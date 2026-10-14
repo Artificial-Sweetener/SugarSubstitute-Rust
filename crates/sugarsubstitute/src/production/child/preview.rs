@@ -8,76 +8,19 @@ mod tests;
 #[path = "preview/worker.rs"]
 mod worker;
 use crate::{job_sequence::JobSequence, production::qualification::PreviewIntent};
+#[cfg(test)]
 use std::{error::Error, fmt};
+#[path = "preview/failure.rs"]
+mod failure;
+pub(super) use failure::PreviewError;
+use failure::PreviewFailure;
 use sugarsubstitute_application::startup::{StartupPhase, StartupSession};
 use sugarsubstitute_contracts::{execution::*, lifecycle::RunKey, startup::MainIdentity};
 use sugarsubstitute_desktop::{
-    CapturedMainPreview, DesktopError, DesktopStartupCommand, DesktopStartupObservation,
+    CapturedMainPreview, DesktopStartupCommand, DesktopStartupObservation,
 };
 use sugarsubstitute_execution::{ExecutionClient, PreviewSourceLoan};
 use worker::{PersistFailure, PersistInput, Persisted};
-
-/// Preserve qualification rejection independently of ordinary product startup health.
-#[derive(Debug)]
-pub(super) enum PreviewError {
-    State,
-    Identity,
-    Deadline,
-    Capacity,
-    Execution(ExecutionError),
-    Admission(sugarsubstitute_execution::BlockingInputError),
-    JobIdentity(IdentityError),
-}
-impl fmt::Display for PreviewError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("Native preview qualification rejected")
-    }
-}
-impl Error for PreviewError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            Self::Execution(cause) => Some(cause),
-            Self::Admission(cause) => Some(cause),
-            Self::JobIdentity(cause) => Some(cause),
-            _ => None,
-        }
-    }
-}
-impl PreviewError {
-    fn kind(&self) -> &'static str {
-        match self {
-            Self::State => "State",
-            Self::Identity => "Identity",
-            Self::Deadline => "Deadline",
-            Self::Capacity => "Capacity",
-            Self::Execution(_) => "Execution",
-            Self::Admission(_) => "Admission",
-            Self::JobIdentity(_) => "JobIdentity",
-        }
-    }
-}
-
-/// Retain the first typed original cause without an additional erased heap allocation.
-enum PreviewFailure {
-    Native(DesktopError),
-    Host(PreviewError),
-}
-impl fmt::Display for PreviewFailure {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Native(cause) => fmt::Display::fmt(cause, formatter),
-            Self::Host(cause) => fmt::Display::fmt(cause, formatter),
-        }
-    }
-}
-impl PreviewFailure {
-    fn kind(&self) -> &'static str {
-        match self {
-            Self::Native(_) => "Native",
-            Self::Host(cause) => cause.kind(),
-        }
-    }
-}
 
 /// Retain original intent/cutoff/input/job/result across cancellation; publication grants no policy.
 pub(super) struct Preview {
@@ -220,6 +163,10 @@ impl Preview {
         self.main = Some(identity);
         tracing::info!(operation="main_preview_requested", identity=?identity,
             until=?self.until, "Actual current Running Main preview requested under original campaign");
+        sugarsubstitute_desktop::qualification_trace::progress(
+            sugarsubstitute_desktop::qualification_trace::Progress::PreviewRequested,
+            identity,
+        );
         Ok(Some(DesktopStartupCommand::CaptureMainPreview { identity, source_deadline }))
     }
 
@@ -404,6 +351,18 @@ impl Preview {
                 JobOutcome::Success(value)
                     if value.artifact.retired() && value.artifact.activated() =>
                 {
+                    let snapshot = value.image.snapshot();
+                    sugarsubstitute_desktop::qualification_trace::persisted(
+                        snapshot.identity(),
+                        sugarsubstitute_desktop::qualification_trace::PngProof {
+                            bytes: value.image.as_bytes().len() as u64,
+                            digest: value.digest,
+                            native_navigation: snapshot.native_navigation(),
+                            width: snapshot.viewport().width(),
+                            height: snapshot.viewport().height(),
+                            dpi: snapshot.viewport().dpi(),
+                        },
+                    );
                     tracing::info!(operation="main_preview_persisted", identity=?value.image.snapshot().identity(),
                         png_bytes=value.image.as_bytes().len(), png_sha256=%worker::Digest(&value.digest),
                         native_navigation=value.image.snapshot().native_navigation(),
@@ -413,11 +372,19 @@ impl Preview {
                         "Actual current renderer PNG persisted with checked native retirement");
                 }
                 JobOutcome::Failure(cause) => {
+                    sugarsubstitute_desktop::qualification_trace::failure(
+                        self.main,
+                        sugarsubstitute_desktop::qualification_trace::Cause::Persistence,
+                    );
                     tracing::warn!(operation="main_preview_persist_failed", identity=?self.main,
                         cause=%cause, native_retired=cause.retired(),
                         "Original preview filesystem failure retained");
                 }
                 other => {
+                    sugarsubstitute_desktop::qualification_trace::failure(
+                        self.main,
+                        sugarsubstitute_desktop::qualification_trace::Cause::Terminal,
+                    );
                     tracing::warn!(operation="main_preview_terminal", identity=?self.main,
                         terminal=?other.kind(), "Preview qualification has no successful artifact");
                 }
@@ -467,6 +434,12 @@ impl Preview {
 
     fn record_failure(&mut self, cause: PreviewFailure) {
         if self.failure.is_none() {
+            use sugarsubstitute_desktop::qualification_trace::Cause;
+            let category = match &cause {
+                PreviewFailure::Native(_) => Cause::Native,
+                PreviewFailure::Host(error) => error.trace_cause(),
+            };
+            sugarsubstitute_desktop::qualification_trace::failure(self.main, category);
             tracing::warn!(operation="main_preview_qualification_failed", identity=?self.main,
                 cause_kind=cause.kind(), cause=%cause, "Original optional preview failure retained");
             self.failure = Some(cause);

@@ -65,6 +65,11 @@ pub(super) fn drain(
                 #[cfg(feature = "k1-native-qualification")]
                 tracing::info!(operation="main_command_dispatched", command="AuthorizeEnvironment", identity=?identity,
                     "Actual creating-thread Main command dispatch; native acceptance remains separate");
+                #[cfg(feature = "k1-native-qualification")]
+                crate::qualification_trace::progress(
+                    crate::qualification_trace::Progress::EnvironmentDispatched,
+                    identity,
+                );
                 main_operation(session, content, |owner| {
                     owner.authorize_environment(identity).map(|()| None)
                 })?
@@ -73,6 +78,11 @@ pub(super) fn drain(
                 #[cfg(feature = "k1-native-qualification")]
                 tracing::info!(operation="main_command_dispatched", command="AuthorizeBrowser", identity=?identity,
                     "Actual creating-thread Main command dispatch; native acceptance remains separate");
+                #[cfg(feature = "k1-native-qualification")]
+                crate::qualification_trace::progress(
+                    crate::qualification_trace::Progress::BrowserDispatched,
+                    identity,
+                );
                 main_operation(session, content, |owner| {
                     owner.authorize_browser(identity).map(|()| None)
                 })?
@@ -111,12 +121,22 @@ pub(super) fn drain(
                 #[cfg(feature = "k1-native-qualification")]
                 tracing::info!(operation="main_command_dispatched", command="RevealMain", identity=?identity,
                     "Actual creating-thread Main command dispatch; native acceptance remains separate");
+                #[cfg(feature = "k1-native-qualification")]
+                crate::qualification_trace::progress(
+                    crate::qualification_trace::Progress::RevealDispatched,
+                    identity,
+                );
                 main_operation(session, content, |owner| owner.reveal(identity).map(Some))?;
             }
             #[cfg(feature = "k1-native-qualification")]
             DesktopStartupCommand::CaptureMainPreview { identity, source_deadline } => {
                 tracing::info!(operation="main_command_dispatched", command="CaptureMainPreview", identity=?identity,
                     "Actual creating-thread Main command dispatch; native acceptance remains separate");
+                #[cfg(feature = "k1-native-qualification")]
+                crate::qualification_trace::progress(
+                    crate::qualification_trace::Progress::PreviewDispatched,
+                    identity,
+                );
                 main_operation(session, content, |owner| {
                     Ok(owner.capture_preview(identity, source_deadline))
                 })?;

@@ -48,7 +48,14 @@ impl ProductionActivation {
         }
         Self::adopt_attachment(record, resources, closing)?;
         let Some(start) = &mut record.start else { return Ok(()) };
-        let output_failure = start.output.as_mut().and_then(|output| output.observe().err());
+        let output_failure = start.output.as_mut().and_then(|output| {
+            output
+                .observe(
+                    #[cfg(feature = "k1-native-qualification")]
+                    record.parent.as_deref().and_then(ParentLifecycle::qualification_identity),
+                )
+                .err()
+        });
         if record.parent.is_none()
             && let Some(completion) = start.profile.consume(batch)?
         {

@@ -271,6 +271,10 @@ impl MainReadiness {
         if !self.loaded {
             tracing::info!(operation="main_navigation_completed", identity=?self.identity,
                 "Actual successful native Main navigation accepted");
+            crate::qualification_trace::progress(
+                crate::qualification_trace::Progress::NavigationCompleted,
+                self.identity,
+            );
         }
         self.loaded = true;
         Ok(())
@@ -366,6 +370,15 @@ impl MainReadiness {
         tracing::info!(operation="main_frontend_receipt", identity=?self.identity,
             ready=self.positive, probe_operation=target.operation,
             "Actual current frontend receipt transferred after native completion barrier");
+        #[cfg(feature = "k1-native-qualification")]
+        crate::qualification_trace::progress(
+            if self.positive {
+                crate::qualification_trace::Progress::FrontendReady
+            } else {
+                crate::qualification_trace::Progress::FrontendFailed
+            },
+            self.identity,
+        );
         Ok(receipt)
     }
 

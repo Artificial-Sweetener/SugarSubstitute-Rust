@@ -123,6 +123,8 @@ fn original_actor_charge_outlives_job_and_frontend_wait_keeps_original_cutoff() 
         Err(super::ParentError::ForeignPeer)
     ));
     assert_eq!(actor.main_deadline(), None);
+    #[cfg(feature = "k1-native-qualification")]
+    assert_eq!(actor.qualification_identity(), None);
     let lease = LeaseKey {
         run: id.run,
         connection,
@@ -134,6 +136,8 @@ fn original_actor_charge_outlives_job_and_frontend_wait_keeps_original_cutoff() 
         },
     };
     actor.main.begin(id, lease, Moment::from_nanos(77))?;
+    #[cfg(feature = "k1-native-qualification")]
+    assert_eq!(actor.qualification_identity(), Some(id));
     assert_eq!(actor.main_deadline(), Some(Moment::from_nanos(77)));
     assert_eq!(actor.next_deadline(), Some(Moment::from_nanos(77)));
     actor.main.retire(id)?;

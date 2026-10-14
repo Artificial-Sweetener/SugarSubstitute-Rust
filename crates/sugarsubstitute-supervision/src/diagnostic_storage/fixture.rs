@@ -8,6 +8,8 @@
 pub(in crate::diagnostic_storage) mod boundary;
 use super::*;
 use boundary::Filesystem;
+#[cfg(test)]
+pub(in crate::diagnostic_storage) mod native_probe;
 
 pub(in crate::diagnostic_storage) trait BoundaryClock:
     Send + Sync

@@ -250,6 +250,11 @@ impl MainActor {
         #[cfg(feature = "k1-native-qualification")]
         tracing::info!(operation="main_browser_authorized", identity=?identity,
             "Actual Main browser stage authorized");
+        #[cfg(feature = "k1-native-qualification")]
+        crate::qualification_trace::progress(
+            crate::qualification_trace::Progress::BrowserAuthorized,
+            identity,
+        );
         Ok(())
     }
 
@@ -286,6 +291,11 @@ impl MainActor {
         #[cfg(feature = "k1-native-qualification")]
         tracing::info!(operation="main_revealed", identity=?identity,
             "Actual ready Main reveal completed after splash retirement");
+        #[cfg(feature = "k1-native-qualification")]
+        crate::qualification_trace::progress(
+            crate::qualification_trace::Progress::MainRevealed,
+            identity,
+        );
         Ok(DesktopStartupObservation::MainRevealed(identity))
     }
 

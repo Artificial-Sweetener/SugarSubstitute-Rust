@@ -9,6 +9,7 @@ use std::{
 use sugarsubstitute_contracts::{backend_custody::*, execution::Moment};
 use sugarsubstitute_execution::{backend_custody::*, windows::NativeObservationError};
 mod error;
+mod finish;
 mod retirement;
 mod state;
 pub use error::{BackendCustodyParentFailure, BackendCustodyParentInputError};
@@ -275,9 +276,7 @@ impl BackendCustodyParent {
             .ok_or_else(|| self.failure(reject("custody_parent_state")))?;
         let result = run(original);
         if let Err(cause) = &result {
-            if original.failure.is_none() {
-                original.failure = Some(cause.clone());
-            }
+            original.retain_failure(self.key(), cause);
             original.closing = true;
             original.session.control().close();
         }
@@ -300,9 +299,7 @@ impl BackendCustodyParent {
             .ok_or_else(|| self.failure(reject("custody_parent_state")))?;
         let result = run(original);
         if let Err(cause) = &result {
-            if original.failure.is_none() {
-                original.failure = Some(cause.clone());
-            }
+            original.retain_failure(self.key(), cause);
             original.closing = true;
             original.session.control().close();
         }

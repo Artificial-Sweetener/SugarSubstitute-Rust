@@ -16,7 +16,7 @@ pub(super) struct State {
     pub(super) closing: bool,
     pub(super) established: bool,
     pub(super) registrations: [Option<retirement::Registration>; 64],
-    pub(super) finish: Option<(Moment, Option<u64>, bool)>,
+    pub(super) finish: Option<finish::Finish>,
 }
 impl State {
     /// Allocate no messages while advancing the sole connection-local operation sequence.
@@ -61,23 +61,18 @@ impl State {
                 BackendCustodyPipeObservation::WriteIssued { operation, .. }
                     if self.write == Some(operation) => {}
                 BackendCustodyPipeObservation::Written { operation, bytes } => {
-                    if self.write != Some(operation)
-                        || bytes as usize != BACKEND_CUSTODY_FRAME_BYTES
-                    {
-                        return Err(reject("custody_parent_write"));
+                    correlate_written(self.write, operation, bytes)?;
+                    if self.pending.is_some_and(|(frame, _)| {
+                        matches!(frame.command, BackendCustodyCommand::Finish { .. })
+                    }) {
+                        tracing::info!(operation="backend_custody_finish_written", key=?key,
+                            nonce=self.finish.as_ref().and_then(finish::Finish::nonce), native_operation=?operation, bytes,
+                            "Original Finish native write completed");
                     }
                     self.write = None;
                 }
                 BackendCustodyPipeObservation::Received { operation, frame } => {
-                    if self.read != Some(operation) {
-                        return Err(reject("custody_parent_read"));
-                    }
-                    let value = BackendCustodyFrame::decode(frame.as_bytes()).map_err(|cause| {
-                        NativeObservationError::new("custody_parent_decode", cause)
-                    })?;
-                    if value.key != key {
-                        return Err(reject("custody_parent_key"));
-                    }
+                    let value = decode_received(self.read, operation, key, frame.as_bytes())?;
                     if self.peer.is_none() {
                         let BackendCustodyCommand::Hello { capability } = value.command else {
                             return Err(reject("custody_parent_hello"));
@@ -95,18 +90,14 @@ impl State {
                                 NativeObservationError::new("custody_parent_capability", cause)
                             })?;
                     } else {
-                        let (pending, _) =
-                            self.pending.ok_or_else(|| reject("custody_parent_unsolicited"))?;
-                        if value.nonce != pending.nonce {
-                            return Err(reject("custody_parent_nonce"));
+                        let facts = correlate_reply(self.pending.map(|pending| pending.0), value)?;
+                        let receipt = facts.receipt;
+                        if receipt == BackendCustodyReceipt::Finished {
+                            tracing::info!(operation="backend_custody_finish_received", key=?key, nonce=facts.nonce,
+                                native_operation=?operation, write_pending=self.write.is_some(),
+                                "Original correlated Finished response received");
                         }
-                        let BackendCustodyCommand::Receipt(receipt) = value.command else {
-                            return Err(reject("custody_parent_receipt"));
-                        };
-                        if !matches_reply(pending.command, receipt) {
-                            return Err(reject("custody_parent_receipt_association"));
-                        }
-                        self.receipt = Some(ReceiptFacts { key, nonce: value.nonce, receipt });
+                        self.receipt = Some(facts);
                         if let BackendCustodyReceipt::Prepared(resource) = receipt {
                             let slot = self
                                 .registrations
@@ -135,6 +126,23 @@ impl State {
             }
         }
         self.advance()
+    }
+    /// Retain and diagnose only the first actual transaction failure.
+    pub(super) fn retain_failure(
+        &mut self,
+        key: BackendCustodyKey,
+        cause: &NativeObservationError,
+    ) {
+        if self.failure.is_none() {
+            tracing::error!(operation="backend_custody_parent_failed", key=?key, stage=cause.stage(),
+                finish_nonce=self.finish.as_ref().and_then(finish::Finish::nonce),
+                pending_nonce=self.pending.map(|(frame, _)| frame.nonce),
+                original_until=?self.pending.map(|(_, until)| until),
+                read_operation=?self.read, write_operation=?self.write,
+                receipt_nonce=self.receipt.map(|facts| facts.nonce),
+                "First original custody transaction failure retained");
+            self.failure = Some(cause.clone());
+        }
     }
     /// Issue the original fixed message and one correlated bounded response receive.
     pub(super) fn advance(&mut self) -> Result<(), NativeObservationError> {
@@ -174,6 +182,54 @@ impl State {
         }
         Ok(())
     }
+}
+/// Validate the original native read operation before decoding its bounded external bytes.
+pub(super) fn decode_received(
+    expected: Option<LifecyclePipeOperationId>,
+    operation: LifecyclePipeOperationId,
+    key: BackendCustodyKey,
+    bytes: &[u8],
+) -> Result<BackendCustodyFrame, NativeObservationError> {
+    if expected != Some(operation) {
+        return Err(reject("custody_parent_read"));
+    }
+    let value = BackendCustodyFrame::decode(bytes)
+        .map_err(|cause| NativeObservationError::new("custody_parent_decode", cause))?;
+    if value.key != key {
+        return Err(reject("custody_parent_key"));
+    }
+    Ok(value)
+}
+/// Correlate the response to the actual original command, without manufacturing a peer.
+pub(super) fn correlate_reply(
+    pending: Option<BackendCustodyFrame>,
+    value: BackendCustodyFrame,
+) -> Result<ReceiptFacts, NativeObservationError> {
+    let pending = pending.ok_or_else(|| reject("custody_parent_unsolicited"))?;
+    if value.key != pending.key {
+        return Err(reject("custody_parent_key"));
+    }
+    if value.nonce != pending.nonce {
+        return Err(reject("custody_parent_nonce"));
+    }
+    let BackendCustodyCommand::Receipt(receipt) = value.command else {
+        return Err(reject("custody_parent_receipt"));
+    };
+    if !matches_reply(pending.command, receipt) {
+        return Err(reject("custody_parent_receipt_association"));
+    }
+    Ok(ReceiptFacts { key: value.key, nonce: value.nonce, receipt })
+}
+/// Accept only the actual queued operation's complete fixed-frame native write.
+pub(super) fn correlate_written(
+    expected: Option<LifecyclePipeOperationId>,
+    operation: LifecyclePipeOperationId,
+    bytes: u32,
+) -> Result<(), NativeObservationError> {
+    if expected != Some(operation) || bytes as usize != BACKEND_CUSTODY_FRAME_BYTES {
+        return Err(reject("custody_parent_write"));
+    }
+    Ok(())
 }
 /// Match only the acknowledged original operation; a Success report cannot synthesize this.
 fn matches_reply(command: BackendCustodyCommand, receipt: BackendCustodyReceipt) -> bool {

@@ -3,6 +3,15 @@
 //! Fake only byte chunks and logger writer/time boundaries; parsed facts grant no authority.
 use super::*;
 const LINE: &str = "operation=\"child_preparation_transition\" capture_admitted=true capture=false registered=false configuration=false original_failure=None capture_failure=None failure_retained=false";
+#[cfg(not(feature = "k1-native-qualification"))]
+#[test]
+fn default_build_discards_compact_qualification_records() {
+    let mut owner = Diagnostic::new();
+    let bytes = b"INFO sugarsubstitute_desktop::qualification_trace: operation=\"child_native_qualification\" schema=1 stage=MainRevealed main=true launch=1 navigation=1\n";
+    let mut seen = Vec::new();
+    owner.feed(OutputStream::Stderr, 1, false, false, bytes, |value| seen.push(value));
+    assert!(seen.is_empty());
+}
 #[test]
 fn closed_fields_accept_all_known_issues_but_reject_extensions_duplicates_and_unknown_values() {
     for issue in [
@@ -156,7 +165,7 @@ fn changing_diagnostics_remain_bounded_for_the_same_output_lifetime() {
     assert!(matches!(seen.last(), Some(Observation::MainFailure(_))));
 }
 /// Use the production text formatter with deterministic external writer/time boundaries.
-pub(super) fn formatted_owner_diagnostics(
+pub(in super::super) fn formatted_owner_diagnostics(
     emit: impl FnOnce(),
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     use std::{
@@ -173,10 +182,12 @@ pub(super) fn formatted_owner_diagnostics(
     }
     impl Write for Sink {
         fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-            self.0
-                .lock()
-                .map_err(|_| std::io::Error::other("Writer fixture poisoned"))?
-                .extend_from_slice(bytes);
+            let mut sink =
+                self.0.lock().map_err(|_| std::io::Error::other("Writer fixture poisoned"))?;
+            if sink.len().saturating_add(bytes.len()) > 32768 {
+                return Err(std::io::Error::other("Writer fixture capacity"));
+            }
+            sink.extend_from_slice(bytes);
             Ok(bytes.len())
         }
         fn flush(&mut self) -> std::io::Result<()> {

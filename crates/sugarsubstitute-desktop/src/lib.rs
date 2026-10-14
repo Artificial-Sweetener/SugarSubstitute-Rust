@@ -18,6 +18,9 @@ mod main_navigation;
 mod main_readiness;
 mod main_readiness_storage;
 mod main_readiness_types;
+/// Bounded observational development trace records; feature-off builds expose none.
+#[cfg(feature = "k1-native-qualification")]
+pub mod qualification_trace;
 #[cfg(all(target_os = "windows", feature = "k1-native-qualification"))]
 mod qualified_preview;
 #[cfg(target_os = "windows")]

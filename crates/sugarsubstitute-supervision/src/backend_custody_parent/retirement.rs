@@ -125,46 +125,29 @@ impl BackendCustodyParent {
         self.consume(
             NonZeroUsize::new(32).ok_or_else(|| self.failure(reject("custody_finish_bound")))?,
         )?;
-        let counter = execution.encode_lifecycle_deadline(until).map_err(|cause| {
-            self.failure(NativeObservationError::new("custody_finish_counter", cause))
-        })?;
-        self.storage.check().map_err(|cause| self.failure(cause))?;
         Ok(self
             .try_access(|state| {
-                let finish = state.finish.get_or_insert((until, None, false));
-                if finish.0 != until {
-                    return Err(reject("custody_finish_renewed"));
-                }
-                if finish.2 {
-                    return Ok(true);
-                }
-                if state.receipt.is_some_and(|facts| {
-                    finish.1 == Some(facts.nonce)
-                        && facts.receipt == BackendCustodyReceipt::Finished
-                }) {
-                    state.receipt = None;
-                    finish.2 = true;
-                    return Ok(true);
-                }
-                if finish.1.is_none() && state.pending.is_none() && state.receipt.is_none() {
-                    let nonce =
-                        state.nonce.checked_add(1).ok_or_else(|| reject("custody_parent_nonce"))?;
-                    state.nonce = nonce;
-                    state.pending = Some((
-                        BackendCustodyFrame {
-                            key: self.key(),
-                            nonce,
-                            command: BackendCustodyCommand::Finish {
-                                until_ticks: counter.ticks(),
-                                frequency: counter.frequency(),
-                            },
-                        },
-                        until,
-                    ));
-                    finish.1 = Some(nonce);
+                let finish = state.finish.get_or_insert_with(|| finish::Finish::new(until));
+                let progress = finish.advance(
+                    self.key(),
+                    until,
+                    finish::Exchange {
+                        next_nonce: &mut state.nonce,
+                        pending: &mut state.pending,
+                        receipt: &mut state.receipt,
+                        io_pending: state.write.is_some() || state.read.is_some(),
+                    },
+                    || {
+                        self.storage.check()?;
+                        execution.encode_lifecycle_deadline(until).map_err(|cause| {
+                            NativeObservationError::new("custody_finish_counter", cause)
+                        })
+                    },
+                )?;
+                if progress == finish::Progress::Queued {
                     state.advance()?;
                 }
-                Ok(false)
+                Ok(progress == finish::Progress::Finished)
             })?
             .unwrap_or(false))
     }

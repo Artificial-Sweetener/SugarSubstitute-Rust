@@ -53,6 +53,11 @@ impl MainActor {
                     #[cfg(feature = "k1-native-qualification")]
                     tracing::info!(operation="main_navigation_started", identity=?self.identity(),
                         "Actual local frontend navigation dispatched after hooks");
+                    #[cfg(feature = "k1-native-qualification")]
+                    crate::qualification_trace::progress(
+                        crate::qualification_trace::Progress::NavigationStarted,
+                        self.identity(),
+                    );
                     Some(DesktopStartupObservation::NavigationStarted(self.identity()))
                 } else {
                     None

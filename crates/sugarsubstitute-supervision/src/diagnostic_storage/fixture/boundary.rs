@@ -14,6 +14,18 @@ pub(in crate::diagnostic_storage) use state::Filesystem;
 use state::*;
 impl Filesystem {
     #[cfg(test)]
+    pub(in crate::diagnostic_storage) fn probe_native_context(
+        &self,
+        probe: Arc<dyn native_probe::NativeControlProbe>,
+    ) {
+        lock(&self.0).native_probe = Some(probe);
+    }
+    #[cfg(test)]
+    fn native_context(&self) -> native_probe::NativeContext {
+        native_probe::NativeContext::new(lock(&self.0).native_probe.clone())
+    }
+
+    #[cfg(test)]
     pub(in crate::diagnostic_storage) fn observe_context_after_open(&self) {
         lock(&self.0).observe_open_context = true;
     }
@@ -131,6 +143,8 @@ impl Port for Filesystem {
     ) -> Result<(NativeId, DiagnosticReadFacts), ClaimError> {
         let result = files::open(self, object, bound, context);
         if lock(&self.0).observe_open_context {
+            #[cfg(test)]
+            let _scope = self.native_context();
             // The external fixture has already adopted any actual partial output.
             let _observed = context.now();
         }
@@ -352,6 +366,12 @@ impl Port for Filesystem {
         files::absent(self, object, context)
     }
     fn close(&mut self, id: NativeId, context: &JobContext) -> Result<(), ClaimError> {
+        #[cfg(test)]
+        let scope = self.native_context();
+        #[cfg(test)]
+        if scope.observed() {
+            let _observed = context.now();
+        }
         files::close(self, id, context)
     }
     fn retire(
@@ -359,6 +379,12 @@ impl Port for Filesystem {
         context: &JobContext,
         control: &mut DiagnosticNativeRetirement<'_>,
     ) -> Result<(), ClaimError> {
+        #[cfg(test)]
+        let scope = self.native_context();
+        #[cfg(test)]
+        if scope.observed() {
+            let _observed = context.now();
+        }
         let ids: Vec<_> = lock(&self.0)
             .handles
             .iter()

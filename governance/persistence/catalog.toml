@@ -416,3 +416,16 @@ current_version = 1
 accepted_versions = [1]
 compatibility = "reject"
 migrations = []
+
+# Closed observational child stderr records share the original 512-byte decoder.
+[[formats]]
+id = "child-native-qualification-diagnostic"
+owner = "sugarsubstitute-desktop"
+sources = ["crates/sugarsubstitute-desktop/src/qualification_trace.rs"]
+source_sha256 = "sha256:bdf5792999c58c3e9d7a4042abccbeccfe828da5241dc9194c11e4c0a75d68b0"
+classification = "protocol"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []

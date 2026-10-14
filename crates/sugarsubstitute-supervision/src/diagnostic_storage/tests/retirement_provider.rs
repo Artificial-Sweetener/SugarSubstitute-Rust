@@ -9,6 +9,7 @@ struct RetirementClock {
     observations: AtomicUsize,
     contended: AtomicUsize,
     panic_detached: AtomicBool,
+    native_calls: AtomicUsize,
 }
 impl Clock for RetirementClock {
     #[expect(
@@ -19,6 +20,9 @@ impl Clock for RetirementClock {
         let target = self.target.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
         if let Some(shared) = target {
             self.observations.fetch_add(1, Ordering::SeqCst);
+            if !super::super::fixture::native_probe::is_current(self as *const Self as usize) {
+                return Moment::from_nanos(17);
+            }
             let detached = match shared.inner.try_lock() {
                 Ok(state) => state.port.is_none(),
                 Err(std::sync::TryLockError::Poisoned(cause)) => cause.into_inner().port.is_none(),
@@ -35,6 +39,11 @@ impl Clock for RetirementClock {
     }
     fn sleep_until(&self, _: Moment) -> WaitFuture {
         Box::pin(std::future::pending())
+    }
+}
+impl super::super::fixture::native_probe::NativeControlProbe for RetirementClock {
+    fn before_context(&self) {
+        self.native_calls.fetch_add(1, Ordering::SeqCst);
     }
 }
 struct ClockTarget(Arc<RetirementClock>);
@@ -54,6 +63,7 @@ fn retirement_job(
         observations: AtomicUsize::new(0),
         contended: AtomicUsize::new(0),
         panic_detached: AtomicBool::new(false),
+        native_calls: AtomicUsize::new(0),
     });
     let owner = ExecutionOwner::new(clock.clone(), wake.clone())?;
     let client = owner.client();
@@ -83,7 +93,9 @@ fn retirement_job(
 #[test]
 fn retirement_provider_reenters_state_without_holding_storage_mutex() -> TestResult {
     retirement_job(|context, clock| {
-        let (mut storage, operation) = setup(&context, Filesystem::new())?;
+        let filesystem = Filesystem::new();
+        filesystem.probe_native_context(clock.clone());
+        let (mut storage, operation) = setup(&context, filesystem)?;
         *clock.target.lock().unwrap_or_else(std::sync::PoisonError::into_inner) =
             Some(storage.shared.clone());
         let target = ClockTarget(clock.clone());
@@ -106,6 +118,7 @@ fn retirement_provider_reenters_state_without_holding_storage_mutex() -> TestRes
 fn normal_native_provider_reenters_state_without_holding_storage_mutex() -> TestResult {
     retirement_job(|context, clock| {
         let filesystem = Filesystem::new();
+        filesystem.probe_native_context(clock.clone());
         filesystem.put(DiagnosticObject::Seed(incident()?), b"actual-source");
         filesystem.observe_context_after_open();
         let (mut storage, operation) = setup(&context, filesystem)?;
@@ -144,6 +157,7 @@ fn provider_unwind_run(cleanup: bool) -> TestResult {
         observations: AtomicUsize::new(0),
         contended: AtomicUsize::new(0),
         panic_detached: AtomicBool::new(false),
+        native_calls: AtomicUsize::new(0),
     });
     let owner = ExecutionOwner::new(clock.clone(), wake.clone())?;
     let client = owner.client();
@@ -163,6 +177,7 @@ fn provider_unwind_run(cleanup: bool) -> TestResult {
         },
         move |context| -> TestResult {
             let filesystem = Filesystem::new();
+            filesystem.probe_native_context(producer_clock.clone());
             let object = DiagnosticObject::Seed(incident()?);
             filesystem.put(object, b"actual-source");
             filesystem.observe_context_after_open();
@@ -226,6 +241,10 @@ fn provider_unwind_run(cleanup: bool) -> TestResult {
         .take()
         .ok_or("Actual fatal source/custody was not retained")?;
     assert!(unwound);
+    assert!(clock.native_calls.load(Ordering::SeqCst) > 0);
+    assert!(!super::super::fixture::native_probe::is_current(clock.as_ref()
+        as *const RetirementClock
+        as usize));
     assert_eq!(clock.contended.load(Ordering::SeqCst), 0);
     let snapshot = storage.snapshot();
     assert!(!snapshot.retirement_in_progress());
@@ -255,4 +274,39 @@ fn retirement_provider_unwind_restores_whole_native_capsule_and_original_claim()
 #[test]
 fn normal_native_provider_unwind_restores_partial_output_and_original_capsule() -> TestResult {
     provider_unwind_run(false)
+}
+
+#[test]
+fn detached_port_clock_observation_outside_native_callback_cannot_consume_armed_failure()
+-> TestResult {
+    retirement_job(|context, clock| {
+        let filesystem = Filesystem::new();
+        filesystem.probe_native_context(clock.clone());
+        let (mut storage, operation) = setup(&context, filesystem)?;
+        *clock.target.lock().unwrap_or_else(std::sync::PoisonError::into_inner) =
+            Some(storage.shared.clone());
+        let target = ClockTarget(clock.clone());
+        clock.panic_detached.store(true, Ordering::SeqCst);
+        let mut access = StateAccess::acquire(&storage.shared, operation.key());
+        access.check(operation.key(), &context, false)?;
+        access.call_native(|port| {
+            assert!(storage.shared.inner.try_lock().is_ok_and(|state| state.port.is_none()));
+            assert_eq!(Clock::now(clock.as_ref()), Moment::from_nanos(17));
+            assert!(clock.panic_detached.load(Ordering::SeqCst));
+            assert_eq!(clock.native_calls.load(Ordering::SeqCst), 0);
+            assert_eq!(port.live_handles(), 0);
+        })?;
+        drop(access);
+        clock.panic_detached.store(false, Ordering::SeqCst);
+        storage.retire(&operation, &context)?;
+        assert!(clock.native_calls.load(Ordering::SeqCst) > 0);
+        assert_eq!(clock.contended.load(Ordering::SeqCst), 0);
+        drop(target);
+        drop((storage, operation));
+        assert_eq!(
+            context.memory().claim(DIAGNOSTIC_STORAGE_BYTES)?.bytes(),
+            DIAGNOSTIC_STORAGE_BYTES
+        );
+        Ok(())
+    })
 }

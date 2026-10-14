@@ -270,6 +270,14 @@ impl ChildQualification {
 impl PreviewHooks {
     fn record(&mut self, cause: PreviewHookCause) {
         if self.failure.is_none() {
+            use sugarsubstitute_desktop::qualification_trace::Cause;
+            let category = match &cause {
+                PreviewHookCause::Capacity => Cause::Capacity,
+                PreviewHookCause::Declaration(_) => Cause::Declaration,
+                PreviewHookCause::Arming(_) => Cause::Arming,
+                PreviewHookCause::Driver(error) => error.trace_cause(),
+            };
+            sugarsubstitute_desktop::qualification_trace::failure(None, category);
             tracing::warn!(operation="registered_main_preview_rejected", cause=%cause,
                 "Original optional qualification cause retained; product startup policy unchanged");
             self.failure = Some(cause);

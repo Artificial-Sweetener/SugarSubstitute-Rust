@@ -90,7 +90,10 @@ impl ProductionActivation {
         let start = record.start.as_mut().ok_or("Original desktop start missing")?;
         if let Some(output) = &mut start.output {
             output.request_close();
-            output.observe()?;
+            output.observe(
+                #[cfg(feature = "k1-native-qualification")]
+                record.parent.as_deref().and_then(ParentLifecycle::qualification_identity),
+            )?;
         }
         if record.parent.is_none() && !start.close_unlaunched()? {
             return Ok(());

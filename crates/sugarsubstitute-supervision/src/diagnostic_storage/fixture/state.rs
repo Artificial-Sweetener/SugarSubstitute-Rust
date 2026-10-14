@@ -36,6 +36,8 @@ pub(super) struct Handle {
     pub(super) memory: Option<allocation::DiagnosticAllocationOwner>,
 }
 pub(in crate::diagnostic_storage) struct Disk {
+    #[cfg(test)]
+    pub(super) native_probe: Option<Arc<dyn native_probe::NativeControlProbe>>,
     pub(super) observe_open_context: bool,
     pub(super) files: Vec<File>,
     pub(super) handles: Vec<Handle>,
@@ -61,6 +63,8 @@ impl Filesystem {
         Self(
             Arc::new(Mutex::new(Disk {
                 observe_open_context: false,
+                #[cfg(test)]
+                native_probe: None,
                 files: Vec::new(),
                 handles: Vec::new(),
                 faults: Faults::default(),

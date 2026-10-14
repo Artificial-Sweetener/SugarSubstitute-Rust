@@ -17,6 +17,13 @@ use sugarsubstitute_supervision::{
 };
 
 impl ParentLifecycle {
+    /// Borrow passive current identity for closed diagnostics; no admission or readiness effect.
+    #[cfg(feature = "k1-native-qualification")]
+    pub(crate) fn qualification_identity(
+        &self,
+    ) -> Option<sugarsubstitute_contracts::startup::MainIdentity> {
+        self.main.snapshot().identity
+    }
     pub(super) fn main_deadline(&self) -> Option<Moment> {
         use sugarsubstitute_application::supervision::MainAuthorizationStage;
         match self.main.stage() {

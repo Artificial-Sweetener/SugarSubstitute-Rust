@@ -95,6 +95,8 @@ fn run_desktop(
         },
         content,
     )?;
+    #[cfg(feature = "k1-native-qualification")]
+    sugarsubstitute_desktop::qualification_trace::finished();
     tracing::info!(operation = "production_desktop_retired", navigations = receipt.navigations_started, main_material = ?receipt.main_material, splash_frames = receipt.splash.frames_presented, "SugarSubstitute desktop retired");
     Ok(())
 }

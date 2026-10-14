@@ -281,7 +281,10 @@ impl DesktopStart {
         self.captured = None;
         let output_settled = if let Some(output) = &mut self.output {
             output.request_close();
-            output.observe()?;
+            output.observe(
+                #[cfg(feature = "k1-native-qualification")]
+                None,
+            )?;
             output.settled()
         } else {
             true

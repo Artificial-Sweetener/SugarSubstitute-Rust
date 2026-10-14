@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compose one actual independent headless witness for managed backends.
 mod attachment;
+mod diagnostics;
+mod retirement;
 use super::coordinator_backend::{BackendResources, Result};
 use std::{
     num::NonZeroUsize,
@@ -30,6 +32,12 @@ pub(crate) struct CoordinatorCustody {
     ready: bool,
     shutdown: Option<ShutdownBudget>,
     finish_received: bool,
+    terminal: Option<
+        sugarsubstitute_contracts::execution::JobCompletion<
+            sugarsubstitute_execution::backend_custody::BackendCustodyPipeReport,
+            sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeFailure,
+        >,
+    >,
     pipe_closed: bool,
     settled: bool,
     grace_observed: bool,
@@ -60,6 +68,7 @@ impl CoordinatorCustody {
             ready: false,
             shutdown: None,
             finish_received: false,
+            terminal: None,
             pipe_closed: false,
             settled: false,
             grace_observed: false,
@@ -84,7 +93,9 @@ impl CoordinatorCustody {
                 .backend_custody_launch_pending(ticket.process(), parent.key())?;
         }
         if self.ready {
-            parent.validate_current_admission()?;
+            parent
+                .validate_current_admission()
+                .map_err(|cause| diagnostics::failed("ready_current_admission", cause))?;
             return Ok(true);
         }
         parent.consume(NonZeroUsize::new(32).ok_or("Custody observation bound missing")?)?;
@@ -249,105 +260,6 @@ impl CoordinatorCustody {
         self.shutdown.filter(|_| !self.settled && !self.total_observed).map(|budget| {
             if self.grace_observed { budget.settle_until } else { budget.graceful_until }
         })
-    }
-    /// Finish the authenticated witness, observe its real exit, then close the actual pipe.
-    pub(crate) fn close(
-        &mut self,
-        budget: ShutdownBudget,
-        resources: &mut BackendResources<'_>,
-    ) -> Result<()> {
-        let original = *self.shutdown.get_or_insert(budget);
-        if original != budget {
-            return Err("Custody original cleanup changed".into());
-        }
-        if self.settled {
-            return Ok(());
-        }
-        let Some(parent) = self.parent.clone() else {
-            self.settled = self.attachment.close(resources)?;
-            return Ok(());
-        };
-        let now = resources.client.now()?;
-        self.grace_observed |= now >= original.graceful_until;
-        self.total_observed |= now >= original.settle_until;
-        let mut failure: Option<Box<dyn std::error::Error + Send + Sync>> = None;
-        if self.ready && !self.finish_received && resources.client.now()? < original.settle_until {
-            match parent.advance_finish(resources.client, original.settle_until) {
-                Ok(finished) => {
-                    self.finish_received = finished;
-                    if finished {
-                        tracing::info!(
-                            operation = "backend_custody_finished",
-                            key = ?parent.key(),
-                            settle_until = ?original.settle_until,
-                            "Authenticated backend custody Finished receipt consumed"
-                        );
-                    }
-                }
-                Err(cause) => failure = Some(Box::new(cause)),
-            }
-        }
-        if let Some(ticket) = self.ticket {
-            let registry = resources.authority.registry_mut().ok_or("Custody registry absent")?;
-            registry.begin_stop(ticket.process(), ShutdownId::new(1)?, original)?;
-            let actual = registry.snapshot(ticket.process())?;
-            if (actual.cleanup_step_due(resources.client.now()?)
-                || (actual.settled && registry.custody_retirement_pending(ticket.process())?))
-                && !actual.cleanup_step_pending
-                && resources.client.now()? < original.settle_until
-            {
-                let watch = if actual.member_watch_required {
-                    Some(spec(resources, JobClass::NativeObservation, 4096, None)?)
-                } else {
-                    None
-                };
-                let cleanup = spec(
-                    resources,
-                    JobClass::InfrastructureLifecycle,
-                    4096,
-                    Some(original.settle_until),
-                )?;
-                resources
-                    .authority
-                    .registry_mut()
-                    .ok_or("Custody registry absent")?
-                    .submit_cleanup_step(
-                        resources.client,
-                        ticket.process(),
-                        resources.cleanup,
-                        cleanup,
-                        watch,
-                    )?;
-            }
-            let registry = resources.authority.registry_mut().ok_or("Custody registry absent")?;
-            if registry.snapshot(ticket.process())?.settled
-                && !registry.custody_retirement_pending(ticket.process())?
-            {
-                while registry.take_observation(ticket.process())?.is_some() {}
-                registry.retire_settled(ticket.process())?;
-                self.ticket = None;
-            }
-        }
-        if self.ticket.is_none() {
-            if !self.pipe_closed {
-                parent.close()?;
-                self.pipe_closed = true;
-            }
-            if parent.take_terminal()?.is_some() {
-                self.attachment.parent_retired();
-                self.settled = true;
-                tracing::info!(
-                    operation = "backend_custody_retired",
-                    key = ?parent.key(),
-                    finish_received = self.finish_received,
-                    "Backend custody family and transport retired"
-                );
-            }
-        }
-        match failure {
-            Some(cause) => Err(cause),
-            None => Ok(()),
-        }
     }
 }
 /// Preserve class quotas and allocate IDs in actual admission order.

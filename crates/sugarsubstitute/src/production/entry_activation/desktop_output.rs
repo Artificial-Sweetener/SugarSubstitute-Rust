@@ -3,6 +3,9 @@
 //! Keep genuine desktop stdio, terminal guards and closed phase diagnostics owned together.
 #[path = "desktop_output/diagnostic.rs"]
 mod diagnostic;
+#[cfg(feature = "k1-native-qualification")]
+#[path = "desktop_output/qualification.rs"]
+mod qualification;
 use crate::job_sequence::JobSequence;
 use std::error::Error;
 use sugarsubstitute_contracts::execution::Scope;
@@ -125,7 +128,12 @@ impl DesktopOutput {
     }
     /// Observe bounded passive bytes and the exact original native completion.
     /// Only closed typed diagnostic fields reach tracing; payload bytes never do.
-    pub(super) fn observe(&mut self) -> Result<()> {
+    pub(super) fn observe(
+        &mut self,
+        #[cfg(feature = "k1-native-qualification")] current: Option<
+            sugarsubstitute_contracts::startup::MainIdentity,
+        >,
+    ) -> Result<()> {
         if self.terminal.is_none() {
             self.terminal = self.session.completion.try_take_completion();
         }
@@ -138,7 +146,10 @@ impl DesktopOutput {
                 self.issue.get_or_insert(issue);
             }
         }
-        let drained = self.drain();
+        let drained = self.drain(
+            #[cfg(feature = "k1-native-qualification")]
+            current,
+        );
         if let Err(cause) = drained {
             self.issue.get_or_insert(Issue::Output(cause));
         }
@@ -148,7 +159,12 @@ impl DesktopOutput {
         }
         Ok(())
     }
-    fn drain(&mut self) -> std::result::Result<(), WindowsOutputError> {
+    fn drain(
+        &mut self,
+        #[cfg(feature = "k1-native-qualification")] current: Option<
+            sugarsubstitute_contracts::startup::MainIdentity,
+        >,
+    ) -> std::result::Result<(), WindowsOutputError> {
         for _ in 0..8 {
             if self.loan.is_none() {
                 self.loan = match self.session.control.take_batch() {
@@ -163,6 +179,10 @@ impl DesktopOutput {
             }
             self.diagnostic.feed(actual.stream(),actual.sequence().get(),actual.gap().is_some(),actual.end(),actual.bytes(),|observed| {
                 match observed {
+                    #[cfg(feature = "k1-native-qualification")]
+                    diagnostic::Observation::Qualification(observed) => {
+                        qualification::relay(self.run, current, observed);
+                    }
                     diagnostic::Observation::Preparation(phase) => {
                         tracing::info!(operation="desktop_child_preparation",run=?self.run,
                             capture_admitted=phase.capture_admitted,capture=phase.capture,registered=phase.registered,

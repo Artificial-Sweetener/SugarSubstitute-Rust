@@ -9,6 +9,9 @@ mod main;
 #[path = "diagnostic/startup.rs"]
 mod startup;
 pub(super) use main::MainFailure;
+#[cfg(feature = "k1-native-qualification")]
+#[path = "diagnostic/qualification.rs"]
+pub(super) mod qualification;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct Phase {
     pub(super) capture_admitted: bool,
@@ -50,6 +53,8 @@ pub(super) enum Observation {
     Failure(Failure),
     Connection(Connection),
     MainFailure(MainFailure),
+    #[cfg(feature = "k1-native-qualification")]
+    Qualification(qualification::Qualification),
 }
 /// Fixed source scratch is covered by the containing Record's original metadata
 /// claim. Loss, oversized input and EOF invalidate partial lines; stdout is opaque.
@@ -104,6 +109,16 @@ impl Diagnostic {
         for &byte in bytes {
             if byte == b'\n' {
                 if !self.discard {
+                    #[cfg(feature = "k1-native-qualification")]
+                    if let Some(record) = qualification::parse(&self.bytes[..self.length]) {
+                        if self.emitted < 30 {
+                            self.emitted += 1;
+                            emit(Observation::Qualification(record));
+                        }
+                        self.length = 0;
+                        self.discard = false;
+                        continue;
+                    }
                     if let Some(failure) = main::parse(&self.bytes[..self.length]) {
                         if !self.main_failure_seen && self.emitted < 32 {
                             self.main_failure_seen = true;
@@ -295,4 +310,4 @@ fn boolean(field: &str, prefix: &str) -> Option<bool> {
 }
 #[cfg(test)]
 #[path = "tests.rs"]
-mod tests;
+pub(super) mod tests;
