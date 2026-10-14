@@ -2239,6 +2239,7 @@ dependencies = [
  "serde",
  "serde_json",
  "softbuffer",
+ "sugarsubstitute-application",
  "sugarsubstitute-contracts",
  "sugarsubstitute-execution",
  "tao",

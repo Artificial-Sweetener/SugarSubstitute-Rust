@@ -38,6 +38,8 @@ impl MainFence {
     /// Join actual application construction custody with native actor custody, then
     /// close admission before the caller publishes MainAbsent. This starts no work.
     /// Any current actor, even a checked-retired one, proves creation rather than absence.
+    /// Navigation is scoped to its launch and may restart at one on retry; only a
+    /// checked-retired strictly older launch in the same run can be excluded.
     pub(super) fn absent(
         &mut self,
         requested: MainIdentity,
@@ -50,9 +52,7 @@ impl MainFence {
             || !match custody {
                 MainCustody::Absent => true,
                 MainCustody::CheckedRetired(prior) => {
-                    prior.run == requested.run
-                        && prior.launch.get() < requested.launch.get()
-                        && prior.navigation < requested.navigation
+                    prior.run == requested.run && prior.launch.get() < requested.launch.get()
                 }
                 MainCustody::Outstanding => false,
             }

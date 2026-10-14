@@ -15,7 +15,7 @@ fn identity(launch: u64) -> Result<MainIdentity, Box<dyn std::error::Error>> {
             generation: RunGeneration::new(1)?,
         },
         launch: LaunchId::new(launch)?,
-        navigation: Generation::new(launch)?,
+        navigation: Generation::new(1)?,
     })
 }
 #[test]
@@ -74,5 +74,76 @@ fn callback_quiescence_and_checked_predecessor_order_are_required_before_success
     );
     fence.absent(current, Some(current), false, MainCustody::CheckedRetired(prior))?;
     assert!(fence.prepare(current, Some(current)).is_err());
+    Ok(())
+}
+
+/// Inert outer failure/settlement/native-custody facts exercise the real application
+/// retry and current-identity APIs plus the creating-thread fence, without native proof.
+#[test]
+fn actual_configured_retry_can_reset_navigation_before_absence_of_the_new_launch() -> TestResult {
+    use sugarsubstitute_application::startup::{StartupPhase, StartupRejection, StartupSession};
+    use sugarsubstitute_contracts::{
+        configuration::{
+            ConnectionConfiguration, LoopbackOrigin, Presentation, ProfileId, StartupConfiguration,
+            Theme,
+        },
+        startup::{StartupEvent, StartupFailure, StartupFailureCode, StartupObservation},
+    };
+    let mut prior = identity(7)?;
+    prior.navigation = Generation::new(91)?;
+    let configuration = StartupConfiguration::new(
+        ConnectionConfiguration::Attach(LoopbackOrigin::parse("http://127.0.0.1:8188", 8188)?),
+        ProfileId::new("RetryFence".into())?,
+        Presentation::new("en", Theme::Dark, true)?,
+    );
+    let mut session = StartupSession::new(prior.launch, prior.navigation, configuration);
+    session.observe(StartupEvent::new(prior.launch, StartupObservation::SplashPresented))?;
+    session.observe(StartupEvent::new(
+        prior.launch,
+        StartupObservation::Failed(StartupFailure::new(
+            StartupFailureCode::ConnectionUnavailable,
+            Box::new(std::io::Error::other("outer adapter failure")),
+        )),
+    ))?;
+    let retry = LaunchId::new(8)?;
+    assert_eq!(
+        session.retry_configured(retry, Generation::new(1)?),
+        Err(StartupRejection::SettlementRequired)
+    );
+    session.observe(StartupEvent::new(prior.launch, StartupObservation::ConnectionSettled))?;
+    assert_eq!(session.phase(), StartupPhase::Stopped);
+    session.retry_configured(retry, Generation::new(1)?)?;
+    let current =
+        MainIdentity { run: prior.run, launch: session.launch(), navigation: session.navigation() };
+    assert_eq!(current.launch, retry);
+    assert_eq!(current.navigation, Generation::new(1)?);
+    let mut fence = MainFence::new();
+    let queued_before_absence = current;
+    fence.prepare(queued_before_absence, Some(current))?;
+    let mut foreign = prior;
+    foreign.run.instance = InstanceId::new(2)?;
+    let same_launch = MainIdentity { navigation: Generation::new(999)?, ..current };
+    for retired in [same_launch, identity(9)?, foreign] {
+        assert!(
+            fence
+                .absent(current, Some(current), false, MainCustody::CheckedRetired(retired))
+                .is_err()
+        );
+        fence.prepare(current, Some(current))?;
+    }
+    assert!(
+        fence.absent(current, Some(current), true, MainCustody::CheckedRetired(prior)).is_err()
+    );
+    assert!(fence.absent(current, Some(current), false, MainCustody::Outstanding).is_err());
+    assert!(
+        fence
+            .absent(same_launch, Some(current), false, MainCustody::CheckedRetired(prior))
+            .is_err()
+    );
+    assert!(fence.absent(identity(9)?, Some(current), false, MainCustody::Absent).is_err());
+    fence.absent(current, Some(current), false, MainCustody::CheckedRetired(prior))?;
+    assert!(fence.prepare(queued_before_absence, Some(current)).is_err());
+    assert!(fence.prepare(current, Some(current)).is_err());
+    assert!(fence.absent(current, Some(current), false, MainCustody::Absent).is_err());
     Ok(())
 }

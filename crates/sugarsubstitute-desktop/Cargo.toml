@@ -30,6 +30,7 @@ gtk.workspace = true
 cairo-rs.workspace = true
 
 [dev-dependencies]
+sugarsubstitute-application = { path = "../sugarsubstitute-application" }
 sugarsubstitute-execution = { path = "../sugarsubstitute-execution" }
 
 [lints]
