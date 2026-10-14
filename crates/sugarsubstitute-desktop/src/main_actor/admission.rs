@@ -109,6 +109,19 @@ impl Admission {
             Err(DesktopError::message("main_frontend_effect", "frontend admission is closed"))
         }
     }
+    /// Borrow actual close/identity admission before a passive expiry diagnostic.
+    /// Repeated retirement has no second diagnosis; early or foreign requests reject.
+    pub(super) fn timeout_diagnostic_allowed(
+        &self,
+        identity: MainIdentity,
+    ) -> Result<bool, DesktopError> {
+        self.check(identity)?;
+        if self.closing() {
+            return Ok(false);
+        }
+        self.frontend(identity)?;
+        Ok(true)
+    }
     fn check(&self, identity: MainIdentity) -> Result<(), DesktopError> {
         if identity == self.identity {
             Ok(())

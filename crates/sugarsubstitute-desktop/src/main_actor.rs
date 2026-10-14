@@ -6,6 +6,7 @@ mod admission;
 mod construction;
 mod evidence;
 mod retirement;
+mod timeout;
 use crate::{
     DesktopError, DesktopStartupObservation, MainWindowRequest, NativeMaterial,
     main_events::{Command, Events},

@@ -24,9 +24,29 @@ pub(in super::super) struct MainFailure {
     pub(in super::super) operation: &'static str,
     pub(in super::super) observation: &'static str,
     pub(in super::super) code: Code,
+    pub(in super::super) timeout: Option<Timeout>,
 }
 
+/// Only sealed stored readiness facts; zero is never an issued operation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in super::super) struct Timeout {
+    pub(in super::super) wait: &'static str,
+    pub(in super::super) operation: Option<u64>,
+}
+const WAITS: &[&str] = &[
+    "Fault",
+    "Ready",
+    "Failed",
+    "Setup",
+    "Navigation",
+    "Root",
+    "Context",
+    "Document",
+    "Probe",
+    "Barrier",
+];
 const OPERATIONS: &[&str] = &[
+    "frontend_budget_expired",
     "adopt_main_environment",
     "allocate_main_commands",
     "allocate_main_event_payload",
@@ -140,10 +160,24 @@ pub(super) fn parse(bytes: &[u8]) -> Option<MainFailure> {
     let navigation = identity(fields.next()?.strip_prefix("navigation=")?)?;
     let observation = known(fields.next()?.strip_prefix("observation=")?, OBSERVATIONS)?;
     let code = code(fields.next()?.strip_prefix("code=")?)?;
+    let timeout = if operation == "frontend_budget_expired" {
+        if observation != "None" || code != Code::Io("TimedOut") {
+            return None;
+        }
+        let wait = known(fields.next()?.strip_prefix("wait=")?, WAITS)?;
+        let value = fields.next()?.strip_prefix("probe_operation=")?;
+        let issued = if value == "None" { None } else { Some(identity(value)?) };
+        if matches!(wait, "Probe" | "Barrier") != issued.is_some() {
+            return None;
+        }
+        Some(Timeout { wait, operation: issued })
+    } else {
+        None
+    };
     if fields.next().is_some() {
         return None;
     }
-    Some(MainFailure { launch, navigation, operation, observation, code })
+    Some(MainFailure { launch, navigation, operation, observation, code, timeout })
 }
 
 /// Match borrowed input to a fixed authored token, retaining no raw input bytes.

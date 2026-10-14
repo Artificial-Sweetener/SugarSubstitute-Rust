@@ -236,6 +236,15 @@ impl Error for MainRequestError {
     }
 }
 
+/// Carry the actual initiating reason through the existing Main retirement operation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MainRetirementReason {
+    /// Retire the current failed or cancelled attempt without a timeout diagnosis.
+    AttemptCleanup,
+    /// The authoritative original frontend cutoff expired before readiness acceptance.
+    FrontendTimeout,
+}
+
 /// Execute at most one explicit application command per bounded native drain.
 pub enum DesktopStartupCommand {
     /// Process an authenticated matching challenge on the actual existing UI event loop.
@@ -255,7 +264,12 @@ pub enum DesktopStartupCommand {
     /// Reveal an already usable main host after actual splash retirement.
     RevealMain(MainIdentity),
     /// Retire the exact current native main lifetime before admitting another attempt.
-    RetireMain(MainIdentity),
+    RetireMain {
+        /// Exact current actor; a rendered identity grants no native authority.
+        identity: MainIdentity,
+        /// The authoritative initiating attempt failure; diagnosis is passive.
+        reason: MainRetirementReason,
+    },
     /// Fence creation and observe exact absence on the native thread. Outstanding
     /// application construction or an unsettled actor prevents a positive observation.
     ConfirmMainAbsent(MainIdentity),

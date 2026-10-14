@@ -258,6 +258,7 @@ fn actual_production_text_formatter_with_writer_and_time_boundaries_preserves_cl
             operation: "decode_main_observation",
             observation: "Frame",
             code: main::Code::Hresult(i32::MIN),
+            timeout: None,
         })
     );
     Ok(())

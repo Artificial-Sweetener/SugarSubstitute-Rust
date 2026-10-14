@@ -15,6 +15,8 @@ mod configuration;
 mod connection;
 #[path = "child/diagnostics.rs"]
 mod diagnostics;
+#[path = "child/frontend_deadline.rs"]
+mod frontend_deadline;
 #[path = "child/handshake.rs"]
 mod handshake;
 #[path = "child/main.rs"]
@@ -74,6 +76,7 @@ pub(in crate::production) struct ProductionChild {
     acquisition_header: Option<WireHeader>,
     attempt: Option<attempt::AttemptCleanup>,
     frontend_budget: Option<FrontendBudget>,
+    frontend_timed_out: bool,
     acquire: Option<connection::PendingAcquire>,
     lease: Option<LeaseReference>,
     grant: Option<ReceivedLifecycleFrame>,
@@ -137,6 +140,7 @@ impl ProductionChild {
             acquisition_header: None,
             attempt: None,
             frontend_budget: None,
+            frontend_timed_out: false,
             acquire: None,
             lease: None,
             grant: None,

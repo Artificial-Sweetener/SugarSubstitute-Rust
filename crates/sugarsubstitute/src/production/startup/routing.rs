@@ -29,6 +29,13 @@ impl ProductionStartup {
         let child = self.child.consume(&batch, self.startup.as_ref());
         self.invalidate(cleanup_failed != self.child.cleanup_failed());
         let frame = super::consume_diagnostic::delivery(render, child)?;
+        self.deliver_startup_events()?;
+        let deadline = self.refresh_deadline();
+        observed_consume(ConsumeStage::DeadlineRefresh, deadline)?;
+        Ok(frame.flatten().filter(|_| !self.closing))
+    }
+    /// Deliver the original bounded child events before accepting later native evidence.
+    pub(super) fn deliver_startup_events(&mut self) -> Result<(), Box<dyn Error>> {
         for _ in 0..32 {
             let Some(startup) = &mut self.startup else { break };
             let Some(event) =
@@ -44,9 +51,7 @@ impl ProductionStartup {
             observed_consume(ConsumeStage::EffectRouting, dispatched)?;
             self.invalidate(true);
         }
-        let deadline = self.refresh_deadline();
-        observed_consume(ConsumeStage::DeadlineRefresh, deadline)?;
-        Ok(frame.flatten().filter(|_| !self.closing))
+        Ok(())
     }
     /// Advance a user-requested retry only after the sole policy observed settlement.
     fn retry_owned(&mut self) -> Result<(), Box<dyn Error>> {
@@ -59,13 +64,23 @@ impl ProductionStartup {
             launch,
             navigation: sugarsubstitute_contracts::execution::Generation::new(1)?,
         };
-        startup.session_mut().retry_configured(launch, identity.navigation)?;
+        Self::prepare_retry_policy(&self.child, startup.session_mut(), identity)?;
         self.child.retry_attempt(identity, startup)?;
         if let Some(view) = &mut self.view {
             view.phase(sugarsubstitute_application::startup::StartupPhase::SplashFirstFrame);
         }
         self.invalidate(true);
         Ok(())
+    }
+    /// Preflight actual child custody before replacing the application's retained failed attempt.
+    /// The transfer owner revalidates afterward; neither copied identity nor elapsed time settles it.
+    pub(in crate::production) fn prepare_retry_policy(
+        child: &ProductionChild,
+        session: &mut sugarsubstitute_application::startup::StartupSession,
+        identity: sugarsubstitute_contracts::startup::MainIdentity,
+    ) -> Result<(), Box<dyn Error>> {
+        child.ensure_retry_ready(identity)?;
+        Ok(session.retry_configured(identity.launch, identity.navigation)?)
     }
     /// Dispatch the one application decision to native UI or the actual child authority owner.
     /// # Errors

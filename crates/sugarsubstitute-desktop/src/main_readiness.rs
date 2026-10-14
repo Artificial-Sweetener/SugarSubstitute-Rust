@@ -18,6 +18,10 @@ use sugarsubstitute_contracts::{
     startup::{ReadinessOutcome, ReadinessReceipt},
 };
 
+#[cfg(any(target_os = "windows", test))]
+#[path = "main_readiness_snapshot.rs"]
+pub(crate) mod snapshot;
+
 struct PendingProbe {
     target: ProbeTarget,
     receipt: Option<ReadinessReceipt>,

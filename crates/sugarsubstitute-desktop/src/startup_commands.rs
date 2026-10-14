@@ -24,7 +24,7 @@ pub(super) fn drain(
             && !matches!(
                 command,
                 DesktopStartupCommand::Close
-                    | DesktopStartupCommand::RetireMain(_)
+                    | DesktopStartupCommand::RetireMain { .. }
                     | DesktopStartupCommand::ConfirmMainAbsent(_)
                     | DesktopStartupCommand::ProcessUiChallenge(_)
             )
@@ -74,9 +74,11 @@ pub(super) fn drain(
             DesktopStartupCommand::ProbeFrontend(identity) => {
                 main_operation(session, content, |owner| owner.probe(identity).map(|()| None))?;
             }
-            DesktopStartupCommand::RetireMain(identity) => {
+            DesktopStartupCommand::RetireMain { identity, reason } => {
                 if session.main.as_ref().is_some_and(|owner| owner.identity() == identity) {
-                    main(session)?.close(identity)?;
+                    let owner = main(session)?;
+                    owner.observe_retirement_reason(identity, reason)?;
+                    owner.close(identity)?;
                 } else {
                     confirm_main_absent(session, content, identity)?;
                 }

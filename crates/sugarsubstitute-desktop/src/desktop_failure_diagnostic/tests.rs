@@ -377,3 +377,50 @@ fn actual_main_absence_observation_tag_remains_distinct_from_retired_without_ide
     );
     Ok(())
 }
+
+#[test]
+fn frontend_timeout_actual_formatter_emits_only_bounded_sealed_owner_fields()
+-> Result<(), Box<dyn Error>> {
+    use crate::main_readiness::snapshot::{Snapshot, Wait};
+    use sugarsubstitute_contracts::{
+        execution::Generation,
+        lifecycle::{
+            CoordinatorEpoch, CoordinatorKey, InstanceId, NamespaceId, RunGeneration, RunKey,
+        },
+        startup::LaunchId,
+    };
+    let identity = crate::MainIdentity {
+        run: RunKey {
+            owner: CoordinatorKey {
+                namespace: NamespaceId::new([1; 32]),
+                epoch: CoordinatorEpoch::new([2; 16])?,
+            },
+            instance: InstanceId::new(1)?,
+            generation: RunGeneration::new(1)?,
+        },
+        launch: LaunchId::new(u64::MAX)?,
+        navigation: Generation::new(u64::MAX)?,
+    };
+    let events = Arc::new(Mutex::new(Vec::new()));
+    tracing::dispatcher::with_default(&tracing::Dispatch::new(Sink(events.clone())), || {
+        crate::DesktopError::observe_frontend_timeout(
+            identity,
+            Snapshot { wait: Wait::Barrier, operation: Some(u64::MAX) },
+        );
+    });
+    let captured = events.lock().map_err(|_| std::io::Error::other("Sink poisoned"))?;
+    assert_eq!(captured.len(), 1);
+    for (key, value) in [
+        ("operation", "main_failure_transition"),
+        ("failed_operation", "frontend_budget_expired"),
+        ("observation", "None"),
+        ("code", "Io(TimedOut)"),
+        ("wait", "Barrier"),
+        ("probe_operation", "18446744073709551615"),
+    ] {
+        assert!(captured[0].iter().any(|(k, v)| k == key && v == value));
+    }
+    let bytes: usize = captured[0].iter().map(|(k, v)| k.len() + v.len() + 4).sum();
+    assert!(bytes + 128 < 512);
+    Ok(())
+}

@@ -63,6 +63,35 @@ impl super::DesktopError {
     }
 }
 
+#[cfg(any(target_os = "windows", test))]
+struct ProbeOperation(Option<u64>);
+#[cfg(any(target_os = "windows", test))]
+impl std::fmt::Display for ProbeOperation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            Some(value) => write!(f, "{value}"),
+            None => f.write_str("None"),
+        }
+    }
+}
+/// Emit the authoritative frontend expiry in the existing first Main failure frame.
+/// Facts come from the actual creating-thread owner; no error callbacks or clock are invoked.
+#[cfg(any(target_os = "windows", test))]
+impl super::DesktopError {
+    pub(crate) fn observe_frontend_timeout(
+        identity: crate::MainIdentity,
+        snapshot: crate::main_readiness::snapshot::Snapshot,
+    ) {
+        let operation = ProbeOperation(snapshot.operation);
+        let observation = "None";
+        tracing::warn!(operation="main_failure_transition", failed_operation="frontend_budget_expired",
+        launch=identity.launch.get(), navigation=identity.navigation.get(),
+        observation=%observation, code=?MainCode::Io(Kind::TimedOut),
+        wait=?snapshot.wait, probe_operation=%operation,
+        "Original frontend cutoff reached before readiness acceptance");
+    }
+}
+
 /// Project only known native/content boundaries without copying arbitrary operation text.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Boundary {

@@ -88,7 +88,14 @@ impl ProductionChild {
                 .iter_mut()
                 .find(|slot| slot.is_none())
                 .ok_or("Main retirement command slots full")?;
-            *slot = Some(DesktopStartupCommand::RetireMain(self.identity));
+            *slot = Some(DesktopStartupCommand::RetireMain {
+                identity: self.identity,
+                reason: if self.frontend_timed_out {
+                    sugarsubstitute_desktop::MainRetirementReason::FrontendTimeout
+                } else {
+                    sugarsubstitute_desktop::MainRetirementReason::AttemptCleanup
+                },
+            });
         }
         self.attempt = Some(AttemptCleanup {
             original,
@@ -216,12 +223,9 @@ impl ProductionChild {
     pub(in crate::production) fn cleanup_failed(&self) -> bool {
         self.attempt.as_ref().is_some_and(|attempt| attempt.failures.iter().any(Option::is_some))
     }
-    /// Replace only a settled acquisition attempt without replacing capture or channel.
-    pub(in crate::production) fn retry_attempt(
-        &mut self,
-        identity: MainIdentity,
-        prepared: &mut PreparedChildStartup,
-    ) -> Result<()> {
+    /// Reject foreign or unsettled custody before the application replaces its old failure.
+    /// This reads the same actual retained transaction; it grants no physical retirement.
+    pub(in crate::production) fn ensure_retry_ready(&self, identity: MainIdentity) -> Result<()> {
         if identity.run != self.run
             || identity.launch.get() <= self.identity.launch.get()
             || self.attempt.as_ref().is_none_or(|a| !a.acknowledged || !a.settled)
@@ -233,6 +237,15 @@ impl ProductionChild {
         if self.failure.is_some() {
             return Err("Unresolved original child infrastructure cause prevents retry".into());
         }
+        Ok(())
+    }
+    /// Replace only a settled acquisition attempt without replacing capture or channel.
+    pub(in crate::production) fn retry_attempt(
+        &mut self,
+        identity: MainIdentity,
+        prepared: &mut PreparedChildStartup,
+    ) -> Result<()> {
+        self.ensure_retry_ready(identity)?;
         let mut input = self.main.take_reusable_input()?;
         if let Err(cause) = prepared.restore_main_input(&mut input) {
             self.main.restore_reusable_input(&mut input)?;
@@ -242,6 +255,7 @@ impl ProductionChild {
         self.identity = identity;
         self.connection_budget = None;
         self.frontend_budget = None;
+        self.frontend_timed_out = false;
         self.acquire = None;
         self.acquisition_header = None;
         self.attempt = None;

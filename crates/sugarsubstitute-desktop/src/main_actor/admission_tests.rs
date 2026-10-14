@@ -99,3 +99,26 @@ fn close_at_each_construction_stage_permanently_rejects_late_progress() -> Resul
     }
     Ok(())
 }
+
+#[test]
+fn frontend_timeout_diagnosis_requires_exact_issued_navigation_and_closing_suppresses_duplicates()
+-> Result<(), Box<dyn Error>> {
+    let expected = identity()?;
+    let mut owner = Admission::new(expected);
+    assert!(owner.timeout_diagnostic_allowed(expected).is_err());
+    owner.environment_observed()?;
+    owner.authorize_environment(expected)?;
+    owner.controller_observed(42)?;
+    owner.authorize_browser(expected)?;
+    owner.hook_completed(true)?;
+    owner.hook_completed(false)?;
+    owner.navigation_admitted()?;
+    assert!(owner.timeout_diagnostic_allowed(expected)?);
+    let mut foreign = expected;
+    foreign.navigation = Generation::new(2)?;
+    assert!(owner.timeout_diagnostic_allowed(foreign).is_err());
+    owner.close();
+    assert!(!owner.timeout_diagnostic_allowed(expected)?);
+    assert!(owner.timeout_diagnostic_allowed(foreign).is_err());
+    Ok(())
+}

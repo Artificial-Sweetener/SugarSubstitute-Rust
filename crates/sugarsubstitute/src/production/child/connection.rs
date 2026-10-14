@@ -307,13 +307,21 @@ impl ProductionChild {
         if self.output.closing() {
             self.advance_output()?;
         }
-        match ActivityRoute::select(
+        let route = ActivityRoute::select(
             self.shutdown.closing(),
             self.attempt.as_ref(),
             self.phase,
             self.frontend_budget,
             self.client()?.now()?,
-        )? {
+        );
+        let route = match route {
+            Ok(route) => route,
+            Err(cause) => {
+                self.publish_frontend_timeout(cause)?;
+                return Ok(());
+            }
+        };
+        match route {
             ActivityRoute::Shutdown => {
                 self.retire_acquire()?;
                 return self.advance_shutdown();

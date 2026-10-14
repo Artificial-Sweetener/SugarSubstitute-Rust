@@ -98,8 +98,8 @@ pub use runtime::run;
 
 pub use host_contract::{
     DesktopStartupCommand, DesktopStartupObservation, MainCaptionLabels, MainIdentity,
-    MainRequestError, MainWindowRequest, MainWindowSettings, ServedFrontendVersions,
-    StartupDesktopReceipt, StartupPreparationStep, StartupWindowContent,
+    MainRequestError, MainRetirementReason, MainWindowRequest, MainWindowSettings,
+    ServedFrontendVersions, StartupDesktopReceipt, StartupPreparationStep, StartupWindowContent,
 };
 
 pub use main_environment::{MainEnvironmentError, MainEnvironmentFacts};

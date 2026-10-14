@@ -193,6 +193,14 @@ impl DesktopOutput {
                             "Observed owned child's closed connection progress");
                     }
                     diagnostic::Observation::MainFailure(failure) => {
+                        if let Some(timeout) = failure.timeout {
+                            tracing::warn!(operation="desktop_child_main_failure",run=?self.run,
+                                launch=failure.launch,navigation=failure.navigation,
+                                failed_operation=%failure.operation,observation=%failure.observation,
+                                code=?failure.code,wait=%timeout.wait,probe_operation=?timeout.operation,
+                                "Observed original frontend expiry within its owned desktop output");
+                            return;
+                        }
                         tracing::warn!(operation="desktop_child_main_failure",run=?self.run,
                             launch=failure.launch,navigation=failure.navigation,
                             failed_operation=%failure.operation,observation=%failure.observation,

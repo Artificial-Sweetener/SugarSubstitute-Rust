@@ -93,3 +93,40 @@ fn repeated_polling_never_coalesces_away_context_loss_or_malformed_duplicate_rec
     assert!(!malformed.ready());
     Ok(())
 }
+
+#[test]
+fn frontend_timeout_snapshot_is_passive_and_tracks_real_probe_barrier_and_fault_custody() -> Result
+{
+    use crate::main_readiness::snapshot::Wait;
+    let mut value = owner()?;
+    assert_eq!(value.wait_snapshot().wait, Wait::Setup);
+    value.navigation_started()?;
+    assert_eq!(value.wait_snapshot().wait, Wait::Navigation);
+    value.navigation_completed(true)?;
+    assert_eq!(value.wait_snapshot().wait, Wait::Root);
+    value.frame("root", "loader", None, "http://127.0.0.1:8188/")?;
+    assert_eq!(value.wait_snapshot().wait, Wait::Context);
+    value.context(7, "root", "http://127.0.0.1:8188", true)?;
+    assert_eq!(value.wait_snapshot().wait, Wait::Document);
+    let target = value.poll_probe()?.ok_or("Actual target absent")?;
+    let sequence = value.next_operation;
+    for _ in 0..32 {
+        assert_eq!(value.wait_snapshot().wait, Wait::Probe);
+        assert_eq!(value.wait_snapshot().operation, Some(target.operation));
+    }
+    assert_eq!(value.next_operation, sequence);
+    value.dom_result(target, Some(positive(target)?))?;
+    assert_eq!(value.wait_snapshot().wait, Wait::Barrier);
+    assert_eq!(value.wait_snapshot().operation, Some(target.operation));
+    let mut stale = target;
+    stale.identity.navigation = Generation::new(2)?;
+    assert_eq!(value.barrier_complete(stale), Err(ReadinessFault::StaleProbe));
+    assert_eq!(value.wait_snapshot().wait, Wait::Barrier);
+    value.barrier_complete(target)?;
+    assert_eq!(value.wait_snapshot().wait, Wait::Ready);
+    assert_eq!(value.wait_snapshot().operation, None);
+    value.invalidate(ReadinessFault::ContextLost);
+    assert_eq!(value.wait_snapshot().wait, Wait::Fault);
+    assert_eq!(value.wait_snapshot().operation, None);
+    Ok(())
+}

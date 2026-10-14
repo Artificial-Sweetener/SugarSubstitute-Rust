@@ -9,7 +9,8 @@ const LINE: &str = "operation=\"main_failure_transition\" failed_operation=\"dec
 
 #[test]
 fn main_grammar_rejects_unknown_extensions_noncanonical_identities_and_native_codes() {
-    for operation in OPERATIONS {
+    for operation in OPERATIONS.iter().filter(|operation| **operation != "frontend_budget_expired")
+    {
         for observation in OBSERVATIONS {
             let line = LINE
                 .replace("decode_main_observation", operation)
@@ -101,6 +102,7 @@ fn main_oversize_gap_eof_and_stdout_cannot_stitch_or_publish_private_suffixes() 
             operation: "decode_main_observation",
             observation: "Frame",
             code: Code::JsonData,
+            timeout: None,
         })]
     );
 }
@@ -138,4 +140,43 @@ fn main_and_generic_failures_both_survive_saturated_progress_in_either_order() {
         assert!(seen.iter().any(|value| matches!(value, Observation::Failure(_))));
         assert_eq!(owner.bytes.len(), 512);
     }
+}
+
+#[test]
+fn frontend_timeout_exact_bounded_grammar_rejects_foreign_wait_operation_and_duplicate_fields() {
+    let line = "operation=\"main_failure_transition\" failed_operation=\"frontend_budget_expired\" launch=18446744073709551615 navigation=18446744073709551615 observation=None code=Io(TimedOut) wait=Barrier probe_operation=18446744073709551615";
+    assert!(line.len() < 512);
+    let parsed = parse(line.as_bytes()).and_then(|failure| failure.timeout);
+    assert_eq!(parsed, Some(Timeout { wait: "Barrier", operation: Some(u64::MAX) }));
+    for wait in WAITS {
+        let operation = if matches!(*wait, "Probe" | "Barrier") { "1" } else { "None" };
+        let current = line.replace("wait=Barrier", &format!("wait={wait}")).replace(
+            "probe_operation=18446744073709551615",
+            &format!("probe_operation={operation}"),
+        );
+        assert!(parse(current.as_bytes()).is_some());
+    }
+    for bad in [
+        line.replace("wait=Barrier", "wait=PRIVATE"),
+        line.replace("probe_operation=18446744073709551615", "probe_operation=0"),
+        line.replace("probe_operation=18446744073709551615", "probe_operation=None"),
+        line.replace("wait=Barrier", "wait=Ready"),
+        line.replace("code=Io(TimedOut)", "code=Opaque"),
+        line.replace("observation=None", "observation=Probe"),
+        format!("{line} wait=Barrier"),
+        format!("{line} private=payload"),
+    ] {
+        assert!(parse(bad.as_bytes()).is_none());
+    }
+    let mut owner = Diagnostic::new();
+    let mut seen = Vec::new();
+    let duplicate = format!(
+        "{line}
+{line}
+"
+    );
+    owner.feed(OutputStream::Stderr, 1, false, false, duplicate.as_bytes(), |value| {
+        seen.push(value)
+    });
+    assert_eq!(seen.len(), 1);
 }
