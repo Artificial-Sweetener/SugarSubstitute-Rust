@@ -39,8 +39,14 @@ impl CoordinatorEntryOwner {
                     .set(memory.clone())
                     .map_err(|_| ClaimError::invalid("entry_repeated_preclaim"))?;
                 state.memory = Some(memory);
-                port.discover(&mut state, &paths.installation, &paths.executable, &context)
-                    .map(Actual::Discovered)
+                port.discover(
+                    &mut state,
+                    &paths.installation,
+                    &paths.executable,
+                    &paths.diagnostics,
+                    &context,
+                )
+                .map(Actual::Discovered)
             })
             .map_err(EntryAdmissionError::Execution)?;
         self.accept(client, scope, job, EntryPhase::Discovering);

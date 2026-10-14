@@ -69,10 +69,17 @@ struct PreparedController {
     input: ChargedBlockingInput<PreparationInput>,
 }
 #[derive(Debug)]
+enum PreparationIdentity {
+    Namespace,
+    ExecutionOwner,
+    Reservation,
+    Deadline,
+}
+#[derive(Debug)]
 enum PreparationCause {
     Namespace(EntryError),
     Memory(MemoryClaimError),
-    Identity,
+    Identity(PreparationIdentity),
     Capacity,
 }
 impl fmt::Display for PreparationCause {
@@ -82,7 +89,7 @@ impl fmt::Display for PreparationCause {
             Self::Memory(_) | Self::Capacity => {
                 f.write_str("Incident controller capacity rejected")
             }
-            Self::Identity => f.write_str("Incident controller identity rejected"),
+            Self::Identity(_) => f.write_str("Incident controller identity rejected"),
         }
     }
 }
@@ -91,7 +98,7 @@ impl Error for PreparationCause {
         match self {
             Self::Namespace(cause) => Some(cause),
             Self::Memory(cause) => Some(cause),
-            Self::Identity | Self::Capacity => None,
+            Self::Identity(_) | Self::Capacity => None,
         }
     }
 }

@@ -3,10 +3,12 @@
 //! Coordinate actual finite entry discovery/election through the execution owner.
 //! Cached UI methods never perform native work or wait for workers. Native custody
 //! survives cancellation, late completion, failed closure and abandoned owner loss.
+mod diagnostic_location;
 pub(crate) mod election;
 #[cfg(test)]
 pub(crate) mod fixture;
 mod input;
+pub use diagnostic_location::DiagnosticStorageLocation;
 pub(crate) mod namespace;
 #[cfg(feature = "boundary-fixtures")]
 #[path = "coordinator_entry/namespace_fixture.rs"]

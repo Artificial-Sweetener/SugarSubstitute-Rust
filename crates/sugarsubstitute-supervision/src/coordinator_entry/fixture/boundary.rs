@@ -142,6 +142,7 @@ impl NativePort for Fake {
         state: &mut NativeState,
         _: &std::path::Path,
         _: &std::path::Path,
+        _: &crate::coordinator_entry::DiagnosticStorageLocation,
         context: &sugarsubstitute_contracts::execution::JobContext,
     ) -> Result<Discovered, ClaimError> {
         if state.memory.is_none() {
@@ -221,6 +222,7 @@ pub(crate) fn resolved() -> ResolvedNamespace {
         directory: PathBuf::from(r"E:\entry-external-boundary"),
         directory_slot: 0,
         directory_identity: [1; 24],
+        diagnostics: None,
     }
 }
 

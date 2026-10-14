@@ -63,6 +63,7 @@ enum CleanupFailure {
 pub(crate) struct EntryBootstrap {
     options: Option<ProductionEntryOptions>,
     installation: Option<PathBuf>,
+    diagnostics: Option<sugarsubstitute_supervision::coordinator_entry::DiagnosticStorageLocation>,
     executable: Option<PathBuf>,
     original: EntrySetupBudget,
     client: Option<ExecutionClient>,
@@ -84,6 +85,7 @@ impl EntryBootstrap {
     pub(crate) fn new(
         options: ProductionEntryOptions,
         installation: PathBuf,
+        diagnostics: sugarsubstitute_supervision::coordinator_entry::DiagnosticStorageLocation,
         executable: PathBuf,
         original: EntrySetupBudget,
     ) -> Result<Self, ConfigurationError> {
@@ -92,6 +94,7 @@ impl EntryBootstrap {
         Ok(Self {
             options: Some(options),
             installation: Some(installation),
+            diagnostics: Some(diagnostics),
             executable: Some(executable),
             original,
             client: None,
@@ -217,7 +220,8 @@ impl EntryBootstrap {
         };
         let installation = self.installation.take().ok_or(EntryBootstrapIssue::Input)?;
         let executable = self.executable.take().ok_or(EntryBootstrapIssue::Input)?;
-        match CoordinatorEntryInput::from_owned(installation, executable, request) {
+        let diagnostics = self.diagnostics.take().ok_or(EntryBootstrapIssue::Input)?;
+        match CoordinatorEntryInput::from_owned(installation, executable, diagnostics, request) {
             Ok(input) => self.owner = Some(CoordinatorEntryOwner::new(input, self.original)),
             Err(cause) => {
                 self.failure = Some(Failure::Input(cause));

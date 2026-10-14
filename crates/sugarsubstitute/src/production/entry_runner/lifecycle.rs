@@ -35,6 +35,7 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
         self.bootstrap = Some(EntryBootstrap::new(
             command.options,
             command.installation,
+            command.diagnostics,
             self.executable.clone(),
             original,
         )?);

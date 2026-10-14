@@ -123,3 +123,6 @@ fn invalid_root_rejection_has_no_native_effects_and_checked_retirement_releases_
         Ok(())
     })
 }
+
+#[path = "account/diagnostic_root/tests.rs"]
+mod diagnostic_root;

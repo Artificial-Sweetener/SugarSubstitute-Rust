@@ -31,13 +31,13 @@ impl ProtectedStorageRoot {
             .as_ref()
             .cloned()
             .ok_or_else(|| state.budget.rejection("diagnostic_namespace_root"))?;
-        let pin = pins
-            .get(source.directory_slot)
-            .ok_or_else(|| state.budget.rejection("diagnostic_namespace_pin"))?;
+        let (directory, slot, directory_identity) = source.diagnostic_directory();
+        let pin =
+            pins.get(slot).ok_or_else(|| state.budget.rejection("diagnostic_namespace_pin"))?;
         let State { budget, causes, sid, .. } = state;
         with_phase(budget, causes, context, ScratchRole::Path, |phase| {
-            if path.path()? != source.directory
-                || identity != source.directory_identity
+            if path.path()? != directory
+                || identity != directory_identity
                 || sid.bytes()? != source.account_sid.as_slice()
                 || paths::file_identity(pin, phase)? != identity
             {

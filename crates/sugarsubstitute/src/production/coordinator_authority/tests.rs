@@ -126,7 +126,15 @@ fn inert_entry(budget: EntrySetupBudget) -> Result<CoordinatorEntryOwner, Box<dy
         path.clone(),
         vec![0, 0],
     )?;
-    Ok(CoordinatorEntryOwner::new(CoordinatorEntryInput::new(path.clone(), path, request)?, budget))
+    Ok(CoordinatorEntryOwner::new(
+        CoordinatorEntryInput::new(
+            path.clone(),
+            path,
+            sugarsubstitute_supervision::coordinator_entry::DiagnosticStorageLocation::Account,
+            request,
+        )?,
+        budget,
+    ))
 }
 
 #[test]

@@ -49,7 +49,12 @@ impl Harness {
             path.clone(),
             vec![0, 0],
         )?;
-        let input = CoordinatorEntryInput::new(path.clone(), path, request)?;
+        let input = CoordinatorEntryInput::new(
+            path.clone(),
+            path,
+            crate::coordinator_entry::DiagnosticStorageLocation::Account,
+            request,
+        )?;
         let budget = EntrySetupBudget::new(Moment::from_nanos(0))?;
         let owner = CoordinatorEntryOwner::with_port(input, budget, fake.clone());
         Ok(Self {

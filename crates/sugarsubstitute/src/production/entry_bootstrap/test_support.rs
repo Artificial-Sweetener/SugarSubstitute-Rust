@@ -39,6 +39,7 @@ impl Files {
                 profile: self.directory.join("profile"),
             },
             self.directory.clone(),
+            sugarsubstitute_supervision::coordinator_entry::DiagnosticStorageLocation::Account,
             self.directory.join("SugarSubstitute.exe"),
             EntrySetupBudget::new(Moment::from_nanos(0))?,
         )?)

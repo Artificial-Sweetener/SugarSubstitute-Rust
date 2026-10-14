@@ -3,6 +3,35 @@
 //! Admit controller allocation on the existing finite blocking boundary before effects.
 use super::*;
 
+/// Log only closed categories and admission byte counts; retain original sensitive causes.
+fn record_terminal(completion: &JobCompletion<PreparedController, PreparationFailure>) {
+    let (cause, identity_stage, requested_bytes, available_bytes) = match &completion.outcome {
+        JobOutcome::Failure(failure) => match &failure.cause {
+            PreparationCause::Namespace(_) => ("namespace", None, None, None),
+            PreparationCause::Memory(cause) => {
+                ("memory", None, Some(cause.requested_bytes), Some(cause.available_bytes))
+            }
+            PreparationCause::Identity(stage) => ("identity", Some(stage), None, None),
+            PreparationCause::Capacity => ("capacity", None, None, None),
+        },
+        _ => ("none", None, None, None),
+    };
+    tracing::error!(
+        operation = "incident_constructor_terminal",
+        scope = ?completion.scope_id,
+        job = ?completion.spec.id,
+        terminal = ?completion.outcome.kind(),
+        preparation_cause = cause,
+        identity_stage = ?identity_stage,
+        requested_bytes,
+        available_bytes,
+        queue_time_ns = %completion.queue_time.as_nanos(),
+        execution_time_ns = %completion.execution_time.as_nanos(),
+        deadline_ns = completion.spec.deadline.map(Moment::as_nanos),
+        "Incident controller preparation stopped"
+    );
+}
+
 pub(super) fn allocate_policy(
     owner: CoordinatorKey,
     context: &JobContext,
@@ -45,14 +74,20 @@ fn prepare(
 ) -> Result<PreparedController, PreparationFailure> {
     let result = (|| {
         let value = input.input();
-        if value.namespace.namespace() != value.owner.namespace
-            || value.namespace.execution_owner() != context.owner_id()
-            || context.spec().reservation_bytes != CONTROLLER_BYTES
-            || context
-                .deadline()
-                .is_none_or(|until| until > value.namespace.original_preparation().until())
+        if value.namespace.namespace() != value.owner.namespace {
+            return Err(PreparationCause::Identity(PreparationIdentity::Namespace));
+        }
+        if value.namespace.execution_owner() != context.owner_id() {
+            return Err(PreparationCause::Identity(PreparationIdentity::ExecutionOwner));
+        }
+        if context.spec().reservation_bytes != CONTROLLER_BYTES {
+            return Err(PreparationCause::Identity(PreparationIdentity::Reservation));
+        }
+        if context
+            .deadline()
+            .is_none_or(|until| until > value.namespace.original_preparation().until())
         {
-            return Err(PreparationCause::Identity);
+            return Err(PreparationCause::Identity(PreparationIdentity::Deadline));
         }
         value.namespace.validate_live().map_err(PreparationCause::Namespace)?;
         allocate_policy(value.owner, &context)
@@ -146,6 +181,9 @@ impl IncidentHost {
                 self.completion.as_ref().map(|value| &value.outcome),
                 Some(JobOutcome::Success(_))
             ) {
+                if let Some(completion) = &self.completion {
+                    record_terminal(completion);
+                }
                 return Err(HostIssue::Preparation);
             }
         }

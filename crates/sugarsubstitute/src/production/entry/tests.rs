@@ -30,7 +30,12 @@ fn inert_owner() -> Result<CoordinatorEntryOwner, Box<dyn Error>> {
         vec![65, 61, 66, 0, 0],
     )?;
     Ok(CoordinatorEntryOwner::new(
-        CoordinatorEntryInput::new(path.clone(), path, input)?,
+        CoordinatorEntryInput::new(
+            path.clone(),
+            path,
+            sugarsubstitute_supervision::coordinator_entry::DiagnosticStorageLocation::Account,
+            input,
+        )?,
         EntrySetupBudget::new(Moment::from_nanos(7))?,
     ))
 }

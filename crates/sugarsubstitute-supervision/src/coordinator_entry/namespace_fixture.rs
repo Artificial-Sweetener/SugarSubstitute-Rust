@@ -39,6 +39,7 @@ impl NativePort for Boundary {
         state: &mut NativeState,
         _: &Path,
         _: &Path,
+        _: &super::DiagnosticStorageLocation,
         context: &JobContext,
     ) -> Result<Discovered, ClaimError> {
         native::check(context)?;
@@ -57,6 +58,7 @@ impl NativePort for Boundary {
             directory: PathBuf::from("entry-boundary-inert"),
             directory_slot: 0,
             directory_identity: [1; 24],
+            diagnostics: None,
         });
         state.image_identity = Some([7; 24]);
         Ok(Discovered { facts, installation_identity: [6; 24] })

@@ -93,7 +93,7 @@ impl Port for StreamingPort {
             context,
         )?;
         let resolved = loan.resolved()?;
-        self.root.resolve(&resolved.directory, context)?;
+        self.root.resolve(resolved.diagnostic_directory().0, context)?;
         self.root.validate_diagnostic_namespace(resolved, loan.handles()?, context)?;
         let (directory, sid, disposition, identity) =
             self.root.diagnostic_directory(request.operation().owner().namespace, context)?;

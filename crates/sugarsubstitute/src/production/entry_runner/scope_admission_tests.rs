@@ -79,6 +79,7 @@ fn mailbox_wake_failure_retains_original_and_runner_observes_cleanup_after_admis
 -> Result<(), Box<dyn Error>> {
     let invalid = PathBuf::from("relative-installation");
     let command = ProductionCommand {
+        diagnostics: Default::default(),
         installation: invalid.clone(),
         options: super::super::super::options::ProductionEntryOptions {
             configuration: invalid.clone(),
@@ -189,6 +190,7 @@ fn actual_runner_native_rejects_finite_box_and_real_finite_scope_preserves_origi
 -> Result<(), Box<dyn Error>> {
     let invalid = PathBuf::from("relative-installation");
     let command = ProductionCommand {
+        diagnostics: Default::default(),
         installation: invalid.clone(),
         options: super::super::super::options::ProductionEntryOptions {
             configuration: invalid.clone(),

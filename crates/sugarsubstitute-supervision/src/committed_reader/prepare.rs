@@ -58,7 +58,7 @@ fn prepare_once(fields: &mut Fields, original: &AllocationOrigin) -> Result<(), 
     fields.root = Some(name(
         original,
         CapturePathRole::CurrentImage,
-        &fields.namespace.resolved()?.directory,
+        fields.namespace.resolved()?.diagnostic_directory().0,
         None,
         &mut fields.causes,
     )?);
@@ -69,8 +69,9 @@ fn prepare_once(fields: &mut Fields, original: &AllocationOrigin) -> Result<(), 
     let mut phase = super::phase(original, &mut fields.scratch, causes);
     paths::open_cell(root.path()?, true, true, &mut fields.directories[0], &mut phase)?;
     let resolved = fields.namespace.resolved()?;
-    if fields.namespace.handles()?.get(resolved.directory_slot).is_none_or(|pin| !pin.is_armed())
-        || paths::file_identity(&fields.directories[0], &mut phase)? != resolved.directory_identity
+    let (_, root_slot, root_identity) = resolved.diagnostic_directory();
+    if fields.namespace.handles()?.get(root_slot).is_none_or(|pin| !pin.is_armed())
+        || paths::file_identity(&fields.directories[0], &mut phase)? != root_identity
     {
         return Err(phase.invalid("committed_reader_root_changed"));
     }

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Resolve actual primary-account and pinned installation namespace authority.
+mod diagnostic_root;
 mod namespace_directory;
 use super::{
     native_name::{NativeSid, NativeSidDestination},
@@ -12,6 +13,7 @@ use crate::{
     ClaimError,
     native_claims::files::{Budget, Handle},
 };
+pub(crate) use diagnostic_root::resolve as resolve_diagnostic_root;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use sugarsubstitute_contracts::lifecycle::NamespaceId;
@@ -119,6 +121,7 @@ pub(crate) struct ResolvedNamespace {
     pub(crate) directory: PathBuf,
     pub(crate) directory_slot: usize,
     pub(crate) directory_identity: [u8; 24],
+    pub(crate) diagnostics: Option<diagnostic_root::PinnedDiagnosticDirectory>,
 }
 /// Resolve existing namespace inputs and protected claims directories under retained custody.
 /// Errors preserve every partial token/path handle in the original charged owner.
@@ -226,6 +229,7 @@ pub(crate) fn resolve_namespace(
         directory,
         directory_slot,
         directory_identity,
+        diagnostics: None,
     })
 }
 fn namespace_identity(sid: &[u8], installation: &[u8; 24]) -> NamespaceId {

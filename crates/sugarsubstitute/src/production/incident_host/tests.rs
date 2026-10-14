@@ -9,6 +9,9 @@ use std::{
 };
 use sugarsubstitute_execution::ExecutionOwner;
 
+#[path = "tests/constructor.rs"]
+mod constructor;
+
 #[test]
 fn deferred_report_record_fits_real_original_policy_admission_until_checked_disposal()
 -> Result<(), Box<dyn Error + Send + Sync>> {

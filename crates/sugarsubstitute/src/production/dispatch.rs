@@ -12,14 +12,17 @@ use sugarsubstitute_contracts::configuration::LaunchConfiguration;
 /// Retain inert launch inputs; actual namespace discovery checks installed identity.
 pub(crate) struct ProductionCommand {
     pub(crate) installation: PathBuf,
+    pub(crate) diagnostics:
+        sugarsubstitute_supervision::coordinator_entry::DiagnosticStorageLocation,
     pub(crate) options: ProductionEntryOptions,
 }
 /// Consume the production prefix only; fallback receives every original argument.
 pub(crate) enum Dispatch<I: Iterator<Item = OsString>> {
-    Production(ProductionCommand),
+    /// Retain one complete inert command until the runner consumes its original ownership.
+    Production(Box<ProductionCommand>),
     Existing(std::iter::Peekable<I>),
 }
-/// Parse `--production --installation-root PATH` followed by the six owned options.
+/// Parse installed production inputs, optional diagnostic root, then the six owned options.
 /// No filesystem, environment snapshot, execution or native surface is initialized.
 /// # Errors
 /// Rejects missing installation, invalid Domain path grammar and owned option shape.
@@ -40,8 +43,20 @@ pub(crate) fn parse<I: IntoIterator<Item = OsString>>(
     if installation.capacity() > 256 * 1024 {
         return Err("Production installation path capacity exceeded".into());
     }
+    let diagnostics = if arguments.peek().is_some_and(|value| value == "--diagnostic-root") {
+        arguments.next();
+        let path = PathBuf::from(arguments.next().ok_or("Production diagnostic root missing")?);
+        let location =
+            sugarsubstitute_supervision::coordinator_entry::DiagnosticStorageLocation::Explicit(
+                path,
+            );
+        location.validate()?;
+        location
+    } else {
+        sugarsubstitute_supervision::coordinator_entry::DiagnosticStorageLocation::Account
+    };
     let options = ProductionEntryOptions::parse(arguments)?;
-    Ok(Dispatch::Production(ProductionCommand { installation, options }))
+    Ok(Dispatch::Production(Box::new(ProductionCommand { installation, diagnostics, options })))
 }
 
 /// Run the selected real production role; return the untouched legacy iterator.
@@ -60,7 +75,7 @@ where
     match parse(arguments)? {
         Dispatch::Existing(arguments) => Ok(Some(arguments)),
         Dispatch::Production(command) => {
-            super::entry_runner::run(command, child, diagnostics)?;
+            super::entry_runner::run(*command, child, diagnostics)?;
             Ok(None)
         }
     }
@@ -134,5 +149,69 @@ mod tests {
         assert_eq!(command.installation, PathBuf::from(r"E:\installation"));
         assert_eq!(command.options.configuration, PathBuf::from(r"E:\configuration.json"));
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod diagnostic_location_tests {
+    use super::*;
+    fn arguments() -> Vec<OsString> {
+        [
+            "--production",
+            "--installation-root",
+            r"D:\installed",
+            "--diagnostic-root",
+            r"D:\private-diagnostics",
+            "--startup-config",
+            r"D:\startup.toml",
+            "--frontend-package",
+            r"D:\frontend",
+            "--frontend-metadata",
+            r"D:\metadata",
+            "--sugarcubes-root",
+            r"D:\cubes",
+            "--backend-script",
+            r"D:\main.py",
+            "--profile-directory",
+            r"D:\profile",
+        ]
+        .map(OsString::from)
+        .into()
+    }
+    #[test]
+    fn explicit_diagnostic_root_is_local_desktop_configuration_and_omission_preserves_account()
+    -> Result<(), Box<dyn Error>> {
+        let Dispatch::Production(command) = parse(arguments())? else {
+            return Err("Production not selected".into());
+        };
+        assert_eq!(
+            command.diagnostics.explicit_path(),
+            Some(std::path::Path::new(r"D:\private-diagnostics"))
+        );
+        let mut omitted = arguments();
+        omitted.drain(3..5);
+        let Dispatch::Production(command) = parse(omitted)? else {
+            return Err("Production not selected".into());
+        };
+        assert!(command.diagnostics.explicit_path().is_none());
+        Ok(())
+    }
+    #[test]
+    fn malformed_or_duplicate_diagnostic_root_rejects_before_production_activation() {
+        for path in ["relative", r"\\server\share\private", r"D:\"] {
+            let mut input = arguments();
+            input[4] = OsString::from(path);
+            assert!(parse(input).is_err());
+        }
+        let mut duplicate = arguments();
+        duplicate.splice(5..5, ["--diagnostic-root", r"D:\second"].map(OsString::from));
+        assert!(parse(duplicate).is_err());
+        assert!(
+            parse(
+                ["--production", "--installation-root", r"D:\installed", "--diagnostic-root"]
+                    .map(OsString::from)
+            )
+            .is_err()
+        );
     }
 }

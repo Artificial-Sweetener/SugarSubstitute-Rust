@@ -29,7 +29,12 @@ fn entry_owner() -> Result<CoordinatorEntryOwner, TestError> {
         path.clone(),
         vec![0, 0],
     )?;
-    let input = coordinator_entry::CoordinatorEntryInput::new(path.clone(), path, request)?;
+    let input = coordinator_entry::CoordinatorEntryInput::new(
+        path.clone(),
+        path,
+        sugarsubstitute_supervision::coordinator_entry::DiagnosticStorageLocation::Account,
+        request,
+    )?;
     Ok(coordinator_entry::namespace_fixture::namespace_owner(
         input,
         EntrySetupBudget::new(Moment::from_nanos(17))?,

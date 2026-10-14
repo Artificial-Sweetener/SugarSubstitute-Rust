@@ -37,6 +37,7 @@ mod tests;
 struct Paths {
     installation: PathBuf,
     executable: PathBuf,
+    diagnostics: super::DiagnosticStorageLocation,
     preparation_memory: OnceLock<Arc<sugarsubstitute_contracts::execution::MemoryClaim>>,
 }
 enum Actual {
@@ -82,6 +83,7 @@ impl CoordinatorEntryOwner {
             paths: Some(Arc::new(Paths {
                 installation: input.installation,
                 executable: input.executable,
+                diagnostics: input.diagnostics,
                 preparation_memory: OnceLock::new(),
             })),
             request: input.request,

@@ -11,6 +11,7 @@ fn original_cleanup_wake_is_consumed_before_unsettled_owner_returns() -> Result<
 {
     let installation = PathBuf::from(r"E:\unopened-installation");
     let command = ProductionCommand {
+        diagnostics: Default::default(),
         installation: installation.clone(),
         options: super::super::options::ProductionEntryOptions {
             configuration: installation.join("unopened.toml"),
@@ -116,7 +117,11 @@ fn child_factory_failure_preserves_cause_before_native_pump_or_configuration()
         script: installation.clone(),
         profile: installation.clone(),
     };
-    let command = ProductionCommand { installation: installation.clone(), options };
+    let command = ProductionCommand {
+        installation: installation.clone(),
+        diagnostics: Default::default(),
+        options,
+    };
     let calls = std::cell::Cell::new(0);
     let result = run(
         command,
@@ -190,7 +195,11 @@ fn actual_runner_retains_schema_failure_and_joins_without_environment_capture()
         script: directory.clone(),
         profile: directory.clone(),
     };
-    let command = ProductionCommand { installation: directory.clone(), options };
+    let command = ProductionCommand {
+        installation: directory.clone(),
+        diagnostics: Default::default(),
+        options,
+    };
     let result = run(command, |_| Ok(NoChild), crate::diagnostics::DiagnosticHealth::fixture());
     let returned = match result {
         Err(cause) => cause,

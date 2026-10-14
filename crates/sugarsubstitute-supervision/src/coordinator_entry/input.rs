@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain bounded inert entry paths and the exact invoking launch snapshot.
-use super::types::EntryInputError;
+use super::{DiagnosticStorageLocation, types::EntryInputError};
 use std::path::PathBuf;
 use sugarsubstitute_contracts::{
     configuration::LaunchConfiguration, coordinator_entry::EntryLaunchRequest,
@@ -13,6 +13,7 @@ use sugarsubstitute_execution::EntryRequestInput;
 pub struct CoordinatorEntryInput {
     pub(super) installation: PathBuf,
     pub(super) executable: PathBuf,
+    pub(super) diagnostics: DiagnosticStorageLocation,
     pub(super) request: Option<EntryRequestInput>,
 }
 impl CoordinatorEntryInput {
@@ -22,9 +23,10 @@ impl CoordinatorEntryInput {
     pub fn new(
         installation: PathBuf,
         executable: PathBuf,
+        diagnostics: DiagnosticStorageLocation,
         request: EntryLaunchRequest,
     ) -> Result<Self, EntryInputError> {
-        Self::from_owned(installation, executable, request.into())
+        Self::from_owned(installation, executable, diagnostics, request.into())
     }
     /// Retain complete original prepared data without separating its custody.
     /// # Errors
@@ -32,18 +34,21 @@ impl CoordinatorEntryInput {
     pub fn from_owned(
         installation: PathBuf,
         executable: PathBuf,
+        diagnostics: DiagnosticStorageLocation,
         request: EntryRequestInput,
     ) -> Result<Self, EntryInputError> {
         LaunchConfiguration::validate_path(&installation)
             .map_err(EntryInputError::Configuration)?;
         LaunchConfiguration::validate_path(&executable).map_err(EntryInputError::Configuration)?;
+        diagnostics.validate()?;
         if installation
             .capacity()
             .checked_add(executable.capacity())
+            .and_then(|bytes| bytes.checked_add(diagnostics.capacity()))
             .is_none_or(|bytes| bytes > 256 * 1024)
         {
             return Err(EntryInputError::Capacity);
         }
-        Ok(Self { installation, executable, request: Some(request) })
+        Ok(Self { installation, executable, diagnostics, request: Some(request) })
     }
 }

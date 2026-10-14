@@ -47,6 +47,7 @@ pub(super) trait NativePort: Send + Sync {
         state: &mut NativeState,
         installation: &Path,
         executable: &Path,
+        diagnostics: &super::DiagnosticStorageLocation,
         context: &JobContext,
     ) -> Result<Discovered, ClaimError>;
     fn elect(&self, state: &mut NativeState, context: &JobContext) -> Result<Elected, ClaimError>;
@@ -150,6 +151,7 @@ impl NativePort for SystemPort {
         state: &mut NativeState,
         installation: &Path,
         executable: &Path,
+        diagnostics: &super::DiagnosticStorageLocation,
         context: &JobContext,
     ) -> Result<Discovered, ClaimError> {
         check(context)?;
@@ -166,7 +168,7 @@ impl NativePort for SystemPort {
             .try_reserve_exact(520)
             .map_err(|e| ClaimError::new("entry_handle_reservation", e))?;
         let budget = Budget::Protected(memory);
-        let resolved =
+        let mut resolved =
             account::resolve_namespace(installation, &mut state.handles, budget.clone())?;
         check(context)?;
         let installed = paths::open_retained(
@@ -242,7 +244,7 @@ impl NativePort for SystemPort {
             true,
             budget.clone(),
             &mut state.handles,
-            &mut crate::protected_storage::native_phase::NativePhase::ordinary(&(budget))?,
+            &mut crate::protected_storage::native_phase::NativePhase::ordinary(&(budget.clone()))?,
         )?;
         if paths::file_identity(
             &state.handles[actual],
@@ -254,6 +256,13 @@ impl NativePort for SystemPort {
             return Err(ClaimError::invalid("entry_running_image_binding"));
         }
         check(context)?;
+        account::resolve_diagnostic_root(
+            &mut resolved,
+            diagnostics,
+            &mut state.handles,
+            budget,
+            context,
+        )?;
         let facts = EntryNativeIdentityFacts::new(
             resolved.namespace,
             &resolved.account_sid,
