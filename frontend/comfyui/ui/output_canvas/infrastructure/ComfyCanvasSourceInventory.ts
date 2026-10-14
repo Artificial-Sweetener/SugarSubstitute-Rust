@@ -28,6 +28,7 @@ import {
 } from '../../surface/NativeSubgraphChangeObserver.js';
 import type { CanvasSourceInventory } from '../application/CanvasSourceInventory.js';
 import { CanvasGraphSourceTopology } from './CanvasGraphSourceTopology.js';
+import { readWorkflowSourceSavingPreferences } from '../../output_saving/domain/SourceSavingPreferences.js';
 
 interface AuthoredSource {
   readonly nodes: readonly UnknownRecord[];
@@ -70,6 +71,25 @@ export class ComfyCanvasSourceInventory {
     return [...this.#authored.values()].flatMap(({ source, nodes, output }) => {
       const node = nodes.at(-1);
       return node && !output ? [{ path: source.executionPath, node }] : [];
+    });
+  }
+
+  /** Expose cached ordinary outputs without allowing cube-internal sinks to acquire separate saving policy. */
+  savingSources(): readonly {
+    readonly path: string;
+    readonly node: UnknownRecord;
+    readonly label: string;
+  }[] {
+    return [...this.#authored.values()].flatMap(({ source, nodes, output }) => {
+      const node = nodes.at(-1);
+      return node &&
+        !output &&
+        !nodes.some(
+          (ancestor) =>
+            isRecord(ancestor.properties) && ancestor.properties.sugarcubes_kind === 'cube',
+        )
+        ? [{ path: source.executionPath, node, label: source.label }]
+        : [];
     });
   }
 
@@ -165,10 +185,11 @@ export class ComfyCanvasSourceInventory {
         }
       };
       visit(root, [], new Set(), []);
+      const preferences = readWorkflowSourceSavingPreferences(root);
       const presented = sources.map((source) => {
         const authored = this.#authored.get(source.executionPath);
         if (!authored) return source;
-        const next = sourceCaption(authored);
+        const next = sourceCaption(authored, preferences.get(source.executionPath)?.label);
         this.#authored.set(source.executionPath, { ...authored, source: next });
         return next;
       });
@@ -210,6 +231,7 @@ export class ComfyCanvasSourceInventory {
       return;
     }
     const targets = new Set(changes.map((change) => change.info));
+    const preferences = readWorkflowSourceSavingPreferences(this.root());
     const changed: WorkflowOutputSource[] = [];
     for (const authored of this.#authored.values()) {
       if (
@@ -218,7 +240,7 @@ export class ComfyCanvasSourceInventory {
         !authored.nodes.some((node) => targets.has(node))
       )
         continue;
-      const next = sourceCaption(authored);
+      const next = sourceCaption(authored, preferences.get(authored.source.executionPath)?.label);
       if (
         next.label !== authored.source.label ||
         next.breadcrumb.join('\0') !== authored.source.breadcrumb.join('\0')
@@ -247,7 +269,7 @@ export class ComfyCanvasSourceInventory {
 }
 
 /** Name Cube outputs after their source, retaining exact output names in multi-output captions and provenance. */
-function sourceCaption(authored: AuthoredSource): WorkflowOutputSource {
+function sourceCaption(authored: AuthoredSource, override?: string | null): WorkflowOutputSource {
   const captions = authored.nodes.map(
     (node, index) =>
       label(node.title) ||
@@ -260,7 +282,14 @@ function sourceCaption(authored: AuthoredSource): WorkflowOutputSource {
   if (!authored.output || !node)
     return {
       ...authored.source,
-      label: captions.at(-1) ?? authored.source.label,
+      label:
+        (isRecord(node?.properties) && node.properties.sugarcubes_kind === 'cube'
+          ? null
+          : override === undefined && isRecord(node?.properties)
+            ? label(node.properties.sugarcubes_output_label)
+            : override) ||
+        captions.at(-1) ||
+        authored.source.label,
       breadcrumb: captions.slice(0, -1),
     };
   const properties = isRecord(node.properties) ? node.properties : null;

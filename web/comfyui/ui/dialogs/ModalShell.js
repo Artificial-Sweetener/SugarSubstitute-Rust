@@ -20,6 +20,7 @@ import { $el } from '/scripts/ui.js';
 import { injectDialogStyles } from './DialogStyles.js';
 import { ModalAppearance } from './ModalAppearance.js';
 import { ModalDismissal } from './ModalDismissal.js';
+import { mountModalLayer } from './ModalLayer.js';
 /**
  * Coordinate shared modal shell behavior for SugarCubes dialogs.
  */
@@ -136,7 +137,8 @@ export class ModalShell {
         this.focusTarget = typeof initialFocus === 'function' ? initialFocus : null;
         const activeElement = this.documentRef?.activeElement;
         this.previousActiveElement = activeElement instanceof HTMLElement ? activeElement : null;
-        this.documentRef?.body?.appendChild(overlay);
+        if (this.documentRef)
+            mountModalLayer(this.documentRef, overlay);
         overlay.classList.add('is-visible');
         this.appearance.open(overlay);
         overlay.style.display = 'flex';

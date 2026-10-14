@@ -10100,6 +10100,26 @@ var ModalAppearance = class {
   }
 };
 
+// frontend/comfyui/ui/dialogs/ModalLayer.ts
+function mountModalLayer(document2, overlay) {
+  const window2 = document2.defaultView;
+  let highest = 1999;
+  if (window2)
+    for (const dialog of document2.querySelectorAll('[role="dialog"],dialog[open]')) {
+      if (overlay.contains(dialog)) continue;
+      const bounds = dialog.getBoundingClientRect();
+      const style = window2.getComputedStyle(dialog);
+      if (!bounds.width || !bounds.height || style.display === "none" || style.visibility === "hidden")
+        continue;
+      for (let element = dialog; element && element !== document2.body; element = element.parentElement) {
+        const value = Number(window2.getComputedStyle(element).zIndex);
+        if (Number.isSafeInteger(value) && value >= 0) highest = Math.max(highest, value);
+      }
+    }
+  overlay.style.zIndex = String(Math.min(2147483647, highest + 1));
+  document2.body.append(overlay);
+}
+
 // frontend/comfyui/ui/dialogs/ModalShell.ts
 var ModalShell = class {
   appearance;
@@ -10238,7 +10258,7 @@ var ModalShell = class {
     this.focusTarget = typeof initialFocus === "function" ? initialFocus : null;
     const activeElement = this.documentRef?.activeElement;
     this.previousActiveElement = activeElement instanceof HTMLElement ? activeElement : null;
-    this.documentRef?.body?.appendChild(overlay);
+    if (this.documentRef) mountModalLayer(this.documentRef, overlay);
     overlay.classList.add("is-visible");
     this.appearance.open(overlay);
     overlay.style.display = "flex";

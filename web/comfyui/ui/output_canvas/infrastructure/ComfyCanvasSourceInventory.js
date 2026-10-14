@@ -20,6 +20,7 @@ import { buildCubeOutputExecutionId } from '../../cube/execution/CubeOutputExecu
 import { resolveCubeModelTitle } from '../../cube/CubeModelTitlePresentation.js';
 import { NativeSubgraphChangeObserver, } from '../../surface/NativeSubgraphChangeObserver.js';
 import { CanvasGraphSourceTopology } from './CanvasGraphSourceTopology.js';
+import { readWorkflowSourceSavingPreferences } from '../../output_saving/domain/SourceSavingPreferences.js';
 /** Keep native node handles inside the adapter, never in catalog or application state. */
 export class ComfyCanvasSourceInventory {
     sessions;
@@ -56,6 +57,17 @@ export class ComfyCanvasSourceInventory {
         return [...this.#authored.values()].flatMap(({ source, nodes, output }) => {
             const node = nodes.at(-1);
             return node && !output ? [{ path: source.executionPath, node }] : [];
+        });
+    }
+    /** Expose cached ordinary outputs without allowing cube-internal sinks to acquire separate saving policy. */
+    savingSources() {
+        return [...this.#authored.values()].flatMap(({ source, nodes, output }) => {
+            const node = nodes.at(-1);
+            return node &&
+                !output &&
+                !nodes.some((ancestor) => isRecord(ancestor.properties) && ancestor.properties.sugarcubes_kind === 'cube')
+                ? [{ path: source.executionPath, node, label: source.label }]
+                : [];
         });
     }
     /** Observe committed workflow activation and release cached handles during loading. */
@@ -145,11 +157,12 @@ export class ComfyCanvasSourceInventory {
                 }
             };
             visit(root, [], new Set(), []);
+            const preferences = readWorkflowSourceSavingPreferences(root);
             const presented = sources.map((source) => {
                 const authored = this.#authored.get(source.executionPath);
                 if (!authored)
                     return source;
-                const next = sourceCaption(authored);
+                const next = sourceCaption(authored, preferences.get(source.executionPath)?.label);
                 this.#authored.set(source.executionPath, { ...authored, source: next });
                 return next;
             });
@@ -183,13 +196,14 @@ export class ComfyCanvasSourceInventory {
             return;
         }
         const targets = new Set(changes.map((change) => change.info));
+        const preferences = readWorkflowSourceSavingPreferences(this.root());
         const changed = [];
         for (const authored of this.#authored.values()) {
             if (!targets.has(undefined) &&
                 !targets.has(null) &&
                 !authored.nodes.some((node) => targets.has(node)))
                 continue;
-            const next = sourceCaption(authored);
+            const next = sourceCaption(authored, preferences.get(authored.source.executionPath)?.label);
             if (next.label !== authored.source.label ||
                 next.breadcrumb.join('\0') !== authored.source.breadcrumb.join('\0')) {
                 changed.push(next);
@@ -216,7 +230,7 @@ export class ComfyCanvasSourceInventory {
     }
 }
 /** Name Cube outputs after their source, retaining exact output names in multi-output captions and provenance. */
-function sourceCaption(authored) {
+function sourceCaption(authored, override) {
     const captions = authored.nodes.map((node, index) => label(node.title) ||
         (isRecord(node.subgraph) ? label(node.subgraph.name) : '') ||
         label(node.type) ||
@@ -226,7 +240,13 @@ function sourceCaption(authored) {
     if (!authored.output || !node)
         return {
             ...authored.source,
-            label: captions.at(-1) ?? authored.source.label,
+            label: (isRecord(node?.properties) && node.properties.sugarcubes_kind === 'cube'
+                ? null
+                : override === undefined && isRecord(node?.properties)
+                    ? label(node.properties.sugarcubes_output_label)
+                    : override) ||
+                captions.at(-1) ||
+                authored.source.label,
             breadcrumb: captions.slice(0, -1),
         };
     const properties = isRecord(node.properties) ? node.properties : null;

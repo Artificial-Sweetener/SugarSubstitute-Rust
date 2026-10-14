@@ -132,6 +132,46 @@ def test_standalone_legacy_output_marker_retains_native_preview_and_saving_behav
     assert inventory.unmanaged_node_ids == ("legacy",)
 
 
+def test_nested_source_choices_are_instance_scoped_and_unknown_savers_remain_native() -> (
+    None
+):
+    """Apply portable source choices without editing shared graph definitions or qualifying custom writers."""
+    prompt: ApiPrompt = {
+        "a:save": {"class_type": "SaveImage", "inputs": {"images": ["image", 0]}},
+        "b:save": {"class_type": "SaveImage", "inputs": {"images": ["image", 0]}},
+        "custom": {"class_type": "CustomSaver", "inputs": {"images": ["image", 0]}},
+    }
+    workflow = {
+        "nodes": [],
+        "extra": {
+            "sugarcubes_output_saving": {
+                "source_preferences": {
+                    "schema_version": 1,
+                    "sources": {
+                        "a:save": {"enabled": False, "label": "<first instance>"},
+                        "b:save": {"enabled": True, "label": "Second instance"},
+                        "custom": {"enabled": False},
+                    },
+                }
+            }
+        },
+    }
+    original = deepcopy(workflow)
+    inventory = ComfySavingSourceInventory(
+        qualified_class=lambda kind: (
+            ImageSaverContract(kind, "images", SourceKind.SAVE)
+            if kind == "SaveImage"
+            else None
+        ),
+        image_output_class=lambda kind: kind == "CustomSaver",
+    ).collect(prompt, workflow=workflow)
+    assert [
+        (source.node_id, source.enabled, source.label) for source in inventory.sources
+    ] == [("a:save", False, "<first instance>"), ("b:save", True, "Second instance")]
+    assert inventory.unmanaged_node_ids == ("custom",)
+    assert workflow == original
+
+
 def test_authored_internal_output_marker_delegates_durable_writes_to_public_cube_outputs() -> (
     None
 ):

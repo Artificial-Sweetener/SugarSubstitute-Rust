@@ -17,7 +17,7 @@
 import type { SettingsManager } from '../settings/HostSettingsController.js';
 import type { ModalAdapter } from '../dialogs/ModalShell.js';
 import { OutputSavingDialog } from './OutputSavingDialog.js';
-import type { OutputSavingClient } from './OutputSavingClient.js';
+import type { OutputSavingCommands } from './OutputSavingConfiguration.js';
 import type { OutputSavingSnapshot } from './OutputSavingPreferences.js';
 import { pickSubstituteSettings } from './SubstituteSettingsPicker.js';
 
@@ -36,9 +36,10 @@ export class OutputSavingSettings {
   /** Bind existing modal, transport and feedback owners without introducing canvas policy. */
   constructor(
     private readonly document: Document,
-    private readonly client: OutputSavingClient,
+    private readonly client: OutputSavingCommands,
     adapter: ModalAdapter,
     private readonly reportError: (error: unknown) => void,
+    private readonly manageSources: (() => Promise<void>) | null,
   ) {
     this.#dialog = new OutputSavingDialog(document, client, adapter);
   }
@@ -72,6 +73,7 @@ export class OutputSavingSettings {
               const value = await pickSubstituteSettings(this.document);
               if (value !== null) this.#value = await this.client.importSubstitute(value);
             }),
+            ...(this.manageSources ? [this.#button('Workflow outputs…', this.manageSources)] : []),
           );
         }
         this.show();

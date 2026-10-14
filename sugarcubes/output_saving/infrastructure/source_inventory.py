@@ -27,6 +27,7 @@ from ...workflow_analysis import CubeGraphAnalysisService
 from ..domain.run_plan import SavingSource, SourceKind
 from ..domain.source_inventory import SavingSourceInventory
 from ..domain.saver_contract import ImageSaverContract
+from .source_preference_reader import workflow_source_preferences
 
 
 class ComfySavingSourceInventory:
@@ -90,6 +91,7 @@ class ComfySavingSourceInventory:
                 if instances[identity].execution_mode not in {2, 4}
             )
         roots = _root_nodes(workflow)
+        preferences = workflow_source_preferences(workflow)
         sources: list[SavingSource] = []
         unmanaged: list[str] = []
         contracts: dict[str, ImageSaverContract] = {}
@@ -158,7 +160,11 @@ class ComfySavingSourceInventory:
                 meta = node.get("_meta")
                 meta = meta if isinstance(meta, Mapping) else {}
                 label = (
-                    _text(properties.get("sugarcubes_output_label"))
+                    (
+                        preferences[node_id].label
+                        if node_id in preferences
+                        else _text(properties.get("sugarcubes_output_label"))
+                    )
                     or _text(root.get("title"))
                     or _text(meta.get("title"))
                     or class_type
@@ -170,7 +176,11 @@ class ComfySavingSourceInventory:
                         (SourceKind.INTERNAL if internal else contract.kind),
                         cube_id=owner.instance_id or "" if owner is not None else "",
                         seed=_upstream_seed(prompt, node_id),
-                        enabled=properties.get("sugarcubes_save_outputs") is not False,
+                        enabled=(
+                            preferences[node_id].enabled
+                            if node_id in preferences
+                            else properties.get("sugarcubes_save_outputs") is not False
+                        ),
                     )
                 )
             elif self._image_output(class_type):

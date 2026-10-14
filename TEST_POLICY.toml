@@ -12,7 +12,7 @@ area = "output_saving"
 
 [[subscription]]
 boundary = "output_saving_contract"
-groups = ["runtime/unit", "execution/integration", "execution/contract"]
+groups = ["runtime/unit", "execution/integration", "execution/contract", "output_canvas/unit", "output_canvas/contract", "output_canvas/integration"]
 
 [[area]]
 name = "masonry_search"
