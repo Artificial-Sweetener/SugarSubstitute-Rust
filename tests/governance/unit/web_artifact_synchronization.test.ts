@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Safeguard exact build-output comparison and active runtime-directory preservation. */
 import { afterEach, beforeEach } from '@jest/globals';
+import { copyFile } from 'node:fs/promises';
 import {
   existsSync,
   mkdirSync,
@@ -47,16 +48,20 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-test('exact verification rejects missing, stale and unexpected files without changing them', () => {
+test('exact verification rejects missing, stale and unexpected files without changing them', async () => {
   writeFileSync(path.join(generated, 'same.js'), 'same');
   writeFileSync(path.join(runtime, 'same.js'), 'same');
   writeFileSync(path.join(generated, 'stale.js'), 'new');
   writeFileSync(path.join(runtime, 'stale.js'), 'old');
   writeFileSync(path.join(generated, 'missing.js'), 'missing');
   writeFileSync(path.join(runtime, 'unexpected.js'), 'extra');
-  expect(() => synchronizeWebArtifacts(generated, runtime, true)).toThrow(/missing: missing.js/);
-  expect(() => synchronizeWebArtifacts(generated, runtime, true)).toThrow(/stale: stale.js/);
-  expect(() => synchronizeWebArtifacts(generated, runtime, true)).toThrow(
+  await expect(synchronizeWebArtifacts(generated, runtime, true)).rejects.toThrow(
+    /missing: missing.js/,
+  );
+  await expect(synchronizeWebArtifacts(generated, runtime, true)).rejects.toThrow(
+    /stale: stale.js/,
+  );
+  await expect(synchronizeWebArtifacts(generated, runtime, true)).rejects.toThrow(
     /unexpected: unexpected.js/,
   );
   expect(readFileSync(path.join(runtime, 'stale.js'), 'utf8')).toBe('old');
@@ -64,46 +69,89 @@ test('exact verification rejects missing, stale and unexpected files without cha
   expect(existsSync(path.join(runtime, 'unexpected.js'))).toBe(true);
 });
 
-test('synchronization adds generated files, replaces stale bytes and removes obsolete artifacts', () => {
+test('synchronization adds generated files, replaces stale bytes and removes obsolete artifacts', async () => {
   mkdirSync(path.join(generated, 'module'));
   writeFileSync(path.join(generated, 'module/new.js'), 'new');
   writeFileSync(path.join(generated, 'stale.js'), 'updated');
   writeFileSync(path.join(runtime, 'stale.js'), 'old');
   writeFileSync(path.join(runtime, 'obsolete.js'), 'obsolete');
-  synchronizeWebArtifacts(generated, runtime, false);
+  await synchronizeWebArtifacts(generated, runtime, false);
   expect(readFileSync(path.join(runtime, 'module/new.js'), 'utf8')).toBe('new');
   expect(readFileSync(path.join(runtime, 'stale.js'), 'utf8')).toBe('updated');
   expect(existsSync(path.join(runtime, 'obsolete.js'))).toBe(false);
-  expect(() => synchronizeWebArtifacts(generated, runtime, true)).not.toThrow();
+  await expect(synchronizeWebArtifacts(generated, runtime, true)).resolves.toBeUndefined();
 });
 
-test('unchanged runtime artifacts retain their identity and modification time', () => {
+test('unchanged runtime artifacts retain their identity and modification time', async () => {
   writeFileSync(path.join(generated, 'unchanged.js'), 'same');
   writeFileSync(path.join(runtime, 'unchanged.js'), 'same');
   const before = statSync(path.join(runtime, 'unchanged.js'));
-  synchronizeWebArtifacts(generated, runtime, false);
+  await synchronizeWebArtifacts(generated, runtime, false);
   const after = statSync(path.join(runtime, 'unchanged.js'));
   expect(after.ino).toBe(before.ino);
   expect(after.mtimeMs).toBe(before.mtimeMs);
 });
 
-test('generated files and directories can replace obsolete artifact kinds beneath the retained root', () => {
+test('generated files and directories can replace obsolete artifact kinds beneath the retained root', async () => {
   mkdirSync(path.join(generated, 'became-directory'));
   writeFileSync(path.join(generated, 'became-directory/module.js'), 'module');
   writeFileSync(path.join(runtime, 'became-directory'), 'old file');
   writeFileSync(path.join(generated, 'became-file'), 'new file');
   mkdirSync(path.join(runtime, 'became-file/nested'), { recursive: true });
   writeFileSync(path.join(runtime, 'became-file/nested/old.js'), 'old');
-  synchronizeWebArtifacts(generated, runtime, false);
+  await synchronizeWebArtifacts(generated, runtime, false);
   expect(readFileSync(path.join(runtime, 'became-directory/module.js'), 'utf8')).toBe('module');
   expect(readFileSync(path.join(runtime, 'became-file'), 'utf8')).toBe('new file');
 });
 
-test('overlapping roots are rejected before removing or copying any artifact', () => {
+test('overlapping roots are rejected before removing or copying any artifact', async () => {
   writeFileSync(path.join(generated, 'retained.js'), 'retained');
-  expect(() => synchronizeWebArtifacts(generated, generated, false)).toThrow('separate trees');
-  expect(() => synchronizeWebArtifacts(root, generated, false)).toThrow('separate trees');
+  await expect(synchronizeWebArtifacts(generated, generated, false)).rejects.toThrow(
+    'separate trees',
+  );
+  await expect(synchronizeWebArtifacts(root, generated, false)).rejects.toThrow('separate trees');
   expect(readFileSync(path.join(generated, 'retained.js'), 'utf8')).toBe('retained');
+});
+
+test('a temporarily busy runtime file is published after its host releases the handle', async () => {
+  writeFileSync(path.join(generated, 'held.js'), 'new');
+  let attempts = 0;
+  await synchronizeWebArtifacts(generated, runtime, false, async (source, destination) => {
+    attempts++;
+    if (attempts <= 2)
+      throw Object.assign(new Error('host is serving this file'), { code: 'EBUSY' });
+    await copyFile(source, destination);
+  });
+  expect(readFileSync(path.join(runtime, 'held.js'), 'utf8')).toBe('new');
+  expect(attempts).toBe(3);
+});
+
+test('permanent filesystem failures retain their cause and do not start an unbounded retry loop', async () => {
+  writeFileSync(path.join(generated, 'blocked.js'), 'new');
+  const error = Object.assign(new Error('permission denied'), { code: 'EACCES' });
+  let attempts = 0;
+  await expect(
+    synchronizeWebArtifacts(generated, runtime, false, async () => {
+      attempts++;
+      throw error;
+    }),
+  ).rejects.toBe(error);
+  expect(attempts).toBe(1);
+  expect(existsSync(path.join(runtime, 'blocked.js'))).toBe(false);
+});
+
+test('a handle that never releases terminates after the bounded retry budget', async () => {
+  writeFileSync(path.join(generated, 'held.js'), 'new');
+  const error = Object.assign(new Error('handle remains held'), { code: 'EBUSY' });
+  let attempts = 0;
+  await expect(
+    synchronizeWebArtifacts(generated, runtime, false, async () => {
+      attempts++;
+      throw error;
+    }),
+  ).rejects.toBe(error);
+  expect(attempts).toBe(6);
+  expect(existsSync(path.join(runtime, 'held.js'))).toBe(false);
 });
 
 /** Observe one IPC boundary with a bounded lifetime and no test-order dependence. */
@@ -154,7 +202,7 @@ test('rebuilding preserves a runtime directory held by an active host process', 
     expect(await childDirectory(child)).toBe(runtime);
     writeFileSync(path.join(generated, 'new.js'), 'new');
     writeFileSync(path.join(runtime, 'obsolete.js'), 'old');
-    synchronizeWebArtifacts(generated, runtime, false);
+    await synchronizeWebArtifacts(generated, runtime, false);
     const directory = childDirectory(child);
     child.send('cwd');
     expect(await directory).toBe(runtime);

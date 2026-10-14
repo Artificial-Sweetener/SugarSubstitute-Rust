@@ -133,7 +133,7 @@ async function main(): Promise<void> {
     ['/scripts/*', '../../../menus/ContextMenu.js'],
   );
   stageStaticAssets();
-  synchronizeWebArtifacts(generatedRoot, runtimeRoot, checkOnly);
+  await synchronizeWebArtifacts(generatedRoot, runtimeRoot, checkOnly);
   console.log(checkOnly ? 'Web artifacts are current.' : 'Web artifacts updated.');
 }
 
