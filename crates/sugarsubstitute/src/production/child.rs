@@ -25,8 +25,14 @@ mod handshake;
 mod main;
 #[path = "child/output.rs"]
 mod output;
+#[cfg(feature = "k1-native-qualification")]
+#[path = "child/preview.rs"]
+mod preview;
 #[path = "child/profile_transaction.rs"]
 mod profile_transaction;
+#[cfg(feature = "k1-native-qualification")]
+#[path = "child/qualification.rs"]
+mod qualification;
 #[path = "child/requests.rs"]
 mod requests;
 #[path = "child/retirement.rs"]
@@ -57,6 +63,7 @@ use sugarsubstitute_supervision::lifecycle_protocol::{LeaseReference, WireHeader
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 /// Inert application role data; paths/settings grant no native profile or backend privilege.
 pub(in crate::production) struct ChildInputs {
+    pub(in crate::production) qualification: super::qualification::QualificationIntent,
     pub(in crate::production) diagnostics: crate::diagnostics::DiagnosticHealth,
     pub(in crate::production) input: InheritedLifecycleBootstrap,
     pub(in crate::production) original: LifecyclePipeDeadline,
@@ -113,7 +120,8 @@ impl ProductionChild {
             capture::ChildCapture::new(driver),
             inputs.native_scope,
             inputs.identity,
-        )?;
+        )?
+        .with_qualification(inputs.qualification, inputs.run);
         Ok(Self::assemble(
             bootstrap,
             inputs.run,
@@ -356,6 +364,8 @@ impl ProductionChild {
                 .then(|| self.bootstrap.original_deadline())
                 .flatten(),
             self.bootstrap.ui_deadline(),
+            #[cfg(feature = "k1-native-qualification")]
+            self.bootstrap.preview_deadline(),
             self.acquire.filter(|p| !p.retiring).map(|p| p.original),
             self.main.deadline().filter(|_| self.attempt.is_none()),
             self.output.deadline().filter(|_| self.attempt.is_none()),
@@ -373,6 +383,27 @@ impl ProductionChild {
         .flatten()
         .min()
     }
+    /// Use only the actual session accepted by StartupPolicy after current MainRevealed.
+    #[cfg(feature = "k1-native-qualification")]
+    pub(in crate::production) fn preview_after_main_revealed(
+        &mut self,
+        identity: sugarsubstitute_contracts::startup::MainIdentity,
+        session: &sugarsubstitute_application::startup::StartupSession,
+    ) {
+        if let Some(command) = self.bootstrap.preview_after_main_revealed(identity, session)
+            && self.push_command(command).is_err()
+        {
+            self.bootstrap.reject_preview_command();
+        }
+    }
+    /// Consume only qualification payloads before they reach ordinary startup failure policy.
+    #[cfg(feature = "k1-native-qualification")]
+    pub(in crate::production) fn accept_preview_observation(
+        &mut self,
+        observation: &mut Option<DesktopStartupObservation>,
+    ) -> bool {
+        self.bootstrap.accept_preview_observation(observation)
+    }
     fn client(&self) -> Result<&ExecutionClient> {
         self.client.as_ref().ok_or_else(|| "Actual child client absent".into())
     }
@@ -389,12 +420,21 @@ impl ProductionChild {
         Ok(())
     }
     fn push_command(&mut self, command: DesktopStartupCommand) -> Result<()> {
+        #[cfg(feature = "k1-native-qualification")]
+        let retire = match &command {
+            DesktopStartupCommand::RetireMain { identity, .. } => Some(*identity),
+            _ => None,
+        };
         let slot = self
             .commands
             .iter_mut()
             .find(|slot| slot.is_none())
             .ok_or("Bounded desktop command slots full")?;
         *slot = Some(command);
+        #[cfg(feature = "k1-native-qualification")]
+        if let Some(identity) = retire {
+            self.bootstrap.retire_preview_main(identity);
+        }
         Ok(())
     }
 }

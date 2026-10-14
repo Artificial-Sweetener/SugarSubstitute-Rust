@@ -194,6 +194,7 @@ impl ProductionChild {
         self.observe_bootstrap_failure();
         if self.shutdown.native_retired
             && !self.bootstrap.projection_pending()
+            && !self.bootstrap.qualification_pending()
             && !self.main.pending()
             && !self.output.pending()
         {
@@ -244,8 +245,10 @@ impl ProductionChild {
             return Ok(false);
         }
         self.activity(None)?;
-        let finite =
-            !self.bootstrap.projection_pending() && !self.main.pending() && !self.output.pending();
+        let finite = !self.bootstrap.projection_pending()
+            && !self.bootstrap.qualification_pending()
+            && !self.main.pending()
+            && !self.output.pending();
         let capture = match self.bootstrap.temporary_settled() {
             None => !self.bootstrap.capture_admitted(),
             Some(

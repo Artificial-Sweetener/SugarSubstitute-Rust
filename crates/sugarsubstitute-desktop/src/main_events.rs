@@ -227,10 +227,26 @@ impl Events {
     pub(crate) fn remaining(&self) -> usize {
         self.storage.borrow().count
     }
+
+    /// Reject preview sealing while an actual callback, unconsumed health event or failure exists.
+    #[cfg(feature = "k1-native-qualification")]
+    pub(crate) fn preview_quiescent(&self) -> bool {
+        let storage = self.storage.borrow();
+        self.accepting.get()
+            && !self.in_callback()
+            && storage.count == 0
+            && storage.failure.is_none()
+    }
     pub(crate) fn rewake(&self) {
         if self.remaining() != 0 {
             (self.wake)();
         }
+    }
+
+    /// Notify the existing main actor after a separately owned native preview completion.
+    #[cfg(feature = "k1-native-qualification")]
+    pub(crate) fn notify_progress(&self) {
+        (self.wake)();
     }
 }
 

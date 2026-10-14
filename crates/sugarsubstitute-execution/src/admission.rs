@@ -25,6 +25,11 @@ use tokio::sync::Notify;
 /// Captured and symbol inputs retain genuine original bindings outside Core while this request borrows them;
 /// validation and the factory share those original allocations without a new control.
 pub(crate) enum RequestKind<'a> {
+    #[cfg(all(feature = "k1-native-qualification", any(windows, test)))]
+    RegisteredDesktopFault {
+        custody: &'a crate::desktop_capture::metadata::DesktopCaptureCustodyRef,
+        run: sugarsubstitute_contracts::lifecycle::RunKey,
+    },
     Async,
     Blocking,
     Cpu,

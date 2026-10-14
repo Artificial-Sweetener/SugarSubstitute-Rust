@@ -5,6 +5,8 @@
 mod admission;
 mod construction;
 mod evidence;
+#[cfg(any(feature = "k1-native-qualification", test))]
+mod render_preview;
 mod retirement;
 mod timeout;
 use crate::{
@@ -58,6 +60,10 @@ pub(crate) struct MainActor {
     pointer: crate::Pointer,
     native_storage: Option<sugarsubstitute_contracts::execution::MemoryClaim>,
     failure_observation: &'static str,
+    #[cfg(feature = "k1-native-qualification")]
+    preview: Option<render_preview::Capture>,
+    #[cfg(feature = "k1-native-qualification")]
+    preview_requested: bool,
 }
 
 impl MainActor {
@@ -103,6 +109,10 @@ impl MainActor {
             pointer: crate::Pointer::default(),
             native_storage: Some(native_storage),
             failure_observation: "None",
+            #[cfg(feature = "k1-native-qualification")]
+            preview: None,
+            #[cfg(feature = "k1-native-qualification")]
+            preview_requested: false,
         })
     }
 
@@ -133,12 +143,24 @@ impl MainActor {
             && (self.admission.closing()
                 || (self.stage != ConstructionStage::Live
                     && self.stage != ConstructionStage::PausedEnvironment)
-                || self.events.as_ref().is_some_and(|events| events.remaining() != 0))
+                || self.events.as_ref().is_some_and(|events| events.remaining() != 0)
+                || self.preview_needs_progress())
     }
     fn request(&self) -> Result<&MainWindowRequest, DesktopError> {
         self.request
             .as_ref()
             .ok_or_else(|| DesktopError::message("main_request", "request retired"))
+    }
+    /// Preserve a genuine completed preview wake without polling its pending native callback.
+    fn preview_needs_progress(&self) -> bool {
+        #[cfg(feature = "k1-native-qualification")]
+        {
+            self.preview.as_ref().is_some_and(render_preview::Capture::publication_pending)
+        }
+        #[cfg(not(feature = "k1-native-qualification"))]
+        {
+            false
+        }
     }
     fn window(&self) -> Result<&Rc<Window>, DesktopError> {
         self.window
@@ -191,7 +213,18 @@ impl MainActor {
         if self.stage != ConstructionStage::Live {
             return self.construct_step(target, proxy, title);
         }
-        self.evidence_step()
+        let observed = self.evidence_step()?;
+        if observed.is_some() || self.events()?.remaining() != 0 {
+            return Ok(observed);
+        }
+        #[cfg(feature = "k1-native-qualification")]
+        {
+            Ok(self.preview_progress())
+        }
+        #[cfg(not(feature = "k1-native-qualification"))]
+        {
+            Ok(observed)
+        }
     }
 
     /// Reject stale authorizations before invoking either native stage.
@@ -288,7 +321,9 @@ impl MainActor {
             1 => self.window()?.set_minimized(true),
             2 => self.window()?.set_maximized(!self.window()?.is_maximized()),
             3 => return Ok(true),
-            _ => return Err(DesktopError::message("main_control", "unknown caption control")),
+            _ => {
+                return Err(DesktopError::message("main_control", "unknown caption control"));
+            }
         }
         Ok(false)
     }

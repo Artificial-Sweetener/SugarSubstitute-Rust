@@ -160,7 +160,9 @@ impl ChildCapture {
     /// Match immutable original metadata before transferring its real typed completion.
     /// Full completion and original guards remain retained even when identity checks fail.
     pub(super) fn consume(&mut self, batch: &CompletionBatch) -> Result<(), ChildCaptureError> {
-        let Some(correlation) = &mut self.correlation else { return Ok(()) };
+        let Some(correlation) = &mut self.correlation else {
+            return Ok(());
+        };
         for notice in &batch.notifications {
             if let Err(cause) = correlation.notice(*notice) {
                 self.invalid = true;
@@ -206,6 +208,11 @@ impl ChildCapture {
             })
     }
 
+    /// Borrow the genuine admitted session only while its real registration remains ready.
+    #[cfg(feature = "k1-native-qualification")]
+    pub(super) fn registered_session(&self) -> Option<&DesktopCaptureSession> {
+        if self.ready() { self.session.as_ref() } else { None }
+    }
     /// Borrow original authenticated Launch bytes for the actual configuration projection.
     #[cfg(test)]
     pub(super) fn startup(&self) -> Option<&AuthenticatedStartupSnapshot> {

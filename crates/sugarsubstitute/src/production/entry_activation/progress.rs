@@ -86,7 +86,9 @@ impl ProductionActivation {
         }
         if failure.is_none() && !delivery.pending() {
             for _ in 0..32 {
-                let Some(observation) = resources.authority.take_observation() else { break };
+                let Some(observation) = resources.authority.take_observation() else {
+                    break;
+                };
                 let mut unrelated_observation = false;
                 let produced = delivery.produce(|| {
                     let (transition, unrelated) = backend
@@ -211,8 +213,12 @@ impl ProductionActivation {
             }
         }
         for at in 0..self.pending.len() {
-            let Some(pending) = &mut self.pending[at] else { continue };
-            let Some(completion) = &pending.completion else { continue };
+            let Some(pending) = &mut self.pending[at] else {
+                continue;
+            };
+            let Some(completion) = &pending.completion else {
+                continue;
+            };
             if self.backend.is_none() && matches!(completion.outcome, JobOutcome::Success(_)) {
                 let storage = completion.memory.claim(RetainedBackend::required_storage_bytes())?;
                 self.backend =
@@ -233,6 +239,7 @@ impl ProductionActivation {
             let projected =
                 pending.completion.take().ok_or("Actual projection completion missing")?;
             let record = Record {
+                qualification: std::mem::take(&mut pending.qualification),
                 run: pending.run,
                 launch: pending.launch,
                 navigation: pending.navigation,

@@ -31,6 +31,19 @@ pub(crate) struct AcceptedCaptureStage {
 }
 /// Current stage state remains available while accepted finite work runs unlocked.
 pub(crate) struct DesktopCaptureState {
+    #[cfg(feature = "k1-native-qualification")]
+    pub(crate) authenticated_creator:
+        Option<crate::desktop_capture::creator::AuthenticatedDesktopCreator>,
+    #[cfg(feature = "k1-native-qualification")]
+    pub(crate) fault_job: Option<sugarsubstitute_contracts::execution::JobId>,
+    #[cfg(feature = "k1-native-qualification")]
+    pub(crate) preview_loan_issued: bool,
+    #[cfg(feature = "k1-native-qualification")]
+    pub(crate) preview_control_bytes: usize,
+    #[cfg(feature = "k1-native-qualification")]
+    pub(crate) preview_job: Option<sugarsubstitute_contracts::execution::JobId>,
+    #[cfg(feature = "k1-native-qualification")]
+    pub(crate) permanent_identity: Option<usize>,
     pub(crate) registered_published: bool,
     pub(crate) phase: DesktopCapturePhase,
     pub(crate) accepted_stage: Option<AcceptedCaptureStage>,
@@ -55,6 +68,18 @@ impl DesktopCaptureCustody {
             Self {
                 cleanup,
                 state: Mutex::new(DesktopCaptureState {
+                    #[cfg(feature = "k1-native-qualification")]
+                    authenticated_creator: None,
+                    #[cfg(feature = "k1-native-qualification")]
+                    fault_job: None,
+                    #[cfg(feature = "k1-native-qualification")]
+                    preview_loan_issued: false,
+                    #[cfg(feature = "k1-native-qualification")]
+                    preview_control_bytes: 0,
+                    #[cfg(feature = "k1-native-qualification")]
+                    preview_job: None,
+                    #[cfg(feature = "k1-native-qualification")]
+                    permanent_identity: None,
                     registered_published: false,
                     phase: DesktopCapturePhase::Preparing,
                     accepted_stage: None,

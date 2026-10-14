@@ -24,9 +24,15 @@ use sugarsubstitute_execution::{
     windows_capture_attach::{CaptureAttachFailure, CaptureCleanupSnapshot},
 };
 
+#[path = "bootstrap/qualification.rs"]
+mod qualification;
+
 type ProjectionJob = OwnedJob<PreparedChildConfiguration, ChildConfigurationFailure>;
 type ProjectionCompletion = JobCompletion<PreparedChildConfiguration, ChildConfigurationFailure>;
 
+#[cfg(feature = "k1-native-qualification")]
+#[path = "bootstrap/preview_hooks.rs"]
+mod preview_hooks;
 #[path = "bootstrap/projection.rs"]
 mod projection;
 
@@ -82,6 +88,10 @@ impl Error for ChildBootstrapIssue {}
 /// Retain original finite/native scopes, admitted capture and configuration custody.
 /// Capture readiness does not establish backend, browser or frontend readiness.
 pub(super) struct ChildBootstrap {
+    #[cfg(feature = "k1-native-qualification")]
+    qualification: super::qualification::ChildQualification,
+    #[cfg(feature = "k1-native-qualification")]
+    qualification_run: Option<sugarsubstitute_contracts::lifecycle::RunKey>,
     channel: ChildChannel,
     capture: ChildCapture,
     native_spec: ScopeSpec,
@@ -117,6 +127,10 @@ impl ChildBootstrap {
             return Err(ChildBootstrapIssue::Identity);
         }
         Ok(Self {
+            #[cfg(feature = "k1-native-qualification")]
+            qualification: super::qualification::ChildQualification::new(Default::default()),
+            #[cfg(feature = "k1-native-qualification")]
+            qualification_run: None,
             channel,
             capture,
             native_spec,
@@ -184,7 +198,11 @@ impl ChildBootstrap {
     pub(super) fn consume(&mut self, batch: &CompletionBatch) -> Result<(), ChildBootstrapIssue> {
         let channel = self.channel.consume(batch);
         let capture = self.capture.consume(batch);
+        #[cfg(feature = "k1-native-qualification")]
+        let qualification = self.qualification.capture(batch);
         let projection = self.capture_projection(batch);
+        #[cfg(feature = "k1-native-qualification")]
+        self.poll_registered_preview();
         let mut issue = None;
         if let Err(cause) = channel {
             issue = Some(self.record(ChildBootstrapIssue::Transport, cause));
@@ -192,6 +210,11 @@ impl ChildBootstrap {
         if let Err(cause) = capture {
             let capture_issue = self.record(ChildBootstrapIssue::Capture, Box::new(cause));
             issue.get_or_insert(capture_issue);
+        }
+        #[cfg(feature = "k1-native-qualification")]
+        if let Err(cause) = qualification {
+            let qualification_issue = self.record(ChildBootstrapIssue::Capture, cause);
+            issue.get_or_insert(qualification_issue);
         }
         issue.map_or(projection, Err)
     }
@@ -227,6 +250,10 @@ impl ChildBootstrap {
                 .map_err(|cause| self.record(ChildBootstrapIssue::Identity, Box::new(cause)))?;
             let client = self.client.as_ref().ok_or(ChildBootstrapIssue::Identity)?;
             let scope = self.scope.as_ref().ok_or(ChildBootstrapIssue::Identity)?;
+            #[cfg(feature = "k1-native-qualification")]
+            let mut input = input;
+            #[cfg(feature = "k1-native-qualification")]
+            self.qualification.declare_preview_storage(&mut input.capture);
             if self.capture.start(client, scope, id, input).is_err() {
                 self.issue.get_or_insert(ChildBootstrapIssue::Capture);
                 self.close_initialization();
@@ -238,6 +265,12 @@ impl ChildBootstrap {
             self.close_initialization();
             return Err(ChildBootstrapIssue::Capture);
         }
+        #[cfg(feature = "k1-native-qualification")]
+        if let Some(step) = self.registered_fault_step()? {
+            return Ok(step);
+        }
+        #[cfg(feature = "k1-native-qualification")]
+        self.prepare_registered_preview();
         if self.projection.is_none()
             && self.prepared.is_none()
             && !self.delivered
@@ -316,6 +349,8 @@ impl ChildBootstrap {
     /// The transport remains alive for authenticated final lifecycle communication.
     pub(super) fn close_initialization(&mut self) {
         self.closing = true;
+        #[cfg(feature = "k1-native-qualification")]
+        self.qualification.close();
         if let Some(job) = &self.projection {
             job.cancel();
         }
@@ -395,7 +430,9 @@ impl ChildBootstrap {
         if self.issue != Some(ChildBootstrapIssue::Capture) {
             return CaptureFailureKind::None;
         }
-        let Some(cause) = self.failure_source() else { return CaptureFailureKind::None };
+        let Some(cause) = self.failure_source() else {
+            return CaptureFailureKind::None;
+        };
         if let Some(cause) = cause.downcast_ref::<ChildCaptureError>() {
             return match cause {
                 ChildCaptureError::State => CaptureFailureKind::State,
@@ -416,6 +453,18 @@ impl ChildBootstrap {
             Some(CaptureAttachFailure::Cancelled) => CaptureFailureKind::Cancelled,
             Some(CaptureAttachFailure::Uncertain) => CaptureFailureKind::Uncertain,
             None => CaptureFailureKind::Other,
+        }
+    }
+    /// Keep every admitted qualification job observable until its actual terminal is consumed.
+    /// This cache-only observation creates no cutoff, effect, or retirement authority.
+    pub(super) fn qualification_pending(&self) -> bool {
+        #[cfg(feature = "k1-native-qualification")]
+        {
+            self.qualification.pending()
+        }
+        #[cfg(not(feature = "k1-native-qualification"))]
+        {
+            false
         }
     }
     /// Observe configuration work independently of transport or native retirement.
@@ -456,7 +505,7 @@ impl ChildBootstrap {
     pub(super) fn release_source_after_native_retired(
         &mut self,
     ) -> Result<(), ChildBootstrapIssue> {
-        if self.projection_pending() {
+        if self.projection_pending() || self.qualification_pending() {
             return Err(ChildBootstrapIssue::State);
         }
         if let Some(prepared) = &mut self.prepared {
@@ -474,6 +523,10 @@ impl ChildBootstrap {
     }
     /// Borrow the first actual adapter or retained typed projection cause.
     pub(super) fn failure_source(&self) -> Option<&(dyn Error + 'static)> {
+        #[cfg(feature = "k1-native-qualification")]
+        if let Some(cause) = self.qualification.failure() {
+            return Some(cause);
+        }
         if let Some(cause) = &self.failure {
             return Some(cause.as_ref());
         }

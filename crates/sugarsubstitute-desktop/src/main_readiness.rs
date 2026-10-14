@@ -49,6 +49,21 @@ impl MainReadiness {
     pub(crate) fn ready(&self) -> bool {
         self.completed && self.positive && self.fault.is_none()
     }
+
+    /// Observe immutable current document facts after its genuine positive completion barrier.
+    #[cfg(any(feature = "k1-native-qualification", test))]
+    pub(crate) fn render_document(&self) -> Option<crate::main_readiness_types::RenderDocument> {
+        if !self.ready() || !self.loaded {
+            return None;
+        }
+        let root = self.root?;
+        Some(crate::main_readiness_types::RenderDocument {
+            identity: self.identity,
+            context: self.default_context?,
+            frame: root.id,
+            loader: root.loader,
+        })
+    }
     /// Claim exact known table capacities before allocation; opaque engine storage is separate.
     pub(crate) fn new(
         identity: MainIdentity,
@@ -220,14 +235,18 @@ impl MainReadiness {
         let Some(record) = self.tables.context(context) else {
             return self.reject(ReadinessFault::ContextLost);
         };
-        let Some(root) = self.root else { return self.reject(ReadinessFault::ContextLost) };
+        let Some(root) = self.root else {
+            return self.reject(ReadinessFault::ContextLost);
+        };
         if !record.default || record.frame != root.id {
             return Ok(());
         }
         if record.origin != Some(self.origin) || self.default_context != Some(context) {
             return self.reject(ReadinessFault::WrongOrigin);
         }
-        let ConsoleArgument::PrimitiveString(message) = argument else { return Ok(()) };
+        let ConsoleArgument::PrimitiveString(message) = argument else {
+            return Ok(());
+        };
         if message.len() > 1024 || message.contains('\0') {
             return self.reject(ReadinessFault::MalformedObservation);
         }
@@ -315,7 +334,9 @@ impl MainReadiness {
         {
             return self.reject(ReadinessFault::VersionMismatch);
         }
-        let Some(pending) = &mut self.pending else { return Err(ReadinessFault::StaleProbe) };
+        let Some(pending) = &mut self.pending else {
+            return Err(ReadinessFault::StaleProbe);
+        };
         if pending.receipt.is_some() {
             return self.reject(ReadinessFault::MalformedObservation);
         }

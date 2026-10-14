@@ -127,6 +127,11 @@ pub struct DesktopCaptureSession {
     control: DesktopCaptureControl,
 }
 impl DesktopCaptureSession {
+    /// Retain only the same precharged metadata allocation for the private qualification owner.
+    #[cfg(feature = "k1-native-qualification")]
+    pub(crate) fn qualification_custody(&self) -> DesktopCaptureCustodyRef {
+        self.control.shared.clone()
+    }
     /// Borrow actual original job completion without transferring native custody.
     pub fn job(&mut self) -> &mut OwnedJob<DesktopCaptureAttached, CaptureAttachFailure> {
         &mut self.job

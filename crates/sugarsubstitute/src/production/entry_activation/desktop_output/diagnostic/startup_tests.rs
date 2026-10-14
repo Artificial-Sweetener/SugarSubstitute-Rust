@@ -8,6 +8,24 @@ use sugarsubstitute_contracts::transcript::OutputStream;
 const LINE: &str = "operation=\"desktop_failure_transition\" boundary=ObserveStartup kind=Other observation=CloseRequested close_stage=CaptureObservation capture_snapshot=CounterFailed code=Native(CounterConversion)";
 
 #[test]
+fn qualification_observation_tags_follow_feature_and_keep_closed_payload_free_grammar() {
+    for kind in ["MainPreviewCaptured", "MainPreviewFailed"] {
+        let line = LINE.replace("CloseRequested", kind);
+        let parsed = parse_failure(line.as_bytes()).and_then(|failure| failure.startup);
+        #[cfg(feature = "k1-native-qualification")]
+        assert_eq!(parsed.map(|detail| detail.observation), Some(kind));
+        #[cfg(not(feature = "k1-native-qualification"))]
+        assert!(parsed.is_none());
+        for payload in [" png=PRIVATE", " bytes=PRIVATE", " image=PRIVATE", " identity=PRIVATE"] {
+            assert!(parse_failure(format!("{line}{payload}").as_bytes()).is_none());
+        }
+    }
+    assert!(
+        parse_failure(LINE.replace("CloseRequested", "MainPreviewUnknown").as_bytes()).is_none()
+    );
+}
+
+#[test]
 fn startup_failure_grammar_keeps_closed_facts_and_rejects_duplicates_foreign_or_raw_tokens() {
     let actual = parse_failure(LINE.as_bytes()).and_then(|failure| failure.startup);
     assert_eq!(

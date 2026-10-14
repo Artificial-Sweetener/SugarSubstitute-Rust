@@ -46,6 +46,7 @@ fn real_driver_factory_cancelled_scope_keeps_partial_custody_until_actual_native
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
     scope.cancel();
     let child = ProductionChild::new(ChildInputs {
+        qualification: super::super::qualification::QualificationIntent::default(),
         diagnostics: crate::diagnostics::DiagnosticHealth::fixture(),
         input: InheritedLifecycleBootstrap::new(1)?,
         original: LifecyclePipeDeadline::new(100, 100)?,

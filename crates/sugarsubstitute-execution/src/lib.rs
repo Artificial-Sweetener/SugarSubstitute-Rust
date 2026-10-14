@@ -30,6 +30,12 @@ mod counter_deadline;
 mod cpu;
 #[cfg(any(windows, test))]
 mod desktop_capture;
+#[cfg(all(feature = "k1-native-qualification", any(windows, test)))]
+mod preview_arming;
+#[cfg(all(feature = "k1-native-qualification", any(windows, test)))]
+mod registered_desktop_fault;
+#[cfg(all(feature = "k1-native-qualification", any(windows, test)))]
+pub use desktop_capture::desktop_capture_control_storage_bytes;
 #[cfg(any(windows, test))]
 pub use desktop_capture::{
     DESKTOP_CAPTURE_NATIVE_WORKSPACE_BYTES, DesktopCaptureAdmissionRejection,
@@ -38,6 +44,10 @@ pub use desktop_capture::{
     NativeCaptureInput, NativeCaptureProgress, NativeCaptureReply, NativeCaptureStep,
     ProcessLifetimeCapture,
 };
+#[cfg(all(feature = "k1-native-qualification", any(windows, test)))]
+pub use preview_arming::{PreviewArmingError, PreviewArmingSeal, PreviewSourceLoan};
+#[cfg(all(feature = "k1-native-qualification", any(windows, test)))]
+pub use registered_desktop_fault::RegisteredDesktopFaultError;
 #[cfg(any(windows, test))]
 pub mod backend_custody;
 #[cfg(any(windows, test))]

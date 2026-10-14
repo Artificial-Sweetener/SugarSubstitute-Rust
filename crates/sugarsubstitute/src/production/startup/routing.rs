@@ -37,7 +37,9 @@ impl ProductionStartup {
     /// Deliver the original bounded child events before accepting later native evidence.
     pub(super) fn deliver_startup_events(&mut self) -> Result<(), Box<dyn Error>> {
         for _ in 0..32 {
-            let Some(startup) = &mut self.startup else { break };
+            let Some(startup) = &mut self.startup else {
+                break;
+            };
             let Some(event) =
                 observed_consume(ConsumeStage::StartupEvent, self.child.take_startup_event())?
             else {

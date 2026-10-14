@@ -178,6 +178,12 @@ impl Receivers {
         self.navigation.begin()
     }
 
+    /// Observe the actual current top native content for renderer qualification only.
+    #[cfg(feature = "k1-native-qualification")]
+    pub(crate) fn preview_navigation(&self) -> Result<u64, DesktopError> {
+        self.navigation.preview_navigation()
+    }
+
     /// Close evidence admission, then remove one actual receiver per normal loop drain.
     /// A pending callback, failed removal or uncertain registration retains all owners.
     pub(crate) fn retire_step(&mut self) -> Result<bool, DesktopError> {

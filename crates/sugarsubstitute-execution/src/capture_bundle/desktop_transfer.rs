@@ -80,6 +80,10 @@ impl Core {
             };
             let record =
                 state.jobs.get_mut(&job_id).ok_or(AdmissionError::InvalidCaptureAdmission)?;
+            #[cfg(feature = "k1-native-qualification")]
+            {
+                stage.permanent_identity = Some(association.capsule_identity);
+            }
             record.process_capture = Some(association);
             record.native_deadlines = None;
             stage.phase = DesktopCapturePhase::Transferred;

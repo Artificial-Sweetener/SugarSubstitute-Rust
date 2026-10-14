@@ -42,6 +42,11 @@ impl Admission {
     pub(super) fn identity(&self) -> MainIdentity {
         self.identity
     }
+    /// Return the original actually observed controller process for qualification rechecks.
+    #[cfg(feature = "k1-native-qualification")]
+    pub(super) fn browser_process_id(&self) -> Option<u32> {
+        self.browser_process_id
+    }
     pub(super) fn closing(&self) -> bool {
         self.phase == Phase::Retiring
     }

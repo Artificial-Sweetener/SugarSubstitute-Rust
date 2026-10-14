@@ -11,6 +11,14 @@ use sugarsubstitute_contracts::{crash::CaptureTarget, execution::Moment};
 /// The concrete native producer validates child self/kernel/peer/capability first.
 /// The lease remains outside Core and survives partial closure or callback unwind.
 pub(crate) trait InheritedCaptureLease: Send {
+    /// Borrow the constructor-private authenticated native producer seal outside Core locks.
+    #[cfg(feature = "k1-native-qualification")]
+    fn authenticated_desktop_creator(
+        &self,
+    ) -> Option<crate::desktop_capture::creator::AuthenticatedDesktopCreator> {
+        None
+    }
+
     /// Project only already authenticated immutable data; no provider/native call.
     /// Callback values remain borrowed through this ONE synchronous outer invoke.
     fn native_input(
@@ -53,9 +61,43 @@ struct InheritedCaptureFields {
     target: CaptureTarget,
     until: Moment,
     lease: Box<dyn InheritedCaptureLease>,
+    #[cfg(feature = "k1-native-qualification")]
+    preview_control_bytes: Option<usize>,
 }
 
 impl InheritedCaptureAttachInput {
+    /// Declare the exact Host preview controller/path storage before original admission.
+    /// This mutates only the genuine unconsumed inherited input. No claim, allocation,
+    /// native call or authority is issued. Core repeats the same compiled preflight
+    /// before its sole original16KiB claim or any child control/Box construction.
+    /// # Errors
+    /// A backend target, repeated, zero/insufficient, overflowing or oversized declaration preserves
+    /// this complete original input and its native/map custody unchanged.
+    #[cfg(feature = "k1-native-qualification")]
+    pub fn reserve_preview_control_storage(
+        &mut self,
+        bytes: usize,
+    ) -> Result<(), sugarsubstitute_contracts::execution::AdmissionError> {
+        if self.fields.target.desktop().is_none()
+            || self.fields.preview_control_bytes.is_some()
+            || bytes < crate::PreviewSourceLoan::storage_bytes()
+            || super::work::DesktopCaptureWork::storage_bytes()
+                .checked_add(bytes)
+                .is_none_or(|total| total > super::metadata::SOURCE_CONTROL_BYTES as usize)
+        {
+            return Err(
+                sugarsubstitute_contracts::execution::AdmissionError::InvalidCaptureAdmission,
+            );
+        }
+        self.fields.preview_control_bytes = Some(bytes);
+        Ok(())
+    }
+    /// Read only the actual original declaration during the central owner construction.
+    #[cfg(feature = "k1-native-qualification")]
+    pub(super) fn preview_control_storage(&self) -> usize {
+        self.fields.preview_control_bytes.unwrap_or(0)
+    }
+
     /// Transfer the actual authenticated producer's outside map loan with its native input.
     /// Both covered boxes deallocate before this nonclone loan/charge can return.
     #[cfg(windows)]
@@ -66,7 +108,13 @@ impl InheritedCaptureAttachInput {
         mapping: crate::windows_lifecycle_pipe::StartupViewLoan,
     ) -> Self {
         Self {
-            fields: Box::new(InheritedCaptureFields { target, until, lease }),
+            fields: Box::new(InheritedCaptureFields {
+                target,
+                until,
+                lease,
+                #[cfg(feature = "k1-native-qualification")]
+                preview_control_bytes: None,
+            }),
             _mapping: Some(mapping.into_retention()),
         }
     }
@@ -98,7 +146,13 @@ impl InheritedCaptureAttachInput {
         lease: Box<dyn InheritedCaptureLease>,
     ) -> Self {
         Self {
-            fields: Box::new(InheritedCaptureFields { target, until, lease }),
+            fields: Box::new(InheritedCaptureFields {
+                target,
+                until,
+                lease,
+                #[cfg(feature = "k1-native-qualification")]
+                preview_control_bytes: None,
+            }),
             #[cfg(windows)]
             _mapping: None,
         }

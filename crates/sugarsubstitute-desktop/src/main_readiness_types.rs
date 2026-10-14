@@ -25,6 +25,22 @@ impl DocumentId {
     pub(crate) fn matches(&self, value: &str) -> bool {
         &self.bytes[..usize::from(self.length)] == value.as_bytes()
     }
+
+    /// Borrow bounded native identity bytes for a qualified renderer receipt.
+    #[cfg(any(feature = "k1-native-qualification", test))]
+    pub(crate) fn bytes(&self) -> &[u8] {
+        &self.bytes[..usize::from(self.length)]
+    }
+}
+
+/// Snapshot current native document facts; this alone grants no capture or host privilege.
+#[cfg(any(feature = "k1-native-qualification", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct RenderDocument {
+    pub(crate) identity: MainIdentity,
+    pub(crate) context: i64,
+    pub(crate) frame: DocumentId,
+    pub(crate) loader: DocumentId,
 }
 
 /// Bind one native evaluation and its completion barrier to the exact document.

@@ -20,9 +20,12 @@ impl ProductionActivation {
                     let projection =
                         record.projected.take().ok_or("Original projected completion missing")?;
                     record.start = Some(DesktopStart::new(
-                        record.run,
-                        record.launch,
-                        record.navigation,
+                        sugarsubstitute_contracts::startup::MainIdentity {
+                            run: record.run,
+                            launch: record.launch,
+                            navigation: record.navigation,
+                        },
+                        std::mem::take(&mut record.qualification),
                         record.connection,
                         projection,
                         pin,

@@ -68,6 +68,7 @@ fn outer(cause: Box<dyn Error + Send + Sync>) -> Box<dyn Error> {
     cause
 }
 struct Record {
+    qualification: super::qualification::QualificationIntent,
     run: RunKey,
     launch: LaunchId,
     navigation: Generation,
@@ -89,6 +90,7 @@ struct Record {
     closed: bool,
 }
 struct PendingProjection {
+    qualification: super::qualification::QualificationIntent,
     run: RunKey,
     launch: LaunchId,
     navigation: Generation,
@@ -103,6 +105,7 @@ struct RetainedRecord {
 /// Own bounded retained records and the process's one actual capture registration.
 /// No constructor grants native effects, trust, serving state or child readiness.
 pub(crate) struct ProductionActivation {
+    qualification: Option<super::qualification::QualificationIntent>,
     executable: PathBuf,
     working_directory: PathBuf,
     capture_root: PathBuf,
@@ -131,6 +134,7 @@ impl ProductionActivation {
             LaunchConfiguration::validate_path(path)?;
         }
         Ok(Self {
+            qualification: None,
             executable,
             working_directory,
             capture_root,
@@ -148,6 +152,14 @@ impl ProductionActivation {
             failure_resource: None,
             next_wake: None,
         })
+    }
+    /// Assign inert development intent only to the first original admitted launch.
+    pub(crate) fn with_qualification(
+        mut self,
+        intent: super::qualification::QualificationIntent,
+    ) -> Self {
+        self.qualification = Some(intent);
+        self
     }
     fn preserve(&mut self, cause: Box<dyn Error>) {
         if self.failure.is_none() {
@@ -261,6 +273,7 @@ impl EntryActivation for ProductionActivation {
         self.next_instance = next_instance;
         self.next_connection = next_connection;
         self.pending[slot] = Some(PendingProjection {
+            qualification: self.qualification.take().unwrap_or_default(),
             run,
             launch,
             navigation,

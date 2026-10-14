@@ -43,6 +43,10 @@ pub(crate) fn observation_kind(observation: &DesktopStartupObservation) -> &'sta
         DesktopStartupObservation::FrontendReceipt { .. } => "FrontendReceipt",
         DesktopStartupObservation::SplashRetired(_) => "SplashRetired",
         DesktopStartupObservation::MainRevealed(_) => "MainRevealed",
+        #[cfg(all(target_os = "windows", feature = "k1-native-qualification"))]
+        DesktopStartupObservation::MainPreviewCaptured(_) => "MainPreviewCaptured",
+        #[cfg(all(target_os = "windows", feature = "k1-native-qualification"))]
+        DesktopStartupObservation::MainPreviewFailed { .. } => "MainPreviewFailed",
         DesktopStartupObservation::MainRetired(_) => "MainRetired",
         DesktopStartupObservation::MainAbsent(_) => "MainAbsent",
         DesktopStartupObservation::CloseRequested => "CloseRequested",

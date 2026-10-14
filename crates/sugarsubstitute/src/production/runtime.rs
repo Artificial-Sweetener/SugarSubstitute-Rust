@@ -28,6 +28,7 @@ pub(crate) fn execute<I: IntoIterator<Item = OsString>>(
         super::backend_custody::run(arguments)?;
         return Ok(None);
     }
+    let qualification = super::qualification::QualificationIntent::root(&mut arguments)?;
     if arguments.peek().is_some_and(|value| value == "--internal-production-desktop") {
         run_desktop(DesktopRole::parse(arguments)?, diagnostics)?;
         return Ok(None);
@@ -38,6 +39,7 @@ pub(crate) fn execute<I: IntoIterator<Item = OsString>>(
             command.installation.clone(),
             command.installation.join("capture"),
         )
+        .map(|activation| activation.with_qualification(qualification))
     })
 }
 
@@ -52,6 +54,7 @@ fn run_desktop(
     let labels = messages("en").window;
     let child = ProductionChild::new(ChildInputs {
         diagnostics,
+        qualification: role.qualification,
         input: role.bootstrap,
         original: role.original,
         run: role.run,

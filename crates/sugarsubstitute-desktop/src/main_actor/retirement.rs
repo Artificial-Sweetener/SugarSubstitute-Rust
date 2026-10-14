@@ -14,6 +14,10 @@ impl MainActor {
             return Err(DesktopError::message("retire_main", "main identity is stale or foreign"));
         }
         self.admission.close();
+        #[cfg(feature = "k1-native-qualification")]
+        if let Some(preview) = &mut self.preview {
+            preview.close();
+        }
         if let Some(readiness) = &mut self.readiness {
             readiness.invalidate(ReadinessFault::Cancelled);
         }
@@ -30,6 +34,12 @@ impl MainActor {
     pub(super) fn retire_step(
         &mut self,
     ) -> Result<Option<DesktopStartupObservation>, DesktopError> {
+        #[cfg(feature = "k1-native-qualification")]
+        if let Some(preview) = &mut self.preview
+            && !preview.retirement_ready()?
+        {
+            return Ok(None);
+        }
         if let Some(receivers) = &mut self.receivers {
             if receivers.retire_step()? {
                 self.receivers = None;
@@ -64,6 +74,10 @@ impl MainActor {
             return Ok(None);
         }
         if let Some(controls) = &mut self.controls {
+            #[cfg(feature = "k1-native-qualification")]
+            {
+                self.preview = None;
+            }
             controls.shutdown()?;
             if controls.retired() {
                 self.controls = None;
@@ -100,6 +114,8 @@ impl Drop for MainActor {
     /// Retain all unresolved native references and their credit before invoking a subscriber.
     fn drop(&mut self) {
         if !self.retired {
+            #[cfg(feature = "k1-native-qualification")]
+            std::mem::forget(self.preview.take());
             std::mem::forget(self.request.take());
             std::mem::forget(self.window.take());
             std::mem::forget(self.presenter.take());

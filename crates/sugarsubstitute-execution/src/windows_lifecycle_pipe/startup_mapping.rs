@@ -178,6 +178,11 @@ struct LoanAlias {
     storage: StorageRef,
 }
 impl StartupViewLoan {
+    /// Private matching fact; the retained original charge prevents allocation reuse.
+    #[cfg(feature = "k1-native-qualification")]
+    pub(crate) fn core_identity(&self) -> usize {
+        self.alias.storage.value.signal.core_identity()
+    }
     /// Move the same actual loan to cache-only capture facts after authentication.
     /// Only the startup view still needs a byte range; this returns no borrow/count.
     pub(crate) fn into_retention(self) -> StartupViewRetention {

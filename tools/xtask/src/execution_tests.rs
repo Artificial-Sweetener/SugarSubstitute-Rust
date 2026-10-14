@@ -349,6 +349,9 @@ fn capture_resource_producers_cannot_hide_outside_contract_or_execution_owners()
     Ok(())
 }
 
+#[path = "execution_qualification_tests.rs"]
+mod qualification;
+
 /// Authenticated native capture inputs cannot be manufactured by nonowners or macro aliases.
 #[test]
 fn authenticated_capture_input_producers_reject_nonowners_and_allow_owned_consumption() -> Result<()>

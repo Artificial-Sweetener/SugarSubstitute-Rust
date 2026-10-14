@@ -47,7 +47,7 @@ concern = "Repository governance and verification"
 package = "sugarsubstitute-supervision"
 root = "crates/sugarsubstitute-supervision"
 layer = "adapter"
-concern = "Bounded Windows launch inputs and retained contained process families"
+concern = "Bounded Windows launch inputs, retained contained process families and authenticated create-only native preview artifacts"
 
 [[owners]]
 package = "sugarsubstitute-splash"

@@ -11,6 +11,7 @@ publish.workspace = true
 [features]
 boundary-fixtures = []
 local-k1-symbol-trust = []
+k1-native-qualification = ["sugarsubstitute-execution/k1-native-qualification"]
 
 [target.'cfg(windows)'.dependencies]
 sugarsubstitute-contracts = { path = "../sugarsubstitute-contracts" }

@@ -5,18 +5,28 @@
 use super::*;
 use std::cell::Cell;
 use sugarsubstitute_contracts::configuration::LoopbackOrigin;
+#[cfg(feature = "k1-native-qualification")]
+use webview2_com::ContentLoadingEventHandler;
 use webview2_com::{
     DownloadStartingEventHandler, NavigationCompletedEventHandler, NavigationStartingEventHandler,
     PermissionRequestedEventHandler, ProcessFailedEventHandler,
 };
 
+const EVENT_COUNT: usize = if cfg!(feature = "k1-native-qualification") { 6 } else { 5 };
+
 struct State {
     origin: LoopbackOrigin,
     active: Cell<bool>,
     navigation: Cell<Option<u64>>,
+    #[cfg(feature = "k1-native-qualification")]
+    content: Cell<Option<(u64, bool)>>,
+    #[cfg(feature = "k1-native-qualification")]
+    completed: Cell<Option<u64>>,
+    #[cfg(feature = "k1-native-qualification")]
+    content_failure: Cell<Option<i32>>,
 }
 pub(super) struct Navigation {
-    tokens: [Option<i64>; 5],
+    tokens: [Option<i64>; EVENT_COUNT],
     uncertain: bool,
     installed: usize,
     state: Rc<State>,
@@ -24,10 +34,20 @@ pub(super) struct Navigation {
 impl Navigation {
     pub(super) fn new(origin: LoopbackOrigin) -> Self {
         Self {
-            tokens: [None; 5],
+            tokens: [None; EVENT_COUNT],
             uncertain: false,
             installed: 0,
-            state: Rc::new(State { origin, active: Cell::new(false), navigation: Cell::new(None) }),
+            state: Rc::new(State {
+                origin,
+                active: Cell::new(false),
+                navigation: Cell::new(None),
+                #[cfg(feature = "k1-native-qualification")]
+                content: Cell::new(None),
+                #[cfg(feature = "k1-native-qualification")]
+                completed: Cell::new(None),
+                #[cfg(feature = "k1-native-qualification")]
+                content_failure: Cell::new(None),
+            }),
         }
     }
     pub(super) fn begin(&self) -> Result<(), DesktopError> {
@@ -126,6 +146,8 @@ impl Navigation {
                                 captured
                                     .fail(DesktopError::new("native_navigation_completion", cause));
                             } else if state.active.get() && state.navigation.get() == Some(id) {
+                                #[cfg(feature = "k1-native-qualification")]
+                                state.completed.set(success.as_bool().then_some(id));
                                 captured.record(
                                     Kind::Navigation { succeeded: success.as_bool() },
                                     |_| Ok(()),
@@ -193,6 +215,32 @@ impl Navigation {
                         &mut token,
                     )
                 }),
+                #[cfg(feature = "k1-native-qualification")]
+                5 => core.add_ContentLoading(
+                    &ContentLoadingEventHandler::create(Box::new(move |_, args| {
+                        let _callback = captured.callback();
+                        let mut id = 0;
+                        let mut error_page = windows::core::BOOL::default();
+                        let observed = match args {
+                            Some(args) => args
+                                .NavigationId(&mut id)
+                                .and_then(|()| args.IsErrorPage(&mut error_page)),
+                            None => Err(windows::core::Error::from(E_POINTER)),
+                        };
+                        match observed {
+                            Ok(()) if state.active.get() && state.navigation.get() == Some(id) => {
+                                state.content.set(Some((id, error_page.as_bool())))
+                            }
+                            Ok(()) => {}
+                            Err(cause) if state.content_failure.get().is_none() => {
+                                state.content_failure.set(Some(cause.code().0))
+                            }
+                            Err(_) => {}
+                        }
+                        Ok(())
+                    })),
+                    &mut token,
+                ),
                 _ => {
                     return Err(DesktopError::message(
                         "install_main_browser_events",
@@ -209,6 +257,30 @@ impl Navigation {
         result.map_err(|cause| DesktopError::new("install_main_browser_events", cause))?;
         self.installed += 1;
         Ok(false)
+    }
+
+    /// Bind qualification to actual current top content, never an outgoing document capture.
+    #[cfg(feature = "k1-native-qualification")]
+    pub(super) fn preview_navigation(&self) -> Result<u64, DesktopError> {
+        if let Some(status) = self.state.content_failure.get() {
+            return Err(DesktopError::new(
+                "observe_preview_content",
+                windows::core::Error::from(windows::core::HRESULT(status)),
+            ));
+        }
+        match self.state.content.get() {
+            Some((id, false))
+                if self.state.active.get()
+                    && self.state.navigation.get() == Some(id)
+                    && self.state.completed.get() == Some(id) =>
+            {
+                Ok(id)
+            }
+            _ => Err(DesktopError::message(
+                "observe_preview_content",
+                "current native content is not eligible",
+            )),
+        }
     }
     pub(super) fn retire_step(&mut self, core: &ICoreWebView2) -> Result<bool, DesktopError> {
         if self.uncertain {
@@ -228,6 +300,8 @@ impl Navigation {
                 4 => core
                     .cast::<ICoreWebView2_4>()
                     .and_then(|core| core.remove_DownloadStarting(token)),
+                #[cfg(feature = "k1-native-qualification")]
+                5 => core.remove_ContentLoading(token),
                 _ => {
                     return Err(DesktopError::message(
                         "remove_main_browser_events",

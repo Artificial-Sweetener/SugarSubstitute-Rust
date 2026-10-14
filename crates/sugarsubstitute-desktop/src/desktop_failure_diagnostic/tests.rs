@@ -80,6 +80,49 @@ impl Drop for Source {
 }
 
 type RecordedEvent = Vec<(String, String)>;
+#[cfg(all(target_os = "windows", feature = "k1-native-qualification"))]
+#[test]
+fn preview_kind_classification_retains_the_native_cause_without_projecting_payload()
+-> Result<(), Box<dyn Error>> {
+    use sugarsubstitute_contracts::{
+        execution::Generation,
+        lifecycle::*,
+        startup::{LaunchId, MainIdentity},
+    };
+    let formatted = Arc::new(AtomicUsize::new(0));
+    let inspected = Arc::new(AtomicUsize::new(0));
+    let dropped = Arc::new(AtomicUsize::new(0));
+    let observation = crate::DesktopStartupObservation::MainPreviewFailed {
+        identity: MainIdentity {
+            run: RunKey {
+                owner: CoordinatorKey {
+                    namespace: NamespaceId::new([1; 32]),
+                    epoch: CoordinatorEpoch::new([2; 16])?,
+                },
+                instance: InstanceId::new(1)?,
+                generation: RunGeneration::new(1)?,
+            },
+            launch: LaunchId::new(1)?,
+            navigation: Generation::new(1)?,
+        },
+        cause: DesktopError::new(
+            "fixture_capture",
+            Source {
+                formatted: formatted.clone(),
+                inspected: inspected.clone(),
+                dropped: dropped.clone(),
+            },
+        ),
+    };
+    assert_eq!(DesktopError::startup_observation_kind(&observation), "MainPreviewFailed");
+    assert_eq!(formatted.load(Ordering::SeqCst), 0);
+    assert_eq!(inspected.load(Ordering::SeqCst), 0);
+    assert_eq!(dropped.load(Ordering::SeqCst), 0);
+    drop(observation);
+    assert_eq!(dropped.load(Ordering::SeqCst), 1);
+    Ok(())
+}
+
 #[test]
 fn actual_startup_observation_enriches_one_generic_frame_and_preserves_opaque_cause()
 -> Result<(), Box<dyn Error>> {

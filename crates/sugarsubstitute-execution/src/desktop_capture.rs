@@ -5,6 +5,8 @@
 #[allow(unsafe_code)]
 mod call;
 pub(crate) mod control;
+#[cfg(feature = "k1-native-qualification")]
+pub(crate) mod creator;
 mod delivery;
 pub(crate) mod event;
 mod failures;
@@ -35,6 +37,13 @@ pub use native_abi::{
 };
 pub use process_lifetime::ProcessLifetimeCapture;
 pub use resources::DESKTOP_CAPTURE_NATIVE_WORKSPACE_BYTES;
+/// Return concrete compiled internal bytes and unchanged original control partition.
+/// Host preview declaration must fit the remaining bytes before original child admission.
+/// This cache-only layout observation grants no memory claim, scope or native authority.
+#[cfg(feature = "k1-native-qualification")]
+pub const fn desktop_capture_control_storage_bytes() -> (usize, usize) {
+    (work::DesktopCaptureWork::storage_bytes(), metadata::SOURCE_CONTROL_BYTES as usize)
+}
 pub use submission::{
     DesktopCaptureAdmissionRejection, DesktopCaptureControl, DesktopCaptureSession,
     DesktopCaptureTemporaryState,

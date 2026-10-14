@@ -90,6 +90,7 @@ fn normal_idle_empty_queued_projection_and_retained_failure_never_issue_normal_c
     assert!(owner.shutdown_budget().is_none());
     let request = actual_request(1, 10)?;
     owner.pending[0] = Some(PendingProjection {
+        qualification: Default::default(),
         run: request.run(),
         launch: LaunchId::new(1)?,
         navigation: Generation::new(1)?,
@@ -109,6 +110,7 @@ fn normal_idle_empty_queued_projection_and_retained_failure_never_issue_normal_c
 fn normal_idle_partial_unlaunched_or_failed_record_never_becomes_a_normal_role() -> Result<()> {
     let request = actual_request(1, 10)?;
     let record = Record {
+        qualification: Default::default(),
         run: request.run(),
         launch: LaunchId::new(1)?,
         navigation: Generation::new(1)?,

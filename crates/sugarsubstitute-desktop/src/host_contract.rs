@@ -263,6 +263,15 @@ pub enum DesktopStartupCommand {
     RetireSplash(LaunchId),
     /// Reveal an already usable main host after actual splash retirement.
     RevealMain(MainIdentity),
+    /// Capture one current revealed renderer for an explicitly admitted native qualification.
+    /// The inert cutoff grants no authentication or file authority and is never renewed.
+    #[cfg(all(target_os = "windows", feature = "k1-native-qualification"))]
+    CaptureMainPreview {
+        /// Exact current authenticated application run, launch and navigation.
+        identity: MainIdentity,
+        /// Original finite campaign cutoff in absolute QPC ticks and ticks per second.
+        source_deadline: sugarsubstitute_contracts::execution::CounterDeadline,
+    },
     /// Retire the exact current native main lifetime before admitting another attempt.
     RetireMain {
         /// Exact current actor; a rendered identity grants no native authority.
@@ -323,6 +332,17 @@ pub enum DesktopStartupObservation {
     SplashRetired(LaunchId),
     /// Main cover retirement and native show/control/focus operations succeeded.
     MainRevealed(MainIdentity),
+    /// Actual current renderer PNG after its native completion and document/callback checks.
+    #[cfg(all(target_os = "windows", feature = "k1-native-qualification"))]
+    MainPreviewCaptured(crate::CapturedMainPreview),
+    /// Preserve optional native qualification failure independently of product startup health.
+    #[cfg(all(target_os = "windows", feature = "k1-native-qualification"))]
+    MainPreviewFailed {
+        /// The current native main identity for the failed qualification attempt.
+        identity: MainIdentity,
+        /// Actual adapter/native cause; an error does not establish callback retirement.
+        cause: crate::DesktopError,
+    },
     /// Complete native main/controller/callback retirement for the exact prior attempt.
     /// A failure observation or a requested COM close does not establish this fact.
     MainRetired(MainIdentity),

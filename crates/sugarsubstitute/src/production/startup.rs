@@ -270,6 +270,19 @@ impl StartupWindowContent for ProductionStartup {
         self.child.main_construction_pending()
     }
     fn observe(&mut self, observation: DesktopStartupObservation) -> Result<(), Box<dyn Error>> {
+        #[cfg(feature = "k1-native-qualification")]
+        let observation = {
+            let mut observation = Some(observation);
+            if self.child.accept_preview_observation(&mut observation) {
+                return self.refresh_deadline();
+            }
+            observation.ok_or("Ordinary native observation custody missing")?
+        };
+        #[cfg(feature = "k1-native-qualification")]
+        let revealed = match &observation {
+            DesktopStartupObservation::MainRevealed(identity) => Some(*identity),
+            _ => None,
+        };
         if self.reject_expired_frontend_receipt(&observation)? {
             self.deliver_startup_events()?;
             self.invalidate(true);
@@ -278,6 +291,12 @@ impl StartupWindowContent for ProductionStartup {
         let session = self.startup.as_mut().map(PreparedChildStartup::session_mut);
         let route = self.policy.native(observation, session)?;
         self.route(route)?;
+        #[cfg(feature = "k1-native-qualification")]
+        if let Some(identity) = revealed
+            && let Some(startup) = &self.startup
+        {
+            self.child.preview_after_main_revealed(identity, startup.session());
+        }
         self.invalidate(true);
         self.refresh_deadline()
     }

@@ -28,6 +28,7 @@ type Result<T> = std::result::Result<T, Box<dyn Error>>;
 /// Retain original projection charge through all profile, section and creation work.
 /// The parent lifecycle actor exclusively consumes the pipe's actual terminal result.
 pub(super) struct DesktopStart {
+    qualification: crate::production::qualification::QualificationIntent,
     pub(super) run: RunKey,
     pub(super) launch: LaunchId,
     pub(super) navigation: Generation,
@@ -57,14 +58,14 @@ impl DesktopStart {
     /// Bind only actual projected source and native attachment pin to current authority.
     /// No key, creator identity or native source can be reconstructed from observations.
     pub(super) fn new(
-        run: RunKey,
-        launch: LaunchId,
-        navigation: Generation,
+        identity: sugarsubstitute_contracts::startup::MainIdentity,
+        qualification: crate::production::qualification::QualificationIntent,
         connection: ConnectionId,
         mut projection: JobCompletion<ProjectedEntry, ProjectionFailure>,
         pin: CaptureAttachLaunchPin,
         resources: &mut EntryResources<'_>,
     ) -> Result<Self> {
+        let sugarsubstitute_contracts::startup::MainIdentity { run, launch, navigation } = identity;
         if resources.authority.key() != Some(run.owner) || !resources.authority.serving() {
             return Err("Actual coordinator authority unavailable".into());
         }
@@ -82,6 +83,7 @@ impl DesktopStart {
         let snapshot =
             value.snapshot.take().ok_or("Original startup snapshot already transferred")?;
         Ok(Self {
+            qualification,
             run,
             launch,
             navigation,
@@ -176,16 +178,23 @@ impl DesktopStart {
         }
         let pipe = self.pipe.as_ref().ok_or("Actual captured channel missing")?;
         if self.bootstrap.is_none() {
-            let Some(bootstrap) = pipe.control.take_bootstrap()? else { return Ok(false) };
+            let Some(bootstrap) = pipe.control.take_bootstrap()? else {
+                return Ok(false);
+            };
             self.original = bootstrap.deadline();
             self.bootstrap = Some(bootstrap);
             self.enrollment = Some(pipe.control.take_desktop_enrollment()?);
         }
         if self.prepared.is_none() {
             let bootstrap = self.bootstrap.as_ref().ok_or("Actual bootstrap pin missing")?;
-            let arguments =
-                desktop_role::arguments(bootstrap, self.run, self.launch, self.navigation)
-                    .map_err(super::outer)?;
+            let arguments = desktop_role::arguments(
+                bootstrap,
+                self.run,
+                self.launch,
+                self.navigation,
+                &self.qualification,
+            )
+            .map_err(super::outer)?;
             let command = WindowsLaunchCommand::from_utf16(
                 &executable.as_os_str().encode_wide().collect::<Vec<_>>(),
                 &working_directory.as_os_str().encode_wide().collect::<Vec<_>>(),
@@ -277,7 +286,9 @@ impl DesktopStart {
         } else {
             true
         };
-        let Some(pipe) = &mut self.pipe else { return Ok(output_settled) };
+        let Some(pipe) = &mut self.pipe else {
+            return Ok(output_settled);
+        };
         pipe.control.close();
         while pipe.control.take_observation().is_some() {}
         if self.pipe_terminal.is_none() {
@@ -286,7 +297,9 @@ impl DesktopStart {
         if self.checked_retirement.is_none() {
             self.checked_retirement = pipe.control.take_checked_retirement();
         }
-        let Some(terminal) = &self.pipe_terminal else { return Ok(false) };
+        let Some(terminal) = &self.pipe_terminal else {
+            return Ok(false);
+        };
         if terminal.scope_id != pipe.completion.scope_id()
             || terminal.spec != pipe.completion.spec()
         {

@@ -70,6 +70,38 @@ pub(crate) fn check(
         }
         for path in rust_files(&resolve(root, &owner.root)?)? {
             let source = read(&path)?;
+            let qualification = execution_source::qualification_producer_findings(&source)?;
+            let actual_child = permitted && path.strip_prefix(root).ok().is_some_and(|path| {
+                path == Path::new(
+                    "crates/sugarsubstitute-execution/src/windows_lifecycle_pipe/captured/child.rs",
+                )
+            });
+            require(
+                qualification.is_empty() || actual_child,
+                format!(
+                    "execution: {} constructs registered Desktop creator authority outside the authenticated native child producer: {}",
+                    path.strip_prefix(root).unwrap_or(&path).display(),
+                    qualification.join(", ")
+                ),
+            )?;
+            let fixtures = execution_source::qualification_fixture_findings(&source)?;
+            let fixture_owner = permitted
+                && path.strip_prefix(root).ok().is_some_and(|path| {
+                    path == Path::new(
+                        "crates/sugarsubstitute-execution/src/preview_arming/capture_tests.rs",
+                    ) || path
+                        == Path::new(
+                            "crates/sugarsubstitute-execution/src/preview_arming/binding.rs",
+                        )
+                });
+            require(
+                fixtures.is_empty() || fixture_owner,
+                format!(
+                    "execution: {} accesses private preview owner fixture authority: {}",
+                    path.strip_prefix(root).unwrap_or(&path).display(),
+                    fixtures.join(", ")
+                ),
+            )?;
             if !permitted && owner.package != "sugarsubstitute-contracts" {
                 let producer = execution_source::resource_producer_findings(&source)?;
                 require(

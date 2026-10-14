@@ -52,6 +52,9 @@ impl Core {
                     | RequestKind::BackendCustody { .. }
                     | RequestKind::CustodiedProcess(_)
             );
+        #[cfg(all(feature = "k1-native-qualification", any(windows, test)))]
+        let fresh_metadata =
+            fresh_metadata || matches!(&kind, RequestKind::RegisteredDesktopFault { .. });
         let now = if fresh_metadata || matches!(&kind, RequestKind::EntryPreparation(_)) {
             match self.clock.metadata() {
                 Ok(now) => now,
@@ -130,6 +133,12 @@ impl Core {
             {
                 return Err(AdmissionError::InvalidCaptureAdmission);
             }
+            #[cfg(all(feature = "k1-native-qualification", any(windows, test)))]
+            let valid_method = valid_method
+                || matches!(
+                    (&kind, spec.class),
+                    (RequestKind::RegisteredDesktopFault { .. }, JobClass::InfrastructureLifecycle)
+                );
             if !valid_method || !spec.validates_class() {
                 return Err(AdmissionError::WrongClass {
                     operation: spec.operation,
@@ -218,6 +227,18 @@ impl Core {
                 )));
             }
             crate::symbol_admission::validate(self, &state, scope, spec, &kind, now)?;
+            #[cfg(all(feature = "k1-native-qualification", any(windows, test)))]
+            if let RequestKind::RegisteredDesktopFault { custody, run } = &kind {
+                crate::registered_desktop_fault::admission::validate(
+                    self,
+                    &state,
+                    scope.id(),
+                    spec,
+                    custody,
+                    *run,
+                    now,
+                )?;
+            }
             Self::check_capacity(&mut state, spec, replacement_index.is_some())?;
             Ok((deadline, parent_cancel, replacement_index, timing))
         })();
@@ -285,6 +306,10 @@ impl Core {
         let memory = sugarsubstitute_contracts::execution::MemoryLeaseObservation::new(
             construction_guard.memory(),
         );
+        #[cfg(all(feature = "k1-native-qualification", any(windows, test)))]
+        if let RequestKind::RegisteredDesktopFault { custody, .. } = &kind {
+            lock(&custody.state).fault_job = Some(spec.id);
+        }
         state.jobs.insert(
             spec.id,
             Record {

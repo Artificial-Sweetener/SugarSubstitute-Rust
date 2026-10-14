@@ -53,6 +53,9 @@ pub use protected_storage::{ProtectedStorageGeneration, ProtectedStorageRoot};
 #[cfg(windows)]
 #[allow(unsafe_code)]
 mod native_process;
+#[cfg(all(windows, feature = "k1-native-qualification"))]
+#[allow(unsafe_code)]
+pub mod qualification_artifact;
 #[cfg(windows)]
 mod registry;
 #[cfg(windows)]

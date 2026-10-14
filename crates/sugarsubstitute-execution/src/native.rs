@@ -84,6 +84,11 @@ impl Signal {
             core.changed();
         }
     }
+    /// Opaque allocation identity of the already charged original mapping owner.
+    #[cfg(feature = "k1-native-qualification")]
+    pub(crate) fn core_identity(&self) -> usize {
+        self.core.as_ptr() as usize
+    }
     pub(crate) fn completed(&self) -> bool {
         self.completed.load(Ordering::Acquire)
     }

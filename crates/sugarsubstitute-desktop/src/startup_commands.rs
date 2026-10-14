@@ -104,6 +104,12 @@ pub(super) fn drain(
                 }
                 main_operation(session, content, |owner| owner.reveal(identity).map(Some))?;
             }
+            #[cfg(feature = "k1-native-qualification")]
+            DesktopStartupCommand::CaptureMainPreview { identity, source_deadline } => {
+                main_operation(session, content, |owner| {
+                    Ok(owner.capture_preview(identity, source_deadline))
+                })?;
+            }
             DesktopStartupCommand::Close => session.close(content),
         }
     }

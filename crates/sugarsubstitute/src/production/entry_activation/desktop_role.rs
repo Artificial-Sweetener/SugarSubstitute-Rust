@@ -20,6 +20,7 @@ use sugarsubstitute_execution::windows_lifecycle_pipe::{
 
 /// Lexical child input; the actual captured transport authenticates its inherited section.
 pub(crate) struct DesktopRole {
+    pub(crate) qualification: super::super::qualification::QualificationIntent,
     pub(crate) bootstrap: InheritedLifecycleBootstrap,
     pub(crate) original: LifecyclePipeDeadline,
     pub(crate) run: RunKey,
@@ -44,10 +45,10 @@ impl DesktopRole {
         let generation = RunGeneration::new(number(&mut arguments, "--run-generation")?)?;
         let launch = LaunchId::new(number(&mut arguments, "--launch")?)?;
         let navigation = Generation::new(number(&mut arguments, "--navigation")?)?;
-        if arguments.next().is_some() {
-            return Err("Unexpected desktop role arguments".into());
-        }
+        let qualification =
+            super::super::qualification::QualificationIntent::child(&mut arguments)?;
         Ok(Self {
+            qualification,
             bootstrap,
             original: LifecyclePipeDeadline::new(ticks, frequency)?,
             run: RunKey { owner: CoordinatorKey { namespace, epoch }, instance, generation },
@@ -63,6 +64,7 @@ pub(super) fn arguments(
     run: RunKey,
     launch: LaunchId,
     navigation: Generation,
+    qualification: &super::super::qualification::QualificationIntent,
 ) -> Result<Vec<Vec<u16>>, Box<dyn Error + Send + Sync>> {
     if bootstrap.run() != Some(run) {
         return Err("Desktop bootstrap run mismatch".into());
@@ -98,6 +100,7 @@ pub(super) fn arguments(
         units.extend(value.encode_utf16());
         output.push(units);
     }
+    qualification.append(&mut output)?;
     Ok(output)
 }
 fn value(

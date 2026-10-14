@@ -49,6 +49,9 @@ pub(crate) struct Lease {
     pub(in crate::windows_lifecycle_pipe) captured_facts:
         Option<super::captured::codec::CapturedFacts>,
     pub(in crate::windows_lifecycle_pipe) captured_until: Option<Moment>,
+    #[cfg(feature = "k1-native-qualification")]
+    pub(in crate::windows_lifecycle_pipe) captured_native_scope:
+        Option<sugarsubstitute_contracts::execution::ScopeId>,
     pub(in crate::windows_lifecycle_pipe) captured_ready:
         Option<super::captured::child::CapturedInput>,
     pub(in crate::windows_lifecycle_pipe) capture_processes: [Handle; 2],
@@ -84,6 +87,8 @@ impl Lease {
             captured_client: false,
             captured_facts: None,
             captured_until: None,
+            #[cfg(feature = "k1-native-qualification")]
+            captured_native_scope: None,
             captured_ready: None,
             capture_processes: std::array::from_fn(|_| Handle::new()),
             capture_tokens: std::array::from_fn(|_| Handle::new()),

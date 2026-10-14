@@ -26,6 +26,8 @@ mod entry_runner;
 mod options;
 #[path = "production/parent_lifecycle.rs"]
 mod parent_lifecycle;
+#[path = "production/qualification.rs"]
+mod qualification;
 #[path = "production/runtime.rs"]
 mod runtime;
 #[path = "production/startup.rs"]

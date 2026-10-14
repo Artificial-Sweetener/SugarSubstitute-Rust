@@ -18,8 +18,12 @@ mod main_navigation;
 mod main_readiness;
 mod main_readiness_storage;
 mod main_readiness_types;
+#[cfg(all(target_os = "windows", feature = "k1-native-qualification"))]
+mod qualified_preview;
 #[cfg(target_os = "windows")]
 pub use headless::{HeadlessLifetime, HeadlessStep, run_headless};
+#[cfg(all(target_os = "windows", feature = "k1-native-qualification"))]
+pub use qualified_preview::{CapturedMainPreview, MainPreviewSnapshot, MainPreviewViewport};
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "macos")]

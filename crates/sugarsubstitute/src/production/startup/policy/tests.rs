@@ -373,3 +373,27 @@ fn pre_surface_failure_keeps_original_cause_without_constructing_a_session() -> 
     }
     Ok(())
 }
+
+#[cfg(feature = "k1-native-qualification")]
+#[test]
+fn qualification_capture_kind_cannot_grant_startup_policy_and_retains_original_cause() -> TestResult
+{
+    let (mut owner, mut session) = policy(false)?;
+    let identity = owner.identity(&session);
+    let phase = session.phase();
+    let observation = DesktopStartupObservation::MainPreviewFailed {
+        identity,
+        cause: crate::production::qualification::error_fixture::native_failure()?,
+    };
+    let cause = owner
+        .native(observation, Some(&mut session))
+        .err()
+        .ok_or("Preview gained startup authority")?;
+    let rejected = cause.downcast::<RejectedNativeObservation>()?;
+    assert!(matches!(&rejected.observation, DesktopStartupObservation::MainPreviewFailed {
+        identity: current, cause,
+    } if *current == identity && cause.to_string().contains("client dimensions must be positive")));
+    assert_eq!(session.phase(), phase);
+    assert!(!owner.closing);
+    Ok(())
+}

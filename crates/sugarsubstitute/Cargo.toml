@@ -8,6 +8,10 @@ license.workspace = true
 authors.workspace = true
 publish.workspace = true
 
+[features]
+default = []
+k1-native-qualification = ["sugarsubstitute-execution/k1-native-qualification", "sugarsubstitute-desktop/k1-native-qualification", "sugarsubstitute-supervision/k1-native-qualification"]
+
 [dependencies]
 sugarsubstitute-contracts = { path = "../sugarsubstitute-contracts" }
 sugarsubstitute-application = { path = "../sugarsubstitute-application" }

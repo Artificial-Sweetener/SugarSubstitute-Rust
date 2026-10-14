@@ -184,6 +184,9 @@ impl StartupPolicy {
             DesktopStartupObservation::Failed { identity, .. } => identity.is_none_or(|identity| {
                 session.is_some_and(|session| identity == self.identity(session))
             }),
+            #[cfg(feature = "k1-native-qualification")]
+            DesktopStartupObservation::MainPreviewCaptured(_)
+            | DesktopStartupObservation::MainPreviewFailed { .. } => false,
             DesktopStartupObservation::CloseRequested => true,
         }
     }

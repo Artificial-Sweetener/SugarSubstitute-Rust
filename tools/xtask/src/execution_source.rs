@@ -312,6 +312,38 @@ pub(crate) fn findings(source: &str) -> Result<Vec<String>> {
 pub(crate) fn resource_producer_findings(source: &str) -> Result<Vec<String>> {
     filtered_findings(source, resource_producer_path, resource_fragments)
 }
+/// Detect private qualification creator construction, including aliases and macro fragments.
+pub(crate) fn qualification_producer_findings(source: &str) -> Result<Vec<String>> {
+    filtered_findings(
+        source,
+        |path| {
+            path.windows(2).any(|pair| {
+                pair[0] == "AuthenticatedDesktopCreator" && pair[1] == "from_authenticated"
+            })
+        },
+        |names| {
+            names.contains("AuthenticatedDesktopCreator") && names.contains("from_authenticated")
+        },
+    )
+}
+/// Test authority stays inside its exact Core-owner regression fixture, including macro aliases.
+pub(crate) fn qualification_fixture_findings(source: &str) -> Result<Vec<String>> {
+    filtered_findings(
+        source,
+        |path| {
+            path.last().is_some_and(|name| name == "borrow_preview_owner_fixture")
+                || path.windows(2).any(|pair| {
+                    pair[0] == "AuthenticatedDesktopCreator" && pair[1] == "owner_fixture"
+                })
+        },
+        |names| {
+            names.contains("borrow_preview_owner_fixture")
+                || (names.contains("AuthenticatedDesktopCreator")
+                    && names.contains("owner_fixture"))
+        },
+    )
+}
+
 fn resource_producer_path(path: &[String]) -> bool {
     path.windows(2).any(|pair| {
         (pair[0] == "InheritedCaptureAttachInput"

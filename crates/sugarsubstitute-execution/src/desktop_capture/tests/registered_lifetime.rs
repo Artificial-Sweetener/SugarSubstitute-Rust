@@ -21,6 +21,19 @@ struct RegisteredOwner {
 }
 impl RegisteredOwner {
     fn new(parent_deadline: Option<Moment>) -> TestResult<Self> {
+        let inherited = input()?;
+        #[cfg(feature = "k1-native-qualification")]
+        let inherited = {
+            let mut original = inherited;
+            original.reserve_preview_control_storage(8192)?;
+            original
+        };
+        Self::with_input(parent_deadline, inherited)
+    }
+    fn with_input(
+        parent_deadline: Option<Moment>,
+        inherited: InheritedCaptureAttachInput,
+    ) -> TestResult<Self> {
         let clock = Arc::new(ManualClock::default());
         let core = Core::new(
             ExecutionId::new(1)?,
@@ -38,8 +51,9 @@ impl RegisteredOwner {
             blocked: false,
             claims: Vec::new(),
         });
+
         let session =
-            submission::reserve(&core, &scope, request()?, input()?, Box::new(driver), event)?;
+            submission::reserve(&core, &scope, request()?, inherited, Box::new(driver), event)?;
         let (queued, wake) =
             core.take_native_at(Moment::from_nanos(0)).ok_or("Actual capture not selected")?;
         core.deliver_capacity_wake(wake);
@@ -215,3 +229,11 @@ fn finite_registration_cutoff_still_vetoes_unissued_capture() -> TestResult {
     assert_eq!(owner.scope.snapshot().reserved_bytes, 0);
     Ok(())
 }
+
+#[cfg(feature = "k1-native-qualification")]
+#[path = "../../registered_desktop_fault/capture_tests.rs"]
+mod qualification;
+
+#[cfg(feature = "k1-native-qualification")]
+#[path = "../../preview_arming/capture_tests.rs"]
+mod preview;

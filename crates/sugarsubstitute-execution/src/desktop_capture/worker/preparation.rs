@@ -33,6 +33,16 @@ impl DesktopCaptureActive {
             self.work.driver = Some(fields.driver);
             return Err(invariant("capture_prepare_duplicate"));
         }
+        #[cfg(feature = "k1-native-qualification")]
+        {
+            // The actual inherited producer is observed outside all Core/cleanup/stage locks.
+            let creator = self
+                .work
+                .inherited
+                .as_ref()
+                .and_then(|input| input.lease().authenticated_desktop_creator());
+            lock(&self.work.shared.state).authenticated_creator = creator;
+        }
         self.prepare_driver(admission)?;
         let fields = self.fields().ok_or_else(|| invariant("capture_event_original"))?;
         let claim = core

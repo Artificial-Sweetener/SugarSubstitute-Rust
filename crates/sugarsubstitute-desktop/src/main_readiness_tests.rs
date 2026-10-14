@@ -69,6 +69,37 @@ fn positive_dom_waits_for_barrier_and_transfers_exactly_one_receipt() -> Result 
     assert!(owner.poll_probe()?.is_none());
     Ok(())
 }
+
+#[test]
+fn renderer_snapshot_requires_actual_positive_barrier_and_retains_native_document() -> Result {
+    let mut owner = owner()?;
+    assert!(owner.render_document().is_none());
+    let target = loaded(&mut owner)?;
+    assert!(owner.render_document().is_none());
+    owner.dom_result(target, Some(positive(target)?))?;
+    assert!(owner.render_document().is_none());
+    owner.barrier_complete(target)?;
+    let document = owner.render_document().ok_or("Ready document snapshot missing")?;
+    assert_eq!(document.identity, target.identity);
+    assert_eq!(document.context, target.context);
+    assert_eq!(document.frame, target.frame);
+    assert_eq!(document.loader, target.loader);
+    assert_eq!(document.frame.bytes(), b"root");
+    assert_eq!(document.loader.bytes(), b"loader");
+    Ok(())
+}
+
+#[test]
+fn renderer_snapshot_does_not_survive_actual_current_document_health_failure() -> Result {
+    let mut owner = owner()?;
+    let target = loaded(&mut owner)?;
+    owner.dom_result(target, Some(positive(target)?))?;
+    owner.barrier_complete(target)?;
+    assert!(owner.render_document().is_some());
+    owner.invalidate(ReadinessFault::SetupFailed);
+    assert!(owner.render_document().is_none());
+    Ok(())
+}
 #[test]
 fn late_caught_setup_error_defeats_positive_dom_and_barrier() -> Result {
     let mut owner = owner()?;

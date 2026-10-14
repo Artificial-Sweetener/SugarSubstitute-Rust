@@ -97,7 +97,14 @@ impl DesktopCaptureWork {
         cancel: Arc<Cancellation>,
         admitted: Moment,
     ) -> Result<Box<Self>, (AdmissionError, WorkInput)> {
-        if Self::storage_bytes() > SOURCE_CONTROL_BYTES as usize {
+        #[cfg(feature = "k1-native-qualification")]
+        let declared = input.inherited.preview_control_storage();
+        #[cfg(not(feature = "k1-native-qualification"))]
+        let declared = 0;
+        if Self::storage_bytes()
+            .checked_add(declared)
+            .is_none_or(|total| total > SOURCE_CONTROL_BYTES as usize)
+        {
             return Err((AdmissionError::InvalidCaptureAdmission, input));
         }
         let memory = match context.memory().claim(SOURCE_CONTROL_BYTES) {
@@ -120,6 +127,10 @@ impl DesktopCaptureWork {
             input.inherited.original_deadline(),
         );
         let shared = DesktopCaptureCustody::with_metadata(cleanup, metadata.clone());
+        #[cfg(feature = "k1-native-qualification")]
+        {
+            crate::scope::lock(&shared.state).preview_control_bytes = declared;
+        }
         let job =
             Job::new(context.scope_id(), context.spec(), admitted, cancel, Arc::downgrade(core));
         let signal = Signal::new(core);

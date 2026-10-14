@@ -10,7 +10,9 @@ impl ProductionStartup {
         &mut self,
         observation: &DesktopStartupObservation,
     ) -> Result<bool, Box<dyn Error>> {
-        let Some(startup) = &self.startup else { return Ok(false) };
+        let Some(startup) = &self.startup else {
+            return Ok(false);
+        };
         let session = startup.session();
         let current = self.policy.identity(session);
         if !matches!(observation, DesktopStartupObservation::FrontendReceipt { identity, receipt }

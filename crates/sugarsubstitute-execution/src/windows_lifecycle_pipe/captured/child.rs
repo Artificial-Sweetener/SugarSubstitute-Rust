@@ -24,6 +24,12 @@ pub(crate) struct CapturedChildBinding {
     target: CaptureTarget,
     child_pid: u32,
     child_birth: u64,
+    #[cfg(feature = "k1-native-qualification")]
+    core_identity: usize,
+    #[cfg(feature = "k1-native-qualification")]
+    native_scope: sugarsubstitute_contracts::execution::ScopeId,
+    #[cfg(feature = "k1-native-qualification")]
+    enrollment: crate::lifecycle_pipe::LifecyclePipeDeadline,
 }
 
 /// Return the two original loans together, after actual native authentication.
@@ -46,6 +52,17 @@ struct InputLease {
     returned: bool,
 }
 impl InheritedCaptureLease for InputLease {
+    #[cfg(feature = "k1-native-qualification")]
+    fn authenticated_desktop_creator(
+        &self,
+    ) -> Option<crate::desktop_capture::creator::AuthenticatedDesktopCreator> {
+        if self.returned {
+            return None;
+        }
+        crate::desktop_capture::creator::AuthenticatedDesktopCreator::from_authenticated(
+            &self.binding,
+        )
+    }
     fn native_input(
         &self,
         cleanup: CleanupSource,
@@ -78,6 +95,26 @@ impl InheritedCaptureLease for InputLease {
     }
 }
 impl CapturedChildBinding {
+    /// Exact original native Core allocation, kept alive by the retained mapping charge.
+    #[cfg(feature = "k1-native-qualification")]
+    pub(crate) const fn core_identity(&self) -> usize {
+        self.core_identity
+    }
+    /// Actual scope supplied only by the original native worker preparation.
+    #[cfg(feature = "k1-native-qualification")]
+    pub(crate) const fn native_scope(&self) -> sugarsubstitute_contracts::execution::ScopeId {
+        self.native_scope
+    }
+    /// Original authenticated finite parent enrollment cutoff; never resampled.
+    #[cfg(feature = "k1-native-qualification")]
+    pub(crate) const fn enrollment(&self) -> crate::lifecycle_pipe::LifecyclePipeDeadline {
+        self.enrollment
+    }
+    /// Borrow actual self identity after the same kernel/capability authentication.
+    #[cfg(feature = "k1-native-qualification")]
+    pub(crate) const fn child_identity(&self) -> (u32, u64) {
+        (self.child_pid, self.child_birth)
+    }
     /// Borrow immutable actual authenticated data only for the private ABI constructor.
     pub(crate) fn facts(&self) -> (&CapturedFacts, CaptureTarget) {
         (&self.facts, self.target)
@@ -102,6 +139,10 @@ impl Lease {
             )
             .map_err(LifecyclePipeFailure::native)?,
         );
+        #[cfg(feature = "k1-native-qualification")]
+        {
+            self.captured_native_scope = Some(context.scope_id());
+        }
         self.captured_facts = Some(facts);
         self.data = Some(data);
         Ok(())
@@ -157,7 +198,20 @@ impl Lease {
             None
         };
         let facts = self.captured_facts.take().ok_or_else(|| failure("captured_child_facts"))?;
-        let binding = CapturedChildBinding { facts, target, child_pid, child_birth };
+        let binding = CapturedChildBinding {
+            facts,
+            target,
+            child_pid,
+            child_birth,
+            #[cfg(feature = "k1-native-qualification")]
+            core_identity: input_loan.core_identity(),
+            #[cfg(feature = "k1-native-qualification")]
+            enrollment: data.deadline,
+            #[cfg(feature = "k1-native-qualification")]
+            native_scope: self
+                .captured_native_scope
+                .ok_or_else(|| failure("captured_native_scope"))?,
+        };
         let capture = InheritedCaptureAttachInput::authenticated(
             target,
             until,
