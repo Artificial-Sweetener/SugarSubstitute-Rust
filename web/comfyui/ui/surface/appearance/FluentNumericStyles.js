@@ -26,6 +26,7 @@ export function fluentNumericCss() {
     }
     [data-sc-number-spinner] > div:has(> [data-sc-number-input]) { margin:0; padding:0; height:100%; min-width:0; }
     [data-sc-number-input] { box-sizing:border-box; min-width:0; width:100%; border:0; margin:0; height:100%; text-align:center; padding:0 8px; }
+    [data-sc-native-number-fill] { display:none; }
     [data-sc-number-increment], [data-sc-number-decrement] {
       position:absolute; right:0; width:20px; height:50%; min-height:0; padding:0; margin:0;
       border:0; border-left:1px solid var(--sc-control-stroke); border-radius:0;

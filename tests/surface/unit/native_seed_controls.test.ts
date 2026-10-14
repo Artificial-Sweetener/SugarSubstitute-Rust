@@ -52,6 +52,7 @@ function fixture() {
       increment: null,
       decrement: null,
       hasNativeSlider: false,
+      rangeFill: null,
       readValue: () => Number(input.value),
       writeValue: (value) => {
         input.value = String(value);

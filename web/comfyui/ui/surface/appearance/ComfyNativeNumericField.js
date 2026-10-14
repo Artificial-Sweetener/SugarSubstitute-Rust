@@ -65,6 +65,7 @@ export function readNativeNumericField(row, widgetVNode) {
         input,
         increment: spinner.querySelector('[data-testid="increment"], .p-inputnumber-increment-button'),
         decrement: spinner.querySelector('[data-testid="decrement"], .p-inputnumber-decrement-button'),
+        rangeFill: spinner.querySelector(':scope > .pointer-events-none.absolute.size-full'),
         hasNativeSlider: findVueComponents(widgetVNode, 'WidgetInputNumberSlider').length > 0,
         readValue,
         disabled: () => input.disabled ||

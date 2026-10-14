@@ -26,6 +26,7 @@ export interface NativeNumericField extends NumericSliderSpec {
   input: HTMLInputElement;
   increment: HTMLButtonElement | null;
   decrement: HTMLButtonElement | null;
+  rangeFill: HTMLElement | null;
   hasNativeSlider: boolean;
   readValue(): number | null;
   disabled(): boolean;
@@ -89,6 +90,9 @@ export function readNativeNumericField(
     ),
     decrement: spinner.querySelector<HTMLButtonElement>(
       '[data-testid="decrement"], .p-inputnumber-decrement-button',
+    ),
+    rangeFill: spinner.querySelector<HTMLElement>(
+      ':scope > .pointer-events-none.absolute.size-full',
     ),
     hasNativeSlider: findVueComponents(widgetVNode, 'WidgetInputNumberSlider').length > 0,
     readValue,
