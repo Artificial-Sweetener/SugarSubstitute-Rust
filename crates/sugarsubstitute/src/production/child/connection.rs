@@ -22,6 +22,12 @@ pub(super) enum ConnectionStage {
     Admitted,
     /// The original matching frame transferred to its semantic owner.
     ReplyReceived,
+    /// The matching reply decoded a grant; transport metadata grants no native authority.
+    Granted,
+    /// The matching reply decoded the parent's original failure disposition.
+    Failed,
+    /// The matching reply decoded the parent's original typed rejection.
+    Rejected,
 }
 impl ConnectionStage {
     /// Emit one closed token at the genuine owner transition without payload or paths.
@@ -113,6 +119,12 @@ impl ProductionChild {
             return Err("Acquire reply differs from original request".into());
         }
         ConnectionStage::ReplyReceived.report();
+        match &frame.payload {
+            DecodedPayload::Reply(ReplyOutcome::Granted(_)) => ConnectionStage::Granted.report(),
+            DecodedPayload::Reply(ReplyOutcome::Failed(_)) => ConnectionStage::Failed.report(),
+            DecodedPayload::Reply(ReplyOutcome::Rejected(_)) => ConnectionStage::Rejected.report(),
+            _ => {}
+        }
         match frame.payload {
             DecodedPayload::Reply(ReplyOutcome::Granted(grant))
                 if grant.identity == self.identity =>

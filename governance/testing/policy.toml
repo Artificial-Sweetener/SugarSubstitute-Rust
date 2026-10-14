@@ -17,13 +17,13 @@ minimum_tests = 162
 package = "sugarsubstitute-comfy"
 root = "crates/sugarsubstitute-comfy"
 concern = "Bounded startup schema, effective managed argv and observed ComfyUI response contracts; Bounded fixed WinHTTP requests, installed runtime asset hash verification, deterministic readiness-owner custody and feature-gated external boundary fixtures; original-budget readiness campaigns and typed native retry classification"
-minimum_tests = 84
+minimum_tests = 87
 
 [[owners]]
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
 concern = "Production desktop startup and retirement through actual execution, authenticated parent/child transport, shared backends, profiles and native window adapters; retained failures, captured startup, bounded console rendering and isolated qualification roles"
- minimum_tests = 404
+ minimum_tests = 407
 
 [[owners]]
 package = "sugarsubstitute-execution"

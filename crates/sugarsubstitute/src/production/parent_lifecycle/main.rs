@@ -54,7 +54,7 @@ impl ParentLifecycle {
             reservation_bytes: PROFILE_OPERATION_BYTES,
             replacement: None,
         };
-        let (identity, pid) = match effect.ok_or(ParentError::WrongPhase)? {
+        let (identity, pid) = match effect.ok_or_else(|| profile_rejection("EffectAbsent"))? {
             Effect::ValidateEnvironment(identity) => {
                 resources.profile.submit_environment_validation(
                     resources.execution.client,
@@ -78,7 +78,7 @@ impl ParentLifecycle {
                 )?;
                 (identity, Some(browser_process_id))
             }
-            _ => return Err(ParentError::WrongPhase.into()),
+            _ => return Err(profile_rejection("EffectKind").into()),
         };
         self.profile_pending =
             Some(ProfilePending { job: spec.id, index, identity, pid, original: until });
@@ -97,9 +97,10 @@ impl ParentLifecycle {
             return Ok(());
         };
         if completion.job != pending.job {
-            return Err(ParentError::WrongPhase.into());
+            return Err(profile_rejection("CompletionJobMismatch").into());
         }
-        let pending = self.profile_pending.take().ok_or(ParentError::WrongPhase)?;
+        let pending =
+            self.profile_pending.take().ok_or_else(|| profile_rejection("PendingOwnerAbsent"))?;
         if let Some(cause) = completion.failure {
             return Err(cause.into());
         }
@@ -120,7 +121,10 @@ impl ParentLifecycle {
         let request = header.request.ok_or(ParentError::WrongPhase)?;
         resources.session.control.validate_current_admission()?;
         if let Some(pid) = pending.pid {
-            let proof = resources.profile.take_browser_proof().ok_or(ParentError::WrongPhase)?;
+            let proof = resources
+                .profile
+                .take_browser_proof()
+                .ok_or_else(|| profile_rejection("BrowserProofAbsent"))?;
             self.browser = Some(proof);
             let proof = self.browser.as_ref().ok_or(ParentError::WrongPhase)?;
             if proof.job_id() != pending.job
@@ -140,8 +144,10 @@ impl ParentLifecycle {
             self.requests.get_mut(pending.index)?.reply =
                 Some(Reply::Browser { identity: pending.identity, pid });
         } else {
-            let proof =
-                resources.profile.take_environment_proof().ok_or(ParentError::WrongPhase)?;
+            let proof = resources
+                .profile
+                .take_environment_proof()
+                .ok_or_else(|| profile_rejection("EnvironmentProofAbsent"))?;
             self.environment = Some(proof);
             let proof = self.environment.as_ref().ok_or(ParentError::WrongPhase)?;
             if proof.job_id() != pending.job
@@ -246,3 +252,13 @@ impl std::fmt::Display for RemoteMainFailure {
     }
 }
 impl std::error::Error for RemoteMainFailure {}
+
+/// Record a closed profile-owner boundary without formatting proof, paths or native payloads.
+fn profile_rejection(boundary: &'static str) -> ParentError {
+    tracing::error!(
+        operation = "parent_profile_transition_rejected",
+        boundary,
+        "Actual profile transition rejected; original parent disposition retained"
+    );
+    ParentError::WrongPhase
+}

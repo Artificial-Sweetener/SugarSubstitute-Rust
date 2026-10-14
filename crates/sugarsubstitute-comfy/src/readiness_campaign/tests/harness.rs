@@ -159,8 +159,20 @@ impl Harness {
         fail_close: bool,
         finish_at: Option<Moment>,
     ) -> TestResult<Arc<FixtureHttp>> {
+        self.submit_timed(behavior, gated, fail_close, finish_at, 0)
+    }
+    /// Set external response time before the genuine worker is admitted.
+    pub(super) fn submit_timed(
+        &mut self,
+        behavior: Behavior,
+        gated: Option<&'static str>,
+        fail_close: bool,
+        finish_at: Option<Moment>,
+        response_nanos: u64,
+    ) -> TestResult<Arc<FixtureHttp>> {
         let input = ReadinessProbeInput::attached(self.lease.clone(), 8188)?;
         let fixture = FixtureHttp::new(behavior, gated, fail_close, self.clock.clone(), finish_at);
+        fixture.response_nanos.store(response_nanos, Ordering::Release);
         self.fixtures.0.push(fixture.clone());
         let owner = ReadinessProbeOwner::from_fixture(input, fixture.clone());
         let now = self.now();

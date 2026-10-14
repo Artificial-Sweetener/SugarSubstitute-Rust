@@ -194,8 +194,15 @@ impl ParentLifecycle {
         batch: &CompletionBatch,
         resources: &mut ParentResources<'_, '_>,
     ) -> std::result::Result<(), ParentError> {
-        let result = self.advance(batch, resources);
+        let mut step = "latch_terminal";
+        let result = self.advance(batch, resources, &mut step);
         if let Err(cause) = result {
+            tracing::error!(operation="parent_lifecycle_transition_failed",step,run=?self.run,
+                main_stage=?self.main.stage(),main_identity=?self.main.snapshot().identity,
+                profile_pending=self.profile_pending.is_some(),native_profile_pending=resources.profile.snapshot().pending,
+                attempt_pending=self.attempt_cleanup.is_some(),read=self.read,write=self.write.is_some(),
+                rejection=?cause.downcast_ref::<ParentError>(),
+                "Actual parent transition rejected; original cause retained");
             self.retain_failure(cause);
             self.closed = true;
             resources.session.control.close();
@@ -208,21 +215,40 @@ impl ParentLifecycle {
         &mut self,
         batch: &CompletionBatch,
         resources: &mut ParentResources<'_, '_>,
+        step: &mut &'static str,
     ) -> Result<()> {
         self.latch_terminal(batch, resources)?;
+        *step = "consume_profile";
         self.consume_profile(batch, resources)?;
+        *step = "finish_main_retirement";
         self.finish_main_retirement(resources)?;
         while let Some(observation) = resources.session.control.take_observation() {
+            *step = match &observation {
+                sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeObservation::Prepared => "observe_prepared",
+                sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeObservation::Connected => "observe_connected",
+                sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeObservation::Authenticated(_) => "observe_authenticated",
+                sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeObservation::ReadPending { .. } => "observe_read_pending",
+                sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeObservation::Received { .. } => "observe_received",
+                sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeObservation::WriteIssued { .. } => "observe_write_issued",
+                sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeObservation::Written { .. } => "observe_written",
+                sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeObservation::WriteRevoked { .. } => "observe_write_revoked",
+            };
             self.observe(observation, resources)?;
         }
+        *step = "consume_terminal";
         self.consume_terminal(resources)?;
         if self.closed {
+            *step = "finish_disconnect";
             self.finish_disconnect(resources)?;
             return Ok(());
         }
+        *step = "check_main_deadline";
         self.check_main_deadline(resources)?;
+        *step = "advance_attempt_cleanup";
         self.advance_attempt_cleanup(resources)?;
+        *step = "send_next";
         self.send_next(resources)?;
+        *step = "receive_next";
         self.receive_next(resources)?;
         Ok(())
     }

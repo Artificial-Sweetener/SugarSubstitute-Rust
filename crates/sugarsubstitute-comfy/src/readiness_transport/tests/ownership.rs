@@ -139,7 +139,14 @@ fn delivery_after_original_effective_deadline_rejects_actual_success_without_new
     assert_eq!(harness.retained(), (0, 0, 0, super::super::memory::BODY_BYTES, 500));
     assert_eq!(
         *lock(&harness.boundary.requests),
-        ["/system_stats", "/extensions", "/index.html", "/extensions/SugarCubes/main.js"]
+        [
+            "/system_stats",
+            "/extensions",
+            "/index.html",
+            "/extensions/SugarCubes/main.js",
+            "/system_stats",
+            "/extensions",
+        ]
     );
     harness.clock.0.store(500, std::sync::atomic::Ordering::Release);
     assert_eq!(

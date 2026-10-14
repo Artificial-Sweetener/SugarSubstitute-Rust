@@ -331,3 +331,43 @@ fn connection_chunks_share_original_diagnostic_cap_and_cannot_stitch_gaps() {
     assert_eq!(seen.len(), 32);
     assert!(matches!(seen.last(), Some(Observation::Failure(Failure { kind: "TimedOut", .. }))));
 }
+
+#[test]
+fn terminal_acquisition_metadata_requires_complete_order_and_rejects_extra_raw_fields() {
+    for terminal in [Connection::Granted, Connection::Failed, Connection::Rejected] {
+        let mut parser = Diagnostic::new();
+        let mut observed = Vec::new();
+        let premature = format!("operation=\"child_connection_transition\" stage={terminal:?}\n");
+        parser.feed(OutputStream::Stderr, 1, false, false, premature.as_bytes(), |fact| {
+            observed.push(fact)
+        });
+        assert!(observed.is_empty());
+        for (index, stage) in
+            [Connection::Queued, Connection::Admitted, Connection::ReplyReceived, terminal]
+                .into_iter()
+                .enumerate()
+        {
+            let line = format!("operation=\"child_connection_transition\" stage={stage:?}\n");
+            parser.feed(
+                OutputStream::Stderr,
+                index as u64 + 2,
+                false,
+                false,
+                line.as_bytes(),
+                |fact| observed.push(fact),
+            );
+        }
+        assert_eq!(observed.len(), 4);
+        assert!(
+            matches!(observed.last(), Some(Observation::Connection(actual)) if *actual == terminal)
+        );
+        parser.feed(OutputStream::Stderr, 6, false, true, premature.as_bytes(), |fact| {
+            observed.push(fact)
+        });
+        assert_eq!(observed.len(), 4);
+        let extension = format!(
+            "operation=\"child_connection_transition\" stage={terminal:?} credential=opaque"
+        );
+        assert!(parse_connection(extension.as_bytes()).is_none());
+    }
+}

@@ -39,6 +39,10 @@ pub(crate) struct FixtureHttp {
     pub(crate) response_nanos: AtomicU64,
     /// Corrupt one selected external body, leaving the expected source unchanged.
     pub(crate) corrupt_asset: AtomicUsize,
+    /// Change served metadata without replacing the pinned expected source.
+    pub(crate) stale_metadata: AtomicBool,
+    /// Change served metadata after an actual asset body has been consumed.
+    pub(crate) change_metadata_after_asset: AtomicBool,
     /// Every phase must borrow the identical original claimed transaction.
     claim_identity: AtomicUsize,
     fail_close: AtomicBool,
@@ -64,6 +68,8 @@ impl FixtureHttp {
             requests: Mutex::new(Vec::new()),
             response_nanos: AtomicU64::new(0),
             corrupt_asset: AtomicUsize::new(usize::MAX),
+            stale_metadata: AtomicBool::new(false),
+            change_metadata_after_asset: AtomicBool::new(false),
             claim_identity: AtomicUsize::new(0),
             fail_close: AtomicBool::new(fail_close),
             panic_close: AtomicBool::new(matches!(behavior, Behavior::CleanupPanicked)),
@@ -159,6 +165,7 @@ impl HttpPort for FixtureHttp {
         );
         let body: &[u8] = match endpoint.path() {
             "/system_stats" if matches!(self.behavior, Behavior::Malformed) => b"{broken",
+            "/system_stats" if self.stale_metadata.load(Ordering::Acquire) => b"{broken",
             "/system_stats" => br#"{"system":{"os":"win32","ram_total":68719476736,"ram_free":40000000000,"comfyui_version":"0.29.0","required_frontend_version":"1.47.11","installed_templates_version":"1.0.0","required_templates_version":"1.0.0","comfy_package_versions":[{"name":"comfyui-frontend-package","installed":"1.47.11","required":"1.47.11"}],"python_version":"3.12.0","pytorch_version":"2.9.0","embedded_python":false,"deploy_environment":"local","argv":["unowned.py"]},"devices":[]}"#,
             "/extensions" => br#"["/extensions/SugarCubes/main.js"]"#,
             "/index.html" if matches!(self.behavior, Behavior::WrongAsset) => b"altered index",
@@ -172,6 +179,11 @@ impl HttpPort for FixtureHttp {
         };
         for chunk in body.chunks(7) {
             consume(chunk)?;
+        }
+        if matches!(endpoint, Endpoint::Asset(_))
+            && self.change_metadata_after_asset.swap(false, Ordering::AcqRel)
+        {
+            self.stale_metadata.store(true, Ordering::Release);
         }
         self.clock.fetch_add(self.response_nanos.load(Ordering::Acquire), Ordering::AcqRel);
         Ok(())

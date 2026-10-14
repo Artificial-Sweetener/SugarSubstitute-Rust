@@ -11,7 +11,9 @@ use std::time::Duration;
 use sugarsubstitute_contracts::execution::JobContext;
 
 /// Bound one actual phase independently of total installed cohort size.
-const ASSETS_PER_STEP: usize = 4;
+const ASSETS_PER_STEP: usize = 64;
+/// Larger cohorts reserve a full second before issuing another asset body.
+const HEADROOM_ASSET_THRESHOLD: usize = 4;
 #[derive(Clone, Copy)]
 pub(super) struct ExpectedAsset<'a> {
     pub(super) path: &'a str,
@@ -72,18 +74,13 @@ pub(super) fn inspect(
     if total == 0 || start > total {
         return Err(ReadinessTransportError::invalid("served_empty_or_changed_cohort"));
     }
-    let configuration = match &input.listener {
-        Listener::Managed(_, configuration) => Some(configuration),
-        Listener::Attached(_, _) => None,
-    };
     let mut requests = BoundRequests { port, state, input, context };
-    super::verification::metadata(
-        &mut requests,
-        manifest.frontend_version(),
-        manifest.cube_version(),
-        manifest.sugarcubes_paths(),
-        configuration,
-    )?;
+    // The source is one immutable pinned cohort. Initial metadata establishes its
+    // expected service; final metadata confirms it after every asset completion.
+    // Intermediate phases retain that owner and still qualify every HTTP peer.
+    if start == 0 || start == total {
+        metadata(&mut requests, input)?;
+    }
     let mut next = start;
     for asset in manifest.assets().iter().skip(start).take(ASSETS_PER_STEP) {
         checkpoint(context)?;
@@ -91,7 +88,7 @@ pub(super) fn inspect(
         let until = context
             .deadline()
             .ok_or_else(|| ReadinessTransportError::invalid("attempt_deadline"))?;
-        if total > ASSETS_PER_STEP
+        if total > HEADROOM_ASSET_THRESHOLD
             && !until
                 .checked_duration_since(now)
                 .is_ok_and(|remaining| remaining > Duration::from_secs(1))
@@ -104,6 +101,9 @@ pub(super) fn inspect(
         )?;
         next += 1;
     }
+    if start == 0 && next == total {
+        metadata(&mut requests, input)?;
+    }
     input
         .source
         .validate_live()
@@ -112,4 +112,23 @@ pub(super) fn inspect(
     // A multi-phase cohort confirms metadata again in its final phase after all
     // asset indices have been committed by their actual timely completions.
     Ok((next, next == total && (start == 0 || start == total)))
+}
+
+/// Verify current service metadata against this identical pinned expected cohort.
+fn metadata(
+    requests: &mut BoundRequests<'_>,
+    input: &ReadinessProbeInput,
+) -> Result<(), ReadinessTransportError> {
+    let manifest = input.source.manifest();
+    let configuration = match &input.listener {
+        Listener::Managed(_, configuration) => Some(configuration),
+        Listener::Attached(_, _) => None,
+    };
+    super::verification::metadata(
+        requests,
+        manifest.frontend_version(),
+        manifest.cube_version(),
+        manifest.sugarcubes_paths(),
+        configuration,
+    )
 }

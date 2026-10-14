@@ -192,6 +192,9 @@ impl ParentLifecycle {
                 Reply::Failed(LifecycleFailureCode::Preparation)
             }
         };
+        tracing::info!(operation="parent_backend_disposition",request=?reply.request,run=?self.run,
+            disposition=?reply.outcome,main_stage=?self.main.stage(),
+            "Original final backend disposition retained by parent");
         self.requests.get_mut(index)?.reply = Some(final_reply);
         Ok(())
     }

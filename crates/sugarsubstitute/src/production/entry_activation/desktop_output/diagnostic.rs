@@ -27,6 +27,12 @@ pub(super) enum Connection {
     Admitted,
     /// Its exact reply transferred to the semantic owner.
     ReplyReceived,
+    /// The exact matching reply decoded a grant; this is inert presentation metadata.
+    Granted,
+    /// The exact matching reply decoded an original failure.
+    Failed,
+    /// The exact matching reply decoded an original rejection.
+    Rejected,
 }
 /// Distinguish preparation progress from the first native failure without granting authority.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -99,7 +105,15 @@ impl Diagnostic {
                             None => Some(Connection::Queued),
                             Some(Connection::Queued) => Some(Connection::Admitted),
                             Some(Connection::Admitted) => Some(Connection::ReplyReceived),
-                            Some(Connection::ReplyReceived) => None,
+                            Some(Connection::ReplyReceived) => match connection {
+                                Connection::Granted | Connection::Failed | Connection::Rejected => {
+                                    Some(connection)
+                                }
+                                _ => None,
+                            },
+                            Some(
+                                Connection::Granted | Connection::Failed | Connection::Rejected,
+                            ) => None,
                         };
                         if next == Some(connection) {
                             self.connection = Some(connection);
@@ -149,6 +163,9 @@ fn parse_connection(bytes: &[u8]) -> Option<Connection> {
         "stage=Queued" => Some(Connection::Queued),
         "stage=Admitted" => Some(Connection::Admitted),
         "stage=ReplyReceived" => Some(Connection::ReplyReceived),
+        "stage=Granted" => Some(Connection::Granted),
+        "stage=Failed" => Some(Connection::Failed),
+        "stage=Rejected" => Some(Connection::Rejected),
         _ => None,
     }
 }

@@ -24,6 +24,23 @@ impl ParentLifecycle {
         }
         let decoded = FrameCodec::decode(bytes)?;
         let header = decoded.header;
+        let startup_operation = match &decoded.payload {
+            DecodedPayload::Acquire { .. } => Some("Acquire"),
+            DecodedPayload::SettleAttempt { .. } => Some("SettleAttempt"),
+            DecodedPayload::RequestedProfileFolder(_) => Some("RequestedProfileFolder"),
+            DecodedPayload::EnvironmentPrepared(_) => Some("EnvironmentPrepared"),
+            DecodedPayload::ControllerPrepared { .. } => Some("ControllerPrepared"),
+            DecodedPayload::MainRetired(_) => Some("MainRetired"),
+            DecodedPayload::MainFailed(_) => Some("MainFailed"),
+            _ => None,
+        };
+        if let Some(startup_operation) = startup_operation {
+            tracing::info!(operation="parent_startup_request_received",startup_operation,
+                request=?header.request,run=?self.run,main_stage=?self.main.stage(),
+                main_identity=?self.main.snapshot().identity,profile_pending=self.profile_pending.is_some(),
+                native_profile_pending=resources.profile.snapshot().pending,
+                "Actual authenticated channel startup request observed before semantic admission");
+        }
         if header.run != self.run {
             return Err(ParentError::ForeignPeer.into());
         }
