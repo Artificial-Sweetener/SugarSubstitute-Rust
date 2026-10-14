@@ -97,6 +97,48 @@ test('propagates drag cancellation to finite HTTP work and rejects late bytes', 
   ).toBeNull();
 });
 
+test.each(['image/png', 'image/jpeg'] as const)(
+  'attaches every original %s byte for each batch item independently of display thumbnails',
+  async (mimeType) => {
+    const write =
+      jest.fn<(blob: Blob, type: 'image/png' | 'image/jpeg' | 'image/webp') => Promise<void>>();
+    for (const batchIndex of [0, 1, 2]) {
+      const selected = {
+        ...file,
+        filename: `batch-${batchIndex}.${mimeType === 'image/png' ? 'png' : 'jpg'}`,
+      };
+      const bytes = Uint8Array.from({ length: 8192 }, (_, index) => (index + batchIndex) % 256);
+      const fetch = jest
+        .fn<typeof globalThis.fetch>()
+        .mockResolvedValue(
+          response(
+            { success: true, data: { file: selected, mime_type: mimeType } },
+            new Blob([bytes], { type: mimeType }),
+          ),
+        );
+      const result = await new BrowserOutputTransfer('http://localhost:8189', fetch, {
+        write,
+      }).drag(selected, new AbortController().signal);
+      expect(result?.file.name).toBe(selected.filename);
+      expect(result?.file.type).toBe(mimeType);
+      expect(result?.file.size).toBe(bytes.length);
+      if (!result) throw new Error('Missing exact batch transfer.');
+      const attached = await new Promise<ArrayBuffer>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () =>
+          reader.result instanceof ArrayBuffer
+            ? resolve(reader.result)
+            : reject(new Error('Missing binary drag data.'));
+        reader.onerror = () => reject(reader.error ?? new Error('Drag data could not be read.'));
+        reader.readAsArrayBuffer(result.file);
+      });
+      expect(new Uint8Array(attached)).toEqual(bytes);
+      expect(new URL(result.url).searchParams.has('preview')).toBe(false);
+    }
+    expect(write).not.toHaveBeenCalled();
+  },
+);
+
 test('refuses late bytes after a workflow switch or different selected output', async () => {
   let current = true;
   const fetch = jest
