@@ -206,6 +206,17 @@ impl DesktopOutput {
         }
         Ok(())
     }
+    /// Borrow undrained observations or original failure while native retirement remains independent.
+    pub(super) fn normal_close_pending(&self) -> bool {
+        let actual = self.session.control.snapshot();
+        self.failure().is_some()
+            || self.loan.is_some()
+            || self.rejected_input.is_some()
+            || self.rejected_stdio.is_some()
+            || actual.identity != OutputIdentity::Desktop(self.run)
+            || actual.queued_chunks != 0
+            || actual.pending_loss != [0, 0]
+    }
     /// Request cleanup of this actual owner; never infer EOF or native retirement.
     pub(super) fn request_close(&mut self) {
         self.closing = true;

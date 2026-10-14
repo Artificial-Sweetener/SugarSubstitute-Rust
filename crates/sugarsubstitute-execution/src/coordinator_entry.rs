@@ -10,6 +10,7 @@ mod port;
 mod prepared_cause;
 pub(crate) mod prepared_failure;
 mod protocol;
+mod quiescence;
 pub use prepared_cause::{EntryPreparedCause, EntryPreparedCauseKind};
 pub use prepared_failure::EntryPreparedRetirement;
 mod replay;

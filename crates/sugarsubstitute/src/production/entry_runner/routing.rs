@@ -145,6 +145,7 @@ impl<C: EntryActivation> EntryRunner<C> {
         {
             return Err("Production entry setup expired before actual admission".into());
         }
+        self.try_normal_shutdown()?;
         Ok(())
     }
     /// Route one bounded intake batch through the same current entry owner.

@@ -11,7 +11,7 @@ minimum_tests = 101
 package = "sugarsubstitute-application"
 root = "crates/sugarsubstitute-application"
 concern = "Acknowledged startup, settled retry, frame publication, backend leases, desktop exit, UI challenge and bounded transcript policy; original connection and frontend campaign deadlines; indexed actual-tail selection and shared immutable snapshot admission; bounded incident publication, report CAS, recovery and independent retirement policy"
-minimum_tests = 162
+minimum_tests = 166
 
 [[owners]]
 package = "sugarsubstitute-comfy"
@@ -23,13 +23,13 @@ minimum_tests = 87
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
 concern = "Production desktop startup and retirement through actual execution, authenticated parent/child transport, shared backends, profiles and native window adapters; retained failures, captured startup, bounded console rendering and isolated qualification roles"
- minimum_tests = 466
+ minimum_tests = 477
 
 [[owners]]
 package = "sugarsubstitute-execution"
 root = "crates/sugarsubstitute-execution"
 concern = "Admission, CPU scheduling, cancellation, retained ownership and observed worker teardown; authenticated bounded coordinator entry transport, replay and native issue fences; original whole preparation/native environment custody, retained error aliases and actual source/client staging fences; same-ledger capture bundle admission/cleanup, typed native dispatch, original ancestor and handshake fences, physical mapping/capsule retention"
-minimum_tests = 531
+minimum_tests = 537
 
 [[owners]]
 package = "sugarsubstitute-xtask"

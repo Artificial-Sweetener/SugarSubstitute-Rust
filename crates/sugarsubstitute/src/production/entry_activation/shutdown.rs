@@ -25,142 +25,148 @@ impl ProductionActivation {
         };
         let backend = retained_backend.backend.as_mut();
         for record in self.records.iter_mut().flatten().map(|retained| retained.record.as_mut()) {
-            if record.closed {
-                continue;
+            Self::close_record(record, backend, resources, budget)?;
+        }
+        Ok(())
+    }
+    /// Settle one actual role through existing pipe, profile, registry and backend owners.
+    /// A caller retains the original role/global budget; this samples no new transaction start.
+    pub(super) fn close_record(
+        record: &mut Record,
+        backend: &mut CoordinatorBackend,
+        resources: &mut EntryResources<'_>,
+        budget: ShutdownBudget,
+    ) -> Result<()> {
+        if record.closed {
+            return Ok(());
+        }
+        if record.attach.is_some() {
+            return Ok(());
+        }
+        if let Some(released) = &mut record.released_attach {
+            if record.attach_retirement.is_none()
+                && let JobOutcome::Success(observer) = &mut released.outcome
+            {
+                record.attach_retirement = observer.try_take_report();
             }
-            if record.attach.is_some() {
-                continue;
-            }
-            if let Some(released) = &mut record.released_attach {
-                if record.attach_retirement.is_none()
-                    && let JobOutcome::Success(observer) = &mut released.outcome
-                {
-                    record.attach_retirement = observer.try_take_report();
+            match &record.attach_retirement {
+                Some(Ok(actual))
+                    if actual.run() == record.run
+                        && actual.execution_id() == resources.native.owner_id()
+                        && actual.job_id() == released.spec.id => {}
+                Some(Err(cause)) => return Err(Box::new(cause.clone())),
+                Some(Ok(_)) => {
+                    return Err("Actual released capture retirement identity mismatch".into());
                 }
-                match &record.attach_retirement {
-                    Some(Ok(actual))
-                        if actual.run() == record.run
-                            && actual.execution_id() == resources.native.owner_id()
-                            && actual.job_id() == released.spec.id => {}
-                    Some(Err(cause)) => return Err(Box::new(cause.clone())),
-                    Some(Ok(_)) => {
-                        return Err("Actual released capture retirement identity mismatch".into());
-                    }
-                    None => continue,
-                }
+                None => return Ok(()),
             }
-            if record.retired.is_some() {
-                progress::with_parent(record, backend, resources, |parent, borrowed| {
-                    Ok(parent.request_cleanup(budget, borrowed)?)
-                })?;
-                let retired = record.retired.as_ref().ok_or("Actual retirement receipt missing")?;
-                backend.settle_run(retired).map_err(outer)?;
-                record.closed = true;
-                continue;
-            }
-            if record.start.is_none() {
-                record.closed = true;
-                continue;
-            }
-            if record.parent.is_some() {
-                progress::with_parent(record, backend, resources, |parent, borrowed| {
-                    Ok(parent.request_cleanup(budget, borrowed)?)
-                })?;
-            }
-            let start = record.start.as_mut().ok_or("Original desktop start missing")?;
-            if let Some(output) = &mut start.output {
-                output.request_close();
-                output.observe()?;
-            }
-            if record.parent.is_none() && !start.close_unlaunched()? {
-                continue;
-            }
-            if let Some(ticket) = start.ticket {
-                let registry =
-                    resources.authority.registry_mut().ok_or("Actual process registry missing")?;
-                let actual = registry.snapshot(ticket.process())?;
-                if !actual.settled {
-                    registry.begin_stop(
-                        ticket.process(),
-                        ShutdownId::new(record.run.instance.get())?,
-                        budget,
-                    )?;
-                    if registry
-                        .snapshot(ticket.process())?
-                        .cleanup_step_due(resources.client.now()?)
-                    {
-                        let member = if actual.member_watch_required {
-                            Some(JobSpec {
-                                id: resources.jobs.allocate()?,
-                                operation: Operation::NativeLifecycle,
-                                class: JobClass::NativeObservation,
-                                deadline: None,
-                                reservation_bytes: 4096,
-                                replacement: None,
-                            })
-                        } else {
-                            None
-                        };
-                        let spec = JobSpec {
+        }
+        if record.retired.is_some() {
+            progress::with_parent(record, backend, resources, |parent, borrowed| {
+                Ok(parent.request_cleanup(parent.cleanup_budget(budget), borrowed)?)
+            })?;
+            let retired = record.retired.as_ref().ok_or("Actual retirement receipt missing")?;
+            backend.settle_run(retired).map_err(outer)?;
+            record.closed = true;
+            return Ok(());
+        }
+        if record.start.is_none() {
+            record.closed = true;
+            return Ok(());
+        }
+        if record.parent.is_some() {
+            progress::with_parent(record, backend, resources, |parent, borrowed| {
+                Ok(parent.request_cleanup(parent.cleanup_budget(budget), borrowed)?)
+            })?;
+        }
+        let start = record.start.as_mut().ok_or("Original desktop start missing")?;
+        if let Some(output) = &mut start.output {
+            output.request_close();
+            output.observe()?;
+        }
+        if record.parent.is_none() && !start.close_unlaunched()? {
+            return Ok(());
+        }
+        if let Some(ticket) = start.ticket {
+            let registry =
+                resources.authority.registry_mut().ok_or("Actual process registry missing")?;
+            let actual = registry.snapshot(ticket.process())?;
+            if !actual.settled {
+                registry.begin_stop(
+                    ticket.process(),
+                    ShutdownId::new(record.run.instance.get())?,
+                    budget,
+                )?;
+                if registry.snapshot(ticket.process())?.cleanup_step_due(resources.client.now()?) {
+                    let member = if actual.member_watch_required {
+                        Some(JobSpec {
                             id: resources.jobs.allocate()?,
                             operation: Operation::NativeLifecycle,
-                            class: JobClass::InfrastructureLifecycle,
-                            deadline: Some(budget.settle_until),
+                            class: JobClass::NativeObservation,
+                            deadline: None,
                             reservation_bytes: 4096,
                             replacement: None,
-                        };
-                        match registry.submit_cleanup_step(
-                            resources.client,
-                            ticket.process(),
-                            resources.cleanup,
-                            spec,
-                            member,
-                        ) {
-                            Ok(_) => {}
-                            Err(RegistryAdmissionError::Busy) => {}
-                            Err(cause) => return Err(Box::new(cause)),
-                        }
-                    }
-                    continue;
-                }
-                while registry.take_observation(ticket.process())?.is_some() {}
-            }
-            if !start.profile.snapshot().released {
-                if !start.profile.snapshot().pending {
-                    let registry =
-                        resources.authority.registry().ok_or("Actual process registry missing")?;
+                        })
+                    } else {
+                        None
+                    };
                     let spec = JobSpec {
                         id: resources.jobs.allocate()?,
                         operation: Operation::NativeLifecycle,
                         class: JobClass::InfrastructureLifecycle,
                         deadline: Some(budget.settle_until),
-                        reservation_bytes: PROFILE_OPERATION_BYTES,
+                        reservation_bytes: 4096,
                         replacement: None,
                     };
-                    start.profile.submit_release(
+                    match registry.submit_cleanup_step(
                         resources.client,
+                        ticket.process(),
                         resources.cleanup,
                         spec,
-                        registry,
-                    )?;
+                        member,
+                    ) {
+                        Ok(_) => {}
+                        Err(RegistryAdmissionError::Busy) => {}
+                        Err(cause) => return Err(Box::new(cause)),
+                    }
                 }
-                continue;
+                return Ok(());
             }
-            if let Some(parent) = &record.parent {
+            while registry.take_observation(ticket.process())?.is_some() {}
+        }
+        if !start.profile.snapshot().released {
+            if !start.profile.snapshot().pending {
                 let registry =
-                    resources.authority.registry_mut().ok_or("Actual process registry missing")?;
-                if let Some(retired) = retirement::retire(start, parent, registry)? {
-                    record.retired = Some(retired);
-                    backend
-                        .settle_run(
-                            record.retired.as_ref().ok_or("Actual retirement receipt missing")?,
-                        )
-                        .map_err(outer)?;
-                    record.closed = true;
-                }
-            } else {
+                    resources.authority.registry().ok_or("Actual process registry missing")?;
+                let spec = JobSpec {
+                    id: resources.jobs.allocate()?,
+                    operation: Operation::NativeLifecycle,
+                    class: JobClass::InfrastructureLifecycle,
+                    deadline: Some(budget.settle_until),
+                    reservation_bytes: PROFILE_OPERATION_BYTES,
+                    replacement: None,
+                };
+                start.profile.submit_release(
+                    resources.client,
+                    resources.cleanup,
+                    spec,
+                    registry,
+                )?;
+            }
+            return Ok(());
+        }
+        if let Some(parent) = &record.parent {
+            let registry =
+                resources.authority.registry_mut().ok_or("Actual process registry missing")?;
+            if let Some(retired) = retirement::retire(start, parent, registry)? {
+                record.retired = Some(retired);
+                backend
+                    .settle_run(record.retired.as_ref().ok_or("Actual retirement receipt missing")?)
+                    .map_err(outer)?;
                 record.closed = true;
             }
+        } else {
+            record.closed = true;
         }
         Ok(())
     }

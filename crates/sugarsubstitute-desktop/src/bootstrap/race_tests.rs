@@ -163,9 +163,6 @@ fn actual_execution_producers_serialize_active_event_signal_with_handoff_and_che
     let proxy = Arc::new(Proxy::default());
     bootstrap.handoff(proxy.clone())?;
     assert!(gate.state.lock().map_err(|_| "gate")?.closed);
-    let observed = proxy.observed()?;
-    endpoint.wake()?;
-    assert_eq!(proxy.observed()?, observed + 1);
     let mut consumed = [false; 2];
     while !consumed.into_iter().all(|done| done) {
         let observed = proxy.observed()?;
@@ -195,6 +192,9 @@ fn actual_execution_producers_serialize_active_event_signal_with_handoff_and_che
     // workers here, off UI. Dropping job/future tokens is not used as a stop proof.
     drop(release_guard);
     drop(owner);
+    let observed = proxy.observed()?;
+    endpoint.wake()?;
+    assert_eq!(proxy.observed()?, observed + 1);
     bootstrap.disconnect()?;
     assert!(endpoint.wake().is_err());
     let state = gate.state.lock().map_err(|_| "gate")?;

@@ -154,6 +154,14 @@ impl ProductionActivation {
                 }
                 failure.get_or_insert(cause);
             }
+            if !self.closing
+                && failure.is_none()
+                && !delivery.pending()
+                && let Some(budget) = Self::normal_role_budget(record)
+                && let Err(cause) = Self::close_record(record, backend, resources, budget)
+            {
+                failure.get_or_insert(cause);
+            }
         }
         if let Err(cause) = relay::route(&mut self.records, backend, resources) {
             failure.get_or_insert(cause);

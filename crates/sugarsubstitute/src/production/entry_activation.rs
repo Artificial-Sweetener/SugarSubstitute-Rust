@@ -15,6 +15,8 @@ pub(crate) mod desktop_role;
 mod forwarding;
 #[path = "entry_activation/launch.rs"]
 mod launch;
+#[path = "entry_activation/normal_idle.rs"]
+mod normal_idle;
 #[path = "entry_activation/parent_construction.rs"]
 mod parent_construction;
 #[path = "entry_activation/progress.rs"]
@@ -300,13 +302,18 @@ impl EntryActivation for ProductionActivation {
         }
         Ok(())
     }
+    fn normal_close_requested(&self) -> bool {
+        self.normal_close_budget().is_some()
+    }
     fn shutdown_budget(&self) -> Option<ShutdownBudget> {
         self.records
             .iter()
             .flatten()
+            .filter(|retained| retained.record.retired.is_none())
             .filter_map(|retained| {
                 retained.record.parent.as_ref().and_then(|parent| parent.shutdown())
             })
+            .chain(self.normal_close_budget())
             .fold(self.shutdown, |current, next| {
                 Some(current.map_or(next, |current| ShutdownBudget {
                     started: current.started.min(next.started),

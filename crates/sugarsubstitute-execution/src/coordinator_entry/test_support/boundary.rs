@@ -25,6 +25,8 @@ pub(in crate::coordinator_entry::tests) struct Boundary {
     pub(in crate::coordinator_entry::tests) panic_prepare: AtomicBool,
     pub(in crate::coordinator_entry::tests) fail_retire_once: AtomicBool,
     pub(in crate::coordinator_entry::tests) allow_retire: AtomicBool,
+    pub(in crate::coordinator_entry::tests) retirement_probe:
+        Mutex<Option<crate::runtime_test_support::ClockCallback>>,
     pub(in crate::coordinator_entry::tests) prepared: Gate,
     pub(in crate::coordinator_entry::tests) retiring: Gate,
     pub(in crate::coordinator_entry::tests) writes: AtomicUsize,
@@ -76,6 +78,7 @@ impl Boundary {
             panic_prepare: AtomicBool::new(false),
             fail_retire_once: AtomicBool::new(false),
             allow_retire: AtomicBool::new(true),
+            retirement_probe: Mutex::new(None),
             prepared: Gate::default(),
             retiring: Gate::default(),
             writes: AtomicUsize::new(0),
@@ -448,6 +451,10 @@ impl EntryLease for Lease {
         }
         self.0.available.fetch_and(!(1 << index), Ordering::AcqRel);
         self.0.native_closes.fetch_add(1, Ordering::AcqRel);
+        let probe = lock(&self.0.retirement_probe).take();
+        if let Some(probe) = probe {
+            probe();
+        }
         Ok(true)
     }
     fn retire(&mut self) -> Result<bool, EntryTransportError> {

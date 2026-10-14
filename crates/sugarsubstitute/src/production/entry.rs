@@ -146,6 +146,21 @@ impl ProductionEntryIntake {
     pub(crate) fn initial_client(&mut self) -> Option<&mut CoordinatorEntryClientSession> {
         self.initial_client.as_mut()
     }
+    /// Fence the actual server only after its atomic queue, route and live-peer check.
+    /// Busy admission remains active; retained jobs and passive loans still require checked retirement.
+    pub(crate) fn try_close_when_idle(&mut self) -> Result<bool, EntryIntakeFailure> {
+        if self.closed {
+            return Err(EntryIntakeFailure::Transport(EntryTransportError::Closed));
+        }
+        if !self.server.control.try_close_when_idle().map_err(EntryIntakeFailure::Transport)? {
+            return Ok(false);
+        }
+        self.closed = true;
+        if let Some(client) = &self.initial_client {
+            client.control.close();
+        }
+        Ok(true)
+    }
     /// Fence both endpoints; their retained jobs still require terminal observation.
     pub(crate) fn close(&mut self) {
         self.closed = true;

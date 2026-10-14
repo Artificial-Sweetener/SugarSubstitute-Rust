@@ -41,25 +41,31 @@ impl Active {
                     )
                 })
                 .cloned();
-            self.emit(
-                core,
-                Some(index),
-                EntryTransportObservation::ConnectionRetired { connection, failure },
-            )?;
+            {
+                let mut state = lock(&self.work.shared.state);
+                state.emit(
+                    Some(index),
+                    EntryTransportObservation::ConnectionRetired { connection, failure },
+                )?;
+                // The final fact and checked-retired layout become visible together.
+                // Preserve the original frame loan until its owner actually returns it.
+                let slot = &mut state.connections[index];
+                slot.id = None;
+                slot.peer = None;
+                slot.header = None;
+                slot.until = None;
+                slot.read = None;
+                slot.reply = None;
+                slot.reading = false;
+                slot.writing = false;
+                slot.latest = 0;
+                slot.reserved = 0;
+            }
             self.connections[index].failure = None;
             self.report.retired_connections += 1;
-            let mut state = lock(&self.work.shared.state);
-            let slot = &mut state.connections[index];
-            slot.id = None;
-            slot.peer = None;
-            slot.header = None;
-            slot.until = None;
-            slot.read = None;
-            slot.reply = None;
-            slot.reading = false;
-            slot.writing = false;
-            slot.latest = 0;
-            slot.reserved = 0;
+            if core.mailbox.signal_capacity() {
+                core.mailbox.deliver_wake();
+            }
         }
         self.connections[index].pending = None;
         if loan {

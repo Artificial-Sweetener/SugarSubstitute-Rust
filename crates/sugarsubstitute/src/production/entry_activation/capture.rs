@@ -98,6 +98,17 @@ impl CaptureRegistration {
         self.capture.observe(batch);
         report_failure(&mut self.failure_reported, self.capture.errors().next())
     }
+    /// Borrow unresolved registration/failure custody without closing the live helper.
+    pub(super) fn normal_close_pending(&self, owner: CoordinatorKey) -> bool {
+        let actual = self.capture.snapshot();
+        self.rejected.is_some()
+            || self.unbound_watch.is_some()
+            || self.capture.errors().next().is_some()
+            || actual.owner != owner
+            || actual.state != CaptureState::Registered
+            || actual.handler.is_none()
+            || actual.handler_exit.is_some()
+    }
     /// Mint an attachment expectation exclusively from actual retained registration facts.
     pub(super) fn attach(
         &self,

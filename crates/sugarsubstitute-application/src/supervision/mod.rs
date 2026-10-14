@@ -10,7 +10,9 @@ mod resource_requests;
 mod resource_state;
 mod resources;
 mod watchdog;
-pub use desktop_exit::{DesktopExitSnapshot, DesktopExitTransaction, FailedDesktopFact};
+pub use desktop_exit::{
+    DesktopCloseRequest, DesktopExitSnapshot, DesktopExitTransaction, FailedDesktopFact,
+};
 pub use main_authorization::{
     MAIN_AUTHORIZATION_HISTORY, MainAuthorizationEffect, MainAuthorizationError,
     MainAuthorizationObservation, MainAuthorizationRejected, MainAuthorizationSession,

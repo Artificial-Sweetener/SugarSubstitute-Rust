@@ -2,6 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Attribute actual desktop exit and retain independent resource-settlement proof.
 use sugarsubstitute_contracts::{execution::Moment, lifecycle::*};
+#[path = "desktop_exit/normal_close.rs"]
+mod normal_close;
+pub use normal_close::DesktopCloseRequest;
 
 #[derive(Clone, Copy)]
 struct ShutdownTransaction {

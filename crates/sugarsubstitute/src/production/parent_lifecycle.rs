@@ -13,6 +13,9 @@ mod folders;
 mod history;
 #[path = "parent_lifecycle/main.rs"]
 mod main;
+#[path = "parent_lifecycle/normal_close.rs"]
+mod normal_close;
+pub(crate) use normal_close::NormalCloseRequest;
 #[path = "parent_lifecycle/output.rs"]
 mod output;
 #[path = "parent_lifecycle/receive.rs"]
@@ -269,9 +272,7 @@ impl ParentLifecycle {
         budget: ShutdownBudget,
         resources: &mut ParentResources<'_, '_>,
     ) -> std::result::Result<(), ParentError> {
-        if self.cleanup.is_some_and(|original| original != budget) {
-            return Err(ParentError::ChangedDuplicate);
-        }
+        self.validate_cleanup_budget(budget)?;
         self.cleanup = Some(budget);
         self.closed = true;
         // Retain the first semantic cause while releasing its immutable input loan

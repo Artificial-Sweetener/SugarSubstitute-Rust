@@ -153,6 +153,9 @@ impl EntryActivation for NoChild {
     fn shutdown_budget(&self) -> Option<ShutdownBudget> {
         None
     }
+    fn normal_close_requested(&self) -> bool {
+        false
+    }
     fn failure_source(&self) -> Option<&(dyn Error + 'static)> {
         None
     }

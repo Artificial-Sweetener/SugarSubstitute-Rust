@@ -37,6 +37,10 @@ mod clock_callback;
 mod issue;
 #[path = "test_support.rs"]
 mod kernel;
+#[path = "quiescence_tests.rs"]
+mod quiescence;
+#[path = "quiescence_publication_tests.rs"]
+mod quiescence_publication;
 #[path = "retirement_tests.rs"]
 mod retirement;
 #[path = "startup_snapshot/tests.rs"]

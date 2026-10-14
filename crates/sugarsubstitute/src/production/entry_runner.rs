@@ -3,6 +3,8 @@
 //! Retain real entry, authority, child and execution lifetimes through native headless pumping.
 #[path = "entry_runner/lifecycle.rs"]
 mod lifecycle;
+#[path = "entry_runner/normal_idle.rs"]
+mod normal_idle;
 #[path = "entry_runner/routing.rs"]
 mod routing;
 #[path = "entry_runner/scope_sequence.rs"]
@@ -75,6 +77,9 @@ pub(crate) trait EntryActivation {
     fn request_close(&mut self, budget: Option<ShutdownBudget>) -> Result<(), Box<dyn Error>>;
     /// Borrow its already-issued same-executor shutdown budget, without sampling.
     fn shutdown_budget(&self) -> Option<ShutdownBudget>;
+    /// Borrow actual deliberate close intent only when current role and diagnostic custody permit it.
+    /// This samples no clock and proves neither intake quiescence nor native settlement.
+    fn normal_close_requested(&self) -> bool;
     /// Borrow its original retained failure without separating its custody.
     fn failure_source(&self) -> Option<&(dyn Error + 'static)>;
     /// Return its actual next native-thread wake without introducing timers.

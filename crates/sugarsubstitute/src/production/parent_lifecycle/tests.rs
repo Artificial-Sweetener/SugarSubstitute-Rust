@@ -7,6 +7,8 @@ mod acquisition_lifetime;
 mod acquisition_progress;
 #[path = "tests/attempt_cleanup.rs"]
 mod attempt_cleanup;
+#[path = "tests/normal_close.rs"]
+mod normal_close;
 #[path = "tests/ownership.rs"]
 mod ownership;
 use super::{ParentError, ParentLifecycle, Reply, folders::Folders, history::Requests};
