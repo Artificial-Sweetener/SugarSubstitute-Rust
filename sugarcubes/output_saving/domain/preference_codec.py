@@ -50,14 +50,33 @@ def decode_preferences(value: object) -> OutputSavingPreferences:
 
 
 def import_substitute_preferences(value: object) -> OutputSavingPreferences:
-    """Import supported Substitute settings without opting into ordinary-node management."""
+    """Require recognizable Substitute saving settings without opting into graph management."""
     payload = _record(value, "Substitute output settings")
     version = payload.get("schema_version")
     if version is not None and (
         not isinstance(version, str) or version not in {"1", "2", "3", "4"}
     ):
         raise ValueError("Unsupported Substitute output settings version.")
+    if not _has_image_saving_fields(payload):
+        raise ValueError("No Substitute image-saving settings were found in this file.")
     return _decode_fields(payload, include_management=False)
+
+
+def _has_image_saving_fields(payload: Mapping[str, object]) -> bool:
+    """Distinguish current and legacy saving files from unrelated JSON before applying defaults."""
+    if any(
+        name in payload for name in ("output_root", "path_pattern", "persistence_mode")
+    ):
+        return True
+    for name, fields in (
+        ("organization", ("output_root", "path_pattern")),
+        ("jpeg", ("enabled", "sizing_mode", "quality", "target_size_kib")),
+        ("transfer", ("preferred_format",)),
+    ):
+        value = payload.get(name)
+        if isinstance(value, Mapping) and any(field in value for field in fields):
+            return True
+    return False
 
 
 def encode_preferences(preferences: OutputSavingPreferences) -> dict[str, object]:

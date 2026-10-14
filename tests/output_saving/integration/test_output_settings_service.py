@@ -69,6 +69,24 @@ def test_invalid_migrated_destination_leaves_original_settings_intact(
     assert (tmp_path / "settings.json").read_bytes() == previous
 
 
+def test_unrelated_import_leaves_all_current_preferences_intact(tmp_path: Path) -> None:
+    """Reject a mistaken settings file before replacing the user's output policy."""
+    repository = FileOutputSavingPreferences(tmp_path / "settings.json")
+    service = OutputSavingSettingsService(repository, HostSavingSettingsPaths(tmp_path))
+    current = replace(
+        OutputSavingPreferences(),
+        organization=OutputOrganization(path_pattern="retained_{run}_{source}"),
+        manage_workflow=True,
+        save_previews=True,
+    )
+    service.save(current)
+    previous = (tmp_path / "settings.json").read_bytes()
+    with pytest.raises(ValueError, match="image-saving settings"):
+        service.import_substitute({"schema_version": "4", "theme": "dark"})
+    assert service.load() == current
+    assert (tmp_path / "settings.json").read_bytes() == previous
+
+
 def test_example_and_proposed_validation_do_not_create_output_folders(
     tmp_path: Path,
 ) -> None:

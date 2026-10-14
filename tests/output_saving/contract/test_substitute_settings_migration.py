@@ -87,6 +87,11 @@ def test_legacy_organization_import_and_defaults() -> None:
     [
         None,
         [],
+        {},
+        {"schema_version": "4"},
+        {"schema_version": "4", "theme": "dark"},
+        {"schema_version": "4", "organization": {"download_root": "E:\\Models"}},
+        {"schema_version": "4", "jpeg": {}, "transfer": {}},
         {"schema_version": "5"},
         {"jpeg": {"enabled": "false"}},
         {"jpeg": {"quality": True}},
