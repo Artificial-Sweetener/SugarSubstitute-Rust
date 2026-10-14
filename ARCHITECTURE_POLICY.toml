@@ -247,6 +247,33 @@ forbidden_python_imports = [
 ]
 
 [[dependency]]
+name = "PYTHON_OUTPUT_SAVING_DOMAIN"
+paths = ["sugarcubes/output_saving/domain/*.py"]
+forbidden_python_imports = [
+  "sugarcubes.output_saving.application",
+  "sugarcubes.output_saving.infrastructure",
+  "sugarcubes.backend",
+  "sugarcubes.runtime",
+  "aiohttp",
+  "pathlib",
+  "os",
+  "sqlite3",
+]
+
+[[dependency]]
+name = "PYTHON_OUTPUT_SAVING_APPLICATION"
+paths = ["sugarcubes/output_saving/application/*.py"]
+forbidden_python_imports = [
+  "sugarcubes.output_saving.infrastructure",
+  "sugarcubes.backend",
+  "sugarcubes.runtime",
+  "aiohttp",
+  "pathlib",
+  "os",
+  "sqlite3",
+]
+
+[[dependency]]
 name = "PYTHON_MODEL_LIBRARY_DOMAIN"
 paths = ["sugarcubes/model_library/domain/*.py"]
 forbidden_python_imports = [

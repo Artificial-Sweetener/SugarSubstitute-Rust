@@ -2,6 +2,11 @@ schema = 1
 test_root = "tests"
 
 [[area]]
+name = "output_saving"
+sources = ["sugarcubes/output_saving/**"]
+proofs = ["unit", "contract", "integration"]
+
+[[area]]
 name = "masonry_search"
 sources = ["frontend/comfyui/ui/search/**", "web/comfyui/ui/search/**", "frontend/static/icons/search/**", "web/icons/search/**", "frontend/static/textures/acrylic-grain.svg", "web/textures/acrylic-grain.svg"]
 proofs = ["unit", "integration"]
@@ -377,6 +382,10 @@ groups = ["model_library/integration", "editor_actions/integration", "authoring/
 [[boundary]]
 name = "execution_prompt"
 area = "execution"
+
+[[subscription]]
+boundary = "execution_prompt"
+groups = ["output_saving/unit", "output_saving/contract", "output_saving/integration"]
 
 [[boundary]]
 name = "native_card_presentation"
