@@ -439,7 +439,7 @@ Development tools are explicit dev configuration; production has no remote inspe
 
 ### 4.2 L2: Production native splash and bounded transcript
 
-**Implementation:** Bounded transcript contracts/parser/store/snapshots, execution-owned stdout/stderr transport and contained launch inheritance are integrated. The four-case qualification consumer retains output, lifecycle and family observations independently. Reusable splash is B4–B6; production console presentation remains pending. **Verification:** Windows actual three/four-handle inheritance, corpus drainage, held-loan overflow, pending-read cancellation and descendant-held writer retirement pass against the recorded release artifact. Canonical source verification passes; console presentation and the complete K1 handoff remain pending.
+**Implementation:** Bounded transcript contracts/parser/store/snapshots, execution-owned stdout/stderr transport and contained launch inheritance are integrated. Production startup presents retained output in the native splash, drains the original output lease during pending acquisition and adopts it on final Grant. The four-case qualification consumer retains output, lifecycle and family observations independently. **Verification:** Windows actual three/four-handle inheritance, corpus drainage, held-loan overflow, pending-read cancellation and descendant-held writer retirement pass against the recorded release artifact. Source43 full verification passes 2,429 tests; Native49 directly observes the native console toggle and retained backend text on an inactive desktop. Complete splash interaction/parity, pre-Grant pixel timing and the K1 matrix remain pending.
 
 - [ ] Extend the existing splash with bounded live transcript, native accessibility and production startup events.
 
@@ -455,7 +455,7 @@ L2 tests scripted events against the real view and startup events against an in-
 
 ### 4.3 L3: Trusted launch/attach, readiness and cleanup
 
-**Implementation:** Comfy launch/response adapters, retained installed frontend/Cube files, connected listener identity and bounded WinHTTP readiness are integrated. Managed listener checks require the exact live contained family; attachment has read-only peer observations. **Verification:** Independent source/CPU review passes 34 selected readiness/source/listener tests. Canonical governance and formatting pass; actual filesystem/HTTP/launch/attach qualification and production orchestration remain pending.
+**Implementation:** Comfy launch/response adapters, retained installed frontend/Cube files, connected listener identity and bounded WinHTTP readiness are integrated. Managed listener checks require the exact live contained family; attachment has read-only peer observations. The parent and child coordinate pending output, native Main admission/absence and actual backend release through lifecycle protocol version 4. **Verification:** Source43 full verification passes 2,429 tests. Native49 launches the trusted existing ComfyUI environment, observes actual readiness and the guarded Main window, then confirms Main retirement, parent backend release and physical desktop/backend retirement. Frontend pixels, complete coordinator/helper shutdown, explicit attachment and the cancellation/retry/shared-instance matrix remain pending.
 
 - [ ] Implement trusted Comfy launch/attach/readiness/retry through M1 leases and containment.
 
@@ -505,7 +505,7 @@ Tests cover authenticated completion, startup cancellation/failure, panic/abort/
 
 **Entry:** M0/M1 accepted and L1-L5 owner-tested components/individual native proofs ready for the receiving platform; this stage establishes their joint application acceptance. All required platform receipts are tracked separately. **Owner:** Integration lead and independent qualification reviewer.
 
-**Implementation:** Partial; real coordinator, captured child, backend, output and native window composition are linked. **Verification:** Windows owner tests and exact repository verification pass; actual signed-image launch and native K1 matrix remain pending.
+**Implementation:** Partial; real coordinator, captured child, backend, output and native window composition are linked. **Verification:** Exact Source43 Windows verification passes 2,429 tests. Signed Native49 directly observes the splash, retained console output, guarded Main reveal and checked Main/backend retirement on an inactive desktop. Frontend content capture, complete coordinator/helper shutdown, Native14 crash/report/export/restart, optimized delivery and the remaining native K1 matrix are pending.
 
 - [ ] Integrate the real supervised Comfy/SugarCubes host and demonstrate the complete K1 acceptance matrix.
 
