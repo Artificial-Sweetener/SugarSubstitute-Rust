@@ -36,6 +36,11 @@ from .models import (
 _EXECUTION_PREFIX = "__sugarcubes_cube_output__"
 
 
+def is_instrumented_cube_output(node_id: str) -> bool:
+    """Identify the prompt-only public-output namespace separately from authored legacy markers."""
+    return node_id.startswith(f"{_EXECUTION_PREFIX}:")
+
+
 @dataclass(frozen=True)
 class InstrumentedPrompt:
     """Carry a prompt, complete ownership, and stable output identities."""

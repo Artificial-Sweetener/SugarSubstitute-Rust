@@ -38,6 +38,8 @@ import { ensureBrowserCanvasWorkspaceStyles } from './BrowserCanvasWorkspaceStyl
 import { CanvasRevealCoordinator } from '../application/CanvasRevealCoordinator.js';
 import type { CanvasRevealTarget } from '../domain/CanvasReveal.js';
 import { ComfyImageRevealHost } from './ComfyImageRevealHost.js';
+import { BrowserOutputTransfer } from '../../output_saving/BrowserOutputTransfer.js';
+import { BrowserImageClipboard } from '../../output_saving/BrowserImageClipboard.js';
 
 export interface ComfyCanvasHostOptions {
   readonly presentation: WorkflowViewSource;
@@ -67,6 +69,11 @@ export class ComfyCanvasHost {
     const { document, execution, app, logger, report } = options;
     const window = document.defaultView;
     if (!window) throw new Error('Output canvas window is unavailable.');
+    const transfers = new BrowserOutputTransfer(
+      document.location.origin,
+      (input, init) => window.fetch(input, init),
+      new BrowserImageClipboard(document),
+    );
     const nextKey = (): string =>
       [...window.crypto.getRandomValues(new Uint32Array(4))]
         .map((word) => word.toString(16).padStart(8, '0'))
@@ -156,6 +163,7 @@ export class ComfyCanvasHost {
           connected: () => execution.connected,
           url: (item) => comfyCanvasMediaUrl(document.location.origin, item),
           open: (item) => openComfyCanvasMedia(window, item),
+          copy: (item, accepts) => transfers.copy(item.file, accepts),
           disposeLoader: () => loader.dispose(),
           report: (error) => report(error),
         });

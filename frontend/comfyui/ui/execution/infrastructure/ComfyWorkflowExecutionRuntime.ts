@@ -40,6 +40,7 @@ import {
 import { workflowSessionKey } from './WorkflowSessionKey.js';
 import { isRecord } from '../../types/common.js';
 import type { WorkflowSessionId } from '../domain/ExecutionIdentity.js';
+import type { WorkflowSubmissionContext } from '../domain/WorkflowSubmission.js';
 
 export interface ComfyWorkflowExecutionRuntimeOptions {
   readonly app: unknown;
@@ -177,6 +178,11 @@ export class ComfyWorkflowExecutionRuntime {
   /** Read submission intent through the shared run registry, including outstanding queue receipts. */
   latestSubmissionOrder(session: WorkflowSessionId): number {
     return this.#runs.latestOrder(session);
+  }
+
+  /** Read immutable construction ownership without inferring identity from the currently active graph. */
+  submissionContext(payload: unknown): WorkflowSubmissionContext | null {
+    return isRecord(payload) ? this.#contexts.read(payload) : null;
   }
 
   /** Refuse live-graph preparation when an observed construction now names another workflow or load. */

@@ -116,6 +116,22 @@ class SavingTicketJournal:
             connection.execute("DELETE FROM tickets WHERE run_id=?", (run_id,))
             connection.execute("DELETE FROM runs WHERE id=?", (run_id,))
 
+    def retain_runs(self, live_ids: frozenset[str]) -> None:
+        """Retire interrupted prior-host snapshots without changing saved files or counters."""
+        with self._connection() as connection:
+            rows = connection.execute("SELECT id FROM runs").fetchall()
+            stale: list[tuple[str]] = []
+            for row in rows:
+                identity: object = row[0]
+                if not isinstance(identity, str):
+                    raise ValueError(
+                        "Output saving journal contains an invalid run identity."
+                    )
+                if identity not in live_ids:
+                    stale.append((identity,))
+            connection.executemany("DELETE FROM tickets WHERE run_id=?", stale)
+            connection.executemany("DELETE FROM runs WHERE id=?", stale)
+
     def run_number(
         self, run_id: str, bucket: str, initial_number: Callable[[], int]
     ) -> int:

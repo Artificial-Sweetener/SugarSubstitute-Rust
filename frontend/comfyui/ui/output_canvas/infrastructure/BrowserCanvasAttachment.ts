@@ -77,6 +77,8 @@ export interface BrowserCanvasAttachmentOptions {
   url(item: WorkflowOutputItem): string;
   /** Open supported media through the host-facing browser adapter. */
   open(item: WorkflowOutputItem): void;
+  /** Copy a completed image through the platform's shared transfer adapter. */
+  copy?(item: WorkflowOutputItem, accepts: () => boolean): Promise<boolean>;
   /** Dispose platform loading after the resource owner has canceled every lease. */
   disposeLoader(): void;
   /** Report product feedback through the existing SugarCubes services. */
@@ -202,6 +204,7 @@ export class BrowserCanvasAttachment {
           'retry',
           'admit-large-image',
           'open-media',
+          ...(options.copy ? ['copy-media' as const] : []),
         ],
       },
       accepts: () => !this.#disposed && options.accepts(),
@@ -215,6 +218,20 @@ export class BrowserCanvasAttachment {
           sources,
           snapshot: command.type === 'comparison' ? this.#snapshot() : this.port.read(),
           open: options.open,
+          ...(options.copy
+            ? {
+                copy: (item: WorkflowOutputItem) =>
+                  options.copy?.(
+                    item,
+                    () =>
+                      !this.#disposed &&
+                      options.accepts() &&
+                      [this.#plan?.primary?.item?.id, this.#plan?.secondary?.item?.id].includes(
+                        item.id,
+                      ),
+                  ) ?? Promise.resolve(false),
+              }
+            : {}),
         }),
       geometry: (geometry) => this.#resize(geometry),
       release: () => this.dispose(),

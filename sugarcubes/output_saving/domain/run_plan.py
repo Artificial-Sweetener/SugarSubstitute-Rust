@@ -59,6 +59,7 @@ class SavingRun:
     preferences: OutputSavingPreferences
     metadata: tuple[tuple[str, str], ...] = ()
     metadata_enabled: bool = True
+    generation_seed: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

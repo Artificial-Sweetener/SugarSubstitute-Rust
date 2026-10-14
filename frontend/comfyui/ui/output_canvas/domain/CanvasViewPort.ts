@@ -89,7 +89,8 @@ export type CanvasCommand =
     }
   | { readonly type: 'retry' }
   | { readonly type: 'admit-large-image' }
-  | { readonly type: 'open-media'; readonly target: 'primary' | 'secondary' };
+  | { readonly type: 'open-media'; readonly target: 'primary' | 'secondary' }
+  | { readonly type: 'copy-media'; readonly target: 'primary' | 'secondary' };
 
 export interface CanvasCommandRequest {
   readonly schema: 1;

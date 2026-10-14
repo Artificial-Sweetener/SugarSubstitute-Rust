@@ -16,8 +16,12 @@
 """Prove immutable saving policy and execution-only sink rewrites."""
 
 from copy import deepcopy
+from collections.abc import Mapping
+
+from sugarcubes.output_saving.domain.saver_contract import ImageSaverContract
 from dataclasses import replace
 from datetime import datetime
+import pytest
 
 from sugarcubes.execution.models import ApiPrompt
 from sugarcubes.output_saving.application.prompt_preparer import (
@@ -85,6 +89,7 @@ def test_cube_policy_uses_authoritative_order_before_muting_final() -> None:
     store = TicketStore()
     prepared = OutputSavingPromptPreparer(store).prepare(
         prompt,
+        contracts=_contracts(prompt),
         run=_run(
             replace(
                 OutputSavingPreferences(), persistence_mode=PersistenceMode.FINAL_CUBE
@@ -124,6 +129,7 @@ def test_management_off_preserves_ordinary_nodes_and_unknown_savers() -> None:
     assert (
         OutputSavingPromptPreparer(store).prepare(
             prompt,
+            contracts=_contracts(prompt),
             run=_run(OutputSavingPreferences()),
             sources=sources,
             active_cube_ids=(),
@@ -149,6 +155,7 @@ def test_managed_save_rewrite_retains_ids_metadata_and_tensor_connections() -> N
     run = _run(replace(OutputSavingPreferences(), manage_workflow=True))
     prepared = OutputSavingPromptPreparer(store).prepare(
         prompt,
+        contracts=_contracts(prompt),
         run=run,
         sources=(SavingSource("save", "Result", SourceKind.SAVE),),
         active_cube_ids=(),
@@ -156,7 +163,10 @@ def test_managed_save_rewrite_retains_ids_metadata_and_tensor_connections() -> N
     assert prompt == original
     assert prepared["save"]["class_type"] == "SugarCubes.ManagedImageOutput"
     assert prepared["save"]["_meta"] == prompt["save"]["_meta"]
-    assert prepared["consumer"] == prompt["consumer"]
+    assert prepared["consumer"] == {
+        "class_type": "Consumer",
+        "inputs": {"image": ["sampler", 0]},
+    }
     assert prepared["save"]["inputs"] == {
         "images": ["sampler", 0],
         "save_ticket": "run-a-1",
@@ -176,6 +186,7 @@ def test_internal_cube_saves_are_transient_even_with_workflow_management_off() -
     store = TicketStore()
     prepared = OutputSavingPromptPreparer(store).prepare(
         prompt,
+        contracts=_contracts(prompt),
         run=_run(OutputSavingPreferences()),
         sources=(
             SavingSource("internal", "Internal", SourceKind.INTERNAL, cube_id="a"),
@@ -196,6 +207,7 @@ def test_completed_preview_saving_requires_its_separate_opt_in() -> None:
         store = TicketStore()
         prepared = OutputSavingPromptPreparer(store).prepare(
             prompt,
+            contracts=_contracts(prompt),
             run=_run(
                 replace(
                     OutputSavingPreferences(),
@@ -208,3 +220,74 @@ def test_completed_preview_saving_requires_its_separate_opt_in() -> None:
         )
         assert bool(store.sources) is enabled
         assert (prepared != prompt) is enabled
+
+
+def _contracts(prompt: ApiPrompt) -> Mapping[str, ImageSaverContract]:
+    """Declare only the fixture's known built-ins at the host qualification boundary."""
+    kinds = {
+        "SugarCubes.CubeOutput": SourceKind.CUBE,
+        "SaveImage": SourceKind.SAVE,
+        "PreviewImage": SourceKind.PREVIEW,
+    }
+    result: dict[str, ImageSaverContract] = {}
+    for identity, node in prompt.items():
+        name = node.get("class_type")
+        if isinstance(name, str) and name in kinds:
+            result[identity] = ImageSaverContract(
+                name,
+                "value" if kinds[name] is SourceKind.CUBE else "images",
+                kinds[name],
+            )
+    return result
+
+
+def test_qualified_custom_saver_delegates_writes_and_preserves_image_consumers() -> (
+    None
+):
+    """Normalize the declared input and bypass only a certified unchanged image result."""
+    prompt: ApiPrompt = {
+        "custom": {
+            "class_type": "AuthorSaver",
+            "inputs": {"picture": ["sampler", 0], "prefix": "native"},
+        },
+        "consumer": {"class_type": "Processor", "inputs": {"image": ["custom", 0]}},
+    }
+    original = deepcopy(prompt)
+    store = TicketStore()
+    prepared = OutputSavingPromptPreparer(store).prepare(
+        prompt,
+        run=_run(replace(OutputSavingPreferences(), manage_workflow=True)),
+        sources=(SavingSource("custom", "Custom", SourceKind.SAVE),),
+        active_cube_ids=(),
+        contracts={
+            "custom": ImageSaverContract("AuthorSaver", "picture", SourceKind.SAVE)
+        },
+    )
+    assert prompt == original
+    assert prepared["custom"]["inputs"] == {
+        "images": ["sampler", 0],
+        "save_ticket": "run-a-1",
+    }
+    assert prepared["consumer"]["inputs"] == {"image": ["sampler", 0]}
+    assert store.sources[0].persist
+
+
+def test_stale_custom_qualification_rejects_before_ticket_transaction() -> None:
+    """Never rewrite a class that changed between classification and execution preparation."""
+    store = TicketStore()
+    with pytest.raises(ValueError, match="qualified node class"):
+        OutputSavingPromptPreparer(store).prepare(
+            {
+                "custom": {
+                    "class_type": "OtherSaver",
+                    "inputs": {"picture": ["sampler", 0]},
+                }
+            },
+            run=_run(replace(OutputSavingPreferences(), manage_workflow=True)),
+            sources=(SavingSource("custom", "Custom", SourceKind.SAVE),),
+            active_cube_ids=(),
+            contracts={
+                "custom": ImageSaverContract("AuthorSaver", "picture", SourceKind.SAVE)
+            },
+        )
+    assert not store.sources

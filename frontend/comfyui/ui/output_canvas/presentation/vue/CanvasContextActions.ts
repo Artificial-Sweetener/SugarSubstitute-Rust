@@ -47,6 +47,20 @@ export function canvasContextActions(
     });
   }
   action(
+    'Copy image',
+    { type: 'copy-media', target: 'primary' },
+    snapshot.preview ||
+      !snapshot.selected ||
+      snapshot.selected.mediaKind !== 'image' ||
+      state.mode === 'overview',
+  );
+  if (comparison)
+    action(
+      'Copy comparison image',
+      { type: 'copy-media', target: 'secondary' },
+      !snapshot.secondary || snapshot.secondary.mediaKind !== 'image',
+    );
+  action(
     'Compare outputs',
     { type: 'comparison', enabled: !comparison },
     state.mode === 'overview' ||

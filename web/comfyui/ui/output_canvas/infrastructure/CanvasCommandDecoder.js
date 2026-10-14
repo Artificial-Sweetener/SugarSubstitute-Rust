@@ -122,8 +122,9 @@ function decodeCommand(value) {
                 ? Object.freeze({ type: 'wipe', orientation: value.orientation, split: value.split })
                 : null;
         case 'open-media':
+        case 'copy-media':
             return value.target === 'primary' || value.target === 'secondary'
-                ? Object.freeze({ type: 'open-media', target: value.target })
+                ? Object.freeze({ type: value.type, target: value.target })
                 : null;
         default:
             return null;

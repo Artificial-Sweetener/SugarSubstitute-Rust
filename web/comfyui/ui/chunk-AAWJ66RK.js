@@ -13,6 +13,17 @@ function canvasContextActions(snapshot, capabilities, send) {
     });
   }
   action(
+    "Copy image",
+    { type: "copy-media", target: "primary" },
+    snapshot.preview || !snapshot.selected || snapshot.selected.mediaKind !== "image" || state.mode === "overview"
+  );
+  if (comparison)
+    action(
+      "Copy comparison image",
+      { type: "copy-media", target: "secondary" },
+      !snapshot.secondary || snapshot.secondary.mediaKind !== "image"
+    );
+  action(
     "Compare outputs",
     { type: "comparison", enabled: !comparison },
     state.mode === "overview" || !comparison && (!snapshot.comparisonAvailable || !snapshot.selected || snapshot.preview || snapshot.resource.state !== "ready" || snapshot.selected.mediaKind !== "image"),

@@ -174,6 +174,41 @@ class ManagedArtifactRegistry:
                     return None
         return None
 
+    def reference(
+        self, artifact_id: str, filename: str, output_type: str
+    ) -> ManagedImageReference | None:
+        """Read an available pair through the same containment authority used by native image serving."""
+        if self.resolve(artifact_id, filename, output_type) is None:
+            return None
+        connection = self._connect()
+        try:
+            row = connection.execute(
+                "SELECT png,jpeg,width,height FROM images WHERE id=?", (artifact_id,)
+            ).fetchone()
+        finally:
+            connection.close()
+        if row is None:
+            return None
+        raw_png, raw_jpeg, width, height = row
+        if (
+            not isinstance(raw_png, str)
+            or not isinstance(width, int)
+            or not isinstance(height, int)
+        ):
+            return None
+        png_name = Path(raw_png).name
+        if self.resolve(artifact_id, png_name, output_type) is None:
+            return None
+        jpeg_name = Path(raw_jpeg).name if isinstance(raw_jpeg, str) else None
+        if (
+            jpeg_name is not None
+            and self.resolve(artifact_id, jpeg_name, output_type) is None
+        ):
+            jpeg_name = None
+        return ManagedImageReference(
+            artifact_id, png_name, output_type, width, height, jpeg_name
+        )
+
     def _connect(self) -> sqlite3.Connection:
         """Open a bounded local connection whose lifetime is owned by the requesting operation."""
         return sqlite3.connect(self._path, timeout=30)

@@ -24,6 +24,9 @@ from .runtime import (
     notify_cube_output_observers,
 )
 from .runtime.cube_output_preview import build_cube_output_preview
+from .output_saving.host_binding import runtime_images
+from .output_saving.infrastructure.managed_node import ManagedImageOutput
+from .output_saving.infrastructure.policy_error_node import OutputSavingPolicyError
 
 
 class AnyType(str):
@@ -170,7 +173,10 @@ class CubeOutput:
                 "instance_alias": ("STRING", {"default": "", "multiline": False}),
                 "instance_id": ("STRING", {"default": "", "multiline": False}),
             },
-            "optional": {"save_outputs": ("BOOLEAN", {"default": False})},
+            "optional": {
+                "save_outputs": ("BOOLEAN", {"default": False}),
+                "save_ticket": ("STRING", {"default": ""}),
+            },
         }
 
     def forward(
@@ -181,6 +187,7 @@ class CubeOutput:
         instance_alias: str = "",
         instance_id: str = "",
         save_outputs: bool = False,
+        save_ticket: str = "",
     ) -> dict[str, object]:
         """Emit output metadata and pass the input through unchanged."""
 
@@ -188,9 +195,16 @@ class CubeOutput:
         cleaned_default_alias = _ensure_default_alias(default_alias, "CubeOutput")
         cleaned_instance_alias = _clean_optional_string(instance_alias)
         cleaned_instance_id = _clean_optional_string(instance_id)
-        ui_payload, artifacts = build_cube_output_preview(
-            value, save_outputs=save_outputs
-        )
+        if save_ticket:
+            ui_payload, artifacts = runtime_images().save(value, save_ticket)
+            if not artifacts:
+                ui_payload, artifacts = build_cube_output_preview(
+                    value, save_outputs=False
+                )
+        else:
+            ui_payload, artifacts = build_cube_output_preview(
+                value, save_outputs=save_outputs
+            )
         context = _current_execution_context()
         event = CubeOutputEvent(
             version=1,
@@ -217,11 +231,15 @@ class CubeOutput:
 NODE_CLASS_MAPPINGS = {
     "SugarCubes.CubeInput": CubeInput,
     "SugarCubes.CubeOutput": CubeOutput,
+    "SugarCubes.ManagedImageOutput": ManagedImageOutput,
+    "SugarCubes.OutputSavingPolicyError": OutputSavingPolicyError,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "SugarCubes.CubeInput": "Cube Input",
     "SugarCubes.CubeOutput": "Cube Output",
+    "SugarCubes.ManagedImageOutput": "Managed image output",
+    "SugarCubes.OutputSavingPolicyError": "Output saving error",
 }
 
 __all__ = [

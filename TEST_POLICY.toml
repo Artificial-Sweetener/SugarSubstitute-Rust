@@ -3,8 +3,16 @@ test_root = "tests"
 
 [[area]]
 name = "output_saving"
-sources = ["sugarcubes/output_saving/**"]
+sources = ["sugarcubes/output_saving/**", "frontend/comfyui/ui/output_saving/**", "web/comfyui/ui/output_saving/**"]
 proofs = ["unit", "contract", "integration"]
+
+[[boundary]]
+name = "output_saving_contract"
+area = "output_saving"
+
+[[subscription]]
+boundary = "output_saving_contract"
+groups = ["runtime/unit", "execution/integration", "execution/contract"]
 
 [[area]]
 name = "masonry_search"
@@ -377,7 +385,7 @@ area = "settings"
 
 [[subscription]]
 boundary = "modal_presentation"
-groups = ["model_library/integration", "editor_actions/integration", "authoring/unit", "authoring/integration", "masonry_search/integration"]
+groups = ["model_library/integration", "editor_actions/integration", "authoring/unit", "authoring/integration", "masonry_search/integration", "output_saving/integration"]
 
 [[boundary]]
 name = "execution_prompt"
