@@ -41,6 +41,7 @@ impl ParentLifecycle {
             native_operation=operation.get(),main_stage=?self.main.stage(),
             retained_delivery=self.output.as_ref().map(|delivery| delivery.id.get()),
             last_issued_delivery=self.next_delivery,
+            native_output_rejection=?error.downcast_ref::<sugarsubstitute_execution::windows_output::WindowsOutputError>(),
             "Actual received payload rejected; original frame and error retained");
             self.rejected_frame = Some(frame);
             return Err(error);
@@ -71,6 +72,7 @@ impl ParentLifecycle {
         if let Err(cause) = self.receive(frame.as_bytes(), resources) {
             tracing::error!(operation="parent_acquisition_received_payload_rejected",payload_kind=received_payload_kind(frame.as_bytes()),
                 run=?self.run,native_operation=operation,main_stage=?self.main.stage(),
+                native_output_rejection=?cause.downcast_ref::<sugarsubstitute_execution::windows_output::WindowsOutputError>(),
                 "Original received frame and cause retained after actual progress write");
             self.rejected_frame = Some(frame);
             return Err(cause);

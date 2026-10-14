@@ -21,6 +21,8 @@ mod cutoff_tests;
 #[path = "coordinator_backend/failure.rs"]
 mod failure;
 use failure::{FailureKind, FailureObservation, OutputTerminalFailure, RootExit, Stopped};
+#[path = "coordinator_backend/output.rs"]
+mod output;
 #[path = "coordinator_backend/preparation.rs"]
 mod preparation;
 #[cfg(test)]
@@ -372,15 +374,6 @@ impl CoordinatorBackend {
     /// Borrow the retained original preparation cause independently of current cleanup.
     pub(crate) fn failure(&self, key: ResourceKey) -> Option<&LifecycleFailure> {
         self.policy.failure(key)
-    }
-
-    /// Transfer one genuinely charged output guard; attached targets have no output owner.
-    pub(crate) fn take_output(&self, key: ResourceKey) -> Result<Option<AdmittedOutputBatch>> {
-        let record = self.record(key)?;
-        match &record.output {
-            Some(output) => Ok(output.control.take_batch()?),
-            None => Ok(None),
-        }
     }
 
     /// Return the next original campaign/cleanup deadline for the existing native pump.
