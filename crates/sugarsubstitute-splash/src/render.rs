@@ -270,6 +270,28 @@ mod tests {
         Ok(())
     }
 
+    /// The native status painter replaces loading with owned recovery copy in its same clip.
+    #[test]
+    fn recovery_status_changes_real_status_pixels_without_changing_character_or_caption()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut renderer = SplashRenderer::new("en")?;
+        let mut appearance = Appearance { expanded: false, ..Appearance::demo() };
+        let feedback = ProgressFrame { completed: 0.0, activity: None };
+        let loading =
+            renderer.render(558, 558, 1.0, appearance, AnimationFrame::bootstrap(), feedback)?;
+        appearance.status = crate::StartupStatus::RetryReady;
+        let retry =
+            renderer.render(558, 558, 1.0, appearance, AnimationFrame::bootstrap(), feedback)?;
+        assert!((486..530).any(|y| (24..534).any(|x| loading.pixel(x, y) != retry.pixel(x, y))));
+        for y in 0..558 {
+            for x in 0..558 {
+                if !(24..534).contains(&x) || !(486..530).contains(&y) {
+                    assert_eq!(loading.pixel(x, y), retry.pixel(x, y));
+                }
+            }
+        }
+        Ok(())
+    }
     /// Keep material pixels transparent and blank output confined to its owned rectangle.
     #[test]
     fn blank_console_preserves_native_material_and_rejects_invalid_frames()

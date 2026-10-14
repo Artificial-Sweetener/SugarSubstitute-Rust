@@ -205,6 +205,29 @@ impl StartupSession {
         Ok(())
     }
 
+    /// Retry the same retained configuration after actual cleanup settlement.
+    /// No configuration paths, arguments or claims are copied.
+    /// # Errors
+    /// Rejects unsettled or nonincreasing attempts without mutation.
+    pub fn retry_configured(
+        &mut self,
+        launch: LaunchId,
+        navigation: Generation,
+    ) -> Result<(), StartupRejection> {
+        if self.phase != StartupPhase::Stopped || !self.admission_closed {
+            return Err(StartupRejection::SettlementRequired);
+        }
+        if launch.get() <= self.launch().get() {
+            return Err(StartupRejection::LaunchIdentityNotIncreasing);
+        }
+        self.readiness = ReadinessGate::new(launch, navigation);
+        self.phase = StartupPhase::SplashFirstFrame;
+        self.origin = None;
+        self.admission_closed = false;
+        self.failure = None;
+        Ok(())
+    }
+
     /// Validate all externally supplied ordering and identities before mutation.
     fn validate(&self, event: &StartupEvent) -> Result<(), StartupRejection> {
         if event.launch() != self.launch() {

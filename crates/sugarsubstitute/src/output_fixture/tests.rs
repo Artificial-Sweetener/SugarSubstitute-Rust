@@ -48,6 +48,19 @@ fn output_protocol_rejects_other_role_version_size_opcode_zero_and_unexpected_id
     Ok(())
 }
 #[test]
+fn diagnostic_error_reply_requires_exact_idle_role_positive_code_and_zero_reserved_birth()
+-> Result<()> {
+    let wire = encode(Role::Idle, Message::DiagnosticFailed, 2, Some((232, 0)));
+    assert_eq!(decode(Role::Idle, &wire)?.2, Some((232, 0)));
+    assert!(decode(Role::Flood, &wire).is_err());
+    assert!(decode(Role::Idle, &encode(Role::Idle, Message::DiagnosticFailed, 2, None)).is_err());
+    assert!(
+        decode(Role::Idle, &encode(Role::Idle, Message::DiagnosticFailed, 2, Some((232, 9))))
+            .is_err()
+    );
+    Ok(())
+}
+#[test]
 fn output_forward_identity_is_exact_positive_and_only_in_actual_done() -> Result<()> {
     let wire = encode(Role::Forward, Message::Done, 2, Some((37, 259)));
     assert_eq!(decode(Role::Forward, &wire)?.2, Some((37, 259)));

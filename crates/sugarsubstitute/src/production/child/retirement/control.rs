@@ -51,6 +51,7 @@ impl ProductionChild {
             self.bootstrap.channel_mut().consume_reply(decoded.header)?;
             match pending.control {
                 Control::Release(_) => self.shutdown.released = true,
+                Control::MainRetired(_) => self.shutdown.main_retirement_ack = true,
                 Control::ExitIntent => self.shutdown.intent_done = true,
                 Control::ExitCompleted => self.shutdown.completed_done = true,
                 _ => {}

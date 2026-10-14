@@ -252,6 +252,7 @@ mod admission;
 mod bounds;
 mod claim_identity;
 mod cleanup_failure;
+mod cleanup_scheduling;
 mod completions;
 mod construction;
 mod descendant_facts;

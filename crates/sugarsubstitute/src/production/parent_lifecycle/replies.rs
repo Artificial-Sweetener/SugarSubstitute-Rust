@@ -95,6 +95,7 @@ impl ParentLifecycle {
             Reply::Reloaded(lease) => ReplyOutcome::Reloaded(reference(lease)),
             Reply::Cancelled => ReplyOutcome::Cancelled,
             Reply::Failed(code) => ReplyOutcome::Failed(code),
+            Reply::Rejected(code) => ReplyOutcome::Rejected(code),
             Reply::Output(facts) => ReplyOutcome::OutputDelivery(OutputDelivery {
                 lease: reference(facts.lease),
                 delivery_id: facts.id,

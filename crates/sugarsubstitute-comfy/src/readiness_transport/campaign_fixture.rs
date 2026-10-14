@@ -22,6 +22,7 @@ use sugarsubstitute_contracts::execution::{JobContext, Moment};
 pub(crate) enum Behavior {
     Success,
     Unavailable,
+    ListenerAbsent,
     Malformed,
     WrongAsset,
     Panicked,
@@ -113,13 +114,20 @@ impl HttpPort for FixtureHttp {
         _: u16,
         context: &JobContext,
     ) -> Result<(), ReadinessTransportError> {
-        let identity = Arc::as_ptr(&state._claim) as usize;
+        let identity = std::ptr::from_ref(state) as usize;
         if self
             .claim_identity
             .compare_exchange(0, identity, Ordering::AcqRel, Ordering::Acquire)
             .is_err_and(|original| original != identity)
         {
             return Err(ReadinessTransportError::invalid("fixture_changed_original_claim"));
+        }
+        if matches!(self.behavior, Behavior::ListenerAbsent) {
+            self.phase("listener_absent", context);
+            return Err(ReadinessTransportError::unavailable(
+                "http_listener_absent",
+                std::io::Error::from(std::io::ErrorKind::ConnectionRefused),
+            ));
         }
         state.session = 1;
         state.connect = 2;

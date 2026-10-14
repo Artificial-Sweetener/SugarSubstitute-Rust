@@ -197,7 +197,14 @@ impl RenderStages {
             }
             Stage::StatusPrepare => {
                 let text = renderer.text.as_mut().ok_or(RenderError::InvalidFrame)?;
-                let message = messages(&renderer.locale).loading;
+                let copy = messages(&renderer.locale);
+                let message = match frame.appearance.status {
+                    crate::StartupStatus::Loading => copy.loading,
+                    crate::StartupStatus::Failed => copy.connection_failed,
+                    crate::StartupStatus::Settling => copy.cleanup_pending,
+                    crate::StartupStatus::RetryReady => copy.retry_ready,
+                    crate::StartupStatus::CleanupFailed => copy.cleanup_failed,
+                };
                 let cursor = match lease {
                     Some(lease) => text.prepare_status(
                         message,

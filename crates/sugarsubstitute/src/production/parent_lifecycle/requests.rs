@@ -117,6 +117,9 @@ impl ParentLifecycle {
                     resources,
                 )?;
             }
+            DecodedPayload::SettleAttempt { identity, acquisition } => {
+                self.begin_attempt_cleanup(index, identity, acquisition, until, resources)?;
+            }
             DecodedPayload::Release(reference) => {
                 let lease = self.lease(reference)?;
                 self.backend_request(

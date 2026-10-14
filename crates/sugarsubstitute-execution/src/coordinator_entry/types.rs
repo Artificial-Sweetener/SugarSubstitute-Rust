@@ -160,7 +160,7 @@ pub enum EntryTransportError {
     Capacity,
     /// Preserve the original central/native clock failure.
     Clock(NativeObservationError),
-    /// An actual write found its requester disconnected before native acceptance.
+    /// An actual connected peer was lost during kernel verification, an unaccepted write, or final-reply EOF.
     /// The original cause remains in checked connection retirement observations.
     PeerDisconnected(NativeObservationError),
     /// Actual unaccepted client open found no local endpoint. This observation

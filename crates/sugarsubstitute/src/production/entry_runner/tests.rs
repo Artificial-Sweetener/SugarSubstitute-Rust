@@ -21,7 +21,12 @@ fn original_cleanup_wake_is_consumed_before_unsettled_owner_returns() -> Result<
             profile: installation.clone(),
         },
     };
-    let mut owner = EntryRunner::new(command, installation.join("unopened.exe"), NoChild);
+    let mut owner = EntryRunner::new(
+        command,
+        installation.join("unopened.exe"),
+        NoChild,
+        crate::diagnostics::DiagnosticHealth::fixture(),
+    );
     let issued = ShutdownBudget::new(sugarsubstitute_contracts::execution::Moment::from_nanos(0))?;
     let cutoff = Instant::now();
     owner.closing = true;
@@ -113,11 +118,15 @@ fn child_factory_failure_preserves_cause_before_native_pump_or_configuration()
     };
     let command = ProductionCommand { installation: installation.clone(), options };
     let calls = std::cell::Cell::new(0);
-    let result = run(command, |command| {
-        calls.set(calls.get() + 1);
-        assert_eq!(command.installation, installation);
-        Err::<NoChild, Box<dyn Error>>(Box::new(ConstructorFailure))
-    });
+    let result = run(
+        command,
+        |command| {
+            calls.set(calls.get() + 1);
+            assert_eq!(command.installation, installation);
+            Err::<NoChild, Box<dyn Error>>(Box::new(ConstructorFailure))
+        },
+        crate::diagnostics::DiagnosticHealth::fixture(),
+    );
     let cause = result.err().ok_or("Failed child constructor entered the native pump")?;
     assert_eq!(calls.get(), 1);
     assert!(cause.downcast_ref::<ConstructorFailure>().is_some());
@@ -179,7 +188,7 @@ fn actual_runner_retains_schema_failure_and_joins_without_environment_capture()
         profile: directory.clone(),
     };
     let command = ProductionCommand { installation: directory.clone(), options };
-    let result = run(command, |_| Ok(NoChild));
+    let result = run(command, |_| Ok(NoChild), crate::diagnostics::DiagnosticHealth::fixture());
     let returned = match result {
         Err(cause) => cause,
         Ok(()) => return Err("Malformed actual configuration was admitted".into()),

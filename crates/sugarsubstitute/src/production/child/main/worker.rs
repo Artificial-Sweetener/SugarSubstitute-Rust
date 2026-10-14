@@ -15,7 +15,7 @@ pub(super) struct PreparedMain {
     pub(super) header: WireHeader,
     pub(super) original: Moment,
     pub(super) binding: OutputBinding,
-    _input: PreparedMainInput,
+    pub(super) reusable_input: Option<PreparedMainInput>,
     _control: MemoryClaim,
 }
 #[derive(Debug)]
@@ -153,7 +153,7 @@ pub(super) fn submit(
                     header,
                     original,
                     binding,
-                    _input: input,
+                    reusable_input: Some(input),
                     _control: control,
                 }),
                 Err(cause) => Err(MainPreparationFailure::new(cause, frame, input)),

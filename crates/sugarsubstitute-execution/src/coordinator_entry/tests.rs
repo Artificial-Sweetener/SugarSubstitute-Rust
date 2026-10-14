@@ -58,6 +58,8 @@ mod reply_deadline;
 #[path = "startup_snapshot/captured_admission_tests.rs"]
 mod captured_admission;
 
+#[path = "kernel_peer_disconnect_tests.rs"]
+mod kernel_peer_disconnect;
 #[path = "peer_disconnect_tests.rs"]
 mod peer_disconnect;
 

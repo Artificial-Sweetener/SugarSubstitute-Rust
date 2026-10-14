@@ -21,7 +21,8 @@ pub(super) struct StartupView {
     reduced_motion: bool,
     pressed: Option<Control>,
     messages: &'static Messages,
-    controls: [AccessibleControl; 2],
+    controls: [AccessibleControl; 3],
+    retry_requested: bool,
 }
 impl StartupView {
     /// Resolve owned text through the sole locale registry; allocate no raster resources.
@@ -32,6 +33,7 @@ impl StartupView {
         animation.set_reduced_motion(presentation.reduced_motion());
         Self {
             appearance: Appearance {
+                status: sugarsubstitute_splash::StartupStatus::Loading,
                 theme: match presentation.theme() {
                     RequestedTheme::Dark => Theme::Dark,
                     RequestedTheme::Light => Theme::Light,
@@ -44,6 +46,7 @@ impl StartupView {
             elapsed: Duration::ZERO,
             reduced_motion: presentation.reduced_motion(),
             pressed: None,
+            retry_requested: false,
             messages,
             controls: [
                 AccessibleControl {
@@ -57,6 +60,12 @@ impl StartupView {
                     label: messages.cancel,
                     bounds: ControlBounds { x: 512.0, y: 0.0, width: 46.0, height: 32.0 },
                     close: true,
+                },
+                AccessibleControl {
+                    id: 3,
+                    label: messages.retry,
+                    bounds: ControlBounds { x: 24.0, y: 486.0, width: 510.0, height: 48.0 },
+                    close: false,
                 },
             ],
         }
@@ -91,7 +100,27 @@ impl StartupView {
             self.messages.show_output
         };
     }
+    /// Consume only an actual pointer/accessibility activation, never a rendered fact.
+    pub(super) fn take_retry(&mut self) -> bool {
+        std::mem::take(&mut self.retry_requested)
+    }
+    /// Project the sole application phase into native copy and accessible affordances.
+    pub(super) fn phase(&mut self, phase: StartupPhase) {
+        self.appearance.status = match phase {
+            StartupPhase::Failed | StartupPhase::Cancelling => {
+                sugarsubstitute_splash::StartupStatus::Settling
+            }
+            StartupPhase::Stopped => sugarsubstitute_splash::StartupStatus::RetryReady,
+            _ => sugarsubstitute_splash::StartupStatus::Loading,
+        };
+    }
     fn control(&self, pointer: Pointer) -> Option<Control> {
+        if self.appearance.status == sugarsubstitute_splash::StartupStatus::RetryReady
+            && (24.0..534.0).contains(&pointer.x)
+            && (486.0..534.0).contains(&pointer.y)
+        {
+            return Some(Control::Retry);
+        }
         if !(0.0..32.0).contains(&pointer.y) {
             return None;
         }
@@ -131,6 +160,9 @@ impl StartupView {
                 if self.pressed == Some(Control::ConsoleToggle) && control == self.pressed {
                     self.appearance.expanded = !self.appearance.expanded;
                 }
+                if self.pressed == Some(Control::Retry) && control == self.pressed {
+                    self.retry_requested = true;
+                }
                 self.pressed = None;
                 self.appearance.pressed = None;
             }
@@ -146,10 +178,18 @@ impl StartupView {
     }
     /// Expose stable native accessibility peers for the exact painted caption controls.
     pub(super) fn controls(&self) -> &[AccessibleControl] {
-        &self.controls
+        if self.appearance.status == sugarsubstitute_splash::StartupStatus::RetryReady {
+            &self.controls
+        } else {
+            &self.controls[..2]
+        }
     }
     /// Activate only the non-close disclosure control; desktop owns native close intent.
     pub(super) fn activate(&mut self, id: u16) -> bool {
+        if id == 3 && self.appearance.status == sugarsubstitute_splash::StartupStatus::RetryReady {
+            self.retry_requested = true;
+            return true;
+        }
         if id != 1 {
             return false;
         }

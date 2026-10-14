@@ -19,6 +19,15 @@ impl Parent {
             {
                 case.done = true
             }
+            Some(Message::DiagnosticFailed)
+                if case.role == Role::Idle && case.exit_sent && case.diagnostic_error.is_none() =>
+            {
+                case.diagnostic_error =
+                    case.channel.as_ref().and_then(|channel| channel.diagnostic_error);
+                if case.diagnostic_error.is_none() {
+                    return Err("Actual diagnostic error reply missing".into());
+                }
+            }
             Some(_) => {
                 return Err("Output parent received unexpected/repeated source command".into());
             }

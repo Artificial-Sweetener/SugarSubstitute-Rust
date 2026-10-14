@@ -87,7 +87,7 @@ impl Active {
     /// Retire the expired native operation before a bounded same-source reprobe.
     /// The original setup cutoff and staged request remain unchanged; checked
     /// connection retirement must finish before the existing reuse path can run.
-    fn expire_probe(
+    pub(super) fn expire_probe(
         &mut self,
         core: &Core,
         index: usize,
@@ -111,6 +111,7 @@ impl Active {
                 self.read_frame(core, index, now)
             }
             Phase::AwaitRoot => self.cached_reply(core, index, now),
+            Phase::AwaitPeerRetirement => self.await_peer_retirement(core, index),
             Phase::Connecting | Phase::Retiring => Ok(()),
         }
     }
@@ -255,6 +256,12 @@ impl Active {
         if deadline <= core.clock.now() {
             return Err(EntryTransportError::InvalidDeadline);
         }
+        let next = if self.work.shared.server && next == Phase::Retiring {
+            self.connections[index].peer_retirement_until = Some(deadline);
+            Phase::AwaitPeerRetirement
+        } else {
+            next
+        };
         let io = Io { role: Role::Write, length, next, deadline: Some(deadline), operation };
         self.connections[index].pending = Some(io);
         lock(&self.work.shared.state).connections[index].writing = true;
@@ -291,7 +298,7 @@ impl Active {
             IssueDispatch::Expired => self.expire_probe(core, index, core.clock.now()),
         }
     }
-    fn complete(
+    pub(super) fn complete(
         &mut self,
         core: &Core,
         index: usize,
@@ -352,6 +359,9 @@ impl Active {
                 }
             }
             Role::Read => {
+                if self.connections[index].phase == Phase::AwaitPeerRetirement {
+                    return Err(EntryTransportError::Malformed);
+                }
                 lock(&self.work.shared.state).connections[index].reading = false;
                 if io.operation.is_some() {
                     let mut state = lock(&self.work.shared.state);

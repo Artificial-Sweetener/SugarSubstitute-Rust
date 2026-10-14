@@ -78,3 +78,29 @@ fn keyboard_and_reduced_motion_use_the_same_actual_disclosure_and_animation()
     assert!(view(false)?.motion());
     Ok(())
 }
+
+#[test]
+fn recovery_control_is_localized_and_inert_until_policy_observes_settlement()
+-> Result<(), Box<dyn Error>> {
+    let mut view = view(true)?;
+    let retry = Pointer { x: 270.0, y: 510.0 };
+    for phase in [StartupPhase::PreparingConnection, StartupPhase::Failed, StartupPhase::Cancelling]
+    {
+        view.phase(phase);
+        assert_eq!(view.controls().len(), 2);
+        assert!(!view.activate(3));
+        view.pointer(PointerAction::Press, retry);
+        view.pointer(PointerAction::Release, retry);
+        assert!(!view.take_retry());
+    }
+    view.phase(StartupPhase::Stopped);
+    assert_eq!(view.controls()[2].label, "Retry");
+    assert!(!view.controls()[2].close);
+    view.pointer(PointerAction::Press, retry);
+    view.pointer(PointerAction::Release, retry);
+    assert!(view.take_retry());
+    assert!(!view.take_retry());
+    view.phase(StartupPhase::SplashFirstFrame);
+    assert!(!view.activate(3));
+    Ok(())
+}

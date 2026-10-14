@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Pin actual peer processes, primary/message tokens and installed executable identities.
+#[path = "security/query_error.rs"]
+mod query_error;
 use super::native::error;
 use crate::{
     coordinator_entry::{EntryTransportError, KernelPeer},
@@ -55,11 +57,11 @@ impl PeerPin {
         // SAFETY: the retained connected pipe and fixed DWORD outputs remain live.
         unsafe {
             if server {
-                GetNamedPipeClientProcessId(pipe, &mut pid)?;
-                GetNamedPipeClientSessionId(pipe, &mut session)?;
+                GetNamedPipeClientProcessId(pipe, &mut pid).map_err(query_error::classify)?;
+                GetNamedPipeClientSessionId(pipe, &mut session).map_err(query_error::classify)?;
             } else {
-                GetNamedPipeServerProcessId(pipe, &mut pid)?;
-                GetNamedPipeServerSessionId(pipe, &mut session)?;
+                GetNamedPipeServerProcessId(pipe, &mut pid).map_err(query_error::classify)?;
+                GetNamedPipeServerSessionId(pipe, &mut session).map_err(query_error::classify)?;
             }
         }
         if pid == 0 || session != expected.session_id() || (self.pid != 0 && pid != self.pid) {
@@ -224,3 +226,7 @@ impl From<windows::core::Error> for EntryTransportError {
         error("entry_query_kernel_peer", cause)
     }
 }
+
+#[cfg(test)]
+#[path = "security/kernel_query_tests.rs"]
+mod kernel_query_tests;

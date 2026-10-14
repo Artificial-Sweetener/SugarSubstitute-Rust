@@ -65,7 +65,7 @@ impl Fixture {
             || !family.cleanup_requested
             || family.cleanup_job.is_some()
             || snapshot.creation_pending
-            || snapshot.cleanup_pending
+            || snapshot.cleanup_step_pending
         {
             return Ok(false);
         }

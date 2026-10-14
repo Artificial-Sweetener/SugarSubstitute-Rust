@@ -96,6 +96,8 @@ pub struct RegistrySnapshot {
     pub retained_members: usize,
     /// An admitted finite cleanup job or secondary process watch remains owned.
     pub cleanup_pending: bool,
+    /// A finite cleanup job remains owned, independently of secondary exit observation.
+    pub cleanup_step_pending: bool,
     /// Complete cached inventory requires a new secondary observation reservation.
     pub member_watch_required: bool,
     /// Actual handles/work settled; observations may still require transfer.
@@ -106,6 +108,19 @@ pub struct RegistrySnapshot {
     pub shutdown: Option<(ShutdownId, ShutdownBudget)>,
 }
 impl RegistrySnapshot {
+    /// Select a finite step without waiting for an existing secondary exit watch.
+    /// Before grace, the watch supplies the next wake. At grace, the same original
+    /// transaction may force the family while that watch remains owned. Expiry
+    /// grants no new admission or settlement.
+    pub fn cleanup_step_due(self, now: Moment) -> bool {
+        !self.settled
+            && !self.creation_pending
+            && !self.cleanup_step_pending
+            && self.shutdown.is_some_and(|(_, budget)| {
+                now < budget.settle_until
+                    && (!self.cleanup_pending || (!self.forced && now >= budget.graceful_until))
+            })
+    }
     /// Report policy expiry without claiming termination or resetting its budget.
     pub fn deadline_expired(self, now: Moment) -> bool {
         !self.settled && self.shutdown.is_some_and(|(_, budget)| now >= budget.settle_until)

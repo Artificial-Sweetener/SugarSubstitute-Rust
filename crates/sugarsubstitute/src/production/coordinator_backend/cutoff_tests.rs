@@ -62,7 +62,7 @@ fn absent_foreign_kind_and_expired_budget_reject_before_policy_mutation() -> Res
     Ok(())
 }
 /// Represent the real retained creator before any source/native effect; no authority is minted.
-fn creator(
+pub(super) fn creator(
     key: ResourceKey,
     target: BackendTarget,
     budget: ConnectionBudget,
@@ -108,7 +108,7 @@ fn creator(
         shutdown: None,
         failure_published: false,
         settled: false,
-        cleanup_failure: None,
+        cleanup_failure: cleanup_state::CleanupState::new(),
     })
 }
 #[test]

@@ -1,0 +1,278 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Artificial Sweetener and contributors
+//! Keep authenticated startup failure and attempt cleanup separate from process shutdown.
+#[path = "attempt/reply.rs"]
+mod reply;
+use super::*;
+use std::{fmt, time::Duration};
+use sugarsubstitute_contracts::startup::{StartupFailure, StartupFailureCode};
+use sugarsubstitute_supervision::lifecycle_protocol::{FrameCodec, WireMessage, WirePayload};
+
+/// The original authenticated disposition, retained without rendering wire diagnostics.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum AcquisitionFailure {
+    Failed(LifecycleFailureCode),
+    Rejected(LifecycleRejection),
+}
+impl fmt::Display for AcquisitionFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Authenticated connection disposition: {self:?}")
+    }
+}
+impl Error for AcquisitionFailure {}
+impl AcquisitionFailure {
+    pub(super) const fn classification(self) -> StartupFailureCode {
+        match self {
+            Self::Failed(LifecycleFailureCode::Deadline) => StartupFailureCode::TimedOut,
+            Self::Rejected(_) => StartupFailureCode::ConnectionPreparation,
+            _ => StartupFailureCode::ConnectionUnavailable,
+        }
+    }
+}
+
+pub(super) struct AttemptCleanup {
+    original: Moment,
+    pending: Option<(WireHeader, bool)>,
+    acknowledged: bool,
+    settled: bool,
+    failures: [Option<Box<dyn Error>>; 2],
+    omitted_failures: u64,
+}
+impl AttemptCleanup {
+    pub(super) fn deadline(&self) -> Option<Moment> {
+        if self.settled || self.failures.iter().any(Option::is_some) {
+            None
+        } else {
+            Some(self.original)
+        }
+    }
+}
+impl ProductionChild {
+    /// Consume the genuine final reply before releasing its passive transport loan.
+    /// The application owns the unchanged typed cause through cleanup and presentation.
+    pub(super) fn acquire_failed(
+        &mut self,
+        header: WireHeader,
+        cause: AcquisitionFailure,
+    ) -> Result<()> {
+        if self.events.iter().all(Option::is_some) {
+            return Err("Startup failure event capacity exhausted".into());
+        }
+        self.bootstrap.channel_mut().consume_reply(header)?;
+        self.acquire = None;
+        self.failed = true;
+        self.grant = None;
+        self.push_event(StartupEvent::new(
+            self.identity.launch,
+            StartupObservation::Failed(StartupFailure::new(
+                cause.classification(),
+                Box::new(cause),
+            )),
+        ))
+    }
+    /// Close only this attempt's finite main/output work; capture and channel stay live.
+    pub(super) fn begin_attempt_cleanup(&mut self) -> Result<()> {
+        if self.attempt.is_some() {
+            return Ok(());
+        }
+        let original = self.client()?.now()?.checked_add(Duration::from_secs(15))?;
+        self.main.close();
+        self.output.close();
+        if self.main.profile().is_some() && !self.shutdown.main_retired {
+            let slot = self
+                .commands
+                .iter_mut()
+                .find(|slot| slot.is_none())
+                .ok_or("Main retirement command slots full")?;
+            *slot = Some(DesktopStartupCommand::RetireMain(self.identity));
+        }
+        self.attempt = Some(AttemptCleanup {
+            original,
+            pending: None,
+            acknowledged: false,
+            settled: false,
+            failures: [None, None],
+            omitted_failures: 0,
+        });
+        self.advance_attempt()
+    }
+    /// Observe each actual finite owner before requesting the matching backend settlement.
+    pub(super) fn advance_attempt(&mut self) -> Result<()> {
+        let Some(attempt) = &self.attempt else { return Ok(()) };
+        if attempt.settled || attempt.failures.iter().any(Option::is_some) {
+            return Ok(());
+        }
+        if self.client()?.now()? >= attempt.original {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "Original attempt cleanup expired",
+            )
+            .into());
+        }
+        if self.main.pending()
+            || self.output.pending()
+            || (self.main.profile().is_some()
+                && (!self.shutdown.main_retired || !self.shutdown.main_retirement_ack))
+        {
+            return Ok(());
+        }
+        self.main.release_frame()?;
+        self.output.release_frame()?;
+        if self.attempt.as_ref().is_some_and(|a| a.pending.is_none()) {
+            let original = self.attempt.as_ref().ok_or("Attempt cleanup absent")?.original;
+            let header = self.bootstrap.channel_mut().prepare_request(original)?;
+            self.attempt.as_mut().ok_or("Attempt cleanup absent")?.pending = Some((header, false));
+        }
+        let original = self.attempt.as_ref().ok_or("Attempt cleanup absent")?.original;
+        let (header, admitted) = self
+            .attempt
+            .as_ref()
+            .and_then(|a| a.pending)
+            .ok_or("Attempt cleanup request absent")?;
+        if !admitted {
+            let acquisition = self
+                .acquisition_header
+                .and_then(|h| h.request)
+                .ok_or("Original acquisition identity absent")?;
+            if self.bootstrap.channel_mut().try_send(
+                &WireMessage {
+                    header,
+                    payload: WirePayload::SettleAttempt { identity: self.identity, acquisition },
+                },
+                original,
+            )? {
+                self.attempt.as_mut().ok_or("Attempt cleanup absent")?.pending =
+                    Some((header, true));
+            }
+            return Ok(());
+        }
+        if self.bootstrap.channel_mut().received_header()? != Some(header) {
+            return Ok(());
+        }
+        self.failed_frame = self.bootstrap.channel_mut().take_frame();
+        let decoded = FrameCodec::decode(
+            self.failed_frame.as_ref().ok_or("Actual settlement reply absent")?.as_bytes(),
+        )?;
+        match reply::classify(header, &decoded)? {
+            reply::SettlementReply::Acknowledged => {}
+            reply::SettlementReply::Failed(cause) => {
+                self.bootstrap.channel_mut().consume_reply(header)?;
+                self.failed_frame = None;
+                return self.retain_attempt_failure(Box::new(cause));
+            }
+        }
+        if self.events.iter().all(Option::is_some) {
+            return Err("Settlement event slots full".into());
+        }
+        self.bootstrap.channel_mut().consume_reply(header)?;
+        self.failed_frame = None;
+        let attempt = self.attempt.as_mut().ok_or("Attempt cleanup absent")?;
+        attempt.acknowledged = true;
+        attempt.settled = true;
+        self.lease = None;
+        self.push_event(StartupEvent::new(
+            self.identity.launch,
+            StartupObservation::ConnectionSettled,
+        ))
+    }
+    /// Preserve actual cleanup failure without turning it into native window retirement.
+    pub(super) fn retain_attempt_failure(&mut self, cause: Box<dyn Error>) -> Result<()> {
+        let attempt = self.attempt.as_mut().ok_or("Attempt failure has no original owner")?;
+        if let Some(slot) = attempt.failures.iter_mut().find(|slot| slot.is_none()) {
+            *slot = Some(cause);
+            tracing::warn!(operation="startup_attempt_cleanup",launch=?self.identity.launch,
+                "Original cleanup failure retained; retry remains unavailable");
+        } else {
+            attempt.omitted_failures = attempt.omitted_failures.saturating_add(1);
+        }
+        Ok(())
+    }
+    /// Inspect retained failure presentation only; this cannot establish settlement.
+    pub(in crate::production) fn cleanup_failed(&self) -> bool {
+        self.attempt.as_ref().is_some_and(|attempt| attempt.failures.iter().any(Option::is_some))
+    }
+    /// Replace only a settled acquisition attempt without replacing capture or channel.
+    pub(in crate::production) fn retry_attempt(
+        &mut self,
+        identity: MainIdentity,
+        prepared: &mut PreparedChildStartup,
+    ) -> Result<()> {
+        if identity.run != self.run
+            || identity.launch.get() <= self.identity.launch.get()
+            || self.attempt.as_ref().is_none_or(|a| !a.acknowledged || !a.settled)
+            || self.main.pending()
+            || self.output.pending()
+        {
+            return Err("Retry requires the exact original attempt settlement".into());
+        }
+        if self.failure.is_some() {
+            return Err("Unresolved original child infrastructure cause prevents retry".into());
+        }
+        let mut input = self.main.take_reusable_input()?;
+        if let Err(cause) = prepared.restore_main_input(&mut input) {
+            self.main.restore_reusable_input(&mut input)?;
+            return Err(cause);
+        }
+        self.failed = false;
+        self.identity = identity;
+        self.connection_budget = None;
+        self.frontend_budget = None;
+        self.acquire = None;
+        self.acquisition_header = None;
+        self.attempt = None;
+        self.grant_header = None;
+        self.shutdown.main_retired = false;
+        self.shutdown.main_retirement_ack = false;
+        self.main = main::MainPreparation::new(self.main.settings);
+        self.output = output::ChildOutput::new();
+        self.snapshot = None;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn authenticated_disposition_retains_typed_failure_and_rejection_classifications() {
+        assert_eq!(
+            AcquisitionFailure::Failed(LifecycleFailureCode::Preparation).classification(),
+            StartupFailureCode::ConnectionUnavailable
+        );
+        assert_eq!(
+            AcquisitionFailure::Failed(LifecycleFailureCode::Deadline).classification(),
+            StartupFailureCode::TimedOut
+        );
+        assert_eq!(
+            AcquisitionFailure::Rejected(LifecycleRejection::Overloaded).classification(),
+            StartupFailureCode::ConnectionPreparation
+        );
+        let failure = StartupFailure::new(
+            StartupFailureCode::ConnectionUnavailable,
+            Box::new(AcquisitionFailure::Failed(LifecycleFailureCode::Cleanup)),
+        );
+        assert_eq!(
+            failure.source().and_then(|cause| cause.downcast_ref::<AcquisitionFailure>()),
+            Some(&AcquisitionFailure::Failed(LifecycleFailureCode::Cleanup))
+        );
+    }
+    #[test]
+    fn failed_cleanup_keeps_original_cause_and_disables_expired_attempt_timer_without_settlement() {
+        let original = Moment::from_nanos(123);
+        let mut attempt = AttemptCleanup {
+            original,
+            pending: None,
+            acknowledged: false,
+            settled: false,
+            failures: [None, None],
+            omitted_failures: 0,
+        };
+        assert_eq!(attempt.deadline(), Some(original));
+        attempt.failures[0] =
+            Some(Box::new(std::io::Error::other("actual cleanup boundary failure")));
+        assert_eq!(attempt.deadline(), None);
+        assert_eq!(attempt.original, original);
+        assert!(!attempt.acknowledged && !attempt.settled);
+        assert!(attempt.failures[0].as_ref().is_some_and(|cause| cause.is::<std::io::Error>()));
+    }
+}

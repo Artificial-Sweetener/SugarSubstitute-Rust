@@ -12,6 +12,12 @@ use sugarsubstitute_execution::ExecutionOwner;
 pub(crate) mod storage_tests;
 #[derive(Default)]
 pub(super) struct TestClock(AtomicU64);
+impl TestClock {
+    /// Advance the injected external clock without changing any owner's transaction.
+    pub(super) fn set(&self, now: Moment) {
+        self.0.store(now.as_nanos(), Ordering::Release);
+    }
+}
 impl Clock for TestClock {
     fn now(&self) -> Moment {
         Moment::from_nanos(self.0.load(Ordering::Acquire))
@@ -280,7 +286,7 @@ fn pending_actual_transition_blocks_mutation_until_original_replies_transfer() -
 fn partial_backend_cleanup_keeps_actual_parent_budget_across_later_clock_and_repeat() -> Result<()>
 {
     let clock = Arc::new(TestClock::default());
-    clock.0.store(2_000_000_000, Ordering::Release);
+    clock.set(Moment::from_nanos(2_000_000_000));
     let executor = ExecutionOwner::new(clock.clone(), Arc::new(Wake))?;
     let client = executor.client();
     let scopes = ScopeSequence::new();
@@ -344,7 +350,7 @@ fn partial_backend_cleanup_keeps_actual_parent_budget_across_later_clock_and_rep
         shutdown: None,
         failure_published: false,
         settled: false,
-        cleanup_failure: None,
+        cleanup_failure: cleanup_state::CleanupState::new(),
     });
     let mut resources = BackendResources {
         client: &client,
@@ -355,18 +361,20 @@ fn partial_backend_cleanup_keeps_actual_parent_budget_across_later_clock_and_rep
         authority: &mut authority,
     };
     let original = ShutdownBudget::new(Moment::from_nanos(1_000_000_000))?;
-    owner.begin_cleanup(key, Some(original), &mut resources)?;
+    let transition = owner.begin_cleanup(key, Some(original), &mut resources)?;
+    assert!(transition.replies.is_empty() && transition.effects.is_empty());
     let actual = owner.record(key)?.shutdown.ok_or(LifecycleRejection::WrongPhase)?;
     assert_eq!(actual.1, original);
     assert!(owner.record(key)?.scope.snapshot().cancellation_requested);
-    clock.0.store(40_000_000_000, Ordering::Release);
-    owner.begin_cleanup(
+    clock.set(Moment::from_nanos(40_000_000_000));
+    let transition = owner.begin_cleanup(
         key,
         Some(ShutdownBudget::new(Moment::from_nanos(40_000_000_000))?),
         &mut resources,
     )?;
+    assert!(transition.replies.is_empty() && transition.effects.is_empty());
     assert_eq!(owner.record(key)?.shutdown, Some(actual));
-    assert_eq!(owner.next_deadline(), Some(original.settle_until));
+    assert_eq!(owner.next_deadline(), Some(original.graceful_until));
     assert_eq!(native.snapshot().reserved_bytes, 0);
     assert_eq!(cleanup.snapshot().reserved_bytes, 0);
     assert_eq!(jobs.allocate()?.get(), 1);

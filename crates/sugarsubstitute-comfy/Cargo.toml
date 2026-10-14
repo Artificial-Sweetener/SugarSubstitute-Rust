@@ -19,6 +19,7 @@ sugarsubstitute-application = { path = "../sugarsubstitute-application" }
 sugarsubstitute-execution = { path = "../sugarsubstitute-execution" }
 sugarsubstitute-supervision = { path = "../sugarsubstitute-supervision" }
 sha2.workspace = true
+tracing.workspace = true
 windows = { workspace = true, features = ["Win32_Networking_WinHttp", "Win32_Networking_WinSock"] }
 
 [target.'cfg(windows)'.dev-dependencies]

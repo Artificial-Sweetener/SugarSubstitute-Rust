@@ -68,7 +68,14 @@ fn collect(
     requests: &mut impl Requests,
     endpoint: Endpoint<'_>,
 ) -> Result<Vec<u8>, ReadinessTransportError> {
+    let bound = endpoint.maximum() as usize;
     let mut bytes = Vec::new();
+    bytes
+        .try_reserve_exact(bound)
+        .map_err(|cause| ReadinessTransportError::new("served_body_allocation", cause))?;
+    if bytes.capacity() != bound {
+        return Err(ReadinessTransportError::invalid("served_body_capacity"));
+    }
     requests.get(endpoint, &mut |chunk| {
         if bytes.len().checked_add(chunk.len()).is_none_or(|n| n as u64 > endpoint.maximum()) {
             return Err(ReadinessTransportError::invalid("served_body_bound"));

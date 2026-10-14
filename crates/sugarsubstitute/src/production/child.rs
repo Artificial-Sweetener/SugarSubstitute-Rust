@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compose the real captured child, authenticated lifecycle channel and native startup effects.
+#[path = "child/attempt.rs"]
+mod attempt;
 #[path = "child/bootstrap.rs"]
 mod bootstrap;
 #[path = "child/capture.rs"]
@@ -11,6 +13,8 @@ mod channel;
 mod configuration;
 #[path = "child/connection.rs"]
 mod connection;
+#[path = "child/diagnostics.rs"]
+mod diagnostics;
 #[path = "child/handshake.rs"]
 mod handshake;
 #[path = "child/main.rs"]
@@ -48,6 +52,7 @@ use sugarsubstitute_supervision::lifecycle_protocol::{LeaseReference, WireHeader
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 /// Inert application role data; paths/settings grant no native profile or backend privilege.
 pub(in crate::production) struct ChildInputs {
+    pub(in crate::production) diagnostics: crate::diagnostics::DiagnosticHealth,
     pub(in crate::production) input: InheritedLifecycleBootstrap,
     pub(in crate::production) original: LifecyclePipeDeadline,
     pub(in crate::production) run: RunKey,
@@ -58,12 +63,15 @@ pub(in crate::production) struct ChildInputs {
 /// Keep all partial admissions, original frames, completions and permanent capture together.
 /// This owner creates no executor and uses only the application's shared job sequence.
 pub(in crate::production) struct ProductionChild {
+    diagnostics: crate::diagnostics::DiagnosticHealth,
     bootstrap: ChildBootstrap,
     run: RunKey,
     identity: MainIdentity,
     client: Option<ExecutionClient>,
     jobs: Option<JobSequence>,
     connection_budget: Option<ConnectionBudget>,
+    acquisition_header: Option<WireHeader>,
+    attempt: Option<attempt::AttemptCleanup>,
     frontend_budget: Option<FrontendBudget>,
     acquire: Option<connection::PendingAcquire>,
     lease: Option<LeaseReference>,
@@ -100,7 +108,13 @@ impl ProductionChild {
             inputs.native_scope,
             inputs.identity,
         )?;
-        Ok(Self::assemble(bootstrap, inputs.run, inputs.identity, inputs.settings))
+        Ok(Self::assemble(
+            bootstrap,
+            inputs.run,
+            inputs.identity,
+            inputs.settings,
+            inputs.diagnostics,
+        ))
     }
     /// Assemble inert application state around its actual bootstrap owner.
     /// Native driver selection remains exclusively at the outer constructor boundary.
@@ -109,14 +123,18 @@ impl ProductionChild {
         run: RunKey,
         identity: (LaunchId, Generation),
         settings: MainWindowSettings,
+        diagnostics: crate::diagnostics::DiagnosticHealth,
     ) -> Self {
         Self {
+            diagnostics,
             bootstrap,
             run,
             identity: MainIdentity { run, launch: identity.0, navigation: identity.1 },
             client: None,
             jobs: None,
             connection_budget: None,
+            acquisition_header: None,
+            attempt: None,
             frontend_budget: None,
             acquire: None,
             lease: None,
@@ -159,6 +177,8 @@ impl ProductionChild {
         })();
         self.failed |= result.is_err();
         self.bootstrap.report_preparation();
+        let result = self.observe_diagnostics(result);
+        self.failed |= result.is_err();
         result
     }
     /// Deliver one immutable batch to every actual owner before resolving any failure.
@@ -186,7 +206,17 @@ impl ProductionChild {
         })();
         self.failed |= result.is_err();
         self.bootstrap.report_preparation();
-        result
+        if !self.shutdown.closing() && self.diagnostics.check().is_err() {
+            self.failed = true;
+            return self.observe_diagnostics(result);
+        }
+        match result {
+            Err(cause) if self.attempt.is_some() && !self.shutdown.closing() => {
+                self.retain_attempt_failure(cause)?;
+                Ok(())
+            }
+            result => result,
+        }
     }
     /// Drive only actual capture/authentication/configuration before native surface admission.
     /// # Errors
@@ -204,6 +234,8 @@ impl ProductionChild {
         })();
         self.failed |= result.is_err();
         self.bootstrap.report_preparation();
+        let result = self.observe_diagnostics(result);
+        self.failed |= result.is_err();
         result
     }
     /// Move the complete guarded application state once after actual Ready.
@@ -240,7 +272,7 @@ impl ProductionChild {
                 StartupEffect::CleanupConnection { launch, .. }
                     if launch == self.identity.launch =>
                 {
-                    self.begin_shutdown()?;
+                    self.begin_attempt_cleanup()?;
                     Ok(())
                 }
                 _ => Err("Effect belongs to native presentation or another attempt".into()),
@@ -302,6 +334,9 @@ impl ProductionChild {
     }
     /// Borrow the earliest original pending operation or cleanup cutoff without renewing it.
     pub(in crate::production) fn next_deadline(&self) -> Option<Moment> {
+        if self.cleanup_failed() && !self.shutdown.closing() {
+            return self.bootstrap.ui_deadline();
+        }
         [
             (!self.prepared && !self.shutdown.closing())
                 .then(|| self.bootstrap.original_deadline())
@@ -311,6 +346,7 @@ impl ProductionChild {
             self.main.deadline(),
             self.output.deadline(),
             self.shutdown.deadline(),
+            self.attempt.as_ref().and_then(attempt::AttemptCleanup::deadline),
             self.frontend_budget
                 .filter(|_| {
                     self.phase

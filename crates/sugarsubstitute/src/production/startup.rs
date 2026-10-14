@@ -161,6 +161,10 @@ impl WindowContent for ProductionStartup {
             .ok_or_else(|| std::io::Error::other("Actual startup policy absent"))?;
         let view =
             self.view.as_mut().ok_or_else(|| std::io::Error::other("Startup view absent"))?;
+        view.phase(startup.session().phase());
+        if self.child.cleanup_failed() {
+            view.appearance.status = sugarsubstitute_splash::StartupStatus::CleanupFailed;
+        }
         view.elapsed = elapsed;
         view.animation.tick(elapsed);
         let progress = view.progress(startup.session().phase());

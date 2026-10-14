@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Route the actual authenticated desktop pipe through the existing native owners.
+#[path = "parent_lifecycle/attempt.rs"]
+mod attempt;
 #[path = "parent_lifecycle/backend.rs"]
 mod backend;
 #[path = "parent_lifecycle/folders.rs"]
@@ -79,6 +81,9 @@ pub(crate) struct ParentLifecycle {
     lease: Option<LeaseKey>,
     backend_failed_resource: Option<sugarsubstitute_contracts::lifecycle::ResourceKey>,
     backend_failure_seen: bool,
+    _attempt_failure: Option<Cause>,
+    settled_attempt_failures: [Option<attempt::SettledAttemptFailure>; 8],
+    attempt_cleanup: Option<attempt::AttemptSettlement>,
     output: Option<output::Delivery>,
     next_delivery: u64,
     challenge: Option<(
@@ -153,6 +158,9 @@ impl ParentLifecycle {
             lease: None,
             backend_failed_resource: None,
             backend_failure_seen: false,
+            _attempt_failure: None,
+            settled_attempt_failures: std::array::from_fn(|_| None),
+            attempt_cleanup: None,
             output: None,
             next_delivery: 0,
             challenge: None,
@@ -213,6 +221,7 @@ impl ParentLifecycle {
             return Ok(());
         }
         self.check_main_deadline(resources)?;
+        self.advance_attempt_cleanup(resources)?;
         self.send_next(resources)?;
         self.receive_next(resources)?;
         Ok(())
@@ -286,6 +295,10 @@ impl ParentLifecycle {
         self.failure.as_deref()
     }
 
+    /// Borrow the actual settled attempt cause and original request/campaign correlation.
+    pub(crate) fn settled_attempt_failure(&self) -> Option<&attempt::SettledAttemptFailure> {
+        self.settled_attempt_failures.iter().flatten().next()
+    }
     /// Observe the first failed backend request's actual reply association.
     /// Absence grants no inference about backend records or readiness. The caller
     /// borrows that exact backend owner's retained failure/cleanup cause separately.

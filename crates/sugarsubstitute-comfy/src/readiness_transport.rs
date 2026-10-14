@@ -4,6 +4,7 @@
 //! One finite attempt owns its native transaction outside discardable job results.
 //! Fixed GET endpoints grant no arbitrary URL, proxy, redirect, authentication or cookie authority.
 mod headers;
+mod memory;
 #[allow(unsafe_code)]
 mod native;
 mod owner;

@@ -13,6 +13,7 @@ mod claim_fixture;
 mod demo;
 #[cfg(target_os = "windows")]
 mod descendant_fixture;
+mod diagnostics;
 #[cfg(target_os = "windows")]
 mod forwarding_root;
 #[cfg(target_os = "windows")]
@@ -42,12 +43,13 @@ use sugarsubstitute_desktop::{DesktopOptions, run};
 use sugarsubstitute_splash::Theme;
 
 /// Dispatch actual production roles or isolated native/off-screen qualification.
-fn execute() -> Result<(), Box<dyn Error>> {
+fn execute(health: diagnostics::DiagnosticHealth) -> Result<(), Box<dyn Error>> {
+    health.check()?;
     let started = Instant::now();
-    initialize_diagnostics()?;
     #[cfg(target_os = "windows")]
     let invocation = {
-        let Some(arguments) = production::execute(std::env::args_os().skip(1))? else {
+        let Some(arguments) = production::execute(std::env::args_os().skip(1), health.clone())?
+        else {
             return Ok(());
         };
         invocation::Invocation::parse_arguments(arguments)
@@ -67,7 +69,7 @@ fn execute() -> Result<(), Box<dyn Error>> {
         Ok(invocation::Invocation::NativeExitFixture(code)) => std::process::exit(code),
         #[cfg(target_os = "windows")]
         Ok(invocation::Invocation::NativeOutputChild(options)) => {
-            std::process::exit(output_fixture::run_child(options)?);
+            std::process::exit(output_fixture::run_child(options, health.clone())?);
         }
         #[cfg(target_os = "windows")]
         Ok(invocation::Invocation::NativeOutputFixture(path)) => {
@@ -224,24 +226,20 @@ fn execute() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// Initialize diagnostics for presentation and rejected arguments before returning errors.
-fn initialize_diagnostics() -> Result<(), Box<dyn Error>> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
-        )
-        .with_writer(std::io::stderr)
-        .try_init()
-        .map_err(|error| error as Box<dyn Error>)
-}
-
 /// Preserve errors in structured diagnostics and return a failing process status.
 fn main() -> ExitCode {
-    match execute() {
+    match run_application() {
         Ok(()) => ExitCode::SUCCESS,
-        Err(error) => {
-            tracing::error!(operation="application_startup",cause=%error,"SugarSubstitute could not complete its application lifetime");
-            ExitCode::FAILURE
-        }
+        Err(_retained) => ExitCode::FAILURE,
     }
+}
+
+/// Observe original diagnostic health after the actual application lifetime and its final event.
+fn run_application() -> Result<(), Box<dyn Error>> {
+    let diagnostics = diagnostics::Diagnostics::initialize()?;
+    let result = execute(diagnostics.health());
+    if let Err(error) = &result {
+        tracing::error!(operation="application_startup",cause=%error,"SugarSubstitute could not complete its application lifetime");
+    }
+    diagnostics.finish(result)
 }

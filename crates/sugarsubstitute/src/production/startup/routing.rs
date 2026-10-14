@@ -17,9 +17,14 @@ impl ProductionStartup {
         if !self.started || !self.execution.has_owner() {
             return Ok(None);
         }
+        if self.view.as_mut().is_some_and(|view| view.take_retry()) {
+            self.retry_owned()?;
+        }
         let batch = self.execution.drain(maximum)?;
         let render = self.preparation.as_mut().map(|render| render.consume(&batch)).transpose();
+        let cleanup_failed = self.child.cleanup_failed();
         let child = self.child.consume(&batch, self.startup.as_ref());
+        self.invalidate(cleanup_failed != self.child.cleanup_failed());
         let frame = super::delivery::resolve(render, child)?;
         for _ in 0..32 {
             let Some(startup) = &mut self.startup else { break };
@@ -32,6 +37,25 @@ impl ProductionStartup {
         }
         self.refresh_deadline()?;
         Ok(frame.flatten().filter(|_| !self.closing))
+    }
+    /// Advance a user-requested retry only after the sole policy observed settlement.
+    fn retry_owned(&mut self) -> Result<(), Box<dyn Error>> {
+        let startup = self.startup.as_mut().ok_or("Actual startup owner absent")?;
+        let launch = LaunchId::new(
+            startup.session().launch().get().checked_add(1).ok_or("Launch identity exhausted")?,
+        )?;
+        let identity = sugarsubstitute_contracts::startup::MainIdentity {
+            run: self.policy.run(),
+            launch,
+            navigation: sugarsubstitute_contracts::execution::Generation::new(1)?,
+        };
+        startup.session_mut().retry_configured(launch, identity.navigation)?;
+        self.child.retry_attempt(identity, startup)?;
+        if let Some(view) = &mut self.view {
+            view.phase(sugarsubstitute_application::startup::StartupPhase::SplashFirstFrame);
+        }
+        self.invalidate(true);
+        Ok(())
     }
     /// Dispatch the one application decision to native UI or the actual child authority owner.
     /// # Errors

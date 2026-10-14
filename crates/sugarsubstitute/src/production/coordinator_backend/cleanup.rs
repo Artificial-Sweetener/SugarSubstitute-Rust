@@ -8,11 +8,11 @@ impl CoordinatorBackend {
         key: ResourceKey,
         original: Option<ShutdownBudget>,
         resources: &mut BackendResources<'_>,
-    ) -> Result<()> {
+    ) -> Result<ResourceTransition> {
         let at = self.index(key)?;
         let record = self.records[at].as_mut().ok_or(LifecycleRejection::StaleIdentity)?;
         if record.shutdown.is_some() {
-            return Ok(());
+            return Ok(ResourceTransition::default());
         }
         let next =
             self.next_shutdown.checked_add(1).ok_or(LifecycleRejection::IdentityExhausted)?;
@@ -29,14 +29,32 @@ impl CoordinatorBackend {
         if let Some(output) = &record.output {
             output.control.close();
         }
-        if let Some(ticket) = record.launch {
-            resources.authority.registry_mut().ok_or(LifecycleRejection::WrongPhase)?.begin_stop(
-                ticket.process(),
-                shutdown,
-                budget,
-            )?;
+        if let Some(ticket) = record.launch
+            && let Err(cause) = resources
+                .authority
+                .registry_mut()
+                .ok_or(LifecycleRejection::WrongPhase)?
+                .begin_stop(ticket.process(), shutdown, budget)
+        {
+            record.cleanup_failure.retain(Box::new(cause));
         }
-        Ok(())
+        // A late authentic request may arrive after grace. A past wake is not
+        // an event, so admit its actual due finite step before returning to the pump.
+        if resources.client.now()? >= budget.graceful_until {
+            match self.cleanup(at, resources) {
+                Ok(next) => Ok(next),
+                Err(cause) => {
+                    self.records[at]
+                        .as_mut()
+                        .ok_or(LifecycleRejection::StaleIdentity)?
+                        .cleanup_failure
+                        .retain(cause);
+                    Ok(ResourceTransition::default())
+                }
+            }
+        } else {
+            Ok(ResourceTransition::default())
+        }
     }
     pub(super) fn cleanup(
         &mut self,
@@ -48,6 +66,20 @@ impl CoordinatorBackend {
             return Ok(ResourceTransition::default());
         }
         let (_, budget) = record.shutdown.ok_or(LifecycleRejection::WrongPhase)?;
+        let now = resources.client.now()?;
+        if now >= budget.settle_until && record.cleanup_failure.first().is_none() {
+            tracing::warn!(operation="backend_attempt_cleanup",resource=?record.key,
+                source_pending=record.source_job || record.source_close.is_some(),
+                source_closed=record.source_closed,probe_settled=record.campaign.settled(),
+                resolution_pending=record.resolution_pending || record.resolution_retiring,
+                claim_pending=record.claim_pending || record.release_pending,
+                family_settled=record.family_settled,
+                "Original backend cleanup cutoff reached with retained owner state");
+        }
+        record.cleanup_failure.observe(now, budget);
+        if now >= budget.settle_until {
+            return self.finish_cleanup(at, resources);
+        }
         if !record.source_job
             && !record.source_closed
             && record.source_close.is_none()
@@ -89,7 +121,7 @@ impl CoordinatorBackend {
                 .registry()
                 .ok_or(LifecycleRejection::WrongPhase)?
                 .snapshot(ticket.process())?;
-            if !snapshot.settled && !snapshot.creation_pending && !snapshot.cleanup_pending {
+            if snapshot.cleanup_step_due(resources.client.now()?) {
                 let watch = if snapshot.member_watch_required {
                     Some(Self::spec(
                         resources,
@@ -145,6 +177,15 @@ impl CoordinatorBackend {
             )?;
             record.release_pending = true;
         }
+        self.finish_cleanup(at, resources)
+    }
+    /// Observe actual late closure without admitting another native effect or renewing time.
+    fn finish_cleanup(
+        &mut self,
+        at: usize,
+        resources: &mut BackendResources<'_>,
+    ) -> Result<ResourceTransition> {
+        let record = self.records[at].as_mut().ok_or(LifecycleRejection::StaleIdentity)?;
         let output_settled = record
             .output
             .as_ref()

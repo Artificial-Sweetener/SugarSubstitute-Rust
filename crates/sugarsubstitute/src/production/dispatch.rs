@@ -50,6 +50,7 @@ pub(crate) fn parse<I: IntoIterator<Item = OsString>>(
 /// Preserves actual child construction or retained native runner failures.
 pub(crate) fn execute<I, C>(
     arguments: I,
+    diagnostics: crate::diagnostics::DiagnosticHealth,
     child: impl FnOnce(&ProductionCommand) -> Result<C, Box<dyn Error>>,
 ) -> Result<Option<std::iter::Peekable<I::IntoIter>>, Box<dyn Error>>
 where
@@ -59,7 +60,7 @@ where
     match parse(arguments)? {
         Dispatch::Existing(arguments) => Ok(Some(arguments)),
         Dispatch::Production(command) => {
-            super::entry_runner::run(command, child)?;
+            super::entry_runner::run(command, child, diagnostics)?;
             Ok(None)
         }
     }
@@ -71,10 +72,14 @@ mod tests {
     #[test]
     fn executable_fallback_never_constructs_production_child() -> Result<(), Box<dyn Error>> {
         let calls = std::cell::Cell::new(0);
-        let legacy = execute([OsString::from("--locale"), OsString::from("ko")], |_| {
-            calls.set(calls.get() + 1);
-            Ok(super::super::entry_runner::tests::NoChild)
-        })?
+        let legacy = execute(
+            [OsString::from("--locale"), OsString::from("ko")],
+            crate::diagnostics::DiagnosticHealth::fixture(),
+            |_| {
+                calls.set(calls.get() + 1);
+                Ok(super::super::entry_runner::tests::NoChild)
+            },
+        )?
         .ok_or("Legacy command unexpectedly ran production")?;
         assert_eq!(calls.get(), 0);
         assert_eq!(legacy.collect::<Vec<_>>(), [OsString::from("--locale"), OsString::from("ko")]);

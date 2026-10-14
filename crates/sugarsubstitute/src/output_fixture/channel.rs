@@ -17,6 +17,7 @@ pub(super) enum Message {
     Done = 3,
     Exit = 4,
     Primed = 5,
+    DiagnosticFailed = 6,
 }
 pub(super) struct Channel {
     pub(super) session: LifecyclePipeSession,
@@ -41,6 +42,7 @@ pub(super) struct Channel {
     pub(super) last_written: Option<Message>,
     current_write: Option<Message>,
     pub(super) descendant: Option<(u32, u64)>,
+    pub(super) diagnostic_error: Option<u32>,
     pub(super) expected_disconnect:
         Option<sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeFailure>,
 }
@@ -69,6 +71,7 @@ impl Channel {
             last_written: None,
             current_write: None,
             descendant: None,
+            diagnostic_error: None,
             expected_disconnect: None,
         }
     }
@@ -116,7 +119,13 @@ impl Channel {
                 self.role,
                 message,
                 sequence,
-                if message == Message::Done { self.descendant } else { None },
+                if message == Message::Done {
+                    self.descendant
+                } else if message == Message::DiagnosticFailed {
+                    self.diagnostic_error.map(|code| (code, 0))
+                } else {
+                    None
+                },
             );
             self.write_bytes(&wire)?;
             self.send_sequence = sequence;
@@ -241,7 +250,9 @@ impl Channel {
                             return Err("Output command replay/order differs".into());
                         }
                         self.receive_sequence = sequence;
-                        if descendant.is_some() {
+                        if message == Message::DiagnosticFailed {
+                            self.diagnostic_error = descendant.map(|(code, _)| code);
+                        } else if descendant.is_some() {
                             self.descendant = descendant;
                         }
                         if message == Message::Welcome && !self.server {
@@ -250,7 +261,11 @@ impl Channel {
                         received = Some(message);
                     }
                     drop(frame);
-                    if self.verified && !self.closing {
+                    if self.server && received == Some(Message::DiagnosticFailed) {
+                        // This authenticated final report settles the fixture exchange;
+                        // no additional read is needed after its actual source was adopted.
+                        self.close();
+                    } else if self.verified && !self.closing {
                         self.read()?;
                     }
                 }
@@ -336,6 +351,7 @@ pub(super) fn decode(role: Role, wire: &[u8]) -> Result<DecodedMessage> {
         3 => Message::Done,
         4 => Message::Exit,
         5 => Message::Primed,
+        6 => Message::DiagnosticFailed,
         _ => return Err("Output command opcode differs".into()),
     };
     let sequence = u64::from_le_bytes(wire[6..14].try_into()?);
@@ -344,7 +360,12 @@ pub(super) fn decode(role: Role, wire: &[u8]) -> Result<DecodedMessage> {
     }
     let pid = u32::from_le_bytes(wire[14..18].try_into()?);
     let birth = u64::from_le_bytes(wire[18..].try_into()?);
-    let descendant = if role == Role::Forward && message == Message::Done {
+    let descendant = if role == Role::Idle && message == Message::DiagnosticFailed {
+        if pid == 0 || birth != 0 {
+            return Err("Diagnostic native code missing or malformed".into());
+        }
+        Some((pid, birth))
+    } else if role == Role::Forward && message == Message::Done {
         if pid == 0 || birth == 0 {
             return Err("Output descendant identity missing".into());
         }

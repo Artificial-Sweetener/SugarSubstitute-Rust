@@ -67,6 +67,7 @@ impl ProductionChild {
         self.connection_budget = Some(budget);
         let header = self.bootstrap.channel_mut().prepare_request(budget.until())?;
         self.acquire = Some(PendingAcquire { header, original: budget.until(), admitted: false });
+        self.acquisition_header = Some(header);
         ConnectionStage::Queued.report();
         self.send_acquire(prepared)
     }
@@ -132,10 +133,10 @@ impl ProductionChild {
                 Err("Pending acquire has no final readiness grant".into())
             }
             DecodedPayload::Reply(ReplyOutcome::Failed(code)) => {
-                Err(format!("Authenticated acquire failed: {code:?}").into())
+                self.acquire_failed(pending.header, attempt::AcquisitionFailure::Failed(code))
             }
             DecodedPayload::Reply(ReplyOutcome::Rejected(code)) => {
-                Err(format!("Authenticated acquire rejected: {code:?}").into())
+                self.acquire_failed(pending.header, attempt::AcquisitionFailure::Rejected(code))
             }
             _ => Err("Acquire reply is not the exact current grant".into()),
         }
@@ -164,6 +165,7 @@ impl ProductionChild {
             self.send_acquire(prepared)?;
         }
         self.receive_acquire()?;
+        self.advance_attempt()?;
         self.advance_control()?;
         self.advance_profile()?;
         self.advance_output()

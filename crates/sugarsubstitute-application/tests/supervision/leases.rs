@@ -149,3 +149,64 @@ fn failures_return_rejected_causes_and_require_settlement_then_explicit_cause_tr
     submit(&mut coordinator, request(1, 2, ResourceCommand::Acquire(target(8188, true)?))?)?;
     Ok(())
 }
+
+#[test]
+fn attempt_release_preserves_other_clients_and_requires_actual_last_lease_settlement() -> TestResult
+{
+    let mut coordinator = ResourceCoordinator::new(owner()?);
+    register(&mut coordinator, 1, "first")?;
+    register(&mut coordinator, 2, "second")?;
+    let a = lease(&submit(
+        &mut coordinator,
+        request(1, 1, ResourceCommand::Acquire(target(8188, true)?))?,
+    )?)?;
+    let b = lease(&submit(
+        &mut coordinator,
+        request(2, 1, ResourceCommand::Acquire(target(8188, true)?))?,
+    )?)?;
+    ready(&mut coordinator, a, 8188, true)?;
+    let mut transition = ResourceTransition::default();
+    assert_eq!(
+        coordinator.release_attempt(
+            ClientBinding { run: run(2)?, connection: connection(2)? },
+            a,
+            &mut transition
+        ),
+        Err(LifecycleRejection::StaleIdentity)
+    );
+    assert_eq!(coordinator.snapshot().leases, 2);
+    assert!(
+        !coordinator
+            .attempt_released(ClientBinding { run: run(1)?, connection: connection(1)? }, a)?
+    );
+    coordinator.release_attempt(
+        ClientBinding { run: run(1)?, connection: connection(1)? },
+        a,
+        &mut transition,
+    )?;
+    assert!(transition.effects.is_empty());
+    assert_eq!(coordinator.snapshot().leases, 1);
+    assert!(
+        coordinator
+            .attempt_released(ClientBinding { run: run(1)?, connection: connection(1)? }, a)?
+    );
+    assert_eq!(coordinator.resource_phase(a.resource), Some(ResourcePhase::Ready));
+    coordinator.release_attempt(
+        ClientBinding { run: run(2)?, connection: connection(2)? },
+        b,
+        &mut transition,
+    )?;
+    assert_eq!(transition.effects, vec![ResourceEffect::StopOwned { resource: b.resource }]);
+    assert_eq!(coordinator.resource_phase(b.resource), Some(ResourcePhase::Stopping));
+    assert!(
+        submit(&mut coordinator, request(1, 2, ResourceCommand::Acquire(target(8188, true)?))?)
+            .is_err()
+    );
+    observe(&mut coordinator, ResourceObservation::Settled(b.resource))?;
+    let next = lease(&submit(
+        &mut coordinator,
+        request(1, 3, ResourceCommand::Acquire(target(8188, true)?))?,
+    )?)?;
+    assert!(next.resource.generation.get() > b.resource.generation.get());
+    Ok(())
+}

@@ -62,15 +62,16 @@ impl AttachedListenerLease {
     pub fn qualify_connection(
         &self,
         connection: ConnectedLoopback,
+        storage: &mut TcpOwnerWorkspace,
         context: &JobContext,
     ) -> Result<BackendPeerIdentity, RegistryError> {
         if !self.is_live() {
             return Err(RegistryError::invalid("attached_listener_retiring"));
         }
-        let pid = table::connected_owner(connection, context)?;
+        let pid = table::connected_owner(connection, storage, context)?;
         let mut retained = crate::registry::lock(&self.retained);
         native::qualify(&mut retained, pid, context)?;
-        if table::connected_owner(connection, context)? != pid {
+        if table::connected_owner(connection, storage, context)? != pid {
             return Err(RegistryError::invalid("attached_listener_changed"));
         }
         retained.identity.ok_or_else(|| RegistryError::invalid("attached_listener_identity"))

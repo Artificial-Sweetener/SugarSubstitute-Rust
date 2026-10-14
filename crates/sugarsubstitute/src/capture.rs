@@ -98,6 +98,7 @@ pub(crate) fn export(scenarios: &Path, output: &Path) -> Result<(), Box<dyn Erro
             renderer = SplashRenderer::new(&locale)?;
         }
         let appearance = Appearance {
+            status: sugarsubstitute_splash::StartupStatus::Loading,
             theme,
             expanded: scenario.expanded,
             hovered: control(scenario.hovered.as_deref())?,

@@ -28,6 +28,9 @@ pub(crate) fn run() -> Result<serde_json::Value> {
     parent::run()
 }
 /// Run one isolated self-EXE role through actual headless/execution shutdown.
-pub(crate) fn run_child(options: ChildOptions) -> Result<i32> {
-    child::run(options)
+pub(crate) fn run_child(
+    options: ChildOptions,
+    health: crate::diagnostics::DiagnosticHealth,
+) -> Result<i32> {
+    child::run(options, health)
 }

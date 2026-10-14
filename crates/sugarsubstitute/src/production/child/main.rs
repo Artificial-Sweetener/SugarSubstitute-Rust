@@ -17,7 +17,7 @@ use terminal::{MainTerminalIssue, MainTerminalOwner};
 type MainJob = OwnedJob<PreparedMain, MainPreparationFailure>;
 type MainTerminal = JobCompletion<PreparedMain, MainPreparationFailure>;
 pub(super) struct MainPreparation {
-    settings: MainWindowSettings,
+    pub(in super::super) settings: MainWindowSettings,
     input: Option<worker::MainConstruction>,
     job: Option<MainJob>,
     noticed: Option<TerminalKind>,
@@ -64,6 +64,39 @@ impl MainPreparation {
             JobOutcome::Success(value) => Some(&mut value.profile),
             _ => None,
         }
+    }
+    pub(in super::super) fn take_reusable_input(&mut self) -> Result<Option<PreparedMainInput>> {
+        if self.pending() {
+            return Err("Original main worker is not settled".into());
+        }
+        if self.input.is_some() {
+            return Err("Original main construction remains retained".into());
+        }
+        if let Some(owner) = &mut self.terminal {
+            let completion = owner.get_mut().ok_or("Original main outcome remains aliased")?;
+            if let JobOutcome::Success(value) = &mut completion.outcome {
+                return Ok(value.reusable_input.take());
+            }
+        }
+        Ok(None)
+    }
+    pub(in super::super) fn restore_reusable_input(
+        &mut self,
+        input: &mut Option<PreparedMainInput>,
+    ) -> Result<()> {
+        let completion = self
+            .terminal
+            .as_mut()
+            .and_then(MainTerminalOwner::get_mut)
+            .ok_or("Original main completion absent")?;
+        if let JobOutcome::Success(value) = &mut completion.outcome {
+            if value.reusable_input.is_some() {
+                return Err("Reusable input replacement rejected".into());
+            }
+            value.reusable_input = input.take();
+            return Ok(());
+        }
+        Err("Original reusable main input lost its successful owner".into())
     }
     pub(super) fn pending(&self) -> bool {
         self.job.is_some() || self.unshared.is_some()

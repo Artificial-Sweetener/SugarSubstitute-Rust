@@ -54,6 +54,20 @@ impl ParentLifecycle {
                     self.retain_failure(cause);
                     return Err(additional.into());
                 }
+                // A typed denial with no observed resource admitted no native
+                // preparation. Keep the original cause and send its bounded code.
+                if self.requests.backend_resource(original_request)?.is_none()
+                    && let Some(code) = cause
+                        .downcast_ref::<sugarsubstitute_contracts::lifecycle::LifecycleRejection>()
+                        .copied()
+                {
+                    let index =
+                        self.requests.find(original_request).ok_or(ParentError::StaleRequest)?;
+                    self.requests.get_mut(index)?.reply = Some(Reply::Rejected(code));
+                    self._attempt_failure = Some(cause);
+                    self.forwarded = None;
+                    return Ok(());
+                }
                 Err(cause)
             }
         }

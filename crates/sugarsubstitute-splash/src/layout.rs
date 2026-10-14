@@ -15,6 +15,24 @@ pub enum Control {
     ConsoleToggle,
     /// Startup cancellation affordance.
     Close,
+    /// Retry after actual previous-attempt settlement.
+    Retry,
+}
+
+/// Closed presentation of the actual application recovery phase.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum StartupStatus {
+    /// Normal startup is still in progress.
+    #[default]
+    Loading,
+    /// The application retained an original startup failure.
+    Failed,
+    /// Original attempt cleanup remains unresolved.
+    Settling,
+    /// Real cleanup settled and the application can accept retry.
+    RetryReady,
+    /// Cleanup failed and original ownership remains retained.
+    CleanupFailed,
 }
 
 /// Supply portable appearance state; process and connection state stay elsewhere.
@@ -22,6 +40,8 @@ pub enum Control {
 pub struct Appearance {
     /// Current presentation theme.
     pub theme: Theme,
+    /// Localized application recovery presentation; this grants no cleanup authority.
+    pub status: StartupStatus,
     /// Expose the blank output surface and lift the character.
     pub expanded: bool,
     /// Control under the pointer.
@@ -33,7 +53,13 @@ pub struct Appearance {
 impl Appearance {
     /// Open the requested blank-console proof with the source dark theme.
     pub const fn demo() -> Self {
-        Self { theme: Theme::Dark, expanded: true, hovered: None, pressed: None }
+        Self {
+            theme: Theme::Dark,
+            status: StartupStatus::Loading,
+            expanded: true,
+            hovered: None,
+            pressed: None,
+        }
     }
 
     /// Return the source widget's whole mascot slot before aspect fitting.

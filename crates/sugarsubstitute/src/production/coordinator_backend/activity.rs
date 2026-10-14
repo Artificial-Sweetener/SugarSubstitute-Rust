@@ -205,11 +205,7 @@ impl CoordinatorBackend {
                 Err(cause) => {
                     let record =
                         self.records[at].as_mut().ok_or(LifecycleRejection::StaleIdentity)?;
-                    if record.cleanup_failure.is_none() {
-                        record.cleanup_failure = Some(cause);
-                    } else {
-                        return Err(cause);
-                    }
+                    record.cleanup_failure.retain(cause);
                 }
             }
         }
@@ -290,6 +286,10 @@ impl CoordinatorBackend {
                 Some(origin);
             return Ok(transition);
         }
+        let cleanup_current = match record.shutdown {
+            Some((_, budget)) => resources.client.now()? < budget.settle_until,
+            None => true,
+        };
         if step == CampaignStep::Progressed || step == CampaignStep::Failed {
             if step == CampaignStep::Failed
                 && record.shutdown.is_none()
@@ -297,7 +297,7 @@ impl CoordinatorBackend {
             {
                 return Err(Box::new(cause));
             }
-            if !record.campaign.settled() {
+            if !record.campaign.settled() && cleanup_current {
                 let until = record
                     .shutdown
                     .map_or(record.budget.until(), |(_, budget)| budget.settle_until);
@@ -329,11 +329,13 @@ impl CoordinatorBackend {
         let at = self.index(key)?;
         let record = self.records[at].as_mut().ok_or(LifecycleRejection::StaleIdentity)?;
         if record.failure_published {
-            return Err(cause);
+            record.cleanup_failure.retain(cause);
+            return Ok(ResourceTransition::default());
         }
         record.failure_published = true;
         let failure = LifecycleFailure::new(LifecycleFailureCode::Preparation, cause);
-        let transition = self.observe(ResourceObservation::Failed { resource: key, failure })?;
+        let mut transition =
+            self.observe(ResourceObservation::Failed { resource: key, failure })?;
         if let Some(failure) = self.failure(key) {
             let observation = FailureObservation::retained(failure);
             if observation.kind == FailureKind::Source {
@@ -343,7 +345,14 @@ impl CoordinatorBackend {
             tracing::warn!(operation="backend_preparation_failure",resource=?key,kind=?observation.kind,stage=observation.stage,
                 "Original backend preparation failure retained");
         }
-        self.begin_cleanup(key, None, resources)?;
+        match self.begin_cleanup(key, None, resources) {
+            Ok(next) => Self::merge(&mut transition, next),
+            Err(cause) => self.records[at]
+                .as_mut()
+                .ok_or(LifecycleRejection::StaleIdentity)?
+                .cleanup_failure
+                .retain(cause),
+        }
         Ok(transition)
     }
 }

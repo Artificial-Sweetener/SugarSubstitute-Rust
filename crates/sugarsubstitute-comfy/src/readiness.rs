@@ -8,6 +8,7 @@
 use serde::Deserialize;
 use std::{error::Error, fmt};
 use sugarsubstitute_contracts::configuration::LaunchConfiguration;
+mod extensions;
 mod identity;
 mod json;
 mod schema;
@@ -85,8 +86,9 @@ impl fmt::Debug for ExtensionInventory {
 /// Unknown supplemental fields are allowed inside the bounded JSON envelope;
 /// a declared `schema_version` is rejected because this endpoint defines none.
 pub fn decode_system_stats(bytes: &[u8]) -> Result<SystemStats, ReadinessError> {
-    let value = json::decode(bytes, MAX_SYSTEM_STATS_BYTES)?;
-    let wire = schema::Response::deserialize(value).map_err(ReadinessError::Json)?;
+    json::decode(bytes, MAX_SYSTEM_STATS_BYTES)?;
+    let wire = schema::Response::deserialize(&mut serde_json::Deserializer::from_slice(bytes))
+        .map_err(ReadinessError::Json)?;
     if wire.devices.len() > 64 {
         return Err(ReadinessError::Shape);
     }
@@ -97,8 +99,8 @@ pub fn decode_system_stats(bytes: &[u8]) -> Result<SystemStats, ReadinessError> 
 /// Values must be absolute `/extensions/.../*.js` paths, with no traversal,
 /// backslashes, query, fragment or encoded path separators/dot segments.
 pub fn decode_extensions(bytes: &[u8]) -> Result<ExtensionInventory, ReadinessError> {
-    let value = json::decode(bytes, MAX_EXTENSIONS_BYTES)?;
-    let paths = Vec::<String>::deserialize(value).map_err(ReadinessError::Json)?;
+    json::decode(bytes, MAX_EXTENSIONS_BYTES)?;
+    let paths = extensions::decode(bytes)?;
     identity::validate_paths(&paths, false)?;
     Ok(ExtensionInventory { paths })
 }

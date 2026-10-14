@@ -36,6 +36,11 @@ pub(in crate::coordinator_entry::tests) struct Boundary {
     pub(in crate::coordinator_entry::tests) memory: Mutex<Option<MemoryLease>>,
     pub(in crate::coordinator_entry::tests) outcome_write_failure:
         Mutex<Option<EntryTransportError>>,
+    pub(in crate::coordinator_entry::tests) verify_failure: Mutex<Option<EntryTransportError>>,
+    pub(in crate::coordinator_entry::tests) hold_peer_close: AtomicBool,
+    peer_closed: Mutex<std::collections::BTreeSet<usize>>,
+    peer_probes: Mutex<std::collections::BTreeSet<usize>>,
+    pub(in crate::coordinator_entry::tests) peer_retirement_issued: Gate,
     nonce: AtomicUsize,
     reads: Mutex<Vec<Option<u32>>>,
     pub(in crate::coordinator_entry::tests) pause_role:
@@ -81,6 +86,11 @@ impl Boundary {
             client_launches: Mutex::new(Vec::new()),
             memory: Mutex::new(None),
             outcome_write_failure: Mutex::new(None),
+            verify_failure: Mutex::new(None),
+            hold_peer_close: AtomicBool::new(false),
+            peer_closed: Mutex::new(std::collections::BTreeSet::new()),
+            peer_probes: Mutex::new(std::collections::BTreeSet::new()),
+            peer_retirement_issued: Gate::default(),
             nonce: AtomicUsize::new(0),
             reads: Mutex::new(Vec::new()),
             pause_role: Mutex::new(None),
@@ -92,6 +102,11 @@ impl Boundary {
             reads_issued: AtomicUsize::new(0),
         }))
     }
+    pub(in crate::coordinator_entry::tests) fn close_peer(&self, index: usize) -> TestResult {
+        lock(&self.peer_closed).insert(index);
+        lock(&self.signals).get(index).ok_or("Peer read signal missing")?[1].complete();
+        Ok(())
+    }
     pub(in crate::coordinator_entry::tests) fn connect(&self) -> TestResult {
         self.connect_at(0)
     }
@@ -99,6 +114,8 @@ impl Boundary {
         if index >= MAX_ENTRY_CONNECTIONS {
             return Err("External endpoint index outside fixed capacity".into());
         }
+        lock(&self.peer_closed).remove(&index);
+        lock(&self.peer_probes).remove(&index);
         let original = *lock(&self.source);
         let source =
             CounterDeadline::new(original.ticks() - i64::try_from(index)?, original.frequency())?;
@@ -238,6 +255,17 @@ impl EntryLease for Lease {
         self.0.prepare_issue(index, crate::native_deadlines::Role::Read)?;
         issue.execute(|| {
             self.0.reads_issued.fetch_add(1, Ordering::AcqRel);
+            lock(&self.0.reads)[index] = None;
+            if bytes.len() == 1 {
+                lock(&self.0.peer_probes).insert(index);
+                self.0.peer_retirement_issued.open();
+            }
+            if bytes.len() == 1 && lock(&self.0.peer_closed).contains(&index) {
+                return Err(EntryTransportError::native(NativeObservationError::new(
+                    "pipe_issue",
+                    windows::core::Error::from_hresult(windows::core::HRESULT::from_win32(109)),
+                )));
+            }
             let frame = {
                 let mut incoming = lock(&self.0.incoming);
                 let position = incoming.iter().position(|(slot, _)| *slot == index);
@@ -269,6 +297,12 @@ impl EntryLease for Lease {
             {
                 return Err(error);
             }
+            let final_reply = matches!(
+                frame.payload,
+                protocol::DecodedPayload::Accepted(_)
+                    | protocol::DecodedPayload::Rejected(_)
+                    | protocol::DecodedPayload::Initializing
+            );
             match frame.payload {
                 protocol::DecodedPayload::Challenge if self.0.server => {
                     let mut header = frame.header;
@@ -324,6 +358,9 @@ impl EntryLease for Lease {
                 protocol::DecodedPayload::Initializing => {}
                 _ => return Err(EntryTransportError::InvalidPhase),
             }
+            if self.0.server && !self.0.hold_peer_close.load(Ordering::Acquire) && final_reply {
+                lock(&self.0.peer_closed).insert(index);
+            }
             Ok(Progress::Complete(bytes.len() as u32))
         })
     }
@@ -342,6 +379,14 @@ impl EntryLease for Lease {
                 },
             ),
             crate::native_deadlines::Role::Read => {
+                if lock(&self.0.peer_probes).contains(&index)
+                    && lock(&self.0.peer_closed).contains(&index)
+                {
+                    return Err(EntryTransportError::native(NativeObservationError::new(
+                        "pipe_completion",
+                        windows::core::Error::from_hresult(windows::core::HRESULT::from_win32(109)),
+                    )));
+                }
                 Ok(lock(&self.0.reads)[index].map_or(Progress::Pending, Progress::Complete))
             }
             crate::native_deadlines::Role::Write => Err(EntryTransportError::InvalidPhase),
@@ -372,7 +417,10 @@ impl EntryLease for Lease {
         }
         Ok(())
     }
-    fn verify(&mut self, _index: usize, _message: bool) -> Result<KernelPeer, EntryTransportError> {
+    fn verify(&mut self, _index: usize, message: bool) -> Result<KernelPeer, EntryTransportError> {
+        if message && let Some(cause) = lock(&self.0.verify_failure).take() {
+            return Err(cause);
+        }
         let mut facts = facts().map_err(|cause| failure_from("entry_fixture_facts", cause))?;
         if self.0.wrong_peer.load(Ordering::Acquire) {
             facts = EntryNativeIdentityFacts::new(

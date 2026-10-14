@@ -86,6 +86,22 @@ impl PreparedChildStartup {
     pub(in crate::production) fn take_main_input(&mut self) -> Option<PreparedMainInput> {
         self.main.take()
     }
+    /// Restore the identical charged main data after actual attempt retirement.
+    /// # Errors
+    /// Rejects replacement of an existing original input.
+    pub(in crate::production) fn restore_main_input(
+        &mut self,
+        input: &mut Option<PreparedMainInput>,
+    ) -> Result<(), Box<dyn Error>> {
+        if input.is_none() {
+            return Ok(());
+        }
+        if self.main.is_some() {
+            return Err("Original main input remains retained".into());
+        }
+        self.main = input.take();
+        Ok(())
+    }
     /// Borrow the acknowledged application startup owner without detaching its charge.
     pub(in crate::production) fn session(&self) -> &StartupSession {
         &self.session

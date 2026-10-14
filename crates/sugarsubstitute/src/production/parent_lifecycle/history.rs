@@ -20,6 +20,7 @@ pub(super) struct Record {
     backend: Option<RequestOutcome>,
     backend_lease: Option<LeaseKey>,
     pub(super) sent: bool,
+    abandoned: bool,
     pub(super) until: Option<sugarsubstitute_contracts::execution::Moment>,
     pub(super) output_bytes: Box<[u8]>,
 }
@@ -112,6 +113,7 @@ impl Requests {
             backend: None,
             backend_lease: None,
             sent: false,
+            abandoned: false,
             until: None,
             output_bytes: output_bytes.into_boxed_slice(),
         });
@@ -180,9 +182,27 @@ impl Requests {
         Ok(self.get(index)?.backend_lease.map(|lease| lease.resource))
     }
 
+    /// Borrow only the lease retained from the actual original backend producer.
+    pub(super) fn backend_lease(
+        &self,
+        request: RequestId,
+    ) -> Result<Option<LeaseKey>, ParentError> {
+        let index = self.find(request).ok_or(ParentError::StaleRequest)?;
+        Ok(self.get(index)?.backend_lease)
+    }
+
+    /// Fence this expired operation while retaining its exact header/digest/cutoff.
+    /// This is no acknowledgement, semantic consumption or native settlement.
+    pub(super) fn abandon(&mut self, index: usize) -> Result<(), ParentError> {
+        self.get_mut(index)?.abandoned = true;
+        Ok(())
+    }
+
     pub(super) fn next_reply(&self) -> Option<usize> {
         self.records.iter().position(|record| {
-            record.as_ref().is_some_and(|record| record.reply.is_some() && !record.sent)
+            record
+                .as_ref()
+                .is_some_and(|record| record.reply.is_some() && !record.sent && !record.abandoned)
         })
     }
 
@@ -190,7 +210,7 @@ impl Requests {
         self.records
             .iter()
             .flatten()
-            .filter(|record| !record.sent)
+            .filter(|record| !record.sent && !record.abandoned)
             .filter_map(|record| record.until)
             .min()
     }

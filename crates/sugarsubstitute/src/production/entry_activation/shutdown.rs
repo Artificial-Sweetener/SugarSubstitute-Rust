@@ -85,7 +85,10 @@ impl ProductionActivation {
                         ShutdownId::new(record.run.instance.get())?,
                         budget,
                     )?;
-                    if !actual.cleanup_pending && !actual.creation_pending {
+                    if registry
+                        .snapshot(ticket.process())?
+                        .cleanup_step_due(resources.client.now()?)
+                    {
                         let member = if actual.member_watch_required {
                             Some(JobSpec {
                                 id: resources.jobs.allocate()?,

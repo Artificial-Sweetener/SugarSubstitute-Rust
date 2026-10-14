@@ -83,7 +83,10 @@ fn closed_requester_reply_retires_locally_and_fresh_nonce_replays_same_run_witho
     else {
         return Err("Fresh cached reply retirement missing".into());
     };
-    assert!(fresh_failure.is_none());
+    assert!(
+        fresh_failure
+            .is_some_and(|cause| matches!(cause, EntryTransportError::PeerDisconnected(_)))
+    );
     let replies = lock(&boundary.replies);
     assert_eq!(replies.len(), 1);
     assert_eq!(replies[0].0.request, original_id);

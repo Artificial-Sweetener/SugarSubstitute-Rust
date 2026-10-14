@@ -204,7 +204,7 @@ impl super::evidence::Case {
         let cleanup = std::mem::take(&mut self.cleanup_success);
         let member = std::mem::take(&mut self.member_success);
         if !snapshot.settled
-            && !snapshot.cleanup_pending
+            && !snapshot.cleanup_step_pending
             && ((cleanup && snapshot.member_watch_required)
                 || (member && snapshot.last_member_exit.is_some()))
         {

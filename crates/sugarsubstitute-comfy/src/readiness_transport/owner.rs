@@ -3,16 +3,18 @@
 //! Retain admitted native HTTP outputs independently of cancellation and payload disposal.
 use super::{types::*, *};
 use std::sync::{Arc, Mutex};
+#[cfg(test)]
+use sugarsubstitute_contracts::execution::JobOutcome;
 use sugarsubstitute_contracts::execution::{
-    AdmissionError, ExecutionError, ExecutionPort, JobClass, JobContext, JobId, JobOutcome,
-    JobSpec, MemoryClaim, Moment, Operation, OwnedJob, Scope, ScopeId,
+    AdmissionError, ExecutionError, ExecutionPort, JobClass, JobContext, JobId, JobSpec, Moment,
+    Operation, OwnedJob, Scope, ScopeId,
 };
 use sugarsubstitute_execution::ExecutionClient;
 pub(super) struct Transaction {
     pub(super) session: usize,
     pub(super) connect: usize,
     pub(super) request: usize,
-    pub(super) _claim: Arc<MemoryClaim>,
+    pub(super) tcp: sugarsubstitute_supervision::backend_listener::TcpOwnerWorkspace,
     pub(super) deadline: Moment,
     pub(super) peer: Option<sugarsubstitute_supervision::backend_listener::BackendPeerIdentity>,
     /// Complete asset indices committed only after successful timely delivery.
@@ -22,17 +24,21 @@ pub(super) struct Transaction {
     /// Final metadata confirmation applies to the complete retained cohort.
     candidate_complete: bool,
 }
+pub(super) struct FundedTransaction {
+    pub(super) value: Box<Transaction>,
+    pub(super) _claim: super::memory::BodyClaim,
+}
 pub(super) struct Shared {
-    pub(super) transaction: Mutex<Option<Box<Transaction>>>,
+    pub(super) transaction: Mutex<Option<FundedTransaction>>,
 }
 impl Drop for Shared {
     fn drop(&mut self) {
         let state = self.transaction.get_mut().unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(value) = state.take() {
-            if value.session == 0 && value.connect == 0 && value.request == 0 {
+            if value.value.session == 0 && value.value.connect == 0 && value.value.request == 0 {
                 drop(value);
             } else {
-                let _retained = Box::leak(value);
+                std::mem::forget(value);
             }
         }
     }
@@ -154,44 +160,55 @@ impl ReadinessProbeOwner {
                 if guard.is_some() {
                     return Err(ReadinessTransportError::invalid("attempt_duplicate_custody"));
                 }
-                let claim = Arc::new(
-                    context
-                        .memory()
-                        .claim(READINESS_TRANSPORT_BYTES - 128 * 1024)
-                        .map_err(|e| ReadinessTransportError::new("attempt_memory", e))?,
-                );
-                *guard = Some(Box::new(Transaction {
-                    session: 0,
-                    connect: 0,
-                    request: 0,
+                let claim = super::memory::BodyClaim::new(&context)
+                    .map_err(|cause| ReadinessTransportError::new("attempt_memory", cause))?;
+                let tcp =
+                    sugarsubstitute_supervision::backend_listener::TcpOwnerWorkspace::new(&context)
+                        .map_err(|cause| {
+                            ReadinessTransportError::new("attempt_tcp_memory", cause)
+                                .retain_body(claim.clone())
+                        })?;
+                *guard = Some(FundedTransaction {
+                    value: Box::new(Transaction {
+                        session: 0,
+                        connect: 0,
+                        request: 0,
+                        tcp,
+                        deadline: context
+                            .deadline()
+                            .ok_or_else(|| ReadinessTransportError::invalid("attempt_deadline"))?,
+                        peer: None,
+                        verified_assets: 0,
+                        candidate_assets: 0,
+                        candidate_complete: false,
+                    }),
                     _claim: claim,
-                    deadline: context
-                        .deadline()
-                        .ok_or_else(|| ReadinessTransportError::invalid("attempt_deadline"))?,
-                    peer: None,
-                    verified_assets: 0,
-                    candidate_assets: 0,
-                    candidate_complete: false,
-                }));
+                });
             }
             let state = guard
                 .as_mut()
                 .ok_or_else(|| ReadinessTransportError::invalid("attempt_custody"))?;
-            if state.session != 0 || state.connect != 0 || state.request != 0 {
-                return Err(ReadinessTransportError::invalid("attempt_unsettled_predecessor"));
-            }
-            state.deadline = context
-                .deadline()
-                .ok_or_else(|| ReadinessTransportError::invalid("attempt_deadline"))?;
-            state.candidate_assets = state.verified_assets;
-            state.candidate_complete = false;
-            port.begin(state, input.port(), &context)?;
-            let (assets, complete) = super::probe::inspect(port.as_ref(), state, &input, &context)?;
-            port.close(state, &context)?;
-            checkpoint(&context)?;
-            state.candidate_assets = assets;
-            state.candidate_complete = complete;
-            Ok(())
+            let body = state._claim.clone();
+            let state = &mut state.value;
+            let result = (|| {
+                if state.session != 0 || state.connect != 0 || state.request != 0 {
+                    return Err(ReadinessTransportError::invalid("attempt_unsettled_predecessor"));
+                }
+                state.deadline = context
+                    .deadline()
+                    .ok_or_else(|| ReadinessTransportError::invalid("attempt_deadline"))?;
+                state.candidate_assets = state.verified_assets;
+                state.candidate_complete = false;
+                port.begin(state, input.port(), &context)?;
+                let (assets, complete) =
+                    super::probe::inspect(port.as_ref(), state, &input, &context)?;
+                port.close(state, &context)?;
+                checkpoint(&context)?;
+                state.candidate_assets = assets;
+                state.candidate_complete = complete;
+                Ok(())
+            })();
+            result.map_err(|cause: ReadinessTransportError| cause.retain_body(body))
         })?;
         self.pending = Some(job);
         self.submitted = true;
@@ -210,45 +227,56 @@ impl ReadinessProbeOwner {
     /// Rejects cancellation, failure, late delivery, missing peer or retired installed sources.
     /// A timely partial cohort returns `None`; `ReadinessCampaign` drives its same-owner continuation.
     pub fn take_readiness(&mut self) -> Result<Option<VerifiedReadiness>, ReadinessTransportError> {
-        let Some(completion) = self.pending.as_mut().and_then(OwnedJob::try_take_completion) else {
-            return Ok(None);
-        };
-        self.pending = None;
-        self.partial = false;
-        match completion.outcome {
-            JobOutcome::Success(()) => (),
-            JobOutcome::Failure(cause) => return Err(cause),
-            JobOutcome::Panicked(cause) => {
-                return Err(ReadinessTransportError::new(
-                    "attempt_terminal",
-                    super::terminal::ProbePanic(cause),
-                ));
+        let result = (|| {
+            let Some(completion) = self.pending.as_mut().and_then(OwnedJob::try_take_completion)
+            else {
+                return Ok(None);
+            };
+            self.pending = None;
+            self.partial = false;
+            tracing::info!(operation="readiness_attempt_terminal",job=?completion.spec.id,
+            scope=?completion.scope_id,outcome=?completion.outcome.kind(),
+            "Actual owned readiness attempt completion consumed");
+            super::terminal::observe(completion.outcome)?;
+            let client = self
+                .client
+                .as_ref()
+                .ok_or_else(|| ReadinessTransportError::invalid("attempt_no_executor"))?;
+            let now = client
+                .now()
+                .map_err(|e| ReadinessTransportError::new("attempt_delivery_clock", e))?;
+            let mut guard = lock(&self.shared.transaction);
+            let state = guard
+                .as_mut()
+                .ok_or_else(|| ReadinessTransportError::invalid("attempt_no_custody"))?;
+            let state = &mut state.value;
+            if now >= state.deadline
+                || state.request != 0
+                || state.connect != 0
+                || state.session != 0
+            {
+                return Err(ReadinessTransportError::invalid("attempt_delivery_or_retirement"));
             }
-            _ => return Err(ReadinessTransportError::invalid("attempt_terminal")),
-        }
-        let client = self
-            .client
-            .as_ref()
-            .ok_or_else(|| ReadinessTransportError::invalid("attempt_no_executor"))?;
-        let now =
-            client.now().map_err(|e| ReadinessTransportError::new("attempt_delivery_clock", e))?;
-        let mut guard = lock(&self.shared.transaction);
-        let state =
-            guard.as_mut().ok_or_else(|| ReadinessTransportError::invalid("attempt_no_custody"))?;
-        if now >= state.deadline || state.request != 0 || state.connect != 0 || state.session != 0 {
-            return Err(ReadinessTransportError::invalid("attempt_delivery_or_retirement"));
-        }
-        self.input
-            .source
-            .validate_live()
-            .map_err(|e| ReadinessTransportError::new("expected_source_retired", e))?;
-        let peer = state.peer.ok_or_else(|| ReadinessTransportError::invalid("attempt_no_peer"))?;
-        state.verified_assets = state.candidate_assets;
-        if !state.candidate_complete {
-            self.partial = true;
-            return Ok(None);
-        }
-        Ok(Some(VerifiedReadiness { input: self.input.clone(), peer }))
+            self.input
+                .source
+                .validate_live()
+                .map_err(|e| ReadinessTransportError::new("expected_source_retired", e))?;
+            let peer =
+                state.peer.ok_or_else(|| ReadinessTransportError::invalid("attempt_no_peer"))?;
+            state.verified_assets = state.candidate_assets;
+            if !state.candidate_complete {
+                self.partial = true;
+                return Ok(None);
+            }
+            Ok(Some(VerifiedReadiness { input: self.input.clone(), peer }))
+        })();
+        result.map_err(|cause: ReadinessTransportError| {
+            let guard = lock(&self.shared.transaction);
+            match guard.as_ref() {
+                Some(state) => cause.retain_body(state._claim.clone()),
+                None => cause,
+            }
+        })
     }
     /// Admit explicit partial cleanup on a finite shutdown deadline without resetting the attempt deadline.
     /// # Errors
@@ -269,16 +297,23 @@ impl ReadinessProbeOwner {
         client.submit_blocking(scope, spec, move |context| {
             checkpoint(&context)?;
             let mut guard = lock(&shared.transaction);
-            if let Some(state) = guard.as_mut() {
-                port.close(state, &context)?;
-            }
-            if let Listener::Attached(lease, _) = &input.listener {
-                lease
-                    .close(&context)
-                    .map_err(|e| ReadinessTransportError::new("attached_identity_close", e))?;
-            }
-            *guard = None;
-            Ok(())
+            let body = guard.as_ref().map(|state| state._claim.clone());
+            let result = (|| {
+                if let Some(state) = guard.as_mut() {
+                    port.close(&mut state.value, &context)?;
+                }
+                if let Listener::Attached(lease, _) = &input.listener {
+                    lease
+                        .close(&context)
+                        .map_err(|e| ReadinessTransportError::new("attached_identity_close", e))?;
+                }
+                *guard = None;
+                Ok(())
+            })();
+            result.map_err(|cause: ReadinessTransportError| match body {
+                Some(body) => cause.retain_body(body),
+                None => cause,
+            })
         })
     }
 }

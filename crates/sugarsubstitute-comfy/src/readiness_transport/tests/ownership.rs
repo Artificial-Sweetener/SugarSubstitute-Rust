@@ -11,6 +11,38 @@ use std::error::Error;
 use sugarsubstitute_contracts::execution::{JobPhase, TerminalKind};
 type TestResult = Result<(), Box<dyn Error>>;
 #[test]
+fn worker_failure_keeps_original_body_credit_after_checked_cleanup_until_cause_drops() -> TestResult
+{
+    let mut harness = Harness::new(3, false, false, false)?;
+    harness.submit()?;
+    harness.terminal()?;
+    let error = harness.owner.take_readiness().err().ok_or("Expected original failure")?;
+    assert!(matches!(harness.cleanup()?.outcome, JobOutcome::Success(())));
+    assert!(lock(&harness.owner.shared.transaction).is_none());
+    assert_eq!(harness.attempt.snapshot().reserved_bytes, READINESS_TRANSPORT_BYTES);
+    assert_eq!(error.source().ok_or("Missing genuine cause")?.to_string(), "original-begin-cause");
+    drop(error);
+    assert_eq!(harness.attempt.snapshot().reserved_bytes, 0);
+    harness.finish()
+}
+#[test]
+fn cleanup_failure_keeps_original_body_credit_after_later_checked_close() -> TestResult {
+    let mut harness = Harness::new(3, false, false, true)?;
+    harness.submit()?;
+    harness.terminal()?;
+    drop(harness.owner.take_readiness().err().ok_or("Expected initial failure")?);
+    let JobOutcome::Failure(error) = harness.cleanup()?.outcome else {
+        return Err("Expected cleanup failure".into());
+    };
+    assert!(matches!(harness.cleanup()?.outcome, JobOutcome::Success(())));
+    assert!(lock(&harness.owner.shared.transaction).is_none());
+    assert_eq!(harness.attempt.snapshot().reserved_bytes, READINESS_TRANSPORT_BYTES);
+    assert_eq!(error.source().ok_or("Missing genuine cause")?.to_string(), "original-close-cause");
+    drop(error);
+    assert_eq!(harness.attempt.snapshot().reserved_bytes, 0);
+    harness.finish()
+}
+#[test]
 fn partial_begin_failure_retains_each_native_slot_and_original_memory_until_real_cleanup()
 -> TestResult {
     for slots in 1..=3 {
@@ -29,12 +61,13 @@ fn partial_begin_failure_retains_each_native_slot_and_original_memory_until_real
                 1,
                 if slots > 1 { 2 } else { 0 },
                 if slots > 2 { 3 } else { 0 },
-                READINESS_TRANSPORT_BYTES - 128 * 1024,
+                super::super::memory::BODY_BYTES,
                 500
             )
         );
         assert_eq!(harness.attempt.snapshot().reserved_bytes, READINESS_TRANSPORT_BYTES);
         assert!(lock(&harness.boundary.requests).is_empty());
+        drop(error);
         assert!(matches!(harness.cleanup()?.outcome, JobOutcome::Success(())));
         assert!(lock(&harness.owner.shared.transaction).is_none());
         assert_eq!(harness.attempt.snapshot().reserved_bytes, 0);
@@ -61,9 +94,9 @@ fn late_partial_result_keeps_custody_after_actual_timed_out_completion() -> Test
     ));
     assert_eq!(
         harness.owner.take_readiness().err().ok_or("Expected late rejection")?.stage(),
-        "attempt_terminal"
+        "attempt_timed_out"
     );
-    assert_eq!(harness.retained(), (1, 2, 3, READINESS_TRANSPORT_BYTES - 128 * 1024, 500));
+    assert_eq!(harness.retained(), (1, 2, 3, super::super::memory::BODY_BYTES, 500));
     assert_eq!(harness.attempt.snapshot().reserved_bytes, READINESS_TRANSPORT_BYTES);
     assert!(matches!(harness.cleanup()?.outcome, JobOutcome::Success(())));
     assert_eq!(*lock(&harness.boundary.phases), [("begin", 500), ("close", 5000)]);
@@ -87,9 +120,9 @@ fn cancelled_inflight_attempt_returns_only_after_boundary_and_keeps_partial_slot
     ));
     assert_eq!(
         harness.owner.take_readiness().err().ok_or("Expected cancelled rejection")?.stage(),
-        "attempt_terminal"
+        "attempt_cancelled"
     );
-    assert_eq!(harness.retained(), (1, 2, 3, READINESS_TRANSPORT_BYTES - 128 * 1024, 500));
+    assert_eq!(harness.retained(), (1, 2, 3, super::super::memory::BODY_BYTES, 500));
     assert!(lock(&harness.boundary.requests).is_empty());
     harness.finish()
 }
@@ -103,7 +136,7 @@ fn delivery_after_original_effective_deadline_rejects_actual_success_without_new
         harness.owner.pending.as_ref().ok_or("Missing attempt")?.status().phase,
         JobPhase::Terminal(TerminalKind::Success)
     ));
-    assert_eq!(harness.retained(), (0, 0, 0, READINESS_TRANSPORT_BYTES - 128 * 1024, 500));
+    assert_eq!(harness.retained(), (0, 0, 0, super::super::memory::BODY_BYTES, 500));
     assert_eq!(
         *lock(&harness.boundary.requests),
         ["/system_stats", "/extensions", "/index.html", "/extensions/SugarCubes/main.js"]
@@ -152,7 +185,8 @@ fn failed_close_preserves_remaining_slots_cause_charge_and_original_attempt_dead
     };
     assert_eq!(error.stage(), "fake_close");
     assert_eq!(error.source().ok_or("Missing original cause")?.to_string(), "original-close-cause");
-    assert_eq!(harness.retained(), (1, 2, 0, READINESS_TRANSPORT_BYTES - 128 * 1024, 500));
+    drop(error);
+    assert_eq!(harness.retained(), (1, 2, 0, super::super::memory::BODY_BYTES, 500));
     assert_eq!(harness.attempt.snapshot().reserved_bytes, READINESS_TRANSPORT_BYTES);
     assert_eq!(*lock(&harness.boundary.closed), [3]);
     assert!(matches!(harness.cleanup()?.outcome, JobOutcome::Success(())));

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise real request/folder owners without manufacturing a native peer or frame loan.
+#[path = "tests/attempt_cleanup.rs"]
+mod attempt_cleanup;
 #[path = "tests/ownership.rs"]
 mod ownership;
 use super::{ParentError, ParentLifecycle, Reply, folders::Folders, history::Requests};

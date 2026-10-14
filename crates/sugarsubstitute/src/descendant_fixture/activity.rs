@@ -36,7 +36,7 @@ impl Fixture {
                         .snapshot(key)?;
                     self.cleanup_needed |= notice.kind == TerminalKind::Success
                         && snapshot.member_watch_required
-                        && !snapshot.cleanup_pending
+                        && !snapshot.cleanup_step_pending
                         && !snapshot.settled;
                 }
             }

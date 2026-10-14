@@ -8,7 +8,7 @@ fn exact_header_layout_and_large_integer_ticks_match_independent_goldens() -> Te
     let encoded = encoded(WirePayload::Register)?;
     let mut golden = Vec::new();
     golden.extend(b"SSLC");
-    golden.extend(2u16.to_le_bytes());
+    golden.extend(3u16.to_le_bytes());
     golden.extend(104u16.to_le_bytes());
     golden.extend(104u32.to_le_bytes());
     golden.extend(3u16.to_le_bytes());

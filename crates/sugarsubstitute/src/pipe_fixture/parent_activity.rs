@@ -50,7 +50,7 @@ impl Parent {
                                 .snapshot(key)?;
                             case.cleanup_requested |= notice.kind == TerminalKind::Success
                                 && snapshot.member_watch_required
-                                && !snapshot.cleanup_pending
+                                && !snapshot.cleanup_step_pending
                                 && !snapshot.settled;
                         }
                     }

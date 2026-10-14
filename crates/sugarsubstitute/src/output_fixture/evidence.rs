@@ -197,6 +197,7 @@ pub(super) struct Case {
     pub(super) done: bool,
     pub(super) exit_sent: bool,
     pub(super) pending_before_cancel: Option<WindowsOutputReport>,
+    pub(super) diagnostic_error: Option<u32>,
     pub(super) root_before_eof: bool,
     pub(super) complete_inventory: bool,
     pub(super) forced: bool,
@@ -246,6 +247,7 @@ impl Case {
             done: false,
             exit_sent: false,
             pending_before_cancel: None,
+            diagnostic_error: None,
             root_before_eof: false,
             complete_inventory: false,
             forced: false,
@@ -275,7 +277,10 @@ impl Case {
                         && self.output_terminal == Some(TerminalKind::Success)
                 }
                 Role::Idle => {
-                    self.pending_before_cancel.is_some()
+                    self.diagnostic_error.is_some()
+                        && self
+                            .pending_before_cancel
+                            .is_some_and(|report| report.counters[1].read_bytes > 0)
                         && self.output_terminal == Some(TerminalKind::Cancelled)
                 }
                 Role::Forward => {

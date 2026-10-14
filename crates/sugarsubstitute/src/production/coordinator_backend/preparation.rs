@@ -38,7 +38,8 @@ impl CoordinatorBackend {
                 }
                 ResourceEffect::StopOwned { resource }
                 | ResourceEffect::DisconnectAttached { resource } => {
-                    self.begin_cleanup(resource, original_shutdown, resources)?;
+                    let next = self.begin_cleanup(resource, original_shutdown, resources)?;
+                    Self::merge(transition, next);
                 }
             }
         }
@@ -56,7 +57,11 @@ impl CoordinatorBackend {
             .records
             .iter()
             .position(Option::is_none)
-            .or_else(|| self.records.iter().position(|r| r.as_ref().is_some_and(|r| r.settled)))
+            .or_else(|| {
+                self.records.iter().position(|r| {
+                    r.as_ref().is_some_and(|r| r.settled && r.cleanup_failure.first().is_none())
+                })
+            })
             .ok_or(LifecycleRejection::Overloaded)?;
         let original = input.as_ref().ok_or(LifecycleRejection::WrongPhase)?;
         if matches!(target, BackendTarget::Managed(_)) != original.environment.is_some() {
@@ -76,7 +81,19 @@ impl CoordinatorBackend {
             ScopeSpec { id: resources.scopes.allocate()?, deadline: Some(budget.until()) },
             Some(resources.native),
         )?;
-        let input = input.take().ok_or(LifecycleRejection::WrongPhase)?;
+        let original = input.as_ref().ok_or(LifecycleRejection::WrongPhase)?;
+        // The parent retains the original inert paths/environment. Every attempt
+        // performs a new inspection; copied input is covered by its two-MiB actor claim.
+        let input = BackendPreparation {
+            source: original.source.try_reissue()?,
+            environment: original
+                .environment
+                .as_ref()
+                .map(|environment| {
+                    LaunchEnvironment::from_snapshot_utf16(environment.as_utf16(), &[])
+                })
+                .transpose()?,
+        };
         self.records[at] = Some(Backend {
             key,
             target,
@@ -110,7 +127,7 @@ impl CoordinatorBackend {
             shutdown: None,
             failure_published: false,
             settled: false,
-            cleanup_failure: None,
+            cleanup_failure: cleanup_state::CleanupState::new(),
         });
         let spec = Self::spec(
             resources,

@@ -63,6 +63,51 @@ impl ResourceCoordinator {
         transition.replies.push(reply);
         Ok(transition)
     }
+    /// Release the original authenticated attempt lease without disconnecting its run.
+    /// # Errors
+    /// Rejects foreign/stale binding or lease before changing the actual resource.
+    pub fn release_attempt(
+        &mut self,
+        binding: ClientBinding,
+        lease: LeaseKey,
+        transition: &mut ResourceTransition,
+    ) -> Result<(), LifecycleRejection> {
+        self.check_run(binding.run, binding.connection)?;
+        if lease.run != binding.run
+            || lease.connection != binding.connection
+            || lease.resource.owner != self.owner
+            || self.resources.get(&lease.resource.id).is_none_or(|resource| {
+                resource.key != lease.resource || resource.leases.get(&lease.id) != Some(&lease)
+            })
+        {
+            return Err(LifecycleRejection::StaleIdentity);
+        }
+        self.release_lease(lease, transition)
+    }
+    /// Observe a released attempt while remaining clients retain a ready shared resource.
+    /// # Errors
+    /// Rejects foreign binding or another resource generation.
+    pub fn attempt_released(
+        &self,
+        binding: ClientBinding,
+        lease: LeaseKey,
+    ) -> Result<bool, LifecycleRejection> {
+        self.check_run(binding.run, binding.connection)?;
+        if lease.run != binding.run
+            || lease.connection != binding.connection
+            || lease.resource.owner != self.owner
+        {
+            return Err(LifecycleRejection::StaleIdentity);
+        }
+        let resource = self
+            .resources
+            .get(&lease.resource.id)
+            .filter(|resource| resource.key == lease.resource)
+            .ok_or(LifecycleRejection::StaleIdentity)?;
+        Ok(resource.phase == ResourcePhase::Ready
+            && !resource.leases.contains_key(&lease.id)
+            && !resource.leases.is_empty())
+    }
     fn acquire(
         &mut self,
         request: &ResourceRequest,

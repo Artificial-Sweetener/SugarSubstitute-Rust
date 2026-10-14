@@ -164,10 +164,16 @@ pub struct ReadinessTransportError {
     stage: &'static str,
     cause: Box<dyn Error + Send + Sync>,
     disposition: ProbeRetryDisposition,
+    body: Option<super::memory::BodyClaim>,
 }
 impl ReadinessTransportError {
     pub(super) fn new(stage: &'static str, cause: impl Error + Send + Sync + 'static) -> Self {
-        Self { stage, cause: Box::new(cause), disposition: ProbeRetryDisposition::Terminal }
+        Self {
+            stage,
+            cause: Box::new(cause),
+            disposition: ProbeRetryDisposition::Terminal,
+            body: None,
+        }
     }
     /// Preserve a typed native first-connection failure eligible only for campaign retry.
     pub(super) fn unavailable(
@@ -178,10 +184,17 @@ impl ReadinessTransportError {
             stage,
             cause: Box::new(cause),
             disposition: ProbeRetryDisposition::TransientConnectionUnavailable,
+            body: None,
         }
     }
     pub(super) fn invalid(stage: &'static str) -> Self {
         Self::new(stage, std::io::Error::other("Readiness transport rejected"))
+    }
+    pub(super) fn retain_body(mut self, body: super::memory::BodyClaim) -> Self {
+        if self.body.is_none() {
+            self.body = Some(body);
+        }
+        self
     }
     /// Borrow the stable operation label.
     pub const fn stage(&self) -> &'static str {

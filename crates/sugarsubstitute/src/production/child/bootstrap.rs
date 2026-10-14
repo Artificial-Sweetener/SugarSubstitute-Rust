@@ -43,7 +43,7 @@ pub(super) enum ChildBootstrapIssue {
 
 /// Closed diagnostic facts; none grants native, configuration or readiness authority.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct PreparationObservation {
+pub(super) struct PreparationObservation {
     capture_admitted: bool,
     capture: bool,
     registered: bool,
@@ -368,7 +368,16 @@ impl ChildBootstrap {
     }
     /// Cache one closed observation to suppress identical polling diagnostics.
     fn changed_preparation(&mut self) -> Option<PreparationObservation> {
-        let observation = PreparationObservation {
+        let observation = self.preparation_observation();
+        if self.last_preparation == Some(observation) {
+            return None;
+        }
+        self.last_preparation = Some(observation);
+        Some(observation)
+    }
+    /// Borrow closed actual preparation predicates independently of fallible logging.
+    pub(super) fn preparation_observation(&self) -> PreparationObservation {
+        PreparationObservation {
             capture_admitted: self.capture.admitted(),
             capture: self.capture.ready(),
             registered: self.channel.registered(),
@@ -376,12 +385,7 @@ impl ChildBootstrap {
             original_failure: self.issue,
             capture_failure: self.capture_failure_kind(),
             failure_retained: self.failure_source().is_some(),
-        };
-        if self.last_preparation == Some(observation) {
-            return None;
         }
-        self.last_preparation = Some(observation);
-        Some(observation)
     }
     /// Inspect only supported concrete first-cause types; never format their payload.
     fn capture_failure_kind(&self) -> CaptureFailureKind {

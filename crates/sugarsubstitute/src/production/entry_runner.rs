@@ -96,10 +96,11 @@ pub(crate) trait EntryActivation {
 pub(crate) fn run<C: EntryActivation + 'static>(
     command: ProductionCommand,
     child: impl FnOnce(&ProductionCommand) -> Result<C, Box<dyn Error>>,
+    diagnostics: crate::diagnostics::DiagnosticHealth,
 ) -> Result<(), Box<dyn Error>> {
     let executable = std::env::current_exe()?;
     let child = child(&command)?;
-    let mut lifetime = boxed_lifetime(command, executable, child);
+    let mut lifetime = boxed_lifetime(command, executable, child, diagnostics);
     match run_headless(lifetime.as_mut()) {
         Ok(()) => Ok(()),
         Err(pump) => Err(retain_failure(pump, lifetime)),
@@ -112,8 +113,9 @@ fn boxed_lifetime<C: EntryActivation>(
     command: ProductionCommand,
     executable: PathBuf,
     child: C,
+    diagnostics: crate::diagnostics::DiagnosticHealth,
 ) -> Box<EntryRunner<C>> {
-    Box::new(EntryRunner::new(command, executable, child))
+    Box::new(EntryRunner::new(command, executable, child, diagnostics))
 }
 
 /// Keep exceptional whole-lifetime moves outside the native pump's persistent stack frame.
@@ -230,6 +232,7 @@ enum FailureOrigin {
 
 /// Keep every actual owner ahead of original scopes and the sole execution join owner.
 pub(crate) struct EntryRunner<C: EntryActivation> {
+    diagnostics: crate::diagnostics::DiagnosticHealth,
     child: C,
     pending_activation: Option<AuthenticatedEntryLaunch>,
     authority: Option<CoordinatorAuthority>,
@@ -269,9 +272,15 @@ pub(crate) struct EntryRunner<C: EntryActivation> {
     finished: bool,
 }
 impl<C: EntryActivation> EntryRunner<C> {
-    pub(crate) fn new(command: ProductionCommand, executable: PathBuf, child: C) -> Self {
+    pub(crate) fn new(
+        command: ProductionCommand,
+        executable: PathBuf,
+        child: C,
+        diagnostics: crate::diagnostics::DiagnosticHealth,
+    ) -> Self {
         let installation = command.installation.clone();
         Self {
+            diagnostics,
             child,
             pending_activation: None,
             authority: None,
@@ -375,6 +384,12 @@ impl<C: EntryActivation> EntryRunner<C> {
             return Err(
                 "Production completion routing failed with its original retained cause".into()
             );
+        }
+        if !self.closing
+            && let Err(cause) = self.diagnostics.check()
+        {
+            self.close_on_failure(Box::new(cause));
+            return Err("Diagnostic output failed with its original retained cause".into());
         }
         Ok(if self.closing { HeadlessStep::Shutdown } else { HeadlessStep::Active })
     }

@@ -89,7 +89,12 @@ fn mailbox_wake_failure_retains_original_and_runner_observes_cleanup_after_admis
             profile: invalid.clone(),
         },
     };
-    let mut runner = EntryRunner::new(command, invalid, NoChild);
+    let mut runner = EntryRunner::new(
+        command,
+        invalid,
+        NoChild,
+        crate::diagnostics::DiagnosticHealth::fixture(),
+    );
     let identity = Arc::new(());
     let wake = Arc::new(FailOnceWake {
         observed: ScopeWake::default(),
@@ -194,7 +199,12 @@ fn actual_runner_native_rejects_finite_box_and_real_finite_scope_preserves_origi
             profile: invalid.clone(),
         },
     };
-    let mut runner = EntryRunner::new(command, invalid, NoChild);
+    let mut runner = EntryRunner::new(
+        command,
+        invalid,
+        NoChild,
+        crate::diagnostics::DiagnosticHealth::fixture(),
+    );
     let wake = Arc::new(ScopeWake::default());
     let rejected_start = runner
         .start(wake.clone())

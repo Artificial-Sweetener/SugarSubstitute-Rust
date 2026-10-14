@@ -287,3 +287,38 @@ fn native_activity_and_output_pull_are_shape_only_and_do_not_synthesize_privileg
     }
     Ok(())
 }
+
+#[test]
+fn settlement_wire_preserves_original_acquisition_and_rejects_zero_foreign_or_changed_shape()
+-> TestResult {
+    let identity = main()?;
+    let acquisition = sugarsubstitute_contracts::lifecycle::RequestId::new(71)?;
+    let source = encoded(WirePayload::SettleAttempt { identity, acquisition })?;
+    assert_eq!(source.len(), HEADER_BYTES + 24);
+    assert_eq!(&source[4..6], &3u16.to_le_bytes());
+    assert!(
+        matches!(FrameCodec::decode(&source)?.payload, DecodedPayload::SettleAttempt { identity: actual, acquisition: original } if actual == identity && original == acquisition)
+    );
+    assert_rejected_tail_and_prefix(&source)?;
+    for offset in [104, 112, 120] {
+        let mut invalid = source.clone();
+        invalid[offset..offset + 8].fill(0);
+        assert!(matches!(FrameCodec::decode(&invalid), Err(ProtocolError::Identity)));
+    }
+    let mut foreign = identity;
+    foreign.run = header(19)?.run;
+    foreign.run.instance = sugarsubstitute_contracts::lifecycle::InstanceId::new(99)?;
+    let mut unchanged = [0x55; 256];
+    assert!(
+        FrameCodec::encode(
+            &WireMessage {
+                header: header(19)?,
+                payload: WirePayload::SettleAttempt { identity: foreign, acquisition }
+            },
+            &mut unchanged
+        )
+        .is_err()
+    );
+    assert_eq!(unchanged, [0x55; 256]);
+    Ok(())
+}

@@ -3,8 +3,15 @@
 //! Compose actual backend claims, process custody, installed sources and readiness.
 #[path = "coordinator_backend/activity.rs"]
 mod activity;
+#[path = "coordinator_backend/attempt.rs"]
+mod attempt;
 #[path = "coordinator_backend/cleanup.rs"]
 mod cleanup;
+#[cfg(test)]
+#[path = "coordinator_backend/cleanup_lifetime_tests.rs"]
+mod cleanup_lifetime_tests;
+#[path = "coordinator_backend/cleanup_state.rs"]
+mod cleanup_state;
 #[cfg(test)]
 #[path = "coordinator_backend/cutoff_tests.rs"]
 mod cutoff_tests;
@@ -106,7 +113,7 @@ struct Backend {
     shutdown: Option<(ShutdownId, ShutdownBudget)>,
     failure_published: bool,
     settled: bool,
-    cleanup_failure: Option<Box<dyn Error + Send + Sync>>,
+    cleanup_failure: cleanup_state::CleanupState,
 }
 
 /// Own at most64 actual backend generations; attached processes never enter registry.
@@ -295,7 +302,7 @@ impl CoordinatorBackend {
         key: ResourceKey,
     ) -> Option<&(dyn Error + Send + Sync + 'static)> {
         let record = self.record(key).ok()?;
-        if let Some(cause) = record.cleanup_failure.as_deref() {
+        if let Some(cause) = record.cleanup_failure.first() {
             return Some(cause);
         }
         record
@@ -335,12 +342,12 @@ impl CoordinatorBackend {
             .iter()
             .flatten()
             .filter(|record| !record.settled)
-            .filter_map(|record| {
-                record
-                    .shutdown
-                    .map(|(_, budget)| budget.settle_until)
-                    .or_else(|| record.campaign.next_deadline())
-                    .or_else(|| record.readiness.is_none().then_some(record.budget.until()))
+            .filter_map(|record| match record.shutdown {
+                Some((_, budget)) => record.cleanup_failure.next_deadline(budget),
+                None => record
+                    .campaign
+                    .next_deadline()
+                    .or_else(|| record.readiness.is_none().then_some(record.budget.until())),
             })
             .min()
     }

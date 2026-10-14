@@ -1,0 +1,205 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Artificial Sweetener and contributors
+//! Retain fallible diagnostic writes independently of the process-global subscriber.
+//! Active host owners observe the same health; logging failure never recursively writes stderr.
+use std::{
+    error::Error,
+    fmt,
+    io::{self, Write},
+    sync::{
+        Arc, OnceLock,
+        atomic::{AtomicU64, Ordering},
+    },
+};
+
+struct HealthState {
+    first: OnceLock<io::Error>,
+    secondary: OnceLock<io::Error>,
+    omitted: AtomicU64,
+}
+/// Share bounded original diagnostic causes, without execution or native authority.
+#[derive(Clone)]
+pub(crate) struct DiagnosticHealth(Arc<HealthState>);
+impl DiagnosticHealth {
+    fn new() -> Self {
+        Self(Arc::new(HealthState {
+            first: OnceLock::new(),
+            secondary: OnceLock::new(),
+            omitted: AtomicU64::new(0),
+        }))
+    }
+    /// Construct isolated data-only health for an owner test, without installing a subscriber.
+    #[cfg(test)]
+    pub(crate) fn fixture() -> Self {
+        Self::new()
+    }
+    /// Inject only the external sink's data-only failure for active owner tests.
+    #[cfg(test)]
+    pub(crate) fn fixture_failure(cause: io::Error) -> Self {
+        let health = Self::new();
+        health.retain(cause);
+        health
+    }
+    fn retain(&self, cause: io::Error) {
+        if let Err(cause) = self.0.first.set(cause)
+            && self.0.secondary.set(cause).is_err()
+        {
+            let _previous =
+                match self.0.omitted.fetch_update(Ordering::AcqRel, Ordering::Acquire, |value| {
+                    Some(value.saturating_add(1))
+                }) {
+                    Ok(previous) | Err(previous) => previous,
+                };
+        }
+    }
+    /// Observe the actual retained write failure; successful logging grants no product capability.
+    pub(crate) fn check(&self) -> Result<(), DiagnosticFailure> {
+        if self.0.first.get().is_some() { Err(DiagnosticFailure(self.clone())) } else { Ok(()) }
+    }
+    /// Inspect the original OS code for bounded process-fixture evidence only.
+    pub(crate) fn native_error(&self) -> Option<i32> {
+        self.0.first.get().and_then(io::Error::raw_os_error)
+    }
+}
+/// Keep original stderr I/O and its independently retained secondary cause alive through result delivery.
+pub(crate) struct DiagnosticFailure(DiagnosticHealth);
+impl fmt::Debug for DiagnosticFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DiagnosticFailure")
+            .field("native_error", &self.0.native_error())
+            .field("secondary", &self.0.0.secondary.get().map(io::Error::kind))
+            .field("omitted", &self.0.0.omitted.load(Ordering::Acquire))
+            .finish()
+    }
+}
+impl fmt::Display for DiagnosticFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Owned diagnostic stderr write failed")
+    }
+}
+impl Error for DiagnosticFailure {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        self.0.0.first.get().map(|cause| cause as &dyn Error)
+    }
+}
+struct Writer<W> {
+    sink: W,
+    health: DiagnosticHealth,
+}
+impl<W: Write> Write for Writer<W> {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        let result = self.sink.write(bytes);
+        self.observe(result)
+    }
+    fn write_all(&mut self, bytes: &[u8]) -> io::Result<()> {
+        let result = self.sink.write_all(bytes);
+        self.observe(result)
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        let result = self.sink.flush();
+        self.observe(result)
+    }
+}
+impl<W> Writer<W> {
+    fn observe<T>(&self, result: io::Result<T>) -> io::Result<T> {
+        result.map_err(|cause| {
+            let code = cause.raw_os_error();
+            let kind = cause.kind();
+            self.health.retain(cause);
+            // The writer receives a closed rejection; the identical original error
+            // and its complete source remain in the independently observed health.
+            code.map_or_else(|| io::Error::from(kind), io::Error::from_raw_os_error)
+        })
+    }
+}
+struct Factory<F> {
+    make: F,
+    health: DiagnosticHealth,
+}
+impl<'a, F, W> tracing_subscriber::fmt::MakeWriter<'a> for Factory<F>
+where
+    F: Fn() -> W,
+    W: Write,
+{
+    type Writer = Writer<W>;
+    fn make_writer(&'a self) -> Self::Writer {
+        Writer { sink: (self.make)(), health: self.health.clone() }
+    }
+}
+fn subscriber<F, W>(
+    health: DiagnosticHealth,
+    make: F,
+    filter: tracing_subscriber::EnvFilter,
+) -> impl tracing::Subscriber + Send + Sync
+where
+    F: Fn() -> W + Send + Sync + 'static,
+    W: Write,
+{
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_writer(Factory { make, health })
+        .log_internal_errors(false)
+        .finish()
+}
+/// Own health through the actual application lifetime and final error resolution.
+/// The global subscriber retains only bounded cause data, never a context, claim or native owner.
+pub(crate) struct Diagnostics {
+    health: DiagnosticHealth,
+}
+impl Diagnostics {
+    /// Install the supported process-global subscriber once, retaining two original causes and an omitted count.
+    pub(crate) fn initialize() -> Result<Self, Box<dyn Error>> {
+        use tracing_subscriber::util::SubscriberInitExt as _;
+        let health = DiagnosticHealth::new();
+        let filter =
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into());
+        subscriber(health.clone(), std::io::stderr, filter).try_init()?;
+        Ok(Self { health })
+    }
+    /// Give the actual active host the same data-only diagnostic health owner.
+    pub(crate) fn health(&self) -> DiagnosticHealth {
+        self.health.clone()
+    }
+    /// Preserve both the application result and original diagnostic failure at final process observation.
+    pub(crate) fn finish<T>(self, result: Result<T, Box<dyn Error>>) -> Result<T, Box<dyn Error>> {
+        resolve(result, &self.health)
+    }
+}
+/// Resolve independently observed outcomes without replacing either original cause.
+pub(crate) fn resolve<T>(
+    result: Result<T, Box<dyn Error>>,
+    health: &DiagnosticHealth,
+) -> Result<T, Box<dyn Error>> {
+    match (result, health.check()) {
+        (Ok(value), Ok(())) => Ok(value),
+        (Err(cause), Ok(())) => Err(cause),
+        (Ok(_), Err(cause)) => Err(Box::new(cause)),
+        (Err(application), Err(diagnostic)) => {
+            Err(Box::new(LifetimeFailure { application, diagnostic }))
+        }
+    }
+}
+struct LifetimeFailure {
+    application: Box<dyn Error>,
+    diagnostic: DiagnosticFailure,
+}
+impl fmt::Debug for LifetimeFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LifetimeFailure")
+            .field("diagnostic", &self.diagnostic)
+            .finish_non_exhaustive()
+    }
+}
+impl fmt::Display for LifetimeFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Application and owned diagnostic output failed")
+    }
+}
+impl Error for LifetimeFailure {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(self.application.as_ref())
+    }
+}
+#[cfg(test)]
+#[path = "diagnostics/tests.rs"]
+mod tests;

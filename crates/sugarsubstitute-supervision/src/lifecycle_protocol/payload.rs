@@ -7,8 +7,8 @@ use std::{
     num::{NonZeroU32, NonZeroU64},
 };
 use sugarsubstitute_contracts::lifecycle::{
-    CompletionIntent, LeaseId, ResourceGeneration, ResourceId, ShutdownId, UiChallengeId,
-    UiWatchdogActivity,
+    CompletionIntent, LeaseId, RequestId, ResourceGeneration, ResourceId, ShutdownId,
+    UiChallengeId, UiWatchdogActivity,
 };
 use sugarsubstitute_contracts::startup::MainIdentity;
 
@@ -118,6 +118,13 @@ pub enum WirePayload<'a> {
     },
     /// Tag18: original bounded native stage classification; never native retirement proof.
     MainFailed(MainStageFailure),
+    /// Tag19: settle the exact original acquisition before another attempt.
+    SettleAttempt {
+        /// Original current application attempt.
+        identity: MainIdentity,
+        /// Original Acquire request; never a caller-supplied resource privilege.
+        acquisition: RequestId,
+    },
 }
 impl WirePayload<'_> {
     pub(super) const fn kind(&self) -> u16 {
@@ -140,6 +147,7 @@ impl WirePayload<'_> {
             Self::NativeActivity { .. } => 16,
             Self::OutputPull { .. } => 17,
             Self::MainFailed(_) => 18,
+            Self::SettleAttempt { .. } => 19,
         }
     }
 }
@@ -217,4 +225,11 @@ pub enum DecodedPayload<'a> {
     },
     /// Bounded native failure classification, separate from actual retirement.
     MainFailed(MainStageFailure),
+    /// Tag19: settle the exact original acquisition before another attempt.
+    SettleAttempt {
+        /// Original current application attempt.
+        identity: MainIdentity,
+        /// Original Acquire request; never a caller-supplied resource privilege.
+        acquisition: RequestId,
+    },
 }

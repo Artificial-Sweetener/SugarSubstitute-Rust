@@ -63,6 +63,10 @@ fn transient_retry_waits_for_actual_partial_close_and_original_backoff() -> Test
     assert!(!harness.campaign.settled());
     first.release();
     assert_eq!(harness.completion()?, CampaignStep::Progressed);
+    assert_eq!(harness.retained_bytes(), crate::readiness_transport::READINESS_TRANSPORT_BYTES);
+    let cause = harness.campaign.take_failure().ok_or("Missing retained transient cause")?;
+    assert_eq!(harness.retained_bytes(), crate::readiness_transport::READINESS_TRANSPORT_BYTES);
+    drop(cause);
     assert_eq!(harness.retained_bytes(), 0);
     assert_eq!(harness.campaign.next_deadline(), Some(Moment::from_nanos(50_000_000)));
     assert!(!harness.campaign.needs_input(Moment::from_nanos(49_999_999))?);

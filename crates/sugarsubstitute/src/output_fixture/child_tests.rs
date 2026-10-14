@@ -46,7 +46,10 @@ impl Wake {
     }
 }
 fn child() -> Result<(Child, Arc<Wake>)> {
-    let mut child = Child::new(ChildOptions { role: Role::Corpus, section: None, deadline: None });
+    let mut child = Child::new(
+        ChildOptions { role: Role::Corpus, section: None, deadline: None },
+        crate::diagnostics::DiagnosticHealth::fixture(),
+    );
     let wake = Arc::new(Wake::default());
     let owner = ExecutionOwner::new(child.clock.clone(), wake.clone())?;
     let client = owner.client();
@@ -87,7 +90,10 @@ fn finish(mut child: Child, _: &Wake) -> Result<()> {
 }
 #[test]
 fn failed_retirement_does_not_readmit_on_unchanged_closing_callbacks() -> Result<()> {
-    let mut child = Child::new(ChildOptions { role: Role::Forward, section: None, deadline: None });
+    let mut child = Child::new(
+        ChildOptions { role: Role::Forward, section: None, deadline: None },
+        crate::diagnostics::DiagnosticHealth::fixture(),
+    );
     child.closing = true;
     child.retirement_requested = true;
     assert!(!child.take_retirement_request(false));
@@ -106,7 +112,10 @@ fn failed_retirement_does_not_readmit_on_unchanged_closing_callbacks() -> Result
 }
 #[test]
 fn descendant_jobs_use_containment_admission_and_preserve_original_deadline() -> Result<()> {
-    let mut child = Child::new(ChildOptions { role: Role::Forward, section: None, deadline: None });
+    let mut child = Child::new(
+        ChildOptions { role: Role::Forward, section: None, deadline: None },
+        crate::diagnostics::DiagnosticHealth::fixture(),
+    );
     child.deadline = Some(Moment::from_nanos(123));
     let creation = child.descendant_spec(4096)?;
     let retirement = child.descendant_spec(8192)?;
@@ -121,7 +130,10 @@ fn descendant_jobs_use_containment_admission_and_preserve_original_deadline() ->
 }
 #[test]
 fn completed_descendant_leaf_does_not_close_writers_on_its_finished_write_deadline() -> Result<()> {
-    let mut child = Child::new(ChildOptions { role: Role::Leaf, section: None, deadline: None });
+    let mut child = Child::new(
+        ChildOptions { role: Role::Leaf, section: None, deadline: None },
+        crate::diagnostics::DiagnosticHealth::fixture(),
+    );
     child.deadline = Some(Moment::from_nanos(0));
     child.deadline_wall = Some(Instant::now());
     child.done_queued = true;

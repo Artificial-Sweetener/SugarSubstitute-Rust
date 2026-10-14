@@ -4,6 +4,7 @@
 use super::*;
 use serde_json::{Value, json};
 use sugarsubstitute_contracts::configuration::MAX_ARGUMENTS;
+mod memory;
 fn system(argv: &[&str]) -> Value {
     json!({"system":{"os":"win32","ram_total":68719476736u64,"ram_free":40000000000u64,
         "comfyui_version":"0.29.0","required_frontend_version":"1.47.11",

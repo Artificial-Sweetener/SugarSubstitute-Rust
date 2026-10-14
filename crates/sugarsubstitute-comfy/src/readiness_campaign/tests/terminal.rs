@@ -4,6 +4,61 @@
 use super::*;
 
 #[test]
+fn actual_panicked_completion_keeps_original_body_credit_until_escaped_cause_drops() -> TestResult {
+    let mut harness = Harness::new()?;
+    harness.submit(Behavior::Panicked, None, false, None)?;
+    assert_eq!(harness.completion()?, CampaignStep::Failed);
+    harness.submit_close(Moment::from_nanos(5_000_000_000))?;
+    assert_eq!(harness.completion()?, CampaignStep::Failed);
+    assert!(harness.campaign.settled());
+    let cause = harness.campaign.take_failure().ok_or("Missing actual panic cause")?;
+    assert_eq!(harness.retained_bytes(), crate::readiness_transport::READINESS_TRANSPORT_BYTES);
+    let CampaignError::Transport(ref error) = cause else {
+        return Err("Missing transport panic".into());
+    };
+    assert_eq!(error.stage(), "attempt_panicked");
+    assert_eq!(
+        error.source().ok_or("Missing supervised panic")?.to_string(),
+        "original-campaign-panic"
+    );
+    drop(cause);
+    assert_eq!(harness.retained_bytes(), 0);
+    harness.finish()
+}
+
+#[test]
+fn absent_listener_keeps_original_campaign_and_delays_http_until_observed_cleanup_and_backoff()
+-> TestResult {
+    let mut harness = Harness::new()?;
+    let until = harness.campaign.budget.until();
+    let fixture = harness.submit(Behavior::ListenerAbsent, None, false, None)?;
+    assert_eq!(harness.completion()?, CampaignStep::Progressed);
+    let Some(CampaignError::Transport(cause)) = harness.campaign.failure() else {
+        return Err("Actual absent listener result missing".into());
+    };
+    assert_eq!(cause.stage(), "http_listener_absent");
+    assert!(!harness.campaign.ready && !harness.campaign.settled());
+    assert!(!harness.campaign.needs_input(harness.now())?);
+    assert!(harness.retained_bytes() > 0);
+    assert!(fixture.requests.lock().unwrap_or_else(std::sync::PoisonError::into_inner).is_empty());
+    harness.submit_close(Moment::from_nanos(5_000_000_000))?;
+    harness.completion()?;
+    assert_eq!(harness.retained_bytes(), crate::readiness_transport::READINESS_TRANSPORT_BYTES);
+    let cause = harness.campaign.take_failure().ok_or("Missing actual absent listener cause")?;
+    drop(cause);
+    assert_eq!(harness.retained_bytes(), 0);
+    assert!(fixture.closed.lock().unwrap_or_else(std::sync::PoisonError::into_inner).is_empty());
+    assert_eq!(harness.campaign.budget.until(), until);
+    assert!(!harness.campaign.needs_input(harness.now())?);
+    harness.set_time(50_000_000);
+    assert!(harness.campaign.needs_input(harness.now())?);
+    harness.submit(Behavior::Success, None, false, None)?;
+    assert_eq!(harness.completion()?, CampaignStep::Ready);
+    assert_eq!(harness.campaign.budget.until(), until);
+    harness.finish()
+}
+
+#[test]
 fn cancelled_attempt_scope_cannot_be_replaced_to_resume_campaign() -> TestResult {
     let mut harness = Harness::new()?;
     harness.attempt.cancel();
@@ -87,6 +142,9 @@ fn cancellation_waits_for_actual_inflight_return_and_separate_cleanup() -> TestR
     harness.submit_close(original.settle_until)?;
     harness.completion()?;
     assert!(harness.campaign.settled());
+    assert_eq!(harness.retained_bytes(), crate::readiness_transport::READINESS_TRANSPORT_BYTES);
+    let cause = harness.campaign.take_failure().ok_or("Missing actual cancelled completion")?;
+    drop(cause);
     assert_eq!(harness.retained_bytes(), 0);
     harness.finish()
 }
@@ -110,6 +168,7 @@ fn supervised_attempt_and_cleanup_panics_preserve_original_payloads_and_partial_
     let Some(CampaignError::Transport(cause)) = harness.campaign.failure() else {
         return Err("Missing attempt panic cause".into());
     };
+    assert_eq!(cause.stage(), "attempt_panicked");
     assert_eq!(
         cause.source().ok_or("Missing original panic")?.to_string(),
         "original-campaign-panic"
@@ -149,6 +208,9 @@ fn cancellation_during_pending_close_waits_for_actual_closure_and_prohibits_succ
     assert_eq!(harness.completion()?, CampaignStep::Failed);
     assert!(harness.campaign.settled());
     assert!(!harness.campaign.needs_input(harness.now())?);
+    assert_eq!(harness.retained_bytes(), crate::readiness_transport::READINESS_TRANSPORT_BYTES);
+    let cause = harness.campaign.take_failure().ok_or("Missing retained first native failure")?;
+    drop(cause);
     assert_eq!(harness.retained_bytes(), 0);
     harness.finish()
 }

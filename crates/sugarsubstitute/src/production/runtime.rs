@@ -21,13 +21,14 @@ use sugarsubstitute_execution::MonotonicClock;
 /// Preserve lexical, actual startup, coordinator and native teardown failures.
 pub(crate) fn execute<I: IntoIterator<Item = OsString>>(
     arguments: I,
+    diagnostics: crate::diagnostics::DiagnosticHealth,
 ) -> Result<Option<impl Iterator<Item = OsString>>, Box<dyn Error>> {
     let mut arguments = arguments.into_iter().peekable();
     if arguments.peek().is_some_and(|value| value == "--internal-production-desktop") {
-        run_desktop(DesktopRole::parse(arguments)?)?;
+        run_desktop(DesktopRole::parse(arguments)?, diagnostics)?;
         return Ok(None);
     }
-    super::dispatch::execute(arguments, |command| {
+    super::dispatch::execute(arguments, diagnostics, |command| {
         ProductionActivation::new(
             std::env::current_exe()?,
             command.installation.clone(),
@@ -40,9 +41,13 @@ pub(crate) fn execute<I: IntoIterator<Item = OsString>>(
 /// Scope identities belong to this process; jobs retain original per-operation deadlines.
 /// # Errors
 /// Retain failures from actual capture, configuration, backend, main and final joins.
-fn run_desktop(role: DesktopRole) -> Result<(), Box<dyn Error>> {
+fn run_desktop(
+    role: DesktopRole,
+    diagnostics: crate::diagnostics::DiagnosticHealth,
+) -> Result<(), Box<dyn Error>> {
     let labels = messages("en").window;
     let child = ProductionChild::new(ChildInputs {
+        diagnostics,
         input: role.bootstrap,
         original: role.original,
         run: role.run,

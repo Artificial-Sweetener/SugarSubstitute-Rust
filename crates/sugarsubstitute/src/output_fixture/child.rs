@@ -20,8 +20,11 @@ use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner, MonotonicClock}
 use sugarsubstitute_supervision::fixture_descendant::{
     FixtureDescendantInput, FixtureDescendantLaunch,
 };
-pub(super) fn run(options: ChildOptions) -> Result<i32> {
-    let mut child = Child::new(options);
+pub(super) fn run(
+    options: ChildOptions,
+    health: crate::diagnostics::DiagnosticHealth,
+) -> Result<i32> {
+    let mut child = Child::new(options, health);
     run_headless(&mut child)?;
     if !child.finished || child.options.role == Role::Leaf {
         return Err("Output child lacks actual orderly shutdown".into());
@@ -29,6 +32,7 @@ pub(super) fn run(options: ChildOptions) -> Result<i32> {
     Ok(0)
 }
 pub(super) struct Child {
+    health: crate::diagnostics::DiagnosticHealth,
     pub(super) options: ChildOptions,
     pub(super) clock: Arc<MonotonicClock>,
     pub(super) owner: Option<ExecutionOwner>,
@@ -58,9 +62,10 @@ pub(super) struct Child {
     next_job: u64,
 }
 impl Child {
-    fn new(options: ChildOptions) -> Self {
+    fn new(options: ChildOptions, health: crate::diagnostics::DiagnosticHealth) -> Self {
         let phase = options.role;
         Self {
+            health,
             options,
             clock: MonotonicClock::new(),
             owner: None,
@@ -162,6 +167,11 @@ impl Child {
             match message {
                 Message::Welcome if !self.writers_started => {
                     if self.options.role == Role::Idle {
+                        tracing::info!(
+                            operation = "output_fixture_stdio_live",
+                            "Actual inherited diagnostic write before reader closure"
+                        );
+                        self.health.check()?;
                         self.channel
                             .as_mut()
                             .ok_or("Idle channel missing")?
@@ -193,7 +203,24 @@ impl Child {
                         return Err("Idle child cannot write on Go".into());
                     }
                 }
-                Message::Exit if !self.exit_requested => self.exit_requested = true,
+                Message::Exit if !self.exit_requested => {
+                    self.exit_requested = true;
+                    if self.options.role == Role::Idle {
+                        tracing::info!(
+                            operation = "output_fixture_stdio_closed",
+                            "Actual diagnostic write after checked owned-reader retirement"
+                        );
+                        let code = self
+                            .health
+                            .native_error()
+                            .ok_or("Actual closed-reader diagnostic error missing")?;
+                        self.health.check().err().ok_or("Original diagnostic cause missing")?;
+                        let channel =
+                            self.channel.as_mut().ok_or("Diagnostic reply channel missing")?;
+                        channel.diagnostic_error = Some(u32::try_from(code)?);
+                        channel.queue(Message::DiagnosticFailed)?;
+                    }
+                }
                 _ => return Err("Output child command state/order differs".into()),
             }
         }
@@ -220,7 +247,11 @@ impl Child {
             || self.exit_requested
                 && self.done_queued
                 && self.channel.as_ref().is_some_and(|channel| {
-                    matches!(channel.last_written, Some(Message::Done | Message::Primed))
+                    if self.options.role == Role::Idle {
+                        channel.last_written == Some(Message::DiagnosticFailed)
+                    } else {
+                        matches!(channel.last_written, Some(Message::Done | Message::Primed))
+                    }
                 }))
     }
     fn capture(&mut self, batch: &CompletionBatch) -> Result<()> {

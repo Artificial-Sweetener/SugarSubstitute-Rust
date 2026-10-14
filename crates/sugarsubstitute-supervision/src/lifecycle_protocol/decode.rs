@@ -118,6 +118,10 @@ pub(super) fn frame(source: &[u8]) -> Result<DecodedFrame<'_>, ProtocolError> {
             acknowledged_delivery: std::num::NonZeroU64::new(input.u64()?),
         },
         18 => DecodedPayload::MainFailed(main_fields::read_stage_failure(&mut input, run)?),
+        19 => DecodedPayload::SettleAttempt {
+            identity: main_fields::read_identity(&mut input, run)?,
+            acquisition: RequestId::new(input.u64()?).map_err(|_| ProtocolError::Identity)?,
+        },
         _ => return Err(ProtocolError::UnsupportedTag),
     };
     input.finish()?;

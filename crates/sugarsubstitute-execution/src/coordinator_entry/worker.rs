@@ -13,6 +13,7 @@ mod allocation;
 mod cleanup;
 mod commands;
 mod handshake;
+mod peer_retirement;
 mod retirement;
 mod source_staging;
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -24,6 +25,7 @@ enum Phase {
     Launch,
     Outcome,
     AwaitRoot,
+    AwaitPeerRetirement,
     Retiring,
 }
 #[derive(Clone, Copy)]
@@ -42,6 +44,8 @@ struct ConnectionIo {
     failure: Option<EntryTransportError>,
     native_retired: bool,
     retry_at: Option<Moment>,
+    peer_retirement_until: Option<Moment>,
+    retirement_probe: [u8; 1],
 }
 impl ConnectionIo {
     fn new() -> Self {
@@ -53,6 +57,8 @@ impl ConnectionIo {
             failure: None,
             native_retired: false,
             retry_at: None,
+            peer_retirement_until: None,
+            retirement_probe: [0],
         }
     }
 }
@@ -183,6 +189,7 @@ impl Active {
     }
     fn close_connection(&mut self, core: &Core, index: usize, error: Option<EntryTransportError>) {
         if let Some(error) = error {
+            let error = self.peer_retirement_error(index, error);
             if !self.work.shared.server || error.requires_process_shutdown() {
                 self.error(core, error);
                 return;

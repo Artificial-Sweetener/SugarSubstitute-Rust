@@ -20,7 +20,7 @@ mod text;
 pub use animation::{AnimationFrame, FlipPhase, POSE_COUNT, PaperFlip};
 pub use caption_icons::IconError;
 pub use character::{CharacterError, CharacterLibrary, PoseAsset};
-pub use layout::{Appearance, Control, LOGICAL_SIZE};
+pub use layout::{Appearance, Control, LOGICAL_SIZE, StartupStatus};
 pub use progress::ProgressFrame;
 pub use projection::{Bounds, Point, projected_quad};
 pub use render::{

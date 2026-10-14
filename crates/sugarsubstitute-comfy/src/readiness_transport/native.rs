@@ -26,6 +26,20 @@ impl HttpPort for SystemPort {
         context: &JobContext,
     ) -> Result<(), ReadinessTransportError> {
         checkpoint(context)?;
+        if state.peer.is_none()
+            && !sugarsubstitute_supervision::backend_listener::loopback_listener_present(
+                port,
+                &mut state.tcp,
+                context,
+            )
+            .map_err(|cause| ReadinessTransportError::new("http_listener_query", cause))?
+        {
+            return Err(ReadinessTransportError::unavailable(
+                "http_listener_absent",
+                std::io::Error::from(std::io::ErrorKind::ConnectionRefused),
+            ));
+        }
+        checkpoint(context)?;
         // SAFETY: Literal user agent and explicit NO_PROXY disable proxy discovery; synchronous session has no callback.
         let handle = unsafe {
             WinHttpOpen(
@@ -270,8 +284,12 @@ fn qualify(
     context: &JobContext,
 ) -> Result<(), ReadinessTransportError> {
     let peer = match &input.listener {
-        Listener::Managed(lease, _) => lease.qualify_connection(connection, context),
-        Listener::Attached(lease, _) => lease.qualify_connection(connection, context),
+        Listener::Managed(lease, _) => {
+            lease.qualify_connection(connection, &mut state.tcp, context)
+        }
+        Listener::Attached(lease, _) => {
+            lease.qualify_connection(connection, &mut state.tcp, context)
+        }
     }
     .map_err(|e| ReadinessTransportError::new("http_native_peer", e))?;
     if state.peer.is_some_and(|old| old != peer) {

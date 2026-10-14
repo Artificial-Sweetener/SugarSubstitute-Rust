@@ -4,12 +4,28 @@
 //! Listener rows and PID-only observations cannot establish managed readiness.
 mod attached;
 mod table;
+mod workspace;
 use crate::{
     FamilyBinding, LaunchTicket, RegistryError, WindowsProcessRegistry,
     registry::family_proof::RetainedFamilyProof,
 };
 pub use attached::AttachedListenerLease;
 use sugarsubstitute_contracts::{execution::JobContext, lifecycle::ResourceKey};
+pub use table::TcpTableFailure;
+pub use workspace::{TCP_OWNER_WORKSPACE_BYTES, TcpOwnerWorkspace};
+
+/// Observe bounded kernel IPv4 loopback listener presence before attempting HTTP.
+/// Absence permits delaying a connection attempt; presence grants no peer, family or readiness authority.
+/// Actual established peer qualification and complete served-content validation remain mandatory.
+/// # Errors
+/// Rejects zero ports, stale/non-readiness contexts and incomplete or oversized native tables.
+pub fn loopback_listener_present(
+    port: u16,
+    storage: &mut TcpOwnerWorkspace,
+    context: &JobContext,
+) -> Result<bool, RegistryError> {
+    table::listening(port, storage, context)
+}
 
 /// Observe one actual IPv4 loopback connection in network byte order.
 /// Values come from the HTTP adapter's connected request, never configured LISTEN facts.
@@ -97,11 +113,12 @@ impl ManagedListenerLease {
     pub fn qualify_connection(
         &self,
         connection: ConnectedLoopback,
+        storage: &mut TcpOwnerWorkspace,
         context: &JobContext,
     ) -> Result<BackendPeerIdentity, RegistryError> {
-        let pid = table::connected_owner(connection, context)?;
+        let pid = table::connected_owner(connection, storage, context)?;
         let identity = self.family.qualify_member(pid, context)?;
-        if table::connected_owner(connection, context)? != identity.pid {
+        if table::connected_owner(connection, storage, context)? != identity.pid {
             return Err(RegistryError::invalid("managed_listener_changed"));
         }
         Ok(BackendPeerIdentity { process_id: identity.pid, creation_time_100ns: identity.birth })

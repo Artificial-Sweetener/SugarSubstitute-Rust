@@ -36,6 +36,30 @@ impl FrontendInstallationInput {
         }
         Ok(Self { package, metadata, cube, script })
     }
+    /// Reissue the same explicit inert selection for another finite inspection.
+    /// This copies no proof or native owner. The composing parent retains its
+    /// preclaimed input-copy partition until the new inspector takes custody.
+    /// # Errors
+    /// Preserves allocation causes and rejects unexpected capacity growth.
+    pub fn try_reissue(&self) -> Result<Self, FrontendSourceError> {
+        fn copy(path: &Path) -> Result<PathBuf, FrontendSourceError> {
+            let mut result = PathBuf::new();
+            result
+                .try_reserve_exact(path.as_os_str().len())
+                .map_err(|cause| FrontendSourceError::new("source_reissue_allocation", cause))?;
+            result.push(path);
+            if result.capacity() > 128 * 1024 {
+                return Err(FrontendSourceError::invalid("source_reissue_capacity"));
+            }
+            Ok(result)
+        }
+        Self::new(
+            copy(&self.package)?,
+            copy(&self.metadata)?,
+            copy(&self.cube)?,
+            copy(&self.script)?,
+        )
+    }
     /// Borrow the selected package directory; this is not a canonical proof.
     pub fn package_directory(&self) -> &Path {
         &self.package

@@ -160,6 +160,7 @@ fn quiet_pre_ui_owner_keeps_original_cutoff_until_ready_or_shutdown() -> TestRes
                 close: "close",
             },
         },
+        crate::diagnostics::DiagnosticHealth::fixture(),
     );
     assert_eq!(child.next_deadline(), Some(original));
     assert_eq!(child.next_deadline(), Some(original));
@@ -276,5 +277,63 @@ fn capture_failure_kind_preserves_first_identity_and_redacts_native_payload() ->
     assert!(!format!("{observation:?}").contains("private-"));
     assert!(native.failure_source().is_some_and(|cause| cause.is::<CaptureAttachFailure>()));
     assert_eq!(calls.load(Ordering::Acquire), 0);
+    Ok(())
+}
+
+#[test]
+fn closed_preparation_failure_survives_failed_diagnostic_write_without_native_effects() -> TestResult
+{
+    use crate::production::child::ProductionChild;
+    use sugarsubstitute_desktop::{MainCaptionLabels, MainWindowSettings};
+    let calls = Arc::new(AtomicUsize::new(0));
+    let mut bootstrap = bootstrap(&calls, None)?;
+    bootstrap.record(
+        ChildBootstrapIssue::Capture,
+        Box::new(std::io::Error::other("original capture boundary")),
+    );
+    let run = RunKey {
+        owner: CoordinatorKey {
+            namespace: NamespaceId::new([1; 32]),
+            epoch: CoordinatorEpoch::new([2; 16])?,
+        },
+        instance: InstanceId::new(1)?,
+        generation: RunGeneration::new(1)?,
+    };
+    let mut child = ProductionChild::assemble(
+        bootstrap,
+        run,
+        (LaunchId::new(1)?, Generation::new(1)?),
+        MainWindowSettings {
+            logical_width: 1280,
+            logical_height: 720,
+            dark: true,
+            labels: MainCaptionLabels {
+                minimize: "minimize",
+                maximize: "maximize",
+                restore: "restore",
+                close: "close",
+            },
+        },
+        crate::diagnostics::DiagnosticHealth::fixture_failure(std::io::Error::from_raw_os_error(
+            232,
+        )),
+    );
+    let failure = child
+        .observe_diagnostics::<()>(Err(Box::new(ChildBootstrapIssue::Capture)))
+        .err()
+        .ok_or("Real diagnostic rejection missing")?;
+    assert_eq!(
+        child.bootstrap.preparation_observation().original_failure,
+        Some(ChildBootstrapIssue::Capture)
+    );
+    assert_eq!(
+        child.bootstrap.failure_source().ok_or("Original cause lost")?.to_string(),
+        "original capture boundary"
+    );
+    assert!(failure.to_string().contains("Capture"));
+    assert!(!failure.to_string().contains("original capture boundary"));
+    assert_eq!(child.diagnostics.native_error(), Some(232));
+    assert_eq!(calls.load(Ordering::Acquire), 0);
+    assert!(child.take_prepared_startup().is_none());
     Ok(())
 }

@@ -60,6 +60,7 @@ pub(super) enum Reply {
     Reloaded(LeaseKey),
     Cancelled,
     Failed(LifecycleFailureCode),
+    Rejected(sugarsubstitute_contracts::lifecycle::LifecycleRejection),
     Output(super::output::OutputFacts),
     OutputIdle(LeaseKey),
     MainFailed(sugarsubstitute_supervision::lifecycle_protocol::MainStageFailure),

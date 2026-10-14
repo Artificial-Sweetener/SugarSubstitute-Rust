@@ -138,6 +138,7 @@ impl Record {
             forced: self.forced,
             retained_members: self.retained,
             cleanup_pending: self.cleanup.is_some() || self.member_watch.is_some(),
+            cleanup_step_pending: self.cleanup.is_some(),
             member_watch_required: self.next.is_some() && self.member_watch.is_none(),
             settled: self.settled,
             failed: self.error.is_some(),

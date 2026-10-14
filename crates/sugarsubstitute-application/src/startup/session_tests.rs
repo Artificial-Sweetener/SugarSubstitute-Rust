@@ -345,3 +345,34 @@ fn frontend_failure_retains_bounded_detail_and_closes_readiness_before_settlemen
     assert!(session.failure().is_some());
     Ok(())
 }
+
+/// A retained configuration retries only after genuine composing-owner settlement.
+#[test]
+fn configured_retry_requires_settlement_and_waits_for_new_native_presentation() -> TestResult {
+    let mut session = session(false)?;
+    session.observe(event(StartupObservation::SplashPresented)?)?;
+    session.observe(event(StartupObservation::Failed(StartupFailure::new(
+        StartupFailureCode::ConnectionUnavailable,
+        Box::new(std::io::Error::other("actual adapter disposition")),
+    )))?)?;
+    let configuration = session.configuration().clone();
+    assert_eq!(
+        session.retry_configured(LaunchId::new(5)?, Generation::new(1)?),
+        Err(StartupRejection::SettlementRequired)
+    );
+    session.intent(LaunchId::new(4)?, SplashIntent::Cancel)?;
+    assert_eq!(session.phase(), StartupPhase::Failed);
+    session.observe(event(StartupObservation::ConnectionSettled)?)?;
+    assert_eq!(
+        session.retry_configured(LaunchId::new(4)?, Generation::new(1)?),
+        Err(StartupRejection::LaunchIdentityNotIncreasing)
+    );
+    session.retry_configured(LaunchId::new(5)?, Generation::new(1)?)?;
+    assert_eq!(session.configuration(), &configuration);
+    assert_eq!(session.phase(), StartupPhase::SplashFirstFrame);
+    assert!(session.observe(event(StartupObservation::SplashPresented)?).is_err());
+    let effect = session
+        .observe(StartupEvent::new(LaunchId::new(5)?, StartupObservation::SplashPresented))?;
+    assert_eq!(effect, Some(StartupEffect::PrepareConnection { launch: LaunchId::new(5)? }));
+    Ok(())
+}

@@ -115,7 +115,7 @@ impl Fixture {
             }
             let snapshot =
                 self.registry.as_ref().ok_or("Actual registry is not prepared")?.snapshot(key)?;
-            if snapshot.creation_pending || snapshot.cleanup_pending || snapshot.settled {
+            if snapshot.creation_pending || snapshot.cleanup_step_pending || snapshot.settled {
                 continue;
             }
             let watch = if snapshot.member_watch_required {
