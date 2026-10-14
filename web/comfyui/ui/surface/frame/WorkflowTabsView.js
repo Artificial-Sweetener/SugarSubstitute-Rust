@@ -21,6 +21,7 @@ import { WORKFLOW_TAB_WIDTH } from './WorkflowTabStyles.js';
 export class WorkflowTabsView {
     document;
     actions;
+    viewport;
     element = createWorkflowTablist();
     #tabs = new Map();
     #menu;
@@ -29,12 +30,13 @@ export class WorkflowTabsView {
     #projecting = false;
     #selection = '';
     /** Bind interaction intents without retaining host workflow objects in presentation. */
-    constructor(document, actions) {
+    constructor(document, actions, viewport) {
         this.document = document;
         this.actions = actions;
+        this.viewport = viewport;
         this.#menu = new ContextMenu(document);
         this.element.setAttribute('aria-label', 'Workflows');
-        this.element.addEventListener('scroll', () => this.#updateOrbAdjacency());
+        this.viewport.addEventListener('scroll', this.#scrolled);
         this.element.addEventListener('change', () => {
             if (this.#projecting)
                 return;
@@ -42,12 +44,7 @@ export class WorkflowTabsView {
             if (selected && selected[0] !== this.#order.find((tab) => tab.selected)?.id)
                 this.#run(() => actions.activate(selected[0]));
         });
-        this.element.addEventListener('wheel', (event) => {
-            if (this.element.scrollWidth <= this.element.clientWidth)
-                return;
-            event.preventDefault();
-            this.element.scrollLeft += event.deltaY || event.deltaX;
-        }, { passive: false });
+        this.viewport.addEventListener('wheel', this.#wheel, { passive: false });
     }
     /** Update values in place and animate only a newly accepted unread transition. */
     update(tabs, unread, animate = true) {
@@ -93,33 +90,49 @@ export class WorkflowTabsView {
     }
     /** Reveal newly selected or reordered tabs without changing scroll position on activity refresh. */
     #revealSelected(index) {
-        const width = this.element.clientWidth;
+        const width = this.viewport.clientWidth;
         if (index < 0 || width <= 0)
             return;
         const left = index * WORKFLOW_TAB_WIDTH;
         const right = left + WORKFLOW_TAB_WIDTH;
-        if (left < this.element.scrollLeft)
-            this.element.scrollLeft = left;
-        else if (right > this.element.scrollLeft + width)
-            this.element.scrollLeft = Math.max(0, right - width);
+        if (left < this.viewport.scrollLeft)
+            this.viewport.scrollLeft = left;
+        else if (right > this.viewport.scrollLeft + width)
+            this.viewport.scrollLeft = Math.max(0, right - width);
     }
+    /** Keep selection and the orb cutout aligned after the enclosing strip changes width. */
+    resize() {
+        this.#revealSelected(this.#order.findIndex((tab) => tab.selected));
+        this.#updateOrbAdjacency();
+    }
+    /** Project scroll position without rebuilding controls or changing selected workflow policy. */
+    #scrolled = () => this.#updateOrbAdjacency();
+    /** Preserve reference horizontal wheel scrolling across both tabs and the trailing add button. */
+    #wheel = (event) => {
+        if (this.viewport.scrollWidth <= this.viewport.clientWidth)
+            return;
+        event.preventDefault();
+        this.viewport.scrollLeft += event.deltaY || event.deltaX;
+    };
     /** Keep the cutout aligned to the orb when the uniform-width tab strip scrolls or reorders. */
     #updateOrbAdjacency() {
         const selected = this.#order.findIndex((tab) => tab.selected);
         this.element.toggleAttribute('data-selected', selected >= 0);
         this.element.style.setProperty('--sc-selected-offset', `${String(selected * WORKFLOW_TAB_WIDTH)}px`);
-        this.element.style.setProperty('--sc-tab-scroll', `${String(this.element.scrollLeft)}px`);
-        const index = Math.floor(Math.max(0, this.element.scrollLeft) / WORKFLOW_TAB_WIDTH);
+        this.element.style.setProperty('--sc-tab-scroll', `${String(this.viewport.scrollLeft)}px`);
+        const index = Math.floor(Math.max(0, this.viewport.scrollLeft) / WORKFLOW_TAB_WIDTH);
         const adjacent = this.#order[index]?.id;
         for (const [id, tab] of this.#tabs) {
             tab.element.toggleAttribute('data-orb-adjacent', id === adjacent);
             if (id === adjacent)
-                tab.element.style.setProperty('--sc-tab-cutout-x', `${String(-17 + this.element.scrollLeft - index * WORKFLOW_TAB_WIDTH)}px`);
+                tab.element.style.setProperty('--sc-tab-cutout-x', `${String(-17 + this.viewport.scrollLeft - index * WORKFLOW_TAB_WIDTH)}px`);
         }
     }
     /** Release floating interaction and official Fluent focus bindings through normal disconnection. */
     dispose() {
         this.#menu.close();
+        this.viewport.removeEventListener('scroll', this.#scrolled);
+        this.viewport.removeEventListener('wheel', this.#wheel);
         this.element.remove();
         this.#tabs.clear();
     }

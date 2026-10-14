@@ -14,6 +14,12 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Scope the reference shell geometry to the explicitly selected Substitute visual mode. */
+import {
+  FRAME_TAB_START,
+  WORKFLOW_TAB_TOOL_WIDTH,
+  WORKFLOW_NEW_BUTTON_GAP,
+} from './WorkflowTabStripLayout.js';
+/** Match frame, scrolling strip and rail geometry only in the selected visual mode. */
 export const substituteFrameCss = `
   @property --sc-tab-cutout-radius { syntax:'<length>'; inherits:false; initial-value:0px; }
   .sc-substitute-frame sc-workflow-tab { transition:--sc-tab-cutout-radius 160ms cubic-bezier(.645,.045,.355,1); }
@@ -24,7 +30,7 @@ export const substituteFrameCss = `
   :root[data-sc-substitute-frame] .splitter-overlay:not(.splitter-overlay-bottom) > .p-splitter-gutter { display:none !important; }
   :root[data-sc-substitute-frame] .subgraph-breadcrumb { padding-left:62px; }
   :root[data-sc-substitute-frame] div:has(> .subgraph-breadcrumb) { min-width:190px; }
-  .sc-substitute-frame { position:absolute; inset:0; height:34px; display:flex; padding:4px 0 0 48px;
+  .sc-substitute-frame { position:absolute; inset:0; height:34px; display:flex; padding:4px 0 0 ${String(FRAME_TAB_START)}px;
     box-sizing:border-box; align-items:flex-end; z-index:1000; pointer-events:auto;
     background:transparent; color:var(--colorNeutralForeground1); font-family:var(--fontFamilyBase);
     --sc-frame-wash:rgba(44,44,44,.588); --sc-frame-muted:rgba(255,255,255,.788);
@@ -49,6 +55,14 @@ export const substituteFrameCss = `
   .sc-substitute-frame sc-workflow-tab:focus-within .sc-workflow-close { visibility:visible; }
   .sc-substitute-frame sc-workflow-tab[data-modified] .sc-workflow-title::after { content:' •'; }
   .sc-substitute-frame .sc-frame-tool { flex:0 0 30px; width:30px; height:30px; min-width:0; padding:0; border-radius:0; }
+  .sc-substitute-frame .sc-workflow-strip { display:flex; align-items:center; height:30px; min-width:0;
+    flex:0 1 auto; overflow-x:auto; overflow-y:hidden; scrollbar-width:none; }
+  .sc-substitute-frame .sc-workflow-strip::-webkit-scrollbar { display:none; }
+  .sc-substitute-frame :is(.sc-workflow-new,.sc-workflow-overflow) { width:${String(WORKFLOW_TAB_TOOL_WIDTH)}px;
+    flex:0 0 ${String(WORKFLOW_TAB_TOOL_WIDTH)}px; height:24px; min-height:24px; align-self:center; border-radius:4px; }
+  .sc-substitute-frame .sc-workflow-new { margin-left:${String(WORKFLOW_NEW_BUTTON_GAP)}px; }
+  .sc-substitute-frame .sc-workflow-overflow { margin-left:auto; }
+  .sc-substitute-frame .sc-workflow-overflow[hidden] { display:none !important; }
   .sc-substitute-frame .sc-app-orb { position:absolute; left:8px; top:6px; width:46px; height:46px; min-width:46px;
     padding:0; border:0; border-radius:50%; background:transparent; overflow:hidden; clip-path:circle(50%); z-index:2; }
   .sc-substitute-frame .sc-app-orb canvas { display:block; width:46px; height:46px; pointer-events:none; }

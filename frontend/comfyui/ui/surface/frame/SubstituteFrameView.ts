@@ -16,6 +16,7 @@
 /** Compose the source-matched frame controls independently of host mounts and workflow stores. */
 import { WorkflowTabsView, type WorkflowTabsActions } from './WorkflowTabsView.js';
 import { AppOrbView } from './AppOrbView.js';
+import { WorkflowTabStripLayout } from './WorkflowTabStripLayout.js';
 import { ContextMenu } from '../../menus/ContextMenu.js';
 import { applyOwnedFluentTheme } from '../appearance/FluentThemeRuntime.js';
 import type { CubeStackFrameControls } from '../stack/CubeStackHost.js';
@@ -36,6 +37,8 @@ export class SubstituteFrameView {
   readonly #tabs: WorkflowTabsView;
   readonly #orb: AppOrbView;
   readonly #menu: ContextMenu;
+  readonly #overflowMenu: ContextMenu;
+  readonly #stripLayout: WorkflowTabStripLayout;
   readonly #stackButton: HTMLElement;
   readonly #stopStack: () => void;
   #presented: readonly FrameWorkflowTab[] = [];
@@ -51,7 +54,10 @@ export class SubstituteFrameView {
     this.element.className = 'sc-substitute-frame';
     this.element.setAttribute('data-sc-fluent-theme-root', '');
     this.#menu = new ContextMenu(document);
-    this.#tabs = new WorkflowTabsView(document, actions.workflows);
+    this.#overflowMenu = new ContextMenu(document);
+    const viewport = document.createElement('div');
+    viewport.className = 'sc-workflow-strip';
+    this.#tabs = new WorkflowTabsView(document, actions.workflows, viewport);
     this.#orb = new AppOrbView(document, () => [
       { label: 'Open workflow', select: () => actions.command('Comfy.OpenWorkflow') },
       { label: 'Save', select: () => actions.command('Comfy.SaveWorkflow') },
@@ -61,8 +67,9 @@ export class SubstituteFrameView {
       { label: 'Settings', select: () => actions.command('Comfy.ShowSettingsDialog') },
     ]);
     const create = this.#button('New workflow', '+', () => actions.workflows.create());
+    create.classList.add('sc-workflow-new');
     const overflow = this.#button('More workflows', '⌄', () =>
-      this.#menu.open({
+      this.#overflowMenu.open({
         label: 'Open workflows',
         trigger: overflow,
         anchor: { kind: 'below', bounds: overflow.getBoundingClientRect() },
@@ -73,6 +80,18 @@ export class SubstituteFrameView {
           select: () => actions.workflows.activate(tab.id),
         })),
       }),
+    );
+    overflow.classList.add('sc-workflow-overflow');
+    overflow.setAttribute('aria-haspopup', 'menu');
+    viewport.append(this.#tabs.element, create);
+    this.#stripLayout = new WorkflowTabStripLayout(
+      document,
+      this.element,
+      viewport,
+      this.#tabs.element,
+      overflow,
+      () => this.#tabs.resize(),
+      () => this.#overflowMenu.close(),
     );
     const cluster = document.createElement('div');
     cluster.className = 'sc-orb-actions';
@@ -101,12 +120,13 @@ export class SubstituteFrameView {
     chevron.setAttribute('aria-hidden', 'true');
     overrides.append(this.#glyph('sc-orb-pin-icon', 'pin.svg'), chevron);
     cluster.append(this.#stackButton, overrides);
-    this.element.append(this.#orb.element, this.#tabs.element, overflow, create, cluster);
+    this.element.append(this.#orb.element, viewport, overflow, cluster);
   }
 
   /** Retain tab identities through workflow and activity updates. */
   update(tabs: readonly FrameWorkflowTab[], unread: (id: WorkflowSessionId) => boolean): void {
     this.#presented = tabs;
+    this.#stripLayout.update(tabs.length);
     this.#tabs.update(tabs, unread, this.#initialized);
     this.#initialized = true;
   }
@@ -124,6 +144,8 @@ export class SubstituteFrameView {
   /** Release rendering subscriptions, Microsoft focus groups and transient menus together. */
   dispose(): void {
     this.#stopStack();
+    this.#stripLayout.dispose();
+    this.#overflowMenu.close();
     this.#menu.close();
     this.#orb.dispose();
     this.#tabs.dispose();

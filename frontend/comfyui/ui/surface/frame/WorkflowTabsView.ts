@@ -48,25 +48,18 @@ export class WorkflowTabsView {
   constructor(
     private readonly document: Document,
     private readonly actions: WorkflowTabsActions,
+    private readonly viewport: HTMLElement,
   ) {
     this.#menu = new ContextMenu(document);
     this.element.setAttribute('aria-label', 'Workflows');
-    this.element.addEventListener('scroll', () => this.#updateOrbAdjacency());
+    this.viewport.addEventListener('scroll', this.#scrolled);
     this.element.addEventListener('change', () => {
       if (this.#projecting) return;
       const selected = [...this.#tabs].find(([, tab]) => tab.element.id === this.element.activeid);
       if (selected && selected[0] !== this.#order.find((tab) => tab.selected)?.id)
         this.#run(() => actions.activate(selected[0]));
     });
-    this.element.addEventListener(
-      'wheel',
-      (event) => {
-        if (this.element.scrollWidth <= this.element.clientWidth) return;
-        event.preventDefault();
-        this.element.scrollLeft += event.deltaY || event.deltaX;
-      },
-      { passive: false },
-    );
+    this.viewport.addEventListener('wheel', this.#wheel, { passive: false });
   }
 
   /** Update values in place and animate only a newly accepted unread transition. */
@@ -113,14 +106,30 @@ export class WorkflowTabsView {
 
   /** Reveal newly selected or reordered tabs without changing scroll position on activity refresh. */
   #revealSelected(index: number): void {
-    const width = this.element.clientWidth;
+    const width = this.viewport.clientWidth;
     if (index < 0 || width <= 0) return;
     const left = index * WORKFLOW_TAB_WIDTH;
     const right = left + WORKFLOW_TAB_WIDTH;
-    if (left < this.element.scrollLeft) this.element.scrollLeft = left;
-    else if (right > this.element.scrollLeft + width)
-      this.element.scrollLeft = Math.max(0, right - width);
+    if (left < this.viewport.scrollLeft) this.viewport.scrollLeft = left;
+    else if (right > this.viewport.scrollLeft + width)
+      this.viewport.scrollLeft = Math.max(0, right - width);
   }
+
+  /** Keep selection and the orb cutout aligned after the enclosing strip changes width. */
+  resize(): void {
+    this.#revealSelected(this.#order.findIndex((tab) => tab.selected));
+    this.#updateOrbAdjacency();
+  }
+
+  /** Project scroll position without rebuilding controls or changing selected workflow policy. */
+  readonly #scrolled = (): void => this.#updateOrbAdjacency();
+
+  /** Preserve reference horizontal wheel scrolling across both tabs and the trailing add button. */
+  readonly #wheel = (event: WheelEvent): void => {
+    if (this.viewport.scrollWidth <= this.viewport.clientWidth) return;
+    event.preventDefault();
+    this.viewport.scrollLeft += event.deltaY || event.deltaX;
+  };
 
   /** Keep the cutout aligned to the orb when the uniform-width tab strip scrolls or reorders. */
   #updateOrbAdjacency(): void {
@@ -130,15 +139,15 @@ export class WorkflowTabsView {
       '--sc-selected-offset',
       `${String(selected * WORKFLOW_TAB_WIDTH)}px`,
     );
-    this.element.style.setProperty('--sc-tab-scroll', `${String(this.element.scrollLeft)}px`);
-    const index = Math.floor(Math.max(0, this.element.scrollLeft) / WORKFLOW_TAB_WIDTH);
+    this.element.style.setProperty('--sc-tab-scroll', `${String(this.viewport.scrollLeft)}px`);
+    const index = Math.floor(Math.max(0, this.viewport.scrollLeft) / WORKFLOW_TAB_WIDTH);
     const adjacent = this.#order[index]?.id;
     for (const [id, tab] of this.#tabs) {
       tab.element.toggleAttribute('data-orb-adjacent', id === adjacent);
       if (id === adjacent)
         tab.element.style.setProperty(
           '--sc-tab-cutout-x',
-          `${String(-17 + this.element.scrollLeft - index * WORKFLOW_TAB_WIDTH)}px`,
+          `${String(-17 + this.viewport.scrollLeft - index * WORKFLOW_TAB_WIDTH)}px`,
         );
     }
   }
@@ -146,6 +155,8 @@ export class WorkflowTabsView {
   /** Release floating interaction and official Fluent focus bindings through normal disconnection. */
   dispose(): void {
     this.#menu.close();
+    this.viewport.removeEventListener('scroll', this.#scrolled);
+    this.viewport.removeEventListener('wheel', this.#wheel);
     this.element.remove();
     this.#tabs.clear();
   }
