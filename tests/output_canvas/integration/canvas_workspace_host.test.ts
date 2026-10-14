@@ -19,6 +19,7 @@ import { jest } from '@jest/globals';
 import { ComfyCanvasWorkspaceHost } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/ComfyCanvasWorkspaceHost.js';
 import { ComfyCanvasPreferences } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/ComfyCanvasPreferences.js';
 import { CanvasFrameFixture } from '../support/CanvasFrameFixture.js';
+import { installCanvasWorkspaceAnimation } from '../support/CanvasWorkspaceMotionFixture.js';
 
 interface Setting {
   readonly id: string;
@@ -164,6 +165,32 @@ test('opens a narrow drawer when its accepted desktop visibility is already enab
   f.host.toggle();
   expect(f.host.canvas).toBeNull();
   expect(f.presentation.snapshot.canvas).toBe(false);
+  f.dispose();
+});
+
+test('reverses explicit toggles without detaching exit pixels and skips workflow restoration slides', async () => {
+  const f = fixture();
+  await Promise.resolve();
+  const pane = f.root.querySelector<HTMLElement>('.sc-output-workspace-pane')!;
+  const animation = installCanvasWorkspaceAnimation(pane);
+  const canvas = f.host.canvas;
+  f.host.toggle();
+  expect(f.host.visible).toBe(false);
+  expect(f.presentation.snapshot.canvas).toBe(false);
+  expect(f.host.canvas).toBe(canvas);
+  f.host.toggle();
+  expect(f.host.visible).toBe(true);
+  expect(f.host.canvas).toBe(canvas);
+  expect(animation.effects).toHaveLength(2);
+  f.host.beforeConfigureGraph(true);
+  expect(pane.dataset.canvasMotion).toBeUndefined();
+  f.presentation.change({ canvas: false });
+  expect(f.host.canvas).toBeNull();
+  f.presentation.change({ canvas: true });
+  expect(f.host.canvas).toBe(canvas);
+  expect(animation.effects).toHaveLength(2);
+  await Promise.resolve();
+  expect(f.report).not.toHaveBeenCalled();
   f.dispose();
 });
 

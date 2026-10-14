@@ -36,6 +36,7 @@ export class ComfyCanvasWorkspaceHost {
   #disposed = false;
   #started = false;
   #accepted: { visible: boolean; width: number } | null = null;
+  #userVisibilityChange = false;
 
   /** Inject host lifecycle sources, accepted settings, and finite geometry scheduling. */
   constructor(
@@ -55,7 +56,12 @@ export class ComfyCanvasWorkspaceHost {
 
   /** Expose the primary canvas allocation only while its supported host surface is visible. */
   get canvas(): HTMLElement | null {
-    return this.#workspace?.visible ? this.#workspace.canvas : null;
+    return this.#workspace?.presented ? this.#workspace.canvas : null;
+  }
+
+  /** Read accepted open state independently of pixels retained during an exit slide. */
+  get visible(): boolean {
+    return this.#workspace?.visible ?? false;
   }
 
   /** Observe only identified graph workspace mounting and public app/renderer lifecycles. */
@@ -105,14 +111,14 @@ export class ComfyCanvasWorkspaceHost {
     this.changed();
   }
 
-  /** Apply explicit drawer intent immediately; host setting callbacks own accepted visibility. */
+  /** Toggle accepted open state while allowing the outgoing image to finish its slide. */
   toggle(): void {
-    this.#visibility(this.canvas === null);
+    this.#visibility(!this.visible);
   }
 
   /** Open the current workflow's pane idempotently for explicit image inspection. */
   show(): void {
-    if (this.canvas === null) this.#visibility(true);
+    if (!this.visible) this.#visibility(true);
   }
 
   /** Relinquish only this primary workspace and leave independently owned future windows unaffected. */
@@ -128,11 +134,16 @@ export class ComfyCanvasWorkspaceHost {
     this.#panel = null;
   }
 
-  /** Route one local action through public Comfy persistence and preserve host-owned rollback semantics. */
+  /** Animate one accepted local action through the authoritative workflow preference owner. */
   #visibility(visible: boolean): void {
     if (this.#disposed) return;
-    this.presentation.change({ canvas: visible });
-    this.#workspace?.drawer(visible);
+    this.#userVisibilityChange = true;
+    try {
+      this.presentation.change({ canvas: visible });
+      this.#workspace?.drawer(visible, true);
+    } finally {
+      this.#userVisibilityChange = false;
+    }
     this.changed();
   }
 
@@ -151,7 +162,7 @@ export class ComfyCanvasWorkspaceHost {
     const next = this.#preferences();
     if (this.#accepted?.visible === next.visible && this.#accepted.width === next.width) return;
     this.#accepted = next;
-    this.#workspace?.preferences(next);
+    this.#workspace?.preferences(next, this.#userVisibilityChange);
     this.changed();
   }
 
@@ -176,6 +187,7 @@ export class ComfyCanvasWorkspaceHost {
         },
         close: () => this.#visibility(false),
         changed: this.changed,
+        report: this.report,
       });
       this.#panel = panel;
       this.#workspace.suspend(this.#suspension());
