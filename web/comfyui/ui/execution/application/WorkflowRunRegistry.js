@@ -26,6 +26,10 @@ export class WorkflowRunRegistry {
         this.#orders.set(context.session.sessionId, order);
         return Object.freeze({ ...freezeWorkflowSubmissionContext(context), order });
     }
+    /** Expose the sole queue-order authority without requiring a transport receipt or active job. */
+    latestOrder(session) {
+        return this.#orders.get(session) ?? 0;
+    }
     /** Register a validated queue acceptance once while preserving its captured submission order. */
     accept(context, promptId) {
         const existing = this.#runs.get(promptId);

@@ -18,6 +18,7 @@ import { buildCubeOutputExecutionId } from '../cube/execution/CubeOutputExecutio
 import { buildLinkIndex } from '../graph/GraphQuery.js';
 import { isRecord } from '../types/common.js';
 import { upstreamPreviewLocatorLayers } from './CubeOutputPreviewAncestry.js';
+import { canvasRevealTarget } from '../output_canvas/domain/CanvasReveal.js';
 /** Own Comfy media lookup while leaving preview composition to the surface. */
 export class ComfyCubePreviewCatalog {
     #host;
@@ -139,6 +140,7 @@ export class ComfyCubePreviewCatalog {
                         url,
                         label,
                         sourceLocator: locator,
+                        revealTarget: canvasRevealTarget(item),
                     }
                     : null;
             })

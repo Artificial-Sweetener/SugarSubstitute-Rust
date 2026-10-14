@@ -39,6 +39,7 @@ import {
 } from './ComfyCubeLivePreview.js';
 import { workflowSessionKey } from './WorkflowSessionKey.js';
 import { isRecord } from '../../types/common.js';
+import type { WorkflowSessionId } from '../domain/ExecutionIdentity.js';
 
 export interface ComfyWorkflowExecutionRuntimeOptions {
   readonly app: unknown;
@@ -171,6 +172,11 @@ export class ComfyWorkflowExecutionRuntime {
   /** Read connection state independently of whichever workflow or image is mounted. */
   get connected(): boolean {
     return this.#connected;
+  }
+
+  /** Read submission intent through the shared run registry, including outstanding queue receipts. */
+  latestSubmissionOrder(session: WorkflowSessionId): number {
+    return this.#runs.latestOrder(session);
   }
 
   /** Refuse live-graph preparation when an observed construction now names another workflow or load. */

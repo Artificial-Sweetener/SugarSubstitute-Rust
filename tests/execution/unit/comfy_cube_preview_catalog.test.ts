@@ -20,6 +20,26 @@ import { workflowSnapshotOutput } from '../support/workflow_results.js';
 import type { NativeCubeSubgraph } from '../../../frontend/comfyui/ui/cube/ComfyCubeGraphBuilder.js';
 import type { CubeNode } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 import { buildCubeOutputExecutionId } from '../../../frontend/comfyui/ui/cube/execution/CubeOutputExecutionIdentity.js';
+import {
+  outputSourceId,
+  workflowSessionId,
+  snapshotOutputResultId,
+} from '../../../frontend/comfyui/ui/execution/domain/ExecutionIdentity.js';
+import type { CanvasRevealTarget } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasReveal.js';
+
+/** Assert immutable snapshot provenance is carried to thumbnails alongside their normal media fields. */
+function expectedReveal(path: string): CanvasRevealTarget {
+  const sessionId = workflowSessionId('fixture');
+  const sourceId = outputSourceId(path);
+  return {
+    sessionId,
+    sourceId,
+    generation: 0,
+    runOrder: 0,
+    batchIndex: 0,
+    itemId: snapshotOutputResultId(sessionId, 'fixture', sourceId, 1, 0),
+  };
+}
 
 describe('ComfyCubePreviewCatalog', () => {
   test('collects only media belonging to a Cube output boundary', () => {
@@ -51,6 +71,7 @@ describe('ComfyCubePreviewCatalog', () => {
               url: '/view?filename=output.png',
               label: 'image',
               sourceLocator: 'container-definition:save',
+              revealTarget: expectedReveal('container-definition:save'),
             },
           ],
         },
@@ -100,6 +121,7 @@ describe('ComfyCubePreviewCatalog', () => {
         url: '/view?filename=cube-output.png',
         label: 'output.image',
         sourceLocator: sinkId,
+        revealTarget: expectedReveal(sinkId),
       },
     ]);
   });
@@ -125,6 +147,7 @@ describe('ComfyCubePreviewCatalog', () => {
         url: '/view?filename=captured-result.png',
         label: 'output.image',
         sourceLocator: sinkId,
+        revealTarget: expectedReveal(sinkId),
       },
     ]);
   });
@@ -362,6 +385,7 @@ describe('ComfyCubePreviewCatalog', () => {
         url: '/view?filename=downstream.png',
         label: 'image',
         sourceLocator: 'preview',
+        revealTarget: expectedReveal('preview'),
       },
     ]);
   });

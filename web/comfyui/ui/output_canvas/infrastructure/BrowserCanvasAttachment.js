@@ -46,6 +46,7 @@ export class BrowserCanvasAttachment {
     #camera;
     #browserResources;
     #status;
+    #navigation;
     #overlay;
     #stopView;
     #catalog;
@@ -111,11 +112,13 @@ export class BrowserCanvasAttachment {
             read: () => !this.#disposed && options.accepts() ? { plan: this.#plan, catalog: this.#catalog } : null,
             cells: (catalog) => this.#overview.cells(catalog),
         });
+        this.#navigation = sources;
         this.port = new BrowserCanvasPort(this.#snapshot(), {
             origin: document.location.origin,
             capabilities: {
                 schema: 1,
                 commands: [
+                    'reveal',
                     'select',
                     'select-source',
                     'select-preview',
@@ -212,6 +215,12 @@ export class BrowserCanvasAttachment {
             element.replaceChildren();
             throw error;
         }
+    }
+    /** Accept graph-thumbnail inspection through the same preparation path as surface commands. */
+    async reveal(target) {
+        if (this.#disposed || !this.options.accepts())
+            return false;
+        return await this.#navigation.reveal(target);
     }
     /** Refresh light catalog state at a scoped execution/metadata/navigation boundary. */
     refresh() {

@@ -96,6 +96,11 @@ export class ComfyCanvasWorkspaceHost {
     toggle() {
         this.#visibility(this.canvas === null);
     }
+    /** Open the current workflow's pane idempotently for explicit image inspection. */
+    show() {
+        if (this.canvas === null)
+            this.#visibility(true);
+    }
     /** Relinquish only this primary workspace and leave independently owned future windows unaffected. */
     dispose() {
         if (this.#disposed)

@@ -23,6 +23,7 @@ export class ComfyCubePreviewActions {
     #fetchBlob;
     #showContextMenu;
     #reportError;
+    #revealImage;
     /** Bind browser operations without coupling preview views to host globals. */
     constructor(options) {
         this.#document = options.document;
@@ -31,6 +32,7 @@ export class ComfyCubePreviewActions {
         this.#fetchBlob = options.fetchBlob;
         this.#showContextMenu = options.showContextMenu;
         this.#reportError = options.reportError;
+        this.#revealImage = options.revealImage;
     }
     /** Open the same image commands exposed by Comfy's native node menu. */
     openContextMenu(item, event) {
@@ -38,6 +40,9 @@ export class ComfyCubePreviewActions {
         event.stopPropagation();
         const sourceUrl = resolveOriginalImageUrl(item.url, this.#document.baseURI);
         this.#showContextMenu([
+            ...(item.revealTarget && this.#revealImage
+                ? [{ content: 'Show in output canvas', callback: () => this.reveal(item) }]
+                : []),
             {
                 content: 'Open Image',
                 callback: () => this.#openWindow(sourceUrl),
@@ -55,6 +60,12 @@ export class ComfyCubePreviewActions {
     /** Match Comfy's hover download action without retaining preview transforms. */
     download(item) {
         this.#saveImage(resolveOriginalImageUrl(item.url, this.#document.baseURI));
+    }
+    /** Inspect only a completed thumbnail's captured identity through the canvas authority. */
+    reveal(item) {
+        if (!item.revealTarget || !this.#revealImage)
+            return;
+        void this.#revealImage(item.revealTarget).catch((error) => this.#reportError('SugarCubes could not reveal the output image.', error));
     }
     /** Copy one host image while preserving Comfy's asynchronous failure boundary. */
     async #copyImage(url) {
@@ -85,6 +96,7 @@ export function createComfyCubePreviewActions(host) {
         throw new Error('Cube preview actions require a browser window.');
     return new ComfyCubePreviewActions({
         document: host.document,
+        ...(host.revealImage ? { revealImage: host.revealImage } : {}),
         openWindow: (url) => {
             windowRef.open(url, '_blank');
         },

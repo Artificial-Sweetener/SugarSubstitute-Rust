@@ -27,6 +27,8 @@ import { ComfyCanvasSourceInventory } from '../../../frontend/comfyui/ui/output_
 import { CanvasGraphFixture } from '../support/CanvasGraphFixture.js';
 import { buildCubeOutputExecutionId } from '../../../frontend/comfyui/ui/cube/execution/CubeOutputExecutionIdentity.js';
 import { decodeComfyMedia } from '../../../frontend/comfyui/ui/execution/infrastructure/ComfyMediaDecoder.js';
+import { canvasRevealTarget } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasReveal.js';
+import { promptId } from '../../../frontend/comfyui/ui/execution/domain/ExecutionIdentity.js';
 
 /** Create colliding workflow IDs and distinct nested instance paths. */
 function fixture() {
@@ -51,7 +53,7 @@ function fixture() {
   });
   let key = 0;
   const views = new CanvasViewRegistry(() => String(++key));
-  const selection = new CanvasSelectionController(views);
+  const selection = new CanvasSelectionController(views, { latestOrder: () => 0 });
   const coordinator = new CanvasSessionCoordinator(
     sessions,
     results,
@@ -79,6 +81,55 @@ function fixture() {
 }
 
 describe('canvas source and workflow lifetimes', () => {
+  test('keeps explicit inspection available across preview handoff and caches its current projection', () => {
+    const f = fixture();
+    const source = f.inventory.read(f.a)[0];
+    const media = decodeComfyMedia({ images: [{ filename: 'prior.png', type: 'output' }] });
+    if (!source || !media) throw new Error('Missing inspection source');
+    f.results.restore(f.a, source, media.payload, 'loaded');
+    const view = f.coordinator.active();
+    if (!view) throw new Error('Missing inspection view');
+    const run = {
+      session: f.a,
+      sources: f.inventory.read(f.a),
+      order: 1,
+      promptId: promptId('first'),
+      status: 'running' as const,
+    };
+    f.results.updateRun(run);
+    const prior = f.coordinator.catalog(view);
+    const item = prior?.entries[0]?.items[0];
+    if (!prior || !item) throw new Error('Missing retained final');
+    f.selection.apply(view, prior, { type: 'reveal', target: canvasRevealTarget(item) });
+    const preview = {
+      sessionId: f.a.sessionId,
+      generation: 0,
+      promptId: run.promptId,
+      sourceId: source.id,
+      runOrder: 1,
+      sequence: 1,
+      token: 'frame:1',
+      dimensions: null,
+    };
+    f.results.publishPreview(preview);
+    const held = f.coordinator.catalog(view);
+    if (!held) throw new Error('Missing held inspection catalog');
+    expect(held?.entries[0]?.items).toContain(item);
+    expect(f.coordinator.catalog(view)).toBe(held);
+    expect(f.selection.items(view, held).primary).toBe(item);
+    expect(f.selection.preview(view, held)).toBeNull();
+    f.results.updateRun({ ...run, order: 2, promptId: promptId('second') });
+    f.results.publishPreview({
+      ...preview,
+      runOrder: 2,
+      promptId: promptId('second'),
+      token: 'frame:2',
+    });
+    expect(f.views.read(view).follow).toBe('auto');
+    expect(f.coordinator.catalog(view)?.entries[0]?.items).toHaveLength(0);
+    f.adapter.dispose();
+    f.coordinator.dispose();
+  });
   test('reuses unchanged catalogs and refreshes only the workflow whose metadata changed', () => {
     const f = fixture();
     const first = f.coordinator.active();

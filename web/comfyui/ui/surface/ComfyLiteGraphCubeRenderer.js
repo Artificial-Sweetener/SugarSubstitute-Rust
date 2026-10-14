@@ -129,20 +129,22 @@ export class ComfyLiteGraphCubeRenderer {
                 context.drawImage(image, target.x, target.y, target.width, target.height);
                 if (containsPoint(previewItem.rect, this.#host.graph_mouse)) {
                     drawPreviewDownloadAction(context, previewItem.downloadAction);
+                    if (previewItem.revealAction)
+                        drawPreviewDownloadAction(context, previewItem.revealAction, 'window-maximize');
                 }
             }
         }
     }
 }
 /** Draw Comfy's compact hover download affordance over one canvas preview. */
-function drawPreviewDownloadAction(context, action) {
+function drawPreviewDownloadAction(context, action, icon = 'download') {
     context.save();
     context.fillStyle = '#f2f2f2';
     context.beginPath();
     context.roundRect(action.x, action.y, action.width, action.height, 6);
     context.fill();
     context.fillStyle = '#151515';
-    drawComfyPrimeIcon(context, 'download', action.x + action.width / 2, action.y + action.height / 2, 14);
+    drawComfyPrimeIcon(context, icon, action.x + action.width / 2, action.y + action.height / 2, 14);
     context.restore();
 }
 /** Return whether the current graph pointer is inside one finite rectangle. */

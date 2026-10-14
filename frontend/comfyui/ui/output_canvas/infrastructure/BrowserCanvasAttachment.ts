@@ -50,6 +50,7 @@ import {
 } from '../presentation/vue/CanvasOverlayRuntime.js';
 import { BrowserCanvasGeometry } from './BrowserCanvasGeometry.js';
 import { BrowserCanvasPort } from './BrowserCanvasPort.js';
+import type { CanvasRevealTarget } from '../domain/CanvasReveal.js';
 import { BrowserCanvasResources } from './BrowserCanvasResources.js';
 import type { BrowserCanvasImagePayload } from './BrowserCanvasImageLoader.js';
 import { applyBrowserCanvasCommand } from './BrowserCanvasActions.js';
@@ -93,6 +94,7 @@ export class BrowserCanvasAttachment {
   readonly #camera: CanvasCameraController;
   readonly #browserResources: BrowserCanvasResources;
   readonly #status: CanvasStatusPublisher;
+  readonly #navigation: BrowserCanvasSourceNavigation;
   readonly #overlay: MountedCanvasOverlay;
   readonly #stopView: () => void;
   #catalog: CanvasCatalogSnapshot;
@@ -175,11 +177,13 @@ export class BrowserCanvasAttachment {
         !this.#disposed && options.accepts() ? { plan: this.#plan, catalog: this.#catalog } : null,
       cells: (catalog) => this.#overview.cells(catalog),
     });
+    this.#navigation = sources;
     this.port = new BrowserCanvasPort(this.#snapshot(), {
       origin: document.location.origin,
       capabilities: {
         schema: 1,
         commands: [
+          'reveal',
           'select',
           'select-source',
           'select-preview',
@@ -276,6 +280,12 @@ export class BrowserCanvasAttachment {
       element.replaceChildren();
       throw error;
     }
+  }
+
+  /** Accept graph-thumbnail inspection through the same preparation path as surface commands. */
+  async reveal(target: CanvasRevealTarget): Promise<boolean> {
+    if (this.#disposed || !this.options.accepts()) return false;
+    return await this.#navigation.reveal(target);
   }
 
   /** Refresh light catalog state at a scoped execution/metadata/navigation boundary. */

@@ -28,7 +28,7 @@ import { canvasCatalogFixture, canvasSources } from '../support/CanvasCatalogFix
 function fixture() {
   let identity = 0;
   const views = new CanvasViewRegistry(() => String(++identity));
-  const selection = new CanvasSelectionController(views);
+  const selection = new CanvasSelectionController(views, { latestOrder: () => 0 });
   const catalog = canvasCatalogFixture();
   const view = views.create(catalog.sessionId).viewId;
   selection.reconcile(view, catalog);

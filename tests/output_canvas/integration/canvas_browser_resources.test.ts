@@ -47,7 +47,7 @@ function fixture() {
   const catalog = canvasCatalogFixture();
   const views = new CanvasViewRegistry(() => 'browser-resources');
   const view = views.create(catalog.sessionId).viewId;
-  const selection = new CanvasSelectionController(views);
+  const selection = new CanvasSelectionController(views, { latestOrder: () => 0 });
   selection.reconcile(view, catalog);
   selection.apply(view, catalog, {
     type: 'select-source',

@@ -16,14 +16,16 @@
 /** Project current source membership and authoritative execution results into stable navigation. */
 import { canvasSessionId } from '../domain/CanvasIdentity.js';
 /** Retain displayed workflow media until the first visual hands over to the current Run. */
-export function canvasOutputCatalog(result, inventory) {
+export function canvasOutputCatalog(result, inventory, inspection = null) {
     const presentedRun = result.outputs.reduce((latest, output) => output.items.reduce((run, item) => (item.file.type === 'input' ? run : Math.max(run, item.provenance.runOrder)), latest), Math.max(result.presentedRunOrder, result.preview?.runOrder ?? 0));
     const outputs = new Map(result.outputs.map((output) => [output.source.id, output]));
     const entries = [];
     for (const source of [...inventory].sort((a, b) => a.order - b.order)) {
         const output = outputs.get(source.id);
         const input = Boolean(output?.items.length && output.items.every((item) => item.file.type === 'input'));
-        const items = output?.items.filter((item) => (input && presentedRun === 0) || item.provenance.runOrder === presentedRun) ?? [];
+        const items = output?.items.filter((item) => (input && presentedRun === 0) ||
+            item.provenance.runOrder === presentedRun ||
+            source.id === inspection?.sourceId) ?? [];
         const preview = result.preview?.sourceId === source.id ? result.preview : null;
         if (!preview && !items.length)
             continue;
@@ -44,6 +46,7 @@ export function canvasOutputCatalog(result, inventory) {
     return Object.freeze({
         sessionId: canvasSessionId(result.context.sessionId),
         generation: result.context.generation,
+        sources: inventory,
         entries: Object.freeze(qualifiedCaptions(entries)),
         result,
     });

@@ -23,11 +23,14 @@ import type { WorkflowPreviewConsumer } from '../../execution/infrastructure/Com
 import type { WorkflowPreview } from '../../execution/domain/WorkflowPreview.js';
 import type { AttributedWorkflowSource } from '../../execution/application/WorkflowExecutionIngestor.js';
 import type { CanvasImageDiagnostics } from '../domain/CanvasImageResource.js';
+import type { CanvasRevealTarget } from '../domain/CanvasReveal.js';
+import type { CanvasRevealDestination } from '../application/CanvasRevealCoordinator.js';
 
 export interface PrimaryCanvasAttachment {
   /** Read counters only on explicit diagnostic request, with no telemetry timer. */
   diagnostics(): CanvasImageDiagnostics & { readonly renderFrames: number };
   refresh(): void;
+  reveal?(target: CanvasRevealTarget): Promise<boolean>;
   wants(
     session: WorkflowPreview['sessionId'],
     generation: number,
@@ -76,6 +79,15 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
       generation: this.#current?.generation ?? null,
       resources: this.#current?.attachment.diagnostics() ?? null,
     };
+  }
+
+  /** Return only the active attachment's renderer-neutral inspection destination. */
+  destination(view: CanvasViewId): CanvasRevealDestination | null {
+    this.reconcile();
+    const current = this.#current;
+    if (current?.view !== view || !current.attachment.reveal) return null;
+    const reveal = current.attachment.reveal.bind(current.attachment);
+    return { reveal };
   }
 
   /** Observe scoped catalog boundaries and document visibility without another execution event listener. */

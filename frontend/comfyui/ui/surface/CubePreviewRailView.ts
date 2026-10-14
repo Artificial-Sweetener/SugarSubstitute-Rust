@@ -163,6 +163,27 @@ function buildPreviewFigure(
       actions.download(item);
     });
     figure.append(download);
+    if (item.revealTarget && actions.reveal) {
+      const reveal = documentRef.createElement('button');
+      reveal.type = 'button';
+      reveal.className = 'sc-image-reveal';
+      reveal.dataset.scImageReveal = '';
+      reveal.style.right = '3rem';
+      reveal.style.top = '0.5rem';
+      reveal.setAttribute('aria-label', 'Show in output canvas');
+      reveal.title = 'Show in output canvas';
+      const icon = documentRef.createElement('i');
+      icon.className = 'pi pi-window-maximize';
+      icon.setAttribute('aria-hidden', 'true');
+      reveal.append(icon);
+      reveal.addEventListener('pointerdown', (event) => event.stopPropagation());
+      reveal.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        actions.reveal?.(item);
+      });
+      figure.append(reveal);
+    }
   }
   return figure;
 }

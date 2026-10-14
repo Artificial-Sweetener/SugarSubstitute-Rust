@@ -34,6 +34,7 @@ export interface CanvasCatalogEntry {
 export interface CanvasCatalogSnapshot {
   readonly sessionId: CanvasSessionId;
   readonly generation: number;
+  readonly sources: readonly WorkflowOutputSource[];
   readonly entries: readonly CanvasCatalogEntry[];
   readonly result: WorkflowResultSession;
 }

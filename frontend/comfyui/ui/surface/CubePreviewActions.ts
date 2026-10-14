@@ -21,4 +21,5 @@ import type { CubePreviewItem } from './CubePreviewModel.js';
 export interface CubePreviewActions {
   openContextMenu(item: CubePreviewItem, event: MouseEvent): void;
   download(item: CubePreviewItem): void;
+  reveal?(item: CubePreviewItem): void;
 }

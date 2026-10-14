@@ -18,6 +18,8 @@
 import type { OutputSourceId } from '../../execution/domain/ExecutionIdentity.js';
 import type { WorkflowPreview } from '../../execution/domain/WorkflowPreview.js';
 import type { CanvasCatalogSnapshot } from '../domain/CanvasCatalog.js';
+import { resolveCanvasReveal } from '../domain/CanvasReveal.js';
+import type { WorkflowSubmissionOrderSource } from '../../execution/domain/WorkflowSubmission.js';
 import type { CanvasViewId } from '../domain/CanvasIdentity.js';
 import type { CanvasCommand } from '../domain/CanvasViewPort.js';
 import type { CanvasSelection, CanvasViewState } from '../domain/CanvasViewState.js';
@@ -88,7 +90,10 @@ export class CanvasSelectionController {
   readonly #cursors = new Map<CanvasViewId, FollowCursor>();
 
   /** Use the existing view authority for every published state transition. */
-  constructor(private readonly views: CanvasViewRegistry) {}
+  constructor(
+    private readonly views: CanvasViewRegistry,
+    private readonly submissions: WorkflowSubmissionOrderSource,
+  ) {}
 
   /** Reconcile a named view without making background deliveries select another workflow. */
   reconcile(viewId: CanvasViewId, catalog: CanvasCatalogSnapshot): CanvasViewState {
@@ -167,6 +172,27 @@ export class CanvasSelectionController {
     this.reconcile(viewId, catalog);
     const state = this.views.read(viewId);
     switch (command.type) {
+      case 'reveal': {
+        const item = resolveCanvasReveal(catalog, command.target);
+        if (!item) return false;
+        const cursor = this.#cursors.get(viewId);
+        // Explicit inspection during an accepted job also owns its not-yet-presented first frame.
+        if (cursor)
+          cursor.presentedRun = Math.max(
+            cursor.presentedRun,
+            catalog.result.runOrder,
+            this.submissions.latestOrder(item.provenance.sessionId),
+          );
+        this.views.update(viewId, (current) => ({
+          ...current,
+          follow: 'manual',
+          mode: 'image',
+          sourcePreview: false,
+          selection: { sourceId: item.provenance.sourceId, batchIndex: item.batchIndex },
+          comparison: null,
+        }));
+        return true;
+      }
       case 'select':
         this.#select(viewId, catalog, command.selection, 'image');
         return true;
@@ -268,6 +294,12 @@ export class CanvasSelectionController {
     this.views.update(viewId, (state) =>
       state.follow === 'manual' ? state : { ...state, follow: 'manual' },
     );
+  }
+
+  /** Keep an explicitly inspected source available independently of automatic Run handoff. */
+  inspection(viewId: CanvasViewId): CanvasSelection | null {
+    const state = this.views.read(viewId);
+    return state.follow === 'manual' && !state.sourcePreview ? state.selection : null;
   }
 
   /** Resolve both semantic selections to current finals without retaining superseded revisions. */

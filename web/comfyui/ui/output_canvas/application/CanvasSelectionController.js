@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own navigation, execution following, and bounded comparison revision intent. */
+import { resolveCanvasReveal } from '../domain/CanvasReveal.js';
 import { canvasComparisonPair } from './CanvasComparisonSelection.js';
 import { canvasSelectedItem, canvasAvailableSelection, canvasItemSelection, canvasBatchGridCatalog, } from './CanvasContentSelection.js';
 /** Compare attributable execution progress independently of delivery order. */
@@ -59,10 +60,12 @@ function autoCandidate(catalog) {
 /** Keep per-view selection policy separate from immutable registry storage and result ingestion. */
 export class CanvasSelectionController {
     views;
+    submissions;
     #cursors = new Map();
     /** Use the existing view authority for every published state transition. */
-    constructor(views) {
+    constructor(views, submissions) {
         this.views = views;
+        this.submissions = submissions;
     }
     /** Reconcile a named view without making background deliveries select another workflow. */
     reconcile(viewId, catalog) {
@@ -134,6 +137,24 @@ export class CanvasSelectionController {
         this.reconcile(viewId, catalog);
         const state = this.views.read(viewId);
         switch (command.type) {
+            case 'reveal': {
+                const item = resolveCanvasReveal(catalog, command.target);
+                if (!item)
+                    return false;
+                const cursor = this.#cursors.get(viewId);
+                // Explicit inspection during an accepted job also owns its not-yet-presented first frame.
+                if (cursor)
+                    cursor.presentedRun = Math.max(cursor.presentedRun, catalog.result.runOrder, this.submissions.latestOrder(item.provenance.sessionId));
+                this.views.update(viewId, (current) => ({
+                    ...current,
+                    follow: 'manual',
+                    mode: 'image',
+                    sourcePreview: false,
+                    selection: { sourceId: item.provenance.sourceId, batchIndex: item.batchIndex },
+                    comparison: null,
+                }));
+                return true;
+            }
             case 'select':
                 this.#select(viewId, catalog, command.selection, 'image');
                 return true;
@@ -230,6 +251,11 @@ export class CanvasSelectionController {
     /** Hold deliberate content navigation for the current output session. */
     manual(viewId) {
         this.views.update(viewId, (state) => state.follow === 'manual' ? state : { ...state, follow: 'manual' });
+    }
+    /** Keep an explicitly inspected source available independently of automatic Run handoff. */
+    inspection(viewId) {
+        const state = this.views.read(viewId);
+        return state.follow === 'manual' && !state.sourcePreview ? state.selection : null;
     }
     /** Resolve both semantic selections to current finals without retaining superseded revisions. */
     items(viewId, catalog) {

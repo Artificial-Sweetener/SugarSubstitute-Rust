@@ -31,7 +31,7 @@ function fixture(reduced = false) {
   const catalog = canvasCatalogFixture();
   const views = new CanvasViewRegistry(() => 'camera');
   const view = views.create(catalog.sessionId).viewId;
-  const selection = new CanvasSelectionController(views);
+  const selection = new CanvasSelectionController(views, { latestOrder: () => 0 });
   selection.reconcile(view, catalog);
   const slots = catalog.entries.map((entry) => ({ sourceId: entry.source.id, batchIndex: 0 }));
   const inspections = new CanvasInspectionStore();

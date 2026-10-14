@@ -81,7 +81,7 @@ function fixture() {
   }
   let keys = 0;
   const views = new CanvasViewRegistry(() => String(++keys));
-  const selection = new CanvasSelectionController(views);
+  const selection = new CanvasSelectionController(views, { latestOrder: () => 0 });
   const inspections = new CanvasInspectionStore();
   const allowances = new CanvasImageAllowances();
   const coordinator = new CanvasSessionCoordinator(sessions, results, inventory, views, selection, {

@@ -67,10 +67,13 @@ export class CanvasSessionCoordinator {
             return null;
         const sources = this.sources.read(result.context);
         const previous = this.#catalogs.get(view);
-        if (previous?.result === result && previous.sources === sources)
+        const inspection = this.selection.inspection(view);
+        if (previous?.result === result &&
+            previous.sources === sources &&
+            previous.inspection === inspection)
             return previous.catalog;
-        const catalog = canvasOutputCatalog(result, sources);
-        this.#catalogs.set(view, { result, sources, catalog });
+        const catalog = canvasOutputCatalog(result, sources, inspection);
+        this.#catalogs.set(view, { result, sources, inspection, catalog });
         return catalog;
     }
     /** Deliver scoped result changes and explicit active-view transitions. */
