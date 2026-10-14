@@ -292,6 +292,15 @@ impl NativePort for FakePort {
     }
 }
 impl CaptureLease for FakeLease {
+    fn prepare_finished(
+        &mut self,
+        _: &mut crate::incident::CapturedReport,
+        _: &mut sugarsubstitute_supervision::diagnostic_storage::DiagnosticStorage,
+        _: &sugarsubstitute_supervision::diagnostic_storage::DiagnosticStorageOperation,
+        _: &JobContext,
+    ) -> Result<(), crate::incident::IncidentStoreError> {
+        Err(crate::incident::IncidentStoreError::MissingPayload)
+    }
     fn start(
         &mut self,
         _: CaptureStartInput,

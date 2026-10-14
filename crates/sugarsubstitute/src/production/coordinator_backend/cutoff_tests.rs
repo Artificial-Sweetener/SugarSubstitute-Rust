@@ -141,8 +141,20 @@ fn existing_shared_join_and_replay_emit_no_fresh_creator_preparation() -> Result
     let owner = tests::key()?;
     let first = run(owner, 1)?;
     let joining = run(owner, 2)?;
-    backend.policy.register_run(registration(first)?)?;
-    backend.policy.register_run(registration(joining)?)?;
+    let peer_registration = registration(first)?;
+    backend.policy.enroll_run(sugarsubstitute_contracts::lifecycle::RunEnrollment {
+        run: peer_registration.run,
+        launch: peer_registration.launch,
+        profile: peer_registration.profile.clone(),
+    })?;
+    backend.policy.register_run(peer_registration)?;
+    let peer_registration = registration(joining)?;
+    backend.policy.enroll_run(sugarsubstitute_contracts::lifecycle::RunEnrollment {
+        run: peer_registration.run,
+        launch: peer_registration.launch,
+        profile: peer_registration.profile.clone(),
+    })?;
+    backend.policy.register_run(peer_registration)?;
     let creator_transition =
         submit(&mut backend.policy, request(first, 1, ResourceCommand::Acquire(target()?))?)?;
     assert_eq!(creator_transition.effects.len(), 1);
@@ -203,7 +215,13 @@ fn reload_keeps_ready_shared_lease_without_a_preparation_budget() -> Result<()> 
     let owner = tests::key()?;
     let run = run(owner, 1)?;
     let mut policy = ResourceCoordinator::new(owner);
-    policy.register_run(registration(run)?)?;
+    let peer_registration = registration(run)?;
+    policy.enroll_run(sugarsubstitute_contracts::lifecycle::RunEnrollment {
+        run: peer_registration.run,
+        launch: peer_registration.launch,
+        profile: peer_registration.profile.clone(),
+    })?;
+    policy.register_run(peer_registration)?;
     let held = lease(&submit(&mut policy, request(run, 1, ResourceCommand::Acquire(target()?))?)?)?;
     policy
         .observe(ResourceObservation::Ready {

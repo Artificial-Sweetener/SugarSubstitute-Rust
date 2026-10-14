@@ -60,8 +60,8 @@ use sugarsubstitute_execution::windows_lifecycle_pipe::{
     VerifiedLifecyclePeer,
 };
 use sugarsubstitute_supervision::profiles::{BrowserFamilyProof, EnvironmentProfileProof};
+use types::{ParentActivityFailureOrigin, PendingWrite, ProfilePending, Reply};
 pub(crate) use types::{ParentError, ParentResources};
-use types::{PendingWrite, ProfilePending, Reply};
 
 type Cause = Box<dyn Error + Send + Sync>;
 type Result<T> = std::result::Result<T, Cause>;
@@ -114,6 +114,7 @@ pub(crate) struct ParentLifecycle {
     checked_retirement:
         Option<sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeRetirement>,
     terminal_failure_reported: bool,
+    activity_failure_origin: ParentActivityFailureOrigin,
     rejected_frame: Option<ReceivedLifecycleFrame>,
     acquisition_receive: Option<(u64, ReceivedLifecycleFrame)>,
     failure: Option<Cause>,
@@ -191,6 +192,7 @@ impl ParentLifecycle {
             terminal_accepted: false,
             checked_retirement: None,
             terminal_failure_reported: false,
+            activity_failure_origin: ParentActivityFailureOrigin::Coordinator,
             rejected_frame: None,
             acquisition_receive: None,
             failure: None,
@@ -211,6 +213,7 @@ impl ParentLifecycle {
         batch: &CompletionBatch,
         resources: &mut ParentResources<'_, '_>,
     ) -> std::result::Result<(), ParentError> {
+        self.activity_failure_origin = ParentActivityFailureOrigin::Coordinator;
         let mut step = "latch_terminal";
         let result = self.advance(batch, resources, &mut step);
         if let Err(cause) = result {
@@ -223,7 +226,10 @@ impl ParentLifecycle {
             self.retain_failure(cause);
             self.closed = true;
             resources.session.control.close();
-            return Err(ParentError::OwnerFailed);
+            return Err(match self.activity_failure_origin {
+                ParentActivityFailureOrigin::DesktopPipeTerminal => ParentError::DesktopStopped,
+                ParentActivityFailureOrigin::Coordinator => ParentError::OwnerFailed,
+            });
         }
         Ok(())
     }

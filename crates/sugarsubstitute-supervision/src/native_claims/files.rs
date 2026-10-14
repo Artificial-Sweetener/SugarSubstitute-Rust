@@ -299,7 +299,7 @@ impl Handle {
     /// Settle exactly this accepted capture output under the original borrowed close proof.
     pub(crate) fn close_selected(
         &mut self,
-        proof: &sugarsubstitute_execution::CaptureBundleRetirement,
+        proof: &crate::installed_release::SelectedRetirement<'_>,
         causes: &mut crate::protected_storage::native_file::NativeCauseDestinations,
     ) -> Result<(), ClaimError> {
         let Budget::SelectedRelease(original) = &self.budget else {

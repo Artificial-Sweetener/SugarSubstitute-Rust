@@ -95,8 +95,8 @@ impl SymbolBundleRetirement {
     }
 }
 
-/// Derive either fixed target's proof through the same actual paired cleanup fence.
-pub(super) fn retire(
+/// Derive each fixed target's proof through the same actual paired cleanup fence.
+pub(crate) fn retire(
     client: &ExecutionClient,
     target: &SymbolBundleOrigin,
     observed: &JobContext,

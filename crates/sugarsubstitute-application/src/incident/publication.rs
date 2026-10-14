@@ -99,23 +99,16 @@ impl IncidentCoordinator {
         if *expected != summary {
             return Err(IncidentDecisionError::MismatchedCommit);
         }
-        let session = self.session()?;
-        let binding = ReportBinding::new(scope.incident(), summary.revision(), session);
-        let effects = IncidentEffects::pair(
-            IncidentEffect::RetireSource { scope: record.source_scope },
-            IncidentEffect::LaunchReporter { binding, summary: summary.clone() },
-        );
-        self.next_session = session.get();
+        self.preflight_automatic_reporter()?;
+        let effects =
+            IncidentEffects::one(IncidentEffect::RetireSource { scope: record.source_scope });
         let record = self.record_mut(index)?;
         record.summary = Some(summary);
         record.published_scope = Some(scope);
         record.current = None;
         record.pending = None;
-        record.binding = Some(binding);
-        record.automatic_report_attempted = true;
-        record.reporter_retired = false;
         record.source_requested = true;
-        record.phase = IncidentServicePhase::Reporting;
+        record.phase = IncidentServicePhase::Pending;
         Ok(effects)
     }
     /// Latch a matching failed use case without renewing its pending operation.
@@ -136,6 +129,7 @@ impl IncidentCoordinator {
             Some(Pending::Seed) => IncidentServiceFailure::SeedPublication,
             Some(Pending::Collection) => IncidentServiceFailure::Collection,
             Some(Pending::Summary(_)) => IncidentServiceFailure::SummaryPublication,
+            Some(Pending::Symbols { .. }) => IncidentServiceFailure::SummaryPublication,
             Some(Pending::Attempt { .. }) => IncidentServiceFailure::AttemptPublication,
             Some(Pending::Acknowledgement { .. }) => IncidentServiceFailure::Acknowledgement,
             Some(Pending::Export(_)) => IncidentServiceFailure::Export,

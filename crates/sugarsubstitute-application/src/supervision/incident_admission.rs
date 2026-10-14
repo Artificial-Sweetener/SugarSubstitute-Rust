@@ -5,10 +5,16 @@ use super::{FailedDesktopFact, ResourceCoordinator};
 use sugarsubstitute_contracts::lifecycle::{LifecycleRejection, RunKey};
 
 impl ResourceCoordinator {
-    /// Mark one current registered seed after incident-owner preflight completes.
+    /// Mark one current enrolled seed after incident-owner preflight completes.
+    /// Enrollment permits this before native connection; a closed run cannot seed.
     pub(crate) fn admit_incident_seed(&mut self, run: RunKey) -> Result<(), LifecycleRejection> {
         self.check_identity(run)?;
         let record = self.runs.get_mut(&run.instance).ok_or(LifecycleRejection::StaleIdentity)?;
+        if record.settled
+            || matches!(record.connection, super::resource_state::ConnectionPhase::Disconnected(_))
+        {
+            return Err(LifecycleRejection::WrongPhase);
+        }
         if record.incident_seed_admitted {
             return Err(LifecycleRejection::StaleIdentity);
         }
@@ -17,6 +23,8 @@ impl ResourceCoordinator {
     }
 
     /// Mark the accepted failed exit once; classification stays with its transaction.
+    /// A genuine seeded failure may precede connection. Enrollment alone supplies
+    /// neither this sealed fact nor the incident owner's durable commit observation.
     pub(crate) fn admit_failed_incident(
         &mut self,
         fact: FailedDesktopFact,
@@ -24,7 +32,7 @@ impl ResourceCoordinator {
         let run = fact.run();
         self.check_identity(run)?;
         let record = self.runs.get_mut(&run.instance).ok_or(LifecycleRejection::StaleIdentity)?;
-        if !record.incident_seed_admitted {
+        if record.settled || !record.incident_seed_admitted {
             return Err(LifecycleRejection::WrongPhase);
         }
         if record.incident_failure_admitted {
@@ -53,12 +61,18 @@ mod tests {
         })
     }
     fn register(resources: &mut ResourceCoordinator, run: RunKey) -> TestResult {
-        resources.register_run(ClientRegistration {
+        let registration = ClientRegistration {
             run,
             launch: LaunchId::new(1)?,
             profile: ProfileId::new("incident-admission".into())?,
             connection: ConnectionId::new(1)?,
+        };
+        resources.enroll_run(RunEnrollment {
+            run: registration.run,
+            launch: registration.launch,
+            profile: registration.profile.clone(),
         })?;
+        resources.register_run(registration)?;
         Ok(())
     }
     fn fact(run: RunKey) -> Result<FailedDesktopFact, Box<dyn std::error::Error>> {

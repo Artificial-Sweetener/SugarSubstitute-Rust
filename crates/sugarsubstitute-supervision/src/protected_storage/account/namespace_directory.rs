@@ -12,8 +12,12 @@ pub(super) fn resolve(
     sid: &[u8],
     budget: Budget,
     handles: &mut Vec<Handle>,
-) -> Result<PathBuf, ClaimError> {
-    resolve_with_boundary(directory, &mut NativeDirectory { sid, budget, handles })
+) -> Result<(PathBuf, usize, [u8; 24]), ClaimError> {
+    let mut native = NativeDirectory { sid, budget, handles, count: 0, namespace: None };
+    let directory = resolve_with_boundary(directory, &mut native)?;
+    let (index, identity) =
+        native.namespace.ok_or_else(|| ClaimError::invalid("namespace_directory_pin"))?;
+    Ok((directory, index, identity))
 }
 /// Adapter boundary for actual creation, retained handle adoption and final-name observation.
 trait DirectoryBoundary {
@@ -23,6 +27,8 @@ struct NativeDirectory<'a> {
     sid: &'a [u8],
     budget: Budget,
     handles: &'a mut Vec<Handle>,
+    count: usize,
+    namespace: Option<(usize, [u8; 24])>,
 }
 impl DirectoryBoundary for NativeDirectory<'_> {
     fn create_and_observe(&mut self, path: &Path) -> Result<PathBuf, ClaimError> {
@@ -33,6 +39,10 @@ impl DirectoryBoundary for NativeDirectory<'_> {
             .handles
             .get(index)
             .ok_or_else(|| ClaimError::invalid("namespace_directory_handle"))?;
+        self.count += 1;
+        if self.count == 3 {
+            self.namespace = Some((index, paths::file_identity(handle, &mut phase)?));
+        }
         paths::final_path(
             handle,
             &mut phase,

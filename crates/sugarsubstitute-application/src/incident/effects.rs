@@ -145,6 +145,21 @@ impl IncidentEffects {
         result.items[2] = Some(third);
         result
     }
+    /// Preserve transition order inside the same original fixed effect allocation.
+    /// # Errors
+    /// Rejects a full original effect envelope without replacing an existing effect.
+    pub(super) fn append(
+        &mut self,
+        effect: IncidentEffect,
+    ) -> Result<(), super::IncidentDecisionError> {
+        let slot = self
+            .items
+            .iter_mut()
+            .find(|slot| slot.is_none())
+            .ok_or(super::IncidentDecisionError::Saturated)?;
+        *slot = Some(effect);
+        Ok(())
+    }
     /// Inspect the finite effects without executing them.
     pub fn iter(&self) -> impl Iterator<Item = &IncidentEffect> {
         self.items.iter().flatten()

@@ -153,7 +153,7 @@ impl NativePort for SystemPort {
         context: &JobContext,
     ) -> Result<Discovered, ClaimError> {
         check(context)?;
-        if !state.handles.is_empty() || state.namespace.is_some() {
+        if state.borrowed || !state.handles.is_empty() || state.namespace.is_some() {
             return Err(ClaimError::invalid("entry_discovery_repeated"));
         }
         let memory = state
@@ -271,6 +271,9 @@ impl NativePort for SystemPort {
         election::elect(state, context)
     }
     fn close(&self, state: &mut NativeState, context: &JobContext) -> Result<(), ClaimError> {
+        if state.borrowed {
+            return Err(ClaimError::invalid("entry_namespace_borrowed"));
+        }
         let until =
             context.deadline().ok_or_else(|| ClaimError::invalid("entry_close_deadline"))?;
         if state.close_deadline.is_some_and(|old| until > old) {

@@ -56,10 +56,12 @@ impl ProtectedStorageRoot {
                 path: &path,
                 parent: parent_index,
                 mode: directories::Mode::OpenOrCreate,
+                output: None,
             },
             context,
             &mut crate::protected_storage::native_phase::NativePhase::ordinary(&state.budget)?,
         )?;
+        let index = index.index;
         let canonical = paths::final_path(
             &state.handles[index],
             &mut crate::protected_storage::native_phase::NativePhase::ordinary(

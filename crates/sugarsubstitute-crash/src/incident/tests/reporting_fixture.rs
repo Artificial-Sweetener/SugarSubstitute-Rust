@@ -4,15 +4,17 @@
 use super::*;
 use sugarsubstitute_supervision::diagnostic_storage::{fixture::*, *};
 type TestError = Box<dyn Error + Send + Sync>;
-pub(super) type TestResult = Result<(), TestError>;
+pub(in crate::incident) type TestResult = Result<(), TestError>;
 
 pub(super) fn original() -> Result<IncidentSummary, TestError> {
     super::summary().map_err(|cause| std::io::Error::other(cause.to_string()).into())
 }
-pub(super) fn binding(summary: &IncidentSummary) -> Result<ReportBinding, IncidentError> {
+pub(in crate::incident) fn binding(
+    summary: &IncidentSummary,
+) -> Result<ReportBinding, IncidentError> {
     Ok(ReportBinding::new(summary.seed().key(), summary.revision(), ReportSessionId::new(3)?))
 }
-pub(super) fn installed(
+pub(in crate::incident) fn installed(
     fixture: &DiagnosticStorageFixture,
     summary: IncidentSummary,
     payload_revision: Option<IncidentRevision>,
@@ -23,7 +25,7 @@ pub(super) fn installed(
     )?;
     Ok(())
 }
-pub(super) fn retained(bytes: &[u8]) -> Result<IncidentSummary, TestError> {
+pub(in crate::incident) fn retained(bytes: &[u8]) -> Result<IncidentSummary, TestError> {
     let current = original()?;
     let facts = current.facts();
     Ok(IncidentSummary::new(

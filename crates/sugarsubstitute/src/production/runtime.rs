@@ -28,6 +28,12 @@ pub(crate) fn execute<I: IntoIterator<Item = OsString>>(
         super::backend_custody::run(arguments)?;
         return Ok(None);
     }
+    if arguments.peek().is_some_and(|value| value == "--internal-production-reporter") {
+        super::reporter_role::runtime::run(super::reporter_role::options::ReporterRole::parse(
+            arguments,
+        )?)?;
+        return Ok(None);
+    }
     let qualification = super::qualification::QualificationIntent::root(&mut arguments)?;
     if arguments.peek().is_some_and(|value| value == "--internal-production-desktop") {
         run_desktop(DesktopRole::parse(arguments)?, diagnostics)?;

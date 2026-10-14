@@ -46,8 +46,23 @@ impl Drop for OwnedPort {
     }
 }
 impl State {
+    pub(super) fn stage_slots(&self) -> usize {
+        self.stages.len()
+            + if self.finished_owner.is_some() {
+                finished_owner::FINISHED_METADATA_STAGES
+            } else {
+                0
+            }
+    }
+
     pub(super) fn live_handles(&self) -> usize {
         self.port.as_ref().map_or(self.retiring_handles, OwnedPort::live_handles)
+            + self.capture_reads * 2
+            + if self.finished_owner.is_some() {
+                finished_owner::FINISHED_NATIVE_OUTPUTS
+            } else {
+                0
+            }
     }
     pub(super) fn retained_files(&self) -> usize {
         self.port.as_ref().map_or(self.retiring_files, OwnedPort::retained_files)

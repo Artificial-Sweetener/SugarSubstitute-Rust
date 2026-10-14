@@ -14,7 +14,7 @@ use std::{
     },
 };
 use sugarsubstitute_contracts::execution::*;
-pub(super) struct ForeignRelease;
+pub(crate) struct ForeignRelease;
 impl MemoryRelease for ForeignRelease {
     fn release(&self, _: u64) {}
 }
@@ -23,7 +23,7 @@ impl NativeHandleRelease for ForeignNative {
     fn release_symbol_reservation(&self) {}
     fn output_custody_changed(&self) {}
 }
-pub(super) struct Ports(pub(super) AtomicUsize);
+pub(crate) struct Ports(pub(crate) AtomicUsize);
 impl CancelControl for Ports {
     fn is_requested(&self) -> bool {
         self.0.fetch_add(1, Ordering::AcqRel);
@@ -44,7 +44,7 @@ impl Clock for Ports {
         Box::pin(std::future::pending())
     }
 }
-pub(super) fn supplied(
+pub(crate) fn supplied(
     actual: &JobContext,
     memory: MemoryLease,
     ledger: Option<NativeHandleLease>,
@@ -71,20 +71,20 @@ impl Drop for Release {
         self.1.open();
     }
 }
-pub(super) struct Pair {
-    pub(super) rig: Rig,
+pub(crate) struct Pair {
+    pub(crate) rig: Rig,
     _release: Release,
-    pub(super) context: JobContext,
-    pub(super) main: OwnedJob<(), io::Error>,
-    pub(super) permit: Option<SymbolCleanupPermit<(), io::Error>>,
-    pub(super) cleanup_scope: Scope,
+    pub(crate) context: JobContext,
+    pub(crate) main: OwnedJob<(), io::Error>,
+    pub(crate) permit: Option<SymbolCleanupPermit<(), io::Error>>,
+    pub(crate) cleanup_scope: Scope,
     stored: Arc<Mutex<Option<JobContext>>>,
     cleanup_entered: Arc<Gate>,
     main_release: Arc<Gate>,
     cleanup_release: Arc<Gate>,
 }
 impl Pair {
-    pub(super) fn new() -> TestResult<Self> {
+    pub(crate) fn new() -> TestResult<Self> {
         let rig = Rig::new()?;
         let main_release = Arc::new(Gate::default());
         let cleanup_release = Arc::new(Gate::default());
@@ -143,11 +143,11 @@ impl Pair {
             cleanup_release,
         })
     }
-    pub(super) fn finish_main(&mut self) -> TestResult<JobCompletion<(), io::Error>> {
+    pub(crate) fn finish_main(&mut self) -> TestResult<JobCompletion<(), io::Error>> {
         self.main_release.open();
         self.rig.completion(&mut self.main)
     }
-    pub(super) fn activate(
+    pub(crate) fn activate(
         &mut self,
     ) -> TestResult<(OwnedJob<(), io::Error>, JobContext, crate::CleanupDeadline)> {
         let permit = self.permit.take().ok_or("Actual cleanup permit absent")?;
@@ -160,7 +160,7 @@ impl Pair {
         let context = lock(&self.stored).take().ok_or("Actual running cleanup absent")?;
         Ok((job, context, deadline))
     }
-    pub(super) fn finish_cleanup(
+    pub(crate) fn finish_cleanup(
         &self,
         job: &mut OwnedJob<(), io::Error>,
     ) -> TestResult<JobCompletion<(), io::Error>> {

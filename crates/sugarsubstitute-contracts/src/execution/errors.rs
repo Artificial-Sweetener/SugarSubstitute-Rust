@@ -138,6 +138,10 @@ pub enum AdmissionError {
     },
     /// A fixed symbol reservation or paired cleanup binding is invalid.
     InvalidSymbolAdmission,
+    /// A fixed export admission or independent paired cleanup is invalid.
+    InvalidReportExportAdmission,
+    /// The independent original export ledger has exhausted its 68 output credits.
+    ReportExportOutputCapacity,
     /// Original capture ledger, sole issuance or close-only custody binding is invalid.
     InvalidCaptureAdmission,
     /// The actual child has requested cleanup and no longer accepts fresh effects.
@@ -155,6 +159,10 @@ impl fmt::Debug for AdmissionError {
                 formatter.debug_struct("ScopeClosed").field("scope_id", scope_id).finish()
             }
             Self::ShuttingDown => formatter.write_str("ShuttingDown"),
+            Self::InvalidReportExportAdmission => {
+                formatter.write_str("InvalidReportExportAdmission")
+            }
+            Self::ReportExportOutputCapacity => formatter.write_str("ReportExportOutputCapacity"),
             Self::InvalidSymbolAdmission => formatter.write_str("InvalidSymbolAdmission"),
             Self::InvalidCaptureAdmission => formatter.write_str("InvalidCaptureAdmission"),
             Self::CaptureRetiring => formatter.write_str("CaptureRetiring"),
@@ -294,6 +302,12 @@ impl fmt::Display for AdmissionError {
             }
             Self::Memory(cause) => fmt::Display::fmt(cause, formatter),
             Self::Unexpected(error) => fmt::Display::fmt(error, formatter),
+            Self::InvalidReportExportAdmission => {
+                formatter.write_str("Invalid original report export admission")
+            }
+            Self::ReportExportOutputCapacity => {
+                formatter.write_str("Original report export output capacity exhausted")
+            }
             Self::InvalidSymbolAdmission => {
                 formatter.write_str("Invalid fixed symbol admission or cleanup binding")
             }

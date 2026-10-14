@@ -68,6 +68,7 @@ impl Session {
             current,
             scratch: &mut self.scratch,
             causes: &mut self.causes,
+            source: None,
         }
     }
 }

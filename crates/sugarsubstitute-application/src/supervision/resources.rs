@@ -8,7 +8,7 @@ use sugarsubstitute_contracts::lifecycle::*;
 /// Observe bounded retained policy state, independently of actual native handles.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CoordinatorSnapshot {
-    /// Registered run records, including unsettled disconnected runs.
+    /// Enrolled run records, including prelaunch and unsettled disconnected runs.
     pub runs: usize,
     /// Pending/live native acquisition records, excluding settled records.
     pub resources: usize,
@@ -48,65 +48,6 @@ impl ResourceCoordinator {
             next_lease: 0,
         }
     }
-    /// Register authenticated run/profile facts before any backend acquisition.
-    ///
-    /// # Errors
-    /// Rejects foreign/stale runs, exclusive profile conflicts and run overload
-    /// without starting a backend. A new generation cannot overlap an unsettled
-    /// old run. Retired instance IDs cannot be resurrected after their record evicts.
-    pub fn register_run(
-        &mut self,
-        registration: ClientRegistration,
-    ) -> Result<(), LifecycleRejection> {
-        let run = registration.run;
-        if run.owner != self.owner {
-            return Err(LifecycleRejection::ForeignOwner);
-        }
-        if let Some(previous) = self.runs.get(&run.instance) {
-            if previous.registration == registration && previous.connected {
-                return Ok(());
-            }
-            if run.generation <= previous.registration.run.generation {
-                return Err(LifecycleRejection::StaleIdentity);
-            }
-            if !previous.settled {
-                return Err(LifecycleRejection::WrongPhase);
-            }
-        } else if run.instance.get() <= self.instance_highwater {
-            return Err(LifecycleRejection::StaleIdentity);
-        }
-        if self
-            .runs
-            .values()
-            .any(|record| !record.settled && record.registration.profile == registration.profile)
-        {
-            return Err(LifecycleRejection::ProfileContention);
-        }
-        if !self.runs.contains_key(&run.instance) && self.runs.len() >= MAX_RUNS {
-            let retired = self.runs.iter().find(|(_, record)| record.settled).map(|(id, _)| *id);
-            if let Some(retired) = retired {
-                self.runs.remove(&retired);
-            } else {
-                return Err(LifecycleRejection::Overloaded);
-            }
-        }
-        self.instance_highwater = self.instance_highwater.max(run.instance.get());
-        self.runs.insert(
-            run.instance,
-            RunRecord {
-                registration,
-                incident_seed_admitted: false,
-                incident_failure_admitted: false,
-                connected: true,
-                settled: false,
-                highwater: 0,
-                pending: BTreeMap::new(),
-                history: Default::default(),
-                resources: BTreeMap::new(),
-            },
-        );
-        Ok(())
-    }
     /// Close one authenticated connection and release its leases, not its profile.
     ///
     /// Effects are bounded by the 64 resources. Losing this client never stops a
@@ -130,7 +71,7 @@ impl ResourceCoordinator {
             self.release_lease(lease, &mut transition)?;
         }
         if let Some(record) = self.runs.get_mut(&run.instance) {
-            record.connected = false;
+            record.connection = ConnectionPhase::Disconnected(connection);
         }
         Ok(transition)
     }
@@ -139,11 +80,13 @@ impl ResourceCoordinator {
     /// # Errors
     /// Cancellation, process root exit and socket loss are insufficient. Rejects
     /// a connected run, live leases or unsettled last-client resource cleanup.
+    /// A never-connected enrollment requires actual adapter-owned unlaunched/capsule
+    /// settlement; its absent connection or expired deadline supplies no proof.
     /// The trusted adapter separately proves all profile/native work actually stopped.
     pub fn settle_run(&mut self, run: RunKey) -> Result<(), LifecycleRejection> {
         self.check_identity(run)?;
         let record = self.runs.get(&run.instance).ok_or(LifecycleRejection::StaleIdentity)?;
-        if record.connected
+        if matches!(record.connection, ConnectionPhase::Connected(_))
             || self
                 .resources
                 .values()
@@ -212,7 +155,7 @@ impl ResourceCoordinator {
         if run.owner != self.owner {
             return Err(LifecycleRejection::ForeignOwner);
         }
-        if self.runs.get(&run.instance).is_none_or(|record| record.registration.run != run) {
+        if self.runs.get(&run.instance).is_none_or(|record| record.enrollment.run != run) {
             return Err(LifecycleRejection::StaleIdentity);
         }
         Ok(())
@@ -223,11 +166,9 @@ impl ResourceCoordinator {
         connection: ConnectionId,
     ) -> Result<(), LifecycleRejection> {
         self.check_identity(run)?;
-        if self
-            .runs
-            .get(&run.instance)
-            .is_none_or(|record| !record.connected || record.registration.connection != connection)
-        {
+        if self.runs.get(&run.instance).is_none_or(|record| {
+            record.settled || record.connection != ConnectionPhase::Connected(connection)
+        }) {
             return Err(LifecycleRejection::StaleIdentity);
         }
         Ok(())

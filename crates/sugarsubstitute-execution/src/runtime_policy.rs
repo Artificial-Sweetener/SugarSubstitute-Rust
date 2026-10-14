@@ -5,13 +5,13 @@
 
 use sugarsubstitute_contracts::execution::{JobId, ScopeId};
 
-/// Report original symbol accounting still retained by actual native output owners.
+/// Report original native output accounting retained by actual symbol and export owners.
 /// Counters describe custody and never establish successful OS close or quiescence.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct NativeOutputCustody {
-    /// Scope that originally admitted the fixed symbol reservation.
+    /// Scope that originally admitted the fixed native reservation.
     pub original_scope_id: ScopeId,
-    /// Job that originally admitted the fixed symbol reservation.
+    /// Job that originally admitted the fixed native reservation.
     pub original_job_id: JobId,
     /// Unreleased output accounting guards, in native output slots.
     pub outputs_in_custody: u16,

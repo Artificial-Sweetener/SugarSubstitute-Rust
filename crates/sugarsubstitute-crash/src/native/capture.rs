@@ -15,6 +15,7 @@ use windows::Win32::{
     System::Threading::*,
 };
 
+mod finished;
 mod registration;
 mod retention;
 use retention::native_code;
@@ -174,6 +175,15 @@ fn retire_io(fields: &mut Fields) -> Result<bool, CrashError> {
     Ok(fields.io_retired)
 }
 impl CaptureLease for Capture {
+    fn prepare_finished(
+        &mut self,
+        report: &mut crate::incident::CapturedReport,
+        storage: &mut sugarsubstitute_supervision::diagnostic_storage::DiagnosticStorage,
+        operation: &sugarsubstitute_supervision::diagnostic_storage::DiagnosticStorageOperation,
+        context: &JobContext,
+    ) -> Result<(), crate::incident::IncidentStoreError> {
+        self.prepare_finished_native(report, storage, operation, context)
+    }
     fn start(
         &mut self,
         input: CaptureStartInput,

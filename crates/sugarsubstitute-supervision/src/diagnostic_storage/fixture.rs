@@ -7,9 +7,8 @@
 //! every operation, retained source and durable disposition authority.
 pub(in crate::diagnostic_storage) mod boundary;
 use super::*;
+pub use crate::protected_storage::capture_read::fixture::ProtectedCaptureSourceFixture;
 use boundary::Filesystem;
-#[cfg(test)]
-pub(in crate::diagnostic_storage) mod native_probe;
 
 pub(in crate::diagnostic_storage) trait BoundaryClock:
     Send + Sync
@@ -17,6 +16,8 @@ pub(in crate::diagnostic_storage) trait BoundaryClock:
     fn observe(&self, value: u64);
 }
 
+#[cfg(test)]
+pub(in crate::diagnostic_storage) mod native_probe;
 /// Choose a failure at an external primitive without modifying storage policy.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DiagnosticFixtureFailure {
@@ -71,6 +72,35 @@ impl DiagnosticStorageFixture {
         let filesystem = self.filesystem.retain_claim(&allocation).map_err(failure)?;
         DiagnosticStorage::from_port(allocation, OwnedPort::new(Box::new(filesystem), None))
     }
+    /// Resolve the same retained external filesystem and return actual opening disposition.
+    /// This boundary-fixture method runs the real storage owner against its admitted
+    /// disk; it cannot mint proof for another fixture or a production native port.
+    /// # Errors
+    /// Rejects foreign fixture/storage/original operation and original control failure.
+    pub fn resolve_opening(
+        &self,
+        storage: &mut DiagnosticStorage,
+        operation: &DiagnosticStorageOperation,
+        context: &JobContext,
+    ) -> Result<DiagnosticStoreOpening, DiagnosticStorageError> {
+        let mut state = storage.check(operation, context)?;
+        let marker = self.filesystem.marker();
+        if !state.data_mut()?.allocation.matches_fixture(&marker)
+            || state.data_mut()?.namespace.is_some()
+        {
+            return Err(error(operation.key(), Code::InvalidIdentity));
+        }
+        let opening = state
+            .call_native(|port| {
+                port.resolve(
+                    Path::new("external-fixture-only"),
+                    operation.key().owner().namespace,
+                    context,
+                )
+            })?
+            .map_err(|cause| native(operation.key(), Code::ForeignProtection, cause))?;
+        storage.adopt_opening(state, opening, operation, context)
+    }
     /// Observe a complete externally supplied file under its typed canonical name.
     /// Existing content at that name is replaced as an external observation.
     /// # Errors
@@ -106,6 +136,10 @@ impl DiagnosticStorageFixture {
     /// Observe live external outputs and effects without minting native proofs.
     pub fn snapshot(&self) -> DiagnosticFixtureSnapshot {
         self.filesystem.snapshot()
+    }
+    #[cfg(test)]
+    pub(in crate::diagnostic_storage) fn file_observations(&self) -> usize {
+        self.filesystem.file_observations()
     }
 }
 

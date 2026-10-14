@@ -11,6 +11,14 @@ pub(crate) struct DiagnosticNativeRetirement<'a> {
     current: &'a JobContext,
 }
 impl DiagnosticNativeRetirement<'_> {
+    pub(super) fn new(
+        shared: Shared,
+        key: LogicalStoreOperationKey,
+        current: &JobContext,
+    ) -> DiagnosticNativeRetirement<'_> {
+        DiagnosticNativeRetirement { shared, key, current }
+    }
+
     /// Sample original/live providers outside State, then revalidate the latched binding.
     pub(crate) fn check(
         &mut self,
@@ -162,6 +170,12 @@ impl DiagnosticStorage {
         }
         let mut access = StateAccess::acquire(&self.shared, operation.key);
         access.check(operation.key, context, true)?;
+        if access.data_mut()?.capture_reads != 0
+            || access.data_mut()?.finished_owner.is_some()
+            || access.data_mut()?.capture.is_some()
+        {
+            return Err(error(operation.key, Code::Busy));
+        }
         let original = access.data_mut()?.allocation.native_grant();
         let mut control = DiagnosticNativeRetirement {
             shared: self.shared.clone(),
@@ -211,11 +225,12 @@ impl DiagnosticStorage {
             writer: state.writer,
             handles: state.live_handles(),
             retirement_in_progress: state.port.is_none() && state.closed,
-            stages: state.stages.len(),
-            reads: state.reads.len(),
+            stages: state.stage_slots(),
+            reads: state.reads.len() + state.capture_reads,
             disposition: state.deletion.is_some()
                 || state.migration.is_some()
-                || state.payload.is_some(),
+                || state.payload.is_some()
+                || state.capture.is_some(),
         }
     }
 }

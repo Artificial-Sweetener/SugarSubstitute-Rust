@@ -117,6 +117,8 @@ pub(crate) struct ResolvedNamespace {
     pub(crate) session_id: u32,
     pub(crate) installation_identity: [u8; 24],
     pub(crate) directory: PathBuf,
+    pub(crate) directory_slot: usize,
+    pub(crate) directory_identity: [u8; 24],
 }
 /// Resolve existing namespace inputs and protected claims directories under retained custody.
 /// Errors preserve every partial token/path handle in the original charged owner.
@@ -186,7 +188,7 @@ pub(crate) fn resolve_namespace(
         handles,
         &mut crate::protected_storage::native_phase::NativePhase::ordinary(&(budget.clone()))?,
     )?;
-    let mut directory = paths::final_path(
+    let directory = paths::final_path(
         &handles[known_handle],
         &mut crate::protected_storage::native_phase::NativePhase::ordinary(
             &handles[known_handle].budget(),
@@ -214,13 +216,16 @@ pub(crate) fn resolve_namespace(
         budget.clone(),
         &mut crate::protected_storage::native_phase::NativePhase::ordinary(&(budget.clone()))?,
     )?;
-    directory = namespace_directory::resolve(directory, account.sid.bytes()?, budget, handles)?;
+    let (directory, directory_slot, directory_identity) =
+        namespace_directory::resolve(directory, account.sid.bytes()?, budget, handles)?;
     Ok(ResolvedNamespace {
         namespace,
         account_sid: account.sid.into_ordinary()?,
         session_id: account.session_id,
         installation_identity,
         directory,
+        directory_slot,
+        directory_identity,
     })
 }
 fn namespace_identity(sid: &[u8], installation: &[u8; 24]) -> NamespaceId {

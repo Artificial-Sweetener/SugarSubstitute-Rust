@@ -65,7 +65,7 @@ impl CryptoOwner {
     /// exactly the already accepted output without renewed proof/provider sampling.
     pub(in crate::installed_release) fn retire_capture(
         &mut self,
-        proof: &sugarsubstitute_execution::CaptureBundleRetirement,
+        proof: &crate::installed_release::SelectedRetirement<'_>,
     ) -> Result<(), ClaimError> {
         for key in [true, false] {
             self.active = usize::from(key);

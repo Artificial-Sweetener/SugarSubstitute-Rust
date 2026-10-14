@@ -69,7 +69,9 @@ impl TransitionDelivery {
         })
     }
     fn deliver(&mut self, recipients: impl FnOnce(&mut Forwarded) -> Result<()>) -> Result<()> {
-        let Some(forwarded) = self.pending.as_mut() else { return Ok(()) };
+        let Some(forwarded) = self.pending.as_mut() else {
+            return Ok(());
+        };
         let result = recipients(forwarded);
         if forwarded.complete() {
             *self.pending = None;

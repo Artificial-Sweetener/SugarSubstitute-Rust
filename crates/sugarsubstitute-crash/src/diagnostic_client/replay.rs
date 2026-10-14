@@ -44,6 +44,25 @@ pub struct IssuedDiagnosticRequest {
     generation: u64,
 }
 impl IssuedDiagnosticRequest {
+    /// Match the complete original authenticated input against this issued correlation.
+    /// This verifies key, request and SHA256; actual native origin remains with `received`.
+    /// # Errors
+    /// Changed bytes, foreign sessions or request numbers reject before native effects.
+    pub fn matches_received(
+        &self,
+        received: &ReceivedDiagnosticRequest,
+    ) -> Result<(), DiagnosticWireError> {
+        let frame = received.decode()?;
+        if received.key() != self.key
+            || frame.key != self.key
+            || frame.request != self.request
+            || <[u8; 32]>::from(Sha256::digest(received.bytes())) != self.digest
+        {
+            return Err(DiagnosticWireError::Identity);
+        }
+        Ok(())
+    }
+
     /// Exact original request identity, without native authority.
     pub const fn request(&self) -> DiagnosticRequestId {
         self.request

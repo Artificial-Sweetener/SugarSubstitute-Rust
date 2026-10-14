@@ -219,6 +219,8 @@ pub(crate) fn resolved() -> ResolvedNamespace {
         session_id: 4,
         installation_identity: [6; 24],
         directory: PathBuf::from(r"E:\entry-external-boundary"),
+        directory_slot: 0,
+        directory_identity: [1; 24],
     }
 }
 

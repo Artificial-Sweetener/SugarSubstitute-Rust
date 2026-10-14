@@ -16,6 +16,32 @@ pub struct IncidentCoordinator {
     pub(super) recovery_failure: Option<IncidentServiceFailure>,
 }
 impl IncidentCoordinator {
+    /// Bound the coordinator's retained domain allocations and one transition peak.
+    ///
+    /// Units are bytes of first-party inline/boxed content. The bound includes the
+    /// 128 record table, five independently retained summary destinations per record,
+    /// the standalone seed build, two eight-effect batches, two temporary records
+    /// and eight temporary summaries. The composing owner must claim this storage
+    /// before `new`, retain the claim through all results and admit no extra batch
+    /// copies. Native handles, adapters, host controls and allocator internals require
+    /// their separate existing reservations; this value grants no allocation authority.
+    pub const fn required_storage_bytes() -> u64 {
+        let summary_heap = Self::summary_heap_bytes();
+        let record_heap = 5 * summary_heap + BuildIdentity::MAX_BYTES;
+        let record = size_of::<Option<Record>>() + record_heap;
+        let effects = MAX_INCIDENT_EFFECTS * (size_of::<Option<IncidentEffect>>() + summary_heap);
+        (size_of::<Self>()
+            + MAX_INCIDENT_RECORDS * record
+            + 2 * effects
+            + 2 * record
+            + 8 * (size_of::<IncidentSummary>() + summary_heap)) as u64
+    }
+    const fn summary_heap_bytes() -> usize {
+        2 * BuildIdentity::MAX_BYTES
+            + 2 * FileLabel::MAX_BYTES
+            + SymbolName::MAX_BYTES
+            + MAX_ATTACHMENTS * size_of::<Option<AttachmentFacts>>()
+    }
     /// Start the current authenticated owner with bounded empty state.
     pub fn new(owner: CoordinatorKey) -> Self {
         Self {
@@ -40,6 +66,21 @@ impl IncidentCoordinator {
             finished: self.recovery_closed,
             first_failure: self.recovery_failure,
         })
+    }
+    /// Observe unresolved incident use cases without admitting work or granting settlement.
+    /// Clean live seeds may complete through normal shutdown. Failed records retain
+    /// their collection, mutation, acknowledgement and independent retirement duties.
+    pub fn diagnostic_custody_pending(&self) -> bool {
+        self.recovery.is_some() && !self.recovery_closed
+            || self.records.iter().flatten().any(|record| {
+                record.current.is_some()
+                    || record.pending.is_some()
+                    || record.queued_failure.is_some()
+                    || record.refresh_pending
+                    || record.restart_requested && !record.restart_forwarded
+                    || (record.failure.is_some() || record.summary.is_some())
+                        && !record.reclaimable()
+            })
     }
     /// Locate the retained full subject without admitting another record.
     pub(super) fn index(&self, key: IncidentKey) -> Result<usize, IncidentDecisionError> {
@@ -102,6 +143,22 @@ impl IncidentCoordinator {
             original,
         })
     }
+    /// Return the first deferred launch refusal retained with this original incident record.
+    /// It grants no native launch, new reservation, retry interval or retirement authority.
+    pub fn report_admission_failure(&self, key: IncidentKey) -> Option<IncidentDecisionError> {
+        self.index(key)
+            .ok()
+            .and_then(|index| self.record(index).ok())
+            .and_then(|record| record.report_admission_failure)
+    }
+    /// Borrow actual retained refusal identities for the Host's structured diagnostics.
+    /// No cause, incident storage or queued summary is removed by observation.
+    pub fn report_admission_failures(&self) -> impl Iterator<Item = IncidentKey> + '_ {
+        self.records
+            .iter()
+            .flatten()
+            .filter_map(|record| record.report_admission_failure.map(|_| record.seed.key()))
+    }
     /// Apply one actual host projection after validating its exact retained binding.
     /// Rejects mismatched content/scopes without altering the current operation.
     pub fn observe(
@@ -109,10 +166,14 @@ impl IncidentCoordinator {
         observation: IncidentServiceObservation,
     ) -> Result<IncidentEffects, IncidentDecisionError> {
         use IncidentServiceObservation::*;
-        match observation {
+        let mut effects = match observation {
             SeedCommitted { scope, seed } => self.seed_committed(scope, seed),
             EvidenceCollected { scope, evidence } => self.collected(scope, evidence),
             SummaryCommitted { scope, summary } => self.summary_committed(scope, summary),
+            SymbolsCommitted { scope, binding, summary } => {
+                self.symbols_committed(scope, binding, summary)
+            }
+            SymbolsNotWritten { scope, binding } => self.symbols_not_written(scope, binding),
             ReporterPresented { binding, context } => {
                 self.record_attempt(binding, ReportAttempt::Presented, context)
             }
@@ -142,6 +203,8 @@ impl IncidentCoordinator {
             }
             RecoveryFinished { scope } => self.recovery_finished(scope),
             RecoveryFailed { scope } => self.recovery_failed(scope),
-        }
+        }?;
+        self.append_ready_reporter(&mut effects);
+        Ok(effects)
     }
 }

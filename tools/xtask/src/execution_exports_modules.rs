@@ -177,7 +177,7 @@ impl Names {
 }
 
 /// Retain conditional attribute payloads without evaluating platform or feature predicates.
-fn attribute_alternatives(meta: &syn::Meta) -> Vec<syn::Meta> {
+pub(crate) fn attribute_alternatives(meta: &syn::Meta) -> Vec<syn::Meta> {
     use syn::parse::Parser;
     let mut result = vec![meta.clone()];
     if let syn::Meta::List(list) = meta

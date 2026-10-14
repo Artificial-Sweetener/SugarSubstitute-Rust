@@ -9,7 +9,7 @@ fn add(a: usize, b: usize) -> Result<usize, CaptureCapacityFailure> {
 }
 /// All layouts are compiled source-owner types; input supplies no numerical capacity.
 pub(super) fn regions(
-    origin: &CaptureBundleOrigin,
+    origin: &crate::installed_release::ReleaseAuthority,
 ) -> Result<(usize, usize, usize), CaptureCapacityFailure> {
     let file = NativeFile::diagnostic_owner_layout()
         .map_err(|_| CaptureCapacityFailure::new(CapacityFailureKind::Layout))?
@@ -57,6 +57,12 @@ pub(super) fn regions(
 }
 
 pub(super) fn preflight(origin: &CaptureBundleOrigin) -> Result<(), CaptureCapacityFailure> {
+    preflight_authority(&crate::installed_release::ReleaseAuthority::Capture(origin.clone()))
+}
+
+pub(super) fn preflight_authority(
+    origin: &crate::installed_release::ReleaseAuthority,
+) -> Result<(), CaptureCapacityFailure> {
     let (metadata, ingress, scratch) = regions(origin)?;
     if metadata > METADATA_BYTES || ingress > INGRESS_BYTES || scratch > SCRATCH_BYTES {
         return Err(CaptureCapacityFailure::new(CapacityFailureKind::Layout));

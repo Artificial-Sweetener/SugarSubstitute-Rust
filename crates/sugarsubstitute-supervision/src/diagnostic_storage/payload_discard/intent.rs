@@ -91,7 +91,7 @@ pub(super) fn capacity(
             .live_handles()
             .checked_add(MAX_ATTACHMENTS + 2)
             .is_none_or(|count| count > DIAGNOSTIC_HANDLE_BOUND)
-        || state.data_mut()?.stages.len() >= DIAGNOSTIC_STAGE_BOUND
+        || state.data_mut()?.stage_slots() >= DIAGNOSTIC_STAGE_BOUND
     {
         return Err(error(key, Code::Capacity));
     }

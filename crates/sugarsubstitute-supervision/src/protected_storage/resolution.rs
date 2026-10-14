@@ -25,8 +25,13 @@ pub(super) fn with_phase<T>(
                 ScratchRole::Path => original.path_scratch(current),
             }
             .map_err(ClaimError::diagnostic_allocation)?;
-            let mut phase =
-                NativePhase::Diagnostic { original, current, scratch: &mut scratch, causes };
+            let mut phase = NativePhase::Diagnostic {
+                original,
+                current,
+                scratch: &mut scratch,
+                causes,
+                source: None,
+            };
             let result = operation(&mut phase);
             phase.post_context(result, current)
         }

@@ -17,7 +17,7 @@ use sugarsubstitute_contracts::{
 /// Constructor-private matching facts; this owns no frame, new claim or native authority.
 /// Arc aliases retain only the already-admitted Entry session metadata.
 #[derive(Clone)]
-pub(crate) struct StartupAdmissionBinding {
+pub(crate) struct EntryAdmissionBinding {
     shared: Arc<Shared>,
     job: JobId,
     index: usize,
@@ -30,8 +30,8 @@ pub(crate) struct StartupAdmissionBinding {
 
 pub(super) fn project(
     snapshot: &PreparedStartupSnapshot,
-) -> Result<StartupAdmissionBinding, EntryTransportError> {
-    let launch = &snapshot.launch;
+) -> Result<EntryAdmissionBinding, EntryTransportError> {
+    let launch = snapshot.launch.as_ref().ok_or(EntryTransportError::Authentication)?;
     if launch.frame.buffer.is_none() {
         return Err(EntryTransportError::Closed);
     }
@@ -44,7 +44,7 @@ pub(super) fn project(
     {
         return Err(EntryTransportError::Authentication);
     }
-    Ok(StartupAdmissionBinding {
+    Ok(EntryAdmissionBinding {
         shared: launch.frame.shared.clone(),
         job: launch.frame.shared.job_id,
         index: launch.frame.index,
@@ -56,7 +56,85 @@ pub(super) fn project(
     })
 }
 
+#[derive(Clone)]
+pub(crate) enum StartupAdmissionBinding {
+    Entry(EntryAdmissionBinding),
+    Registered(super::super::registered_startup::RegisteredSnapshot),
+}
 impl StartupAdmissionBinding {
+    pub(crate) fn validate_current_locked(
+        &self,
+        core: &Arc<Core>,
+        state: &State,
+        run: RunKey,
+        now: Moment,
+    ) -> Result<Moment, EntryTransportError> {
+        match self {
+            Self::Entry(entry) => entry.validate_current_locked(core, state, run, now),
+            Self::Registered(registered) => {
+                registered.validate_current_locked(core, state, run, now)
+            }
+        }
+    }
+    pub(crate) fn validate_registered_owner_locked(
+        &self,
+        core: &Arc<Core>,
+        state: &State,
+        run: RunKey,
+        now: Moment,
+    ) -> Result<Option<Moment>, EntryTransportError> {
+        match self {
+            Self::Entry(entry) => entry.registered_owner_locked(core, state, run, now),
+            Self::Registered(_) => Err(EntryTransportError::Authentication),
+        }
+    }
+}
+impl EntryAdmissionBinding {
+    /// Validate the surviving real Root Entry owner; the old request loan is historical.
+    fn registered_owner_locked(
+        &self,
+        core: &Arc<Core>,
+        state: &State,
+        run: RunKey,
+        now: Moment,
+    ) -> Result<Option<Moment>, EntryTransportError> {
+        if self.shared.core.upgrade().is_none_or(|actual| !Arc::ptr_eq(&actual, core))
+            || !self.shared.server
+            || state.stopping
+            || core.clock.failed()
+        {
+            return Err(EntryTransportError::Closed);
+        }
+        let record = state.jobs.get(&self.job).ok_or(EntryTransportError::Closed)?;
+        if record.phase != JobPhase::Running
+            || record.retiring
+            || record.memory.is_none()
+            || record.job.cancellation().is_requested()
+            || record.native_deadlines.is_none_or(|deadlines| deadlines.stopped())
+        {
+            return Err(EntryTransportError::Closed);
+        }
+        let until = crate::coordinator_entry::registered_startup::admission::scope_current(
+            state,
+            record.scope_id,
+        )?;
+        let until = crate::scope::earliest(until, record.deadline);
+        if until.is_some_and(|until| now >= until) {
+            return Err(EntryTransportError::InvalidDeadline);
+        }
+        let entry = lock(&self.shared.state);
+        if !entry.prepared
+            || entry.stopped
+            || entry.owner != Some(run.owner)
+            || entry.activation.is_some_and(|pending| pending != run.owner)
+            || self.header.namespace != run.owner.namespace
+            || self.header.epoch != Some(run.owner.epoch)
+            || self.peer.namespace() != run.owner.namespace
+        {
+            return Err(EntryTransportError::Authentication);
+        }
+        Ok(until)
+    }
     /// Check the actual original Entry job and route before final admission consumes input.
     /// Caller holds this Core's state mutex and supplies its already observed clock sample.
     /// This method acquires only Entry state, calls no provider and performs no effects.

@@ -60,19 +60,19 @@ fn startup_snapshot_moves_original_allocation_peer_counter_and_connection_loan()
     let source = request.source_deadline();
     let peer = format!("{:?}", request.peer());
     let snapshot = request.into_startup_snapshot().map_err(|failure| failure.error)?;
-    assert_eq!(snapshot.launch.frame.bytes().as_ptr(), pointer);
-    assert_eq!(snapshot.body, protocol::HEADER_BYTES..snapshot.launch.frame.length);
-    assert_eq!(snapshot.launch.frame.index, index);
-    assert!(std::sync::Arc::ptr_eq(&snapshot.launch.frame.shared, &shared));
-    assert_eq!(snapshot.launch.request_id(), id);
-    assert_eq!(snapshot.launch.received_at(), received);
-    assert_eq!(snapshot.launch.until(), until);
-    assert_eq!(snapshot.launch.source_deadline(), source);
-    assert_eq!(format!("{:?}", snapshot.launch.peer()), peer);
+    let actual = snapshot.launch.as_ref().ok_or("Original Entry source missing")?;
+    assert_eq!(actual.frame.bytes().as_ptr(), pointer);
+    assert_eq!(snapshot.body, protocol::HEADER_BYTES..actual.frame.length);
+    assert_eq!(actual.frame.index, index);
+    assert!(std::sync::Arc::ptr_eq(&actual.frame.shared, &shared));
+    assert_eq!(actual.request_id(), id);
+    assert_eq!(actual.received_at(), received);
+    assert_eq!(actual.until(), until);
+    assert_eq!(actual.source_deadline(), source);
+    assert_eq!(format!("{:?}", actual.peer()), peer);
     assert!(lock(&shared.state).connections[index].loan);
     assert_eq!(
-        protocol::launch_payload::decode(&snapshot.launch.frame.bytes()[snapshot.body.clone()])?
-            .profile(),
+        protocol::launch_payload::decode(&actual.frame.bytes()[snapshot.body.clone()])?.profile(),
         "profile_1"
     );
     drop(snapshot);
@@ -100,7 +100,10 @@ fn startup_snapshot_retains_actual_frame_charge_until_native_close_and_loan_retu
             .claim(MIN_ENTRY_SERVER_BYTES)
             .is_err()
     );
-    assert_eq!(snapshot.launch.view()?.profile(), "profile_1");
+    assert_eq!(
+        snapshot.launch.as_ref().ok_or("Original Entry source missing")?.view()?.profile(),
+        "profile_1"
+    );
     drop(snapshot);
     assert!(matches!(rig.completion(&mut session.completion)?.outcome, JobOutcome::Success(_)));
     assert_eq!(boundary.drops.load(Ordering::Acquire), 1);

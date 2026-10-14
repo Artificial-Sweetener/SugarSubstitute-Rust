@@ -153,7 +153,9 @@ impl ProductionChild {
         self.send_acquire(prepared)
     }
     pub(super) fn send_acquire(&mut self, prepared: &PreparedChildStartup) -> Result<()> {
-        let Some(pending) = self.acquire else { return Ok(()) };
+        let Some(pending) = self.acquire else {
+            return Ok(());
+        };
         if pending.retiring {
             return Ok(());
         }
@@ -187,7 +189,9 @@ impl ProductionChild {
         Ok(())
     }
     pub(super) fn receive_acquire(&mut self) -> Result<()> {
-        let Some(pending) = self.acquire else { return Ok(()) };
+        let Some(pending) = self.acquire else {
+            return Ok(());
+        };
         if pending.retiring || self.expire_acquisition()? {
             return Ok(());
         }
@@ -254,7 +258,9 @@ impl ProductionChild {
     /// Drain the original nonfinal/final acquisition during cancellation without starting
     /// output, publishing readiness or renewing its deadline. Errors retain the real frame.
     fn retire_acquire(&mut self) -> Result<()> {
-        let Some(pending) = self.acquire else { return Ok(()) };
+        let Some(pending) = self.acquire else {
+            return Ok(());
+        };
         if pending.retiring {
             return self.dispose_retiring_acquire(pending);
         }

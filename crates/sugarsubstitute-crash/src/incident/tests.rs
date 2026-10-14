@@ -6,6 +6,8 @@ mod codec;
 mod codec_allocation;
 mod codec_parse;
 mod codec_writer;
+#[cfg(windows)]
+mod initialization;
 mod migration;
 #[cfg(windows)]
 mod migration_recovery;
@@ -16,7 +18,7 @@ mod migration_runtime_fixture;
 #[cfg(windows)]
 mod publication;
 #[cfg(windows)]
-mod publication_fixture;
+pub(in crate::incident) mod publication_fixture;
 #[cfg(windows)]
 mod publication_preflight;
 #[cfg(windows)]
@@ -29,7 +31,7 @@ mod redaction;
 #[cfg(windows)]
 mod reporting;
 #[cfg(windows)]
-mod reporting_fixture;
+pub(in crate::incident) mod reporting_fixture;
 mod retention;
 #[cfg(windows)]
 mod retention_fixture;

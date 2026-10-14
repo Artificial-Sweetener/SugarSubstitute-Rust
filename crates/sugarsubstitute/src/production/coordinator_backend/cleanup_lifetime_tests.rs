@@ -30,12 +30,18 @@ fn later_cleanup_failures_preserve_original_policy_cause_and_original_scope_budg
         generation: RunGeneration::new(1)?,
     };
     let connection = ConnectionId::new(1)?;
-    backend.register_run(ClientRegistration {
+    let peer_registration = ClientRegistration {
         run,
         connection,
         launch: sugarsubstitute_contracts::startup::LaunchId::new(1)?,
         profile: sugarsubstitute_contracts::configuration::ProfileId::new("Cleanup_1".into())?,
+    };
+    backend.policy.enroll_run(sugarsubstitute_contracts::lifecycle::RunEnrollment {
+        run: peer_registration.run,
+        launch: peer_registration.launch,
+        profile: peer_registration.profile.clone(),
     })?;
+    backend.register_run(peer_registration)?;
     let target = BackendTarget::Attached(LoopbackOrigin::parse("http://127.0.0.1:8188", 8188)?);
     let transition = backend.policy.request(
         ClientBinding { run, connection },
@@ -132,12 +138,18 @@ fn late_original_grace_admission_progresses_actual_inert_cleanup_without_another
             generation: RunGeneration::new(1)?,
         };
         let connection = ConnectionId::new(1)?;
-        backend.register_run(ClientRegistration {
+        let peer_registration = ClientRegistration {
             run,
             connection,
             launch: sugarsubstitute_contracts::startup::LaunchId::new(1)?,
             profile: sugarsubstitute_contracts::configuration::ProfileId::new("Late_1".into())?,
+        };
+        backend.policy.enroll_run(sugarsubstitute_contracts::lifecycle::RunEnrollment {
+            run: peer_registration.run,
+            launch: peer_registration.launch,
+            profile: peer_registration.profile.clone(),
         })?;
+        backend.register_run(peer_registration)?;
         let target = BackendTarget::Attached(LoopbackOrigin::parse("http://127.0.0.1:8188", 8188)?);
         let produced = backend.policy.request(
             ClientBinding { run, connection },

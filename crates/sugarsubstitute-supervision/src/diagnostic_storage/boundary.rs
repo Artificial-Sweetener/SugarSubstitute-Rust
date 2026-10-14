@@ -15,7 +15,12 @@ pub(crate) trait Port: Send {
         root: &Path,
         namespace: NamespaceId,
         context: &JobContext,
-    ) -> Result<(), ClaimError>;
+    ) -> Result<genesis::NativeOpening, ClaimError>;
+    fn resolve_namespace(
+        &mut self,
+        request: &ProtectedDiagnosticWriteRequest,
+        context: &JobContext,
+    ) -> Result<genesis::NativeOpening, ClaimError>;
     fn acquire_writer(&mut self, context: &JobContext) -> Result<(), ClaimError>;
     fn scan(&mut self, context: &JobContext) -> Result<inventory::Scan, ClaimError>;
     fn open(

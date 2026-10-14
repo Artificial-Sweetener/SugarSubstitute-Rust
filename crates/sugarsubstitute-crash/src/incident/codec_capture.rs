@@ -97,7 +97,7 @@ pub struct CaptureDispositionPlan {
 }
 impl CaptureDispositionPlan {
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn new(
+    pub(crate) fn new(
         historical_operation: LogicalStoreOperationKey,
         incident: IncidentKey,
         incident_revision: IncidentRevision,

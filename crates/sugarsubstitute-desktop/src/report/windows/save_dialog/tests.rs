@@ -25,6 +25,10 @@ pub(super) fn state() -> Result<Hook, Box<dyn Error>> {
         failure: None,
         save: Text::new("Save", &lease)?,
         cancel_label: Text::new("Cancel", &lease)?,
+        consent: Some(consent::Consent::new(
+            Text::new("Replace an existing destination", &lease)?,
+            &lease,
+        )),
     })
 }
 #[test]

@@ -73,6 +73,7 @@ pub(super) struct Api {
     start: Start,
     retire: Retire,
     endpoint: Option<Endpoint>,
+    pub(super) finished: super::finished_report::Api,
 }
 /// Preserve the genuine loader cause and any outputs not installed in the PIN slot.
 /// No new rejection allocation or replayable trust authority is created.
@@ -178,9 +179,14 @@ pub(super) fn load(
         Ok(value) => value,
         Err(cause) => return Err((cause, None, None)),
     };
+    let finished = match super::finished_report::Api::resolve(&mut symbol) {
+        Ok(value) => value,
+        Err(cause) => return Err((cause, None, None)),
+    };
     // SAFETY: the authenticated reviewed first-party module implements these exact repr(C) exports.
     Ok(unsafe {
         Api {
+            finished,
             start: std::mem::transmute::<unsafe extern "system" fn() -> isize, Start>(start),
             retire: std::mem::transmute::<unsafe extern "system" fn() -> isize, Retire>(retire),
             endpoint: Some(std::mem::transmute::<unsafe extern "system" fn() -> isize, Endpoint>(

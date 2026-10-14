@@ -29,18 +29,22 @@ struct QuotaControl {
 }
 impl CaptureOutputQuota {
     /// Consume the named quota control loan before allocating its sole atomic owner.
-    pub(in crate::installed_release) fn new(allocation: SharedCaptureLoan) -> Self {
+    pub(crate) fn new(allocation: SharedCaptureLoan) -> Self {
         Self {
             data: Some(Arc::new(QuotaData { held: AtomicU8::new(0) })),
             original: allocation.original().clone(),
             _allocation: allocation,
         }
     }
-    pub(super) const fn control_storage_bytes() -> usize {
+    pub(crate) const fn control_storage_bytes() -> usize {
         size_of::<QuotaControl>()
     }
     /// Reserve one possible output before a durable concrete cell invokes its producer.
+    #[cfg(test)]
     pub(super) fn reserve_output(&self) -> Result<CaptureOutputGuard, CaptureCapacityFailure> {
+        if self.original.original().capture().is_none() {
+            return Err(CaptureCapacityFailure::identity());
+        }
         let data =
             self.data.as_ref().ok_or(CaptureCapacityFailure::new(CapacityFailureKind::Missing))?;
         data.held
@@ -48,7 +52,38 @@ impl CaptureOutputQuota {
                 held.checked_add(1).filter(|held| *held <= CAPTURE_OUTPUTS)
             })
             .map_err(|_| CaptureCapacityFailure::new(CapacityFailureKind::Occupied))?;
-        Ok(CaptureOutputGuard { quota: self.clone() })
+        Ok(CaptureOutputGuard { quota: self.clone(), symbol: None })
+    }
+    /// Reserve from the same sealed selected ledger before any possible native output.
+    /// The cause destinations are admitted before the genuine Core reservation call.
+    pub(crate) fn reserve_selected(
+        &self,
+        causes: &mut crate::protected_storage::native_file::NativeCauseDestinations,
+    ) -> Result<CaptureOutputGuard, crate::ClaimError> {
+        causes.matches_selected(&self.original)?;
+        let symbol = match self.original.original() {
+            crate::installed_release::ReleaseAuthority::Symbol(origin) => Some(
+                origin.reserve_output().map_err(|cause| causes.selected_control(cause, false))?,
+            ),
+            crate::installed_release::ReleaseAuthority::CommittedReader(origin) => Some(
+                origin.reserve_output().map_err(|cause| causes.selected_control(cause, false))?,
+            ),
+            crate::installed_release::ReleaseAuthority::Capture(_) => None,
+        };
+        let limit = if self.original.original().reader().is_some() { 140 } else { CAPTURE_OUTPUTS };
+        let data = self.data.as_ref().ok_or_else(|| {
+            crate::ClaimError::capture_allocation(CaptureCapacityFailure::missing())
+        })?;
+        data.held
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |held| {
+                held.checked_add(1).filter(|held| *held <= limit)
+            })
+            .map_err(|_| {
+                crate::ClaimError::capture_allocation(CaptureCapacityFailure::new(
+                    CapacityFailureKind::Occupied,
+                ))
+            })?;
+        Ok(CaptureOutputGuard { quota: self.clone(), symbol })
     }
     pub(crate) fn original(&self) -> &AllocationOrigin {
         &self.original
@@ -75,6 +110,7 @@ impl Drop for CaptureOutputQuota {
 /// Its concrete file or module owner alone establishes no-output or checked closure.
 pub(crate) struct CaptureOutputGuard {
     quota: CaptureOutputQuota,
+    symbol: Option<sugarsubstitute_contracts::execution::NativeHandleOutput>,
 }
 impl CaptureOutputGuard {
     pub(crate) fn original(&self) -> &AllocationOrigin {
@@ -90,6 +126,9 @@ impl Drop for CaptureOutputGuard {
                 .is_ok()
         {
             return;
+        }
+        if let Some(symbol) = self.symbol.take() {
+            std::mem::forget(symbol);
         }
         std::mem::forget(self.quota.clone());
         tracing::error!(operation = "capture_output_retained", "Capture output custody retained");

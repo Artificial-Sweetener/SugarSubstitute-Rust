@@ -31,7 +31,7 @@ impl DiagnosticStorage {
         let plan = intent.plan;
         if case != DiagnosticRecoveryLedgerCase::Original
             || !intent.victim_settled
-            || state.data_mut()?.stages.len() >= DIAGNOSTIC_STAGE_BOUND
+            || state.data_mut()?.stage_slots() >= DIAGNOSTIC_STAGE_BOUND
             || state.data_mut()?.stages.iter().any(|stage| stage.recovered == Some(expected))
         {
             return Err(error(operation.key, Code::Busy));
@@ -47,6 +47,7 @@ impl DiagnosticStorage {
             recovered: Some(expected),
             role: None,
             activated: false,
+            genesis: None,
             recovery_predecessor: Some(DiagnosticPredecessor::Exact {
                 file_identity: original.file_identity(),
                 sha256: original.sha256(),

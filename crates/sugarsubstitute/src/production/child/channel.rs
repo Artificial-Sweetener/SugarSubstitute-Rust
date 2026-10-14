@@ -154,7 +154,9 @@ impl ChildChannel {
     /// Capture matching terminal metadata before fallible observation handling.
     /// Retain the complete typed result and its original charge when acknowledged.
     pub(super) fn consume(&mut self, batch: &CompletionBatch) -> Result<()> {
-        let Some(session) = &mut self.session else { return Ok(()) };
+        let Some(session) = &mut self.session else {
+            return Ok(());
+        };
         for notice in &batch.notifications {
             if (notice.scope_id, notice.job_id)
                 == (session.completion.scope_id(), session.completion.spec().id)

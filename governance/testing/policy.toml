@@ -23,7 +23,7 @@ minimum_tests = 87
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
 concern = "Production desktop startup and retirement through actual execution, authenticated parent/child transport, shared backends, profiles and native window adapters; retained failures, captured startup, bounded console rendering and isolated qualification roles; contained headless backend witness invocation and original-budget Finish lifecycle"
-minimum_tests = 575
+minimum_tests = 581
 
 [[owners]]
 package = "sugarsubstitute-execution"
@@ -35,7 +35,7 @@ minimum_tests = 571
 package = "sugarsubstitute-xtask"
 root = "tools/xtask"
 concern = "Governance rejection behavior and verification orchestration"
-minimum_tests = 47
+minimum_tests = 50
 
 [[owners]]
 package = "sugarsubstitute-supervision"
@@ -58,5 +58,5 @@ minimum_tests = 295
 [[owners]]
 package = "sugarsubstitute-crash"
 root = "crates/sugarsubstitute-crash"
-concern = "Bounded capture input, immutable budgets, retained partial registration and actual native retirement; bounded charged redacted report views, categorical absence and symbol failures; closed bounded diagnostic wire, replay high-water, exact result and transfer correlation, original transport guard custody; genuine installed bundle selection before capture effects, outside-lock parent loans, typed v2 failure adoption and process-lifetime module/source retention"
-minimum_tests = 233
+concern = "Bounded capture input, immutable budgets, retained partial registration and actual native retirement; bounded charged redacted report views, categorical absence and symbol failures; closed bounded diagnostic wire, replay high-water, exact result and transfer correlation, original transport guard custody; genuine installed bundle selection before capture effects, outside-lock parent loans, typed v2 failure adoption and process-lifetime module/source retention; source-derived exception facts preserve authoritative mechanism and dev-only semantic exit/collection/symbol/Reporter owner flow"
+minimum_tests = 236

@@ -9,6 +9,7 @@ mod resource_observations;
 mod resource_requests;
 mod resource_state;
 mod resources;
+mod run_enrollment;
 mod watchdog;
 pub use desktop_exit::{
     DesktopCloseRequest, DesktopExitSnapshot, DesktopExitTransaction, FailedDesktopFact,

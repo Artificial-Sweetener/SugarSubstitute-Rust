@@ -27,6 +27,7 @@ pub(in super::super) fn select<T: ReportSessionContent>(
     let title = Text::new(labels.save_title, lease)?;
     let save = Text::new(labels.save, lease)?;
     let cancel_label = Text::new(labels.cancel, lease)?;
+    let consent = consent::Consent::new(Text::new(labels.overwrite_destination, lease)?, lease);
     let (filter_label, pattern, extension, default) = match content_kind {
         ExportSelection::TextOnly => (labels.text_filter, "*.txt", w!("txt"), "report.txt"),
         ExportSelection::TextAndNativeDump => {
@@ -70,6 +71,7 @@ pub(in super::super) fn select<T: ReportSessionContent>(
         failure: None,
         save,
         cancel_label,
+        consent: Some(consent),
     });
     let options = Box::new(OPENFILENAMEW {
         lStructSize: size_of::<OPENFILENAMEW>() as u32,
@@ -148,7 +150,12 @@ pub(in super::super) fn select<T: ReportSessionContent>(
             binding: request.binding,
             destination: dialog.destination,
             content: content_kind,
-            overwrite_consented: true,
+            overwrite_consented: dialog
+                .hook
+                .consent
+                .as_ref()
+                .ok_or_else(|| ReportSurfaceError::rejected("report_picker_consent_missing"))?
+                .selected()?,
             _claim: dialog.claim,
         }),
         update: None,

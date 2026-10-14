@@ -13,6 +13,22 @@ pub use allocation::*;
 mod boundary;
 pub(crate) use boundary::Port;
 pub(crate) use boundary::SummaryStageAccess;
+pub(crate) mod genesis;
+pub use genesis::{
+    DiagnosticStoreGenesis, DiagnosticStoreOpening, ProtectedDiagnosticWriteRequest,
+};
+mod finished_owner;
+pub use finished_owner::{
+    FINISHED_OWNER_STORAGE_BYTES, FINISHED_RUST_STORAGE_BYTES, ProtectedFinishedOwnerAllocation,
+    ProtectedFinishedRustRetention,
+};
+mod capture_read;
+pub use capture_read::{ProtectedCaptureReadGuard, ProtectedCaptureReadLease};
+mod capture_intent;
+pub use capture_intent::{
+    CAPTURE_RETIREMENT_ERROR_BYTES, DiagnosticCaptureFence, DiagnosticCaptureIntent,
+    DiagnosticCaptureNativeSource, DiagnosticCaptureRetirementError,
+};
 mod deletion;
 mod disposition;
 #[cfg(any(test, feature = "boundary-fixtures"))]
@@ -129,6 +145,7 @@ struct State {
     operation: Option<Binding>,
     namespace: Option<NamespaceId>,
     writer: bool,
+    genesis: Option<genesis::RetainedGenesis>,
     inventory_complete: bool,
     charged_bytes: u64,
     payload_groups: Vec<[u8; 32]>,
@@ -137,6 +154,9 @@ struct State {
     closed: bool,
     stages: Vec<stage::RetainedStage>,
     reads: Vec<read::RetainedRead>,
+    capture_reads: usize,
+    finished_owner: Option<u64>,
+    capture: Option<capture_intent::RetainedCapture>,
     deletion: Option<deletion::RetainedDeletion>,
     migration: Option<allocation::RetainedIntent<summary_migration::MigrationIntent>>,
     payload: Option<allocation::RetainedIntent<payload_discard::intent::PayloadIntent>>,
@@ -200,6 +220,7 @@ impl DiagnosticStorage {
                     operation: None,
                     namespace: None,
                     writer: false,
+                    genesis: None,
                     inventory_complete: false,
                     charged_bytes: 0,
                     payload_groups: Vec::new(),
@@ -208,6 +229,9 @@ impl DiagnosticStorage {
                     closed: false,
                     stages,
                     reads,
+                    capture_reads: 0,
+                    finished_owner: None,
+                    capture: None,
                     deletion: None,
                     migration: None,
                     payload: None,
@@ -295,6 +319,8 @@ impl DiagnosticStorage {
         let mut state = self.check(operation, context)?;
         if !state.data_mut()?.stages.is_empty()
             || !state.data_mut()?.reads.is_empty()
+            || state.data_mut()?.capture_reads != 0
+            || state.data_mut()?.finished_owner.is_some()
             || state.data_mut()?.deletion.is_some()
             || state.data_mut()?.migration.is_some()
             || state.data_mut()?.payload.is_some()

@@ -38,12 +38,18 @@ pub(super) fn seed(run: RunKey) -> Result<IncidentSeed, IncidentError> {
     )
 }
 pub(super) fn register(resources: &mut ResourceCoordinator, run: RunKey) -> TestResult {
-    resources.register_run(ClientRegistration {
+    let registration = ClientRegistration {
         run,
         launch: LaunchId::new(run.instance.get())?,
         profile: ProfileId::new(format!("profile{}", run.instance.get()))?,
         connection: ConnectionId::new(run.instance.get())?,
+    };
+    resources.enroll_run(RunEnrollment {
+        run: registration.run,
+        launch: registration.launch,
+        profile: registration.profile.clone(),
     })?;
+    resources.register_run(registration)?;
     Ok(())
 }
 pub(super) fn seed_ready(
@@ -91,6 +97,12 @@ pub(super) struct Ready {
     pub summary: IncidentSummary,
 }
 pub(super) fn ready(instance: u64) -> Result<Ready, Box<dyn std::error::Error>> {
+    ready_with_evidence(instance, evidence()?)
+}
+pub(super) fn ready_with_evidence(
+    instance: u64,
+    collected: CollectedIncidentEvidence,
+) -> Result<Ready, Box<dyn std::error::Error>> {
     let mut coord = IncidentCoordinator::new(owner(2)?);
     let mut resources = ResourceCoordinator::new(owner(2)?);
     let run = run(instance)?;
@@ -110,7 +122,7 @@ pub(super) fn ready(instance: u64) -> Result<Ready, Box<dyn std::error::Error>> 
     };
     let effects = coord.observe(IncidentServiceObservation::EvidenceCollected {
         scope: source,
-        evidence: evidence()?,
+        evidence: collected,
     })?;
     let summary = match effects.iter().next() {
         Some(IncidentEffect::PublishSummary { summary, .. }) => summary.clone(),

@@ -30,6 +30,8 @@ struct LedgerState {
     native: Option<loans::Binding>,
     native_generation: u64,
     closed: bool,
+    namespace: Option<Arc<crate::coordinator_entry::namespace::NamespaceLifetime>>,
+    capture_source: Option<crate::protected_storage::capture_read::pin::ReadPins>,
 }
 #[derive(Clone)]
 pub(in crate::diagnostic_storage) struct Owner {
@@ -62,6 +64,8 @@ impl Ledger {
                     native: None,
                     native_generation: 0,
                     closed: false,
+                    namespace: None,
+                    capture_source: None,
                 }),
                 _fixture: Mutex::new(None),
                 _original: original,
@@ -73,6 +77,58 @@ impl Ledger {
     }
 }
 impl Owner {
+    pub(in crate::diagnostic_storage) fn bind_namespace(
+        &self,
+        request: &ProtectedDiagnosticWriteRequest,
+    ) -> Result<(), native::DiagnosticNativeAllocationFailure> {
+        let inner = self
+            .inner
+            .as_ref()
+            .ok_or_else(native::DiagnosticNativeAllocationFailure::namespace_rejected)?;
+        let mut state = inner.lock();
+        if state.closed
+            || state.current != Some(request.operation())
+            || !request.lifetime.open.load(std::sync::atomic::Ordering::Acquire)
+            || state.namespace.as_ref().is_some_and(|held| !Arc::ptr_eq(held, &request.lifetime))
+        {
+            return Err(native::DiagnosticNativeAllocationFailure::namespace_rejected());
+        }
+        if state.namespace.is_none() {
+            state.namespace = Some(Arc::clone(&request.lifetime));
+        }
+        Ok(())
+    }
+    pub(in crate::diagnostic_storage) fn admission_sources_open(&self) -> bool {
+        self.inner.as_ref().is_some_and(|inner| {
+            let state = inner.lock();
+            state
+                .namespace
+                .as_ref()
+                .is_none_or(|namespace| namespace.open.load(std::sync::atomic::Ordering::Acquire))
+                && state.capture_source.as_ref().is_none_or(|source| source.open())
+        })
+    }
+    pub(in crate::diagnostic_storage) fn bind_capture_source(
+        &self,
+        source: crate::protected_storage::capture_read::pin::ReadPins,
+    ) -> Result<(), native::DiagnosticNativeAllocationFailure> {
+        let inner = self
+            .inner
+            .as_ref()
+            .ok_or_else(native::DiagnosticNativeAllocationFailure::namespace_rejected)?;
+        let mut state = inner.lock();
+        if state.closed
+            || state.current.is_none()
+            || !source.open()
+            || state.capture_source.as_ref().is_some_and(|held| !held.same(&source))
+        {
+            return Err(native::DiagnosticNativeAllocationFailure::namespace_rejected());
+        }
+        if state.capture_source.is_none() {
+            state.capture_source = Some(source);
+        }
+        Ok(())
+    }
     pub(super) fn same(&self, other: &Self) -> bool {
         self.inner
             .as_ref()
@@ -216,6 +272,20 @@ impl Drop for PhaseLoan {
 }
 
 impl Owner {
+    #[cfg(any(test, feature = "boundary-fixtures"))]
+    pub(in crate::diagnostic_storage) fn matches_fixture(
+        &self,
+        marker: &Arc<std::sync::atomic::AtomicBool>,
+    ) -> bool {
+        self.inner.as_ref().is_some_and(|inner| {
+            inner
+                ._fixture
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .as_ref()
+                .is_some_and(|held| Arc::ptr_eq(&held.0, marker))
+        })
+    }
     #[cfg(any(test, feature = "boundary-fixtures"))]
     pub(in crate::diagnostic_storage) fn retain_fixture(
         &self,

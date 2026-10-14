@@ -59,7 +59,11 @@ impl<'a> StateAccess<'a> {
         drop(self.held.take());
         drop(original);
         self.held = Some(lock(self.shared));
-        result
+        result?;
+        if !cleanup && !self.data_mut()?.allocation.admission_sources_open() {
+            return Err(error(key, Code::Closed));
+        }
+        Ok(())
     }
     pub(super) fn call_native<T>(
         &mut self,

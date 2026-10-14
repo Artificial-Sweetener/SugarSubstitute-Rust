@@ -17,6 +17,7 @@ struct Running {
     context: sugarsubstitute_contracts::execution::JobContext,
     job: Arc<dyn task::ErasedJob>,
     started: Moment,
+    receiving: Option<(sugarsubstitute_contracts::execution::JobContext, Arc<dyn task::ErasedJob>)>,
 }
 
 pub(super) async fn supervise(core: Arc<Core>) {
@@ -32,6 +33,15 @@ pub(super) async fn supervise(core: Arc<Core>) {
             if running[index].handle.is_finished() {
                 let stopped = running.swap_remove(index);
                 if let Err(error) = stopped.handle.await {
+                    if let Some((context, job)) = &stopped.receiving {
+                        job.panicked(
+                            context,
+                            stopped.started,
+                            sugarsubstitute_contracts::execution::PanicCause::new(
+                                error.to_string(),
+                            ),
+                        );
+                    }
                     stopped.job.panicked(
                         &stopped.context,
                         stopped.started,
@@ -51,14 +61,19 @@ pub(super) async fn supervise(core: Arc<Core>) {
                     | sugarsubstitute_contracts::execution::JobClass::InfrastructureLifecycle
             )
         }) {
-            if let Some(reason) = task::stop_reason(&queued.context)
+            if let Some(reason) = queued.stop_reason(core.clock.retirement_now())
                 && !matches!(queued.work, Work::BlockingHeld(_))
             {
                 task::stop_queued(queued, reason);
                 continue;
             }
             let started = core.clock.retirement_now();
+            let receiving = match &queued.work {
+                Work::ReportExportPair(pair) => Some((pair.context.clone(), pair.job.clone())),
+                _ => None,
+            };
             let future = match queued.work {
+                Work::ReportExportPair(pair) => (pair.factory)(queued.context.clone(), started),
                 Work::Async(factory) | Work::Blocking(factory) | Work::BlockingHeld(factory) => {
                     factory(queued.context.clone(), started)
                 }
@@ -71,6 +86,7 @@ pub(super) async fn supervise(core: Arc<Core>) {
                 context: queued.context,
                 job: queued.job,
                 started,
+                receiving,
             });
         }
         let now = core.clock.retirement_now();
@@ -158,7 +174,7 @@ pub(super) async fn supervise(core: Arc<Core>) {
             () = deadline_wait => { core.changed(); },
             (index, result) = stopped, if has_running => {
                 let stopped = running.swap_remove(index);
-                if let Err(error) = result { stopped.job.panicked(&stopped.context, stopped.started, sugarsubstitute_contracts::execution::PanicCause::new(error.to_string())); }
+                if let Err(error) = result { if let Some((context, job)) = &stopped.receiving { job.panicked(context, stopped.started, sugarsubstitute_contracts::execution::PanicCause::new(error.to_string())); } stopped.job.panicked(&stopped.context, stopped.started, sugarsubstitute_contracts::execution::PanicCause::new(error.to_string())); }
             }
         }
     }

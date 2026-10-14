@@ -176,6 +176,10 @@ impl RetainedBackend {
     }
 }
 impl CoordinatorBackend {
+    /// Borrow the same authoritative run/resource policy for incident enrollment and admission.
+    pub(in crate::production) fn incident_policy(&mut self) -> &mut ResourceCoordinator {
+        &mut self.policy
+    }
     /// Bind installed executable/namespace paths before the first managed request.
     pub(crate) fn configure_custody(
         &mut self,

@@ -13,6 +13,15 @@ mod desktop_output;
 pub(crate) mod desktop_role;
 #[path = "entry_activation/forwarding.rs"]
 mod forwarding;
+#[path = "entry_activation/incident_collection.rs"]
+mod incident_collection;
+#[path = "entry_activation/incident_flow.rs"]
+mod incident_flow;
+#[path = "entry_activation/incident_reporting.rs"]
+mod incident_reporting;
+#[path = "entry_activation/incident_seed.rs"]
+mod incident_seed;
+pub(in crate::production) use incident_reporting::RetiredReporter;
 #[path = "entry_activation/launch.rs"]
 mod launch;
 #[path = "entry_activation/normal_idle.rs"]
@@ -27,6 +36,8 @@ mod projection;
 mod record_progress;
 #[path = "entry_activation/relay.rs"]
 mod relay;
+#[path = "entry_activation/restart.rs"]
+mod restart;
 #[path = "entry_activation/retirement.rs"]
 pub(crate) mod retirement;
 #[path = "entry_activation/shutdown.rs"]
@@ -88,6 +99,15 @@ struct Record {
     ui_suspected: bool,
     replied: bool,
     closed: bool,
+    seed: incident_seed::SeedPreparation,
+    seeded: bool,
+    collection: incident_collection::IncidentCollection,
+    failed: Option<sugarsubstitute_application::supervision::FailedDesktopFact>,
+    failed_cause: Option<Box<dyn Error>>,
+    failed_shutdown: Option<ShutdownBudget>,
+    failed_family_adopted: bool,
+    pending_desktop_failure: Option<incident_reporting::PendingDesktopFailure>,
+    restart: restart::RestartState,
 }
 struct PendingProjection {
     qualification: super::qualification::QualificationIntent,
@@ -97,6 +117,7 @@ struct PendingProjection {
     connection: ConnectionId,
     job: Option<OwnedJob<ProjectedEntry, ProjectionFailure>>,
     completion: Option<JobCompletion<ProjectedEntry, ProjectionFailure>>,
+    restart: bool,
 }
 struct RetainedRecord {
     record: Box<Record>,
@@ -105,6 +126,7 @@ struct RetainedRecord {
 /// Own bounded retained records and the process's one actual capture registration.
 /// No constructor grants native effects, trust, serving state or child readiness.
 pub(crate) struct ProductionActivation {
+    incidents: incident_flow::IncidentFlow,
     qualification: Option<super::qualification::QualificationIntent>,
     executable: PathBuf,
     working_directory: PathBuf,
@@ -134,6 +156,7 @@ impl ProductionActivation {
             LaunchConfiguration::validate_path(path)?;
         }
         Ok(Self {
+            incidents: incident_flow::IncidentFlow::new(),
             qualification: None,
             executable,
             working_directory,
@@ -167,6 +190,22 @@ impl ProductionActivation {
         }
     }
     fn failure_source(&self) -> Option<&(dyn Error + 'static)> {
+        if let Some(cause) = self.incidents.reporting.failure() {
+            return Some(cause);
+        }
+        if let Some(cause) = self.incidents.host.failure() {
+            return Some(cause);
+        }
+        if let Some(cause) =
+            self.records.iter().flatten().find_map(|record| record.record.seed.failure())
+        {
+            return Some(cause);
+        }
+        if let Some(cause) =
+            self.records.iter().flatten().find_map(|record| record.record.collection.failure())
+        {
+            return Some(cause);
+        }
         if let Some(key) = self.failure_resource
             && let Some(retained) = &self.backend
         {
@@ -210,7 +249,7 @@ impl EntryActivation for ProductionActivation {
     fn enter_activation(
         &mut self,
         request: &mut Option<AuthenticatedEntryLaunch>,
-        resources: EntryResources<'_>,
+        mut resources: EntryResources<'_>,
     ) -> Result<()> {
         if self.closing {
             return Err("Production activation admission closed".into());
@@ -226,6 +265,7 @@ impl EntryActivation for ProductionActivation {
         if resources.client.now()? >= until {
             return Err("Original entry deadline expired".into());
         }
+        self.incidents.prepare(&mut resources)?;
         let slot = self
             .records
             .iter()
@@ -256,7 +296,12 @@ impl EntryActivation for ProductionActivation {
             replacement: None,
         };
         let frame = request.take().ok_or("Original authenticated entry missing")?;
-        let mut input = Some(ProjectionInput::new(frame, self.capture_root.clone()));
+        let mut input = Some(ProjectionInput::new(
+            frame,
+            self.capture_root.clone(),
+            resources.client.clone(),
+            run,
+        ));
         let submitted = resources.client.submit_blocking_owned_box(
             resources.finite,
             spec,
@@ -280,6 +325,7 @@ impl EntryActivation for ProductionActivation {
             connection,
             job: Some(job),
             completion: None,
+            restart: false,
         });
         Ok(())
     }
@@ -302,6 +348,10 @@ impl EntryActivation for ProductionActivation {
                 graceful_until: old.graceful_until.min(budget.graceful_until),
                 settle_until: old.settle_until.min(budget.settle_until),
             }));
+            if !self.records.iter().flatten().any(|held| held.record.collection.pending()) {
+                self.incidents
+                    .request_close(self.shutdown.ok_or("Original activation cutoff missing")?);
+            }
         }
         for pending in self.pending.iter().flatten() {
             if let Some(job) = &pending.job {
@@ -309,6 +359,10 @@ impl EntryActivation for ProductionActivation {
             }
         }
         for record in self.records.iter_mut().flatten().map(|retained| retained.record.as_mut()) {
+            record.seed.cancel();
+            if !record.collection.pending() {
+                record.collection.cancel_preparation();
+            }
             if let Some(job) = &record.attach {
                 job.cancel();
             }
@@ -358,6 +412,10 @@ impl EntryActivation for ProductionActivation {
         }
         self.close_records(&mut resources)?;
         Ok(self.records.iter().flatten().all(|retained| retained.record.closed)
+            && self.records.iter().flatten().all(|retained| retained.record.seed.delivered())
+            && self.records.iter().flatten().all(|retained| retained.record.collection.delivered())
+            && self.incidents.reporting.settled()
+            && self.incidents.close_seed(&resources, budget)?
             && self.pending.iter().all(Option::is_none)
             && self.delivery.as_ref().is_none_or(|delivery| !delivery.pending())
             && self.backend.as_ref().is_none_or(|retained| retained.backend.settled())

@@ -40,8 +40,13 @@ impl Core {
             crate::admission_timing::AdmittedTiming,
         ) -> Result<(QueuedJob, R), (AdmissionError, M)>,
     ) -> Result<R, (AdmissionError, M)> {
-        let fresh_metadata =
-            matches!(&kind, RequestKind::SymbolCleanup { .. } | RequestKind::SymbolHelper { .. });
+        let fresh_metadata = matches!(
+            &kind,
+            RequestKind::SymbolCleanup { .. }
+                | RequestKind::SymbolHelper { .. }
+                | RequestKind::ReportExportCleanup { .. }
+                | RequestKind::ReportExportMain { .. }
+        );
         #[cfg(any(windows, test))]
         let fresh_metadata = fresh_metadata
             || matches!(
@@ -122,6 +127,12 @@ impl Core {
                     (&kind, spec.class),
                     (RequestKind::SymbolCleanup { .. }, JobClass::InfrastructureLifecycle)
                         | (RequestKind::SymbolHelper { .. }, JobClass::InfrastructureOrdinary)
+                );
+            let valid_method = valid_method
+                || matches!(
+                    (&kind, spec.class),
+                    (RequestKind::ReportExportCleanup { .. }, JobClass::InfrastructureLifecycle)
+                        | (RequestKind::ReportExportMain { .. }, JobClass::InfrastructureOrdinary)
                 );
             #[cfg(any(windows, test))]
             if matches!(&kind, RequestKind::DesktopCapture(_))
@@ -226,6 +237,7 @@ impl Core {
                     std::io::Error::other("Original entry preparation specification mismatch"),
                 )));
             }
+            crate::report_export::admission::validate(self, &state, scope, spec, &kind, now)?;
             crate::symbol_admission::validate(self, &state, scope, spec, &kind, now)?;
             #[cfg(all(feature = "k1-native-qualification", any(windows, test)))]
             if let RequestKind::RegisteredDesktopFault { custody, run } = &kind {
@@ -292,6 +304,7 @@ impl Core {
                 crate::native_resources::ResourceRecord {
                     bundle_issued: false,
                     reader_issued: false,
+                    provider_issued: false,
                     scope_id: scope.id(),
                     observation: lease.observation(),
                 },
@@ -303,77 +316,19 @@ impl Core {
         {
             binding.paired = true;
         }
-        let memory = sugarsubstitute_contracts::execution::MemoryLeaseObservation::new(
-            construction_guard.memory(),
-        );
+        if let RequestKind::ReportExportMain { cleanup } = &kind
+            && let Some(binding) =
+                state.jobs.get_mut(cleanup).and_then(|record| record.report_cleanup.as_mut())
+        {
+            binding.paired = true;
+        }
         #[cfg(all(feature = "k1-native-qualification", any(windows, test)))]
         if let RequestKind::RegisteredDesktopFault { custody, .. } = &kind {
             lock(&custody.state).fault_job = Some(spec.id);
         }
         state.jobs.insert(
             spec.id,
-            Record {
-                #[cfg(any(windows, test))]
-                custodied_process: matches!(&kind, RequestKind::CustodiedProcess(_)),
-                #[cfg(any(windows, test))]
-                custody_deadlines: if matches!(&kind, RequestKind::BackendCustody { .. }) {
-                    Some(Box::new(crate::backend_custody::deadlines::Deadlines::new()))
-                } else {
-                    None
-                },
-                memory: Some(memory),
-                entry_setup: match &kind {
-                    RequestKind::EntryPreparation(setup) => Some(*setup),
-                    _ => None,
-                },
-                preparation_issued: false,
-                preparation: None,
-                capture_bundle_issued: false,
-                #[cfg(any(windows, test))]
-                process_capture: None,
-                #[cfg(any(windows, test))]
-                capture_event_issued: false,
-                #[cfg(any(windows, test))]
-                capture_event_identity: None,
-                #[cfg(any(windows, test))]
-                desktop_capture_custody: match &queued.work {
-                    crate::task::Work::Native(work) => work.initial_desktop_custody(),
-                    _ => None,
-                },
-                symbol_original: match &kind {
-                    RequestKind::SymbolNative { original, .. } => Some(original.job_id()),
-                    _ => None,
-                },
-                symbol_cleanup: match &kind {
-                    RequestKind::SymbolCleanup { main_scope, main_spec } => {
-                        Some(crate::symbol_cleanup::Binding {
-                            main_scope: *main_scope,
-                            main_spec: *main_spec,
-                            paired: false,
-                            original: None,
-                        })
-                    }
-                    _ => None,
-                },
-                #[cfg(any(windows, test))]
-                native_custody: match &queued.work {
-                    crate::task::Work::Native(work) => work.initial_custody(),
-                    _ => None,
-                },
-                #[cfg(any(windows, test))]
-                native_deadlines: match &queued.work {
-                    crate::task::Work::Native(work) => work.initial_deadlines(),
-                    _ => None,
-                },
-                deadline,
-                scope_id: scope.id(),
-                spec,
-                phase: JobPhase::Queued,
-                job: queued.job.clone(),
-                retiring: false,
-                acknowledged: false,
-                terminal_published: false,
-            },
+            Record::admitted(&construction_guard, queued.job.clone(), &kind, Some(&queued.work)),
         );
         state.latest_job = Some(spec.id);
         let replaced = replacement_index.and_then(|index| state.queue.remove(index));

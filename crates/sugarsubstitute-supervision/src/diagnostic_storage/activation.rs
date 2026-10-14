@@ -50,6 +50,9 @@ impl DiagnosticStorage {
         let flushed = retained.flushed.ok_or_else(|| error(operation.key, Code::Flush))?;
         let object = retained.object;
         let id = retained.native.ok_or_else(|| error(operation.key, Code::Closed))?;
+        if object == DiagnosticObject::StoreState && expected == DiagnosticPredecessor::Absent {
+            genesis::validate_activation(state.data_mut()?, operation.key, stage.id, flushed)?;
+        }
         let facts = state
             .call_native(|port| port.activate(id, object, expected, context))?
             .map_err(|cause| native(operation.key, Code::ActivationUncertain, cause))?;
@@ -57,6 +60,12 @@ impl DiagnosticStorage {
             return Err(error(operation.key, Code::ChangedIdentity));
         }
         check(&mut state, operation.key, context, false)?;
+        if object == DiagnosticObject::StoreState
+            && expected == DiagnosticPredecessor::Absent
+            && let Some(genesis) = &mut state.data_mut()?.genesis
+        {
+            genesis.committed = true;
+        }
         state.data_mut()?.stages.remove(index);
         state.data_mut()?.inventory_complete = false;
         Ok(DiagnosticActivation {
@@ -93,6 +102,9 @@ impl DiagnosticStorage {
             return Err(error(operation.key, Code::ChangedIdentity));
         }
         check(&mut state, operation.key, context, false)?;
+        if object == DiagnosticObject::StoreState {
+            genesis::reconcile(state.data_mut()?, operation.key, facts)?;
+        }
         Ok(DiagnosticActivation {
             shared: self.shared.clone(),
             operation: operation.key,

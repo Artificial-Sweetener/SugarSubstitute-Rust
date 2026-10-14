@@ -68,7 +68,9 @@ impl ParentLifecycle {
         if self.closed || (self.acquisition_receive.is_some() && self.hold_acquisition_receive()?) {
             return Ok(());
         }
-        let Some((operation, frame)) = self.acquisition_receive.take() else { return Ok(()) };
+        let Some((operation, frame)) = self.acquisition_receive.take() else {
+            return Ok(());
+        };
         if let Err(cause) = self.receive(frame.as_bytes(), resources) {
             tracing::error!(operation="parent_acquisition_received_payload_rejected",payload_kind=received_payload_kind(frame.as_bytes()),
                 run=?self.run,native_operation=operation,main_stage=?self.main.stage(),
@@ -119,7 +121,9 @@ fn progress_write(purpose: &WritePurpose) -> bool {
 /// credential, path or capability bytes enter diagnostics; this grants no authority.
 fn received_payload_kind(bytes: &[u8]) -> &'static str {
     use sugarsubstitute_supervision::lifecycle_protocol::DecodedPayload as Payload;
-    let Ok(message) = FrameCodec::decode(bytes) else { return "Malformed" };
+    let Ok(message) = FrameCodec::decode(bytes) else {
+        return "Malformed";
+    };
     match message.payload {
         Payload::Hello(_) => "Hello",
         Payload::Welcome { .. } => "Welcome",

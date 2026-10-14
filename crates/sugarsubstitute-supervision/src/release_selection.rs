@@ -24,3 +24,15 @@ impl InstalledReleaseOwner {
         CaptureSelectionRequest { _private: () }
     }
 }
+
+/// Select the actual current process under a separately admitted paired symbol job.
+/// This inert request contains no caller path, digest, build or signer authority.
+pub struct SymbolSelectionRequest {
+    _private: (),
+}
+impl InstalledReleaseOwner {
+    /// Request authenticated current-image symbols; actual Core admission grants effects.
+    pub const fn symbol_selection(&self) -> SymbolSelectionRequest {
+        SymbolSelectionRequest { _private: () }
+    }
+}

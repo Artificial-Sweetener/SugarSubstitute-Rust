@@ -358,14 +358,18 @@ impl ParentLifecycle {
         if self.terminal.is_none() {
             self.terminal = resources.session.completion.try_take_completion();
         }
-        let Some(terminal) = &self.terminal else { return Ok(()) };
+        let Some(terminal) = &self.terminal else {
+            return Ok(());
+        };
         if terminal.scope_id != scope || terminal.spec != spec || terminal.outcome.kind() != kind {
             return Err(ParentError::WrongPhase.into());
         }
         if self.checked_retirement.is_none() {
             self.checked_retirement = resources.session.control.take_checked_retirement();
         }
-        let Some(proof) = &self.checked_retirement else { return Ok(()) };
+        let Some(proof) = &self.checked_retirement else {
+            return Ok(());
+        };
         if !proof.matches(&resources.session.control)
             || proof.scope_id() != scope
             || proof.spec() != spec
@@ -383,7 +387,11 @@ impl ParentLifecycle {
             match &terminal.outcome {
                 JobOutcome::Success(report) if report.run == Some(self.run) => {}
                 JobOutcome::Cancelled if self.cleanup.is_some() => {}
-                JobOutcome::Failure(cause) => return Err(cause.clone().into()),
+                JobOutcome::Failure(cause) => {
+                    self.activity_failure_origin =
+                        super::types::ParentActivityFailureOrigin::DesktopPipeTerminal;
+                    return Err(cause.clone().into());
+                }
                 _ => return Err(ParentError::OwnerFailed.into()),
             }
         }

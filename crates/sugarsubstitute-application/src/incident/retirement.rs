@@ -109,6 +109,9 @@ impl IncidentCoordinator {
         if self.record(index)?.binding != Some(binding) {
             return Err(IncidentDecisionError::StaleOperation);
         }
+        if self.record(index)?.reporter_retired {
+            return Ok(IncidentEffects::default());
+        }
         let record = self.record_mut(index)?;
         record.reporter_retired = true;
         record.presented = false;

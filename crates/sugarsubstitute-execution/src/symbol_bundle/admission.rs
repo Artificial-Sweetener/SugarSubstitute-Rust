@@ -62,8 +62,8 @@ impl ExecutionClient {
     }
 }
 
-/// Both fixed purposes share the sole actual record/ledger admission transaction.
-pub(super) fn admit(
+/// All fixed purposes share the sole actual record/ledger admission transaction.
+pub(crate) fn admit(
     client: &ExecutionClient,
     observed: &JobContext,
     purpose: Purpose,

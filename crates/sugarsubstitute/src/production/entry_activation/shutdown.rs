@@ -35,8 +35,8 @@ impl ProductionActivation {
             .map_err(outer)?;
         Ok(())
     }
-    /// Settle one actual role through existing pipe, profile, registry and backend owners.
-    /// A caller retains the original role/global budget; this samples no new transaction start.
+    /// Advance the same actual native owners for explicit coordinator close or one failed desktop.
+    /// The caller retains original collection/source custody until checked retirement permits this work.
     pub(super) fn close_record(
         record: &mut Record,
         backend: &mut CoordinatorBackend,
@@ -44,7 +44,11 @@ impl ProductionActivation {
         resources: &mut EntryResources<'_>,
         budget: ShutdownBudget,
     ) -> Result<()> {
+        let budget = record.parent.as_ref().map_or(budget, |parent| parent.cleanup_budget(budget));
         if record.closed {
+            return Ok(());
+        }
+        if record.collection.pending() {
             return Ok(());
         }
         if record.attach.is_some() {

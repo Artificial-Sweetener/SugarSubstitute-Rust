@@ -22,11 +22,18 @@ pub(super) struct RequestRecord {
     pub command: ResourceCommand,
     pub reply: ResourceReply,
 }
+/// Keep prelaunch reservation separate from the composing adapter's native peer facts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ConnectionPhase {
+    Admitted,
+    Connected(ConnectionId),
+    Disconnected(ConnectionId),
+}
 pub(super) struct RunRecord {
-    pub registration: ClientRegistration,
+    pub enrollment: RunEnrollment,
     pub incident_seed_admitted: bool,
     pub incident_failure_admitted: bool,
-    pub connected: bool,
+    pub connection: ConnectionPhase,
     pub settled: bool,
     pub highwater: u64,
     pub pending: BTreeMap<RequestId, RequestRecord>,

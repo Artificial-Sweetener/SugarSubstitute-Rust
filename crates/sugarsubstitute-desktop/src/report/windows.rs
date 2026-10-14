@@ -5,6 +5,7 @@ mod buffer;
 mod callback;
 mod clipboard;
 mod controls;
+mod copy;
 mod font;
 mod save_dialog;
 mod session;

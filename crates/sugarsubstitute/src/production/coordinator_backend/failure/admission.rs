@@ -28,6 +28,8 @@ impl FailureObservation {
             AdmissionError::WrongClass { .. } => "admission_wrong_class",
             AdmissionError::InvalidReplacement { .. } => "admission_invalid_replacement",
             AdmissionError::InvalidSymbolAdmission => "admission_invalid_symbol",
+            AdmissionError::InvalidReportExportAdmission => "admission_invalid_report_export",
+            AdmissionError::ReportExportOutputCapacity => "admission_report_export_output_capacity",
             AdmissionError::InvalidCaptureAdmission => "admission_invalid_capture",
             AdmissionError::CaptureRetiring => "admission_capture_retiring",
             AdmissionError::NativeResources(_) => "admission_native_resources",

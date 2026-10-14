@@ -344,6 +344,21 @@ pub(crate) fn qualification_fixture_findings(source: &str) -> Result<Vec<String>
     )
 }
 
+/// Test-only Report request metadata uses the same alias/macro scanner and a separate exact owner rule.
+pub(crate) fn report_copy_fixture_findings(source: &str) -> Result<Vec<String>> {
+    filtered_findings(
+        source,
+        |path| {
+            path.last().is_some_and(|name| name == "with_pending_report_copy")
+                || path.windows(2).any(|pair| pair[0] == "report" && pair[1] == "copy_fixture")
+        },
+        |names| {
+            names.contains("with_pending_report_copy")
+                || (names.contains("report") && names.contains("copy_fixture"))
+        },
+    )
+}
+
 fn resource_producer_path(path: &[String]) -> bool {
     path.windows(2).any(|pair| {
         (pair[0] == "InheritedCaptureAttachInput"
@@ -360,6 +375,14 @@ fn resource_producer_path(path: &[String]) -> bool {
                     | "CaptureBundleAdmission"
                     | "CaptureBundleOrigin"
                     | "CaptureBundleRetirement"
+                    | "ReportExportAdmission"
+                    | "ReportExportOrigin"
+                    | "ReportExportRetirement"
+                    | "ReportExportOutput"
+                    | "ReportExportCleanupDeadline"
+                    | "RegisteredStartupSource"
+                    | "RegisteredRestartAdmission"
+                    | "PreparedStartupSnapshot"
             ) && pair[1] == "new"
         })
 }
@@ -382,6 +405,14 @@ fn resource_fragments(names: &BTreeSet<String>) -> bool {
                         | "CaptureBundleAdmission"
                         | "CaptureBundleOrigin"
                         | "CaptureBundleRetirement"
+                        | "ReportExportAdmission"
+                        | "ReportExportOrigin"
+                        | "ReportExportRetirement"
+                        | "ReportExportOutput"
+                        | "ReportExportCleanupDeadline"
+                        | "RegisteredStartupSource"
+                        | "RegisteredRestartAdmission"
+                        | "PreparedStartupSnapshot"
                 )
             })
 }

@@ -111,7 +111,9 @@ impl Attachment {
             }
             return Err("Original custody bootstrap expired during capture preparation".into());
         }
-        let Some(completion) = &mut self.completion else { return Ok(None) };
+        let Some(completion) = &mut self.completion else {
+            return Ok(None);
+        };
         if completion.scope_id != resources.native.id()
             || completion.spec.class != JobClass::NativeObservation
         {
@@ -178,7 +180,9 @@ impl Attachment {
         if self.admitted {
             return Ok(false);
         }
-        let Some(completion) = &mut self.completion else { return Ok(false) };
+        let Some(completion) = &mut self.completion else {
+            return Ok(false);
+        };
         if self.retirement.is_none() {
             match &mut completion.outcome {
                 JobOutcome::Success(pin) => {

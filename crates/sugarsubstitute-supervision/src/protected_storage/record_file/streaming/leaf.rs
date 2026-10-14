@@ -7,7 +7,7 @@ use std::fmt::{self, Write};
 pub(super) const LEAF_BYTES: usize = 197;
 
 /// Keep every canonical leaf byte inline, including complete stage identities.
-pub(super) struct Leaf {
+pub(crate) struct Leaf {
     bytes: [u8; LEAF_BYTES],
     length: usize,
 }
@@ -15,7 +15,7 @@ impl Leaf {
     pub(super) const fn empty() -> Self {
         Self { bytes: [0; LEAF_BYTES], length: 0 }
     }
-    pub(super) fn object(
+    pub(crate) fn object(
         object: DiagnosticObject,
         namespace: NamespaceId,
     ) -> Result<Self, fmt::Error> {
@@ -49,7 +49,7 @@ impl Leaf {
         write!(leaf, ".{}.", Hex(&layout::operation(operation)))?;
         Ok(leaf)
     }
-    pub(super) fn text(&self) -> Result<&str, fmt::Error> {
+    pub(crate) fn text(&self) -> Result<&str, fmt::Error> {
         std::str::from_utf8(&self.bytes[..self.length]).map_err(|_| fmt::Error)
     }
 }

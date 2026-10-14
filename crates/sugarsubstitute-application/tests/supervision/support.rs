@@ -31,12 +31,18 @@ pub(super) fn register(
     instance: u64,
     profile: &str,
 ) -> TestResult {
-    coordinator.register_run(ClientRegistration {
+    let registration = ClientRegistration {
         run: run(instance)?,
         launch: LaunchId::new(instance)?,
         profile: ProfileId::new(profile.into())?,
         connection: connection(instance)?,
+    };
+    coordinator.enroll_run(RunEnrollment {
+        run: registration.run,
+        launch: registration.launch,
+        profile: registration.profile.clone(),
     })?;
+    coordinator.register_run(registration)?;
     Ok(())
 }
 pub(super) fn target(port: u16, managed: bool) -> Result<BackendTarget, Box<dyn Error>> {

@@ -168,3 +168,5 @@ fn diagnostic_close_fences_connect_and_read_after_inert_native_preparation() -> 
 }
 #[path = "diagnostic_custody_tests.rs"]
 mod custody;
+#[path = "diagnostic_retirement_tests.rs"]
+mod retirement;

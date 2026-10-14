@@ -73,7 +73,7 @@ impl Error for CaptureCapacityFailure {}
 
 /// Select one fixed source-owned region; numerical capacities are never public input.
 #[derive(Clone, Copy)]
-pub(super) enum CaptureRegion {
+pub(crate) enum CaptureRegion {
     Path(u8),
     Scratch,
     Metadata,
@@ -95,7 +95,7 @@ impl CaptureScratch {
     }
 }
 impl AllocationOrigin {
-    pub(super) fn scratch(&self) -> Result<CaptureScratch, CaptureCapacityFailure> {
+    pub(crate) fn scratch(&self) -> Result<CaptureScratch, CaptureCapacityFailure> {
         let allocation =
             SharedCaptureLoan::new(self.reserve(CaptureRegion::Scratch, SCRATCH_BYTES)?)?;
         Ok(CaptureScratch { allocation, original: self.clone() })

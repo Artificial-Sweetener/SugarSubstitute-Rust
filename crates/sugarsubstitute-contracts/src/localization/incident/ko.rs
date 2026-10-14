@@ -17,6 +17,7 @@ pub static KO: ReportMessages = ReportMessages {
     archive_filter: "보고서 및 메모리 덤프 (*.zip)",
     save: "저장",
     cancel: "취소",
+    overwrite_destination: "선택한 대상의 기존 파일 바꾸기",
     copied: "보고서를 복사했습니다.",
     exported: "보고서를 내보냈습니다.",
     copy_failed: "보고서를 복사할 수 없습니다.",

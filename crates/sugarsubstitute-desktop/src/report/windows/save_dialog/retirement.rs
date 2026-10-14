@@ -6,6 +6,7 @@ pub(in super::super) struct UnretiredDialog {
     dialog: Option<Dialog>,
 }
 #[cfg(test)]
+#[path = "retirement/tests.rs"]
 mod tests;
 impl UnretiredDialog {
     pub(super) fn new(dialog: Dialog) -> Self {

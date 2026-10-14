@@ -84,7 +84,9 @@ impl CoordinatorCustody {
         if self.parent.is_none() {
             self.parent = self.attachment.advance(resources)?;
         }
-        let Some(parent) = self.parent.clone() else { return Ok(false) };
+        let Some(parent) = self.parent.clone() else {
+            return Ok(false);
+        };
         if let Some(ticket) = self.ticket {
             resources
                 .authority

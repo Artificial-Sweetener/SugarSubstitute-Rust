@@ -10,7 +10,7 @@ use sugarsubstitute_contracts::execution::AdmissionError;
 
 /// Choose one immutable native path slot; callers cannot choose a capacity.
 #[derive(Clone, Copy)]
-pub(super) enum CapturePathRole {
+pub(crate) enum CapturePathRole {
     CurrentImage,
     Manifest,
     Signature,
@@ -75,11 +75,11 @@ impl std::error::Error for CaptureNameFailure {
         }
     }
 }
-pub(super) const fn name_control_bytes() -> usize {
+pub(crate) const fn name_control_bytes() -> usize {
     size_of::<NameControl>()
 }
 impl AllocationOrigin {
-    pub(super) fn name(
+    pub(crate) fn name(
         &self,
         role: CapturePathRole,
     ) -> Result<CaptureNameDestination, CaptureCapacityFailure> {
@@ -95,7 +95,7 @@ impl AllocationOrigin {
     }
 }
 impl CaptureNameDestination {
-    pub(super) fn produce(
+    pub(crate) fn produce(
         self,
         path: &Path,
         child: Option<&std::ffi::OsStr>,
@@ -277,13 +277,16 @@ impl CaptureSidDestination {
     }
 }
 impl CaptureNativeSid {
+    pub(crate) fn original(&self) -> &AllocationOrigin {
+        &self.original
+    }
     pub(crate) fn bytes(&self) -> Result<&[u8], CaptureCapacityFailure> {
         self.data
             .as_ref()
             .map(|data| data.bytes.as_slice())
             .ok_or(CaptureCapacityFailure::missing())
     }
-    pub(super) const fn control_bytes() -> usize {
+    pub(crate) const fn control_bytes() -> usize {
         size_of::<SidControl>()
     }
 }

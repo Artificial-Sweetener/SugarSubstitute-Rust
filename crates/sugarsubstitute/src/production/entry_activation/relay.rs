@@ -24,7 +24,9 @@ pub(super) fn route(
                 .and_then(|parent| parent.take_forwarded_transition())
                 .map(Forwarded::new);
         }
-        let Some(mut forwarded) = record.forwarded.take() else { continue };
+        let Some(mut forwarded) = record.forwarded.take() else {
+            continue;
+        };
         let delivered: Result<()> = (|| {
             for destination in records.iter_mut().flatten().map(|held| held.record.as_mut()) {
                 if let Some(retired) = &destination.retired {

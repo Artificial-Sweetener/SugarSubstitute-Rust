@@ -34,3 +34,10 @@ mod runtime;
 mod startup;
 
 pub(crate) use runtime::execute;
+
+#[path = "production/diagnostic_helper.rs"]
+mod diagnostic_helper;
+#[path = "production/incident_host.rs"]
+mod incident_host;
+#[path = "production/reporter_role.rs"]
+mod reporter_role;

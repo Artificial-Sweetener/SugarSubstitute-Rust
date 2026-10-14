@@ -26,6 +26,46 @@ fn bound_empty(
 }
 
 #[test]
+fn finished_native_and_rust_roles_use_original_residual_and_keep_last_credit() -> TestResult {
+    let cpp_bytes =
+        size_of::<super::super::super::finished_owner::ProtectedFinishedOwnerAllocation>();
+    let rust_bytes =
+        size_of::<super::super::super::finished_owner::ProtectedFinishedRustRetention>();
+    println!("finished_cpp_guard_bytes={cpp_bytes} finished_rust_guard_bytes={rust_bytes}");
+    assert!(
+        cpp_bytes + rust_bytes + 5056
+            <= super::super::super::finished_owner::FINISHED_RUST_STORAGE_BYTES
+    );
+    admitted(|context, _| {
+        let (mut storage, operation) = bound_empty(&context)?;
+        let original = operation.shared._allocation.native_grant();
+        let finished = original.finished_owner(&context)?;
+        let rust = original.finished_rust_owner(&context)?;
+        let rejected = original
+            .finished_owner(&context)
+            .err()
+            .ok_or("Second four-MiB destination exceeded original residual")?;
+        assert_eq!(rejected.code(), Code::Capacity);
+        assert_eq!(rejected.operation(), Some(operation.key()));
+        drop(finished);
+        let successor = original.finished_owner(&context)?;
+        storage.retire(&operation, &context)?;
+        drop(operation);
+        drop(storage);
+        drop(original);
+        assert!(context.memory().claim(1).is_err());
+        drop(successor);
+        assert!(context.memory().claim(1).is_err());
+        drop(rust);
+        assert_eq!(
+            context.memory().claim(DIAGNOSTIC_STORAGE_BYTES)?.bytes(),
+            DIAGNOSTIC_STORAGE_BYTES
+        );
+        Ok(())
+    })
+}
+
+#[test]
 fn diagnostic_native_ordinary_branches_reject_before_allocation_or_effect() -> TestResult {
     admitted(|context, _| {
         let (mut storage, operation) = bound_empty(&context)?;
@@ -124,6 +164,7 @@ fn diagnostic_native_first_failure_observes_actual_expiry_and_retains_escaped_pa
             current: &context,
             scratch: &mut scratch,
             causes: &mut causes,
+            source: None,
         };
         let first = phase.error(
             "fixture_native_first",
@@ -202,6 +243,7 @@ fn diagnostic_native_cng_failure_keeps_code_only_status_and_held_cause() -> Test
             current: &context,
             scratch: &mut scratch,
             causes: &mut causes,
+            source: None,
         };
         phase.ntstatus("fixture_cng_success", NTSTATUS(0))?;
         let status = NTSTATUS(-1_073_741_811);

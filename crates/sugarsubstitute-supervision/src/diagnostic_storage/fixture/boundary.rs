@@ -14,6 +14,10 @@ pub(in crate::diagnostic_storage) use state::Filesystem;
 use state::*;
 impl Filesystem {
     #[cfg(test)]
+    pub(in crate::diagnostic_storage) fn file_observations(&self) -> usize {
+        lock(&self.0).file_observations
+    }
+    #[cfg(test)]
     pub(in crate::diagnostic_storage) fn probe_native_context(
         &self,
         probe: Arc<dyn native_probe::NativeControlProbe>,
@@ -54,9 +58,31 @@ impl Port for Filesystem {
         _: &Path,
         namespace: NamespaceId,
         _: &JobContext,
-    ) -> Result<(), ClaimError> {
-        lock(&self.0).namespace = Some(namespace);
-        Ok(())
+    ) -> Result<genesis::NativeOpening, ClaimError> {
+        let mut disk = lock(&self.0);
+        let created =
+            disk.namespace.is_none() && disk.files.is_empty() && disk.observations.is_empty();
+        disk.namespace = Some(namespace);
+        Ok(if created {
+            genesis::NativeOpening::Created([9; 24])
+        } else {
+            genesis::NativeOpening::Existing
+        })
+    }
+    fn resolve_namespace(
+        &mut self,
+        request: &ProtectedDiagnosticWriteRequest,
+        _: &JobContext,
+    ) -> Result<genesis::NativeOpening, ClaimError> {
+        let mut disk = lock(&self.0);
+        let created =
+            disk.namespace.is_none() && disk.files.is_empty() && disk.observations.is_empty();
+        disk.namespace = Some(request.operation().owner().namespace);
+        Ok(if created {
+            genesis::NativeOpening::Created([9; 24])
+        } else {
+            genesis::NativeOpening::Existing
+        })
     }
     fn acquire_writer(&mut self, _: &JobContext) -> Result<(), ClaimError> {
         Ok(())
@@ -143,9 +169,9 @@ impl Port for Filesystem {
     ) -> Result<(NativeId, DiagnosticReadFacts), ClaimError> {
         let result = files::open(self, object, bound, context);
         if lock(&self.0).observe_open_context {
-            #[cfg(test)]
-            let _scope = self.native_context();
             // The external fixture has already adopted any actual partial output.
+            #[cfg(test)]
+            let _probe = self.native_context();
             let _observed = context.now();
         }
         result
@@ -217,6 +243,10 @@ impl Port for Filesystem {
         id: NativeId,
         _: &JobContext,
     ) -> Result<DiagnosticReadFacts, ClaimError> {
+        #[cfg(test)]
+        {
+            lock(&self.0).file_observations += 1;
+        }
         let disk = lock(&self.0);
         let output = &disk.handles[index(&disk, id)?];
         if !output.live {
@@ -367,9 +397,9 @@ impl Port for Filesystem {
     }
     fn close(&mut self, id: NativeId, context: &JobContext) -> Result<(), ClaimError> {
         #[cfg(test)]
-        let scope = self.native_context();
+        let probe = self.native_context();
         #[cfg(test)]
-        if scope.observed() {
+        if probe.observed() {
             let _observed = context.now();
         }
         files::close(self, id, context)
@@ -380,9 +410,9 @@ impl Port for Filesystem {
         control: &mut DiagnosticNativeRetirement<'_>,
     ) -> Result<(), ClaimError> {
         #[cfg(test)]
-        let scope = self.native_context();
+        let probe = self.native_context();
         #[cfg(test)]
-        if scope.observed() {
+        if probe.observed() {
             let _observed = context.now();
         }
         let ids: Vec<_> = lock(&self.0)

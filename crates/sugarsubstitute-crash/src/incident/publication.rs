@@ -100,18 +100,18 @@ impl CommittedIncident {
 }
 /// One non-cloneable publication correlation; dropping it leaves repository custody intact.
 pub struct PublishTicket {
-    id: u64,
+    pub(super) id: u64,
     operation: LogicalStoreOperationKey,
     identity: DiagnosticPublicationIdentity,
 }
 pub(super) struct PendingPublication {
     id: u64,
-    seed: IncidentSeed,
-    revision: IncidentRevision,
+    pub(super) seed: IncidentSeed,
+    pub(super) revision: IncidentRevision,
     expected: DiagnosticPredecessor,
-    payloads: Vec<(AttachmentKind, u64, u64, u64, DiagnosticActivation)>,
-    demand: super::IncidentPublicationDemand,
-    context: JobContext,
+    pub(super) payloads: Vec<(AttachmentKind, u64, u64, u64, DiagnosticActivation)>,
+    pub(super) demand: super::IncidentPublicationDemand,
+    pub(super) context: JobContext,
     _custody: DiagnosticPendingPublicationLoan,
 }
 impl IncidentRepository {
@@ -143,6 +143,8 @@ impl IncidentRepository {
         context: &JobContext,
     ) -> Result<SeedCommit, IncidentStoreError> {
         self.namespace(seed.key())?;
+        // Every first seed requires the actual store ledger, including existing namespaces.
+        self.ledger(context)?;
         let encoded = self.encode_seed(&seed, context)?;
         let inventory = self.inventory(context)?;
         let mut existing = None;
@@ -235,7 +237,10 @@ impl IncidentRepository {
         });
         Ok(PublishTicket { id: retained.id, operation: self.operation.key(), identity })
     }
-    fn pending(&self, ticket: &PublishTicket) -> Result<&PendingPublication, IncidentStoreError> {
+    pub(super) fn pending(
+        &self,
+        ticket: &PublishTicket,
+    ) -> Result<&PendingPublication, IncidentStoreError> {
         self.pending
             .as_ref()
             .filter(|pending| {

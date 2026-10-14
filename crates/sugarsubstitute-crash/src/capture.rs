@@ -18,10 +18,12 @@ mod attach;
 pub use attach::CaptureBootstrapRejection;
 mod loan;
 pub(crate) use loan::observe_registered_endpoint;
+mod finished;
 mod submission;
 #[cfg(test)]
 pub(crate) mod tests;
 mod work;
+pub use finished::FinishedCaptureSource;
 
 type WatchJob = OwnedJob<ProcessExit, NativeObservationError>;
 type WorkJob = OwnedJob<(), CrashError>;

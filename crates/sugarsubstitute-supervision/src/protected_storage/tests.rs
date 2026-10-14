@@ -9,6 +9,8 @@ use std::{
 };
 use sugarsubstitute_contracts::execution::*;
 use sugarsubstitute_execution::ExecutionOwner;
+#[path = "capture_read/tests.rs"]
+mod capture_read;
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 struct FixedClock;
 impl Clock for FixedClock {

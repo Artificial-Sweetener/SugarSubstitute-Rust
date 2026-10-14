@@ -22,8 +22,10 @@ mod creation_job;
 mod custodied_creation;
 mod custody_establishment;
 mod custody_retirement;
+mod settled_failure;
 mod shared_owner;
 use creation_job::CreationJob;
+pub use settled_failure::SettledRegistryFailure;
 use shared_owner::SharedOwner;
 use sugarsubstitute_contracts::{
     execution::{CompletionBatch, ExecutionPort, JobContext, JobId, JobSpec, OwnedJob, Scope},
@@ -134,6 +136,7 @@ struct Record {
     started: bool,
     settled: bool,
     error: Option<RegistryError>,
+    failure_transferred: bool,
     unread: [bool; 5],
 }
 impl Record {
@@ -166,7 +169,7 @@ impl Record {
             cleanup_step_pending: self.cleanup.is_some(),
             member_watch_required: self.next.is_some() && self.member_watch.is_none(),
             settled: self.settled,
-            failed: self.error.is_some(),
+            failed: self.error.is_some() || self.failure_transferred,
             shutdown: self.stop,
         }
     }

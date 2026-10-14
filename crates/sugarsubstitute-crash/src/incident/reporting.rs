@@ -4,6 +4,9 @@
 use super::{IncidentCommit, IncidentRepository, IncidentStoreError, StoredIncidentSummary};
 use sugarsubstitute_contracts::{execution::JobContext, incident::*};
 use sugarsubstitute_supervision::diagnostic_storage::*;
+#[path = "reporting/symbols.rs"]
+mod symbols;
+pub use symbols::SymbolRecordingError;
 
 /// Constructor-private acknowledgement backed by actual checked summary activation.
 /// The host authenticates the reporter separately before submitting its command.

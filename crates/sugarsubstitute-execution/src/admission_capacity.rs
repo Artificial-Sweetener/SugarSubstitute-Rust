@@ -22,6 +22,14 @@ impl Core {
         spec: JobSpec,
         replaces_ready: bool,
     ) -> Result<(), AdmissionError> {
+        Self::check_capacity_slots(state, spec, replaces_ready, 1)
+    }
+    pub(super) fn check_capacity_slots(
+        state: &mut State,
+        spec: JobSpec,
+        replaces_ready: bool,
+        slots: usize,
+    ) -> Result<(), AdmissionError> {
         let ordinary = ordinary(spec.class);
         let native = spec.class == JobClass::NativeObservation;
         let index = if native { 2 } else { usize::from(ordinary) };
@@ -29,7 +37,8 @@ impl Core {
             .queue
             .iter()
             .filter(|queued| (queued.context.spec().class == JobClass::NativeObservation) == native)
-            .count();
+            .map(crate::task::QueuedJob::queue_slots)
+            .sum::<usize>();
         let held = state
             .jobs
             .values()
@@ -42,9 +51,11 @@ impl Core {
             .queue
             .iter()
             .filter(|queued| super::ordinary(queued.context.spec().class))
-            .count();
+            .map(crate::task::QueuedJob::queue_slots)
+            .sum::<usize>();
         if !replaces_ready
-            && (ready >= if native { 384 } else { 32 } || (ordinary && queued_ordinary >= 28))
+            && (ready + slots > if native { 384 } else { 32 }
+                || (ordinary && queued_ordinary + slots > 28))
         {
             state.capacity_wait.queue[index] = true;
             return Err(AdmissionError::QueueSaturated { class: spec.class });
@@ -54,7 +65,8 @@ impl Core {
             .values()
             .filter(|record| !record.process_lifetime_only() && super::ordinary(record.spec.class))
             .count();
-        if held >= if native { 512 } else { 48 } || (ordinary && held_ordinary >= 44) {
+        if held + slots > if native { 512 } else { 48 } || (ordinary && held_ordinary + slots > 44)
+        {
             state.capacity_wait.completion[index] = true;
             return Err(AdmissionError::CompletionSaturated);
         }
@@ -88,8 +100,12 @@ impl Core {
         if wait.queue == [false; 3] && wait.completion == [false; 3] && wait.memory.is_none() {
             return false;
         }
-        let queued_ordinary =
-            state.queue.iter().filter(|queued| ordinary(queued.context.spec().class)).count();
+        let queued_ordinary = state
+            .queue
+            .iter()
+            .filter(|queued| ordinary(queued.context.spec().class))
+            .map(crate::task::QueuedJob::queue_slots)
+            .sum::<usize>();
         let held_ordinary = state
             .jobs
             .values()
@@ -105,7 +121,8 @@ impl Core {
                 .filter(|queued| {
                     (queued.context.spec().class == JobClass::NativeObservation) == native
                 })
-                .count();
+                .map(crate::task::QueuedJob::queue_slots)
+                .sum::<usize>();
             let held_count = state
                 .jobs
                 .values()

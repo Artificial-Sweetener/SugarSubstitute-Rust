@@ -37,8 +37,10 @@ pub(super) struct Handle {
 }
 pub(in crate::diagnostic_storage) struct Disk {
     #[cfg(test)]
-    pub(super) native_probe: Option<Arc<dyn native_probe::NativeControlProbe>>,
+    pub(in crate::diagnostic_storage) file_observations: usize,
     pub(super) observe_open_context: bool,
+    #[cfg(test)]
+    pub(super) native_probe: Option<Arc<dyn native_probe::NativeControlProbe>>,
     pub(super) files: Vec<File>,
     pub(super) handles: Vec<Handle>,
     pub(in crate::diagnostic_storage) faults: Faults,
@@ -59,9 +61,15 @@ pub(in crate::diagnostic_storage) struct Filesystem(
     pub(super) Option<allocation::DiagnosticAllocationOwner>,
 );
 impl Filesystem {
+    pub(in crate::diagnostic_storage) fn marker(&self) -> Arc<AtomicBool> {
+        Arc::clone(&lock(&self.0).owned)
+    }
+
     pub(in crate::diagnostic_storage) fn new() -> Self {
         Self(
             Arc::new(Mutex::new(Disk {
+                #[cfg(test)]
+                file_observations: 0,
                 observe_open_context: false,
                 #[cfg(test)]
                 native_probe: None,

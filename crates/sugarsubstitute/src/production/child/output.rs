@@ -127,7 +127,9 @@ impl ProductionChild {
     pub(super) fn consume_output(&mut self) -> Result<()> {
         if self.output.terminal.is_none() && self.output.notice.is_some() {
             let job = self.output.job.as_mut().ok_or("Output constructor absent")?;
-            let Some(completion) = job.try_take_completion() else { return Ok(()) };
+            let Some(completion) = job.try_take_completion() else {
+                return Ok(());
+            };
             let matches = completion.scope_id == job.scope_id()
                 && completion.spec == job.spec()
                 && Some(completion.outcome.kind()) == self.output.notice;
@@ -249,7 +251,9 @@ impl ProductionChild {
             let original =
                 self.output.acquisition_until.map_or(original, |cutoff| original.min(cutoff));
             let header = self.bootstrap.channel_mut().prepare_request(original)?;
-            let Some(owner) = self.output.owner_mut() else { return Ok(()) };
+            let Some(owner) = self.output.owner_mut() else {
+                return Ok(());
+            };
             owner.prepare_pull(header, original)?;
             self.bootstrap.channel_mut().output_pull(header)?;
             self.output.pending = Some((header, original));

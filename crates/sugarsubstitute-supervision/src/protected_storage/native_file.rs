@@ -187,7 +187,7 @@ impl NativeFile {
     /// Borrow the real close proof and adopt only this file's checked returned output.
     pub(crate) fn retire_selected(
         &mut self,
-        proof: &sugarsubstitute_execution::CaptureBundleRetirement,
+        proof: &crate::installed_release::SelectedRetirement<'_>,
     ) -> Result<(), ClaimError> {
         let fields = self.fields_mut()?;
         let result = fields.handle.close_selected(proof, &mut fields.causes);

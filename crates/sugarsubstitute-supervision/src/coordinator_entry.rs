@@ -7,13 +7,18 @@ pub(crate) mod election;
 #[cfg(test)]
 pub(crate) mod fixture;
 mod input;
-mod namespace;
+pub(crate) mod namespace;
+#[cfg(feature = "boundary-fixtures")]
+#[path = "coordinator_entry/namespace_fixture.rs"]
+pub mod namespace_fixture;
 mod native;
 mod owner;
+pub(crate) mod read_namespace;
 #[cfg(test)]
 mod tests;
 mod types;
 pub use input::CoordinatorEntryInput;
+pub(crate) use namespace::NamespaceLifetime;
 pub use namespace::VerifiedEntryNamespace;
 pub use owner::CoordinatorEntryOwner;
 pub use types::{

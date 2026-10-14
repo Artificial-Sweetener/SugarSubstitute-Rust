@@ -21,6 +21,7 @@ pub(super) struct RetainedStage {
     pub(super) recovery_predecessor: Option<DiagnosticPredecessor>,
     pub(super) role: Option<StageRole>,
     pub(super) activated: bool,
+    pub(super) genesis: Option<genesis::GenesisContent>,
 }
 
 /// Pin one owner-retained stage; dropping the pin preserves its charge and custody.
@@ -55,8 +56,21 @@ impl DiagnosticStorage {
         operation: &DiagnosticStorageOperation,
         context: &JobContext,
     ) -> Result<DiagnosticStage, DiagnosticStorageError> {
+        self.stage_with_purpose(object, reserved_bytes, None, operation, context)
+    }
+    pub(super) fn stage_with_purpose(
+        &mut self,
+        object: DiagnosticObject,
+        reserved_bytes: u64,
+        genesis: Option<genesis::GenesisContent>,
+        operation: &DiagnosticStorageOperation,
+        context: &JobContext,
+    ) -> Result<DiagnosticStage, DiagnosticStorageError> {
         let mut state = self.check(operation, context)?;
         mutation(&mut state, operation.key)?;
+        if let Some(content) = genesis {
+            genesis::validate_issue(&mut state, operation.key, content)?;
+        }
         let group = crate::protected_storage::record_file::diagnostic_payload_group_digest(object);
         if let Some(group) = group
             && !state.data_mut()?.payload_groups.contains(&group)
@@ -78,7 +92,7 @@ impl DiagnosticStorage {
         if object.namespace().is_some_and(|value| Some(value) != namespace)
             || reserved_bytes == 0
             || reserved_bytes > object.bound()
-            || state.data_mut()?.stages.len() >= DIAGNOSTIC_STAGE_BOUND
+            || state.data_mut()?.stage_slots() >= DIAGNOSTIC_STAGE_BOUND
         {
             return Err(error(operation.key, Code::Capacity));
         }
@@ -123,6 +137,15 @@ impl DiagnosticStorage {
             }
         }
         let id = next_lease(&mut state, operation.key)?;
+        if let Some(content) = genesis {
+            let retained = state
+                .data_mut()?
+                .genesis
+                .as_mut()
+                .ok_or_else(|| error(operation.key, Code::InvalidIdentity))?;
+            retained.stage = Some(id);
+            retained.content = Some(content);
+        }
         if let Some(group) = group
             && !state.data_mut()?.payload_groups.contains(&group)
         {
@@ -139,6 +162,7 @@ impl DiagnosticStorage {
             recovery_predecessor: None,
             role: None,
             activated: false,
+            genesis,
         });
         let native_id = state
             .call_native(|port| port.create_stage(object, operation.key, reserved_bytes, context))?
@@ -303,7 +327,10 @@ pub(super) fn mutation(
     if !state.data_mut()?.writer {
         return Err(error(key, Code::Busy));
     }
-    if state.data_mut()?.migration.is_some() || state.data_mut()?.payload.is_some() {
+    if state.data_mut()?.migration.is_some()
+        || state.data_mut()?.payload.is_some()
+        || state.data_mut()?.capture.is_some()
+    {
         return Err(error(key, Code::Busy));
     }
     if !state.data_mut()?.inventory_complete {

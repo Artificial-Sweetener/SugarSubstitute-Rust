@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Project one original authenticated entry under its admitted finite allocation.
+//! Project one registered startup specification under its admitted finite allocation.
+#[path = "projection/restart.rs"]
+mod restart;
+pub(super) use restart::RestartProjection;
 #[cfg(test)]
 #[path = "projection_retirement_tests.rs"]
 mod retirement_tests;
@@ -9,7 +12,7 @@ mod retirement_tests;
 mod tests;
 use std::{error::Error, ffi::OsString, fmt, os::windows::ffi::OsStringExt, path::PathBuf};
 use sugarsubstitute_contracts::{
-    configuration::{LaunchConfiguration, ProfileId},
+    configuration::{LaunchConfiguration, LocaleId, ProfileId},
     coordinator_entry::{
         EntryConnectionId, EntryConnectionView, EntryLaunchRequestView, EntryRequestId,
         EntryWindowsPathView,
@@ -18,7 +21,8 @@ use sugarsubstitute_contracts::{
     lifecycle::BackendTarget,
 };
 use sugarsubstitute_execution::{
-    AuthenticatedEntryLaunch, ChargedBlockingInput, PreparedStartupSnapshot,
+    AuthenticatedEntryLaunch, ChargedBlockingInput, ExecutionClient, PreparedStartupSnapshot,
+    REGISTERED_STARTUP_BYTES, RegisteredStartupSource,
 };
 use sugarsubstitute_supervision::{
     LaunchEnvironment, installed_frontend::FrontendInstallationInput,
@@ -31,11 +35,15 @@ const PROJECTION_DATA_BYTES: u64 = 2 * 1024 * 1024
     - size_of::<super::Record>() as u64
     - super::RetainedBackend::required_storage_bytes()
     - super::delivery::TransitionDelivery::storage_bytes()
-    - size_of::<ProjectionInput>() as u64;
+    - size_of::<ProjectionInput>() as u64
+    - REGISTERED_STARTUP_BYTES;
 
 /// Keep the real frame and configured inert capture location across admission rejection.
 pub(super) struct ProjectionInput {
     request: Option<AuthenticatedEntryLaunch>,
+    client: Option<ExecutionClient>,
+    run: Option<sugarsubstitute_contracts::lifecycle::RunKey>,
+    restart: Option<RestartProjection>,
     snapshot: Option<PreparedStartupSnapshot>,
     capture_root: PathBuf,
     cause: ProjectionCause,
@@ -43,9 +51,17 @@ pub(super) struct ProjectionInput {
     _charge: Option<MemoryClaim>,
 }
 impl ProjectionInput {
-    pub(super) fn new(request: AuthenticatedEntryLaunch, capture_root: PathBuf) -> Self {
+    pub(super) fn new(
+        request: AuthenticatedEntryLaunch,
+        capture_root: PathBuf,
+        client: ExecutionClient,
+        run: sugarsubstitute_contracts::lifecycle::RunKey,
+    ) -> Self {
         Self {
             request: Some(request),
+            client: Some(client),
+            run: Some(run),
+            restart: None,
             snapshot: None,
             capture_root,
             cause: ProjectionCause::NotStarted,
@@ -61,6 +77,7 @@ impl ProjectionInput {
 /// Paths remain lexical; frontend, claims and profile owners perform actual trust checks.
 pub(super) struct ProjectedEntry {
     pub(super) snapshot: Option<PreparedStartupSnapshot>,
+    pub(super) registered: RegisteredStartupSource,
     pub(super) until: Moment,
     pub(super) entry_connection: EntryConnectionId,
     pub(super) entry_request: EntryRequestId,
@@ -68,6 +85,7 @@ pub(super) struct ProjectedEntry {
     pub(super) requested_profile: PathBuf,
     pub(super) profile_units: Vec<u16>,
     pub(super) profile: ProfileId,
+    pub(super) locale: LocaleId,
     pub(super) target: BackendTarget,
     pub(super) frontend: Option<FrontendInstallationInput>,
     pub(super) backend_environment: Option<LaunchEnvironment>,
@@ -172,6 +190,9 @@ pub(super) fn project(
         }
     };
     input.input_mut()._charge = Some(charge);
+    if input.input().restart.is_some() {
+        return restart::project(input, context);
+    }
     let Some(request) = input.input_mut().request.take() else {
         return Err(ProjectionFailure { retained: input });
     };
@@ -217,6 +238,18 @@ pub(super) fn project(
             return Err(ProjectionFailure { retained: input });
         }
     };
+    let registered = match (&input.input().client, input.input().run) {
+        (Some(client), Some(run)) => client.register_startup_source(&snapshot, &context, run),
+        _ => Err(sugarsubstitute_contracts::execution::AdmissionError::InvalidCaptureAdmission),
+    };
+    let registered = match registered {
+        Ok(source) => source,
+        Err(cause) => {
+            input.input_mut().snapshot = Some(snapshot);
+            input.input_mut().cause = ProjectionCause::Operation(Box::new(cause));
+            return Err(ProjectionFailure { retained: input });
+        }
+    };
     // Both real claims were admitted before their allocations. The temporary
     // source box drops before its metadata claim; transferred data keeps its claim.
     let charge = match input.input_mut()._charge.take() {
@@ -228,6 +261,7 @@ pub(super) fn project(
     };
     Ok(ProjectedEntry {
         snapshot: Some(snapshot),
+        registered,
         until,
         entry_connection,
         entry_request,
@@ -235,6 +269,7 @@ pub(super) fn project(
         requested_profile: fields.requested_profile,
         profile_units: fields.profile_units,
         profile: fields.profile,
+        locale: fields.locale,
         target: fields.target,
         frontend: Some(fields.frontend),
         backend_environment: fields.backend_environment,
@@ -246,6 +281,7 @@ struct Fields {
     requested_profile: PathBuf,
     profile_units: Vec<u16>,
     profile: ProfileId,
+    locale: LocaleId,
     target: BackendTarget,
     frontend: FrontendInstallationInput,
     backend_environment: Option<LaunchEnvironment>,
@@ -302,6 +338,7 @@ fn fields(view: EntryLaunchRequestView<'_>) -> Result<Fields, Box<dyn Error + Se
         requested_profile,
         profile_units,
         profile,
+        locale: view.presentation().locale(),
         target,
         frontend,
         backend_environment,

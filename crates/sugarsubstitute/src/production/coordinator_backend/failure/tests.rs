@@ -146,6 +146,12 @@ fn exact_admission_and_lifecycle_variants_do_not_require_error_sources() {
     let failure =
         retained(AdmissionError::QueueSaturated { class: JobClass::InfrastructureOrdinary });
     assert_eq!(FailureObservation::retained(&failure).stage, "admission_queue_saturated");
+    for (cause, stage) in [
+        (AdmissionError::InvalidReportExportAdmission, "admission_invalid_report_export"),
+        (AdmissionError::ReportExportOutputCapacity, "admission_report_export_output_capacity"),
+    ] {
+        assert_eq!(FailureObservation::retained(&retained(cause)).stage, stage);
+    }
     let failure = retained(RegistryAdmissionError::Busy);
     assert_eq!(FailureObservation::retained(&failure).stage, "registry_busy");
     let failure = retained(LifecycleRejection::WrongPhase);

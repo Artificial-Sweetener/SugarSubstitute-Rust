@@ -63,7 +63,7 @@ pub(crate) struct CaptureCauseDestination {
     pub(crate) original: AllocationOrigin,
 }
 impl AllocationOrigin {
-    pub(super) fn cause_destination(
+    pub(crate) fn cause_destination(
         &self,
         slot: u8,
     ) -> Result<NativeCauseDestination, CaptureCapacityFailure> {

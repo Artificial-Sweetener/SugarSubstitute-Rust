@@ -34,7 +34,9 @@ impl CompletionWake for Wake {
         Ok(())
     }
 }
-pub(super) fn admitted(work: impl FnOnce(JobContext) -> TestResult + Send + 'static) -> TestResult {
+pub(in crate::incident) fn admitted(
+    work: impl FnOnce(JobContext) -> TestResult + Send + 'static,
+) -> TestResult {
     let wake = Arc::new(Wake::default());
     let owner = ExecutionOwner::new(Arc::new(TestClock), wake.clone())?;
     let client = owner.client();
@@ -121,7 +123,7 @@ fn run_job<T: Send + 'static>(
         }
     }
 }
-pub(super) fn setup(
+pub(in crate::incident) fn setup(
     context: &JobContext,
 ) -> Result<(DiagnosticStorageFixture, IncidentRepository), TestError> {
     let fixture = DiagnosticStorageFixture::new()?;

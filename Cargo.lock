@@ -2224,6 +2224,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "sugarsubstitute-application",
  "sugarsubstitute-contracts",
  "sugarsubstitute-execution",
  "sugarsubstitute-supervision",

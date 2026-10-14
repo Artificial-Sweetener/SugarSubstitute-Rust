@@ -103,3 +103,22 @@ fn zero_byte_claim_retains_reservation_without_consuming_capacity() -> Result<()
     assert_eq!(released.bytes.load(Ordering::SeqCst), 4);
     Ok(())
 }
+
+#[test]
+fn borrowed_reservation_identity_rejects_equal_foreign_bytes_and_retains_original_release() {
+    let original_releases = Arc::new(Releases::default());
+    let foreign_releases = Arc::new(Releases::default());
+    let original = lease(64, &original_releases);
+    let alias = original.clone();
+    let foreign = lease(64, &foreign_releases);
+    assert!(original.same_reservation(&alias));
+    assert!(!original.same_reservation(&foreign));
+    assert_eq!(original_releases.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(foreign_releases.calls.load(Ordering::SeqCst), 0);
+    drop(original);
+    assert_eq!(original_releases.calls.load(Ordering::SeqCst), 0);
+    drop(alias);
+    assert_eq!(original_releases.calls.load(Ordering::SeqCst), 1);
+    drop(foreign);
+    assert_eq!(foreign_releases.calls.load(Ordering::SeqCst), 1);
+}

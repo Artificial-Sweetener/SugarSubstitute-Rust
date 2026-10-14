@@ -8,8 +8,8 @@ use windows::{
     Wdk::{
         Foundation::OBJECT_ATTRIBUTES,
         Storage::FileSystem::{
-            FILE_CREATE, FILE_DIRECTORY_FILE, FILE_OPEN_IF, FILE_SYNCHRONOUS_IO_NONALERT,
-            NtCreateFile,
+            FILE_CREATE, FILE_DIRECTORY_FILE, FILE_OPEN, FILE_OPEN_IF,
+            FILE_SYNCHRONOUS_IO_NONALERT, NtCreateFile,
         },
     },
     Win32::{
@@ -26,34 +26,48 @@ use windows::{
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum Mode {
+pub(crate) enum Mode {
     CreateNew,
     OpenOrCreate,
+    Existing,
 }
-fn accepted(mode: Mode, status: i32, information: usize) -> bool {
-    match mode {
-        Mode::CreateNew => status == 0 && information == 2,
-        Mode::OpenOrCreate => {
-            (status == 0 && matches!(information, 1 | 2))
-                || (status == 0x40000000 && information == 1)
-        }
+/// Preserve the checked native creation disposition of this exact opened directory.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum DirectoryDisposition {
+    Created,
+    Existing,
+}
+/// Retain the opened native slot and its checked full file identity.
+pub(crate) struct OpenedDirectory {
+    pub(crate) index: usize,
+    pub(super) identity: [u8; 24],
+    pub(super) disposition: DirectoryDisposition,
+}
+fn disposition(mode: Mode, status: i32, information: usize) -> Option<DirectoryDisposition> {
+    match (mode, status, information) {
+        (Mode::Existing, 0, 1) => Some(DirectoryDisposition::Existing),
+        (Mode::Existing, _, _) => None,
+        (_, 0, 2) => Some(DirectoryDisposition::Created),
+        (Mode::OpenOrCreate, 0 | 0x40000000, 1) => Some(DirectoryDisposition::Existing),
+        _ => None,
     }
 }
 /// Specify one relative child under its retained actual parent.
-pub(super) struct RelativeDirectory<'a> {
-    pub(super) path: &'a Path,
-    pub(super) parent: usize,
-    pub(super) mode: Mode,
+pub(crate) struct RelativeDirectory<'a> {
+    pub(crate) path: &'a Path,
+    pub(crate) parent: usize,
+    pub(crate) mode: Mode,
+    pub(crate) output: Option<Handle>,
 }
-pub(super) fn open_relative(
+pub(crate) fn open_relative(
     handles: &mut Vec<Handle>,
     sid: &[u8],
     budget: files::Budget,
     directory: RelativeDirectory<'_>,
     context: &JobContext,
     phase: &mut NativePhase<'_>,
-) -> Result<usize, ClaimError> {
-    let RelativeDirectory { path, parent, mode } = directory;
+) -> Result<OpenedDirectory, ClaimError> {
+    let RelativeDirectory { path, parent, mode, output } = directory;
     phase.context(context)?;
     phase.check_budget(&budget)?;
     paths::validate_local_shape(path).map_err(|operation| phase.invalid(operation))?;
@@ -92,7 +106,7 @@ pub(super) fn open_relative(
         ..Default::default()
     };
     let index = handles.len();
-    handles.push(Handle::new(HANDLE::default(), budget.clone()));
+    handles.push(output.unwrap_or_else(|| Handle::new(HANDLE::default(), budget.clone())));
     let mut raw = HANDLE::default();
     let mut io = IO_STATUS_BLOCK::default();
     producing.context(context)?;
@@ -108,7 +122,11 @@ pub(super) fn open_relative(
             None,
             FILE_ATTRIBUTE_DIRECTORY,
             FILE_SHARE_READ | FILE_SHARE_WRITE,
-            if mode == Mode::CreateNew { FILE_CREATE } else { FILE_OPEN_IF },
+            match mode {
+                Mode::CreateNew => FILE_CREATE,
+                Mode::OpenOrCreate => FILE_OPEN_IF,
+                Mode::Existing => FILE_OPEN,
+            },
             FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT,
             None,
             0,
@@ -125,7 +143,8 @@ pub(super) fn open_relative(
         ));
     }
     // FILE_CREATED=2 is the pinned SDK result; success never substitutes existing state.
-    if raw.0.is_null() || !accepted(mode, status.0, io.Information) {
+    let disposition = disposition(mode, status.0, io.Information);
+    if raw.0.is_null() || disposition.is_none() {
         return Err(phase.invalid("generation_creation_output"));
     }
     paths::validate_object(&handles[index], true, true, phase)?;
@@ -134,13 +153,17 @@ pub(super) fn open_relative(
     let destination = phase.name_destination()?;
     let canonical = paths::final_path(&handles[index], phase, destination)?;
     if (mode == Mode::CreateNew && canonical.path()? != path)
-        || (mode == Mode::OpenOrCreate && canonical.path()?.parent() != path.parent())
+        || (mode != Mode::CreateNew && canonical.path()?.parent() != path.parent())
     {
         return Err(phase.invalid("capture_generation_resolution"));
     }
     paths::verify_pinned(canonical.path()?, identity, handles, true, budget, phase)?;
     phase.context(context)?;
-    Ok(index)
+    Ok(OpenedDirectory {
+        index,
+        identity,
+        disposition: disposition.ok_or_else(|| phase.invalid("generation_creation_output"))?,
+    })
 }
 
 #[cfg(test)]
@@ -148,20 +171,23 @@ mod tests {
     use super::*;
     #[test]
     fn directory_disposition_never_overwrites_or_admits_unknown_native_outputs() {
-        assert!(accepted(Mode::CreateNew, 0, 2));
-        assert!(!accepted(Mode::CreateNew, 0, 1));
-        assert!(!accepted(Mode::CreateNew, 0x40000000, 1));
+        assert_eq!(disposition(Mode::CreateNew, 0, 2), Some(DirectoryDisposition::Created));
+        assert!(disposition(Mode::CreateNew, 0, 1).is_none());
+        assert!(disposition(Mode::CreateNew, 0x40000000, 1).is_none());
         for information in [1, 2] {
-            assert!(accepted(Mode::OpenOrCreate, 0, information));
+            assert!(disposition(Mode::OpenOrCreate, 0, information).is_some());
         }
-        assert!(accepted(Mode::OpenOrCreate, 0x40000000, 1));
-        assert!(!accepted(Mode::OpenOrCreate, 0x40000000, 2));
+        assert_eq!(
+            disposition(Mode::OpenOrCreate, 0x40000000, 1),
+            Some(DirectoryDisposition::Existing)
+        );
+        assert!(disposition(Mode::OpenOrCreate, 0x40000000, 2).is_none());
         for mode in [Mode::CreateNew, Mode::OpenOrCreate] {
             for information in [0, 3, 4, 5, usize::MAX] {
-                assert!(!accepted(mode, 0, information));
+                assert!(disposition(mode, 0, information).is_none());
             }
             for status in [-1, 0x40000001, 0x103] {
-                assert!(!accepted(mode, status, 1));
+                assert!(disposition(mode, status, 1).is_none());
             }
         }
     }

@@ -58,6 +58,25 @@ impl<T, const N: usize> OwnerSlots<T, N> {
             .and_then(Option::as_mut)
             .ok_or(super::super::IncidentStoreError::RecoveryConflict)
     }
+    pub(in crate::incident) fn three_mut(
+        &mut self,
+        first: usize,
+        second: usize,
+        third: usize,
+    ) -> Result<(&mut T, &mut T, &mut T), super::super::IncidentStoreError> {
+        if first >= second || second >= third || third >= self.count {
+            return Err(super::super::IncidentStoreError::RecoveryConflict);
+        }
+        let (prefix, third_cell) = self.cells.split_at_mut(third);
+        let (first_cells, second_cell) = prefix.split_at_mut(second);
+        Ok((
+            first_cells[first]
+                .as_mut()
+                .ok_or(super::super::IncidentStoreError::RecoveryConflict)?,
+            second_cell[0].as_mut().ok_or(super::super::IncidentStoreError::RecoveryConflict)?,
+            third_cell[0].as_mut().ok_or(super::super::IncidentStoreError::RecoveryConflict)?,
+        ))
+    }
     pub(in crate::incident) fn remove(
         &mut self,
         index: usize,

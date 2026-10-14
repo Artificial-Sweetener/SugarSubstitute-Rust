@@ -134,3 +134,49 @@ fn report_content_settlement_cannot_authorize_native_close_or_retirement()
     assert_eq!(content.retired, 0);
     Ok(())
 }
+#[test]
+fn wrong_copy_control_kind_keeps_actual_surface_request_without_native_effects()
+-> Result<(), Box<dyn Error>> {
+    let mut session = session()?;
+    let old = session.state.binding();
+    let binding = ReportBinding::new(
+        old.incident(),
+        IncidentRevision::new(old.revision().get() + 1)?,
+        old.session(),
+    );
+    session.state.presented()?;
+    session.state.preflight_replace(old, binding)?;
+    session.state.replaced(binding);
+    let request = session.state.request(binding, Intent::Export(ExportSelection::TextOnly))?;
+    let mut content = Content::default();
+    assert!(
+        session
+            .apply(
+                &mut content,
+                ReportSurfaceUpdate::CopyAuthorized {
+                    request: request.id,
+                    binding,
+                    counter: sugarsubstitute_contracts::execution::CounterDeadline::new(100, 10)?,
+                    outcome: Ok(()),
+                }
+            )
+            .is_err()
+    );
+    assert!(session.state.matching_request(request.id, binding).is_ok());
+    assert!(session.controls.is_none());
+    assert_eq!(content.polls, 0);
+    assert_eq!(content.retired, 0);
+    session.state.completed_request();
+    let copy = session.state.request(binding, Intent::Action(ReportAction::CopyText))?;
+    assert!(
+        session
+            .apply(
+                &mut content,
+                ReportSurfaceUpdate::ActionResult { request: copy.id, binding, outcome: Ok(()) }
+            )
+            .is_err()
+    );
+    assert!(session.state.matching_request(copy.id, binding).is_ok());
+    assert!(session.controls.is_none());
+    Ok(())
+}

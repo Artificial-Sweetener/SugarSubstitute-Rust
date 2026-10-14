@@ -102,15 +102,25 @@ pub enum ReportSurfaceUpdate {
         /// Charged immutable successor text.
         view: NativeReportView,
     },
-    /// Resolve the current admitted surface action; stale/foreign outcomes reject.
+    /// Authorize the exact current CopyText intent within the original absolute QPC cutoff.
+    /// The affine surface checks the same counter immediately before native clipboard entry.
+    CopyAuthorized {
+        /// Original native request.
+        request: ReportRequestId,
+        /// Exact requesting view.
+        binding: ReportBinding,
+        /// Unchanged absolute counter ticks and frequency from the authenticated control.
+        counter: sugarsubstitute_contracts::execution::CounterDeadline,
+        /// Actual host policy decision; native completion is separately observed.
+        outcome: Result<(), ReportSurfaceFailure>,
+    },
+    /// Resolve the current admitted export or failed dismissal; CopyText requires CopyAuthorized.
     ActionResult {
         /// Original request.
         request: ReportRequestId,
         /// Exact requesting view.
         binding: ReportBinding,
-        /// Host validation outcome. For CopyText, success permits the actual clipboard
-        /// transfer, whose separate CopyFinished observation carries its native outcome.
-        /// This content decision proves neither native completion nor durable mutation.
+        /// Host outcome proves neither native completion nor durable mutation.
         outcome: Result<(), ReportSurfaceFailure>,
     },
     /// Authenticated composing host accepted an actual durable acknowledgement.

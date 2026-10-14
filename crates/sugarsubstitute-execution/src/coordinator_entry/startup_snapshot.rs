@@ -13,7 +13,8 @@ use std::ops::Range;
 /// Capture admission must independently fence its actual execution owner, current
 /// run, cancellation and unchanged receive deadline before native effects.
 pub struct PreparedStartupSnapshot {
-    pub(super) launch: AuthenticatedEntryLaunch,
+    pub(super) launch: Option<AuthenticatedEntryLaunch>,
+    pub(super) registered: Option<super::registered_startup::RegisteredSnapshot>,
     pub(super) body: Range<usize>,
 }
 
@@ -52,7 +53,7 @@ impl AuthenticatedEntryLaunch {
             Ok::<_, EntryTransportError>(protocol::HEADER_BYTES..self.frame.length)
         };
         match validate() {
-            Ok(body) => Ok(PreparedStartupSnapshot { launch: self, body }),
+            Ok(body) => Ok(PreparedStartupSnapshot { launch: Some(self), registered: None, body }),
             Err(error) => Err(StartupSnapshotRejection { error, launch: self }),
         }
     }
@@ -62,7 +63,10 @@ impl std::fmt::Debug for PreparedStartupSnapshot {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("PreparedStartupSnapshot")
-            .field("request", &self.launch.request_id())
+            .field(
+                "original_entry",
+                &self.launch.as_ref().map(AuthenticatedEntryLaunch::request_id),
+            )
             .field("body_bytes", &self.body.len())
             .finish_non_exhaustive()
     }
@@ -73,7 +77,15 @@ impl PreparedStartupSnapshot {
     /// # Errors
     /// Rejects missing original frame custody or an invalid retained body range.
     pub(crate) fn body(&self) -> Result<&[u8], EntryTransportError> {
-        self.launch.frame.bytes().get(self.body.clone()).ok_or(EntryTransportError::Malformed)
+        match (&self.launch, &self.registered) {
+            (Some(launch), None) => {
+                launch.frame.bytes().get(self.body.clone()).ok_or(EntryTransportError::Malformed)
+            }
+            (None, Some(registered)) => {
+                registered.body().get(self.body.clone()).ok_or(EntryTransportError::Malformed)
+            }
+            _ => Err(EntryTransportError::Malformed),
+        }
     }
 
     /// Project inert matching facts for final Core-to-Entry admission validation.
@@ -81,6 +93,10 @@ impl PreparedStartupSnapshot {
     /// # Errors
     /// Rejects a missing frame or mismatched original SSCE1 correlation.
     pub(crate) fn admission_binding(&self) -> Result<StartupAdmissionBinding, EntryTransportError> {
-        admission::project(self)
+        match (&self.launch, &self.registered) {
+            (Some(_), None) => admission::project(self).map(StartupAdmissionBinding::Entry),
+            (None, Some(registered)) => Ok(StartupAdmissionBinding::Registered(registered.clone())),
+            _ => Err(EntryTransportError::Malformed),
+        }
     }
 }

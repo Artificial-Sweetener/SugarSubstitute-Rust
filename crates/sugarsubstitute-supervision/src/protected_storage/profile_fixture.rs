@@ -40,6 +40,7 @@ pub(crate) fn create(path: &Path, context: &JobContext) -> Result<PathBuf, Claim
                 path: &path,
                 parent,
                 mode: directories::Mode::CreateNew,
+                output: None,
             },
             context,
             &mut phase,

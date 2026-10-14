@@ -12,6 +12,7 @@ mod error;
 mod observations;
 mod publication;
 mod recovery;
+mod reporter_queue;
 mod reporting;
 mod retirement;
 mod scope;

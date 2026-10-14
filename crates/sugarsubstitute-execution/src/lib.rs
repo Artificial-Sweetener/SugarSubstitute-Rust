@@ -61,10 +61,21 @@ mod lifecycle_pipe;
 mod mailbox;
 mod memory;
 mod native_resources;
+mod symbol_provider;
+pub use symbol_provider::{
+    SymbolProviderAdmission, SymbolProviderOrigin, SymbolProviderRetirement,
+};
 mod symbol_bundle;
 pub use symbol_bundle::{
     CommittedReaderAdmission, CommittedReaderOrigin, CommittedReaderRetirement,
     SymbolBundleAdmission, SymbolBundleOrigin, SymbolBundleRetirement,
+};
+mod report_export;
+pub use report_export::{
+    REPORT_EXPORT_BYTES, REPORT_EXPORT_CLEANUP_BYTES, REPORT_EXPORT_OUTPUTS, ReportExportAdmission,
+    ReportExportCleanupBeginRejection, ReportExportCleanupDeadline, ReportExportCleanupPermit,
+    ReportExportOrigin, ReportExportOutput, ReportExportPairJobs, ReportExportPairRequest,
+    ReportExportPairSubmission, ReportExportRetirement, ReportExportSubmissionRejection,
 };
 mod symbol_admission;
 mod symbol_cleanup;

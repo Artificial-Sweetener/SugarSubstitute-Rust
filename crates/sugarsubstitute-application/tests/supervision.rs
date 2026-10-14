@@ -3,6 +3,8 @@
 //! Exercise the concrete owner through its public lease/admission contracts.
 #[path = "supervision/admission.rs"]
 mod admission;
+#[path = "supervision/enrollment.rs"]
+mod enrollment;
 #[path = "supervision/leases.rs"]
 mod leases;
 #[path = "supervision/support.rs"]

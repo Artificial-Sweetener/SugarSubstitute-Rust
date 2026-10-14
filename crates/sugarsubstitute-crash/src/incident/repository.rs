@@ -13,6 +13,7 @@ pub struct IncidentRepository {
     pub(super) operation: DiagnosticStorageOperation,
     pub(super) reads: super::allocation::OwnerSlots<DiagnosticReadLease, DIAGNOSTIC_READ_BOUND>,
     pub(super) stages: super::allocation::OwnerSlots<DiagnosticStage, DIAGNOSTIC_STAGE_BOUND>,
+    pub(super) initialization: Option<super::initialization::Initialization>,
     pub(super) pending: Option<super::publication::PendingPublication>,
     pub(super) preflight: Option<super::publication_preflight::RetainedPreflight>,
     pub(super) publication_identity: DiagnosticPublicationIdentity,
@@ -37,6 +38,7 @@ impl IncidentRepository {
             operation,
             reads: super::allocation::OwnerSlots::new(),
             stages: super::allocation::OwnerSlots::new(),
+            initialization: None,
             pending: None,
             preflight: None,
             publication_identity,
@@ -59,12 +61,15 @@ impl IncidentRepository {
         self.storage.retire(&self.operation, context)?;
         self.reads.clear();
         self.stages.clear();
+        self.initialization = None;
         self.pending = None;
         self.preflight = None;
         Ok(())
     }
     pub(super) fn namespace(&self, key: IncidentKey) -> Result<(), IncidentStoreError> {
-        if key.subject().coordinator().namespace != self.operation.key().owner().namespace {
+        if self.initialization.is_some()
+            || key.subject().coordinator().namespace != self.operation.key().owner().namespace
+        {
             return Err(IncidentStoreError::RecoveryConflict);
         }
         Ok(())

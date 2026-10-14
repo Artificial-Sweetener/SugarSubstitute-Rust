@@ -51,6 +51,9 @@ pub(super) fn create(
         database: database.clone(),
         metrics: metrics.clone(),
         ready: false,
+        coordinator,
+        slots: [usize::MAX; 2],
+        identities: [[0; 24]; 2],
     });
     let parent = directories::open_relative(
         &mut state.handles,
@@ -60,39 +63,44 @@ pub(super) fn create(
             path: &directory,
             parent: root_index,
             mode: directories::Mode::CreateNew,
+            output: None,
         },
         context,
         &mut crate::protected_storage::native_phase::NativePhase::ordinary(&state.budget)?,
     )?;
-    directories::open_relative(
+    let database_opened = directories::open_relative(
         &mut state.handles,
         state.sid.bytes()?,
         state.budget.clone(),
         directories::RelativeDirectory {
             path: &database,
-            parent,
+            parent: parent.index,
             mode: directories::Mode::CreateNew,
+            output: None,
         },
         context,
         &mut crate::protected_storage::native_phase::NativePhase::ordinary(&state.budget)?,
     )?;
-    directories::open_relative(
+    let metrics_opened = directories::open_relative(
         &mut state.handles,
         state.sid.bytes()?,
         state.budget.clone(),
         directories::RelativeDirectory {
             path: &metrics,
-            parent,
+            parent: parent.index,
             mode: directories::Mode::CreateNew,
+            output: None,
         },
         context,
         &mut crate::protected_storage::native_phase::NativePhase::ordinary(&state.budget)?,
     )?;
-    state
+    let generation = state
         .generation
         .as_mut()
-        .ok_or_else(|| ClaimError::invalid("missing_capture_generation"))?
-        .ready = true;
+        .ok_or_else(|| ClaimError::invalid("missing_capture_generation"))?;
+    generation.slots = [database_opened.index, metrics_opened.index];
+    generation.identities = [database_opened.identity, metrics_opened.identity];
+    generation.ready = true;
     Ok(())
 }
 

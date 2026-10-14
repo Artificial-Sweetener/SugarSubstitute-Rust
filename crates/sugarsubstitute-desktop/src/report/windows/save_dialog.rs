@@ -32,6 +32,7 @@ struct Hook {
     failure: Option<ReportSurfaceError>,
     save: Text,
     cancel_label: Text,
+    consent: Option<consent::Consent>,
 }
 struct Dialog {
     hook: Box<Hook>,
@@ -44,7 +45,9 @@ struct Dialog {
 }
 impl Hook {
     fn retired(&self) -> bool {
-        !self.active && (!self.initialized || (self.installed && self.destroyed && self.timer == 0))
+        !self.active
+            && (!self.initialized || (self.installed && self.destroyed && self.timer == 0))
+            && self.consent.as_ref().is_some_and(consent::Consent::retired)
     }
     fn begin_poll(&mut self) -> Result<Option<(Poller, *mut c_void)>, ReportSurfaceError> {
         if self.active {
@@ -159,6 +162,43 @@ unsafe extern "system" fn hook(hwnd: HWND, message: u32, _wparam: WPARAM, lparam
                 state.fail(ReportSurfaceError::new("report_picker_localization", cause));
                 state.cancel(hwnd);
             }
+            // SAFETY: Synchronous label dispatch ended; the same retained hook owns this borrow.
+            let state = unsafe { &mut *pointer };
+            let Some(mut consent) = state.consent.take() else {
+                state.fail(ReportSurfaceError::rejected("report_picker_consent_busy"));
+                state.cancel(hwnd);
+                return 0;
+            };
+            // Native layout dispatch may reenter the hook; no Hook reference crosses it.
+            let _ = state;
+            // SAFETY: Query only the parent of this actual retained hook dialog.
+            let result = unsafe { GetParent(hwnd) }
+                .map_err(|cause| ReportSurfaceError::new("report_picker_consent_parent", cause))
+                .and_then(|parent| consent.install(parent));
+            // SAFETY: Nested dispatch returned; restore the exact original control/label owner.
+            let state = unsafe { &mut *pointer };
+            state.consent = Some(consent);
+            if let Err(cause) = result {
+                state.fail(cause);
+                state.cancel(hwnd);
+            }
+            return 0;
+        }
+        if notification.hdr.code == CDN_FILEOK {
+            let Some(mut consent) = state.consent.take() else {
+                state.fail(ReportSurfaceError::rejected("report_picker_consent_busy"));
+                state.cancel(hwnd);
+                return 0;
+            };
+            let _ = state;
+            let result = consent.observe_selection();
+            // SAFETY: Native checkbox dispatch completed before restoring the retained modal owner.
+            let state = unsafe { &mut *pointer };
+            state.consent = Some(consent);
+            if let Err(cause) = result {
+                state.fail(cause);
+                state.cancel(hwnd);
+            }
             return 0;
         }
     }
@@ -211,9 +251,14 @@ unsafe extern "system" fn hook(hwnd: HWND, message: u32, _wparam: WPARAM, lparam
     }
     0
 }
+#[path = "save_dialog/consent.rs"]
+mod consent;
+#[path = "save_dialog/retirement.rs"]
 mod retirement;
+#[path = "save_dialog/selection.rs"]
 mod selection;
 #[cfg(test)]
+#[path = "save_dialog/tests.rs"]
 mod tests;
 pub(super) use retirement::UnretiredDialog;
 pub(super) use selection::select;

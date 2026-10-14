@@ -5,10 +5,14 @@
 mod allocation_tests;
 mod binding;
 
+#[path = "capture_intent/error_tests.rs"]
+mod capture_error;
+mod capture_read;
 mod clocks;
 mod custody;
 mod disposition;
 mod fixture;
+mod genesis;
 mod group_inventory;
 mod inventory;
 mod migration;

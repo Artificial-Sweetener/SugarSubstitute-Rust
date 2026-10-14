@@ -51,6 +51,23 @@ pub enum IncidentServiceObservation {
         /// Exact actually committed summary.
         summary: IncidentSummary,
     },
+    /// Actual checked symbol metadata activation completed before initial presentation.
+    SymbolsCommitted {
+        /// Exact original metadata mutation scope.
+        scope: IncidentOperationScope,
+        /// Original unpresented binding.
+        binding: ReportBinding,
+        /// Actual successor preserving original evidence and reporting facts.
+        summary: IncidentSummary,
+    },
+    /// The host proved the exact symbol metadata operation never began.
+    /// Original summary bytes and their session remain authoritative.
+    SymbolsNotWritten {
+        /// Same original mutation scope and logical operation.
+        scope: IncidentOperationScope,
+        /// Same unpresented binding; no successor was activated.
+        binding: ReportBinding,
+    },
     /// Native adapter actually presented the outstanding session.
     ReporterPresented {
         /// Exact outstanding session.

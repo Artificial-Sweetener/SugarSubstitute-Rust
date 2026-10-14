@@ -17,6 +17,7 @@ pub static JA: ReportMessages = ReportMessages {
     archive_filter: "レポートとメモリダンプ (*.zip)",
     save: "保存",
     cancel: "キャンセル",
+    overwrite_destination: "選択した保存先に既存のファイルがある場合は置き換える",
     copied: "レポートをコピーしました。",
     exported: "レポートをエクスポートしました。",
     copy_failed: "レポートをコピーできませんでした。",

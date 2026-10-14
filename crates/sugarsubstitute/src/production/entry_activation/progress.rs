@@ -8,6 +8,21 @@ impl ProductionActivation {
         batch: &CompletionBatch,
         resources: &mut EntryResources<'_>,
     ) -> Result<()> {
+        let mut delivery_failure = self.incidents.capture(batch).err();
+        for record in self.records.iter_mut().flatten() {
+            for result in
+                [record.record.seed.capture(batch), record.record.collection.capture(batch)]
+            {
+                if let Err(cause) = result {
+                    delivery_failure.get_or_insert(cause);
+                }
+            }
+        }
+        let first_delivery_failure = delivery_failure.is_some();
+        if let Some(cause) = delivery_failure {
+            self.preserve(cause);
+            self.closing = true;
+        }
         let capture_failure =
             self.capture.as_mut().and_then(|capture| capture.observe(batch).err());
         let first_capture_failure = capture_failure.is_some();
@@ -26,6 +41,20 @@ impl ProductionActivation {
                 held.record.parent.as_ref().and_then(|parent| parent.next_deadline())
             })
             .chain(self.backend.as_ref().and_then(|held| held.backend.next_deadline()))
+            .chain(
+                self.records
+                    .iter()
+                    .flatten()
+                    .filter_map(|held| held.record.collection.next_deadline()),
+            )
+            .chain(self.records.iter().flatten().filter_map(|held| {
+                held.record
+                    .pending_desktop_failure
+                    .as_ref()
+                    .map(incident_reporting::PendingDesktopFailure::until)
+            }))
+            .chain(self.incidents.reporting.next_deadline())
+            .chain(self.records.iter().flatten().filter_map(|held| held.record.restart.deadline()))
             .min();
         self.next_wake = None;
         if let Some(until) = deadline {
@@ -39,7 +68,7 @@ impl ProductionActivation {
                 Err(cause) => self.preserve(Box::new(cause)),
             }
         }
-        self.complete_observation(first_capture_failure, result)
+        self.complete_observation(first_capture_failure || first_delivery_failure, result)
     }
     /// Report this turn's first capture failure only after owned completion and
     /// deadline adoption; retained historical errors do not fail later turns again.
@@ -61,6 +90,7 @@ impl ProductionActivation {
         resources: &mut EntryResources<'_>,
     ) -> Result<()> {
         self.receive_projections(resources)?;
+        self.adopt_installed_restarts(resources)?;
         let Some(retained_backend) = &mut self.backend else {
             if let Some(record) =
                 self.records.iter().flatten().map(|held| held.record.as_ref()).find(|record| {
@@ -147,11 +177,15 @@ impl ProductionActivation {
         }
         let capture = self.capture.as_mut().ok_or("Actual capture owner missing")?;
         for record in self.records.iter_mut().flatten().map(|held| held.record.as_mut()) {
+            if let Err(cause) = Self::adopt_failed_family(record, &mut self.incidents) {
+                failure.get_or_insert(cause);
+            }
             if record.closed || record.retired.is_some() {
                 continue;
             }
             if let Err(cause) = Self::progress_record(
                 record,
+                &mut self.incidents,
                 capture,
                 backend,
                 &self.executable,
@@ -191,9 +225,20 @@ impl ProductionActivation {
         {
             failure.get_or_insert(cause);
         }
+        if let Err(cause) = self.incidents.reporting.progress(
+            &mut self.incidents.host,
+            &mut self.records,
+            &self.executable,
+            &self.working_directory,
+            resources,
+            self.closing || failure.is_some(),
+        ) {
+            failure.get_or_insert(cause);
+        }
         if let Some(cause) = failure {
             return Err(cause);
         }
+        self.advance_restart(resources)?;
         Ok(())
     }
     fn receive_projections(&mut self, resources: &EntryResources<'_>) -> Result<()> {
@@ -256,8 +301,17 @@ impl ProductionActivation {
                 retired: None,
                 forwarded: None,
                 ui_suspected: false,
-                replied: false,
+                replied: pending.restart,
                 closed: false,
+                seed: incident_seed::SeedPreparation::new(),
+                seeded: false,
+                collection: incident_collection::IncidentCollection::new(),
+                failed: None,
+                failed_cause: None,
+                failed_shutdown: None,
+                failed_family_adopted: false,
+                pending_desktop_failure: None,
+                restart: restart::RestartState::for_projection(pending.restart),
             };
             self.records[at] = Some(RetainedRecord { record: Box::new(record), _storage: storage });
             self.pending[at] = None;

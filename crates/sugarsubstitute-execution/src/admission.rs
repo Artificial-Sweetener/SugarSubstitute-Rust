@@ -41,6 +41,13 @@ pub(crate) enum RequestKind<'a> {
     SymbolHelper {
         cleanup: JobId,
     },
+    ReportExportCleanup {
+        main_scope: sugarsubstitute_contracts::execution::ScopeSpec,
+        main_spec: JobSpec,
+    },
+    ReportExportMain {
+        cleanup: JobId,
+    },
     SymbolNative {
         original: &'a JobContext,
         handles: Arc<sugarsubstitute_contracts::execution::NativeHandleClaim>,
@@ -71,12 +78,17 @@ pub(crate) struct Record {
     pub(crate) entry_setup: Option<sugarsubstitute_contracts::coordinator_entry::EntrySetupBudget>,
     pub(crate) preparation_issued: bool,
     pub(crate) preparation: Option<Arc<crate::entry_preparation::slot::PreparationSlot>>,
+    pub(crate) registered_startup_issued: bool,
     pub(crate) capture_bundle_issued: bool,
     #[cfg(any(windows, test))]
     pub(crate) capture_event_issued: bool,
     #[cfg(any(windows, test))]
     pub(crate) capture_event_identity: Option<usize>,
     pub(crate) symbol_original: Option<JobId>,
+    pub(crate) report_pair: Option<crate::report_export::pair::Association>,
+    pub(crate) report_export: bool,
+    pub(crate) report_export_issued: bool,
+    pub(crate) report_cleanup: Option<crate::report_export::cleanup::Binding>,
     pub(crate) symbol_cleanup: Option<crate::symbol_cleanup::Binding>,
     #[cfg(any(windows, test))]
     pub(crate) native_custody: Option<Arc<crate::capture_attach::control::Custody>>,
@@ -198,6 +210,7 @@ impl Retirement {
 }
 
 pub(crate) struct State {
+    pub(crate) report_resources: HashMap<JobId, crate::report_export::resources::ResourceRecord>,
     pub(crate) symbol_resources: HashMap<JobId, crate::native_resources::ResourceRecord>,
     pub(crate) scopes: HashMap<ScopeId, ScopeState>,
     pub(crate) jobs: HashMap<JobId, Record>,
@@ -257,6 +270,7 @@ impl Core {
             native_identity_unrestored: std::sync::atomic::AtomicBool::new(false),
             id,
             state: Mutex::new(State {
+                report_resources: HashMap::new(),
                 symbol_resources: HashMap::new(),
                 scopes: HashMap::new(),
                 jobs: HashMap::new(),
@@ -318,7 +332,11 @@ impl Core {
             .jobs
             .values()
             .filter(|record| record.active())
-            .map(|record| record.spec.class)
+            .map(|record| {
+                (record.report_pair.map_or(record.spec.id, |pair| pair.root), record.spec.class)
+            })
+            .collect::<std::collections::HashMap<_, _>>()
+            .into_values()
             .collect();
         match class {
             JobClass::IoOrdinary | JobClass::IoLifecycle => {
@@ -358,7 +376,7 @@ impl Core {
         let index = state.queue.iter().position(|queued| {
             queued.factory_work()
                 && accepts(queued.context.spec().class)
-                && (stop_reason_at(&queued.context, now).is_some()
+                && (queued.stop_reason(now).is_some()
                     || (!matches!(queued.work, crate::task::Work::BlockingHeld(_))
                         && Self::has_capacity(&state, queued.context.spec().class)))
         })?;
@@ -367,6 +385,12 @@ impl Core {
             record.phase = JobPhase::Running;
         }
         queued.job.running();
+        if let crate::task::Work::ReportExportPair(pair) = &queued.work {
+            if let Some(record) = state.jobs.get_mut(&pair.context.job_id()) {
+                record.phase = JobPhase::Running;
+            }
+            pair.job.running();
+        }
         let wake = self.capacity_ready(&mut state);
         drop(state);
         self.deliver_capacity_wake(wake);
@@ -377,7 +401,7 @@ impl Core {
         let now = self.clock.retirement_now();
         let mut state = lock(&self.state);
         let index = state.queue.iter().position(|queued| {
-            accepts(queued.context.spec().class) && stop_reason_at(&queued.context, now).is_some()
+            accepts(queued.context.spec().class) && queued.stop_reason(now).is_some()
         })?;
         let queued = state.queue.remove(index)?;
         if let Some(record) = state.jobs.get_mut(&queued.context.job_id()) {
@@ -438,3 +462,8 @@ mod native;
 
 #[path = "admission_submit.rs"]
 mod submission;
+
+#[path = "admission_record.rs"]
+mod record;
+#[path = "report_export/pair_admission.rs"]
+mod report_pair;

@@ -30,49 +30,59 @@ fn normal_idle_two_roles_keep_original_unresolved_cutoff_and_deny_live_or_queued
     assert_eq!(
         original_budget(
             [
-                Some(Role { budget: first, retired: false }),
-                Some(Role { budget: second, retired: false })
+                Some(Role::Normal { budget: first, retired: false }),
+                Some(Role::Normal { budget: second, retired: false })
             ]
-            .into_iter()
+            .into_iter(),
+            None
         ),
         Some(first)
     );
     assert_eq!(
-        original_budget([Some(Role { budget: first, retired: true }), None].into_iter()),
+        original_budget(
+            [Some(Role::Normal { budget: first, retired: true }), None].into_iter(),
+            None
+        ),
         None
     );
     assert_eq!(
-        original_budget([Some(Role { budget: first, retired: false }), None].into_iter()),
+        original_budget(
+            [Some(Role::Normal { budget: first, retired: false }), None].into_iter(),
+            None
+        ),
         None
     );
     // Completed is the caller's existing sealed retirement disposition, never a new proof from this fold.
     assert_eq!(
         original_budget(
             [
-                Some(Role { budget: first, retired: true }),
-                Some(Role { budget: second, retired: false })
+                Some(Role::Normal { budget: first, retired: true }),
+                Some(Role::Normal { budget: second, retired: false })
             ]
-            .into_iter()
+            .into_iter(),
+            None
         ),
         Some(second)
     );
     assert_eq!(
         original_budget(
             [
-                Some(Role { budget: first, retired: true }),
-                Some(Role { budget: second, retired: true })
+                Some(Role::Normal { budget: first, retired: true }),
+                Some(Role::Normal { budget: second, retired: true })
             ]
-            .into_iter()
+            .into_iter(),
+            None
         ),
         Some(second)
     );
     assert_eq!(
         original_budget(
             [
-                Some(Role { budget: second, retired: true }),
-                Some(Role { budget: first, retired: true })
+                Some(Role::Normal { budget: second, retired: true }),
+                Some(Role::Normal { budget: first, retired: true })
             ]
-            .into_iter()
+            .into_iter(),
+            None
         ),
         Some(second)
     );
@@ -90,6 +100,7 @@ fn normal_idle_empty_queued_projection_and_retained_failure_never_issue_normal_c
     assert!(owner.shutdown_budget().is_none());
     let request = actual_request(1, 10)?;
     owner.pending[0] = Some(PendingProjection {
+        restart: false,
         qualification: Default::default(),
         run: request.run(),
         launch: LaunchId::new(1)?,
@@ -129,6 +140,15 @@ fn normal_idle_partial_unlaunched_or_failed_record_never_becomes_a_normal_role()
         ui_suspected: false,
         replied: true,
         closed: false,
+        seed: incident_seed::SeedPreparation::new(),
+        seeded: false,
+        collection: incident_collection::IncidentCollection::new(),
+        failed: None,
+        failed_cause: None,
+        failed_shutdown: None,
+        failed_family_adopted: false,
+        pending_desktop_failure: None,
+        restart: restart::RestartState::new(),
     };
     assert!(ProductionActivation::normal_role_budget(&record).is_none());
     assert!(role(&record).is_none());
@@ -150,5 +170,36 @@ fn normal_idle_capture_query_preserves_actual_dormant_registration_and_denies_fo
     assert_eq!(after.state, sugarsubstitute_contracts::crash::CaptureState::Dormant);
     assert_eq!(before.handler, after.handler);
     assert!(after.handler.is_none());
+    Ok(())
+}
+
+#[test]
+fn normal_idle_checked_failed_history_requires_real_later_close_intent_and_denies_live_peer()
+-> Result<()> {
+    let original = actual_request(1, 10)?.budget();
+    let dismissed = actual_request(2, 30)?.budget();
+    assert_eq!(original_budget([Some(Role::SettledFailedDesktop)].into_iter(), None), None);
+    assert_eq!(
+        original_budget([Some(Role::SettledFailedDesktop)].into_iter(), Some(dismissed)),
+        Some(dismissed)
+    );
+    assert_eq!(
+        original_budget([Some(Role::SettledFailedDesktop), None].into_iter(), Some(dismissed)),
+        None
+    );
+    assert_eq!(
+        original_budget(
+            [Some(Role::Normal { budget: original, retired: false })].into_iter(),
+            Some(dismissed)
+        ),
+        Some(original)
+    );
+    assert_eq!(
+        original_budget(
+            [Some(Role::Normal { budget: original, retired: true })].into_iter(),
+            Some(dismissed)
+        ),
+        Some(dismissed)
+    );
     Ok(())
 }

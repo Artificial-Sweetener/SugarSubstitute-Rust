@@ -5,6 +5,7 @@ mod capacity;
 mod files;
 mod lease;
 mod selection;
+mod symbol;
 use super::{
     allocation::*,
     crypto::CryptoOwner,
@@ -25,6 +26,10 @@ pub use lease::{
 };
 use std::{error::Error, fmt};
 use sugarsubstitute_execution::{CaptureBundleAdmission, CaptureBundleOrigin};
+pub use symbol::{
+    SymbolBundleLease, SymbolBundleOwner, SymbolConstructionFailure, SymbolOwnerRetirementFailure,
+    SymbolRegistrationFacts,
+};
 
 /// Return partial native custody after a failed actual checked close.
 pub struct CaptureOwnerRetirementFailure {
@@ -58,6 +63,7 @@ pub(super) struct Fields {
     signature: Vec<u8>,
     _ingress: CaptureLoan,
     facts: Option<CaptureRegistrationFacts>,
+    symbol_facts: Option<SymbolRegistrationFacts>,
     attempted: bool,
     failure: Option<ClaimError>,
 }
@@ -94,7 +100,7 @@ impl CaptureConstructionFailure {
 pub struct CaptureBundleOwner {
     fields: Option<Box<Fields>>,
     allocation: Option<SharedCaptureLoan>,
-    original: AllocationOrigin,
+    capture: CaptureBundleOrigin,
 }
 impl CaptureBundleOwner {
     /// Consume only the real once-issued admission and inert installed-release request.
@@ -111,6 +117,7 @@ impl CaptureBundleOwner {
                 original: origin,
             });
         }
+        let retained = origin.clone();
         let original = match AllocationOrigin::new(origin) {
             Ok(original) => original,
             Err(failure) => {
@@ -122,110 +129,25 @@ impl CaptureBundleOwner {
         };
         match Self::construct(original.clone()) {
             Ok(owner) => Ok(owner),
-            Err(cause) => {
-                Err(CaptureConstructionFailure { cause, original: original.original().clone() })
-            }
+            Err(cause) => Err(CaptureConstructionFailure { cause, original: retained }),
         }
     }
     fn construct(original: AllocationOrigin) -> Result<Self, ClaimError> {
-        let outside = SharedCaptureLoan::new(
-            original
-                .reserve(
-                    CaptureRegion::Metadata,
-                    size_of::<Fields>() + SharedCaptureLoan::control_bytes(),
-                )
-                .map_err(ClaimError::capture_allocation)?,
-        )
-        .map_err(ClaimError::capture_allocation)?;
-        let quota = CaptureOutputQuota::new(
-            SharedCaptureLoan::new(
-                original
-                    .reserve(
-                        CaptureRegion::Metadata,
-                        CaptureOutputQuota::control_storage_bytes()
-                            + SharedCaptureLoan::control_bytes(),
-                    )
-                    .map_err(ClaimError::capture_allocation)?,
-            )
-            .map_err(ClaimError::capture_allocation)?,
-        );
-        let scratch = original.scratch().map_err(ClaimError::capture_allocation)?;
-        let ingress = original
-            .reserve(CaptureRegion::Ingress, 65_536 + 384)
-            .map_err(ClaimError::capture_allocation)?;
-        let mut fields = Box::new(Fields {
-            files: std::array::from_fn(|_| None),
-            directories: std::array::from_fn(|_| None),
-            token: None,
-            prepared: std::array::from_fn(|_| None),
-            causes: std::array::from_fn(|_| None),
-            quota,
-            scratch,
-            crypto: None,
-            modules: [None, None],
-            current: None,
-            sid: None,
-            manifest: Vec::new(),
-            signature: Vec::new(),
-            _ingress: ingress,
-            facts: None,
-            attempted: false,
-            failure: None,
-        });
-        let causes = |slot: u8| -> Result<NativeCauseDestinations, ClaimError> {
-            Ok(NativeCauseDestinations::selected(
-                &original,
-                original.cause_destination(slot * 2).map_err(ClaimError::capture_allocation)?,
-                original.cause_destination(slot * 2 + 1).map_err(ClaimError::capture_allocation)?,
-            ))
-        };
-        for index in 0..80 {
-            let slot = if index < 40 { index } else { index + 9 };
-            let handle = Handle::reserve_capture(&mut Some((
-                original.clone(),
-                fields.quota.reserve_output().map_err(ClaimError::capture_allocation)?,
-            )))?;
-            fields.directories[index] =
-                Some(OwnedHandle { handle, causes: causes(slot as u8)?, identity: None });
-        }
-        let handle = Handle::reserve_capture(&mut Some((
-            original.clone(),
-            fields.quota.reserve_output().map_err(ClaimError::capture_allocation)?,
-        )))?;
-        fields.token = Some(OwnedHandle { handle, causes: causes(48)?, identity: None });
-        for index in 0..8 {
-            fields.prepared[index] = Some(PreparedFile {
-                output: fields.quota.reserve_output().map_err(ClaimError::capture_allocation)?,
-                causes: causes((40 + index) as u8)?,
-            });
-        }
-        fields.crypto = Some(CryptoOwner::capture(
-            original.clone(),
-            fields.quota.reserve_output().map_err(ClaimError::capture_allocation)?,
-            fields.quota.reserve_output().map_err(ClaimError::capture_allocation)?,
-            [causes(89)?, causes(90)?],
-        )?);
-        for index in 0..2 {
-            fields.modules[index] = Some(CaptureModuleOutput::from_guard(
-                fields.quota.reserve_output().map_err(ClaimError::capture_allocation)?,
-                causes((91 + index) as u8)?,
-            ));
-        }
-        for index in 0..4 {
-            fields.causes[index] = Some(causes((96 + index) as u8)?);
-        }
-        Ok(Self { fields: Some(fields), allocation: Some(outside), original })
+        let capture = original.original().capture().ok_or_else(missing)?.clone();
+        let (fields, allocation) = construct_fields(&original)?;
+        Ok(Self { capture, fields: Some(fields), allocation: Some(allocation) })
     }
     /// Select once; native and matching failures remain with the same durable owner.
     /// # Errors
     /// Fails closed without a compiled signer or genuine same-file matching association.
     pub fn select(&mut self) -> Result<(), ClaimError> {
+        let original = self.allocation.as_ref().ok_or_else(missing)?.original();
         let fields = self.fields.as_mut().ok_or_else(missing)?;
         if fields.attempted {
             return Err(fields.failure.clone().unwrap_or_else(missing));
         }
         fields.attempted = true;
-        let result = selection::select(fields, &self.original);
+        let result = selection::select(fields, original, selection::BundlePurpose::Capture);
         if let Err(cause) = &result {
             fields.failure = Some(cause.clone());
         }
@@ -262,32 +184,157 @@ impl CaptureBundleOwner {
     }
     /// Borrow the opaque original target for independent cleanup admission.
     pub fn original_origin(&self) -> &CaptureBundleOrigin {
-        self.original.original()
+        &self.capture
     }
 }
+/// Allocate the one shared physical graph only after its sealed origin is preflighted.
+fn construct_fields(
+    original: &AllocationOrigin,
+) -> Result<(Box<Fields>, SharedCaptureLoan), ClaimError> {
+    let outside = SharedCaptureLoan::new(
+        original
+            .reserve(
+                CaptureRegion::Metadata,
+                size_of::<Fields>() + SharedCaptureLoan::control_bytes(),
+            )
+            .map_err(ClaimError::capture_allocation)?,
+    )
+    .map_err(ClaimError::capture_allocation)?;
+    let quota = CaptureOutputQuota::new(
+        SharedCaptureLoan::new(
+            original
+                .reserve(
+                    CaptureRegion::Metadata,
+                    CaptureOutputQuota::control_storage_bytes()
+                        + SharedCaptureLoan::control_bytes(),
+                )
+                .map_err(ClaimError::capture_allocation)?,
+        )
+        .map_err(ClaimError::capture_allocation)?,
+    );
+    let scratch = original.scratch().map_err(ClaimError::capture_allocation)?;
+    let ingress = original
+        .reserve(CaptureRegion::Ingress, 65_536 + 384)
+        .map_err(ClaimError::capture_allocation)?;
+    let mut fields = Box::new(Fields {
+        files: std::array::from_fn(|_| None),
+        directories: std::array::from_fn(|_| None),
+        token: None,
+        prepared: std::array::from_fn(|_| None),
+        causes: std::array::from_fn(|_| None),
+        quota,
+        scratch,
+        crypto: None,
+        modules: [None, None],
+        current: None,
+        sid: None,
+        manifest: Vec::new(),
+        signature: Vec::new(),
+        _ingress: ingress,
+        facts: None,
+        symbol_facts: None,
+        attempted: false,
+        failure: None,
+    });
+    let causes = |slot: u8| -> Result<NativeCauseDestinations, ClaimError> {
+        Ok(NativeCauseDestinations::selected(
+            original,
+            original.cause_destination(slot * 2).map_err(ClaimError::capture_allocation)?,
+            original.cause_destination(slot * 2 + 1).map_err(ClaimError::capture_allocation)?,
+        ))
+    };
+    for index in 0..80 {
+        let slot = if index < 40 { index } else { index + 9 };
+        let mut causes = causes(slot as u8)?;
+        let output = fields.quota.reserve_selected(&mut causes)?;
+        let handle = Handle::reserve_capture(&mut Some((original.clone(), output)))?;
+        fields.directories[index] = Some(OwnedHandle { handle, causes, identity: None });
+    }
+    let mut token_causes = causes(48)?;
+    let output = fields.quota.reserve_selected(&mut token_causes)?;
+    let handle = Handle::reserve_capture(&mut Some((original.clone(), output)))?;
+    fields.token = Some(OwnedHandle { handle, causes: token_causes, identity: None });
+    let file_count = if original.original().symbol().is_some() { 4 } else { 8 };
+    for index in 0..file_count {
+        let mut causes = causes((40 + index) as u8)?;
+        let output = fields.quota.reserve_selected(&mut causes)?;
+        fields.prepared[index] = Some(PreparedFile { output, causes });
+    }
+    let mut provider_causes = causes(89)?;
+    let provider = fields.quota.reserve_selected(&mut provider_causes)?;
+    let mut key_causes = causes(90)?;
+    let key = fields.quota.reserve_selected(&mut key_causes)?;
+    fields.crypto = Some(CryptoOwner::selected(
+        original.clone(),
+        provider,
+        key,
+        [provider_causes, key_causes],
+    )?);
+    if original.original().capture().is_some() {
+        for index in 0..2 {
+            let mut causes = causes((91 + index) as u8)?;
+            let output = fields.quota.reserve_selected(&mut causes)?;
+            fields.modules[index] = Some(CaptureModuleOutput::from_guard(output, causes));
+        }
+    }
+    for index in 0..4 {
+        fields.causes[index] = Some(causes((96 + index) as u8)?);
+    }
+    Ok((fields, outside))
+}
+
+/// Check the same cleanup proof before each fresh close; late correlated return is passive.
+fn retire_fields(
+    fields: Option<&mut Box<Fields>>,
+    origin: Option<&AllocationOrigin>,
+    proof: &crate::installed_release::SelectedRetirement<'_>,
+) -> Result<(), ClaimError> {
+    let origin = origin.ok_or_else(missing)?;
+    if !proof.matches_origin(origin.original()) {
+        return Err(missing());
+    }
+    origin.close().map_err(ClaimError::capture_allocation)?;
+    let fields = fields.ok_or_else(missing)?;
+    for file in fields.files.iter_mut().flatten() {
+        file.retire_selected(proof)?;
+    }
+    for cell in fields.directories.iter_mut().flatten() {
+        cell.handle.close_selected(proof, &mut cell.causes)?;
+    }
+    if let Some(token) = fields.token.as_mut() {
+        token.handle.close_selected(proof, &mut token.causes)?;
+    }
+    if let Some(crypto) = fields.crypto.as_mut() {
+        crypto.retire_capture(proof)?;
+    }
+    Ok(())
+}
+
 fn missing() -> ClaimError {
     ClaimError::capture_allocation(CaptureCapacityFailure::missing())
 }
 impl Drop for CaptureBundleOwner {
     fn drop(&mut self) {
-        if let Some(fields) = self.fields.take() {
-            let uncertain = fields.files.iter().flatten().any(NativeFile::has_output)
-                || fields.directories.iter().flatten().any(|cell| cell.handle.is_armed())
-                || fields.token.as_ref().is_some_and(|cell| cell.handle.is_armed())
-                || fields.crypto.as_ref().is_some_and(CryptoOwner::has_output);
-            if uncertain {
-                std::mem::forget(fields);
-                if let Some(allocation) = self.allocation.take() {
-                    std::mem::forget(allocation);
-                }
-                std::mem::forget(self.original.clone());
-                tracing::error!(
-                    operation = "capture_bundle_retained",
-                    "Selected release native custody retained"
-                );
-            } else {
-                drop(fields);
+        drop_physical(&mut self.fields, &mut self.allocation);
+    }
+}
+fn drop_physical(fields: &mut Option<Box<Fields>>, allocation: &mut Option<SharedCaptureLoan>) {
+    if let Some(fields) = fields.take() {
+        let uncertain = fields.files.iter().flatten().any(NativeFile::has_output)
+            || fields.directories.iter().flatten().any(|cell| cell.handle.is_armed())
+            || fields.token.as_ref().is_some_and(|cell| cell.handle.is_armed())
+            || fields.crypto.as_ref().is_some_and(CryptoOwner::has_output);
+        if uncertain {
+            std::mem::forget(fields);
+            if let Some(allocation) = allocation.take() {
+                std::mem::forget(allocation);
             }
+            tracing::error!(
+                operation = "capture_bundle_retained",
+                "Selected release native custody retained"
+            );
+        } else {
+            drop(fields);
         }
     }
 }

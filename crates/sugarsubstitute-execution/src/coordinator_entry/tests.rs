@@ -69,3 +69,6 @@ mod peer_disconnect;
 
 #[path = "close_progress_tests.rs"]
 mod close_progress;
+
+#[path = "registered_startup/tests.rs"]
+mod registered_startup;

@@ -18,10 +18,11 @@ sha2.workspace = true
 [target.'cfg(windows)'.dependencies]
 sugarsubstitute-execution = { path = "../sugarsubstitute-execution" }
 tracing.workspace = true
-windows = { workspace = true, features = ["Win32_Storage_FileSystem", "Win32_System_LibraryLoader", "Win32_System_IO", "Win32_Security"] }
+windows = { workspace = true, features = ["Win32_Storage_FileSystem", "Win32_System_LibraryLoader", "Win32_System_IO", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_System_Diagnostics_Debug", "Win32_Security"] }
 
 [lints]
 workspace = true
 
 [target.'cfg(windows)'.dev-dependencies]
 sugarsubstitute-supervision = { path = "../sugarsubstitute-supervision", features = ["boundary-fixtures"] }
+sugarsubstitute-application = { path = "../sugarsubstitute-application" }

@@ -93,6 +93,7 @@ impl IncidentCoordinator {
             restart_requested: false,
             restart_forwarded: false,
             first_failure: None,
+            report_admission_failure: None,
         }
     }
     /// Admit one exact validated historical summary under current recovery admission.
@@ -139,18 +140,7 @@ impl IncidentCoordinator {
             record.phase = IncidentServicePhase::Acknowledged;
             IncidentEffects::one(IncidentEffect::RetireSource { scope: record.source_scope })
         } else {
-            let session = self.session()?;
-            let binding = ReportBinding::new(key, summary.revision(), session);
-            let effects = IncidentEffects::pair(
-                IncidentEffect::RetireSource { scope: record.source_scope },
-                IncidentEffect::LaunchReporter { binding, summary: summary.clone() },
-            );
-            record.binding = Some(binding);
-            record.automatic_report_attempted = true;
-            record.reporter_retired = false;
-            record.phase = IncidentServicePhase::Reporting;
-            self.next_session = session.get();
-            effects
+            IncidentEffects::one(IncidentEffect::RetireSource { scope: record.source_scope })
         };
         record.recovery_projection = Some(summary.clone());
         record.summary = Some(summary);

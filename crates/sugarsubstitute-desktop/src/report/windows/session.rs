@@ -2,15 +2,14 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Apply fenced decisions to retained native resources on one UI thread.
 use super::super::{
-    NativeReportView, ReportSessionContent, ReportSurfaceError, ReportSurfaceFailure,
-    ReportSurfaceObservation, ReportSurfaceOptions, ReportSurfaceUpdate,
+    NativeReportView, ReportSessionContent, ReportSurfaceError, ReportSurfaceObservation,
+    ReportSurfaceOptions, ReportSurfaceUpdate,
     state::{Intent, State},
 };
 use super::{
-    buffer::Text,
     callback::{Event, Input},
     controls::Controls,
-    save_dialog,
+    copy, save_dialog,
 };
 use std::{
     num::NonZeroUsize,
@@ -170,6 +169,25 @@ impl Session {
                 self.state.replaced(current);
                 content.observe(ReportSurfaceObservation::ViewReplaced(current))?;
             }
+            ReportSurfaceUpdate::CopyAuthorized { request, binding, counter, outcome } => {
+                let pending = self.state.matching_request(request, binding)?;
+                if pending.intent != Intent::Action(ReportAction::CopyText) {
+                    return Err(ReportSurfaceError::rejected("report_copy_action_kind"));
+                }
+                let controls = self
+                    .controls
+                    .as_mut()
+                    .ok_or_else(|| ReportSurfaceError::rejected("report_action_native_owner"))?;
+                let mut native = copy::NativeCopy::new(controls, &self.view, self.labels);
+                copy::execute(&mut native, counter, outcome, &mut self.failure, |outcome| {
+                    content.observe(ReportSurfaceObservation::CopyFinished {
+                        request,
+                        binding,
+                        outcome,
+                    })
+                })?;
+                self.state.completed_request();
+            }
             ReportSurfaceUpdate::ActionResult { request, binding, outcome } => {
                 let pending = self.state.matching_request(request, binding)?;
                 let controls = self
@@ -178,31 +196,7 @@ impl Session {
                     .ok_or_else(|| ReportSurfaceError::rejected("report_action_native_owner"))?;
                 match pending.intent {
                     Intent::Action(ReportAction::CopyText) => {
-                        let result = if outcome.is_ok() {
-                            Text::new(self.view.text(), &controls.lease).and_then(|text| {
-                                controls.clipboard.copy(&text.units, &controls.lease)
-                            })
-                        } else {
-                            Err(ReportSurfaceError::rejected("report_copy_host_rejected"))
-                        };
-                        let outcome = result
-                            .as_ref()
-                            .map(|_| ())
-                            .map_err(|_| ReportSurfaceFailure::Clipboard);
-                        controls.status(if outcome.is_ok() {
-                            self.labels.copied
-                        } else {
-                            self.labels.copy_failed
-                        })?;
-                        content.observe(ReportSurfaceObservation::CopyFinished {
-                            request,
-                            binding,
-                            outcome,
-                        })?;
-                        if let Err(cause) = result {
-                            self.retain(cause);
-                        }
-                        self.state.completed_request();
+                        return Err(ReportSurfaceError::rejected("report_copy_counter_missing"));
                     }
                     Intent::Export(_) => {
                         controls.status(if outcome.is_ok() {

@@ -24,6 +24,7 @@ use sugarsubstitute_contracts::execution::{
 };
 
 pub(crate) struct Binding {
+    pub(crate) report_export_partner: Option<JobId>,
     pub(crate) main_scope: ScopeSpec,
     pub(crate) main_spec: JobSpec,
     pub(crate) paired: bool,
@@ -82,6 +83,15 @@ fn held<'a>(
     id: JobId,
     scope_id: ScopeId,
 ) -> Result<&'a mut Binding, AdmissionError> {
+    let paired = state.jobs.get(&id).and_then(|record| record.symbol_cleanup.as_ref());
+    if let Some(binding) = paired
+        && let Some(partner) = binding.report_export_partner
+        && [binding.main_spec.id, partner].iter().any(|id| {
+            state.jobs.get(id).is_some_and(|record| !matches!(record.phase, JobPhase::Terminal(_)))
+        })
+    {
+        return Err(AdmissionError::InvalidSymbolAdmission);
+    }
     if state.stopping || core.clock.failed() {
         return Err(AdmissionError::ShuttingDown);
     }

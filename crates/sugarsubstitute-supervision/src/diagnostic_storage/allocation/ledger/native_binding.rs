@@ -123,6 +123,17 @@ impl Owner {
         let observation = snapshot.observe(current);
         sampling.pending = false;
         let mut state = inner.lock();
+        if state
+            .namespace
+            .as_ref()
+            .is_some_and(|source| !source.open.load(std::sync::atomic::Ordering::Acquire))
+            || state.capture_source.as_ref().is_some_and(|source| !source.open())
+        {
+            return Err(native::DiagnosticNativeAllocationFailure::rejected(
+                Some(snapshot.key()),
+                Code::Closed,
+            ));
+        }
         if state.closed || state.current != Some(snapshot.key()) {
             return Err(native::DiagnosticNativeAllocationFailure::rejected(
                 Some(snapshot.key()),

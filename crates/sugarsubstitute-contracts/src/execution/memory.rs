@@ -44,6 +44,13 @@ impl MemoryLease {
         self.0.bytes
     }
 
+    /// Compare the same physical reservation while both original guards remain borrowed.
+    /// This allocates nothing, creates no Weak observer, invokes no release port and exposes
+    /// no address or admission authority. Equal byte limits do not imply identical custody.
+    pub fn same_reservation(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+
     /// Claim part of the shared charge for one independently owned allocation.
     ///
     /// Claims across every cloned lease atomically share this reservation's byte

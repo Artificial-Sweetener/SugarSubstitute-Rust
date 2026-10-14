@@ -5,7 +5,7 @@ mod allocation;
 mod inventory;
 mod io;
 pub(crate) mod layout;
-mod leaf;
+pub(crate) mod leaf;
 mod lifecycle;
 mod recovery;
 mod session;
@@ -60,14 +60,55 @@ impl Port for StreamingPort {
         root: &Path,
         namespace: NamespaceId,
         context: &JobContext,
-    ) -> Result<(), ClaimError> {
+    ) -> Result<diagnostic::genesis::NativeOpening, ClaimError> {
         self.check(context)?;
         self.root.resolve(root, context)?;
-        let (directory, sid) = self.root.diagnostic_directory(namespace, context)?;
+        let (directory, sid, disposition, identity) =
+            self.root.diagnostic_directory(namespace, context)?;
         self.directory = Some(directory);
         self.sid = Some(sid);
         self.namespace = Some(namespace);
-        self.check(context)
+        self.check(context)?;
+        Ok(match disposition {
+            crate::protected_storage::directories::DirectoryDisposition::Created => {
+                diagnostic::genesis::NativeOpening::Created(identity)
+            }
+            crate::protected_storage::directories::DirectoryDisposition::Existing => {
+                diagnostic::genesis::NativeOpening::Existing
+            }
+        })
+    }
+    fn resolve_namespace(
+        &mut self,
+        request: &ProtectedDiagnosticWriteRequest,
+        context: &JobContext,
+    ) -> Result<diagnostic::genesis::NativeOpening, ClaimError> {
+        self.check(context)?;
+        self.original
+            .bind_namespace(request, context)
+            .map_err(ClaimError::diagnostic_allocation)?;
+        let loan = crate::coordinator_entry::read_namespace::NamespaceReadLoan::take_writer(
+            request,
+            &self.original,
+            context,
+        )?;
+        let resolved = loan.resolved()?;
+        self.root.resolve(&resolved.directory, context)?;
+        self.root.validate_diagnostic_namespace(resolved, loan.handles()?, context)?;
+        let (directory, sid, disposition, identity) =
+            self.root.diagnostic_directory(request.operation().owner().namespace, context)?;
+        self.directory = Some(directory);
+        self.sid = Some(sid);
+        self.namespace = Some(request.operation().owner().namespace);
+        self.check(context)?;
+        Ok(match disposition {
+            crate::protected_storage::directories::DirectoryDisposition::Existing => {
+                diagnostic::genesis::NativeOpening::Existing
+            }
+            crate::protected_storage::directories::DirectoryDisposition::Created => {
+                diagnostic::genesis::NativeOpening::Created(identity)
+            }
+        })
     }
     fn acquire_writer(&mut self, context: &JobContext) -> Result<(), ClaimError> {
         self.check(context)?;

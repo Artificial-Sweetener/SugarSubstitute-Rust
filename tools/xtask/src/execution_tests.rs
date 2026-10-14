@@ -349,8 +349,53 @@ fn capture_resource_producers_cannot_hide_outside_contract_or_execution_owners()
     Ok(())
 }
 
+/// Original export producers are confined to the real execution owner across aliases and macros.
+#[test]
+fn report_export_producers_reject_nonowners_and_preserve_consumers() -> Result<()> {
+    let fixture = Repository::new()?;
+    let policy = Policy { schema_version: 1, owner: None };
+    for source in [
+        "fn forge() { sugarsubstitute_execution::ReportExportAdmission::new(); }",
+        "use sugarsubstitute_execution::ReportExportOrigin as Origin; fn forge() { Origin::new(); }",
+        "type Proof = sugarsubstitute_execution::ReportExportRetirement; fn forge() { Proof::new(); }",
+        "macro_rules! forge { () => { ReportExportOutput::new() }; }",
+        "macro_rules! forge { ($t:ident,$m:ident) => { $t::$m() }; } fn x() { forge!(ReportExportCleanupDeadline,new); }",
+        "#[cfg(test)] mod tests { fn forge() { ReportExportOrigin::new(); } }",
+    ] {
+        assert!(
+            !crate::execution_source::resource_producer_findings(source)?.is_empty(),
+            "accepted {source}"
+        );
+        write(fixture.root(), "crates/host/src/export.rs", source)?;
+        assert!(check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace).is_err());
+    }
+    assert!(crate::execution_source::resource_producer_findings("use sugarsubstitute_execution::{ReportExportAdmission,ReportExportOrigin,ReportExportRetirement}; fn use_admitted(a: ReportExportAdmission, o: &ReportExportOrigin, r: &ReportExportRetirement) { a.into_origin(); o.check_effect(); r.check(); }")?.is_empty());
+    Ok(())
+}
+
+#[test]
+fn paired_export_request_is_inert_public_metadata_and_never_scheduler_access() -> Result<()> {
+    let valid = "use sugarsubstitute_execution::ReportExportPairRequest; fn use_pair() { let request = ReportExportPairRequest::new(source_scope, source_spec, source_cleanup, receiving_scope, receiving_spec, receiving_cleanup); client.submit_report_export_pair(request, factory); }";
+    assert!(crate::execution_source::resource_producer_findings(valid)?.is_empty());
+    assert!(crate::execution_source::findings(valid)?.is_empty());
+    for invalid in [
+        "fn fake_pair_worker() { std::thread::spawn(|| callback()); }",
+        "macro_rules! inline_worker { () => { tokio::task::spawn_blocking(factory) }; }",
+        "use sugarsubstitute_execution::ReportExportOrigin as Source; fn fake_role() { Source::new(); }",
+    ] {
+        assert!(
+            !crate::execution_source::findings(invalid)?.is_empty()
+                || !crate::execution_source::resource_producer_findings(invalid)?.is_empty()
+        );
+    }
+    Ok(())
+}
+
 #[path = "execution_qualification_tests.rs"]
 mod qualification;
+
+#[path = "execution_registered_startup_tests.rs"]
+mod registered_startup;
 
 /// Authenticated native capture inputs cannot be manufactured by nonowners or macro aliases.
 #[test]

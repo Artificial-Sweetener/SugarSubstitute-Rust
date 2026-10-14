@@ -90,12 +90,18 @@ mod tests {
         let connection = ConnectionId::new(1)?;
         let mut coordinator =
             sugarsubstitute_application::supervision::ResourceCoordinator::new(run.owner);
-        coordinator.register_run(ClientRegistration {
+        let peer_registration = ClientRegistration {
             run,
             connection,
             launch: LaunchId::new(1)?,
             profile: sugarsubstitute_contracts::configuration::ProfileId::new("Output_1".into())?,
+        };
+        coordinator.enroll_run(sugarsubstitute_contracts::lifecycle::RunEnrollment {
+            run: peer_registration.run,
+            launch: peer_registration.launch,
+            profile: peer_registration.profile.clone(),
         })?;
+        coordinator.register_run(peer_registration)?;
         let root = std::env::current_dir()?;
         let transition = coordinator.request(
             ClientBinding { run, connection },

@@ -57,11 +57,12 @@ impl InheritedCaptureLease for InputLease {
         &self,
     ) -> Option<crate::desktop_capture::creator::AuthenticatedDesktopCreator> {
         if self.returned {
-            return None;
+            None
+        } else {
+            crate::desktop_capture::creator::AuthenticatedDesktopCreator::from_authenticated(
+                &self.binding,
+            )
         }
-        crate::desktop_capture::creator::AuthenticatedDesktopCreator::from_authenticated(
-            &self.binding,
-        )
     }
     fn native_input(
         &self,

@@ -3,6 +3,7 @@
 //! Serialize exact report mutations and fence actions until actual view refresh.
 mod attempts;
 mod queued;
+mod symbols;
 
 use super::{
     state::{MutationCommit, Pending, Record},
@@ -33,6 +34,29 @@ pub(super) fn rewritten(
     )?)
 }
 impl IncidentCoordinator {
+    /// Allocate correlation for reading the exact retained report revision.
+    /// The scope grants no storage authority and leaves mutation and presentation state intact.
+    pub fn admit_report_view(
+        &mut self,
+        binding: ReportBinding,
+        context: IncidentRequestContext,
+    ) -> Result<IncidentOperationScope, IncidentDecisionError> {
+        let record = self.record(self.index(binding.incident())?)?;
+        if record.binding != Some(binding) || record.revision() != binding.revision() {
+            return Err(IncidentDecisionError::StaleOperation);
+        }
+        let read_allowed = match &record.pending {
+            None => true,
+            Some(Pending::Export(original)) => *original == binding,
+            _ => false,
+        };
+        if record.reporter_retired || record.summary.is_none() || !read_allowed {
+            return Err(IncidentDecisionError::WrongPhase);
+        }
+        let scope = self.scope(binding.incident(), binding.revision(), context.budget())?;
+        self.next_operation = scope.operation().id().get();
+        Ok(scope)
+    }
     /// Validate the exact visible view and admit only its requested use case.
     /// Copy allocates no operation. Export never acknowledges. Dismiss closes only
     /// after the exact actual durable successor is independently observed.

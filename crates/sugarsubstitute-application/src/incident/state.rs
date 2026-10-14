@@ -18,6 +18,10 @@ pub(super) enum Pending {
     Seed,
     Collection,
     Summary(IncidentSummary),
+    Symbols {
+        binding: ReportBinding,
+        original: IncidentSummary,
+    },
     Attempt {
         binding: ReportBinding,
         expected: IncidentSummary,
@@ -81,6 +85,7 @@ pub(super) struct Record {
     pub restart_requested: bool,
     pub restart_forwarded: bool,
     pub first_failure: Option<IncidentServiceFailure>,
+    pub report_admission_failure: Option<IncidentDecisionError>,
 }
 impl Record {
     /// Return the actually committed revision without advancing it.

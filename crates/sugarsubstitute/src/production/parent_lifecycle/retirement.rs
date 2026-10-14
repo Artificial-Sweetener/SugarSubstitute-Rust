@@ -6,6 +6,28 @@ use sugarsubstitute_contracts::lifecycle::{ConnectionId, DesktopObservation, Run
 use sugarsubstitute_supervision::RegistryObservation;
 
 impl ParentLifecycle {
+    /// Project only this parent's actual matching native registry exit transaction.
+    pub(crate) fn failed_incident(
+        &self,
+        run: RunKey,
+        process: sugarsubstitute_contracts::lifecycle::ProcessKey,
+    ) -> std::result::Result<
+        Option<sugarsubstitute_application::supervision::FailedDesktopFact>,
+        ParentError,
+    > {
+        if run != self.run {
+            return Err(ParentError::ForeignPeer);
+        }
+        let Some(exit) = &self.exit else {
+            return Ok(None);
+        };
+        match exit.failed_incident() {
+            Ok(fact) if fact.run() == run && fact.process() == process => Ok(Some(fact)),
+            Ok(_) => Err(ParentError::ForeignPeer),
+            Err(sugarsubstitute_contracts::lifecycle::LifecycleRejection::WrongPhase) => Ok(None),
+            Err(_) => Err(ParentError::WrongPhase),
+        }
+    }
     pub(super) fn finish_disconnect(
         &mut self,
         resources: &mut ParentResources<'_, '_>,

@@ -288,3 +288,6 @@ impl crate::registry::construction_fixture::ConstructionWake for Wake {
         }
     }
 }
+
+#[path = "tests/settled_failure.rs"]
+mod settled_failure;

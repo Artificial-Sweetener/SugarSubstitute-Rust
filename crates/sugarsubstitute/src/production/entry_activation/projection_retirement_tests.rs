@@ -42,6 +42,9 @@ fn unused_projection_source_return_keeps_first_cause_controls_and_original_charg
     // No authenticated loan/native authority is fabricated in this failure fixture.
     let mut input = Some(ProjectionInput {
         request: None,
+        client: None,
+        run: None,
+        restart: None,
         snapshot: None,
         capture_root: PathBuf::new(),
         cause: ProjectionCause::NotStarted,

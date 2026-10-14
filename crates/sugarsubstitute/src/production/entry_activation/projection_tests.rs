@@ -41,6 +41,7 @@ fn managed_view<'a>(
     interpreter: &'a [u8],
     arguments: &'a [u8],
     count: u8,
+    locale: &str,
 ) -> Result<EntryLaunchRequestView<'a>, Box<dyn Error + Send + Sync>> {
     use sugarsubstitute_contracts::{
         configuration::{Presentation, Theme},
@@ -58,7 +59,7 @@ fn managed_view<'a>(
         EntryFrontendView::new(root, root, root, root),
         root,
         "Profile_1",
-        Presentation::new("en", Theme::Dark, false)?,
+        Presentation::new(locale, Theme::Dark, false)?,
         EntryEnvironmentView::from_le_bytes(&[0, 0, 0, 0])?,
     )?)
 }
@@ -70,7 +71,7 @@ fn parent_projection_composes_complete_managed_command_from_empty_extras()
     let root = bytes(&r"E:\comfyui".encode_utf16().collect::<Vec<_>>());
     let interpreter =
         bytes(&r"E:\comfyui\venv\Scripts\python.exe".encode_utf16().collect::<Vec<_>>());
-    let original = managed_view(&root, &interpreter, &[], 0)?;
+    let original = managed_view(&root, &interpreter, &[], 0, "en")?;
     let projected = fields(original)?;
     let BackendTarget::Managed(launch) = projected.target else {
         return Err("Managed target changed mode".into());
@@ -108,7 +109,7 @@ fn parent_projection_rejects_effective_command_overflow_without_changing_extra_s
         arguments.extend_from_slice(&5u32.to_le_bytes());
         arguments.extend_from_slice(b"--cpu");
     }
-    let original = managed_view(&root, &interpreter, &arguments, 58)?;
+    let original = managed_view(&root, &interpreter, &arguments, 58, "en")?;
     let cause = fields(original).err().ok_or("Complete command limit bypassed")?;
     assert!(matches!(
         cause.downcast_ref::<sugarsubstitute_comfy::launch::ManagedLaunchError>(),
@@ -121,5 +122,45 @@ fn parent_projection_rejects_effective_command_overflow_without_changing_extra_s
     };
     assert_eq!(retained.iter().count(), 58);
     assert!(retained.iter().all(|value| value == "--cpu"));
+    Ok(())
+}
+
+#[test]
+fn configured_japanese_locale_reaches_production_report_view_work_without_web_content()
+-> Result<(), Box<dyn Error>> {
+    use crate::production::diagnostic_helper::reporting::ReportingWork;
+    use sugarsubstitute_contracts::{
+        configuration::LocaleId,
+        incident::*,
+        lifecycle::{
+            CoordinatorEpoch, CoordinatorKey, InstanceId, NamespaceId, RunGeneration, RunKey,
+        },
+    };
+    let root = bytes(&r"E:\comfyui".encode_utf16().collect::<Vec<_>>());
+    let interpreter = bytes(&r"E:\python.exe".encode_utf16().collect::<Vec<_>>());
+    let original =
+        managed_view(&root, &interpreter, &[], 0, "ja").map_err(|cause| cause as Box<dyn Error>)?;
+    let projected = fields(original).map_err(|cause| cause as Box<dyn Error>)?;
+    assert_eq!(projected.locale.as_str(), "ja");
+    let owner = CoordinatorKey {
+        namespace: NamespaceId::new([1; 32]),
+        epoch: CoordinatorEpoch::new([2; 16])?,
+    };
+    let run = RunKey { owner, instance: InstanceId::new(3)?, generation: RunGeneration::new(4)? };
+    let binding = ReportBinding::new(
+        IncidentKey::new(IncidentSubject::Desktop(run)),
+        IncidentRevision::new(1)?,
+        ReportSessionId::new(1)?,
+    );
+    let mut receiving = super::super::incident_reporting::IncidentReporting::new();
+    assert!(receiving.view_work(binding).is_err());
+    receiving.configure_locale(projected.locale)?;
+    let ReportingWork::View { binding: actual, locale } = receiving.view_work(binding)? else {
+        return Err("Report view work changed kind".into());
+    };
+    assert_eq!(actual, binding);
+    assert_eq!(locale, "ja");
+    assert!(receiving.configure_locale(LocaleId::new("en")?).is_err());
+    assert!(matches!(receiving.view_work(binding), Ok(ReportingWork::View { locale: "ja", .. })));
     Ok(())
 }

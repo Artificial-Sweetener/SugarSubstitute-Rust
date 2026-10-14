@@ -17,6 +17,7 @@ pub static EN: ReportMessages = ReportMessages {
     archive_filter: "Report and memory dump (*.zip)",
     save: "Save",
     cancel: "Cancel",
+    overwrite_destination: "Replace an existing file at the selected destination",
     copied: "Report copied.",
     exported: "Report exported.",
     copy_failed: "Could not copy the report.",

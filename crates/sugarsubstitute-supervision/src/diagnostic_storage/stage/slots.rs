@@ -32,7 +32,7 @@ pub(in crate::diagnostic_storage) fn reserve_stage(
 ) -> Result<u64, DiagnosticStorageError> {
     let namespace = state.data_mut()?.namespace;
     if !state.data_mut()?.writer
-        || state.data_mut()?.stages.len() >= DIAGNOSTIC_STAGE_BOUND
+        || state.data_mut()?.stage_slots() >= DIAGNOSTIC_STAGE_BOUND
         || state.data_mut()?.live_handles() >= DIAGNOSTIC_HANDLE_BOUND
         || object.namespace().is_some_and(|value| Some(value) != namespace)
     {
@@ -60,6 +60,7 @@ pub(in crate::diagnostic_storage) fn reserve_stage(
         recovery_predecessor: None,
         role: Some(role),
         activated: false,
+        genesis: None,
     });
     Ok(id)
 }

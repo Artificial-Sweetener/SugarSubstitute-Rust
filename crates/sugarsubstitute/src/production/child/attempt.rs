@@ -125,7 +125,9 @@ impl ProductionChild {
     }
     /// Observe each actual finite owner before requesting the matching backend settlement.
     pub(super) fn advance_attempt(&mut self) -> Result<()> {
-        let Some(attempt) = &self.attempt else { return Ok(()) };
+        let Some(attempt) = &self.attempt else {
+            return Ok(());
+        };
         if attempt.complete() || attempt.failures.iter().any(Option::is_some) {
             return Ok(());
         }

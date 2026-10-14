@@ -125,7 +125,7 @@ impl CaptureBundleRetention {
     /// # Errors
     /// Rejects terminal/cancelled/expired original admission; retained pins stay owned.
     pub fn check_effect(&self) -> Result<(), sugarsubstitute_contracts::execution::AdmissionError> {
-        self.owner.original.original().check_effect()
+        self.owner.capture.check_effect()
     }
     /// Retire every existing actual output using the same borrowed cleanup proof.
     /// # Errors
@@ -144,23 +144,10 @@ impl CaptureBundleRetention {
         &mut self,
         proof: &CaptureBundleRetirement,
     ) -> Result<(), ClaimError> {
-        if !proof.matches_origin(self.original_origin()) {
-            return Err(missing());
-        }
-        self.owner.original.close().map_err(ClaimError::capture_allocation)?;
-        let fields = self.owner.fields.as_mut().ok_or_else(missing)?;
-        for file in fields.files.iter_mut().flatten() {
-            file.retire_selected(proof)?;
-        }
-        for cell in fields.directories.iter_mut().flatten() {
-            cell.handle.close_selected(proof, &mut cell.causes)?;
-        }
-        if let Some(token) = fields.token.as_mut() {
-            token.handle.close_selected(proof, &mut token.causes)?;
-        }
-        if let Some(crypto) = fields.crypto.as_mut() {
-            crypto.retire_capture(proof)?;
-        }
-        Ok(())
+        retire_fields(
+            self.owner.fields.as_mut(),
+            self.owner.allocation.as_ref().map(SharedCaptureLoan::original),
+            &crate::installed_release::SelectedRetirement::Capture(proof),
+        )
     }
 }

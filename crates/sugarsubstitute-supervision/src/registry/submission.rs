@@ -228,6 +228,7 @@ impl WindowsProcessRegistry {
             started: false,
             settled: false,
             error: None,
+            failure_transferred: false,
             unread: [false; 5],
         };
         self.next_process = next;

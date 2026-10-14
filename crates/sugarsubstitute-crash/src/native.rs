@@ -15,9 +15,13 @@ use sugarsubstitute_execution::windows_capture_attach::{
 
 mod bridge;
 mod capture;
+pub(crate) mod committed_parser;
 pub(crate) mod desktop_driver;
+pub(crate) mod finished_report;
+pub(crate) mod incident_utc;
 mod module_pin;
 mod pins;
+pub(crate) mod symbol_provider;
 
 pub(crate) const CALLBACK_PIN_BYTES: usize = 64 * 1024;
 pub(crate) type WatchJob = OwnedJob<ProcessExit, NativeObservationError>;
@@ -26,6 +30,13 @@ pub(crate) struct BindFailed {
     pub(crate) cause: CrashError,
 }
 pub(crate) trait CaptureLease: Send {
+    fn prepare_finished(
+        &mut self,
+        report: &mut crate::incident::CapturedReport,
+        storage: &mut sugarsubstitute_supervision::diagnostic_storage::DiagnosticStorage,
+        operation: &sugarsubstitute_supervision::diagnostic_storage::DiagnosticStorageOperation,
+        context: &JobContext,
+    ) -> Result<(), crate::incident::IncidentStoreError>;
     fn start(
         &mut self,
         input: CaptureStartInput,
@@ -80,3 +91,5 @@ pub(crate) fn current_clock_observer() -> u32 {
     // SAFETY: This metadata-only Win32 call has no arguments or retained outputs.
     unsafe { windows::Win32::System::Threading::GetCurrentThreadId() }
 }
+
+pub(crate) mod report_export;

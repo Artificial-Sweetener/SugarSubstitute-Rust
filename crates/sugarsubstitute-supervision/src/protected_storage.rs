@@ -10,8 +10,9 @@
 //! Crashpad database contents remain opaque preserved external authoritative data.
 
 pub(crate) mod account;
-mod diagnostic;
-mod directories;
+pub(crate) mod capture_read;
+pub(crate) mod diagnostic;
+pub(crate) mod directories;
 pub(crate) mod exclusion;
 mod generation;
 mod leaf;
@@ -60,6 +61,7 @@ struct State {
     execution: Option<ExecutionId>,
     start_deadline: Option<Moment>,
     close_deadline: Option<Moment>,
+    readers: capture_read::pin::ReadPins,
 }
 
 /// Own actual protected root/generation handles and their admitted storage.
@@ -79,6 +81,9 @@ pub struct ProtectedStorageGeneration {
     pub(crate) database: PathBuf,
     pub(crate) metrics: PathBuf,
     pub(crate) ready: bool,
+    coordinator: CoordinatorKey,
+    slots: [usize; 2],
+    identities: [[u8; 24]; 2],
 }
 impl ProtectedStorageGeneration {
     /// Borrow the canonical newly created generation name while its proof lives.
@@ -103,6 +108,8 @@ impl ProtectedStorageRoot {
             .size();
         let bytes = std::alloc::Layout::new::<State>()
             .size()
+            .checked_add(capture_read::pin::ReadPins::control_bytes())
+            .ok_or(files::NativeLayoutFailure::Overflow)?
             .checked_add(cells)
             .ok_or(files::NativeLayoutFailure::Overflow)?;
         Ok(files::NativeRoleLayout { retained: bytes, peak: bytes })
@@ -149,6 +156,7 @@ impl ProtectedStorageRoot {
         Self {
             state: Some(Box::new(State {
                 handles: Vec::new(),
+                readers: capture_read::pin::ReadPins::new(budget.clone()),
                 budget,
                 sid: NativeSid::Ordinary(Vec::new()),
                 root: None,
@@ -201,7 +209,9 @@ impl ProtectedStorageRoot {
     }
     /// Observe whether all actual handles were successfully retired.
     pub fn is_retired(&self) -> bool {
-        self.state.as_ref().is_none_or(|state| state.handles.is_empty())
+        self.state
+            .as_ref()
+            .is_none_or(|state| state.handles.is_empty() && state.readers.count() == 0)
     }
     /// Close retained handles under the first latched cleanup deadline; preserve directories.
     ///
@@ -212,6 +222,10 @@ impl ProtectedStorageRoot {
         if let Some(state) = &mut self.state {
             if !state.budget.is_ordinary() {
                 return Err(state.budget.rejection("diagnostic_cleanup_requires_binding"));
+            }
+            state.readers.close();
+            if state.readers.count() != 0 {
+                return Err(state.budget.rejection("capture_read_source_busy"));
             }
             bind_context(state, context, true)?;
             check(context)?;

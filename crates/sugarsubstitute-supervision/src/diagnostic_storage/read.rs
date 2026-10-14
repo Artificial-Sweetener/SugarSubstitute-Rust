@@ -93,10 +93,10 @@ fn reserve(
     object: Option<DiagnosticObject>,
     candidate: Option<(DiagnosticEntryClass, [u8; 32])>,
 ) -> Result<u64, DiagnosticStorageError> {
-    if state.data_mut()?.namespace.is_none() {
+    if state.data_mut()?.namespace.is_none() || state.data_mut()?.capture.is_some() {
         return Err(error(key, Code::Closed));
     }
-    if state.data_mut()?.reads.len() >= DIAGNOSTIC_READ_BOUND {
+    if state.data_mut()?.reads.len() + state.data_mut()?.capture_reads >= DIAGNOSTIC_READ_BOUND {
         return Err(error(key, Code::Capacity));
     }
     let id = next_lease(state, key)?;
@@ -172,6 +172,9 @@ impl DiagnosticReadLease {
     ) -> Result<(), DiagnosticStorageError> {
         let mut state = StateAccess::acquire(&self.shared, self.operation);
         check(&mut state, self.operation, context, false)?;
+        if capture_intent::pins(state.data_mut()?, self.id) {
+            return Err(error(self.operation, Code::Busy));
+        }
         let namespace =
             state.data_mut()?.namespace.ok_or_else(|| error(self.operation, Code::Closed))?;
         if object.namespace().is_some_and(|actual| actual != namespace) {
@@ -253,6 +256,7 @@ impl DiagnosticReadLease {
         };
         if summary_migration::intent::pins_read(&mut state, self.id)?
             || payload_discard::intent::pins_read(&mut state, self.id)?
+            || capture_intent::pins(state.data_mut()?, self.id)
         {
             return Err(error(self.operation, Code::Busy));
         }

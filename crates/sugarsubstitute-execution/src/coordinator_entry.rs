@@ -38,6 +38,10 @@ pub(crate) use port::{EntryLease, KernelPeer, Progress};
 pub(crate) use protocol::launch_payload as startup_launch_payload;
 pub(crate) use startup_snapshot::StartupAdmissionBinding;
 pub use startup_snapshot::{PreparedStartupSnapshot, StartupSnapshotRejection};
+mod registered_startup;
+pub use registered_startup::{
+    REGISTERED_STARTUP_BYTES, RegisteredRestartAdmission, RegisteredStartupSource,
+};
 use state::{Command, Connection, Reply, RequestRoute, Shared, State};
 use std::sync::{Arc, Mutex, Weak};
 use sugarsubstitute_contracts::execution::{JobContext, Moment};

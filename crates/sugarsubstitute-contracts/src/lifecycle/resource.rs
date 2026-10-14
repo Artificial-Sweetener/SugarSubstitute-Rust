@@ -19,7 +19,20 @@ pub enum BackendTarget {
     /// Externally owned server; only disconnect is permitted.
     Attached(LoopbackOrigin),
 }
-/// Report an authenticated client binding from the trusted adapter entry point.
+/// Reserve immutable startup identities before native child initialization.
+///
+/// Enrollment carries data only. It authenticates no peer and grants no resource
+/// request, readiness, process or connection authority.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RunEnrollment {
+    /// Current coordinator-scoped desktop generation.
+    pub run: RunKey,
+    /// Existing startup attempt identity.
+    pub launch: LaunchId,
+    /// Exclusive browser profile retained until actual settlement.
+    pub profile: ProfileId,
+}
+/// Report an authenticated client binding for an already enrolled run.
 ///
 /// These facts do not authenticate themselves; never decode this as browser data.
 #[derive(Clone, Debug, PartialEq, Eq)]

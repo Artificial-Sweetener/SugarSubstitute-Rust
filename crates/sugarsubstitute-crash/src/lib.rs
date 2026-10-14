@@ -19,7 +19,7 @@ mod native;
 #[cfg(windows)]
 pub use capture::{
     CaptureBootstrapRejection, CaptureBuildIdentity, CaptureCreator, CaptureSnapshot,
-    CaptureUpdates, StartRejected, WindowsCrashCapture,
+    CaptureUpdates, FinishedCaptureSource, StartRejected, WindowsCrashCapture,
 };
 pub use error::{CrashAdmissionError, CrashError};
 pub use input::CaptureStartInput;
@@ -32,3 +32,6 @@ pub mod report_view;
 
 /// Bounded diagnostic schema1 frames, replay and actual transport loan routing.
 pub mod diagnostic_client;
+
+#[cfg(windows)]
+pub mod report_export;

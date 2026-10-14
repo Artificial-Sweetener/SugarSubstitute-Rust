@@ -79,12 +79,18 @@ fn failed_resource_diagnostic_borrows_the_original_source_cause_after_policy_ado
     let run =
         RunKey { owner: key()?, instance: InstanceId::new(1)?, generation: RunGeneration::new(1)? };
     let connection = ConnectionId::new(1)?;
-    owner.register_run(ClientRegistration {
+    let peer_registration = ClientRegistration {
         run,
         connection,
         launch: sugarsubstitute_contracts::startup::LaunchId::new(1)?,
         profile: sugarsubstitute_contracts::configuration::ProfileId::new("Diagnostic_1".into())?,
+    };
+    owner.policy.enroll_run(sugarsubstitute_contracts::lifecycle::RunEnrollment {
+        run: peer_registration.run,
+        launch: peer_registration.launch,
+        profile: peer_registration.profile.clone(),
     })?;
+    owner.register_run(peer_registration)?;
     let transition = owner.policy.request(
         ClientBinding { run, connection },
         ResourceRequest {
@@ -177,12 +183,18 @@ fn unavailable_authority_preserves_input_and_both_identity_sequences() -> Result
     let run =
         RunKey { owner: key()?, instance: InstanceId::new(1)?, generation: RunGeneration::new(1)? };
     let connection = ConnectionId::new(1)?;
-    owner.register_run(ClientRegistration {
+    let peer_registration = ClientRegistration {
         run,
         connection,
         launch: sugarsubstitute_contracts::startup::LaunchId::new(1)?,
         profile: sugarsubstitute_contracts::configuration::ProfileId::new("Backend_1".into())?,
+    };
+    owner.policy.enroll_run(sugarsubstitute_contracts::lifecycle::RunEnrollment {
+        run: peer_registration.run,
+        launch: peer_registration.launch,
+        profile: peer_registration.profile.clone(),
     })?;
+    owner.register_run(peer_registration)?;
     let target = BackendTarget::Attached(LoopbackOrigin::parse("http://127.0.0.1:8188", 8188)?);
     let path = std::path::PathBuf::from(r"D:\SugarSubstitute-Rust\artifacts\unopened-input");
     let mut input = Some(BackendPreparation {

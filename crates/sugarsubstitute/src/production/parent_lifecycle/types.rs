@@ -41,6 +41,8 @@ pub(crate) enum ParentError {
     ForeignPeer,
     IdentityExhausted,
     OwnerFailed,
+    /// Original failure of this exact child pipe after actual checked native terminal adoption.
+    DesktopStopped,
 }
 impl fmt::Display for ParentError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -48,6 +50,13 @@ impl fmt::Display for ParentError {
     }
 }
 impl std::error::Error for ParentError {}
+
+/// Classify this actual activity turn at its owning boundary, independently of exit facts.
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(super) enum ParentActivityFailureOrigin {
+    Coordinator,
+    DesktopPipeTerminal,
+}
 
 #[derive(Clone, Copy)]
 pub(super) enum Reply {

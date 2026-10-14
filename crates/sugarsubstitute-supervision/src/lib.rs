@@ -17,7 +17,9 @@ mod arguments;
 mod command;
 mod errors;
 mod release_selection;
-pub use release_selection::{CaptureSelectionRequest, InstalledReleaseOwner};
+pub use release_selection::{
+    CaptureSelectionRequest, InstalledReleaseOwner, SymbolSelectionRequest,
+};
 
 #[cfg(windows)]
 mod claim_error;
@@ -28,6 +30,8 @@ mod claims;
 #[cfg(all(windows, feature = "boundary-fixtures"))]
 #[doc(hidden)]
 pub use claims::boundary_fixture as claim_boundary_fixture;
+#[cfg(windows)]
+pub mod committed_reader;
 #[cfg(windows)]
 pub mod coordinator_entry;
 #[cfg(windows)]
@@ -92,7 +96,7 @@ pub use native_claims::backend_custody::{
     BackendCustodyDriverInputError, BackendCustodyFailure, BackendCustodySource,
 };
 #[cfg(windows)]
-pub use registry::WindowsProcessRegistry;
+pub use registry::{SettledRegistryFailure, WindowsProcessRegistry};
 #[cfg(windows)]
 pub use registry_error::{RegistryAdmissionError, RegistryError, RegistryInputError};
 #[cfg(windows)]

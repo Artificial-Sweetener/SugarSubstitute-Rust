@@ -87,12 +87,18 @@ fn queued_output(check: impl FnOnce(&CoordinatorBackend, ResourceKey) -> Result<
         generation: RunGeneration::new(1)?,
     };
     let binding = ClientBinding { run, connection: ConnectionId::new(1)? };
-    owner.register_run(ClientRegistration {
+    let peer_registration = ClientRegistration {
         run,
         connection: binding.connection,
         launch: sugarsubstitute_contracts::startup::LaunchId::new(1)?,
         profile: sugarsubstitute_contracts::configuration::ProfileId::new("QueuedOutput_1".into())?,
+    };
+    owner.policy.enroll_run(sugarsubstitute_contracts::lifecycle::RunEnrollment {
+        run: peer_registration.run,
+        launch: peer_registration.launch,
+        profile: peer_registration.profile.clone(),
     })?;
+    owner.register_run(peer_registration)?;
     let root = std::env::current_dir()?;
     let target =
         BackendTarget::Managed(sugarsubstitute_contracts::configuration::LaunchConfiguration::new(

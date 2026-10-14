@@ -9,7 +9,9 @@ impl ChildChannel {
     /// # Errors
     /// Preserves malformed frame decoding causes without transferring received custody.
     pub(in super::super) fn received_header(&self) -> Result<Option<WireHeader>> {
-        let Some(frame) = &self.received else { return Ok(None) };
+        let Some(frame) = &self.received else {
+            return Ok(None);
+        };
         Ok(Some(FrameCodec::decode(frame.as_bytes())?.header))
     }
 

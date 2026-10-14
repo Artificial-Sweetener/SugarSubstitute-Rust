@@ -29,6 +29,7 @@ pub(crate) enum NativePhase<'a> {
         current: &'a JobContext,
         scratch: &'a mut DiagnosticNativeScratchLoan,
         causes: &'a mut NativeCauseDestinations,
+        source: Option<super::capture_read::pin::ReadPins>,
     },
 }
 impl<'origin> NativePhase<'origin> {
@@ -68,10 +69,31 @@ impl<'origin> NativePhase<'origin> {
                     causes: std::cell::RefCell::new(causes),
                 })
             }
-            Self::Diagnostic { original, current, scratch, .. } => {
+            Self::Diagnostic { original, current, scratch, source, .. } => {
                 causes.matches_original(original)?;
-                Ok(NativePhase::Diagnostic { original, current, scratch, causes })
+                Ok(NativePhase::Diagnostic {
+                    original,
+                    current,
+                    scratch,
+                    causes,
+                    source: source.as_ref().map(super::capture_read::pin::ReadPins::borrow),
+                })
             }
+        }
+    }
+    /// Bind the actual retained source pin while current buffers/causes stay charged.
+    /// Only the protected capture receiver can supply this constructor-private pin.
+    pub(in crate::protected_storage) fn capture_source(
+        &mut self,
+        pin: &super::capture_read::pin::ReadPin,
+    ) -> Result<(), ClaimError> {
+        self.check()?;
+        match self {
+            Self::Diagnostic { source, .. } if pin.open() => {
+                *source = Some(pin.fence());
+                Ok(())
+            }
+            _ => Err(ClaimError::invalid("native_phase_source_origin")),
         }
     }
     /// Borrow an ordinary owner only after excluding every closed diagnostic origin.
@@ -93,6 +115,11 @@ impl<'origin> NativePhase<'origin> {
             }
             (Self::Diagnostic { original, .. }, Budget::Diagnostic(current))
                 if original.matches_original(current) =>
+            {
+                self.check()
+            }
+            (Self::Diagnostic { source: Some(pin), .. }, source)
+                if pin.matches_budget(source) && pin.open() =>
             {
                 self.check()
             }

@@ -96,6 +96,9 @@ impl CoordinatorEntryOwner {
         let job = client
             .submit_blocking(cleanup, spec, move |context| {
                 let mut state = lock(&shared.state);
+                if state.borrowed {
+                    return Err(ClaimError::invalid("entry_namespace_borrowed"));
+                }
                 port.close(&mut state, &context)?;
                 if !state.retired
                     || state.election.is_some()

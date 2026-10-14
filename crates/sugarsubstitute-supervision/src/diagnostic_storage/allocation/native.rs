@@ -22,6 +22,11 @@ pub(crate) struct DiagnosticNativeGrant {
 pub(crate) struct DiagnosticNativeOwnerLoan {
     _allocation: DiagnosticAllocationLoan,
 }
+impl DiagnosticNativeOwnerLoan {
+    pub(in crate::diagnostic_storage) fn matches_loan(&self, other: &Self) -> bool {
+        self._allocation.owner.same(&other._allocation.owner)
+    }
+}
 /// Retain a complete checked native path destination.
 pub(crate) struct DiagnosticNativeNameLoan {
     _allocation: DiagnosticAllocationLoan,
@@ -81,6 +86,10 @@ pub(crate) struct DiagnosticNativeCauseLoan {
 #[derive(Clone, Copy)]
 pub(super) enum NativeRole {
     RootOwner,
+    CaptureReadOwner,
+    FinishedOwner,
+    FinishedRustOwner,
+    CaptureRetirementError,
     StreamingOwner,
     NativeFileOwner,
     NamespaceControl,
@@ -97,6 +106,21 @@ pub(super) enum NativeRole {
 impl NativeRole {
     pub(super) fn layout(self) -> Result<NativeRoleLayout, NativeLayoutFailure> {
         match self {
+            Self::CaptureRetirementError => Ok(NativeRoleLayout {
+                retained: super::super::capture_intent::CAPTURE_RETIREMENT_ERROR_BYTES,
+                peak: super::super::capture_intent::CAPTURE_RETIREMENT_ERROR_BYTES,
+            }),
+            Self::FinishedRustOwner => Ok(NativeRoleLayout {
+                retained: super::super::finished_owner::FINISHED_RUST_STORAGE_BYTES,
+                peak: super::super::finished_owner::FINISHED_RUST_STORAGE_BYTES,
+            }),
+            Self::FinishedOwner => Ok(NativeRoleLayout {
+                retained: super::super::finished_owner::FINISHED_OWNER_STORAGE_BYTES,
+                peak: super::super::finished_owner::FINISHED_OWNER_STORAGE_BYTES,
+            }),
+            Self::CaptureReadOwner => {
+                crate::protected_storage::capture_read::CaptureReadOwner::layout()
+            }
             Self::RootOwner => ProtectedStorageRoot::diagnostic_owner_layout(),
             Self::StreamingOwner => StreamingPort::diagnostic_owner_layout(),
             Self::NativeFileOwner => NativeFile::diagnostic_owner_layout(),
@@ -135,6 +159,55 @@ impl DiagnosticAllocationOwner {
     }
 }
 impl DiagnosticNativeGrant {
+    pub(in crate::diagnostic_storage) fn capture_retirement_error(
+        &self,
+    ) -> Result<DiagnosticNativeOwnerLoan, DiagnosticNativeAllocationFailure> {
+        Ok(DiagnosticNativeOwnerLoan {
+            _allocation: self.original.native_metadata(NativeRole::CaptureRetirementError)?,
+        })
+    }
+    pub(crate) fn bind_capture_source(
+        &self,
+        source: crate::protected_storage::capture_read::pin::ReadPins,
+        context: &JobContext,
+    ) -> Result<(), DiagnosticNativeAllocationFailure> {
+        self.check(context)?;
+        self.original.bind_capture_source(source)
+    }
+
+    /// Admit the source-owned fixed C++ envelope under the same actual operation.
+    pub(crate) fn finished_owner(
+        &self,
+        current: &JobContext,
+    ) -> Result<DiagnosticNativeOwnerLoan, DiagnosticNativeAllocationFailure> {
+        Ok(DiagnosticNativeOwnerLoan {
+            _allocation: self.current(NativeRole::FinishedOwner, current)?,
+        })
+    }
+    /// Admit the separate concrete Rust bridge envelope under the same operation.
+    pub(crate) fn finished_rust_owner(
+        &self,
+        current: &JobContext,
+    ) -> Result<DiagnosticNativeOwnerLoan, DiagnosticNativeAllocationFailure> {
+        Ok(DiagnosticNativeOwnerLoan {
+            _allocation: self.current(NativeRole::FinishedRustOwner, current)?,
+        })
+    }
+    pub(crate) fn capture_read_owner(
+        &self,
+    ) -> Result<DiagnosticNativeOwnerLoan, DiagnosticNativeAllocationFailure> {
+        self.metadata(NativeRole::CaptureReadOwner)
+    }
+
+    pub(crate) fn bind_namespace(
+        &self,
+        request: &ProtectedDiagnosticWriteRequest,
+        current: &JobContext,
+    ) -> Result<(), DiagnosticNativeAllocationFailure> {
+        self.check(current)?;
+        self.original.bind_namespace(request)
+    }
+
     pub(in crate::diagnostic_storage) fn matches_allocation(
         &self,
         owner: &DiagnosticAllocationOwner,
@@ -344,6 +417,10 @@ pub(crate) struct DiagnosticNativeAllocationFailure {
     pub(crate) storage_after: Option<Code>,
 }
 impl DiagnosticNativeAllocationFailure {
+    pub(crate) const fn namespace_rejected() -> Self {
+        Self::rejected(None, Code::InvalidIdentity)
+    }
+
     pub(in crate::diagnostic_storage) const fn rejected(
         operation: Option<LogicalStoreOperationKey>,
         code: Code,

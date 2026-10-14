@@ -111,7 +111,9 @@ impl ChildChannel {
         let next =
             latest.checked_add(1).ok_or("Lifecycle transport operation identity exhausted")?;
         let operation = LifecyclePipeOperationId::new(next)?;
-        let Some(mut buffer) = session.control.take_write_buffer()? else { return Ok(false) };
+        let Some(mut buffer) = session.control.take_write_buffer()? else {
+            return Ok(false);
+        };
         let bytes = FrameCodec::encode(message, buffer.as_mut_bytes())?;
         match session.control.write(operation, original, buffer, bytes) {
             Ok(admission) => {

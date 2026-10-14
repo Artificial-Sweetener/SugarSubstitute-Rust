@@ -97,6 +97,7 @@ impl EffectContext {
 pub(crate) struct ResourceRecord {
     pub(crate) bundle_issued: bool,
     pub(crate) reader_issued: bool,
+    pub(crate) provider_issued: bool,
     pub(crate) scope_id: ScopeId,
     pub(crate) observation: NativeHandleObservation,
 }
@@ -172,6 +173,7 @@ pub(crate) fn output_custody(state: &State) -> Vec<crate::NativeOutputCustody> {
             })
         })
         .collect::<Vec<_>>();
+    retained.extend(crate::report_export::resources::output_custody(state));
     retained.sort_unstable_by_key(|row| (row.original_scope_id, row.original_job_id));
     retained
 }

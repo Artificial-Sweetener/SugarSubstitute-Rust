@@ -70,6 +70,7 @@ impl IncidentCoordinator {
             restart_requested: false,
             restart_forwarded: false,
             first_failure: None,
+            report_admission_failure: None,
         };
         match key.subject() {
             IncidentSubject::Desktop(run) => resources.admit_incident_seed(run)?,

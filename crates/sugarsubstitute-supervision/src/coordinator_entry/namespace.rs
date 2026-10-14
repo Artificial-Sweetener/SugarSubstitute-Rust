@@ -28,6 +28,7 @@ pub(super) struct NativeState {
     pub(super) memory: Option<Arc<MemoryClaim>>,
     pub(super) close_deadline: Option<Moment>,
     pub(super) retired: bool,
+    pub(super) borrowed: bool,
 }
 impl NativeState {
     pub(super) fn new() -> Self {
@@ -42,6 +43,7 @@ impl NativeState {
             memory: None,
             close_deadline: None,
             retired: false,
+            borrowed: false,
         }
     }
 }

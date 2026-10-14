@@ -4,6 +4,70 @@
 use super::support::*;
 
 #[test]
+fn report_view_reads_have_unique_original_scopes_without_changing_mutation_state() -> TestResult {
+    let mut ready = ready(1)?;
+    let before = ready.coord.snapshot(ready.seed.key()).ok_or("No snapshot")?;
+    let first = ready.coord.admit_report_view(ready.binding, context(3, 102)?)?;
+    let second = ready.coord.admit_report_view(ready.binding, context(4, 103)?)?;
+    assert_ne!(first.operation(), second.operation());
+    assert_eq!(first.original(), context(3, 102)?.budget());
+    assert_eq!(second.original(), context(4, 103)?.budget());
+    assert_eq!(ready.coord.snapshot(ready.seed.key()), Some(before));
+    let effects = ready.coord.observe(IncidentServiceObservation::ReporterPresented {
+        binding: ready.binding,
+        context: context(5, 104)?,
+    })?;
+    assert!(matches!(effects.iter().next(), Some(IncidentEffect::RecordAttempt { .. })));
+    assert_eq!(
+        ready.coord.admit_report_view(ready.binding, context(6, 105)?),
+        Err(IncidentDecisionError::WrongPhase)
+    );
+    Ok(())
+}
+
+#[test]
+fn report_view_read_rejects_stale_binding_without_consuming_operation() -> TestResult {
+    let mut ready = ready(1)?;
+    let old = ready.binding;
+    present(&mut ready)?;
+    let operation = ready.coord.next_operation;
+    assert_eq!(
+        ready.coord.admit_report_view(old, context(6, 105)?),
+        Err(IncidentDecisionError::StaleOperation)
+    );
+    assert_eq!(ready.coord.next_operation, operation);
+    Ok(())
+}
+
+#[test]
+fn export_view_read_preserves_the_original_pending_export_and_cutoff() -> TestResult {
+    let mut ready = ready(1)?;
+    present(&mut ready)?;
+    let IncidentReportDecision::Effects(effects) = ready.coord.report_action(
+        ReportCommand::new(ready.binding, ReportAction::Export(ExportSelection::TextOnly)),
+        context(4, 103)?,
+    )?
+    else {
+        return Err("No export".into());
+    };
+    let scope = match effects.iter().next() {
+        Some(IncidentEffect::Export { scope, .. }) => *scope,
+        _ => return Err("No export".into()),
+    };
+    let read = ready.coord.admit_report_view(ready.binding, context(4, 103)?)?;
+    assert_ne!(read.operation(), scope.operation());
+    assert_eq!(read.original(), scope.original());
+    assert_eq!(
+        ready.coord.snapshot(ready.seed.key()).ok_or("No snapshot")?.current_operation,
+        Some(scope)
+    );
+    ready
+        .coord
+        .observe(IncidentServiceObservation::ExportFinished { scope, binding: ready.binding })?;
+    Ok(())
+}
+
+#[test]
 fn presented_cas_fences_old_commands_until_actual_same_session_refresh() -> TestResult {
     let mut ready = ready(1)?;
     let old = ready.binding;

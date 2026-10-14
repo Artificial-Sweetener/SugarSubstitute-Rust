@@ -17,6 +17,7 @@ pub static ES: ReportMessages = ReportMessages {
     archive_filter: "Informe y volcado de memoria (*.zip)",
     save: "Guardar",
     cancel: "Cancelar",
+    overwrite_destination: "Reemplazar un archivo existente en el destino seleccionado",
     copied: "Informe copiado.",
     exported: "Informe exportado.",
     copy_failed: "No se pudo copiar el informe.",

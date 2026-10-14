@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain stable exclusion files independently of each owner's record policy.
 pub(crate) mod operation;
+mod reader;
 use super::{
     native_file::NativeCauseDestinations,
     native_name::{NativeName, NativeSid},
@@ -101,14 +102,19 @@ impl<const N: usize> HeldFile<N> {
             fixture_receipt: None,
         });
         let held = retained.as_mut().ok_or_else(|| phase.invalid("missing_claim"))?;
-        let result = held.acquire(phase, mode);
+        let (disposition, expected_inode) = match mode {
+            ExclusionOpen::CreateOrOpen => (OPEN_ALWAYS, None),
+            ExclusionOpen::Existing(original) => (OPEN_EXISTING, Some(original)),
+        };
+        let result = held.acquire(phase, disposition, expected_inode);
         phase.post_current_for(result, &mut held.causes)
     }
 
     fn acquire(
         &mut self,
         phase: &mut NativePhase<'_>,
-        mode: ExclusionOpen,
+        disposition: FILE_CREATION_DISPOSITION,
+        expected_inode: Option<[u8; 24]>,
     ) -> Result<(), ClaimError> {
         let mut phase = phase.for_causes(&mut self.causes)?;
         let producing =
@@ -123,16 +129,15 @@ impl<const N: usize> HeldFile<N> {
                 FILE_GENERIC_READ.0 | FILE_GENERIC_WRITE.0,
                 FILE_SHARE_READ | FILE_SHARE_WRITE,
                 attributes.as_ref().map(std::ptr::from_ref),
-                match mode {
-                    ExclusionOpen::CreateOrOpen => OPEN_ALWAYS,
-                    ExclusionOpen::Existing(_) => OPEN_EXISTING,
-                },
+                disposition,
                 FILE_FLAG_OPEN_REPARSE_POINT,
                 None,
             )
         };
         // SAFETY: Read the current thread's creation disposition immediately.
-        let created = raw.is_ok() && unsafe { GetLastError() } != ERROR_ALREADY_EXISTS;
+        let created = disposition != OPEN_EXISTING
+            && raw.is_ok()
+            && unsafe { GetLastError() } != ERROR_ALREADY_EXISTS;
         if let Ok(raw) = &raw {
             self.handle.adopt_output(*raw);
         }
@@ -143,7 +148,7 @@ impl<const N: usize> HeldFile<N> {
         })?;
         paths::validate_regular(&self.handle, Some(0), &mut phase)?;
         security::verify(&self.handle, self.account_sid.bytes()?, &mut phase)?;
-        if let ExclusionOpen::Existing(original) = mode
+        if let Some(original) = expected_inode
             && paths::file_identity(&self.handle, &mut phase)? != original
         {
             return Err(phase.invalid("changed_original_exclusion_inode"));

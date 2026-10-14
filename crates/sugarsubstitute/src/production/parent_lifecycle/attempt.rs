@@ -187,7 +187,9 @@ impl ParentLifecycle {
     /// Retain expired correlation and all native owners while keeping the transport live.
     /// No reply may be admitted after its unchanged cutoff, even if native work settles later.
     pub(super) fn expire_attempt(&mut self, now: Moment) -> Result<bool> {
-        let Some(attempt) = &mut self.attempt_cleanup else { return Ok(false) };
+        let Some(attempt) = &mut self.attempt_cleanup else {
+            return Ok(false);
+        };
         if now < attempt.until {
             return Ok(false);
         }
@@ -255,7 +257,9 @@ impl ParentLifecycle {
         if self.closed {
             return Ok(());
         }
-        let Some(attempt) = &self.attempt_cleanup else { return Ok(()) };
+        let Some(attempt) = &self.attempt_cleanup else {
+            return Ok(());
+        };
         if self.requests.get(attempt.index)?.header != header {
             return Ok(());
         }

@@ -34,7 +34,16 @@ impl Record {
         std::str::from_utf8(&self.pdb[..self.pdb_len]).map_err(|_| missing())
     }
 }
-pub(super) fn select(fields: &mut Fields, origin: &AllocationOrigin) -> Result<(), ClaimError> {
+#[derive(Clone, Copy)]
+pub(super) enum BundlePurpose {
+    Capture,
+    Symbol,
+}
+pub(super) fn select(
+    fields: &mut Fields,
+    origin: &AllocationOrigin,
+    purpose: BundlePurpose,
+) -> Result<(), ClaimError> {
     let anchor = anchor::selected().ok_or_else(|| {
         fields.causes[0].as_mut().map_or_else(missing, |causes| {
             causes.error(
@@ -79,7 +88,7 @@ pub(super) fn select(fields: &mut Fields, origin: &AllocationOrigin) -> Result<(
         &context,
     )?;
     // Parsing is pure; the original CNG success precedes every label-directed open.
-    let (host, client, handler, facts) = {
+    let (host, capture) = {
         let manifest = Manifest::parse(&fields.manifest).map_err(|cause| {
             fields.causes[3].as_mut().map_or_else(missing, |causes| {
                 causes.selected_error(
@@ -103,15 +112,6 @@ pub(super) fn select(fields: &mut Fields, origin: &AllocationOrigin) -> Result<(
             })
         })?;
         let host = manifest.role_pair().ok_or_else(missing)?;
-        let (client, handler) = manifest.capture_pairs().map_err(|cause| {
-            fields.causes[3].as_mut().map_or_else(missing, |causes| {
-                causes.selected_error(
-                    "selected_capture_role",
-                    super::super::CaptureBoundedCause::Manifest(cause),
-                    false,
-                )
-            })
-        })?;
         let leaf = fields
             .current
             .as_ref()
@@ -123,9 +123,31 @@ pub(super) fn select(fields: &mut Fields, origin: &AllocationOrigin) -> Result<(
         if leaf != OsStr::new(host.pe_label) {
             return Err(missing());
         }
-        let facts =
-            CaptureRegistrationFacts::new(manifest.build, client.pe_sha256, handler.pe_sha256)?;
-        (Record::copy(host)?, Record::copy(client)?, Record::copy(handler)?, facts)
+        let capture = match purpose {
+            BundlePurpose::Capture => {
+                let (client, handler) = manifest.capture_pairs().map_err(|cause| {
+                    fields.causes[3].as_mut().map_or_else(missing, |causes| {
+                        causes.selected_error(
+                            "selected_capture_role",
+                            super::super::CaptureBoundedCause::Manifest(cause),
+                            false,
+                        )
+                    })
+                })?;
+                Some((
+                    Record::copy(client)?,
+                    Record::copy(handler)?,
+                    CaptureRegistrationFacts::new(
+                        manifest.build,
+                        client.pe_sha256,
+                        handler.pe_sha256,
+                    )?,
+                ))
+            }
+            BundlePurpose::Symbol => None,
+        };
+        let symbol = SymbolRegistrationFacts::new(manifest.build, host)?;
+        (Record::copy(host)?, (capture, symbol))
     };
     files::open(
         fields,
@@ -136,46 +158,51 @@ pub(super) fn select(fields: &mut Fields, origin: &AllocationOrigin) -> Result<(
         host.facts.pdb_length,
     )?;
     files::verify_pair(fields, origin, 0, 3, &host.facts, PeKind::Executable)?;
-    files::open(
-        fields,
-        origin,
-        4,
-        CapturePathRole::ClientImage,
-        Some(client.pe()?),
-        client.facts.pe_length,
-    )?;
-    files::open(
-        fields,
-        origin,
-        5,
-        CapturePathRole::ClientPdb,
-        Some(client.pdb()?),
-        client.facts.pdb_length,
-    )?;
-    files::verify_pair(fields, origin, 4, 5, &client.facts, PeKind::Library)?;
-    files::open(
-        fields,
-        origin,
-        6,
-        CapturePathRole::HandlerImage,
-        Some(handler.pe()?),
-        handler.facts.pe_length,
-    )?;
-    files::open(
-        fields,
-        origin,
-        7,
-        CapturePathRole::HandlerPdb,
-        Some(handler.pdb()?),
-        handler.facts.pdb_length,
-    )?;
-    files::verify_pair(fields, origin, 6, 7, &handler.facts, PeKind::Executable)?;
+    if let Some((client, handler, _)) = &capture.0 {
+        files::open(
+            fields,
+            origin,
+            4,
+            CapturePathRole::ClientImage,
+            Some(client.pe()?),
+            client.facts.pe_length,
+        )?;
+        files::open(
+            fields,
+            origin,
+            5,
+            CapturePathRole::ClientPdb,
+            Some(client.pdb()?),
+            client.facts.pdb_length,
+        )?;
+        files::verify_pair(fields, origin, 4, 5, &client.facts, PeKind::Library)?;
+        files::open(
+            fields,
+            origin,
+            6,
+            CapturePathRole::HandlerImage,
+            Some(handler.pe()?),
+            handler.facts.pe_length,
+        )?;
+        files::open(
+            fields,
+            origin,
+            7,
+            CapturePathRole::HandlerPdb,
+            Some(handler.pdb()?),
+            handler.facts.pdb_length,
+        )?;
+        files::verify_pair(fields, origin, 6, 7, &handler.facts, PeKind::Executable)?;
+    }
     files::ancestors(fields, origin, true)?;
     origin.original().check_effect().map_err(|cause| {
         fields.causes[3]
             .as_mut()
             .map_or_else(missing, |causes| causes.selected_control(cause, false))
     })?;
-    fields.facts = Some(facts);
+    match purpose {
+        BundlePurpose::Capture => fields.facts = capture.0.map(|(_, _, facts)| facts),
+        BundlePurpose::Symbol => fields.symbol_facts = Some(capture.1),
+    }
     Ok(())
 }

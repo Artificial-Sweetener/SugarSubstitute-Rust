@@ -25,6 +25,7 @@ pub(crate) enum Work {
     Async(TaskFactory),
     Blocking(TaskFactory),
     BlockingHeld(TaskFactory),
+    ReportExportPair(Box<crate::report_export::pair::Work>),
     Cpu(Box<dyn FnOnce(JobContext, Moment) -> Box<dyn crate::cpu::CpuWork> + Send>),
 }
 
@@ -43,6 +44,16 @@ pub(crate) struct QueuedJob {
 }
 
 impl QueuedJob {
+    pub(crate) fn queue_slots(&self) -> usize {
+        if matches!(self.work, Work::ReportExportPair(_)) { 2 } else { 1 }
+    }
+    pub(crate) fn stop_reason(&self, now: Moment) -> Option<Stop> {
+        stop_reason_at(&self.context, now).or_else(|| match &self.work {
+            Work::ReportExportPair(pair) => stop_reason_at(&pair.context, now),
+            _ => None,
+        })
+    }
+
     /// Keep actual native work on its sole worker independently of capacity class.
     pub(crate) fn factory_work(&self) -> bool {
         #[cfg(any(windows, test))]
@@ -70,6 +81,22 @@ pub(crate) fn stopped_outcome<T, E>(reason: Stop) -> JobOutcome<T, E> {
 
 pub(crate) fn stop_queued(queued: QueuedJob, reason: Stop) {
     let QueuedJob { context, job, work } = queued;
+    if let Work::ReportExportPair(pair) = work {
+        let crate::report_export::pair::Work { context: receiving, job: receiving_job, factory } =
+            *pair;
+        match catch_unwind(AssertUnwindSafe(|| drop(factory))) {
+            Ok(()) => {
+                job.stop(&context, None, reason);
+                receiving_job.stop(&receiving, None, reason);
+            }
+            Err(payload) => {
+                let cause = panic_cause(payload);
+                job.panicked(&context, context.now(), cause.clone());
+                receiving_job.panicked(&receiving, receiving.now(), cause);
+            }
+        }
+        return;
+    }
     match catch_unwind(AssertUnwindSafe(|| drop(work))) {
         Ok(()) => job.stop(&context, None, reason),
         Err(payload) => job.panicked(&context, context.now(), panic_cause(payload)),

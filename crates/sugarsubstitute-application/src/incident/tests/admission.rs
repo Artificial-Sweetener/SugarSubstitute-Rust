@@ -4,6 +4,82 @@
 use super::support::*;
 
 #[test]
+fn enrolled_seed_commits_before_connection_and_accepts_genuine_early_failed_fact() -> TestResult {
+    let run = run(1)?;
+    let mut coord = IncidentCoordinator::new(owner(2)?);
+    let mut resources = ResourceCoordinator::new(owner(2)?);
+    resources.enroll_run(RunEnrollment {
+        run,
+        launch: sugarsubstitute_contracts::startup::LaunchId::new(1)?,
+        profile: sugarsubstitute_contracts::configuration::ProfileId::new("prelaunch".into())?,
+    })?;
+    let original = seed(run)?;
+    let effects = coord.seed(&mut resources, original.clone(), context(1, 100)?)?;
+    let scope = match effects.iter().next() {
+        Some(IncidentEffect::PublishSeed { scope, .. }) => *scope,
+        _ => return Err("Missing actual seed publication".into()),
+    };
+    let fact = exit(run, None)?.failed_incident()?;
+    assert_eq!(
+        coord.failed_desktop(&mut resources, fact, FailureEvidence::Unexplained, context(2, 101)?),
+        Err(IncidentDecisionError::WrongPhase)
+    );
+    assert!(exit(run, Some(CompletionIntent::Normal))?.failed_incident().is_err());
+    assert!(exit(run, Some(CompletionIntent::StartupCancelled))?.failed_incident().is_err());
+    let mut foreign = run;
+    foreign.owner = owner(3)?;
+    assert_eq!(
+        coord.failed_desktop(
+            &mut resources,
+            exit(foreign, None)?.failed_incident()?,
+            FailureEvidence::Unexplained,
+            context(2, 101)?
+        ),
+        Err(IncidentDecisionError::ForeignNamespace)
+    );
+    coord.observe(IncidentServiceObservation::SeedCommitted { scope, seed: original })?;
+    let effects = coord.failed_desktop(
+        &mut resources,
+        fact,
+        FailureEvidence::Unexplained,
+        context(2, 101)?,
+    )?;
+    assert!(matches!(
+        effects.iter().next(),
+        Some(IncidentEffect::CollectEvidence {
+            attribution: ExitAttribution::Desktop { kind: DesktopExitKind::Unexpected, status: 0 },
+            ..
+        })
+    ));
+    assert!(
+        coord
+            .failed_desktop(&mut resources, fact, FailureEvidence::Unexplained, context(2, 101)?)?
+            .is_empty()
+    );
+    assert_eq!((resources.snapshot().resources, resources.snapshot().leases), (0, 0));
+    Ok(())
+}
+#[test]
+fn disconnected_or_settled_enrollment_cannot_admit_a_new_seed() -> TestResult {
+    let run = run(1)?;
+    let mut resources = ResourceCoordinator::new(owner(2)?);
+    register(&mut resources, run)?;
+    resources.disconnect_run(run, ConnectionId::new(1)?)?;
+    for settled in [false, true] {
+        if settled {
+            resources.settle_run(run)?;
+        }
+        let mut coord = IncidentCoordinator::new(owner(2)?);
+        assert_eq!(
+            coord.seed(&mut resources, seed(run)?, context(1, 100)?),
+            Err(IncidentDecisionError::Lifecycle(LifecycleRejection::WrongPhase))
+        );
+        assert!(coord.snapshot(seed(run)?.key()).is_none());
+    }
+    Ok(())
+}
+
+#[test]
 fn exact_seed_repeats_without_second_effect_changed_content_rejects() -> TestResult {
     let run = run(1)?;
     let seed = seed(run)?;

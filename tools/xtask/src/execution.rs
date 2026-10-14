@@ -15,6 +15,9 @@ use crate::{
     workspace::Workspace,
 };
 
+#[path = "execution_copy_fixture.rs"]
+mod copy_fixture;
+
 /// Register the single implemented scheduler owner; absence forbids scheduling everywhere.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -100,6 +103,24 @@ pub(crate) fn check(
                     "execution: {} accesses private preview owner fixture authority: {}",
                     path.strip_prefix(root).unwrap_or(&path).display(),
                     fixtures.join(", ")
+                ),
+            )?;
+            let imports = copy_fixture::import_findings(root, &path, &source)?;
+            require(
+                imports.is_empty(),
+                format!(
+                    "execution: {} imports test-only Report source outside its exact gated parent: {}",
+                    path.strip_prefix(root).unwrap_or(&path).display(),
+                    imports.join(", ")
+                ),
+            )?;
+            let copy_fixtures = execution_source::report_copy_fixture_findings(&source)?;
+            require(
+                copy_fixtures.is_empty() || copy_fixture::permitted(root, &owner.package, &path)?,
+                format!(
+                    "execution: {} accesses test-only Report request metadata outside its exact gated owner: {}",
+                    path.strip_prefix(root).unwrap_or(&path).display(),
+                    copy_fixtures.join(", ")
                 ),
             )?;
             if !permitted && owner.package != "sugarsubstitute-contracts" {

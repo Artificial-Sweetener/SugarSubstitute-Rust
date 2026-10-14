@@ -7,8 +7,10 @@ use crate::native_claims::files::test_support::{TestResult, capture};
 fn actual_capture_constructor_fits_closed_regions_and_releases_uninvoked_owner() -> TestResult {
     capture(|admission, context| {
         let origin_bytes = admission.into_origin();
-        let (metadata, ingress, scratch) =
-            capacity::regions(&origin_bytes).map_err(ClaimError::capture_allocation)?;
+        let (metadata, ingress, scratch) = capacity::regions(
+            &crate::installed_release::ReleaseAuthority::Capture(origin_bytes.clone()),
+        )
+        .map_err(ClaimError::capture_allocation)?;
         assert!(
             metadata <= METADATA_BYTES,
             "actual compiled metadata {metadata} exceeds {METADATA_BYTES}"

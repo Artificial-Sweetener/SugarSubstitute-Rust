@@ -50,18 +50,24 @@ impl ParentLifecycle {
         if returned_digest != original_digest {
             return Ok(false);
         }
-        let Some(acquisition) = &self.acquisition else { return Ok(false) };
+        let Some(acquisition) = &self.acquisition else {
+            return Ok(false);
+        };
         if until != acquisition.original || now < acquisition.original || acquisition.write_active()
         {
             return Ok(false);
         }
-        let Ok(decoded) = FrameCodec::decode(bytes) else { return Ok(false) };
+        let Ok(decoded) = FrameCodec::decode(bytes) else {
+            return Ok(false);
+        };
         if decoded.header.run != acquisition.header.run
             || decoded.header.connection != acquisition.header.connection
         {
             return Ok(false);
         }
-        let DecodedPayload::Reply(actual) = decoded.payload else { return Ok(false) };
+        let DecodedPayload::Reply(actual) = decoded.payload else {
+            return Ok(false);
+        };
         let original = acquisition.header.request.ok_or(ParentError::WrongPhase)?;
         let index = match purpose {
             WritePurpose::AcquisitionProgress(header) => {

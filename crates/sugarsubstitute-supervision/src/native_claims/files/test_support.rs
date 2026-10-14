@@ -58,8 +58,33 @@ pub(crate) fn completion<T: Send + 'static, E: Send + 'static>(
         }
     }
 }
+/// Run an original paired main without issuing any selected-symbol authority.
 pub(crate) fn admitted(
     work: impl FnOnce(JobContext) -> Result<(), ClaimError> + Send + 'static,
+) -> TestResult {
+    paired(move |_, context| work(context))
+}
+
+/// Issue only the actual running paired main's original selected-symbol admission.
+pub(crate) fn symbol(
+    work: impl FnOnce(
+        sugarsubstitute_execution::SymbolBundleAdmission,
+        JobContext,
+    ) -> Result<(), ClaimError>
+    + Send
+    + 'static,
+) -> TestResult {
+    paired(move |client, context| {
+        let admission = client
+            .symbol_bundle_admission(&context)
+            .map_err(|cause| ClaimError::new("fixture_actual_symbol_admission", cause))?;
+        work(admission, context)
+    })
+}
+
+/// Keep the existing main and unbegun cleanup terminal under one actual execution owner.
+fn paired(
+    work: impl FnOnce(&ExecutionClient, JobContext) -> Result<(), ClaimError> + Send + 'static,
 ) -> TestResult {
     let wake = Arc::new(Wake::default());
     let owner = ExecutionOwner::new(Arc::new(FixedClock), wake.clone())?;
@@ -89,8 +114,11 @@ pub(crate) fn admitted(
             Ok::<_, ClaimError>(())
         })
         .map_err(|rejection| rejection.error)?;
+    let worker = client.clone();
     let mut main = client
-        .submit_symbol_helper(&main_scope, main_spec, &permit, work)
+        .submit_symbol_helper(&main_scope, main_spec, &permit, move |context| {
+            work(&worker, context)
+        })
         .map_err(|rejection| rejection.error)?;
     let main_done = completion(&client, &wake, &mut main);
     // The unbegun cleanup still has one actually owned terminal on every main outcome.

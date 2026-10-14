@@ -10,6 +10,17 @@ pub(crate) fn scope_deadline(
     state: &State,
     record: &Record,
 ) -> Result<Option<Moment>, AdmissionError> {
+    let original = scope_only_deadline(core, state, record)?;
+    let partner = crate::report_export::pair::live(core, state, record)?;
+    Ok(crate::scope::earliest(original, partner))
+}
+
+/// Preserve this actual Main deadline before checking an independent paired role.
+pub(crate) fn scope_only_deadline(
+    core: &Core,
+    state: &State,
+    record: &Record,
+) -> Result<Option<Moment>, AdmissionError> {
     let ancestry = scope_ancestry_deadline(core, state, record)?;
     Ok(crate::scope::earliest(record.deadline, ancestry))
 }

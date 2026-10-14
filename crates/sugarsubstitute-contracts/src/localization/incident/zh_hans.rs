@@ -17,6 +17,7 @@ pub static ZH_HANS: ReportMessages = ReportMessages {
     archive_filter: "报告和内存转储 (*.zip)",
     save: "保存",
     cancel: "取消",
+    overwrite_destination: "替换所选目标位置已有的文件",
     copied: "已复制报告。",
     exported: "已导出报告。",
     copy_failed: "无法复制报告。",

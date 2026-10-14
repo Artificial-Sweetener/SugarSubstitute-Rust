@@ -18,12 +18,17 @@ pub(super) struct Counters {
 /// Share only accounting identity; original Core still checks every native effect.
 pub(crate) struct AllocationOrigin {
     state: Option<Arc<Mutex<Counters>>>,
-    original: CaptureBundleOrigin,
+    original: crate::installed_release::ReleaseAuthority,
 }
 
 pub(in crate::installed_release) struct CaptureOriginConstructionFailure {
     pub(in crate::installed_release) cause: CaptureCapacityFailure,
     pub(in crate::installed_release) original: CaptureBundleOrigin,
+}
+
+pub(crate) struct ReleaseOriginConstructionFailure {
+    pub(crate) cause: CaptureCapacityFailure,
+    pub(crate) _original: crate::installed_release::ReleaseAuthority,
 }
 
 #[repr(C)]
@@ -51,14 +56,22 @@ impl AllocationOrigin {
     pub(in crate::installed_release) fn new(
         original: CaptureBundleOrigin,
     ) -> Result<Self, CaptureOriginConstructionFailure> {
+        let retained = original.clone();
+        Self::from_authority(crate::installed_release::ReleaseAuthority::Capture(original)).map_err(
+            |failure| CaptureOriginConstructionFailure { cause: failure.cause, original: retained },
+        )
+    }
+    pub(crate) fn from_authority(
+        original: crate::installed_release::ReleaseAuthority,
+    ) -> Result<Self, ReleaseOriginConstructionFailure> {
         let Some(metadata) = original
             .control_storage_bytes()
             .checked_add(size_of::<CounterControl>())
             .filter(|metadata| *metadata <= METADATA_BYTES)
         else {
-            return Err(CaptureOriginConstructionFailure {
+            return Err(ReleaseOriginConstructionFailure {
                 cause: CaptureCapacityFailure::new(CapacityFailureKind::Layout),
-                original,
+                _original: original,
             });
         };
         Ok(Self {
@@ -74,12 +87,12 @@ impl AllocationOrigin {
         })
     }
 
-    pub(in crate::installed_release) const fn control_bytes() -> usize {
+    pub(crate) const fn control_bytes() -> usize {
         size_of::<CounterControl>()
     }
 
     /// Borrow the sole reconstructed Core origin without exposing its claim or Arc.
-    pub(crate) fn original(&self) -> &CaptureBundleOrigin {
+    pub(crate) fn original(&self) -> &crate::installed_release::ReleaseAuthority {
         &self.original
     }
 
@@ -101,7 +114,7 @@ impl AllocationOrigin {
         Ok(())
     }
 
-    pub(in crate::installed_release) fn reserve(
+    pub(crate) fn reserve(
         &self,
         region: CaptureRegion,
         bytes: usize,

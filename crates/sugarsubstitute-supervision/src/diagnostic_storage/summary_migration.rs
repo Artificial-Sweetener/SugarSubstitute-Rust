@@ -35,7 +35,7 @@ impl DiagnosticStorage {
         if !canonical(&source, object, namespace)
             || state.data_mut()?.deletion.is_some()
             || state.data_mut()?.archives.len() >= DIAGNOSTIC_MIGRATION_ARCHIVE_BOUND
-            || state.data_mut()?.stages.len() + 2 > DIAGNOSTIC_STAGE_BOUND
+            || state.data_mut()?.stage_slots() + 2 > DIAGNOSTIC_STAGE_BOUND
         {
             return Err(error(operation.key, Code::Capacity));
         }

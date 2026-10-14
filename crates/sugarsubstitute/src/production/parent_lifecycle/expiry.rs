@@ -10,7 +10,9 @@ impl ParentLifecycle {
     /// Fence the unfinished original acquisition; request only never-issued write
     /// revocation and retain every native guard until its actual owner outcome.
     pub(super) fn expire_acquisition(&mut self, now: Moment) -> Result<()> {
-        let Some(acquisition) = &mut self.acquisition else { return Ok(()) };
+        let Some(acquisition) = &mut self.acquisition else {
+            return Ok(());
+        };
         if !acquisition.expire(now) {
             return Ok(());
         }
@@ -46,7 +48,9 @@ impl ParentLifecycle {
         now: Moment,
     ) -> Result<bool> {
         self.expire_acquisition(now)?;
-        let Some(acquisition) = &self.acquisition else { return Ok(false) };
+        let Some(acquisition) = &self.acquisition else {
+            return Ok(false);
+        };
         if !acquisition.retiring() || now < acquisition.original {
             return Ok(false);
         }
@@ -72,7 +76,9 @@ impl ParentLifecycle {
     pub(super) fn next_live_reply(&mut self, now: Moment) -> Result<Option<usize>> {
         self.expire_acquisition(now)?;
         for _ in 0..super::history::SLOTS {
-            let Some(index) = self.requests.next_reply() else { return Ok(None) };
+            let Some(index) = self.requests.next_reply() else {
+                return Ok(None);
+            };
             let record = self.requests.get(index)?;
             let until = record.until.ok_or(ParentError::WrongPhase)?;
             if now < until {
@@ -103,11 +109,15 @@ impl ParentLifecycle {
     /// Retain the existing received loan while an original expired write still owns
     /// native custody. Metadata expiry cannot dispose a queued or issued operation.
     pub(super) fn retiring_write_pending(&self) -> Result<bool> {
-        let Some(acquisition) = &self.acquisition else { return Ok(false) };
+        let Some(acquisition) = &self.acquisition else {
+            return Ok(false);
+        };
         if !acquisition.retiring() {
             return Ok(false);
         }
-        let Some(write) = &self.write else { return Ok(false) };
+        let Some(write) = &self.write else {
+            return Ok(false);
+        };
         Ok(match write.purpose {
             WritePurpose::Reply(index) => self
                 .requests

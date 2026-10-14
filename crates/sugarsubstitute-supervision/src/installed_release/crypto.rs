@@ -97,8 +97,8 @@ impl CryptoOwner {
         })
     }
 
-    /// Retain both genuine capture credits with the original reconstructed owner.
-    pub(super) fn capture(
+    /// Retain both genuine selected-release credits with the original reconstructed owner.
+    pub(super) fn selected(
         original: super::allocation::AllocationOrigin,
         provider: super::outputs::CaptureOutputGuard,
         key: super::outputs::CaptureOutputGuard,
