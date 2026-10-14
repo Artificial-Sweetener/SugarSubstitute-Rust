@@ -53,68 +53,71 @@ test('reports unavailable clipboard support without native dialogs or pretending
   ).rejects.toThrow('unavailable');
 });
 
-test('offers exact JPEG bytes with PNG pixels and releases temporary decoding after encoding', async () => {
-  const itemDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'ClipboardItem');
-  const bitmapDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'createImageBitmap');
-  const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
-  const payload: { formats: Record<string, Blob | Promise<Blob>> } = { formats: {} };
-  class Item {
-    /** Capture portable bytes rather than implementing browser clipboard behavior in the fixture. */
-    constructor(formats: Record<string, Blob | Promise<Blob>>) {
-      payload.formats = formats;
+test.each([true, false])(
+  'offers JPEG pixels and releases decoding with custom JPEG support=%s',
+  async (supportsCustom) => {
+    const itemDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'ClipboardItem');
+    const bitmapDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'createImageBitmap');
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    const payload: { formats: Record<string, Blob | Promise<Blob>> } = { formats: {} };
+    class Item {
+      /** Capture portable bytes rather than implementing browser clipboard behavior in the fixture. */
+      constructor(formats: Record<string, Blob | Promise<Blob>>) {
+        payload.formats = formats;
+      }
+      /** Admit the actual Chromium formats observed in the in-app browser. */
+      static supports(type: string): boolean {
+        return type === 'image/png' || (supportsCustom && type === 'web image/jpeg');
+      }
     }
-    /** Admit the actual Chromium formats observed in the in-app browser. */
-    static supports(type: string): boolean {
-      return type === 'image/png' || type === 'web image/jpeg';
-    }
-  }
-  const close = jest.fn();
-  const draw = jest.fn();
-  // Canvas drawing is an external browser capability; this fixture implements only the consumed method.
-  const context = jest
-    .spyOn(HTMLCanvasElement.prototype, 'getContext')
-    .mockReturnValue({ drawImage: draw } as unknown as CanvasRenderingContext2D);
-  const encoded = new Blob(['PNG pixels'], { type: 'image/png' });
-  const canvases: HTMLCanvasElement[] = [];
-  const encode = jest.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(function (
-    this: HTMLCanvasElement,
-    callback,
-  ) {
-    canvases.push(this);
-    callback(encoded);
-  });
-  Object.defineProperty(globalThis, 'ClipboardItem', { configurable: true, value: Item });
-  Object.defineProperty(globalThis, 'createImageBitmap', {
-    configurable: true,
-    value: async () => ({ width: 4, height: 3, close }),
-  });
-  Object.defineProperty(navigator, 'clipboard', {
-    configurable: true,
-    value: {
-      write: async () => {
-        await Promise.all(Object.values(payload.formats).map((value) => Promise.resolve(value)));
+    const close = jest.fn();
+    const draw = jest.fn();
+    // Canvas drawing is an external browser capability; this fixture implements only the consumed method.
+    const context = jest
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue({ drawImage: draw } as unknown as CanvasRenderingContext2D);
+    const encoded = new Blob(['PNG pixels'], { type: 'image/png' });
+    const canvases: HTMLCanvasElement[] = [];
+    const encode = jest.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(function (
+      this: HTMLCanvasElement,
+      callback,
+    ) {
+      canvases.push(this);
+      callback(encoded);
+    });
+    Object.defineProperty(globalThis, 'ClipboardItem', { configurable: true, value: Item });
+    Object.defineProperty(globalThis, 'createImageBitmap', {
+      configurable: true,
+      value: async () => ({ width: 4, height: 3, close }),
+    });
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        write: async () => {
+          await Promise.all(Object.values(payload.formats).map((value) => Promise.resolve(value)));
+        },
       },
-    },
-  });
-  try {
-    const jpeg = new Blob(['exact JPEG'], { type: 'image/jpeg' });
-    await new BrowserImageClipboard(document).write(jpeg, 'image/jpeg');
-    expect(payload.formats['web image/jpeg']).toBe(jpeg);
-    expect(await payload.formats['image/png']).toBe(encoded);
-    expect(draw).toHaveBeenCalledTimes(1);
-    expect(close).toHaveBeenCalledTimes(1);
-    expect(canvases[0]?.width).toBe(0);
-  } finally {
-    context.mockRestore();
-    encode.mockRestore();
-    for (const [name, descriptor] of [
-      ['ClipboardItem', itemDescriptor],
-      ['createImageBitmap', bitmapDescriptor],
-    ] as const) {
-      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
-      else Reflect.deleteProperty(globalThis, name);
+    });
+    try {
+      const jpeg = new Blob(['exact JPEG'], { type: 'image/jpeg' });
+      await new BrowserImageClipboard(document).write(jpeg, 'image/jpeg');
+      expect(payload.formats['web image/jpeg']).toBe(supportsCustom ? jpeg : undefined);
+      expect(await payload.formats['image/png']).toBe(encoded);
+      expect(draw).toHaveBeenCalledTimes(1);
+      expect(close).toHaveBeenCalledTimes(1);
+      expect(canvases[0]?.width).toBe(0);
+    } finally {
+      context.mockRestore();
+      encode.mockRestore();
+      for (const [name, descriptor] of [
+        ['ClipboardItem', itemDescriptor],
+        ['createImageBitmap', bitmapDescriptor],
+      ] as const) {
+        if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+        else Reflect.deleteProperty(globalThis, name);
+      }
+      if (clipboardDescriptor) Object.defineProperty(navigator, 'clipboard', clipboardDescriptor);
+      else Reflect.deleteProperty(navigator, 'clipboard');
     }
-    if (clipboardDescriptor) Object.defineProperty(navigator, 'clipboard', clipboardDescriptor);
-    else Reflect.deleteProperty(navigator, 'clipboard');
-  }
-});
+  },
+);

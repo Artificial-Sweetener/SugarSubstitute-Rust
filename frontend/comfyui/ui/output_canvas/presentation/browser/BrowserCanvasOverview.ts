@@ -26,6 +26,7 @@ import type {
   CanvasImageFrame,
 } from '../../domain/CanvasImageResource.js';
 import type { ImageDimensions } from '../../../execution/domain/WorkflowOutput.js';
+import type { CanvasMediaTarget } from '../../domain/CanvasMedia.js';
 
 interface OverviewCellElements {
   readonly cell: CanvasOverviewCell;
@@ -132,6 +133,24 @@ export class BrowserCanvasOverview {
         frame.key === elements.cell.item?.id
       )
         return frame;
+    }
+    return null;
+  }
+
+  /** Pin context actions to the completed image actually painted in this visible batch cell. */
+  contextTarget(target: EventTarget | null): CanvasMediaTarget | null {
+    if (!this.#active || this.#disposed || !(target instanceof Node)) return null;
+    for (const [key, elements] of this.#cells) {
+      const frame = this.#images.find((image) => image.slot === key)?.frame;
+      const item = elements.cell.item;
+      if (
+        item &&
+        frame &&
+        !frame.preview &&
+        frame.key === item.id &&
+        elements.button.contains(target)
+      )
+        return Object.freeze({ sourceId: elements.cell.selection.sourceId, itemId: item.id });
     }
     return null;
   }

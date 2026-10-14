@@ -22,6 +22,9 @@ import sys
 
 from ..application.settings_service import OutputSavingSettingsService
 from ..application.transfer_service import OutputTransferService
+from ..application.media_service import OutputMediaService
+from .media_files import HostOutputImageFiles
+from .file_revealer import WindowsImageFileRevealer
 from .artifact_registry import ManagedArtifactRegistry
 from .comfy_node_capabilities import ComfySavingNodeCapabilities
 from .managed_image_writer import ManagedImageWriter
@@ -40,7 +43,12 @@ class OutputSavingRuntime:
     """Provide the shared saving services without owning their policy or filesystem mechanics."""
 
     def __init__(
-        self, *, state_root: Path, output_root: Path, temporary_root: Path
+        self,
+        *,
+        state_root: Path,
+        output_root: Path,
+        temporary_root: Path,
+        input_root: Path | None = None,
     ) -> None:
         """Compose explicit host locations without changing Comfy's configured roots."""
         self.paths = HostSavingSettingsPaths(output_root)
@@ -51,6 +59,13 @@ class OutputSavingRuntime:
         self.artifacts = ManagedArtifactRegistry(state_root / "artifacts.sqlite")
         self.transfers = OutputTransferService(
             self.settings.load, ManagedTransferResolver(self.artifacts)
+        )
+        roots = {"output": output_root, "temp": temporary_root}
+        if input_root is not None:
+            roots["input"] = input_root
+        self.media = OutputMediaService(
+            self.settings.load,
+            HostOutputImageFiles(self.artifacts, roots, WindowsImageFileRevealer()),
         )
         self.mask_uploads = NativeManagedMaskBridge(self.artifacts, temporary_root)
         self.capabilities = capabilities = ComfySavingNodeCapabilities()
@@ -88,6 +103,7 @@ class OutputSavingRuntime:
             / "output_saving",
             output_root=_directory(folders, "get_output_directory"),
             temporary_root=_directory(folders, "get_temp_directory"),
+            input_root=_directory(folders, "get_input_directory"),
         )
 
 

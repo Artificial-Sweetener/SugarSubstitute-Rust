@@ -61,6 +61,10 @@ import {
   type BrowserCanvasDragPayload,
 } from '../presentation/browser/BrowserCanvasDrag.js';
 import { BrowserCanvasDragSubjects } from './BrowserCanvasDragSubject.js';
+import {
+  BrowserCanvasMediaActions,
+  type BrowserCanvasMediaOptions,
+} from './BrowserCanvasMediaActions.js';
 
 export interface BrowserCanvasAttachmentOptions {
   readonly address: CanvasAttachmentAddress;
@@ -83,7 +87,9 @@ export interface BrowserCanvasAttachmentOptions {
   /** Open supported media through the host-facing browser adapter. */
   open(item: WorkflowOutputItem): void;
   /** Copy a completed image through the platform's shared transfer adapter. */
-  copy?(item: WorkflowOutputItem, accepts: () => boolean): Promise<boolean>;
+  copy?: BrowserCanvasMediaOptions['copy'];
+  fileAction?: BrowserCanvasMediaOptions['fileAction'];
+  mediaProfile?: BrowserCanvasMediaOptions['profile'];
   /** Prepare one exact completed image for platform-owned outbound dragging. */
   drag?(item: WorkflowOutputItem, signal: AbortSignal): Promise<BrowserCanvasDragPayload | null>;
   /** Invalidate prepared transfers after an accepted shared preference change. */
@@ -102,6 +108,7 @@ export class BrowserCanvasAttachment {
   readonly #overview: BrowserCanvasOverview;
   readonly #input: BrowserCanvasInput;
   readonly #drag: BrowserCanvasDrag;
+  readonly #media: BrowserCanvasMediaActions;
   readonly #stopTransfer: () => void;
   readonly #geometry: BrowserCanvasGeometry;
   readonly #camera: CanvasCameraController;
@@ -187,7 +194,11 @@ export class BrowserCanvasAttachment {
         !this.#disposed && this.#surface?.visible === true && options.accepts() && !!options.drag,
       report: (error) => options.report(error, null),
     });
-    this.#stopTransfer = options.transferChanged?.(() => this.#drag.invalidate()) ?? (() => {});
+    this.#stopTransfer =
+      options.transferChanged?.(() => {
+        this.#drag.invalidate();
+        if (this.#ready) this.#publish();
+      }) ?? (() => {});
     this.#status = new CanvasStatusPublisher(options.clock, () => this.#publish());
     this.#camera = new CanvasCameraController({
       view: options.address.viewId,
@@ -209,6 +220,13 @@ export class BrowserCanvasAttachment {
       cells: (catalog) => this.#overview.cells(catalog),
     });
     this.#navigation = sources;
+    this.#media = new BrowserCanvasMediaActions({
+      read: () => this.#snapshot(),
+      accepts: () => !this.#disposed && options.accepts(),
+      ...(options.copy ? { copy: options.copy } : {}),
+      ...(options.fileAction ? { fileAction: options.fileAction } : {}),
+      ...(options.mediaProfile ? { profile: options.mediaProfile } : {}),
+    });
     this.port = new BrowserCanvasPort(this.#snapshot(), {
       origin: document.location.origin,
       capabilities: {
@@ -233,7 +251,7 @@ export class BrowserCanvasAttachment {
           'retry',
           'admit-large-image',
           'open-media',
-          ...(options.copy ? ['copy-media' as const] : []),
+          ...this.#media.commands(),
         ],
       },
       accepts: () => !this.#disposed && options.accepts(),
@@ -247,20 +265,7 @@ export class BrowserCanvasAttachment {
           sources,
           snapshot: command.type === 'comparison' ? this.#snapshot() : this.port.read(),
           open: options.open,
-          ...(options.copy
-            ? {
-                copy: (item: WorkflowOutputItem) =>
-                  options.copy?.(
-                    item,
-                    () =>
-                      !this.#disposed &&
-                      options.accepts() &&
-                      [this.#plan?.primary?.item?.id, this.#plan?.secondary?.item?.id].includes(
-                        item.id,
-                      ),
-                  ) ?? Promise.resolve(false),
-              }
-            : {}),
+          media: this.#media,
         }),
       geometry: (geometry) => this.#resize(geometry),
       release: () => this.dispose(),
@@ -268,6 +273,7 @@ export class BrowserCanvasAttachment {
     });
     const cleanup: (() => void)[] = [
       () => this.#drag.dispose(),
+      () => this.#media.dispose(),
       this.#stopTransfer,
       () => this.#images.dispose(),
       () => this.#overview.dispose(),
@@ -277,7 +283,14 @@ export class BrowserCanvasAttachment {
       () => this.port.dispose(),
     ];
     try {
-      this.#overlay = mountCanvasOverlay(overlay, this.port, options.report, element);
+      this.#overlay = mountCanvasOverlay(
+        overlay,
+        this.port,
+        options.report,
+        element,
+        (target) =>
+          this.#overview.contextTarget(target) ?? this.#images.contextTarget(target) ?? 'primary',
+      );
       cleanup.push(() => this.#overlay.dispose());
       this.#input = new BrowserCanvasInput(this.viewport, {
         outbound: (event) => this.#drag.allows(event),
@@ -421,6 +434,7 @@ export class BrowserCanvasAttachment {
     this.port.dispose();
     this.#input.dispose();
     this.#drag.dispose();
+    this.#media.dispose();
     this.#stopTransfer();
     this.#geometry.dispose();
     this.#camera.dispose();
@@ -507,7 +521,10 @@ export class BrowserCanvasAttachment {
 
   /** Publish the current actual display at bounded cadence, without graph access. */
   #publish(): void {
-    if (this.#ready && !this.#disposed) this.port.publish(this.#snapshot());
+    if (this.#ready && !this.#disposed) {
+      this.#media.reconcile();
+      this.port.publish(this.#snapshot());
+    }
   }
 
   /** Report actual camera/fidelity rather than the incoming selection's unshown dimensions. */
@@ -522,6 +539,7 @@ export class BrowserCanvasAttachment {
       this.#browserResources.previewStarted,
       this.#sources,
       this.#browserResources.preparing,
+      this.#media.profile(),
     );
   }
 }

@@ -21,6 +21,7 @@ import type { CanvasInspectionTarget } from '../../application/CanvasInspectionS
 import type { CanvasCatalogSnapshot } from '../../domain/CanvasCatalog.js';
 import type { CanvasAttachmentAddress } from '../../domain/CanvasIdentity.js';
 import type { CanvasImageSlotSnapshot } from '../../domain/CanvasImageResource.js';
+import type { OutputMediaProfile } from '../../../output_saving/domain/OutputMedia.js';
 import type {
   CanvasResourceStatus,
   CanvasViewSnapshot,
@@ -38,6 +39,7 @@ export function browserCanvasSnapshot(
   previewStarted: boolean,
   sources: readonly CanvasSourceSummary[],
   preparing: boolean,
+  mediaActions: OutputMediaProfile | null,
 ): CanvasViewSnapshot {
   const primary = images.find((slot) => slot.slot === 'primary');
   const secondary = images.find((slot) => slot.slot === 'secondary');
@@ -97,6 +99,7 @@ export function browserCanvasSnapshot(
     secondaryResource: secondaryResource ? Object.freeze(secondaryResource) : null,
     runStatus: catalog.result.runStatus,
     connected,
+    mediaActions,
     zoom: Object.freeze({
       mode: camera?.camera.mode ?? 'fit',
       physicalScale,

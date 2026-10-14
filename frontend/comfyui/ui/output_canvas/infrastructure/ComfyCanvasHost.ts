@@ -40,6 +40,7 @@ import type { CanvasRevealTarget } from '../domain/CanvasReveal.js';
 import { ComfyImageRevealHost } from './ComfyImageRevealHost.js';
 import { BrowserOutputTransfer } from '../../output_saving/BrowserOutputTransfer.js';
 import { BrowserImageClipboard } from '../../output_saving/BrowserImageClipboard.js';
+import { BrowserImageDownload } from '../../output_saving/BrowserImageDownload.js';
 import type { OutputSavingFeature } from '../../output_saving/OutputSavingFeature.js';
 import { NativeSourceSavingHost } from '../../output_saving/NativeSourceSavingHost.js';
 
@@ -64,6 +65,7 @@ export class ComfyCanvasHost {
   readonly #reveal: CanvasRevealCoordinator;
   readonly #imageActions: ComfyImageRevealHost;
   readonly #saving: NativeSourceSavingHost | null;
+  readonly #transfers: BrowserOutputTransfer;
   readonly #stops: (() => void)[] = [];
   #started = false;
   #disposed = false;
@@ -73,11 +75,12 @@ export class ComfyCanvasHost {
     const { document, execution, app, logger, report, saving } = options;
     const window = document.defaultView;
     if (!window) throw new Error('Output canvas window is unavailable.');
-    const transfers = new BrowserOutputTransfer(
+    const transfers = (this.#transfers = new BrowserOutputTransfer(
       document.location.origin,
       (input, init) => window.fetch(input, init),
       new BrowserImageClipboard(document),
-    );
+      new BrowserImageDownload(document),
+    ));
     const nextKey = (): string =>
       [...window.crypto.getRandomValues(new Uint32Array(4))]
         .map((word) => word.toString(16).padStart(8, '0'))
@@ -180,13 +183,19 @@ export class ComfyCanvasHost {
           connected: () => execution.connected,
           url: (item) => comfyCanvasMediaUrl(document.location.origin, item),
           open: (item) => openComfyCanvasMedia(window, item),
-          copy: (item, accepts) => transfers.copy(item.file, accepts),
+          copy: (item, accepts, format, signal) =>
+            transfers.copy(item.file, accepts, format, signal),
+          fileAction: (item, accepts, signal) => transfers.fileAction(item.file, accepts, signal),
+          mediaProfile: () => transfers.profile(),
           drag: (item, signal) => transfers.drag(item.file, signal),
-          ...(saving
-            ? {
-                transferChanged: (listener: () => void) => saving.configuration.subscribe(listener),
-              }
-            : {}),
+          transferChanged: (listener) => {
+            const profile = transfers.subscribe(listener);
+            const settings = saving?.configuration.subscribe(listener);
+            return () => {
+              profile();
+              settings?.();
+            };
+          },
           disposeLoader: () => loader.dispose(),
           report: (error) => report(error),
         });
@@ -236,6 +245,13 @@ export class ComfyCanvasHost {
       this.#sources.install();
       this.#coordinator.install();
       this.#started = true;
+      void this.#transfers.refresh().catch(this.options.report);
+      if (this.options.saving)
+        this.#stops.push(
+          this.options.saving.configuration.subscribe(() => {
+            void this.#transfers.refresh().catch(this.options.report);
+          }),
+        );
       ensureBrowserCanvasWorkspaceStyles(this.options.document);
       this.#primary.setup();
       this.#workspace.setup();
@@ -289,6 +305,7 @@ export class ComfyCanvasHost {
     for (const stop of this.#stops.splice(0)) stop();
     this.#sources.dispose();
     this.#preferences.dispose();
+    this.#transfers.dispose();
   }
 
   /** Honor actual page teardown without introducing a recurring visibility or frame loop. */

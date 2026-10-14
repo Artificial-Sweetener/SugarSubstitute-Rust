@@ -46,6 +46,7 @@ const authority = {
       'admit-large-image',
       'open-media',
       'copy-media',
+      'file-media',
     ] satisfies CanvasCommand['type'][],
   },
 };
@@ -85,8 +86,9 @@ test.each<CanvasCommand>([
   { type: 'pan', x: -0.1, y: 0.1, units: 'viewport' },
   { type: 'wipe', orientation: 'horizontal', split: 0.3 },
   { type: 'open-media', target: 'secondary' },
-  { type: 'copy-media', target: 'primary' },
-  { type: 'copy-media', target: 'secondary' },
+  { type: 'copy-media', target: 'primary', format: 'preferred' },
+  { type: 'copy-media', target: 'secondary', format: 'jpeg' },
+  { type: 'file-media', target: 'primary' },
 ])('decodes a bounded supported intent %#', (command) => {
   const external = request({ ...command, extra: { untrusted: true } });
   const decoded = decodeCanvasCommandRequest(external, authority.origin, authority);
@@ -150,6 +152,8 @@ test.each([
   { type: 'overview', enabled: 'true' },
   { type: 'open-media', target: 'unknown' },
   { type: 'copy-media', target: 'unknown' },
+  { type: 'copy-media', target: 'primary', format: 'gif' },
+  { type: 'file-media', target: { sourceId: 'source:1', itemId: '../private' } },
   null,
 ])('rejects malformed external parameters %#', (command) => {
   expect(decodeCanvasCommandRequest(request(command), authority.origin, authority)).toBeNull();

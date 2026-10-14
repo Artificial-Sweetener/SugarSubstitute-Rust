@@ -21,6 +21,11 @@ import type { CanvasCatalogEntry } from './CanvasCatalog.js';
 import type { CanvasAttachmentAddress } from './CanvasIdentity.js';
 import type { CanvasSelection, CanvasViewState } from './CanvasViewState.js';
 import type { CanvasRevealTarget } from './CanvasReveal.js';
+import type { CanvasMediaTarget } from './CanvasMedia.js';
+import type {
+  OutputCopyFormat,
+  OutputMediaProfile,
+} from '../../output_saving/domain/OutputMedia.js';
 
 export interface CanvasSourceSummary {
   readonly id: OutputSourceId;
@@ -64,6 +69,8 @@ export interface CanvasViewSnapshot {
   readonly secondaryResource: CanvasResourceStatus | null;
   readonly runStatus: 'idle' | 'queued' | 'running' | 'complete' | 'cancelled' | 'error';
   readonly connected: boolean;
+  /** Describe shared transfer preference and qualified local file action without platform handles. */
+  readonly mediaActions: OutputMediaProfile | null;
 }
 
 export type CanvasCommand =
@@ -90,7 +97,12 @@ export type CanvasCommand =
   | { readonly type: 'retry' }
   | { readonly type: 'admit-large-image' }
   | { readonly type: 'open-media'; readonly target: 'primary' | 'secondary' }
-  | { readonly type: 'copy-media'; readonly target: 'primary' | 'secondary' };
+  | {
+      readonly type: 'copy-media';
+      readonly target: CanvasMediaTarget;
+      readonly format: OutputCopyFormat;
+    }
+  | { readonly type: 'file-media'; readonly target: CanvasMediaTarget };
 
 export interface CanvasCommandRequest {
   readonly schema: 1;

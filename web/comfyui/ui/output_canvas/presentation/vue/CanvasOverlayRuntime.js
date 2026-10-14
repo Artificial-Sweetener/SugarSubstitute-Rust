@@ -2,8 +2,9 @@ import {
   ensureCanvasOverlayStyles
 } from "../../../chunk-3NCH6UDE.js";
 import {
-  canvasContextActions
-} from "../../../chunk-AAWJ66RK.js";
+  canvasContextActions,
+  canvasMediaItem
+} from "../../../chunk-4I7PXU5I.js";
 import {
   CanvasOverlay
 } from "../../../chunk-OMMMFGR6.js";
@@ -32,7 +33,7 @@ function sameCanvasAttachment(left, right) {
 }
 
 // frontend/comfyui/ui/output_canvas/presentation/vue/CanvasOverlayRuntime.ts
-function mountCanvasOverlay(element, port, reportFailure, interactionSurface = element) {
+function mountCanvasOverlay(element, port, reportFailure, interactionSurface = element, contextTarget = () => "primary") {
   ensureCanvasOverlayStyles(element.ownerDocument);
   const initial = port.read();
   const state = shallowRef(initial);
@@ -62,6 +63,7 @@ function mountCanvasOverlay(element, port, reportFailure, interactionSurface = e
     }
   }
   const menu = new ContextMenu(element.ownerDocument);
+  let menuTarget = "primary";
   function openMenu(event) {
     if (event instanceof KeyboardEvent && event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10"))
       return;
@@ -70,6 +72,7 @@ function mountCanvasOverlay(element, port, reportFailure, interactionSurface = e
     event.preventDefault();
     event.stopPropagation();
     const bounds = interactionSurface.getBoundingClientRect();
+    menuTarget = contextTarget(target);
     menu.open({
       label: "Output actions",
       anchor: {
@@ -78,7 +81,7 @@ function mountCanvasOverlay(element, port, reportFailure, interactionSurface = e
         y: event instanceof MouseEvent ? event.clientY : bounds.bottom - 48
       },
       trigger: target instanceof HTMLElement ? target : interactionSurface,
-      entries: canvasContextActions(state.value, port.capabilities, send)
+      entries: canvasContextActions(state.value, port.capabilities, send, menuTarget)
     });
   }
   interactionSurface.addEventListener("contextmenu", openMenu);
@@ -91,8 +94,12 @@ function mountCanvasOverlay(element, port, reportFailure, interactionSurface = e
   const unsubscribe = port.subscribe((snapshot) => {
     if (!active || !sameCanvasAttachment(initial.address, snapshot.address) || snapshot.revision <= state.value.revision)
       return;
-    if (menu.isOpen() && canvasNavigationSnapshot(snapshot, state.value) !== state.value)
-      menu.updateEntries(canvasContextActions(snapshot, port.capabilities, send));
+    if (menu.isOpen()) {
+      if (snapshot.selected?.id !== state.value.selected?.id || snapshot.secondary?.id !== state.value.secondary?.id || snapshot.preview !== state.value.preview || snapshot.view.mode !== state.value.view.mode || typeof menuTarget === "object" && !canvasMediaItem(snapshot, menuTarget))
+        menu.close();
+      else if (canvasNavigationSnapshot(snapshot, state.value) !== state.value || snapshot.mediaActions !== state.value.mediaActions)
+        menu.updateEntries(canvasContextActions(snapshot, port.capabilities, send, menuTarget));
+    }
     const spoken = canvasAnnouncement(state.value, snapshot);
     if (spoken !== null) announcement.value = spoken;
     state.value = snapshot;

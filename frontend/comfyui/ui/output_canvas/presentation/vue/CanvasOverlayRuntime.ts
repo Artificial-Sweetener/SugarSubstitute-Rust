@@ -26,6 +26,7 @@ import type {
   CanvasViewSnapshot,
 } from '../../domain/CanvasViewPort.js';
 import { canvasNavigationSnapshot } from './CanvasNavigationSnapshot.js';
+import { canvasMediaItem, type CanvasMediaTarget } from '../../domain/CanvasMedia.js';
 import { CanvasOverlay } from './CanvasOverlay.js';
 import { ensureCanvasOverlayStyles } from './CanvasOverlayStyles.js';
 
@@ -40,6 +41,7 @@ export function mountCanvasOverlay(
   port: CanvasViewPort,
   reportFailure: (error: unknown, request: CanvasCommandRequest | null) => void,
   interactionSurface: HTMLElement = element,
+  contextTarget: (target: EventTarget | null) => CanvasMediaTarget = () => 'primary',
 ): MountedCanvasOverlay {
   ensureCanvasOverlayStyles(element.ownerDocument);
   const initial = port.read();
@@ -76,6 +78,7 @@ export function mountCanvasOverlay(
     }
   }
   const menu = new ContextMenu(element.ownerDocument);
+  let menuTarget: CanvasMediaTarget = 'primary';
   /** Open optional actions from this surface only, retaining its attachment-qualified dispatch. */
   function openMenu(event: MouseEvent | KeyboardEvent): void {
     if (
@@ -89,6 +92,7 @@ export function mountCanvasOverlay(
     event.preventDefault();
     event.stopPropagation();
     const bounds = interactionSurface.getBoundingClientRect();
+    menuTarget = contextTarget(target);
     menu.open({
       label: 'Output actions',
       anchor: {
@@ -97,7 +101,7 @@ export function mountCanvasOverlay(
         y: event instanceof MouseEvent ? event.clientY : bounds.bottom - 48,
       },
       trigger: target instanceof HTMLElement ? target : interactionSurface,
-      entries: canvasContextActions(state.value, port.capabilities, send),
+      entries: canvasContextActions(state.value, port.capabilities, send, menuTarget),
     });
   }
   interactionSurface.addEventListener('contextmenu', openMenu);
@@ -115,8 +119,21 @@ export function mountCanvasOverlay(
       snapshot.revision <= state.value.revision
     )
       return;
-    if (menu.isOpen() && canvasNavigationSnapshot(snapshot, state.value) !== state.value)
-      menu.updateEntries(canvasContextActions(snapshot, port.capabilities, send));
+    if (menu.isOpen()) {
+      if (
+        snapshot.selected?.id !== state.value.selected?.id ||
+        snapshot.secondary?.id !== state.value.secondary?.id ||
+        snapshot.preview !== state.value.preview ||
+        snapshot.view.mode !== state.value.view.mode ||
+        (typeof menuTarget === 'object' && !canvasMediaItem(snapshot, menuTarget))
+      )
+        menu.close();
+      else if (
+        canvasNavigationSnapshot(snapshot, state.value) !== state.value ||
+        snapshot.mediaActions !== state.value.mediaActions
+      )
+        menu.updateEntries(canvasContextActions(snapshot, port.capabilities, send, menuTarget));
+    }
     const spoken = canvasAnnouncement(state.value, snapshot);
     if (spoken !== null) announcement.value = spoken;
     state.value = snapshot;

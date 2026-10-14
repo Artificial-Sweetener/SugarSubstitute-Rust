@@ -50,7 +50,7 @@ test('retains inactive JPEG and workflow choices without losing control identity
   document.body.append(form.root);
   expect(form.read()).toEqual(savingPreferences);
   expect(form.previews.disabled).toBe(true);
-  expect(form.quality.disabled).toBe(true);
+  expect(form.quality.disabled).toBe(false);
   expect(form.transfer.value).toBe('companion_jpeg');
   form.jpeg.click();
   form.management.click();
@@ -58,7 +58,7 @@ test('retains inactive JPEG and workflow choices without losing control identity
   expect(form.quality.disabled).toBe(false);
   form.jpegMode.value = 'target_size';
   form.jpegMode.dispatchEvent(new Event('change', { bubbles: true }));
-  expect(form.quality.disabled).toBe(true);
+  expect(form.quality.disabled).toBe(false);
   expect(form.targetSize.disabled).toBe(false);
   form.jpeg.click();
   form.management.click();

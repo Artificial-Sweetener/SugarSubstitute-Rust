@@ -16,7 +16,7 @@
 /** Describe actual displayed image fidelity and loading state for reusable overlay controls. */
 import { canvasComparisonAvailable } from '../../application/CanvasComparisonSelection.js';
 /** Project only lightweight status, keeping DOM handles out of the renderer-independent port. */
-export function browserCanvasSnapshot(address, plan, catalog, images, camera, connected, previewStarted, sources, preparing) {
+export function browserCanvasSnapshot(address, plan, catalog, images, camera, connected, previewStarted, sources, preparing, mediaActions) {
     const primary = images.find((slot) => slot.slot === 'primary');
     const secondary = images.find((slot) => slot.slot === 'secondary');
     const frame = primary?.frame;
@@ -73,6 +73,7 @@ export function browserCanvasSnapshot(address, plan, catalog, images, camera, co
         secondaryResource: secondaryResource ? Object.freeze(secondaryResource) : null,
         runStatus: catalog.result.runStatus,
         connected,
+        mediaActions,
         zoom: Object.freeze({
             mode: camera?.camera.mode ?? 'fit',
             physicalScale,
