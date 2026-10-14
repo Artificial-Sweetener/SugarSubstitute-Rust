@@ -4,6 +4,8 @@
 //! These records describe accepted effects; they grant no native or readiness authority.
 use crate::MainIdentity;
 use std::fmt;
+mod native;
+pub use native::{NativeFailure, NativePhase, native_failed, native_operation};
 
 /// A closed observation of one creating-thread or registered preview transition.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

@@ -1,8 +1,131 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Retain helper Finish and original native pipe terminal through checked retirement.
+//! Own the original Finish exchange and checked helper retirement sequence.
+mod native;
 use super::*;
-use sugarsubstitute_contracts::execution::{JobOutcome, TerminalKind};
+use sugarsubstitute_contracts::execution::{JobCompletion, JobOutcome, TerminalKind};
+use sugarsubstitute_execution::{
+    backend_custody::BackendCustodyPipeReport, windows_lifecycle_pipe::LifecyclePipeFailure,
+};
+type Terminal = JobCompletion<BackendCustodyPipeReport, LifecyclePipeFailure>;
+/// Borrow real native adapters; returned facts do not grant fresh admission.
+trait Boundary {
+    /// Consume the actual original Finished fact; pending prior responses keep this false.
+    fn finish(&mut self, until: Moment) -> Result<bool>;
+    /// Begin and advance the exact registered helper family with its immutable budget.
+    fn retire_family(&mut self, budget: ShutdownBudget) -> Result<bool>;
+    /// Close the original pipe only after its helper family has actually retired.
+    fn close_pipe(&mut self) -> Result<()>;
+    /// Transfer the original typed completion after callbacks, handles and loans retire.
+    fn take_terminal(&mut self) -> Result<Option<Terminal>>;
+    /// Release the captured attachment only after original native retirement evidence.
+    fn parent_retired(&mut self);
+}
+/// Retain the original shutdown fields until actual family and pipe retirement.
+#[derive(Default)]
+pub(super) struct Retirement {
+    pub(super) original: Option<ShutdownBudget>,
+    finish_received: bool,
+    terminal: Option<Terminal>,
+    pipe_closed: bool,
+    pub(super) settled: bool,
+    grace_observed: bool,
+    total_observed: bool,
+}
+impl Retirement {
+    /// Freeze one unchanged original transaction, including pre-parent attachment cleanup.
+    fn freeze(&mut self, budget: ShutdownBudget) -> Result<ShutdownBudget> {
+        let original = *self.original.get_or_insert(budget);
+        if original != budget {
+            return Err("Custody original cleanup changed".into());
+        }
+        Ok(original)
+    }
+    /// Advance the complete retirement policy through the actual external effect boundary.
+    fn advance(
+        &mut self,
+        budget: ShutdownBudget,
+        ready: bool,
+        now: Moment,
+        key: BackendCustodyKey,
+        port: &mut impl Boundary,
+    ) -> Result<()> {
+        let original = self.freeze(budget)?;
+        if self.settled {
+            return self.terminal_result(ready, key);
+        }
+        self.grace_observed |= now >= original.graceful_until;
+        self.total_observed |= now >= original.settle_until;
+        let mut failure = None;
+        if ready && !self.finish_received && now < original.settle_until {
+            match port.finish(original.settle_until) {
+                Ok(finished) => {
+                    self.finish_received = finished;
+                    if finished {
+                        tracing::info!(operation="backend_custody_finished", key=?key, settle_until=?original.settle_until, "Authenticated backend custody Finished receipt consumed");
+                    }
+                }
+                Err(cause) => failure = Some(cause),
+            }
+        }
+        if ready && !self.finish_received && now >= original.settle_until {
+            failure = Some(Box::new(RetirementRejected::FinishExpired(original.settle_until)));
+        }
+        if ready && !self.finish_received && failure.is_none() {
+            return Ok(());
+        }
+        let cleanup = (|| -> Result<()> {
+            if port.retire_family(original)? {
+                if !self.pipe_closed {
+                    port.close_pipe()?;
+                    self.pipe_closed = true;
+                }
+                if self.terminal.is_none() {
+                    self.terminal = port.take_terminal()?;
+                }
+                if let Some(terminal) = &self.terminal {
+                    port.parent_retired();
+                    self.settled = true;
+                    let native_failure = match &terminal.outcome {
+                        JobOutcome::Failure(cause) => Some(cause.native_cause()),
+                        _ => None,
+                    };
+                    tracing::info!(operation="backend_custody_retired", key=?key, finish_received=self.finish_received,
+                    terminal_kind=?terminal.outcome.kind(), native_stage=native_failure.map(sugarsubstitute_execution::windows::NativeObservationError::stage),
+                    native_win32_code=native_failure.and_then(sugarsubstitute_execution::windows::NativeObservationError::win32_code), terminal_job=?terminal.spec.id, terminal_scope=?terminal.scope_id,
+                    "Backend custody family and transport retired");
+                }
+            }
+            Ok(())
+        })();
+        if let Err(cause) = cleanup {
+            return Err(diagnostics::preserve_cleanup(failure, cause));
+        }
+        match failure {
+            Some(cause) => Err(cause),
+            None if self.settled => self.terminal_result(ready, key),
+            None => Ok(()),
+        }
+    }
+    /// Preserve the retained terminal outcome independently of physical closure.
+    fn terminal_result(&self, ready: bool, key: BackendCustodyKey) -> Result<()> {
+        let Some(terminal) = &self.terminal else { return Ok(()) };
+        inspect_terminal(
+            &terminal.outcome,
+            key,
+            ready,
+            self.finish_received,
+            self.pipe_closed,
+            self.settled,
+        )
+    }
+    /// Preserve the existing original graceful and total wake observations.
+    pub(super) fn next_deadline(&self) -> Option<Moment> {
+        self.original.filter(|_| !self.settled && !self.total_observed).map(|budget| {
+            if self.grace_observed { budget.settle_until } else { budget.graceful_until }
+        })
+    }
+}
 impl CoordinatorCustody {
     /// Finish the authenticated witness, observe its real exit, then close the actual pipe.
     pub(crate) fn close(
@@ -10,124 +133,20 @@ impl CoordinatorCustody {
         budget: ShutdownBudget,
         resources: &mut BackendResources<'_>,
     ) -> Result<()> {
-        let original = *self.shutdown.get_or_insert(budget);
-        if original != budget {
-            return Err("Custody original cleanup changed".into());
-        }
-        if self.settled {
-            return self.terminal_result();
-        }
+        self.retirement.freeze(budget)?;
         let Some(parent) = self.parent.clone() else {
-            self.settled = self.attachment.close(resources)?;
+            self.retirement.settled = self.attachment.close(resources)?;
             return Ok(());
         };
         let now = resources.client.now()?;
-        self.grace_observed |= now >= original.graceful_until;
-        self.total_observed |= now >= original.settle_until;
-        let mut failure: Option<Box<dyn std::error::Error + Send + Sync>> = None;
-        if self.ready && !self.finish_received && resources.client.now()? < original.settle_until {
-            match parent.advance_finish(resources.client, original.settle_until) {
-                Ok(finished) => {
-                    self.finish_received = finished;
-                    if finished {
-                        tracing::info!(
-                            operation = "backend_custody_finished",
-                            key = ?parent.key(),
-                            settle_until = ?original.settle_until,
-                            "Authenticated backend custody Finished receipt consumed"
-                        );
-                    }
-                }
-                Err(cause) => failure = Some(diagnostics::failed("finish_exchange", cause)),
-            }
-        }
-        if let Some(ticket) = self.ticket {
-            let registry = resources.authority.registry_mut().ok_or("Custody registry absent")?;
-            registry.begin_stop(ticket.process(), ShutdownId::new(1)?, original)?;
-            let actual = registry.snapshot(ticket.process())?;
-            if (actual.cleanup_step_due(resources.client.now()?)
-                || (actual.settled && registry.custody_retirement_pending(ticket.process())?))
-                && !actual.cleanup_step_pending
-                && resources.client.now()? < original.settle_until
-            {
-                let watch = if actual.member_watch_required {
-                    Some(spec(resources, JobClass::NativeObservation, 4096, None)?)
-                } else {
-                    None
-                };
-                let cleanup = spec(
-                    resources,
-                    JobClass::InfrastructureLifecycle,
-                    4096,
-                    Some(original.settle_until),
-                )?;
-                resources
-                    .authority
-                    .registry_mut()
-                    .ok_or("Custody registry absent")?
-                    .submit_cleanup_step(
-                        resources.client,
-                        ticket.process(),
-                        resources.cleanup,
-                        cleanup,
-                        watch,
-                    )?;
-            }
-            let registry = resources.authority.registry_mut().ok_or("Custody registry absent")?;
-            if registry.snapshot(ticket.process())?.settled
-                && !registry.custody_retirement_pending(ticket.process())?
-            {
-                while registry.take_observation(ticket.process())?.is_some() {}
-                registry.retire_settled(ticket.process())?;
-                self.ticket = None;
-            }
-        }
-        if self.ticket.is_none() {
-            if !self.pipe_closed {
-                parent.close().map_err(|cause| diagnostics::failed("pipe_close", cause))?;
-                self.pipe_closed = true;
-            }
-            if self.terminal.is_none() {
-                self.terminal = parent
-                    .take_terminal()
-                    .map_err(|cause| diagnostics::failed("pipe_terminal", cause))?;
-            }
-            if let Some(terminal) = &self.terminal {
-                self.attachment.parent_retired();
-                self.settled = true;
-                tracing::info!(
-                    operation = "backend_custody_retired",
-                    key = ?parent.key(),
-                    finish_received = self.finish_received,
-                    terminal_kind = ?terminal.outcome.kind(),
-                    terminal_job = ?terminal.spec.id,
-                    terminal_scope = ?terminal.scope_id,
-                    "Backend custody family and transport retired"
-                );
-            }
-        }
-        match failure {
-            Some(cause) => Err(cause),
-            None => {
-                if self.settled {
-                    self.terminal_result()
-                } else {
-                    Ok(())
-                }
-            }
-        }
-    }
-    /// Preserve the retained terminal outcome independently of physical closure.
-    fn terminal_result(&self) -> Result<()> {
-        let Some(terminal) = &self.terminal else { return Ok(()) };
-        inspect_terminal(
-            &terminal.outcome,
-            self.parent()?.key(),
-            self.ready,
-            self.finish_received,
-            self.pipe_closed,
-            self.ticket.is_none(),
-        )
+        let key = parent.key();
+        let mut port = native::Native {
+            parent,
+            ticket: &mut self.ticket,
+            attachment: &mut self.attachment,
+            resources,
+        };
+        self.retirement.advance(budget, self.ready, now, key, &mut port)
     }
 }
 
@@ -168,6 +187,7 @@ where
 #[derive(Debug)]
 enum RetirementRejected {
     MissingFinished,
+    FinishExpired(Moment),
     ForeignKey,
     FamilyPending,
     Terminal(TerminalKind),
@@ -178,6 +198,10 @@ impl std::fmt::Display for RetirementRejected {
             Self::MissingFinished => {
                 formatter.write_str("Original helper Finished acknowledgement is missing")
             }
+            Self::FinishExpired(until) => write!(
+                formatter,
+                "Original helper Finished acknowledgement absent at cutoff {until:?}"
+            ),
             Self::ForeignKey => formatter.write_str("Original custody terminal has a foreign key"),
             Self::FamilyPending => formatter.write_str("Original helper family remains owned"),
             Self::Terminal(kind) => {

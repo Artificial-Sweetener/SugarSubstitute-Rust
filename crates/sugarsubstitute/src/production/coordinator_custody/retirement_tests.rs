@@ -7,8 +7,8 @@ use std::error::Error;
 use sugarsubstitute_execution::{
     backend_custody::BackendCustodyPipeReport, windows::NativeObservationError,
 };
-type TestResult = std::result::Result<(), Box<dyn Error>>;
-fn key() -> std::result::Result<BackendCustodyKey, Box<dyn Error>> {
+type TestResult = std::result::Result<(), Box<dyn Error + Send + Sync>>;
+fn key() -> std::result::Result<BackendCustodyKey, Box<dyn Error + Send + Sync>> {
     use sugarsubstitute_contracts::lifecycle::{CoordinatorEpoch, CoordinatorKey, NamespaceId};
     Ok(BackendCustodyKey::new(
         CoordinatorKey {
@@ -18,9 +18,10 @@ fn key() -> std::result::Result<BackendCustodyKey, Box<dyn Error>> {
         BackendCustodySession::new(1)?,
     ))
 }
-fn success()
--> std::result::Result<JobOutcome<BackendCustodyPipeReport, NativeObservationError>, Box<dyn Error>>
-{
+fn success() -> std::result::Result<
+    JobOutcome<BackendCustodyPipeReport, NativeObservationError>,
+    Box<dyn Error + Send + Sync>,
+> {
     Ok(JobOutcome::Success(BackendCustodyPipeReport {
         key: Some(key()?),
         received_messages: 1,
@@ -79,3 +80,6 @@ fn expired_coalesced_and_panicked_outcomes_remain_failures() -> TestResult {
     }
     Ok(())
 }
+
+#[path = "sequence_tests.rs"]
+mod sequence;

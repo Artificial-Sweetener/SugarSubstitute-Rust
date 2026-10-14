@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Decode schema-one compact observations; bytes and launch facts confer no authority.
-use sugarsubstitute_desktop::qualification_trace::{Cause, PngProof, Progress};
+use sugarsubstitute_desktop::qualification_trace::{
+    Cause, NativeFailure, NativePhase, PngProof, Progress, native_operation,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in super::super) enum Detail {
     Progress(Progress),
     Failed(Cause),
+    NativeFailed(NativeFailure),
     Persisted(PngProof),
     Finished,
 }
@@ -52,6 +55,29 @@ pub(super) fn parse(bytes: &[u8]) -> Option<Qualification> {
         match stage {
             "\"PreviewFailed\"" => {
                 Detail::Failed(Cause::parse(fields.next()?.strip_prefix("cause=")?)?)
+            }
+            "\"NativePreviewFailed\"" if main => {
+                let phase = NativePhase::parse(fields.next()?.strip_prefix("phase=")?)?;
+                let operation = native_operation(
+                    fields.next()?.strip_prefix("native_operation=\"")?.strip_suffix('"')?,
+                )?;
+                let has = match fields.next()? {
+                    "has_hresult=true" => true,
+                    "has_hresult=false" => false,
+                    _ => return None,
+                };
+                let raw = fields.next()?.strip_prefix("hresult=")?;
+                let code = raw.parse::<i32>().ok()?;
+                if has && (code >= 0 || !raw.starts_with('-') || raw.starts_with("-0"))
+                    || !has && raw != "0"
+                {
+                    return None;
+                }
+                Detail::NativeFailed(NativeFailure {
+                    phase,
+                    operation,
+                    hresult: has.then_some(code),
+                })
             }
             "\"NativeFinished\"" if !main => Detail::Finished,
             "\"PreviewPersisted\"" if main => {

@@ -232,3 +232,102 @@ fn compiled_diagnostic_variant_fits_original_inline_metadata_without_state_growt
     assert_eq!(size_of::<Observation>(), size_of::<Original>());
     assert_eq!(align_of::<Observation>(), align_of::<Original>());
 }
+
+#[test]
+fn actual_native_failure_formatter_decoder_relay_preserves_phase_operation_and_hresult() -> Result {
+    use producer::{NativeFailure, NativePhase};
+    let main = main()?;
+    for detail in [
+        NativeFailure {
+            phase: NativePhase::Seal,
+            operation: "observe_preview_bounds",
+            hresult: None,
+        },
+        NativeFailure {
+            phase: NativePhase::Callback,
+            operation: "complete_main_preview",
+            hresult: Some(i32::MIN),
+        },
+        NativeFailure {
+            phase: NativePhase::Stream,
+            operation: "complete_preview_stream",
+            hresult: Some(-2147286928),
+        },
+    ] {
+        let bytes = formatted(|| producer::native_failed(main, detail))?;
+        assert!(bytes.split(|byte| *byte == b'\n').all(|line| line.len() <= 512));
+        let records = parsed(&bytes);
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].detail, Detail::NativeFailed(detail));
+        let output =
+            String::from_utf8(formatted(|| assert!(relay(main.run, Some(main), records[0])))?)?;
+        assert!(output.contains("operation=\"main_preview_native_failed\""));
+        assert!(output.contains(&format!("phase={:?}", detail.phase)));
+        assert!(output.contains(&format!("native_operation=\"{}\"", detail.operation)));
+        assert!(output.contains(&format!("hresult={}", detail.hresult.unwrap_or(0))));
+    }
+    Ok(())
+}
+#[test]
+fn native_failure_relay_requires_actual_current_identity_and_rejects_foreign_or_stale() -> Result {
+    use producer::{NativeFailure, NativePhase};
+    let main = main()?;
+    let record = parsed(&formatted(|| {
+        producer::native_failed(
+            main,
+            NativeFailure {
+                phase: NativePhase::Issue,
+                operation: "capture_main_preview",
+                hresult: Some(-2147467259),
+            },
+        )
+    })?)[0];
+    let stale = MainIdentity { navigation: Generation::new(1)?, ..main };
+    let foreign =
+        MainIdentity { run: RunKey { instance: InstanceId::new(99)?, ..main.run }, ..main };
+    assert!(
+        formatted(|| {
+            for current in [None, Some(stale), Some(foreign)] {
+                assert!(!relay(main.run, current, record));
+            }
+            assert!(!relay(foreign.run, Some(main), record));
+        })?
+        .is_empty()
+    );
+    Ok(())
+}
+#[test]
+fn native_failure_decoder_rejects_unknown_malformed_and_overflow_native_details() -> Result {
+    use producer::{NativeFailure, NativePhase};
+    let main = main()?;
+    let line = String::from_utf8(formatted(|| {
+        producer::native_failed(
+            main,
+            NativeFailure {
+                phase: NativePhase::Issue,
+                operation: "capture_main_preview",
+                hresult: Some(-2147467259),
+            },
+        )
+    })?)?;
+    for invalid in [
+        line.replace("phase=Issue", "phase=Unknown"),
+        line.replace("capture_main_preview", "private_path"),
+        line.replace("hresult=-2147467259", "hresult=-2147483649"),
+        line.replace("hresult=-2147467259", "hresult=1"),
+        line.replace("hresult=-2147467259", "hresult=0"),
+        line.replace("hresult=-2147467259", "hresult=-02147467259"),
+        line.replace("has_hresult=true", "has_hresult=false"),
+        line.replace("has_hresult=true", "has_hresult=unknown"),
+        line.replace("main=true", "main=false"),
+        line.replace(
+            "sugarsubstitute_desktop::qualification_trace:",
+            "foreign::qualification_trace:",
+        ),
+        format!("{} raw=private\n", line.trim_end()),
+        "x".repeat(513) + &line,
+    ] {
+        assert!(parsed(invalid.as_bytes()).is_empty());
+    }
+    Ok(())
+}

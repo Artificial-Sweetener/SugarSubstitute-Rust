@@ -45,6 +45,15 @@ pub(super) fn relay(run: RunKey, current: Option<MainIdentity>, observed: Qualif
             tracing::warn!(operation="main_preview_qualification_failed", run=?run,
                 identity=?identity, cause_kind=?cause, "Observed closed original preview failure");
         }
+        Detail::NativeFailed(detail) => {
+            let Some(identity) = identity else {
+                return false;
+            };
+            tracing::warn!(operation="main_preview_native_failed", run=?run, identity=?identity,
+                phase=?detail.phase, native_operation=detail.operation,
+                has_hresult=detail.hresult.is_some(), hresult=detail.hresult.unwrap_or(0),
+                "Observed original native capture failure");
+        }
         Detail::Persisted(proof) => {
             let Some(identity) = identity else {
                 return false;

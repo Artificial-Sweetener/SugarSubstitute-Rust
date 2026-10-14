@@ -30,18 +30,7 @@ pub(crate) struct CoordinatorCustody {
     until: Moment,
     establishment_issued: bool,
     ready: bool,
-    shutdown: Option<ShutdownBudget>,
-    finish_received: bool,
-    terminal: Option<
-        sugarsubstitute_contracts::execution::JobCompletion<
-            sugarsubstitute_execution::backend_custody::BackendCustodyPipeReport,
-            sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeFailure,
-        >,
-    >,
-    pipe_closed: bool,
-    settled: bool,
-    grace_observed: bool,
-    total_observed: bool,
+    retirement: retirement::Retirement,
     observed_progress: Option<(bool, bool, bool, bool, bool)>,
 }
 impl CoordinatorCustody {
@@ -66,19 +55,13 @@ impl CoordinatorCustody {
             until,
             establishment_issued: false,
             ready: false,
-            shutdown: None,
-            finish_received: false,
-            terminal: None,
-            pipe_closed: false,
-            settled: false,
-            grace_observed: false,
-            total_observed: false,
+            retirement: retirement::Retirement::default(),
             observed_progress: None,
         })
     }
     /// Advance actual bootstrap, contained helper, authenticated establishment and claims binding.
     pub(crate) fn advance(&mut self, resources: &mut BackendResources<'_>) -> Result<bool> {
-        if self.shutdown.is_some() {
+        if self.retirement.original.is_some() {
             return Ok(false);
         }
         if self.parent.is_none() {
@@ -244,7 +227,7 @@ impl CoordinatorCustody {
         budget: ShutdownBudget,
         resources: &BackendResources<'_>,
     ) -> Result<bool> {
-        if self.settled {
+        if self.retirement.settled {
             return Ok(true);
         }
         Ok(self.parent()?.advance_resource_release(
@@ -255,13 +238,11 @@ impl CoordinatorCustody {
     }
     /// Require genuine helper, native family and pipe retirement before activation closes.
     pub(crate) fn settled(&self) -> bool {
-        self.settled
+        self.retirement.settled
     }
     /// Preserve the one original witness shutdown wake.
     pub(crate) fn next_deadline(&self) -> Option<Moment> {
-        self.shutdown.filter(|_| !self.settled && !self.total_observed).map(|budget| {
-            if self.grace_observed { budget.settle_until } else { budget.graceful_until }
-        })
+        self.retirement.next_deadline()
     }
 }
 /// Preserve class quotas and allocate IDs in actual admission order.

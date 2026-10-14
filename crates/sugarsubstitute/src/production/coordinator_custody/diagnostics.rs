@@ -25,3 +25,30 @@ impl Error for TransitionFailed {
         Some(self.cause.as_ref())
     }
 }
+
+/// Preserve the first protocol failure while retaining the actual cleanup failure too.
+pub(super) fn preserve_cleanup(
+    primary: Option<Box<dyn Error + Send + Sync>>,
+    cleanup: Box<dyn Error + Send + Sync>,
+) -> Box<dyn Error + Send + Sync> {
+    match primary {
+        Some(primary) => Box::new(CleanupFailed { primary, cleanup }),
+        None => cleanup,
+    }
+}
+/// Both owned failures remain bounded; source identifies the original operation.
+#[derive(Debug)]
+struct CleanupFailed {
+    primary: Box<dyn Error + Send + Sync>,
+    cleanup: Box<dyn Error + Send + Sync>,
+}
+impl fmt::Display for CleanupFailed {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "{}; cleanup failed: {}", self.primary, self.cleanup)
+    }
+}
+impl Error for CleanupFailed {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(self.primary.as_ref())
+    }
+}

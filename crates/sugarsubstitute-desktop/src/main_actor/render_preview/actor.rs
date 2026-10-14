@@ -3,6 +3,7 @@
 //! Seal genuine current main facts immediately before one optional native renderer capture.
 
 use super::{Capture, capture::current_ticks};
+use crate::qualification_trace::{NativeFailure, NativePhase, native_failed};
 use crate::{
     DesktopError, DesktopStartupObservation, MainIdentity, MainPreviewSnapshot,
     MainPreviewViewport, main_actor::MainActor, main_readiness_types::DocumentId,
@@ -36,19 +37,24 @@ impl MainActor {
         source: CounterDeadline,
     ) -> Option<DesktopStartupObservation> {
         if self.preview_requested {
-            return Some(self.preview_failure(DesktopError::message(
-                "capture_main_preview",
-                "qualification capture already requested",
-            )));
+            return Some(self.preview_failure(
+                NativePhase::Admission,
+                DesktopError::message(
+                    "capture_main_preview",
+                    "qualification capture already requested",
+                ),
+            ));
         }
         self.preview_requested = true;
-        let created = (|| {
-            let seal = self.render_seal(identity, source)?;
-            Capture::new(seal, self.request()?.storage_lease(), self.events()?.clone())
-        })();
+        let seal = match self.render_seal(identity, source) {
+            Ok(seal) => seal,
+            Err(cause) => return Some(self.preview_failure(NativePhase::Seal, cause)),
+        };
+        let created =
+            (|| Capture::new(seal, self.request()?.storage_lease(), self.events()?.clone()))();
         match created {
             Ok(owner) => self.preview = Some(owner),
-            Err(cause) => return Some(self.preview_failure(cause)),
+            Err(cause) => return Some(self.preview_failure(NativePhase::Storage, cause)),
         }
         let issued = self
             .preview
@@ -57,7 +63,7 @@ impl MainActor {
             .and_then(Capture::issue);
         match issued {
             Ok(()) => None,
-            Err(cause) => Some(self.preview_failure(cause)),
+            Err(cause) => Some(self.preview_failure(NativePhase::Issue, cause)),
         }
     }
 
@@ -153,29 +159,37 @@ impl MainActor {
         let source = pending.snapshot().source_deadline();
         let current = match self.render_seal(self.identity(), source) {
             Ok(seal) => seal,
-            Err(cause) => return Some(self.preview_failure(cause)),
+            Err(cause) => return Some(self.preview_failure(NativePhase::Revalidate, cause)),
         };
         if let Err(cause) = self.preview_quiescence() {
-            return Some(self.preview_failure(cause));
+            return Some(self.preview_failure(NativePhase::Revalidate, cause));
         }
         let owner = self.preview.as_mut()?;
         if !owner.matches(current.snapshot, &current.core) {
-            return Some(self.preview_failure(DesktopError::message(
-                "complete_main_preview",
-                "captured native document or viewport changed",
-            )));
+            return Some(self.preview_failure(
+                NativePhase::Revalidate,
+                DesktopError::message(
+                    "complete_main_preview",
+                    "captured native document or viewport changed",
+                ),
+            ));
         }
         match owner.take() {
             Ok(Some(image)) => Some(DesktopStartupObservation::MainPreviewCaptured(image)),
             Ok(None) => None,
-            Err(cause) => Some(self.preview_failure(cause)),
+            Err(cause) => Some(self.preview_failure(NativePhase::Publication, cause)),
         }
     }
 
-    fn preview_failure(&mut self, cause: DesktopError) -> DesktopStartupObservation {
+    fn preview_failure(
+        &mut self,
+        phase: NativePhase,
+        cause: DesktopError,
+    ) -> DesktopStartupObservation {
         if let Some(owner) = &mut self.preview {
             owner.reported_failure();
         }
+        native_failed(self.identity(), NativeFailure::from_error(phase, &cause));
         DesktopStartupObservation::MainPreviewFailed { identity: self.identity(), cause }
     }
 

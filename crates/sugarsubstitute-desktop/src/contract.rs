@@ -239,6 +239,12 @@ pub struct DesktopError {
 mod failure_diagnostic;
 
 impl DesktopError {
+    /// Borrow only the stable operation for feature-only closed native diagnostics.
+    #[cfg(all(feature = "k1-native-qualification", any(windows, test)))]
+    pub(crate) fn qualification_operation(&self) -> &'static str {
+        self.operation
+    }
+
     /// Attach an external failure to its adapter operation.
     pub(crate) fn new(operation: &'static str, cause: impl Error + 'static) -> Self {
         Self { operation, cause: Box::new(cause) }

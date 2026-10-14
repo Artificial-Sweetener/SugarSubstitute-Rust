@@ -137,6 +137,7 @@ impl State {
             tracing::error!(operation="backend_custody_parent_failed", key=?key, stage=cause.stage(),
                 finish_nonce=self.finish.as_ref().and_then(finish::Finish::nonce),
                 pending_nonce=self.pending.map(|(frame, _)| frame.nonce),
+                pending_kind=self.pending.map(|(frame, _)| command_kind(&frame.command)),
                 original_until=?self.pending.map(|(_, until)| until),
                 read_operation=?self.read, write_operation=?self.write,
                 receipt_nonce=self.receipt.map(|facts| facts.nonce),
@@ -250,4 +251,17 @@ fn matches_reply(command: BackendCustodyCommand, receipt: BackendCustodyReceipt)
 /// Return a bounded typed protocol rejection without paths or capability contents.
 pub(super) fn reject(stage: &'static str) -> NativeObservationError {
     NativeObservationError::new(stage, LifecyclePipeError::InvalidMessage)
+}
+
+/// Classify the retained operation without exposing payloads, paths or capabilities.
+fn command_kind(command: &BackendCustodyCommand) -> &'static str {
+    match command {
+        BackendCustodyCommand::Hello { .. } => "Hello",
+        BackendCustodyCommand::Establish { .. } => "Establish",
+        BackendCustodyCommand::Prepare { .. } => "Prepare",
+        BackendCustodyCommand::Root { .. } => "Root",
+        BackendCustodyCommand::Stop { .. } => "Stop",
+        BackendCustodyCommand::Finish { .. } => "Finish",
+        BackendCustodyCommand::Receipt(_) => "Receipt",
+    }
 }

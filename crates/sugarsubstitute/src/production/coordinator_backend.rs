@@ -305,7 +305,9 @@ impl CoordinatorBackend {
             && self.records.iter().flatten().all(|r| r.settled)
             && self.custody.as_ref().is_none_or(|custody| custody.settled())
     }
-    /// Close the witness once all writer claims and physical local families are closed.
+    /// Progress final witness retirement after local writers and families close.
+    /// The Parent transaction owner retains prior release until its exact ACK is consumed
+    /// by finish_cleanup; helper process cleanup requires the final Finished response.
     pub(crate) fn close_custody(
         &mut self,
         budget: ShutdownBudget,
