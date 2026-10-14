@@ -52,21 +52,48 @@ test('presents preferred Copy and the explicit alternate format with local revea
   const send = jest.fn<(command: CanvasCommand) => void>();
   const caps = { schema: 1 as const, commands: ['copy-media', 'file-media'] as const };
   const local = canvasContextActions(source, caps, send);
-  expect(local.map((entry) => entry.label)).toEqual(['Reveal in folder', 'Copy', 'Copy .jpg']);
-  local[2]!.select?.();
+  expect(local.map((entry) => entry.label)).toEqual(['Copy', 'Copy .jpg', 'Reveal in folder']);
+  local[1]!.select?.();
   expect(send).toHaveBeenCalledWith({ type: 'copy-media', target: 'primary', format: 'jpeg' });
   const remote = canvasContextActions(
     { ...source, mediaActions: { preferredCopyFormat: 'jpeg', fileAction: 'download' } },
     caps,
     send,
   );
-  expect(remote.map((entry) => entry.label)).toEqual(['Download', 'Copy', 'Copy .png']);
-  remote[1]!.select?.();
+  expect(remote.map((entry) => entry.label)).toEqual(['Copy', 'Copy .png', 'Download']);
+  remote[0]!.select?.();
   expect(send).toHaveBeenLastCalledWith({
     type: 'copy-media',
     target: 'primary',
     format: 'preferred',
   });
+});
+
+test('orders comparison before a separator and image actions in the Substitute order', () => {
+  const caps = {
+    schema: 1 as const,
+    commands: ['comparison', 'copy-media', 'file-media'] as const,
+  };
+  for (const profile of [
+    { preferredCopyFormat: 'png' as const, fileAction: 'reveal' as const },
+    { preferredCopyFormat: 'jpeg' as const, fileAction: 'download' as const },
+  ]) {
+    const actions = canvasContextActions({ ...snapshot(), mediaActions: profile }, caps, jest.fn());
+    expect(actions.map((entry) => (entry.separator ? 'separator' : entry.label))).toEqual([
+      'Compare outputs',
+      'separator',
+      'Copy',
+      profile.preferredCopyFormat === 'png' ? 'Copy .jpg' : 'Copy .png',
+      profile.fileAction === 'reveal' ? 'Reveal in folder' : 'Download',
+    ]);
+    const compareOnly = canvasContextActions(
+      snapshot(),
+      { schema: 1, commands: ['comparison'] },
+      jest.fn(),
+    );
+    expect(compareOnly).toHaveLength(1);
+    expect(compareOnly[0]?.separator).toBeUndefined();
+  }
 });
 
 test('pins a batch context command to the clicked image without changing the displayed selection', async () => {

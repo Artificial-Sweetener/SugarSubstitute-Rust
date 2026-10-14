@@ -18,28 +18,6 @@ function canvasContextActions(snapshot, capabilities, send, target = "primary") 
       select: () => send(command)
     });
   }
-  const available = canvasMediaItem(snapshot, target) !== null;
-  if (snapshot.mediaActions)
-    action(
-      snapshot.mediaActions.fileAction === "reveal" ? "Reveal in folder" : "Download",
-      { type: "file-media", target },
-      !available
-    );
-  function copies(itemTarget, label, alternateLabel) {
-    const disabled = canvasMediaItem(snapshot, itemTarget) === null;
-    action(label, { type: "copy-media", target: itemTarget, format: "preferred" }, disabled);
-    if (snapshot.mediaActions) {
-      const format = snapshot.mediaActions.preferredCopyFormat === "jpeg" ? "png" : "jpeg";
-      action(
-        `${alternateLabel} .${format === "jpeg" ? "jpg" : "png"}`,
-        { type: "copy-media", target: itemTarget, format },
-        disabled
-      );
-    }
-  }
-  copies(target, "Copy", "Copy");
-  if (comparison && target === "primary")
-    copies("secondary", "Copy comparison image", "Copy comparison");
   action(
     "Compare outputs",
     { type: "comparison", enabled: !comparison },
@@ -55,6 +33,31 @@ function canvasContextActions(snapshot, capabilities, send, target = "primary") 
       orientation: comparison.orientation === "vertical" ? "horizontal" : "vertical"
     });
   }
+  const comparisonCount = entries.length;
+  function copies(itemTarget, label, alternateLabel) {
+    const disabled = canvasMediaItem(snapshot, itemTarget) === null;
+    action(label, { type: "copy-media", target: itemTarget, format: "preferred" }, disabled);
+    if (snapshot.mediaActions) {
+      const format = snapshot.mediaActions.preferredCopyFormat === "jpeg" ? "png" : "jpeg";
+      action(
+        `${alternateLabel} .${format === "jpeg" ? "jpg" : "png"}`,
+        { type: "copy-media", target: itemTarget, format },
+        disabled
+      );
+    }
+  }
+  copies(target, "Copy", "Copy");
+  if (comparison && target === "primary")
+    copies("secondary", "Copy comparison image", "Copy comparison");
+  const available = canvasMediaItem(snapshot, target) !== null;
+  if (snapshot.mediaActions)
+    action(
+      snapshot.mediaActions.fileAction === "reveal" ? "Reveal in folder" : "Download",
+      { type: "file-media", target },
+      !available
+    );
+  if (comparisonCount > 0 && entries.length > comparisonCount)
+    entries.splice(comparisonCount, 0, { label: "", separator: true });
   return entries;
 }
 

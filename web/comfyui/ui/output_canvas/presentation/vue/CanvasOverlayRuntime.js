@@ -4,7 +4,7 @@ import {
 import {
   canvasContextActions,
   canvasMediaItem
-} from "../../../chunk-4I7PXU5I.js";
+} from "../../../chunk-5KUSCYB6.js";
 import {
   CanvasOverlay
 } from "../../../chunk-OMMMFGR6.js";
