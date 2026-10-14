@@ -134,6 +134,10 @@ export class RelationHostLifecycle {
     prepare(payload) {
         return this.#execution.prepare(payload);
     }
+    /** Present the authoritative override menu from an alternate frame affordance. */
+    openOverrideMenu(trigger) {
+        this.#toolbar.openMenu(trigger);
+    }
     /** Release all reversible host hooks and presentation at application teardown. */
     dispose() {
         this.#active = false;

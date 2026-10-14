@@ -1,0 +1,146 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Bind reversible host frame mounts to the existing workflow, mode and palette authorities. */
+import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
+import { SubstituteFrameMode } from './SubstituteFrameMode.js';
+import { ComfyFrameWorkflowAdapter } from './ComfyFrameWorkflowAdapter.js';
+import { SubstituteFrameView } from './SubstituteFrameView.js';
+import { substituteFrameCss } from './SubstituteFrameStyles.js';
+/** Keep one frame lifetime independent of graph rendering, workflow contents and Rust chrome. */
+export class SubstituteFrameHost {
+    options;
+    mode = new SubstituteFrameMode();
+    #stops = [];
+    #style;
+    #presence = null;
+    #mount = null;
+    #native = null;
+    #view = null;
+    #adapter = null;
+    #stopWorkflow = null;
+    #queued = false;
+    #disposed = false;
+    /** Prepare collaborators without choosing presentation before settings are restored. */
+    constructor(options) {
+        this.options = options;
+        this.#style = options.document.createElement('style');
+        this.#style.id = 'sugarcubes-substitute-frame';
+        this.#style.textContent = substituteFrameCss;
+    }
+    /** Subscribe to named host mounts and existing workflow and appearance owners only. */
+    setup() {
+        this.#stops.push(this.mode.subscribe(() => this.#reconcile()), this.options.palette.subscribe(() => this.#palette()), this.options.sessions.subscribe(() => this.#queue()), this.options.activity.subscribe(() => this.#queue()));
+        this.#presence = new HostSurfaceObserver(this.options.document.body, '.workflow-tabs-container', () => this.#queue(), { content: true, exclude: '.sc-substitute-frame' });
+        this.mode.setup(this.options.app);
+        this.#reconcile();
+        this.options.document.defaultView?.addEventListener('pagehide', this.dispose);
+    }
+    /** Restore native presentation and release only owned subscriptions and mounts. */
+    dispose = () => {
+        this.#disposed = true;
+        this.#unmount();
+        this.#presence?.disconnect();
+        for (const stop of this.#stops.splice(0))
+            stop();
+        this.mode.dispose();
+        this.#style.remove();
+        this.options.document.documentElement.removeAttribute('data-sc-substitute-frame');
+        this.options.document.defaultView?.removeEventListener('pagehide', this.dispose);
+    };
+    /** Coalesce host and workflow events without promoting popup activity into graph discovery. */
+    #queue() {
+        if (this.#queued || this.#disposed)
+            return;
+        this.#queued = true;
+        queueMicrotask(() => {
+            this.#queued = false;
+            this.#reconcile();
+        });
+    }
+    /** Replace visual presentation while retaining Comfy's mounted action and workflow owners. */
+    #reconcile() {
+        if (this.#disposed)
+            return;
+        const { document } = this.options;
+        if (!this.mode.enabled) {
+            this.#unmount();
+            this.#style.remove();
+            document.documentElement.removeAttribute('data-sc-substitute-frame');
+            return;
+        }
+        const native = document.querySelector('.workflow-tabs-container .workflow-tabs-container');
+        const mount = native?.parentElement?.parentElement ?? null;
+        if (!native || !mount)
+            return;
+        try {
+            if (this.#mount !== mount || this.#native !== native) {
+                this.#unmount();
+                this.#attach(mount, native);
+            }
+            if (!this.#style.isConnected)
+                document.head.append(this.#style);
+            document.documentElement.setAttribute('data-sc-substitute-frame', '');
+            this.#view?.update(this.#adapter?.read(this.options.sessions.read().open) ?? [], (id) => this.options.activity.unread(id));
+            this.#palette();
+        }
+        catch (error) {
+            this.options.report(error);
+            this.#unmount();
+            document.documentElement.removeAttribute('data-sc-substitute-frame');
+        }
+    }
+    /** Bind typed intents once per native frame replacement. */
+    #attach(mount, native) {
+        this.#mount = mount;
+        this.#native = native;
+        this.#adapter = new ComfyFrameWorkflowAdapter(this.options.app, native);
+        this.#stopWorkflow = this.#adapter.subscribe(() => this.#queue());
+        const command = (id) => {
+            void this.#adapter?.command(id).catch(this.options.report);
+        };
+        this.#view = new SubstituteFrameView(this.options.document, {
+            workflows: {
+                activate: (id) => this.#adapter?.activate(id, this.options.sessions.read().open),
+                close: (id) => this.#adapter?.close(id, this.options.sessions.read().open),
+                reorder: (from, to) => this.#adapter?.reorder(from, to),
+                create: () => command('Comfy.NewBlankWorkflow'),
+                report: this.options.report,
+            },
+            command,
+            stack: this.options.stackControls(),
+            openOverrides: this.options.openOverrides,
+            report: this.options.report,
+        });
+        native.parentElement?.setAttribute('data-sc-frame-native', '');
+        mount.append(this.#view.element);
+    }
+    /** Project accepted palette facts without adding a theme observer or renderer dependency. */
+    #palette() {
+        const { color, dark } = this.options.palette.theme;
+        this.#view?.setPalette(color, dark);
+    }
+    /** Retire the view while preserving host controls, workflow state and saved preferences. */
+    #unmount() {
+        this.#stopWorkflow?.();
+        this.#stopWorkflow = null;
+        this.#view?.dispose();
+        this.#native?.parentElement?.removeAttribute('data-sc-frame-native');
+        this.#mount = null;
+        this.#native = null;
+        this.#view = null;
+        this.#adapter = null;
+    }
+}

@@ -46,25 +46,7 @@ export class GlobalOverrideToolbar {
         chevron.className = 'icon-[lucide--chevron-down]';
         chevron.setAttribute('aria-hidden', 'true');
         this.#menuButton.append(icon, chevron);
-        this.#menuButton.addEventListener('click', () => {
-            if (this.#menu.isOpen()) {
-                this.#menu.close();
-                return;
-            }
-            this.#menuButton.setAttribute('aria-expanded', 'true');
-            this.#menu.open({
-                label: 'Set Global Override',
-                trigger: this.#menuButton,
-                anchor: { kind: 'below', bounds: this.#menuButton.getBoundingClientRect() },
-                closed: () => this.#menuButton.setAttribute('aria-expanded', 'false'),
-                entries: relations.snapshot().groups.map((group) => ({
-                    label: group.label,
-                    checked: group.enabled,
-                    selection: 'multiple',
-                    select: () => this.#run(() => relations.setOverrideEnabled(group.key, !group.enabled)),
-                })),
-            });
-        });
+        this.#menuButton.addEventListener('click', () => this.openMenu(this.#menuButton));
         const grip = document.createElement('button');
         grip.type = 'button';
         grip.className = 'sc-overrides-grip';
@@ -100,6 +82,26 @@ export class GlobalOverrideToolbar {
         }, reportError, stateStore);
         this.#labels = new MutationObserver(this.#measureLabels);
         this.#labels.observe(this.element, { childList: true, subtree: true, characterData: true });
+    }
+    /** Anchor the same override menu to either native toolbar or Substitute frame controls. */
+    openMenu(trigger) {
+        if (this.#menu.isOpen()) {
+            this.#menu.close();
+            return;
+        }
+        trigger.setAttribute('aria-expanded', 'true');
+        this.#menu.open({
+            label: 'Set Global Override',
+            trigger,
+            anchor: { kind: 'below', bounds: trigger.getBoundingClientRect() },
+            closed: () => trigger.setAttribute('aria-expanded', 'false'),
+            entries: this.relations.snapshot().groups.map((group) => ({
+                label: group.label,
+                checked: group.enabled,
+                selection: 'multiple',
+                select: () => this.#run(() => this.relations.setOverrideEnabled(group.key, !group.enabled)),
+            })),
+        });
     }
     /** Let an embedding host select its chrome while retaining mounted controls and menu identity. */
     setPresentation(presentation) {

@@ -253,6 +253,15 @@ test('reserves workflow space below Run and creates every field through the widg
   menuButton.click();
   expect(open.mock.calls[0]?.[0].entries.map((entry) => entry.label)).toEqual(['Seed']);
   expect(open.mock.calls[0]?.[0].entries[0]?.checked).toBe(true);
+  const framePin = document.createElement('button');
+  document.body.append(framePin);
+  toolbar.openMenu(framePin);
+  const frameRequest = open.mock.calls.at(-1)?.[0];
+  expect(frameRequest?.trigger).toBe(framePin);
+  expect(frameRequest?.anchor).toEqual({ kind: 'below', bounds: framePin.getBoundingClientRect() });
+  expect(framePin.getAttribute('aria-expanded')).toBe('true');
+  frameRequest?.closed?.();
+  expect(framePin.getAttribute('aria-expanded')).toBe('false');
   open.mockRestore();
   runRow.remove();
   toolbar.reconcile();

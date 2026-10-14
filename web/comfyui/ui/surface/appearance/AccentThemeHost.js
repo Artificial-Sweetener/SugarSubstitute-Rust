@@ -23,6 +23,11 @@ import { accentThemeCss } from './AccentThemeStyles.js';
 export const ACCENT_COLOR_SETTING = 'SugarCubes.Appearance.AccentColor';
 /** Project one accepted accent into mounted and future surfaces without rebuilding graph inventories. */
 export class AccentThemeHost {
+    #listeners = new Set();
+    #theme = Object.freeze({
+        color: DEFAULT_ACCENT_COLOR,
+        dark: true,
+    });
     #document;
     #app;
     #report;
@@ -33,6 +38,15 @@ export class AccentThemeHost {
     #queued = false;
     #disposed = false;
     #setup = false;
+    /** Expose the authoritative accepted palette independently of node renderer presentation. */
+    get theme() {
+        return this.#theme;
+    }
+    /** Observe palette changes without introducing another document observer or setting owner. */
+    subscribe(listener) {
+        this.#listeners.add(listener);
+        return () => this.#listeners.delete(listener);
+    }
     /** Bind the host-facing settings and CSS boundary without claiming external variables. */
     constructor(documentRef, app, reportError) {
         this.#document = documentRef;
@@ -110,6 +124,9 @@ export class AccentThemeHost {
             return;
         this.#signature = signature;
         this.#style.textContent = accentThemeCss(color, dark);
+        this.#theme = Object.freeze({ color, dark });
+        for (const listener of this.#listeners)
+            listener();
         const app = isRecord(this.#app) ? this.#app : {};
         const canvas = isRecord(app.canvas) ? app.canvas : {};
         if (typeof canvas.setDirty === 'function')
@@ -120,6 +137,7 @@ export class AccentThemeHost {
         if (this.#disposed)
             return;
         this.#disposed = true;
+        this.#listeners.clear();
         this.#observer.disconnect();
         this.#document.head.removeEventListener('load', this.#onStylesheetLoad, true);
         this.#style.remove();

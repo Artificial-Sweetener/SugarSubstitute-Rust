@@ -52,6 +52,7 @@ sugarcubes_model_roots = ["py.typed"]
 
 [tool.black]
 target-version = ["py312"]
+extend-exclude = '\.pytest_cache/'
 
 [tool.mypy]
 python_version = "3.12"

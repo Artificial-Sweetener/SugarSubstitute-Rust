@@ -17,6 +17,10 @@
 # ComfyUI consumes this compiler-owned deployment tree.
 web/** linguist-generated=true
 
+# Preserve the original bytes covered by the frame artwork provenance hashes.
+frontend/static/orb/*.svg binary
+web/orb/*.svg binary
+
 # Windows-native scripts should keep CRLF.
 *.bat text eol=crlf
 *.cmd text eol=crlf

@@ -41,6 +41,7 @@ export interface CubeStackCommandRuntime {
 export function createCubeStackCommands(options: {
   document: Document;
   appearance: FluentAppearanceSource;
+  frame?: CubeStackHostOptions['frame'];
   picker: Pick<CubePickerHostIntegration, 'openCart'>;
   library: Pick<CubeWorkflowLibraryActions, 'classification' | 'capture'>;
   dialogs: Pick<ModalService, 'promptText'>;
@@ -72,6 +73,7 @@ export function createCubeStackCommands(options: {
   };
   return {
     appearance: options.appearance,
+    ...(options.frame ? { frame: options.frame } : {}),
     closeTransient: () => menu.close(),
     getReorder: () => options.getRuntime()?.reorder ?? null,
     resolveSource: options.resolveSource,

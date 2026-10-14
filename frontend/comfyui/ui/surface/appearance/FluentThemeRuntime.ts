@@ -28,8 +28,10 @@ import { Button } from '@fluentui/web-components/button/class.js';
 import { definition as ButtonDefinition } from '@fluentui/web-components/button/definition.js';
 import { Tab } from '@fluentui/web-components/tab/class.js';
 import { definition as TabDefinition } from '@fluentui/web-components/tab/definition.js';
+import { styles as TabStyles } from '@fluentui/web-components/tab/styles.js';
 import { Tablist } from '@fluentui/web-components/tablist/class.js';
 import { definition as TablistDefinition } from '@fluentui/web-components/tablist/definition.js';
+import { styles as TablistStyles } from '@fluentui/web-components/tablist/styles.js';
 import { Checkbox } from '@fluentui/web-components/checkbox/class.js';
 import { definition as CheckboxDefinition } from '@fluentui/web-components/checkbox/definition.js';
 import { TextInput } from '@fluentui/web-components/text-input/class.js';
@@ -40,6 +42,13 @@ import type { FluentBooleanCheckbox } from './NativeToggleRows.js';
 import type { FluentBooleanSegmentsControls } from './NativeBooleanSegments.js';
 import { adaptFluentSliderGeometry } from './FluentSliderGeometry.js';
 import { createFluentSliderThumb } from './FluentSliderThumb.js';
+import { css } from '@microsoft/fast-element';
+import { workflowTabCss, workflowTablistCss } from '../frame/WorkflowTabStyles.js';
+
+/** Scope Substitute geometry to workflow tabs without changing output or boolean segments. */
+class WorkflowTab extends Tab {}
+/** Retain Microsoft's native focus group for the complete workflow-tab lifetime. */
+class WorkflowTablist extends Tablist {}
 
 /** Retain the official slider's bindings and stylesheet during connected presentation moves. */
 class PresentationSlider extends Slider {
@@ -86,6 +95,39 @@ if (!customElements.get('fluent-tab')) await PresentationTab.define(TabDefinitio
 if (!customElements.get('fluent-tablist')) await PresentationTablist.define(TablistDefinition);
 if (!customElements.get('fluent-checkbox')) await PresentationCheckbox.define(CheckboxDefinition);
 if (!customElements.get('fluent-text-input')) await TextInput.define(TextInputDefinition);
+const workflowTabDefinition: typeof TabDefinition = {
+  ...TabDefinition,
+  name: 'sc-workflow-tab',
+  styles: [
+    TabStyles,
+    css`
+      ${workflowTabCss}
+    `,
+  ],
+};
+const workflowTablistDefinition: typeof TablistDefinition = {
+  ...TablistDefinition,
+  name: 'sc-workflow-tablist',
+  styles: [
+    TablistStyles,
+    css`
+      ${workflowTablistCss}
+    `,
+  ],
+};
+if (!customElements.get('sc-workflow-tab')) await WorkflowTab.define(workflowTabDefinition);
+if (!customElements.get('sc-workflow-tablist'))
+  await WorkflowTablist.define(workflowTablistDefinition);
+
+/** Create an official workflow tablist without constructor-time document-create restrictions. */
+export function createWorkflowTablist(): HTMLElement & { activeid: string } {
+  return new WorkflowTablist();
+}
+
+/** Instantiate one workflow-specific official Fluent tab. */
+export function createWorkflowTab(documentRef: Document): HTMLElement {
+  return documentRef.createElement('sc-workflow-tab');
+}
 
 /** Instantiate Microsoft's native text input through the narrow finder control boundary. */
 export function createFluentFinderInput(documentRef: Document): FluentFinderInput {
