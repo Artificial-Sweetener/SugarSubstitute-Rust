@@ -61,6 +61,11 @@ impl PublicationAuthority<'_> {
     }
 }
 impl<const N: usize> PublicationBinding<N> {
+    /// Distinguish an issued write/retirement from a retained read-only observation.
+    pub(crate) fn targets_record(&self) -> bool {
+        self.encoded.is_some()
+    }
+
     /// Retain an observation's ports while a failed source close remains owned.
     pub(super) fn read(
         current: &JobContext,

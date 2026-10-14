@@ -19,6 +19,8 @@ pub(crate) mod native_file;
 pub(crate) mod native_name;
 pub(crate) mod native_phase;
 pub(crate) mod paths;
+#[cfg(test)]
+pub(crate) mod profile_fixture;
 pub(crate) mod record_file;
 mod resolution;
 pub(crate) mod security;

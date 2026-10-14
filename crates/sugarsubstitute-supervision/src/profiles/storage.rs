@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Perform profile filesystem effects under the shared protected-storage owner.
+mod disposal;
 #[cfg(test)]
 mod tests;
 use super::*;
@@ -21,6 +22,7 @@ pub(super) struct NativeState {
     pub(super) held: bool,
     pub(super) retired: bool,
     pub(super) release_published: bool,
+    pub(super) publication_attempted: bool,
     pub(super) close_deadline: Option<Moment>,
     pub(super) prepared_folder: Option<PreparedFolder>,
     pub(super) environment: Option<(attempt::Binding, JobId)>,
@@ -46,6 +48,7 @@ impl NativeState {
             held: false,
             retired: true,
             release_published: false,
+            publication_attempted: false,
             close_deadline: None,
             environment: None,
             prepared_folder: None,
@@ -159,6 +162,7 @@ impl ProfilePort for WindowsProfilePort {
         }
         state.original_released = previous.map(|(_, bytes)| bytes);
         state.record = Some(record);
+        state.publication_attempted = true;
         record_file::publish(
             file,
             &record.encode(),
@@ -239,6 +243,14 @@ impl ProfilePort for WindowsProfilePort {
     }
     fn release(&self, state: &mut NativeState, context: &JobContext) -> Result<(), ClaimError> {
         check(context)?;
+        if disposal::dispose_unpublished(
+            state,
+            context,
+            |file| file.close(),
+            |root| root.retire(context),
+        )? {
+            return Ok(());
+        }
         if let Some(file) = state.file.as_ref().filter(|file| file.is_locked()) {
             let expected = state.record.map(record::Record::encode);
             let observed = record_file::retire_publication(file, expected.as_ref(), context)?;
