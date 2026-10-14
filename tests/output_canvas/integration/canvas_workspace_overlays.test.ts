@@ -88,6 +88,7 @@ function fixture() {
     changed,
     width: () => undefined,
     close: () => undefined,
+    report: () => undefined,
   });
   return {
     root,

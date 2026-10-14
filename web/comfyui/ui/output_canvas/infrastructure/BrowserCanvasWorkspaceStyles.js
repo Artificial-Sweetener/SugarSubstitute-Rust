@@ -40,11 +40,12 @@ export function ensureBrowserCanvasWorkspaceStyles(document) {
     .sc-output-workspace-pane { position:absolute; right:0; top:0; bottom:0; z-index:${MASONRY_STACK_Z_INDEX + 2};
       display:flex; flex-direction:column; box-sizing:border-box; pointer-events:auto;
       color:var(--fg-color,#ddd); background:var(--comfy-menu-bg,#202020);
-      border-left:1px solid var(--interface-stroke,#454545); font:13px var(--fontFamilyBase,"Segoe UI",system-ui,sans-serif); }
+      font:13px var(--fontFamilyBase,"Segoe UI",system-ui,sans-serif); }
     .sc-output-workspace-pane[hidden],.sc-output-workspace-backdrop[hidden] { display:none; }
-    .sc-output-workspace-view { position:relative; flex:1; min-height:0; margin-left:6px; overflow:hidden; }
-    .sc-output-workspace-divider { position:absolute; top:0; bottom:0; left:0; width:6px; cursor:ew-resize;
+    .sc-output-workspace-view { position:relative; flex:1; min-height:0; margin-left:2px; overflow:hidden; }
+    .sc-output-workspace-divider { position:absolute; top:0; bottom:0; left:0; width:2px; cursor:ew-resize;
       touch-action:none; background:var(--interface-stroke,#454545); pointer-events:auto; }
+    .sc-output-workspace-divider::before { content:''; position:absolute; inset:0 -3px; }
     .sc-output-workspace-divider:hover { background:var(--p-primary-color,var(--ring,#df258e)); }
     .sc-output-workspace-divider:focus-visible {
       outline:2px solid var(--p-primary-color,var(--ring,#df258e)); outline-offset:-2px; }

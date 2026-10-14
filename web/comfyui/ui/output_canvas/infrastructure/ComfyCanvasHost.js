@@ -102,7 +102,7 @@ export class ComfyCanvasHost {
         const changed = () => {
             if (this.#started && !this.#disposed) {
                 this.#primary.reconcile();
-                this.#toolbar.update(this.#workspace.canvas !== null, this.#workspace.content !== null);
+                this.#toolbar.update(this.#workspace.visible, this.#workspace.content !== null);
             }
         };
         this.#workspace = new ComfyCanvasWorkspaceHost(app, document, this.#preferences, frames, changed, report, options.presentation);

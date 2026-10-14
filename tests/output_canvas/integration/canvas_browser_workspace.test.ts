@@ -19,6 +19,7 @@ import { jest } from '@jest/globals';
 import { BrowserCanvasWorkspace } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/BrowserCanvasWorkspace.js';
 import { CanvasWorkspaceLayout } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasWorkspaceLayout.js';
 import { CanvasFrameFixture } from '../support/CanvasFrameFixture.js';
+import { installCanvasWorkspaceAnimation } from '../support/CanvasWorkspaceMotionFixture.js';
 
 /** Supply only platform geometry while exercising real DOM allocation and layout policy. */
 function fixture(width = 1400) {
@@ -54,6 +55,7 @@ function fixture(width = 1400) {
     width: jest.fn<(width: number) => void>(),
     close: jest.fn(),
     changed: jest.fn(),
+    report: jest.fn(),
   };
   const workspace = new BrowserCanvasWorkspace(root, panel, model, frames, actions);
   return {
@@ -176,6 +178,46 @@ test('coalesces workspace measurements and cancels pending observation on teardo
   expect(f.frames.pending).toBe(0);
 });
 
+test('keeps exit pixels and their width until settled while accepted visibility closes immediately', async () => {
+  const f = fixture();
+  const pane = f.root.querySelector<HTMLElement>('.sc-output-workspace-pane')!;
+  const animation = installCanvasWorkspaceAnimation(pane);
+  f.workspace.preferences({ visible: false, width: 560 }, true);
+  expect(f.workspace.visible).toBe(false);
+  expect(f.workspace.presented).toBe(true);
+  expect(pane.style.width).toBe('560px');
+  expect(f.workspace.content.style.width).toBe('calc(100% - 0px)');
+  animation.effects[0]!.finish();
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(f.workspace.presented).toBe(false);
+  expect(pane.hidden).toBe(true);
+  f.workspace.preferences({ visible: true, width: 560 }, true);
+  expect(f.workspace.presented).toBe(true);
+  expect(animation.effects[1]?.frames[0]?.transform).toBe('translateX(100%)');
+  f.workspace.suspend('configure');
+  expect(f.workspace.presented).toBe(false);
+  await Promise.resolve();
+  expect(f.actions.report).not.toHaveBeenCalled();
+  f.dispose();
+});
+
+test('renders a two-pixel divider with a wider invisible resize target', () => {
+  const f = fixture();
+  const divider = f.root.querySelector<HTMLElement>('.sc-output-workspace-divider')!;
+  expect(window.getComputedStyle(divider).width).toBe('2px');
+  expect(window.getComputedStyle(f.workspace.canvas).marginLeft).toBe('2px');
+  const rules = [...document.styleSheets].flatMap((sheet) => [...sheet.cssRules]);
+  expect(
+    rules.some(
+      (rule) =>
+        rule.cssText.includes('.sc-output-workspace-divider::before') &&
+        rule.cssText.includes('inset: 0 -3px'),
+    ),
+  ).toBe(true);
+  f.dispose();
+});
+
 test('rolls back owned DOM, listeners, and graph geometry when initial allocation publication fails', () => {
   const f = fixture();
   f.workspace.dispose();
@@ -184,6 +226,7 @@ test('rolls back owned DOM, listeners, and graph geometry when initial allocatio
       new BrowserCanvasWorkspace(f.root, f.panel, f.model, f.frames, {
         width: () => undefined,
         close: () => undefined,
+        report: () => undefined,
         changed: () => {
           throw new Error('Publication failed.');
         },

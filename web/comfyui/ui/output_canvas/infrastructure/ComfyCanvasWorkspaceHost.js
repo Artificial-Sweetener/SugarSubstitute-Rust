@@ -38,6 +38,7 @@ export class ComfyCanvasWorkspaceHost {
     #disposed = false;
     #started = false;
     #accepted = null;
+    #userVisibilityChange = false;
     /** Inject host lifecycle sources, accepted settings, and finite geometry scheduling. */
     constructor(app, document, preferences, frames, changed, report, presentation) {
         this.app = app;
@@ -54,7 +55,11 @@ export class ComfyCanvasWorkspaceHost {
     }
     /** Expose the primary canvas allocation only while its supported host surface is visible. */
     get canvas() {
-        return this.#workspace?.visible ? this.#workspace.canvas : null;
+        return this.#workspace?.presented ? this.#workspace.canvas : null;
+    }
+    /** Read accepted open state independently of pixels retained during an exit slide. */
+    get visible() {
+        return this.#workspace?.visible ?? false;
     }
     /** Observe only identified graph workspace mounting and public app/renderer lifecycles. */
     setup() {
@@ -92,13 +97,13 @@ export class ComfyCanvasWorkspaceHost {
         this.#workspace?.suspend(this.#suspension());
         this.changed();
     }
-    /** Apply explicit drawer intent immediately; host setting callbacks own accepted visibility. */
+    /** Toggle accepted open state while allowing the outgoing image to finish its slide. */
     toggle() {
-        this.#visibility(this.canvas === null);
+        this.#visibility(!this.visible);
     }
     /** Open the current workflow's pane idempotently for explicit image inspection. */
     show() {
-        if (this.canvas === null)
+        if (!this.visible)
             this.#visibility(true);
     }
     /** Relinquish only this primary workspace and leave independently owned future windows unaffected. */
@@ -115,12 +120,18 @@ export class ComfyCanvasWorkspaceHost {
         workspace?.dispose();
         this.#panel = null;
     }
-    /** Route one local action through public Comfy persistence and preserve host-owned rollback semantics. */
+    /** Animate one accepted local action through the authoritative workflow preference owner. */
     #visibility(visible) {
         if (this.#disposed)
             return;
-        this.presentation.change({ canvas: visible });
-        this.#workspace?.drawer(visible);
+        this.#userVisibilityChange = true;
+        try {
+            this.presentation.change({ canvas: visible });
+            this.#workspace?.drawer(visible, true);
+        }
+        finally {
+            this.#userVisibilityChange = false;
+        }
         this.changed();
     }
     /** Combine global sizing with the workflow's authoritative visibility choice. */
@@ -137,7 +148,7 @@ export class ComfyCanvasWorkspaceHost {
         if (this.#accepted?.visible === next.visible && this.#accepted.width === next.width)
             return;
         this.#accepted = next;
-        this.#workspace?.preferences(next);
+        this.#workspace?.preferences(next, this.#userVisibilityChange);
         this.changed();
     }
     /** Mount only qualified siblings, releasing the old attachment before removing its allocation. */
@@ -164,6 +175,7 @@ export class ComfyCanvasWorkspaceHost {
                 },
                 close: () => this.#visibility(false),
                 changed: this.changed,
+                report: this.report,
             });
             this.#panel = panel;
             this.#workspace.suspend(this.#suspension());

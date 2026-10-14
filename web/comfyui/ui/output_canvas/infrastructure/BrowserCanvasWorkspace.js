@@ -18,6 +18,7 @@ import { CanvasWorkspaceResizeInput } from '../presentation/browser/CanvasWorksp
 import { ComfyCanvasFrameAllocation } from './ComfyCanvasFrameAllocation.js';
 import { ComfyCanvasWorkspaceFrame } from './ComfyCanvasWorkspaceFrame.js';
 import { ensureBrowserCanvasWorkspaceStyles } from './BrowserCanvasWorkspaceStyles.js';
+import { BrowserCanvasWorkspaceMotion } from './BrowserCanvasWorkspaceMotion.js';
 /** Keep graph frame, sibling bounds, and resize input coordinated without owning workflow results. */
 export class BrowserCanvasWorkspace {
     model;
@@ -31,6 +32,7 @@ export class BrowserCanvasWorkspace {
     #frame;
     #workspaceFrame;
     #input;
+    #motion;
     #allocation = null;
     #suspension = null;
     #disposed = false;
@@ -57,6 +59,10 @@ export class BrowserCanvasWorkspace {
         this.#divider.setAttribute('aria-label', 'Resize output canvas');
         this.#divider.setAttribute('aria-orientation', 'vertical');
         this.#pane.append(this.canvas, this.#divider);
+        this.#motion = new BrowserCanvasWorkspaceMotion(this.#pane, () => {
+            this.#paintedAllocation = null;
+            this.#render();
+        });
         this.#backdrop = document.createElement('button');
         this.#backdrop.className = 'sc-output-workspace-backdrop';
         this.#backdrop.type = 'button';
@@ -89,6 +95,7 @@ export class BrowserCanvasWorkspace {
         catch (error) {
             this.#disposed = true;
             input?.dispose();
+            this.#motion.dispose();
             this.#workspaceFrame.dispose();
             this.#backdrop.removeEventListener('click', actions.close);
             this.#frame.dispose();
@@ -98,27 +105,32 @@ export class BrowserCanvasWorkspace {
             throw error;
         }
     }
-    /** Read actual primary-surface availability rather than the stored desktop visibility preference. */
+    /** Read accepted open state independently of pixels retained during the exit slide. */
     get visible() {
         return !this.#disposed && this.#suspension === null && this.#allocation?.visible === true;
     }
-    /** Apply accepted user settings without moving or remounting existing masonry controls. */
-    preferences(preferences) {
+    /** Retain the outgoing primary attachment until its exit slide completes. */
+    get presented() {
+        return !this.#disposed && this.#suspension === null && this.#motion.present;
+    }
+    /** Apply accepted view settings while preserving borrowed masonry control identity. */
+    preferences(preferences, animate = false) {
         this.model.preferences(preferences);
-        this.#render();
+        this.#render(animate);
     }
     /** Open/close a narrow drawer only after its explicit user action is accepted. */
-    drawer(open) {
+    drawer(open, animate = false) {
         this.model.drawer(open);
-        this.#render();
+        this.#render(animate);
         if (open && this.#allocation?.mode === 'drawer')
             this.#pane.focus({ preventScroll: true });
     }
     /** Keep content identity while the host temporarily hides graph mode or configures its workflow. */
     suspend(reason) {
-        if (this.#suspension === reason || this.#disposed)
+        if (this.#disposed || (this.#suspension === reason && !this.#pane.dataset.canvasMotion))
             return;
         this.#suspension = reason;
+        this.#paintedAllocation = null;
         this.#input.cancel();
         this.model.cancelResize();
         this.#render();
@@ -129,6 +141,7 @@ export class BrowserCanvasWorkspace {
             return;
         this.#disposed = true;
         this.#input.dispose();
+        this.#motion.dispose();
         this.#workspaceFrame.dispose();
         this.#backdrop.removeEventListener('click', this.actions.close);
         this.#frame.dispose();
@@ -137,7 +150,7 @@ export class BrowserCanvasWorkspace {
         this.content.remove();
     }
     /** Apply one authoritative rectangle to masonry, its backdrop, rail, and finder through their shared parent. */
-    #render() {
+    #render(animate = false) {
         if (this.#disposed)
             return;
         const allocation = this.model.read();
@@ -162,10 +175,14 @@ export class BrowserCanvasWorkspace {
         this.#paintedAllocation = painted;
         this.content.style.left = '0px';
         this.content.style.width = `calc(100% - ${inset}px)`;
-        this.#pane.style.width = `${allocation.canvas.width}px`;
-        this.#pane.hidden = !visible;
-        this.#backdrop.hidden = !visible || allocation.mode !== 'drawer';
-        this.#backdrop.style.right = `${allocation.canvas.width}px`;
+        if (visible || !animate)
+            this.#pane.style.width = `${allocation.canvas.width}px`;
+        if (animate)
+            void this.#motion.setVisible(visible).catch(this.actions.report);
+        else
+            this.#motion.restore(visible);
+        this.#backdrop.hidden = !this.#motion.present || allocation.mode !== 'drawer';
+        this.#backdrop.style.right = this.#pane.style.width;
         this.#divider.setAttribute('aria-valuenow', String(Math.round(allocation.canvas.width)));
         this.#divider.setAttribute('aria-valuemin', String(Math.round(allocation.minimumWidth)));
         this.#divider.setAttribute('aria-valuemax', String(Math.round(allocation.maximumWidth)));
