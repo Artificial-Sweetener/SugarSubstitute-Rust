@@ -29,6 +29,7 @@ interface SugarCubesUIFactoryOptions extends UnknownRecord {
 interface SugarCubesPublicApiOptions {
   openLibrary(): void;
   importSugarScript?(source: string): Promise<unknown>;
+  setSubstituteFrame?(enabled: boolean): void;
 }
 
 /**
@@ -64,6 +65,9 @@ export function createPublicApi(uiInstance: SugarCubesUI, options: SugarCubesPub
     scheduleCubeInstanceRefresh: uiInstance.scheduleCubeInstanceRefresh.bind(uiInstance),
     scheduleCubeDirtyRefresh: uiInstance.scheduleCubeDirtyRefresh.bind(uiInstance),
     openLibrary: () => options.openLibrary(),
+    ...(options.setSubstituteFrame
+      ? { setSubstituteFrame: (enabled: unknown) => options.setSubstituteFrame?.(enabled === true) }
+      : {}),
     ...(importSugarScript
       ? { importSugarScript: (source: string) => importSugarScript(source) }
       : {}),

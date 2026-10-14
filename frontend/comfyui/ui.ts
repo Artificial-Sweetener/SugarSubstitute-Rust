@@ -118,8 +118,7 @@ const overlayManager = ui.overlayManager;
 const appRef = adapter.getApp() as SugarCubesHostApp | null;
 const windowRef = adapter.getWindow();
 const documentRef = adapter.getDocument();
-const consoleRef = adapter.getConsole();
-const logger = consoleRef ?? console;
+const logger = adapter.getConsole() ?? console;
 const hostFeedback = new CubeHostFeedback({
   toast: toastService,
 });
@@ -127,10 +126,12 @@ const hostFeedback = new CubeHostFeedback({
 const cubePreconfiguration = ui.workflowPreconfiguration;
 const workflowExecution = createComfyWorkflowExecutionRuntime({ app: appRef, api, logger });
 const cubeRuntimeLifecycle = new ComfyCubeRuntimeLifecycle(createCubeRuntime);
-const { appearance: fluentAppearance, relations: workflowRelations } = createWorkflowFieldHost({
+const { appearance, relations, frame } = createWorkflowFieldHost({
   app: appRef,
   document: documentRef ?? document,
   seeds: workflowExecution.seeds,
+  activity: workflowExecution.activity,
+  stackControls: () => workflowWorkspace.masonry.stackControls(),
   sessions: workflowExecution.sessions,
   getCardState: () => cubeRuntimeLifecycle.current()?.cardState ?? null,
   getConnections: (graph) => proximityWorkflowConnections(overlayManager.proximity, graph),
@@ -146,7 +147,7 @@ const { appearance: fluentAppearance, relations: workflowRelations } = createWor
 });
 
 const cubePicker = createComfyCubePickerIntegration({
-  appearance: fluentAppearance.state,
+  appearance: appearance.state,
   onStackApplied: () => workflowWorkspace.masonry.refresh(),
   api: cubeApi,
   app,
@@ -179,7 +180,7 @@ const promptQueueBridge = createCubeHostExecution({
     try {
       workflowExecution.assertCurrentPrompt(payload);
       return attachSavingRunContext(
-        workflowRelations.prepare(payload),
+        relations.prepare(payload),
         workflowExecution.submissionContext(payload),
       );
     } catch (error: unknown) {
@@ -236,7 +237,7 @@ function createCubeRuntime(): ComfyCubeRuntime {
     api,
     cubeApi,
     graphGateway: new CubeGraphApi(cubeApi),
-    reconcileCubeOrder: () => workflowRelations.reconcileCubeOrder(),
+    reconcileCubeOrder: () => relations.reconcileCubeOrder(),
     liteGraph,
     document: documentRef,
     logger,
@@ -335,7 +336,8 @@ const workflowWorkspace = new ComfyWorkflowWorkspace(
   {
     stack: createCubeStackCommands({
       document: documentRef ?? document,
-      appearance: fluentAppearance.state,
+      appearance: appearance.state,
+      frame: frame.mode,
       picker: cubePicker,
       library: ui.workflowLibraryActions,
       dialogs: ui.dialogs,
@@ -369,7 +371,7 @@ const workflowWorkspace = new ComfyWorkflowWorkspace(
 const workflowHistory = new ComfyCanvasHistoryAdapter(
   appRef,
   documentRef ?? document,
-  workflowRelations.commitNativeTransaction,
+  relations.commitNativeTransaction,
 );
 
 /** Compose theme-independent native scroll input once for the host document. */
@@ -499,10 +501,11 @@ export const sugarCubesExtension: SugarCubesExtension = {
   async setup() {
     await extensionSetupLifecycle.setup();
     workflowHistory.install();
-    workflowRelations.setup();
+    relations.setup();
     workflowWorkspace.setup();
     scrollSurfaceInput.setup();
-    fluentAppearance.setup();
+    appearance.setup();
+    frame.setup();
     modelPickers.setup();
     await editorActions.setup();
     modelLibrarySettings.setup();
@@ -513,7 +516,7 @@ export const sugarCubesExtension: SugarCubesExtension = {
   },
   beforeConfigureGraph(graphData?: unknown) {
     workflowHistory.setConfiguring(true);
-    workflowRelations.beforeConfigureGraph();
+    relations.beforeConfigureGraph();
     workflowWorkspace.masonry.beforeConfigureGraph();
     workflowWorkspace.canvas.beforeConfigureGraph();
     cubePicker.closeAddMenu();
@@ -523,7 +526,7 @@ export const sugarCubesExtension: SugarCubesExtension = {
     graphConfigurationLifecycle.afterConfigureGraph(missingNodeTypes, comfyApp);
     workflowWorkspace.canvas.afterConfigureGraph();
     workflowWorkspace.masonry.afterConfigureGraph();
-    workflowRelations.afterConfigureGraph();
+    relations.afterConfigureGraph();
     workflowHistory.setConfiguring(false);
   },
 };
@@ -539,6 +542,7 @@ const debugApi = createSugarCubesDebugApi({
 if (windowRef) {
   Object.assign(windowRef, {
     SugarCubes: createPublicApi(ui, {
+      setSubstituteFrame: (enabled) => frame.mode.setEnabled(enabled),
       openLibrary: () => cubePicker.openCart(),
       importSugarScript: (source) => importHostCoordinator.importSugarScript(source),
     }),

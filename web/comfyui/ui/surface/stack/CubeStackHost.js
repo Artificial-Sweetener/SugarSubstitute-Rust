@@ -7,6 +7,7 @@ import { CubeStackScrollSelection } from './CubeStackScrollSelection.js';
 import { CubeStackDrawerMotion } from './CubeStackDrawerMotion.js';
 /** Retain one presentation application for a mounted surface and release it before native teardown. */
 export class CubeStackHost {
+    frameControls;
     #options;
     #preferences;
     #actions;
@@ -26,6 +27,15 @@ export class CubeStackHost {
     constructor(options) {
         this.#options = options;
         this.#preferences = new CubeStackPreferences(options.app);
+        const preferences = this.#preferences;
+        this.frameControls = {
+            get compact() {
+                return preferences.snapshot.compact;
+            },
+            toggleCompact: () => preferences.setCompact(!preferences.snapshot.compact),
+            menu: () => this.presentationMenu(),
+            subscribe: (listener) => preferences.subscribe(listener),
+        };
         this.#actions = {
             navigate: (id) => this.#navigate(id),
             previewOrder: (order) => this.#view?.previewCubeOrder(order?.map((id) => `cube:${id}`) ?? null),
@@ -47,6 +57,30 @@ export class CubeStackHost {
         this.#started = true;
         ensureCubeStackStyles(this.#options.document);
         this.#subscriptions.push(this.#preferences.subscribe(() => this.#reconcile()), this.#options.appearance.subscribeAppearance(() => this.#reconcile()));
+        if (this.#options.frame)
+            this.#subscriptions.push(this.#options.frame.subscribe(() => this.#reconcile(false)));
+    }
+    /** Expose rail preference intents to the frame without creating another persistence owner. */
+    presentationMenu() {
+        const { visible, compact } = this.#preferences.snapshot;
+        return [
+            {
+                label: 'Show Cube stack',
+                checked: visible,
+                selection: 'multiple',
+                select: () => {
+                    void this.#preferences.setVisible(!visible).catch(this.#options.reportError);
+                },
+            },
+            {
+                label: 'Compact Cube stack',
+                checked: compact,
+                selection: 'multiple',
+                select: () => {
+                    void this.#preferences.setCompact(!compact).catch(this.#options.reportError);
+                },
+            },
+        ];
     }
     /** Attach to already projected sections without triggering graph candidate discovery. */
     ready(view, preparing = false) {
@@ -135,7 +169,7 @@ export class CubeStackHost {
         const appearance = this.#options.appearance.appearance;
         this.#element.dataset.appearance = state.appearance;
         this.#element.dataset.colorScheme = appearance.dark ? 'dark' : 'light';
-        applyOwnedFluentTheme(this.#element, appearance.fluent ? appearance.dark : null);
+        applyOwnedFluentTheme(this.#element, appearance.fluent || this.#options.frame?.enabled ? appearance.dark : null);
         if (this.#mounted)
             this.#mounted.update(state);
         else {
@@ -143,7 +177,7 @@ export class CubeStackHost {
             this.#motion = new CubeStackDrawerMotion(this.#element);
             this.#mounted.setInteractive(false);
         }
-        view.setStackWidth(state.compact ? 82 : 248);
+        view.setStackWidth(this.#options.frame?.enabled ? (state.compact ? 58 : 224) : state.compact ? 82 : 248);
         if (this.#surfaceVisible)
             void this.#present(true, animate).catch(this.#options.reportError);
         this.#scrollSelection?.refresh(state.rows.map((row) => row.id));
@@ -154,7 +188,9 @@ export class CubeStackHost {
             rows: projectCubeStackRows(this.#view?.sections ?? [], this.#reorder?.analysis ?? null, this.#selectedId, this.#options.resolveSource, this.#reorder?.available === true),
             compact: this.#preferences.snapshot.compact,
             pending: this.#reorder?.pending === true,
-            appearance: this.#options.appearance.appearance.fluent ? 'fluent' : 'comfy',
+            appearance: this.#options.appearance.appearance.fluent || this.#options.frame?.enabled
+                ? 'fluent'
+                : 'comfy',
         };
     }
     /** Restore filtered sections through the search owner before scrolling to stable identity. */

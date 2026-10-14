@@ -26,6 +26,43 @@ from xml.etree import ElementTree
 ROOT = Path(__file__).resolve().parents[3]
 
 
+def test_substitute_frame_artwork_has_pinned_licensed_deployment_bytes() -> None:
+    """Verify every original orb and action glyph rather than accepting unrecorded replacements."""
+    manifest = tomllib.loads((ROOT / "third_party/manifest.toml").read_text("utf-8"))
+    expected = {
+        "SugarSubstitute frame presentation": "GPL-3.0-or-later",
+        "Substitute panel-control Fluent artwork": "MIT",
+        "QFluent override pin artwork": "GPL-3.0-or-later",
+    }
+    recorded: set[Path] = set()
+    for component in manifest["component"]:
+        if component["name"] not in expected:
+            continue
+        assert component["license"] == expected[component["name"]]
+        assert re.fullmatch(r"[0-9a-f]{40}", component["revision"])
+        license_path = Path(component["license_file"])
+        assert (ROOT / license_path).read_bytes() == (
+            ROOT / "web" / license_path
+        ).read_bytes()
+        for asset in component["asset"]:
+            authored = Path(asset["vendored_file"])
+            assert authored.parts[:3] == ("frontend", "static", "orb")
+            assert authored not in recorded
+            recorded.add(authored)
+            contents = (ROOT / authored).read_bytes()
+            assert hashlib.sha256(contents).hexdigest() == asset["sha256"]
+            assert (ROOT / asset["runtime_file"]).read_bytes() == contents
+            if authored.suffix == ".svg":
+                tree = ElementTree.fromstring(contents)
+                assert tree.tag == "{http://www.w3.org/2000/svg}svg"
+                assert not any(
+                    element.tag.endswith("script") for element in tree.iter()
+                )
+    assert recorded == {
+        path.relative_to(ROOT) for path in (ROOT / "frontend/static/orb").iterdir()
+    }
+
+
 def test_every_vendored_icon_has_exact_provenance_and_deployment_bytes() -> None:
     """Reject unrecorded assets, stale derivatives, unsafe SVGs, and missing notices."""
     manifest = tomllib.loads((ROOT / "third_party/manifest.toml").read_text("utf-8"))
@@ -41,6 +78,7 @@ def test_every_vendored_icon_has_exact_provenance_and_deployment_bytes() -> None
             "https://github.com/OpenModelDB/open-model-database",
             "https://github.com/microsoft/fluentui",
             "https://github.com/microsoft/polyfills",
+            "https://github.com/zhiyiYo/PyQt-Fluent-Widgets",
         }:
             continue
         assert source in {

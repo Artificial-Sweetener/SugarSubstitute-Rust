@@ -10,7 +10,7 @@ import { WorkflowMasonryPropertiesPanel } from './WorkflowMasonryPropertiesPanel
 import { captureMasonryLinkPaths } from './ComfyMasonryLinkAdapter.js';
 import { WorkflowMasonryLinkMotion } from './WorkflowMasonryLinkMotion.js';
 import { MasonrySearchHost } from '../../search/infrastructure/MasonrySearchHost.js';
-import { CubeStackHost } from '../stack/CubeStackHost.js';
+import { CubeStackHost, } from '../stack/CubeStackHost.js';
 /** Compose focused owners and keep host registration free of layout behavior. */
 export class WorkflowMasonryHostLifecycle {
     #options;
@@ -137,6 +137,10 @@ export class WorkflowMasonryHostLifecycle {
     /** Refresh an accepted canonical stack mutation through the existing projected layout owner. */
     refresh() {
         return this.#controller.graphChanged();
+    }
+    /** Delegate the frame's stack controls to the rail's existing preference authority. */
+    stackControls() {
+        return this.#stack.frameControls;
     }
     /** Release native mounts before Comfy replaces a workflow's graph objects. */
     beforeConfigureGraph() {

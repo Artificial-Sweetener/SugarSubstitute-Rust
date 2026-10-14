@@ -17,6 +17,7 @@
 import { WorkflowSessionStore } from '../application/WorkflowSessionStore.js';
 import { WorkflowResultStore } from '../application/WorkflowResultStore.js';
 import { WorkflowSeedHistory } from '../application/WorkflowSeedHistory.js';
+import { WorkflowOutputActivity } from '../application/WorkflowOutputActivity.js';
 import { WorkflowRunRegistry } from '../application/WorkflowRunRegistry.js';
 import { WorkflowSubmissionContexts } from '../application/WorkflowSubmissionContexts.js';
 import { WorkflowExecutionIngestor } from '../application/WorkflowExecutionIngestor.js';
@@ -39,6 +40,7 @@ export class ComfyWorkflowExecutionRuntime {
     sessions = new WorkflowSessionStore();
     results = new WorkflowResultStore();
     seeds = new WorkflowSeedHistory();
+    activity = new WorkflowOutputActivity();
     previews;
     outputs;
     submissionObserver;
@@ -60,12 +62,16 @@ export class ComfyWorkflowExecutionRuntime {
     /** Construct pure owners immediately and defer public-host capability access until extension setup. */
     constructor(options) {
         this.options = options;
-        this.#stopSeeds = this.sessions.subscribe((snapshot) => this.seeds.synchronize(snapshot));
+        this.#stopSeeds = this.sessions.subscribe((snapshot) => {
+            this.seeds.synchronize(snapshot);
+            this.activity.synchronize(snapshot);
+        });
         this.#ingestor = new WorkflowExecutionIngestor({
             runs: this.#runs,
             results: this.results,
             clock: options.clock,
             logger: options.logger,
+            imageAccepted: (id) => this.activity.record(id),
             recover: (id) => {
                 void this.#history?.reconcile(id);
             },
@@ -181,6 +187,7 @@ export class ComfyWorkflowExecutionRuntime {
         this.results.dispose();
         this.#stopSeeds();
         this.seeds.dispose();
+        this.activity.dispose();
         this.sessions.dispose();
         this.#connections.clear();
     }

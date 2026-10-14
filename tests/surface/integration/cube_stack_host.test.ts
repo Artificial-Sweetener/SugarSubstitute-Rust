@@ -32,6 +32,28 @@ import { projectCubeStackRows } from '../../../frontend/comfyui/ui/surface/stack
 import type { CubeNode } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 import type { CubeGraphAnalysis } from '../../../frontend/comfyui/ui/workflow/domain/CubeGraphModels.js';
 import { CubeStackDrawerMotion } from '../../../frontend/comfyui/ui/surface/stack/CubeStackDrawerMotion.js';
+import { SubstituteFrameMode } from '../../../frontend/comfyui/ui/surface/frame/SubstituteFrameMode.js';
+
+test('frame mode changes allocation without replacing the existing rail or accent indicator', async () => {
+  const frame = new SubstituteFrameMode();
+  const fixture = setup(true, true, frame);
+  fixture.host.setup();
+  fixture.host.ready(fixture.surface, false);
+  await nextTick();
+  const rail = document.querySelector('.sc-cube-stack-host');
+  const indicator = rail?.querySelector('.sc-cube-stack__selection');
+  frame.setEnabled(true);
+  await nextTick();
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(224);
+  expect(document.querySelector('.sc-cube-stack-host')).toBe(rail);
+  expect(rail?.querySelector('.sc-cube-stack__selection')).toBe(indicator);
+  fixture.settings.get(CUBE_STACK_COMPACT_SETTING)?.onChange(true);
+  await nextTick();
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(58);
+  frame.setEnabled(false);
+  await nextTick();
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(82);
+});
 
 const owned: CubeStackHost[] = [];
 test('restores an already-selected workflow rail without allocating entrance animations', () => {
@@ -338,7 +360,7 @@ test.each([true, false])(
 );
 
 /** Provide existing mounted topology with native-shaped Cube identity and isolated host ports. */
-function setup(analysisAvailable = true, available = true) {
+function setup(analysisAvailable = true, available = true, frame?: SubstituteFrameMode) {
   const settings = new Map<string, { onChange(value: unknown): void }>();
   const appearance = new FluentAppearanceState();
   const container = document.createElement('div');
@@ -396,6 +418,7 @@ function setup(analysisAvailable = true, available = true) {
       },
     },
     appearance,
+    ...(frame ? { frame } : {}),
     getReorder: () => ({
       analysis: analysisAvailable ? analysis : null,
       available,

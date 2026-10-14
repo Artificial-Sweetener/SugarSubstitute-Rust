@@ -96,6 +96,11 @@ export class FluentAppearanceHost {
   #setup = false;
   #popupOrigin: HTMLElement | null = null;
 
+  /** Share the accepted palette while keeping frame mode independent of node rendering. */
+  get palette(): AccentThemeHost {
+    return this.#accent;
+  }
+
   /** Prepare observers without altering styles until the user opts in. */
   constructor(options: FluentAppearanceHostOptions) {
     this.#options = options;

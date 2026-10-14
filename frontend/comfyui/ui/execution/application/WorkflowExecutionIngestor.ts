@@ -38,6 +38,7 @@ export interface WorkflowExecutionIngestorOptions {
   readonly clock: ExecutionClock;
   readonly logger: Pick<Console, 'warn'>;
   recover(promptId: PromptId): void;
+  imageAccepted?(sessionId: WorkflowSessionId): void;
 }
 export interface AttributedWorkflowSource {
   readonly run: WorkflowRun;
@@ -125,7 +126,7 @@ export class WorkflowExecutionIngestor {
       }
       return false;
     }
-    return this.options.results.retain({
+    const retained = this.options.results.retain({
       ...attributed,
       payload: event.payload,
       containsImages: event.containsImages,
@@ -133,6 +134,9 @@ export class WorkflowExecutionIngestor {
       delivery: event.delivery,
       ...(expectedRevision !== undefined ? { expectedRevision } : {}),
     });
+    if (retained && event.containsImages)
+      this.options.imageAccepted?.(attributed.run.session.sessionId);
+    return retained;
   }
 
   /** Publish a job-qualified start, staging early transport events until queue acceptance. */

@@ -37,6 +37,7 @@ export function createCubeStackCommands(options) {
     };
     return {
         appearance: options.appearance,
+        ...(options.frame ? { frame: options.frame } : {}),
         closeTransient: () => menu.close(),
         getReorder: () => options.getRuntime()?.reorder ?? null,
         resolveSource: options.resolveSource,

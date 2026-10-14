@@ -1,0 +1,76 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Scope the reference shell geometry to the explicitly selected Substitute visual mode. */
+export const substituteFrameCss = `
+  @property --sc-tab-cutout-radius { syntax:'<length>'; inherits:false; initial-value:0px; }
+  .sc-substitute-frame sc-workflow-tab { transition:--sc-tab-cutout-radius 160ms cubic-bezier(.645,.045,.355,1); }
+  @media(prefers-reduced-motion:reduce) { .sc-substitute-frame sc-workflow-tab { transition:none; } }
+  :root[data-sc-substitute-frame] { --workflow-tabs-height:34px; }
+  :root[data-sc-substitute-frame] [data-sc-frame-native] { display:none !important; }
+  :root[data-sc-substitute-frame] :is(.side-toolbar-container,.side-tool-bar-container,.side-bar-panel) { display:none !important; }
+  :root[data-sc-substitute-frame] .splitter-overlay:not(.splitter-overlay-bottom) > .p-splitter-gutter { display:none !important; }
+  :root[data-sc-substitute-frame] .subgraph-breadcrumb { padding-left:62px; }
+  :root[data-sc-substitute-frame] div:has(> .subgraph-breadcrumb) { min-width:190px; }
+  .sc-substitute-frame { position:absolute; inset:0; height:34px; display:flex; padding:4px 0 0 48px;
+    box-sizing:border-box; align-items:flex-end; z-index:1000; pointer-events:auto;
+    background:transparent; color:var(--colorNeutralForeground1); font-family:var(--fontFamilyBase);
+    --sc-frame-wash:rgba(44,44,44,.588); --sc-frame-muted:rgba(255,255,255,.788);
+    --sc-frame-hover:rgba(255,255,255,.059); --sc-frame-pressed:rgba(255,255,255,.047);
+    --sc-frame-unread:color-mix(in srgb,var(--sc-accent-color) 17.25%,transparent);
+    --sc-frame-shimmer-edge:rgba(255,255,255,.063); --sc-frame-shimmer-center:rgba(255,255,255,.176); }
+  .sc-substitute-frame[data-color-scheme='light'] { --sc-frame-wash:rgba(252,252,252,.769);
+    --sc-frame-muted:rgba(0,0,0,.788); --sc-frame-hover:rgba(0,0,0,.039); --sc-frame-pressed:rgba(0,0,0,.027);
+    --sc-frame-unread:color-mix(in srgb,var(--sc-accent-color) 11%,transparent);
+    --sc-frame-shimmer-edge:rgba(255,255,255,.086); --sc-frame-shimmer-center:rgba(255,255,255,.216); }
+  .sc-substitute-frame .sc-workflow-title { display:block; white-space:nowrap; min-width:0; overflow:hidden;
+    mask-image:linear-gradient(90deg,#000 calc(100% - 10px),transparent); }
+  .sc-substitute-frame .sc-workflow-shimmer { position:absolute; top:0; bottom:0; left:-36px; width:clamp(24px,32%,36px);
+    background:linear-gradient(90deg,var(--sc-frame-shimmer-edge),var(--sc-frame-shimmer-center),var(--sc-frame-shimmer-edge));
+    pointer-events:none; opacity:0; }
+  .sc-substitute-frame sc-workflow-tab[data-shimmer] .sc-workflow-shimmer { animation:sc-frame-result-shimmer 800ms cubic-bezier(.215,.61,.355,1) forwards; }
+  @keyframes sc-frame-result-shimmer { 0% { left:-36px; opacity:1; } 85% { opacity:1; } 100% { left:100%; opacity:0; } }
+  @media(prefers-reduced-motion:reduce) { .sc-substitute-frame sc-workflow-tab[data-shimmer] .sc-workflow-shimmer { animation:none; } }
+  .sc-substitute-frame .sc-workflow-close { display:flex; align-items:center; justify-content:center; flex:0 0 18px;
+    width:18px; height:18px; min-width:18px; padding:0; border-radius:4px; visibility:hidden; }
+  .sc-substitute-frame sc-workflow-tab:hover .sc-workflow-close,
+  .sc-substitute-frame sc-workflow-tab:focus-within .sc-workflow-close { visibility:visible; }
+  .sc-substitute-frame sc-workflow-tab[data-modified] .sc-workflow-title::after { content:' •'; }
+  .sc-substitute-frame .sc-frame-tool { flex:0 0 30px; width:30px; height:30px; min-width:0; padding:0; border-radius:0; }
+  .sc-substitute-frame .sc-app-orb { position:absolute; left:8px; top:6px; width:46px; height:46px; min-width:46px;
+    padding:0; border:0; border-radius:50%; background:transparent; overflow:hidden; clip-path:circle(50%); z-index:2; }
+  .sc-substitute-frame .sc-app-orb canvas { display:block; width:46px; height:46px; pointer-events:none; }
+  .sc-substitute-frame .sc-orb-actions { position:absolute; top:38px; left:8px; display:flex; gap:1px; width:47px; height:36px; }
+  .sc-substitute-frame .sc-orb-actions::after { content:''; position:absolute; left:23px; top:20px; height:10px; width:1px; background:var(--colorNeutralStroke2); }
+  .sc-substitute-frame .sc-orb-actions fluent-button { position:relative; width:23px; height:36px; flex:0 0 23px; min-width:0; padding:0; border-radius:5px; mask-image:radial-gradient(circle 25px at var(--sc-orb-center-x,23px) -9px,transparent 24px,#000 25px); }
+  .sc-substitute-frame .sc-orb-actions fluent-button:last-child { --sc-orb-center-x:-1px; }
+  .sc-substitute-frame :is(.sc-orb-stack-icon,.sc-orb-pin-icon) { display:block; width:13px; height:13px; background:currentColor; mask:var(--sc-orb-glyph) center/contain no-repeat; }
+  .sc-substitute-frame .sc-orb-pin-icon { width:11px; height:11px; }
+  .sc-substitute-frame .sc-orb-stack-icon { position:absolute; left:5px; top:18.5px; }
+  .sc-substitute-frame .sc-orb-pin-icon { position:absolute; left:6px; top:17px; }
+  .sc-substitute-frame .sc-orb-chevron { position:absolute; left:10px; top:29px; width:3.5px; height:3.5px; border:solid currentColor; border-width:0 1.1px 1.1px 0; transform:rotate(45deg); }
+  :root[data-sc-substitute-frame] .sc-cube-stack-host { left:0; top:6px; bottom:6px; padding:0; border:0; border-radius:0;
+    background:transparent; box-shadow:none; scrollbar-width:none; }
+  :root[data-sc-substitute-frame] .sc-cube-stack-host::-webkit-scrollbar { display:none; }
+  :root[data-sc-substitute-frame] .sc-cube-stack[data-kind='rail'] .sc-cube-stack__toolbar { display:none; }
+  :root[data-sc-substitute-frame] .sc-cube-stack-row { border-radius:4px; }
+  :root[data-sc-substitute-frame] .sc-cube-stack-row__text { mask-image:linear-gradient(90deg,#000 calc(100% - 10px),transparent); }
+  :root[data-sc-substitute-frame] .sc-cube-stack-row__label { text-overflow:clip; }
+  :root[data-sc-substitute-frame] .sc-cube-stack[data-kind='rail'] .sc-cube-stack-row:hover { background:rgba(255,255,255,.059); }
+  :root[data-sc-substitute-frame] .sc-cube-stack[data-kind='rail'] .sc-cube-stack-row:active { background:rgba(255,255,255,.047); }
+  :root[data-sc-substitute-frame] .sc-cube-stack-host[data-color-scheme='light'] .sc-cube-stack[data-kind='rail'] .sc-cube-stack-row:hover { background:rgba(0,0,0,.039); }
+  :root[data-sc-substitute-frame] .sc-cube-stack-host[data-color-scheme='light'] .sc-cube-stack[data-kind='rail'] .sc-cube-stack-row:active { background:rgba(0,0,0,.027); }
+  :root[data-sc-substitute-frame] .sc-cube-stack[data-kind='rail'][data-compact] .sc-cube-stack-row__remove { display:none; }
+`;

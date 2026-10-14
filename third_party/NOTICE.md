@@ -160,3 +160,6 @@ Cube stack geometry, presentation states, cart draft semantics, neutral icon con
 `84b6c882d1323447cf82350495dadaeb41d948d5`, under GPL-3.0-or-later.
 The provenance manifest records source fingerprints and adapted TypeScript and Python paths;
 the complete license is in `licenses/sugarsubstitute.LICENSE.txt`.
+
+Substitute workflow tabs and orb rendering are adapted from SugarSubstitute revision 34ce6d9976c76ac708b1dbda3920e9311010006a (GPL-3.0-or-later). The original witch icon and three orb glass PNG layers are distributed unmodified. Source fingerprints, asset hashes and runtime locations are recorded in the provenance manifest; see licenses/sugarsubstitute.LICENSE.txt.
+The orb action cluster uses Microsoft's Fluent panel-left artwork from Substitute and QFluent's original pin SVG. Their complete MIT and GPL license texts, pinned revisions and unmodified asset hashes are recorded in the manifest and licenses directory.

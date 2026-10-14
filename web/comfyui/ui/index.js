@@ -49,6 +49,9 @@ export function createPublicApi(uiInstance, options) {
         scheduleCubeInstanceRefresh: uiInstance.scheduleCubeInstanceRefresh.bind(uiInstance),
         scheduleCubeDirtyRefresh: uiInstance.scheduleCubeDirtyRefresh.bind(uiInstance),
         openLibrary: () => options.openLibrary(),
+        ...(options.setSubstituteFrame
+            ? { setSubstituteFrame: (enabled) => options.setSubstituteFrame?.(enabled === true) }
+            : {}),
         ...(importSugarScript
             ? { importSugarScript: (source) => importSugarScript(source) }
             : {}),

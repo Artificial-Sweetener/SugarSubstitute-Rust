@@ -16,17 +16,23 @@
 /** Compose native field appearance and relation policy around one submitted seed history. */
 import { RelationHostLifecycle, type RelationHostOptions } from './RelationHostLifecycle.js';
 import { FluentAppearanceHost } from '../surface/appearance/FluentAppearanceHost.js';
+import { SubstituteFrameHost } from '../surface/frame/SubstituteFrameHost.js';
+import type { WorkflowOutputActivity } from '../execution/application/WorkflowOutputActivity.js';
+import type { CubeStackFrameControls } from '../surface/stack/CubeStackHost.js';
 
 export interface WorkflowFieldHostOptions
   extends Omit<RelationHostOptions, 'reportError' | 'appearance'> {
   reportRelationError(error: unknown): void;
   reportAppearanceError(error: unknown): void;
+  activity: WorkflowOutputActivity;
+  stackControls(): CubeStackFrameControls;
 }
 
 /** Share seed reuse across actual native field mounts and the override toolbar. */
 export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
   appearance: FluentAppearanceHost;
   relations: RelationHostLifecycle;
+  frame: SubstituteFrameHost;
 } {
   const relations: RelationHostLifecycle = new RelationHostLifecycle({
     ...options,
@@ -39,5 +45,15 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
     seedReuse: (node, name) => relations.seedReuse.field(node, name),
     reportError: options.reportAppearanceError,
   });
-  return { appearance, relations };
+  const frame = new SubstituteFrameHost({
+    app: options.app,
+    document: options.document,
+    palette: appearance.palette,
+    sessions: options.sessions,
+    activity: options.activity,
+    stackControls: options.stackControls,
+    openOverrides: (trigger) => relations.openOverrideMenu(trigger),
+    report: options.reportAppearanceError,
+  });
+  return { appearance, relations, frame };
 }

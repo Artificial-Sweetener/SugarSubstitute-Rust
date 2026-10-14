@@ -40,7 +40,11 @@ import { WorkflowMasonryPropertiesPanel } from './WorkflowMasonryPropertiesPanel
 import { captureMasonryLinkPaths } from './ComfyMasonryLinkAdapter.js';
 import { WorkflowMasonryLinkMotion } from './WorkflowMasonryLinkMotion.js';
 import { MasonrySearchHost } from '../../search/infrastructure/MasonrySearchHost.js';
-import { CubeStackHost, type CubeStackHostOptions } from '../stack/CubeStackHost.js';
+import {
+  CubeStackHost,
+  type CubeStackHostOptions,
+  type CubeStackFrameControls,
+} from '../stack/CubeStackHost.js';
 import type { WorkflowViewSource } from '../../workflow/domain/WorkflowView.js';
 
 export interface WorkflowMasonryHostLifecycleOptions {
@@ -197,6 +201,11 @@ export class WorkflowMasonryHostLifecycle {
   /** Refresh an accepted canonical stack mutation through the existing projected layout owner. */
   refresh(): Promise<void> {
     return this.#controller.graphChanged();
+  }
+
+  /** Delegate the frame's stack controls to the rail's existing preference authority. */
+  stackControls(): CubeStackFrameControls {
+    return this.#stack.frameControls;
   }
 
   /** Release native mounts before Comfy replaces a workflow's graph objects. */

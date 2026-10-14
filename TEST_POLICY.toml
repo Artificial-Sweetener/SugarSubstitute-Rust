@@ -289,6 +289,8 @@ proofs = ["contract", "integration", "unit"]
 [[area]]
 name = "surface"
 sources = [
+  "frontend/static/orb/**",
+  "web/orb/**",
   "frontend/static/icons/node/**",
   "web/icons/node/**",
   "frontend/static/icons/view/**",

@@ -48,6 +48,7 @@ describe('ui public api', () => {
     expect(typeof window.SugarCubes.importSugarScript).toBe('function');
     expect(typeof window.SugarCubes.scheduleCubeInstanceRefresh).toBe('function');
     expect(typeof window.SugarCubes.scheduleCubeDirtyRefresh).toBe('function');
+    expect(typeof window.SugarCubes.setSubstituteFrame).toBe('function');
     const keys = Object.keys(window.SugarCubes).sort();
     expect(keys).toEqual([
       'importSugarScript',
@@ -56,6 +57,7 @@ describe('ui public api', () => {
       'previewCube',
       'scheduleCubeDirtyRefresh',
       'scheduleCubeInstanceRefresh',
+      'setSubstituteFrame',
     ]);
     expect(Object.isFrozen(window.SugarCubes)).toBe(true);
   });

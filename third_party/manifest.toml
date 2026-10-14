@@ -664,3 +664,90 @@ version = "1.6.0"
 modifications = "None; Microsoft's shadowless focusgroup implementation is bundled as the official Fluent Tablist keyboard navigation dependency."
 source_paths = ["packages/focusgroup/src"]
 runtime_files = ["web/comfyui/ui/surface/appearance/FluentThemeRuntime.js"]
+
+[[component]]
+name = "SugarSubstitute frame presentation"
+license = "GPL-3.0-or-later"
+license_file = "third_party/licenses/sugarsubstitute.LICENSE.txt"
+source = "https://github.com/Artificial-Sweetener/SugarSubstitute"
+revision = "34ce6d9976c76ac708b1dbda3920e9311010006a"
+modifications = "Workflow tab geometry and unread-result painter adapted to official Microsoft Fluent web controls. Orb tint and PSD layer placement adapted to cached browser canvas composition; original PNG artwork is unmodified. Rail styling shares existing Cube stack behavior."
+runtime_files = ["web/comfyui/ui/surface/frame/WorkflowTabStyles.js","web/comfyui/ui/surface/frame/SubstituteFrameStyles.js","web/comfyui/ui/surface/frame/SubstituteFrameView.js","web/comfyui/ui/surface/frame/OrbTint.js","web/comfyui/ui/surface/frame/AppOrbRenderer.js"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/workflows/workflow_tabs_view.py"
+source_sha256 = "567d197f2c0b3bf448189ef91bf6fc3315367b7a27e74f9b50aff364ea8593e0"
+adapted_paths = ["frontend/comfyui/ui/surface/frame/WorkflowTabStyles.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/shell/app_orb_renderer.py"
+source_sha256 = "b63c244f1cf45aa8b316f1ed32d2951ca25a1fedc937eccafa4b118d86e7d0dd"
+adapted_paths = ["frontend/comfyui/ui/surface/frame/OrbTint.ts", "frontend/comfyui/ui/surface/frame/AppOrbRenderer.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/shell/chrome_style.py"
+source_sha256 = "f183df37e6295024e93850f9f5fee86cd8f9a251db2afd7aa879412ba9c3ab03"
+adapted_paths = ["frontend/comfyui/ui/surface/frame/SubstituteFrameStyles.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/shell/app_orb_action_cluster.py"
+source_sha256 = "5d4966ca5139aa9ceb00684e32913e4ffc53351b5f60b2d514ee365ec2a922af"
+adapted_paths = ["frontend/comfyui/ui/surface/frame/SubstituteFrameView.ts"]
+
+[[component.asset]]
+source_path = "substitute/presentation/resources/app_icons/app_icon_256.png"
+vendored_file = "frontend/static/orb/app_icon_256.png"
+runtime_file = "web/orb/app_icon_256.png"
+sha256 = "c6e1e822fbe3fe67fe00eefffb678b52f41ac734bea25f62a048a7aa1414d0f3"
+
+[[component.asset]]
+source_path = "substitute/presentation/resources/app_orb/orb_base.png"
+vendored_file = "frontend/static/orb/orb_base.png"
+runtime_file = "web/orb/orb_base.png"
+sha256 = "1b187034ac2373687ccca1a0e4c9410640d95e50fb60176f56fc1a659851b648"
+
+[[component.asset]]
+source_path = "substitute/presentation/resources/app_orb/orb_lower_overlay.png"
+vendored_file = "frontend/static/orb/orb_lower_overlay.png"
+runtime_file = "web/orb/orb_lower_overlay.png"
+sha256 = "8bf56f20d09909b9c1cd57ad3ca20165a351262bdc991b460647bb74e98992bd"
+
+[[component.asset]]
+source_path = "substitute/presentation/resources/app_orb/orb_upper_overlay.png"
+vendored_file = "frontend/static/orb/orb_upper_overlay.png"
+runtime_file = "web/orb/orb_upper_overlay.png"
+sha256 = "9893e6dcde736344fca4feec2e930668f542df0ca39b6664125c95009be0e9ba"
+
+[[component]]
+name = "Substitute panel-control Fluent artwork"
+license = "MIT"
+license_file = "third_party/licenses/fluentui-system-icons.LICENSE.txt"
+source = "https://github.com/Artificial-Sweetener/SugarSubstitute"
+revision = "34ce6d9976c76ac708b1dbda3920e9311010006a"
+modifications = "None; existing Microsoft Fluent panel-left artwork copied verbatim from Substitute and tinted through a CSS mask."
+
+[[component.asset]]
+source_path = "substitute/presentation/resources/icons/PanelLeft20Filled_white.svg"
+vendored_file = "frontend/static/orb/panel-left.svg"
+runtime_file = "web/orb/panel-left.svg"
+sha256 = "985bc2ee7a650d16189a32b1a2a0d674556d39e36a0dc1c5fb7593e366a1b547"
+
+[[component.asset]]
+source_path = "substitute/presentation/resources/icons/PanelLeft20Regular_white.svg"
+vendored_file = "frontend/static/orb/panel-left-regular.svg"
+runtime_file = "web/orb/panel-left-regular.svg"
+sha256 = "c75e02cf35885662711fc02ea0f8210cdd9da9daaa482c8e2c2a82faac95e088"
+
+[[component]]
+name = "QFluent override pin artwork"
+license = "GPL-3.0-or-later"
+license_file = "third_party/licenses/qfluentwidgets.LICENSE.txt"
+source = "https://github.com/zhiyiYo/PyQt-Fluent-Widgets"
+revision = "d90c008c534b2b0079ce7981d19b2bc957b354a5"
+modifications = "None; original pin SVG copied verbatim and tinted through a CSS mask."
+
+[[component.asset]]
+source_path = "qfluentwidgets/_rc/images/icons/Pin_white.svg"
+vendored_file = "frontend/static/orb/pin.svg"
+runtime_file = "web/orb/pin.svg"
+sha256 = "362afa2c2d770f123b4964b89f2c171285e28a4db68016705d8867625102051c"
