@@ -13,15 +13,15 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Allocate the installed Comfy graph frame while retaining native chrome and coordinate origins. */
-/** Reserve right-side canvas space across graph layers while retaining the native graph origin. */
+/** Allocate the native graph viewport beneath chrome while retaining its mounted render layers. */
+/** Own graph bounds for native rendering and graph-pinned surfaces while leaving chrome stationary. */
 export class ComfyCanvasFrameAllocation {
     root;
     panel;
     #chrome;
     #frame;
     #styles;
-    #inset = 0;
+    #allocation = null;
     #disposed = false;
     /** Qualify a direct native chrome ancestor and the public graph canvas before changing host geometry. */
     constructor(root, panel) {
@@ -41,11 +41,11 @@ export class ComfyCanvasFrameAllocation {
         this.#styles = [
             { element: frame, property: 'overflow' },
             { element: panel, property: '--sc-output-workspace-reserved-width' },
-            ...['width', 'margin-left', 'overflow', 'clip-path'].map((property) => ({
+            ...['width', 'height', 'margin-left', 'margin-top', 'overflow', 'clip-path'].map((property) => ({
                 element: root,
                 property,
             })),
-            ...['left', 'width'].map((property) => ({ element: chrome, property })),
+            ...['left', 'width', 'top', 'height'].map((property) => ({ element: chrome, property })),
         ].map(({ element, property }) => ({
             element,
             property,
@@ -53,26 +53,52 @@ export class ComfyCanvasFrameAllocation {
             priority: element.style.getPropertyPriority(property),
         }));
     }
-    /** Resize actual canvas/Nodes layers through Comfy's canvas-element ResizeObserver, preserving public conversion origins. */
+    /** Resize actual canvas/Nodes layers to the usable panel through Comfy's canvas ResizeObserver. */
     apply(inset) {
         if (!Number.isFinite(inset) || inset < 0)
             throw new RangeError('Graph workspace inset is invalid.');
-        if (this.#disposed || this.#inset === inset)
+        if (this.#disposed)
             return;
-        this.#inset = inset;
-        if (inset === 0) {
+        const frame = this.#frame.getBoundingClientRect();
+        const panel = this.panel.getBoundingClientRect();
+        const measured = frame.height > 0 && panel.height > 0;
+        const top = measured ? Math.max(0, Math.min(frame.height, panel.top - frame.top)) : 0;
+        const bottom = measured
+            ? Math.max(0, Math.min(frame.height - top, frame.bottom - panel.bottom))
+            : 0;
+        const measuredWidth = frame.width > 0 && panel.width > 0;
+        const left = measuredWidth ? Math.max(0, Math.min(frame.width, panel.left - frame.left)) : 0;
+        const right = measuredWidth
+            ? Math.max(0, Math.min(frame.width - left, frame.right - panel.right))
+            : 0;
+        const horizontal = left + right + inset;
+        const vertical = top + bottom;
+        const allocation = JSON.stringify([inset, left, right, top, bottom]);
+        if (this.#allocation === allocation)
+            return;
+        this.#allocation = allocation;
+        if (horizontal === 0 && vertical === 0) {
             this.#restore();
             return;
         }
-        this.root.style.setProperty('width', `calc(100% - ${inset}px)`);
-        this.panel.style.setProperty('--sc-output-workspace-reserved-width', `${inset}px`);
-        this.root.style.setProperty('margin-left', '0px');
+        this.#set(this.root, 'width', horizontal ? `calc(100% - ${horizontal}px)` : null);
+        this.#set(this.panel, '--sc-output-workspace-reserved-width', inset ? `${inset}px` : null);
+        this.#set(this.root, 'margin-left', horizontal ? `${left}px` : null);
+        this.#set(this.root, 'margin-top', vertical ? `${top}px` : null);
+        this.#set(this.root, 'height', vertical ? `calc(100% - ${vertical}px)` : null);
         // Hidden overflow permits focus-driven scrolling; the qualified outer frame must remain stationary.
-        this.#frame.style.setProperty('overflow', 'clip');
-        this.root.style.setProperty('overflow', 'visible');
-        this.root.style.setProperty('clip-path', `inset(0px -${inset}px 0px 0px)`);
-        this.#chrome.style.setProperty('left', '0px');
-        this.#chrome.style.setProperty('width', `calc(100% + ${inset}px)`);
+        this.#set(this.#frame, 'overflow', 'clip');
+        this.#set(this.root, 'overflow', 'visible');
+        this.#set(this.root, 'clip-path', `inset(${-top}px ${-(right + inset)}px ${-bottom}px ${-left}px)`);
+        this.#set(this.#chrome, 'left', horizontal ? `${-left}px` : null);
+        this.#set(this.#chrome, 'width', horizontal ? `calc(100% + ${horizontal}px)` : null);
+        this.#set(this.#chrome, 'top', vertical ? `${-top}px` : null);
+        this.#set(this.#chrome, 'height', vertical ? `calc(100% + ${vertical}px)` : null);
+    }
+    /** Relinquish viewport allocation while Comfy owns an alternate application surface. */
+    suspend() {
+        this.#allocation = null;
+        this.#restore();
     }
     /** Restore exact inline values and priorities after graph-workspace suspension or replacement. */
     dispose() {
@@ -83,11 +109,20 @@ export class ComfyCanvasFrameAllocation {
     }
     /** Relinquish only properties this adapter owns, including pre-existing extension styles. */
     #restore() {
-        for (const style of this.#styles) {
-            if (style.value)
-                style.element.style.setProperty(style.property, style.value, style.priority);
-            else
-                style.element.style.removeProperty(style.property);
-        }
+        for (const style of this.#styles)
+            this.#set(style.element, style.property, null);
+    }
+    /** Write changed geometry only, restoring exact borrowed values and priorities on release. */
+    #set(element, property, value) {
+        const original = this.#styles.find((style) => style.element === element && style.property === property);
+        const next = value ?? original?.value ?? '';
+        const priority = value === null ? (original?.priority ?? '') : '';
+        if (element.style.getPropertyValue(property) === next &&
+            element.style.getPropertyPriority(property) === priority)
+            return;
+        if (next)
+            element.style.setProperty(property, next, priority);
+        else
+            element.style.removeProperty(property);
     }
 }

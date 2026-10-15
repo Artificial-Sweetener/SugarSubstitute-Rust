@@ -61,6 +61,7 @@ export class OverrideToolbarPlacement {
   #gesture: Gesture | null = null;
   #pointerPlaced = false;
   #retryDock = false;
+  #inline = false;
 
   /** Bind the host boundary and publish placement changes to disclosure presentation. */
   constructor(
@@ -81,6 +82,7 @@ export class OverrideToolbarPlacement {
 
   /** Reattach after native shell replacement, preserving the requested resting placement. */
   attached(): boolean {
+    if (this.#inline) return this.host.attach(this.root, true);
     this.#setDocked(this.#requestedDocked);
     if (!this.host.attach(this.root, this.#docked)) {
       if (!this.#docked) return false;
@@ -109,8 +111,21 @@ export class OverrideToolbarPlacement {
     this.#place();
   }
 
+  /** Suspend floating and docking intent while an embedding frame owns fixed bar layout. */
+  setInline(inline: boolean): void {
+    if (this.#inline === inline) return;
+    this.#inline = inline;
+    this.#gesture = null;
+    this.host.dragging(false);
+    this.root.dataset.placement = inline ? 'inline' : this.#docked ? 'docked' : 'floating';
+    this.root.style.removeProperty('left');
+    this.root.style.removeProperty('top');
+    this.attached();
+  }
+
   /** Capture the pointer's position inside the grip before either placement can change. */
   begin(x: number, y: number): void {
+    if (this.#inline) return;
     const grip = this.grip.getBoundingClientRect();
     this.#gesture = { start: { x, y }, grip: { x: x - grip.left, y: y - grip.top }, moved: false };
     const bounds = this.root.getBoundingClientRect();
@@ -163,6 +178,7 @@ export class OverrideToolbarPlacement {
 
   /** Offer keyboard docking without requiring a pointer gesture. */
   toggleDock(): void {
+    if (this.#inline) return;
     if (!this.#docked && !this.host.canDock()) return;
     this.#requestedDocked = !this.#docked;
     this.#setDocked(!this.#docked);
@@ -172,6 +188,7 @@ export class OverrideToolbarPlacement {
 
   /** Move an undocked toolbar through the same bounded coordinate owner. */
   shift(x: number, y: number): void {
+    if (this.#inline) return;
     this.#requestedDocked = false;
     this.#pointerPlaced = false;
     this.#anchor = null;
@@ -186,6 +203,7 @@ export class OverrideToolbarPlacement {
 
   /** Restore the default top dock without changing disclosure or widget values. */
   reset(): void {
+    if (this.#inline) return;
     this.#requestedDocked = true;
     this.#desired = null;
     this.#anchor = null;
@@ -260,6 +278,11 @@ export class OverrideToolbarPlacement {
     if (!window?.requestAnimationFrame) return;
     this.#frame = window.requestAnimationFrame(() => {
       this.#frame = null;
+      if (this.#inline) {
+        this.attached();
+        this.settled();
+        return;
+      }
       const retryDock = this.#retryDock;
       this.#retryDock = false;
       if (
@@ -280,7 +303,7 @@ export class OverrideToolbarPlacement {
 
   /** Follow viewport coordinates inside the workflow surface without consuming a layout row. */
   #place(): void {
-    if (this.#docked || !this.#parent || this.#size.width <= 0) return;
+    if (this.#inline || this.#docked || !this.#parent || this.#size.width <= 0) return;
     const surface = this.host.floatingBounds();
     if (!surface) return;
     const panel = surface.bounds;

@@ -17,6 +17,7 @@
  * Own SugarCubes host settings and tracked-pack management.
  */
 
+import { sugarCubesSettingsSection } from './SugarCubesSettingsSections.js';
 import { TrackedPackManagerDialog } from './TrackedPackManagerDialog.js';
 import { HostSettingsRepositoryController } from './HostSettingsRepositoryController.js';
 import {
@@ -29,6 +30,15 @@ import type { ComfyAdapter } from '../core/ComfyAdapter.js';
 import type { CubeLibraryApi } from '../core/CubeLibraryApi.js';
 import type { SugarCubesUI } from '../SugarCubesUI.js';
 import type { UnknownRecord } from '../types/common.js';
+
+import {
+  applySettingsRowShellStyle,
+  applySettingsSummaryStyle,
+  applySettingsControlsStyle,
+  applySettingsValueStyle,
+  applySettingsActionGroupStyle,
+  applySettingsListStyle,
+} from './SettingsRowPresentation.js';
 
 type StatusTone = 'neutral' | 'muted' | 'error' | 'accent';
 
@@ -174,61 +184,6 @@ export function createHostSettingsController(
 
   function isEnvManagedPolicySource(source: unknown): boolean {
     return source === 'dotenv' || source === 'process_env';
-  }
-
-  function applySettingsRowShellStyle(element: HTMLElement): void {
-    Object.assign(element.style, {
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'flex-end',
-      gap: '4px',
-      minWidth: '0',
-      textAlign: 'right',
-    });
-  }
-
-  function applySettingsSummaryStyle(element: HTMLElement): void {
-    Object.assign(element.style, {
-      fontSize: '11px',
-      lineHeight: '1.45',
-      whiteSpace: 'pre-wrap',
-      opacity: '0.72',
-      maxWidth: '28rem',
-    });
-  }
-
-  function applySettingsControlsStyle(element: HTMLElement): void {
-    Object.assign(element.style, {
-      display: 'inline-flex',
-      alignItems: 'center',
-      justifyContent: 'flex-end',
-      gap: '8px',
-      flexWrap: 'wrap',
-    });
-  }
-
-  function applySettingsValueStyle(element: HTMLElement): void {
-    Object.assign(element.style, {
-      fontSize: '12px',
-      lineHeight: '1.4',
-    });
-  }
-
-  function applySettingsActionGroupStyle(element: HTMLElement): void {
-    Object.assign(element.style, {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
-      flexWrap: 'wrap',
-    });
-  }
-
-  function applySettingsListStyle(element: HTMLElement): void {
-    Object.assign(element.style, {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '10px',
-    });
   }
 
   function createSettingsActionButton(
@@ -574,9 +529,8 @@ export function createHostSettingsController(
     settingsManager.addSetting({
       defaultValue: '',
       id: 'SugarCubes.Authoring.ClaimedGithubOwner',
-      category: ['SugarCubes', 'Authoring', 'ClaimedGithubOwner'],
+      ...sugarCubesSettingsSection('authoring', 'ClaimedGithubOwner'),
       name: 'Claimed GitHub owner',
-      sortOrder: 341,
       tooltip: 'Claim one GitHub owner to unlock writes for matching tracked repos.',
       type() {
         return settingsUiState.claimedOwner?.root || createClaimedGithubOwnerSettingRow();
@@ -585,9 +539,8 @@ export function createHostSettingsController(
     settingsManager.addSetting({
       defaultValue: '',
       id: 'SugarCubes.Graph.ProximityLinks',
-      category: ['SugarCubes', 'Graph', 'ProximityLinks'],
+      ...sugarCubesSettingsSection('connections', 'ProximityLinks'),
       name: 'Enable proximity links',
-      sortOrder: 342,
       tooltip: 'Enable or disable SugarCubes proximity connections.',
       type() {
         return settingsUiState.proximity?.root || createProximitySettingRow();
@@ -596,9 +549,8 @@ export function createHostSettingsController(
     settingsManager.addSetting({
       defaultValue: '',
       id: 'SugarCubes.CubePacks.TrackedPacks',
-      category: ['SugarCubes', 'Cube Packs', 'TrackedPacks'],
+      ...sugarCubesSettingsSection('packs', 'TrackedPacks'),
       name: 'Tracked packs',
-      sortOrder: 343,
       tooltip: 'Show the current tracked pack summary.',
       type() {
         return settingsUiState.trackedPacks?.root || createTrackedPacksSettingRow();
@@ -607,9 +559,8 @@ export function createHostSettingsController(
     settingsManager.addSetting({
       defaultValue: '',
       id: 'SugarCubes.CubePacks.Manager',
-      category: ['SugarCubes', 'Cube Packs', 'Manager'],
+      ...sugarCubesSettingsSection('packs', 'Manager'),
       name: 'Manage tracked packs',
-      sortOrder: 342.5,
       tooltip: 'Open the tracked pack manager.',
       type() {
         return settingsUiState.manageTrackedPacks?.root || createTrackedPackManagerSettingRow();

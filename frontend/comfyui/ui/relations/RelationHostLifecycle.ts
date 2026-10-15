@@ -229,6 +229,16 @@ export class RelationHostLifecycle {
     this.#toolbar.openMenu(trigger);
   }
 
+  /** Delegate temporary embedding layout to the toolbar's presentation and preference owners. */
+  setOverridesInline(inline: boolean): void {
+    this.#toolbar.setPresentation(inline ? 'substitute' : 'comfy');
+  }
+
+  /** Suspend workflow-wide override presentation while retaining authoritative relation state. */
+  setEditorActive(active: boolean): void {
+    this.#toolbar.setSuspended(active);
+  }
+
   /** Release all reversible host hooks and presentation at application teardown. */
   dispose(): void {
     this.#active = false;

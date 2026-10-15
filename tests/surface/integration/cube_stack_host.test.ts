@@ -497,3 +497,41 @@ function cubeNode(id: string): CubeNode {
     },
   };
 }
+
+test('frame compact control follows visible masonry without changing preferences while unavailable', async () => {
+  const fixture = setup();
+  fixture.host.setup();
+  const controls = fixture.host.frameControls;
+  const changed = jest.fn();
+  const stop = controls.subscribe(changed);
+  expect(controls.available).toBe(false);
+  await controls.toggleCompact();
+  expect(controls.compact).toBe(false);
+  fixture.host.ready(fixture.surface, true);
+  expect(controls.available).toBe(false);
+  await fixture.host.transition(true);
+  expect(controls.available).toBe(true);
+  expect(changed).toHaveBeenCalled();
+  await controls.toggleCompact();
+  expect(controls.compact).toBe(true);
+  await fixture.host.transition(false);
+  expect(controls.available).toBe(false);
+  await controls.toggleCompact();
+  expect(controls.compact).toBe(true);
+  await fixture.host.transition(true);
+  fixture.settings.get(CUBE_STACK_VISIBLE_SETTING)?.onChange(false);
+  expect(controls.available).toBe(false);
+  await controls.toggleCompact();
+  expect(controls.compact).toBe(true);
+  fixture.settings.get(CUBE_STACK_VISIBLE_SETTING)?.onChange(true);
+  expect(controls.available).toBe(true);
+  fixture.host.release();
+  expect(controls.available).toBe(false);
+  fixture.host.ready(fixture.surface, false);
+  expect(controls.available).toBe(true);
+  expect(controls.compact).toBe(true);
+  stop();
+  changed.mockClear();
+  fixture.host.release();
+  expect(changed).not.toHaveBeenCalled();
+});

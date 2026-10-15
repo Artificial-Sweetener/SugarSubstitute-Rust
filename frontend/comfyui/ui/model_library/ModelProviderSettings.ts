@@ -14,13 +14,9 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Present reference CivitAI settings through the shared SugarCubes preference owner. */
+import { sugarCubesSettingsSection } from '../settings/SugarCubesSettingsSections.js';
 import { isRecord } from '../types/common.js';
-import {
-  createFluentBooleanCheckbox,
-  fluentTokenDeclarations,
-} from '../surface/appearance/FluentThemeRuntime.js';
-import { readComfyDarkTheme } from '../surface/appearance/ComfyColorScheme.js';
-import type { FluentBooleanCheckbox } from '../surface/appearance/NativeToggleRows.js';
+import { createSettingsCheckbox, type SettingsCheckbox } from '../settings/SettingsCheckbox.js';
 import {
   modelThumbnailSafetyChoices,
   type ModelProviderPreferences,
@@ -32,7 +28,7 @@ export class ModelProviderSettings {
   readonly #document: Document;
   readonly #client: ModelProviderPreferenceClient;
   readonly #report: (error: unknown) => void;
-  readonly #createCheckbox: (document: Document) => FluentBooleanCheckbox;
+  readonly #createCheckbox: (document: Document) => SettingsCheckbox;
   readonly #render: (() => void)[] = [];
   #value: ModelProviderPreferences | null = null;
   #loading: Promise<void> | null = null;
@@ -44,7 +40,7 @@ export class ModelProviderSettings {
     document: Document,
     client: ModelProviderPreferenceClient,
     report: (error: unknown) => void,
-    createCheckbox: (document: Document) => FluentBooleanCheckbox = createFluentBooleanCheckbox,
+    createCheckbox: (document: Document) => SettingsCheckbox = createSettingsCheckbox,
   ) {
     this.#document = document;
     this.#client = client;
@@ -93,7 +89,7 @@ export class ModelProviderSettings {
       settings.addSetting.call(settings, {
         id: 'SugarCubes.Models.' + key,
         name,
-        category: ['SugarCubes', 'Models', key],
+        ...sugarCubesSettingsSection(key.startsWith('thumbnail') ? 'previews' : 'metadata', key),
         defaultValue: '',
         tooltip,
         type: () => {
@@ -103,7 +99,7 @@ export class ModelProviderSettings {
           }
           row = this.#document.createElement('div');
           row.className = 'sugarcubes-settings-row';
-          let control: HTMLSelectElement | FluentBooleanCheckbox;
+          let control: HTMLSelectElement | SettingsCheckbox;
           if (key === 'thumbnailSafety') {
             const select = this.#document.createElement('select');
             select.className = 'p-inputtext p-component';
@@ -121,7 +117,6 @@ export class ModelProviderSettings {
             const group = this.#document.createElement('span');
             group.style.cssText =
               'display:inline-flex;align-items:center;gap:8px;white-space:nowrap';
-            // Microsoft's checkbox has indicator slots only, so its caption must be a sibling.
             group.append(control, caption);
             const checkbox = control;
             caption.addEventListener('click', () => {
@@ -132,8 +127,6 @@ export class ModelProviderSettings {
           control.setAttribute('aria-label', name);
           if (control instanceof HTMLSelectElement) row.append(control);
           this.#render.push(() => {
-            if (row)
-              row.style.cssText = fluentTokenDeclarations(readComfyDarkTheme(this.#document));
             control.disabled =
               this.#busy ||
               this.#value === null ||

@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own the reversible appearance setting and native presentation lifetime. */
+import { sugarCubesSettingsSection } from '../../settings/SugarCubesSettingsSections.js';
 import { isRecord } from '../../types/common.js';
 import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
 import { createComfyRendererModeChangeSource, resolveComfyRendererMode, } from '../../core/ComfyRendererMode.js';
@@ -111,7 +112,7 @@ export class FluentAppearanceHost {
         settings.addSetting.call(settings, {
             id: FLUENT_APPEARANCE_SETTING,
             name: 'Fluent theme',
-            category: ['SugarCubes', 'Appearance', 'Fluent'],
+            ...sugarCubesSettingsSection('appearance', 'Fluent'),
             type: 'boolean',
             defaultValue: false,
             tooltip: 'Use Windows Fluent styling and SugarSubstitute card presentation in Nodes 2.0.',

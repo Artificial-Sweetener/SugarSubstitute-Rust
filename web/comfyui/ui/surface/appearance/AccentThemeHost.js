@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own accent persistence, external CSS overrides, and palette-only invalidation. */
+import { sugarCubesSettingsSection } from '../../settings/SugarCubesSettingsSections.js';
 import { isRecord } from '../../types/common.js';
 import { readComfyDarkTheme } from './ComfyColorScheme.js';
 import { DEFAULT_ACCENT_COLOR, normalizeAccentColor } from './AccentPalette.js';
@@ -74,7 +75,7 @@ export class AccentThemeHost {
             settings.addSetting.call(settings, {
                 id: ACCENT_COLOR_SETTING,
                 name: 'Accent color',
-                category: ['SugarCubes', 'Appearance', 'AccentColor'],
+                ...sugarCubesSettingsSection('appearance', 'AccentColor'),
                 defaultValue: DEFAULT_ACCENT_COLOR,
                 tooltip: 'Choose the shared SugarCubes accent. Hosts can override it with --sugarcubes-accent on the document root.',
                 type: () => createAccentColorSetting(this.#document, this.#configured, (color) => {

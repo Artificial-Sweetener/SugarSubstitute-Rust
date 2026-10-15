@@ -13,129 +13,88 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Keep the Cube editor HUD clear of Comfy's native viewport chrome as it changes. */
+/** Position the metadata HUD inside the authoritative native graph viewport. */
 import { HostSurfaceObserver } from '../core/HostSurfaceObserver.js';
 
-const LEFT_CHROME_SELECTOR = [
-  '.side-tool-bar-container',
-  '.side-bar-panel',
-  '[class*="side-bar" i]',
-  '[class*="sidebar" i]',
-].join(', ');
-const TOP_CHROME_SELECTOR = '.subgraph-breadcrumb';
+const VIEWPORT_SELECTOR = '#graph-canvas-container > #graph-canvas';
 const VIEWPORT_GUTTER_PX = 16;
 
-/** Own the DOM observation required to keep one viewport overlay out of Comfy's chrome. */
+/** Follow graph allocation and renderer replacement without rediscovering graph contents or popups. */
 export class CubeEditorHudPositioner {
-  readonly #document: Document;
-  readonly #root: HTMLElement;
-  readonly #mutationObserver: HostSurfaceObserver;
-  readonly #resizeObserver: ResizeObserver | null;
-  readonly #onWindowResize: () => void;
+  readonly #presence: HostSurfaceObserver;
+  readonly #resize: ResizeObserver | null;
+  #viewport: HTMLElement | null = null;
   #queued = false;
+  #disposed = false;
 
-  /** Start tracking the native viewport chrome for one mounted HUD. */
-  constructor(documentRef: Document, root: HTMLElement) {
-    this.#document = documentRef;
-    this.#root = root;
-    this.#onWindowResize = () => this.#schedule();
-    const ResizeObserverConstructor = documentRef.defaultView?.ResizeObserver;
-    this.#resizeObserver = ResizeObserverConstructor
-      ? new ResizeObserverConstructor(() => this.#schedule())
-      : null;
-    this.#mutationObserver = new HostSurfaceObserver(
-      documentRef.documentElement,
-      `${LEFT_CHROME_SELECTOR},${TOP_CHROME_SELECTOR}`,
+  /** Bind one HUD to actual canvas bounds, independently of toolbar visibility or window layout. */
+  constructor(
+    private readonly document: Document,
+    private readonly root: HTMLElement,
+  ) {
+    const Observer = document.defaultView?.ResizeObserver;
+    this.#resize = Observer ? new Observer(() => this.#schedule()) : null;
+    this.#presence = new HostSurfaceObserver(
+      document.body,
+      '#graph-canvas-container, #graph-canvas',
       () => this.#schedule(),
-      { attributes: ['class', 'style'] },
+      { attributes: ['class', 'style', 'data-sugarcubes-masonry'] },
     );
-    documentRef.defaultView?.addEventListener('resize', this.#onWindowResize);
-    this.#observeChrome();
+    document.defaultView?.addEventListener('resize', this.#schedule);
     this.sync();
   }
 
-  /** Release document observers when the HUD leaves the editor. */
+  /** Release geometry observation and discard pending callbacks when this HUD retires. */
   dispose(): void {
-    this.#mutationObserver.disconnect();
-    this.#resizeObserver?.disconnect();
-    this.#document.defaultView?.removeEventListener('resize', this.#onWindowResize);
+    this.#disposed = true;
+    this.#presence.disconnect();
+    this.#resize?.disconnect();
+    this.document.defaultView?.removeEventListener('resize', this.#schedule);
   }
 
-  /** Write viewport insets consumed by the HUD's native-token stylesheet. */
+  /** Keep the entire HUD within the current native graph rectangle and hide it before a viewport exists. */
   sync(): void {
-    const left = occupiedLeftEdge(this.#document);
-    const top = occupiedTopEdge(this.#document);
-    setStyleProperty(
-      this.#root,
-      '--sugarcubes-cube-editor-metadata-left',
-      `${String(Math.max(VIEWPORT_GUTTER_PX, Math.ceil(left + VIEWPORT_GUTTER_PX)))}px`,
-    );
-    setStyleProperty(
-      this.#root,
-      '--sugarcubes-cube-editor-metadata-top',
-      `${String(Math.max(VIEWPORT_GUTTER_PX, Math.ceil(top + VIEWPORT_GUTTER_PX)))}px`,
-    );
+    if (this.#disposed) return;
+    const viewport = this.document.querySelector<HTMLElement>(VIEWPORT_SELECTOR);
+    if (viewport !== this.#viewport) {
+      this.#resize?.disconnect();
+      this.#viewport = viewport;
+      if (viewport) this.#resize?.observe(viewport);
+    }
+    const bounds = viewport?.getBoundingClientRect();
+    const style = viewport ? this.document.defaultView?.getComputedStyle(viewport) : null;
+    const visible =
+      !!bounds &&
+      bounds.width > 0 &&
+      bounds.height > 0 &&
+      style?.display !== 'none' &&
+      style?.visibility !== 'hidden';
+    const hidden = !visible;
+    if (this.root.hidden !== hidden) this.root.hidden = hidden;
+    if (!visible || !bounds) return;
+    const gutterX = Math.min(VIEWPORT_GUTTER_PX, bounds.width / 2);
+    const gutterY = Math.min(VIEWPORT_GUTTER_PX, bounds.height / 2);
+    const left = Math.ceil(bounds.left + gutterX);
+    const top = Math.ceil(bounds.top + gutterY);
+    this.#set('--sugarcubes-cube-editor-metadata-left', `${left}px`);
+    this.#set('--sugarcubes-cube-editor-metadata-top', `${top}px`);
+    this.#set('max-width', `${Math.max(0, Math.floor(bounds.right - left - gutterX))}px`);
+    this.#set('max-height', `${Math.max(0, Math.floor(bounds.bottom - top - gutterY))}px`);
   }
 
-  /** Batch native-chrome DOM changes into one layout read. */
-  #schedule(): void {
-    if (this.#queued) return;
+  /** Coalesce accepted viewport geometry changes without waking on unrelated popup activity. */
+  readonly #schedule = (): void => {
+    if (this.#disposed || this.#queued) return;
     this.#queued = true;
     queueMicrotask(() => {
       this.#queued = false;
-      this.#observeChrome();
       this.sync();
     });
+  };
+
+  /** Preserve mounted controls and avoid producing redundant geometry mutations. */
+  #set(property: string, value: string): void {
+    if (this.root.style.getPropertyValue(property) !== value)
+      this.root.style.setProperty(property, value);
   }
-
-  /** Observe the geometry of Comfy chrome that can change without a DOM mutation. */
-  #observeChrome(): void {
-    if (!this.#resizeObserver) return;
-    for (const element of chromeElements(this.#document)) this.#resizeObserver.observe(element);
-  }
-}
-
-/** Avoid waking the document observer for an unchanged owned style value. */
-function setStyleProperty(element: HTMLElement, name: string, value: string): void {
-  if (element.style.getPropertyValue(name) !== value) element.style.setProperty(name, value);
-}
-
-/** Return the rightmost edge claimed by Comfy's permanent toolbar or expanded panel. */
-function occupiedLeftEdge(documentRef: Document): number {
-  const permanentToolbarRight = occupiedPermanentToolbarEdge(documentRef);
-  return chromeElements(documentRef)
-    .filter((element) => isVisibleLeftChrome(element, permanentToolbarRight))
-    .reduce((rightmost, element) => Math.max(rightmost, element.getBoundingClientRect().right), 0);
-}
-
-/** Find Comfy's left-docked chrome across native and extension-provided side panels. */
-function chromeElements(documentRef: Document): HTMLElement[] {
-  return Array.from(documentRef.querySelectorAll<HTMLElement>(LEFT_CHROME_SELECTOR));
-}
-
-/** Return the permanent rail edge that an expanded Comfy panel docks against. */
-function occupiedPermanentToolbarEdge(documentRef: Document): number {
-  return Array.from(documentRef.querySelectorAll<HTMLElement>('.side-tool-bar-container'))
-    .filter(isVisible)
-    .reduce((rightmost, element) => Math.max(rightmost, element.getBoundingClientRect().right), 0);
-}
-
-/** Return the bottom edge claimed by the native Cube-editor breadcrumb. */
-function occupiedTopEdge(documentRef: Document): number {
-  const breadcrumb = documentRef.querySelector<HTMLElement>(TOP_CHROME_SELECTOR);
-  return breadcrumb && isVisible(breadcrumb) ? breadcrumb.getBoundingClientRect().bottom : 0;
-}
-
-/** Restrict left offsets to visible chrome docked on the viewport's left edge. */
-function isVisibleLeftChrome(element: HTMLElement, permanentToolbarRight: number): boolean {
-  return element.getBoundingClientRect().left <= permanentToolbarRight + 1 && isVisible(element);
-}
-
-/** Ignore retained or hidden Comfy chrome nodes. */
-function isVisible(element: HTMLElement): boolean {
-  const rect = element.getBoundingClientRect();
-  const style = element.ownerDocument.defaultView?.getComputedStyle(element);
-  return (
-    rect.width > 0 && rect.height > 0 && style?.display !== 'none' && style?.visibility !== 'hidden'
-  );
 }

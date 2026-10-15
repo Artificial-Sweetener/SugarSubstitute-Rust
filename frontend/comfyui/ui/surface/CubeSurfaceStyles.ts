@@ -588,7 +588,7 @@ export function ensureCubeSurfaceStyles(documentRef: Document): void {
         21rem,
         calc(100vw - var(--sugarcubes-cube-editor-metadata-left, 1rem) - 1rem)
       );
-      overflow: hidden;
+      overflow: auto;
       border: 1px solid var(--border-color, color-mix(in srgb, var(--fg-color, #ddd) 20%, transparent));
       border-radius: var(--p-border-radius-md, 0.5rem);
       background: var(--comfy-menu-bg, var(--p-content-background, #171b20));

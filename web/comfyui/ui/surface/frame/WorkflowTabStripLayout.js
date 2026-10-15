@@ -87,7 +87,8 @@ export class WorkflowTabStripLayout {
     #refresh() {
         if (this.#disposed || this.#count < 0)
             return;
-        const available = Math.max(0, this.frame.clientWidth - FRAME_TAB_START);
+        const trailing = Number.parseFloat(this.#window.getComputedStyle(this.frame).paddingRight) || 0;
+        const available = Math.max(0, this.frame.clientWidth - FRAME_TAB_START - trailing);
         const hidden = this.#count === 0 || this.#contentWidth <= available + 0.5;
         if (this.overflow.hidden !== hidden) {
             this.overflow.hidden = hidden;

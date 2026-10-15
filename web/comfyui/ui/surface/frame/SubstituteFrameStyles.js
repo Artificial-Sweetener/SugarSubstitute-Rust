@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Scope the reference shell geometry to the explicitly selected Substitute visual mode. */
 import { FRAME_TAB_START, WORKFLOW_TAB_TOOL_WIDTH, WORKFLOW_NEW_BUTTON_GAP, } from './WorkflowTabStripLayout.js';
-/** Match frame, scrolling strip and rail geometry only in the selected visual mode. */
+/** Keep browser tabs legible on black; let the desktop host supply native frame background and foreground. */
 export const substituteFrameCss = `
   @property --sc-tab-cutout-radius { syntax:'<length>'; inherits:false; initial-value:0px; }
   @property --sc-tab-cutout-x { syntax:'<length>'; inherits:false; initial-value:-17px; }
@@ -34,13 +34,14 @@ export const substituteFrameCss = `
   :root[data-sc-substitute-frame] div:has(> .subgraph-breadcrumb) { min-width:190px; }
   .sc-substitute-frame { position:absolute; inset:0; height:34px; display:flex; padding:4px 0 0 ${String(FRAME_TAB_START)}px;
     box-sizing:border-box; align-items:flex-end; z-index:1000; pointer-events:auto;
-    background:transparent; color:var(--colorNeutralForeground1); font-family:var(--fontFamilyBase);
-    --sc-frame-wash:rgba(44,44,44,.588); --sc-frame-muted:rgba(255,255,255,.788);
+    background:var(--sc-native-frame-background,#000); color:var(--colorNeutralForeground1); font-family:var(--fontFamilyBase);
+    --sc-frame-wash:rgba(44,44,44,.588); --sc-frame-muted:var(--sc-native-frame-foreground,rgba(255,255,255,.788));
     --sc-frame-hover:rgba(255,255,255,.059); --sc-frame-pressed:rgba(255,255,255,.047);
     --sc-frame-unread:color-mix(in srgb,var(--sc-accent-color) 17.25%,transparent);
     --sc-frame-shimmer-edge:rgba(255,255,255,.063); --sc-frame-shimmer-center:rgba(255,255,255,.176); }
   .sc-substitute-frame[data-color-scheme='light'] { --sc-frame-wash:rgba(252,252,252,.769);
-    --sc-frame-muted:rgba(0,0,0,.788); --sc-frame-hover:rgba(0,0,0,.039); --sc-frame-pressed:rgba(0,0,0,.027);
+    --sc-frame-hover:color-mix(in srgb,var(--sc-native-frame-foreground,#fff) 3.9%,transparent);
+    --sc-frame-pressed:color-mix(in srgb,var(--sc-native-frame-foreground,#fff) 2.7%,transparent);
     --sc-frame-unread:color-mix(in srgb,var(--sc-accent-color) 11%,transparent);
     --sc-frame-shimmer-edge:rgba(255,255,255,.086); --sc-frame-shimmer-center:rgba(255,255,255,.216); }
   .sc-substitute-frame .sc-workflow-title { display:block; white-space:nowrap; min-width:0; overflow:hidden;
@@ -52,11 +53,14 @@ export const substituteFrameCss = `
   @keyframes sc-frame-result-shimmer { 0% { left:-36px; opacity:1; } 85% { opacity:1; } 100% { left:100%; opacity:0; } }
   @media(prefers-reduced-motion:reduce) { .sc-substitute-frame sc-workflow-tab[data-shimmer] .sc-workflow-shimmer { animation:none; } }
   .sc-substitute-frame .sc-workflow-close { display:flex; align-items:center; justify-content:center; flex:0 0 18px;
-    width:18px; height:18px; min-width:18px; padding:0; border-radius:4px; visibility:hidden; }
+    width:18px; height:18px; min-width:18px; padding:0; border-radius:4px; visibility:hidden; color:inherit; }
   .sc-substitute-frame sc-workflow-tab:hover .sc-workflow-close,
   .sc-substitute-frame sc-workflow-tab:focus-within .sc-workflow-close { visibility:visible; }
   .sc-substitute-frame sc-workflow-tab[data-modified] .sc-workflow-title::after { content:' •'; }
   .sc-substitute-frame .sc-frame-tool { flex:0 0 30px; width:30px; height:30px; min-width:0; padding:0; border-radius:0; }
+  .sc-substitute-frame :is(.sc-workflow-new,.sc-workflow-overflow) { color:var(--sc-native-frame-foreground,#fff); }
+  .sc-substitute-frame :is(.sc-workflow-new,.sc-workflow-overflow):hover { background:var(--sc-frame-hover); }
+  .sc-substitute-frame :is(.sc-workflow-new,.sc-workflow-overflow):active { background:var(--sc-frame-pressed); }
   .sc-substitute-frame .sc-workflow-strip { display:flex; align-items:center; height:30px; min-width:0;
     flex:0 1 auto; overflow-x:auto; overflow-y:hidden; scrollbar-width:none; }
   .sc-substitute-frame .sc-workflow-strip::-webkit-scrollbar { display:none; }

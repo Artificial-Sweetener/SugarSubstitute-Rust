@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own the independent frame-mode preference and its explicit host selection boundary. */
+import { sugarCubesSettingsSection } from '../../settings/SugarCubesSettingsSections.js';
 import { isRecord } from '../../types/common.js';
 /** Persist only the opt-in visual-mode preference in Comfy settings. */
 export const SUBSTITUTE_FRAME_SETTING = 'SugarCubes.Appearance.SubstituteFrame';
@@ -53,7 +54,7 @@ export class SubstituteFrameMode {
         settings.addSetting.call(settings, {
             id: SUBSTITUTE_FRAME_SETTING,
             name: 'Substitute frame',
-            category: ['SugarCubes', 'Appearance', 'SubstituteFrame'],
+            ...sugarCubesSettingsSection('appearance', 'SubstituteFrame'),
             type: 'boolean',
             defaultValue: false,
             tooltip: 'Use Substitute workflow tabs, application orb and transparent Cube stack; hide the Comfy sidebar.',

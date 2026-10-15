@@ -62,14 +62,7 @@ export class ComfyCanvasWorkspaceFrame {
         if (this.#disposed)
             return;
         this.#toolbar.measure();
-        const origin = this.root.getBoundingClientRect();
-        const panel = this.panel.getBoundingClientRect();
-        const next = {
-            left: panel.left - origin.left,
-            top: panel.top - origin.top,
-            width: panel.width,
-            height: panel.height,
-        };
+        const next = this.#readBounds();
         const previous = this.#bounds;
         if (previous &&
             next.left === previous.left &&
@@ -82,6 +75,30 @@ export class ComfyCanvasWorkspaceFrame {
             this.element.style.setProperty(property, `${value}px`);
         if (!previous || next.width !== previous.width || next.height !== previous.height)
             this.changed(next.width, next.height);
+    }
+    /** Reanchor sibling pixels synchronously after native allocation moves their shared origin. */
+    syncOrigin() {
+        if (this.#disposed)
+            return;
+        const next = this.#readBounds();
+        for (const property of ['left', 'top']) {
+            const value = `${next[property]}px`;
+            if (this.element.style.getPropertyValue(property) !== value)
+                this.element.style.setProperty(property, value);
+        }
+        if (this.#bounds)
+            this.#bounds = { ...this.#bounds, left: next.left, top: next.top };
+    }
+    /** Measure native content in the current graph coordinate origin without changing host geometry. */
+    #readBounds() {
+        const origin = this.root.getBoundingClientRect();
+        const panel = this.panel.getBoundingClientRect();
+        return {
+            left: panel.left - origin.left,
+            top: panel.top - origin.top,
+            width: panel.width,
+            height: panel.height,
+        };
     }
     /** Release geometry scheduling and the owned sibling while leaving every native surface intact. */
     dispose() {

@@ -671,8 +671,8 @@ license = "GPL-3.0-or-later"
 license_file = "third_party/licenses/sugarsubstitute.LICENSE.txt"
 source = "https://github.com/Artificial-Sweetener/SugarSubstitute"
 revision = "34ce6d9976c76ac708b1dbda3920e9311010006a"
-modifications = "Workflow tab geometry and unread-result painter adapted to official Microsoft Fluent web controls. Orb tint and PSD layer placement adapted to cached browser canvas composition with alpha-safe Lanczos display resampling; original PNG artwork is unmodified. Rail styling shares existing Cube stack behavior."
-runtime_files = ["web/comfyui/ui/surface/frame/WorkflowTabStyles.js","web/comfyui/ui/surface/frame/WorkflowTabStripLayout.js","web/comfyui/ui/surface/frame/WorkflowTabDragGeometry.js","web/comfyui/ui/surface/frame/WorkflowTabDragPreview.js","web/comfyui/ui/surface/frame/WorkflowTabPointerDrag.js","web/comfyui/ui/surface/frame/SubstituteFrameStyles.js","web/comfyui/ui/surface/frame/SubstituteFrameView.js","web/comfyui/ui/surface/frame/OrbTint.js","web/comfyui/ui/surface/frame/OrbRaster.js","web/comfyui/ui/surface/frame/OrbDisplayDensity.js","web/comfyui/ui/surface/frame/AppOrbRenderer.js"]
+modifications = "Workflow tab geometry and unread-result painter adapted to official Microsoft Fluent web controls. Orb tint and PSD layer placement adapted to cached browser canvas composition with alpha-safe Lanczos display resampling; original PNG artwork is unmodified. Rail styling shares existing Cube stack behavior. Generation strip geometry and painting are translated to accessible browser controls while Comfy retains commands and batch settings."
+runtime_files = ["web/comfyui/ui/surface/frame/WorkflowTabStyles.js","web/comfyui/ui/surface/frame/WorkflowTabStripLayout.js","web/comfyui/ui/surface/frame/WorkflowTabDragGeometry.js","web/comfyui/ui/surface/frame/WorkflowTabDragPreview.js","web/comfyui/ui/surface/frame/WorkflowTabPointerDrag.js","web/comfyui/ui/surface/frame/SubstituteFrameStyles.js","web/comfyui/ui/surface/frame/SubstituteFrameView.js","web/comfyui/ui/surface/frame/OrbTint.js","web/comfyui/ui/surface/frame/OrbRaster.js","web/comfyui/ui/surface/frame/OrbDisplayDensity.js","web/comfyui/ui/surface/frame/AppOrbRenderer.js","web/comfyui/ui/surface/frame/GenerationStripStyles.js","web/comfyui/ui/surface/frame/GenerationStripView.js","web/comfyui/ui/surface/frame/SubstituteToolbarStyles.js"]
 
 [[component.implementation]]
 source_path = "substitute/presentation/workflows/workflow_tab_gesture_controller.py"
@@ -702,12 +702,17 @@ adapted_paths = ["frontend/comfyui/ui/surface/frame/OrbTint.ts", "frontend/comfy
 [[component.implementation]]
 source_path = "substitute/presentation/shell/chrome_style.py"
 source_sha256 = "f183df37e6295024e93850f9f5fee86cd8f9a251db2afd7aa879412ba9c3ab03"
-adapted_paths = ["frontend/comfyui/ui/surface/frame/SubstituteFrameStyles.ts"]
+adapted_paths = ["frontend/comfyui/ui/surface/frame/SubstituteFrameStyles.ts", "frontend/comfyui/ui/surface/frame/SubstituteToolbarStyles.ts"]
 
 [[component.implementation]]
 source_path = "substitute/presentation/shell/app_orb_action_cluster.py"
 source_sha256 = "5d4966ca5139aa9ceb00684e32913e4ffc53351b5f60b2d514ee365ec2a922af"
 adapted_paths = ["frontend/comfyui/ui/surface/frame/SubstituteFrameView.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/shell/titlebar_buttons.py"
+source_sha256 = "4d01853b628dc09b1fc704cc259aeee7f8af0c80bce0dc1d8b5b2dca8c16395b"
+adapted_paths = ["frontend/comfyui/ui/surface/frame/GenerationStripStyles.ts", "frontend/comfyui/ui/surface/frame/GenerationStripView.ts"]
 
 [[component.asset]]
 source_path = "substitute/presentation/resources/app_icons/app_icon_256.png"
@@ -766,3 +771,51 @@ source_path = "qfluentwidgets/_rc/images/icons/Pin_white.svg"
 vendored_file = "frontend/static/orb/pin.svg"
 runtime_file = "web/orb/pin.svg"
 sha256 = "362afa2c2d770f123b4964b89f2c171285e28a4db68016705d8867625102051c"
+
+[[component]]
+name = "QFluent generation play artwork"
+license = "GPL-3.0-or-later"
+license_file = "third_party/licenses/qfluentwidgets.LICENSE.txt"
+source = "https://github.com/zhiyiYo/PyQt-Fluent-Widgets"
+revision = "d90c008c534b2b0079ce7981d19b2bc957b354a5"
+modifications = "None; original play SVG copied verbatim and tinted through a CSS mask."
+
+[[component.asset]]
+source_path = "qfluentwidgets/_rc/images/icons/PlaySolid_black.svg"
+vendored_file = "frontend/static/orb/play.svg"
+runtime_file = "web/orb/play.svg"
+sha256 = "74e1859d4fc625457c3e44373d13db567d275011996d4799114ad49fcd766be0"
+
+[[component]]
+name = "Substitute generation segment artwork"
+license = "MIT"
+license_file = "third_party/licenses/fluentui-system-icons.LICENSE.txt"
+source = "https://github.com/Artificial-Sweetener/SugarSubstitute"
+revision = "34ce6d9976c76ac708b1dbda3920e9311010006a"
+modifications = "None; Substitute's stop and Microsoft Fluent next SVGs copied verbatim and tinted through CSS masks."
+
+[[component.asset]]
+source_path = "substitute/presentation/resources/icons/StopSolid_black.svg"
+vendored_file = "frontend/static/orb/stop.svg"
+runtime_file = "web/orb/stop.svg"
+sha256 = "1b424a2393d94e079ad69b5c80aba1c979ee122c4fdf55445f5b534202292c62"
+
+[[component.asset]]
+source_path = "substitute/presentation/resources/icons/Next24Filled_black.svg"
+vendored_file = "frontend/static/orb/next.svg"
+runtime_file = "web/orb/next.svg"
+sha256 = "843ff93d6e261f8e6520e1081a9db5121aede857bb8d6ed62459d5524efb9633"
+
+[[component]]
+name = "QFluent generation queue artwork"
+license = "GPL-3.0-or-later"
+license_file = "third_party/licenses/qfluentwidgets.LICENSE.txt"
+source = "https://github.com/zhiyiYo/PyQt-Fluent-Widgets"
+revision = "d90c008c534b2b0079ce7981d19b2bc957b354a5"
+modifications = "None; original history SVG copied verbatim and tinted through a CSS mask."
+
+[[component.asset]]
+source_path = "qfluentwidgets/_rc/images/icons/History_black.svg"
+vendored_file = "frontend/static/orb/history.svg"
+runtime_file = "web/orb/history.svg"
+sha256 = "7affa00b4b880448871aa84138086ad1e5eaa5ad352b941bcd70542baccfda35"

@@ -54,7 +54,7 @@ export class WorkflowMasonryToolbarButton {
   }
 
   /** Show the destination view while exposing current state to assistive technology. */
-  update(active: boolean, available: boolean): void {
+  update(active: boolean, available: boolean, unavailableReason?: string): void {
     const destination = active ? 'graph' : 'masonry';
     if (this.#button.dataset.view !== destination) {
       this.#button.dataset.view = destination;
@@ -64,7 +64,9 @@ export class WorkflowMasonryToolbarButton {
     }
     this.#button.setAttribute('aria-pressed', String(active));
     this.#button.disabled = !available;
-    this.#button.title = available ? `Switch to ${destination} view` : 'Masonry requires Nodes 2.0';
+    this.#button.title = available
+      ? `Switch to ${destination} view`
+      : (unavailableReason ?? 'Masonry requires Nodes 2.0');
   }
 
   /** Release the toolbar observer and click handler with the owning host. */

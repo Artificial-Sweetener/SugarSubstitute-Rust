@@ -284,32 +284,16 @@ test('uses Another model as the explicit HUD path for a custom target model', as
   hud.dispose();
 });
 
-test('uses Comfy PrimeIcons and clears the native toolbar, sidebar, and breadcrumb', async () => {
+test('uses Comfy PrimeIcons inside the actual allocated graph viewport', async () => {
   document.body.replaceChildren();
-  const toolbar = document.createElement('nav');
-  toolbar.className = 'side-tool-bar-container';
-  Object.defineProperty(toolbar, 'getBoundingClientRect', {
-    value: () => ({ left: 0, right: 74, top: 38, bottom: 900, width: 74, height: 862 }),
-  });
-  const sidebar = document.createElement('div');
-  sidebar.className = 'side-bar-panel';
-  Object.defineProperty(sidebar, 'getBoundingClientRect', {
-    value: () => ({ left: 0, right: 280, top: 38, bottom: 900, width: 280, height: 862 }),
-  });
-  const breadcrumb = document.createElement('div');
-  breadcrumb.className = 'subgraph-breadcrumb';
-  Object.defineProperty(breadcrumb, 'getBoundingClientRect', {
-    value: () => ({ left: 80, right: 400, top: 64, bottom: 102, width: 320, height: 38 }),
-  });
-  document.body.append(toolbar, sidebar, breadcrumb);
+  mountGraphViewport(() => ({ left: 280, top: 102, width: 1000, height: 798 }));
   const hud = new CubeEditorMetadataHud(document, {
     canEdit: async () => true,
     save: async () => 'saved',
   });
-
   await showExpanded(hud, cubeNode());
-
   const card = document.querySelector<HTMLElement>('.sugarcubes-cube-editor-metadata');
+  expect(card?.hidden).toBe(false);
   expect(card?.style.getPropertyValue('--sugarcubes-cube-editor-metadata-left')).toBe('296px');
   expect(card?.style.getPropertyValue('--sugarcubes-cube-editor-metadata-top')).toBe('118px');
   expect(document.querySelector('.sugarcubes-cube-editor-metadata__save .pi-save')).not.toBeNull();
@@ -319,45 +303,50 @@ test('uses Comfy PrimeIcons and clears the native toolbar, sidebar, and breadcru
   hud.dispose();
 });
 
-test('repositions when Comfy expands a left panel after the HUD mounts', async () => {
+test('repositions when the graph viewport moves after the HUD mounts', async () => {
   document.body.replaceChildren();
-  let panelRight = 0;
-  const toolbar = document.createElement('nav');
-  toolbar.className = 'side-tool-bar-container';
-  Object.defineProperty(toolbar, 'getBoundingClientRect', {
-    value: () => ({ left: 0, right: 74, top: 38, bottom: 900, width: 74, height: 862 }),
-  });
-  const panel = document.createElement('div');
-  panel.className = 'side-bar-panel';
-  Object.defineProperty(panel, 'getBoundingClientRect', {
-    value: () => ({
-      left: 74,
-      right: panelRight ? panelRight : 74,
-      top: 38,
-      bottom: 900,
-      width: panelRight ? panelRight - 74 : 0,
-      height: panelRight ? 862 : 0,
-    }),
-  });
-  document.body.append(toolbar, panel);
+  let left = 74;
+  mountGraphViewport(() => ({ left, top: 38, width: 1200 - left, height: 862 }));
   const hud = new CubeEditorMetadataHud(document, {
     canEdit: async () => true,
     save: async () => 'saved',
   });
-
   await showExpanded(hud, cubeNode());
   const card = document.querySelector<HTMLElement>('.sugarcubes-cube-editor-metadata');
   expect(card?.style.getPropertyValue('--sugarcubes-cube-editor-metadata-left')).toBe('90px');
-
-  panelRight = 320;
-  panel.classList.add('is-open');
+  left = 320;
+  window.dispatchEvent(new Event('resize'));
   await Promise.resolve();
   await Promise.resolve();
-
   expect(card?.style.getPropertyValue('--sugarcubes-cube-editor-metadata-left')).toBe('336px');
   hud.dispose();
 });
 
+/** Supply native viewport bounds while exercising the actual HUD and positioner together. */
+function mountGraphViewport(
+  read: () => { left: number; top: number; width: number; height: number },
+): void {
+  const graph = document.createElement('div');
+  graph.id = 'graph-canvas-container';
+  const canvas = document.createElement('canvas');
+  canvas.id = 'graph-canvas';
+  graph.append(canvas);
+  document.body.append(graph);
+  jest.spyOn(canvas, 'getBoundingClientRect').mockImplementation(() => {
+    const { left, top, width, height } = read();
+    return {
+      x: left,
+      y: top,
+      left,
+      top,
+      width,
+      height,
+      right: left + width,
+      bottom: top + height,
+      toJSON: () => ({ left, top, width, height }),
+    };
+  });
+}
 test('mounts above Comfy workspace chrome so metadata actions cannot click through', async () => {
   document.body.replaceChildren();
   const appRoot = document.createElement('div');

@@ -1,3 +1,20 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Present configured output saving and explicit settings import in Comfy's SugarCubes settings. */
+import { sugarCubesSettingsSection } from '../settings/SugarCubesSettingsSections.js';
 import { OutputSavingDialog } from './OutputSavingDialog.js';
 import { pickSubstituteSettings } from './SubstituteSettingsPicker.js';
 /** Keep the server authoritative while retaining one row's control identity and explicit pending state. */
@@ -31,13 +48,13 @@ export class OutputSavingSettings {
         manager.addSetting({
             id: 'SugarCubes.Output.Files',
             name: 'Output files',
-            category: ['SugarCubes', 'Output', 'Files'],
+            ...sugarCubesSettingsSection('output', 'Files'),
             defaultValue: '',
             tooltip: 'Configure output folder, filename pattern, saved cubes, JPEG companions, workflow management, and Drag and Copy format.',
             type: () => {
                 if (!this.#row) {
                     this.#row = this.document.createElement('div');
-                    this.#row.className = 'sugarcubes-settings-row';
+                    this.#row.className = 'sugarcubes-settings-row sc-output-saving-setting';
                     this.#row.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap';
                     this.#summary = this.document.createElement('span');
                     this.#summary.style.flex = '1';

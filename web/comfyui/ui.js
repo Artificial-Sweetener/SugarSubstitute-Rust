@@ -99,7 +99,7 @@ const hostFeedback = new CubeHostFeedback({
 const cubePreconfiguration = ui.workflowPreconfiguration;
 const workflowExecution = createComfyWorkflowExecutionRuntime({ app: appRef, api, logger });
 const cubeRuntimeLifecycle = new ComfyCubeRuntimeLifecycle(createCubeRuntime);
-const { appearance, relations, frame } = createWorkflowFieldHost({
+const { appearance, relations, frame, setupPresentation } = createWorkflowFieldHost({
     app: appRef,
     document: documentRef ?? document,
     seeds: workflowExecution.seeds,
@@ -109,9 +109,9 @@ const { appearance, relations, frame } = createWorkflowFieldHost({
     getCardState: () => cubeRuntimeLifecycle.current()?.cardState ?? null,
     getConnections: (graph) => proximityWorkflowConnections(overlayManager.proximity, graph),
     logger,
-    reportAppearanceError: (error) => {
-        logger.error('SugarCubes Fluent appearance failed', { error });
-        pushToastMessage('error', 'Fluent theme unavailable', readErrorMessage(error));
+    reportPresentationError: (error) => {
+        logger.error('SugarCubes presentation failed', { error });
+        pushToastMessage('error', 'Interface unavailable', readErrorMessage(error));
     },
     reportRelationError: (error) => {
         logger.error('SugarCubes workflow relations failed', { error });
@@ -419,8 +419,7 @@ export const sugarCubesExtension = {
         relations.setup();
         workflowWorkspace.setup();
         scrollSurfaceInput.setup();
-        appearance.setup();
-        frame.setup();
+        setupPresentation();
         modelPickers.setup();
         await editorActions.setup();
         modelLibrarySettings.setup();

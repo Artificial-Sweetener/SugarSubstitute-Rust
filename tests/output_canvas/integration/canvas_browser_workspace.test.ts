@@ -119,6 +119,47 @@ test('does not generate presentation mutations when accepted allocation is uncha
   f.dispose();
 });
 
+test('reanchors siblings before allocation paints and restores the origin across app suspension', () => {
+  const f = fixture();
+  const parent = f.root.parentElement!;
+  /** Model native layout rectangles independently of the allocation policy. */
+  const rectangle = (left: number, top: number, width: number, height: number): DOMRect => ({
+    x: left,
+    y: top,
+    left,
+    top,
+    width,
+    height,
+    right: left + width,
+    bottom: top + height,
+    toJSON: () => ({ left, top, width, height }),
+  });
+  jest.spyOn(parent, 'getBoundingClientRect').mockReturnValue(rectangle(0, 0, 1400, 900));
+  jest.spyOn(f.panel, 'getBoundingClientRect').mockReturnValue(rectangle(4, 86, 1392, 810));
+  jest
+    .spyOn(f.root, 'getBoundingClientRect')
+    .mockImplementation(() =>
+      rectangle(
+        Number.parseFloat(f.root.style.marginLeft) || 0,
+        Number.parseFloat(f.root.style.marginTop) || 0,
+        840,
+        810,
+      ),
+    );
+  const sibling = f.root.querySelector<HTMLElement>('.sc-output-workspace-frame')!;
+  f.workspace.preferences({ visible: true, width: 560 });
+  expect(f.root.style.marginTop).toBe('86px');
+  expect(sibling.style.top).toBe('0px');
+  expect(sibling.style.left).toBe('0px');
+  f.workspace.suspend('app');
+  expect(f.root.style.marginTop).toBe('');
+  expect(sibling.style.top).toBe('86px');
+  f.workspace.suspend(null);
+  expect(sibling.style.top).toBe('0px');
+  expect(sibling.style.left).toBe('0px');
+  f.dispose();
+});
+
 test('requires explicit narrow activation and exposes authoritative keyboard width bounds', () => {
   const f = fixture(800);
   expect(f.workspace.visible).toBe(false);

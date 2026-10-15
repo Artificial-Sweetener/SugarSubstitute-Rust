@@ -100,7 +100,7 @@ export class SubstituteFrameView {
     const cluster = document.createElement('div');
     cluster.className = 'sc-orb-actions';
     this.#stackButton = this.#button('Cube stack', '', () => {
-      void actions.stack.toggleCompact().catch(actions.report);
+      if (actions.stack.available) void actions.stack.toggleCompact().catch(actions.report);
     });
     this.#stackButton.addEventListener('contextmenu', (event) => {
       event.preventDefault();
@@ -161,7 +161,10 @@ export class SubstituteFrameView {
     const compact = this.actions.stack.compact;
     const label = compact ? 'Expand Cube stack' : 'Collapse Cube stack';
     this.#stackButton.setAttribute('aria-label', label);
-    this.#stackButton.title = label;
+    this.#stackButton.toggleAttribute('disabled', !this.actions.stack.available);
+    this.#stackButton.title = this.actions.stack.available
+      ? label
+      : 'Show the Cube stack in masonry to expand or collapse it';
     this.#stackButton.setAttribute('aria-pressed', String(compact));
     const filename = compact ? 'panel-left-regular.svg' : 'panel-left.svg';
     this.#stackButton

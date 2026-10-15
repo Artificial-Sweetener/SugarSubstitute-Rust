@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Present model-library configuration through SugarCubes' existing settings and dialogs. */
+import { sugarCubesSettingsSection } from '../settings/SugarCubesSettingsSections.js';
 import { isRecord } from '../types/common.js';
 import type { ModalService } from '../dialogs/ModalService.js';
 import type { ModelCatalogClient } from './ModelCatalogClient.js';
@@ -51,7 +52,7 @@ export class ModelLibrarySettings {
     settings.addSetting.call(settings, {
       id: 'SugarCubes.Models.Library',
       name: 'Model library',
-      category: ['SugarCubes', 'Models', 'Library'],
+      ...sugarCubesSettingsSection('models', 'Library'),
       defaultValue: '',
       tooltip: 'Configure the shared model folder or refresh the prepared model catalog.',
       type: () => {

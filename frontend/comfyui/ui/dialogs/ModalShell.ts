@@ -94,6 +94,10 @@ export class ModalShell {
   private focusTarget: (() => FocusableElement | null | undefined) | null;
   private previousActiveElement: HTMLElement | null;
   private readonly dismissal: ModalDismissal;
+  /** Reserve Escape before native document handlers while respecting child popup ownership. */
+  private readonly captureEscape = (event: KeyboardEvent): void => {
+    this.dismissal.captureEscape(event);
+  };
 
   /** Bind presentation lifetimes and one cancellation policy to the host document. */
   constructor({
@@ -266,6 +270,7 @@ export class ModalShell {
       }
     };
     this.windowRef?.addEventListener?.('keydown', onKeydown);
+    this.windowRef?.addEventListener?.('keydown', this.captureEscape, true);
     this.keydownHandler = onKeydown;
 
     this.focusInitialTarget();
@@ -282,6 +287,7 @@ export class ModalShell {
     }
     if (this.keydownHandler) {
       this.windowRef?.removeEventListener?.('keydown', this.keydownHandler);
+      this.windowRef?.removeEventListener?.('keydown', this.captureEscape, true);
       this.keydownHandler = null;
     }
     this.elements.overlay.classList.remove('is-visible');

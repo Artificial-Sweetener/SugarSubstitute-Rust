@@ -54,8 +54,9 @@ export class NativeOverrideToolbarHost implements OverrideToolbarHost {
       this.#removeTarget();
       return false;
     }
+    const inline = element.dataset.presentation === 'substitute';
     this.#emptyContent.mount(docked ? surfaces.actionbar : null);
-    if (docked && !this.canDock()) return false;
+    if (!inline && docked && !this.canDock()) return false;
     const nativeGrip = surfaces.grip;
     const fontFamily = nativeGrip
       ? this.document.defaultView?.getComputedStyle(nativeGrip).fontFamily
@@ -63,7 +64,7 @@ export class NativeOverrideToolbarHost implements OverrideToolbarHost {
     if (fontFamily && element.style.getPropertyValue('--sc-native-grip-font-family') !== fontFamily)
       element.style.setProperty('--sc-native-grip-font-family', fontFamily);
     const focused = this.document.activeElement;
-    if (docked) {
+    if (docked || inline) {
       if (this.#slot?.parentElement !== surfaces.actionbar) {
         const old = this.#slot;
         this.#slot = this.document.createElement('div');
@@ -72,7 +73,7 @@ export class NativeOverrideToolbarHost implements OverrideToolbarHost {
         this.#slot.append(element);
         old?.remove();
       } else if (element.parentElement !== this.#slot) this.#slot.append(element);
-      const width = `${this.#budget()}px`;
+      const width = `${inline ? this.#inlineBudget(surfaces.actionbar) : this.#budget()}px`;
       if (element.style.maxWidth !== width) element.style.maxWidth = width;
     } else {
       if (
@@ -204,6 +205,27 @@ export class NativeOverrideToolbarHost implements OverrideToolbarHost {
     return Math.max(
       0,
       Math.floor(surfaces.line.getBoundingClientRect().width - nativeWidth - otherWidth - 24),
+    );
+  }
+
+  /** Allocate the inline bar after its retained native view controls without floating-width feedback. */
+  #inlineBudget(bar: HTMLElement): number {
+    const children = [...bar.children].filter(
+      (child): child is HTMLElement =>
+        child instanceof HTMLElement && child !== this.#slot && child !== this.#target,
+    );
+    const widths = children
+      .map((child) => child.getBoundingClientRect().width)
+      .filter((width) => width > 0);
+    const gap =
+      Number.parseFloat(this.document.defaultView?.getComputedStyle(bar).columnGap ?? '') || 0;
+    return Math.max(
+      0,
+      Math.floor(
+        bar.getBoundingClientRect().width -
+          widths.reduce((sum, width) => sum + width, 0) -
+          gap * widths.length,
+      ),
     );
   }
 

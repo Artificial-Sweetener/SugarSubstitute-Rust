@@ -156,10 +156,8 @@ export class BrowserCanvasWorkspace {
         const allocation = this.model.read();
         this.#allocation = allocation;
         const visible = allocation.visible && this.#suspension === null;
-        const inset = allocation.visible && this.#suspension !== 'app' && allocation.mode === 'docked'
-            ? allocation.canvas.width
-            : 0;
-        this.#frame.apply(inset);
+        const inset = this.#applyFrame();
+        this.#workspaceFrame.syncOrigin();
         const painted = JSON.stringify([
             visible,
             inset,
@@ -187,5 +185,17 @@ export class BrowserCanvasWorkspace {
         this.#divider.setAttribute('aria-valuemin', String(Math.round(allocation.minimumWidth)));
         this.#divider.setAttribute('aria-valuemax', String(Math.round(allocation.maximumWidth)));
         this.actions.changed();
+    }
+    /** Allocate the graph through its sole native geometry owner for the accepted presentation. */
+    #applyFrame() {
+        const allocation = this.model.read();
+        const inset = allocation.visible && this.#suspension !== 'app' && allocation.mode === 'docked'
+            ? allocation.canvas.width
+            : 0;
+        if (this.#suspension === 'app')
+            this.#frame.suspend();
+        else
+            this.#frame.apply(inset);
+        return inset;
     }
 }

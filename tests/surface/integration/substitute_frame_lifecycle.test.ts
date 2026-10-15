@@ -100,6 +100,7 @@ test('mode restores host presentation and preserves native controls, graph, and 
     activity: new WorkflowOutputActivity(),
     palette: { theme: { color: '#479ef5', dark: true }, subscribe: () => () => undefined },
     stackControls: () => ({
+      available: true,
       compact: false,
       toggleCompact: async () => undefined,
       menu: () => [],
@@ -107,6 +108,7 @@ test('mode restores host presentation and preserves native controls, graph, and 
     }),
     report,
     openOverrides: () => undefined,
+    setOverridesInline: () => undefined,
   });
   host.setup();
   expect(document.querySelector('.sc-substitute-frame')).toBeNull();
@@ -175,6 +177,7 @@ test('frame actions retain stack policy, settings access, override anchor and un
   const command = jest.fn();
   const openOverrides = jest.fn();
   let compact = true;
+  let available = false;
   let refresh = (): void => undefined;
   const toggleCompact = jest.fn(async () => {
     compact = !compact;
@@ -193,6 +196,9 @@ test('frame actions retain stack policy, settings access, override anchor and un
     openOverrides,
     report: jest.fn(),
     stack: {
+      get available() {
+        return available;
+      },
       get compact() {
         return compact;
       },
@@ -206,6 +212,15 @@ test('frame actions retain stack policy, settings access, override anchor and un
   });
   document.body.append(view.element);
   const stack = view.element.querySelector<HTMLElement>('[aria-label="Expand Cube stack"]')!;
+  expect(stack.hasAttribute('disabled')).toBe(true);
+  stack.click();
+  await settle();
+  expect(toggleCompact).not.toHaveBeenCalled();
+  expect(compact).toBe(true);
+  available = true;
+  refresh();
+  await settle();
+  expect(stack.hasAttribute('disabled')).toBe(false);
   stack.click();
   await settle();
   expect(toggleCompact).toHaveBeenCalledTimes(1);
@@ -214,6 +229,7 @@ test('frame actions retain stack policy, settings access, override anchor and un
   stack.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
   expect(open.mock.calls.at(-1)?.[0].entries[0]?.label).toBe('Show Cube stack');
   const pin = view.element.querySelector<HTMLElement>('[aria-label="Set Global Override"]')!;
+  expect(pin.querySelector('.sc-orb-chevron')?.getAttribute('aria-hidden')).toBe('true');
   pin.click();
   expect(openOverrides).toHaveBeenCalledWith(pin);
   view.element.querySelector<HTMLElement>('.sc-app-orb')!.click();
@@ -290,6 +306,7 @@ test('new-workflow control follows the tabs and overflow appears only when the s
     openOverrides: jest.fn(),
     report: jest.fn(),
     stack: {
+      available: true,
       compact: true,
       toggleCompact: async () => undefined,
       menu: () => [],

@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own reversible model-picker mounts independently of theme and layout preferences. */
+import { sugarCubesSettingsSection } from '../settings/SugarCubesSettingsSections.js';
 import { isRecord } from '../types/common.js';
 import { HostSurfaceObserver } from '../core/HostSurfaceObserver.js';
 import {
@@ -138,7 +139,7 @@ export class ModelPickerHost {
       name: 'Enhanced model pickers',
       type: 'boolean',
       defaultValue: true,
-      category: ['SugarCubes', 'Models', 'EnhancedPicker'],
+      ...sugarCubesSettingsSection('models', 'EnhancedPicker'),
       tooltip: 'Browse models with searchable image-backed fields in Nodes 2.0.',
       onChange: (value: unknown) => this.setEnabled(value === true),
     });

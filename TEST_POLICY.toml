@@ -331,6 +331,8 @@ isolated_proofs = ["integration"]
 [[area]]
 name = "settings"
 sources = [
+  "frontend/static/legal/**",
+  "web/legal/**",
   "frontend/comfyui/ui/controls/**",
   "frontend/comfyui/ui/dialogs/**",
   "frontend/comfyui/ui/settings/**",

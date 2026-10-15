@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Persist stack presentation through Comfy settings, independently of workflow documents. */
+import { sugarCubesSettingsSection } from '../../settings/SugarCubesSettingsSections.js';
 import { isRecord } from '../../types/common.js';
 /** Identify the persisted rail visibility affordance in Comfy settings. */
 export const CUBE_STACK_VISIBLE_SETTING = 'SugarCubes.Masonry.CubeStack';
@@ -60,7 +61,7 @@ export class CubeStackPreferences {
             addSetting.call(settings, {
                 id,
                 name,
-                category: ['SugarCubes', 'Masonry', name],
+                ...sugarCubesSettingsSection('stack', name),
                 type: 'boolean',
                 defaultValue,
                 onChange: (value) => {

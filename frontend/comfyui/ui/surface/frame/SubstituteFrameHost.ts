@@ -23,6 +23,8 @@ import { SubstituteFrameMode } from './SubstituteFrameMode.js';
 import { ComfyFrameWorkflowAdapter } from './ComfyFrameWorkflowAdapter.js';
 import { SubstituteFrameView } from './SubstituteFrameView.js';
 import { substituteFrameCss } from './SubstituteFrameStyles.js';
+import { GenerationStripHost } from './GenerationStripHost.js';
+import { SubstituteToolbarLayout } from './SubstituteToolbarLayout.js';
 
 export interface SubstituteFrameHostOptions {
   readonly document: Document;
@@ -32,6 +34,7 @@ export interface SubstituteFrameHostOptions {
   readonly activity: WorkflowOutputActivity;
   stackControls(): CubeStackFrameControls;
   openOverrides(trigger: HTMLElement): void;
+  setOverridesInline(inline: boolean): void;
   report(error: unknown): void;
 }
 
@@ -44,6 +47,8 @@ export class SubstituteFrameHost {
   #mount: HTMLElement | null = null;
   #native: HTMLElement | null = null;
   #view: SubstituteFrameView | null = null;
+  #generation: GenerationStripHost | null = null;
+  #toolbarLayout: SubstituteToolbarLayout | null = null;
   #adapter: ComfyFrameWorkflowAdapter | null = null;
   #stopWorkflow: (() => void) | null = null;
   #queued = false;
@@ -119,6 +124,7 @@ export class SubstituteFrameHost {
       }
       if (!this.#style.isConnected) document.head.append(this.#style);
       document.documentElement.setAttribute('data-sc-substitute-frame', '');
+      this.options.setOverridesInline(true);
       this.#view?.update(this.#adapter?.read(this.options.sessions.read().open) ?? [], (id) =>
         this.options.activity.unread(id),
       );
@@ -154,16 +160,29 @@ export class SubstituteFrameHost {
     });
     native.parentElement?.setAttribute('data-sc-frame-native', '');
     mount.append(this.#view.element);
+    this.#generation = new GenerationStripHost(
+      this.options.document,
+      this.#view.element,
+      this.options.app,
+      this.options.report,
+    );
+    this.#toolbarLayout = new SubstituteToolbarLayout(this.options.document);
   }
 
   /** Project accepted palette facts without adding a theme observer or renderer dependency. */
   #palette(): void {
     const { color, dark } = this.options.palette.theme;
     this.#view?.setPalette(color, dark);
+    this.#generation?.setPalette(dark);
   }
 
   /** Retire the view while preserving host controls, workflow state and saved preferences. */
   #unmount(): void {
+    this.options.setOverridesInline(false);
+    this.#toolbarLayout?.dispose();
+    this.#toolbarLayout = null;
+    this.#generation?.dispose();
+    this.#generation = null;
     this.#stopWorkflow?.();
     this.#stopWorkflow = null;
     this.#view?.dispose();

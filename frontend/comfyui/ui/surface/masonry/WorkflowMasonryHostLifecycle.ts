@@ -90,7 +90,7 @@ export class WorkflowMasonryHostLifecycle {
     this.#search = new MasonrySearchHost({
       document: options.document,
       app: options.app,
-      getGraph: () => options.app?.canvas?.graph ?? options.app?.graph ?? null,
+      getGraph: () => options.app?.graph ?? null,
       reportError: options.reportError,
     });
     this.#stack = new CubeStackHost({
@@ -111,7 +111,7 @@ export class WorkflowMasonryHostLifecycle {
       },
       isNodes2: () => this.#isNodes2(),
       getSections: () => {
-        const graph = options.app?.canvas?.graph ?? options.app?.graph;
+        const graph = options.app?.graph;
         return graph
           ? projectWorkflowMasonry(
               graph,
@@ -178,6 +178,7 @@ export class WorkflowMasonryHostLifecycle {
         this.#restorePresentation();
       },
     );
+    this.#bindNavigation();
     this.#toolbar.setup();
     this.#properties.setup();
     this.#search.setup();
@@ -190,7 +191,7 @@ export class WorkflowMasonryHostLifecycle {
 
   /** Serve both the button and the registered Comfy command through the same use case. */
   toggle(): void {
-    if (this.#disposed) return;
+    if (this.#disposed || this.#insideEditor()) return;
     if (!this.#isNodes2() || !this.#options.presentation.ready || this.#appMode) return;
     const desired = !this.#options.presentation.snapshot.masonry;
     const transition = this.#controller.toggle();
@@ -214,10 +215,13 @@ export class WorkflowMasonryHostLifecycle {
       .setSuspended('configure', true)
       .catch((error: unknown) => this.#options.reportError(error));
     this.#releaseGraphObservers();
+    this.#unsubscribeNavigation?.();
+    this.#unsubscribeNavigation = null;
   }
 
   /** Restore the selected presentation against the newly configured workflow. */
   afterConfigureGraph(): void {
+    this.#bindNavigation();
     if (!this.#options.presentation.ready) return;
     void this.#controller
       .setSuspended('configure', false)
@@ -240,6 +244,8 @@ export class WorkflowMasonryHostLifecycle {
     this.#unsubscribePresentation?.();
     this.#unsubscribePresentation = null;
     this.#releaseGraphObservers();
+    this.#unsubscribeNavigation?.();
+    this.#unsubscribeNavigation = null;
     this.#options.document.defaultView?.removeEventListener('pagehide', this.#onPageHide);
   }
 
@@ -280,7 +286,12 @@ export class WorkflowMasonryHostLifecycle {
   /** Reflect transient presentation and subscribe only while masonry needs graph updates. */
   #refreshButton(): void {
     const active = this.#controller.active;
-    this.#toolbar.update(active, this.#isNodes2() && !this.#appMode);
+    const nested = this.#insideEditor();
+    this.#toolbar.update(
+      active,
+      this.#isNodes2() && !this.#appMode && !nested,
+      nested ? 'Masonry is available in the top-level workflow' : undefined,
+    );
     if (!this.#properties.update(this.#controller.presenting)) {
       this.#controller.leaveImmediately();
       return;
@@ -293,9 +304,7 @@ export class WorkflowMasonryHostLifecycle {
   #observeGraphs(): void {
     this.#unsubscribeCards ??=
       this.#options.getCardState()?.subscribe(this.#onCardsChanged) ?? null;
-    this.#unsubscribeNavigation ??=
-      this.#options.getGraphChanges()?.subscribe(this.#onGraphReplaced) ?? null;
-    const graph = this.#options.app?.canvas?.graph ?? this.#options.app?.graph;
+    const graph = this.#options.app?.graph;
     const candidates: unknown[] = [graph, ...this.#options.getCubes().map((cube) => cube.subgraph)];
     const graphs = new Set(candidates.filter(isObservableGraph));
     for (const [observed, observer] of this.#graphs) {
@@ -319,8 +328,6 @@ export class WorkflowMasonryHostLifecycle {
 
   /** Restore every host callback before changing renderer or graph ownership. */
   #releaseGraphObservers(): void {
-    this.#unsubscribeNavigation?.();
-    this.#unsubscribeNavigation = null;
     this.#unsubscribeCards?.();
     this.#unsubscribeCards = null;
     for (const observer of this.#graphs.values()) observer.dispose();
@@ -335,12 +342,26 @@ export class WorkflowMasonryHostLifecycle {
       .catch((error: unknown) => this.#options.reportError(error));
   };
 
-  /** Follow the shared native navigation boundary rather than retaining a previous graph's cards. */
+  /** Observe navigation even while the root view choice is graph or temporarily suspended. */
+  #bindNavigation(): void {
+    this.#unsubscribeNavigation ??=
+      this.#options.getGraphChanges()?.subscribe(this.#onGraphReplaced) ?? null;
+    this.#onGraphReplaced();
+  }
+
+  /** Keep editor availability independent from the persisted root workflow presentation. */
+  #insideEditor(): boolean {
+    const app = this.#options.app;
+    return !!app?.canvas?.graph && app.canvas.graph !== app.graph;
+  }
+
+  /** Suspend the root presentation for every nested editor without changing saved view intent. */
   readonly #onGraphReplaced = (): void => {
     if (this.#disposed) return;
     void this.#controller
-      .graphReplaced()
+      .setSuspended('subgraph', this.#insideEditor())
       .catch((error: unknown) => this.#options.reportError(error));
+    this.#refreshButton();
   };
 
   /** Enter the native Cube editor through Comfy's validated host API. */
@@ -351,7 +372,6 @@ export class WorkflowMasonryHostLifecycle {
       this.#options.reportError(new Error('Comfy Cube editor navigation is unavailable.'));
       return;
     }
-    this.#options.presentation.change({ masonry: false });
     openSubgraph.call(canvas, cube.subgraph, cube);
   }
 }
