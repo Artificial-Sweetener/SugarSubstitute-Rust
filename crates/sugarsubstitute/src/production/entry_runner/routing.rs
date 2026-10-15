@@ -244,7 +244,7 @@ impl<C: EntryActivation> EntryRunner<C> {
         let authority = self.authority.as_mut().ok_or("Actual authority missing")?;
         let intake = self.intake.as_mut().ok_or("Actual intake missing")?;
         Ok((
-            &mut self.child,
+            self.child.as_mut(),
             EntryResources {
                 client: self.client.as_ref().ok_or("Execution client missing")?,
                 finite: self.finite.as_ref().ok_or("Finite scope missing")?,
@@ -260,7 +260,7 @@ impl<C: EntryActivation> EntryRunner<C> {
     }
     fn parts_optional(&mut self) -> Result<(&mut C, Option<EntryResources<'_>>), Box<dyn Error>> {
         if self.intake.is_none() {
-            return Ok((&mut self.child, None));
+            return Ok((self.child.as_mut(), None));
         }
         self.parts().map(|(child, resources)| (child, Some(resources)))
     }

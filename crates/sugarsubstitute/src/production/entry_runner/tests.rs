@@ -25,7 +25,7 @@ fn original_cleanup_wake_is_consumed_before_unsettled_owner_returns() -> Result<
     let mut owner = EntryRunner::new(
         command,
         installation.join("unopened.exe"),
-        NoChild,
+        Box::new(NoChild),
         crate::diagnostics::DiagnosticHealth::fixture(),
     );
     let issued = ShutdownBudget::new(sugarsubstitute_contracts::execution::Moment::from_nanos(0))?;
@@ -128,7 +128,7 @@ fn child_factory_failure_preserves_cause_before_native_pump_or_configuration()
         |command| {
             calls.set(calls.get() + 1);
             assert_eq!(command.installation, installation);
-            Err::<NoChild, Box<dyn Error>>(Box::new(ConstructorFailure))
+            Err::<Box<NoChild>, Box<dyn Error>>(Box::new(ConstructorFailure))
         },
         crate::diagnostics::DiagnosticHealth::fixture(),
     );
@@ -200,7 +200,13 @@ fn actual_runner_retains_schema_failure_and_joins_without_environment_capture()
         diagnostics: Default::default(),
         options,
     };
-    let result = run(command, |_| Ok(NoChild), crate::diagnostics::DiagnosticHealth::fixture());
+    let child = super::super::entry_activation::ProductionActivation::new(
+        directory.join("unopened.exe"),
+        directory.clone(),
+        directory.join("capture"),
+    )?;
+    let original_child = std::ptr::from_ref(child.as_ref());
+    let result = run(command, |_| Ok(child), crate::diagnostics::DiagnosticHealth::fixture());
     let returned = match result {
         Err(cause) => cause,
         Ok(()) => return Err("Malformed actual configuration was admitted".into()),
@@ -214,6 +220,12 @@ fn actual_runner_retains_schema_failure_and_joins_without_environment_capture()
         source = cause.source();
     }
     assert!(schema, "Actual schema failure was replaced during shutdown");
+    let retained = returned
+        .downcast_ref::<RunFailure<super::super::entry_activation::ProductionActivation>>()
+        .ok_or("Original production child owner was replaced")?;
+    assert_eq!(std::ptr::from_ref(retained.lifetime.child.as_ref()), original_child);
+    assert!(retained.lifetime.finished, "Original runner did not observe cleanup and joins");
+    assert!(!retained.lifetime.child.normal_close_requested());
     let diagnostic = format!("{returned:?}");
     assert!(diagnostic.contains("bootstrap_post_control"));
     assert!(diagnostic.contains("bootstrap_cleanup"));

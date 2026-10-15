@@ -95,12 +95,12 @@ pub(crate) trait EntryActivation {
     fn finish(&mut self) -> Result<(), Box<dyn Error>>;
 }
 
-/// Drive production using the existing native pump and the supplied actual child owner.
+/// Drive production with a uniquely owned heap child, keeping its value outside the persistent pump frame.
 /// # Errors
 /// Keeps the entire failed runner, original sources and scopes owned after pump failure.
 pub(crate) fn run<C: EntryActivation + 'static>(
     command: ProductionCommand,
-    child: impl FnOnce(&ProductionCommand) -> Result<C, Box<dyn Error>>,
+    child: impl FnOnce(&ProductionCommand) -> Result<Box<C>, Box<dyn Error>>,
     diagnostics: crate::diagnostics::DiagnosticHealth,
 ) -> Result<(), Box<dyn Error>> {
     let executable = std::env::current_exe()?;
@@ -112,12 +112,12 @@ pub(crate) fn run<C: EntryActivation + 'static>(
     }
 }
 
-/// Keep fixed application-owner construction temporaries outside the persistent native stack.
+/// Construct the runner from its original heap child without moving that child value onto the pump stack.
 #[inline(never)]
 fn boxed_lifetime<C: EntryActivation>(
     command: ProductionCommand,
     executable: PathBuf,
-    child: C,
+    child: Box<C>,
     diagnostics: crate::diagnostics::DiagnosticHealth,
 ) -> Box<EntryRunner<C>> {
     Box::new(EntryRunner::new(command, executable, child, diagnostics))
@@ -235,10 +235,10 @@ enum FailureOrigin {
     Transport(usize),
 }
 
-/// Keep every actual owner ahead of original scopes and the sole execution join owner.
+/// Keep the original heap child ahead of scopes and the sole execution join owner.
 pub(crate) struct EntryRunner<C: EntryActivation> {
     diagnostics: crate::diagnostics::DiagnosticHealth,
-    child: C,
+    child: Box<C>,
     pending_activation: Option<AuthenticatedEntryLaunch>,
     authority: Option<CoordinatorAuthority>,
     intake: Option<ProductionEntryIntake>,
@@ -280,7 +280,7 @@ impl<C: EntryActivation> EntryRunner<C> {
     pub(crate) fn new(
         command: ProductionCommand,
         executable: PathBuf,
-        child: C,
+        child: Box<C>,
         diagnostics: crate::diagnostics::DiagnosticHealth,
     ) -> Self {
         let installation = command.installation.clone();

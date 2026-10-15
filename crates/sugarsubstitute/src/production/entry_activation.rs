@@ -149,16 +149,16 @@ pub(crate) struct ProductionActivation {
     next_wake: Option<Instant>,
 }
 impl ProductionActivation {
-    /// Retain explicit inert installed/native locations; protection remains with native owners.
+    /// Return the unique heap owner before native pumping; locations remain inert until native validation.
     pub(crate) fn new(
         executable: PathBuf,
         working_directory: PathBuf,
         capture_root: PathBuf,
-    ) -> Result<Self> {
+    ) -> Result<Box<Self>> {
         for path in [&executable, &working_directory, &capture_root] {
             LaunchConfiguration::validate_path(path)?;
         }
-        Ok(Self {
+        Ok(Box::new(Self {
             incidents: incident_flow::IncidentFlow::new(),
             qualification: None,
             executable,
@@ -177,13 +177,13 @@ impl ProductionActivation {
             failure_run: None,
             failure_resource: None,
             next_wake: None,
-        })
+        }))
     }
     /// Assign inert development intent only to the first original admitted launch.
     pub(crate) fn with_qualification(
-        mut self,
+        mut self: Box<Self>,
         intent: super::qualification::QualificationIntent,
-    ) -> Self {
+    ) -> Box<Self> {
         self.qualification = Some(intent);
         self
     }

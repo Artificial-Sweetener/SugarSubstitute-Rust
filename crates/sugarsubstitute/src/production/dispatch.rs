@@ -66,7 +66,7 @@ pub(crate) fn parse<I: IntoIterator<Item = OsString>>(
 pub(crate) fn execute<I, C>(
     arguments: I,
     diagnostics: crate::diagnostics::DiagnosticHealth,
-    child: impl FnOnce(&ProductionCommand) -> Result<C, Box<dyn Error>>,
+    child: impl FnOnce(&ProductionCommand) -> Result<Box<C>, Box<dyn Error>>,
 ) -> Result<Option<std::iter::Peekable<I::IntoIter>>, Box<dyn Error>>
 where
     I: IntoIterator<Item = OsString>,
@@ -92,7 +92,7 @@ mod tests {
             crate::diagnostics::DiagnosticHealth::fixture(),
             |_| {
                 calls.set(calls.get() + 1);
-                Ok(super::super::entry_runner::tests::NoChild)
+                Ok(Box::new(super::super::entry_runner::tests::NoChild))
             },
         )?
         .ok_or("Legacy command unexpectedly ran production")?;

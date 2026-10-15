@@ -95,11 +95,11 @@ impl ProfileComponent {
             }
         }
     }
-    /// Validate inert locations before actual authenticated entry begins.
-    pub(crate) fn new(executable: PathBuf, installation: PathBuf) -> Result<Self> {
+    /// Return one heap child with validated inert locations before authenticated entry begins.
+    pub(crate) fn new(executable: PathBuf, installation: PathBuf) -> Result<Box<Self>> {
         LaunchConfiguration::validate_path(&executable)?;
         LaunchConfiguration::validate_path(&installation)?;
-        Ok(Self {
+        Ok(Box::new(Self {
             executable,
             installation,
             run: None,
@@ -113,7 +113,7 @@ impl ProfileComponent {
             closing: false,
             complete: false,
             next_wake: None,
-        })
+        }))
     }
     /// Require the current profile operation to be consumed before any final caller proceeds.
     fn profile_retirement_ready(&self) -> bool {
