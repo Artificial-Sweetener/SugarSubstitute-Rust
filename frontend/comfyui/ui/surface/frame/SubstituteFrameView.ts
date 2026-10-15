@@ -58,14 +58,18 @@ export class SubstituteFrameView {
     const viewport = document.createElement('div');
     viewport.className = 'sc-workflow-strip';
     this.#tabs = new WorkflowTabsView(document, actions.workflows, viewport);
-    this.#orb = new AppOrbView(document, () => [
-      { label: 'Open workflow', select: () => actions.command('Comfy.OpenWorkflow') },
-      { label: 'Save', select: () => actions.command('Comfy.SaveWorkflow') },
-      { label: 'Save as', select: () => actions.command('Comfy.SaveWorkflowAs') },
-      { label: 'Export workflow', select: () => actions.command('Comfy.ExportWorkflow') },
-      { label: '', separator: true },
-      { label: 'Settings', select: () => actions.command('Comfy.ShowSettingsDialog') },
-    ]);
+    this.#orb = new AppOrbView(
+      document,
+      () => [
+        { label: 'Open workflow', select: () => actions.command('Comfy.OpenWorkflow') },
+        { label: 'Save', select: () => actions.command('Comfy.SaveWorkflow') },
+        { label: 'Save as', select: () => actions.command('Comfy.SaveWorkflowAs') },
+        { label: 'Export workflow', select: () => actions.command('Comfy.ExportWorkflow') },
+        { label: '', separator: true },
+        { label: 'Settings', select: () => actions.command('Comfy.ShowSettingsDialog') },
+      ],
+      actions.report,
+    );
     const create = this.#button('New workflow', '+', () => actions.workflows.create());
     create.classList.add('sc-workflow-new');
     const overflow = this.#button('More workflows', '⌄', () =>

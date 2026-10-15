@@ -15,6 +15,8 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Load exact Substitute artwork and cache complete accent-tinted orb interaction variants. */
 import { orbStateAccent, tintOrbPixel, type OrbRgb } from './OrbTint.js';
+import { resampleOrbRaster, orbPhysicalEdge } from './OrbRaster.js';
+import { OrbDisplayDensity } from './OrbDisplayDensity.js';
 
 /** Compose glass layers around the original witch icon outside pointer-event hot paths. */
 export class AppOrbRenderer {
@@ -26,17 +28,25 @@ export class AppOrbRenderer {
   #revision = 0;
   #state: 'idle' | 'hover' | 'pressed' = 'idle';
   #disposed = false;
+  readonly #density: OrbDisplayDensity;
+  #palette: { readonly color: string; readonly dark: boolean } | null = null;
 
   /** Create a high-quality visual surface; the enclosing Fluent button owns interaction semantics. */
-  constructor(documentRef: Document) {
+  constructor(documentRef: Document, report: (error: unknown) => void) {
     this.#document = documentRef;
     this.canvas = documentRef.createElement('canvas');
-    this.canvas.width = this.canvas.height = 256;
+    this.canvas.width = this.canvas.height = orbPhysicalEdge(
+      documentRef.defaultView?.devicePixelRatio ?? 1,
+    );
     this.canvas.setAttribute('aria-hidden', 'true');
+    this.#density = new OrbDisplayDensity(documentRef.defaultView, () => {
+      if (this.#palette) void this.update(this.#palette.color, this.#palette.dark).catch(report);
+    });
   }
 
   /** Prepare all pointer-state variants only when the accepted palette or DPI changes. */
   async update(color: string, dark: boolean): Promise<void> {
+    this.#palette = { color, dark };
     const signature = `${color}:${dark}:${this.#document.defaultView?.devicePixelRatio ?? 1}`;
     if (signature === this.#signature || this.#disposed) return;
     this.#signature = signature;
@@ -56,8 +66,9 @@ export class AppOrbRenderer {
       Number.parseInt(color.slice(5, 7), 16),
     ];
     const variants = new Map<string, HTMLCanvasElement>();
+    const edge = orbPhysicalEdge(this.#document.defaultView?.devicePixelRatio ?? 1);
     for (const state of ['idle', 'hover', 'pressed'] as const)
-      variants.set(state, this.#compose(layers, orbStateAccent(accent, state)));
+      variants.set(state, this.#compose(layers, orbStateAccent(accent, state), edge));
     this.#variants = variants;
     this.setState(this.#state);
   }
@@ -68,12 +79,14 @@ export class AppOrbRenderer {
     const image = this.#variants.get(state);
     if (!image || this.#disposed) return;
     const context = this.#context(this.canvas);
-    context.clearRect(0, 0, 256, 256);
+    if (this.canvas.width !== image.width) this.canvas.width = this.canvas.height = image.width;
+    context.clearRect(0, 0, image.width, image.height);
     context.drawImage(image, 0, 0);
   }
 
   /** Invalidate pending asset work and release cached raster variants. */
   dispose(): void {
+    this.#density.dispose();
     this.#disposed = true;
     this.#revision++;
     this.#layers = null;
@@ -89,9 +102,14 @@ export class AppOrbRenderer {
   }
 
   /** Preserve the original PSD-relative icon placement between base and overlay layers. */
-  #compose(layers: readonly HTMLImageElement[], accent: OrbRgb): HTMLCanvasElement {
+  #compose(
+    layers: readonly HTMLImageElement[],
+    accent: OrbRgb,
+    physicalEdge: number,
+  ): HTMLCanvasElement {
+    const edge = Math.max(256, physicalEdge * 3);
     const output = this.#document.createElement('canvas');
-    output.width = output.height = 256;
+    output.width = output.height = edge;
     const target = this.#context(output);
     target.imageSmoothingEnabled = true;
     target.imageSmoothingQuality = 'high';
@@ -99,18 +117,18 @@ export class AppOrbRenderer {
       if (index === 1) {
         target.drawImage(
           image,
-          (256 * 109) / 1146,
-          (256 * 98) / 1160,
-          (256 * 928) / 1146,
-          (256 * 928) / 1160,
+          (edge * 109) / 1146,
+          (edge * 98) / 1160,
+          (edge * 928) / 1146,
+          (edge * 928) / 1160,
         );
         continue;
       }
       const layer = this.#document.createElement('canvas');
-      layer.width = layer.height = 256;
+      layer.width = layer.height = edge;
       const context = this.#context(layer);
-      context.drawImage(image, 0, 0, 256, 256);
-      const data = context.getImageData(0, 0, 256, 256);
+      context.drawImage(image, 0, 0, edge, edge);
+      const data = context.getImageData(0, 0, edge, edge);
       for (let offset = 0; offset < data.data.length; offset += 4) {
         const tinted = tintOrbPixel(
           [
@@ -126,7 +144,15 @@ export class AppOrbRenderer {
       context.putImageData(data, 0, 0);
       target.drawImage(layer, 0, 0);
     }
-    return output;
+    const display = this.#document.createElement('canvas');
+    display.width = display.height = physicalEdge;
+    const final = this.#context(display);
+    const raster = final.createImageData(physicalEdge, physicalEdge);
+    raster.data.set(
+      resampleOrbRaster(target.getImageData(0, 0, edge, edge).data, edge, physicalEdge),
+    );
+    final.putImageData(raster, 0, 0);
+    return display;
   }
 
   /** Require browser raster support rather than silently substituting different artwork. */
