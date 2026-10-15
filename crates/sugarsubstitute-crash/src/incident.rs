@@ -49,6 +49,10 @@ pub(crate) mod collection;
 mod error;
 mod evidence;
 #[cfg(windows)]
+pub use crate::native::finished_report::{
+    FinishedFailureCategory, FinishedFailureDiagnostic, FinishedFailureOrigin,
+};
+#[cfg(windows)]
 pub use collection::CapturedReport;
 #[cfg(windows)]
 mod collection_journal;

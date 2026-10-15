@@ -342,7 +342,7 @@ sources = [
   "crates/sugarsubstitute-supervision/src/protected_storage/record_file/native.rs",
   "crates/sugarsubstitute-supervision/src/protected_storage/record_file/streaming/lifecycle.rs",
 ]
-source_sha256 = "sha256:82eff308da9d4e2d7649e75865044f310eea8188e540b1593b2668ccfe2590e2"
+source_sha256 = "sha256:2b26801f5429fa9393a266d331d57ad4c64a0b1975c0edd5d5d018a8df2a5148"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 1

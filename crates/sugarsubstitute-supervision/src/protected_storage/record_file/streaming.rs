@@ -35,7 +35,7 @@ struct StageCandidate {
 }
 struct NativeStageScan {
     candidates: Vec<StageCandidate>,
-    _retention: DiagnosticNativeScanRetention,
+    _allocation: Option<DiagnosticNativeOwnerLoan>,
 }
 pub(crate) struct StreamingPort {
     root: ProtectedStorageRoot,

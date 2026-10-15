@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise the genuine closed Diagnostic writer against actual retained Entry-native pins.
 mod activation;
+mod finished;
 use super::*;
 use crate::coordinator_entry::{
     self, CoordinatorEntryInput, DiagnosticStorageLocation, VerifiedEntryNamespace,

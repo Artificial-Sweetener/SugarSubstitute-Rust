@@ -24,6 +24,9 @@ class Fake final : public sf::FileApi {
   int64_t now = 1;
   uint32_t effects = 0, fail_effect = 0, late_effect = 0, close_fail = 0;
   bool partial_open = false, lock_busy = false, incomplete_scan = false;
+  uint32_t attachment_entries = 0, attachment_scans = 0, attachment_inspections = 0;
+  uint64_t attachment_bytes = 0;
+  DWORD attachment_error = 0; bool attachment_complete = true;
   uint32_t failure_code=9911, failed_control_effect=0;bool failed_control=false;
   uint32_t allocations=0;bool fail_allocation=false,stop_after_allocation=false;
   uint32_t cancel_effect=0; bool cancelled=false;
@@ -46,6 +49,7 @@ class Fake final : public sf::FileApi {
   }
   DWORD Inspect(HANDLE handle, HANDLE, sf::FileInfo& info, sf::ParseControl&) noexcept override {
     const auto error = Effect(); if (error) return error;
+    if (handles[handle] == L"db/attachments") ++attachment_inspections;
     const auto& file = files[handles[handle]];
     info.identity.fill(file.inode); info.bytes = file.bytes.size(); info.directory = file.directory; return 0;
   }
@@ -79,8 +83,13 @@ class Fake final : public sf::FileApi {
     if (files[name].pending && std::none_of(handles.begin(), handles.end(), [&](const auto& pair) { return pair.second == name; })) files[name].present = false;
     return 0;
   }
-  DWORD Scan(HANDLE, sf::ScanRole, bool, std::span<uint8_t>, uint32_t& entries, uint64_t& bytes, bool& end, bool& complete) noexcept override {
-    entries = 0; bytes = 0; end = true; complete=!incomplete_scan; return Effect();
+  DWORD Scan(HANDLE, sf::ScanRole role, bool, std::span<uint8_t>, uint32_t& entries, uint64_t& bytes, bool& end, bool& complete) noexcept override {
+    entries = 0; bytes = 0; end = true; complete = !incomplete_scan;
+    if (role == sf::ScanRole::Attachments) {
+      ++attachment_scans; entries = attachment_entries; bytes = attachment_bytes; complete = attachment_complete;
+    }
+    const auto error = Effect();
+    return error ? error : role == sf::ScanRole::Attachments ? attachment_error : 0;
   }
   DWORD HashBegin(sf::HashState& state, sf::ParseControl& control) noexcept override { const auto e = Effect(); return e ? e : sf::BeginHash(state, control); }
   DWORD HashUpdate(sf::HashState& state, std::span<const uint8_t> bytes) noexcept override { const auto e = Effect(); return e ? e : sf::UpdateHash(state, bytes); }
@@ -123,6 +132,7 @@ struct Fixture {
   Fake api; TestControl main{api,false},cleanup{api,true}; std::unique_ptr<sf::Lease> owner;
   Fixture():owner(std::make_unique<sf::Lease>(api)) {
     api.files[L"db"]={{},1,true};api.files[L"metrics"]={{},2,true};api.files[L"db/reports"]={{},3,true};
+    api.files[L"db/attachments"]={{},6,true};
     api.files[L"db/metadata"]={Metadata(),4};api.files[L"db/reports/12345678-90ab-cdef-1122-334455667788.dmp"]={Dump(),5};
     auto& input=owner->expected;input.borrowed_database=1;input.borrowed_metrics=2;
     std::fill_n(input.expected_database_identity,24,uint8_t{1});std::fill_n(input.expected_metrics_identity,24,uint8_t{2});
@@ -224,6 +234,41 @@ bool CancelAtEachDispositionEffect() {
   for(uint32_t effect=start+1;effect<=end;++effect){Fixture f;if(!f.Query()||!f.Prepare())return false;f.api.cancel_effect=effect;
     if(f.Disposition(f.Permit())||f.api.effects!=effect||f.owner->reclaimed||f.owner->primary!=ERROR_OPERATION_ABORTED)return false;
   }
+  return true;
+}
+bool AttachmentInventoryCase(unsigned mode) {
+  Fixture f;
+  if (mode == 1) { f.api.attachment_entries = 1; f.api.attachment_bytes = 7; }
+  if (mode == 2) { f.api.attachment_entries = 1; f.api.attachment_complete = false; }
+  if (mode == 3) f.api.attachment_error = ERROR_REPARSE_TAG_INVALID;
+  if (mode == 4) f.api.attachment_complete = false;
+  if (mode == 5) f.api.attachment_entries = 4097;
+  if (mode == 6) f.api.files[L"db/attachments"].directory = false;
+  if (mode == 7) f.api.files[L"db/attachments"].present = false;
+  const auto source = f.api.files[L"db/reports/12345678-90ab-cdef-1122-334455667788.dmp"].bytes;
+  const bool queried = f.Query();
+  const DWORD expected = mode == 3 ? ERROR_REPARSE_TAG_INVALID : mode == 6 ? ERROR_INVALID_DATA :
+      mode == 7 ? ERROR_FILE_NOT_FOUND : ERROR_NOT_SUPPORTED;
+  bool passed = f.api.attachment_inspections == (mode == 7 ? 0U : 1U) &&
+      f.api.attachment_scans == (mode >= 6 ? 0U : 1U) && f.owner->facts.observed_entries <= 4096U &&
+      (mode == 0 ? queried && f.owner->facts_valid && f.owner->facts.inventory_complete && !f.owner->primary :
+       !queried && !f.owner->facts_valid &&
+       (mode == 7 ? f.owner->status == Missing && !f.owner->primary &&
+        f.owner->primary_origin == FinishedCauseNone && !f.owner->handles[sf::ScanDirectory] :
+        f.owner->primary == expected && f.owner->primary_origin == FinishedCauseNative &&
+        f.owner->handles[sf::ScanDirectory]));
+  passed = passed && !f.owner->prepared && !f.owner->reclaimed &&
+      f.api.files[L"db/metadata"].bytes == Metadata() &&
+      f.api.files[L"db/reports/12345678-90ab-cdef-1122-334455667788.dmp"].bytes == source;
+  f.owner->in_cleanup = true; f.owner->cleanup = {1000,1}; f.owner->cleanup_latched = true;
+  const bool retired = f.Retire();
+  return passed && retired && f.api.handles.empty() &&
+      f.api.files[L"db/reports/12345678-90ab-cdef-1122-334455667788.dmp"].present &&
+      f.api.files[L"db/metadata"].bytes == Metadata();
+}
+bool EmptyStructuralAttachments() { return AttachmentInventoryCase(0); }
+bool RejectUnhandledAttachments() {
+  for (unsigned mode = 1; mode <= 7; ++mode) if (!AttachmentInventoryCase(mode)) return false;
   return true;
 }
 bool IncompleteInventory() { Fixture f;f.api.incomplete_scan=true;return f.Query()&&f.owner->facts_valid&&!f.owner->facts.inventory_complete; }
@@ -347,7 +392,7 @@ bool QpcOriginAndBoundedSecondaryPacking() {
 
 }
 int main() {
-  const std::pair<const char*,bool(*)()> tests[]={{"normal",Normal},{"foreign-key",BoundsAndWrongKey},{"partial-open",PartialOutput},{"late-output",LatePartial},{"lock-busy",LockBusy},{"failed-close",FailedCloseRetains},{"collision",Collision},{"third-image",ThirdImage},{"every-prepare-effect",EffectFailures},{"original-present",OriginalPresent},{"candidate-present",CandidatePresent},{"candidate-absent",CandidateAbsent},{"original-absent",OriginalAbsent},{"prior-all-absent",PriorAllAbsent},{"changed-metadata-inode",ChangedMetadataInode},{"every-disposition-effect",DispositionFailures},{"CNG-sha256-vector",HashVector},{"first-cause-post-timeout",FirstCauseWinsPostTimeout},{"query-once",QueryIsOneShot},{"incomplete-inventory",IncompleteInventory},{"foreign-generation",ForeignGeneration},{"distinct-epoch-stage",DistinctEpochStageNames},{"cancel-partial-cleanup-source",CancelAfterPartialOutputAndCleanup},{"cancel-each-prepare",CancelAtEachPreparationEffect},{"cancel-each-disposition",CancelAtEachDispositionEffect}};
+  const std::pair<const char*,bool(*)()> tests[]={{"empty-structural-attachments",EmptyStructuralAttachments},{"unhandled-attachments-retained",RejectUnhandledAttachments},{"normal",Normal},{"foreign-key",BoundsAndWrongKey},{"partial-open",PartialOutput},{"late-output",LatePartial},{"lock-busy",LockBusy},{"failed-close",FailedCloseRetains},{"collision",Collision},{"third-image",ThirdImage},{"every-prepare-effect",EffectFailures},{"original-present",OriginalPresent},{"candidate-present",CandidatePresent},{"candidate-absent",CandidateAbsent},{"original-absent",OriginalAbsent},{"prior-all-absent",PriorAllAbsent},{"changed-metadata-inode",ChangedMetadataInode},{"every-disposition-effect",DispositionFailures},{"CNG-sha256-vector",HashVector},{"first-cause-post-timeout",FirstCauseWinsPostTimeout},{"query-once",QueryIsOneShot},{"incomplete-inventory",IncompleteInventory},{"foreign-generation",ForeignGeneration},{"distinct-epoch-stage",DistinctEpochStageNames},{"cancel-partial-cleanup-source",CancelAfterPartialOutputAndCleanup},{"cancel-each-prepare",CancelAtEachPreparationEffect},{"cancel-each-disposition",CancelAtEachDispositionEffect}};
   for(const auto& [name,test]:tests)if(!test()){std::printf("FAILED %s\n",name);return 1;}
   if(!ClosedControlValidation()||!CancelledPreflightAllocatesNoLease()||!PreflightPreservesAllocationCause()){std::printf("FAILED control preflight\n");return 1;}
   if(!EqualCodesPreserveActualNativeFirstOrigin()||!ControlFirstNoEffectsAndNoNativeEcho()||!QpcOriginAndBoundedSecondaryPacking()){std::printf("FAILED cause origins\n");return 1;}

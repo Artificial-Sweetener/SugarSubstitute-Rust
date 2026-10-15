@@ -10,25 +10,21 @@ impl StreamingPort {
     pub(super) fn scan_owned(&mut self, context: &JobContext) -> Result<Scan, ClaimError> {
         self.check(context)?;
         self.stage_scan_complete = false;
+        // No recovery operation may use a predecessor after this scan is invalidated.
+        // Its owned leaves and vector drop before their actual allocation guard.
+        self.stage_candidates = None;
         let retention =
             self.original.scan_retention(context).map_err(ClaimError::diagnostic_allocation)?;
         let mut session = session::Session::scan(&self.original, context)?;
-        let mut stages = NativeStageScan { candidates: Vec::new(), _retention: retention.clone() };
+        let mut stages = NativeStageScan { candidates: Vec::new(), _allocation: None };
         let mut scan =
             Scan { entries: Vec::new(), complete: false, _native_retention: Some(retention) };
-        stages.candidates.try_reserve_exact(DIAGNOSTIC_SCAN_BOUND).map_err(|cause| {
-            session
-                .phase(context)
-                .error("diagnostic_stage_scan_reservation", BoundedNativeCause::Reserve(cause))
-        })?;
         scan.entries.try_reserve_exact(DIAGNOSTIC_SCAN_BOUND).map_err(|cause| {
             session
                 .phase(context)
                 .error("diagnostic_scan_reservation", BoundedNativeCause::Reserve(cause))
         })?;
-        if stages.candidates.capacity() != DIAGNOSTIC_SCAN_BOUND
-            || scan.entries.capacity() != DIAGNOSTIC_SCAN_BOUND
-        {
+        if scan.entries.capacity() != DIAGNOSTIC_SCAN_BOUND {
             return Err(session.phase(context).invalid("diagnostic_scan_capacity"));
         }
         let directory = self.directory.as_ref().ok_or_else(|| self.reject())?.path.clone();
@@ -146,6 +142,27 @@ impl StreamingPort {
                                 observed.bytes = bytes;
                                 observed.protected_regular = true;
                                 if class == DiagnosticEntryClass::Stage {
+                                    if stages._allocation.is_none() {
+                                        stages._allocation = Some(
+                                            self.original
+                                                .stage_scan_owner(context)
+                                                .map_err(ClaimError::diagnostic_allocation)?,
+                                        );
+                                        stages
+                                            .candidates
+                                            .try_reserve_exact(DIAGNOSTIC_SCAN_BOUND)
+                                            .map_err(|cause| {
+                                                session.phase(context).error(
+                                                    "diagnostic_stage_scan_reservation",
+                                                    BoundedNativeCause::Reserve(cause),
+                                                )
+                                            })?;
+                                        if stages.candidates.capacity() != DIAGNOSTIC_SCAN_BOUND {
+                                            return Err(session
+                                                .phase(context)
+                                                .invalid("diagnostic_stage_scan_capacity"));
+                                        }
+                                    }
                                     let mut retained_leaf = String::new();
                                     if name.len() > leaf::LEAF_BYTES {
                                         return Err(session
@@ -188,7 +205,9 @@ impl StreamingPort {
             }
         }
         self.close(id, context)?;
-        self.stage_candidates = Some(stages);
+        // Empty candidate storage owns no recovery facts; destroy its actual vector.
+        // Returned observations keep their shared credit until their own final drop.
+        self.stage_candidates = (!stages.candidates.is_empty()).then_some(stages);
         self.stage_scan_complete = complete;
         scan.complete = complete;
         Ok(scan)

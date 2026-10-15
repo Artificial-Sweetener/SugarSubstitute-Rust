@@ -200,11 +200,15 @@ fn physical_close_does_not_release_conflict_before_actual_source_retirement() ->
     assert!(shared.custody.held());
     rejected(&rig, &second, attach_spec(2)?, expected()?)?;
     assert_eq!(first.snapshot().reserved_bytes, 16_384);
-    let cause = rig
-        .client
-        .drain_completions(std::num::NonZeroUsize::MIN)
-        .err()
-        .ok_or("Actual source retirement failure was not reported")?;
+    // Callback entry precedes failure publication. Observe the owner's wake
+    // rather than requiring the consumer to win that asynchronous ordering.
+    let cause = loop {
+        let previous = rig.wake.count();
+        if let Err(cause) = rig.client.drain_completions(std::num::NonZeroUsize::MIN) {
+            break cause;
+        }
+        rig.wake.wait_after(previous)?;
+    };
     assert!(std::error::Error::source(&cause).is_some());
     boundary.source_blocked.store(false, Ordering::Release);
     boundary.signal()?;

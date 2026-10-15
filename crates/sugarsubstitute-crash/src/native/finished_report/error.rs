@@ -103,6 +103,25 @@ impl SettlementFailure {
         });
         Self { cause }
     }
+    pub(crate) fn diagnostic(&self) -> super::diagnostic::FinishedFailureDiagnostic {
+        use super::diagnostic::{
+            FinishedFailureCategory as Code, FinishedFailureDiagnostic as Data,
+        };
+        match &self.cause {
+            Cause::Native { origin, code, .. } => Data::native(*origin, *code),
+            Cause::Clock { .. } => Data::category(Code::Clock),
+            Cause::Source { source, .. } => Data::source(source.code()),
+            Cause::Panic { .. } => Data::category(Code::Panicked),
+            Cause::Control { category, .. } => Data::category(match category {
+                ControlCategory::Cancelled => Code::Cancelled,
+                ControlCategory::TimedOut => Code::TimedOut,
+                ControlCategory::MissingDeadline => Code::MissingDeadline,
+                ControlCategory::ForeignClock => Code::ForeignClock,
+            }),
+            Cause::Invalid { .. } => Data::category(Code::InvalidResult),
+            Cause::Rejected(_) => Data::category(Code::Rejected),
+        }
+    }
     pub(crate) fn inspect_panic<T>(
         &self,
         inspect: impl FnOnce(&(dyn Any + Send)) -> T,

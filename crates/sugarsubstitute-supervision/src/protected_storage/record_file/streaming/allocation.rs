@@ -16,24 +16,30 @@ impl StreamingPort {
             Layout::new::<Self>().size().checked_add(cells).ok_or(NativeLayoutFailure::Overflow)?;
         Ok(NativeRoleLayout { retained: bytes, peak: bytes })
     }
-    /// Describe one complete bounded native stage-candidate generation.
-    /// A successor is admitted while its predecessor's actual allocations remain.
+    /// Describe the returned native observation vector and its final shared retention.
     pub(crate) fn diagnostic_scan_state_layout() -> Result<NativeRoleLayout, NativeLayoutFailure> {
+        let observations =
+            Layout::array::<diagnostic::inventory::ObservedEntry>(DIAGNOSTIC_SCAN_BOUND)
+                .map_err(|_| NativeLayoutFailure::Overflow)?
+                .size();
+        let bytes = observations
+            .checked_add(DiagnosticNativeScanRetention::control_bytes())
+            .and_then(|bytes| bytes.checked_add(size_of::<diagnostic::inventory::Scan>()))
+            .ok_or(NativeLayoutFailure::Overflow)?;
+        Ok(NativeRoleLayout { retained: bytes, peak: bytes })
+    }
+    /// Describe the independently retained complete stage vector and all bounded leaf bytes.
+    /// Admission occurs before the first verified stage requires this physical allocation.
+    pub(crate) fn diagnostic_stage_scan_layout() -> Result<NativeRoleLayout, NativeLayoutFailure> {
         let cells = Layout::array::<StageCandidate>(DIAGNOSTIC_SCAN_BOUND)
             .map_err(|_| NativeLayoutFailure::Overflow)?
             .size();
         let leaves = DIAGNOSTIC_SCAN_BOUND
             .checked_mul(leaf::LEAF_BYTES)
             .ok_or(NativeLayoutFailure::Overflow)?;
-        let observations =
-            Layout::array::<diagnostic::inventory::ObservedEntry>(DIAGNOSTIC_SCAN_BOUND)
-                .map_err(|_| NativeLayoutFailure::Overflow)?
-                .size();
         let bytes = cells
             .checked_add(leaves)
-            .and_then(|bytes| bytes.checked_add(observations))
-            .and_then(|bytes| bytes.checked_add(DiagnosticNativeScanRetention::control_bytes()))
-            .and_then(|bytes| bytes.checked_add(size_of::<DiagnosticNativeScanRetention>()))
+            .and_then(|bytes| bytes.checked_add(size_of::<NativeStageScan>()))
             .ok_or(NativeLayoutFailure::Overflow)?;
         Ok(NativeRoleLayout { retained: bytes, peak: bytes })
     }

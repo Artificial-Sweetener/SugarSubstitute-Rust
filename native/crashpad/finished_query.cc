@@ -23,9 +23,8 @@ ExpectedIdentity Expected(const QueryIdentity& input, const Uuid& uuid) noexcept
   memcpy(expected.build.data(), input.build, 64); expected.build_length = input.build_length;
   expected.report_uuid = uuid; return expected;
 }
-bool Inventory(Invocation& invocation, Slot parent, ScanRole role) noexcept {
+bool InventoryPages(Invocation& invocation, ScanRole role) noexcept {
   auto& owner = invocation.state;
-  if (!invocation.Open(ScanDirectory, parent, L".", OpenMode::Directory)) return false;
   bool restart = true;
   for (;;) {
     if (!invocation.Allowed()) return false;
@@ -35,13 +34,28 @@ bool Inventory(Invocation& invocation, Slot parent, ScanRole role) noexcept {
     if (!complete) owner.facts.inventory_complete = 0;
     if (entries > 4096 - owner.facts.observed_entries ||
         bytes > UINT64_MAX - owner.facts.observed_temporary_bytes) {
-      owner.facts.inventory_complete = 0; return invocation.Close(ScanDirectory);
+      owner.facts.inventory_complete = 0;
+      return role == ScanRole::Attachments ? owner.Fail(ERROR_NOT_SUPPORTED) : invocation.Close(ScanDirectory);
     }
     owner.facts.observed_entries += entries; owner.facts.observed_temporary_bytes += bytes;
+    if (role == ScanRole::Attachments && (entries || bytes || !complete)) {
+      owner.facts.inventory_complete = 0;
+      return owner.Fail(ERROR_NOT_SUPPORTED);
+    }
     if (end) return invocation.Close(ScanDirectory);
   }
 }
+bool Inventory(Invocation& invocation, Slot parent, ScanRole role) noexcept {
+  return invocation.Open(ScanDirectory, parent, L".", OpenMode::Directory) && InventoryPages(invocation, role);
+}
 }  // namespace
+bool InventoryAttachments(Invocation& invocation) noexcept {
+  if (!invocation.Open(ScanDirectory, Database, L"attachments", OpenMode::Directory)) return false;
+  FileInfo info{};
+  if (!invocation.Info(ScanDirectory, Database, info)) return false;
+  if (!info.directory) return invocation.state.Fail(ERROR_INVALID_DATA);
+  return InventoryPages(invocation, ScanRole::Attachments);
+}
 bool Query(Invocation& invocation) noexcept {
   auto& owner = invocation.state;
   if (owner.queried) return owner.Fail(ERROR_INVALID_STATE);
@@ -101,7 +115,8 @@ bool Query(Invocation& invocation) noexcept {
   if (!selected) { owner.status = Missing; return false; }
   if (!invocation.UnlockMetadata()) return false;
   owner.facts.inventory_complete = 1;
-  if (!Inventory(invocation, Database, ScanRole::Database) || !Inventory(invocation, Reports, ScanRole::Reports) || !Inventory(invocation, Metrics, ScanRole::Metrics)) return false;
+  if (!InventoryAttachments(invocation) || !Inventory(invocation, Database, ScanRole::Database) ||
+      !Inventory(invocation, Reports, ScanRole::Reports) || !Inventory(invocation, Metrics, ScanRole::Metrics)) return false;
   owner.facts_valid = true; owner.status = Finished; return true;
 }
 }  // namespace sugarsubstitute::finished

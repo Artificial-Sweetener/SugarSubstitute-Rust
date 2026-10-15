@@ -46,6 +46,11 @@ impl CapturedReport {
     pub fn failure(&self) -> Option<&(dyn std::error::Error + 'static)> {
         self.token.as_ref().and_then(Token::cause)
     }
+    /// Project the original native/control leaf without formatting or moving its cause.
+    /// This passive value grants no file, disposition, retirement or report acceptance.
+    pub fn failure_diagnostic(&self) -> Option<super::FinishedFailureDiagnostic> {
+        self.token.as_ref().and_then(Token::failure_diagnostic)
+    }
     /// Borrow the original central QPC conversion cause.
     pub fn clock_failure(&self) -> Option<&(dyn std::error::Error + 'static)> {
         self.token.as_ref().and_then(Token::counter_failure).map(|value| value as _)

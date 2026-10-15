@@ -3,6 +3,11 @@
 //! Borrow parser-confirmed data from the same retained token without exporting authority.
 use super::*;
 impl Token {
+    pub(crate) fn failure_diagnostic(
+        &self,
+    ) -> Option<super::super::diagnostic::FinishedFailureDiagnostic> {
+        self.failure().map(Failure::diagnostic)
+    }
     pub(crate) fn publication_headroom(&self) -> Option<u64> {
         let prepared = self.fields.as_ref()?.state.preparation.as_ref()?;
         [

@@ -23,7 +23,7 @@ minimum_tests = 87
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
 concern = "Production desktop startup and retirement through actual execution, authenticated parent/child transport, shared backends, profiles and native window adapters; retained failures, captured startup, bounded console rendering and isolated qualification roles; contained headless backend witness invocation and original-budget Finish lifecycle; genuine boxed incident construction and bounded original terminal/cause diagnostics; unique heap activation ownership outside the persistent native pump frame; original launched-profile release consumption and precise Finish request status"
-minimum_tests = 618
+minimum_tests = 619
 
 [[owners]]
 package = "sugarsubstitute-execution"
@@ -41,7 +41,7 @@ minimum_tests = 50
 package = "sugarsubstitute-supervision"
 root = "crates/sugarsubstitute-supervision"
 concern = "Windows launch inputs, retained containment, resource exclusions, actual claim retirement, attempt-bound profile proofs and bounded lifecycle framing; Retained installed-file/hash custody and actual connected-loopback peer identity; authenticated fixed capture roles, same-job selected bundle and module credit custody, checked current-image/PE/PDB association and bounded original close retention; authenticated parent/witness association, independent dual exclusions, exact suspended-root transfer and checked custody retirement; phase-specific original profile release observation and retained actual Finish status"
-minimum_tests = 530
+minimum_tests = 533
 
 [[owners]]
 package = "sugarsubstitute-splash"
@@ -59,4 +59,4 @@ minimum_tests = 300
 package = "sugarsubstitute-crash"
 root = "crates/sugarsubstitute-crash"
 concern = "Bounded capture input, immutable budgets, retained partial registration and actual native retirement; bounded charged redacted report views, categorical absence and symbol failures; closed bounded diagnostic wire, replay high-water, exact result and transfer correlation, original transport guard custody; genuine installed bundle selection before capture effects, outside-lock parent loans, typed v2 failure adoption and process-lifetime module/source retention; source-derived exception facts preserve authoritative mechanism and dev-only semantic exit/collection/symbol/Reporter owner flow"
-minimum_tests = 236
+minimum_tests = 238

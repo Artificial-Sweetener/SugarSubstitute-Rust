@@ -165,12 +165,23 @@ impl DiagnosticStorage {
             return Err(error(operation.key, Code::Busy));
         }
         state.data_mut()?.inventory_complete = false;
+        {
+            let data = state.data_mut()?;
+            // These inert cached vectors cannot authorize mutation after invalidation.
+            // Destroy every actual allocation before returning their shared credit.
+            data.scan_entries = Vec::new();
+            data.payload_groups = Vec::new();
+            data.seeds = Vec::new();
+            data.summaries = Vec::new();
+            data._scan_allocation = None;
+        }
         let namespace =
             state.data_mut()?.namespace.ok_or_else(|| error(operation.key, Code::Closed))?;
-        let inventory_allocation =
-            allocation::inventory(&state.data_mut()?.allocation, operation.key)?;
         let scan_allocation =
             allocation::scan_binding(&state.data_mut()?.allocation, operation.key)?;
+        // Reject an already-unavailable returned destination before enumeration.
+        // Actual vector construction admits it again after the native session ends.
+        drop(allocation::inventory(&state.data_mut()?.allocation, operation.key)?);
         let scan = state
             .call_native(|port| port.scan(context))?
             .map_err(|cause| native(operation.key, Code::InventoryIncomplete, cause))?;
@@ -194,6 +205,9 @@ impl DiagnosticStorage {
         scan_entries.extend(scan.entries.iter().cloned());
         let reservation =
             allocation::reservation(&state.data_mut()?.allocation, Some(operation.key))?;
+        // Native enumeration's page/session has ended before the returned vector exists.
+        let inventory_allocation =
+            allocation::inventory(&state.data_mut()?.allocation, operation.key)?;
         let mut result = DiagnosticInventory {
             entries: Vec::new(),
             status: DiagnosticInventoryStatus::Incomplete,

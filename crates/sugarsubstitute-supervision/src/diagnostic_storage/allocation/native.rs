@@ -98,6 +98,7 @@ pub(super) enum NativeRole {
     AccountScratch,
     AccountSid,
     ScanState,
+    StageScan,
     ScanPage,
     NativeHash,
     NativeCause,
@@ -130,6 +131,7 @@ impl NativeRole {
             Self::AccountScratch => account::diagnostic_account_layout(),
             Self::AccountSid => NativeSid::diagnostic_layout(),
             Self::ScanState => StreamingPort::diagnostic_scan_state_layout(),
+            Self::StageScan => StreamingPort::diagnostic_stage_scan_layout(),
             Self::ScanPage => {
                 Self::with_nested_security(StreamingPort::diagnostic_scan_page_layout()?)
             }
@@ -306,6 +308,13 @@ impl DiagnosticNativeGrant {
             credit: Some(std::sync::Arc::new(NativeScanCredit { _allocation: allocation })),
             original: self.clone(),
         })
+    }
+    /// Admit the separate complete nonempty stage-candidate destination.
+    pub(crate) fn stage_scan_owner(
+        &self,
+        context: &JobContext,
+    ) -> Result<DiagnosticNativeOwnerLoan, DiagnosticNativeAllocationFailure> {
+        Ok(DiagnosticNativeOwnerLoan { _allocation: self.current(NativeRole::StageScan, context)? })
     }
     /// Admit a page plus recognized leaf and nested canonical validation peak.
     pub(crate) fn scan_page(

@@ -77,6 +77,11 @@ impl Ledger {
     }
 }
 impl Owner {
+    /// Observe the real live residual only in owner fixtures, without admitting or releasing credit.
+    #[cfg(test)]
+    pub(in crate::diagnostic_storage) fn fixture_residual_bytes(&self) -> Option<usize> {
+        self.inner.as_ref().map(|inner| inner.lock().residual)
+    }
     pub(in crate::diagnostic_storage) fn bind_namespace(
         &self,
         request: &ProtectedDiagnosticWriteRequest,

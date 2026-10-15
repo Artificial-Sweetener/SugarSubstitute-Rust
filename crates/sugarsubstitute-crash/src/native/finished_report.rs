@@ -24,6 +24,8 @@ pub(crate) const COPY_CHUNK_BYTES: usize = 8192;
 #[path = "finished_report/error.rs"]
 mod error;
 pub(crate) use error::SettlementFailure;
+mod diagnostic;
+pub use diagnostic::{FinishedFailureCategory, FinishedFailureDiagnostic, FinishedFailureOrigin};
 #[path = "finished_report/journal.rs"]
 mod journal;
 pub(crate) use journal::JournalSource;

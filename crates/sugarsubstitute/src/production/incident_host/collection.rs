@@ -69,8 +69,26 @@ impl IncidentHost {
                 let service = &value.policy.collection;
                 let failed = service.failed();
                 if failed {
+                    let diagnostic = service.inspect(|operation| operation.diagnostic());
                     tracing::error!(
                         operation = "incident_collection_stopped",
+                        worker_terminal = ?service.outcome(),
+                        stage = ?diagnostic.map(|value| value.stage),
+                        store = ?diagnostic.map(|value| value.store),
+                        storage = ?diagnostic.map(|value| value.storage),
+                        native_stage = ?diagnostic.map(|value| value.native_stage),
+                        native_win32_code = ?diagnostic.map(|value| value.native_win32_code),
+                        report = ?diagnostic.map(|value| value.report),
+                        report_clock_failed = ?diagnostic.map(|value| value.report_clock_failed),
+                        journal = ?diagnostic.map(|value| value.journal),
+                        journal_storage = ?diagnostic.map(|value| value.journal_storage),
+                        journal_post_panicked = ?diagnostic.map(|value| value.journal_post_panicked),
+                        cleanup = ?diagnostic.map(|value| value.cleanup),
+                        decision = ?diagnostic.map(|value| value.decision),
+                        memory_requested_bytes = ?diagnostic.map(|value| value.memory_requested_bytes),
+                        memory_available_bytes = ?diagnostic.map(|value| value.memory_available_bytes),
+                        committed = ?diagnostic.map(|value| value.committed),
+                        retired = ?diagnostic.map(|value| value.retired),
                         original_cause_retained = service
                             .inspect(|operation| operation.failure().is_some())
                             .unwrap_or(false),

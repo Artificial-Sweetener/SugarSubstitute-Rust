@@ -15,7 +15,7 @@ struct FileInfo {
   uint64_t bytes = 0;
   bool directory = false;
 };
-enum class ScanRole { Database, Reports, Metrics };
+enum class ScanRole { Database, Reports, Metrics, Attachments };
 enum class OpenMode { Directory, Read, Metadata, CreateStage, RecoverStage };
 // Only OS calls are replaced by tests. All output slots belong to the caller
 // before their status is inspected, including partial outputs on error.

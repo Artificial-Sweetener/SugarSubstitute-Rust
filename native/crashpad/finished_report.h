@@ -104,6 +104,10 @@ bool SameOperation(const SsLogicalStoreOperationV1& a,
 bool ValidOperation(const SsLogicalStoreOperationV1& value) noexcept;
 bool SameFacts(const SsCaptureFileFactsV1& a,
                const SsCaptureFileFactsV1& b) noexcept;
+// Verify the canonical producer-created structural directory through the pinned
+// database using the existing scan slot and original control/cutoff. Unsupported
+// contents and error-returned handles remain owned for checked retirement.
+bool InventoryAttachments(Invocation& invocation) noexcept;
 bool Query(Invocation& invocation) noexcept;
 bool Prepare(Invocation& invocation, const SsLogicalStoreOperationV1& operation) noexcept;
 bool Disposition(Invocation& invocation, const SsCaptureDispositionV1& permit) noexcept;

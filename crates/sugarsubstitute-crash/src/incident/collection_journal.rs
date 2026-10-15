@@ -29,6 +29,26 @@ impl CapturedReport {
     pub fn journal_failure(&self) -> Option<&(dyn std::error::Error + 'static)> {
         self.journal.as_ref().and_then(|journal| journal.failure.as_ref()).map(|cause| cause as _)
     }
+    /// Project only the journal's original moved native/control leaf, without traversing errors.
+    pub fn journal_failure_diagnostic(&self) -> Option<super::FinishedFailureDiagnostic> {
+        self.journal.as_ref()?.failure.as_ref()?.source_error().map(SettlementFailure::diagnostic)
+    }
+    /// Project actual journal storage rejection independently of its original native cause.
+    pub fn journal_storage_failure(&self) -> Option<DiagnosticStorageFailureCode> {
+        self.journal
+            .as_ref()?
+            .failure
+            .as_ref()?
+            .post_storage_error()
+            .map(DiagnosticStorageError::code)
+    }
+    /// Observe an opaque journal post-provider unwind without formatting its payload.
+    pub fn journal_post_panicked(&self) -> bool {
+        self.journal
+            .as_ref()
+            .and_then(|journal| journal.failure.as_ref())
+            .is_some_and(|failure| failure.post_panicked())
+    }
     /// Inspect the original opaque native-control unwind retained by settlement.
     pub fn inspect_settlement_panic<T>(
         &self,

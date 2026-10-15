@@ -95,7 +95,11 @@ class WindowsApi final : public FileApi {
     if (!parent || count == 0 || count == 80) return ERROR_INVALID_PARAMETER;
     for (size_t i = 0; i < count; ++i)
       if (leaf[i] == L'/' || leaf[i] == L'\\' || leaf[i] == L':') return ERROR_INVALID_PARAMETER;
-    UNICODE_STRING name{static_cast<USHORT>(count * 2), static_cast<USHORT>(count * 2), const_cast<PWSTR>(leaf)};
+    // An empty relative NT name reopens this exact directory with a fresh
+    // enumeration cursor. A literal dot is invalid with OBJ_DONT_REPARSE.
+    const bool self = mode == OpenMode::Directory && count == 1 && leaf[0] == L'.';
+    const auto name_bytes = static_cast<USHORT>((self ? 0 : count) * 2);
+    UNICODE_STRING name{name_bytes, name_bytes, const_cast<PWSTR>(leaf)};
     OBJECT_ATTRIBUTES attributes{};
     InitializeObjectAttributes(&attributes, &name, OBJ_CASE_INSENSITIVE | 0x1000, parent, nullptr);
     std::array<uint32_t, 2048> descriptor{};
@@ -105,8 +109,9 @@ class WindowsApi final : public FileApi {
       attributes.SecurityDescriptor = descriptor.data();
     }
     const bool directory = mode == OpenMode::Directory;
-    ACCESS_MASK access = READ_CONTROL | SYNCHRONIZE | (directory ? FILE_LIST_DIRECTORY : FILE_READ_DATA);
-    if (!directory) access |= FILE_READ_ATTRIBUTES;
+    // NtCreateFile does not add the attribute rights required by Inspect.
+    ACCESS_MASK access = READ_CONTROL | SYNCHRONIZE | FILE_READ_ATTRIBUTES |
+        (directory ? FILE_LIST_DIRECTORY : FILE_READ_DATA);
     if (mode == OpenMode::Metadata || mode == OpenMode::CreateStage) access |= FILE_WRITE_DATA;
     if (mode == OpenMode::Read || mode == OpenMode::CreateStage || mode == OpenMode::RecoverStage) access |= DELETE;
     ULONG share = FILE_SHARE_READ;
@@ -202,9 +207,10 @@ class WindowsApi final : public FileApi {
           (units == 2 && info->FileName[0] == L'.' && info->FileName[1] == L'.');
       if (!dot) {
         if (info->FileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-          const bool reports = role == ScanRole::Database && units == 7 &&
-              std::equal(info->FileName, info->FileName + 7, L"reports");
-          if (!reports) complete = false;
+          const bool structural = role == ScanRole::Database &&
+              ((units == 7 && std::equal(info->FileName, info->FileName + 7, L"reports")) ||
+               (units == 11 && std::equal(info->FileName, info->FileName + 11, L"attachments")));
+          if (!structural) complete = false;
         }
         ++entries;
         if (!(info->FileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {

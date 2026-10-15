@@ -7,6 +7,10 @@ use sugarsubstitute_crash::{FinishedCaptureSource, incident::*};
 use sugarsubstitute_execution::ExecutionClient;
 use sugarsubstitute_supervision::diagnostic_storage::*;
 
+#[path = "collection/diagnostic.rs"]
+mod diagnostic;
+use diagnostic::CollectionStage;
+
 /// Consume only the original coordinator-issued collection command and genuine namespace source.
 pub(in crate::production) struct CollectionInput {
     pub(in crate::production) request: ProtectedDiagnosticWriteRequest,
@@ -17,6 +21,7 @@ pub(in crate::production) struct CollectionInput {
 }
 /// Keep every partial output and genuine cause before releasing any original claim.
 pub(in crate::production) struct CollectionOperation {
+    stage: CollectionStage,
     repository: Option<IncidentRepository>,
     opening: Option<DiagnosticStoreOpening>,
     ticket: Option<PublishTicket>,
@@ -33,6 +38,7 @@ pub(in crate::production) struct CollectionOperation {
 impl CollectionOperation {
     pub(super) const fn new() -> Self {
         Self {
+            stage: CollectionStage::NotStarted,
             repository: None,
             opening: None,
             ticket: None,
@@ -73,6 +79,7 @@ impl CollectionOperation {
         effects: &mut [Option<IncidentEffect>; MAX_INCIDENT_EFFECTS],
         context: &JobContext,
     ) -> Result<(), IncidentStoreError> {
+        self.stage = CollectionStage::ValidateInput;
         if context.spec().reservation_bytes != DIAGNOSTIC_STORAGE_BYTES
             || context.deadline().is_none_or(|until| until > input.scope.original().until())
             || input.seed.key() != input.scope.incident()
@@ -81,22 +88,31 @@ impl CollectionOperation {
         {
             return Err(IncidentStoreError::RecoveryConflict);
         }
+        self.stage = CollectionStage::Memory;
         let memory = context.memory().claim(DIAGNOSTIC_STORAGE_BYTES).map_err(|cause| {
             self.memory = Some(cause);
             IncidentStoreError::Capacity
         })?;
+        self.stage = CollectionStage::Storage;
         let mut storage = DiagnosticStorage::new(memory)?;
+        self.stage = CollectionStage::Operation;
         let operation = storage.begin_operation(input.scope.operation(), context)?;
+        self.stage = CollectionStage::Repository;
         self.repository = Some(IncidentRepository::new(storage, operation, context)?);
         let repository = self.repository.as_mut().ok_or(IncidentStoreError::RecoveryConflict)?;
+        self.stage = CollectionStage::Namespace;
         self.opening = Some(repository.resolve_namespace(&input.request, context)?);
         if !matches!(self.opening, Some(DiagnosticStoreOpening::Existing)) {
             return Err(IncidentStoreError::RecoveryConflict);
         }
+        self.stage = CollectionStage::Writer;
         repository.acquire_writer(context)?;
+        self.stage = CollectionStage::ValidateStore;
         repository.validate_store(context)?;
+        self.stage = CollectionStage::PrepareCapture;
         repository.prepare_finished(&input.capture, &mut self.report, context)?;
         let report = self.report.as_mut().ok_or(IncidentStoreError::RecoveryConflict)?;
+        self.stage = CollectionStage::OpenCapture;
         let capture = report.open(input.seed.key(), input.seed.build(), None, context)?;
         let bytes = match capture {
             CaptureEvidence::Finished(_) => {
@@ -108,9 +124,11 @@ impl CollectionOperation {
         let headroom = if bytes == 0 {
             131072
         } else {
+            self.stage = CollectionStage::PrepareDisposition;
             report.prepare_disposition(context)?;
             report.publication_headroom().ok_or(IncidentStoreError::RecoveryConflict)?
         };
+        self.stage = CollectionStage::Preflight;
         let preflight = repository.preflight_publication(
             input.seed,
             ExpectedSummary::Absent,
@@ -118,15 +136,18 @@ impl CollectionOperation {
             input.occurred,
             context,
         )?;
+        self.stage = CollectionStage::BeginPublish;
         self.ticket =
             Some(repository.begin_publish(preflight, input.scope.operation().id(), context)?);
         let ticket = self.ticket.as_mut().ok_or(IncidentStoreError::RecoveryConflict)?;
         let payload = if bytes == 0 {
             PayloadDisposition::Unavailable
         } else {
+            self.stage = CollectionStage::CopyPayload;
             let fact = repository.append_finished(ticket, report, context)?;
             PayloadDisposition::Retained(AttachmentInventory::new(&[fact])?)
         };
+        self.stage = CollectionStage::ObserveEvidence;
         let produced = coordinator
             .observe(IncidentServiceObservation::EvidenceCollected {
                 scope: input.scope,
@@ -155,17 +176,21 @@ impl CollectionOperation {
             return Err(IncidentStoreError::RecoveryConflict);
         }
         // The coordinator owns the exact expected content; storage independently verifies all files.
+        self.stage = CollectionStage::Commit;
         self.committed = Some(repository.commit(ticket, summary.clone(), context)?);
         *slot = None;
         let committed = self.committed.as_ref().ok_or(IncidentStoreError::RecoveryConflict)?;
         if bytes != 0 {
+            self.stage = CollectionStage::PublishJournal;
             repository.publish_capture_journal(report, committed, context)?;
+            self.stage = CollectionStage::SettleJournal;
             repository.settle_capture_journal(report, context)?;
             self.source_settled = report.disposition_settled();
         }
         if effects.iter().any(Option::is_some) {
             return Err(IncidentStoreError::RecoveryConflict);
         }
+        self.stage = CollectionStage::ObserveCommitted;
         let produced = coordinator
             .observe(IncidentServiceObservation::SummaryCommitted {
                 scope: input.scope,
@@ -178,6 +203,7 @@ impl CollectionOperation {
         for (slot, effect) in effects.iter_mut().zip(produced) {
             *slot = Some(effect);
         }
+        self.stage = CollectionStage::Committed;
         Ok(())
     }
     /// Checked native token/source then repository cleanup on the genuine original close-only job.
@@ -314,6 +340,11 @@ mod tests {
                 let original = collection.failure().ok_or("cleanup cause lost")?;
                 assert!(std::error::Error::source(original).is_some());
                 let pointer = std::ptr::from_ref(original);
+                let diagnostic = collection.diagnostic();
+                assert_eq!(diagnostic.cleanup, Some(IncidentStoreFailureCode::Storage));
+                assert!(diagnostic.store.is_none());
+                assert!(diagnostic.report.is_none());
+                assert_eq!(collection.failure().map(std::ptr::from_ref), Some(pointer));
                 fixture.set_failure(DiagnosticFixtureFailure::Close, false);
                 collection.repository.as_mut().ok_or("no repository")?.retire(&context).map_err(
                     |cause| std::io::Error::other(format!("fixture final close: {cause:?}")),
