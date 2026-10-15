@@ -7,5 +7,7 @@ mod admission;
 mod enrollment;
 #[path = "supervision/leases.rs"]
 mod leases;
+#[path = "supervision/run_settlement.rs"]
+mod run_settlement;
 #[path = "supervision/support.rs"]
 mod support;

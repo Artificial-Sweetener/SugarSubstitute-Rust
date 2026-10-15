@@ -86,7 +86,10 @@ fn role(record: &Record) -> Option<Role> {
         return None;
     }
     let retired = match (&record.retired, start.ticket) {
-        (Some(retired), None) if retired.run() == record.run && retired.registered() => true,
+        (Some(retired), None) if retired.run() == record.run && retired.registered() => {
+            // Retain the original unresolved cutoff until run-local policy settlement.
+            record.closed
+        }
         (None, Some(ticket))
             if ticket.process() == request.process()
                 && ticket.binding()

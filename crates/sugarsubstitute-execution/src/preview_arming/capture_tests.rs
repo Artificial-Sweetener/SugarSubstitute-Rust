@@ -303,5 +303,21 @@ fn preview_absent_original_declaration_never_grants_early_loan() -> TestResult {
     close(owner)
 }
 
+/// Expiring an unused preview loan leaves registered native cleanup and mailbox intact.
+#[test]
+fn expired_unused_preview_loan_preserves_registered_cleanup_mailbox() -> TestResult {
+    let mut owner = RegisteredOwner::new(None)?;
+    owner.register()?;
+    let (native, loan) = source(&owner)?;
+    let expired =
+        loan.original_deadline().as_nanos().checked_add(1).ok_or("Fixture clock overflow")?;
+    owner.clock.advance(expired);
+    owner.active.progress(&owner.core, Moment::from_nanos(expired), true);
+    owner.retained()?;
+    drop(loan);
+    drop(native);
+    close(owner)
+}
+
 #[path = "backend_target_tests.rs"]
 mod backend_target;

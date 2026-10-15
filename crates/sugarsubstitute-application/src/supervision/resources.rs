@@ -21,6 +21,14 @@ pub struct CoordinatorSnapshot {
     /// Run-local references to current unsettled resource generations, bounded by 4096.
     pub tracked_resource_refs: usize,
 }
+/// Run-local policy readiness; this does not prove native desktop or profile retirement.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RunSettlementStatus {
+    /// This disconnected run's last-client cleanup still retains a current resource generation.
+    PendingBackendCleanup,
+    /// Policy permits settlement once the adapter supplies actual desktop/profile retirement.
+    Ready,
+}
 /// Serialize resource policy at one application owner; methods perform no I/O.
 ///
 /// Trusted registration/observations are separate from decoded requests. Neither
@@ -84,6 +92,25 @@ impl ResourceCoordinator {
     /// settlement; its absent connection or expired deadline supplies no proof.
     /// The trusted adapter separately proves all profile/native work actually stopped.
     pub fn settle_run(&mut self, run: RunKey) -> Result<(), LifecycleRejection> {
+        if self.run_settlement(run)? == RunSettlementStatus::PendingBackendCleanup {
+            return Err(LifecycleRejection::WrongPhase);
+        }
+        if let Some(record) = self.runs.get_mut(&run.instance) {
+            record.settled = true;
+        }
+        Ok(())
+    }
+    /// Inspect the same authoritative settlement preconditions without changing ownership.
+    ///
+    /// Only this run's current tracked resource cleanup is pending. A ready resource
+    /// still leased by another run does not block this run's settlement. The adapter
+    /// retains its original retirement receipt and shutdown budget while waiting.
+    ///
+    /// # Errors
+    /// Rejects foreign/stale runs, a connected run, and any remaining lease for this
+    /// run. Readiness grants no native retirement authority; `settle_run` validates
+    /// these conditions again before changing the existing policy record.
+    pub fn run_settlement(&self, run: RunKey) -> Result<RunSettlementStatus, LifecycleRejection> {
         self.check_identity(run)?;
         let record = self.runs.get(&run.instance).ok_or(LifecycleRejection::StaleIdentity)?;
         if matches!(record.connection, ConnectionPhase::Connected(_))
@@ -100,12 +127,9 @@ impl ResourceCoordinator {
                     && matches!(resource.phase, ResourcePhase::Stopping | ResourcePhase::Uncertain)
             })
         }) {
-            return Err(LifecycleRejection::WrongPhase);
+            return Ok(RunSettlementStatus::PendingBackendCleanup);
         }
-        if let Some(record) = self.runs.get_mut(&run.instance) {
-            record.settled = true;
-        }
-        Ok(())
+        Ok(RunSettlementStatus::Ready)
     }
     /// Borrow the first retained original native failure for this exact generation.
     pub fn failure(&self, resource: ResourceKey) -> Option<&LifecycleFailure> {

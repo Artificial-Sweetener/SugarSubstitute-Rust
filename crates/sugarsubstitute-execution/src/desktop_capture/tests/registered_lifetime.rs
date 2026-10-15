@@ -122,6 +122,9 @@ impl RegisteredOwner {
             DesktopCaptureTemporaryState::Transferred
         );
         assert_eq!(self.boundary.retired.load(Ordering::Acquire), 1);
+        let drained = self.core.mailbox.drain(std::num::NonZeroUsize::MIN.saturating_add(31))?;
+        assert!(drained.notifications.is_empty());
+        assert_eq!(drained.remaining, 0);
         assert_eq!(
             self.active.event.as_ref().ok_or("Checked Event owner missing")?.original.snapshot(),
             (0, 2)
@@ -174,6 +177,72 @@ fn registered_capture_outlives_finite_cutoff_then_actual_scope_cancel_settles_te
     owner.scope.cancel();
     assert_eq!(owner.scope.snapshot().reserved_bytes, 4_194_304);
     assert_eq!(owner.boundary.retired.load(Ordering::Acquire), 0);
+    owner.settle()
+}
+
+/// A genuine retained native error cannot be mistaken for clean registered settlement.
+#[test]
+fn registered_cleanup_retains_exact_external_failure_in_mailbox_until_observed() -> TestResult {
+    let mut owner = RegisteredOwner::new(None)?;
+    owner.register()?;
+    owner.clock.advance(211_000_000_000);
+    owner.active.progress(&owner.core, Moment::from_nanos(211_000_000_000), true);
+    owner.retained()?;
+    let original = NativeObservationError::new(
+        "registered_retire_boundary",
+        std::io::Error::from_raw_os_error(5),
+    );
+    *lock(&owner.boundary.retire_failure) = Some(original.clone());
+    owner.session.control().request_cleanup();
+    let initial = owner.session.control().cleanup_snapshot();
+    let crate::capture_attach::control::CaptureCleanupSnapshot::Latched {
+        budget,
+        counter: Ok(before),
+    } = initial
+    else {
+        return Err("Actual original cleanup transaction missing".into());
+    };
+    owner.active.progress(&owner.core, budget.started, true);
+    assert!(!owner.active.completed());
+    assert_eq!(owner.session.control().temporary_settled(), DesktopCaptureTemporaryState::Pending);
+    assert_eq!(owner.boundary.retired.load(Ordering::Acquire), 0);
+    assert!(owner.active.work.inherited.is_some());
+    assert_eq!(owner.scope.snapshot().reserved_bytes, 4_194_304);
+    let observed = owner
+        .core
+        .mailbox
+        .drain(std::num::NonZeroUsize::MIN.saturating_add(31))
+        .err()
+        .ok_or("Actual external cleanup failure was not retained")?;
+    assert_eq!(observed.operation(), owner.active.context.spec().operation);
+    // The known execution-owned aggregate and its first typed error are inspected
+    // at this owner; the controlled external error's callbacks are never searched.
+    let aggregate = std::error::Error::source(&observed).ok_or("Aggregate lost")?;
+    let first = aggregate
+        .source()
+        .and_then(|cause| cause.downcast_ref::<ExecutionError>())
+        .ok_or("Original execution failure lost")?;
+    let retained = std::error::Error::source(first)
+        .and_then(|cause| cause.downcast_ref::<NativeObservationError>())
+        .ok_or("Original native failure lost")?;
+    assert_eq!(retained.stage(), original.stage());
+    assert_eq!(retained.win32_code(), Some(5));
+    assert!(std::ptr::eq(
+        std::error::Error::source(retained).ok_or("Retained leaf lost")?,
+        std::error::Error::source(&original).ok_or("Original leaf lost")?,
+    ));
+    let crate::capture_attach::control::CaptureCleanupSnapshot::Latched {
+        budget: after_budget,
+        counter: Ok(after),
+    } = owner.session.control().cleanup_snapshot()
+    else {
+        return Err("Actual cleanup transaction replaced".into());
+    };
+    assert_eq!(after_budget, budget);
+    assert_eq!(after, before);
+    // Only this test's external boundary changes. The same worker resumes with
+    // its retained outputs and original deadline; observing an error settles none.
+    *lock(&owner.boundary.retire_failure) = None;
     owner.settle()
 }
 

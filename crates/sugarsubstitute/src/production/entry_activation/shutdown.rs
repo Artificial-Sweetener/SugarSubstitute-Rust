@@ -79,13 +79,10 @@ impl ProductionActivation {
                 None => return Ok(()),
             }
         }
-        if record.retired.is_some() {
-            progress::with_parent(record, backend, capture, resources, |parent, borrowed| {
-                Ok(parent.request_cleanup(parent.cleanup_budget(budget), borrowed)?)
-            })?;
-            let retired = record.retired.as_ref().ok_or("Actual retirement receipt missing")?;
-            backend.settle_run(retired).map_err(outer)?;
-            record.closed = true;
+        if let Some(retired) = &record.retired {
+            // Native retirement already removed the ticket. Keep this receipt while
+            // the independent backend cleanup owner finishes its current generation.
+            record.closed = backend.settle_run(retired).map_err(outer)?;
             return Ok(());
         }
         if record.start.is_none() {
@@ -190,10 +187,9 @@ impl ProductionActivation {
                 resources.authority.registry_mut().ok_or("Actual process registry missing")?;
             if let Some(retired) = retirement::retire(start, parent, registry)? {
                 record.retired = Some(retired);
-                backend
+                record.closed = backend
                     .settle_run(record.retired.as_ref().ok_or("Actual retirement receipt missing")?)
                     .map_err(outer)?;
-                record.closed = true;
             }
         } else {
             record.closed = true;

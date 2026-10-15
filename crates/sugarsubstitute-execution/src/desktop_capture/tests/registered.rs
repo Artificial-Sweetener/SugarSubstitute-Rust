@@ -49,12 +49,13 @@ impl NativeCaptureDriver for RegisteredDriver {
     ) -> Result<(), NativeObservationError> {
         let mut budget = CleanupBudget::default();
         assert!((input.cleanup.request)(input.cleanup.context, &mut budget));
+        let failure = lock(&self.0.boundary.retire_failure).clone();
         *out = NativeCaptureReply {
             version: 2,
-            status: 4,
+            status: if failure.is_some() { 3 } else { 4 },
             registered: 1,
             attach: input.attach,
-            retired: 1,
+            retired: u32::from(failure.is_none()),
             cleanup_state: 1,
             cleanup_started: budget.started,
             cleanup_grace: budget.grace,
@@ -62,6 +63,9 @@ impl NativeCaptureDriver for RegisteredDriver {
             frequency: budget.frequency,
             ..Default::default()
         };
+        if let Some(cause) = failure {
+            return Err(cause);
+        }
         self.0.boundary.retired.fetch_add(1, Ordering::AcqRel);
         Ok(())
     }

@@ -32,6 +32,7 @@ struct Boundary {
     prepares: AtomicUsize,
     attaches: AtomicUsize,
     retired: AtomicUsize,
+    retire_failure: Mutex<Option<NativeObservationError>>,
 }
 /// Opens the external blocking boundary before actual owner teardown on every unwind.
 struct Release(Arc<Boundary>);

@@ -304,19 +304,26 @@ impl CoordinatorBackend {
     }
 
     /// Retire run/profile policy only after the actual desktop owner checked retirement.
-    /// Shared resources leased by other clients remain owned. A connected run or
-    /// unresolved last-client backend cleanup still rejects this same receipt.
+    /// Shared resources leased by other clients remain owned. Return `false` only
+    /// while this run's current last-client backend cleanup remains pending; retain
+    /// the same receipt until the actual cleanup owner observes settlement.
+    /// A connected run, live lease or foreign/stale receipt remains an error.
     pub(crate) fn settle_run(
         &mut self,
         retired: &super::entry_activation::retirement::RetiredDesktop,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         if retired.run().owner != self.owner {
             return Err(Box::new(LifecycleRejection::ForeignOwner));
         }
         if retired.registered() {
+            if self.policy.run_settlement(retired.run())?
+                == sugarsubstitute_application::supervision::RunSettlementStatus::PendingBackendCleanup
+            {
+                return Ok(false);
+            }
             self.policy.settle_run(retired.run())?;
         }
-        Ok(())
+        Ok(true)
     }
 
     /// A retained producer return fences another policy mutation before admission.

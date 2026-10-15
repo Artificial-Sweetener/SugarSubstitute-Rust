@@ -52,6 +52,18 @@ fn normal_idle_two_roles_keep_original_unresolved_cutoff_and_deny_live_or_queued
         ),
         None
     );
+    // A native-retired role still awaiting policy settlement remains unresolved.
+    assert_eq!(
+        original_budget(
+            [
+                Some(Role::Normal { budget: first, retired: false }),
+                Some(Role::Normal { budget: second, retired: true })
+            ]
+            .into_iter(),
+            None
+        ),
+        Some(first)
+    );
     // Completed is the caller's existing sealed retirement disposition, never a new proof from this fold.
     assert_eq!(
         original_budget(
