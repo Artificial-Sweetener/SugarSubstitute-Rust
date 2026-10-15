@@ -9,6 +9,10 @@ use sugarsubstitute_supervision::coordinator_entry::{
 };
 #[path = "diagnostics.rs"]
 mod diagnostics;
+#[path = "policy_loan.rs"]
+mod policy_loan;
+#[path = "readiness.rs"]
+mod readiness;
 
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 

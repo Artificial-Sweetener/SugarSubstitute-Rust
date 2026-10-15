@@ -165,3 +165,47 @@ fn normal_parent_distinct_original_role_budgets_survive_tighter_global_cleanup_w
     assert!(!second.native_retired());
     Ok(())
 }
+
+#[test]
+fn final_close_ack_fences_new_receives_before_written_without_early_pipe_closure() -> Result<()> {
+    let mut parent = actor()?;
+    // These are external connection/registration facts for a cache-only admission query;
+    // no peer, native write, frame loan or retirement proof is constructed here.
+    parent.connected = true;
+    assert!(parent.receive_admission_open(), "Pre-final receive admission was denied");
+    intent(&mut parent, CompletionIntent::Normal)?;
+    parent.registered = true;
+    let original = parent.cleanup.ok_or("Original close budget absent")?;
+    assert!(parent.receive_admission_open(), "Exit intent prematurely fenced receives");
+    let run = parent.run;
+    parent
+        .exit
+        .as_mut()
+        .ok_or("Original exit absent")?
+        .observe(DesktopObservation::Completed { run, shutdown: ShutdownId::new(1)? })
+        .map_err(|rejected| rejected.reason)?;
+    let (index, _) = parent.requests.admit(header(1)?, b"original final ExitCompleted")?;
+    parent.requests.get_mut(index)?.reply = Some(Reply::Acknowledged);
+    // The actual decoder latches this index only after the preceding exit-owner transition.
+    parent.close_after_reply = Some(index);
+    let operation = parent.latest_operation;
+    assert!(!parent.receive_admission_open(), "Final ACK admitted an extra passive read");
+    assert!(!parent.closed, "Queued final reply closed transport before Written");
+    assert!(!parent.requests.get(index)?.sent);
+    assert!(!parent.normal_cleanup_ready());
+    assert_eq!(parent.latest_operation, operation);
+    // Native delivery facts cross the real receipt owner; neither close intent nor
+    // this inert query supplies those facts or fabricates physical retirement.
+    let mut receipt = super::super::write_receipt::WriteReceipt::new(7, 104);
+    receipt.issue(7)?;
+    assert!(!parent.receive_admission_open());
+    assert!(!parent.normal_cleanup_ready());
+    receipt.complete(7, 104)?;
+    parent.requests.get_mut(index)?.sent = true;
+    parent.closed = true;
+    assert!(!parent.receive_admission_open());
+    assert!(parent.normal_cleanup_ready());
+    assert!(!parent.native_retired());
+    assert_eq!(parent.cleanup, Some(original));
+    Ok(())
+}

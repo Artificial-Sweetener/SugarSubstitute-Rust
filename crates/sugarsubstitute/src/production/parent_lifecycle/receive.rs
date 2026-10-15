@@ -81,15 +81,20 @@ impl ParentLifecycle {
         }
         Ok(())
     }
+    /// Borrow this actor's receive-admission decision without native effects or new timing.
+    /// A validated final ExitCompleted request latches its reply index before ACK issue.
+    /// No further request is expected while that exact ACK finishes; explicit pipe
+    /// closure still waits for its original full Written receipt.
+    pub(super) fn receive_admission_open(&self) -> bool {
+        self.read.is_none()
+            && self.acquisition_receive.is_none()
+            && self.connected
+            && !self.closed
+            && self.close_after_reply.is_none()
+            && (!self.hello || (self.welcome && self.peer.is_some()))
+    }
     pub(super) fn receive_next(&mut self, resources: &ParentResources<'_, '_>) -> Result<()> {
-        if self.read.is_some()
-            || self.acquisition_receive.is_some()
-            || !self.connected
-            || self.closed
-        {
-            return Ok(());
-        }
-        if self.hello && (!self.welcome || self.peer.is_none()) {
+        if !self.receive_admission_open() {
             return Ok(());
         }
         let next = self.next_operation()?;

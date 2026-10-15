@@ -249,7 +249,11 @@ fn reporting_actual_queued_cancellation_restores_protected_input_and_keeps_origi
     assert_eq!(service.cleanup_outcome(), None);
     assert!(!service.cleanup_started());
     assert!(!service.files_retired());
-    assert_eq!(scope.snapshot().reserved_bytes, 4 * 1024 * 1024 + DIAGNOSTIC_STORAGE_BYTES);
+    // Read-worker completions can precede their final context disposal. Inspect
+    // this retained delivery here; aggregate credit is checked after owner join.
+    let completion = service.work.completion.as_ref().ok_or("Original cancelled delivery lost")?;
+    assert_eq!(completion.memory.bytes(), DIAGNOSTIC_STORAGE_BYTES);
+    assert_eq!(completion.spec.reservation_bytes, DIAGNOSTIC_STORAGE_BYTES);
     entry.close_admission();
     entry.submit_close(&client, &scope, entry_spec(6, until)?)?;
     assert!(matches!(entry_delivery(&client, &wake, &mut entry)?, EntryObservation::Retired));

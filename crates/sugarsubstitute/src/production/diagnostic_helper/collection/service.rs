@@ -56,6 +56,10 @@ impl CollectionService {
         self.installed = false;
         Ok(scope)
     }
+    /// Observe only the authoritative source's actual retained or issued original policy.
+    pub(in crate::production) fn policy_pending(&self) -> bool {
+        self.source.policy_pending()
+    }
     /// Borrow original correlation only after passive custody was actually restored outside locks.
     /// This applies to central rejection and genuine terminal delivery before Source::begin.
     pub(in crate::production) const fn passive_restored_scope(
@@ -177,42 +181,6 @@ impl CollectionService {
                 Err(CollectionIssue::Admission)
             }
         }
-    }
-    pub(in crate::production) fn capture(
-        &mut self,
-        batch: &CompletionBatch,
-        policy: &mut Option<FundedState>,
-    ) -> Result<bool, CollectionIssue> {
-        let Some(job) = &mut self.job else { return Ok(false) };
-        let mut matched = false;
-        for notice in &batch.notifications {
-            if (notice.scope_id, notice.job_id) != (job.scope_id(), job.spec().id) {
-                continue;
-            }
-            if self.terminal.is_some_and(|old| old != notice.kind) {
-                return Err(CollectionIssue::Identity);
-            }
-            self.terminal = Some(notice.kind);
-            matched = true;
-        }
-        if self.terminal.is_some()
-            && let Some(completion) = job.try_take_completion()
-        {
-            let valid = completion.scope_id == job.scope_id()
-                && completion.spec == job.spec()
-                && self.terminal == Some(completion.outcome.kind());
-            self.completion = Some(completion);
-            self.job = None;
-            if !valid {
-                return Err(CollectionIssue::Identity);
-            }
-            self.passive_restored = self.source.restore(policy)?;
-            if self.passive_restored.is_some() {
-                self.passive_observation_pending = true;
-                self.installed = false;
-            }
-        }
-        Ok(matched)
     }
     pub(in crate::production) fn submit_cleanup(
         &mut self,
@@ -336,3 +304,10 @@ impl CollectionService {
 #[cfg(test)]
 #[path = "service_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "service_probe.rs"]
+mod policy_probe;
+
+#[path = "service_completion.rs"]
+mod completion;

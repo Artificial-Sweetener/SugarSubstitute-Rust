@@ -10,6 +10,9 @@ impl IncidentHost {
             _ => return Ok(()),
         };
         let policy = &mut controller.policy;
+        if policy.state.is_none() && policy.collection.policy_pending() {
+            return Ok(());
+        }
         let state = policy.state.as_mut().ok_or(HostIssue::Pending)?;
         if state.state.effects.iter().any(Option::is_some) {
             return Ok(());

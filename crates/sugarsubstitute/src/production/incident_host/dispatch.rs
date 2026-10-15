@@ -64,10 +64,28 @@ impl IncidentHost {
             }
         }
     }
-    /// Borrow the next actual policy decision; rejection by its adapter leaves it intact.
+    /// Poll the funded policy queue after its actual constructor delivery.
+    /// A retained accepted constructor supplies no effect until its completion is adopted.
+    /// An actual collection source loan also supplies no effect until the same policy returns.
+    /// Never-started, failed, closed and unaccounted missing states still reject; no state is lent.
     pub(in crate::production) fn next_effect(
         &mut self,
     ) -> Result<Option<&IncidentEffect>, HostIssue> {
+        if !self.closing
+            && self.constructor.is_some()
+            && self.completion.is_none()
+            && self.cause.is_none()
+        {
+            return Ok(None);
+        }
+        if !self.closing
+            && let Some(JobOutcome::Success(controller)) =
+                self.completion.as_ref().map(|value| &value.outcome)
+            && controller.policy.state.is_none()
+            && controller.policy.collection.policy_pending()
+        {
+            return Ok(None);
+        }
         Ok(self.state()?.effects.iter().find_map(Option::as_ref))
     }
     /// Transfer exactly one ordered effect to its retained genuine adapter admission.

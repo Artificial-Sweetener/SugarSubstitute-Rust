@@ -2,17 +2,26 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Restore the identical funded policy and partial native transaction outside provider locks.
 use super::{CollectionInput, CollectionOperation};
+#[path = "policy.rs"]
+mod policy;
 use crate::production::incident_host::FundedState;
+use policy::PolicyCustody;
 use std::sync::{Arc, Mutex};
 use sugarsubstitute_contracts::execution::*;
 pub(in crate::production) const COLLECTION_SOURCE_BYTES: u64 = 16384;
 struct State {
     input: Option<CollectionInput>,
-    policy: Option<FundedState>,
+    policy: PolicyCustody,
     operation: Option<Box<CollectionOperation>>,
     started: bool,
 }
 impl State {
+    /// Issue actual funded custody once; caller-specific input checks precede this move.
+    fn issue_policy(&mut self) -> Result<FundedState, super::service::CollectionIssue> {
+        let policy = self.policy.issue()?;
+        self.started = true;
+        Ok(policy)
+    }
     /// Move the identical controller without constructing replacement state or admitting work.
     /// The public source path additionally requires its genuine occupied original input.
     fn restore_unstarted_policy(
@@ -21,16 +30,16 @@ impl State {
     ) -> Result<Option<CollectionInput>, super::service::CollectionIssue> {
         if output.is_some()
             || self.started
-            || self.policy.is_none()
+            || self.policy.retained().is_none()
             || self
                 .policy
-                .as_ref()
+                .retained()
                 .is_some_and(|policy| policy.state.effects.iter().any(Option::is_some))
             || self.operation.as_ref().is_none_or(|operation| operation.scope().is_some())
         {
             return Err(super::service::CollectionIssue::Busy);
         }
-        *output = self.policy.take();
+        self.policy.restore(output)?;
         Ok(self.input.take())
     }
 }
@@ -79,7 +88,7 @@ impl Source {
             shared: Arc::new(Shared {
                 state: Mutex::new(State {
                     input: None,
-                    policy: None,
+                    policy: PolicyCustody::new(),
                     operation: Some(Box::new(CollectionOperation::new())),
                     started: false,
                 }),
@@ -88,6 +97,10 @@ impl Source {
             }),
             _outside: context.memory().clone(),
         })
+    }
+    /// Borrow only actual retained or uniquely issued policy custody; no native proof is projected.
+    pub(super) fn policy_pending(&self) -> bool {
+        self.shared.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).policy.pending()
     }
     pub(super) fn owner(&self) -> ExecutionId {
         self.shared.owner
@@ -103,7 +116,7 @@ impl Source {
         let mut state = self.shared.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         if state.started
             || state.input.is_some()
-            || state.policy.is_some()
+            || state.policy.pending()
             || input.is_none()
             || policy.is_none()
         {
@@ -112,15 +125,15 @@ impl Source {
         if state.operation.is_none() {
             state.operation = Some(Box::new(CollectionOperation::new()));
         }
+        state.policy.install(policy)?;
         state.input = input.take();
-        state.policy = policy.take();
         Ok(())
     }
     pub(super) fn release_retired(&self) -> Result<(), super::service::CollectionIssue> {
         let operation = {
             let mut state =
                 self.shared.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-            if state.policy.is_some()
+            if state.policy.pending()
                 || state.operation.as_ref().is_none_or(|operation| !operation.releasable())
             {
                 return Err(super::service::CollectionIssue::Busy);
@@ -136,15 +149,14 @@ impl Source {
         let mut state = self.shared.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         if state.started
             || state.operation.is_none()
-            || state.policy.is_none()
+            || state.policy.retained().is_none()
             || state.input.is_none()
         {
             return Err(super::service::CollectionIssue::Busy);
         }
         let input = state.input.take().ok_or(super::service::CollectionIssue::Busy)?;
         let operation = state.operation.take();
-        let policy = state.policy.take();
-        state.started = true;
+        let policy = Some(state.issue_policy()?);
         Ok((Loan { source: self.alias(), operation, policy }, input))
     }
     pub(super) fn loan(&self) -> Result<Loan, super::service::CollectionIssue> {
@@ -167,10 +179,13 @@ impl Source {
             let mut state =
                 self.shared.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             if state.started {
-                if output.is_some() || state.operation.is_none() || state.policy.is_none() {
+                if output.is_some()
+                    || state.operation.is_none()
+                    || state.policy.retained().is_none()
+                {
                     return Err(super::service::CollectionIssue::Busy);
                 }
-                *output = state.policy.take();
+                state.policy.restore(output)?;
                 return Ok(None);
             }
             if state.input.is_none() {
@@ -220,8 +235,8 @@ impl Drop for Loan {
         let mut state =
             self.source.shared.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         state.operation = self.operation.take();
-        if self.policy.is_some() {
-            state.policy = self.policy.take();
+        if let Some(policy) = self.policy.take() {
+            state.policy.return_issued(policy);
         }
     }
 }
@@ -247,7 +262,7 @@ mod restoration_tests {
                         .state
                         .lock()
                         .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    state.policy = Some(funded);
+                    state.policy.install(&mut Some(funded))?;
                 }
                 assert!(source.abandon_unsubmitted(&mut output).is_err());
                 assert!(source.restore(&mut output).is_err());
@@ -259,7 +274,7 @@ mod restoration_tests {
                         .lock()
                         .unwrap_or_else(std::sync::PoisonError::into_inner);
                     assert_eq!(
-                        state.policy.as_ref().map(|value| std::ptr::from_ref(&*value.state)),
+                        state.policy.retained().map(|value| std::ptr::from_ref(&*value.state)),
                         Some(original)
                     );
                     state.started = true;
@@ -267,7 +282,7 @@ mod restoration_tests {
                     assert!(output.is_none());
                     state.started = false;
                     assert!(state.restore_unstarted_policy(&mut output)?.is_none());
-                    assert!(state.policy.is_none());
+                    assert!(!state.policy.pending());
                     assert_eq!(
                         output.as_ref().map(|value| std::ptr::from_ref(&*value.state)),
                         Some(original)
@@ -279,3 +294,7 @@ mod restoration_tests {
         )
     }
 }
+
+#[cfg(test)]
+#[path = "source_probe.rs"]
+mod policy_probe;

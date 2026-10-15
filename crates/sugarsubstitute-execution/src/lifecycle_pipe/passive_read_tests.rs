@@ -233,3 +233,82 @@ fn original_finite_write_expiry_still_retires_pending_passive_receive() -> TestR
     assert_eq!(boundary.closes.load(Ordering::Acquire), 1);
     Ok(())
 }
+
+/// Release the external write-return barrier before the real execution owner joins.
+struct WriteReturnHold(Arc<Boundary>);
+impl Drop for WriteReturnHold {
+    fn drop(&mut self) {
+        self.0.write_release.open();
+    }
+}
+
+#[test]
+fn final_write_peer_close_with_and_without_extra_read_keeps_actual_terminal_causality() -> TestResult
+{
+    for extra_read in [true, false] {
+        let rig = Rig::new()?;
+        let scope = scope(&rig)?;
+        let boundary = Boundary::new();
+        let mut session = authenticated(&rig, &scope, &boundary)?;
+        let original = session.control.original_deadline();
+        boundary.hold_write_return.store(true, Ordering::Release);
+        let hold = WriteReturnHold(boundary.clone());
+        let mut output =
+            session.control.take_write_buffer()?.ok_or("Original ACK buffer absent")?;
+        output.as_mut_bytes()[..5].copy_from_slice(b"Final");
+        session
+            .control
+            .write(LifecyclePipeOperationId::new(2)?, Moment::from_nanos(900), output, 5)
+            .map_err(|rejected| rejected.error)?;
+        // The external kernel has accepted all bytes; the owner has not received
+        // the return or published Written, modeling a peer that already read its ACK.
+        boundary.writing.wait()?;
+        assert_eq!(boundary.writes.load(Ordering::Acquire), 1);
+        assert!(
+            !lock(&session.control.inner.shared.state)
+                .observations
+                .iter()
+                .any(|fact| matches!(fact, Observation::Written { .. }))
+        );
+        assert!(session.completion.try_take_completion().is_none());
+        if extra_read {
+            boundary.pending_read.store(true, Ordering::Release);
+            session.control.read_passive(LifecyclePipeOperationId::new(3)?)?;
+        }
+        boundary.peer_closed.store(true, Ordering::Release);
+        drop(hold);
+        if extra_read {
+            fact(&rig, &session.control, |fact| {
+                matches!(fact,
+                LifecyclePipeObservation::ReadPending { operation } if operation.get() == 3)
+            })?;
+            boundary.wake(Role::Read)?;
+            let terminal = rig.completion(&mut session.completion)?;
+            let JobOutcome::Failure(cause) = terminal.outcome else {
+                return Err("Extra passive read lost its genuine peer-close failure".into());
+            };
+            assert_eq!(cause.native_cause().stage(), "passive_peer_closed");
+        } else {
+            fact(&rig, &session.control, |fact| {
+                matches!(fact,
+                LifecyclePipeObservation::Written { operation, bytes }
+                    if operation.get() == 2 && *bytes == 5)
+            })?;
+            // Only the exact full write observation permits the composing owner to close.
+            session.control.close();
+            assert!(matches!(
+                rig.completion(&mut session.completion)?.outcome,
+                JobOutcome::Cancelled
+            ));
+        }
+        assert_eq!(session.control.original_deadline(), original);
+        let proof =
+            session.control.take_checked_retirement().ok_or("Original retirement absent")?;
+        assert!(proof.matches(&session.control));
+        assert_eq!(proof.scope_id(), scope.id());
+        assert_eq!(proof.spec(), session.completion.spec());
+        assert_eq!(boundary.writes.load(Ordering::Acquire), 1);
+        assert_eq!(boundary.closes.load(Ordering::Acquire), 1);
+    }
+    Ok(())
+}
