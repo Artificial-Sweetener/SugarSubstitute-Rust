@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compose actual Entry, native inventory and generation pins before finished-role admission.
+mod publication;
 use super::*;
 use crate::diagnostic_storage::fixture::ProtectedCaptureSourceFixture;
 use sha2::{Digest, Sha256};
@@ -100,11 +101,37 @@ fn native_initialized_store_prepares_finished_roles_with_original_residual()
                         storage.shared._allocation.fixture_residual_bytes(), DIAGNOSTIC_RESIDUAL_BYTES).into()
                 })?;
                 assert_eq!(rescanned.status(), DiagnosticInventoryStatus::Complete);
+                let candidate = rescanned
+                    .entries()
+                    .find(|entry| entry.class() == DiagnosticEntryClass::StoreState)
+                    .ok_or("Actual initialized state absent")?;
+                let residual = storage.shared._allocation.fixture_residual_bytes();
+                let mut held_read = storage.read_inventory(candidate, 65_536, &operation, &context)
+                    .map_err(|cause| -> TestError {
+                        let native = Error::source(&cause).and_then(|value| value.downcast_ref::<crate::ClaimError>());
+                        let inner = native.and_then(Error::source).and_then(|value| value.downcast_ref::<DiagnosticNativeAllocationFailure>());
+                        format!("held-finished publication read outer={:?} inner={:?} post={:?} residual={residual:?} limit={}",
+                            cause.code(), inner.map(DiagnosticNativeAllocationFailure::code),
+                            inner.and_then(DiagnosticNativeAllocationFailure::post_control_failure), DIAGNOSTIC_RESIDUAL_BYTES).into()
+                    })?;
+                let image = held_read.whole_source(&context)?;
+                assert_eq!(image.as_bytes(), bytes);
+                drop(image);
+                held_read.retire(&context)?;
+                drop(held_read);
                 drop(rescanned);
                 drop(cpp);
                 drop(rust);
                 assert_eq!(storage.shared._allocation.fixture_residual_bytes(), Some(before));
-                Ok(())
+                let (cpp, rust) = storage.reserve_finished_owner(
+                    generation.as_mut().ok_or("Actual read lease absent")?,
+                    &operation,
+                    &context,
+                )?;
+                let publication = publication::roundtrip(&mut storage, &operation, &context);
+                drop(cpp);
+                drop(rust);
+                publication
             })();
             if let Some(generation) = generation.as_mut() {
                 generation.retire(&context)?;

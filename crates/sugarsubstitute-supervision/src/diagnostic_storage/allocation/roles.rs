@@ -136,8 +136,8 @@ pub(super) enum ResidualRole {
     PublicationToken,
     Buffer,
     WholeSource,
-    Inventory,
-    ScanBinding,
+    Inventory(usize),
+    ScanBinding(usize),
     PayloadDecision,
     PayloadPreparation,
     PayloadIntent,
@@ -164,13 +164,13 @@ impl ResidualRole {
             Self::PublicationToken => DIAGNOSTIC_PUBLICATION_TOKEN_INLINE_BYTES,
             Self::Buffer => size_of::<DiagnosticRecordBuffer>() + DIAGNOSTIC_IO_BYTES,
             Self::WholeSource => size_of::<DiagnosticRecoverySource>() + DIAGNOSTIC_IO_BYTES,
-            Self::Inventory => {
-                size_of::<DiagnosticInventory>()
-                    + DIAGNOSTIC_SCAN_BOUND * size_of::<DiagnosticInventoryEntry>()
+            Self::Inventory(entries) => {
+                size_of::<DiagnosticInventory>() + *entries * size_of::<DiagnosticInventoryEntry>()
             }
-            Self::ScanBinding => {
-                DIAGNOSTIC_SCAN_BOUND
-                    * (size_of::<inventory::ObservedEntry>() + 3 * size_of::<[u8; 32]>())
+            Self::ScanBinding(entries) => {
+                // Digest sets retain full capacity for later admitted stage mutations.
+                *entries * size_of::<inventory::ObservedEntry>()
+                    + DIAGNOSTIC_SCAN_BOUND * 3 * size_of::<[u8; 32]>()
             }
             Self::PayloadDecision => {
                 size_of::<DiagnosticPayloadDiscardDecision>()

@@ -57,17 +57,27 @@ pub(super) fn whole_source(
 ) -> Result<DiagnosticAllocationLoan, DiagnosticStorageError> {
     owner.residual(roles::ResidualRole::WholeSource, key)
 }
+/// Admit only the bounded immutable observation cells that will be allocated.
 pub(super) fn inventory(
     owner: &DiagnosticAllocationOwner,
     key: LogicalStoreOperationKey,
+    entries: usize,
 ) -> Result<DiagnosticAllocationLoan, DiagnosticStorageError> {
-    owner.residual(roles::ResidualRole::Inventory, key)
+    if entries > DIAGNOSTIC_SCAN_BOUND {
+        return Err(error(key, Code::Capacity));
+    }
+    owner.residual(roles::ResidualRole::Inventory(entries), key)
 }
+/// Admit observed cells and the full prospective digest sets used by later mutations.
 pub(super) fn scan_binding(
     owner: &DiagnosticAllocationOwner,
     key: LogicalStoreOperationKey,
+    entries: usize,
 ) -> Result<DiagnosticAllocationLoan, DiagnosticStorageError> {
-    owner.residual(roles::ResidualRole::ScanBinding, key)
+    if entries > DIAGNOSTIC_SCAN_BOUND {
+        return Err(error(key, Code::Capacity));
+    }
+    owner.residual(roles::ResidualRole::ScanBinding(entries), key)
 }
 pub(super) fn owner(
     memory: MemoryClaim,

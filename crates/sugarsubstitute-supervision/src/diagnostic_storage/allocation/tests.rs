@@ -5,6 +5,8 @@ use super::*;
 use std::io::Write;
 #[path = "tests/incident_validation.rs"]
 mod incident_validation;
+#[path = "tests/inventory_cardinality.rs"]
+mod inventory_cardinality;
 #[path = "tests/native_owner.rs"]
 mod native_owner;
 #[path = "tests/native_retention.rs"]

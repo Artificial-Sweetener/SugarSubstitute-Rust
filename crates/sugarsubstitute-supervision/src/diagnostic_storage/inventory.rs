@@ -177,17 +177,30 @@ impl DiagnosticStorage {
         }
         let namespace =
             state.data_mut()?.namespace.ok_or_else(|| error(operation.key, Code::Closed))?;
-        let scan_allocation =
-            allocation::scan_binding(&state.data_mut()?.allocation, operation.key)?;
+        let scan_preflight = allocation::scan_binding(
+            &state.data_mut()?.allocation,
+            operation.key,
+            DIAGNOSTIC_SCAN_BOUND,
+        )?;
         // Reject an already-unavailable returned destination before enumeration.
         // Actual vector construction admits it again after the native session ends.
-        drop(allocation::inventory(&state.data_mut()?.allocation, operation.key)?);
+        drop(allocation::inventory(
+            &state.data_mut()?.allocation,
+            operation.key,
+            DIAGNOSTIC_SCAN_BOUND,
+        )?);
+        // No cached vectors exist under this temporary maximum-capacity admission.
+        // The native scan owns its separate actual vector, page and control loans.
+        drop(scan_preflight);
         let scan = state
             .call_native(|port| port.scan(context))?
             .map_err(|cause| native(operation.key, Code::InventoryIncomplete, cause))?;
         if scan.entries.len() > DIAGNOSTIC_SCAN_BOUND {
             return Err(error(operation.key, Code::InventoryIncomplete));
         }
+        let observed_count = scan.entries.len();
+        let scan_allocation =
+            allocation::scan_binding(&state.data_mut()?.allocation, operation.key, observed_count)?;
         state.data_mut()?.scan_generation = state
             .data_mut()?
             .scan_generation
@@ -197,9 +210,9 @@ impl DiagnosticStorage {
             allocation::reservation(&state.data_mut()?.allocation, Some(operation.key))?;
         let mut scan_entries = Vec::new();
         scan_entries
-            .try_reserve_exact(DIAGNOSTIC_SCAN_BOUND)
+            .try_reserve_exact(observed_count)
             .map_err(|cause| reservation.failed(cause))?;
-        if scan_entries.capacity() != DIAGNOSTIC_SCAN_BOUND {
+        if scan_entries.capacity() != observed_count {
             return Err(error(operation.key, Code::Capacity));
         }
         scan_entries.extend(scan.entries.iter().cloned());
@@ -207,7 +220,7 @@ impl DiagnosticStorage {
             allocation::reservation(&state.data_mut()?.allocation, Some(operation.key))?;
         // Native enumeration's page/session has ended before the returned vector exists.
         let inventory_allocation =
-            allocation::inventory(&state.data_mut()?.allocation, operation.key)?;
+            allocation::inventory(&state.data_mut()?.allocation, operation.key, observed_count)?;
         let mut result = DiagnosticInventory {
             entries: Vec::new(),
             status: DiagnosticInventoryStatus::Incomplete,
@@ -220,9 +233,9 @@ impl DiagnosticStorage {
         };
         result
             .entries
-            .try_reserve_exact(DIAGNOSTIC_SCAN_BOUND)
+            .try_reserve_exact(observed_count)
             .map_err(|cause| reservation.failed(cause))?;
-        if result.entries.capacity() != DIAGNOSTIC_SCAN_BOUND {
+        if result.entries.capacity() != observed_count {
             return Err(error(operation.key, Code::Capacity));
         }
         let mut complete = scan.complete;
