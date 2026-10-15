@@ -48,6 +48,8 @@ struct PreparedFile {
     output: crate::installed_release::CaptureOutputGuard,
     causes: NativeCauseDestinations,
 }
+/// Four permanent chain pins plus one still-owned canonical verification output.
+const DIRECTORY_PINS: usize = 4 + 1;
 struct Fields {
     request: ProtectedCommittedReadRequest,
     namespace: crate::coordinator_entry::read_namespace::NamespaceReadLoan,
@@ -55,7 +57,7 @@ struct Fields {
     directory: Option<NativeName>,
     sid: Option<NativeSid>,
     directories: Vec<Handle>,
-    directory_causes: [NativeCauseDestinations; 4],
+    directory_causes: [NativeCauseDestinations; DIRECTORY_PINS],
     token: Handle,
     token_causes: NativeCauseDestinations,
     writer: Option<HeldFile<1>>,

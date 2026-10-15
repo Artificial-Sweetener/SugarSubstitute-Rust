@@ -184,3 +184,6 @@ fn foreign_namespace_request_rejects_before_actual_core_reader_admission() -> Te
         Ok(())
     })
 }
+
+#[path = "tests/native_prepare.rs"]
+mod native_prepare;

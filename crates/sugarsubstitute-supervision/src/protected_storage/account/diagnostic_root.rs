@@ -74,7 +74,7 @@ pub(crate) fn resolve(
             path: &path,
             parent: parent_slot,
             mode: directories::Mode::OpenOrCreate,
-            output: None,
+            outputs: None,
         },
         context,
         &mut phase,

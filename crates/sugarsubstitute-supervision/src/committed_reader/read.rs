@@ -128,7 +128,7 @@ fn open(
             Err(missing())
         };
     }
-    super::prepare::prepare(fields, origin)?;
+    super::prepare::prepare(fields, origin, Handle::close_in_phase)?;
     // Reserve the semantic slot before any producer can return a partial output.
     fields.objects[index] = Some(object);
     let name = super::prepare::object_name(fields, origin, object)?;

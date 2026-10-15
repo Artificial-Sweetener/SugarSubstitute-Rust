@@ -172,7 +172,7 @@ impl ProtectedStorageRoot {
                         path: target.path()?,
                         parent,
                         mode: directories::Mode::OpenOrCreate,
-                        output: None,
+                        outputs: None,
                     },
                     context,
                     phase,

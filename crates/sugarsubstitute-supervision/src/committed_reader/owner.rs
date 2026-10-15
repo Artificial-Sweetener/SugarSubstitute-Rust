@@ -64,7 +64,9 @@ impl CommittedDiagnosticReader {
             .control_storage_bytes()
             .checked_add(authority::ReaderAuthority::additional_control_bytes())
             .and_then(|n| n.checked_add(AllocationOrigin::control_bytes()))
-            .and_then(|n| n.checked_add(size_of::<Fields>() + 4 * size_of::<Handle>()));
+            .and_then(|n| {
+                n.checked_add(size_of::<Fields>() + DIRECTORY_PINS * size_of::<Handle>())
+            });
         if controls.is_none_or(|n| n > 64 * 1024) {
             return Err(missing());
         }
@@ -74,7 +76,8 @@ impl CommittedDiagnosticReader {
             authority::ReaderAuthority::new(&request, core.clone()),
         ))
         .map_err(|failure| ClaimError::capture_allocation(failure.cause))?;
-        let allocation = shared(&original, size_of::<Fields>() + 4 * size_of::<Handle>())?;
+        let allocation =
+            shared(&original, size_of::<Fields>() + DIRECTORY_PINS * size_of::<Handle>())?;
         let quota = CaptureOutputQuota::new(shared(
             &original,
             CaptureOutputQuota::control_storage_bytes(),
@@ -88,16 +91,17 @@ impl CommittedDiagnosticReader {
             causes(&original, 3)?,
             causes(&original, 4)?,
             causes(&original, 5)?,
+            causes(&original, 10)?,
         ];
         let mut directories = Vec::new();
-        directories.try_reserve_exact(4).map_err(|cause| {
+        directories.try_reserve_exact(DIRECTORY_PINS).map_err(|cause| {
             main_causes.error(
                 "reader_directory_reserve",
                 crate::claim_error::BoundedNativeCause::Reserve(cause),
                 false,
             )
         })?;
-        if directories.capacity() != 4 {
+        if directories.capacity() != DIRECTORY_PINS {
             return Err(missing());
         }
         let writer_output = Some(output(&original, &quota, 6)?);

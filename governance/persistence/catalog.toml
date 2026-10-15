@@ -83,7 +83,7 @@ migrations = []
 id = "windows-resource-claim-generation"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/native_claims/account.rs", "crates/sugarsubstitute-supervision/src/native_claims/backend_file.rs", "crates/sugarsubstitute-supervision/src/native_claims/files.rs", "crates/sugarsubstitute-supervision/src/native_claims/mod.rs", "crates/sugarsubstitute-supervision/src/native_claims/paths.rs", "crates/sugarsubstitute-supervision/src/native_claims/records.rs", "crates/sugarsubstitute-supervision/src/native_claims/records/storage.rs", "crates/sugarsubstitute-supervision/src/protected_storage/account.rs", "crates/sugarsubstitute-supervision/src/protected_storage/account/namespace_directory.rs", "crates/sugarsubstitute-supervision/src/protected_storage/exclusion.rs", "crates/sugarsubstitute-supervision/src/protected_storage/exclusion/operation.rs", "crates/sugarsubstitute-supervision/src/protected_storage/paths.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/boundary.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/context.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/native.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/native/read.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/native/stage.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/publication.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/retirement.rs", "crates/sugarsubstitute-supervision/src/protected_storage/security.rs", "crates/sugarsubstitute-supervision/src/protected_storage/security/descriptor.rs", "crates/sugarsubstitute-supervision/src/protected_storage/exclusion/reader.rs"]
-source_sha256 = "sha256:5d9f632faf6112ce8246dc2603b54f6238d303d48d5d17c4824b8a0dd2e9c7ea"
+source_sha256 = "sha256:72f32660c2e2d356e580c704dce2cac0fef4771aecd9a1f05b7f99fe847e2012"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 2
@@ -155,7 +155,7 @@ migrations = []
 id = "windows-capture-generation-namespace"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/native_claims/files.rs", "crates/sugarsubstitute-supervision/src/protected_storage.rs", "crates/sugarsubstitute-supervision/src/protected_storage/account.rs", "crates/sugarsubstitute-supervision/src/protected_storage/account/namespace_directory.rs", "crates/sugarsubstitute-supervision/src/protected_storage/directories.rs", "crates/sugarsubstitute-supervision/src/protected_storage/generation.rs", "crates/sugarsubstitute-supervision/src/protected_storage/paths.rs", "crates/sugarsubstitute-supervision/src/protected_storage/security.rs", "crates/sugarsubstitute-supervision/src/protected_storage/security/descriptor.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/context.rs", "crates/sugarsubstitute-supervision/src/protected_storage/account/diagnostic_root.rs"]
-source_sha256 = "sha256:7501bcc99a6332daf2038edf1a921d629cde1dea4fe014705a1e6c1335f65000"
+source_sha256 = "sha256:7836638bc3b70898eaf5df00f122e510f84e135239697f03ba32aea354a1e801"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 1
@@ -244,7 +244,7 @@ sources = [
   "crates/sugarsubstitute-supervision/src/profiles/custody/acknowledgement.rs",
   "crates/sugarsubstitute-supervision/src/profiles/release_observation.rs",
 ]
-source_sha256 = "sha256:daf56d8abb8c35323572a6b9d30aca1685780fb187ac8bdc83bc0460e21304ff"
+source_sha256 = "sha256:e192486c515c53a0ffbf2676327e51fc5dcbb1b9ab708ccb945c713d6d593c05"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 2
@@ -342,7 +342,7 @@ sources = [
   "crates/sugarsubstitute-supervision/src/protected_storage/record_file/native.rs",
   "crates/sugarsubstitute-supervision/src/protected_storage/record_file/streaming/lifecycle.rs",
 ]
-source_sha256 = "sha256:2b26801f5429fa9393a266d331d57ad4c64a0b1975c0edd5d5d018a8df2a5148"
+source_sha256 = "sha256:38bbd4a18a6e8f663528d4eab8f78b3a4f4c0cec814278641a943f8337dbef54"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 1

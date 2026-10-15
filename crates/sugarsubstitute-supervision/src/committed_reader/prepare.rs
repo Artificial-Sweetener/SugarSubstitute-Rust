@@ -27,7 +27,13 @@ fn name(
         )
     })
 }
-pub(super) fn prepare(fields: &mut Fields, original: &AllocationOrigin) -> Result<(), ClaimError> {
+/// Attempt the complete existing-only chain once; retain the original partial owner on failure.
+/// The close boundary uses this same admitted native phase and cannot grant new controls.
+pub(super) fn prepare(
+    fields: &mut Fields,
+    original: &AllocationOrigin,
+    close_verification: directories::VerificationClose,
+) -> Result<(), ClaimError> {
     if fields.ready {
         return Ok(());
     }
@@ -35,13 +41,18 @@ pub(super) fn prepare(fields: &mut Fields, original: &AllocationOrigin) -> Resul
         return Err(fields.failure.clone().unwrap_or_else(missing));
     }
     fields.attempted = true;
-    let result = prepare_once(fields, original);
+    let result = prepare_once(fields, original, close_verification);
     if let Err(cause) = &result {
         fields.failure = Some(cause.clone());
     }
     result
 }
-fn prepare_once(fields: &mut Fields, original: &AllocationOrigin) -> Result<(), ClaimError> {
+/// Resolve actual account/root identities before three counted relative component verifications.
+fn prepare_once(
+    fields: &mut Fields,
+    original: &AllocationOrigin,
+    close_verification: directories::VerificationClose,
+) -> Result<(), ClaimError> {
     let context = fields.context(original)?;
     let mut phase = super::phase(original, &mut fields.scratch, &mut fields.token_causes);
     let (sid, session) = account::resolve_current_cell(
@@ -98,9 +109,14 @@ fn prepare_once(fields: &mut Fields, original: &AllocationOrigin) -> Result<(), 
     )?);
     for depth in (0..3).rev() {
         let index = fields.directories.len();
+        let mut outputs = [None, None];
+        for (offset, slot) in outputs.iter_mut().enumerate() {
+            let causes = &mut fields.directory_causes[index + offset];
+            let output = fields.quota.reserve_selected(causes)?;
+            *slot = Some(Handle::reserve_capture(&mut Some((original.clone(), output)))?);
+        }
+        let [Some(output), Some(verification)] = outputs else { return Err(missing()) };
         let causes = &mut fields.directory_causes[index];
-        let output = fields.quota.reserve_selected(causes)?;
-        let output = Handle::reserve_capture(&mut Some((original.clone(), output)))?;
         let path = fields
             .directory
             .as_ref()
@@ -118,7 +134,11 @@ fn prepare_once(fields: &mut Fields, original: &AllocationOrigin) -> Result<(), 
                 path,
                 parent: index - 1,
                 mode: Mode::Existing,
-                output: Some(output),
+                outputs: Some(directories::CountedDirectoryOutputs {
+                    primary: output,
+                    verification,
+                    close_verification,
+                }),
             },
             &context,
             &mut phase,

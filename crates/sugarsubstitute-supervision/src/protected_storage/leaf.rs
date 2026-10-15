@@ -72,7 +72,7 @@ impl ProtectedStorageRoot {
                 path: &path,
                 parent: parent_index,
                 mode: directories::Mode::OpenOrCreate,
-                output: None,
+                outputs: None,
             },
             context,
             &mut crate::protected_storage::native_phase::NativePhase::ordinary(&state.budget)?,

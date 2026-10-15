@@ -52,12 +52,24 @@ fn disposition(mode: Mode, status: i32, information: usize) -> Option<DirectoryD
         _ => None,
     }
 }
+/// Check one actual canonical verification close while preserving the caller's physical slot.
+pub(crate) type VerificationClose =
+    for<'a> fn(&mut Handle, &mut NativePhase<'a>) -> Result<(), ClaimError>;
+/// Own both counted outputs before the first relative native call.
+pub(crate) struct CountedDirectoryOutputs {
+    /// Permanent same-parent child pin.
+    pub(crate) primary: Handle,
+    /// Distinct canonical reopen retained in the vector until checked closure.
+    pub(crate) verification: Handle,
+    /// Native close boundary evaluated under the same original running phase.
+    pub(crate) close_verification: VerificationClose,
+}
 /// Specify one relative child under its retained actual parent.
 pub(crate) struct RelativeDirectory<'a> {
     pub(crate) path: &'a Path,
     pub(crate) parent: usize,
     pub(crate) mode: Mode,
-    pub(crate) output: Option<Handle>,
+    pub(crate) outputs: Option<CountedDirectoryOutputs>,
 }
 pub(crate) fn open_relative(
     handles: &mut Vec<Handle>,
@@ -67,11 +79,22 @@ pub(crate) fn open_relative(
     context: &JobContext,
     phase: &mut NativePhase<'_>,
 ) -> Result<OpenedDirectory, ClaimError> {
-    let RelativeDirectory { path, parent, mode, output } = directory;
+    let RelativeDirectory { path, parent, mode, outputs } = directory;
+    if matches!(budget, files::Budget::SelectedRelease(_)) && outputs.is_none() {
+        return Err(budget.rejection("directory_counted_outputs_missing"));
+    }
+    if let Some(outputs) = &outputs {
+        phase.check_budget(&outputs.primary.budget())?;
+        phase.check_budget(&outputs.verification.budget())?;
+    }
     phase.context(context)?;
     phase.check_budget(&budget)?;
     paths::validate_local_shape(path).map_err(|operation| phase.invalid(operation))?;
-    if handles.len() == HANDLE_BOUND || handles.len() == handles.capacity() {
+    if handles
+        .len()
+        .checked_add(2)
+        .is_none_or(|needed| needed > HANDLE_BOUND || needed > handles.capacity())
+    {
         return Err(phase.invalid("storage_handle_bound"));
     }
     let parent_raw =
@@ -106,6 +129,12 @@ pub(crate) fn open_relative(
         ..Default::default()
     };
     let index = handles.len();
+    let (output, verification) = match outputs {
+        Some(CountedDirectoryOutputs { primary, verification, close_verification }) => {
+            (Some(primary), Some((verification, close_verification)))
+        }
+        None => (None, None),
+    };
     handles.push(output.unwrap_or_else(|| Handle::new(HANDLE::default(), budget.clone())));
     let mut raw = HANDLE::default();
     let mut io = IO_STATUS_BLOCK::default();
@@ -157,7 +186,21 @@ pub(crate) fn open_relative(
     {
         return Err(phase.invalid("capture_generation_resolution"));
     }
-    paths::verify_pinned(canonical.path()?, identity, handles, true, budget, phase)?;
+    if let Some((verification, close)) = verification {
+        let reopened = handles.len();
+        handles.push(verification);
+        paths::open_cell(canonical.path()?, true, true, &mut handles[reopened], phase)?;
+        if paths::file_identity(&handles[reopened], phase)? != identity {
+            return Err(phase.invalid("changed_canonical_chain"));
+        }
+        close(&mut handles[reopened], phase)?;
+        if handles[reopened].is_armed() {
+            return Err(phase.invalid("canonical_verification_still_owned"));
+        }
+        drop(handles.pop());
+    } else {
+        paths::verify_pinned(canonical.path()?, identity, handles, true, budget, phase)?;
+    }
     phase.context(context)?;
     Ok(OpenedDirectory {
         index,

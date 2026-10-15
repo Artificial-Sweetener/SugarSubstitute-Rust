@@ -258,11 +258,22 @@ impl Handle {
         &mut self,
         phase: &mut crate::protected_storage::native_phase::NativePhase<'_>,
     ) -> Result<(), ClaimError> {
+        self.close_in_phase_using(phase, |raw| {
+            // SAFETY: The same uniquely owned physical output remains armed.
+            unsafe { CloseHandle(raw) }
+        })
+    }
+    /// Check the actual running phase before one native close primitive.
+    /// Uncertain returned closure retains this exact physical cell and its counted credit.
+    pub(crate) fn close_in_phase_using(
+        &mut self,
+        phase: &mut crate::protected_storage::native_phase::NativePhase<'_>,
+        close: impl FnOnce(HANDLE) -> windows::core::Result<()>,
+    ) -> Result<(), ClaimError> {
         phase.check_budget(&self.budget)?;
         phase.check()?;
         self.close_using(|raw| {
-            // SAFETY: The same uniquely owned physical output remains armed.
-            unsafe { CloseHandle(raw) }.map_err(|cause| {
+            close(raw).map_err(|cause| {
                 phase.error("close_handle", crate::claim_error::BoundedNativeCause::Windows(cause))
             })
         })
