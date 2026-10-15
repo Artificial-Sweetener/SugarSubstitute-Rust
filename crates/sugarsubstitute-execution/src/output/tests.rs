@@ -19,6 +19,8 @@ mod ordering;
 mod pending;
 #[path = "retirement_tests.rs"]
 mod retirement;
+#[path = "shutdown_tail_tests.rs"]
+mod shutdown_tail;
 #[test]
 fn both_hidden_streams_drain_with_bounded_payload_and_exact_interleaved_gaps() -> TestResult {
     let rig = Rig::new()?;

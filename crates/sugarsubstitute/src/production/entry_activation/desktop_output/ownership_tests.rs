@@ -60,3 +60,25 @@ fn actual_cancelled_scope_rejects_desktop_output_before_native_effects_and_retai
     drop(owner);
     Ok(())
 }
+
+#[test]
+fn launched_output_drain_uses_only_original_settlement_cutoff() -> Result<()> {
+    use sugarsubstitute_contracts::{execution::Moment, lifecycle::ShutdownBudget};
+    let original = ShutdownBudget::new(Moment::from_nanos(1))?;
+    assert!(drain_deadline_issue(original.started, original, false).is_none());
+    assert!(drain_deadline_issue(original.graceful_until, original, false).is_none());
+    assert!(matches!(
+        drain_deadline_issue(original.settle_until, original, false),
+        Some(Issue::Stopped(TerminalKind::TimedOut))
+    ));
+    Ok(())
+}
+#[test]
+fn checked_natural_retirement_does_not_create_a_late_output_timeout() -> Result<()> {
+    use sugarsubstitute_contracts::{execution::Moment, lifecycle::ShutdownBudget};
+    let original = ShutdownBudget::new(Moment::from_nanos(1))?;
+    assert!(drain_deadline_issue(original.settle_until, original, true).is_none());
+    assert!(terminal_issue(TerminalKind::Cancelled, false).is_some());
+    assert!(terminal_issue(TerminalKind::Failure, true).is_some());
+    Ok(())
+}

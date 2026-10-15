@@ -245,6 +245,30 @@ impl DesktopOutput {
             || actual.queued_chunks != 0
             || actual.pending_loss != [0, 0]
     }
+    /// Preserve launched Desktop tail bytes through actual EOF under the original shutdown cutoff.
+    /// Expiry retains a timeout failure before requesting actual cancellation/checked retirement.
+    pub(super) fn observe_shutdown(
+        &mut self,
+        now: sugarsubstitute_contracts::execution::Moment,
+        budget: sugarsubstitute_contracts::lifecycle::ShutdownBudget,
+        #[cfg(feature = "k1-native-qualification")] current: Option<
+            sugarsubstitute_contracts::startup::MainIdentity,
+        >,
+    ) -> Result<()> {
+        self.observe(
+            #[cfg(feature = "k1-native-qualification")]
+            current,
+        )?;
+        if let Some(cause) = drain_deadline_issue(now, budget, self.settled()) {
+            self.issue.get_or_insert(cause);
+            self.request_close();
+            self.observe(
+                #[cfg(feature = "k1-native-qualification")]
+                current,
+            )?;
+        }
+        Ok(())
+    }
     /// Request cleanup of this actual owner; never infer EOF or native retirement.
     pub(super) fn request_close(&mut self) {
         self.closing = true;
@@ -279,6 +303,14 @@ impl DesktopOutput {
             })
             .or_else(|| self.issue.as_ref().map(|issue| issue as &(dyn Error + 'static)))
     }
+}
+
+fn drain_deadline_issue(
+    now: sugarsubstitute_contracts::execution::Moment,
+    budget: sugarsubstitute_contracts::lifecycle::ShutdownBudget,
+    settled: bool,
+) -> Option<Issue> {
+    (!settled && now >= budget.settle_until).then_some(Issue::Stopped(TerminalKind::TimedOut))
 }
 
 // Successful stream completion is passive EOF/retirement evidence. Only the
