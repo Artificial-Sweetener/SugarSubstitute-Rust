@@ -114,6 +114,8 @@ fn export_unsubmitted_recovery_observes_both_original_held_cancellations() -> Te
     assert_eq!(scopes[2].snapshot().reserved_bytes, 0);
     assert_eq!(scopes[3].snapshot().reserved_bytes, 0);
     assert!(service.take_unsubmitted_input()?.is_none());
+    drop(controller);
+    drop(owner);
     service.release_unsubmitted()?;
     assert_eq!(scopes[0].snapshot().reserved_bytes, 0);
     assert_eq!(scopes[1].snapshot().reserved_bytes, 0);
@@ -163,6 +165,8 @@ fn export_worker_failure_keeps_actual_cause_and_cannot_complete_as_save_failure(
     assert!(!service.expected_receiving_failure());
     assert!(!service.checked_terminal());
     assert!(service.take_terminal().is_none());
+    drop(controller);
+    drop(owner);
     assert_eq!(scope.snapshot().reserved_bytes, 2_097_152 + 131_072);
     drop(service);
     assert_eq!(scope.snapshot().reserved_bytes, 0);
@@ -198,6 +202,8 @@ fn export_typed_cleanup_rejection_stays_strict_and_retains_actual_delivery() -> 
     assert!(!service.checked_terminal());
     assert!(!service.expected_receiving_failure());
     assert!(service.take_terminal().is_none());
+    drop(controller);
+    drop(owner);
     assert_eq!(scope.snapshot().reserved_bytes, 2_097_152 + 32_768);
     drop(service);
     assert_eq!(scope.snapshot().reserved_bytes, 0);

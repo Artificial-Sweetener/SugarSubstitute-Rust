@@ -8,6 +8,7 @@ mod launch;
 mod migration;
 mod proof;
 pub(crate) mod record;
+mod release_observation;
 mod storage;
 mod submission;
 #[cfg(test)]

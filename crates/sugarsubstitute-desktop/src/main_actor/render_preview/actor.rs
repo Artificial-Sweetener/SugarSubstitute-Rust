@@ -165,14 +165,8 @@ impl MainActor {
             return Some(self.preview_failure(NativePhase::Revalidate, cause));
         }
         let owner = self.preview.as_mut()?;
-        if !owner.matches(current.snapshot, &current.core) {
-            return Some(self.preview_failure(
-                NativePhase::Revalidate,
-                DesktopError::message(
-                    "complete_main_preview",
-                    "captured native document or viewport changed",
-                ),
-            ));
+        if let Err(cause) = owner.validate_current(current.snapshot, &current.core) {
+            return Some(self.preview_failure(NativePhase::Revalidate, cause));
         }
         match owner.take() {
             Ok(Some(image)) => Some(DesktopStartupObservation::MainPreviewCaptured(image)),

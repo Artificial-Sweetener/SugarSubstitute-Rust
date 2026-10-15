@@ -155,6 +155,7 @@ impl Fixture {
             client: client.clone(),
             clock: clock.clone(),
             finished: false,
+            finish_status: BackendCustodyFinishStatus::Unissued,
             failure: None,
             cleanup_failure: false,
             family_retired: false,
@@ -204,6 +205,7 @@ pub(super) struct Port {
     client: ExecutionClient,
     clock: Arc<TestClock>,
     pub(super) finished: bool,
+    pub(super) finish_status: BackendCustodyFinishStatus,
     pub(super) failure: Option<NativeObservationError>,
     pub(super) cleanup_failure: bool,
     pub(super) family_retired: bool,
@@ -232,6 +234,9 @@ impl Boundary for Port {
         }
         self.events.push(if self.finished { Event::Finished } else { Event::FinishPending });
         Ok(self.finished)
+    }
+    fn finish_status(&self) -> BackendCustodyFinishStatus {
+        self.finish_status
     }
     fn retire_family(&mut self, budget: ShutdownBudget) -> Result<bool> {
         if let Some(original) = self.original {

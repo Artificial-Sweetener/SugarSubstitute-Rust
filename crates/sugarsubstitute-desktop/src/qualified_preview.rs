@@ -6,7 +6,7 @@ use crate::{
     MainIdentity,
     main_readiness_types::{DocumentId, RenderDocument},
 };
-use std::sync::Arc;
+use std::{error::Error, fmt, sync::Arc};
 use sugarsubstitute_contracts::{
     configuration::LoopbackOrigin,
     execution::{CounterDeadline, MemoryClaim},
@@ -48,6 +48,41 @@ impl MainPreviewViewport {
     }
 }
 
+/// Closed source differences carry no document payload, path or native capability.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum PreviewMismatch {
+    Document,
+    Navigation,
+    Browser,
+    Viewport,
+    Dpi,
+    Origin,
+    Versions,
+    Deadline,
+    NativeView,
+}
+impl PreviewMismatch {
+    /// Preserve the precise original category under an existing bounded diagnostic operation.
+    /// The Host's closed decoder relays these operations without a protocol or capacity change.
+    pub(crate) fn into_error(self) -> crate::DesktopError {
+        let operation = match self {
+            Self::Document | Self::Navigation | Self::Origin => "observe_preview_content",
+            Self::Browser | Self::NativeView => "observe_preview_browser",
+            Self::Viewport => "observe_preview_bounds",
+            Self::Dpi => "observe_preview_dpi",
+            Self::Versions => "observe_preview_versions",
+            Self::Deadline => "observe_preview_cutoff",
+        };
+        crate::DesktopError::new(operation, self)
+    }
+}
+impl fmt::Display for PreviewMismatch {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "Native preview source changed: {self:?}")
+    }
+}
+impl Error for PreviewMismatch {}
+
 /// Immutable observations from the exact owned main view at native capture admission.
 /// These facts establish no active-display composition, focus, input or Mica appearance.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -62,16 +97,34 @@ pub struct MainPreviewSnapshot {
     pub(crate) issued_qpc: i64,
 }
 impl MainPreviewSnapshot {
-    /// Bind publication to the same original document, native view facts and finite source.
-    /// A later observation time does not itself change an otherwise identical source.
-    pub(crate) fn same_source(self, current: Self) -> bool {
-        self.document == current.document
-            && self.native_navigation == current.native_navigation
-            && self.browser_pid == current.browser_pid
-            && self.viewport == current.viewport
-            && self.origin == current.origin
-            && self.versions == current.versions
-            && self.source_deadline == current.source_deadline
+    /// Revalidate every original document, viewport and finite source fact before publication.
+    /// A later observation time preserves the same source; failure keeps both snapshots unchanged.
+    pub(crate) fn validate_current(self, current: Self) -> Result<(), PreviewMismatch> {
+        if self.document != current.document {
+            return Err(PreviewMismatch::Document);
+        }
+        if self.native_navigation != current.native_navigation {
+            return Err(PreviewMismatch::Navigation);
+        }
+        if self.browser_pid != current.browser_pid {
+            return Err(PreviewMismatch::Browser);
+        }
+        if self.viewport.dpi != current.viewport.dpi {
+            return Err(PreviewMismatch::Dpi);
+        }
+        if self.viewport != current.viewport {
+            return Err(PreviewMismatch::Viewport);
+        }
+        if self.origin != current.origin {
+            return Err(PreviewMismatch::Origin);
+        }
+        if self.versions != current.versions {
+            return Err(PreviewMismatch::Versions);
+        }
+        if self.source_deadline != current.source_deadline {
+            return Err(PreviewMismatch::Deadline);
+        }
+        Ok(())
     }
     /// Return the exact authenticated application's main run, launch and navigation identity.
     pub const fn identity(self) -> MainIdentity {

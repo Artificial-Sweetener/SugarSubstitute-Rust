@@ -3,6 +3,16 @@
 //! Correlate checked resource and witness retirement under their original cutoffs.
 use super::*;
 use sugarsubstitute_contracts::lifecycle::ResourceKey;
+/// Passive facts about the original Finish request; none authorizes native work.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BackendCustodyFinishStatus {
+    /// A callback currently owns state or the original owner has retired.
+    Unavailable,
+    /// The actual request owner has not allocated a Finish nonce.
+    Unissued,
+    /// The original semantic request was queued with this unchanged nonce.
+    Issued(u64),
+}
 #[derive(Clone, Copy)]
 pub(super) struct Registration {
     pub(super) resource: ResourceKey,
@@ -10,6 +20,21 @@ pub(super) struct Registration {
     pub(super) released: Option<ReceiptFacts>,
 }
 impl BackendCustodyParent {
+    /// Borrow the actual original Finish nonce without consuming facts or checking fresh admission.
+    /// A temporarily borrowed callback state remains unknown rather than implying no request.
+    pub fn finish_status(&self) -> BackendCustodyFinishStatus {
+        self.state
+            .as_ref()
+            .and_then(|owner| {
+                lock(owner).as_ref().map(|state| {
+                    state.finish.as_ref().and_then(finish::Finish::nonce).map_or(
+                        BackendCustodyFinishStatus::Unissued,
+                        BackendCustodyFinishStatus::Issued,
+                    )
+                })
+            })
+            .unwrap_or(BackendCustodyFinishStatus::Unavailable)
+    }
     /// Request actual same-generation release after the parent writer is closed.
     /// Returns true only for no adopted registration or its correlated Released receipt.
     /// # Errors

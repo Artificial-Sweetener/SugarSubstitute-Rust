@@ -7,6 +7,7 @@ use sugarsubstitute_contracts::execution::{JobCompletion, JobOutcome, TerminalKi
 use sugarsubstitute_execution::{
     backend_custody::BackendCustodyPipeReport, windows_lifecycle_pipe::LifecyclePipeFailure,
 };
+use sugarsubstitute_supervision::BackendCustodyFinishStatus;
 type Terminal = JobCompletion<BackendCustodyPipeReport, LifecyclePipeFailure>;
 /// Borrow real native adapters; returned facts do not grant fresh admission.
 trait Boundary {
@@ -14,6 +15,8 @@ trait Boundary {
     fn observe(&mut self) -> Result<()>;
     /// Consume the actual original Finished fact; pending prior responses keep this false.
     fn finish(&mut self, until: Moment) -> Result<bool>;
+    /// Borrow the actual original nonce; unavailable state cannot imply never issued.
+    fn finish_status(&self) -> BackendCustodyFinishStatus;
     /// Begin and advance the exact registered helper family with its immutable budget.
     fn retire_family(&mut self, budget: ShutdownBudget) -> Result<bool>;
     /// Close the original pipe only after its helper family has actually retired.
@@ -77,7 +80,11 @@ impl Retirement {
             }
         }
         if ready && !self.finish_received && now >= original.settle_until {
-            failure = Some(Box::new(RetirementRejected::FinishExpired(original.settle_until)));
+            failure = Some(Box::new(RetirementRejected::FinishExpired {
+                until: original.settle_until,
+                profiles_retired,
+                status: port.finish_status(),
+            }));
         }
         if ready && !self.finish_received && failure.is_none() {
             return Ok(());
@@ -196,7 +203,7 @@ where
 #[derive(Debug)]
 enum RetirementRejected {
     MissingFinished,
-    FinishExpired(Moment),
+    FinishExpired { until: Moment, profiles_retired: bool, status: BackendCustodyFinishStatus },
     ForeignKey,
     FamilyPending,
     Terminal(TerminalKind),
@@ -207,10 +214,23 @@ impl std::fmt::Display for RetirementRejected {
             Self::MissingFinished => {
                 formatter.write_str("Original helper Finished acknowledgement is missing")
             }
-            Self::FinishExpired(until) => write!(
-                formatter,
-                "Original helper Finished acknowledgement absent at cutoff {until:?}"
-            ),
+            Self::FinishExpired { until, profiles_retired, status } => match status {
+                BackendCustodyFinishStatus::Unissued if !profiles_retired => write!(
+                    formatter,
+                    "Original helper Finish not issued: profile retirement pending at cutoff {until:?}"
+                ),
+                BackendCustodyFinishStatus::Unissued => {
+                    write!(formatter, "Original helper Finish not issued before cutoff {until:?}")
+                }
+                BackendCustodyFinishStatus::Issued(nonce) => write!(
+                    formatter,
+                    "Original helper Finish nonce {nonce} queued; Finished acknowledgement absent at cutoff {until:?}"
+                ),
+                BackendCustodyFinishStatus::Unavailable => write!(
+                    formatter,
+                    "Original helper Finish state unavailable at cutoff {until:?}"
+                ),
+            },
             Self::ForeignKey => formatter.write_str("Original custody terminal has a foreign key"),
             Self::FamilyPending => formatter.write_str("Original helper family remains owned"),
             Self::Terminal(kind) => {

@@ -17,6 +17,7 @@ mod retirement;
 mod state;
 pub use error::{BackendCustodyParentFailure, BackendCustodyParentInputError};
 use receipt::StoredReceipt;
+pub use retirement::BackendCustodyFinishStatus;
 use state::{State, reject};
 /// Keep the complete actual controller allocation before its original pipe metadata.
 pub struct BackendCustodyParent {

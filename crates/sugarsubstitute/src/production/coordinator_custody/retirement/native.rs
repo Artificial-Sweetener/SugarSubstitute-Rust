@@ -20,6 +20,9 @@ impl Boundary for Native<'_, '_> {
             .advance_finish(self.resources.client, until)
             .map_err(|cause| diagnostics::failed("finish_exchange", cause))
     }
+    fn finish_status(&self) -> BackendCustodyFinishStatus {
+        self.parent.finish_status()
+    }
     fn retire_family(&mut self, original: ShutdownBudget) -> Result<bool> {
         if let Some(ticket) = *self.ticket {
             let registry =

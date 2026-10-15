@@ -22,6 +22,8 @@ mod normal_close;
 pub(crate) use normal_close::NormalCloseRequest;
 #[path = "parent_lifecycle/output.rs"]
 mod output;
+#[path = "parent_lifecycle/profile_observation.rs"]
+mod profile_observation;
 #[path = "parent_lifecycle/receive.rs"]
 mod receive;
 #[path = "parent_lifecycle/replies.rs"]

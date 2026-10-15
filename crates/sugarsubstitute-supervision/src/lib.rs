@@ -78,8 +78,8 @@ pub use claim_error::{ClaimAdmissionError, ClaimError};
 mod backend_custody_parent;
 #[cfg(windows)]
 pub use backend_custody_parent::{
-    BackendCustodyAcknowledgement, BackendCustodyParent, BackendCustodyParentFailure,
-    BackendCustodyParentInputError,
+    BackendCustodyAcknowledgement, BackendCustodyFinishStatus, BackendCustodyParent,
+    BackendCustodyParentFailure, BackendCustodyParentInputError,
 };
 #[cfg(windows)]
 pub use claim_types::{

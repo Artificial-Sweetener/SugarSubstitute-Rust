@@ -86,10 +86,22 @@ fn actual_released_pending_profile_blocks_finish_until_original_job_consumption(
     )?;
     assert_eq!(fixture.port.events, vec![Event::Observe]);
     assert!(!owner.finish_received && !owner.pipe_closed && !owner.settled);
-    let actual = profile.consume(&batch)?.ok_or("Original release result absent")?;
-    assert_eq!(actual.job, release);
-    assert_eq!(actual.kind, TerminalKind::Success);
-    assert!(actual.failure.is_none());
+    let parent_storage = crate::production::coordinator_backend::tests::storage_tests::claim(
+        crate::production::parent_lifecycle::ParentLifecycle::storage_bytes(),
+    )?;
+    let mut desktop_parent = crate::production::parent_lifecycle::ParentLifecycle::new(
+        run,
+        sugarsubstitute_contracts::startup::LaunchId::new(1)?,
+        sugarsubstitute_contracts::configuration::ProfileId::new("Retire_1".into())?,
+        ConnectionId::new(1)?,
+        sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeDeadline::new(
+            30_000_000_000,
+            1_000_000_000,
+        )?,
+        parent_storage,
+    )?;
+    assert!(desktop_parent.profile_completion(&batch, &mut profile)?.is_none());
+    assert!(profile.snapshot().retirement_ready());
     owner.advance(
         budget,
         true,

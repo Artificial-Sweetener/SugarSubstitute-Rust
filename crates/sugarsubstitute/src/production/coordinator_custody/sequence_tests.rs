@@ -91,7 +91,7 @@ fn original_cutoff_without_finished_preserves_failed_owned_cleanup() -> TestResu
         .advance(budget, true, true, fixture.client.now()?, key()?, &mut fixture.port)
         .err()
         .ok_or("Missing Finished accepted")?;
-    assert!(cause.source().and_then(|value|value.downcast_ref::<RetirementRejected>()).is_some_and(|value|matches!(value,RetirementRejected::FinishExpired(until) if *until==budget.settle_until)));
+    assert!(cause.source().and_then(|value|value.downcast_ref::<RetirementRejected>()).is_some_and(|value|matches!(value,RetirementRejected::FinishExpired { until, profiles_retired:true, status:BackendCustodyFinishStatus::Unissued } if *until==budget.settle_until)));
     assert_eq!(fixture.port.events, vec![Event::FinishPending, Event::Stop, Event::ExpiredCleanup]);
     assert_eq!(fixture.port.original, Some(budget));
     assert!(!owner.settled && !owner.finish_received && owner.terminal.is_none());
@@ -113,6 +113,38 @@ fn changed_original_budget_rejects_before_another_external_effect() -> TestResul
     );
     assert_eq!(owner.original, Some(budget));
     assert_eq!(fixture.port.events, before);
+    Ok(())
+}
+
+#[test]
+fn original_finish_cutoff_distinguishes_profile_fence_unissued_and_queued_nonce() -> TestResult {
+    for (profiles_retired, status, text) in [
+        (false, BackendCustodyFinishStatus::Unissued, "profile retirement pending"),
+        (true, BackendCustodyFinishStatus::Unissued, "Finish not issued before cutoff"),
+        (true, BackendCustodyFinishStatus::Issued(7), "Finish nonce 7 queued"),
+        (false, BackendCustodyFinishStatus::Unavailable, "Finish state unavailable"),
+    ] {
+        let mut fixture = Fixture::new(None)?;
+        fixture.port.finish_status = status;
+        let budget = ShutdownBudget::new(Moment::from_nanos(0))?;
+        let mut owner = Retirement::default();
+        owner.advance(budget, true, profiles_retired, budget.started, key()?, &mut fixture.port)?;
+        fixture.clock.set(budget.settle_until);
+        let cause = owner
+            .advance(budget, true, profiles_retired, budget.settle_until, key()?, &mut fixture.port)
+            .err()
+            .ok_or("Cutoff admitted a missing Finished")?;
+        let original = cause
+            .source()
+            .and_then(|source| source.downcast_ref::<RetirementRejected>())
+            .ok_or("Original cutoff cause replaced")?;
+        assert!(matches!(original, RetirementRejected::FinishExpired {
+            until, profiles_retired: actual_profiles, status: actual_status,
+        } if *until == budget.settle_until && *actual_profiles == profiles_retired && *actual_status == status));
+        assert!(original.to_string().contains(text));
+        assert!(!owner.finish_received && !owner.pipe_closed && !owner.settled);
+        assert_eq!(owner.original, Some(budget));
+    }
     Ok(())
 }
 #[test]

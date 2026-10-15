@@ -286,6 +286,9 @@ impl MainActor {
         self.window()?.set_visible(true);
         self.window()?.set_focus();
         self.view()?.focus().map_err(|cause| DesktopError::new("focus_main_view", cause))?;
+        // Native show/focus can resize the container before Tao delivers its queued resize event.
+        // Restore this actor's caption inset before publishing reveal or sealing a capture.
+        self.resize()?;
         self.confirm_visible()?;
         self.revealed = true;
         #[cfg(feature = "k1-native-qualification")]

@@ -146,9 +146,19 @@ impl Capture {
         .map_err(|cause| DesktopError::new("capture_main_preview", cause))
     }
 
-    /// Match this exact retained source and immutable current-document/viewport facts.
-    pub(super) fn matches(&self, current: MainPreviewSnapshot, core: &ICoreWebView2) -> bool {
-        (*self.snapshot).same_source(current) && core.as_raw() == self.core.as_raw()
+    /// Reject changed source facts without moving the original callback, image or storage.
+    pub(super) fn validate_current(
+        &self,
+        current: MainPreviewSnapshot,
+        core: &ICoreWebView2,
+    ) -> Result<(), DesktopError> {
+        self.snapshot
+            .validate_current(current)
+            .map_err(crate::qualified_preview::PreviewMismatch::into_error)?;
+        if core.as_raw() != self.core.as_raw() {
+            return Err(crate::qualified_preview::PreviewMismatch::NativeView.into_error());
+        }
+        Ok(())
     }
 
     /// Observe actual callback completion separately from a successful image publication.

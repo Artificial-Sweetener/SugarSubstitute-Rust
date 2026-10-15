@@ -242,8 +242,9 @@ sources = [
   "crates/sugarsubstitute-supervision/src/native_claims/backend_custody/profile_commands.rs",
   "crates/sugarsubstitute-supervision/src/profiles/custody/preparation.rs",
   "crates/sugarsubstitute-supervision/src/profiles/custody/acknowledgement.rs",
+  "crates/sugarsubstitute-supervision/src/profiles/release_observation.rs",
 ]
-source_sha256 = "sha256:a82a4d9b9e5b4dbb5d43bd1ce9c420ac63d373b0e6e5f106e32ff0ea1a24c675"
+source_sha256 = "sha256:daf56d8abb8c35323572a6b9d30aca1685780fb187ac8bdc83bc0460e21304ff"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 2

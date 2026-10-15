@@ -4,6 +4,7 @@
 mod acknowledgement_retirement;
 #[path = "attempt_tests.rs"]
 mod attempt_tests;
+mod release_observation;
 mod release_progress;
 mod support;
 use super::*;

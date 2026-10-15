@@ -40,7 +40,7 @@ fn current_observation_time_keeps_original_cutoff_without_granting_a_new_source(
     let original = snapshot()?;
     let mut current = original;
     current.issued_qpc = 18;
-    assert!(original.same_source(current));
+    assert!(original.validate_current(current).is_ok());
     assert_eq!(original.source_deadline(), CounterDeadline::new(100, 10)?);
     Ok(())
 }
@@ -64,7 +64,88 @@ fn every_changed_document_viewport_or_source_fact_rejects_publication() -> TestR
     changes[12].versions[1] = DocumentId::new("0.16.0")?;
     changes[13].source_deadline = CounterDeadline::new(101, 10)?;
     for current in changes {
-        assert!(!original.same_source(current));
+        assert!(original.validate_current(current).is_err());
+    }
+    Ok(())
+}
+
+#[test]
+fn changed_viewport_or_dpi_has_closed_native_diagnostic_and_retains_original_cutoff() -> TestResult
+{
+    use crate::qualification_trace::{NativeFailure, NativePhase};
+    let original = snapshot()?;
+    let mut observed = [original; 5];
+    observed[0].viewport.left += 1;
+    observed[1].viewport.top += 1;
+    observed[2].viewport.width += 1;
+    observed[3].viewport.height += 1;
+    observed[4].viewport.dpi += 1;
+    for (index, current) in observed.into_iter().enumerate() {
+        let mismatch = original.validate_current(current).err().ok_or("Stale viewport admitted")?;
+        assert_eq!(
+            mismatch,
+            if index == 4 { PreviewMismatch::Dpi } else { PreviewMismatch::Viewport }
+        );
+        let error = mismatch.into_error();
+        let detail = NativeFailure::from_error(NativePhase::Revalidate, &error);
+        assert_eq!(detail.phase, NativePhase::Revalidate);
+        assert_eq!(
+            detail.operation,
+            if index == 4 { "observe_preview_dpi" } else { "observe_preview_bounds" }
+        );
+        assert_eq!(detail.hresult, None);
+        assert_eq!(
+            error.source().and_then(|cause| cause.downcast_ref::<PreviewMismatch>()),
+            Some(&mismatch)
+        );
+        assert_eq!(original, snapshot()?);
+        assert_eq!(original.source_deadline(), CounterDeadline::new(100, 10)?);
+    }
+    Ok(())
+}
+
+#[test]
+fn changed_source_diagnostic_never_formats_native_document_or_version_payload() -> TestResult {
+    use crate::qualification_trace::{NativeFailure, NativePhase};
+    let original = snapshot()?;
+    let mut observed = [original; 7];
+    observed[0].document.frame = DocumentId::new("retained-private-frame")?;
+    observed[1].document.loader = DocumentId::new("retained-private-loader")?;
+    observed[2].native_navigation += 1;
+    observed[3].browser_pid += 1;
+    observed[4].origin = LoopbackOrigin::parse("http://127.0.0.1:8189/", 8189)?;
+    observed[5].versions[0] = DocumentId::new("retained-private-version")?;
+    observed[6].source_deadline = CounterDeadline::new(101, 10)?;
+    let expected = [
+        PreviewMismatch::Document,
+        PreviewMismatch::Document,
+        PreviewMismatch::Navigation,
+        PreviewMismatch::Browser,
+        PreviewMismatch::Origin,
+        PreviewMismatch::Versions,
+        PreviewMismatch::Deadline,
+    ];
+    let operations = [
+        "observe_preview_content",
+        "observe_preview_content",
+        "observe_preview_content",
+        "observe_preview_browser",
+        "observe_preview_content",
+        "observe_preview_versions",
+        "observe_preview_cutoff",
+    ];
+    for ((current, expected), operation) in observed.into_iter().zip(expected).zip(operations) {
+        let mismatch = original.validate_current(current).err().ok_or("Foreign source admitted")?;
+        assert_eq!(mismatch, expected);
+        let error = mismatch.into_error();
+        let diagnostic = error.to_string();
+        assert!(!diagnostic.contains("retained-private"));
+        assert!(!diagnostic.contains("127.0.0.1"));
+        let detail = NativeFailure::from_error(NativePhase::Revalidate, &error);
+        assert_eq!(detail.phase, NativePhase::Revalidate);
+        assert_eq!(detail.operation, operation);
+        assert_eq!(detail.hresult, None);
+        assert_eq!(original, snapshot()?);
     }
     Ok(())
 }

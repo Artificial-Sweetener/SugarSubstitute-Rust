@@ -95,6 +95,8 @@ fn export_metadata_is_inside_original_controller_credit_until_actual_disposal() 
         return Err("controller worker failed".into());
     };
     drop(completion.memory);
+    drop(job);
+    drop(owner);
     assert!(service.take_terminal().is_none());
     assert_eq!(scope.snapshot().reserved_bytes, 2_097_152);
     drop(other);
@@ -124,6 +126,7 @@ fn export_delivery_requires_actual_matching_terminal_then_retains_original_memor
     assert!(delivery.succeeded());
     assert!(delivery.job.is_none());
     assert_eq!(scope.snapshot().terminal_unobserved, 0);
+    drop(owner);
     assert_eq!(scope.snapshot().reserved_bytes, 131_072);
     drop(delivery);
     assert_eq!(scope.snapshot().reserved_bytes, 0);
@@ -190,6 +193,8 @@ fn export_capture_feeds_other_real_deliveries_after_first_lane_identity_failure(
     assert_eq!(service.capture(&batch), Err(ExportIssue::Identity));
     assert!(service.delivery[0].completion.is_some());
     assert!(service.receipt().is_none());
+    drop(controller);
+    drop(owner);
     drop(service);
     assert_eq!(scope.snapshot().reserved_bytes, 0);
     Ok(())

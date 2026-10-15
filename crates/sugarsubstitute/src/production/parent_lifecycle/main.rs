@@ -99,12 +99,10 @@ impl ParentLifecycle {
         batch: &CompletionBatch,
         resources: &mut ParentResources<'_, '_>,
     ) -> Result<()> {
-        let Some(pending) = &self.profile_pending else {
+        let Some(completion) = self.profile_completion(batch, resources.profile)? else {
             return Ok(());
         };
-        let Some(completion) = resources.profile.consume(batch)? else {
-            return Ok(());
-        };
+        let pending = self.profile_pending.as_ref().ok_or(ParentError::WrongPhase)?;
         if completion.job != pending.job {
             return Err(profile_rejection("CompletionJobMismatch").into());
         }
