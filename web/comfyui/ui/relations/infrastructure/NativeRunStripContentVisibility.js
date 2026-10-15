@@ -19,16 +19,16 @@ import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
 export class NativeRunStripContentVisibility {
     #element = null;
     #observer = null;
-    /** Reconcile the identified legacy container when docking or replacing native chrome. */
+    /** Bind a new native surface; its scoped observer owns subsequent content refreshes. */
     mount(actionbar) {
         const element = actionbar?.querySelector(':scope > [data-testid="legacy-topbar-container"]') ??
             null;
-        if (element !== this.#element) {
-            this.dispose();
-            this.#element = element;
-            if (element)
-                this.#observer = new HostSurfaceObserver(element, '[data-testid="legacy-topbar-container"]', () => this.#reconcile(), { content: true, characterData: true, attributes: ['class', 'style', 'hidden'] });
-        }
+        if (element === this.#element)
+            return;
+        this.dispose();
+        this.#element = element;
+        if (element)
+            this.#observer = new HostSurfaceObserver(element, '[data-testid="legacy-topbar-container"]', () => this.#reconcile(), { content: true, characterData: true, attributes: ['class', 'style', 'hidden'] });
         this.#reconcile();
     }
     /** Release observation and restore the native container's own visibility policy. */

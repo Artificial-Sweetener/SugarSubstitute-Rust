@@ -74,6 +74,7 @@ export class RelationHostLifecycle {
   #configuring = false;
   #generation = 0;
   #unsubscribeChoices: (() => void) | null = null;
+  #presentationFrame: number | null = null;
 
   /** Compose explicit collaborators against the root workflow rather than the navigated canvas graph. */
   constructor(private readonly options: RelationHostOptions) {
@@ -151,7 +152,7 @@ export class RelationHostLifecycle {
     ensureRelationStyles(this.options.document);
     const changed = (changes: readonly HostSurfaceChange[]): void => {
       this.#views.invalidate(changes.map((change) => change.element));
-      if (!this.#rendering) this.#present();
+      if (!this.#rendering) this.#schedulePresentation();
     };
     this.#presence = new HostSurfaceObserver(
       this.options.document.body,
@@ -177,6 +178,9 @@ export class RelationHostLifecycle {
     this.#configuring = true;
     this.#seedMenus.close();
     this.#generation++;
+    if (this.#presentationFrame !== null)
+      this.options.document.defaultView?.cancelAnimationFrame(this.#presentationFrame);
+    this.#presentationFrame = null;
     this.#pending = false;
     this.#valuesPending = false;
     for (const observer of this.#graphs.values()) observer.dispose();
@@ -349,12 +353,39 @@ export class RelationHostLifecycle {
         this.#port.save(snapshot.state);
       const changed = this.#visibility.reconcile(snapshot, this.#port.inventorySource);
       if (changed.length) this.#port.refresh(changed);
-      this.#toolbar.reconcile();
-      this.#cards.reconcile();
+      this.#schedulePresentation();
     } finally {
       this.#presence?.discardPending();
       this.#chromePresence?.discardPending();
       this.#rendering = false;
+    }
+  }
+
+  /** Project settled native surfaces once per frame while keeping history and effective values immediate. */
+  #schedulePresentation(): void {
+    if (!this.#active || this.#configuring || this.#presentationFrame !== null) return;
+    const generation = this.#generation;
+    const render = (): void => {
+      if (generation !== this.#generation) return;
+      this.#presentationFrame = null;
+      if (!this.#active || this.#configuring) return;
+      this.#rendering = true;
+      try {
+        this.#toolbar.reconcile();
+        this.#cards.reconcile();
+      } catch (error: unknown) {
+        this.options.reportError(error);
+      } finally {
+        this.#presence?.discardPending();
+        this.#chromePresence?.discardPending();
+        this.#rendering = false;
+      }
+    };
+    const windowRef = this.options.document.defaultView;
+    if (windowRef) this.#presentationFrame = windowRef.requestAnimationFrame(render);
+    else {
+      this.#presentationFrame = -1;
+      queueMicrotask(render);
     }
   }
 }

@@ -17,6 +17,7 @@
 import { afterAll, afterEach, beforeAll, expect, jest, test } from '@jest/globals';
 import { Updates } from '@microsoft/fast-element';
 import { WorkflowTabsView } from '../../../frontend/comfyui/ui/surface/frame/WorkflowTabsView.js';
+import { WorkflowTabPointerDrag } from '../../../frontend/comfyui/ui/surface/frame/WorkflowTabPointerDrag.js';
 import { substituteFrameCss } from '../../../frontend/comfyui/ui/surface/frame/SubstituteFrameStyles.js';
 import { workflowSessionId } from '../../../frontend/comfyui/ui/execution/domain/ExecutionIdentity.js';
 
@@ -79,12 +80,8 @@ function pointer(
 
 test('pointer movement animates a transient permutation and commits once on release', async () => {
   const viewport = document.createElement('div');
-  const capture = jest.fn();
   Object.defineProperties(viewport, {
     clientWidth: { value: 540 },
-    setPointerCapture: { value: capture },
-    hasPointerCapture: { value: () => true },
-    releasePointerCapture: { value: jest.fn() },
   });
   jest.spyOn(viewport, 'getBoundingClientRect').mockImplementation(() => ({
     x: 0,
@@ -122,6 +119,7 @@ test('pointer movement animates a transient permutation and commits once on rele
   const ids = tabs.map((tab) => `sc-workflow-${tab.id}`);
   const a = document.getElementById(ids[0]!)!;
   const b = document.getElementById(ids[1]!)!;
+  const capture = captureBoundary([viewport, a, b]);
   pointer(a, 'pointerdown', 50);
   pointer(viewport, 'pointermove', 230);
   expect(viewport.hasAttribute('data-sc-tab-dragging')).toBe(true);
@@ -133,6 +131,93 @@ test('pointer movement animates a transient permutation and commits once on rele
   expect(reorder).toHaveBeenCalledTimes(1);
   expect(reorder).toHaveBeenCalledWith(0, 1);
   expect([...view.element.children].map((e) => e.id)).toEqual([ids[1], ids[0], ids[2]]);
-  expect(capture).toHaveBeenCalledWith(1);
+  expect(capture.record).toHaveBeenCalledWith(a, 1);
   view.dispose();
 });
+
+test('stationary captured presses retain the native control as the browser click target', () => {
+  const viewport = document.createElement('div');
+  const list = document.createElement('div');
+  const activate = jest.fn();
+  const reorder = jest.fn();
+  const tabs = ['a', 'b'].map((id) => {
+    const tab = document.createElement('button');
+    tab.id = id;
+    tab.addEventListener('click', () => activate(id));
+    return tab;
+  });
+  list.append(...tabs);
+  viewport.append(list);
+  document.body.append(viewport);
+  const drag = new WorkflowTabPointerDrag(viewport, list, reorder, jest.fn(), jest.fn());
+  drag.afterUpdate(tabs, null);
+  const pressed = tabs[1]!;
+  const capture = captureBoundary([viewport, ...tabs]);
+  try {
+    pointer(pressed, 'pointerdown', 230);
+    // Browsers determine the compatibility click target from pointerup's capture target.
+    const releaseTarget = capture.owner ?? pressed;
+    pointer(releaseTarget, 'pointerup', 230, { buttons: 0 });
+    releaseTarget.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    expect(activate).toHaveBeenCalledTimes(1);
+    expect(activate).toHaveBeenCalledWith('b');
+    expect(reorder).not.toHaveBeenCalled();
+    expect(capture.owner).toBeNull();
+  } finally {
+    drag.dispose();
+  }
+});
+
+test('middle-button release closes once even when the host omits auxclick', async () => {
+  const viewport = document.createElement('div');
+  document.body.append(viewport);
+  const close = jest.fn();
+  const id = workflowSessionId('middle-close');
+  const view = new WorkflowTabsView(
+    document,
+    { activate: jest.fn(), close, reorder: jest.fn(), create: jest.fn(), report: jest.fn() },
+    viewport,
+  );
+  viewport.append(view.element);
+  view.update([{ id, title: 'Close me', selected: true, modified: false }], () => false);
+  await Updates.next();
+  const tab = document.getElementById(`sc-workflow-${id}`)!;
+  try {
+    tab.dispatchEvent(new MouseEvent('mouseup', { button: 0, bubbles: true }));
+    tab.dispatchEvent(new MouseEvent('mouseup', { button: 2, bubbles: true }));
+    expect(close).not.toHaveBeenCalled();
+    tab.dispatchEvent(new MouseEvent('mouseup', { button: 1, bubbles: true }));
+    expect(close).toHaveBeenCalledWith(id);
+    tab.dispatchEvent(new MouseEvent('auxclick', { button: 1, bubbles: true }));
+    expect(close).toHaveBeenCalledTimes(1);
+  } finally {
+    view.dispose();
+  }
+});
+
+/** Model the browser's exclusive capture owner, which JSDOM does not implement. */
+function captureBoundary(elements: readonly HTMLElement[]) {
+  let owner: HTMLElement | null = null;
+  const record = jest.fn<(element: HTMLElement, pointerId: number) => void>();
+  for (const element of elements)
+    Object.defineProperties(element, {
+      setPointerCapture: {
+        value: (id: number) => {
+          owner = element;
+          record(element, id);
+        },
+      },
+      hasPointerCapture: { value: () => owner === element },
+      releasePointerCapture: {
+        value: () => {
+          owner = null;
+        },
+      },
+    });
+  return {
+    record,
+    get owner() {
+      return owner;
+    },
+  };
+}

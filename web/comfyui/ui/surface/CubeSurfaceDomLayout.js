@@ -36,9 +36,10 @@ export function layoutCubeSurfaceDom(options) {
         : 0;
     const masonryWidth = Math.max(1, safeWidth - (canShowPreviewRail ? previewWidth + CUBE_DOM_SURFACE_SECTION_GAP : 0));
     const stackPreview = previewEnabled && !canShowPreviewRail;
+    const measuredHeights = options.cards.map((_, index) => options.cells[index]?.offsetHeight ?? 0);
     const layout = computeCubeMasonry(options.cards.map((card, index) => ({
         id: card.id,
-        height: readCardHeight(options.cells[index], card),
+        height: readCardHeight(measuredHeights[index] ?? 0, card),
         ...(card.columnSpan === undefined ? {} : { columnSpan: card.columnSpan }),
     })), {
         availableWidth: masonryWidth,
@@ -87,24 +88,18 @@ export function layoutCubeSurfaceDom(options) {
         cell.style.width = `${placement.width}px`;
     }
     return {
-        minimumHeight: cardsAreMeasured(options.cards, options.cells) ? minimumHeight : null,
+        minimumHeight: measuredHeights.every((height) => Number.isFinite(height) && height > 0)
+            ? minimumHeight
+            : null,
         previewWidth,
         previewWidthRange,
         previewResizable: canShowPreviewRail,
     };
 }
-/** Resolve measured native-card height with a finite graph-size fallback. */
-function readCardHeight(cell, card) {
-    const measured = cell?.offsetHeight ?? 0;
+/** Resolve a sampled native height with a finite graph-size fallback without another layout read. */
+function readCardHeight(measured, card) {
     if (Number.isFinite(measured) && measured > 0)
         return measured;
     const graphHeight = Number(card.node.size?.[1]);
     return Number.isFinite(graphHeight) && graphHeight > 0 ? graphHeight : DEFAULT_CARD_HEIGHT;
-}
-/** Wait for native renderers to expose real card height before mutating node geometry. */
-function cardsAreMeasured(cards, cells) {
-    return cards.every((_, index) => {
-        const measured = cells[index]?.offsetHeight ?? 0;
-        return Number.isFinite(measured) && measured > 0;
-    });
 }

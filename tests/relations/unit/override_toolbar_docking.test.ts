@@ -187,6 +187,25 @@ test('starts in the preferred dock and retains that preference through temporary
   }
 });
 
+test('measures dock target geometry only while a drag needs the target', () => {
+  const f = fixture();
+  try {
+    f.root.dataset.presentation = 'substitute';
+    const lineBounds = jest.spyOn(f.line, 'getBoundingClientRect');
+    f.host.attach(f.root, true);
+    expect(lineBounds).not.toHaveBeenCalled();
+    f.host.dragging(true);
+    expect(lineBounds).toHaveBeenCalled();
+    expect(f.bar.querySelector('.sc-overrides-dock-target')).not.toBeNull();
+    lineBounds.mockClear();
+    f.host.dragging(false);
+    expect(lineBounds).not.toHaveBeenCalled();
+    expect(f.bar.querySelector('.sc-overrides-dock-target')).toBeNull();
+  } finally {
+    f.dispose();
+  }
+});
+
 test('retries the preferred dock after pane resize even when floating legacy placeholders consume space', async () => {
   const originalObserver = window.ResizeObserver;
   let resized: ResizeObserverCallback | null = null;
@@ -710,6 +729,29 @@ test('floating and docked grips follow the native Run handle font instead of too
     expect(f.root.style.getPropertyValue('--sc-native-grip-font-family')).toBe(
       'Updated Comfy Font',
     );
+  } finally {
+    f.dispose();
+  }
+});
+
+test('inline presentation leaves the unused native drag font unmeasured', () => {
+  const f = fixture();
+  try {
+    const native = document.createElement('div');
+    native.className = 'actionbar';
+    const grip = document.createElement('span');
+    grip.className = 'drag-handle';
+    grip.style.fontFamily = 'Comfy Handle Font';
+    native.append(grip);
+    f.bar.append(native);
+    const styles = jest.spyOn(window, 'getComputedStyle');
+    f.root.dataset.presentation = 'substitute';
+    f.host.attach(f.root, true);
+    expect(styles.mock.calls.filter(([element]) => element === grip)).toHaveLength(0);
+    delete f.root.dataset.presentation;
+    f.host.attach(f.root, false);
+    expect(styles.mock.calls.filter(([element]) => element === grip)).toHaveLength(1);
+    expect(f.root.style.getPropertyValue('--sc-native-grip-font-family')).toBe('Comfy Handle Font');
   } finally {
     f.dispose();
   }

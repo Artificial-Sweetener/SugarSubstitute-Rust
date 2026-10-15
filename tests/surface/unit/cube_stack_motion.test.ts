@@ -46,6 +46,7 @@ test('selects the first whole visible cube and coalesces only identified surface
   const update = jest.fn<(id: string | null) => void>();
   const tracker = new CubeStackScrollSelection(element, update);
   tracker.refresh(['first', 'second', 'third']);
+  frames.shift()!(0);
   expect(update).toHaveBeenLastCalledWith('first');
   element.scrollTop = 200;
   element.dispatchEvent(new Event('scroll'));
@@ -71,6 +72,7 @@ test('selects the first whole visible cube and coalesces only identified surface
   expect(update).toHaveBeenLastCalledWith('third');
   element.scrollTop = 1200;
   tracker.refresh(['first', 'second', 'third']);
+  frames.shift()!(0);
   expect(update).toHaveBeenLastCalledWith('third');
   document.body.append(document.createElement('dialog'));
   expect(frames).toHaveLength(0);
@@ -97,21 +99,59 @@ test('includes the content inset, ignores filtered or invalid bounds and avoids 
     content.append(header);
   }
   const update = jest.fn<(id: string | null) => void>();
+  const frames: FrameRequestCallback[] = [];
+  jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+    frames.push(callback);
+    return frames.length;
+  });
   const tracker = new CubeStackScrollSelection(element, update);
   const ids = ['first', 'second', 'invalid'];
   tracker.refresh(ids);
+  frames.shift()!(0);
   element.scrollTop = 351;
   tracker.refresh(ids);
+  frames.shift()!(0);
   expect(update).toHaveBeenCalledTimes(1);
   expect(update).toHaveBeenLastCalledWith('first');
   element.scrollTop = 353;
   tracker.refresh(ids);
+  frames.shift()!(0);
   expect(update).toHaveBeenLastCalledWith('second');
   content.children[1]?.setAttribute('data-sc-search-card-hidden', '');
   element.scrollTop = 0;
   tracker.refresh(ids);
+  frames.shift()!(0);
   expect(update).toHaveBeenLastCalledWith('first');
   tracker.dispose();
+});
+
+test('coalesces refresh geometry with scoped layout events after presentation writes settle', () => {
+  const element = document.createElement('section');
+  const header = document.createElement('header');
+  header.dataset.masonrySection = 'cube:visible';
+  header.dataset.masonryY = '0';
+  header.dataset.masonryHeight = '300';
+  element.append(header);
+  const height = jest.fn(() => 200);
+  Object.defineProperty(element, 'clientHeight', { get: height });
+  const frames: FrameRequestCallback[] = [];
+  jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+    frames.push(callback);
+    return frames.length;
+  });
+  const update = jest.fn<(id: string | null) => void>();
+  const tracker = new CubeStackScrollSelection(element, update);
+  try {
+    for (let index = 0; index < 10; index++) tracker.refresh(['visible']);
+    element.dispatchEvent(new Event('sc-masonry-layout'));
+    expect(height).not.toHaveBeenCalled();
+    expect(frames).toHaveLength(1);
+    frames.shift()!(0);
+    expect(height).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenLastCalledWith('visible');
+  } finally {
+    tracker.dispose();
+  }
 });
 
 test('commits inset layout once and animates from the current painted position across reversals', () => {

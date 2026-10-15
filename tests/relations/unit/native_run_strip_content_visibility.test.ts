@@ -14,13 +14,29 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove empty legacy chrome gives up space and restores live native controls. */
-import { afterEach, expect, test } from '@jest/globals';
+import { afterEach, expect, jest, test } from '@jest/globals';
 import { NativeRunStripContentVisibility } from '../../../frontend/comfyui/ui/relations/infrastructure/NativeRunStripContentVisibility.js';
 import { ensureRelationStyles } from '../../../frontend/comfyui/ui/relations/presentation/RelationStyles.js';
 
 afterEach(() => {
+  jest.restoreAllMocks();
   document.body.replaceChildren();
   document.getElementById('sc-relation-styles')?.remove();
+});
+
+test('reuses mounted visibility until scoped native content changes', async () => {
+  const f = fixture();
+  const styles = jest.spyOn(window, 'getComputedStyle');
+  try {
+    for (let index = 0; index < 10; index++) f.visibility.mount(f.bar);
+    expect(styles).not.toHaveBeenCalled();
+    f.button.style.display = '';
+    await Promise.resolve();
+    expect(styles).toHaveBeenCalled();
+    expect(f.legacy.hasAttribute('data-sc-empty-run-content')).toBe(false);
+  } finally {
+    f.visibility.dispose();
+  }
 });
 
 /** Model the native wrappers around a button hidden by another extension. */

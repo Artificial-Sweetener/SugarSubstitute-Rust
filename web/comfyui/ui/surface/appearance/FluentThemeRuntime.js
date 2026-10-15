@@ -9671,11 +9671,18 @@ var themes = {
   dark: { ...webDarkTheme, fontFamilyBase: fontFamilyBase2 },
   light: { ...webLightTheme, fontFamilyBase: fontFamilyBase2 }
 };
+var appliedThemes = /* @__PURE__ */ new WeakMap();
 function fluentTokenDeclarations(dark) {
   return Object.entries(dark ? themes.dark : themes.light).map(([name, value]) => `--${name}:${value};`).join("");
 }
 function applyOwnedFluentTheme(element, dark) {
+  if (element !== element.ownerDocument.documentElement && !element.closest("body")) {
+    appliedThemes.delete(element);
+    return;
+  }
+  if (appliedThemes.has(element) && appliedThemes.get(element) === dark) return;
   setTheme(dark === null ? null : dark ? themes.dark : themes.light, element);
+  appliedThemes.set(element, dark);
 }
 function fluentAccentColorTokens(color, dark) {
   const theme = (dark ? createDarkTheme : createLightTheme)(createAccentBrandPalette(color));
