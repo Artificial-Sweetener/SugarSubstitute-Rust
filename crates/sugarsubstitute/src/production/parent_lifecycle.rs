@@ -23,7 +23,7 @@ mod main;
 mod native_retirement;
 #[path = "parent_lifecycle/normal_close.rs"]
 mod normal_close;
-pub(crate) use normal_close::NormalCloseRequest;
+pub(crate) use normal_close::DesktopCloseRequest;
 #[path = "parent_lifecycle/output.rs"]
 mod output;
 #[path = "parent_lifecycle/profile_observation.rs"]
@@ -306,6 +306,11 @@ impl ParentLifecycle {
     ) -> std::result::Result<(), ParentError> {
         self.validate_cleanup_budget(budget)?;
         self.cleanup = Some(budget);
+        if !self.closed {
+            tracing::info!(operation="parent_owned_cleanup_requested",run=?self.run,
+                started=?budget.started,graceful_until=?budget.graceful_until,settle_until=?budget.settle_until,
+                "Original role cleanup requested; physical retirement remains independently owned");
+        }
         self.closed = true;
         // Retain the first semantic cause while releasing its immutable input loan
         // so the actual pipe worker can finish checked native retirement.
@@ -422,6 +427,7 @@ impl ParentLifecycle {
             snapshot.suspicion_at.or(snapshot.next_challenge_at)
         });
         [
+            self.cleanup.map(|budget| budget.graceful_until),
             self.cleanup.map(|budget| budget.settle_until),
             ui,
             self.profile_pending.as_ref().map(|pending| pending.original),

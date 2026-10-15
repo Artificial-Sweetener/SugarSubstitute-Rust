@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Propagate deliberate current-role close through original budgets and actual pending owners.
 use super::*;
-use crate::production::parent_lifecycle::NormalCloseRequest;
+use crate::production::parent_lifecycle::DesktopCloseRequest;
 
 /// Original role budget plus the existing sealed retirement producer's disposition.
 enum Role {
@@ -41,6 +41,31 @@ impl ProductionActivation {
         });
         original_budget(roles, self.incidents.reporting.normal_close_budget())
     }
+    /// Borrow only this accepted deliberate role's original grace-expired transaction.
+    /// The exact launch ticket remains with existing native/profile/capture cleanup owners;
+    /// other roles and backend interests remain serving. This is not normal-idle eligibility.
+    pub(super) fn overdue_role_budget(
+        record: &Record,
+        now: sugarsubstitute_contracts::execution::Moment,
+    ) -> Option<ShutdownBudget> {
+        if record.closed || record.failed.is_some() || record.pending_desktop_failure.is_some() {
+            return None;
+        }
+        let request = record.parent.as_ref()?.overdue_close_request(now)?;
+        let start = record.start.as_ref()?;
+        let ticket = start.ticket?;
+        if request.run() != record.run
+            || start.run != record.run
+            || start.launch != record.launch
+            || start.navigation != record.navigation
+            || start.connection != record.connection
+            || ticket.process() != request.process()
+            || ticket.binding() != sugarsubstitute_supervision::FamilyBinding::Desktop(record.run)
+        {
+            return None;
+        }
+        Some(request.budget())
+    }
     /// Borrow one eligible role for ordinary cleanup while another role may keep Root serving.
     pub(super) fn normal_role_budget(record: &Record) -> Option<ShutdownBudget> {
         match role(record)? {
@@ -72,7 +97,7 @@ fn role(record: &Record) -> Option<Role> {
     if !parent.normal_cleanup_ready() {
         return None;
     }
-    let request: NormalCloseRequest = parent.normal_close_request()?;
+    let request: DesktopCloseRequest = parent.normal_close_request()?;
     let start = record.start.as_ref()?;
     if start.run != record.run
         || start.launch != record.launch

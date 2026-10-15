@@ -53,6 +53,7 @@ pub(super) struct ChildShutdown {
     released: bool,
     bootstrap_failure_observed: bool,
     shutdown: Option<ShutdownId>,
+    intent: Option<CompletionIntent>,
     pending: Option<Pending>,
     queued: [Option<Control>; 4],
 }
@@ -92,6 +93,7 @@ impl ChildShutdown {
             released: false,
             bootstrap_failure_observed: false,
             shutdown: None,
+            intent: None,
             pending: None,
             queued: [None; 4],
         }
@@ -100,7 +102,10 @@ impl ChildShutdown {
         self.closing
     }
     pub(super) fn deadline(&self) -> Option<Moment> {
-        self.pending.map(|p| p.original).or(self.budget.map(|b| b.settle_until))
+        [self.pending.map(|p| p.original), self.budget.map(|b| b.settle_until)]
+            .into_iter()
+            .flatten()
+            .min()
     }
     fn retain_budget(&mut self, budget: ShutdownBudget) {
         if self.budget.is_none_or(|old| budget.settle_until < old.settle_until) {
@@ -132,6 +137,40 @@ impl ChildShutdown {
             }
         }
     }
+    /// Final completion still requires the genuine Child budget despite an early intent ACK.
+    /// Native/source retirement remains a separate prerequisite at the composing callsite.
+    fn completion_ready(&self, lease_required: bool) -> bool {
+        self.budget.is_some()
+            && self.intent_done
+            && (!lease_required || self.released)
+            && !self.completed_done
+            && !self.pending.is_some_and(|p| matches!(p.control, Control::ExitCompleted))
+            && !self.queued.iter().flatten().any(|p| matches!(p, Control::ExitCompleted))
+    }
+    /// Encode only the first whole-close classification, independently of later policy/failure phases.
+    fn exit_intent_payload(&self) -> Result<WirePayload<'static>> {
+        Ok(WirePayload::ExitIntent {
+            shutdown: self.shutdown.ok_or("Actual shutdown identity absent")?,
+            intent: self.intent.ok_or("Original whole-close intent absent")?,
+            expected_code: 0,
+        })
+    }
+    /// Queue deliberate whole-content exit independently of capture clock measurement.
+    /// Neither this intent nor its eventual ACK supplies a Child shutdown budget or native proof.
+    fn request_exit_intent(&mut self, registered: bool) -> Result<()> {
+        if !registered {
+            return Ok(());
+        }
+        if self.intent.is_none() {
+            return Err("Original whole-close intent absent".into());
+        }
+        if self.shutdown.is_none() {
+            let shutdown = ShutdownId::new(1)?;
+            self.queue(Control::ExitIntent)?;
+            self.shutdown = Some(shutdown);
+        }
+        Ok(())
+    }
     fn queue(&mut self, control: Control) -> Result<()> {
         let slot = self
             .queued
@@ -148,12 +187,22 @@ impl ProductionChild {
     /// # Errors
     /// Keeps clock/counter failures and actual partial capture/source custody unchanged.
     pub(in crate::production) fn begin_shutdown(&mut self) -> Result<ShutdownInitiation> {
+        if self.shutdown.intent.is_none() {
+            self.shutdown.intent = Some(self.completion_intent());
+        }
         self.observe_bootstrap_failure();
         if !self.shutdown.closing {
             self.shutdown.closing = true;
             self.bootstrap.close_initialization();
             self.main.close();
             self.output.close();
+        }
+        // The existing control owner freezes its own header before capture measurement
+        // completes. Genuine capture custody and its independent budget remain unchanged.
+        let registered = self.bootstrap.channel_mut().registered();
+        self.shutdown.request_exit_intent(registered)?;
+        if registered {
+            self.advance_control()?;
         }
         self.shutdown.observe_capture(self.bootstrap.capture_cleanup_snapshot())
     }
@@ -168,15 +217,16 @@ impl ProductionChild {
         if ShutdownBudget::new(budget.started)? != budget {
             return Err("Shutdown budget is not the original ten/fifteen transaction".into());
         }
+        if self.shutdown.intent.is_none() {
+            self.shutdown.intent = Some(self.completion_intent());
+        }
         self.shutdown.retain_budget(budget);
         if !self.bootstrap.channel_mut().admitted() {
             return Ok(());
         }
-        if self.shutdown.shutdown.is_none() {
-            self.shutdown.shutdown = Some(ShutdownId::new(1)?);
-            self.shutdown.queue(Control::ExitIntent)?;
-        }
-        if !self.bootstrap.channel_mut().admitted() {
+        let registered = self.bootstrap.channel_mut().registered();
+        self.shutdown.request_exit_intent(registered)?;
+        if !registered {
             return Ok(());
         }
         self.advance_shutdown()
@@ -209,20 +259,7 @@ impl ProductionChild {
                 self.shutdown.queue(Control::Release(lease))?;
                 self.shutdown.release_requested = true;
             }
-            if self.shutdown.intent_done
-                && (self.lease.is_none() || self.shutdown.released)
-                && !self.shutdown.completed_done
-                && !self
-                    .shutdown
-                    .pending
-                    .is_some_and(|p| matches!(p.control, Control::ExitCompleted))
-                && !self
-                    .shutdown
-                    .queued
-                    .iter()
-                    .flatten()
-                    .any(|p| matches!(p, Control::ExitCompleted))
-            {
+            if self.shutdown.completion_ready(self.lease.is_some()) {
                 self.shutdown.queue(Control::ExitCompleted)?;
             }
         }

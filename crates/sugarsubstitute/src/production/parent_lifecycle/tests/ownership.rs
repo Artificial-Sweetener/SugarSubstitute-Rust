@@ -144,6 +144,10 @@ fn original_actor_charge_outlives_job_and_frontend_wait_keeps_original_cutoff() 
     actor.cleanup = Some(cleanup);
     assert_eq!(
         actor.deadlines().filter(|until| *until > Moment::from_nanos(78)).min(),
+        Some(cleanup.graceful_until)
+    );
+    assert_eq!(
+        actor.deadlines().filter(|until| *until > cleanup.graceful_until).min(),
         Some(cleanup.settle_until)
     );
     assert_eq!(actor.main_deadline(), Some(Moment::from_nanos(77)));

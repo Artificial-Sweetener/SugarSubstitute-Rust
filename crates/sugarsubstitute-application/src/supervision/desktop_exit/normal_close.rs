@@ -3,7 +3,7 @@
 //! Borrow accepted deliberate close intent without clock mutation or settlement inference.
 use super::*;
 
-/// Inert deliberate close intent accepted by one exact desktop exit transaction.
+/// Inert deliberate whole-content close intent accepted by one exact desktop exit transaction.
 /// This preserves the original budget and grants no native or resource-settlement authority.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DesktopCloseRequest {
@@ -27,7 +27,7 @@ impl DesktopCloseRequest {
     pub const fn process(self) -> ProcessKey {
         self.process
     }
-    /// Return the originally accepted normal or startup-cancellation intent.
+    /// Return the originally accepted normal, startup-cancellation or startup-failure intent.
     pub const fn intent(self) -> CompletionIntent {
         self.intent
     }
@@ -37,6 +37,23 @@ impl DesktopCloseRequest {
     }
 }
 impl DesktopExitTransaction {
+    /// Borrow authenticated whole-content close progress before actual process exit.
+    /// Unlike normal-idle eligibility, a genuine StartupFailed intent still needs bounded
+    /// native cleanup. This query samples no clock and grants no exit or settlement proof.
+    pub fn close_progress_request(&self) -> Option<DesktopCloseRequest> {
+        if self.failure.is_some() || self.exit.is_some() {
+            return None;
+        }
+        let transaction = self.transaction?;
+        let (intent, _) = transaction.intent?;
+        Some(DesktopCloseRequest {
+            run: self.run,
+            process: self.process,
+            intent,
+            budget: transaction.budget,
+            exited: false,
+        })
+    }
     /// Return only an actually accepted deliberate close request from this retained transaction.
     ///
     /// This passive query samples no clock, changes no phase, and grants no native control or

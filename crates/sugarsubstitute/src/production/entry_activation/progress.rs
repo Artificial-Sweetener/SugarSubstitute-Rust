@@ -247,14 +247,25 @@ impl ProductionActivation {
                 }
                 failure.get_or_insert(cause);
             }
-            if !self.closing
-                && failure.is_none()
-                && !delivery.pending()
-                && let Some(budget) = Self::normal_role_budget(record)
-                && let Err(cause) =
-                    Self::close_record(record, backend, Some(capture), resources, budget)
-            {
-                failure.get_or_insert(cause);
+            if !self.closing && failure.is_none() && !delivery.pending() {
+                let budget = match Self::normal_role_budget(record) {
+                    Some(budget) => Some(budget),
+                    None if record
+                        .parent
+                        .as_ref()
+                        .and_then(|parent| parent.close_progress_request())
+                        .is_some() =>
+                    {
+                        Self::overdue_role_budget(record, resources.client.now()?)
+                    }
+                    None => None,
+                };
+                if let Some(budget) = budget
+                    && let Err(cause) =
+                        Self::close_record(record, backend, Some(capture), resources, budget)
+                {
+                    failure.get_or_insert(cause);
+                }
             }
         }
         let report_restart = capture.restart_availability();

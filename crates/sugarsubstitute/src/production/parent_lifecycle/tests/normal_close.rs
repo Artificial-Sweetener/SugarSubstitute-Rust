@@ -209,3 +209,82 @@ fn final_close_ack_fences_new_receives_before_written_without_early_pipe_closure
     assert_eq!(parent.cleanup, Some(original));
     Ok(())
 }
+
+#[test]
+fn written_attempt_main_retirement_without_whole_close_intent_never_arms_role_force() -> Result<()>
+{
+    let mut parent = actor()?;
+    parent.registered = true;
+    let identity = identity()?;
+    let original = header(1)?;
+    let retired = header(2)?;
+    let binding = ClientBinding { run: parent.run, connection: parent.connection };
+    let mut acquisition = super::super::acquisition::Acquisition::new(
+        binding,
+        original,
+        identity,
+        Moment::from_nanos(1),
+    )?;
+    acquisition.observe_retirement(binding, identity, retired)?;
+    // These are the same copied transport observations used by the actual owner; no
+    // native handle or family retirement proof is constructed by this inert query test.
+    acquisition.observe_write(retired, super::super::acquisition::WriteObservation::Written)?;
+    parent.acquisition = Some(acquisition);
+    assert!(parent.acquisition.as_ref().ok_or("Acquisition absent")?.retirement_written());
+    assert!(parent.close_progress_request().is_none());
+    assert!(parent.overdue_close_request(Moment::from_nanos(u64::MAX)).is_none());
+    assert!(parent.shutdown().is_none());
+    assert!(!parent.native_retired());
+    Ok(())
+}
+#[test]
+fn accepted_whole_close_without_final_completion_arms_original_role_grace_and_preserves_attribution()
+-> Result<()> {
+    for kind in [
+        CompletionIntent::Normal,
+        CompletionIntent::StartupCancelled,
+        CompletionIntent::StartupFailed,
+    ] {
+        let mut parent = actor()?;
+        let process = intent(&mut parent, kind)?;
+        parent.registered = true;
+        let original = parent.shutdown().ok_or("Original budget absent")?;
+        assert!(!parent.normal_cleanup_ready());
+        assert!(
+            parent
+                .overdue_close_request(Moment::from_nanos(original.graceful_until.as_nanos() - 1))
+                .is_none()
+        );
+        for now in [original.graceful_until, original.settle_until, Moment::from_nanos(u64::MAX)] {
+            let request = parent.overdue_close_request(now).ok_or("Whole-close progress lost")?;
+            assert_eq!(request.run(), parent.run);
+            assert_eq!(request.process(), process);
+            assert_eq!(request.intent(), kind);
+            assert_eq!(request.budget(), original);
+            assert!(!request.exited());
+        }
+        assert_eq!(
+            parent.deadlines().collect::<Vec<_>>(),
+            vec![original.graceful_until, original.settle_until]
+        );
+        assert!(!parent.normal_cleanup_ready());
+        assert!(!parent.native_retired());
+        parent
+            .exit
+            .as_mut()
+            .ok_or("Exit absent")?
+            .observe(DesktopObservation::Exited { process, code: 0 })
+            .map_err(|e| e.reason)?;
+        assert!(parent.overdue_close_request(original.settle_until).is_none());
+        assert_eq!(
+            parent.exit.as_ref().ok_or("Exit absent")?.failed_incident()?.attribution(),
+            DesktopExitKind::Unexpected
+        );
+        assert_eq!(parent.shutdown(), Some(original));
+    }
+    let mut peer = actor_for(2)?;
+    peer.registered = true;
+    assert!(peer.overdue_close_request(Moment::from_nanos(u64::MAX)).is_none());
+    assert!(peer.shutdown().is_none());
+    Ok(())
+}

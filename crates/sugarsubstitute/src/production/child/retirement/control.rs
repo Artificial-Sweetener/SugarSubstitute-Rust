@@ -145,11 +145,7 @@ impl ProductionChild {
                 }
                 Control::MainRetired(identity) => WirePayload::MainRetired(identity),
                 Control::Release(lease) => WirePayload::Release(lease),
-                Control::ExitIntent => WirePayload::ExitIntent {
-                    shutdown: self.shutdown.shutdown.ok_or("Actual shutdown identity absent")?,
-                    intent: self.completion_intent(),
-                    expected_code: 0,
-                },
+                Control::ExitIntent => self.shutdown.exit_intent_payload()?,
                 Control::ExitCompleted => WirePayload::ExitCompleted(
                     self.shutdown.shutdown.ok_or("Actual shutdown identity absent")?,
                 ),

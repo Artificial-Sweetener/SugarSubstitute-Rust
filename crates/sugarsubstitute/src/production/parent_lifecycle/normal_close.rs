@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Borrow the actual registered desktop's deliberate close request without settlement inference.
 use super::ParentLifecycle;
-pub(crate) use sugarsubstitute_application::supervision::DesktopCloseRequest as NormalCloseRequest;
+pub(crate) use sugarsubstitute_application::supervision::DesktopCloseRequest;
 
 impl ParentLifecycle {
     /// Preserve this role's accepted transaction when global cleanup has an earlier cutoff.
@@ -35,6 +35,28 @@ impl ParentLifecycle {
                     .close_after_reply
                     .is_some_and(|index| self.requests.get(index).is_ok_and(|record| record.sent)))
     }
+    /// Borrow only this registered role's authenticated whole-content exit transaction.
+    /// Historical attempt failures do not cancel an actual later close request; normal-idle
+    /// eligibility remains with its stricter independent query.
+    pub(crate) fn close_progress_request(&self) -> Option<DesktopCloseRequest> {
+        if !self.registered || self.failure.is_some() {
+            return None;
+        }
+        let request = self.exit.as_ref()?.close_progress_request()?;
+        (request.run() == self.run
+            && request.process().owner == self.run.owner
+            && self.cleanup == Some(request.budget()))
+        .then_some(request)
+    }
+    /// Permit only the accepted deliberate role's existing cleanup owners at original grace.
+    /// Missing final completion stays unproved; no native exit or normal attribution is inferred.
+    pub(crate) fn overdue_close_request(
+        &self,
+        now: sugarsubstitute_contracts::execution::Moment,
+    ) -> Option<DesktopCloseRequest> {
+        let request = self.close_progress_request()?;
+        (now >= request.budget().graceful_until).then_some(request)
+    }
     /// Pending authored work prevents normal idle; original transport/native custody still settles during close.
     fn normal_close_pending(&self) -> bool {
         self.profile_pending.is_some()
@@ -51,7 +73,7 @@ impl ParentLifecycle {
     /// The exact process and original budget remain inert facts. Native, backend,
     /// profile and report custody require their existing independent close owners.
     /// Failed startup, unexpected exit and original actor failures cannot request normal idle.
-    pub(crate) fn normal_close_request(&self) -> Option<NormalCloseRequest> {
+    pub(crate) fn normal_close_request(&self) -> Option<DesktopCloseRequest> {
         if !self.registered || self.failure.is_some() || self._attempt_failure.is_some() {
             return None;
         }

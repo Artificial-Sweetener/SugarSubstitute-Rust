@@ -4,7 +4,7 @@
 use super::*;
 use sugarsubstitute_application::supervision::DesktopExitTransaction;
 use sugarsubstitute_contracts::{execution::Moment, lifecycle::*};
-fn actual_request(instance: u64, at: u64) -> Result<NormalCloseRequest> {
+fn actual_request(instance: u64, at: u64) -> Result<DesktopCloseRequest> {
     let owner = CoordinatorKey {
         namespace: NamespaceId::new([1; 32]),
         epoch: CoordinatorEpoch::new([2; 16])?,
@@ -164,6 +164,9 @@ fn normal_idle_partial_unlaunched_or_failed_record_never_becomes_a_normal_role()
         restart: restart::RestartState::new(),
     };
     assert!(ProductionActivation::normal_role_budget(&record).is_none());
+    assert!(
+        ProductionActivation::overdue_role_budget(&record, Moment::from_nanos(u64::MAX)).is_none()
+    );
     assert!(role(&record).is_none());
     Ok(())
 }

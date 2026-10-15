@@ -85,3 +85,38 @@ fn supervisor_cleanup_without_authenticated_deliberate_intent_never_requests_nor
     assert_eq!(owner.failed_incident()?, fact);
     Ok(())
 }
+
+#[test]
+fn whole_close_progress_is_passive_for_all_intents_and_never_reclassifies_uncompleted_exit()
+-> Result<(), Box<dyn std::error::Error>> {
+    for intent in [
+        CompletionIntent::Normal,
+        CompletionIntent::StartupCancelled,
+        CompletionIntent::StartupFailed,
+    ] {
+        let (mut owner, run, process) = fixture()?;
+        assert!(owner.close_progress_request().is_none());
+        let id = ShutdownId::new(1)?;
+        let original = owner.begin(run, id, intent, 0, Moment::from_nanos(10))?;
+        for _ in 0..64 {
+            let request = owner.close_progress_request().ok_or("Accepted close progress absent")?;
+            assert_eq!(request.run(), run);
+            assert_eq!(request.process(), process);
+            assert_eq!(request.intent(), intent);
+            assert_eq!(request.budget(), original);
+            assert!(!request.exited());
+        }
+        assert_eq!(owner.begin(run, id, intent, 0, Moment::from_nanos(20))?, original);
+        assert!(
+            owner.poll(Moment::from_nanos(19)).is_err(),
+            "Passive query changed the original clock"
+        );
+        owner.observe(DesktopObservation::Exited { process, code: 0 }).map_err(|e| e.reason)?;
+        assert!(owner.close_progress_request().is_none());
+        assert_eq!(owner.failed_incident()?.attribution(), DesktopExitKind::Unexpected);
+        assert!(owner.normal_close_request().is_none());
+        assert!(!owner.poll(original.graceful_until)?.resources_settled);
+        assert_eq!(owner.poll(original.settle_until)?.budget, Some(original));
+    }
+    Ok(())
+}
