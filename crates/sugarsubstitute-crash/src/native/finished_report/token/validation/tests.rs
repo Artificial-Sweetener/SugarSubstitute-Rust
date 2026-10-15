@@ -47,16 +47,16 @@ fn image() -> (Query, abi::Facts, abi::Operation, abi::Preparation) {
     value.database_identity = query.directories[0];
     value.metrics_identity = query.directories[1];
     value.source = abi::FileFacts { identity: source.source_identity, bytes: 64, sha256: [9; 32] };
-    value.metadata = abi::FileFacts { identity: [10; 24], bytes: 80, sha256: [11; 32] };
+    value.metadata = abi::FileFacts { identity: [10; 24], bytes: 114, sha256: [11; 32] };
     value.original_stage = abi::StageFacts {
         role: 1,
         reserved: 0,
-        file: abi::FileFacts { identity: [12; 24], bytes: 80, sha256: [11; 32] },
+        file: abi::FileFacts { identity: [12; 24], bytes: 114, sha256: [11; 32] },
     };
     value.candidate_stage = abi::StageFacts {
         role: 2,
         reserved: 0,
-        file: abi::FileFacts { identity: [13; 24], bytes: 16, sha256: [14; 32] },
+        file: abi::FileFacts { identity: [13; 24], bytes: 58, sha256: [14; 32] },
     };
     (query, source, operation, value)
 }
@@ -100,4 +100,20 @@ fn preparation_requires_exact_original_and_distinct_checked_candidate_before_jou
         change(&mut candidate);
         assert!(!preparation(&candidate, operation, &query, &source));
     }
+}
+
+#[test]
+fn preparation_rejects_nonproducer_record_width_and_short_metadata_header() {
+    let (query, source, operation, value) = image();
+    assert!(preparation(&value, operation, &query, &source));
+    for removed in [55_u64, 64] {
+        let mut changed = value;
+        changed.candidate_stage.file.bytes = changed.metadata.bytes - removed;
+        assert!(!preparation(&changed, operation, &query, &source));
+    }
+    let mut short = value;
+    short.metadata.bytes = 71;
+    short.original_stage.file.bytes = 71;
+    short.candidate_stage.file.bytes = 15;
+    assert!(!preparation(&short, operation, &query, &source));
 }

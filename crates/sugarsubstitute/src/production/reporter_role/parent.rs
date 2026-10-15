@@ -302,6 +302,37 @@ pub(in crate::production) struct ReporterLaunch {
     pub(in crate::production) creation: JobSpec,
     pub(in crate::production) watch: JobSpec,
 }
+impl ReporterLaunch {
+    /// Allocate in actual registry admission order: native root observation precedes creation.
+    /// The original finite cutoff, required input bytes, independent native scope and fixed
+    ///4096-byte no-deadline watch remain unchanged. Exhaustion burns already consumed IDs.
+    /// # Errors
+    /// Returns original sequence exhaustion before submitting either job or moving native input.
+    pub(in crate::production) fn allocate(
+        native: ScopeSpec,
+        jobs: &crate::job_sequence::JobSequence,
+        until: Moment,
+        bytes: u64,
+    ) -> Result<Self, IdentityError> {
+        let watch = JobSpec {
+            id: jobs.allocate()?,
+            operation: Operation::NativeLifecycle,
+            class: JobClass::NativeObservation,
+            deadline: None,
+            reservation_bytes: 4096,
+            replacement: None,
+        };
+        let creation = JobSpec {
+            id: jobs.allocate()?,
+            operation: Operation::NativeLifecycle,
+            class: JobClass::InfrastructureLifecycle,
+            deadline: Some(until),
+            reservation_bytes: bytes,
+            replacement: None,
+        };
+        Ok(Self { native, creation, watch })
+    }
+}
 const _: () = assert!(size_of::<ReporterParent>() + 2 * size_of::<usize>() < 16384);
 
 /// Allocation-only fixed metadata admitted inside the original pre-capture controller.

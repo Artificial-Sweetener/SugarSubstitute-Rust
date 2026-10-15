@@ -65,13 +65,14 @@ fn actual_late_tail_is_delivered_before_dual_eof_and_checked_retirement() -> Tes
 fn final_eof_does_not_hide_a_genuine_checked_retirement_error() -> TestResult {
     let rig = Rig::new()?;
     let boundary = Boundary::new();
-    boundary.fail_retire.store(1, Ordering::Release);
     let hold = RetirementHold::new(&boundary);
     boundary.eof[0].store(true, Ordering::Release);
     boundary.eof[1].store(true, Ordering::Release);
     let mut actual = session(&rig, &boundary)?;
     boundary.retiring.wait()?;
     assert!(actual.completion.try_take_completion().is_none());
+    // Preparation drains execution notices, so inject the checked failure only after it settles.
+    boundary.fail_retire.store(1, Ordering::Release);
     drop(hold);
     let JobOutcome::Failure(cause) = completion(&rig, &mut actual)?.outcome else {
         return Err("Original checked retirement failure must remain a failure".into());

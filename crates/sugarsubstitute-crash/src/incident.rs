@@ -99,6 +99,8 @@ pub use codec::{
     decode_release_symbols, decode_seed, decode_symbol_report, encode_release_symbols, encode_seed,
     encode_symbol_report,
 };
+#[cfg(windows)]
+pub(crate) use codec_capture::{CRASHPAD_METADATA_HEADER_BYTES, CRASHPAD_METADATA_RECORD_BYTES};
 pub use codec_capture::{
     CaptureDispositionCompletion, CaptureDispositionPlan, CaptureMetadataStageRole,
     CaptureRecordedFileFacts,

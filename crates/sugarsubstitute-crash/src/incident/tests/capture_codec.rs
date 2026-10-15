@@ -19,7 +19,7 @@ pub(super) fn capture_plan(discarded: bool) -> Result<CaptureDispositionPlan, Bo
         source,
         CaptureRecordedFileFacts::new([4; 24], [5; 32], 256)?,
         CaptureRecordedFileFacts::new([5; 24], [5; 32], 256)?,
-        CaptureRecordedFileFacts::new([6; 24], [7; 32], 192)?,
+        CaptureRecordedFileFacts::new([6; 24], [7; 32], 200)?,
         if discarded {
             CaptureDispositionCompletion::Discarded {
                 summary_file: summary,
@@ -157,7 +157,7 @@ fn capture_stage_roles_preimage_digest_and_exact_record_subtraction_are_checked(
         ("/content/journal/candidate_stage/role", json!("PRIVATE_STAGE_ROLE")),
         ("/content/journal/original_stage/sha256", repeated(6, 32)),
         ("/content/journal/original_stage/bytes", json!(255)),
-        ("/content/journal/candidate_stage/bytes", json!(191)),
+        ("/content/journal/candidate_stage/bytes", json!(199)),
         ("/content/journal/candidate_stage/sha256", repeated(5, 32)),
     ] {
         let mut changed = record(false)?;
@@ -216,7 +216,7 @@ fn capture_file_facts_apply_payload_summary_and_metadata_bounds() -> Result<(), 
     exact["content"]["journal"]["completion"]["payload_file"]["bytes"] = json!(MAX_PAYLOAD_BYTES);
     exact["content"]["journal"]["metadata_preimage"]["bytes"] = json!(1_048_576);
     exact["content"]["journal"]["original_stage"]["bytes"] = json!(1_048_576);
-    exact["content"]["journal"]["candidate_stage"]["bytes"] = json!(1_048_512);
+    exact["content"]["journal"]["candidate_stage"]["bytes"] = json!(1_048_520);
     exact["content"]["journal"]["completion"]["summary_file"]["bytes"] = json!(65_536);
     assert!(decode_store_state(&serde_json::to_vec(&exact)?).is_ok());
     Ok(())
@@ -262,5 +262,20 @@ fn capture_schema_and_byte_bound_preserve_rejection_without_authority() -> Resul
     let mut forged = record(false)?;
     forged["content"]["journal"]["current_operation"] = json!({});
     rejected(forged)?;
+    Ok(())
+}
+
+#[test]
+fn capture_journal_accepts_only_the_pinned_producer_record_removal() -> Result<(), Box<dyn Error>> {
+    for discarded in [false, true] {
+        let canonical = record(discarded)?;
+        assert!(decode_store_state(&serde_json::to_vec(&canonical)?).is_ok());
+        for removed in [0_u64, 55, 64] {
+            let mut unsupported = canonical.clone();
+            unsupported["content"]["journal"]["candidate_stage"]["bytes"] = json!(256 - removed);
+            let bytes = serde_json::to_vec(&unsupported)?;
+            assert!(decode_store_state(&bytes).is_err());
+        }
+    }
     Ok(())
 }

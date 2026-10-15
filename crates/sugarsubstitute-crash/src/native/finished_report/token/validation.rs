@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Check returned matching data against the same query and actual prepared source.
 use super::abi;
+use crate::incident::{CRASHPAD_METADATA_HEADER_BYTES, CRASHPAD_METADATA_RECORD_BYTES};
 pub(super) struct Query {
     subject: abi::Subject,
     build_length: u32,
@@ -69,7 +70,7 @@ pub(super) fn preparation(
         && value.source.identity == source.source_identity
         && value.source.bytes == source.source_bytes
         && file(&value.metadata, 1024 * 1024)
-        && value.metadata.bytes >= 80
+        && value.metadata.bytes >= CRASHPAD_METADATA_HEADER_BYTES + CRASHPAD_METADATA_RECORD_BYTES
         && file(&original.file, 1024 * 1024)
         && file(&candidate.file, 1024 * 1024)
         && original.role == 1
@@ -78,7 +79,7 @@ pub(super) fn preparation(
         && candidate.reserved == 0
         && original.file.bytes == value.metadata.bytes
         && original.file.sha256 == value.metadata.sha256
-        && candidate.file.bytes == value.metadata.bytes - 64
+        && candidate.file.bytes == value.metadata.bytes - CRASHPAD_METADATA_RECORD_BYTES
         && original.file.sha256 != candidate.file.sha256
         && original.file.identity != candidate.file.identity
         && [original.file.identity, candidate.file.identity]

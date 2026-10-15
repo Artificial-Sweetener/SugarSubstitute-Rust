@@ -28,13 +28,13 @@ void Put(std::vector<std::uint8_t>& image, std::size_t offset,
 const sf::Uuid kUuid{0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef,
                      0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88};
 std::vector<std::uint8_t> Image(std::uint32_t count = 1) {
-  std::vector<std::uint8_t> image(16 + static_cast<std::size_t>(count) * 64);
+  std::vector<std::uint8_t> image(16 + static_cast<std::size_t>(count) * 56);
   Put(image, 0, 0x43504144);
   Put(image, 4, 1);
   Put(image, 8, count);
   std::vector<std::uint8_t> table;
   for (std::uint32_t i = 0; i < count; ++i) {
-    const auto offset = 16 + static_cast<std::size_t>(i) * 64;
+    const auto offset = 16 + static_cast<std::size_t>(i) * 56;
     std::array<std::uint8_t, 16> raw{0x78, 0x56, 0x34, 0x12, 0xab, 0x90,
                                      0xef, 0xcd, 0x11, 0x22, 0x33, 0x44,
                                      0x55, 0x66, 0x77, 0x88};
@@ -53,7 +53,7 @@ std::vector<std::uint8_t> Image(std::uint32_t count = 1) {
     const std::array<std::uint8_t, 5> upload_id{'i', 'd', 0xe2, 0x82, 0xac};
     table.insert(table.end(), upload_id.begin(), upload_id.end());
     table.push_back(0);
-    Put(image, offset + 52, i % 2 == 0 ? 0 : 2);
+    Put(image, offset + 44, i % 2 == 0 ? 0 : 2);
   }
   image.insert(image.end(), table.begin(), table.end());
   return image;
@@ -66,6 +66,30 @@ bool Status(std::span<const std::uint8_t> image, sf::ParseStatus expected) {
   return parsed.status == expected &&
          (expected == sf::ParseStatus::Valid || facts.count == 0);
 }
+bool ActualPinnedProducerMetadata() {
+  // Exact metadata emitted by the pinned Windows producer during Source82.
+  // UUID/time/string bytes are observations and grant no file or native authority.
+  constexpr std::array<std::uint8_t, 114> image{
+      0x44, 0x41, 0x50, 0x43, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x37, 0xd6, 0x82, 0x16, 0x06, 0x3d, 0xa2, 0x4f,
+      0xad, 0xb9, 0x2b, 0x8d, 0xf3, 0x8a, 0x78, 0xc3, 0x00, 0x00, 0x00, 0x00,
+      0x29, 0x00, 0x00, 0x00, 0x8d, 0x9d, 0xd0, 0x6a, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x31, 0x36, 0x38, 0x32, 0x64, 0x36, 0x33, 0x37, 0x2d, 0x33, 0x64, 0x30,
+      0x36, 0x2d, 0x34, 0x66, 0x61, 0x32, 0x2d, 0x61, 0x64, 0x62, 0x39, 0x2d,
+      0x32, 0x62, 0x38, 0x64, 0x66, 0x33, 0x38, 0x61, 0x37, 0x38, 0x63, 0x33,
+      0x2e, 0x64, 0x6d, 0x70, 0x00, 0x00,
+  };
+  constexpr sf::Uuid expected{0x16, 0x82, 0xd6, 0x37, 0x3d, 0x06, 0x4f, 0xa2, 0xad, 0xb9, 0x2b, 0x8d, 0xf3, 0x8a, 0x78, 0xc3};
+  Control control; sf::MetadataFacts facts;
+  if (sf::ParseCrashpadMetadata(image, control, facts).status != sf::ParseStatus::Valid ||
+      facts.count != 1 || facts.string_table_offset != 72 || facts.records[0].offset != 16 ||
+      facts.records[0].uuid != expected || facts.records[0].state != sf::ReportState::Pending) return false;
+  std::vector<std::uint8_t> padded(image.begin(), image.end());
+  padded.insert(padded.begin() + 72, 8, 0);
+  return Status(padded, sf::ParseStatus::Corrupt);
+}
 bool GoldenUuidAndSelection() {
   const auto image = Image();
   Control control;
@@ -73,7 +97,7 @@ bool GoldenUuidAndSelection() {
   if (sf::ParseCrashpadMetadata(image, control, facts).status !=
           sf::ParseStatus::Valid ||
       facts.count != 1 || facts.records[0].uuid != kUuid ||
-      facts.string_table_offset != 80 || facts.records[0].offset != 16) {
+      facts.string_table_offset != 72 || facts.records[0].offset != 16) {
     return false;
   }
   std::uint32_t index = 55;
@@ -106,7 +130,7 @@ bool MaximumImageAndPlusOne() {
 }
 bool Truncation() {
   const auto image = Image();
-  for (std::size_t bytes : {0u, 15u, 16u, 79u, 80u}) {
+  for (std::size_t bytes : {0u, 15u, 16u, 71u, 72u}) {
     if (!Status(std::span(image).first(bytes), sf::ParseStatus::Corrupt)) {
       return false;
     }
@@ -125,22 +149,22 @@ bool BadHeader() {
 }
 bool BadStateAndReservedAttributes() {
   auto image = Image();
-  Put(image, 68, 3);
+  Put(image, 60, 3);
   if (!Status(image, sf::ParseStatus::Corrupt)) {
     return false;
   }
   image = Image();
-  image[72] = 4;
+  image[64] = 4;
   if (!Status(image, sf::ParseStatus::Corrupt)) {
     return false;
   }
   image = Image();
-  image[79] = 1;
+  image[71] = 1;
   return Status(image, sf::ParseStatus::Corrupt);
 }
 bool UploadingIsBusy() {
   auto image = Image();
-  Put(image, 68, 1);
+  Put(image, 60, 1);
   Control control;
   sf::MetadataFacts facts;
   std::uint32_t index = 0;
@@ -156,7 +180,7 @@ bool ZeroAndDuplicateUuid() {
     return false;
   }
   image = Image(2);
-  std::copy_n(image.begin() + 16, 16, image.begin() + 80);
+  std::copy_n(image.begin() + 16, 16, image.begin() + 72);
   return Status(image, sf::ParseStatus::WrongIdentity);
 }
 bool BadStringIndexes() {
@@ -177,13 +201,13 @@ bool BadStringIndexes() {
 bool PathAndUuidMismatch() {
   for (std::size_t character : {0u, 8u, 36u, 39u}) {
     auto image = Image();
-    image[80 + character] = 'X';
+    image[72 + character] = 'X';
     if (!Status(image, sf::ParseStatus::Corrupt)) {
       return false;
     }
   }
   auto image = Image();
-  image[120] = 'x';
+  image[112] = 'x';
   return Status(image, sf::ParseStatus::Corrupt);
 }
 bool MissingNulAndMalformedUtf8() {
@@ -193,7 +217,7 @@ bool MissingNulAndMalformedUtf8() {
     return false;
   }
   image = Image();
-  image[123] = 0xc0;
+  image[115] = 0xc0;
   if (!Status(image, sf::ParseStatus::Corrupt)) {
     return false;
   }
@@ -234,7 +258,7 @@ bool InterruptionPreservesCauseAndClearsPartialFacts() {
                               ? sf::ParseStatus::Cancelled
                               : sf::ParseStatus::ClockFailure;
     if (result.status != expected || result.cause != 12345 ||
-        result.offset != 80 || facts.count != 0 || control.calls != 3) {
+        result.offset != 72 || facts.count != 0 || control.calls != 3) {
       return false;
     }
   }
@@ -274,6 +298,7 @@ struct Test {
 }  // namespace
 int main() {
   const Test tests[]{
+      {"actual pinned producer56-byte record and unsupported padding", ActualPinnedProducerMetadata},
       {"golden asymmetric UUID and exact selection", GoldenUuidAndSelection},
       {"256 actual records", MaximumRecords},
       {"257 claimed records without allocation", OversizedRecords},

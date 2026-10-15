@@ -10,6 +10,9 @@
 
 namespace sugarsubstitute::finished {
 
+// Pinned Crashpad Windows metadata v1: header followed by native 56-byte records.
+inline constexpr std::uint32_t kMetadataHeaderBytes = 16;
+inline constexpr std::uint32_t kMetadataRecordBytes = 56;
 inline constexpr std::uint64_t kMetadataLimit = 1024 * 1024;
 inline constexpr std::uint32_t kReportLimit = 256;
 inline constexpr std::uint64_t kDumpLimit = 256 * 1024 * 1024;

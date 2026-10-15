@@ -99,7 +99,7 @@ class Fake final : public sf::FileApi {
 constexpr uint8_t native_uuid[16]{0x78,0x56,0x34,0x12,0xab,0x90,0xef,0xcd,0x11,0x22,0x33,0x44,0x55,0x66,0x77,0x88};
 constexpr uint8_t uuid[16]{0x12,0x34,0x56,0x78,0x90,0xab,0xcd,0xef,0x11,0x22,0x33,0x44,0x55,0x66,0x77,0x88};
 Bytes Metadata() {
-  Bytes image(80); Put(image,0,0x43504144); Put(image,4,1); Put(image,8,1);
+  Bytes image(72); Put(image,0,0x43504144); Put(image,4,1); Put(image,8,1);
   std::copy_n(native_uuid,16,image.begin()+16);
   const std::string name = "12345678-90ab-cdef-1122-334455667788.dmp";
   image.insert(image.end(),name.begin(),name.end());image.push_back(0);
@@ -158,6 +158,71 @@ struct Fixture {
   }
 };
 bool Normal() {Fixture f;if(!f.Query()||!f.Prepare())return false;const auto p=f.Permit();return f.Disposition(p)&&f.api.handles.empty()&&f.owner->absent_mask==3&&f.owner->reclaimed==p.prepared.source.bytes&&f.owner->metadata_state==CandidateImage;}
+bool DiscardAfterReadReturnsCheckedRetirement() {
+  Fixture f;
+  if (!f.Query() || !f.Prepare()) return false;
+  auto permit = f.Permit();
+  uint8_t bytes[16]{};
+  SsFinishedReadInputV1 read{};
+  read.call.abi_version=1;read.call.phase=Operation;
+  read.call.lease=reinterpret_cast<uintptr_t>(f.owner.get());
+  read.call.original={100,1};read.call.current=f.Source();
+  read.output=bytes;read.capacity=sizeof(bytes);
+  SsFinishedResultV1 observed{};ss_finished_read_v1(&read,&observed);
+  if (observed.status != Finished || observed.actual_read_bytes != sizeof(bytes)) return false;
+  auto token=f.owner.release();
+  SsFinishedDiscardInputV1 input{};input.call=read.call;input.borrowed_live_permit=&permit;
+  SsFinishedDispositionResultV1 output{};ss_finished_discard_v1(&input,&output);
+  if (!output.state.retired) { f.owner.reset(token); return false; }
+  return output.state.status==Finished && !output.state.lease && !output.state.live_handles &&
+      !output.state.live_locks && !output.state.actual_read_bytes &&
+      output.state.actual_reclaimed_bytes==permit.prepared.source.bytes &&
+      output.source_state==DeletedNow && output.metadata_state==CandidateImage &&
+      output.stages_absent_mask==3 && f.api.handles.empty();
+}
+bool StoppedDiscardAfterReadCase(unsigned mode) {
+  Fixture f;
+  if (!f.Query() || !f.Prepare()) return false;
+  auto permit=f.Permit();
+  const auto metadata=f.api.files[L"db/metadata"].bytes;
+  const auto source=f.api.files[L"db/reports/12345678-90ab-cdef-1122-334455667788.dmp"].bytes;
+  uint8_t bytes[16]{};SsFinishedReadInputV1 read{};
+  read.call.abi_version=1;read.call.phase=Operation;
+  read.call.lease=reinterpret_cast<uintptr_t>(f.owner.get());
+  read.call.original={100,1};read.call.current=f.Source();
+  read.output=bytes;read.capacity=sizeof(bytes);
+  SsFinishedResultV1 observed{};ss_finished_read_v1(&read,&observed);
+  if (observed.status!=Finished || observed.actual_read_bytes!=sizeof(bytes)) return false;
+  const auto effects=f.api.effects;
+  if(mode==0) f.api.cancelled=true;
+  else if(mode==1) f.api.now=100;
+  else f.owner->Fail(9911,FinishedCauseNative);
+  const DWORD expected=mode==0?ERROR_OPERATION_ABORTED:mode==1?ERROR_TIMEOUT:9911;
+  const auto origin=mode==0?FinishedCauseControl:mode==1?FinishedCauseQpc:FinishedCauseNative;
+  const auto status=mode==1?DeadlineElapsed:Failed;
+  SsFinishedDiscardInputV1 input{};input.call=read.call;input.borrowed_live_permit=&permit;
+  SsFinishedDispositionResultV1 output{};ss_finished_discard_v1(&input,&output);
+  if(output.state.primary_error!=expected || output.state.primary_origin!=origin ||
+      output.state.status!=status || output.state.retired || output.state.lease!=read.call.lease ||
+      !output.state.live_handles || output.state.actual_read_bytes || output.state.actual_reclaimed_bytes ||
+      output.source_state!=SourceRetained || output.metadata_state!=OriginalImage || output.stages_absent_mask ||
+      f.api.effects!=effects || f.api.files[L"db/metadata"].bytes!=metadata ||
+      f.api.files[L"db/reports/12345678-90ab-cdef-1122-334455667788.dmp"].bytes!=source) return false;
+  const auto calls=f.main.calls;
+  auto token=f.owner.release();
+  SsFinishedCallV1 cleanup{};cleanup.abi_version=1;cleanup.phase=Cleanup;
+  cleanup.lease=reinterpret_cast<uintptr_t>(token);cleanup.original={1000,1};cleanup.current=f.CleanupSource();
+  SsFinishedResultV1 retired{};ss_finished_retire_v1(&cleanup,&retired);
+  if(!retired.retired) { f.owner.reset(token); return false; }
+  return !retired.lease && !retired.live_handles && !retired.live_locks && !retired.actual_read_bytes &&
+      retired.primary_error==expected && retired.primary_origin==origin && f.main.calls==calls &&
+      f.cleanup.calls && f.api.handles.empty() && f.api.files[L"db/metadata"].bytes==metadata &&
+      f.api.files[L"db/reports/12345678-90ab-cdef-1122-334455667788.dmp"].bytes==source;
+}
+bool StoppedDiscardAfterReadRetainsUntilCleanup() {
+  for(unsigned mode=0;mode<3;++mode) if(!StoppedDiscardAfterReadCase(mode)) return false;
+  return true;
+}
 bool BoundsAndWrongKey() {Fixture f;if(!f.Query())return false;auto k=f.Key();k.epoch[0]^=1;const auto before=f.api.effects;return !f.PrepareKey(k)&&f.api.effects==before&&f.api.handles.size()==5;}
 bool PartialOutput() {Fixture f;f.api.fail_effect=7;f.api.partial_open=true;const bool ok=!f.Query()&&f.owner->primary==9911&&!f.api.handles.empty();return ok;}
 bool LatePartial() {Fixture f;f.api.late_effect=1;return !f.Query()&&f.owner->primary==ERROR_TIMEOUT&&f.api.handles.size()==1;}
@@ -392,7 +457,7 @@ bool QpcOriginAndBoundedSecondaryPacking() {
 
 }
 int main() {
-  const std::pair<const char*,bool(*)()> tests[]={{"empty-structural-attachments",EmptyStructuralAttachments},{"unhandled-attachments-retained",RejectUnhandledAttachments},{"normal",Normal},{"foreign-key",BoundsAndWrongKey},{"partial-open",PartialOutput},{"late-output",LatePartial},{"lock-busy",LockBusy},{"failed-close",FailedCloseRetains},{"collision",Collision},{"third-image",ThirdImage},{"every-prepare-effect",EffectFailures},{"original-present",OriginalPresent},{"candidate-present",CandidatePresent},{"candidate-absent",CandidateAbsent},{"original-absent",OriginalAbsent},{"prior-all-absent",PriorAllAbsent},{"changed-metadata-inode",ChangedMetadataInode},{"every-disposition-effect",DispositionFailures},{"CNG-sha256-vector",HashVector},{"first-cause-post-timeout",FirstCauseWinsPostTimeout},{"query-once",QueryIsOneShot},{"incomplete-inventory",IncompleteInventory},{"foreign-generation",ForeignGeneration},{"distinct-epoch-stage",DistinctEpochStageNames},{"cancel-partial-cleanup-source",CancelAfterPartialOutputAndCleanup},{"cancel-each-prepare",CancelAtEachPreparationEffect},{"cancel-each-disposition",CancelAtEachDispositionEffect}};
+  const std::pair<const char*,bool(*)()> tests[]={{"empty-structural-attachments",EmptyStructuralAttachments},{"unhandled-attachments-retained",RejectUnhandledAttachments},{"normal",Normal},{"discard-after-read-retirement",DiscardAfterReadReturnsCheckedRetirement},{"stopped-discard-after-read-cleanup",StoppedDiscardAfterReadRetainsUntilCleanup},{"foreign-key",BoundsAndWrongKey},{"partial-open",PartialOutput},{"late-output",LatePartial},{"lock-busy",LockBusy},{"failed-close",FailedCloseRetains},{"collision",Collision},{"third-image",ThirdImage},{"every-prepare-effect",EffectFailures},{"original-present",OriginalPresent},{"candidate-present",CandidatePresent},{"candidate-absent",CandidateAbsent},{"original-absent",OriginalAbsent},{"prior-all-absent",PriorAllAbsent},{"changed-metadata-inode",ChangedMetadataInode},{"every-disposition-effect",DispositionFailures},{"CNG-sha256-vector",HashVector},{"first-cause-post-timeout",FirstCauseWinsPostTimeout},{"query-once",QueryIsOneShot},{"incomplete-inventory",IncompleteInventory},{"foreign-generation",ForeignGeneration},{"distinct-epoch-stage",DistinctEpochStageNames},{"cancel-partial-cleanup-source",CancelAfterPartialOutputAndCleanup},{"cancel-each-prepare",CancelAtEachPreparationEffect},{"cancel-each-disposition",CancelAtEachDispositionEffect}};
   for(const auto& [name,test]:tests)if(!test()){std::printf("FAILED %s\n",name);return 1;}
   if(!ClosedControlValidation()||!CancelledPreflightAllocatesNoLease()||!PreflightPreservesAllocationCause()){std::printf("FAILED control preflight\n");return 1;}
   if(!EqualCodesPreserveActualNativeFirstOrigin()||!ControlFirstNoEffectsAndNoNativeEcho()||!QpcOriginAndBoundedSecondaryPacking()){std::printf("FAILED cause origins\n");return 1;}

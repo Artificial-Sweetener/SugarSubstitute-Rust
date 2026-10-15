@@ -7,8 +7,6 @@
 namespace sugarsubstitute::finished {
 namespace {
 constexpr std::uint32_t kMagic = 0x43504144;
-constexpr std::size_t kHeaderBytes = 16;
-constexpr std::size_t kRecordBytes = 64;
 
 std::uint32_t U32(std::span<const std::uint8_t> image,
                   std::size_t offset) noexcept {
@@ -63,7 +61,7 @@ ParseResult Parse(std::span<const std::uint8_t> image, ParseControl& control,
   if (image.size() > kMetadataLimit) {
     return {ParseStatus::Oversized};
   }
-  if (image.size() < kHeaderBytes || U32(image, 0) != kMagic ||
+  if (image.size() < kMetadataHeaderBytes || U32(image, 0) != kMagic ||
       U32(image, 4) != 1 || U32(image, 12) != 0) {
     return {ParseStatus::Corrupt};
   }
@@ -72,7 +70,7 @@ ParseResult Parse(std::span<const std::uint8_t> image, ParseControl& control,
     return {ParseStatus::Oversized, 8};
   }
   const std::uint64_t table_offset =
-      kHeaderBytes + static_cast<std::uint64_t>(facts.count) * kRecordBytes;
+      kMetadataHeaderBytes + static_cast<std::uint64_t>(facts.count) * kMetadataRecordBytes;
   if (table_offset > image.size()) {
     return {ParseStatus::Corrupt, table_offset};
   }
@@ -83,7 +81,7 @@ ParseResult Parse(std::span<const std::uint8_t> image, ParseControl& control,
   }
   for (std::uint32_t i = 0; i < facts.count; ++i) {
     const std::size_t offset =
-        kHeaderBytes + static_cast<std::size_t>(i) * kRecordBytes;
+        kMetadataHeaderBytes + static_cast<std::size_t>(i) * kMetadataRecordBytes;
     const auto progress = CheckProgress(control, offset);
     if (progress.status != ParseStatus::Valid) {
       return progress;
@@ -100,12 +98,12 @@ ParseResult Parse(std::span<const std::uint8_t> image, ParseControl& control,
         return {ParseStatus::WrongIdentity, offset};
       }
     }
-    const auto state = U32(image, offset + 52);
+    const auto state = U32(image, offset + 44);
     if (state > static_cast<std::uint32_t>(ReportState::Completed) ||
-        (image[offset + 56] & ~3u) != 0 ||
-        !std::all_of(image.begin() + offset + 57, image.begin() + offset + 64,
+        (image[offset + 48] & ~3u) != 0 ||
+        !std::all_of(image.begin() + offset + 49, image.begin() + offset + kMetadataRecordBytes,
                      [](auto byte) { return byte == 0; })) {
-      return {ParseStatus::Corrupt, offset + 52};
+      return {ParseStatus::Corrupt, offset + 44};
     }
     record.state = static_cast<ReportState>(state);
     if (!StringAt(table, U32(image, offset + 16), true, record.uuid) ||

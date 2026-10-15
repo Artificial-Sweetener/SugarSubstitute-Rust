@@ -28,3 +28,6 @@ mod support;
 
 #[path = "tests/collection.rs"]
 mod collection;
+
+#[path = "tests/disposition.rs"]
+mod disposition;

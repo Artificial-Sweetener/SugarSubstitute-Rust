@@ -38,9 +38,9 @@ bool BuildCandidateImage(Invocation& invocation, const SsCapturePreparationV1& p
   const auto found = FindMetadataUuid(parsed, uuid, index);
   if (found.status != ParseStatus::Valid) { owner.status = found.status == ParseStatus::Busy ? Busy : WrongIdentity; return false; }
   const auto offset = parsed.records[index].offset;
-  owner.candidate_bytes = owner.metadata_bytes - 64;
+  owner.candidate_bytes = owner.metadata_bytes - kMetadataRecordBytes;
   std::copy_n(owner.original.begin(), offset, owner.candidate.begin());
-  std::copy(owner.original.begin() + offset + 64, owner.original.begin() + owner.metadata_bytes, owner.candidate.begin() + offset);
+  std::copy(owner.original.begin() + offset + kMetadataRecordBytes, owner.original.begin() + owner.metadata_bytes, owner.candidate.begin() + offset);
   const auto count = parsed.count - 1;
   for (size_t i = 0; i < 4; ++i) owner.candidate[8 + i] = static_cast<uint8_t>(count >> (8 * i));
   // Records keep their string-table-relative offsets. No unrelated bytes change.
@@ -61,7 +61,8 @@ bool ValidatePermit(Invocation& invocation, const SsCaptureDispositionV1& permit
       p.original_stage.reserved || p.candidate_stage.reserved ||
       p.original_stage.file.bytes != p.metadata_preimage.bytes ||
       memcmp(p.original_stage.file.sha256, p.metadata_preimage.sha256, 32) ||
-      p.metadata_preimage.bytes < 80 || p.candidate_stage.file.bytes != p.metadata_preimage.bytes - 64 ||
+      p.metadata_preimage.bytes < kMetadataHeaderBytes + kMetadataRecordBytes ||
+      p.candidate_stage.file.bytes != p.metadata_preimage.bytes - kMetadataRecordBytes ||
       !memcmp(p.original_stage.file.identity, p.candidate_stage.file.identity, 24) ||
       !memcmp(p.original_stage.file.identity, p.metadata_preimage.identity, 24) ||
       !memcmp(p.candidate_stage.file.identity, p.metadata_preimage.identity, 24) ||
@@ -272,6 +273,7 @@ void ss_finished_discard_v1(const SsFinishedDiscardInputV1* input, SsFinishedDis
   if (!input || !input->call.lease || !input->borrowed_live_permit) return;
   auto owner = reinterpret_cast<Lease*>(input->call.lease);
   if (!TryAcquireSRWLockExclusive(&owner->gate)) { BusyResult(output->state, input->call.lease); return; }
+  owner->read_bytes = 0;
   Invocation invocation(*owner,input->call.current);
   const bool settled = OperationCall(invocation, input->call) && Disposition(invocation, *input->borrowed_live_permit);
   DispositionResult(owner, settled, *output); ReleaseSRWLockExclusive(&owner->gate);

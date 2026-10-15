@@ -276,3 +276,6 @@ fn diagnostic_three_roles_and_uncertain_predecessor_preserve_separate_desktop_ma
     drop(sessions);
     Ok(())
 }
+
+#[path = "diagnostic/launch_jobs.rs"]
+mod launch_jobs;

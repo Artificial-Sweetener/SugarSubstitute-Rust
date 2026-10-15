@@ -224,3 +224,6 @@ mod launch_input_storage;
 
 #[path = "tests/retirement_phase.rs"]
 mod retirement_phase;
+
+#[path = "tests/launch_jobs.rs"]
+mod launch_jobs;

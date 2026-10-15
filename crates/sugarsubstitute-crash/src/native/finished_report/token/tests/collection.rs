@@ -10,11 +10,11 @@ use crate::incident::*;
 use std::path::Path;
 use sugarsubstitute_contracts::incident::*;
 use sugarsubstitute_supervision::diagnostic_storage::{fixture::*, *};
-fn run(partial: bool) -> Result<(), TestError> {
+fn run(partial: bool, malformed: Option<&'static str>) -> Result<(), TestError> {
     let mut harness = Harness::new()?;
     let mut source = runtime::create(&mut harness)?;
     let client = harness.client.clone();
-    let (mut source, mut repository, mut token, fixture) =
+    let (mut source, mut repository, mut token, fixture, raw) =
         harness.run(2, 8 * 1024 * 1024, move |context| {
             let owner = runtime::owner()?;
             let fixture = DiagnosticStorageFixture::new()?;
@@ -58,7 +58,7 @@ fn run(partial: bool) -> Result<(), TestError> {
             .map_err(|e| format!("install {e:?}"))?;
             let mut token = output.ok_or("no token")?;
             token.encode_deadline(&client).map_err(|e| format!("deadline {e:?}"))?;
-            let build = BuildIdentity::new("copy")?;
+            let build = BuildIdentity::new(malformed.unwrap_or("copy"))?;
             let incident = IncidentKey::new(IncidentSubject::Supervisor(owner));
             assert_eq!(token.open(incident, &build, None, &context), Ok(0));
             let raw = token.fields.as_ref().ok_or("no fields")?.state.token;
@@ -137,6 +137,20 @@ fn run(partial: bool) -> Result<(), TestError> {
                     &committed,
                     &context,
                 )?;
+                if malformed.is_some() {
+                    assert!(
+                        repository
+                            .settle_capture_journal_token(&mut token, &mut journal, &context)
+                            .is_err()
+                    );
+                    let fields = token.fields.as_ref().ok_or("retained fields missing")?;
+                    assert!(fields.phase == Phase::Quarantined);
+                    assert_eq!(fields.state.token, raw);
+                    assert!(fields.cpp.is_some());
+                    assert_eq!(abi_boundary::dispositions(raw), 1);
+                    assert_eq!(abi_boundary::counts(raw).1, 0);
+                    return Ok((source, repository, token, fixture, raw));
+                }
                 fixture.set_failure(DiagnosticFixtureFailure::AbsenceObservation, true);
                 assert!(
                     repository
@@ -152,11 +166,25 @@ fn run(partial: bool) -> Result<(), TestError> {
                 );
                 assert_eq!(repository.snapshot().reads(), 1);
             }
-            Ok((source, repository, token, fixture))
+            Ok((source, repository, token, fixture, raw))
         })?;
     let client = harness.client.clone();
     let retained = harness.run(3, 32768, move |context| {
+        if malformed.is_some() {
+            assert_eq!(token.retire_cpp(&client, &context), Err(Issue::Quarantined));
+            assert_eq!(token.retire_source(&context), Err(Issue::Quarantined));
+            assert_eq!(abi_boundary::counts(raw).1, 0);
+            return Ok((source, repository, token, fixture));
+        }
         assert_eq!(token.retire_cpp(&client, &context), Ok(true));
+        assert_eq!(abi_boundary::counts(raw).1, u32::from(partial));
+        if !partial {
+            let fields = token.fields.as_ref().ok_or("retired fields missing")?;
+            assert!(fields.phase == Phase::Retired);
+            assert_eq!(fields.state.token, 0);
+            assert!(fields.cpp.is_none());
+            assert!(!fields.source_closed);
+        }
         token.retire_source(&context).map_err(|e| format!("source {e:?}"))?;
         repository.retire(&context)?;
         source.retire(&context)?;
@@ -166,6 +194,11 @@ fn run(partial: bool) -> Result<(), TestError> {
     harness.join();
     assert_eq!(harness.main.snapshot().reserved_bytes, 8 * 1024 * 1024);
     drop(retained);
+    if malformed.is_some() {
+        assert_eq!(harness.main.snapshot().reserved_bytes, 8 * 1024 * 1024);
+        assert_eq!(harness.source.snapshot().reserved_bytes, 1024 * 1024);
+        return Ok(());
+    }
     assert_eq!(harness.main.snapshot().reserved_bytes, 0);
     assert_eq!(harness.source.snapshot().reserved_bytes, 0);
     Ok(())
@@ -173,10 +206,25 @@ fn run(partial: bool) -> Result<(), TestError> {
 #[test]
 fn whole_finished_stream_is_published_once_with_immutable_payload_generation()
 -> Result<(), TestError> {
-    run(false)
+    run(false, None)
 }
 #[test]
 fn partial_finished_write_preserves_stage_and_never_replays_uncertain_bytes()
 -> Result<(), TestError> {
-    run(true)
+    run(true, None)
+}
+
+#[test]
+fn successful_disposition_without_native_retirement_keeps_original_token_quarantined()
+-> Result<(), TestError> {
+    run(false, Some("copy-live"))
+}
+#[test]
+fn disposition_retirement_with_live_handle_keeps_original_token_quarantined()
+-> Result<(), TestError> {
+    run(false, Some("copy-handle"))
+}
+#[test]
+fn live_disposition_cannot_reuse_recovery_no_owner_retirement() -> Result<(), TestError> {
+    run(false, Some("copy-failedretire"))
 }

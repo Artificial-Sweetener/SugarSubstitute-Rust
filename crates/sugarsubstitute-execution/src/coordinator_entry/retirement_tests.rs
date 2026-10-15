@@ -3,12 +3,18 @@
 //! Preserve actual native custody after root shutdown and original private cleanup expiry.
 use super::kernel::*;
 use crate::{
+    admission::Core,
     coordinator_entry::*,
-    runtime_test_support::{Rig, TestResult},
+    native::NativeWork,
+    runtime_test_support::{ClockPort, Rig, TestResult, spec},
     scope::lock,
+    task::Work,
 };
 use std::{num::NonZeroUsize, sync::atomic::Ordering};
-use sugarsubstitute_contracts::execution::{ExecutionPort, JobOutcome, JobPhase, Moment};
+use sugarsubstitute_contracts::execution::{
+    ExecutionId, ExecutionPort, JobClass, JobOutcome, JobPhase, Moment, Operation, ScopeId,
+    ScopeSpec,
+};
 #[test]
 fn serving_past_preparation_has_no_private_cleanup_budget_and_retains_native_owner() -> TestResult {
     let rig = Rig::new()?;
@@ -45,34 +51,74 @@ fn serving_past_preparation_has_no_private_cleanup_budget_and_retains_native_own
 fn first_private_cleanup_deadlines_do_not_renew_and_expiry_retains_partial_native_owner()
 -> TestResult {
     let rig = Rig::new()?;
+    // Drive the real admitted native owner directly: mailbox error wakes precede private timer updates.
+    let core =
+        Core::new(ExecutionId::new(99)?, Arc::new(ClockPort(rig.clock.clone())), rig.wake.clone());
+    let scope =
+        core.create_scope_kind(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None, true)?;
     let boundary = Boundary::new(&rig, true)?;
     boundary.fail_prepare.store(true, Ordering::Release);
     boundary.allow_retire.store(false, Ordering::Release);
     let release = ReleaseBoundary(boundary.clone());
-    let (_scope, mut session) = server(&rig, &boundary)?;
-    boundary.retiring.wait()?;
-    rig.clock.wait_until_registered(Moment::from_nanos(10_000_000_000))?;
-    rig.clock.advance(9_000_000_000);
-    session.control.close();
-    rig.clock.advance(1_000_000_000);
-    rig.clock.wait_until_registered(Moment::from_nanos(15_000_000_000))?;
-    rig.clock.advance(5_000_000_000);
-    let mut failures = Vec::new();
-    loop {
-        let observed = rig.wake.count();
-        if let Err(error) = rig.client.drain_completions(NonZeroUsize::MIN) {
-            failures.push(error);
-        }
-        let stopped = lock(&rig.client.core.state)
+    let mut specification = spec(1, JobClass::NativeObservation, MIN_ENTRY_SERVER_BYTES)?;
+    specification.operation = Operation::NativeLifecycle;
+    let mut session = reserve_server(
+        &core,
+        &scope,
+        specification,
+        CoordinatorEntryServerInput::new(facts()?)?,
+        Moment::from_nanos(30_000_000_000),
+        Box::new(Lease(boundary.clone())),
+    )?;
+    let (queued, _) =
+        core.take_native_at(Moment::from_nanos(0)).ok_or("Actual native dequeue missing")?;
+    let Work::Native(NativeWork::CoordinatorEntry(work)) = queued.work else {
+        return Err("Wrong actual native owner selected".into());
+    };
+    let mut active = worker::Active::new(work, queued.context, &core, Moment::from_nanos(0));
+    active.progress(&core, Moment::from_nanos(0), true);
+    assert!(
+        lock(&core.state)
             .jobs
             .get(&session.control.shared.job_id)
             .and_then(|record| record.native_deadlines)
-            .is_some_and(|slots| slots.stopped());
-        if stopped {
-            break;
-        }
-        rig.wake.wait_after(observed)?;
-    }
+            .is_some_and(
+                |slots| slots.handshake_deadline() == Some(Moment::from_nanos(10_000_000_000))
+            )
+    );
+    rig.clock.advance(9_000_000_000);
+    session.control.close();
+    active.progress(&core, Moment::from_nanos(9_000_000_000), true);
+    assert!(
+        lock(&core.state)
+            .jobs
+            .get(&session.control.shared.job_id)
+            .and_then(|record| record.native_deadlines)
+            .is_some_and(
+                |slots| slots.handshake_deadline() == Some(Moment::from_nanos(10_000_000_000))
+            )
+    );
+    rig.clock.advance(1_000_000_000);
+    active.progress(&core, Moment::from_nanos(10_000_000_000), true);
+    assert!(
+        lock(&core.state)
+            .jobs
+            .get(&session.control.shared.job_id)
+            .and_then(|record| record.native_deadlines)
+            .is_some_and(
+                |slots| slots.handshake_deadline() == Some(Moment::from_nanos(15_000_000_000))
+            )
+    );
+    rig.clock.advance(5_000_000_000);
+    active.progress(&core, Moment::from_nanos(15_000_000_000), true);
+    assert!(
+        lock(&core.state)
+            .jobs
+            .get(&session.control.shared.job_id)
+            .and_then(|record| record.native_deadlines)
+            .is_some_and(|slots| slots.stopped())
+    );
+    assert!(!active.completed());
     assert!(session.completion.try_take_completion().is_none());
     assert_eq!(boundary.drops.load(Ordering::Acquire), 0);
     assert!(
@@ -82,21 +128,19 @@ fn first_private_cleanup_deadlines_do_not_renew_and_expiry_retains_partial_nativ
             .claim(MIN_ENTRY_SERVER_BYTES)
             .is_err()
     );
+    assert_eq!(scope.snapshot().reserved_bytes, MIN_ENTRY_SERVER_BYTES);
+    let mut failures = Vec::new();
+    while let Err(error) = core.mailbox.drain(NonZeroUsize::MIN) {
+        failures.push(error);
+    }
     session.control.close();
+    active.progress(&core, Moment::from_nanos(15_000_000_000), true);
+    assert!(!active.completed());
+    assert_eq!(boundary.drops.load(Ordering::Acquire), 0);
     drop(release);
-    let completion = loop {
-        let observed = rig.wake.count();
-        if let Some(completion) = session.completion.try_take_completion() {
-            break completion;
-        }
-        if let Err(error) = rig.client.drain_completions(NonZeroUsize::MIN) {
-            failures.push(error);
-        }
-        if let Some(completion) = session.completion.try_take_completion() {
-            break completion;
-        }
-        rig.wake.wait_after(observed)?;
-    };
+    active.progress(&core, Moment::from_nanos(15_000_000_000), true);
+    assert!(active.completed());
+    let completion = session.completion.try_take_completion().ok_or("Actual terminal missing")?;
     assert!(
         matches!(completion.outcome,JobOutcome::Failure(ref error) if error.native_cause().is_some_and(|cause|cause.stage()=="entry_partial_prepare"))
     );

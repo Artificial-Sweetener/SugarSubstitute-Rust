@@ -31,7 +31,7 @@ unsafe extern "C" fn open(input: *const abi::Open<'_>, output: *mut abi::Output)
         b"noowner" => 2,
         b"invalid" => 3,
         b"uncertain" => 5,
-        b"copy" | b"partialcopy" => 6,
+        b"copy" | b"partialcopy" | b"copy-live" | b"copy-handle" | b"copy-failedretire" => 6,
         _ => 4,
     };
     let key = input.database;
@@ -143,7 +143,7 @@ unsafe extern "C" fn prepare(input: *const abi::Prepare<'_>, output: *mut abi::P
         bytes: 64,
         sha256: Sha256::digest([0x5a; 64]).into(),
     };
-    prepared.metadata = abi::FileFacts { identity: [41; 24], bytes: 144, sha256: [42; 32] };
+    prepared.metadata = abi::FileFacts { identity: [41; 24], bytes: 114, sha256: [42; 32] };
     prepared.original_stage = abi::StageFacts {
         role: 1,
         reserved: 0,
@@ -152,7 +152,7 @@ unsafe extern "C" fn prepare(input: *const abi::Prepare<'_>, output: *mut abi::P
     prepared.candidate_stage = abi::StageFacts {
         role: 2,
         reserved: 0,
-        file: abi::FileFacts { identity: [44; 24], bytes: 80, sha256: [45; 32] },
+        file: abi::FileFacts { identity: [44; 24], bytes: 58, sha256: [45; 32] },
     };
     output.valid = 1;
     output.reserved = 0;
@@ -167,17 +167,40 @@ unsafe extern "C" fn discard(input: *const abi::Discard<'_>, output: *mut abi::D
     assert_eq!(permit.plan_sha256, permit.intent.sha256);
     assert_eq!(permit.payload.sha256, permit.prepared.source.sha256);
     let mut scripts = SCRIPTS.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    let script = scripts.iter_mut().flatten().find(|s| s.key == input.call.lease);
-    if let Some(script) = script {
+    let mut script = scripts.iter_mut().flatten().find(|s| s.key == input.call.lease);
+    if let Some(script) = &mut script {
         script.dispositions += 1;
     }
     output.state = abi::Output::empty();
     output.state.version = 1;
-    output.state.lease = input.call.lease;
+    output.state.retired = 1;
+    output.state.reclaimed_bytes = permit.prepared.source.bytes;
+    if let Some(script) = script {
+        output.state.facts_valid = 1;
+        output.state.facts = script.facts;
+    }
     output.source = 2;
     output.metadata = 2;
     output.stages_absent = 3;
     output.reserved = 0;
+    match &permit.prepared.build[..permit.prepared.build_length as usize] {
+        b"copy-live" => {
+            output.state.retired = 0;
+            output.state.lease = input.call.lease;
+        }
+        b"copy-handle" => output.state.handles = 1,
+        b"copy-failedretire" => {
+            output.state.status = 7;
+            output.state.primary_error = 8;
+            output.state.primary_origin = 1;
+            output.state.facts_valid = 0;
+            output.state.reclaimed_bytes = 0;
+            output.source = 4;
+            output.metadata = 3;
+            output.stages_absent = 0;
+        }
+        _ => {}
+    }
 }
 pub(super) fn dispositions(key: usize) -> u32 {
     SCRIPTS

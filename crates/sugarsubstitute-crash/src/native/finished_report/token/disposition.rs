@@ -191,40 +191,56 @@ impl Token {
         let control = current.take_failure();
         drop(current);
         fields.observe(&output.state, control)?;
-        if output.reserved != 0
-            || !(1..=4).contains(&output.source)
-            || !(1..=3).contains(&output.metadata)
-            || output.stages_absent > 3
-            || (!recovering && output.state.retired != 0)
-            || output.state.read_bytes != 0
-            || output.state.reclaimed_bytes > prepared.source.bytes
-        {
+        if !valid_disposition_output(&output, recovering, prepared.source.bytes) {
             fields.phase = Phase::Quarantined;
             return Err(Issue::Invalid);
         }
-        if output.state.retired == 1 {
-            if !matches!(output.state.status, 6 | 7)
-                || output.state.primary_error == 0
-                || output.source != 4
-                || output.metadata != 3
-                || output.stages_absent != 0
-                || output.state.reclaimed_bytes != 0
-                || output.state.facts_valid != 0
-            {
-                fields.phase = Phase::Quarantined;
-                return Err(Issue::Invalid);
-            }
-            fields.accept_retirement(&output.state);
-        }
+        fields.accept_retirement(&output.state);
         if output.state.status != 0 {
             return Err(Issue::Native);
         }
-        if !matches!(output.source, 2 | 3) || output.metadata != 2 || output.stages_absent != 3 {
-            fields.phase = Phase::Quarantined;
-            return Err(Issue::Invalid);
-        }
         Ok(())
     }
+}
+/// Accept native destruction only with complete checked disposition or explicit recovery no-owner.
+pub(super) fn valid_disposition_output(
+    output: &abi::DispositionOutput,
+    recovering: bool,
+    source_bytes: u64,
+) -> bool {
+    let state = &output.state;
+    if output.reserved != 0
+        || !(1..=4).contains(&output.source)
+        || !(1..=3).contains(&output.metadata)
+        || output.stages_absent > 3
+        || state.read_bytes != 0
+        || state.reclaimed_bytes > source_bytes
+    {
+        return false;
+    }
+    if state.status == 0 {
+        return state.retired == 1
+            && state.lease == 0
+            && state.handles == 0
+            && state.locks == 0
+            && (recovering || state.facts_valid == 1)
+            && state.primary_error == 0
+            && state.cleanup_count == 0
+            && state.omitted_cleanup == 0
+            && matches!(output.source, 2 | 3)
+            && output.metadata == 2
+            && output.stages_absent == 3
+            && state.reclaimed_bytes == if output.source == 2 { source_bytes } else { 0 };
+    }
+    state.retired == 0
+        || (recovering
+            && matches!(state.status, 6 | 7)
+            && state.primary_error != 0
+            && output.source == 4
+            && output.metadata == 3
+            && output.stages_absent == 0
+            && state.reclaimed_bytes == 0
+            && state.facts_valid == 0)
 }
 fn operation(key: sugarsubstitute_contracts::incident::LogicalStoreOperationKey) -> abi::Operation {
     abi::Operation {

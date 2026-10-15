@@ -15,6 +15,11 @@ use sugarsubstitute_contracts::{
     lifecycle::CoordinatorKey,
 };
 
+/// Header bytes in the pinned Crashpad Windows metadata version-one format.
+pub(crate) const CRASHPAD_METADATA_HEADER_BYTES: u64 = 16;
+/// Record bytes removed by the pinned producer's version-one disposition.
+pub(crate) const CRASHPAD_METADATA_RECORD_BYTES: u64 = 56;
+
 /// Complete recorded expectations; these values grant no file or native observation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CaptureRecordedFileFacts {
@@ -130,13 +135,15 @@ impl CaptureDispositionPlan {
             || capture_generation != incident.subject().coordinator()
             || database_identity == [0; 24]
             || metrics_identity == [0; 24]
-            || metadata_preimage.bytes > 1_048_576
+            || !(CRASHPAD_METADATA_HEADER_BYTES + CRASHPAD_METADATA_RECORD_BYTES..=1_048_576)
+                .contains(&metadata_preimage.bytes)
             || original_stage.bytes > 1_048_576
             || candidate_stage.bytes > 1_048_576
             || summary.bytes > 65_536
             || original_stage.bytes != metadata_preimage.bytes
             || original_stage.sha256 != metadata_preimage.sha256
-            || metadata_preimage.bytes.checked_sub(64) != Some(candidate_stage.bytes)
+            || metadata_preimage.bytes.checked_sub(CRASHPAD_METADATA_RECORD_BYTES)
+                != Some(candidate_stage.bytes)
             || original_stage.sha256 == candidate_stage.sha256
             || original_stage.identity == candidate_stage.identity
             || [original_stage.identity, candidate_stage.identity].iter().any(|identity| {

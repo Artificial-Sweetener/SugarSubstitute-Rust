@@ -132,25 +132,12 @@ impl IncidentReporting {
             return Ok(());
         };
         if !self.launched {
-            let specs = ReporterLaunch {
-                native: ScopeSpec { id: resources.scopes.allocate()?, deadline: None },
-                creation: JobSpec {
-                    id: resources.jobs.allocate()?,
-                    operation: Operation::NativeLifecycle,
-                    class: JobClass::InfrastructureLifecycle,
-                    deadline: Some(until),
-                    reservation_bytes: prepared.bytes,
-                    replacement: None,
-                },
-                watch: JobSpec {
-                    id: resources.jobs.allocate()?,
-                    operation: Operation::NativeLifecycle,
-                    class: JobClass::NativeObservation,
-                    deadline: None,
-                    reservation_bytes: 4096,
-                    replacement: None,
-                },
-            };
+            let specs = ReporterLaunch::allocate(
+                ScopeSpec { id: resources.scopes.allocate()?, deadline: None },
+                resources.jobs,
+                until,
+                prepared.bytes,
+            )?;
             self.relay()?.source().launch(
                 resources.authority.registry_mut().ok_or("Actual report registry missing")?,
                 resources.client,
