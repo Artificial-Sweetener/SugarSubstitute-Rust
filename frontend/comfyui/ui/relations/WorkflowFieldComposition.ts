@@ -16,14 +16,16 @@
 /** Compose native field appearance and relation policy around one submitted seed history. */
 import { RelationHostLifecycle, type RelationHostOptions } from './RelationHostLifecycle.js';
 import { FluentAppearanceHost } from '../surface/appearance/FluentAppearanceHost.js';
+import { WorkflowEditorNavigationHost } from '../surface/WorkflowEditorNavigationHost.js';
 import { SubstituteFrameHost } from '../surface/frame/SubstituteFrameHost.js';
 import type { WorkflowOutputActivity } from '../execution/application/WorkflowOutputActivity.js';
 import type { CubeStackFrameControls } from '../surface/stack/CubeStackHost.js';
+import { SettingsWorkspaceHost } from '../settings/SettingsWorkspaceHost.js';
 
 export interface WorkflowFieldHostOptions
   extends Omit<RelationHostOptions, 'reportError' | 'appearance'> {
   reportRelationError(error: unknown): void;
-  reportAppearanceError(error: unknown): void;
+  reportPresentationError(error: unknown): void;
   activity: WorkflowOutputActivity;
   stackControls(): CubeStackFrameControls;
 }
@@ -33,6 +35,7 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
   appearance: FluentAppearanceHost;
   relations: RelationHostLifecycle;
   frame: SubstituteFrameHost;
+  setupPresentation(): void;
 } {
   const relations: RelationHostLifecycle = new RelationHostLifecycle({
     ...options,
@@ -43,7 +46,7 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
     app: options.app,
     document: options.document,
     seedReuse: (node, name) => relations.seedReuse.field(node, name),
-    reportError: options.reportAppearanceError,
+    reportError: options.reportPresentationError,
   });
   const frame = new SubstituteFrameHost({
     app: options.app,
@@ -53,7 +56,29 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
     activity: options.activity,
     stackControls: options.stackControls,
     openOverrides: (trigger) => relations.openOverrideMenu(trigger),
-    report: options.reportAppearanceError,
+    setOverridesInline: (inline) => relations.setOverridesInline(inline),
+    report: options.reportPresentationError,
   });
-  return { appearance, relations, frame };
+  const editorNavigation = new WorkflowEditorNavigationHost({
+    app: options.app,
+    document: options.document,
+    appearance: appearance.state,
+    suspendOverrides: (suspended) => relations.setEditorActive(suspended),
+    report: options.reportPresentationError,
+  });
+  const settingsWorkspace = new SettingsWorkspaceHost({
+    app: options.app,
+    document: options.document,
+    mode: frame.mode,
+    palette: appearance.palette,
+    report: options.reportPresentationError,
+  });
+  /** Mount field appearance and its frame/navigation presentation after native workspace setup. */
+  function setupPresentation(): void {
+    appearance.setup();
+    frame.setup();
+    editorNavigation.setup();
+    settingsWorkspace.setup();
+  }
+  return { appearance, relations, frame, setupPresentation };
 }

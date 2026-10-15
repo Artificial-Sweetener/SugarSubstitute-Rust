@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Persist accepted canvas presentation choices through Comfy settings, independently of workflow JSON. */
+import { sugarCubesSettingsSection } from '../../settings/SugarCubesSettingsSections.js';
 import { isRecord } from '../../types/common.js';
 /** Identify the host's visibility preference for the output canvas. */
 export const OUTPUT_CANVAS_VISIBLE_SETTING = 'SugarCubes.OutputCanvas.Visible';
@@ -59,7 +60,7 @@ export class ComfyCanvasPreferences {
         addSetting.call(settings, {
             id: OUTPUT_CANVAS_VISIBLE_SETTING,
             name: 'Show output canvas',
-            category: ['SugarCubes', 'Output Canvas', 'Show output canvas'],
+            ...sugarCubesSettingsSection('canvas', 'Visible'),
             type: 'boolean',
             defaultValue: true,
             onChange: (value) => this.#accept('visible', value),
@@ -67,7 +68,7 @@ export class ComfyCanvasPreferences {
         addSetting.call(settings, {
             id: OUTPUT_CANVAS_WIDTH_SETTING,
             name: 'Output canvas width',
-            category: ['SugarCubes', 'Output Canvas', 'Output canvas width'],
+            ...sugarCubesSettingsSection('canvas', 'Width'),
             type: 'number',
             defaultValue: 0,
             tooltip: 'Width in CSS pixels. Use 0 for automatic allocation. The panel keeps space available for workflow controls.',

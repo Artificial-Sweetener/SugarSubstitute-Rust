@@ -16,6 +16,7 @@
 /** Prove graph-frame qualification and exact reversible ownership without replacing Comfy's renderers. */
 
 import { ComfyCanvasFrameAllocation } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/ComfyCanvasFrameAllocation.js';
+import { jest } from '@jest/globals';
 
 /** Build only the installed public frame/chrome shape, leaving all renderer children in place. */
 function frame() {
@@ -88,3 +89,57 @@ test('restores pre-existing inline styles and priorities on disposal and rejects
   f.canvas.remove();
   expect(() => new ComfyCanvasFrameAllocation(f.root, f.panel)).toThrow('unsupported');
 });
+
+test('allocates the real graph below chrome even with the output canvas closed and restores on suspension', () => {
+  const f = frame();
+  jest.spyOn(f.parent, 'getBoundingClientRect').mockReturnValue(rectangle(0, 0, 1200, 900));
+  let top = 86;
+  jest
+    .spyOn(f.panel, 'getBoundingClientRect')
+    .mockImplementation(() => rectangle(4, top, 1192, 896 - top));
+  const adapter = new ComfyCanvasFrameAllocation(f.root, f.panel);
+  adapter.apply(480);
+  expect(f.root.style.marginTop).toBe('86px');
+  expect(f.root.style.height).toBe('calc(100% - 90px)');
+  expect(f.chrome.style.top).toBe('-86px');
+  expect(f.chrome.style.height).toBe('calc(100% + 90px)');
+  expect(f.root.style.marginLeft).toBe('4px');
+  expect(f.root.style.width).toBe('calc(100% - 488px)');
+  expect(f.chrome.style.left).toBe('-4px');
+  expect(f.root.style.clipPath).toBe('inset(-86px -484px -4px -4px)');
+  adapter.apply(0);
+  expect(f.root.style.width).toBe('calc(100% - 8px)');
+  expect(f.root.style.marginTop).toBe('86px');
+  top = 120;
+  adapter.apply(0);
+  expect(f.root.style.marginTop).toBe('120px');
+  expect(f.root.style.height).toBe('calc(100% - 124px)');
+  const mutations = new MutationObserver(() => undefined);
+  mutations.observe(f.root, { attributes: true, subtree: true });
+  adapter.apply(0);
+  expect(mutations.takeRecords()).toHaveLength(0);
+  mutations.disconnect();
+  adapter.suspend();
+  expect(f.root.style.cssText).toBe('');
+  expect(f.chrome.style.cssText).toBe('');
+  adapter.apply(0);
+  expect(f.root.style.marginTop).toBe('120px');
+  adapter.dispose();
+  expect(f.root.style.cssText).toBe('');
+  expect(f.chrome.style.cssText).toBe('');
+});
+
+/** Supply stable browser geometry without relying on JSDOM layout. */
+function rectangle(x: number, y: number, width: number, height: number): DOMRect {
+  return {
+    x,
+    y,
+    width,
+    height,
+    left: x,
+    top: y,
+    right: x + width,
+    bottom: y + height,
+    toJSON: () => ({ x, y, width, height }),
+  };
+}

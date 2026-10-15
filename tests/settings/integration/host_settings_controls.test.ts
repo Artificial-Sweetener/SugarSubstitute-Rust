@@ -285,11 +285,11 @@ describe('host settings and public library APIs', () => {
     await setupExtension();
 
     expect(getRegisteredSetting('SugarCubes.CubePacks.TrackedPacks')).toMatchObject({
-      category: ['SugarCubes', 'Cube Packs', 'TrackedPacks'],
+      category: ['SugarCubes', 'Cube library', 'TrackedPacks'],
       name: 'Tracked packs',
     });
     expect(getRegisteredSetting('SugarCubes.CubePacks.Manager')).toMatchObject({
-      category: ['SugarCubes', 'Cube Packs', 'Manager'],
+      category: ['SugarCubes', 'Cube library', 'Manager'],
       name: 'Manage tracked packs',
     });
     expect(getRegisteredSetting('SugarCubes.Authoring.ClaimedGithubOwner')).toMatchObject({
@@ -297,7 +297,7 @@ describe('host settings and public library APIs', () => {
       name: 'Claimed GitHub owner',
     });
     expect(getRegisteredSetting('SugarCubes.Graph.ProximityLinks')).toMatchObject({
-      category: ['SugarCubes', 'Graph', 'ProximityLinks'],
+      category: ['SugarCubes', 'Workflow connections', 'ProximityLinks'],
       name: 'Enable proximity links',
     });
     expect(registeredSettings.some((entry) => String(entry.name).startsWith('SugarCubes:'))).toBe(

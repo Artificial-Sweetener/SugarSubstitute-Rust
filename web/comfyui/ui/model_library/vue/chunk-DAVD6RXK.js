@@ -56,9 +56,32 @@ var ModalDismissal = class {
   }
   /** Consume Escape for the front dialog without letting the same key dismiss its parent. */
   escape(event) {
-    if (this.options().allowEscapeClose === false) return;
     event.preventDefault();
+    if (this.options().allowEscapeClose === false) return;
     this.dismiss();
+  }
+  /** Claim a front dialog's Escape before Comfy handles the parent settings layer. */
+  captureEscape(event) {
+    if (event.key !== "Escape" || event.defaultPrevented || !this.isFrontmost() || this.#popupOwnsEscape(event))
+      return;
+    this.escape(event);
+  }
+  /** Let mounted menus and expanded native fields consume Escape before their enclosing dialog. */
+  #popupOwnsEscape(event) {
+    if (event.composedPath().some(
+      (target) => target instanceof Element && target.matches(
+        '[role="combobox"][aria-expanded="true"], [aria-haspopup][aria-expanded="true"]'
+      )
+    ))
+      return true;
+    const popups = this.document?.querySelectorAll(
+      '.p-select-overlay, .p-autocomplete-overlay, [data-sc-floating-surface], [role="menu"][data-state="open"], [role="listbox"][data-state="open"]'
+    );
+    return [...popups ?? []].some((popup) => {
+      if (popup.closest('[hidden], [aria-hidden="true"]')) return false;
+      const style = this.document?.defaultView?.getComputedStyle(popup);
+      return style?.display !== "none" && style?.visibility !== "hidden";
+    });
   }
 };
 

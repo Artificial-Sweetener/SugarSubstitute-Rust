@@ -63,14 +63,14 @@ async function settle(): Promise<void> {
 }
 
 /** Capture real host settings renderers without exposing private presentation state. */
-function mount(fetchApi: ModelApiFetch) {
+function mount(fetchApi: ModelApiFetch, nativeControls = false) {
   const renderers: (() => unknown)[] = [];
   const report = jest.fn<(error: unknown) => void>();
   const settings = new ModelProviderSettings(
     document,
     new ModelProviderPreferenceClient(fetchApi),
     report,
-    createCheckbox,
+    nativeControls ? undefined : createCheckbox,
   );
   const app = {
     ui: {
@@ -95,6 +95,29 @@ function mount(fetchApi: ModelApiFetch) {
   document.body.append(root);
   return { root, renderers, report };
 }
+
+test('let the settings context theme native server-owned checkboxes without persisting initialization defaults', async () => {
+  const writes: (BodyInit | null | undefined)[] = [];
+  const harness = mount(async (_path, options) => {
+    if (options?.method === 'PATCH') {
+      writes.push(options.body);
+      return response({ ...initial, metadataLookupEnabled: true });
+    }
+    return response(initial);
+  }, true);
+  await settle();
+  const checkbox = harness.root.querySelector<HTMLInputElement>('input[type="checkbox"]');
+  if (!checkbox) throw new Error('Missing native checkbox.');
+  expect(harness.root.querySelector('fluent-checkbox')).toBeNull();
+  expect(checkbox.checked).toBe(false);
+  expect(writes).toEqual([]);
+  checkbox.click();
+  await settle();
+  expect(checkbox.checked).toBe(true);
+  expect(writes).toEqual([JSON.stringify({ metadataLookupEnabled: true })]);
+  expect(harness.report).not.toHaveBeenCalled();
+  harness.root.remove();
+});
 
 test('reads reference choices without writing defaults and persists only the deliberate checkbox edit', async () => {
   const calls: (RequestInit | undefined)[] = [];
@@ -121,9 +144,7 @@ test('reads reference choices without writing defaults and persists only the del
     if (!(caption instanceof HTMLElement)) throw new Error('Missing visible caption.');
     caption.click();
     expect(nativeClick).toHaveBeenCalledTimes(1);
-    expect(metadata.closest('.sugarcubes-settings-row')?.getAttribute('style')).toContain(
-      '--colorCompoundBrandBackground:',
-    );
+    expect(metadata.closest('.sugarcubes-settings-row')?.getAttribute('style')).toBeNull();
     expect(metadata.checked).toBe(false);
     expect(metadata.disabled).toBe(false);
     expect(safety.value).toBe('allow_soft');

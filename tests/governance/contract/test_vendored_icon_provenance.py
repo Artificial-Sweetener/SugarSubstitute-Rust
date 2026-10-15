@@ -33,6 +33,9 @@ def test_substitute_frame_artwork_has_pinned_licensed_deployment_bytes() -> None
         "SugarSubstitute frame presentation": "GPL-3.0-or-later",
         "Substitute panel-control Fluent artwork": "MIT",
         "QFluent override pin artwork": "GPL-3.0-or-later",
+        "QFluent generation play artwork": "GPL-3.0-or-later",
+        "QFluent generation queue artwork": "GPL-3.0-or-later",
+        "Substitute generation segment artwork": "MIT",
     }
     recorded: set[Path] = set()
     for component in manifest["component"]:

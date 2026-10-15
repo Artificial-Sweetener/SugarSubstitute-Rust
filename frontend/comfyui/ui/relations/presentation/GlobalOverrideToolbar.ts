@@ -47,6 +47,7 @@ export class GlobalOverrideToolbar {
   readonly #drag: OverrideToolbarDrag;
   readonly #placement: OverrideToolbarPlacement;
   #signature = '';
+  #suspended = false;
 
   /** Bind toolbar edits directly to the authoritative application owner. */
   constructor(
@@ -62,7 +63,6 @@ export class GlobalOverrideToolbar {
     this.element.className = 'sc-overrides-toolbar';
     this.element.setAttribute('role', 'toolbar');
     this.element.setAttribute('aria-label', 'Global overrides');
-    this.setPresentation(presentation);
     this.#menu = new ContextMenu(document);
     this.#menuButton = document.createElement('button');
     this.#menuButton.type = 'button';
@@ -128,10 +128,12 @@ export class GlobalOverrideToolbar {
     );
     this.#labels = new MutationObserver(this.#measureLabels);
     this.#labels.observe(this.element, { childList: true, subtree: true, characterData: true });
+    this.setPresentation(presentation);
   }
 
   /** Anchor the same override menu to either native toolbar or Substitute frame controls. */
   openMenu(trigger: HTMLElement): void {
+    if (this.#suspended) return;
     if (this.#menu.isOpen()) {
       this.#menu.close();
       return;
@@ -153,7 +155,20 @@ export class GlobalOverrideToolbar {
 
   /** Let an embedding host select its chrome while retaining mounted controls and menu identity. */
   setPresentation(presentation: OverrideToolbarPresentation): void {
+    if (this.element.dataset.presentation === presentation) return;
     this.element.dataset.presentation = presentation;
+    const inline = presentation === 'substitute';
+    this.#disclosure.setInline(inline);
+    this.#placement.setInline(inline);
+    this.#fieldLayout.reconcile();
+  }
+
+  /** Hide workflow-wide controls during nested editing without changing saved values or placement. */
+  setSuspended(suspended: boolean): void {
+    if (this.#suspended === suspended) return;
+    this.#suspended = suspended;
+    if (suspended) this.#menu.close();
+    this.reconcile();
   }
 
   /** Reattach after native shell replacement and update only changed controls. */
@@ -161,7 +176,7 @@ export class GlobalOverrideToolbar {
     if (!this.#placement.attached()) return;
     this.#disclosure.refresh();
     const groups = this.relations.snapshot().groups;
-    this.element.hidden = groups.length === 0;
+    this.element.hidden = this.#suspended || groups.length === 0;
     const signature = JSON.stringify(groups);
     if (signature === this.#signature) return;
     this.#signature = signature;

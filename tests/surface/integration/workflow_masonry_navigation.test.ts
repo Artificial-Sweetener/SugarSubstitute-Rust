@@ -127,39 +127,40 @@ test('borrows the application renderer and releases only masonry mounts', async 
   setup.changes.dispose();
 });
 
-test('replaces native bindings on root/cube navigation even when node ids and labels match', async () => {
-  const setup = fixture();
-  setup.host.toggle();
-  await settle();
-  const oldInput = document.querySelector('input');
-  expect(oldInput?.value).toBe('root model');
-  setup.canvas.setGraph(setup.nested);
-  expect(setup.unmount).toHaveBeenCalledWith(setup.root._nodes?.[0]);
-  await settle();
-  const input = document.querySelector('input');
-  expect(input).not.toBe(oldInput);
-  expect(input?.value).toBe('cube model');
-  expect(setup.root.add).toBe(setup.rootAdd);
-  expect(setup.nested.add).not.toBe(setup.nestedAdd);
-  expect(setup.container.dataset.sugarcubesMasonry).toBe('true');
-  input!.value = 'chosen cube model';
-  input!.dispatchEvent(new Event('input'));
-  setup.canvas.setGraph(setup.root);
-  await settle();
-  expect(document.querySelector('input')?.value).toBe('root model');
-  expect(setup.nested._nodes?.[0]?.widgets?.[0]?.value).toBe('chosen cube model');
-  expect(setup.root._nodes?.[0]?.widgets?.[0]?.value).toBe('root model');
-  expect(setup.nested.add).toBe(setup.nestedAdd);
-  setup.host.dispose();
-  expect(setup.root.add).toBe(setup.rootAdd);
-  expect(document.querySelector('.sugarcubes-workflow-masonry')).toBeNull();
-  const mounts = setup.mount.mock.calls.length;
-  setup.canvas.setGraph(setup.nested);
-  await settle();
-  expect(setup.mount).toHaveBeenCalledTimes(mounts);
-  expect(setup.reportError).not.toHaveBeenCalled();
-  setup.changes.dispose();
-});
+test.each([false, true])(
+  'suspends masonry inside nested editors and restores root choice %s',
+  async (masonry) => {
+    const setup = fixture();
+    if (masonry) setup.host.toggle();
+    await settle();
+    setup.canvas.setGraph(setup.nested);
+    await settle();
+    expect(document.querySelector('.sugarcubes-workflow-masonry')).toBeNull();
+    expect(setup.container.dataset.sugarcubesMasonry).toBeUndefined();
+    expect(setup.nested.add).toBe(setup.nestedAdd);
+    const mounts = setup.mount.mock.calls.length;
+    setup.host.toggle();
+    await settle();
+    expect(setup.mount).toHaveBeenCalledTimes(mounts);
+    expect(setup.viewChoice().masonry).toBe(masonry);
+    const deeper = graph('nested subgraph');
+    setup.canvas.setGraph(deeper);
+    setup.host.toggle();
+    setup.canvas.setGraph(setup.nested);
+    await settle();
+    expect(document.querySelector('.sugarcubes-workflow-masonry')).toBeNull();
+    setup.canvas.setGraph(setup.root);
+    await settle();
+    expect(!!document.querySelector('.sugarcubes-workflow-masonry')).toBe(masonry);
+    expect(setup.viewChoice().masonry).toBe(masonry);
+    expect(setup.mount.mock.calls.every(([, node]) => setup.root._nodes?.includes(node))).toBe(
+      true,
+    );
+    setup.host.dispose();
+    expect(setup.root.add).toBe(setup.rootAdd);
+    setup.changes.dispose();
+  },
+);
 
 test('cancels obsolete native mount batches when navigation interrupts mounting', async () => {
   const setup = fixture(20);
@@ -181,8 +182,8 @@ test('cancels obsolete native mount batches when navigation interrupts mounting'
   expect(
     setup.mount.mock.calls.filter(([, node]) => setup.root._nodes?.includes(node)),
   ).toHaveLength(6);
-  expect(document.querySelector('input')?.value).toBe('cube model');
-  expect(setup.container.dataset.sugarcubesMasonry).toBe('true');
+  expect(document.querySelector('input')).toBeNull();
+  expect(setup.container.dataset.sugarcubesMasonry).toBeUndefined();
   setup.host.dispose();
   setup.changes.dispose();
 });
@@ -197,7 +198,7 @@ test('binds the new runtime navigation source after workflow configuration', asy
   setup.canvas.setGraph(setup.nested);
   setup.host.afterConfigureGraph();
   await settle();
-  expect(document.querySelector('input')?.value).toBe('cube model');
+  expect(document.querySelector('input')).toBeNull();
   setup.canvas.setGraph(setup.root);
   await settle();
   expect(document.querySelector('input')?.value).toBe('root model');
@@ -220,12 +221,15 @@ test('releases observers during Nodes 1 fallback and restores the view when Node
   expect(setup.mount).toHaveBeenCalledTimes(mounts);
   setup.setNodes2(true);
   await settle();
-  expect(document.querySelector('input')?.value).toBe('cube model');
+  expect(document.querySelector('input')).toBeNull();
+  setup.canvas.setGraph(setup.root);
+  await settle();
+  expect(document.querySelector('input')?.value).toBe('root model');
   setup.host.dispose();
   setup.changes.dispose();
 });
 
-test('restores graph presentation if the new native graph cannot mount', async () => {
+test('keeps editor graph visible when restoring root masonry fails', async () => {
   const setup = fixture();
   setup.host.toggle();
   await settle();
@@ -239,6 +243,9 @@ test('restores graph presentation if the new native graph cannot mount', async (
   expect(setup.container.dataset.sugarcubesMasonry).toBeUndefined();
   expect(setup.root.add).toBe(setup.rootAdd);
   expect(setup.nested.add).toBe(setup.nestedAdd);
+  expect(setup.reportError).not.toHaveBeenCalled();
+  setup.canvas.setGraph(setup.root);
+  await settle();
   expect(setup.reportError).toHaveBeenCalledWith(failure);
   expect(setup.nested._nodes?.[0]?.widgets?.[0]?.value).toBe('cube model');
   setup.host.dispose();
@@ -295,10 +302,13 @@ test('keeps app suspension through configuration and restores only the latest gr
   expect(document.querySelector('input')).toBeNull();
   setup.setMode('builder:inputs');
   await settle();
-  expect(document.querySelector('input')?.value).toBe('cube model');
+  expect(document.querySelector('input')).toBeNull();
   setup.setMode('builder:outputs');
   await settle();
-  expect(setup.getRenderer).toHaveBeenCalledTimes(2);
+  expect(setup.getRenderer).toHaveBeenCalledTimes(1);
+  setup.canvas.setGraph(setup.root);
+  await settle();
+  expect(document.querySelector('input')?.value).toBe('root model');
   setup.host.dispose();
   setup.setMode('graph');
   await settle();
@@ -465,6 +475,7 @@ function fixture(rootCount = 1) {
   host.setup();
   return {
     host,
+    viewChoice: () => viewChoice,
     panelDefinition,
     propertiesOpen: () => propertiesOpen,
     setPropertiesOpen: (value: boolean) => setting.set('Comfy.RightSidePanel.IsOpen', value),

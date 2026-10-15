@@ -14,9 +14,9 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Present reference CivitAI settings through the shared SugarCubes preference owner. */
+import { sugarCubesSettingsSection } from '../settings/SugarCubesSettingsSections.js';
 import { isRecord } from '../types/common.js';
-import { createFluentBooleanCheckbox, fluentTokenDeclarations, } from '../surface/appearance/FluentThemeRuntime.js';
-import { readComfyDarkTheme } from '../surface/appearance/ComfyColorScheme.js';
+import { createSettingsCheckbox } from '../settings/SettingsCheckbox.js';
 import { modelThumbnailSafetyChoices, } from './ModelProviderPreferences.js';
 /** Render provider policy without manufacturing defaults or persisting browser-local choices. */
 export class ModelProviderSettings {
@@ -30,7 +30,7 @@ export class ModelProviderSettings {
     #busy = false;
     #registered = false;
     /** Bind shared settings transport and the established non-blocking feedback owner. */
-    constructor(document, client, report, createCheckbox = createFluentBooleanCheckbox) {
+    constructor(document, client, report, createCheckbox = createSettingsCheckbox) {
         this.#document = document;
         this.#client = client;
         this.#report = report;
@@ -78,7 +78,7 @@ export class ModelProviderSettings {
             settings.addSetting.call(settings, {
                 id: 'SugarCubes.Models.' + key,
                 name,
-                category: ['SugarCubes', 'Models', key],
+                ...sugarCubesSettingsSection(key.startsWith('thumbnail') ? 'previews' : 'metadata', key),
                 defaultValue: '',
                 tooltip,
                 type: () => {
@@ -107,7 +107,6 @@ export class ModelProviderSettings {
                         const group = this.#document.createElement('span');
                         group.style.cssText =
                             'display:inline-flex;align-items:center;gap:8px;white-space:nowrap';
-                        // Microsoft's checkbox has indicator slots only, so its caption must be a sibling.
                         group.append(control, caption);
                         const checkbox = control;
                         caption.addEventListener('click', () => {
@@ -120,8 +119,6 @@ export class ModelProviderSettings {
                     if (control instanceof HTMLSelectElement)
                         row.append(control);
                     this.#render.push(() => {
-                        if (row)
-                            row.style.cssText = fluentTokenDeclarations(readComfyDarkTheme(this.#document));
                         control.disabled =
                             this.#busy ||
                                 this.#value === null ||

@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Expose server-owned update consent in SugarCubes settings without a competing browser preference. */
+import { sugarCubesSettingsSection } from '../settings/SugarCubesSettingsSections.js';
 import { isRecord } from '../types/common.js';
 /** Render durable opt-in and explicit checks through the shared update application boundary. */
 export class ModelUpdateSettings {
@@ -41,7 +42,7 @@ export class ModelUpdateSettings {
         settings.addSetting.call(settings, {
             id: 'SugarCubes.Models.UpdateNotifications',
             name: 'Model update notifications',
-            category: ['SugarCubes', 'Models', 'UpdateNotifications'],
+            ...sugarCubesSettingsSection('updates', 'UpdateNotifications'),
             defaultValue: '',
             tooltip: 'Show compatible updates checked during metadata lookup, daily model selection, and version browsing.',
             type: () => {

@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Present cache usage and reference maintenance actions through the shared server owner. */
+import { sugarCubesSettingsSection } from '../settings/SugarCubesSettingsSections.js';
 import { isRecord } from '../types/common.js';
 /** Keep cache activity independent of preference edits and their form state. */
 export class ModelProviderCacheSettings {
@@ -44,7 +45,7 @@ export class ModelProviderCacheSettings {
         settings.addSetting.call(settings, {
             id: 'SugarCubes.Models.CivitaiCache',
             name: 'CivitAI cache',
-            category: ['SugarCubes', 'Models', 'CivitaiCache'],
+            ...sugarCubesSettingsSection('metadata', 'CivitaiCache'),
             defaultValue: '',
             type: () => {
                 if (!this.#row)

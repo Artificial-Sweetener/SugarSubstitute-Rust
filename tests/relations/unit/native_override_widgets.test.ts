@@ -234,6 +234,17 @@ test('reserves workflow space below Run and creates every field through the widg
   expect(getComputedStyle(menuButton).width).toBe('40px');
   expect(getComputedStyle(menuButton.firstElementChild!).width).toBe('16px');
   expect(getComputedStyle(menuButton.lastElementChild!).width).toBe('8px');
+  const beforeEditor = JSON.stringify(relations.snapshot());
+  toolbar.setSuspended(true);
+  expect(toolbar.element.hidden).toBe(true);
+  toolbar.reconcile();
+  expect(toolbar.element.hidden).toBe(true);
+  toolbar.openMenu(menuButton);
+  expect(document.querySelector('[role="menu"]')).toBeNull();
+  toolbar.setSuspended(false);
+  expect(toolbar.element.hidden).toBe(false);
+  expect(toolbar.element.querySelector('.sc-override-control')).toBe(nativeControl);
+  expect(JSON.stringify(relations.snapshot())).toBe(beforeEditor);
   toolbar.setPresentation('substitute');
   expect(getComputedStyle(menuButton).flexDirection).toBe('column');
   expect(getComputedStyle(menuButton).width).toBe('24px');

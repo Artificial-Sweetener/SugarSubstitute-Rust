@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Present configured output saving and explicit settings import in Comfy's SugarCubes settings. */
+import { sugarCubesSettingsSection } from '../settings/SugarCubesSettingsSections.js';
 import type { SettingsManager } from '../settings/HostSettingsController.js';
 import type { ModalAdapter } from '../dialogs/ModalShell.js';
 import { OutputSavingDialog } from './OutputSavingDialog.js';
@@ -51,14 +52,14 @@ export class OutputSavingSettings {
     manager.addSetting({
       id: 'SugarCubes.Output.Files',
       name: 'Output files',
-      category: ['SugarCubes', 'Output', 'Files'],
+      ...sugarCubesSettingsSection('output', 'Files'),
       defaultValue: '',
       tooltip:
         'Configure output folder, filename pattern, saved cubes, JPEG companions, workflow management, and Drag and Copy format.',
       type: () => {
         if (!this.#row) {
           this.#row = this.document.createElement('div');
-          this.#row.className = 'sugarcubes-settings-row';
+          this.#row.className = 'sugarcubes-settings-row sc-output-saving-setting';
           this.#row.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap';
           this.#summary = this.document.createElement('span');
           this.#summary.style.flex = '1';

@@ -50,6 +50,7 @@ export interface CubeStackSurface {
 
 /** Expose the existing rail preference authority to alternative frame controls. */
 export interface CubeStackFrameControls {
+  readonly available: boolean;
   readonly compact: boolean;
   toggleCompact(): Promise<void>;
   menu(): readonly ContextMenuEntry[];
@@ -91,19 +92,30 @@ export class CubeStackHost {
   #scrollSelection: CubeStackScrollSelection | null = null;
   #started = false;
   #disposed = false;
+  readonly #frameListeners = new Set<() => void>();
+  #frameSignature = '';
 
   /** Compose typed intent handlers while preference and graph services keep their own authority. */
   constructor(options: CubeStackHostOptions) {
     this.#options = options;
     this.#preferences = new CubeStackPreferences(options.app);
     const preferences = this.#preferences;
+    const host = this;
     this.frameControls = {
+      get available() {
+        return host.#frameAvailable();
+      },
       get compact() {
         return preferences.snapshot.compact;
       },
-      toggleCompact: () => preferences.setCompact(!preferences.snapshot.compact),
+      toggleCompact: async () => {
+        if (this.#frameAvailable()) await preferences.setCompact(!preferences.snapshot.compact);
+      },
       menu: () => this.presentationMenu(),
-      subscribe: (listener) => preferences.subscribe(listener),
+      subscribe: (listener) => {
+        this.#frameListeners.add(listener);
+        return () => this.#frameListeners.delete(listener);
+      },
     };
     this.#actions = {
       navigate: (id) => this.#navigate(id),
@@ -177,6 +189,7 @@ export class CubeStackHost {
   /** Start the rail on the owning masonry transition and retain it through reverse travel. */
   async transition(entering: boolean): Promise<void> {
     this.#surfaceVisible = entering;
+    this.#publishFrame();
     await this.#present(entering && this.#preferences.snapshot.visible);
   }
 
@@ -196,6 +209,7 @@ export class CubeStackHost {
     this.#selectedId = null;
     this.#scrollSelection?.dispose();
     this.#scrollSelection = null;
+    this.#publishFrame();
   }
 
   /** Restore every retained subscription before extension or document teardown. */
@@ -205,12 +219,16 @@ export class CubeStackHost {
     this.#disposed = true;
     for (const unsubscribe of this.#subscriptions.splice(0)) unsubscribe();
     this.#preferences.dispose();
+    this.#frameListeners.clear();
   }
 
   /** Match one rail lifetime to the current mounted surface and accepted visibility preference. */
   #reconcile(animate = true): void {
     const view = this.#view;
-    if (!this.#started || this.#disposed || !view) return;
+    if (!this.#started || this.#disposed || !view) {
+      this.#publishFrame();
+      return;
+    }
     const reorder = this.#options.getReorder();
     if (this.#reorder !== reorder) {
       this.#unsubscribeReorder?.();
@@ -230,6 +248,7 @@ export class CubeStackHost {
           })
           .catch(this.#options.reportError);
       }
+      this.#publishFrame();
       return;
     }
     const container = view.element.parentElement;
@@ -259,6 +278,26 @@ export class CubeStackHost {
     );
     if (this.#surfaceVisible) void this.#present(true, animate).catch(this.#options.reportError);
     this.#scrollSelection?.refresh(state.rows.map((row) => row.id));
+    this.#publishFrame();
+  }
+
+  /** Allow compact controls only while the accepted masonry surface actually presents its stack. */
+  #frameAvailable(): boolean {
+    return (
+      !this.#disposed &&
+      this.#view !== null &&
+      this.#mounted !== null &&
+      this.#surfaceVisible &&
+      this.#preferences.snapshot.visible
+    );
+  }
+
+  /** Publish only changed availability or compact state to frame affordances. */
+  #publishFrame(): void {
+    const signature = `${this.#frameAvailable()}:${this.#preferences.snapshot.compact}`;
+    if (signature === this.#frameSignature) return;
+    this.#frameSignature = signature;
+    for (const listener of this.#frameListeners) listener();
   }
 
   /** Derive all row facts from the current projection and exact canonical analysis snapshot. */

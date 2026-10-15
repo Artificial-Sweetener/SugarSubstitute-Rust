@@ -38,6 +38,7 @@ export class OverrideToolbarDisclosure {
   #generation = 0;
   #frame: number | null = null;
   #direction: 'left' | 'right' = 'right';
+  #inline = false;
 
   /** Bind one native widget strip to its chrome without remounting controls. */
   constructor(
@@ -83,13 +84,23 @@ export class OverrideToolbarDisclosure {
     this.refresh();
   }
 
+  /** Present inline fields without changing the user's saved compact-toolbar preference. */
+  setInline(inline: boolean): void {
+    if (this.#inline === inline) return;
+    this.finish();
+    this.#inline = inline;
+    this.#present();
+    this.#fields.hidden = this.#collapsed && !inline;
+    this.refresh();
+  }
+
   /** Commit the requested resting presentation before a drag or teardown. */
   finish(): void {
     this.#generation += 1;
     for (const effect of this.#effects) effect.cancel();
     this.#effects = [];
     delete this.#root.dataset.scOverrideMoving;
-    this.#fields.hidden = this.#collapsed;
+    this.#fields.hidden = this.#collapsed && !this.#inline;
     setSurfaceGeometryMoving(this.#root, false);
   }
 
@@ -104,6 +115,7 @@ export class OverrideToolbarDisclosure {
 
   /** Blend from the currently painted width, including reversals during travel. */
   readonly #toggle = (): void => {
+    if (this.#inline) return;
     const current = this.#root.getBoundingClientRect();
     const margin =
       this.#root.ownerDocument.defaultView?.getComputedStyle(this.#fields).marginRight ?? '0px';
@@ -183,9 +195,10 @@ export class OverrideToolbarDisclosure {
 
   /** Keep the pin available while excluding compacted fields from focus and input. */
   #present(): void {
-    this.#root.dataset.collapsed = String(this.#collapsed);
-    this.#fields.inert = this.#collapsed;
-    this.#button.setAttribute('aria-expanded', String(!this.#collapsed));
+    const collapsed = this.#collapsed && !this.#inline;
+    this.#root.dataset.collapsed = String(collapsed);
+    this.#fields.inert = collapsed;
+    this.#button.setAttribute('aria-expanded', String(!collapsed));
     const label = this.#collapsed ? 'Expand global overrides' : 'Collapse global overrides';
     this.#button.setAttribute('aria-label', label);
     this.#button.title = label;

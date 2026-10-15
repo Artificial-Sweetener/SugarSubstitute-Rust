@@ -59,7 +59,7 @@ export class WorkflowMasonryController {
   #view: WorkflowMasonryView | null = null;
   #container: HTMLElement | null = null;
   #desired = false;
-  readonly #suspensions = new Set<'app' | 'configure'>();
+  readonly #suspensions = new Set<'app' | 'configure' | 'subgraph'>();
   #generation = 0;
   #mounting: Promise<void> | null = null;
   #topology = '';
@@ -84,7 +84,10 @@ export class WorkflowMasonryController {
 
   /** Retain graph-only control exclusion until the departing masonry surface is released. */
   get presenting(): boolean {
-    return (this.#desired && !this.#suspensions.has('app')) || this.#view !== null;
+    return (
+      (this.#desired && !this.#suspensions.has('app') && !this.#suspensions.has('subgraph')) ||
+      this.#view !== null
+    );
   }
 
   /** Restore a committed workflow choice without replaying an explicit user-toggle transition. */
@@ -93,19 +96,23 @@ export class WorkflowMasonryController {
     this.#desired = desired;
     const generation = ++this.#generation;
     this.#transition.cancel();
-    this.#releaseView(desired && !this.#suspensions.has('app'));
+    this.#releaseView(
+      desired && !this.#suspensions.has('app') && !this.#suspensions.has('subgraph'),
+    );
     this.#options.onStateChange();
     if (this.active && this.#options.isNodes2()) await this.#show(generation, false);
   }
 
   /** Release native mounts during host transitions without changing the user's view choice. */
-  async setSuspended(reason: 'app' | 'configure', suspended: boolean): Promise<void> {
+  async setSuspended(reason: 'app' | 'configure' | 'subgraph', suspended: boolean): Promise<void> {
     if (this.#suspensions.has(reason) === suspended) return;
     if (suspended) this.#suspensions.add(reason);
     else this.#suspensions.delete(reason);
     const generation = ++this.#generation;
     this.#transition.cancel();
-    this.#releaseView(this.#desired && !this.#suspensions.has('app'));
+    this.#releaseView(
+      this.#desired && !this.#suspensions.has('app') && !this.#suspensions.has('subgraph'),
+    );
     this.#options.onStateChange();
     if (!this.active || !this.#options.isNodes2()) return;
     // Comfy commits its mode before Vue reveals the graph container and native controls.
@@ -150,20 +157,6 @@ export class WorkflowMasonryController {
     await this.#show(generation, true);
   }
 
-  /** Release obsolete graph bindings immediately while retaining the chosen presentation. */
-  async graphReplaced(): Promise<void> {
-    if (this.#suspensions.size) return;
-    if (!this.#desired) {
-      if (this.#view || this.#links) this.leaveImmediately();
-      return;
-    }
-    const generation = ++this.#generation;
-    this.#transition.cancel();
-    this.#releaseView(true);
-    this.#options.onStateChange();
-    await this.#show(generation, false);
-  }
-
   /** Mount the current graph only while this presentation request still owns the lifecycle. */
   async #show(generation: number, animate: boolean): Promise<void> {
     try {
@@ -181,10 +174,7 @@ export class WorkflowMasonryController {
           sections,
           cardState: this.#options.getCardState(),
           getSources: () => workflowMasonryGraphCards(container, this.#options.getSections()),
-          openCube: (cube) => {
-            this.leaveImmediately();
-            this.#options.openCube(cube);
-          },
+          openCube: (cube) => this.#options.openCube(cube),
           onCardsChanged: () => {
             if (this.#view && this.#desired) this.#options.onSurfaceReady?.(this.#view, animate);
           },

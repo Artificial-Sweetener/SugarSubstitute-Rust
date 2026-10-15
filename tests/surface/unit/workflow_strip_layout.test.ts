@@ -147,6 +147,29 @@ test('teardown cancels queued geometry and rejects late observer deliveries or c
   expect(viewport.style.width).toBe('400px');
 });
 
+test('generation strip and native caption reservation participate in the overflow boundary', () => {
+  const frame = document.createElement('header');
+  frame.style.paddingRight = '324px';
+  Object.defineProperty(frame, 'clientWidth', { value: 1132 });
+  const overflow = document.createElement('button');
+  const layout = new WorkflowTabStripLayout(
+    document,
+    frame,
+    document.createElement('div'),
+    document.createElement('div'),
+    overflow,
+    jest.fn(),
+    jest.fn(),
+  );
+  layout.update(4);
+  expect(overflow.hidden).toBe(true);
+  frame.style.paddingRight = '325px';
+  observers[0]?.deliver();
+  flush();
+  expect(overflow.hidden).toBe(false);
+  layout.dispose();
+});
+
 test('layout rejects a detached document without a browser geometry lifetime', () => {
   expect(
     () =>

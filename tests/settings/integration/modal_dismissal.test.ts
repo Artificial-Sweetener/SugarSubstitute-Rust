@@ -17,6 +17,7 @@
 import { afterEach, expect, jest, test } from '@jest/globals';
 import { ModalShell } from '../../../frontend/comfyui/ui/dialogs/ModalShell.js';
 import { ModalService } from '../../../frontend/comfyui/ui/dialogs/ModalService.js';
+import { ContextMenu } from '../../../frontend/comfyui/ui/menus/ContextMenu.js';
 import { VersionDialog } from '../../../frontend/comfyui/ui/dialogs/VersionDialog.js';
 import { CubeAuthoringModal } from '../../../frontend/comfyui/ui/dialogs/CubeAuthoringModal.js';
 import { TrackedPackManagerDialog } from '../../../frontend/comfyui/ui/settings/TrackedPackManagerDialog.js';
@@ -166,4 +167,88 @@ test('explicit escape and backdrop restrictions do not remove the deliberate clo
   expect(modal.elements.overlay?.classList.contains('is-visible')).toBe(true);
   closeButton().click();
   await expect(result).resolves.toBeNull();
+});
+
+test.each(['dismissible', 'busy', 'restricted'] as const)(
+  'Escape belongs to the %s child before native settings handle it',
+  async (state) => {
+    const nativeDismiss = jest.fn();
+    const nativeKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape' && !event.defaultPrevented) nativeDismiss();
+    };
+    document.addEventListener('keydown', nativeKey);
+    const modal = shell();
+    const result = modal.open({ allowEscapeClose: state !== 'restricted' });
+    if (state === 'busy') modal.setBusy(true);
+    try {
+      modal.elements.confirmButton?.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+      expect(nativeDismiss).not.toHaveBeenCalled();
+      expect(modal.elements.overlay?.classList.contains('is-visible')).toBe(
+        state !== 'dismissible',
+      );
+    } finally {
+      document.removeEventListener('keydown', nativeKey);
+      modal.close(null);
+      await result;
+    }
+  },
+);
+
+test('Escape dismisses an expanded native field before its enclosing SugarCubes dialog', async () => {
+  const control = document.createElement('button');
+  control.setAttribute('role', 'combobox');
+  control.setAttribute('aria-expanded', 'true');
+  const nativeDismiss = jest.fn();
+  const nativeKey = (event: KeyboardEvent): void => {
+    if (!event.defaultPrevented && event.key === 'Escape') nativeDismiss();
+  };
+  document.addEventListener('keydown', nativeKey);
+  const modal = shell();
+  const result = modal.open({ body: control });
+  control.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    control.setAttribute('aria-expanded', 'false');
+    event.preventDefault();
+    event.stopPropagation();
+  });
+  try {
+    control.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
+    expect(control.getAttribute('aria-expanded')).toBe('false');
+    expect(nativeDismiss).not.toHaveBeenCalled();
+    expect(modal.elements.overlay?.classList.contains('is-visible')).toBe(true);
+  } finally {
+    document.removeEventListener('keydown', nativeKey);
+    modal.close(null);
+    await result;
+  }
+});
+
+test('Escape closes a shared context menu before its enclosing dialog', async () => {
+  const modal = shell();
+  const result = modal.open();
+  const menu = new ContextMenu(document);
+  menu.open({
+    label: 'Dialog actions',
+    trigger: modal.elements.confirmButton ?? null,
+    anchor: { kind: 'pointer', x: 12, y: 12 },
+    entries: [{ label: 'Action' }],
+  });
+  try {
+    document.activeElement?.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
+    expect(menu.isOpen()).toBe(false);
+    expect(modal.elements.overlay?.classList.contains('is-visible')).toBe(true);
+    modal.elements.confirmButton?.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
+    await expect(result).resolves.toBeNull();
+  } finally {
+    menu.close();
+    modal.close(null);
+  }
 });

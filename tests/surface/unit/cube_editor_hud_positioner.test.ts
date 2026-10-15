@@ -20,6 +20,7 @@ import { CubeEditorHudPositioner } from '../../../frontend/comfyui/ui/surface/Cu
 
 test('does not rewrite unchanged owned style properties after observing itself', async () => {
   document.body.replaceChildren();
+  mountViewport();
   const root = document.createElement('aside');
   document.body.append(root);
   const setProperty = jest.spyOn(root.style, 'setProperty');
@@ -27,17 +28,18 @@ test('does not rewrite unchanged owned style properties after observing itself',
 
   await Promise.resolve();
   await Promise.resolve();
-  expect(setProperty).toHaveBeenCalledTimes(2);
+  expect(setProperty).toHaveBeenCalledTimes(4);
 
   document.body.append(document.createElement('div'));
   await Promise.resolve();
   await Promise.resolve();
-  expect(setProperty).toHaveBeenCalledTimes(2);
+  expect(setProperty).toHaveBeenCalledTimes(4);
   positioner.dispose();
 });
 
 test('does not rediscover chrome when a widget or popup changes', async () => {
   document.body.replaceChildren();
+  mountViewport();
   const root = document.createElement('aside');
   document.body.append(root);
   const positioner = new CubeEditorHudPositioner(document, root);
@@ -54,3 +56,94 @@ test('does not rediscover chrome when a widget or popup changes', async () => {
   positioner.dispose();
   jest.restoreAllMocks();
 });
+
+test('uses actual graph bounds when the breadcrumb is hidden and follows graph replacement', async () => {
+  document.body.replaceChildren();
+  const graph = document.createElement('div');
+  graph.id = 'graph-canvas-container';
+  const canvas = document.createElement('canvas');
+  canvas.id = 'graph-canvas';
+  graph.append(canvas);
+  jest.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
+    x: 60,
+    y: 86,
+    left: 60,
+    top: 86,
+    right: 660,
+    bottom: 886,
+    width: 600,
+    height: 800,
+    toJSON: () => ({}),
+  });
+  const root = document.createElement('aside');
+  document.body.append(graph, root);
+  const positioner = new CubeEditorHudPositioner(document, root);
+  expect(root.hidden).toBe(false);
+  expect(root.style.getPropertyValue('--sugarcubes-cube-editor-metadata-left')).toBe('76px');
+  expect(root.style.getPropertyValue('--sugarcubes-cube-editor-metadata-top')).toBe('102px');
+  expect(root.style.maxWidth).toBe('568px');
+  expect(root.style.maxHeight).toBe('768px');
+  graph.remove();
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(root.hidden).toBe(true);
+  const replacement = document.createElement('canvas');
+  replacement.id = 'graph-canvas';
+  jest.spyOn(replacement, 'getBoundingClientRect').mockReturnValue({
+    x: 0,
+    y: 120,
+    left: 0,
+    top: 120,
+    right: 400,
+    bottom: 620,
+    width: 400,
+    height: 500,
+    toJSON: () => ({}),
+  });
+  graph.replaceChildren(replacement);
+  document.body.append(graph);
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(root.hidden).toBe(false);
+  expect(root.style.getPropertyValue('--sugarcubes-cube-editor-metadata-top')).toBe('136px');
+  expect(root.style.maxWidth).toBe('368px');
+  positioner.dispose();
+});
+
+test('hides without a measured graph and ignores queued viewport work after disposal', async () => {
+  document.body.replaceChildren();
+  const root = document.createElement('aside');
+  document.body.append(root);
+  const positioner = new CubeEditorHudPositioner(document, root);
+  expect(root.hidden).toBe(true);
+  const setProperty = jest.spyOn(root.style, 'setProperty');
+  window.dispatchEvent(new Event('resize'));
+  positioner.dispose();
+  mountViewport();
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(root.hidden).toBe(true);
+  expect(setProperty).not.toHaveBeenCalled();
+  jest.restoreAllMocks();
+});
+
+/** Mount the native graph boundary with deterministic allocated screen bounds. */
+function mountViewport(): void {
+  const graph = document.createElement('div');
+  graph.id = 'graph-canvas-container';
+  const canvas = document.createElement('canvas');
+  canvas.id = 'graph-canvas';
+  graph.append(canvas);
+  jest.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
+    x: 0,
+    y: 86,
+    left: 0,
+    top: 86,
+    right: 800,
+    bottom: 886,
+    width: 800,
+    height: 800,
+    toJSON: () => ({}),
+  });
+  document.body.append(graph);
+}
