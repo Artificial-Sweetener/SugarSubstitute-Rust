@@ -39,7 +39,7 @@ struct NativeStageScan {
 }
 pub(crate) struct StreamingPort {
     root: ProtectedStorageRoot,
-    directory: Option<NativeName>,
+    directory: Option<crate::protected_storage::diagnostic::DiagnosticDirectory>,
     namespace: Option<NamespaceId>,
     sid: Option<NativeSid>,
     writer: Option<HeldFile>,

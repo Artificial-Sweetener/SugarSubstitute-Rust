@@ -83,7 +83,7 @@ migrations = []
 id = "windows-resource-claim-generation"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/native_claims/account.rs", "crates/sugarsubstitute-supervision/src/native_claims/backend_file.rs", "crates/sugarsubstitute-supervision/src/native_claims/files.rs", "crates/sugarsubstitute-supervision/src/native_claims/mod.rs", "crates/sugarsubstitute-supervision/src/native_claims/paths.rs", "crates/sugarsubstitute-supervision/src/native_claims/records.rs", "crates/sugarsubstitute-supervision/src/native_claims/records/storage.rs", "crates/sugarsubstitute-supervision/src/protected_storage/account.rs", "crates/sugarsubstitute-supervision/src/protected_storage/account/namespace_directory.rs", "crates/sugarsubstitute-supervision/src/protected_storage/exclusion.rs", "crates/sugarsubstitute-supervision/src/protected_storage/exclusion/operation.rs", "crates/sugarsubstitute-supervision/src/protected_storage/paths.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/boundary.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/context.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/native.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/native/read.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/native/stage.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/publication.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/retirement.rs", "crates/sugarsubstitute-supervision/src/protected_storage/security.rs", "crates/sugarsubstitute-supervision/src/protected_storage/security/descriptor.rs", "crates/sugarsubstitute-supervision/src/protected_storage/exclusion/reader.rs"]
-source_sha256 = "sha256:59286154c97ee543775cd4e638ee56ba87ea431b6f2442efce23afc0cd3f5ab0"
+source_sha256 = "sha256:5d9f632faf6112ce8246dc2603b54f6238d303d48d5d17c4824b8a0dd2e9c7ea"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 2
@@ -203,8 +203,47 @@ migrations = []
 [[formats]]
 id = "windows-profile-exclusion-generation"
 owner = "sugarsubstitute-supervision"
-sources = ["crates/sugarsubstitute-supervision/src/native_claims/files.rs", "crates/sugarsubstitute-supervision/src/profiles.rs", "crates/sugarsubstitute-supervision/src/profiles/attempt.rs", "crates/sugarsubstitute-supervision/src/profiles/folder.rs", "crates/sugarsubstitute-supervision/src/profiles/launch.rs", "crates/sugarsubstitute-supervision/src/profiles/proof.rs", "crates/sugarsubstitute-supervision/src/profiles/record.rs", "crates/sugarsubstitute-supervision/src/profiles/storage.rs", "crates/sugarsubstitute-supervision/src/profiles/submission.rs", "crates/sugarsubstitute-supervision/src/protected_storage.rs", "crates/sugarsubstitute-supervision/src/protected_storage/account.rs", "crates/sugarsubstitute-supervision/src/protected_storage/account/namespace_directory.rs", "crates/sugarsubstitute-supervision/src/protected_storage/directories.rs", "crates/sugarsubstitute-supervision/src/protected_storage/exclusion.rs", "crates/sugarsubstitute-supervision/src/protected_storage/leaf.rs", "crates/sugarsubstitute-supervision/src/protected_storage/paths.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file.rs", "crates/sugarsubstitute-supervision/src/protected_storage/security.rs", "crates/sugarsubstitute-supervision/src/protected_storage/security/descriptor.rs", "crates/sugarsubstitute-supervision/src/registry/family_proof.rs", "crates/sugarsubstitute-supervision/src/registry/profile.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/boundary.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/native.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/native/read.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/native/stage.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/publication.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/retirement.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/context.rs", "crates/sugarsubstitute-supervision/src/profiles/storage/disposal.rs", "crates/sugarsubstitute-supervision/src/profiles/custody.rs", "crates/sugarsubstitute-supervision/src/profiles/migration.rs", "crates/sugarsubstitute-supervision/src/profiles/record/custody.rs", "crates/sugarsubstitute-supervision/src/registry/profile/prepared.rs", "crates/sugarsubstitute-supervision/src/native_claims/backend_custody/profile_registration.rs", "crates/sugarsubstitute-supervision/src/native_claims/backend_custody/entry.rs", "crates/sugarsubstitute-supervision/src/native_claims/backend_custody/profile_commands.rs", "crates/sugarsubstitute-supervision/src/profiles/custody/preparation.rs"]
-source_sha256 = "sha256:fdcc8aa48b3d98bcf96609852a3c374175f46bf1f6980b98b1fd04640755b4fc"
+sources = [
+  "crates/sugarsubstitute-supervision/src/native_claims/files.rs",
+  "crates/sugarsubstitute-supervision/src/profiles.rs",
+  "crates/sugarsubstitute-supervision/src/profiles/attempt.rs",
+  "crates/sugarsubstitute-supervision/src/profiles/folder.rs",
+  "crates/sugarsubstitute-supervision/src/profiles/launch.rs",
+  "crates/sugarsubstitute-supervision/src/profiles/proof.rs",
+  "crates/sugarsubstitute-supervision/src/profiles/record.rs",
+  "crates/sugarsubstitute-supervision/src/profiles/storage.rs",
+  "crates/sugarsubstitute-supervision/src/profiles/submission.rs",
+  "crates/sugarsubstitute-supervision/src/protected_storage.rs",
+  "crates/sugarsubstitute-supervision/src/protected_storage/account.rs",
+  "crates/sugarsubstitute-supervision/src/protected_storage/account/namespace_directory.rs",
+  "crates/sugarsubstitute-supervision/src/protected_storage/directories.rs",
+  "crates/sugarsubstitute-supervision/src/protected_storage/exclusion.rs",
+  "crates/sugarsubstitute-supervision/src/protected_storage/leaf.rs",
+  "crates/sugarsubstitute-supervision/src/protected_storage/paths.rs",
+  "crates/sugarsubstitute-supervision/src/protected_storage/record_file.rs",
+  "crates/sugarsubstitute-supervision/src/protected_storage/security.rs",
+  "crates/sugarsubstitute-supervision/src/protected_storage/security/descriptor.rs",
+  "crates/sugarsubstitute-supervision/src/registry/family_proof.rs",
+  "crates/sugarsubstitute-supervision/src/registry/profile.rs",
+  "crates/sugarsubstitute-supervision/src/protected_storage/record_file/boundary.rs",
+  "crates/sugarsubstitute-supervision/src/protected_storage/record_file/native.rs",
+  "crates/sugarsubstitute-supervision/src/protected_storage/record_file/native/read.rs",
+  "crates/sugarsubstitute-supervision/src/protected_storage/record_file/native/stage.rs",
+  "crates/sugarsubstitute-supervision/src/protected_storage/record_file/publication.rs",
+  "crates/sugarsubstitute-supervision/src/protected_storage/record_file/retirement.rs",
+  "crates/sugarsubstitute-supervision/src/protected_storage/record_file/context.rs",
+  "crates/sugarsubstitute-supervision/src/profiles/storage/disposal.rs",
+  "crates/sugarsubstitute-supervision/src/profiles/custody.rs",
+  "crates/sugarsubstitute-supervision/src/profiles/migration.rs",
+  "crates/sugarsubstitute-supervision/src/profiles/record/custody.rs",
+  "crates/sugarsubstitute-supervision/src/registry/profile/prepared.rs",
+  "crates/sugarsubstitute-supervision/src/native_claims/backend_custody/profile_registration.rs",
+  "crates/sugarsubstitute-supervision/src/native_claims/backend_custody/entry.rs",
+  "crates/sugarsubstitute-supervision/src/native_claims/backend_custody/profile_commands.rs",
+  "crates/sugarsubstitute-supervision/src/profiles/custody/preparation.rs",
+  "crates/sugarsubstitute-supervision/src/profiles/custody/acknowledgement.rs",
+]
+source_sha256 = "sha256:a82a4d9b9e5b4dbb5d43bd1ce9c420ac63d373b0e6e5f106e32ff0ea1a24c675"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 2
@@ -288,8 +327,21 @@ migrations = []
 [[formats]]
 id = "windows-diagnostic-object-layout"
 owner = "sugarsubstitute-supervision"
-sources = ["crates/sugarsubstitute-supervision/src/diagnostic_storage/types.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/streaming.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/streaming/layout.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/streaming/inventory/names.rs", "crates/sugarsubstitute-supervision/src/protected_storage/account/diagnostic_root.rs", "crates/sugarsubstitute-supervision/src/protected_storage/diagnostic.rs", "crates/sugarsubstitute-supervision/src/committed_reader/prepare.rs", "crates/sugarsubstitute-supervision/src/coordinator_entry/read_namespace.rs", "crates/sugarsubstitute-supervision/src/diagnostic_storage/allocation/ledger.rs", "crates/sugarsubstitute-supervision/src/diagnostic_storage/allocation/native.rs"]
-source_sha256 = "sha256:0e90470f47c3b19a1f33854f0fd6d8e8d7b328b859e3ced6ee58ead08d4e0cfc"
+sources = [
+  "crates/sugarsubstitute-supervision/src/diagnostic_storage/types.rs",
+  "crates/sugarsubstitute-supervision/src/protected_storage/record_file/streaming.rs",
+  "crates/sugarsubstitute-supervision/src/protected_storage/record_file/streaming/layout.rs",
+  "crates/sugarsubstitute-supervision/src/protected_storage/record_file/streaming/inventory/names.rs",
+  "crates/sugarsubstitute-supervision/src/protected_storage/account/diagnostic_root.rs",
+  "crates/sugarsubstitute-supervision/src/protected_storage/diagnostic.rs",
+  "crates/sugarsubstitute-supervision/src/committed_reader/prepare.rs",
+  "crates/sugarsubstitute-supervision/src/coordinator_entry/read_namespace.rs",
+  "crates/sugarsubstitute-supervision/src/diagnostic_storage/allocation/ledger.rs",
+  "crates/sugarsubstitute-supervision/src/diagnostic_storage/allocation/native.rs",
+  "crates/sugarsubstitute-supervision/src/protected_storage/record_file/native.rs",
+  "crates/sugarsubstitute-supervision/src/protected_storage/record_file/streaming/lifecycle.rs",
+]
+source_sha256 = "sha256:82eff308da9d4e2d7649e75865044f310eea8188e540b1593b2668ccfe2590e2"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 1

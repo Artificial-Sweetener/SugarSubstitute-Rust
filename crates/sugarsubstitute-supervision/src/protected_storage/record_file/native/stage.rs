@@ -125,7 +125,7 @@ pub(super) fn activate<const N: usize>(
     let target = file.record_path.path()?.to_owned();
     rename(
         &value.handle,
-        &target,
+        RenameTarget::Absolute(&target),
         true,
         &mut crate::protected_storage::native_phase::NativePhase::ordinary(&value.handle.budget())?,
     )?;

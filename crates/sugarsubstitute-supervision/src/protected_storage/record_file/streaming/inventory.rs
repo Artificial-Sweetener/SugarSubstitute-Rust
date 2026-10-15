@@ -31,7 +31,7 @@ impl StreamingPort {
         {
             return Err(session.phase(context).invalid("diagnostic_scan_capacity"));
         }
-        let directory = self.directory.as_ref().ok_or_else(|| self.reject())?.clone();
+        let directory = self.directory.as_ref().ok_or_else(|| self.reject())?.path.clone();
         let index = self.reserve_file(directory.clone(), 0, FileGrant::DirectoryScan, context)?;
         let id = self.files[index].fields()?.id;
         let original = self.original_context.as_ref().ok_or_else(|| self.reject())?;

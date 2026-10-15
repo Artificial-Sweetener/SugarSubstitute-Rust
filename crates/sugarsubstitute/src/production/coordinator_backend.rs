@@ -342,6 +342,7 @@ impl CoordinatorBackend {
     pub(crate) fn close_custody(
         &mut self,
         budget: ShutdownBudget,
+        profiles_retired: bool,
         resources: &mut BackendResources<'_>,
     ) -> Result<()> {
         if self.records.iter().flatten().all(|record| {
@@ -352,7 +353,7 @@ impl CoordinatorBackend {
                 && record.shutdown.is_some()
         }) && let Some(custody) = &mut self.custody
         {
-            custody.close(budget, resources)?;
+            custody.close(budget, profiles_retired, resources)?;
         }
         Ok(())
     }

@@ -10,6 +10,8 @@ use sugarsubstitute_contracts::{backend_custody::*, execution::Moment};
 use sugarsubstitute_execution::{backend_custody::*, windows::NativeObservationError};
 mod error;
 mod finish;
+#[cfg(test)]
+pub(crate) mod observation_fixture;
 mod receipt;
 mod retirement;
 mod state;

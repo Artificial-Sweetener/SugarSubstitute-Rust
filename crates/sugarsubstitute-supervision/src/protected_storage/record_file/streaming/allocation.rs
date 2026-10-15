@@ -99,7 +99,7 @@ impl StreamingPort {
     pub(super) fn name(&self, leaf: &str, context: &JobContext) -> Result<NativeName, ClaimError> {
         let directory = self.directory.as_ref().ok_or_else(|| self.reject())?;
         let mut session = session::Session::path(&self.original, context)?;
-        session.name(directory, leaf, context)
+        session.name(&directory.path, leaf, context)
     }
     pub(super) fn path(
         &self,

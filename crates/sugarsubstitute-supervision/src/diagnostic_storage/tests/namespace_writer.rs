@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise the genuine closed Diagnostic writer against actual retained Entry-native pins.
+mod activation;
 use super::*;
 use crate::coordinator_entry::{
     self, CoordinatorEntryInput, DiagnosticStorageLocation, VerifiedEntryNamespace,

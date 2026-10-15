@@ -10,6 +10,8 @@ use sugarsubstitute_execution::{
 type Terminal = JobCompletion<BackendCustodyPipeReport, LifecyclePipeFailure>;
 /// Borrow real native adapters; returned facts do not grant fresh admission.
 trait Boundary {
+    /// Observe the existing transport without admitting Finish while profile owners remain.
+    fn observe(&mut self) -> Result<()>;
     /// Consume the actual original Finished fact; pending prior responses keep this false.
     fn finish(&mut self, until: Moment) -> Result<bool>;
     /// Begin and advance the exact registered helper family with its immutable budget.
@@ -46,6 +48,7 @@ impl Retirement {
         &mut self,
         budget: ShutdownBudget,
         ready: bool,
+        profiles_retired: bool,
         now: Moment,
         key: BackendCustodyKey,
         port: &mut impl Boundary,
@@ -58,7 +61,12 @@ impl Retirement {
         self.total_observed |= now >= original.settle_until;
         let mut failure = None;
         if ready && !self.finish_received && now < original.settle_until {
-            match port.finish(original.settle_until) {
+            let observed = if profiles_retired {
+                port.finish(original.settle_until)
+            } else {
+                port.observe().map(|()| false)
+            };
+            match observed {
                 Ok(finished) => {
                     self.finish_received = finished;
                     if finished {
@@ -131,6 +139,7 @@ impl CoordinatorCustody {
     pub(crate) fn close(
         &mut self,
         budget: ShutdownBudget,
+        profiles_retired: bool,
         resources: &mut BackendResources<'_>,
     ) -> Result<()> {
         self.retirement.freeze(budget)?;
@@ -146,7 +155,7 @@ impl CoordinatorCustody {
             attachment: &mut self.attachment,
             resources,
         };
-        self.retirement.advance(budget, self.ready, now, key, &mut port)
+        self.retirement.advance(budget, self.ready, profiles_retired, now, key, &mut port)
     }
 }
 

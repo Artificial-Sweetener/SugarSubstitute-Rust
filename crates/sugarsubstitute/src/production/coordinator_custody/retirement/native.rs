@@ -10,6 +10,11 @@ pub(super) struct Native<'a, 'r> {
     pub(super) resources: &'a mut BackendResources<'r>,
 }
 impl Boundary for Native<'_, '_> {
+    fn observe(&mut self) -> Result<()> {
+        self.parent
+            .consume(std::num::NonZeroUsize::new(32).ok_or("Custody drain bound")?)
+            .map_err(|cause| diagnostics::failed("profile_retirement_observation", cause))
+    }
     fn finish(&mut self, until: Moment) -> Result<bool> {
         self.parent
             .advance_finish(self.resources.client, until)

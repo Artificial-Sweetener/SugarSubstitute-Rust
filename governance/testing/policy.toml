@@ -23,7 +23,7 @@ minimum_tests = 87
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
 concern = "Production desktop startup and retirement through actual execution, authenticated parent/child transport, shared backends, profiles and native window adapters; retained failures, captured startup, bounded console rendering and isolated qualification roles; contained headless backend witness invocation and original-budget Finish lifecycle; genuine boxed incident construction and bounded original terminal/cause diagnostics"
-minimum_tests = 603
+minimum_tests = 605
 
 [[owners]]
 package = "sugarsubstitute-execution"
@@ -41,7 +41,7 @@ minimum_tests = 50
 package = "sugarsubstitute-supervision"
 root = "crates/sugarsubstitute-supervision"
 concern = "Windows launch inputs, retained containment, resource exclusions, actual claim retirement, attempt-bound profile proofs and bounded lifecycle framing; Retained installed-file/hash custody and actual connected-loopback peer identity; authenticated fixed capture roles, same-job selected bundle and module credit custody, checked current-image/PE/PDB association and bounded original close retention; authenticated parent/witness association, independent dual exclusions, exact suspended-root transfer and checked custody retirement"
-minimum_tests = 518
+minimum_tests = 527
 
 [[owners]]
 package = "sugarsubstitute-splash"

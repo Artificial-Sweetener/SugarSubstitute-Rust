@@ -47,7 +47,10 @@ impl StreamingPort {
         let mut session = session::Session::path(&self.original, context)?;
         let mut phase = session.phase(context);
         let fields = self.files[index].fields_mut()?;
-        let result = super::super::native::rename(
+        let directory =
+            self.directory.as_ref().ok_or_else(|| phase.invalid("diagnostic_rename_directory"))?;
+        let result = self.root.rename_diagnostic_file(
+            directory,
             &fields.handle,
             target.path()?,
             matches!(expected, DiagnosticPredecessor::Exact { .. }),

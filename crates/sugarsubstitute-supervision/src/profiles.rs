@@ -194,19 +194,20 @@ impl WindowsProfileLease {
         if batch.notifications.len() > 32 {
             return Err(ClaimError::invalid("profile_completion_bound"));
         }
-        self.advance_custody_release()?;
+        // A failed transport must not retain an independently completed finite job.
+        let custody_failure = self.advance_custody_release().err();
         let Some(job) = self.pending.as_mut() else {
-            return Ok(None);
+            return custody_failure.map_or(Ok(None), Err);
         };
         if !batch
             .notifications
             .iter()
             .any(|notice| notice.scope_id == job.scope_id() && notice.job_id == job.spec().id)
         {
-            return Ok(None);
+            return custody_failure.map_or(Ok(None), Err);
         }
         let Some(completion) = job.try_take_completion() else {
-            return Ok(None);
+            return custody_failure.map_or(Ok(None), Err);
         };
         let id = job.spec().id;
         self.pending = None;
@@ -218,7 +219,7 @@ impl WindowsProfileLease {
         let state =
             native.as_mut().ok_or_else(|| ClaimError::invalid("profile_completion_storage"))?;
         self.shared.observed_held.store(state.held, Ordering::Release);
-        let failure = state.failure.take().or_else(|| match completion.outcome {
+        let worker_failure = state.failure.take().or_else(|| match completion.outcome {
             sugarsubstitute_contracts::execution::JobOutcome::Failure(cause) => Some(cause),
             sugarsubstitute_contracts::execution::JobOutcome::Panicked(cause) => {
                 Some(ClaimError::new(
@@ -228,6 +229,11 @@ impl WindowsProfileLease {
             }
             _ => None,
         });
+        let failure = ClaimError::finish(
+            worker_failure.map_or(Ok(()), Err),
+            custody_failure.map_or(Ok(()), Err),
+        )
+        .err();
         // Proofs never survive cancellation or late completion as successful authorization.
         if kind == TerminalKind::Success
             && failure.is_none()

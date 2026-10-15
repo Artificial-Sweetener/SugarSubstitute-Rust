@@ -128,3 +128,142 @@ fn actual_released_atomic_does_not_retire_an_unconsumed_owned_job() -> TestResul
     harness.finish_workers();
     Ok(())
 }
+
+#[test]
+fn completed_profile_job_drains_despite_original_custody_transport_failure() -> TestResult {
+    use crate::backend_custody_parent::observation_fixture;
+    use sugarsubstitute_contracts::{backend_custody::*, execution::*};
+    let mut h = Harness::new()?;
+    let release = h.spec(100)?;
+    h.lease.submit_release(&h.client, &h.scope, release, &h.registry)?;
+    let batch = h.terminal_batch()?;
+    assert!(h.lease.snapshot().released && h.lease.snapshot().pending);
+    let native =
+        h.client.create_native_scope(ScopeSpec { id: ScopeId::new(3)?, deadline: None }, None)?;
+    let mut spec = h.spec(100)?;
+    spec.class = JobClass::NativeObservation;
+    spec.deadline = None;
+    spec.reservation_bytes =
+        sugarsubstitute_execution::windows_lifecycle_pipe::MIN_LIFECYCLE_PIPE_BYTES;
+    let parent = observation_fixture::parent(
+        &h.client,
+        &native,
+        spec,
+        BackendCustodyKey::new(h.lease.run.owner, BackendCustodySession::new(1)?),
+        Moment::from_nanos(30_000_000_000),
+    )?;
+    let cause = sugarsubstitute_execution::windows::NativeObservationError::new(
+        "original_profile_transport",
+        std::io::Error::other("Original transport failure"),
+    );
+    let pointer = std::ptr::from_ref(cause.source().ok_or("Original cause absent")?);
+    let first = observation_fixture::fail(&parent, cause)?;
+    lock(&h.lease.shared.native).as_mut().ok_or("Profile state absent")?.custody_release =
+        Some(custody::Release {
+            parent: parent.clone(),
+            key: ProfileCustodyKey::new(h.lease.run, 2)?,
+            until: None,
+            nonce: None,
+            counter: None,
+            ack: None,
+        });
+    let observed = h.lease.consume(&batch);
+    assert!(!h.lease.snapshot().pending, "Original completed job starved: {observed:?}");
+    let completed = observed?.ok_or("Original profile completion lost")?;
+    assert_eq!(completed.job, release.id);
+    assert_eq!(completed.kind, TerminalKind::Success);
+    let failure = completed.failure.ok_or("Original custody failure lost")?;
+    let transport = failure
+        .source()
+        .and_then(|e| e.downcast_ref::<crate::BackendCustodyParentFailure>())
+        .and_then(Error::source)
+        .and_then(|e| {
+            e.downcast_ref::<sugarsubstitute_execution::windows::NativeObservationError>()
+        })
+        .ok_or("Original transport type lost")?;
+    assert_eq!(std::ptr::from_ref(transport.source().ok_or("Original source lost")?), pointer);
+    assert_eq!(h.lease.release_deadline, Some(Moment::from_nanos(100)));
+    assert!(h.lease.consume(&batch).is_err());
+    drop(first);
+    drop(parent);
+    h.finish_workers();
+    Ok(())
+}
+
+#[test]
+fn actual_failed_profile_job_keeps_worker_primary_and_original_transport_secondary() -> TestResult {
+    use crate::backend_custody_parent::observation_fixture;
+    use sugarsubstitute_contracts::{backend_custody::*, execution::*};
+    let mut h = Harness::new()?;
+    assert!(lock(&h.lease.shared.native).as_ref().ok_or("Initial profile absent")?.retired);
+    let acquired = h.acquire()?;
+    assert_eq!(acquired.kind, TerminalKind::Success);
+    assert!(acquired.failure.is_none());
+    assert!(h.lease.snapshot().held);
+    assert!(!lock(&h.lease.shared.native).as_ref().ok_or("Acquired profile absent")?.retired);
+    h.fake.fail_release.store(true, Ordering::Release);
+    let release = h.spec(100)?;
+    h.lease.submit_release(&h.client, &h.scope, release, &h.registry)?;
+    let batch = h.terminal_batch()?;
+    assert_eq!(h.fake.releases.load(Ordering::Acquire), 1);
+    let primary = lock(&h.lease.shared.native)
+        .as_ref()
+        .and_then(|state| state.failure.clone())
+        .ok_or("Original worker cause absent")?;
+    assert_eq!(primary.operation(), "fake_close_failure");
+    let native =
+        h.client.create_native_scope(ScopeSpec { id: ScopeId::new(3)?, deadline: None }, None)?;
+    let mut spec = h.spec(100)?;
+    spec.class = JobClass::NativeObservation;
+    spec.deadline = None;
+    spec.reservation_bytes =
+        sugarsubstitute_execution::windows_lifecycle_pipe::MIN_LIFECYCLE_PIPE_BYTES;
+    let parent = observation_fixture::parent(
+        &h.client,
+        &native,
+        spec,
+        BackendCustodyKey::new(h.lease.run.owner, BackendCustodySession::new(7)?),
+        Moment::from_nanos(30_000_000_000),
+    )?;
+    let cause = sugarsubstitute_execution::windows::NativeObservationError::new(
+        "original_parallel_transport",
+        std::io::Error::from_raw_os_error(109),
+    );
+    let pointer = std::ptr::from_ref(cause.source().ok_or("Original transport source absent")?);
+    let first = observation_fixture::fail(&parent, cause)?;
+    lock(&h.lease.shared.native).as_mut().ok_or("Actual profile state absent")?.custody_release =
+        Some(custody::Release {
+            parent: parent.clone(),
+            key: ProfileCustodyKey::new(h.lease.run, 2)?,
+            until: None,
+            nonce: None,
+            counter: None,
+            ack: None,
+        });
+    let completed = h.lease.consume(&batch)?.ok_or("Original terminal result absent")?;
+    assert!(!h.lease.snapshot().pending);
+    assert!(!h.lease.snapshot().retirement_ready());
+    assert_eq!(completed.job, release.id);
+    assert_eq!(completed.kind, TerminalKind::Failure);
+    let failure = completed.failure.ok_or("Actual failed job became healthy")?;
+    assert!(failure.same_primary(&primary));
+    let secondary = failure.cleanup_cause().ok_or("Observed transport cause discarded")?;
+    assert_eq!(secondary.operation(), "profile_release_observation");
+    let original = secondary
+        .source()
+        .and_then(|cause| cause.downcast_ref::<crate::BackendCustodyParentFailure>())
+        .and_then(Error::source)
+        .and_then(|cause| {
+            cause.downcast_ref::<sugarsubstitute_execution::windows::NativeObservationError>()
+        })
+        .ok_or("Original secondary type replaced")?;
+    assert_eq!(
+        std::ptr::from_ref(original.source().ok_or("Original secondary source lost")?),
+        pointer
+    );
+    assert_eq!(h.lease.release_deadline, Some(Moment::from_nanos(100)));
+    drop(first);
+    drop(parent);
+    h.finish_workers();
+    Ok(())
+}

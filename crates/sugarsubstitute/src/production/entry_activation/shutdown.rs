@@ -30,6 +30,12 @@ impl ProductionActivation {
         backend
             .close_custody(
                 budget,
+                self.records.iter().flatten().all(|held| {
+                    held.record
+                        .start
+                        .as_ref()
+                        .is_none_or(|start| start.profile.snapshot().retirement_ready())
+                }),
                 &mut progress::backend_resources(resources, self.capture.as_ref()),
             )
             .map_err(outer)?;

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Advance genuine profile preparation and actual Held activation with original custody receipts.
+pub(super) mod acknowledgement;
 pub(super) mod preparation;
 use super::*;
 use crate::registry::profile::prepared::PreparedDesktop;
@@ -50,17 +51,13 @@ impl WindowsProfileLease {
                 .try_submit(Command::ProfilePublished { profile: prepared.key }, prepared.until)
                 .map_err(|cause| ClaimError::new("profile_published_deferred_admission", cause))?;
         }
-        let Some(nonce) = prepared.published_nonce else { return Ok(false) };
-        let Some(ack) = prepared.parent.take_acknowledgement_for(nonce) else {
-            return Ok(false);
-        };
-        if ack.receipt() != Receipt::ProfilePublished(prepared.key) {
-            return Err(ClaimError::invalid("profile_published_association"));
-        }
-        prepared.published_ack = Some(ack);
-        tracing::info!(operation="profile_published_acknowledged",profile=?prepared.key,nonce,
-            "Actual helper validated the protected prospective Held row");
-        Ok(true)
+        acknowledgement::published(
+            &prepared.parent,
+            prepared.key,
+            prepared.published_nonce,
+            &mut prepared.published_ack,
+        )?;
+        Ok(prepared.published_ack.is_some())
     }
     /// Observe actual original registry watch retirement for an unlaunched prepared family.
     /// # Errors
@@ -88,13 +85,30 @@ impl WindowsProfileLease {
         if release.ack.is_some() {
             return Ok(());
         }
-        release
+        let observed = release
             .parent
             .consume(
                 std::num::NonZeroUsize::new(32)
                     .ok_or_else(|| ClaimError::invalid("profile_release_bound"))?,
             )
-            .map_err(|cause| ClaimError::new("profile_release_observation", cause))?;
+            .map_err(|cause| ClaimError::new("profile_release_observation", cause));
+        let receipts = state.desktop_custody.as_mut().map_or(Ok(()), |prepared| {
+            let preparation = acknowledgement::prepared_during_close(
+                &prepared.parent,
+                prepared.key,
+                prepared.prepared_nonce,
+                &self.shared.closing,
+                &mut prepared.prepared_ack,
+            );
+            let publication = acknowledgement::published(
+                &prepared.parent,
+                prepared.key,
+                prepared.published_nonce,
+                &mut prepared.published_ack,
+            );
+            ClaimError::finish(preparation, publication)
+        });
+        ClaimError::finish(observed, receipts)?;
         if release.nonce.is_none()
             && let (Some(until), Some((until_ticks, frequency))) = (release.until, release.counter)
         {
@@ -184,6 +198,9 @@ impl WindowsProfileLease {
         spec: JobSpec,
     ) -> Result<Option<JobId>, ClaimAdmissionError> {
         self.validate_submission(scope, spec)?;
+        if self.shared.closing.load(Ordering::Acquire) {
+            return Err(ClaimAdmissionError::Closed);
+        }
         let mut native = lock(&self.shared.native);
         let state = native.as_mut().ok_or(ClaimAdmissionError::Closed)?;
         let prepared = state.desktop_custody.as_mut().ok_or(ClaimAdmissionError::Identity)?;

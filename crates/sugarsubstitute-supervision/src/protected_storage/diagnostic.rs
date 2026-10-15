@@ -16,7 +16,61 @@ pub(crate) fn namespace_component(
     hex
 }
 
+/// Retain the actual namespace directory slot, canonical name and creation identity.
+pub(crate) struct DiagnosticDirectory {
+    pub(super) path: NativeName,
+    slot: usize,
+    identity: [u8; 24],
+}
 impl ProtectedStorageRoot {
+    /// Publish through the exact retained namespace parent without reopening it for writes.
+    /// # Errors
+    /// Rejects foreign budgets, changed parent identity/path and native rename failures.
+    pub(crate) fn rename_diagnostic_file(
+        &self,
+        directory: &DiagnosticDirectory,
+        source: &Handle,
+        target: &Path,
+        replace: bool,
+        phase: &mut native_phase::NativePhase<'_>,
+    ) -> Result<(), ClaimError> {
+        let state = self.state.as_ref().ok_or_else(|| phase.invalid("diagnostic_rename_root"))?;
+        if !matches!(state.budget, Budget::Diagnostic(_)) {
+            return Err(phase.invalid("diagnostic_rename_origin"));
+        }
+        phase.check_budget(&state.budget)?;
+        let parent = state
+            .handles
+            .get(directory.slot)
+            .ok_or_else(|| phase.invalid("diagnostic_rename_pin"))?;
+        phase.check_budget(&parent.budget())?;
+        if target.parent() != Some(directory.path.path()?)
+            || paths::file_identity(parent, phase)? != directory.identity
+        {
+            return Err(phase.invalid("diagnostic_rename_parent"));
+        }
+        paths::validate_object(parent, true, true, phase)?;
+        security::verify(parent, state.sid.bytes()?, phase)?;
+        let destination = phase.name_destination()?;
+        let actual = paths::final_path(parent, phase, destination)?;
+        if actual.path()? != directory.path.path()? {
+            return Err(phase.invalid("diagnostic_rename_parent_path"));
+        }
+        drop(actual);
+        let destination = phase.name_destination()?;
+        let actual_source = paths::final_path(source, phase, destination)?;
+        if actual_source.path()?.parent() != Some(directory.path.path()?) {
+            return Err(phase.invalid("diagnostic_rename_source_parent"));
+        }
+        drop(actual_source);
+        record_file::native::rename(
+            source,
+            record_file::native::RenameTarget::SameDirectory(target),
+            replace,
+            phase,
+        )
+    }
+
     /// Revalidate the copied root against the same actual retained namespace pin.
     pub(crate) fn validate_diagnostic_namespace(
         &mut self,
@@ -81,8 +135,10 @@ impl ProtectedStorageRoot {
         &mut self,
         namespace: sugarsubstitute_contracts::lifecycle::NamespaceId,
         context: &JobContext,
-    ) -> Result<(NativeName, NativeSid, directories::DirectoryDisposition, [u8; 24]), ClaimError>
-    {
+    ) -> Result<
+        (DiagnosticDirectory, NativeSid, directories::DirectoryDisposition, [u8; 24]),
+        ClaimError,
+    > {
         let state = self.state_mut()?;
         if !matches!(state.budget, Budget::Diagnostic(_)) {
             return Err(state.budget.rejection("diagnostic_directory_origin"));
@@ -130,6 +186,11 @@ impl ProtectedStorageRoot {
             final_disposition = resolved.1.disposition;
             final_identity = resolved.1.identity;
         }
-        Ok((path, sid.clone(), final_disposition, final_identity))
+        Ok((
+            DiagnosticDirectory { path, slot: parent, identity: final_identity },
+            sid.clone(),
+            final_disposition,
+            final_identity,
+        ))
     }
 }

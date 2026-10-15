@@ -17,6 +17,7 @@ use sugarsubstitute_contracts::execution::{
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner, windows::NativeObservationError};
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) enum Event {
+    Observe,
     FinishPending,
     Finished,
     Stop,
@@ -73,11 +74,29 @@ pub(super) struct Fixture {
     pub(super) clock: Arc<TestClock>,
     pub(super) client: ExecutionClient,
     pub(super) port: Port,
-    scope: Scope,
+    pub(super) scope: Scope,
     wake: Arc<Wake>,
     _execution: Option<ExecutionOwner>,
 }
 impl Fixture {
+    /// Observe the matching real job notification without consuming its original outcome.
+    pub(super) fn terminal(
+        &self,
+        id: sugarsubstitute_contracts::execution::JobId,
+    ) -> std::result::Result<
+        sugarsubstitute_contracts::execution::CompletionBatch,
+        Box<dyn Error + Send + Sync>,
+    > {
+        loop {
+            let prior = self.wake.revision();
+            let batch =
+                self.client.drain_completions(NonZeroUsize::new(32).ok_or("Drain bound")?)?;
+            if batch.notifications.iter().any(|notice| notice.job_id == id) {
+                return Ok(batch);
+            }
+            self.wake.wait(prior)?;
+        }
+    }
     pub(super) fn new(tag: Option<u8>) -> std::result::Result<Self, Box<dyn Error + Send + Sync>> {
         let clock = Arc::new(TestClock::default());
         let wake = Arc::new(Wake::default());
@@ -154,7 +173,7 @@ impl Fixture {
     ) -> TestResult {
         loop {
             let prior = self.wake.revision();
-            owner.advance(budget, ready, self.client.now()?, key, &mut self.port)?;
+            owner.advance(budget, ready, true, self.client.now()?, key, &mut self.port)?;
             if owner.settled {
                 return Ok(());
             }
@@ -200,6 +219,13 @@ impl Port {
     }
 }
 impl Boundary for Port {
+    fn observe(&mut self) -> Result<()> {
+        self.events.push(Event::Observe);
+        if let Some(cause) = &self.failure {
+            return Err(Box::new(cause.clone()));
+        }
+        Ok(())
+    }
     fn finish(&mut self, _: Moment) -> Result<bool> {
         if let Some(cause) = &self.failure {
             return Err(Box::new(cause.clone()));

@@ -3,7 +3,7 @@
 //! Activate bounded bytes through one retained staging inode; codecs stay with owners.
 mod boundary;
 mod context;
-mod native;
+pub(super) mod native;
 pub(crate) mod publication;
 pub(crate) mod retirement;
 mod streaming;

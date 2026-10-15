@@ -115,6 +115,7 @@ impl ProfileComponent {
                 custody
                     .close(
                         budget,
+                        true,
                         &mut super::super::progress::backend_resources(
                             resources,
                             self.capture.as_ref(),

@@ -5,6 +5,8 @@ use super::*;
 #[path = "sequence/boundary.rs"]
 mod boundary;
 use boundary::{Event, Fixture};
+#[path = "sequence/profile.rs"]
+mod profile;
 #[test]
 fn original_pending_release_or_finish_keeps_helper_stop_and_force_unissued() -> TestResult {
     let mut fixture = Fixture::new(None)?;
@@ -12,7 +14,7 @@ fn original_pending_release_or_finish_keeps_helper_stop_and_force_unissued() -> 
     let mut owner = Retirement::default();
     for now in [budget.started, budget.graceful_until, Moment::from_nanos(12_000_000_000)] {
         fixture.clock.set(now);
-        owner.advance(budget, true, fixture.client.now()?, key()?, &mut fixture.port)?;
+        owner.advance(budget, true, true, fixture.client.now()?, key()?, &mut fixture.port)?;
         assert_eq!(owner.original, Some(budget));
         assert!(!owner.finish_received && !owner.settled && owner.terminal.is_none());
     }
@@ -27,10 +29,10 @@ fn late_finished_precedes_helper_force_and_actual_pipe_terminal() -> TestResult 
     let key = fixture.port.key()?;
     let mut owner = Retirement::default();
     fixture.clock.set(budget.graceful_until);
-    owner.advance(budget, true, fixture.client.now()?, key, &mut fixture.port)?;
+    owner.advance(budget, true, true, fixture.client.now()?, key, &mut fixture.port)?;
     fixture.clock.set(Moment::from_nanos(12_000_000_000));
     fixture.port.finished = true;
-    owner.advance(budget, true, fixture.client.now()?, key, &mut fixture.port)?;
+    owner.advance(budget, true, true, fixture.client.now()?, key, &mut fixture.port)?;
     assert_eq!(
         fixture.port.events,
         vec![Event::FinishPending, Event::Finished, Event::Stop, Event::Force]
@@ -63,7 +65,7 @@ fn original_protocol_failure_survives_actual_cleanup_error() -> TestResult {
     let mut owner = Retirement::default();
     for _ in 0..2 {
         let cause = owner
-            .advance(budget, true, fixture.client.now()?, key()?, &mut fixture.port)
+            .advance(budget, true, true, fixture.client.now()?, key()?, &mut fixture.port)
             .err()
             .ok_or("Failed cleanup accepted")?;
         let original = cause
@@ -83,10 +85,10 @@ fn original_cutoff_without_finished_preserves_failed_owned_cleanup() -> TestResu
     let mut fixture = Fixture::new(None)?;
     let budget = ShutdownBudget::new(Moment::from_nanos(0))?;
     let mut owner = Retirement::default();
-    owner.advance(budget, true, fixture.client.now()?, key()?, &mut fixture.port)?;
+    owner.advance(budget, true, true, fixture.client.now()?, key()?, &mut fixture.port)?;
     fixture.clock.set(budget.settle_until);
     let cause = owner
-        .advance(budget, true, fixture.client.now()?, key()?, &mut fixture.port)
+        .advance(budget, true, true, fixture.client.now()?, key()?, &mut fixture.port)
         .err()
         .ok_or("Missing Finished accepted")?;
     assert!(cause.source().and_then(|value|value.downcast_ref::<RetirementRejected>()).is_some_and(|value|matches!(value,RetirementRejected::FinishExpired(until) if *until==budget.settle_until)));
@@ -101,11 +103,13 @@ fn changed_original_budget_rejects_before_another_external_effect() -> TestResul
     let mut fixture = Fixture::new(None)?;
     let budget = ShutdownBudget::new(Moment::from_nanos(0))?;
     let mut owner = Retirement::default();
-    owner.advance(budget, true, fixture.client.now()?, key()?, &mut fixture.port)?;
+    owner.advance(budget, true, true, fixture.client.now()?, key()?, &mut fixture.port)?;
     let before = fixture.port.events.clone();
     let changed = ShutdownBudget::new(Moment::from_nanos(1))?;
     assert!(
-        owner.advance(changed, true, fixture.client.now()?, key()?, &mut fixture.port).is_err()
+        owner
+            .advance(changed, true, true, fixture.client.now()?, key()?, &mut fixture.port)
+            .is_err()
     );
     assert_eq!(owner.original, Some(budget));
     assert_eq!(fixture.port.events, before);
