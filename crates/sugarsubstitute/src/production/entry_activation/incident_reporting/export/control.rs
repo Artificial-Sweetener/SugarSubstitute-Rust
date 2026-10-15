@@ -3,6 +3,60 @@
 //! Emit one native result only from the genuine checked terminal and original frame correlation.
 use super::*;
 impl IncidentReporting {
+    /// Reject actual overload only after every admitted unpaired cleanup was cancelled and observed.
+    /// Original source/input/view/request stay retained through the ordinary router completion.
+    /// This records failed admission, never a native export result or physical retirement proof.
+    pub(super) fn complete_rejected_export_control(
+        &mut self,
+        scope: IncidentOperationScope,
+        binding: ReportBinding,
+        input: ExportInput,
+    ) -> Result<()> {
+        let work = self.export_work.as_mut().ok_or("Original rejected export owner missing")?;
+        work.material = ExportMaterial::Input(input);
+        if work.submitted
+            || !work.rejected_admission
+            || self.completion.is_some()
+            || self.pending_control.is_some()
+            || self.binding != Some(binding)
+        {
+            return Err("Original rejected export disposition changed with inputs retained".into());
+        }
+        let ExportMaterial::Input(input) = &work.material else {
+            return Err("Original rejected export input missing".into());
+        };
+        if self.key != Some(input.received.key())
+            || input.view.as_ref().is_none_or(|view| view.view().binding() != binding)
+        {
+            return Err("Original rejected export correlation changed with inputs retained".into());
+        }
+        let control = self::input(
+            input.received.key(),
+            input.issued.request(),
+            binding,
+            scope.original().until(),
+            DiagnosticActionResult::Failed(ReportFailure::Export),
+        );
+        let work = self.export_work.as_mut().ok_or("Original rejected export owner missing")?;
+        let prior = std::mem::replace(&mut work.material, ExportMaterial::Bound);
+        let ExportMaterial::Input(input) = prior else {
+            work.material = prior;
+            return Err("Original rejected export input changed".into());
+        };
+        let ExportInput { protected, view, received, issued } = input;
+        drop(protected);
+        work.material =
+            ExportMaterial::Completion { request: issued.request(), view, custody: None };
+        work.wake_until = Some(scope.original().until());
+        self.relay_until = Some(scope.original().until());
+        self.pending_control = Some(control);
+        self.completion = Some(ReporterCompletion {
+            received,
+            issued,
+            reply: DiagnosticReply::Failed(DiagnosticOperationFailure::Export),
+        });
+        Ok(())
+    }
     /// Keep whole originals on foreign facts, occupied output slots or policy adoption rejection.
     /// The service admits a terminal only after all four real deliveries and both checked closes.
     pub(super) fn complete_export_control(
@@ -37,7 +91,7 @@ impl IncidentReporting {
             );
         }
         let saved = terminal.receipt.is_some();
-        let control = input(
+        let control = self::input(
             terminal.received.key(),
             terminal.issued.request(),
             binding,
@@ -61,7 +115,8 @@ impl IncidentReporting {
         };
         let (received, issued, receipt, view, custody): ExportCompletionParts =
             terminal.into_completion_parts();
-        work.material = ExportMaterial::Completion { request: issued.request(), view, custody };
+        work.material =
+            ExportMaterial::Completion { request: issued.request(), view, custody: Some(custody) };
         work.wake_until = Some(scope.original().until());
         self.relay_until = Some(scope.original().until());
         self.pending_control = Some(control);

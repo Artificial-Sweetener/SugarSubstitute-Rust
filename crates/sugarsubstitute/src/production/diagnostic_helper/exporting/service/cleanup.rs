@@ -40,10 +40,7 @@ impl ExportService {
                 self.cleanup_admitted[0] = true;
                 Ok(())
             }
-            Err(cause) => {
-                self.admission.get_or_insert(cause.error);
-                Err(ExportIssue::Admission)
-            }
+            Err(cause) => Err(self.reject_admission(cause.error)),
         }
     }
     /// Reserve genuine receiving cleanup before either native owner is constructed.
@@ -83,10 +80,7 @@ impl ExportService {
                 self.cleanup_admitted[1] = true;
                 Ok(())
             }
-            Err(cause) => {
-                self.admission.get_or_insert(cause.error);
-                Err(ExportIssue::Admission)
-            }
+            Err(cause) => Err(self.reject_admission(cause.error)),
         }
     }
     /// Activate independent cleanup sequentially after both exact original Main deliveries.
@@ -104,10 +98,7 @@ impl ExportService {
             self.source_deadline = Some(
                 client
                     .freeze_symbol_cleanup_deadline(permit, std::time::Duration::from_secs(15))
-                    .map_err(|cause| {
-                    self.admission.get_or_insert(cause);
-                    ExportIssue::Admission
-                })?,
+                    .map_err(|cause| self.reject_admission(cause))?,
             );
         }
         if self.receiving_deadline.is_none()
@@ -119,10 +110,7 @@ impl ExportService {
                         permit,
                         std::time::Duration::from_secs(15),
                     )
-                    .map_err(|cause| {
-                        self.admission.get_or_insert(cause);
-                        ExportIssue::Admission
-                    })?,
+                    .map_err(|cause| self.reject_admission(cause))?,
             );
         }
         if self.delivery[2].job.is_none() && self.delivery[2].completion.is_none() {
@@ -137,8 +125,7 @@ impl ExportService {
                 }
                 Err(rejection) => {
                     self.receiving_held = Some(rejection.permit);
-                    self.admission.get_or_insert(rejection.error);
-                    return Err(ExportIssue::Admission);
+                    return Err(self.reject_admission(rejection.error));
                 }
             }
         }
@@ -157,8 +144,7 @@ impl ExportService {
                 }
                 Err(rejection) => {
                     self.source_held = Some(rejection.permit);
-                    self.admission.get_or_insert(rejection.error);
-                    return Err(ExportIssue::Admission);
+                    return Err(self.reject_admission(rejection.error));
                 }
             }
         }

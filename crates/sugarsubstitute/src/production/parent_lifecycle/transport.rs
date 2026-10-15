@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Observe actual issue/byte-count/terminal facts before releasing request records.
+use super::retirement_trace::AckStage;
 use super::types::{PendingWrite, WritePurpose};
 use super::{ParentError, ParentLifecycle, ParentResources, Reply, Result};
 use sha2::{Digest, Sha256};
@@ -107,6 +108,11 @@ impl ParentLifecycle {
                                 "Actual issued reply authorization rejected; original cause retained");
                             return Err(cause);
                         }
+                        self.trace_retirement_ack(
+                            self.requests.get(index)?.header,
+                            AckStage::Issued,
+                            Some(operation.get()),
+                        );
                     }
                     WritePurpose::Challenge(challenge) => {
                         self.challenge_issued(
@@ -135,6 +141,11 @@ impl ParentLifecycle {
                             attempt.retirement_written(self.requests.get(index)?.header);
                         }
                         self.requests.get_mut(index)?.sent = true;
+                        self.trace_retirement_ack(
+                            self.requests.get(index)?.header,
+                            AckStage::Written,
+                            Some(operation.get()),
+                        );
                         self.recovery_written(index)?;
                         self.finish_attempt_write(
                             self.requests.get(index)?.header,
@@ -248,6 +259,15 @@ impl ParentLifecycle {
                         self.requests.get(index)?.header,
                         super::acquisition::WriteObservation::Queued,
                     )?;
+                }
+                if let WritePurpose::Reply(index) =
+                    self.write.as_ref().ok_or(ParentError::WrongPhase)?.purpose
+                {
+                    self.trace_retirement_ack(
+                        self.requests.get(index)?.header,
+                        AckStage::Queued,
+                        Some(next),
+                    );
                 }
                 Ok(true)
             }

@@ -42,6 +42,14 @@ impl ExportService {
     pub(in crate::production) fn take_unsubmitted_input(
         &mut self,
     ) -> Result<Option<ExportInput>, ExportIssue> {
+        if !self.retire_unsubmitted()? {
+            return Ok(None);
+        }
+        self.source.take_unsubmitted_input()
+    }
+    /// Cancel only unpaired held cleanup and await every real original cancellation delivery.
+    /// This leaves the complete input in its source for admission-failure correlation.
+    pub(in crate::production) fn retire_unsubmitted(&mut self) -> Result<bool, ExportIssue> {
         if self.delivery[..2]
             .iter()
             .any(|delivery| delivery.job.is_some() || delivery.completion.is_some())
@@ -54,10 +62,18 @@ impl ExportService {
         if let Some(permit) = self.source_held.take() {
             self.delivery[3].job = Some(permit.cancel_and_observe());
         }
-        if !self.unsubmitted_observed() {
-            return Ok(None);
+        if self.delivery[2..].iter().any(|delivery| {
+            delivery
+                .completion
+                .as_ref()
+                .is_some_and(|done| !matches!(done.outcome, JobOutcome::Cancelled))
+        }) {
+            return Err(ExportIssue::Identity);
         }
-        self.source.take_unsubmitted_input()
+        if !self.unsubmitted_observed() {
+            return Ok(false);
+        }
+        Ok(true)
     }
     pub(super) fn unsubmitted_observed(&self) -> bool {
         self.delivery[..2]

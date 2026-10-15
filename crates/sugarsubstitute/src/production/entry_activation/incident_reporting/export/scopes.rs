@@ -7,32 +7,51 @@ pub(super) struct ExportJobs {
     pub(super) receiving: Scope,
     pub(super) source_cleanup: Scope,
     pub(super) receiving_cleanup: Scope,
-    source_id: JobId,
-    receiving_id: JobId,
-    source_cleanup_id: JobId,
-    receiving_cleanup_id: JobId,
+    ids: Option<ExportIds>,
     until: Moment,
 }
+/// IDs belong only to one actual admission attempt; accepted permits retain their specs.
+struct ExportIds {
+    source: JobId,
+    receiving: JobId,
+    source_cleanup: JobId,
+    receiving_cleanup: JobId,
+}
 impl ExportJobs {
-    /// Allocate four independent owned scopes and consume IDs before original admission.
-    pub(super) fn new(resources: &EntryResources<'_>, until: Moment) -> Result<Self> {
+    /// Retain four scopes and the original cutoff without reserving future job IDs.
+    pub(super) fn new(
+        client: &ExecutionClient,
+        scopes: &crate::production::entry_runner::ScopeSequence,
+        until: Moment,
+    ) -> Result<Self> {
         let scope = || -> Result<Scope> {
-            Ok(resources.client.create_scope(
-                ScopeSpec { id: resources.scopes.allocate()?, deadline: None },
-                None,
-            )?)
+            Ok(client.create_scope(ScopeSpec { id: scopes.allocate()?, deadline: None }, None)?)
         };
         Ok(Self {
             source: scope()?,
             receiving: scope()?,
             source_cleanup: scope()?,
             receiving_cleanup: scope()?,
-            source_cleanup_id: resources.jobs.allocate()?,
-            receiving_cleanup_id: resources.jobs.allocate()?,
-            source_id: resources.jobs.allocate()?,
-            receiving_id: resources.jobs.allocate()?,
+            ids: None,
             until,
         })
+    }
+    /// Allocate IDs immediately before this attempt's first central admission.
+    /// Repository/view jobs may finish before this call. Repeats keep the same attempt.
+    pub(super) fn prepare(&mut self, jobs: &crate::job_sequence::JobSequence) -> Result<()> {
+        if self.ids.is_none() {
+            self.ids = Some(ExportIds {
+                source_cleanup: jobs.allocate()?,
+                receiving_cleanup: jobs.allocate()?,
+                source: jobs.allocate()?,
+                receiving: jobs.allocate()?,
+            });
+        }
+        Ok(())
+    }
+    /// Reject an attempt whose real admission identities have not yet been allocated.
+    fn ids(&self) -> Result<&ExportIds> {
+        self.ids.as_ref().ok_or_else(|| "Original export admission attempt missing".into())
     }
     /// The same original action cutoff remains through actual native result delivery.
     pub(super) const fn until(&self) -> Moment {
@@ -54,19 +73,38 @@ impl ExportJobs {
         }
     }
     /// Same original source Main8,159,232/260 admission; deadline never recomputed from now.
-    pub(super) fn source_spec(&self) -> JobSpec {
-        Self::spec(self.source_id, JobClass::InfrastructureOrdinary, 8_159_232, Some(self.until))
+    pub(super) fn source_spec(&self) -> Result<JobSpec> {
+        Ok(Self::spec(
+            self.ids()?.source,
+            JobClass::InfrastructureOrdinary,
+            8_159_232,
+            Some(self.until),
+        ))
     }
     /// Same separate original receiving Main128KiB/68 admission.
-    pub(super) fn receiving_spec(&self) -> JobSpec {
-        Self::spec(self.receiving_id, JobClass::InfrastructureOrdinary, 131_072, Some(self.until))
+    pub(super) fn receiving_spec(&self) -> Result<JobSpec> {
+        Ok(Self::spec(
+            self.ids()?.receiving,
+            JobClass::InfrastructureOrdinary,
+            131_072,
+            Some(self.until),
+        ))
     }
     /// Same independently preheld source cleanup32KiB spec; original cutoff freezes centrally.
-    pub(super) fn source_cleanup_spec(&self) -> JobSpec {
-        Self::spec(self.source_cleanup_id, JobClass::InfrastructureLifecycle, 32_768, None)
+    pub(super) fn source_cleanup_spec(&self) -> Result<JobSpec> {
+        Ok(Self::spec(self.ids()?.source_cleanup, JobClass::InfrastructureLifecycle, 32_768, None))
     }
     /// Same independently preheld receiving cleanup32KiB spec.
-    pub(super) fn receiving_cleanup_spec(&self) -> JobSpec {
-        Self::spec(self.receiving_cleanup_id, JobClass::InfrastructureLifecycle, 32_768, None)
+    pub(super) fn receiving_cleanup_spec(&self) -> Result<JobSpec> {
+        Ok(Self::spec(
+            self.ids()?.receiving_cleanup,
+            JobClass::InfrastructureLifecycle,
+            32_768,
+            None,
+        ))
     }
 }
+
+#[cfg(test)]
+#[path = "scopes/tests.rs"]
+mod tests;

@@ -2,6 +2,21 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain one immutable authenticated request through native write contention and exact reply consumption.
 use super::*;
+use crate::production::close_diagnostic::{
+    CloseTrace, Control as CloseControl, ControlStage, DeadlineSource, Prepared,
+};
+impl Control {
+    /// Name only finite lifecycle controls; normal activity never floods close diagnostics.
+    fn diagnostic_label(self) -> Option<CloseControl> {
+        match self {
+            Self::MainRetired(_) => Some(CloseControl::MainRetired),
+            Self::Release(_) => Some(CloseControl::Release),
+            Self::ExitIntent => Some(CloseControl::ExitIntent),
+            Self::ExitCompleted => Some(CloseControl::ExitCompleted),
+            Self::Activity { .. } => None,
+        }
+    }
+}
 impl ProductionChild {
     pub(in super::super) fn advance_control(&mut self) -> Result<()> {
         if !self.bootstrap.channel_mut().admitted() {
@@ -50,7 +65,27 @@ impl ProductionChild {
             if decoded.header != pending.header || !acknowledged {
                 return Err("Actual lifecycle disposition was not acknowledged".into());
             }
+            if let Some(control) = pending.control.diagnostic_label() {
+                CloseTrace::Control {
+                    stage: ControlStage::ReplyReceived,
+                    control,
+                    request: pending.header.request.map(|r| r.get()).unwrap_or(0),
+                    deadline_qpc: pending.header.deadline_qpc,
+                    prepared: None,
+                }
+                .emit();
+            }
             self.bootstrap.channel_mut().consume_reply(decoded.header)?;
+            if let Some(control) = pending.control.diagnostic_label() {
+                CloseTrace::Control {
+                    stage: ControlStage::ReplyConsumed,
+                    control,
+                    request: pending.header.request.map(|r| r.get()).unwrap_or(0),
+                    deadline_qpc: pending.header.deadline_qpc,
+                    prepared: None,
+                }
+                .emit();
+            }
             match pending.control {
                 Control::Release(_) => self.shutdown.released = true,
                 Control::MainRetired(_) => self.shutdown.main_retirement_ack = true,
@@ -64,18 +99,41 @@ impl ProductionChild {
         if self.shutdown.pending.is_none()
             && let Some(control) = take_first(&mut self.shutdown.queued)
         {
-            let original = if let Some(budget) = self.shutdown.budget {
+            let (original, deadline_source) = if let Some(budget) = self.shutdown.budget {
                 if matches!(control, Control::ExitIntent) {
-                    budget.graceful_until
+                    (budget.graceful_until, DeadlineSource::ShutdownGrace)
                 } else {
-                    budget.settle_until
+                    (budget.settle_until, DeadlineSource::ShutdownTotal)
                 }
             } else if matches!(control, Control::MainRetired(_)) && self.attempt.is_some() {
-                self.attempt.as_ref().ok_or("Original attempt absent")?.original_deadline()
+                (
+                    self.attempt.as_ref().ok_or("Original attempt absent")?.original_deadline(),
+                    DeadlineSource::AttemptCleanup,
+                )
             } else {
-                self.client()?.now()?.checked_add(Duration::from_secs(30))?
+                (
+                    self.client()?.now()?.checked_add(Duration::from_secs(30))?,
+                    DeadlineSource::ControlInterval,
+                )
             };
             let header = self.bootstrap.channel_mut().prepare_request(original)?;
+            if let Some(control) = control.diagnostic_label() {
+                CloseTrace::Control {
+                    stage: ControlStage::Prepared,
+                    control,
+                    request: header.request.map(|r| r.get()).unwrap_or(0),
+                    deadline_qpc: header.deadline_qpc,
+                    prepared: Some(Prepared {
+                        original_ns: original.as_nanos(),
+                        source: deadline_source,
+                        phase: self.phase,
+                        attempt_present: self.attempt.is_some(),
+                        attempt_complete: self.attempt.as_ref().is_some_and(|a| a.complete()),
+                        shutdown_budget_present: self.shutdown.budget.is_some(),
+                    }),
+                }
+                .emit();
+            }
             self.shutdown.pending = Some(Pending { header, original, control, admitted: false });
         }
         if let Some(pending) = self.shutdown.pending
@@ -106,6 +164,16 @@ impl ProductionChild {
                     .as_mut()
                     .ok_or("Original control request disappeared")?
                     .admitted = true;
+                if let Some(control) = pending.control.diagnostic_label() {
+                    CloseTrace::Control {
+                        stage: ControlStage::Admitted,
+                        control,
+                        request: pending.header.request.map(|r| r.get()).unwrap_or(0),
+                        deadline_qpc: pending.header.deadline_qpc,
+                        prepared: None,
+                    }
+                    .emit();
+                }
             }
         }
         Ok(())

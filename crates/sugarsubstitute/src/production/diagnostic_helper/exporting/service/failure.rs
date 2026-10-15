@@ -4,6 +4,30 @@
 use super::*;
 use sugarsubstitute_crash::report_export::ReportExportCode;
 impl ExportService {
+    /// Borrow the actual failed central admission while the unchanged source owns all inputs.
+    pub(in crate::production) fn admission_failure(&self) -> Option<&AdmissionError> {
+        self.admission.as_ref()
+    }
+
+    /// Admission-only overload disposition after actual unpaired cancellation and before input transfer.
+    /// The fixed source still owns the original protected operation and complete view.
+    /// This never establishes a native export receipt or checked native terminal.
+    pub(in crate::production) fn admission_rejected_for(
+        &self,
+        operation: LogicalStoreOperationKey,
+        binding: ReportBinding,
+    ) -> bool {
+        self.admission.as_ref().is_some_and(Self::capacity_rejection)
+            && self.unsubmitted_observed()
+            && self.source.inspect(|original| {
+                original.input.as_ref().is_some_and(|input| {
+                    input.protected.as_ref().is_some_and(|protected| {
+                        protected.execution_owner() == self.source.owner()
+                            && protected.operation() == operation
+                    }) && input.view.as_ref().is_some_and(|view| view.view().binding() == binding)
+                })
+            }) == Some(true)
+    }
     /// Compare only the original authenticated operation/binding retained before native effects.
     pub(in crate::production) fn matches_original(
         &self,
@@ -74,6 +98,8 @@ impl ExportService {
                 execution
             {
                 Some(delivery)
+            } else if let Some(cause) = self.admission.as_ref() {
+                Some(cause)
             } else if let Some(issue) = self.delivery_error.as_ref() {
                 Some(issue)
             } else if operation

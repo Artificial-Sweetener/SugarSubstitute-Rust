@@ -248,9 +248,9 @@ impl CoordinatorCustody {
     pub(crate) fn settled(&self) -> bool {
         self.retirement.settled
     }
-    /// Preserve the one original witness shutdown wake.
-    pub(crate) fn next_deadline(&self) -> Option<Moment> {
-        self.retirement.next_deadline()
+    /// Enumerate the unchanged original witness grace and total boundaries.
+    pub(crate) fn deadlines(&self) -> impl Iterator<Item = Moment> + '_ {
+        self.retirement.deadlines().into_iter().flatten()
     }
 }
 /// Preserve class quotas and allocate IDs in actual admission order.

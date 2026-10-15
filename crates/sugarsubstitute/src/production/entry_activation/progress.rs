@@ -33,14 +33,44 @@ impl ProductionActivation {
         let result = self.advance(batch, resources);
         // Failed adapters cannot prevent deadline consumption or keep a past native
         // wake spinning. Actual late completions are still observed on every batch.
-        let deadline = self
-            .records
+        if let Err(cause) = self.arm_next_wake(resources.client, Instant::now()) {
+            if result.is_ok() {
+                return Err(cause);
+            }
+            self.preserve(cause);
+        }
+        self.complete_observation(first_capture_failure || first_delivery_failure, result)
+    }
+    /// Re-arm future original boundaries after this turn attempted owner progress.
+    /// A retained past boundary stays with its owner; it cannot suppress another owner's
+    /// future force/settle wake or manufacture admission, progress or physical retirement.
+    /// Due owners still owe their finite progress turn before any further admission.
+    pub(super) fn arm_next_wake(
+        &mut self,
+        client: &sugarsubstitute_execution::ExecutionClient,
+        anchor: Instant,
+    ) -> Result<()> {
+        self.next_wake = None;
+        let mut deadlines = self.wake_deadlines().peekable();
+        if deadlines.peek().is_none() {
+            return Ok(());
+        }
+        let now = client.now()?;
+        let until = deadlines.filter(|until| *until > now).min();
+        if let Some(until) = until {
+            self.next_wake = anchor.checked_add(until.checked_duration_since(now)?);
+        }
+        Ok(())
+    }
+    /// Enumerate bounded original owner candidates before selecting one native wake.
+    fn wake_deadlines(
+        &self,
+    ) -> impl Iterator<Item = sugarsubstitute_contracts::execution::Moment> + '_ {
+        self.records
             .iter()
             .flatten()
-            .filter_map(|held| {
-                held.record.parent.as_ref().and_then(|parent| parent.next_deadline())
-            })
-            .chain(self.backend.as_ref().and_then(|held| held.backend.next_deadline()))
+            .flat_map(|held| held.record.parent.iter().flat_map(|parent| parent.deadlines()))
+            .chain(self.backend.iter().flat_map(|held| held.backend.deadlines()))
             .chain(
                 self.records
                     .iter()
@@ -56,20 +86,6 @@ impl ProductionActivation {
             .chain(self.incidents.reporting.next_deadline())
             .chain(self.incidents.recovery_deadline())
             .chain(self.records.iter().flatten().filter_map(|held| held.record.restart.deadline()))
-            .min();
-        self.next_wake = None;
-        if let Some(until) = deadline {
-            let anchor = Instant::now();
-            match resources.client.now() {
-                Ok(now) if until > now => {
-                    self.next_wake = anchor.checked_add(until.checked_duration_since(now)?)
-                }
-                Ok(_) => {}
-                Err(cause) if result.is_ok() => return Err(Box::new(cause)),
-                Err(cause) => self.preserve(Box::new(cause)),
-            }
-        }
-        self.complete_observation(first_capture_failure || first_delivery_failure, result)
     }
     /// Report this turn's first capture failure only after owned completion and
     /// deadline adoption; retained historical errors do not fail later turns again.

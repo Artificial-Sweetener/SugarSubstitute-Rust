@@ -187,6 +187,11 @@ impl ParentLifecycle {
         resources.profile.confirm_main_retired(identity)?;
         self.main.confirm_retired(identity)?;
         self.requests.get_mut(index)?.reply = Some(Reply::Acknowledged);
+        self.trace_retirement_ack(
+            self.requests.get(index)?.header,
+            super::retirement_trace::AckStage::Staged,
+            None,
+        );
         self.main_retirement = None;
         Ok(())
     }

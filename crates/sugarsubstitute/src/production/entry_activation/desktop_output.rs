@@ -183,6 +183,9 @@ impl DesktopOutput {
                     diagnostic::Observation::Qualification(observed) => {
                         qualification::relay(self.run, current, observed);
                     }
+                    diagnostic::Observation::Close(close) => {
+                        diagnostic::close::relay(self.run, close);
+                    }
                     diagnostic::Observation::Preparation(phase) => {
                         tracing::info!(operation="desktop_child_preparation",run=?self.run,
                             capture_admitted=phase.capture_admitted,capture=phase.capture,registered=phase.registered,

@@ -29,6 +29,9 @@ impl ParentLifecycle {
             DecodedPayload::ControllerPrepared { .. } => Some("ControllerPrepared"),
             DecodedPayload::MainRetired(_) => Some("MainRetired"),
             DecodedPayload::MainFailed(_) => Some("MainFailed"),
+            DecodedPayload::Release(_) => Some("Release"),
+            DecodedPayload::ExitIntent { .. } => Some("ExitIntent"),
+            DecodedPayload::ExitCompleted(_) => Some("ExitCompleted"),
             _ => None,
         };
         if let Some(startup_operation) = startup_operation {

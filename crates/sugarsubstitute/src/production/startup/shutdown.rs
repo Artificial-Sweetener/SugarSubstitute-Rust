@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain the original full shutdown transaction, including failed clock measurement.
 use super::super::child::ShutdownInitiation;
+use crate::production::close_diagnostic::{BudgetStage, CloseTrace};
 use std::{error::Error, fmt, rc::Rc};
 use sugarsubstitute_contracts::{execution::Moment, lifecycle::ShutdownBudget};
 
@@ -70,18 +71,49 @@ impl ShutdownTransaction {
         if self.state.is_none() || matches!(self.state, Some(State::CapturePending)) {
             match origin {
                 ShutdownInitiation::CapturePending => {
+                    if self.state.is_none() {
+                        CloseTrace::Budget { stage: BudgetStage::CapturePending, moments: None }
+                            .emit();
+                    }
                     self.state = Some(State::CapturePending);
                     return Ok(None);
                 }
                 ShutdownInitiation::NoCapture if self.state.is_some() => return Ok(None),
                 ShutdownInitiation::NoCapture => {
                     let measured = now().and_then(|now| Ok(ShutdownBudget::new(now)?));
+                    match &measured {
+                        Ok(budget) => {
+                            CloseTrace::Budget {
+                                stage: BudgetStage::LocalMeasured,
+                                moments: Some([
+                                    budget.started.as_nanos(),
+                                    budget.graceful_until.as_nanos(),
+                                    budget.settle_until.as_nanos(),
+                                ]),
+                            }
+                            .emit();
+                        }
+                        Err(_) => CloseTrace::Budget {
+                            stage: BudgetStage::MeasurementFailed,
+                            moments: None,
+                        }
+                        .emit(),
+                    }
                     self.state = Some(State::Measured(
                         measured.map_err(|cause| MeasurementFailure(Rc::from(cause))),
                     ));
                 }
                 ShutdownInitiation::Captured(budget) => {
                     self.state = Some(State::Measured(Ok(budget)));
+                    CloseTrace::Budget {
+                        stage: BudgetStage::CaptureLatched,
+                        moments: Some([
+                            budget.started.as_nanos(),
+                            budget.graceful_until.as_nanos(),
+                            budget.settle_until.as_nanos(),
+                        ]),
+                    }
+                    .emit();
                 }
             }
         }
@@ -93,6 +125,8 @@ impl ShutdownTransaction {
         if self.state.is_none() || matches!(self.state, Some(State::CapturePending)) {
             let failure = MeasurementFailure(Rc::from(cause));
             self.state = Some(State::Measured(Err(failure.clone())));
+            CloseTrace::Budget { stage: BudgetStage::CaptureMeasurementFailed, moments: None }
+                .emit();
             Box::new(failure)
         } else {
             cause
@@ -342,6 +376,77 @@ mod tests {
             address
         );
         assert!(!transaction.pending());
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod transition_diagnostic_tests {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+    type Result<T> = std::result::Result<T, Box<dyn Error>>;
+    #[derive(Clone)]
+    struct Sink(Arc<Mutex<Vec<u8>>>);
+    impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for Sink {
+        type Writer = Self;
+        fn make_writer(&'a self) -> Self {
+            self.clone()
+        }
+    }
+    impl std::io::Write for Sink {
+        fn write(&mut self, value: &[u8]) -> std::io::Result<usize> {
+            let mut bytes =
+                self.0.lock().map_err(|_| std::io::Error::other("Trace fixture poisoned"))?;
+            if bytes.len().saturating_add(value.len()) > 8192 {
+                return Err(std::io::Error::other("Trace fixture capacity"));
+            }
+            bytes.extend_from_slice(value);
+            Ok(value.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    fn recorded(emit: impl FnOnce() -> Result<()>) -> Result<String> {
+        let bytes = Arc::new(Mutex::new(Vec::new()));
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(Sink(bytes.clone()))
+            .without_time()
+            .with_ansi(false)
+            .finish();
+        tracing::subscriber::with_default(subscriber, emit)?;
+        let bytes = bytes.lock().map_err(|_| "Trace fixture poisoned")?.clone();
+        Ok(String::from_utf8(bytes)?)
+    }
+
+    #[test]
+    fn shutdown_budget_logs_only_real_pending_to_latched_transition_without_resampling()
+    -> Result<()> {
+        let mut owner = ShutdownTransaction::new();
+        let original = ShutdownBudget::new(Moment::from_nanos(50))?;
+        let calls = std::cell::Cell::new(0);
+        let log = recorded(|| {
+            for origin in [
+                ShutdownInitiation::CapturePending,
+                ShutdownInitiation::CapturePending,
+                ShutdownInitiation::NoCapture,
+                ShutdownInitiation::Captured(original),
+                ShutdownInitiation::Captured(original),
+                ShutdownInitiation::NoCapture,
+            ] {
+                let _observed = owner.request(origin, || {
+                    calls.set(calls.get() + 1);
+                    Ok(Moment::from_nanos(999))
+                })?;
+            }
+            Ok(())
+        })?;
+        assert_eq!(calls.get(), 0);
+        assert_eq!(owner.budget()?, original);
+        assert_eq!(log.matches("operation=\"child_shutdown_budget\"").count(), 2);
+        assert_eq!(log.matches("stage=CapturePending").count(), 1);
+        assert_eq!(log.matches("stage=CaptureLatched").count(), 1);
+        assert!(!log.contains("LocalMeasured"));
         Ok(())
     }
 }

@@ -135,10 +135,13 @@ impl Retirement {
         )
     }
     /// Preserve the existing original graceful and total wake observations.
-    pub(super) fn next_deadline(&self) -> Option<Moment> {
-        self.original.filter(|_| !self.settled && !self.total_observed).map(|budget| {
-            if self.grace_observed { budget.settle_until } else { budget.graceful_until }
-        })
+    pub(super) fn deadlines(&self) -> [Option<Moment>; 2] {
+        match self.original.filter(|_| !self.settled && !self.total_observed) {
+            Some(budget) => {
+                [(!self.grace_observed).then_some(budget.graceful_until), Some(budget.settle_until)]
+            }
+            None => [None, None],
+        }
     }
 }
 impl CoordinatorCustody {

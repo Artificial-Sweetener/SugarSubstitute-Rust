@@ -39,6 +39,9 @@ mod normal_idle;
 mod parent_construction;
 #[path = "entry_activation/progress.rs"]
 mod progress;
+#[cfg(test)]
+#[path = "entry_activation/progress_deadline_tests.rs"]
+mod progress_deadline_tests;
 #[path = "entry_activation/projection.rs"]
 mod projection;
 #[path = "entry_activation/record_progress.rs"]

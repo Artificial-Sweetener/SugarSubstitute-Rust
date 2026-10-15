@@ -16,10 +16,13 @@ fn original_pending_release_or_finish_keeps_helper_stop_and_force_unissued() -> 
         fixture.clock.set(now);
         owner.advance(budget, true, true, fixture.client.now()?, key()?, &mut fixture.port)?;
         assert_eq!(owner.original, Some(budget));
+        if now == budget.started {
+            assert_eq!(owner.deadlines(), [Some(budget.graceful_until), Some(budget.settle_until)]);
+        }
         assert!(!owner.finish_received && !owner.settled && owner.terminal.is_none());
     }
     assert!(fixture.port.events.iter().all(|event| matches!(event, Event::FinishPending)));
-    assert_eq!(owner.next_deadline(), Some(budget.settle_until));
+    assert_eq!(owner.deadlines().into_iter().flatten().min(), Some(budget.settle_until));
     Ok(())
 }
 #[test]
@@ -95,7 +98,7 @@ fn original_cutoff_without_finished_preserves_failed_owned_cleanup() -> TestResu
     assert_eq!(fixture.port.events, vec![Event::FinishPending, Event::Stop, Event::ExpiredCleanup]);
     assert_eq!(fixture.port.original, Some(budget));
     assert!(!owner.settled && !owner.finish_received && owner.terminal.is_none());
-    assert_eq!(owner.next_deadline(), None);
+    assert_eq!(owner.deadlines().into_iter().flatten().min(), None);
     Ok(())
 }
 #[test]

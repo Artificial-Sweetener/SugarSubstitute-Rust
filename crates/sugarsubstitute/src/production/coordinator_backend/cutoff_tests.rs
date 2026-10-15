@@ -162,7 +162,7 @@ fn existing_shared_join_and_replay_emit_no_fresh_creator_preparation() -> Result
     assert_eq!(creator_transition.effects.len(), 1);
     let held = lease(&creator_transition)?;
     backend.records[0] = Some(creator(held.resource, target()?, budget, scope)?);
-    let original_deadline = backend.next_deadline();
+    let original_deadline = backend.deadlines().min();
     let mut resources = BackendResources {
         client: &client,
         native: &native,
@@ -197,7 +197,7 @@ fn existing_shared_join_and_replay_emit_no_fresh_creator_preparation() -> Result
         )?;
         assert_eq!(backend.record(held.resource)?.budget, budget);
         assert_eq!(backend.record(held.resource)?.scope.spec().deadline, Some(budget.until()));
-        assert_eq!(backend.next_deadline(), original_deadline);
+        assert_eq!(backend.deadlines().min(), original_deadline);
         assert!(backend.record(held.resource)?.launch.is_none());
         assert!(!backend.record(held.resource)?.source_job);
     }

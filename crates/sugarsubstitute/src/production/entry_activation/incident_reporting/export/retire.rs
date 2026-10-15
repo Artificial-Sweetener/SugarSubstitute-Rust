@@ -63,7 +63,7 @@ impl IncidentReporting {
                 drop(original);
                 (view, None)
             }
-            ExportMaterial::Completion { view, custody, .. } => (view, Some(custody)),
+            ExportMaterial::Completion { view, custody, .. } => (view, custody),
             ExportMaterial::Bound => {
                 return Err("Original export terminal was not actually returned".into());
             }

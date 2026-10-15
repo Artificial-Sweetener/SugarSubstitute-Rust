@@ -202,3 +202,6 @@ fn export_capture_feeds_other_real_deliveries_after_first_lane_identity_failure(
 
 #[path = "tests/lifecycle.rs"]
 mod lifecycle;
+
+#[path = "tests/admission_order.rs"]
+mod admission_order;

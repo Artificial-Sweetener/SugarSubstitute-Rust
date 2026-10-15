@@ -48,14 +48,13 @@ impl CleanupState {
             )));
         }
     }
-    /// Expired cleanup is dormant; pending jobs and native watches still wake their owner.
-    pub(super) fn next_deadline(&self, original: ShutdownBudget) -> Option<Moment> {
+    /// Enumerate unchanged unobserved boundaries; composition selects future wakes.
+    /// Returning a due grace never marks it observed or permits a replacement budget.
+    pub(super) fn deadlines(&self, original: ShutdownBudget) -> [Option<Moment>; 2] {
         if self.expired {
-            None
-        } else if self.grace_observed {
-            Some(original.settle_until)
+            [None, None]
         } else {
-            Some(original.graceful_until)
+            [(!self.grace_observed).then_some(original.graceful_until), Some(original.settle_until)]
         }
     }
 }
@@ -67,11 +66,21 @@ mod tests {
     -> Result<(), Box<dyn Error>> {
         let original = ShutdownBudget::new(Moment::from_nanos(0))?;
         let mut state = CleanupState::new();
-        assert_eq!(state.next_deadline(original), Some(original.graceful_until));
+        assert_eq!(
+            state.deadlines(original),
+            [Some(original.graceful_until), Some(original.settle_until)]
+        );
+        assert_eq!(
+            state.deadlines(original).into_iter().flatten().min(),
+            Some(original.graceful_until)
+        );
         state.observe(original.graceful_until, original);
-        assert_eq!(state.next_deadline(original), Some(original.settle_until));
+        assert_eq!(
+            state.deadlines(original).into_iter().flatten().min(),
+            Some(original.settle_until)
+        );
         state.observe(original.settle_until, original);
-        assert_eq!(state.next_deadline(original), None);
+        assert_eq!(state.deadlines(original).into_iter().flatten().min(), None);
         assert_eq!(
             state.first().and_then(|e| e.downcast_ref::<io::Error>()).map(io::Error::kind),
             Some(io::ErrorKind::TimedOut)
@@ -81,7 +90,7 @@ mod tests {
         state.observe(Moment::from_nanos(999_000_000_000), original);
         assert_eq!(state.first().map(std::ptr::from_ref), pointer);
         assert!(state.secondary[0].is_some());
-        assert_eq!(state.next_deadline(original), None);
+        assert_eq!(state.deadlines(original).into_iter().flatten().min(), None);
         Ok(())
     }
 }

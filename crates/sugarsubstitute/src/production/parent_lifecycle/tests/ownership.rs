@@ -139,7 +139,16 @@ fn original_actor_charge_outlives_job_and_frontend_wait_keeps_original_cutoff() 
     #[cfg(feature = "k1-native-qualification")]
     assert_eq!(actor.qualification_identity(), Some(id));
     assert_eq!(actor.main_deadline(), Some(Moment::from_nanos(77)));
-    assert_eq!(actor.next_deadline(), Some(Moment::from_nanos(77)));
+    assert_eq!(actor.deadlines().min(), Some(Moment::from_nanos(77)));
+    let cleanup = sugarsubstitute_contracts::lifecycle::ShutdownBudget::new(Moment::from_nanos(0))?;
+    actor.cleanup = Some(cleanup);
+    assert_eq!(
+        actor.deadlines().filter(|until| *until > Moment::from_nanos(78)).min(),
+        Some(cleanup.settle_until)
+    );
+    assert_eq!(actor.main_deadline(), Some(Moment::from_nanos(77)));
+    assert_eq!(actor.shutdown(), Some(cleanup));
+    actor.cleanup = None;
     actor.main.retire(id)?;
     assert_eq!(actor.main_deadline(), None);
     assert!(!actor.native_retired());

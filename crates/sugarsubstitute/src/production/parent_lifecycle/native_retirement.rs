@@ -63,6 +63,7 @@ impl ParentLifecycle {
             resources.profile.snapshot().pending,
         )? {
             self.requests.get_mut(index)?.reply = Some(Reply::Acknowledged);
+            self.trace_retirement_ack(header, super::retirement_trace::AckStage::Staged, None);
             return Ok(());
         }
         self.main.retire(identity)?;
@@ -76,6 +77,10 @@ impl ParentLifecycle {
         self.environment = None;
         self.browser = None;
         self.main_retirement = Some((index, identity));
+        tracing::info!(operation="parent_main_retirement_accepted",run=?self.run,
+            request=?header.request,identity=?identity,
+            profile_pending=self.profile_pending.is_some(),native_profile_pending=resources.profile.snapshot().pending,
+            "Original MainRetired observation accepted before its acknowledgement");
         self.finish_main_retirement(resources)
     }
 }

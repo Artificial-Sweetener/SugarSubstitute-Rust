@@ -285,6 +285,12 @@ impl Acquisition {
         Ok(())
     }
 
+    /// Borrow the exact accepted native retirement correlation for closed diagnostics.
+    /// Matching metadata neither admits a reply nor establishes native retirement.
+    pub(super) fn retirement_header(&self) -> Option<WireHeader> {
+        self.retirement.map(|(header, _)| header)
+    }
+
     /// Only a checked original native-retirement ACK permits expired semantic cleanup.
     pub(super) fn retirement_written(&self) -> bool {
         self.retirement.is_some_and(|(_, written)| written)

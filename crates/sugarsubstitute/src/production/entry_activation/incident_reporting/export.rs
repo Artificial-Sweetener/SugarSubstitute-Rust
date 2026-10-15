@@ -23,7 +23,7 @@ enum ExportMaterial {
     Completion {
         request: DiagnosticRequestId,
         view: Option<PreparedReportView>,
-        custody: ExportCompletionCustody,
+        custody: Option<ExportCompletionCustody>,
     },
     Retiring(ExportTerminal),
     Returned {
@@ -39,6 +39,7 @@ pub(super) struct ExportWork {
     source_held: bool,
     receiving_held: bool,
     submitted: bool,
+    rejected_admission: bool,
     wake_until: Option<Moment>,
 }
 impl ExportWork {
@@ -85,7 +86,8 @@ impl IncidentReporting {
         {
             return Err("Original selected export correlation changed".into());
         }
-        let jobs = scopes::ExportJobs::new(resources, scope.original().until())?;
+        let jobs =
+            scopes::ExportJobs::new(resources.client, resources.scopes, scope.original().until())?;
         let read = host.admit_report_view(binding, selected.context)?;
         let at = selected.context.at();
         self.export_work = Some(ExportWork {
@@ -98,6 +100,7 @@ impl IncidentReporting {
             source_held: false,
             receiving_held: false,
             submitted: false,
+            rejected_admission: false,
             wake_until: Some(scope.original().until()),
         });
         self.begin_store(host, read, binding, StoreKind::ExportView, at)
@@ -154,6 +157,20 @@ impl IncidentReporting {
             }
         }
         let service = host.export_service()?;
+        if work.rejected_admission {
+            if !service.retire_unsubmitted()? {
+                return Ok(());
+            }
+            host.adopt_export_admission_failure(scope, binding)?;
+            let input = host
+                .export_service()?
+                .take_unsubmitted_input()?
+                .ok_or("Original rejected export input missing after actual cancellation")?;
+            // Genuine unpaired cancellation deliveries precede the failed action result.
+            // No native Main ran, and this request never creates a second admission attempt.
+            return self.complete_rejected_export_control(scope, binding, input);
+        }
+        work.jobs.prepare(resources.jobs)?;
         if !work.bound {
             let prior = std::mem::replace(&mut work.material, ExportMaterial::Bound);
             let ExportMaterial::Input(input) = prior else {
@@ -172,12 +189,26 @@ impl IncidentReporting {
             match service.reserve_source_cleanup(
                 resources.client,
                 &work.jobs.source_cleanup,
-                work.jobs.source_cleanup_spec(),
+                work.jobs.source_cleanup_spec()?,
                 &work.jobs.source,
-                work.jobs.source_spec(),
+                work.jobs.source_spec()?,
             ) {
                 Ok(()) => work.source_held = true,
-                Err(ExportIssue::Admission) => return Ok(()),
+                Err(ExportIssue::Admission) => {
+                    work.rejected_admission = true;
+                    if let Some(cause) = service.admission_failure() {
+                        tracing::warn!(
+                            operation = "report_export_admission_rejected",
+                            cause = ?crate::production::entry_runner::FailureDisplay(cause),
+                            "Original export overload retained until actual unpaired cancellation"
+                        );
+                    }
+                    return Ok(());
+                }
+                Err(ExportIssue::Rejected) => {
+                    Self::observe_export_failure(service);
+                    return Err(ExportIssue::Rejected.into());
+                }
                 Err(cause) => return Err(cause.into()),
             }
         }
@@ -185,12 +216,26 @@ impl IncidentReporting {
             match service.reserve_receiving_cleanup(
                 resources.client,
                 &work.jobs.receiving_cleanup,
-                work.jobs.receiving_cleanup_spec(),
+                work.jobs.receiving_cleanup_spec()?,
                 &work.jobs.receiving,
-                work.jobs.receiving_spec(),
+                work.jobs.receiving_spec()?,
             ) {
                 Ok(()) => work.receiving_held = true,
-                Err(ExportIssue::Admission) => return Ok(()),
+                Err(ExportIssue::Admission) => {
+                    work.rejected_admission = true;
+                    if let Some(cause) = service.admission_failure() {
+                        tracing::warn!(
+                            operation = "report_export_admission_rejected",
+                            cause = ?crate::production::entry_runner::FailureDisplay(cause),
+                            "Original export overload retained until actual unpaired cancellation"
+                        );
+                    }
+                    return Ok(());
+                }
+                Err(ExportIssue::Rejected) => {
+                    Self::observe_export_failure(service);
+                    return Err(ExportIssue::Rejected.into());
+                }
                 Err(cause) => return Err(cause.into()),
             }
         }
@@ -198,18 +243,36 @@ impl IncidentReporting {
             match service.submit_pair(
                 resources.client,
                 &work.jobs.source,
-                work.jobs.source_spec(),
+                work.jobs.source_spec()?,
                 &work.jobs.receiving,
-                work.jobs.receiving_spec(),
+                work.jobs.receiving_spec()?,
             ) {
                 Ok(()) => work.submitted = true,
-                Err(ExportIssue::Admission) => return Ok(()),
+                Err(ExportIssue::Admission) => {
+                    work.rejected_admission = true;
+                    if let Some(cause) = service.admission_failure() {
+                        tracing::warn!(
+                            operation = "report_export_admission_rejected",
+                            cause = ?crate::production::entry_runner::FailureDisplay(cause),
+                            "Original export overload retained until actual unpaired cancellation"
+                        );
+                    }
+                    return Ok(());
+                }
+                Err(ExportIssue::Rejected) => {
+                    Self::observe_export_failure(service);
+                    return Err(ExportIssue::Rejected.into());
+                }
                 Err(cause) => return Err(cause.into()),
             }
         }
         match service.advance_cleanup(resources.client) {
             Ok(_) => {}
             Err(ExportIssue::Admission) => return Ok(()),
+            Err(ExportIssue::Rejected) => {
+                Self::observe_export_failure(service);
+                return Err(ExportIssue::Rejected.into());
+            }
             Err(cause) => return Err(cause.into()),
         }
         work.wake_until = service.next_deadline();
@@ -228,7 +291,7 @@ impl IncidentReporting {
             if let Some(cause) = cause {
                 tracing::error!(
                     operation = "report_export_retained_failure",
-                    error = %cause,
+                    error = ?crate::production::entry_runner::FailureDisplay(cause),
                     custody = ?custody,
                     "Original export failure remains retained through checked retirement"
                 );
@@ -260,8 +323,13 @@ impl IncidentReporting {
             return Err("Original export Core completion changed".into());
         }
         self.relay_until = Some(work.jobs.until());
+        let submitted = work.submitted;
         drop(self.export_work.take());
-        host.export_service()?.release_adopted()?;
+        if submitted {
+            host.export_service()?.release_adopted()?;
+        } else {
+            host.export_service()?.release_unsubmitted()?;
+        }
         self.retained_effect = None;
         Ok(true)
     }

@@ -409,21 +409,24 @@ impl CoordinatorBackend {
         self.policy.failure(key)
     }
 
-    /// Return the next original campaign/cleanup deadline for the existing native pump.
-    pub(crate) fn next_deadline(&self) -> Option<Moment> {
+    /// Enumerate original campaign/cleanup candidates without collapsing independent actors.
+    pub(crate) fn deadlines(&self) -> impl Iterator<Item = Moment> + '_ {
         self.records
             .iter()
             .flatten()
             .filter(|record| !record.settled)
-            .filter_map(|record| match record.shutdown {
-                Some((_, budget)) => record.cleanup_failure.next_deadline(budget),
-                None => record
-                    .campaign
-                    .next_deadline()
-                    .or_else(|| record.readiness.is_none().then_some(record.budget.until())),
+            .flat_map(|record| match record.shutdown {
+                Some((_, budget)) => record.cleanup_failure.deadlines(budget),
+                None => [
+                    record
+                        .campaign
+                        .next_deadline()
+                        .or_else(|| record.readiness.is_none().then_some(record.budget.until())),
+                    None,
+                ],
             })
-            .chain(self.custody.as_ref().and_then(|custody| custody.next_deadline()))
-            .min()
+            .flatten()
+            .chain(self.custody.iter().flat_map(|custody| custody.deadlines()))
     }
 
     fn validate(&self, resources: &BackendResources<'_>) -> Result<()> {
@@ -515,3 +518,7 @@ impl Error for ObservationFailure {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "coordinator_backend/deadline_test_fixture.rs"]
+pub(crate) mod deadline_test_fixture;

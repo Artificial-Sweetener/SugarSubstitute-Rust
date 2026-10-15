@@ -265,7 +265,7 @@ fn unavailable_authority_preserves_input_and_both_identity_sequences() -> Result
     assert!(owner.take_output(stale).is_err());
     assert!(owner.cleanup_failure(stale).is_none());
     assert!(owner.failure(stale).is_none());
-    assert!(owner.next_deadline().is_none());
+    assert!(owner.deadlines().min().is_none());
     assert!(owner.resource_keys().iter().all(Option::is_none));
     assert!(owner.settled());
     assert!(
@@ -406,7 +406,7 @@ fn partial_backend_cleanup_keeps_actual_parent_budget_across_later_clock_and_rep
     )?;
     assert!(transition.replies.is_empty() && transition.effects.is_empty());
     assert_eq!(owner.record(key)?.shutdown, Some(actual));
-    assert_eq!(owner.next_deadline(), Some(original.graceful_until));
+    assert_eq!(owner.deadlines().min(), Some(original.graceful_until));
     assert_eq!(native.snapshot().reserved_bytes, 0);
     assert_eq!(cleanup.snapshot().reserved_bytes, 0);
     assert_eq!(jobs.allocate()?.get(), 1);

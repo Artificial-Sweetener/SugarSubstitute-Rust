@@ -41,6 +41,27 @@ impl IncidentHost {
             _ => Ok(false),
         }
     }
+    /// Adopt failed admission only after actual unpaired cancellation with original input still retained.
+    /// No Main/native factory ran, and no native terminal/receipt or acknowledgement is inferred.
+    pub(in crate::production) fn adopt_export_admission_failure(
+        &mut self,
+        scope: IncidentOperationScope,
+        binding: ReportBinding,
+    ) -> Result<(), HostIssue> {
+        let service = self.export_service()?;
+        if !service.admission_rejected_for(scope.operation(), binding)
+            || service.checked_terminal()
+            || service.receipt().is_some()
+            || scope.incident() != binding.incident()
+            || scope.expected_revision() != binding.revision()
+        {
+            return Err(HostIssue::Identity);
+        }
+        self.observe(IncidentServiceObservation::Failed {
+            scope,
+            failure: IncidentServiceFailure::Export,
+        })
+    }
     /// Finish a failed export only after both actual Main and checked cleanup deliveries.
     /// No saved receipt, acknowledgement or revision mutation is inferred.
     pub(in crate::production) fn adopt_export_failure(

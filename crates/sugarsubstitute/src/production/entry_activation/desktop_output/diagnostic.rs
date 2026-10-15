@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Decode only complete closed preparation fields, discarding every other raw line.
 use sugarsubstitute_contracts::transcript::OutputStream;
+#[path = "diagnostic/close.rs"]
+pub(super) mod close;
 #[path = "diagnostic/consume.rs"]
 mod consume;
 #[path = "diagnostic/main.rs"]
@@ -52,6 +54,7 @@ pub(super) enum Observation {
     Preparation(Phase),
     Failure(Failure),
     Connection(Connection),
+    Close(crate::production::close_diagnostic::CloseTrace),
     MainFailure(MainFailure),
     #[cfg(feature = "k1-native-qualification")]
     Qualification(qualification::Qualification),
@@ -119,7 +122,12 @@ impl Diagnostic {
                         self.discard = false;
                         continue;
                     }
-                    if let Some(failure) = main::parse(&self.bytes[..self.length]) {
+                    if let Some(close) = close::parse(&self.bytes[..self.length]) {
+                        if self.emitted < 30 {
+                            self.emitted += 1;
+                            emit(Observation::Close(close));
+                        }
+                    } else if let Some(failure) = main::parse(&self.bytes[..self.length]) {
                         if !self.main_failure_seen && self.emitted < 32 {
                             self.main_failure_seen = true;
                             self.emitted += 1;

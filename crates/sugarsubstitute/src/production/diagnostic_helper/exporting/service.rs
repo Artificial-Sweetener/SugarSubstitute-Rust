@@ -12,7 +12,10 @@ pub(in crate::production) enum ExportIssue {
     Started,
     Identity,
     Busy,
+    /// Actual bounded overload; unpaired cleanup must retire before failed-action adoption.
     Admission,
+    /// Permanent original central rejection, retained for explicit source inspection.
+    Rejected,
 }
 impl std::fmt::Display for ExportIssue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -61,6 +64,30 @@ impl ExportService {
             delivery_error: None,
             cleanup_admitted: [false; 2],
         })
+    }
+    /// Only central bounded overload permits an admission-only failed action after real cancellation.
+    /// Permanent identity/scope/time/provider failures retain their original cause immediately.
+    fn reject_admission(&mut self, cause: AdmissionError) -> ExportIssue {
+        if self.admission.as_ref().is_some_and(|original| !Self::capacity_rejection(original)) {
+            return ExportIssue::Rejected;
+        }
+        if Self::capacity_rejection(&cause) {
+            self.admission.get_or_insert(cause);
+            ExportIssue::Admission
+        } else {
+            // Overload is a deferred disposition; preserve the first permanent failure.
+            self.admission = Some(cause);
+            ExportIssue::Rejected
+        }
+    }
+    /// Classify only actual bounded central overload; identity/time/provider errors remain strict.
+    fn capacity_rejection(cause: &AdmissionError) -> bool {
+        matches!(
+            cause,
+            AdmissionError::QueueSaturated { .. }
+                | AdmissionError::CompletionSaturated
+                | AdmissionError::MemorySaturated { .. }
+        )
     }
     /// Move genuine input once, preserving it on later job/admission failure.
     pub(in crate::production) fn bind(
@@ -122,10 +149,7 @@ impl ExportService {
                 self.delivery[1].job = Some(receiving);
                 Ok(())
             }
-            Err(rejection) => {
-                self.admission.get_or_insert(rejection.error);
-                Err(ExportIssue::Admission)
-            }
+            Err(rejection) => Err(self.reject_admission(rejection.error)),
         }
     }
     /// Capture exact central terminal notices and completion guards independently for all jobs.

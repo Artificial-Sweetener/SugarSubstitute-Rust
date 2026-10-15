@@ -38,6 +38,8 @@ mod replies;
 mod requests;
 #[path = "parent_lifecycle/retirement.rs"]
 mod retirement;
+#[path = "parent_lifecycle/retirement_trace.rs"]
+mod retirement_trace;
 #[cfg(test)]
 #[path = "parent_lifecycle/tests.rs"]
 mod tests;
@@ -413,10 +415,8 @@ impl ParentLifecycle {
     }
 
     /// Return cached original boundaries for the composing native wait pump.
-    pub(crate) fn next_deadline(&self) -> Option<Moment> {
-        if self.settled() {
-            return None;
-        }
+    pub(crate) fn deadlines(&self) -> impl Iterator<Item = Moment> + '_ {
+        let active = !self.settled();
         let ui = self.watchdog.as_ref().and_then(|watchdog| {
             let snapshot = watchdog.snapshot();
             snapshot.suspicion_at.or(snapshot.next_challenge_at)
@@ -430,7 +430,7 @@ impl ParentLifecycle {
         ]
         .into_iter()
         .flatten()
-        .min()
+        .filter(move |_| active)
     }
 
     /// Observe only the retained native watchdog's actual dispatched suspicion.
