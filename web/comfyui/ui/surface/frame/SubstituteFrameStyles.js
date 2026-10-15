@@ -18,7 +18,13 @@ import { FRAME_TAB_START, WORKFLOW_TAB_TOOL_WIDTH, WORKFLOW_NEW_BUTTON_GAP, } fr
 /** Match frame, scrolling strip and rail geometry only in the selected visual mode. */
 export const substituteFrameCss = `
   @property --sc-tab-cutout-radius { syntax:'<length>'; inherits:false; initial-value:0px; }
+  @property --sc-tab-cutout-x { syntax:'<length>'; inherits:false; initial-value:-17px; }
+  @property --sc-selected-offset { syntax:'<length>'; inherits:true; initial-value:0px; }
   .sc-substitute-frame sc-workflow-tab { transition:--sc-tab-cutout-radius 160ms cubic-bezier(.645,.045,.355,1); }
+  .sc-substitute-frame sc-workflow-tab { touch-action:none; user-select:none; }
+  .sc-substitute-frame sc-workflow-tab[data-sc-held] { z-index:3; cursor:grabbing; }
+  .sc-substitute-frame [data-sc-tab-dragging] { cursor:grabbing; }
+  @media(prefers-reduced-motion:reduce) { .sc-substitute-frame sc-workflow-tab { transition:none !important; } }
   @media(prefers-reduced-motion:reduce) { .sc-substitute-frame sc-workflow-tab { transition:none; } }
   :root[data-sc-substitute-frame] { --workflow-tabs-height:34px; }
   :root[data-sc-substitute-frame] [data-sc-frame-native] { display:none !important; }

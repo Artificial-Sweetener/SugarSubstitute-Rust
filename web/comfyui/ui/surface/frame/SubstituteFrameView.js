@@ -53,7 +53,7 @@ export class SubstituteFrameView {
             { label: 'Export workflow', select: () => actions.command('Comfy.ExportWorkflow') },
             { label: '', separator: true },
             { label: 'Settings', select: () => actions.command('Comfy.ShowSettingsDialog') },
-        ]);
+        ], actions.report);
         const create = this.#button('New workflow', '+', () => actions.workflows.create());
         create.classList.add('sc-workflow-new');
         const overflow = this.#button('More workflows', '⌄', () => this.#overflowMenu.open({

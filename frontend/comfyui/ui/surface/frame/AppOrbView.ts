@@ -24,13 +24,17 @@ export class AppOrbView {
   readonly #menu: ContextMenu;
 
   /** Reuse existing application commands; artwork remains separate from menu policy. */
-  constructor(document: Document, entries: () => readonly ContextMenuEntry[]) {
+  constructor(
+    document: Document,
+    entries: () => readonly ContextMenuEntry[],
+    report: (error: unknown) => void,
+  ) {
     this.element = document.createElement('fluent-button');
     this.element.className = 'sc-app-orb';
     this.element.setAttribute('appearance', 'transparent');
     this.element.setAttribute('aria-label', 'Application menu');
     this.element.setAttribute('aria-haspopup', 'menu');
-    this.#renderer = new AppOrbRenderer(document);
+    this.#renderer = new AppOrbRenderer(document, report);
     this.#menu = new ContextMenu(document);
     this.element.append(this.#renderer.canvas);
     this.element.addEventListener('pointerenter', () => this.#renderer.setState('hover'));

@@ -671,8 +671,23 @@ license = "GPL-3.0-or-later"
 license_file = "third_party/licenses/sugarsubstitute.LICENSE.txt"
 source = "https://github.com/Artificial-Sweetener/SugarSubstitute"
 revision = "34ce6d9976c76ac708b1dbda3920e9311010006a"
-modifications = "Workflow tab geometry and unread-result painter adapted to official Microsoft Fluent web controls. Orb tint and PSD layer placement adapted to cached browser canvas composition; original PNG artwork is unmodified. Rail styling shares existing Cube stack behavior."
-runtime_files = ["web/comfyui/ui/surface/frame/WorkflowTabStyles.js","web/comfyui/ui/surface/frame/WorkflowTabStripLayout.js","web/comfyui/ui/surface/frame/SubstituteFrameStyles.js","web/comfyui/ui/surface/frame/SubstituteFrameView.js","web/comfyui/ui/surface/frame/OrbTint.js","web/comfyui/ui/surface/frame/AppOrbRenderer.js"]
+modifications = "Workflow tab geometry and unread-result painter adapted to official Microsoft Fluent web controls. Orb tint and PSD layer placement adapted to cached browser canvas composition with alpha-safe Lanczos display resampling; original PNG artwork is unmodified. Rail styling shares existing Cube stack behavior."
+runtime_files = ["web/comfyui/ui/surface/frame/WorkflowTabStyles.js","web/comfyui/ui/surface/frame/WorkflowTabStripLayout.js","web/comfyui/ui/surface/frame/WorkflowTabDragGeometry.js","web/comfyui/ui/surface/frame/WorkflowTabDragPreview.js","web/comfyui/ui/surface/frame/WorkflowTabPointerDrag.js","web/comfyui/ui/surface/frame/SubstituteFrameStyles.js","web/comfyui/ui/surface/frame/SubstituteFrameView.js","web/comfyui/ui/surface/frame/OrbTint.js","web/comfyui/ui/surface/frame/OrbRaster.js","web/comfyui/ui/surface/frame/OrbDisplayDensity.js","web/comfyui/ui/surface/frame/AppOrbRenderer.js"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/workflows/workflow_tab_gesture_controller.py"
+source_sha256 = "34604ff16ea535db885bbe6ca8177eb4e1c56aee0f82857b6d589832ec0dde89"
+adapted_paths = ["frontend/comfyui/ui/surface/frame/WorkflowTabPointerDrag.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/workflows/workflow_tab_reorder_controller.py"
+source_sha256 = "d279e41e5ded1ed6aa92bf9ecbd94f291b79ed07d3255735274cdf971a92aff2"
+adapted_paths = ["frontend/comfyui/ui/surface/frame/WorkflowTabDragGeometry.ts"]
+
+[[component.implementation]]
+source_path = "substitute/presentation/workflows/workflow_tab_drag_preview_presenter.py"
+source_sha256 = "167e010fd057af3cd8024131290bca29d01f5df338391c9d826e845df6e752eb"
+adapted_paths = ["frontend/comfyui/ui/surface/frame/WorkflowTabDragPreview.ts"]
 
 [[component.implementation]]
 source_path = "substitute/presentation/workflows/workflow_tabs_view.py"
@@ -682,7 +697,7 @@ adapted_paths = ["frontend/comfyui/ui/surface/frame/WorkflowTabStyles.ts", "fron
 [[component.implementation]]
 source_path = "substitute/presentation/shell/app_orb_renderer.py"
 source_sha256 = "b63c244f1cf45aa8b316f1ed32d2951ca25a1fedc937eccafa4b118d86e7d0dd"
-adapted_paths = ["frontend/comfyui/ui/surface/frame/OrbTint.ts", "frontend/comfyui/ui/surface/frame/AppOrbRenderer.ts"]
+adapted_paths = ["frontend/comfyui/ui/surface/frame/OrbTint.ts", "frontend/comfyui/ui/surface/frame/OrbRaster.ts", "frontend/comfyui/ui/surface/frame/AppOrbRenderer.ts"]
 
 [[component.implementation]]
 source_path = "substitute/presentation/shell/chrome_style.py"

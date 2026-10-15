@@ -28,6 +28,8 @@ export const workflowTabCss = `
   :host(:not([aria-selected='true'])) { clip-path:inset(1px 1px 0 round 7px 7px 0 0); }
   :host(:not([aria-selected='true']):active) { background:var(--sc-frame-pressed); }
   :host([data-unread]:not([aria-selected='true'])) { background:var(--sc-frame-unread); }
+  :host([data-sc-held]:not([aria-selected='true'])) { background:linear-gradient(var(--sc-frame-hover),var(--sc-frame-hover)),var(--sc-tab-drag-backdrop,var(--colorNeutralBackground1)); }
+  :host([data-sc-held][aria-selected='true']) { background:linear-gradient(var(--sc-frame-wash),var(--sc-frame-wash)),var(--sc-tab-drag-backdrop,var(--colorNeutralBackground1)); }
   :host::after { content:''; position:absolute; inset:0 0 auto; height:2px; width:auto; border-radius:0;
     background:transparent; transform:none; transition:none; }
   :host([aria-selected='true'])::after { background:var(--sc-accent-indicator); }

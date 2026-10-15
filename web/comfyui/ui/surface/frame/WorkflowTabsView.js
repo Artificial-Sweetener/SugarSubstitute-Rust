@@ -17,6 +17,7 @@
 import { createWorkflowTab, createWorkflowTablist } from '../appearance/FluentThemeRuntime.js';
 import { ContextMenu } from '../../menus/ContextMenu.js';
 import { WORKFLOW_TAB_WIDTH } from './WorkflowTabStyles.js';
+import { WorkflowTabPointerDrag } from './WorkflowTabPointerDrag.js';
 /** Retain keyed controls, literal titles, native keyboard navigation and one-shot activity animation. */
 export class WorkflowTabsView {
     document;
@@ -26,7 +27,7 @@ export class WorkflowTabsView {
     #tabs = new Map();
     #menu;
     #order = [];
-    #dragged = null;
+    #drag;
     #projecting = false;
     #selection = '';
     /** Bind interaction intents without retaining host workflow objects in presentation. */
@@ -35,6 +36,7 @@ export class WorkflowTabsView {
         this.actions = actions;
         this.viewport = viewport;
         this.#menu = new ContextMenu(document);
+        this.#drag = new WorkflowTabPointerDrag(viewport, this.element, (from, to) => actions.reorder(from, to), (error) => actions.report(error), () => this.#updateOrbAdjacency());
         this.element.setAttribute('aria-label', 'Workflows');
         this.viewport.addEventListener('scroll', this.#scrolled);
         this.element.addEventListener('change', () => {
@@ -48,6 +50,7 @@ export class WorkflowTabsView {
     }
     /** Update values in place and animate only a newly accepted unread transition. */
     update(tabs, unread, animate = true) {
+        const positions = this.#drag.beforeUpdate(tabs.map((tab) => `sc-workflow-${tab.id}`));
         this.#projecting = true;
         this.#order = tabs;
         const open = new Set(tabs.map((tab) => tab.id));
@@ -80,11 +83,13 @@ export class WorkflowTabsView {
                 this.element.activeid = view.element.id;
         }
         this.#projecting = false;
+        this.#drag.afterUpdate([...this.element.children].filter((element) => element instanceof HTMLElement), positions);
         const selected = tabs.findIndex((tab) => tab.selected);
         const selection = `${tabs[selected]?.id ?? ''}:${String(selected)}`;
         if (selection !== this.#selection) {
             this.#selection = selection;
-            this.#revealSelected(selected);
+            if (!this.#drag.active)
+                this.#revealSelected(selected);
         }
         this.#updateOrbAdjacency();
     }
@@ -102,7 +107,8 @@ export class WorkflowTabsView {
     }
     /** Keep selection and the orb cutout aligned after the enclosing strip changes width. */
     resize() {
-        this.#revealSelected(this.#order.findIndex((tab) => tab.selected));
+        if (!this.#drag.active)
+            this.#revealSelected(this.#order.findIndex((tab) => tab.selected));
         this.#updateOrbAdjacency();
     }
     /** Project scroll position without rebuilding controls or changing selected workflow policy. */
@@ -116,6 +122,8 @@ export class WorkflowTabsView {
     };
     /** Keep the cutout aligned to the orb when the uniform-width tab strip scrolls or reorders. */
     #updateOrbAdjacency() {
+        if (this.#drag.active)
+            return;
         const selected = this.#order.findIndex((tab) => tab.selected);
         this.element.toggleAttribute('data-selected', selected >= 0);
         this.element.style.setProperty('--sc-selected-offset', `${String(selected * WORKFLOW_TAB_WIDTH)}px`);
@@ -130,6 +138,7 @@ export class WorkflowTabsView {
     }
     /** Release floating interaction and official Fluent focus bindings through normal disconnection. */
     dispose() {
+        this.#drag.dispose();
         this.#menu.close();
         this.viewport.removeEventListener('scroll', this.#scrolled);
         this.viewport.removeEventListener('wheel', this.#wheel);
@@ -140,7 +149,7 @@ export class WorkflowTabsView {
     #create(id) {
         const element = createWorkflowTab(this.document);
         element.id = `sc-workflow-${id}`;
-        element.draggable = true;
+        element.draggable = false;
         const title = this.document.createElement('span');
         title.className = 'sc-workflow-title';
         const shimmer = this.document.createElement('span');
@@ -172,27 +181,6 @@ export class WorkflowTabsView {
                 anchor: { kind: 'pointer', x: event.clientX, y: event.clientY },
                 entries: [{ label: 'Close tab', select: () => this.#run(() => this.actions.close(id)) }],
             });
-        });
-        element.addEventListener('dragstart', (event) => {
-            this.#dragged = id;
-            event.dataTransfer?.setData('text/plain', id);
-            if (event.dataTransfer)
-                event.dataTransfer.effectAllowed = 'move';
-        });
-        element.addEventListener('dragover', (event) => {
-            if (this.#dragged)
-                event.preventDefault();
-        });
-        element.addEventListener('drop', (event) => {
-            event.preventDefault();
-            const from = this.#order.findIndex((tab) => tab.id === this.#dragged);
-            const to = this.#order.findIndex((tab) => tab.id === id);
-            if (from >= 0 && to >= 0 && from !== to)
-                this.#run(() => this.actions.reorder(from, to));
-            this.#dragged = null;
-        });
-        element.addEventListener('dragend', () => {
-            this.#dragged = null;
         });
         element.addEventListener('keydown', (event) => {
             if (event.altKey && ['ArrowLeft', 'ArrowRight'].includes(event.key)) {
