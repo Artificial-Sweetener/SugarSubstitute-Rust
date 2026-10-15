@@ -50,11 +50,22 @@ fn actual_table_capacity_and_identity_pin_retain_original_constructor_charge() -
                 >()
                 + size_of::<Option<super::super::CreationJob>>()
                 - size_of::<Option<OwnedJob<(), RegistryError>>>();
-        assert_eq!(custody_owners, 624);
+        assert_eq!(custody_owners, 584);
+        let profile_carrier =
+            size_of::<Option<crate::registry::profile::prepared::PreparedDesktopCarrier>>();
+        assert_eq!(profile_carrier, 16);
         assert_eq!(
-            bytes,
-            253_792 + 131 * (output_growth + custody_input + family_guards + custody_owners) as u64
+            WindowsProcessRegistry::storage_bytes(),
+            253_792
+                + 131
+                    * (output_growth
+                        + custody_input
+                        + family_guards
+                        + custody_owners
+                        + profile_carrier) as u64
         );
+        assert_eq!(WindowsProcessRegistry::storage_bytes(), 366_976);
+        assert!(WindowsProcessRegistry::storage_bytes() <= bytes);
         assert_eq!(bytes, 370_120);
         // The boxed native family's own identity growth remains covered by its
         // original fixed claim and actual production capacity preflight.

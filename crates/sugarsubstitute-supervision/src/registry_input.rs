@@ -18,6 +18,7 @@ pub(crate) const FAMILY_STORAGE_BYTES: u64 = 131_072;
 /// Own explicit executable/cwd/argv/environment for one admitted creation operation.
 /// Values establish input shape only; a trusted native caller supplies ownership.
 pub struct WindowsLaunchInput {
+    pub(crate) profile_custody: Option<crate::registry::profile::prepared::PreparedDesktopCarrier>,
     pub(crate) managed_custody: Option<crate::claims::managed_custody::ManagedCustodySource>,
     pub(crate) command: WindowsLaunchBuffers,
     pub(crate) environment: LaunchEnvironment,
@@ -55,6 +56,7 @@ impl WindowsLaunchInput {
             .checked_add(environment.allocated_bytes().map_err(RegistryInputError::Environment)?)
             .ok_or(RegistryInputError::Capacity)?;
         Ok(Self {
+            profile_custody: None,
             managed_custody: None,
             command,
             environment,

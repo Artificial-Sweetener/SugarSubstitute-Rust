@@ -5,7 +5,7 @@ platforms = ["windows", "macos", "linux"]
 package = "sugarsubstitute-contracts"
 root = "crates/sugarsubstitute-contracts"
 concern = "Owned contracts, localization, memory claims, immutable frames, scoped lifecycle and bounded transcript facts; bounded incident evidence, durable acknowledgment facts and namespace eviction ledger; bounded coordinator-entry identity, launch input and setup deadlines; sole five-locale native incident report messages and complete consent disclosure; fixed authenticated backend custody framing and exact purpose/session matching; authoritative capture target and domain-separated helper Supervisor subject"
-minimum_tests = 104
+minimum_tests = 105
 
 [[owners]]
 package = "sugarsubstitute-application"
@@ -23,13 +23,13 @@ minimum_tests = 87
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
 concern = "Production desktop startup and retirement through actual execution, authenticated parent/child transport, shared backends, profiles and native window adapters; retained failures, captured startup, bounded console rendering and isolated qualification roles; contained headless backend witness invocation and original-budget Finish lifecycle; genuine boxed incident construction and bounded original terminal/cause diagnostics"
-minimum_tests = 596
+minimum_tests = 603
 
 [[owners]]
 package = "sugarsubstitute-execution"
 root = "crates/sugarsubstitute-execution"
 concern = "Admission, CPU scheduling, cancellation, retained ownership and observed worker teardown; authenticated bounded coordinator entry transport, replay and native issue fences; original whole preparation/native environment custody, retained error aliases and actual source/client staging fences; same-ledger capture bundle admission/cleanup, typed native dispatch, original ancestor and handshake fences, physical mapping/capsule retention; original finite custodied creation through both native acknowledgements and retained cleanup aliases; same-ledger BackendCustody capture pins, authenticated v5 inherited input and unchanged preflight budgets"
-minimum_tests = 571
+minimum_tests = 572
 
 [[owners]]
 package = "sugarsubstitute-xtask"
@@ -41,7 +41,7 @@ minimum_tests = 50
 package = "sugarsubstitute-supervision"
 root = "crates/sugarsubstitute-supervision"
 concern = "Windows launch inputs, retained containment, resource exclusions, actual claim retirement, attempt-bound profile proofs and bounded lifecycle framing; Retained installed-file/hash custody and actual connected-loopback peer identity; authenticated fixed capture roles, same-job selected bundle and module credit custody, checked current-image/PE/PDB association and bounded original close retention; authenticated parent/witness association, independent dual exclusions, exact suspended-root transfer and checked custody retirement"
-minimum_tests = 505
+minimum_tests = 518
 
 [[owners]]
 package = "sugarsubstitute-splash"

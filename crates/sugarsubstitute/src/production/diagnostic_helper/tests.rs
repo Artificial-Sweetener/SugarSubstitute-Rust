@@ -13,7 +13,7 @@ use sugarsubstitute_contracts::{execution::*, incident::*, lifecycle::*};
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner};
 use sugarsubstitute_supervision::diagnostic_storage::fixture::*;
 type TestError = Box<dyn Error + Send + Sync>;
-struct TestClock;
+pub(super) struct TestClock;
 impl Clock for TestClock {
     fn now(&self) -> Moment {
         Moment::from_nanos(17)
@@ -23,9 +23,9 @@ impl Clock for TestClock {
     }
 }
 #[derive(Default)]
-struct Wake {
-    count: Mutex<u64>,
-    changed: Condvar,
+pub(super) struct Wake {
+    pub(super) count: Mutex<u64>,
+    pub(super) changed: Condvar,
 }
 impl CompletionWake for Wake {
     fn wake(&self) -> Result<(), ExecutionError> {
@@ -34,7 +34,7 @@ impl CompletionWake for Wake {
         Ok(())
     }
 }
-fn observe<T: Send + 'static, E: Send + 'static>(
+pub(super) fn observe<T: Send + 'static, E: Send + 'static>(
     client: &ExecutionClient,
     wake: &Wake,
     job: &mut OwnedJob<T, E>,
@@ -58,7 +58,7 @@ fn observe<T: Send + 'static, E: Send + 'static>(
         }
     }
 }
-fn key() -> Result<LogicalStoreOperationKey, TestError> {
+pub(super) fn key() -> Result<LogicalStoreOperationKey, TestError> {
     Ok(LogicalStoreOperationKey::new(
         CoordinatorKey {
             namespace: NamespaceId::new([1; 32]),
@@ -67,7 +67,7 @@ fn key() -> Result<LogicalStoreOperationKey, TestError> {
         IncidentOperationId::new(1)?,
     ))
 }
-fn seed() -> Result<IncidentSeed, TestError> {
+pub(super) fn seed() -> Result<IncidentSeed, TestError> {
     Ok(IncidentSeed::new(
         IncidentKey::new(IncidentSubject::Desktop(RunKey {
             owner: key()?.owner(),
@@ -80,7 +80,7 @@ fn seed() -> Result<IncidentSeed, TestError> {
         IncidentStage::Startup,
     )?)
 }
-fn prepared(
+pub(super) fn prepared(
     context: &JobContext,
     fixture: &DiagnosticStorageFixture,
 ) -> Result<SeedOperation, TestError> {
@@ -90,6 +90,7 @@ fn prepared(
     storage.acquire_writer(&operation, context)?;
     storage.inventory(&operation, context)?;
     Ok(SeedOperation {
+        stage: SeedStage::Writer,
         repository: Some(IncidentRepository::new(storage, operation, context)?),
         opening: Some(opening),
         committed: None,
@@ -99,7 +100,7 @@ fn prepared(
         retired: false,
     })
 }
-fn spec(id: JobId) -> JobSpec {
+pub(super) fn spec(id: JobId) -> JobSpec {
     JobSpec {
         id,
         operation: Operation::NativeLifecycle,

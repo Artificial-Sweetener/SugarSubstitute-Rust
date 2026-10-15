@@ -53,7 +53,9 @@ impl Finish {
             if facts.key != key {
                 return Err(reject("custody_finish_key"));
             }
-            if self.nonce == Some(facts.nonce) && facts.receipt == BackendCustodyReceipt::Finished {
+            if self.nonce == Some(facts.nonce)
+                && facts.receipt.expand(facts.key.owner()) == BackendCustodyReceipt::Finished
+            {
                 if exchange.io_pending || exchange.pending.is_some() {
                     return Ok(Progress::Waiting);
                 }

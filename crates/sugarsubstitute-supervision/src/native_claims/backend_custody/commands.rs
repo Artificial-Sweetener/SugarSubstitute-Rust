@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Adopt authenticated one-command outputs before returning matching receipts.
-use super::{registration::Registration, source::State};
+use super::{entry::Entry, registration::Registration, source::State};
 use crate::{
     ClaimError,
     native_claims::files::{Budget, Handle},
@@ -53,6 +53,7 @@ impl State {
         frame: BackendCustodyFrame,
         memory: &BackendCustodyMemory,
         wake: &BackendCustodyWake,
+        context: &sugarsubstitute_contracts::execution::JobContext,
     ) -> Result<Option<Receipt>, ClaimError> {
         if Some(frame.key) != memory.key() || !self.initialized {
             return Err(ClaimError::invalid("custody_command_session"));
@@ -72,6 +73,12 @@ impl State {
         self.reply = None;
         self.reply_until = None;
         let result = match frame.command {
+            Command::ProfilePrepare { .. }
+            | Command::ProfilePublished { .. }
+            | Command::ProfileRoot { .. }
+            | Command::ProfileStop { .. } => {
+                return self.apply_profile(frame, memory, wake, context);
+            }
             Command::Establish { parent, pid, birth, containment } => {
                 if self.parent.is_some() || self.containment.is_some() {
                     return Err(ClaimError::invalid("custody_establish_repeated"));
@@ -96,7 +103,12 @@ impl State {
             Command::Prepare { resource, job, until_ticks, frequency, .. } => {
                 self.require_established()?;
                 self.adopt_transfer(0, job)?;
-                if self.registrations.iter().flatten().any(|entry| entry.resource() == resource) {
+                if self
+                    .registrations
+                    .iter()
+                    .flatten()
+                    .any(|entry| entry.resource() == Some(resource))
+                {
                     return Err(ClaimError::invalid("custody_resource_repeated"));
                 }
                 let index = self
@@ -114,19 +126,22 @@ impl State {
                     .decode_counter(source, false)
                     .map_err(|cause| ClaimError::new("custody_prepare_cutoff", cause))?;
                 self.reply_until = Some(until);
-                self.registrations[index] = Some(Box::new(Registration::new(
+                self.registrations[index] = Some(Entry::Backend(Box::new(Registration::new(
                     slot,
                     &self.directory,
                     &self.sid,
                     frame.key,
                     &frame.command,
                     until,
-                )?));
+                )?)));
                 let input = self.transfer(0)?;
-                self.registrations[index]
+                let Entry::Backend(entry) = self.registrations[index]
                     .as_mut()
                     .ok_or_else(|| ClaimError::invalid("custody_registration_owner"))?
-                    .prepare(input)?;
+                else {
+                    return Err(ClaimError::invalid("custody_registration_purpose"));
+                };
+                entry.prepare(input)?;
                 Receipt::Prepared(resource)
             }
             Command::Root { resource, process, .. } => {
@@ -136,19 +151,25 @@ impl State {
                     .registrations
                     .iter()
                     .position(|entry| {
-                        entry.as_ref().is_some_and(|entry| entry.resource() == resource)
+                        entry.as_ref().is_some_and(|entry| entry.resource() == Some(resource))
                     })
                     .ok_or_else(|| ClaimError::invalid("custody_root_resource"))?;
-                let entry = self.registrations[index]
+                let Entry::Backend(entry) = self.registrations[index]
                     .as_ref()
-                    .ok_or_else(|| ClaimError::invalid("custody_registration_owner"))?;
+                    .ok_or_else(|| ClaimError::invalid("custody_registration_owner"))?
+                else {
+                    return Err(ClaimError::invalid("custody_registration_purpose"));
+                };
                 entry.validate_root(&frame.command)?;
                 self.reply_until = Some(entry.original_until());
                 let input = self.transfer(0)?;
-                self.registrations[index]
+                let Entry::Backend(entry) = self.registrations[index]
                     .as_mut()
                     .ok_or_else(|| ClaimError::invalid("custody_registration_owner"))?
-                    .root(&frame.command, input, wake)?;
+                else {
+                    return Err(ClaimError::invalid("custody_registration_purpose"));
+                };
+                entry.root(&frame.command, input, wake)?;
                 Receipt::Root(resource)
             }
             Command::Stop { resource, until_ticks, frequency } => {
@@ -162,8 +183,11 @@ impl State {
                     .registrations
                     .iter_mut()
                     .flatten()
-                    .find(|entry| entry.resource() == resource)
+                    .find(|entry| entry.resource() == Some(resource))
                     .ok_or_else(|| ClaimError::invalid("custody_stop_resource"))?;
+                let Entry::Backend(entry) = entry else {
+                    return Err(ClaimError::invalid("custody_registration_purpose"));
+                };
                 entry.stop(until)?;
                 self.reply_until = Some(entry.cleanup_until()?);
                 // The driver returns Released only after later complete actual settlement.
@@ -194,10 +218,9 @@ impl State {
             return Err(ClaimError::invalid("custody_written_nonce"));
         }
         if let Some(Receipt::Released(resource)) = self.reply {
-            let index = self
-                .registrations
-                .iter()
-                .position(|entry| entry.as_ref().is_some_and(|entry| entry.resource() == resource));
+            let index = self.registrations.iter().position(|entry| {
+                entry.as_ref().is_some_and(|entry| entry.resource() == Some(resource))
+            });
             if let Some(index) = index {
                 if !self.registrations[index].as_ref().is_some_and(|entry| entry.settled()) {
                     return Err(ClaimError::invalid("custody_written_unsettled"));
@@ -205,10 +228,20 @@ impl State {
                 self.registrations[index] = None;
             }
         }
+        if let Some(Receipt::ProfileReleased(profile)) = self.reply
+            && let Some(index) = self.registrations.iter().position(|entry| {
+                entry.as_ref().is_some_and(|entry| entry.profile() == Some(profile))
+            })
+        {
+            if !self.registrations[index].as_ref().is_some_and(|entry| entry.settled()) {
+                return Err(ClaimError::invalid("profile_custody_written_unsettled"));
+            }
+            self.registrations[index] = None;
+        }
         Ok(())
     }
     /// Require the actual established parent and occupied self-containment cells.
-    fn require_established(&self) -> Result<(), ClaimError> {
+    pub(super) fn require_established(&self) -> Result<(), ClaimError> {
         if self.established
             && self.parent.is_some()
             && self.containment.as_ref().is_some_and(Handle::is_armed)
@@ -219,7 +252,7 @@ impl State {
         }
     }
     /// Adopt the actual destination output into funded storage before any fallible query.
-    fn adopt_transfer(&mut self, index: usize, raw: u64) -> Result<(), ClaimError> {
+    pub(super) fn adopt_transfer(&mut self, index: usize, raw: u64) -> Result<(), ClaimError> {
         let slot = self
             .transfers
             .get_mut(index)
@@ -234,7 +267,10 @@ impl State {
         Ok(())
     }
     /// Move the identical output directly to the next already-funded durable owner.
-    fn transfer(&mut self, index: usize) -> Result<std::os::windows::io::OwnedHandle, ClaimError> {
+    pub(super) fn transfer(
+        &mut self,
+        index: usize,
+    ) -> Result<std::os::windows::io::OwnedHandle, ClaimError> {
         let slot = self
             .transfers
             .get_mut(index)

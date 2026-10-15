@@ -132,7 +132,13 @@ fn explicit_native_root_pins_same_directory_for_writer_validation_and_durable_re
                 .map_err(|cause| ClaimError::new("test_reader_claim", cause))?,
         )?;
         reader_root.resolve(&path, &context)?;
-        reader_root.validate_diagnostic_namespace(&native.resolved, &native.handles, &context)?;
+        let observed =
+            reader_root.state.as_ref().ok_or_else(|| ClaimError::invalid("test_reopened_root"))?;
+        let (observed_path, observed_identity, _) =
+            observed.root.as_ref().ok_or_else(|| ClaimError::invalid("test_reopened_root"))?;
+        assert_eq!(observed_path.path()?, path);
+        assert_eq!(*observed_identity, identity);
+        assert_eq!(observed.sid.bytes()?, expected_sid);
         std::fs::write(path.join("preserved.payload"), b"original-payload")
             .map_err(|cause| ClaimError::new("test_payload", cause))?;
         reader_root.retire(&context)?;

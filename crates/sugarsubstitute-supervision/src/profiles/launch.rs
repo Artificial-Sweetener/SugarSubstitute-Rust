@@ -27,7 +27,7 @@ impl WindowsProfileLease {
     /// Rejects pending, previously attempted or concurrently prepared launches.
     pub fn prepare_desktop_launch(
         &mut self,
-        input: WindowsLaunchInput,
+        mut input: WindowsLaunchInput,
     ) -> Result<ProfileDesktopLaunch, ClaimAdmissionError> {
         if self.pending.is_some()
             || self.shared.active.load(Ordering::Acquire) != HELD
@@ -36,6 +36,37 @@ impl WindowsProfileLease {
             || self.prepared.load(Ordering::Acquire) == 1
         {
             return Err(ClaimAdmissionError::Busy);
+        }
+        {
+            let mut native = lock(&self.shared.native);
+            if native.as_ref().is_some_and(|state| {
+                state.custody_release.is_some() && state.desktop_custody.is_none()
+            }) {
+                return Err(ClaimAdmissionError::Closed);
+            }
+            if let Some(state) = native.as_mut()
+                && state.desktop_custody.is_some()
+            {
+                let prepared =
+                    state.desktop_custody.as_mut().ok_or(ClaimAdmissionError::Identity)?;
+                if prepared.published_ack.as_ref().is_none_or(|ack|
+                    ack.receipt()!=sugarsubstitute_contracts::backend_custody::BackendCustodyReceipt::ProfilePublished(prepared.key)) {
+                    return Err(ClaimAdmissionError::Busy);
+                }
+                let memory = state.memory.as_ref().ok_or(ClaimAdmissionError::Identity)?.clone();
+                input.profile_custody = Some(
+                    crate::registry::profile::prepared::PreparedDesktopCarrier::new(
+                        &mut state.desktop_custody,
+                        memory,
+                    )
+                    .map_err(|cause| {
+                        ClaimAdmissionError::Native(ClaimError::new(
+                            "profile_carrier_admission",
+                            cause,
+                        ))
+                    })?,
+                );
+            }
         }
         self.prepared.store(1, Ordering::Release);
         Ok(ProfileDesktopLaunch {

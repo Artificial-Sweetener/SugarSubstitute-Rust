@@ -84,9 +84,6 @@ impl Port for StreamingPort {
         context: &JobContext,
     ) -> Result<diagnostic::genesis::NativeOpening, ClaimError> {
         self.check(context)?;
-        self.original
-            .bind_namespace(request, context)
-            .map_err(ClaimError::diagnostic_allocation)?;
         let loan = crate::coordinator_entry::read_namespace::NamespaceReadLoan::take_writer(
             request,
             &self.original,
@@ -94,7 +91,7 @@ impl Port for StreamingPort {
         )?;
         let resolved = loan.resolved()?;
         self.root.resolve(resolved.diagnostic_directory().0, context)?;
-        self.root.validate_diagnostic_namespace(resolved, loan.handles()?, context)?;
+        self.root.validate_diagnostic_namespace(&loan, context)?;
         let (directory, sid, disposition, identity) =
             self.root.diagnostic_directory(request.operation().owner().namespace, context)?;
         self.directory = Some(directory);

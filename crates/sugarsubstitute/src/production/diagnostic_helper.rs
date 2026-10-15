@@ -22,6 +22,7 @@ pub(in crate::production) struct SeedInput {
 /// Retain the same original repository, opening and proofs across success or failure.
 /// The parent observes terminal transfer and actual worker settlement separately.
 pub(in crate::production) struct SeedOperation {
+    stage: SeedStage,
     repository: Option<IncidentRepository>,
     opening: Option<DiagnosticStoreOpening>,
     committed: Option<SeedCommit>,
@@ -34,6 +35,7 @@ impl SeedOperation {
     /// Construct inert retained custody before invoking any external provider.
     fn new() -> Self {
         Self {
+            stage: SeedStage::NotStarted,
             repository: None,
             opening: None,
             committed: None,
@@ -47,26 +49,38 @@ impl SeedOperation {
     /// The caller's owned source reservation retains the input until this call;
     /// repository record roles admit each moved seed destination before publication.
     fn execute(&mut self, input: SeedInput, context: &JobContext) {
-        let memory = match context.memory().claim(DIAGNOSTIC_STORAGE_BYTES) {
-            Ok(memory) => memory,
-            Err(cause) => {
-                self.memory = Some(cause);
-                return;
-            }
-        };
+        let Some(memory) = self.claim_memory(context) else { return };
         let prepare = (|| {
-            // Admit the repository identity before protected filesystem effects.
+            self.stage = SeedStage::Storage;
             let mut storage = DiagnosticStorage::new(memory)?;
+            self.stage = SeedStage::Operation;
             let operation = storage.begin_operation(input.operation, context)?;
+            self.stage = SeedStage::Repository;
             self.repository = Some(IncidentRepository::new(storage, operation, context)?);
             let repository =
                 self.repository.as_mut().ok_or(IncidentStoreError::RecoveryConflict)?;
+            self.stage = SeedStage::Namespace;
             self.opening = Some(repository.resolve_namespace(&input.request, context)?);
+            self.stage = SeedStage::Writer;
             repository.acquire_writer(context)?;
             self.publish(input.seed, context)
         })();
         if let Err(cause) = prepare {
             self.first = Some(cause);
+        }
+    }
+    /// Retain the actual failed original allocation before any protected storage effect.
+    fn claim_memory(
+        &mut self,
+        context: &JobContext,
+    ) -> Option<sugarsubstitute_contracts::execution::MemoryClaim> {
+        self.stage = SeedStage::Memory;
+        match context.memory().claim(DIAGNOSTIC_STORAGE_BYTES) {
+            Ok(memory) => Some(memory),
+            Err(cause) => {
+                self.memory = Some(cause);
+                None
+            }
         }
     }
     fn publish(
@@ -77,13 +91,17 @@ impl SeedOperation {
         let repository = self.repository.as_mut().ok_or(IncidentStoreError::RecoveryConflict)?;
         match self.opening.as_mut().ok_or(IncidentStoreError::RecoveryConflict)? {
             DiagnosticStoreOpening::Created(genesis) => {
+                self.stage = SeedStage::Initialize;
                 repository.initialize(genesis, context)?;
             }
             DiagnosticStoreOpening::Existing => {
+                self.stage = SeedStage::Validate;
                 repository.validate_store(context)?;
             }
         }
+        self.stage = SeedStage::Publish;
         self.committed = Some(repository.publish_seed(seed, context)?);
+        self.stage = SeedStage::Committed;
         Ok(())
     }
     /// Borrow the genuine seed activation after strict ledger and seed publication.
@@ -138,6 +156,11 @@ mod service;
 mod source;
 pub(in crate::production) use service::{SeedService, SeedServiceIssue};
 pub(in crate::production) use source::SEED_SOURCE_BYTES;
+
+#[path = "diagnostic_helper/seed_failure.rs"]
+mod seed_failure;
+pub(in crate::production) use seed_failure::SeedFailure;
+use seed_failure::SeedStage;
 
 #[cfg(test)]
 #[path = "diagnostic_helper/tests.rs"]

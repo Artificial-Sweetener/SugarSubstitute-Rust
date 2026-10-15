@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain durable native state before callbacks and restore it on every unwind.
-use super::{control::WitnessControl, pool::WitnessPool, registration::Registration};
+use super::{control::WitnessControl, entry::Entry, pool::WitnessPool};
 use crate::{ClaimError, native_claims::files::Handle};
 use std::{
     path::PathBuf,
@@ -27,7 +27,7 @@ pub(super) struct State {
     pub(super) parent: Option<BackendCustodyProcessWatch>,
     pub(super) containment: Option<Handle>,
     pub(super) transfers: [Option<Handle>; 2],
-    pub(super) registrations: [Option<Box<Registration>>; 64],
+    pub(super) registrations: [Option<Entry>; 64],
     pub(super) latest: Option<BackendCustodyFrame>,
     pub(super) reply: Option<BackendCustodyReceipt>,
     pub(super) reply_until: Option<sugarsubstitute_contracts::execution::Moment>,

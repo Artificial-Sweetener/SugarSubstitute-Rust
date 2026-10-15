@@ -23,6 +23,10 @@ pub(super) struct NativeState {
     pub(super) retired: bool,
     pub(super) release_published: bool,
     pub(super) publication_attempted: bool,
+    pub(super) desktop_custody: Option<crate::registry::profile::prepared::PreparedDesktop>,
+    pub(super) custody_record: Option<record::custody::CustodiedRecord>,
+    pub(super) custody_release: Option<super::custody::Release>,
+    pub(super) migration_file: Option<HeldFile<160>>,
     pub(super) close_deadline: Option<Moment>,
     pub(super) prepared_folder: Option<PreparedFolder>,
     pub(super) environment: Option<(attempt::Binding, JobId)>,
@@ -49,6 +53,10 @@ impl NativeState {
             retired: true,
             release_published: false,
             publication_attempted: false,
+            desktop_custody: None,
+            custody_record: None,
+            custody_release: None,
+            migration_file: None,
             close_deadline: None,
             environment: None,
             prepared_folder: None,
@@ -107,15 +115,7 @@ impl ProfilePort for WindowsProfilePort {
         root.resolve_or_create_profile_leaf(path, context)?;
         let (folder, identity, sid) = root.profile_folder()?;
         let record = record::Record {
-            account: {
-                use sha2::{Digest, Sha256};
-                let mut hash = Sha256::new();
-                for part in [b"SugarSubstitute.profile-account.v1".as_slice(), sid] {
-                    hash.update((part.len() as u64).to_le_bytes());
-                    hash.update(part);
-                }
-                hash.finalize().into()
-            },
+            account: record::account_identity(sid),
             folder: identity,
             run,
             state: record::State::Held,
@@ -151,7 +151,12 @@ impl ProfilePort for WindowsProfilePort {
                 return Err(ClaimError::invalid("empty_profile_record"));
             }
             record_file::RecordRead::Present(bytes) => {
-                Some((record::Record::decode(&bytes)?, bytes))
+                let old = if bytes[8..10] == [2, 0] {
+                    record::custody::CustodiedRecord::decode(&bytes)?.original
+                } else {
+                    record::Record::decode(&bytes)?
+                };
+                Some((old, bytes))
             }
         };
         if !match previous {
@@ -161,6 +166,10 @@ impl ProfilePort for WindowsProfilePort {
             return Err(ClaimError::invalid("profile_unresolved_predecessor"));
         }
         state.original_released = previous.map(|(_, bytes)| bytes);
+        if state.desktop_custody.is_some() {
+            super::custody::preparation::prepare(state, record, context)?;
+            return check(context);
+        }
         state.record = Some(record);
         state.publication_attempted = true;
         record_file::publish(
@@ -243,6 +252,23 @@ impl ProfilePort for WindowsProfilePort {
     }
     fn release(&self, state: &mut NativeState, context: &JobContext) -> Result<(), ClaimError> {
         check(context)?;
+        if let Some(prepared) = state.desktop_custody.as_mut().filter(|prepared| {
+            prepared.prepared_nonce.is_none() && prepared.queued_prepare.is_none()
+        }) {
+            prepared
+                .close_unissued(context)
+                .map_err(|cause| ClaimError::new("profile_prepared_cleanup", cause))?;
+            state.desktop_custody = None;
+        }
+        if let Some(file) = &mut state.migration_file {
+            let original = state
+                .original_released
+                .as_ref()
+                .ok_or_else(|| ClaimError::invalid("profile_migration_original_missing"))?;
+            record_file::retire_publication(file, Some(original), context)?;
+            file.close()?;
+            state.migration_file = None;
+        }
         if disposal::dispose_unpublished(
             state,
             context,
@@ -252,25 +278,67 @@ impl ProfilePort for WindowsProfilePort {
             return Ok(());
         }
         if let Some(file) = state.file.as_ref().filter(|file| file.is_locked()) {
-            let expected = state.record.map(record::Record::encode);
-            let observed = record_file::retire_publication(file, expected.as_ref(), context)?;
-            if prepare_release(observed, &mut state.record, state.original_released.as_ref())? {
-                let record =
-                    state.record.ok_or_else(|| ClaimError::invalid("profile_release_record"))?;
-                record_file::publish(
-                    file,
-                    &record.encode(),
-                    record_file::PublicationAuthority::Ordinary,
-                    context,
-                    |old| match old {
-                        record_file::RecordRead::Present(bytes)
-                            if record::Record::decode(bytes)?.permits_replacement(record) =>
-                        {
-                            Ok(())
+            if let Some(held) = state.custody_record {
+                let encoded = held.encode();
+                let released = held.released().encode();
+                let observed = record_file::retire_publication(file, Some(&encoded), context)?;
+                match observed {
+                    record_file::PublicationRetirement::Preserved(
+                        record_file::RecordRead::Present(bytes),
+                    )
+                    | record_file::PublicationRetirement::Activated(bytes)
+                        if bytes == encoded || bytes == released =>
+                    {
+                        if bytes != released {
+                            record_file::publish(
+                                file,
+                                &released,
+                                record_file::PublicationAuthority::Ordinary,
+                                context,
+                                |old| match old {
+                                    record_file::RecordRead::Present(actual)
+                                        if *actual == encoded =>
+                                    {
+                                        Ok(())
+                                    }
+                                    _ => Err(ClaimError::invalid(
+                                        "profile_custody_release_changed_record",
+                                    )),
+                                },
+                            )?;
                         }
-                        _ => Err(ClaimError::invalid("profile_release_changed_record")),
-                    },
-                )?;
+                        state.custody_record = Some(held.released());
+                    }
+                    record_file::PublicationRetirement::Preserved(
+                        record_file::RecordRead::Missing,
+                    ) if !state.held => {}
+                    record_file::PublicationRetirement::Preserved(
+                        record_file::RecordRead::Present(bytes),
+                    ) if !state.held && state.original_released == Some(bytes) => {}
+                    _ => return Err(ClaimError::invalid("profile_custody_release_identity")),
+                }
+            } else {
+                let expected = state.record.map(record::Record::encode);
+                let observed = record_file::retire_publication(file, expected.as_ref(), context)?;
+                if prepare_release(observed, &mut state.record, state.original_released.as_ref())? {
+                    let record = state
+                        .record
+                        .ok_or_else(|| ClaimError::invalid("profile_release_record"))?;
+                    record_file::publish(
+                        file,
+                        &record.encode(),
+                        record_file::PublicationAuthority::Ordinary,
+                        context,
+                        |old| match old {
+                            record_file::RecordRead::Present(bytes)
+                                if record::Record::decode(bytes)?.permits_replacement(record) =>
+                            {
+                                Ok(())
+                            }
+                            _ => Err(ClaimError::invalid("profile_release_changed_record")),
+                        },
+                    )?;
+                }
             }
             state.release_published = true;
         }

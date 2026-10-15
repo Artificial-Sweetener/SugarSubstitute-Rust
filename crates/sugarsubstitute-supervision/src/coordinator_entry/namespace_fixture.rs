@@ -101,3 +101,7 @@ impl NativePort for Boundary {
         Err(ClaimError::invalid("namespace_boundary_has_no_election"))
     }
 }
+
+#[cfg(test)]
+#[path = "namespace_fixture/native_writer.rs"]
+pub(crate) mod native_writer;

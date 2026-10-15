@@ -98,6 +98,26 @@ impl Owner {
         }
         Ok(())
     }
+    /// Require the identical bound Entry source and full operation after original control sampling.
+    pub(in crate::diagnostic_storage) fn validate_namespace(
+        &self,
+        lifetime: &Arc<crate::coordinator_entry::namespace::NamespaceLifetime>,
+        operation: LogicalStoreOperationKey,
+    ) -> Result<(), native::DiagnosticNativeAllocationFailure> {
+        let inner = self
+            .inner
+            .as_ref()
+            .ok_or_else(native::DiagnosticNativeAllocationFailure::namespace_rejected)?;
+        let state = inner.lock();
+        if state.closed
+            || state.current != Some(operation)
+            || !lifetime.open.load(std::sync::atomic::Ordering::Acquire)
+            || state.namespace.as_ref().is_none_or(|held| !Arc::ptr_eq(held, lifetime))
+        {
+            return Err(native::DiagnosticNativeAllocationFailure::namespace_rejected());
+        }
+        Ok(())
+    }
     pub(in crate::diagnostic_storage) fn admission_sources_open(&self) -> bool {
         self.inner.as_ref().is_some_and(|inner| {
             let state = inner.lock();

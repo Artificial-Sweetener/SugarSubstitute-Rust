@@ -114,6 +114,7 @@ pub(in crate::production) enum HostIssue {
     Identity,
     Admission,
     Preparation,
+    Seed,
     Unprepared,
     Pending,
     Decision,
@@ -204,6 +205,12 @@ impl IncidentHost {
     /// Borrow original retained constructor/policy causes without detached error allocation.
     pub(in crate::production) fn failure(&self) -> Option<&(dyn Error + 'static)> {
         if let Some(cause) = self.unsubmitted_collection_failure() {
+            return Some(cause);
+        }
+        if let Some(JobOutcome::Success(controller)) =
+            self.completion.as_ref().map(|value| &value.outcome)
+            && let Some(cause) = controller.policy.seed.failure()
+        {
             return Some(cause);
         }
         if let Some(JobOutcome::Failure(cause)) =

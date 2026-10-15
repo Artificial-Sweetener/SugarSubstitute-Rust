@@ -34,6 +34,10 @@ pub(crate) struct CoordinatorCustody {
     observed_progress: Option<(bool, bool, bool, bool, bool)>,
 }
 impl CoordinatorCustody {
+    /// Borrow the genuine established parent for early profile Job preparation.
+    pub(crate) fn established_parent(&self) -> Option<BackendCustodyParent> {
+        self.ready.then(|| self.parent.clone()).flatten()
+    }
     /// Admit the original registered capture attachment before its sole transport or helper.
     pub(crate) fn new(
         owner: CoordinatorKey,

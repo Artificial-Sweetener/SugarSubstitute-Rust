@@ -16,6 +16,7 @@ mod genesis;
 mod group_inventory;
 mod inventory;
 mod migration;
+mod namespace_writer;
 mod payload_discard;
 mod recovery;
 mod retirement_provider;

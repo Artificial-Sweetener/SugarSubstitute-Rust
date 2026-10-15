@@ -5,6 +5,9 @@
 mod attachment_completion;
 #[path = "entry_activation/capture.rs"]
 mod capture;
+#[path = "entry_activation/component.rs"]
+mod component;
+pub(crate) use component::ProfileComponent;
 #[path = "entry_activation/delivery.rs"]
 mod delivery;
 #[path = "entry_activation/desktop_output.rs"]

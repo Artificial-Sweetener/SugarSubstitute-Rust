@@ -79,7 +79,22 @@ impl ProductionActivation {
             }
         }
         if !admission_closed {
-            start.acquire_profile(resources)?;
+            let parent = if let Some(parent) = backend.profile_custody_parent() {
+                Some(parent)
+            } else {
+                let value = start.value()?;
+                let environment = value
+                    .desktop_environment
+                    .as_ref()
+                    .ok_or("Original desktop environment absent before profile custody")?;
+                let until = value.until;
+                let mut borrowed = super::progress::backend_resources(resources, Some(capture));
+                backend.ensure_profile_custody(environment, until, &mut borrowed).map_err(outer)?
+            };
+            let Some(parent) = parent else {
+                return Ok(());
+            };
+            start.acquire_profile(&parent, resources)?;
             start.reserve_channel(resources)?;
         }
         if !admission_closed && !incidents.seed_ready(record, capture, backend, resources)? {

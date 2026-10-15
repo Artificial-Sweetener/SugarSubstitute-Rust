@@ -20,25 +20,28 @@ impl ProtectedStorageRoot {
     /// Revalidate the copied root against the same actual retained namespace pin.
     pub(crate) fn validate_diagnostic_namespace(
         &mut self,
-        source: &account::ResolvedNamespace,
-        pins: &[Handle],
+        source: &crate::coordinator_entry::read_namespace::NamespaceReadLoan,
         context: &JobContext,
     ) -> Result<(), ClaimError> {
         let state = self.state_mut()?;
+        let original = match &state.budget {
+            Budget::Diagnostic(original) => original.clone(),
+            _ => return Err(state.budget.rejection("diagnostic_namespace_origin")),
+        };
+        let resolved = source.validate_writer(&original, context)?;
         bind_context(state, context, false)?;
-        let (path, identity, _) = state
+        let (path, identity, index) = state
             .root
             .as_ref()
             .cloned()
             .ok_or_else(|| state.budget.rejection("diagnostic_namespace_root"))?;
-        let (directory, slot, directory_identity) = source.diagnostic_directory();
-        let pin =
-            pins.get(slot).ok_or_else(|| state.budget.rejection("diagnostic_namespace_pin"))?;
-        let State { budget, causes, sid, .. } = state;
+        let (directory, _, directory_identity) = resolved.diagnostic_directory();
+        let State { budget, causes, sid, handles, .. } = state;
+        let pin = handles.get(index).ok_or_else(|| budget.rejection("diagnostic_namespace_pin"))?;
         with_phase(budget, causes, context, ScratchRole::Path, |phase| {
             if path.path()? != directory
                 || identity != directory_identity
-                || sid.bytes()? != source.account_sid.as_slice()
+                || sid.bytes()? != resolved.account_sid.as_slice()
                 || paths::file_identity(pin, phase)? != identity
             {
                 return Err(phase.invalid("diagnostic_namespace_changed"));
@@ -46,7 +49,9 @@ impl ProtectedStorageRoot {
             paths::validate_object(pin, true, true, phase)?;
             security::verify(pin, sid.bytes()?, phase)?;
             phase.context(context)
-        })
+        })?;
+        source.validate_writer(&original, context)?;
+        Ok(())
     }
 
     /// Retire only retained outputs under the actual storage cleanup binding.

@@ -37,7 +37,29 @@ pub(super) struct Driver {
     phase: Phase,
     client: ExecutionClient,
     ticket: LaunchTicket,
-    source: ManagedCustodySource,
+    source: Source,
+    _profile_metadata: Option<std::sync::Arc<sugarsubstitute_contracts::execution::MemoryClaim>>,
+}
+enum Source {
+    Managed(ManagedCustodySource),
+    Profile {
+        parent: crate::BackendCustodyParent,
+        key: sugarsubstitute_contracts::backend_custody::ProfileCustodyKey,
+    },
+}
+impl Source {
+    fn parent(&self) -> &crate::BackendCustodyParent {
+        match self {
+            Self::Managed(source) => source.parent(),
+            Self::Profile { parent, .. } => parent,
+        }
+    }
+    fn root_receipt(&self) -> Receipt {
+        match self {
+            Self::Managed(source) => Receipt::Root(source.resource()),
+            Self::Profile { key, .. } => Receipt::ProfileRoot(*key),
+        }
+    }
 }
 impl Driver {
     /// Claim real input capacities before constructing the actual retained driver.
@@ -49,14 +71,51 @@ impl Driver {
         client: ExecutionClient,
         ticket: LaunchTicket,
     ) -> Result<Box<dyn CustodiedProcessDriver>, NativeObservationError> {
-        let source = input
-            .managed_custody
-            .take()
-            .ok_or_else(|| native(RegistryError::invalid("custodied_source")))?;
-        if ticket.binding != FamilyBinding::Managed(source.resource())
-            || !source.parent().matches_execution(&client)
-        {
-            return Err(native(RegistryError::invalid("custodied_source_association")));
+        if Family::storage_bytes() + size_of::<Self>() > memory.bytes() as usize {
+            return Err(native(RegistryError::invalid("custodied_family_capacity")));
+        }
+        let profile = input.profile_custody.take();
+        let mut profile_metadata = None;
+        let (source, family, destination, phase) = if let Some(mut profile) = profile {
+            profile_metadata = Some(profile.memory);
+            let profile = &mut profile.value;
+            if ticket.binding != FamilyBinding::Desktop(profile.key.run())
+                || context
+                    .deadline()
+                    .is_none_or(|until| until > profile.until || context.now() >= profile.until)
+                || profile
+                    .published_ack
+                    .as_ref()
+                    .is_none_or(|ack| ack.receipt() != Receipt::ProfilePublished(profile.key))
+                || !profile.identity.same_as(shared.identity())
+            {
+                return Err(native(RegistryError::invalid("custodied_profile_source")));
+            }
+            (
+                Source::Profile { parent: profile.parent.clone(), key: profile.key },
+                profile
+                    .family
+                    .take()
+                    .ok_or_else(|| native(RegistryError::invalid("custodied_profile_family")))?,
+                profile.destination.take().ok_or_else(|| {
+                    native(RegistryError::invalid("custodied_profile_destination"))
+                })?,
+                Phase::WaitingPrepared,
+            )
+        } else {
+            let source = input
+                .managed_custody
+                .take()
+                .ok_or_else(|| native(RegistryError::invalid("custodied_source")))?;
+            if ticket.binding != FamilyBinding::Managed(source.resource()) {
+                return Err(native(RegistryError::invalid("custodied_source_association")));
+            }
+            let family = Family::custodied(memory, size_of::<Self>()).map_err(native)?;
+            let destination = CustodyDestination::new(source.parent());
+            (Source::Managed(source), family, destination, Phase::Prepared)
+        };
+        if !source.parent().matches_execution(&client) {
+            return Err(native(RegistryError::invalid("custodied_source_execution")));
         }
         let transient =
             input.required_reservation_bytes() - crate::registry_input::FAMILY_STORAGE_BYTES;
@@ -64,8 +123,6 @@ impl Driver {
             .memory()
             .claim(transient)
             .map_err(|cause| native(RegistryError::new("custodied_input_memory", cause)))?;
-        let family = Family::custodied(memory, size_of::<Self>()).map_err(native)?;
-        let destination = CustodyDestination::new(source.parent());
         Ok(Box::new(Self {
             shared,
             input: Some(Input { value: input, _memory: claim }),
@@ -75,10 +132,11 @@ impl Driver {
             nonce: None,
             facts: None,
             memory: Some(memory.clone()),
-            phase: Phase::Prepared,
+            phase,
             client,
             ticket,
             source,
+            _profile_metadata: profile_metadata,
         }))
     }
     /// Observe current original controls before each fresh native or protocol effect.
@@ -125,8 +183,10 @@ impl Driver {
             return Ok(());
         }
         self.check()?;
-        let prepared = self
-            .source
+        let Source::Managed(source) = &self.source else {
+            return Err(RegistryError::invalid("custodied_profile_prepare_phase"));
+        };
+        let prepared = source
             .preparation(context)
             .map_err(|cause| RegistryError::new("custodied_claim", cause))?;
         let until = self
@@ -153,7 +213,7 @@ impl Driver {
         let job =
             target.duplicate(native_process::handle(family.job, "custodied_prepared_job")?)?;
         self.queued = Some(Command::Prepare {
-            resource: self.source.resource(),
+            resource: source.resource(),
             digest: prepared.digest,
             job,
             until_ticks: until.ticks(),
@@ -175,7 +235,16 @@ impl Driver {
             .as_mut()
             .ok_or_else(|| RegistryError::invalid("custodied_input"))?
             .value;
+        if matches!(self.source, Source::Profile { .. }) {
+            family.adopt_lifecycle(input)?;
+            family.adopt_output(input, self.ticket.binding)?;
+            family.prepare_inheritance()?;
+        }
         let root = self.shared.port.create(family, input)?;
+        if let Source::Profile { key, .. } = &self.source {
+            tracing::info!(operation="profile_root_suspended",profile=?key,pid=root.pid,birth=root.birth,
+                "Actual root created suspended in the original prepared desktop Job");
+        }
         self.facts = Some(CreationFacts { root, resumed: false });
         let duplicate = self.shared.port.duplicate(family, 0)?;
         let permit = lock(&self.shared.permit)
@@ -183,17 +252,25 @@ impl Driver {
             .ok_or_else(|| RegistryError::invalid("custodied_root_watch"))?;
         let watch = submission::bind(permit, duplicate);
         lock(&self.shared.native).watch = watch;
+        if let Source::Profile { key, .. } = &self.source {
+            self.shared.port.enroll_desktop(family, key.run(), self.ticket.process)?;
+        }
         let process = self
             .destination
             .as_mut()
             .ok_or_else(|| RegistryError::invalid("custodied_destination"))?
             .duplicate(native_process::handle(family.member(0)?.handle, "custodied_root")?)?;
-        self.queued = Some(Command::Root {
-            resource: self.source.resource(),
-            process,
-            pid: root.pid,
-            birth: root.birth,
-            registry_process: self.ticket.process.id.get(),
+        self.queued = Some(match &self.source {
+            Source::Managed(source) => Command::Root {
+                resource: source.resource(),
+                process,
+                pid: root.pid,
+                birth: root.birth,
+                registry_process: self.ticket.process.id.get(),
+            },
+            Source::Profile { key, .. } => {
+                Command::ProfileRoot { profile: *key, process, pid: root.pid, birth: root.birth }
+            }
         });
         self.phase = Phase::WaitingRoot;
         self.send(context)
@@ -249,13 +326,24 @@ impl CustodiedProcessDriver for Driver {
             if matches!(self.phase, Phase::Prepared) {
                 self.prepare(context)?;
             }
+            if matches!(self.source, Source::Profile { .. })
+                && matches!(self.phase, Phase::WaitingPrepared)
+                && self.nonce.is_none()
+            {
+                self.create_root(context)?;
+            }
             self.send(context)?;
             if let Some(nonce) = self.nonce
                 && let Some(ack) = self.source.parent().take_acknowledgement_for(nonce)
             {
                 let expected = match self.phase {
-                    Phase::WaitingPrepared => Receipt::Prepared(self.source.resource()),
-                    Phase::WaitingRoot => Receipt::Root(self.source.resource()),
+                    Phase::WaitingPrepared => match &self.source {
+                        Source::Managed(source) => Receipt::Prepared(source.resource()),
+                        Source::Profile { .. } => {
+                            return Err(RegistryError::invalid("custodied_profile_ack_phase"));
+                        }
+                    },
+                    Phase::WaitingRoot => self.source.root_receipt(),
                     _ => return Err(RegistryError::invalid("custodied_ack_phase")),
                 };
                 if ack.receipt() != expected {
@@ -265,6 +353,10 @@ impl CustodiedProcessDriver for Driver {
                     .as_mut()
                     .ok_or_else(|| RegistryError::invalid("custodied_destination"))?
                     .acknowledge(&ack)?;
+                if let Source::Profile { key, .. } = &self.source {
+                    tracing::info!(operation="profile_root_acknowledged",profile=?key,nonce,
+                        "Actual helper adopted the suspended root before resume commitment");
+                }
                 self.nonce = None;
                 match self.phase {
                     Phase::WaitingPrepared => self.create_root(context)?,

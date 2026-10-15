@@ -228,6 +228,30 @@ impl Harness {
             self.wake.wait(count)?;
         }
     }
+    /// Observe the real terminal notification while leaving its original owned result unconsumed.
+    pub(super) fn terminal_batch(&self) -> Result<CompletionBatch, Box<dyn Error>> {
+        let job = self.lease.pending.as_ref().ok_or("Original profile job absent")?;
+        let mut notifications = Vec::new();
+        loop {
+            let prior = *lock(&self.wake.count);
+            let batch =
+                self.client.drain_completions(NonZeroUsize::new(32).ok_or("zero drain")?)?;
+            notifications.extend(batch.notifications);
+            if notifications.len() > 32 {
+                return Err("Profile observation bound exceeded".into());
+            }
+            if matches!(
+                job.status().phase,
+                sugarsubstitute_contracts::execution::JobPhase::Terminal(_)
+            ) && notifications
+                .iter()
+                .any(|notice| notice.scope_id == job.scope_id() && notice.job_id == job.spec().id)
+            {
+                return Ok(CompletionBatch { notifications, remaining: batch.remaining });
+            }
+            self.wake.wait(prior)?;
+        }
+    }
     pub(super) fn acquire(&mut self) -> Result<ProfileCompletion, Box<dyn Error>> {
         let spec = self.spec(100)?;
         self.lease.submit_acquire(&self.client, &self.scope, spec)?;

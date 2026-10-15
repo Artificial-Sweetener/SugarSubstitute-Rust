@@ -106,6 +106,15 @@ impl Source {
         let state = self.shared.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         state.operation.as_deref().map(observe)
     }
+    /// Move the actual passive cause once; original native/data custody remains in this cell.
+    pub(super) fn take_failure(&self) -> Option<super::SeedFailure> {
+        let mut state = self.shared.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let operation = state.operation.as_deref_mut()?;
+        if !operation.files_retired() {
+            return None;
+        }
+        super::SeedFailure::take(operation)
+    }
 }
 pub(super) struct Loan {
     source: Source,

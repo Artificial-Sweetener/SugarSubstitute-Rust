@@ -11,6 +11,70 @@ use std::{sync::atomic::Ordering, time::Duration};
 use sugarsubstitute_contracts::{coordinator_entry::*, execution::*};
 
 #[test]
+fn delayed_component_style_reply_keeps_one_probe_and_the_actual_original_source() -> TestResult {
+    let rig = Rig::new()?;
+    let boundary = Boundary::new(&rig, true)?;
+    let (_scope, mut session) = server(&rig, &boundary)?;
+    activate(&rig, &session)?;
+    boundary.connect()?;
+    let EntryTransportObservation::RequestAuthenticated { connection, request } =
+        fact(&rig, &session.control, |fact| {
+            matches!(fact, EntryTransportObservation::RequestAuthenticated { .. })
+        })?
+    else {
+        return Err("Actual authenticated component-style request absent".into());
+    };
+    let original_until = request.until();
+    let source = request.source_deadline();
+    let request_id = request.request_id();
+    let selected = run()?;
+    rig.clock.advance(10_000_000_000);
+    let operation = EntryOperationId::new(1)?;
+    assert!(matches!(
+        session.control.reply(
+            connection,
+            request_id,
+            operation,
+            original_until,
+            EntryOutcome::Accepted(selected)
+        ),
+        Err(EntryTransportError::InvalidDeadline)
+    ));
+    assert!(lock(&boundary.replies).is_empty());
+    let probe = rig.client.now()?.checked_add(Duration::from_secs(2))?.min(original_until);
+    rig.clock.advance(1_000_000_000);
+    session.control.reply(
+        connection,
+        request_id,
+        operation,
+        probe,
+        EntryOutcome::Accepted(selected),
+    )?;
+    let retired = fact(
+        &rig,
+        &session.control,
+        |fact| matches!(fact, EntryTransportObservation::ConnectionRetired { connection: actual, .. } if *actual == connection),
+    )?;
+    assert!(matches!(retired, EntryTransportObservation::ConnectionRetired { .. }));
+    let replies = lock(&boundary.replies);
+    assert_eq!(replies.len(), 1);
+    assert_eq!(replies[0].0.request, request_id);
+    assert_eq!(replies[0].0.source, source);
+    assert_eq!(replies[0].1, EntryOutcome::Accepted(selected));
+    drop(replies);
+    assert_eq!(request.until(), original_until);
+    assert_eq!(request.source_deadline(), source);
+    assert!(probe < original_until);
+    drop(request);
+    session.control.close();
+    assert!(
+        matches!(rig.completion(&mut session.completion)?.outcome, JobOutcome::Success(report) if report.authenticated_launches == 1 && report.completed_writes == 2)
+    );
+    assert_eq!(boundary.drops.load(Ordering::Acquire), 1);
+    Ok(())
+}
+
+#[test]
 fn original_setup_cutoff_rejects_reply_without_consumption_then_current_probe_preserves_source_and_run()
 -> TestResult {
     let rig = Rig::new()?;

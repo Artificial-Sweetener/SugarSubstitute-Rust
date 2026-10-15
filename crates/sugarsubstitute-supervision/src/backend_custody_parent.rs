@@ -10,9 +10,11 @@ use sugarsubstitute_contracts::{backend_custody::*, execution::Moment};
 use sugarsubstitute_execution::{backend_custody::*, windows::NativeObservationError};
 mod error;
 mod finish;
+mod receipt;
 mod retirement;
 mod state;
 pub use error::{BackendCustodyParentFailure, BackendCustodyParentInputError};
+use receipt::StoredReceipt;
 use state::{State, reject};
 /// Keep the complete actual controller allocation before its original pipe metadata.
 pub struct BackendCustodyParent {
@@ -30,7 +32,7 @@ pub struct BackendCustodyAcknowledgement {
 struct ReceiptFacts {
     key: BackendCustodyKey,
     nonce: u64,
-    receipt: BackendCustodyReceipt,
+    receipt: StoredReceipt,
 }
 impl BackendCustodyAcknowledgement {
     /// Match the one actual originating parent allocation without forming an owner cycle.
@@ -47,7 +49,7 @@ impl BackendCustodyAcknowledgement {
     }
     /// Observe the actual correlated helper receipt; native owners bind their cells too.
     pub const fn receipt(&self) -> BackendCustodyReceipt {
-        self.facts.receipt
+        self.facts.receipt.expand(self.facts.key.owner())
     }
 }
 impl BackendCustodyParent {

@@ -53,14 +53,14 @@ impl BackendCustodyParent {
                 }
                 let stop = entry.stop.get_or_insert((until, None));
                 if let Some(facts) = state.receipt {
-                    if facts.receipt == BackendCustodyReceipt::Released(resource)
+                    if facts.receipt.expand(facts.key.owner()) == BackendCustodyReceipt::Released(resource)
                         && stop.1 == Some(facts.nonce)
                     {
                         state.receipt = None;
                         entry.released = Some(facts);
                         return Ok(true);
                     }
-                    if matches!(facts.receipt, BackendCustodyReceipt::Prepared(actual)
+                    if matches!(facts.receipt.expand(facts.key.owner()), BackendCustodyReceipt::Prepared(actual)
                     | BackendCustodyReceipt::Root(actual) if actual == resource)
                     {
                         // The original creator has finished. Its unacknowledged remote

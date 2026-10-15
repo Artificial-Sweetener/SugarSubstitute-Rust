@@ -5,6 +5,8 @@ use super::*;
 use sugarsubstitute_contracts::execution::MemoryLease;
 
 const TABLE_SLOTS: usize = 131;
+const ORIGINAL_TABLE_BYTES: u64 = 370_120;
+const _: () = assert!(WindowsProcessRegistry::storage_bytes() <= ORIGINAL_TABLE_BYTES);
 
 impl WindowsProcessRegistry {
     /// Return the fixed original byte reservation required for registry construction.
@@ -12,6 +14,10 @@ impl WindowsProcessRegistry {
     /// bounded pending Shared allocations before any creation factory is admitted.
     /// Each contained family's separate 131072-byte reservation remains unchanged.
     pub const fn required_reservation_bytes() -> u64 {
+        ORIGINAL_TABLE_BYTES
+    }
+    /// Measure every actual allocation inside the unchanged original table reservation.
+    pub(super) const fn storage_bytes() -> u64 {
         (size_of::<Self>()
             + TABLE_SLOTS * size_of::<Option<Record>>()
             + TABLE_SLOTS * (size_of::<Shared>() + 2 * size_of::<usize>())

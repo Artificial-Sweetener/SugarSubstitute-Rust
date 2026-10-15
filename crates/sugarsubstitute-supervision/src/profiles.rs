@@ -2,10 +2,12 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Hold actual profile identity through browser lifetime and checked family retirement.
 mod attempt;
+mod custody;
 mod folder;
 mod launch;
+mod migration;
 mod proof;
-mod record;
+pub(crate) mod record;
 mod storage;
 mod submission;
 #[cfg(test)]
@@ -31,6 +33,15 @@ use sugarsubstitute_execution::ExecutionClient;
 
 /// Peak reservation for one admitted profile operation, including persistent storage.
 pub const PROFILE_OPERATION_BYTES: u64 = 2 * 1024 * 1024;
+/// Count profile-owned inline state, compact-carrier allocation and original bounded buffers.
+pub(crate) const fn carrier_metadata_bytes() -> u64 {
+    (size_of::<storage::NativeState>()
+        + size_of::<crate::registry::profile::prepared::PreparedDesktop>()
+        + size_of::<crate::registry::profile::prepared::PreparedDesktopCarrier>()
+        + 2 * 65532
+        + 2 * 8192
+        + 2 * size_of::<usize>()) as u64
+}
 const INITIAL: u8 = 0;
 const HELD: u8 = 1;
 const RELEASED: u8 = 2;
@@ -47,6 +58,13 @@ pub struct ProfileSnapshot {
     pub released: bool,
     /// A finite operation remains owned and unconsumed.
     pub pending: bool,
+}
+impl ProfileSnapshot {
+    /// Permit retirement only after checked release and consumption of the original operation.
+    /// A worker can publish `released` before its terminal result reaches this owner.
+    pub const fn retirement_ready(self) -> bool {
+        self.released && !self.pending
+    }
 }
 /// Transfer a finite operation's actual terminal outcome without granting native authority.
 #[derive(Debug)]
@@ -176,6 +194,7 @@ impl WindowsProfileLease {
         if batch.notifications.len() > 32 {
             return Err(ClaimError::invalid("profile_completion_bound"));
         }
+        self.advance_custody_release()?;
         let Some(job) = self.pending.as_mut() else {
             return Ok(None);
         };
@@ -231,7 +250,10 @@ impl WindowsProfileLease {
                 self.browser =
                     Some(BrowserFamilyProof::new(self, binding, job, native_identity, family));
             }
-        } else {
+        } else if kind != TerminalKind::Success
+            || failure.is_some()
+            || self.shared.closing.load(Ordering::Acquire)
+        {
             state.prepared_folder = None;
             state.environment = None;
             state.browser = None;

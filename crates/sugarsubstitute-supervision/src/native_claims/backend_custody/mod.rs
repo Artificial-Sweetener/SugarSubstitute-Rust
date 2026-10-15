@@ -4,8 +4,11 @@
 mod commands;
 pub(crate) mod control;
 mod driver;
+mod entry;
 mod exit;
 pub(crate) mod pool;
+mod profile_commands;
+mod profile_registration;
 mod registration;
 mod retirement;
 mod source;

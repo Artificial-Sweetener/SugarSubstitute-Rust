@@ -12,6 +12,12 @@ use sugarsubstitute_contracts::execution::JobContext;
 pub(crate) struct NamespaceReadLoan {
     state: Option<NativeState>,
     lifetime: Arc<NamespaceLifetime>,
+    writer: Option<WriterBinding>,
+}
+struct WriterBinding {
+    original: DiagnosticNativeGrant,
+    execution: sugarsubstitute_contracts::execution::ExecutionId,
+    operation: sugarsubstitute_contracts::incident::LogicalStoreOperationKey,
 }
 fn rejected() -> ClaimError {
     ClaimError::diagnostic_allocation(
@@ -46,7 +52,7 @@ impl NamespaceReadLoan {
         let original_state = std::mem::replace(&mut *state, NativeState::new());
         state.borrowed = true;
         drop(state);
-        Ok(Self { state: Some(original_state), lifetime: Arc::clone(lifetime) })
+        Ok(Self { state: Some(original_state), lifetime: Arc::clone(lifetime), writer: None })
     }
     /// Validate the genuine current native grant before detaching the same source.
     /// Original controls execute outside the namespace mutex.
@@ -55,10 +61,10 @@ impl NamespaceReadLoan {
         original: &DiagnosticNativeGrant,
         current: &JobContext,
     ) -> Result<Self, ClaimError> {
-        original.check(current).map_err(ClaimError::diagnostic_allocation)?;
         if request.execution() != current.owner_id() {
             return Err(rejected());
         }
+        original.bind_namespace(request, current).map_err(ClaimError::diagnostic_allocation)?;
         let lifetime = &request.lifetime;
         if !lifetime.open.load(Ordering::Acquire) {
             return Err(rejected());
@@ -76,7 +82,45 @@ impl NamespaceReadLoan {
         let original_state = std::mem::replace(&mut *state, NativeState::new());
         state.borrowed = true;
         drop(state);
-        Ok(Self { state: Some(original_state), lifetime: Arc::clone(lifetime) })
+        Ok(Self {
+            state: Some(original_state),
+            lifetime: Arc::clone(lifetime),
+            writer: Some(WriterBinding {
+                original: original.clone(),
+                execution: request.execution(),
+                operation: request.operation(),
+            }),
+        })
+    }
+    /// Validate the exact live writer source without granting Diagnostic effects on Protected handles.
+    /// The original source allocation and armed diagnostic slot remain borrowed until this loan drops.
+    pub(crate) fn validate_writer(
+        &self,
+        original: &DiagnosticNativeGrant,
+        current: &JobContext,
+    ) -> Result<&crate::protected_storage::account::ResolvedNamespace, ClaimError> {
+        let binding = self.writer.as_ref().ok_or_else(rejected)?;
+        if !original.matches_original(&binding.original) || binding.execution != current.owner_id()
+        {
+            return Err(rejected());
+        }
+        original
+            .validate_namespace(&self.lifetime, binding.operation, current)
+            .map_err(ClaimError::diagnostic_allocation)?;
+        let state = self.state.as_ref().ok_or_else(rejected)?;
+        let memory = state.memory.as_ref().ok_or_else(rejected)?;
+        let resolved = self.resolved()?;
+        if state.retired || resolved.namespace != binding.operation.owner().namespace {
+            return Err(rejected());
+        }
+        let (_, slot, _) = resolved.diagnostic_directory();
+        let pin = state.handles.get(slot).ok_or_else(rejected)?;
+        if !pin.is_armed()
+            || !matches!(pin.budget(), crate::native_claims::files::Budget::Protected(ref held) if Arc::ptr_eq(held, memory))
+        {
+            return Err(rejected());
+        }
+        Ok(resolved)
     }
     pub(crate) fn resolved(
         &self,

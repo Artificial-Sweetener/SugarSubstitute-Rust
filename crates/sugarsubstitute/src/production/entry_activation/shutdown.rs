@@ -149,8 +149,17 @@ impl ProductionActivation {
             }
             while registry.take_observation(ticket.process())?.is_some() {}
         }
-        if !start.profile.snapshot().released {
-            if !start.profile.snapshot().pending {
+        if !start.profile.snapshot().retirement_ready() {
+            if start.ticket.is_none() {
+                let registry = resources
+                    .authority
+                    .registry_mut()
+                    .ok_or("Actual prepared profile registry missing")?;
+                if !start.profile.retire_prepared_family(registry)? {
+                    return Ok(());
+                }
+            }
+            if !start.profile.snapshot().pending && !start.profile.custody_release_pending() {
                 let registry =
                     resources.authority.registry().ok_or("Actual process registry missing")?;
                 let spec = JobSpec {

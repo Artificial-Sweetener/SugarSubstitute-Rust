@@ -74,6 +74,13 @@ impl WindowsProcessRegistry {
         input: &mut Option<WindowsLaunchInput>,
     ) -> Result<LaunchTicket, RegistryAdmissionError> {
         let original = input.as_ref().ok_or(RegistryAdmissionError::InvalidSpecification)?;
+        if let Some(profile) = &original.profile_custody
+            && (binding!=FamilyBinding::Desktop(profile.value.key.run()) || !profile.value.identity.same_as(&self.identity)
+                || original.managed_custody.is_some() || original.backend_custody.is_some()
+                || original.diagnostic.is_some() || profile.value.published_ack.as_ref().is_none_or(|ack|
+                    ack.receipt()!=sugarsubstitute_contracts::backend_custody::BackendCustodyReceipt::ProfilePublished(profile.value.key))) {
+                return Err(RegistryAdmissionError::InvalidSpecification);
+        }
         if let Some(source) = &original.managed_custody
             && binding != FamilyBinding::Managed(source.resource())
         {
@@ -133,110 +140,127 @@ impl WindowsProcessRegistry {
         {
             return Err(RegistryAdmissionError::InvalidSpecification);
         }
+        let prepared_index = original.profile_custody.as_ref().and_then(|profile| {
+            self.records.iter().position(|record| {
+                record.as_ref().is_some_and(|record| {
+                    record.ticket.process.id.get() == profile.value.key.registry_process()
+                        && record.ticket.binding == binding
+                        && !record.started
+                        && record.creation.is_none()
+                        && lock(&record.shared.native).pending_input.is_none()
+                })
+            })
+        });
+        if original.profile_custody.is_some() && prepared_index.is_none() {
+            return Err(RegistryAdmissionError::InvalidSpecification);
+        }
         let kind_count = self
             .records
             .iter()
             .flatten()
             .filter(|record| record.ticket.binding.kind() == binding.kind())
             .count();
-        if kind_count >= binding.kind().capacity() {
+        if kind_count - usize::from(prepared_index.is_some()) >= binding.kind().capacity() {
             return Err(RegistryAdmissionError::Saturated);
         }
         // A current run/resource cannot overlap a retained uncertain predecessor.
-        if self.records.iter().flatten().any(|record| match (record.ticket.binding, binding) {
-            (FamilyBinding::Desktop(old), FamilyBinding::Desktop(new)) => {
-                old.instance == new.instance
+        if self.records.iter().enumerate().any(|(at, slot)| {
+            if prepared_index == Some(at) {
+                return false;
             }
-            (FamilyBinding::Managed(old), FamilyBinding::Managed(new)) => old.id == new.id,
-            (FamilyBinding::Diagnostic(old), FamilyBinding::Diagnostic(new)) => {
-                old.owner() == new.owner() && old.role() == new.role()
+            let Some(record) = slot else {
+                return false;
+            };
+            match (record.ticket.binding, binding) {
+                (FamilyBinding::Desktop(old), FamilyBinding::Desktop(new)) => {
+                    old.instance == new.instance
+                }
+                (FamilyBinding::Managed(old), FamilyBinding::Managed(new)) => old.id == new.id,
+                (FamilyBinding::Diagnostic(old), FamilyBinding::Diagnostic(new)) => {
+                    old.owner() == new.owner() && old.role() == new.role()
+                }
+                (FamilyBinding::BackendCustody(old), FamilyBinding::BackendCustody(new)) => {
+                    old.owner() == new.owner()
+                }
+                _ => false,
             }
-            (FamilyBinding::BackendCustody(old), FamilyBinding::BackendCustody(new)) => {
-                old.owner() == new.owner()
-            }
-            _ => false,
         }) {
             return Err(RegistryAdmissionError::Busy);
         }
-        let index = self
-            .records
-            .iter()
-            .position(Option::is_none)
-            .ok_or(RegistryAdmissionError::Saturated)?;
-        let process_id = ProcessId::new(self.next_process)
-            .map_err(|_| RegistryAdmissionError::IdentityExhausted)?;
-        let next =
-            self.next_process.checked_add(1).ok_or(RegistryAdmissionError::IdentityExhausted)?;
-        let correlation = NativeCorrelation::new(process_id.get())
-            .map_err(|_| RegistryAdmissionError::InvalidSpecification)?;
-        let native_scope = execution
-            .create_native_scope(native_scope_spec, None)
-            .map_err(RegistryAdmissionError::Execution)?;
-        let root_spec = (native_scope.id(), root_watch.id);
-        let permit = execution
-            .reserve_process_watch(&native_scope, root_watch, correlation)
-            .map_err(RegistryAdmissionError::Execution)?;
-        let shared = SharedOwner::new(
-            Shared {
-                admission: AtomicU8::new(OPEN),
-                native: Mutex::new(NativeState {
-                    establishment: None,
-                    custody_destination: None,
-                    custody_release: None,
-                    pending_input: input.take(),
-                    family: None,
-                    watch: None,
-                    creation: None,
-                    cleanup: None,
-                    failure: None,
-                    forced: false,
+        let (index, mut record) = if let Some(index) = prepared_index {
+            let record = self.records[index].take().ok_or(RegistryAdmissionError::Stale)?;
+            if record.root_spec.1 != root_watch.id
+                || record.native_scope.spec() != native_scope_spec
+            {
+                self.records[index] = Some(record);
+                return Err(RegistryAdmissionError::InvalidSpecification);
+            }
+            if record.shared.admission.load(Ordering::Acquire) != OPEN || record.settled {
+                self.records[index] = Some(record);
+                return Err(RegistryAdmissionError::Closed);
+            }
+            lock(&record.shared.native).pending_input = input.take();
+            (index, record)
+        } else {
+            let index = self
+                .records
+                .iter()
+                .position(Option::is_none)
+                .ok_or(RegistryAdmissionError::Saturated)?;
+            let reserved = original
+                .profile_custody
+                .as_ref()
+                .map(|profile| profile.value.key.registry_process());
+            let process_id = ProcessId::new(reserved.unwrap_or(self.next_process))
+                .map_err(|_| RegistryAdmissionError::IdentityExhausted)?;
+            let next = if reserved.is_some() {
+                self.next_process
+            } else {
+                self.next_process.checked_add(1).ok_or(RegistryAdmissionError::IdentityExhausted)?
+            };
+            let correlation = NativeCorrelation::new(process_id.get())
+                .map_err(|_| RegistryAdmissionError::InvalidSpecification)?;
+            let native_scope = execution
+                .create_native_scope(native_scope_spec, None)
+                .map_err(RegistryAdmissionError::Execution)?;
+            let root_spec = (native_scope.id(), root_watch.id);
+            let permit = execution
+                .reserve_process_watch(&native_scope, root_watch, correlation)
+                .map_err(RegistryAdmissionError::Execution)?;
+            let shared = SharedOwner::new(
+                Shared {
+                    admission: AtomicU8::new(OPEN),
+                    native: Mutex::new(NativeState {
+                        establishment: None,
+                        custody_destination: None,
+                        custody_release: None,
+                        pending_input: input.take(),
+                        family: None,
+                        watch: None,
+                        creation: None,
+                        cleanup: None,
+                        failure: None,
+                        forced: false,
+                        port: self.port.clone(),
+                    }),
                     port: self.port.clone(),
-                }),
-                port: self.port.clone(),
-                permit: Mutex::new(Some(permit)),
-            },
-            self.identity.clone(),
-        );
-        let ticket =
-            LaunchTicket { process: ProcessKey { owner: self.owner, id: process_id }, binding };
-        let mut record = Record {
-            establishment_job: None,
-            establishment_completion: None,
-            ticket,
-            shared: shared.clone(),
-            native_scope,
-            rejected_launch: false,
-            creation: None,
-            root_spec,
-            root_watch: None,
-            root_notice: false,
-            root: None,
-            root_exit: None,
-            last_member_exit: None,
-            forced: false,
-            root_retirement: None,
-            member_watch: None,
-            member_spec: None,
-            member_notice: false,
-            watched: None,
-            pending_exit: None,
-            cleanup: None,
-            stop: None,
-            retained: 0,
-            next: None,
-            closed_native: false,
-            started: false,
-            settled: false,
-            error: None,
-            failure_transferred: false,
-            unread: [false; 5],
+                    permit: Mutex::new(Some(permit)),
+                },
+                self.identity.clone(),
+            );
+            let ticket =
+                LaunchTicket { process: ProcessKey { owner: self.owner, id: process_id }, binding };
+            let record = Record::pending(ticket, shared, native_scope, root_spec);
+            self.next_process = next;
+            (index, record)
         };
-        self.next_process = next;
-        let custodian = lock(&shared.native)
-            .pending_input
-            .as_ref()
-            .and_then(|input| input.managed_custody.as_ref())
-            .map(|source| source.parent().clone());
+        let shared = record.shared.clone();
+        let ticket = record.ticket;
+        let custodian = lock(&shared.native).pending_input.as_ref().and_then(|input| {
+            input.managed_custody.as_ref().map(|source| source.parent().clone()).or_else(|| {
+                input.profile_custody.as_ref().map(|profile| profile.value.parent.clone())
+            })
+        });
         let job = if let Some(parent) = custodian {
             let mut retained = Some(shared.clone());
             let client = execution.clone();

@@ -11,6 +11,24 @@ use sugarsubstitute_contracts::lifecycle::{
     CoordinatorEpoch, CoordinatorKey, InstanceId, NamespaceId, RunGeneration,
 };
 type TestResult = Result<(), Box<dyn std::error::Error>>;
+#[test]
+fn profile_custody_inline_metadata_remains_inside_original_funded_partition() {
+    let metadata = size_of::<NativeState>() + size_of::<super::super::custody::Release>();
+    let family = crate::native_process::Family::storage_bytes();
+    let prepared = crate::registry::profile::prepared::PreparedDesktop::storage_bytes();
+    assert!(metadata + prepared + 2 * 65532 + 2 * 8192 < 512 * 1024);
+    assert!(
+        crate::registry::profile::prepared::PreparedDesktopCarrier::metadata_bytes() < 512 * 1024
+    );
+    assert!(family < crate::registry_input::FAMILY_STORAGE_BYTES as usize);
+    eprintln!(
+        "profile_layout NativeState={} PreparedDesktop={} Family={} profile_operation={}",
+        size_of::<NativeState>(),
+        prepared,
+        family,
+        crate::profiles::PROFILE_OPERATION_BYTES
+    );
+}
 fn generation(value: u64) -> Result<record::Record, ClaimError> {
     Ok(record::Record {
         account: [3; 32],

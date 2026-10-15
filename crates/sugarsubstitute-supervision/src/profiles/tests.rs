@@ -3,6 +3,7 @@
 //! Characterize profile acquisition, proof and release through the actual owner.
 #[path = "attempt_tests.rs"]
 mod attempt_tests;
+mod release_progress;
 mod support;
 use super::*;
 use sugarsubstitute_contracts::{

@@ -22,6 +22,7 @@ mod creation_job;
 mod custodied_creation;
 mod custody_establishment;
 mod custody_retirement;
+mod record;
 mod settled_failure;
 mod shared_owner;
 use creation_job::CreationJob;

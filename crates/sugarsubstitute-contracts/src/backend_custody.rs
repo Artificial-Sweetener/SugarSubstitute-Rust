@@ -4,10 +4,12 @@
 use crate::lifecycle::{CoordinatorKey, IdentityError};
 use std::num::NonZeroU64;
 mod codec;
+mod profile;
 pub use codec::{
     BACKEND_CUSTODY_FRAME_BYTES, BackendCustodyCommand, BackendCustodyFrame, BackendCustodyReceipt,
     BackendCustodyWireError,
 };
+pub use profile::{ProfileCustodyIdentity, ProfileCustodyKey};
 
 /// Distinguish one custodian from every prior session of the same coordinator.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]

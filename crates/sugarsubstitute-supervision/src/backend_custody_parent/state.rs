@@ -91,7 +91,7 @@ impl State {
                             })?;
                     } else {
                         let facts = correlate_reply(self.pending.map(|pending| pending.0), value)?;
-                        let receipt = facts.receipt;
+                        let receipt = facts.receipt.expand(facts.key.owner());
                         if receipt == BackendCustodyReceipt::Finished {
                             tracing::info!(operation="backend_custody_finish_received", key=?key, nonce=facts.nonce,
                                 native_operation=?operation, write_pending=self.write.is_some(),
@@ -219,7 +219,11 @@ pub(super) fn correlate_reply(
     if !matches_reply(pending.command, receipt) {
         return Err(reject("custody_parent_receipt_association"));
     }
-    Ok(ReceiptFacts { key: value.key, nonce: value.nonce, receipt })
+    Ok(ReceiptFacts {
+        key: value.key,
+        nonce: value.nonce,
+        receipt: StoredReceipt::new(value.key.owner(), receipt)?,
+    })
 }
 /// Accept only the actual queued operation's complete fixed-frame native write.
 pub(super) fn correlate_written(
@@ -235,6 +239,22 @@ pub(super) fn correlate_written(
 /// Match only the acknowledged original operation; a Success report cannot synthesize this.
 fn matches_reply(command: BackendCustodyCommand, receipt: BackendCustodyReceipt) -> bool {
     match (command, receipt) {
+        (
+            BackendCustodyCommand::ProfilePrepare { profile, .. },
+            BackendCustodyReceipt::ProfilePrepared(actual),
+        )
+        | (
+            BackendCustodyCommand::ProfilePublished { profile },
+            BackendCustodyReceipt::ProfilePublished(actual),
+        )
+        | (
+            BackendCustodyCommand::ProfileRoot { profile, .. },
+            BackendCustodyReceipt::ProfileRoot(actual),
+        )
+        | (
+            BackendCustodyCommand::ProfileStop { profile, .. },
+            BackendCustodyReceipt::ProfileReleased(actual),
+        ) => profile == actual,
         (BackendCustodyCommand::Establish { .. }, BackendCustodyReceipt::Established)
         | (BackendCustodyCommand::Finish { .. }, BackendCustodyReceipt::Finished) => true,
         (
@@ -261,6 +281,10 @@ fn command_kind(command: &BackendCustodyCommand) -> &'static str {
         BackendCustodyCommand::Prepare { .. } => "Prepare",
         BackendCustodyCommand::Root { .. } => "Root",
         BackendCustodyCommand::Stop { .. } => "Stop",
+        BackendCustodyCommand::ProfilePrepare { .. } => "ProfilePrepare",
+        BackendCustodyCommand::ProfilePublished { .. } => "ProfilePublished",
+        BackendCustodyCommand::ProfileRoot { .. } => "ProfileRoot",
+        BackendCustodyCommand::ProfileStop { .. } => "ProfileStop",
         BackendCustodyCommand::Finish { .. } => "Finish",
         BackendCustodyCommand::Receipt(_) => "Receipt",
     }

@@ -12,6 +12,10 @@ pub(super) struct SharedOwner {
     _table_identity: RegistryIdentity,
 }
 impl SharedOwner {
+    /// Borrow the retained exact registry table identity for prepared-family transfer.
+    pub(super) fn identity(&self) -> &RegistryIdentity {
+        &self._table_identity
+    }
     /// Adopt the exact shared state and an already admitted original table lifetime.
     pub(super) fn new(shared: Shared, identity: RegistryIdentity) -> Self {
         Self { shared: Arc::new(shared), _table_identity: identity }

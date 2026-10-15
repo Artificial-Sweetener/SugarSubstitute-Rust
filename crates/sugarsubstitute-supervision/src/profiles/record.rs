@@ -3,11 +3,22 @@
 //! Preserve schema-one profile exclusion independently of logical profile labels.
 
 use crate::ClaimError;
+pub(crate) mod custody;
 use sugarsubstitute_contracts::lifecycle::{
     CoordinatorEpoch, CoordinatorKey, InstanceId, NamespaceId, RunGeneration, RunKey,
 };
 
 const MAGIC: &[u8; 8] = b"SSPROFL1";
+/// Derive the unchanged persisted account binding from the native owner's retained SID.
+pub(super) fn account_identity(sid: &[u8]) -> [u8; 32] {
+    use sha2::{Digest, Sha256};
+    let mut hash = Sha256::new();
+    for part in [b"SugarSubstitute.profile-account.v1".as_slice(), sid] {
+        hash.update((part.len() as u64).to_le_bytes());
+        hash.update(part);
+    }
+    hash.finalize().into()
+}
 pub(super) const RECORD_BYTES: usize = 160;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

@@ -3,6 +3,7 @@
 //! Retain the exact desktop family for off-UI browser qualification.
 use super::*;
 use sugarsubstitute_contracts::lifecycle::RunKey;
+pub(crate) mod prepared;
 
 pub(crate) struct ProfileFamily {
     pub(crate) identity: RegistryIdentity,

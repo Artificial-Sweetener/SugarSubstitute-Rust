@@ -75,7 +75,7 @@ impl Driver {
             .map_err(|cause| NativeObservationError::new("custody_operation", cause))
     }
     /// Drain at most32 actual facts; all frame loans return before another receive.
-    fn observe(&mut self) -> Result<(), NativeObservationError> {
+    fn observe(&mut self, context: &JobContext) -> Result<(), NativeObservationError> {
         let Some(session) = &mut self.session else {
             return Ok(());
         };
@@ -114,9 +114,9 @@ impl Driver {
                         let mut access = self.source.access().map_err(|cause| {
                             NativeObservationError::new("custody_source_access", cause)
                         })?;
-                        access
-                            .state()
-                            .and_then(|state| state.apply(decoded, self.source.memory(), &wake))
+                        access.state().and_then(|state| {
+                            state.apply(decoded, self.source.memory(), &wake, context)
+                        })
                     };
                     applied.map_err(|cause| self.native("custody_command", cause))?;
                     drop(frame);
@@ -298,7 +298,7 @@ impl BackendCustodyDriver for Driver {
         context: &JobContext,
         now: Moment,
     ) -> Result<BackendCustodyProgress, NativeObservationError> {
-        self.observe()?;
+        self.observe(context)?;
         let result = {
             let wake = self.wake.as_ref().ok_or_else(|| {
                 NativeObservationError::new(

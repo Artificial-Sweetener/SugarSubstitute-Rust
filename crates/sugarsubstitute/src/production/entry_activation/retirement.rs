@@ -15,8 +15,7 @@ pub(super) fn retire(
     parent: &ParentLifecycle,
     registry: &mut WindowsProcessRegistry,
 ) -> Result<Option<RetiredDesktop>, Box<dyn Error>> {
-    if !start.profile.snapshot().released
-        || start.profile.snapshot().pending
+    if !start.profile.snapshot().retirement_ready()
         || !parent.native_retired()
         || start.output.as_ref().is_some_and(|output| !output.settled())
     {

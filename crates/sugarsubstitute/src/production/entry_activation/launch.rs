@@ -52,6 +52,8 @@ pub(super) struct DesktopStart {
     pub(super) ticket: Option<LaunchTicket>,
     pub(super) original: Option<LifecyclePipeDeadline>,
     acquired: bool,
+    publication_issued: bool,
+    custody_watch: Option<(ScopeSpec, JobSpec)>,
     attempted: bool,
 }
 impl DesktopStart {
@@ -101,17 +103,47 @@ impl DesktopStart {
             ticket: None,
             original: None,
             acquired: false,
+            publication_issued: false,
+            custody_watch: None,
             attempted: false,
         })
     }
     /// Admit acquisition only after this complete record is retained by Activation.
-    pub(super) fn acquire_profile(&mut self, resources: &EntryResources<'_>) -> Result<()> {
+    pub(super) fn acquire_profile(
+        &mut self,
+        parent: &sugarsubstitute_supervision::BackendCustodyParent,
+        resources: &mut EntryResources<'_>,
+    ) -> Result<()> {
         if self.acquired {
+            if !self.publication_issued && !self.profile.snapshot().pending {
+                let spec = JobSpec {
+                    id: resources.jobs.allocate()?,
+                    operation: Operation::NativeLifecycle,
+                    class: JobClass::InfrastructureLifecycle,
+                    deadline: Some(self.value()?.until),
+                    reservation_bytes: PROFILE_OPERATION_BYTES,
+                    replacement: None,
+                };
+                self.publication_issued = self
+                    .profile
+                    .submit_custody_publication(resources.client, resources.finite, spec)?
+                    .is_some();
+            }
             return Ok(());
         }
         let until = self.value()?.until;
-        self.profile.submit_acquire(
+        let root_watch = JobSpec {
+            id: resources.jobs.allocate()?,
+            operation: Operation::NativeLifecycle,
+            class: JobClass::NativeObservation,
+            deadline: None,
+            reservation_bytes: 4096,
+            replacement: None,
+        };
+        let native_scope = ScopeSpec { id: resources.scopes.allocate()?, deadline: None };
+        self.profile.submit_custodied_acquire(
             resources.client,
+            resources.authority.registry_mut().ok_or("Actual profile registry unavailable")?,
             resources.finite,
             JobSpec {
                 id: resources.jobs.allocate()?,
@@ -121,8 +153,11 @@ impl DesktopStart {
                 reservation_bytes: PROFILE_OPERATION_BYTES,
                 replacement: None,
             },
+            parent,
+            (native_scope, root_watch),
         )?;
         self.acquired = true;
+        self.custody_watch = Some((native_scope, root_watch));
         Ok(())
     }
     /// Reserve the actual captured source before allocating its one native bootstrap.
@@ -163,6 +198,9 @@ impl DesktopStart {
             return Err("Desktop launch already attempted".into());
         }
         if !self.profile.snapshot().held || self.profile.snapshot().pending {
+            return Ok(false);
+        }
+        if !self.profile.custody_publication_ready()? {
             return Ok(false);
         }
         if self.output.is_none() {
@@ -226,14 +264,8 @@ impl DesktopStart {
             .as_ref()
             .ok_or("Actual profile launch capsule missing")?
             .required_reservation_bytes();
-        let root_watch = JobSpec {
-            id: resources.jobs.allocate()?,
-            operation: Operation::NativeLifecycle,
-            class: JobClass::NativeObservation,
-            deadline: None,
-            reservation_bytes: 4096,
-            replacement: None,
-        };
+        let (native_scope, root_watch) =
+            self.custody_watch.ok_or("Original prepared profile watch absent")?;
         let creation = JobSpec {
             id: resources.jobs.allocate()?,
             operation: Operation::NativeLifecycle,
@@ -242,11 +274,7 @@ impl DesktopStart {
             reservation_bytes: bytes,
             replacement: None,
         };
-        let jobs = ClaimLaunchJobs {
-            native_scope: ScopeSpec { id: resources.scopes.allocate()?, deadline: None },
-            creation,
-            root_watch,
-        };
+        let jobs = ClaimLaunchJobs { native_scope, creation, root_watch };
         let registry =
             resources.authority.registry_mut().ok_or("Actual process registry unavailable")?;
         let input = self.prepared.take().ok_or("Actual profile launch capsule missing")?;

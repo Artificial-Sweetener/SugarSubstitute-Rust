@@ -24,6 +24,7 @@ impl Error for SeedServiceIssue {}
 /// Keep the funded input, actual partial repository and completion until checked cleanup.
 /// This parent-side owner never waits or performs protected storage effects.
 pub(in crate::production) struct SeedService {
+    failure: Option<super::SeedFailure>,
     source: Source,
     job: Option<OwnedJob<(), SeedServiceIssue>>,
     completion: Option<JobCompletion<(), SeedServiceIssue>>,
@@ -41,6 +42,7 @@ impl SeedService {
     /// Claim source/control storage inside the original pre-capture controller reservation.
     pub(in crate::production) fn new(context: &JobContext) -> Result<Self, MemoryClaimError> {
         Ok(Self {
+            failure: None,
             source: Source::new(context)?,
             job: None,
             completion: None,
@@ -171,7 +173,10 @@ impl SeedService {
     /// Return the actual completed seed's native/data charge after exact policy adoption.
     /// Source metadata remains funded by the pre-capture controller for the next seed.
     pub(in crate::production) fn release_adopted(&mut self) -> Result<(), SeedServiceIssue> {
-        if !self.files_retired() || self.outcome() != Some(TerminalKind::Success) {
+        if self.failure.is_some()
+            || !self.files_retired()
+            || self.outcome() != Some(TerminalKind::Success)
+        {
             return Err(SeedServiceIssue::Busy);
         }
         self.source.release_retired()?;
@@ -188,7 +193,29 @@ impl SeedService {
     pub(in crate::production) fn outcome(&self) -> Option<TerminalKind> {
         self.completion.as_ref().map(|value| value.outcome.kind())
     }
+    /// Retain a logical transaction failure only after genuine worker delivery and checked cleanup.
+    /// The identical source, original completion and their independent claims stay owned here.
+    pub(in crate::production) fn retain_failure(&mut self) -> bool {
+        if self.failure.is_none()
+            && self.outcome() == Some(TerminalKind::Success)
+            && self.files_retired()
+        {
+            self.failure = self.source.take_failure();
+            if let (Some(failure), Some(completion)) = (&self.failure, &self.completion) {
+                failure.record(completion);
+            }
+        }
+        self.failure.is_some()
+    }
+    /// Borrow the original logical cause after its once-only passive transfer.
+    pub(in crate::production) fn failure(&self) -> Option<&super::SeedFailure> {
+        self.failure.as_ref()
+    }
 }
 
 #[path = "service/cleanup.rs"]
 mod cleanup;
+
+#[cfg(test)]
+#[path = "service/seed_failure_tests.rs"]
+mod seed_failure_tests;

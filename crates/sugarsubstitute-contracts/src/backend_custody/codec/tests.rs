@@ -121,3 +121,66 @@ fn invalid_destination_handles_and_counter_facts_fail_before_adoption() -> TestR
     }
     Ok(())
 }
+#[test]
+fn profile_commands_keep_genuine_run_and_prepared_family_in_fixed384_bytes() -> TestResult {
+    use crate::lifecycle::{InstanceId, RunGeneration, RunKey};
+    let key = key()?;
+    let profile = ProfileCustodyKey::new(
+        RunKey {
+            owner: key.owner(),
+            instance: InstanceId::new(3)?,
+            generation: RunGeneration::new(7)?,
+        },
+        9,
+    )?;
+    for command in [
+        BackendCustodyCommand::ProfilePublished { profile },
+        BackendCustodyCommand::Receipt(BackendCustodyReceipt::ProfilePublished(profile)),
+        BackendCustodyCommand::ProfilePrepare {
+            profile,
+            job: 40,
+            directory: 44,
+            record: [8; 160],
+            claim_identity: [6; 24],
+            until_ticks: 100,
+            frequency: 10,
+        },
+        BackendCustodyCommand::ProfileRoot { profile, process: 48, pid: 10, birth: 11 },
+        BackendCustodyCommand::ProfileStop { profile, until_ticks: 200, frequency: 10 },
+        BackendCustodyCommand::Receipt(BackendCustodyReceipt::ProfilePrepared(profile)),
+        BackendCustodyCommand::Receipt(BackendCustodyReceipt::ProfileRoot(profile)),
+        BackendCustodyCommand::Receipt(BackendCustodyReceipt::ProfileReleased(profile)),
+    ] {
+        let frame = BackendCustodyFrame { key, nonce: 1, command };
+        let bytes = frame.encode()?;
+        assert_eq!(bytes.len(), 384);
+        assert_eq!(BackendCustodyFrame::decode(&bytes)?, frame);
+        for offset in [11, 15, 320, 383] {
+            let mut changed = bytes;
+            changed[offset] = 255;
+            assert!(BackendCustodyFrame::decode(&changed).is_err());
+        }
+        let mut zero = bytes;
+        zero[96..104].fill(0);
+        assert!(BackendCustodyFrame::decode(&zero).is_err());
+    }
+    let foreign = ProfileCustodyKey::new(
+        RunKey {
+            owner: CoordinatorKey { namespace: NamespaceId::new([9; 32]), ..key.owner() },
+            ..profile.run()
+        },
+        profile.registry_process(),
+    )?;
+    assert!(
+        BackendCustodyFrame {
+            key,
+            nonce: 1,
+            command: BackendCustodyCommand::Receipt(BackendCustodyReceipt::ProfilePrepared(
+                foreign
+            ))
+        }
+        .encode()
+        .is_err()
+    );
+    Ok(())
+}

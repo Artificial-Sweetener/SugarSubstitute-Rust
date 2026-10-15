@@ -69,6 +69,21 @@ impl ProjectionInput {
             _charge: None,
         }
     }
+    /// Supply inert input to the real admitted failure path without an authenticated loan.
+    #[cfg(test)]
+    pub(super) fn without_request() -> Self {
+        Self {
+            request: None,
+            client: None,
+            run: None,
+            restart: None,
+            snapshot: None,
+            capture_root: PathBuf::new(),
+            cause: ProjectionCause::NotStarted,
+            post: None,
+            _charge: None,
+        }
+    }
     pub(super) fn rejected_request(self) -> Option<AuthenticatedEntryLaunch> {
         self.request
     }

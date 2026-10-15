@@ -113,10 +113,13 @@ impl IncidentHost {
         {
             return Err(HostIssue::Pending);
         }
+        if policy.seed.retain_failure() {
+            return Err(HostIssue::Seed);
+        }
         let observation = policy
             .seed
             .inspect(|operation| {
-                let proof = operation.committed().ok_or(HostIssue::Preparation)?;
+                let proof = operation.committed().ok_or(HostIssue::Seed)?;
                 if operation.failure().is_some()
                     || operation.memory_failure().is_some()
                     || proof.operation() != scope.operation()

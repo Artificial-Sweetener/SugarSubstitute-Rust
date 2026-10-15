@@ -4,6 +4,22 @@
 use super::*;
 
 impl ProtectedStorageRoot {
+    /// Borrow the original pinned profile-directory output for authenticated helper duplication.
+    pub(crate) fn profile_handle(&self) -> Result<windows::Win32::Foundation::HANDLE, ClaimError> {
+        let state = self.state.as_ref().ok_or_else(|| ClaimError::invalid("retired_storage"))?;
+        if !state.profile_leaf || !state.budget.is_ordinary() {
+            return Err(ClaimError::invalid("profile_directory_origin"));
+        }
+        let (_, _, index) = state
+            .root
+            .as_ref()
+            .ok_or_else(|| ClaimError::invalid("profile_directory_unresolved"))?;
+        state
+            .handles
+            .get(*index)
+            .map(Handle::raw)
+            .ok_or_else(|| ClaimError::invalid("profile_directory_output"))
+    }
     pub(crate) fn profile_folder(&self) -> Result<(&Path, [u8; 24], &[u8]), ClaimError> {
         let state = self.state.as_ref().ok_or_else(|| ClaimError::invalid("retired_storage"))?;
         if !state.budget.is_ordinary() {

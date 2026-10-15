@@ -21,6 +21,10 @@ pub(super) fn dispose_unpublished(
         || state.environment.is_some()
         || state.browser.is_some()
         || state.prepared_folder.is_some()
+        || state.migration_file.is_some()
+        || state.desktop_custody.as_ref().is_some_and(|prepared| {
+            prepared.prepared_nonce.is_some() || prepared.queued_prepare.is_some()
+        })
         || state.file.as_ref().is_some_and(|file| {
             lock(&file.stage).is_some()
                 || lock(&file.publication).as_ref().is_some_and(|binding| binding.targets_record())

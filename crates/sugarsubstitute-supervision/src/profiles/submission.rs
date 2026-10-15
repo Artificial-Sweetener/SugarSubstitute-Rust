@@ -169,6 +169,7 @@ impl WindowsProfileLease {
         let port = self.port.clone();
         let shared = self.shared.clone();
         let deadline = spec.deadline.ok_or(ClaimAdmissionError::Specification)?;
+        let execution_client = execution.clone();
         if self.release_deadline.is_some_and(|old| deadline > old) {
             return Err(ClaimAdmissionError::Specification);
         }
@@ -189,8 +190,34 @@ impl WindowsProfileLease {
                 }
                 state.close_deadline =
                     Some(state.close_deadline.map_or(deadline, |old| old.min(deadline)));
-                port.release(state, context)?;
-                shared.active.store(RELEASED, Ordering::Release);
+                if !state.retired { port.release(state, context)?; }
+                if let Some(release)=state.custody_release.as_mut() {
+                    if let Some(ack)=&release.ack {
+                        if let Some(prepared)=&mut state.desktop_custody {
+                            prepared.close_released(ack,context).map_err(|cause|ClaimError::new("profile_prepared_released_close",cause))?;
+                        }
+                        state.desktop_custody=None;shared.active.store(RELEASED,Ordering::Release);
+                        return Ok(());
+                    }
+                    let prepared=state.desktop_custody.as_ref().is_some_and(|prepared|prepared.prepared_nonce.is_some());
+                    if state.custody_record.is_some() || prepared {
+                        if release.until.is_some_and(|until|until!=deadline) {
+                            return Err(ClaimError::invalid("profile_custody_release_renewed"));
+                        }
+                        release.until=Some(deadline);
+                        if release.counter.is_none() {
+                            let counter=execution_client.encode_lifecycle_deadline(deadline)
+                                .map_err(|cause|ClaimError::new("profile_custody_release_counter",cause))?;
+                            release.counter=Some((counter.ticks(),counter.frequency()));
+                        }
+                        let (until_ticks,frequency)=release.counter.ok_or_else(||ClaimError::invalid("profile_custody_release_counter_missing"))?;
+                        if release.nonce.is_none() {release.nonce=release.parent.try_submit(
+                            sugarsubstitute_contracts::backend_custody::BackendCustodyCommand::ProfileStop {
+                                profile:release.key,until_ticks,frequency
+                            },deadline).map_err(|cause|ClaimError::new("profile_custody_release_admission",cause))?
+                            ;}
+                    } else {shared.active.store(RELEASED,Ordering::Release);}
+                } else {shared.active.store(RELEASED, Ordering::Release);}
                 Ok(())
             },
             false,

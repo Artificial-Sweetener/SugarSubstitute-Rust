@@ -180,6 +180,37 @@ impl CoordinatorBackend {
     pub(in crate::production) fn incident_policy(&mut self) -> &mut ResourceCoordinator {
         &mut self.policy
     }
+    /// Observe the actual established original helper without invoking another launch.
+    pub(crate) fn profile_custody_parent(
+        &self,
+    ) -> Option<sugarsubstitute_supervision::BackendCustodyParent> {
+        self.custody.as_ref().and_then(|custody| custody.established_parent())
+    }
+    /// Establish the one original helper before any desktop profile Held publication.
+    pub(crate) fn ensure_profile_custody(
+        &mut self,
+        environment: &LaunchEnvironment,
+        until: Moment,
+        resources: &mut BackendResources<'_>,
+    ) -> Result<Option<sugarsubstitute_supervision::BackendCustodyParent>> {
+        if self.custody.is_none() {
+            let (executable, installation) =
+                self.custody_options.as_ref().ok_or("Custody invocation unconfigured")?;
+            self.custody = Some(Box::new(super::coordinator_custody::CoordinatorCustody::new(
+                self.owner,
+                executable.clone(),
+                installation.clone(),
+                LaunchEnvironment::from_snapshot_utf16(environment.as_utf16(), &[])?,
+                until,
+                resources,
+            )?));
+        }
+        let custody = self.custody.as_mut().ok_or("Original custody owner absent")?;
+        if !custody.advance(resources)? {
+            return Ok(None);
+        }
+        Ok(custody.established_parent())
+    }
     /// Bind installed executable/namespace paths before the first managed request.
     pub(crate) fn configure_custody(
         &mut self,

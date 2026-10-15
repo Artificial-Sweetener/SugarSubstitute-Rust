@@ -208,6 +208,17 @@ impl DiagnosticNativeGrant {
         self.original.bind_namespace(request)
     }
 
+    /// Revalidate the same bound Entry namespace, full operation and actual original worker controls.
+    pub(crate) fn validate_namespace(
+        &self,
+        lifetime: &std::sync::Arc<crate::coordinator_entry::namespace::NamespaceLifetime>,
+        operation: LogicalStoreOperationKey,
+        current: &JobContext,
+    ) -> Result<(), DiagnosticNativeAllocationFailure> {
+        self.check(current)?;
+        self.original.validate_namespace(lifetime, operation)
+    }
+
     pub(in crate::diagnostic_storage) fn matches_allocation(
         &self,
         owner: &DiagnosticAllocationOwner,

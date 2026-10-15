@@ -70,12 +70,22 @@ impl State {
             return Err(cause);
         }
         if let Some(frame) = self.latest
+            && let BackendCustodyCommand::ProfileStop { profile, .. } = frame.command
+            && self
+                .registrations
+                .iter()
+                .flatten()
+                .any(|entry| entry.profile() == Some(profile) && entry.settled())
+        {
+            self.reply = Some(BackendCustodyReceipt::ProfileReleased(profile));
+        }
+        if let Some(frame) = self.latest
             && let BackendCustodyCommand::Stop { resource, .. } = frame.command
             && self
                 .registrations
                 .iter()
                 .flatten()
-                .any(|entry| entry.resource() == resource && entry.settled())
+                .any(|entry| entry.resource() == Some(resource) && entry.settled())
         {
             self.reply = Some(BackendCustodyReceipt::Released(resource));
         }

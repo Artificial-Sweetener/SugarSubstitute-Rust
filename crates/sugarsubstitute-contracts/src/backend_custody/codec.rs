@@ -8,96 +8,12 @@ use crate::lifecycle::{
 use std::{error::Error, fmt};
 
 /// Complete schema-one custody frame size, in bytes; no variable payload allocation.
+/// Profile operations extend the tag inventory without changing existing bytes.
+/// Older peers reject unknown tags; exact selected bundle/source pairing is required.
 pub const BACKEND_CUSTODY_FRAME_BYTES: usize = 384;
 
-/// Bounded commands exchanged only through the purpose-specific authenticated session.
-/// Handle integers are destination-process matching facts. They confer no control
-/// until the native owner adopts their actual output cells and validates type,
-/// membership, birth, account and original source allocation.
-#[derive(Clone, Copy, Eq, PartialEq)]
-pub enum BackendCustodyCommand {
-    /// Authenticate this immutable session before custody operations.
-    Hello {
-        /// Original private bootstrap capability.
-        capability: [u8; 32],
-    },
-    /// Adopt the exact parent observation and helper containment after helper resume.
-    Establish {
-        /// Destination parent process duplicate.
-        parent: u64,
-        /// Original parent kernel PID.
-        pid: u32,
-        /// Original parent creation time in 100ns units since1601.
-        birth: u64,
-        /// Destination duplicate of this helper's actual containment Job.
-        containment: u64,
-    },
-    /// Adopt a prepared Job before any backend process creation.
-    Prepare {
-        /// Original resource generation.
-        resource: ResourceKey,
-        /// Original exact backend digest.
-        digest: [u8; 32],
-        /// Destination Job duplicate.
-        job: u64,
-        /// Original absolute Windows QPC cutoff.
-        until_ticks: i64,
-        /// Original positive QPC frequency.
-        frequency: i64,
-        /// Exact prospective version-two record bytes.
-        record: [u8; 128],
-        /// Original pinned writer-exclusion volume/file identity.
-        claim_identity: [u8; 24],
-        /// Original registry process identity, distinct from kernel PID.
-        registry_process: u64,
-    },
-    /// Adopt the original suspended root before its actual resume CAS.
-    Root {
-        /// Same acknowledged resource generation.
-        resource: ResourceKey,
-        /// Destination root process duplicate.
-        process: u64,
-        /// Exact kernel PID.
-        pid: u32,
-        /// Exact creation time in100ns units since1601.
-        birth: u64,
-        /// Same prepared registry process identity.
-        registry_process: u64,
-    },
-    /// Request same-owner cleanup without replacing the original transaction cutoff.
-    Stop {
-        /// Exact retained resource generation.
-        resource: ResourceKey,
-        /// Original absolute cleanup QPC cutoff.
-        until_ticks: i64,
-        /// Original QPC frequency.
-        frequency: i64,
-    },
-    /// End admission and settle all registrations under the original shutdown.
-    Finish {
-        /// Original absolute cleanup QPC cutoff.
-        until_ticks: i64,
-        /// Original QPC frequency.
-        frequency: i64,
-    },
-    /// Return a correlated owned result; receipt facts alone grant no launch authority.
-    Receipt(BackendCustodyReceipt),
-}
-
-/// Acknowledgements retained by the parent operation's exact source/nonce owner.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum BackendCustodyReceipt {
-    /// Parent and helper containment duplicates were actually adopted.
-    Established,
-    /// All actual registrations and temporary helper outputs settled.
-    Finished,
-    /// Independent custody exclusion and prepared Job are actually retained.
-    Prepared(ResourceKey),
-    /// The same suspended root duplicate passed actual Job membership/birth checks.
-    Root(ResourceKey),
-    /// Actual family/outputs settled and same-generation Released publication returned.
-    Released(ResourceKey),
-}
+mod command;
+pub use command::{BackendCustodyCommand, BackendCustodyReceipt};
 
 /// Keep one complete purpose/key/nonce association with the bounded command.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -139,6 +55,41 @@ impl BackendCustodyFrame {
         put(&mut bytes, 64, self.key.session().get());
         put(&mut bytes, 72, self.nonce);
         match self.command {
+            BackendCustodyCommand::ProfilePublished { profile } => {
+                bytes[10] = 18;
+                profile_put(&mut bytes, profile);
+            }
+            BackendCustodyCommand::ProfilePrepare {
+                profile,
+                job,
+                directory,
+                record,
+                claim_identity,
+                until_ticks,
+                frequency,
+            } => {
+                bytes[10] = 12;
+                profile_put(&mut bytes, profile);
+                put(&mut bytes, 104, job);
+                put(&mut bytes, 112, directory);
+                put(&mut bytes, 120, until_ticks as u64);
+                put(&mut bytes, 128, frequency as u64);
+                bytes[136..296].copy_from_slice(&record);
+                bytes[296..320].copy_from_slice(&claim_identity);
+            }
+            BackendCustodyCommand::ProfileRoot { profile, process, pid, birth } => {
+                bytes[10] = 13;
+                profile_put(&mut bytes, profile);
+                put(&mut bytes, 104, process);
+                put(&mut bytes, 112, u64::from(pid));
+                put(&mut bytes, 120, birth);
+            }
+            BackendCustodyCommand::ProfileStop { profile, until_ticks, frequency } => {
+                bytes[10] = 14;
+                profile_put(&mut bytes, profile);
+                put(&mut bytes, 104, until_ticks as u64);
+                put(&mut bytes, 112, frequency as u64);
+            }
             BackendCustodyCommand::Hello { capability } => {
                 bytes[10] = 1;
                 bytes[80..112].copy_from_slice(&capability);
@@ -191,6 +142,10 @@ impl BackendCustodyFrame {
             }
             BackendCustodyCommand::Receipt(receipt) => {
                 bytes[10] = match receipt {
+                    BackendCustodyReceipt::ProfilePublished(_) => 19,
+                    BackendCustodyReceipt::ProfilePrepared(_) => 15,
+                    BackendCustodyReceipt::ProfileRoot(_) => 16,
+                    BackendCustodyReceipt::ProfileReleased(_) => 17,
                     BackendCustodyReceipt::Established => 6,
                     BackendCustodyReceipt::Prepared(_) => 7,
                     BackendCustodyReceipt::Root(_) => 8,
@@ -198,6 +153,14 @@ impl BackendCustodyFrame {
                     BackendCustodyReceipt::Finished => 11,
                 };
                 match receipt {
+                    BackendCustodyReceipt::ProfilePublished(profile) => {
+                        profile_put(&mut bytes, profile)
+                    }
+                    BackendCustodyReceipt::ProfilePrepared(profile)
+                    | BackendCustodyReceipt::ProfileRoot(profile)
+                    | BackendCustodyReceipt::ProfileReleased(profile) => {
+                        profile_put(&mut bytes, profile)
+                    }
                     BackendCustodyReceipt::Established | BackendCustodyReceipt::Finished => {}
                     BackendCustodyReceipt::Prepared(resource)
                     | BackendCustodyReceipt::Root(resource)
@@ -238,7 +201,52 @@ impl BackendCustodyFrame {
             })
         };
         let pid = |at| u32::try_from(get(bytes, at)).map_err(|_| BackendCustodyWireError::Identity);
+        let profile = || -> Result<ProfileCustodyKey, BackendCustodyWireError> {
+            use crate::lifecycle::{InstanceId, RunGeneration, RunKey};
+            ProfileCustodyKey::new(
+                RunKey {
+                    owner,
+                    instance: InstanceId::new(get(bytes, 80))
+                        .map_err(|_| BackendCustodyWireError::Identity)?,
+                    generation: RunGeneration::new(get(bytes, 88))
+                        .map_err(|_| BackendCustodyWireError::Identity)?,
+                },
+                get(bytes, 96),
+            )
+            .map_err(|_| BackendCustodyWireError::Identity)
+        };
         let command = match bytes[10] {
+            18 => BackendCustodyCommand::ProfilePublished { profile: profile()? },
+            19 => {
+                BackendCustodyCommand::Receipt(BackendCustodyReceipt::ProfilePublished(profile()?))
+            }
+            12 => BackendCustodyCommand::ProfilePrepare {
+                profile: profile()?,
+                job: get(bytes, 104),
+                directory: get(bytes, 112),
+                until_ticks: get(bytes, 120) as i64,
+                frequency: get(bytes, 128) as i64,
+                record: std::array::from_fn(|i| bytes[136 + i]),
+                claim_identity: std::array::from_fn(|i| bytes[296 + i]),
+            },
+            13 => BackendCustodyCommand::ProfileRoot {
+                profile: profile()?,
+                process: get(bytes, 104),
+                pid: pid(112)?,
+                birth: get(bytes, 120),
+            },
+            14 => BackendCustodyCommand::ProfileStop {
+                profile: profile()?,
+                until_ticks: get(bytes, 104) as i64,
+                frequency: get(bytes, 112) as i64,
+            },
+            15 => {
+                BackendCustodyCommand::Receipt(BackendCustodyReceipt::ProfilePrepared(profile()?))
+            }
+            16 => BackendCustodyCommand::Receipt(BackendCustodyReceipt::ProfileRoot(profile()?)),
+            17 => {
+                BackendCustodyCommand::Receipt(BackendCustodyReceipt::ProfileReleased(profile()?))
+            }
             1 => {
                 BackendCustodyCommand::Hello { capability: std::array::from_fn(|i| bytes[80 + i]) }
             }
@@ -290,7 +298,54 @@ impl BackendCustodyFrame {
     fn validate(&self) -> Result<(), BackendCustodyWireError> {
         let handle = |value| value != 0 && value < u64::MAX - 15;
         let mut valid = self.nonce != 0;
+        let profile = match self.command {
+            BackendCustodyCommand::ProfilePublished { profile }
+            | BackendCustodyCommand::Receipt(BackendCustodyReceipt::ProfilePublished(profile)) => {
+                Some(profile)
+            }
+            BackendCustodyCommand::ProfilePrepare {
+                profile,
+                job,
+                directory,
+                until_ticks,
+                frequency,
+                claim_identity,
+                ..
+            } => {
+                valid &= handle(job)
+                    && handle(directory)
+                    && until_ticks > 0
+                    && frequency > 0
+                    && claim_identity != [0; 24];
+                Some(profile)
+            }
+            BackendCustodyCommand::ProfileRoot { profile, process, pid, birth } => {
+                valid &= handle(process) && pid != 0 && birth != 0;
+                Some(profile)
+            }
+            BackendCustodyCommand::ProfileStop { profile, until_ticks, frequency } => {
+                valid &= until_ticks > 0 && frequency > 0;
+                Some(profile)
+            }
+            BackendCustodyCommand::Receipt(
+                BackendCustodyReceipt::ProfilePrepared(profile)
+                | BackendCustodyReceipt::ProfileRoot(profile)
+                | BackendCustodyReceipt::ProfileReleased(profile),
+            ) => Some(profile),
+            _ => None,
+        };
+        valid &= profile.is_none_or(|profile| profile.run().owner == self.key.owner());
         let resource = match self.command {
+            BackendCustodyCommand::ProfilePublished { .. }
+            | BackendCustodyCommand::Receipt(BackendCustodyReceipt::ProfilePublished(_)) => None,
+            BackendCustodyCommand::ProfilePrepare { .. }
+            | BackendCustodyCommand::ProfileRoot { .. }
+            | BackendCustodyCommand::ProfileStop { .. }
+            | BackendCustodyCommand::Receipt(
+                BackendCustodyReceipt::ProfilePrepared(_)
+                | BackendCustodyReceipt::ProfileRoot(_)
+                | BackendCustodyReceipt::ProfileReleased(_),
+            ) => None,
             BackendCustodyCommand::Hello { capability } => {
                 valid &= capability.iter().any(|b| *b != 0);
                 None
@@ -343,6 +398,10 @@ impl BackendCustodyFrame {
 impl fmt::Debug for BackendCustodyCommand {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
+            Self::ProfilePublished { .. } => "ProfilePublished",
+            Self::ProfilePrepare { .. } => "ProfilePrepare { owned Job and directory }",
+            Self::ProfileRoot { .. } => "ProfileRoot { owned duplicate }",
+            Self::ProfileStop { .. } => "ProfileStop",
             Self::Hello { .. } => "Hello { redacted }",
             Self::Establish { .. } => "Establish { owned duplicates }",
             Self::Prepare { .. } => "Prepare { owned Job }",
@@ -362,6 +421,11 @@ fn put(bytes: &mut [u8; BACKEND_CUSTODY_FRAME_BYTES], at: usize, number: u64) {
 fn resource_put(bytes: &mut [u8; BACKEND_CUSTODY_FRAME_BYTES], resource: ResourceKey) {
     put(bytes, 80, resource.id.get());
     put(bytes, 88, resource.generation.get());
+}
+fn profile_put(bytes: &mut [u8; BACKEND_CUSTODY_FRAME_BYTES], profile: ProfileCustodyKey) {
+    put(bytes, 80, profile.run().instance.get());
+    put(bytes, 88, profile.run().generation.get());
+    put(bytes, 96, profile.registry_process());
 }
 
 #[cfg(test)]

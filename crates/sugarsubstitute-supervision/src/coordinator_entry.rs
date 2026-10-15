@@ -10,7 +10,7 @@ pub(crate) mod fixture;
 mod input;
 pub use diagnostic_location::DiagnosticStorageLocation;
 pub(crate) mod namespace;
-#[cfg(feature = "boundary-fixtures")]
+#[cfg(any(test, feature = "boundary-fixtures"))]
 #[path = "coordinator_entry/namespace_fixture.rs"]
 pub mod namespace_fixture;
 mod native;

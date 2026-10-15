@@ -23,6 +23,24 @@ struct Data {
     nonce: Option<u64>,
 }
 impl CustodyDestination {
+    /// Close local acknowledged cells after exact profile retirement under the original cutoff.
+    pub(crate) fn close_profile_released(
+        &mut self,
+        ack: &BackendCustodyAcknowledgement,
+        profile: sugarsubstitute_contracts::backend_custody::ProfileCustodyKey,
+    ) -> Result<(), RegistryError> {
+        if !ack.matches_storage(&self.parent) || ack.receipt()!=
+            sugarsubstitute_contracts::backend_custody::BackendCustodyReceipt::ProfileReleased(profile) {
+            return Err(RegistryError::invalid("profile_destination_release"));
+        }
+        let data = self
+            .data
+            .as_mut()
+            .ok_or_else(|| RegistryError::invalid("custody_destination_closed"))?;
+        data.outputs.fill(None);
+        data.nonce = None;
+        close_slot(&mut data.process, "profile_destination_close")
+    }
     /// Allocate inert cells under the already-funded actual controller source.
     pub(crate) fn new(parent: &BackendCustodyParent) -> Self {
         Self {

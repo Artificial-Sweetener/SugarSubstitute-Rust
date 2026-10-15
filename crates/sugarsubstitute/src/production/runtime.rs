@@ -24,6 +24,21 @@ pub(crate) fn execute<I: IntoIterator<Item = OsString>>(
     diagnostics: crate::diagnostics::DiagnosticHealth,
 ) -> Result<Option<impl Iterator<Item = OsString>>, Box<dyn Error>> {
     let mut arguments = arguments.into_iter().peekable();
+    if arguments.peek().is_some_and(|value| value == "--internal-profile-custody-component") {
+        arguments.next();
+        let command = super::entry_activation::ProfileComponent::command(arguments)?;
+        super::entry_runner::run(
+            command,
+            |command| {
+                super::entry_activation::ProfileComponent::new(
+                    std::env::current_exe()?,
+                    command.installation.clone(),
+                )
+            },
+            diagnostics,
+        )?;
+        return Ok(None);
+    }
     if arguments.peek().is_some_and(|value| value == "--internal-backend-custody") {
         super::backend_custody::run(arguments)?;
         return Ok(None);

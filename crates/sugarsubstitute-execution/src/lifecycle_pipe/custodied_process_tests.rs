@@ -219,9 +219,28 @@ fn original_finite_deadline_rejects_late_root_ack_without_resuming() -> TestResu
     boundary.prepared.wait()?;
     boundary.observe(1, false)?;
     boundary.suspended.wait()?;
+    rig.clock.wait_until_registered(Moment::from_nanos(800))?;
     rig.clock.advance(800);
+    // A native pass can retain its earlier clock sample; observe the original
+    // deadline retirement before releasing the controlled late acknowledgement.
+    boundary.retiring.wait()?;
+    assert!(job.try_take_completion().is_none());
+    assert_eq!(boundary.resumed.load(Ordering::Acquire), 0);
     boundary.observe(2, true)?;
-    assert!(matches!(rig.completion(&mut job)?.outcome, JobOutcome::TimedOut));
+    let actual = rig.completion(&mut job)?;
+    assert_eq!(actual.spec.deadline, Some(Moment::from_nanos(800)));
+    let failure = match &actual.outcome {
+        JobOutcome::Failure(cause) => Some(format!("{cause:?}")),
+        _ => None,
+    };
+    assert!(
+        matches!(&actual.outcome, JobOutcome::TimedOut),
+        "Actual terminal {:?}; failure {:?}; boundary resumes {}",
+        actual.outcome.kind(),
+        failure,
+        boundary.resumed.load(Ordering::Acquire)
+    );
+    drop(actual);
     assert_eq!(boundary.resumed.load(Ordering::Acquire), 0);
     drop(lock(&boundary.wake).take());
     drop(lock(&boundary.memory).take());
