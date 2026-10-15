@@ -39,6 +39,7 @@ export class RelationHostLifecycle {
     #configuring = false;
     #generation = 0;
     #unsubscribeChoices = null;
+    #presentationFrame = null;
     /** Compose explicit collaborators against the root workflow rather than the navigated canvas graph. */
     constructor(options) {
         this.options = options;
@@ -71,7 +72,7 @@ export class RelationHostLifecycle {
         const changed = (changes) => {
             this.#views.invalidate(changes.map((change) => change.element));
             if (!this.#rendering)
-                this.#present();
+                this.#schedulePresentation();
         };
         this.#presence = new HostSurfaceObserver(this.options.document.body, '.sugarcubes-cube-face__node-card,.lg-node[data-node-id],[data-sugarcubes-cube-face-projection]', changed, { content: true, exclude: '.sc-field-relation,.sc-overrides-toolbar' });
         this.#chromePresence = new HostSurfaceObserver(this.options.document.body, '.actionbar-container', changed);
@@ -85,6 +86,9 @@ export class RelationHostLifecycle {
         this.#configuring = true;
         this.#seedMenus.close();
         this.#generation++;
+        if (this.#presentationFrame !== null)
+            this.options.document.defaultView?.cancelAnimationFrame(this.#presentationFrame);
+        this.#presentationFrame = null;
         this.#pending = false;
         this.#valuesPending = false;
         for (const observer of this.#graphs.values())
@@ -252,13 +256,45 @@ export class RelationHostLifecycle {
             const changed = this.#visibility.reconcile(snapshot, this.#port.inventorySource);
             if (changed.length)
                 this.#port.refresh(changed);
-            this.#toolbar.reconcile();
-            this.#cards.reconcile();
+            this.#schedulePresentation();
         }
         finally {
             this.#presence?.discardPending();
             this.#chromePresence?.discardPending();
             this.#rendering = false;
+        }
+    }
+    /** Project settled native surfaces once per frame while keeping history and effective values immediate. */
+    #schedulePresentation() {
+        if (!this.#active || this.#configuring || this.#presentationFrame !== null)
+            return;
+        const generation = this.#generation;
+        const render = () => {
+            if (generation !== this.#generation)
+                return;
+            this.#presentationFrame = null;
+            if (!this.#active || this.#configuring)
+                return;
+            this.#rendering = true;
+            try {
+                this.#toolbar.reconcile();
+                this.#cards.reconcile();
+            }
+            catch (error) {
+                this.options.reportError(error);
+            }
+            finally {
+                this.#presence?.discardPending();
+                this.#chromePresence?.discardPending();
+                this.#rendering = false;
+            }
+        };
+        const windowRef = this.options.document.defaultView;
+        if (windowRef)
+            this.#presentationFrame = windowRef.requestAnimationFrame(render);
+        else {
+            this.#presentationFrame = -1;
+            queueMicrotask(render);
         }
     }
 }

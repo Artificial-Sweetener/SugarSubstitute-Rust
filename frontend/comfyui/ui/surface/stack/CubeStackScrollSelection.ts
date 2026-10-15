@@ -35,11 +35,11 @@ export class CubeStackScrollSelection {
     element.addEventListener('keydown', this.#onKeyDown);
   }
 
-  /** Reconcile the exact already projected row identities after topology or preview order changes. */
+  /** Sample the latest projected rows once after their presentation writes settle. */
   refresh(ids: readonly string[]): void {
     this.#ids = ids;
     if (this.#navigationId && !ids.includes(this.#navigationId)) this.#navigationId = null;
-    this.#measure();
+    this.#schedule();
   }
 
   /** Hold an explicitly revealed cube through smooth scrolling until settlement or user input. */

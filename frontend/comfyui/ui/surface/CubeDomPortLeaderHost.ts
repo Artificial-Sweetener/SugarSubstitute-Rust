@@ -56,12 +56,12 @@ export class CubeDomPortLeaderHost {
       path.remove();
       this.#paths.delete(index);
     }
+    if (!leaders.length) return;
     const bodyRect = this.#body.getBoundingClientRect();
     const scale = this.#body.offsetWidth > 0 ? bodyRect.width / this.#body.offsetWidth : 1;
     const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
     const elbowX = Math.max(0, this.#body.offsetWidth - CUBE_PREVIEW_EDGE_INSET / 2);
-    for (const leader of leaders) {
-      const path = this.#paths.get(leader.index) ?? this.#createPath(leader.index);
+    const paths = leaders.map((leader) => {
       const label =
         leader.title.querySelector<HTMLElement>('[data-cube-preview-output-label]') ?? leader.title;
       const titleRect = label.getBoundingClientRect();
@@ -72,11 +72,16 @@ export class CubeDomPortLeaderHost {
       const labelY = (titleRect.top + titleRect.height / 2 - bodyRect.top) / safeScale;
       const portY = resolveCubeOutputPortY(labelY, leader.portY);
       const socketRimX = Math.max(elbowX, this.#body.offsetWidth - leader.socketRadius);
-      path.setAttribute(
-        'd',
-        `M ${format(labelEndX)} ${format(labelY)} ` +
+      return {
+        index: leader.index,
+        geometry:
+          `M ${format(labelEndX)} ${format(labelY)} ` +
           `H ${format(elbowX)} V ${format(portY)} H ${format(socketRimX)}`,
-      );
+      };
+    });
+    for (const { index, geometry } of paths) {
+      const path = this.#paths.get(index) ?? this.#createPath(index);
+      if (path.getAttribute('d') !== geometry) path.setAttribute('d', geometry);
     }
   }
 

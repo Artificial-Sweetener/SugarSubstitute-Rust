@@ -29,7 +29,7 @@ export class NativeOverrideToolbarHost {
         this.#emptyContent.mount(docked ? surfaces.actionbar : null);
         if (!inline && docked && !this.canDock())
             return false;
-        const nativeGrip = surfaces.grip;
+        const nativeGrip = inline ? null : surfaces.grip;
         const fontFamily = nativeGrip
             ? this.document.defaultView?.getComputedStyle(nativeGrip).fontFamily
             : undefined;
@@ -185,8 +185,12 @@ export class NativeOverrideToolbarHost {
     /** Keep one placeholder on the current native surface and exclude its width from dock budgets. */
     #reconcileTarget() {
         const bar = this.#surfaces?.actionbar;
+        if (!this.#dragging || !bar) {
+            this.#removeTarget();
+            return;
+        }
         const budget = this.#budget();
-        if (!this.#dragging || !bar || budget < 88) {
+        if (budget < 88) {
             this.#removeTarget();
             return;
         }

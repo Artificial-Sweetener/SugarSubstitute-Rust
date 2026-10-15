@@ -241,7 +241,7 @@ afterEach(() => {
 });
 
 describe('host settings and public library APIs', () => {
-  // Importing the complete host entrypoint includes cold TypeScript transformation.
+  // Cold entrypoint transformation competes with the parallel worker, outside UI runtime timing.
   test('setup registers settings without the old sidebar or its browser resources', async () => {
     const restore = silenceConsole();
     const registerSidebarTab = jest.fn();
@@ -256,7 +256,7 @@ describe('host settings and public library APIs', () => {
     } finally {
       restore();
     }
-  }, 15000);
+  }, 60000);
 
   const silenceConsole = () => {
     const spies = [

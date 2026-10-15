@@ -319,6 +319,7 @@ test('holds clicked selection during programmatic scroll and resumes whole-cube 
   });
   fixture.host.setup();
   fixture.host.ready(fixture.surface);
+  frames.shift()!(0);
   await nextTick();
   expect(
     document.querySelector('.sc-cube-stack-row[data-selected]')?.getAttribute('data-row-id'),

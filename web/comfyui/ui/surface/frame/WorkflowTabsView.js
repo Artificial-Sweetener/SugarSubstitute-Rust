@@ -167,7 +167,8 @@ export class WorkflowTabsView {
             this.#run(() => this.actions.close(id));
         });
         close.addEventListener('focusin', (event) => event.stopPropagation());
-        element.addEventListener('auxclick', (event) => {
+        // Match Comfy's mouse-release boundary; embedded hosts may omit auxclick.
+        element.addEventListener('mouseup', (event) => {
             if (event.button === 1) {
                 event.preventDefault();
                 this.#run(() => this.actions.close(id));

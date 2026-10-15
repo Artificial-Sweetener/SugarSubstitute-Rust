@@ -95,7 +95,8 @@ export class WorkflowTabPointerDrag {
         };
         event.preventDefault();
         tab.focus({ preventScroll: true });
-        this.viewport.setPointerCapture(event.pointerId);
+        // A stationary release must keep the compatibility click on the official tab.
+        tab.setPointerCapture(event.pointerId);
     };
     /** Resolve pointer motion from immutable slots rather than moving neighbor rectangles. */
     #move = (event) => {
@@ -188,8 +189,9 @@ export class WorkflowTabPointerDrag {
         if (this.#scrollFrame !== null)
             this.#document.defaultView?.cancelAnimationFrame(this.#scrollFrame);
         this.#scrollFrame = null;
-        if (candidate && this.viewport.hasPointerCapture(candidate.pointerId))
-            this.viewport.releasePointerCapture(candidate.pointerId);
+        const tab = candidate?.tabs[candidate.origin];
+        if (candidate && tab?.hasPointerCapture(candidate.pointerId))
+            tab.releasePointerCapture(candidate.pointerId);
     }
     /** Return to accepted order on cancellation and host action failure. */
     #settle() {

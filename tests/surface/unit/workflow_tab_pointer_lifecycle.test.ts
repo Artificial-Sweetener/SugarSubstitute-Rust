@@ -67,9 +67,6 @@ function mount(deferred = false) {
   Object.defineProperties(viewport, {
     clientWidth: { value: 540 },
     scrollWidth: { value: 760 },
-    setPointerCapture: { value: jest.fn() },
-    hasPointerCapture: { value: () => true },
-    releasePointerCapture: { value: jest.fn() },
   });
   jest.spyOn(viewport, 'getBoundingClientRect').mockImplementation(() => rect(0, 540));
   const motions: MotionStub[] = [];
@@ -78,11 +75,25 @@ function mount(deferred = false) {
     motions.push(animation);
     return animation;
   });
+  let captured: HTMLElement | null = null;
   let tabs: HTMLElement[] = ['a', 'b', 'c'].map((id) => {
     const tab = document.createElement('div');
     tab.id = id;
     list.append(tab);
     Object.defineProperty(tab, 'animate', { value: animate });
+    Object.defineProperties(tab, {
+      setPointerCapture: {
+        value: jest.fn(() => {
+          captured = tab;
+        }),
+      },
+      hasPointerCapture: { value: () => captured === tab },
+      releasePointerCapture: {
+        value: jest.fn(() => {
+          captured = null;
+        }),
+      },
+    });
     jest
       .spyOn(tab, 'getBoundingClientRect')
       .mockImplementation(() =>
@@ -148,7 +159,7 @@ test.each(['pointercancel', 'lostpointercapture', 'blur', 'contextmenu', 'Escape
       f.viewport.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
     else
       pointer(
-        reason === 'lostpointercapture' ? f.viewport : document,
+        reason === 'lostpointercapture' ? f.tabs[0]! : document,
         reason === 'buttons-lost' ? 'pointermove' : reason,
         230,
         0,
@@ -158,7 +169,7 @@ test.each(['pointercancel', 'lostpointercapture', 'blur', 'contextmenu', 'Escape
     expect(f.viewport.hasAttribute('data-sc-tab-dragging')).toBe(false);
     expect(f.tabs.every((tab) => tab.style.transform === '')).toBe(true);
     expect(f.animate).toHaveBeenCalled();
-    expect(f.viewport.releasePointerCapture).toHaveBeenCalledWith(1);
+    expect(f.tabs[0]!.releasePointerCapture).toHaveBeenCalledWith(1);
   },
 );
 

@@ -135,7 +135,7 @@ export class ComfyVueCubeBoundaryHost {
       this.#titleHeight,
     );
     this.#remember(row);
-    row.dataset.sugarcubeBoundaryRow = '';
+    if (!row.hasAttribute('data-sugarcube-boundary-row')) row.dataset.sugarcubeBoundaryRow = '';
     this.#markSlots('input', inputs, true);
     this.#markSlots('output', outputs, true);
     this.#renderLeaders(row, outputs, outputTitles);
@@ -265,9 +265,12 @@ export class ComfyVueCubeBoundaryHost {
         slot.dataset.sugarcubeBoundaryIndex !== boundaryIndex ||
         slot.style.getPropertyValue('--sugarcube-boundary-position') !== boundaryPositionCss ||
         changed;
-      slot.dataset.sugarcubeBoundaryDirection = direction;
-      slot.dataset.sugarcubeBoundaryIndex = boundaryIndex;
-      slot.style.setProperty('--sugarcube-boundary-position', boundaryPositionCss);
+      if (slot.dataset.sugarcubeBoundaryDirection !== direction)
+        slot.dataset.sugarcubeBoundaryDirection = direction;
+      if (slot.dataset.sugarcubeBoundaryIndex !== boundaryIndex)
+        slot.dataset.sugarcubeBoundaryIndex = boundaryIndex;
+      if (slot.style.getPropertyValue('--sugarcube-boundary-position') !== boundaryPositionCss)
+        slot.style.setProperty('--sugarcube-boundary-position', boundaryPositionCss);
       if (direction === 'input') this.#presentInputLabel(slot, index);
     }
     return changed;
@@ -282,7 +285,7 @@ export class ComfyVueCubeBoundaryHost {
     return slots.flatMap((element, index) => {
       this.#remember(element);
       const isVisible = visible.has(index);
-      element.hidden = !isVisible;
+      if (element.hidden === isVisible) element.hidden = !isVisible;
       if (isVisible) {
         element.style.removeProperty('display');
         return [{ element, index }];
@@ -290,7 +293,11 @@ export class ComfyVueCubeBoundaryHost {
       // Comfy's utility classes set display:flex, which overrides the HTML
       // hidden attribute in Nodes 2.0. Use an explicit priority so dormant
       // draft ports cannot leak onto the closed Cube face.
-      element.style.setProperty('display', 'none', 'important');
+      if (
+        element.style.getPropertyValue('display') !== 'none' ||
+        element.style.getPropertyPriority('display') !== 'important'
+      )
+        element.style.setProperty('display', 'none', 'important');
       return [];
     });
   }

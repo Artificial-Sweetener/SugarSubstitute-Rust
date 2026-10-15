@@ -185,6 +185,7 @@ const themes = {
   dark: { ...webDarkTheme, fontFamilyBase },
   light: { ...webLightTheme, fontFamilyBase },
 };
+const appliedThemes = new WeakMap<HTMLElement, boolean | null>();
 
 /** Serialize trusted Microsoft tokens for scoped native-node inheritance. */
 export function fluentTokenDeclarations(dark: boolean): string {
@@ -193,9 +194,15 @@ export function fluentTokenDeclarations(dark: boolean): string {
     .join('');
 }
 
-/** Theme only a SugarCubes-owned container through Microsoft's official API. */
+/** Apply accepted palette changes once while respecting the native API's connection boundary. */
 export function applyOwnedFluentTheme(element: HTMLElement, dark: boolean | null): void {
+  if (element !== element.ownerDocument.documentElement && !element.closest('body')) {
+    appliedThemes.delete(element);
+    return;
+  }
+  if (appliedThemes.has(element) && appliedThemes.get(element) === dark) return;
   setTheme(dark === null ? null : dark ? themes.dark : themes.light, element);
+  appliedThemes.set(element, dark);
 }
 
 /** Derive all brand roles through Microsoft's factories while retaining one visible accent. */

@@ -30,8 +30,10 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-/** Drain native forwarding and mutation batches without replacing their owners. */
+/** Drain native forwarding, scoped mutations and their coalesced presentation frame. */
 async function settle(): Promise<void> {
+  for (let index = 0; index < 6; index++) await Promise.resolve();
+  await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
   for (let index = 0; index < 6; index++) await Promise.resolve();
 }
 

@@ -21,22 +21,21 @@ export class NativeRunStripContentVisibility {
   #element: HTMLElement | null = null;
   #observer: HostSurfaceObserver | null = null;
 
-  /** Reconcile the identified legacy container when docking or replacing native chrome. */
+  /** Bind a new native surface; its scoped observer owns subsequent content refreshes. */
   mount(actionbar: HTMLElement | null): void {
     const element =
       actionbar?.querySelector<HTMLElement>(':scope > [data-testid="legacy-topbar-container"]') ??
       null;
-    if (element !== this.#element) {
-      this.dispose();
-      this.#element = element;
-      if (element)
-        this.#observer = new HostSurfaceObserver(
-          element,
-          '[data-testid="legacy-topbar-container"]',
-          () => this.#reconcile(),
-          { content: true, characterData: true, attributes: ['class', 'style', 'hidden'] },
-        );
-    }
+    if (element === this.#element) return;
+    this.dispose();
+    this.#element = element;
+    if (element)
+      this.#observer = new HostSurfaceObserver(
+        element,
+        '[data-testid="legacy-topbar-container"]',
+        () => this.#reconcile(),
+        { content: true, characterData: true, attributes: ['class', 'style', 'hidden'] },
+      );
     this.#reconcile();
   }
 
