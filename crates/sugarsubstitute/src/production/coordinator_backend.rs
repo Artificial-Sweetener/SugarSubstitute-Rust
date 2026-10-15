@@ -3,6 +3,8 @@
 //! Compose actual backend claims, process custody, installed sources and readiness.
 #[path = "coordinator_backend/activity.rs"]
 mod activity;
+#[path = "coordinator_backend/admission.rs"]
+mod admission;
 #[path = "coordinator_backend/attempt.rs"]
 mod attempt;
 #[path = "coordinator_backend/cleanup.rs"]
@@ -23,8 +25,23 @@ mod failure;
 use failure::{FailureKind, FailureObservation, OutputTerminalFailure, RootExit, Stopped};
 #[path = "coordinator_backend/output.rs"]
 mod output;
+#[path = "coordinator_backend/policy_funding.rs"]
+mod policy_funding;
 #[path = "coordinator_backend/preparation.rs"]
 mod preparation;
+use policy_funding::PolicyFunding;
+#[path = "coordinator_backend/recovery.rs"]
+mod recovery;
+pub(crate) use recovery::BackendReadyMetadata;
+#[cfg(test)]
+#[path = "coordinator_backend/historical_context_tests.rs"]
+mod historical_context_tests;
+#[cfg(test)]
+#[path = "coordinator_backend/recovery_retry_tests.rs"]
+mod recovery_retry_tests;
+#[cfg(test)]
+#[path = "coordinator_backend/recovery_tests.rs"]
+mod recovery_tests;
 #[cfg(test)]
 #[path = "coordinator_backend/tests.rs"]
 pub(crate) mod tests;
@@ -90,6 +107,8 @@ struct Backend {
     budget: ConnectionBudget,
     resolved: Option<sugarsubstitute_contracts::configuration::LaunchConfiguration>,
     ready_origin: Option<LoopbackOrigin>,
+    ready_context: Option<BackendReadyMetadata>,
+    managed_exit: Option<(ProcessKey, u32)>,
     scope: Scope,
     source: InstalledFrontendOwner,
     source_job: bool,
@@ -136,49 +155,23 @@ pub(crate) struct CoordinatorBackend {
     records: Box<[Option<Backend>]>,
     next_shutdown: u64,
     undelivered: Option<ResourceTransition>,
+    // These original data-backed credits outlive every source, policy and return above.
+    policy_funding: PolicyFunding,
 }
-/// Destroy the complete table and metadata allocations before returning their
-/// single original projection charge. No bare funded backend escapes construction.
+/// Destroy table/source/policy data before returning the fixed metadata claim.
+/// Retained original projection credits outlive every allocation they fund.
 pub(crate) struct RetainedBackend {
     pub(crate) backend: Box<CoordinatorBackend>,
     _storage: MemoryClaim,
 }
-impl RetainedBackend {
-    /// Cover the retained table and one MiB of bounded witness invocation metadata
-    /// inside the unchanged original sixteen-MiB projection reservation.
-    pub(crate) const fn required_storage_bytes() -> u64 {
-        (size_of::<CoordinatorBackend>() + 64 * size_of::<Option<Backend>>() + 1_048_576) as u64
-    }
-    /// Construct only from an actually serving claims/registry association.
-    /// The caller preclaims the table and heap header from its unchanged original
-    /// projection reservation. Both allocations remain inseparable from that claim.
-    pub(crate) fn new(authority: &CoordinatorAuthority, storage: MemoryClaim) -> Result<Self> {
-        if !authority.serving() || authority.registry().is_none() {
-            return Err(Box::new(LifecycleRejection::WrongPhase));
-        }
-        let owner = authority.key().ok_or(LifecycleRejection::ForeignOwner)?;
-        if storage.bytes() < Self::required_storage_bytes() {
-            return Err(Box::new(LifecycleRejection::Overloaded));
-        }
-        let mut records = Vec::new();
-        records.try_reserve_exact(64)?;
-        records.resize_with(64, || None);
-        let backend = CoordinatorBackend {
-            custody_options: None,
-            custody: None,
-            owner,
-            policy: ResourceCoordinator::new(owner),
-            records: records.into_boxed_slice(),
-            next_shutdown: 0,
-            undelivered: None,
-        };
-        Ok(Self { backend: Box::new(backend), _storage: storage })
-    }
-}
 impl CoordinatorBackend {
     /// Borrow the same authoritative run/resource policy for incident enrollment and admission.
-    pub(in crate::production) fn incident_policy(&mut self) -> &mut ResourceCoordinator {
-        &mut self.policy
+    pub(in crate::production) fn incident_policy(
+        &mut self,
+        input: sugarsubstitute_application::supervision::ResourceStorageInput<'_>,
+    ) -> Result<&mut ResourceCoordinator> {
+        self.preflight_policy(input)?;
+        Ok(&mut self.policy)
     }
     /// Observe the actual established original helper without invoking another launch.
     pub(crate) fn profile_custody_parent(
@@ -196,6 +189,11 @@ impl CoordinatorBackend {
         if self.custody.is_none() {
             let (executable, installation) =
                 self.custody_options.as_ref().ok_or("Custody invocation unconfigured")?;
+            super::coordinator_custody::CoordinatorCustody::validate_invocation_storage(
+                executable,
+                installation,
+                Some(environment),
+            )?;
             self.custody = Some(Box::new(super::coordinator_custody::CoordinatorCustody::new(
                 self.owner,
                 executable.clone(),
@@ -223,11 +221,19 @@ impl CoordinatorBackend {
         {
             return Err(Box::new(LifecycleRejection::WrongPhase));
         }
+        super::coordinator_custody::CoordinatorCustody::validate_invocation_storage(
+            &executable,
+            &installation,
+            None,
+        )?;
         self.custody_options = Some((executable, installation));
         Ok(())
     }
     /// Register facts authenticated by the existing native child owner.
     pub(crate) fn register_run(&mut self, registration: ClientRegistration) -> Result<()> {
+        self.preflight_policy(
+            sugarsubstitute_application::supervision::ResourceStorageInput::Current,
+        )?;
         self.policy.register_run(registration)?;
         Ok(())
     }
@@ -244,17 +250,20 @@ impl CoordinatorBackend {
         resources: &mut BackendResources<'_>,
     ) -> Result<ResourceTransition> {
         self.validate(resources)?;
-        Self::check_request_budget(&request.command, original, resources.client.now()?)?;
-        if let ResourceCommand::Acquire(target) = &request.command
-            && !self.records.iter().flatten().any(|r| r.target == *target && !r.settled)
-            && input.is_none()
-        {
-            return Err(Box::new(LifecycleRejection::WrongPhase));
-        }
+        let preferred = self.request_preparation(
+            binding,
+            &request,
+            original,
+            input.as_ref(),
+            resources.client.now()?,
+        )?;
+        self.preflight_policy(
+            sugarsubstitute_application::supervision::ResourceStorageInput::Request(&request),
+        )?;
         self.begin_delivery()?;
         let mut transition = self.policy.request(binding, request)?;
         self.retain_transition(&transition);
-        self.effects(&mut transition, input, original, None, resources)?;
+        self.effects(&mut transition, input, original, None, preferred, resources)?;
         Ok(self.undelivered.take().unwrap_or_default())
     }
 
@@ -270,37 +279,16 @@ impl CoordinatorBackend {
         if ShutdownBudget::new(original.started)? != original {
             return Err(Box::new(LifecycleRejection::WrongPhase));
         }
+        self.preflight_policy(
+            sugarsubstitute_application::supervision::ResourceStorageInput::Disconnect(
+                ClientBinding { run, connection },
+            ),
+        )?;
         self.begin_delivery()?;
         let mut transition = self.policy.disconnect_run(run, connection)?;
         self.retain_transition(&transition);
-        self.effects(&mut transition, &mut None, None, Some(original), resources)?;
+        self.effects(&mut transition, &mut None, None, Some(original), None, resources)?;
         Ok(self.undelivered.take().unwrap_or_default())
-    }
-
-    /// Check inert timing separately from actual serving/native binding validation.
-    fn check_request_budget(
-        command: &ResourceCommand,
-        original: Option<ConnectionBudget>,
-        now: Moment,
-    ) -> Result<()> {
-        match command {
-            ResourceCommand::Acquire(target) => {
-                let budget = original.ok_or(LifecycleRejection::WrongPhase)?;
-                let expected = match target {
-                    BackendTarget::Managed(_) => ConnectionBudgetKind::Managed,
-                    BackendTarget::Attached(_) => ConnectionBudgetKind::Attached,
-                };
-                if budget.kind() != expected {
-                    return Err(Box::new(LifecycleRejection::WrongPhase));
-                }
-                budget.probe_until(now)?;
-                Ok(())
-            }
-            ResourceCommand::Release(_) | ResourceCommand::Reload(_) if original.is_none() => {
-                Ok(())
-            }
-            _ => Err(Box::new(LifecycleRejection::WrongPhase)),
-        }
     }
 
     /// Retire run/profile policy only after the actual desktop owner checked retirement.
@@ -477,8 +465,20 @@ impl CoordinatorBackend {
     fn merge(into: &mut ResourceTransition, mut next: ResourceTransition) {
         into.replies.append(&mut next.replies);
         into.effects.append(&mut next.effects);
+        into.invalidations.append(&mut next.invalidations);
+        into.replacements.append(&mut next.replacements);
     }
     fn observe(&mut self, observation: ResourceObservation) -> Result<ResourceTransition> {
+        if let Err(reason) = self.policy_admission(
+            sugarsubstitute_application::supervision::ResourceStorageInput::Observation(
+                &observation,
+            ),
+        ) {
+            return Err(Box::new(ObservationFailure(Box::new(RejectedObservation {
+                reason,
+                observation,
+            }))));
+        }
         let transition = self.policy.observe(observation).map_err(|rejected| {
             Box::new(ObservationFailure(rejected)) as Box<dyn Error + Send + Sync>
         })?;
@@ -509,7 +509,8 @@ impl std::fmt::Display for ObservationFailure {
 impl Error for ObservationFailure {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match &self.0.observation {
-            ResourceObservation::Failed { failure, .. } => Some(failure),
+            ResourceObservation::Failed { failure, .. }
+            | ResourceObservation::ManagedExited { failure, .. } => Some(failure),
             _ => Some(&self.0.reason),
         }
     }

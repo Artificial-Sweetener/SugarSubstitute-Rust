@@ -14,26 +14,31 @@ impl IncidentReporting {
         }
         let Some(binding) = self.next_launch_binding(host)? else { return Ok(()) };
         let owner = resources.authority.key().ok_or("Actual report coordinator missing")?;
-        if owner != binding.incident().subject().coordinator() {
-            return Err("Actual report owner mismatch".into());
+        if owner.namespace != binding.incident().subject().coordinator().namespace {
+            return Err("Actual report namespace mismatch".into());
         }
-        let IncidentSubject::Desktop(run) = binding.incident().subject() else {
-            return Err("Live report source is not a desktop".into());
+        let (startup, locale) = if owner == binding.incident().subject().coordinator() {
+            let IncidentSubject::Desktop(run) = binding.incident().subject() else {
+                return Err("Live report source is not a desktop".into());
+            };
+            let record = records
+                .iter_mut()
+                .flatten()
+                .find(|record| record.record.run == run)
+                .ok_or("Genuine collected desktop source missing")?;
+            let projected = record
+                .record
+                .start
+                .as_mut()
+                .ok_or("Actual report desktop projection missing")?
+                .value_mut()?;
+            (projected.registered.clone(), projected.locale)
+        } else {
+            self.recovered_launch(owner, binding.incident(), records)?
         };
-        let record = records
-            .iter_mut()
-            .flatten()
-            .find(|record| record.record.run == run)
-            .ok_or("Genuine collected desktop source missing")?;
-        let projected = record
-            .record
-            .start
-            .as_mut()
-            .ok_or("Actual report desktop projection missing")?
-            .value_mut()?;
-        self.configure_locale(projected.locale)?;
+        self.configure_locale(locale)?;
         if self.reporter_startup.is_none() {
-            self.reporter_startup = Some(projected.registered.clone());
+            self.reporter_startup = Some(startup);
         }
         if self.relay.is_none() {
             let source = ReporterSource::new(host.reporter_funding()?)?;

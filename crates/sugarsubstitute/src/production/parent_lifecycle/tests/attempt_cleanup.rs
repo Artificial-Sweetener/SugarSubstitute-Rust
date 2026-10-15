@@ -20,7 +20,7 @@ fn expired_original_attempt_quarantines_reply_without_closing_or_acknowledging_t
             100,
             1_000_000_000,
         )?,
-        storage,
+        &mut Some(crate::production::parent_lifecycle::causes::BackendCauses::new(storage)?),
     )?;
     let h = header(2)?;
     let (index, _) = actor.requests.admit(h, b"same exact settlement")?;

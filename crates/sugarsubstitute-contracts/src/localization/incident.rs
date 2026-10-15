@@ -27,6 +27,8 @@ pub struct ReportMessages {
     pub close: &'static str,
     /// Dismiss and request fresh restart action.
     pub restart: &'static str,
+    /// Restart is unavailable; explicit close and normal reopening remain supported.
+    pub restart_unavailable: &'static str,
     /// Explicit native memory inclusion consent.
     pub include_dump: &'static str,
     /// Unsanitized sensitive native memory disclosure.
@@ -99,7 +101,7 @@ pub struct ReportMessages {
 
 impl ReportMessages {
     /// Borrow every owned label for complete-coverage validation.
-    pub fn labels(&self) -> [&'static str; 58] {
+    pub fn labels(&self) -> [&'static str; 59] {
         [
             self.title,
             self.explanation,
@@ -107,6 +109,7 @@ impl ReportMessages {
             self.export,
             self.close,
             self.restart,
+            self.restart_unavailable,
             self.include_dump,
             self.dump_warning,
             self.save_title,

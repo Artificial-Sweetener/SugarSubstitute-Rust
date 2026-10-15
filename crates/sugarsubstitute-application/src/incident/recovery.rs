@@ -31,18 +31,18 @@ impl IncidentCoordinator {
     fn check_recovery(
         &self,
         scope: IncidentRecoveryScope,
-        original: LogicalStoreOperationKey,
+        original: Option<LogicalStoreOperationKey>,
         key: IncidentKey,
     ) -> Result<(), IncidentDecisionError> {
         if self.recovery != Some(scope) || self.recovery_closed {
             return Err(IncidentDecisionError::StaleOperation);
         }
-        if original.owner().namespace != self.owner.namespace
+        if original.is_some_and(|original| original.owner().namespace != self.owner.namespace)
             || key.subject().coordinator().namespace != self.owner.namespace
         {
             return Err(IncidentDecisionError::ForeignNamespace);
         }
-        if original.owner() != key.subject().coordinator() {
+        if original.is_some_and(|original| original.owner() != key.subject().coordinator()) {
             return Err(IncidentDecisionError::MismatchedCommit);
         }
         Ok(())
@@ -51,7 +51,7 @@ impl IncidentCoordinator {
     fn recovered_record(
         seed: IncidentSeed,
         scope: IncidentRecoveryScope,
-        original: LogicalStoreOperationKey,
+        original: Option<LogicalStoreOperationKey>,
         revision: IncidentRevision,
     ) -> Record {
         let source_scope = IncidentSourceScope::Recovered(RecoveredSourceScope {
@@ -100,7 +100,7 @@ impl IncidentCoordinator {
     pub(super) fn recovered(
         &mut self,
         scope: IncidentRecoveryScope,
-        original: LogicalStoreOperationKey,
+        original: Option<LogicalStoreOperationKey>,
         summary: IncidentSummary,
     ) -> Result<IncidentEffects, IncidentDecisionError> {
         let key = summary.seed().key();
@@ -157,7 +157,7 @@ impl IncidentCoordinator {
         failure: FailureEvidence,
     ) -> Result<IncidentEffects, IncidentDecisionError> {
         let key = seed.key();
-        self.check_recovery(scope, original, key)?;
+        self.check_recovery(scope, Some(original), key)?;
         if !matches!(key.subject(), IncidentSubject::Supervisor(_)) {
             return Err(IncidentDecisionError::WrongPhase);
         }
@@ -169,7 +169,7 @@ impl IncidentCoordinator {
         if let Ok(index) = self.index(key) {
             let record = self.record(index)?;
             return if record.seed == seed
-                && record.original_publication == original
+                && record.original_publication == Some(original)
                 && record.failure.as_ref() == Some(&input)
                 && matches!(record.source_scope,IncidentSourceScope::Recovered(source) if source.recovery()==scope)
             {
@@ -187,7 +187,8 @@ impl IncidentCoordinator {
             attribution: input.attribution,
             failure,
         });
-        let mut record = Self::recovered_record(seed, scope, original, current.expected_revision());
+        let mut record =
+            Self::recovered_record(seed, scope, Some(original), current.expected_revision());
         record.failure = Some(input);
         record.current = Some(current);
         record.pending = Some(Pending::Collection);

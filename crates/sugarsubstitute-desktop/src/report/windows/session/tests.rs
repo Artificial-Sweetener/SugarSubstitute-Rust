@@ -63,8 +63,13 @@ fn session() -> Result<Session, Box<dyn Error>> {
         ReportSessionId::new(1)?,
     );
     let lease = MemoryLease::new(ReportSurfaceOptions::KNOWN_STORAGE_BYTES, Box::new(Release));
-    let view = NativeReportView::from_claimed(binding, "report\n".into(), lease.claim(512)?)?;
-    Ok(Session::new(ReportSurfaceOptions::new(view, "en", false, 960, 740, lease)?))
+    let view = NativeReportView::from_claimed(
+        binding,
+        "report\n".into(),
+        lease.claim(512)?,
+        sugarsubstitute_contracts::incident::ReportRestartAvailability::Available,
+    )?;
+    Ok(Session::new(ReportSurfaceOptions::new(view, "en", false, 960, 740, lease)?).0)
 }
 #[test]
 fn report_partial_initialization_close_is_once_and_keeps_original_shutdown_deadline()
@@ -76,7 +81,7 @@ fn report_partial_initialization_close_is_once_and_keeps_original_shutdown_deadl
         ReportSurfaceError::new("actual_native_initialization", std::io::Error::other("original")),
     );
     let deadline = session.close_deadline;
-    session.close(&mut content);
+    session.close_at(&mut content, Instant::now());
     assert_eq!(session.close_deadline, deadline);
     assert_eq!(content.shutdowns, 1);
     assert_eq!(
@@ -106,7 +111,7 @@ fn report_actual_native_retirement_is_not_reissued_when_host_observer_rejects()
 -> Result<(), Box<dyn Error>> {
     let mut session = session()?;
     let mut content = Content { reject_retirement: true, ..Default::default() };
-    session.close(&mut content);
+    session.close_at(&mut content, Instant::now());
     session.shutdown(&mut content);
     session.observe_retirement(&mut content);
     session.observe_retirement(&mut content);
@@ -146,7 +151,10 @@ fn wrong_copy_control_kind_keeps_actual_surface_request_without_native_effects()
     );
     session.state.presented()?;
     session.state.preflight_replace(old, binding)?;
-    session.state.replaced(binding);
+    session.state.replaced(
+        binding,
+        sugarsubstitute_contracts::incident::ReportRestartAvailability::Available,
+    );
     let request = session.state.request(binding, Intent::Export(ExportSelection::TextOnly))?;
     let mut content = Content::default();
     assert!(

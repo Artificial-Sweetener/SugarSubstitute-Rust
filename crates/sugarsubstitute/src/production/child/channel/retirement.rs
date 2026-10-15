@@ -9,6 +9,10 @@ impl ChildChannel {
         self.requests.as_mut().ok_or("Original ledger absent")?.output_pull(header)?;
         Ok(())
     }
+    pub(in super::super) fn backend_retry(&mut self, header: WireHeader) -> Result<()> {
+        self.requests.as_mut().ok_or("Original ledger absent")?.backend_retry(header)?;
+        Ok(())
+    }
     /// Read actual queue admission without withdrawing or changing its native custody.
     pub(in super::super) fn request_prepared(&self, header: WireHeader) -> Result<bool> {
         Ok(self.requests.as_ref().ok_or("Original ledger absent")?.prepared(header)?)

@@ -100,7 +100,7 @@ fn original_actor_charge_outlives_job_and_frontend_wait_keeps_original_cutoff() 
         ProfileId::new("Actor_1".into())?,
         connection,
         LifecyclePipeDeadline::new(1000, 1_000_000_000)?,
-        claim,
+        &mut Some(crate::production::parent_lifecycle::causes::BackendCauses::new(claim)?),
     )?;
     drop(completion.memory);
     drop(job);

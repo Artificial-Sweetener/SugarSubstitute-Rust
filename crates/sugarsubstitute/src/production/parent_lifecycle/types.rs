@@ -24,6 +24,8 @@ pub(crate) struct ParentResources<'a, 'b> {
     /// The actual operation parent scope, independent of completed projection custody.
     /// Each submitted profile job has its retained finite frontend cutoff.
     pub(crate) finite: &'a Scope,
+    /// Root-derived original backend command gate; ACKs, cleanup and completions remain live.
+    pub(crate) backend_commands_open: bool,
     pub(crate) backend: &'a mut CoordinatorBackend,
     pub(crate) preparation: &'a mut Option<BackendPreparation>,
     pub(crate) execution: &'a mut BackendResources<'b>,
@@ -37,6 +39,8 @@ pub(crate) enum ParentError {
     ChangedDuplicate,
     StaleRequest,
     Overloaded,
+    /// Genuine transition retained by its producer until this Main consumes its preceding handoff.
+    TransitionPending,
     ProfileMismatch,
     ForeignPeer,
     IdentityExhausted,
@@ -61,10 +65,19 @@ pub(super) enum ParentActivityFailureOrigin {
 #[derive(Clone, Copy)]
 pub(super) enum Reply {
     Acknowledged,
-    Folder { identity: MainIdentity, next: u32 },
+    Folder {
+        identity: MainIdentity,
+        next: u32,
+    },
     Environment(MainIdentity),
-    Browser { identity: MainIdentity, pid: NonZeroU32 },
-    Granted { lease: LeaseKey, identity: MainIdentity },
+    Browser {
+        identity: MainIdentity,
+        pid: NonZeroU32,
+    },
+    Granted {
+        lease: LeaseKey,
+        identity: MainIdentity,
+    },
     Released,
     Reloaded(LeaseKey),
     Cancelled,
@@ -72,6 +85,16 @@ pub(super) enum Reply {
     Rejected(sugarsubstitute_contracts::lifecycle::LifecycleRejection),
     Output(super::output::OutputFacts),
     OutputIdle(LeaseKey),
+    BackendUnavailable {
+        failed: LeaseKey,
+        status: u32,
+        affected_clients: u16,
+        retry_ready: bool,
+    },
+    BackendReplaced {
+        identity: MainIdentity,
+        pair: sugarsubstitute_contracts::lifecycle::GrantedResourceReplacement,
+    },
     MainFailed(sugarsubstitute_supervision::lifecycle_protocol::MainStageFailure),
 }
 

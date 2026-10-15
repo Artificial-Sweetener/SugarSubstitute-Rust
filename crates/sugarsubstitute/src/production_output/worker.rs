@@ -11,6 +11,7 @@ pub(super) struct Parsed {
     pub(super) delivery: Option<std::num::NonZeroU64>,
     pub(super) change: Option<TranscriptChange>,
     pub(super) snapshot: Option<OutputSnapshot>,
+    pub(super) notice: Option<BackendNotice>,
 }
 pub(super) fn check(context: &JobContext) -> Result<(), OutputError> {
     if context.cancellation_requested() {
@@ -34,13 +35,13 @@ pub(super) fn parse(
     let state::State { transcript, frame } = &mut *state;
     let frame = frame.as_ref().ok_or(OutputError::Order)?;
     let decoded = FrameCodec::decode(frame.as_bytes())?;
-    if decoded.header != pending.header {
-        return Err(OutputError::Identity);
-    }
     let DecodedPayload::Reply(reply) = decoded.payload else { return Err(OutputError::Identity) };
+    if let Some(notice) = recovery::notice(binding, pending, decoded.header, reply)? {
+        return Ok(Parsed { delivery: None, change: None, snapshot: None, notice: Some(notice) });
+    }
     match reply {
         ReplyOutcome::OutputIdle(lease) if lease == binding.lease => {
-            Ok(Parsed { delivery: None, change: None, snapshot: None })
+            Ok(Parsed { delivery: None, change: None, snapshot: None, notice: None })
         }
         ReplyOutcome::OutputDelivery(delivery) => {
             if delivery.lease != binding.lease
@@ -83,5 +84,6 @@ pub(super) fn apply_delivery(
         delivery: Some(delivery.delivery_id),
         change: Some(change),
         snapshot: Some(OutputSnapshot::new(view, custody.clone())),
+        notice: None,
     })
 }

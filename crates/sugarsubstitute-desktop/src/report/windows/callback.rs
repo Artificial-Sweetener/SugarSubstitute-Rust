@@ -7,7 +7,9 @@ use crate::windows_subclass::{callback, destroy_callback};
 use std::cell::Cell;
 mod queue;
 use queue::Queue;
-use sugarsubstitute_contracts::incident::{ExportSelection, ReportAction, ReportBinding};
+use sugarsubstitute_contracts::incident::{
+    ExportSelection, ReportAction, ReportBinding, ReportRestartAvailability,
+};
 use tao::event_loop::EventLoopProxy;
 use windows::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM},
@@ -39,6 +41,7 @@ pub(super) struct Callback {
     pub(super) parent: HWND,
     pub(super) children: Cell<[HWND; 8]>,
     pub(super) enabled: Cell<bool>,
+    pub(super) restart: Cell<ReportRestartAvailability>,
     proxy: EventLoopProxy<Event>,
     queue: Queue,
     failure: Cell<Option<ReportSurfaceError>>,
@@ -50,13 +53,14 @@ impl Callback {
             binding: Cell::new(binding),
             children: Cell::new([HWND::default(); 8]),
             enabled: Cell::new(false),
+            restart: Cell::new(ReportRestartAvailability::Unavailable),
             proxy,
             queue: Queue::new(),
             failure: Cell::new(None),
         }
     }
     fn push(&self, intent: Intent) {
-        if !self.enabled.get() {
+        if !self.enabled.get() || !intent.allowed(self.restart.get()) {
             return;
         }
         match self.queue.push(Input { binding: self.binding.get(), intent }) {

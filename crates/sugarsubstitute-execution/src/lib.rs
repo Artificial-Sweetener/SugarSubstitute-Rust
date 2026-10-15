@@ -117,6 +117,10 @@ pub mod windows_lifecycle_pipe;
 #[cfg(windows)]
 pub mod windows_output;
 
+/// Deterministic external clock injection for tests using the real execution owner.
+#[cfg(any(test, feature = "boundary-fixtures"))]
+pub mod clock_fixture;
+
 pub use clock::MonotonicClock;
 pub use runtime::{
     EntryEnvironmentCustody, EntryEnvironmentExtent, ExecutionClient, ExecutionLimits,

@@ -28,6 +28,7 @@ pub(super) struct IncidentFlow {
     preparing: bool,
     seed: Option<SeedTransaction>,
     pub(super) collection_run: Option<RunKey>,
+    recovery: recovery::RecoveryFlow,
 }
 impl IncidentFlow {
     /// Close original jobs before releasing the namespace or capture registration.
@@ -46,6 +47,9 @@ impl IncidentFlow {
         } else {
             self.host.construction_delivered()
         }) {
+            return Ok(false);
+        }
+        if !self.close_recovery(resources, budget)? {
             return Ok(false);
         }
         let Some(active) = &mut self.seed else { return Ok(true) };
@@ -81,6 +85,7 @@ impl IncidentFlow {
             preparing: false,
             seed: None,
             collection_run: None,
+            recovery: recovery::RecoveryFlow::new(),
         }
     }
     /// Transfer the native entry namespace once before actual capture or child effects.
@@ -123,8 +128,9 @@ impl IncidentFlow {
     }
     /// Consume actual constructor/helper terminals during both normal progress and retirement.
     pub(super) fn capture(&mut self, batch: &CompletionBatch) -> Result<()> {
-        let results: [Result<()>; 7] = [
+        let results: [Result<()>; 8] = [
             self.reporting.capture(batch),
+            self.host.capture_recovery(batch).map_err(Into::into),
             self.host.capture(batch).map(|_| ()).map_err(Into::into),
             self.host.capture_seed_jobs(batch).map(|_| ()).map_err(Into::into),
             self.host.capture_collection(batch).map(|_| ()).map_err(Into::into),
@@ -152,6 +158,9 @@ impl IncidentFlow {
         if record.seeded {
             return Ok(true);
         }
+        if !self.seed_busy() && self.host.next_effect()?.is_some() {
+            return Ok(false);
+        }
         if self.collection_run.is_some() {
             return Ok(false);
         }
@@ -171,14 +180,33 @@ impl IncidentFlow {
                 return Ok(false);
             }
         } else {
+            backend
+                .preflight_policy(
+                    sugarsubstitute_application::supervision::ResourceStorageInput::Current,
+                )
+                .map_err(outer)?;
             let enrollment = RunEnrollment {
                 run: record.run,
                 launch: record.launch,
                 profile: start.value()?.profile.clone(),
             };
-            let policy = backend.incident_policy();
-            policy.enroll_run(enrollment)?;
-            self.host.seed(policy, material.seed.clone(), material.context)?;
+            backend
+                .incident_policy(
+                    sugarsubstitute_application::supervision::ResourceStorageInput::Enrollment(
+                        &enrollment,
+                    ),
+                )
+                .map_err(outer)?
+                .enroll_run(enrollment)?;
+            self.host.seed(
+                backend
+                    .incident_policy(
+                        sugarsubstitute_application::supervision::ResourceStorageInput::Current,
+                    )
+                    .map_err(outer)?,
+                material.seed.clone(),
+                material.context,
+            )?;
             let Some(IncidentEffect::PublishSeed { scope, seed }) = self.host.next_effect()? else {
                 return Err("Actual seed command missing".into());
             };
@@ -263,10 +291,14 @@ impl IncidentFlow {
     }
     /// Inspect original preparation, seed, collection and receiving custody before idle close.
     pub(super) fn diagnostic_custody_pending(&self) -> bool {
-        self.preparation.is_some()
+        self.recovery.pending()
+            || self.preparation.is_some()
             || self.seed.is_some()
             || self.collection_run.is_some()
             || self.host.diagnostic_custody_pending()
             || self.reporting.diagnostic_custody_pending()
     }
 }
+
+#[path = "incident_flow/recovery.rs"]
+mod recovery;

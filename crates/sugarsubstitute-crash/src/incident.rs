@@ -119,3 +119,6 @@ pub use evidence::{IncidentLogCode, RedactedDiagnosticFact, RedactedTextChunk};
 
 #[cfg(test)]
 mod tests;
+
+mod pending;
+pub use pending::PendingIncidentSnapshot;

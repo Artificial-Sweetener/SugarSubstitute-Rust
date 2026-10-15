@@ -3,6 +3,9 @@
 //! Compose one actual independent headless witness for managed backends.
 mod attachment;
 mod diagnostics;
+mod invocation;
+/// Original fixed witness invocation/control metadata role; no new reservation.
+pub(crate) const WITNESS_STORAGE_BYTES: u64 = 1_048_576;
 mod retirement;
 use super::coordinator_backend::{BackendResources, Result};
 use std::{
@@ -47,6 +50,7 @@ impl CoordinatorCustody {
         until: Moment,
         resources: &mut BackendResources<'_>,
     ) -> Result<Self> {
+        Self::validate_invocation_storage(&executable, &installation, Some(&environment))?;
         let key = BackendCustodyKey::new(owner, BackendCustodySession::new(1)?);
         let attachment = attachment::Attachment::new(key, until, resources)?;
         Ok(Self {
@@ -94,7 +98,7 @@ impl CoordinatorCustody {
             let key = parent.key();
             let deadline = bootstrap.deadline().ok_or("Custody original native cutoff absent")?;
             let section = bootstrap.borrow_inheritance().section.as_raw_handle() as usize;
-            let fields = [
+            let fields: [String; invocation::FIELDS] = [
                 "--internal-backend-custody".to_owned(),
                 "--bootstrap".into(),
                 section.to_string(),

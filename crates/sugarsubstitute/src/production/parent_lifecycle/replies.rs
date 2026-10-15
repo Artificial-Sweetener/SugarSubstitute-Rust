@@ -70,6 +70,11 @@ impl ParentLifecycle {
             return Ok(());
         };
         resources.session.control.validate_current_admission()?;
+        if let Some(Reply::BackendReplaced { pair, .. }) = self.requests.get(index)?.reply
+            && !self.replacement_reply_ready(pair, resources)?
+        {
+            return Ok(());
+        }
         let record = self.requests.get(index)?;
         let header = record.header;
         let until = record.until.ok_or(ParentError::WrongPhase)?;
@@ -151,6 +156,19 @@ impl ParentLifecycle {
             }),
             Reply::OutputIdle(lease) => ReplyOutcome::OutputIdle(reference(lease)),
             Reply::MainFailed(failure) => ReplyOutcome::MainStageFailed(failure),
+            Reply::BackendUnavailable { failed, status, affected_clients, retry_ready } => {
+                ReplyOutcome::BackendUnavailable {
+                    failed: reference(failed),
+                    status,
+                    affected_clients,
+                    retry_ready,
+                }
+            }
+            Reply::BackendReplaced { identity, pair } => ReplyOutcome::BackendReplaced {
+                identity,
+                previous: reference(pair.previous),
+                current: reference(pair.current),
+            },
         };
         // The codec borrows record output; splitting native queue state avoids a copy.
         let control = &resources.session.control;

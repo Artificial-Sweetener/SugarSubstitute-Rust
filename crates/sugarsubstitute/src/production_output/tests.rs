@@ -5,6 +5,7 @@ use super::*;
 use std::error::Error;
 use sugarsubstitute_contracts::transcript::*;
 use sugarsubstitute_supervision::lifecycle_protocol::OutputDelivery;
+mod backend_recovery;
 mod retirement;
 mod support;
 use support::*;
@@ -18,12 +19,12 @@ fn one_pull_retains_original_header_deadline_and_never_acknowledges_shape() -> T
     let message = owner.prepare_pull(h, Moment::from_nanos(100))?;
     assert!(matches!(message.payload, WirePayload::OutputPull { acknowledged_delivery: None, .. }));
     assert!(owner.prepare_pull(header(binding, 3)?, Moment::from_nanos(101)).is_err());
-    let (same, cutoff) = owner.pending_pull().ok_or("Pending missing")?;
+    let (same, cutoff) = owner.pending_message().ok_or("Pending missing")?;
     assert_eq!(same.header, h);
     assert_eq!(cutoff, Moment::from_nanos(100));
-    owner.admitted_pull(h)?;
-    assert!(owner.pending_pull().is_none());
-    assert!(owner.admitted_pull(h).is_err());
+    owner.admitted_request(h)?;
+    assert!(owner.pending_message().is_none());
+    assert!(owner.admitted_request(h).is_err());
     owner.close();
     assert!(!owner.worker_pending());
     drop(owner);
@@ -188,7 +189,7 @@ fn empty_frame_submission_preserves_original_pull_before_any_factory() -> TestRe
     let mut owner = output(&rig)?;
     let header = header(binding()?, 2)?;
     owner.prepare_pull(header, Moment::from_nanos(100))?;
-    owner.admitted_pull(header)?;
+    owner.admitted_request(header)?;
     let mut frame = None;
     assert!(matches!(
         owner.submit_frame(&rig.client, &rig.scope, JobId::new(2)?, &mut frame),

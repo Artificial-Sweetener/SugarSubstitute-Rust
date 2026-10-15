@@ -157,8 +157,8 @@ pub enum IncidentServiceObservation {
     Recovered {
         /// Current admitted recovery scope.
         scope: IncidentRecoveryScope,
-        /// Inert original publication identity.
-        original_operation: LogicalStoreOperationKey,
+        /// Actual recorded historical operation, absent for canonical summaries which persist none.
+        original_operation: Option<LogicalStoreOperationKey>,
         /// Actual stored content.
         summary: IncidentSummary,
     },

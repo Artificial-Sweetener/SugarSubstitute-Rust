@@ -125,6 +125,14 @@ pub enum WirePayload<'a> {
         /// Original Acquire request; never a caller-supplied resource privilege.
         acquisition: RequestId,
     },
+    /// Tag20: explicit retry claim for the exact unavailable managed lease.
+    /// Authentication, actual old settlement and retained target admission stay local.
+    RetryBackend {
+        /// Exact mounted Main; its full run must match the checked frame header.
+        identity: MainIdentity,
+        /// Original unavailable lease, never a new target or process privilege.
+        failed: LeaseReference,
+    },
 }
 impl WirePayload<'_> {
     pub(super) const fn kind(&self) -> u16 {
@@ -148,6 +156,7 @@ impl WirePayload<'_> {
             Self::OutputPull { .. } => 17,
             Self::MainFailed(_) => 18,
             Self::SettleAttempt { .. } => 19,
+            Self::RetryBackend { .. } => 20,
         }
     }
 }
@@ -231,5 +240,13 @@ pub enum DecodedPayload<'a> {
         identity: MainIdentity,
         /// Original Acquire request; never a caller-supplied resource privilege.
         acquisition: RequestId,
+    },
+    /// Tag20: explicit retry claim for the exact unavailable managed lease.
+    /// Authentication, actual old settlement and retained target admission stay local.
+    RetryBackend {
+        /// Exact mounted Main; its full run must match the checked frame header.
+        identity: MainIdentity,
+        /// Original unavailable lease, never a new target or process privilege.
+        failed: LeaseReference,
     },
 }

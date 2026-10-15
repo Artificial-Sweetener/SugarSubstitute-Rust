@@ -5,8 +5,12 @@
 mod acquisition;
 #[path = "parent_lifecycle/attempt.rs"]
 mod attempt;
+#[cfg(test)]
+pub(in crate::production) use attempt::SettledAttemptFailure;
 #[path = "parent_lifecycle/backend.rs"]
 mod backend;
+#[path = "parent_lifecycle/causes.rs"]
+pub(in crate::production) mod causes;
 #[path = "parent_lifecycle/expiry.rs"]
 mod expiry;
 #[path = "parent_lifecycle/folders.rs"]
@@ -26,6 +30,8 @@ mod output;
 mod profile_observation;
 #[path = "parent_lifecycle/receive.rs"]
 mod receive;
+#[path = "parent_lifecycle/recovery.rs"]
+pub(in crate::production) mod recovery;
 #[path = "parent_lifecycle/replies.rs"]
 mod replies;
 #[path = "parent_lifecycle/requests.rs"]
@@ -51,9 +57,7 @@ use std::error::Error;
 use sugarsubstitute_application::supervision::{MainAuthorizationSession, UiWatchdog};
 use sugarsubstitute_contracts::{
     configuration::ProfileId,
-    execution::{
-        CompletionBatch, JobCompletion, JobSpec, MemoryClaim, Moment, ScopeId, TerminalKind,
-    },
+    execution::{CompletionBatch, JobCompletion, JobSpec, Moment, ScopeId, TerminalKind},
     lifecycle::{ClientBinding, ConnectionId, LeaseKey, RunKey, ShutdownBudget},
     startup::LaunchId,
 };
@@ -93,10 +97,10 @@ pub(crate) struct ParentLifecycle {
     watchdog: Option<UiWatchdog>,
     activity_revision: u64,
     lease: Option<LeaseKey>,
+    recovery: recovery::Recovery,
     backend_failed_resource: Option<sugarsubstitute_contracts::lifecycle::ResourceKey>,
     backend_failure_seen: bool,
     _attempt_failure: Option<Cause>,
-    settled_attempt_failures: [Option<attempt::SettledAttemptFailure>; 8],
     attempt_cleanup: Option<attempt::AttemptSettlement>,
     output: Option<output::Delivery>,
     next_delivery: u64,
@@ -125,7 +129,7 @@ pub(crate) struct ParentLifecycle {
     forwarded: Option<sugarsubstitute_contracts::lifecycle::ResourceTransition>,
     disconnect_attempted: bool,
     close_after_reply: Option<usize>,
-    _storage: MemoryClaim,
+    backend_causes: Option<causes::BackendCauses>,
 }
 
 impl ParentLifecycle {
@@ -136,6 +140,13 @@ impl ParentLifecycle {
         2 * 1024 * 1024
     }
 
+    /// Fixed actor and eight original output buffers inside the unchanged Parent partition.
+    /// The receiving composition separately preflights dynamic policy/transition/input peaks before effects.
+    pub(crate) const fn fixed_storage_bytes() -> u64 {
+        (std::mem::size_of::<Self>() + history::SLOTS * 32768) as u64
+            + causes::BackendCauses::heap_bytes()
+    }
+
     /// Preserve original run/connection/QPC facts after actual pipe preparation.
     /// This constructor performs no IO, provider call or authentication.
     pub(crate) fn new(
@@ -144,9 +155,11 @@ impl ParentLifecycle {
         profile: ProfileId,
         connection: ConnectionId,
         original: LifecyclePipeDeadline,
-        storage: MemoryClaim,
+        causes: &mut Option<causes::BackendCauses>,
     ) -> std::result::Result<Self, ParentError> {
-        if storage.bytes() != Self::storage_bytes() {
+        if causes.as_ref().is_none_or(|owner| owner.storage_bytes() != Self::storage_bytes())
+            || Self::fixed_storage_bytes() > Self::storage_bytes()
+        {
             return Err(ParentError::Storage);
         }
         Ok(Self {
@@ -172,10 +185,10 @@ impl ParentLifecycle {
             watchdog: None,
             activity_revision: 0,
             lease: None,
+            recovery: recovery::Recovery::default(),
             backend_failed_resource: None,
             backend_failure_seen: false,
             _attempt_failure: None,
-            settled_attempt_failures: std::array::from_fn(|_| None),
             attempt_cleanup: None,
             output: None,
             next_delivery: 0,
@@ -203,7 +216,7 @@ impl ParentLifecycle {
             forwarded: None,
             disconnect_attempted: false,
             close_after_reply: None,
-            _storage: storage,
+            backend_causes: Some(causes.take().ok_or(ParentError::Storage)?),
         })
     }
 
@@ -249,6 +262,9 @@ impl ParentLifecycle {
         self.finish_main_retirement(resources)?;
         *step = "expire_acquisition";
         self.expire_acquisition(resources.execution.client.now()?)?;
+        self.expire_recovery(resources.execution.client.now()?)?;
+        *step = "advance_backend_command_admission";
+        self.advance_backend_commands(resources)?;
         while let Some(observation) = resources.session.control.take_observation() {
             *step = match &observation {
                 sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeObservation::Prepared => "observe_prepared",
@@ -348,9 +364,21 @@ impl ParentLifecycle {
         self.failure.as_deref()
     }
 
-    /// Borrow the actual settled attempt cause and original request/campaign correlation.
-    pub(crate) fn settled_attempt_failure(&self) -> Option<&attempt::SettledAttemptFailure> {
-        self.settled_attempt_failures.iter().flatten().next()
+    /// Report a whole actual producer return still owned locally, before Root captures its metadata.
+    pub(in crate::production) fn pending_backend_delivery(&self) -> bool {
+        self.forwarded.is_some()
+    }
+
+    /// Block fresh shared backend commands while this actual native binding handoff is unconsumed.
+    /// Completion adoption, checked cleanup and the authenticated current OutputPull remain admissible.
+    pub(crate) fn pending_backend_handoff(&self) -> bool {
+        !self.closed && self.recovery.handoff.is_some()
+    }
+
+    /// Borrow the actual settled cause for owner custody assertions.
+    #[cfg(test)]
+    pub(crate) fn settled_attempt_failure(&self) -> Option<&SettledAttemptFailure> {
+        self.backend_causes.as_ref()?.first()
     }
     /// Observe the first failed backend request's actual reply association.
     /// Absence grants no inference about backend records or readiness. The caller

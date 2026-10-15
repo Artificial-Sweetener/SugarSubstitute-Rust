@@ -72,7 +72,7 @@ impl IncidentReporting {
         if self.store.is_some() || self.completion.is_some() || self.export_work.is_some() {
             return Ok(());
         }
-        if !self.initial_loaded {
+        if !self.initial_view_admitted {
             if host.next_effect()?.is_some() {
                 return Ok(());
             }
@@ -86,7 +86,7 @@ impl IncidentReporting {
                 StoreKind::View { previous: None },
                 context.at(),
             )?;
-            self.initial_loaded = true;
+            self.initial_view_admitted = true;
             return Ok(());
         }
         if self.retained_effect.is_none() {
@@ -163,7 +163,8 @@ impl IncidentReporting {
                 let (scope, binding, selection) = (*scope, *binding, *selection);
                 self.begin_export(host, scope, binding, selection, resources)?;
             }
-            IncidentEffect::ForwardRestartIntent { .. } => {}
+            IncidentEffect::ForwardRestartIntent { .. }
+            | IncidentEffect::ForwardRecoveredRestartIntent { .. } => {}
             _ => {}
         }
         let _resources = resources;
@@ -303,6 +304,7 @@ impl IncidentReporting {
                         .ok_or("Report stream request identity exhausted")?;
                     let work = self.store.as_mut().ok_or("Actual view store missing")?;
                     work.stream_plan = Some(ReporterViewPlan {
+                        restart: self.restart,
                         key: self.key.ok_or("Actual report key missing")?,
                         first_request: request,
                         context: DiagnosticContext {

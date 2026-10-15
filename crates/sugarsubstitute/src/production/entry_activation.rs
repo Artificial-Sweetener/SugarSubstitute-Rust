@@ -3,8 +3,12 @@
 //! Compose actual authenticated requests, trusted capture and retained desktop starts.
 #[path = "entry_activation/attachment_completion.rs"]
 mod attachment_completion;
+#[path = "entry_activation/backend_failure.rs"]
+mod backend_failure;
 #[path = "entry_activation/capture.rs"]
 mod capture;
+#[path = "entry_activation/cause_transfer.rs"]
+mod cause_transfer;
 #[path = "entry_activation/component.rs"]
 mod component;
 pub(crate) use component::ProfileComponent;
@@ -15,7 +19,9 @@ mod desktop_output;
 #[path = "entry_activation/desktop_role.rs"]
 pub(crate) mod desktop_role;
 #[path = "entry_activation/forwarding.rs"]
-mod forwarding;
+pub(in crate::production) mod forwarding;
+#[path = "entry_activation/funding.rs"]
+pub(in crate::production) mod funding;
 #[path = "entry_activation/incident_collection.rs"]
 mod incident_collection;
 #[path = "entry_activation/incident_flow.rs"]
@@ -96,6 +102,7 @@ struct Record {
         Option<std::result::Result<CaptureAttachRetirementReport, CaptureAttachFailure>>,
     start: Option<DesktopStart>,
     parent: Option<Box<ParentLifecycle>>,
+    retained_causes: Option<crate::production::parent_lifecycle::causes::BackendCauses>,
     preparation: Option<BackendPreparation>,
     retired: Option<retirement::RetiredDesktop>,
     forwarded: Option<forwarding::Forwarded>,
@@ -135,7 +142,6 @@ pub(crate) struct ProductionActivation {
     working_directory: PathBuf,
     capture_root: PathBuf,
     capture: Option<CaptureRegistration>,
-    backend: Option<RetainedBackend>,
     delivery: Option<delivery::TransitionDelivery>,
     records: [Option<RetainedRecord>; 64],
     pending: [Option<PendingProjection>; 64],
@@ -147,6 +153,8 @@ pub(crate) struct ProductionActivation {
     failure_run: Option<RunKey>,
     failure_resource: Option<ResourceKey>,
     next_wake: Option<Instant>,
+    // Policy credit outlives dependent Record/Forwarded/delivery allocations.
+    backend: Option<RetainedBackend>,
 }
 impl ProductionActivation {
     /// Return the unique heap owner before native pumping; locations remain inert until native validation.
@@ -165,7 +173,6 @@ impl ProductionActivation {
             working_directory,
             capture_root,
             capture: None,
-            backend: None,
             delivery: None,
             records: [const { None }; 64],
             pending: [const { None }; 64],
@@ -177,6 +184,7 @@ impl ProductionActivation {
             failure_run: None,
             failure_resource: None,
             next_wake: None,
+            backend: None,
         }))
     }
     /// Assign inert development intent only to the first original admitted launch.
@@ -209,13 +217,20 @@ impl ProductionActivation {
         {
             return Some(cause);
         }
+        if let Some(operation) = self
+            .failure
+            .as_deref()
+            .and_then(|cause| cause.downcast_ref::<backend_failure::OperationFailure>())
+        {
+            return Some(operation.cause());
+        }
         if let Some(key) = self.failure_resource
             && let Some(retained) = &self.backend
         {
-            if let Some(cause) = retained.backend.failure(key) {
+            if let Some(cause) = retained.backend.cleanup_failure(key) {
                 return Some(cause);
             }
-            if let Some(cause) = retained.backend.cleanup_failure(key) {
+            if let Some(cause) = retained.backend.failure(key) {
                 return Some(cause);
             }
         }
@@ -338,6 +353,11 @@ impl EntryActivation for ProductionActivation {
         mut resources: EntryResources<'_>,
     ) -> Result<HeadlessStep> {
         if let Err(cause) = self.activity(batch, &mut resources) {
+            tracing::error!(
+                operation = "production_activation_transition_failed",
+                failure = ?crate::production::entry_runner::FailureDisplay(cause.as_ref()),
+                "Actual activation turn failed before original cause retention"
+            );
             self.preserve(cause);
             return Err("Actual production activation failed with retained source".into());
         }

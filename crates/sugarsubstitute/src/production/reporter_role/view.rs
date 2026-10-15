@@ -15,6 +15,7 @@ pub(in crate::production) struct ViewReceiver {
     visible: Option<ReportBinding>,
     pending: Option<ReportBinding>,
     replacing: bool,
+    restart: ReportRestartAvailability,
     error_claim: Option<MemoryClaim>,
     rejection: Option<ViewRejection>,
     funding: MemoryLease,
@@ -99,6 +100,7 @@ impl ViewReceiver {
             visible: None,
             pending: None,
             replacing: false,
+            restart: ReportRestartAvailability::Unavailable,
             error_claim: None,
             rejection: None,
             funding: context.memory().clone(),
@@ -166,14 +168,14 @@ impl ViewReceiver {
         }
         let binding = DiagnosticTransferBinding::from_frame(&frame).map_err(ViewFailure::Wire)?;
         match frame.command {
-            DiagnosticCommand::BeginView { session, total, sha256 } => {
+            DiagnosticCommand::BeginView { session, restart, total, sha256 } => {
                 if self.visible.is_some() {
                     return Err(ViewFailure::Wire(DiagnosticWireError::Stale));
                 }
-                self.begin(binding, session, total, sha256, false, context)?;
+                self.begin(binding, (session, restart), total, sha256, false, context)?;
                 Ok(PreparedView::Partial)
             }
-            DiagnosticCommand::ReplaceView { session, old, total, sha256 } => {
+            DiagnosticCommand::ReplaceView { session, restart, old, total, sha256 } => {
                 let current = self.visible.ok_or(ViewFailure::Wire(DiagnosticWireError::Stale))?;
                 let incident =
                     frame.context.incident.ok_or(ViewFailure::Wire(DiagnosticWireError::Shape))?;
@@ -184,7 +186,7 @@ impl ViewReceiver {
                 {
                     return Err(ViewFailure::Wire(DiagnosticWireError::Stale));
                 }
-                self.begin(binding, session, total, sha256, true, context)?;
+                self.begin(binding, (session, restart), total, sha256, true, context)?;
                 Ok(PreparedView::Partial)
             }
             DiagnosticCommand::ViewChunk { chunk, .. } => {
@@ -234,7 +236,12 @@ impl ViewReceiver {
                 let text_string = String::from_utf8(text.bytes).map_err(ViewFailure::Text)?;
                 let claim =
                     self.error_claim.take().ok_or(ViewFailure::Wire(DiagnosticWireError::Shape))?;
-                let view = PreparedText { binding: view_binding, text: text_string, claim };
+                let view = PreparedText {
+                    binding: view_binding,
+                    text: text_string,
+                    claim,
+                    restart: self.restart,
+                };
                 self.transfer = None;
                 self.pending = Some(view_binding);
                 Ok(if self.replacing {
@@ -249,12 +256,13 @@ impl ViewReceiver {
     fn begin(
         &mut self,
         binding: DiagnosticTransferBinding,
-        session: ReportSessionId,
+        presentation: (ReportSessionId, ReportRestartAvailability),
         total: u64,
         sha256: [u8; 32],
         replacing: bool,
         context: &JobContext,
     ) -> Result<(), ViewFailure> {
+        let (session, restart) = presentation;
         if self.transfer.is_some()
             || self.pending.is_some()
             || binding.key().session().get() != session.get()
@@ -279,6 +287,7 @@ impl ViewReceiver {
         self.text = Some(Text { bytes, claim });
         self.transfer = Some(transfer);
         self.replacing = replacing;
+        self.restart = restart;
         Ok(())
     }
     /// Only the actual native surface observation advances the visible binding.
@@ -297,6 +306,7 @@ impl ViewReceiver {
 
 /// Whole UTF8 and its original claim move together into the affine native presentation boundary.
 pub(in crate::production) struct PreparedText {
+    restart: ReportRestartAvailability,
     binding: ReportBinding,
     pub(super) text: String,
     claim: MemoryClaim,
@@ -304,7 +314,7 @@ pub(in crate::production) struct PreparedText {
 impl PreparedText {
     /// Native shape validation consumes already decoded text; this parses no wire on the UI thread.
     pub(in crate::production) fn into_native(self) -> Result<NativeReportView, ReportSurfaceError> {
-        NativeReportView::from_claimed(self.binding, self.text, self.claim)
+        NativeReportView::from_claimed(self.binding, self.text, self.claim, self.restart)
     }
 }
 

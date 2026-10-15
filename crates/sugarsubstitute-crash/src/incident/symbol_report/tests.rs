@@ -223,3 +223,6 @@ fn actual_provider_buffer_owner_closes_under_same_pair_and_retains_charge_throug
     assert_eq!(rig.cleanup.snapshot().reserved_bytes, 0);
     Ok(())
 }
+
+#[path = "tests/causes.rs"]
+mod causes;

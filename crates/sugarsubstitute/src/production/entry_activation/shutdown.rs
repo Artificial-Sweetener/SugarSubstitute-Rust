@@ -90,9 +90,16 @@ impl ProductionActivation {
             return Ok(());
         }
         if record.parent.is_some() {
-            progress::with_parent(record, backend, capture, resources, |parent, borrowed| {
-                Ok(parent.request_cleanup(parent.cleanup_budget(budget), borrowed)?)
-            })?;
+            progress::with_parent(
+                record,
+                backend,
+                capture,
+                resources,
+                false,
+                |parent, borrowed| {
+                    Ok(parent.request_cleanup(parent.cleanup_budget(budget), borrowed)?)
+                },
+            )?;
         }
         let start = record.start.as_mut().ok_or("Original desktop start missing")?;
         if let Some(output) = &mut start.output {

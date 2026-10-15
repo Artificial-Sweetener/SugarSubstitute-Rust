@@ -33,6 +33,18 @@ impl ClientRequests {
         pending.purpose = Purpose::OutputPull;
         Ok(())
     }
+    /// Designate the same finite output consumer's distinct user retry request.
+    pub(in crate::production::child) fn backend_retry(
+        &mut self,
+        header: WireHeader,
+    ) -> Result<(), RequestError> {
+        let pending = self.find_mut(header)?;
+        if pending.phase != Phase::Prepared || pending.purpose != Purpose::Other {
+            return Err(RequestError::Order);
+        }
+        pending.purpose = Purpose::BackendRetry;
+        Ok(())
+    }
     /// Inspect only original queue admission; a prepared request has issued no native write.
     pub(in crate::production::child) fn prepared(
         &self,

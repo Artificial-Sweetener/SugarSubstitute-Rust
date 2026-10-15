@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Project one registered startup specification under its admitted finite allocation.
+#[path = "projection/capacity.rs"]
+mod capacity;
 #[path = "projection/restart.rs"]
 mod restart;
 pub(super) use restart::RestartProjection;
@@ -31,13 +33,29 @@ use sugarsubstitute_supervision::{
 /// Bound known projection buffers; the original frame keeps its own native loan.
 pub(super) const PROJECTION_BYTES: u64 = 4 * 1024 * 1024;
 // The other two MiB remain available for distinct funded parent lifecycle storage.
-const PROJECTION_DATA_BYTES: u64 = 2 * 1024 * 1024
-    - size_of::<super::Record>() as u64
-    - super::RetainedBackend::required_storage_bytes()
-    - super::delivery::TransitionDelivery::storage_bytes()
-    - size_of::<ProjectionInput>() as u64
-    - REGISTERED_STARTUP_BYTES;
-
+pub(super) const fn projection_data_bytes() -> Option<u64> {
+    let bytes = match PROJECTION_BYTES.checked_sub(super::ParentLifecycle::storage_bytes()) {
+        Some(bytes) => bytes,
+        None => return None,
+    };
+    let bytes = match bytes.checked_sub(size_of::<super::Record>() as u64) {
+        Some(bytes) => bytes,
+        None => return None,
+    };
+    let bytes = match bytes.checked_sub(super::RetainedBackend::required_storage_bytes()) {
+        Some(bytes) => bytes,
+        None => return None,
+    };
+    let bytes = match bytes.checked_sub(super::delivery::TransitionDelivery::storage_bytes()) {
+        Some(bytes) => bytes,
+        None => return None,
+    };
+    let bytes = match bytes.checked_sub(size_of::<ProjectionInput>() as u64) {
+        Some(bytes) => bytes,
+        None => return None,
+    };
+    bytes.checked_sub(REGISTERED_STARTUP_BYTES)
+}
 /// Keep the real frame and configured inert capture location across admission rejection.
 pub(super) struct ProjectionInput {
     request: Option<AuthenticatedEntryLaunch>,
@@ -105,7 +123,8 @@ pub(super) struct ProjectedEntry {
     pub(super) frontend: Option<FrontendInstallationInput>,
     pub(super) backend_environment: Option<LaunchEnvironment>,
     pub(super) desktop_environment: Option<LaunchEnvironment>,
-    _charge: MemoryClaim,
+    pub(super) policy_credit: Option<super::funding::ProjectionPolicyCredit>,
+    _charge: super::funding::ProjectionDataFunding,
 }
 
 /// Preserve the original failure and frame through late cancellation or rejection.
@@ -131,6 +150,7 @@ pub(super) fn return_unused_source(outcome: &mut JobOutcome<ProjectedEntry, Proj
 enum ProjectionCause {
     NotStarted,
     Claim(MemoryClaimError),
+    Funding(sugarsubstitute_contracts::lifecycle::LifecycleRejection),
     Operation(Box<dyn Error + Send + Sync>),
 }
 impl ProjectionCause {
@@ -138,6 +158,7 @@ impl ProjectionCause {
         match self {
             Self::NotStarted => None,
             Self::Claim(cause) => Some(cause),
+            Self::Funding(cause) => Some(cause),
             Self::Operation(cause) => Some(cause.as_ref()),
         }
     }
@@ -193,7 +214,17 @@ pub(super) fn project(
     mut input: ChargedBlockingInput<ProjectionInput>,
     context: JobContext,
 ) -> Result<ProjectedEntry, ProjectionFailure> {
-    let charge = match context.memory().claim(PROJECTION_DATA_BYTES) {
+    let Some(bytes) = projection_data_bytes() else {
+        input.input_mut().cause = ProjectionCause::Funding(
+            sugarsubstitute_contracts::lifecycle::LifecycleRejection::Overloaded,
+        );
+        if let Some(request) = &input.input().request {
+            let post = check(&context, request.received_at(), request.until()).err();
+            input.input_mut().post = post;
+        }
+        return Err(ProjectionFailure { retained: input });
+    };
+    let charge = match context.memory().claim(bytes) {
         Ok(charge) => charge,
         Err(cause) => {
             input.input_mut().cause = ProjectionCause::Claim(cause);
@@ -220,7 +251,7 @@ pub(super) fn project(
         .and_then(|()| request.view().map_err(|cause| Box::new(cause) as _))
         .and_then(|view| {
             LaunchConfiguration::validate_path(&input.input().capture_root)?;
-            fields(view)
+            fields(view, &input.input().capture_root, bytes)
         });
     // The same preclaimed slot adopts the primary before any lazy provider.
     let projected = match outcome {
@@ -265,12 +296,11 @@ pub(super) fn project(
             return Err(ProjectionFailure { retained: input });
         }
     };
-    // Both real claims were admitted before their allocations. The temporary
-    // source box drops before its metadata claim; transferred data keeps its claim.
-    let charge = match input.input_mut()._charge.take() {
-        Some(charge) => charge,
-        None => {
+    let (charge, policy_credit) = match capacity::funding(input.input_mut(), &fields) {
+        Ok(funding) => funding,
+        Err(cause) => {
             input.input_mut().snapshot = Some(snapshot);
+            input.input_mut().cause = ProjectionCause::Operation(cause);
             return Err(ProjectionFailure { retained: input });
         }
     };
@@ -289,10 +319,12 @@ pub(super) fn project(
         frontend: Some(fields.frontend),
         backend_environment: fields.backend_environment,
         desktop_environment: Some(fields.desktop_environment),
+        policy_credit: Some(policy_credit),
         _charge: charge,
     })
 }
 struct Fields {
+    allocated_bytes: u64,
     requested_profile: PathBuf,
     profile_units: Vec<u16>,
     profile: ProfileId,
@@ -308,21 +340,29 @@ impl super::ProductionActivation {
     pub(in crate::production) fn projected_target_for_test(
         view: EntryLaunchRequestView<'_>,
     ) -> Result<BackendTarget, Box<dyn Error + Send + Sync>> {
-        Ok(fields(view)?.target)
+        Ok(fields(view, &PathBuf::new(), u64::MAX)?.target)
     }
 }
-fn fields(view: EntryLaunchRequestView<'_>) -> Result<Fields, Box<dyn Error + Send + Sync>> {
+fn fields(
+    view: EntryLaunchRequestView<'_>,
+    capture: &PathBuf,
+    available: u64,
+) -> Result<Fields, Box<dyn Error + Send + Sync>> {
+    capacity::preflight(view, capture, available)?;
     let profile_units = collect_units(view.profile_directory())?;
     let requested_profile = PathBuf::from(OsString::from_wide(&profile_units));
     LaunchConfiguration::validate_path(&requested_profile)?;
     let profile = ProfileId::new(copy_string(view.profile())?)?;
     let frontend = view.frontend();
-    let frontend = FrontendInstallationInput::new(
+    let frontend_paths = [
         path(frontend.package_directory())?,
         path(frontend.metadata_file())?,
         path(frontend.cube_directory())?,
         path(frontend.backend_script())?,
-    )?;
+    ];
+    let frontend_bytes = capacity::frontend(&frontend_paths)?;
+    let [package, metadata, cube, script] = frontend_paths;
+    let frontend = FrontendInstallationInput::new(package, metadata, cube, script)?;
     let target = match view.connection() {
         EntryConnectionView::Attached(origin) => BackendTarget::Attached(origin),
         EntryConnectionView::Managed { root, interpreter, arguments, port } => {
@@ -349,7 +389,8 @@ fn fields(view: EntryLaunchRequestView<'_>) -> Result<Fields, Box<dyn Error + Se
     } else {
         None
     };
-    Ok(Fields {
+    let mut fields = Fields {
+        allocated_bytes: 0,
         requested_profile,
         profile_units,
         profile,
@@ -358,7 +399,9 @@ fn fields(view: EntryLaunchRequestView<'_>) -> Result<Fields, Box<dyn Error + Se
         frontend,
         backend_environment,
         desktop_environment,
-    })
+    };
+    fields.allocated_bytes = capacity::data(&fields, frontend_bytes)?;
+    Ok(fields)
 }
 fn copy_string(value: &str) -> Result<String, std::collections::TryReserveError> {
     let mut result = String::new();

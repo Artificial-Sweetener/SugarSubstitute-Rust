@@ -24,8 +24,8 @@ use windows::{
             Input::KeyboardAndMouse::GetFocus,
             WindowsAndMessaging::{
                 BS_PUSHBUTTON, CreateWindowExW, DestroyWindow, HMENU, SWP_NOACTIVATE, SWP_NOZORDER,
-                SetWindowPos, SetWindowTextW, WINDOW_EX_STYLE, WINDOW_STYLE, WS_CHILD, WS_TABSTOP,
-                WS_VISIBLE,
+                SetWindowPos, SetWindowTextW, WINDOW_EX_STYLE, WINDOW_STYLE, WS_CHILD, WS_DISABLED,
+                WS_TABSTOP, WS_VISIBLE,
             },
         },
     },
@@ -35,6 +35,8 @@ use windows::{
 #[path = "windows_controls_creation.rs"]
 mod creation;
 use creation::{Creation, NativePort};
+#[path = "windows_controls_retry.rs"]
+mod retry;
 
 /// Retain a stable native identity and the last applied content snapshot.
 struct Peer {
@@ -77,8 +79,26 @@ impl Controls {
         planned
             .try_reserve_exact(controls.len())
             .map_err(|cause| DesktopError::new("allocate_accessible_plan", cause))?;
+        if planned.capacity() != controls.len() {
+            return Err(DesktopError::message(
+                "allocate_accessible_plan",
+                "plan capacity exceeded",
+            ));
+        }
         planned.extend_from_slice(controls);
         Ok(Self { window, callback, creation: Creation::new(controls.len())?, planned, paint_mode })
+    }
+
+    /// Include the largest current peers, actions, subclass Rc states and label conversion.
+    pub(crate) fn storage_bytes(count: usize) -> Option<usize> {
+        size_of::<Self>()
+            .checked_add(count.checked_mul(size_of::<AccessibleControl>())?)?
+            .checked_add(Creation::<Registration<Callback>, Peer>::storage_bytes(count)?)?
+            .checked_add(Callback::storage_bytes(count)?)?
+            .checked_add(
+                count.checked_add(1)?.checked_mul(Registration::<Callback>::allocation_bytes())?,
+            )?
+            .checked_add(count.checked_mul(129 * size_of::<u16>())?)
     }
 
     /// Initialize once, with this owner already retained by its native surface.
@@ -245,7 +265,7 @@ impl NativePort for ControlPort<'_> {
                 WINDOW_EX_STYLE::default(),
                 w!("BUTTON"),
                 PCWSTR(label.as_ptr()),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP | WINDOW_STYLE(BS_PUSHBUTTON as u32),
+                retry::initial_style(self.paint_mode, control.id),
                 rect.left,
                 rect.top,
                 rect.right - rect.left,
@@ -269,11 +289,12 @@ impl NativePort for ControlPort<'_> {
             peer.hwnd,
             peer.snapshot.id,
             match self.paint_mode {
+                PaintMode::NativeButtons(_) if peer.snapshot.id == 4 => None,
                 PaintMode::NativeButtons(identity) => {
-                    NativeAction::MainControl(identity, peer.snapshot.id)
+                    Some(NativeAction::MainControl(identity, peer.snapshot.id))
                 }
-                PaintMode::PreparedPixels if peer.snapshot.close => NativeAction::Close,
-                PaintMode::PreparedPixels => NativeAction::Activate(peer.snapshot.id),
+                PaintMode::PreparedPixels if peer.snapshot.close => Some(NativeAction::Close),
+                PaintMode::PreparedPixels => Some(NativeAction::Activate(peer.snapshot.id)),
             },
         )
     }

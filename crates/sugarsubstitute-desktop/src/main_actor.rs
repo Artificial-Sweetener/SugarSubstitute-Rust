@@ -5,6 +5,7 @@
 mod admission;
 mod construction;
 mod evidence;
+mod recovery;
 #[cfg(any(feature = "k1-native-qualification", test))]
 mod render_preview;
 mod retirement;
@@ -43,6 +44,7 @@ enum ConstructionStage {
 pub(crate) struct MainActor {
     request: Option<MainWindowRequest>,
     admission: Admission,
+    recovery: crate::main_backend::Recovery,
     stage: ConstructionStage,
     window: Option<Rc<Window>>,
     presenter: Option<Presenter>,
@@ -73,9 +75,11 @@ impl MainActor {
         proxy: EventLoopProxy<NativeAction>,
     ) -> Result<Self, DesktopError> {
         let admission = Admission::new(request.identity());
+        let recovery = crate::main_backend::Recovery::new(request.identity());
+        recovery::check_storage()?;
         let native_storage = request
             .storage_lease()
-            .claim(512 * 1024)
+            .claim(recovery::NATIVE_BYTES)
             .map_err(|cause| DesktopError::new("claim_main_native_metadata", cause))?;
         let events = Events::new(request.storage_lease(), move || {
             if let Err(cause) = proxy.send_event(NativeAction::Main) {
@@ -92,6 +96,7 @@ impl MainActor {
         Ok(Self {
             request: Some(request),
             admission,
+            recovery,
             stage: ConstructionStage::Window,
             window: None,
             presenter: None,

@@ -188,6 +188,20 @@ impl Source {
         state.operation = Some(Box::new(ReportingOperation::new()));
         Ok(())
     }
+    /// Observe a uniquely held open generation that has never received this operation's input.
+    /// This is ownership inspection only; it grants no file or native retirement proof.
+    pub(super) fn uninstalled(&self) -> bool {
+        if Arc::strong_count(&self.shared) != 1 {
+            return false;
+        }
+        let state = self.shared.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        !state.closed
+            && !state.started
+            && state.views == 0
+            && state.input.is_none()
+            && state.operation.as_ref().is_some_and(|operation| operation.pristine())
+            && self.shared._claim.as_ref().is_some_and(|claim| Arc::strong_count(claim) == 1)
+    }
     /// Inspect the actual uniquely held closed generation without creating a replacement or authority.
     pub(super) fn passive_replacement_ready(&self) -> bool {
         if Arc::strong_count(&self.shared) != 1 {

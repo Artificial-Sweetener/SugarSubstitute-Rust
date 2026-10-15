@@ -40,6 +40,10 @@ fn absent_grant_is_worker_state_failure_and_retains_actual_projected_input()
         header: WireHeader { run, connection: None, request: None, deadline_qpc: 100 },
         origin: LoopbackOrigin::parse("http://127.0.0.1:8188", 8188)?,
         settings: MainWindowSettings {
+            recovery: sugarsubstitute_desktop::MainRecoveryLabels {
+                retry: sugarsubstitute_contracts::localization::messages("en").retry,
+                retry_ready: sugarsubstitute_contracts::localization::messages("en").retry_ready,
+            },
             logical_width: 1280,
             logical_height: 720,
             dark: true,

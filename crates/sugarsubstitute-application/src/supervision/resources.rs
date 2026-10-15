@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Own connection-bound leases and profile exclusion without native handle authority.
-use super::resource_state::*;
+use super::{resource_outage::RetainedOutage, resource_state::*};
 use std::collections::BTreeMap;
 use sugarsubstitute_contracts::lifecycle::*;
 
@@ -40,6 +40,7 @@ pub struct ResourceCoordinator {
     pub(super) owner: CoordinatorKey,
     pub(super) runs: BTreeMap<InstanceId, RunRecord>,
     pub(super) resources: BTreeMap<ResourceId, ResourceRecord>,
+    pub(super) outages: BTreeMap<LeaseId, RetainedOutage>,
     pub(super) instance_highwater: u64,
     pub(super) next_resource: u64,
     pub(super) next_lease: u64,
@@ -51,6 +52,7 @@ impl ResourceCoordinator {
             owner,
             runs: BTreeMap::new(),
             resources: BTreeMap::new(),
+            outages: BTreeMap::new(),
             instance_highwater: 0,
             next_resource: 0,
             next_lease: 0,
@@ -78,6 +80,9 @@ impl ResourceCoordinator {
         for lease in leases {
             self.release_lease(lease, &mut transition)?;
         }
+        self.outages.retain(|_, outage| {
+            outage.notice.lease.run != run || outage.notice.lease.connection != connection
+        });
         if let Some(record) = self.runs.get_mut(&run.instance) {
             record.connection = ConnectionPhase::Disconnected(connection);
         }
@@ -154,7 +159,11 @@ impl ResourceCoordinator {
         if resource.phase != ResourcePhase::Settled {
             return Err(LifecycleRejection::WrongPhase);
         }
-        Ok(resource.failure.take())
+        let failure = resource.failure.take();
+        if failure.is_some() {
+            self.transferred_outage_cause(key);
+        }
+        Ok(failure)
     }
     /// Inspect retained policy phase without inferring native completion.
     pub fn resource_phase(&self, resource: ResourceKey) -> Option<ResourcePhase> {

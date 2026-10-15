@@ -3,7 +3,7 @@
 //! Adopt every window, presenter, controller and native getter before interpreting outcomes.
 
 use super::*;
-use crate::{AccessibleControl, ControlBounds, MainEnvironmentFacts, windows_controls::PaintMode};
+use crate::{AccessibleControl, MainEnvironmentFacts, windows_controls::PaintMode};
 use tao::{
     dpi::LogicalSize,
     window::{Theme, WindowBuilder},
@@ -85,6 +85,7 @@ impl MainActor {
                         )
                     })?
                     .initialize()?;
+                self.present_recovery_control()?;
                 self.stage = ConstructionStage::Begin;
             }
             ConstructionStage::Begin => {
@@ -224,26 +225,16 @@ impl MainActor {
                 .into(),
         })
     }
-    pub(super) fn caption_controls(&self) -> Result<[AccessibleControl; 3], DesktopError> {
+    pub(super) fn caption_controls(&self) -> Result<[AccessibleControl; 4], DesktopError> {
         let window = self.window()?;
         let width = window.inner_size().to_logical::<f64>(window.scale_factor()).width.max(144.0);
-        let labels = self.request()?.settings().labels;
-        let names = [
-            labels.minimize,
-            if window.is_maximized() { labels.restore } else { labels.maximize },
-            labels.close,
-        ];
-        Ok(std::array::from_fn(|index| AccessibleControl {
-            id: index as u16 + 1,
-            label: names[index],
-            bounds: ControlBounds {
-                x: width - 144.0 + index as f64 * 48.0,
-                y: 0.0,
-                width: 48.0,
-                height: 40.0,
-            },
-            close: index == 2,
-        }))
+        let settings = self.request()?.settings();
+        Ok(crate::main_backend::caption_controls(
+            width,
+            window.is_maximized(),
+            settings.labels,
+            self.recovery.presentation(settings.recovery).label,
+        ))
     }
     pub(super) fn resize(&mut self) -> Result<(), DesktopError> {
         let controls = self.caption_controls()?;

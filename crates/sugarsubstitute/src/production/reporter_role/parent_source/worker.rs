@@ -194,6 +194,9 @@ impl State {
                 ReporterControl::Export(result) => {
                     DiagnosticCommand::ExportSelectionResult { session: input.session, result }
                 }
+                ReporterControl::RestartUnavailable => {
+                    DiagnosticCommand::RestartUnavailable { session: input.session }
+                }
                 ReporterControl::Close(acknowledgement) => {
                     DiagnosticCommand::CloseAfterDurableAck {
                         session: input.session,

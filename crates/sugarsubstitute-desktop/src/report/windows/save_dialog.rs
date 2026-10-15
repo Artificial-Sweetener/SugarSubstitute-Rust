@@ -4,8 +4,8 @@
 use super::super::{
     ReportSessionContent, ReportSurfaceError, ReportSurfaceUpdate, SaveSelection, state::Request,
 };
-use super::buffer::Text;
-use std::{ffi::c_void, num::NonZeroUsize};
+use super::{buffer::Text, dispatch};
+use std::{ffi::c_void, num::NonZeroUsize, rc::Rc, time::Instant};
 use sugarsubstitute_contracts::{
     execution::{MemoryClaim, MemoryLease},
     incident::ExportSelection,
@@ -29,6 +29,9 @@ struct Hook {
     destroyed: bool,
     timer: usize,
     update: Option<ReportSurfaceUpdate>,
+    update_at: Option<Instant>,
+    cancel_requested: Rc<dispatch::ModalCancellation>,
+    cancel_posted: bool,
     failure: Option<ReportSurfaceError>,
     save: Text,
     cancel_label: Text,
@@ -49,6 +52,9 @@ impl Hook {
             && (!self.initialized || (self.installed && self.destroyed && self.timer == 0))
             && self.consent.as_ref().is_some_and(consent::Consent::retired)
     }
+    fn take_cancel(&mut self) -> bool {
+        self.cancel_requested.get() && !std::mem::replace(&mut self.cancel_posted, true)
+    }
     fn begin_poll(&mut self) -> Result<Option<(Poller, *mut c_void)>, ReportSurfaceError> {
         if self.active {
             return Err(ReportSurfaceError::rejected("report_picker_recursive_poll"));
@@ -68,6 +74,7 @@ impl Hook {
             Ok(ReportSurfaceUpdate::None) => false,
             Ok(update) => {
                 self.update = Some(update);
+                self.update_at = Some(Instant::now());
                 true
             }
             Err(cause) => {
@@ -203,6 +210,12 @@ unsafe extern "system" fn hook(hwnd: HWND, message: u32, _wparam: WPARAM, lparam
         }
     }
     if message == WM_TIMER {
+        if state.cancel_requested.get() {
+            if state.take_cancel() {
+                state.cancel(hwnd);
+            }
+            return 0;
+        }
         let invocation = match state.begin_poll() {
             Ok(invocation) => invocation,
             Err(cause) => {

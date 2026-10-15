@@ -14,6 +14,10 @@ struct State<T> {
 /// Retain exact callback metadata and actual final-destruction observation with its owner.
 pub(crate) struct Registration<T>(Rc<State<T>>);
 impl<T> Registration<T> {
+    /// Include the actual retained Rc state and its two native reference counters.
+    pub(crate) const fn allocation_bytes() -> usize {
+        size_of::<State<T>>() + 2 * size_of::<usize>()
+    }
     pub(crate) fn new(callback: &Rc<T>) -> Self {
         Self(Rc::new(State {
             callback: callback.clone(),

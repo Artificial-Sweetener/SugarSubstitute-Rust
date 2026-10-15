@@ -72,6 +72,20 @@ pub(super) fn write(
             writer.u8(14)?;
             main_fields::write_stage_failure(value, run, writer)
         }
+        ReplyOutcome::BackendUnavailable { failed, status, affected_clients, retry_ready } => {
+            check_affected_clients(affected_clients)?;
+            writer.u8(15)?;
+            encode::lease(failed, writer)?;
+            writer.u32(status)?;
+            writer.u16(affected_clients)?;
+            writer.u8(u8::from(retry_ready))
+        }
+        ReplyOutcome::BackendReplaced { identity, previous, current } => {
+            writer.u8(16)?;
+            main_fields::write_identity(identity, run, writer)?;
+            encode::lease(previous, writer)?;
+            encode::lease(current, writer)
+        }
     }
 }
 pub(super) fn read<'a>(
@@ -107,8 +121,32 @@ pub(super) fn read<'a>(
         12 => ReplyOutcome::OutputDelivery(read_output(input)?),
         13 => ReplyOutcome::OutputIdle(decode::lease(input)?),
         14 => ReplyOutcome::MainStageFailed(main_fields::read_stage_failure(input, run)?),
+        15 => {
+            let failed = decode::lease(input)?;
+            let status = input.u32()?;
+            let affected_clients = input.u16()?;
+            check_affected_clients(affected_clients)?;
+            let retry_ready = match input.u8()? {
+                0 => false,
+                1 => true,
+                _ => return Err(ProtocolError::UnsupportedTag),
+            };
+            ReplyOutcome::BackendUnavailable { failed, status, affected_clients, retry_ready }
+        }
+        16 => ReplyOutcome::BackendReplaced {
+            identity: main_fields::read_identity(input, run)?,
+            previous: decode::lease(input)?,
+            current: decode::lease(input)?,
+        },
         _ => return Err(ProtocolError::UnsupportedTag),
     })
+}
+/// Validate the closed Main cohort count before any caller-owned output mutation.
+fn check_affected_clients(count: u16) -> Result<(), ProtocolError> {
+    if !(1..=64).contains(&count) {
+        return Err(ProtocolError::Length);
+    }
+    Ok(())
 }
 fn check_offset(offset: u32) -> Result<(), ProtocolError> {
     if offset == 0 || offset > MAX_PROFILE_FOLDER_UNITS as u32 {

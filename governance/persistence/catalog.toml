@@ -71,11 +71,11 @@ migrations = []
 id = "windows-lifecycle-control"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/lifecycle_protocol.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/binary.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/decode.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/encode.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/errors.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/frame.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/payload.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/reply.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/target.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/utf16.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/main_fields.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/main_types.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/output.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/raw_windows.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/reply_codec.rs"]
-source_sha256 = "sha256:e70b7edfeb9a6520e74a876d8d7c6841baa39c4db9d280c488f74b0faeed973c"
+source_sha256 = "sha256:19110f8416db487114e3ade605f7cf3731c28a573990ad6af3fe880d76cb1ea0"
 classification = "protocol"
 preservation = "must_preserve"
-current_version = 4
-accepted_versions = [4]
+current_version = 5
+accepted_versions = [5]
 compatibility = "reject"
 migrations = []
 
@@ -244,7 +244,7 @@ sources = [
   "crates/sugarsubstitute-supervision/src/profiles/custody/acknowledgement.rs",
   "crates/sugarsubstitute-supervision/src/profiles/release_observation.rs",
 ]
-source_sha256 = "sha256:e192486c515c53a0ffbf2676327e51fc5dcbb1b9ab708ccb945c713d6d593c05"
+source_sha256 = "sha256:ddedd449bd00f35ea09fb4f3ae734a49f1ba27455eedbe87245a80878b3df2bc"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 2
@@ -366,11 +366,11 @@ migrations = []
 id = "native-diagnostic-command"
 owner = "sugarsubstitute-crash"
 sources = ["crates/sugarsubstitute-crash/src/diagnostic_client.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/codec.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/command_codec.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/command_codec/fields.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/command_codec/read.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/command_codec/write.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/commands.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/error.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/identity.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/reader.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/replay.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/types.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/validation.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/writer.rs"]
-source_sha256 = "sha256:b63fd012d13c7298047ff4ca3fbeccc942b93eda5eda9a3ad5c96d0cda91a5c6"
+source_sha256 = "sha256:fc5b709e9be154ff83e6ac43827ddac485593b7a69a5db2192331dbff79c2558"
 classification = "protocol"
 preservation = "must_preserve"
-current_version = 1
-accepted_versions = [1]
+current_version = 2
+accepted_versions = [2]
 compatibility = "reject"
 migrations = []
 

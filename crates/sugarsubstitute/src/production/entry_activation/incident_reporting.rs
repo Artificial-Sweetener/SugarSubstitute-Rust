@@ -9,6 +9,8 @@ mod admission;
 mod delivery;
 #[path = "incident_reporting/desktop_failure.rs"]
 mod desktop_failure;
+#[path = "incident_reporting/restart_guard.rs"]
+mod restart_guard;
 pub(super) use desktop_failure::{DesktopFailureDisposition, PendingDesktopFailure};
 #[path = "incident_reporting/custody.rs"]
 mod custody;
@@ -24,9 +26,13 @@ mod export;
 mod recycling;
 #[path = "incident_reporting/restart.rs"]
 mod restart;
-pub(super) use restart::RestartAcceptance;
+pub(super) use restart::{RestartAcceptance, RestartTarget};
+#[path = "incident_reporting/receiving_failure.rs"]
+mod receiving_failure;
 #[path = "incident_reporting/routing.rs"]
 mod routing;
+#[path = "incident_reporting/source_observation.rs"]
+mod source_observation;
 #[path = "incident_reporting/store.rs"]
 mod store;
 #[path = "incident_reporting/symbols.rs"]
@@ -65,6 +71,18 @@ pub(super) struct SelectedReportExport {
     pub(super) selection: ExportSelection,
     pub(super) authentication: ReportingAuthentication,
 }
+/// Closed native-thread transitions identify the actual rejected receiving operation.
+#[derive(Clone, Copy, Debug)]
+enum ReportTransition {
+    Retire,
+    Admit,
+    PrepareLaunch,
+    CaptureOutput,
+    AdvanceStore,
+    ConsumeEffect,
+    AdvanceExport,
+    DriveRelay,
+}
 #[derive(Clone, Copy)]
 enum StoreKind {
     View { previous: Option<IncidentRevision> },
@@ -96,8 +114,21 @@ struct NativeRequest {
     reply: DiagnosticReply,
     context: IncidentRequestContext,
 }
+/// This native turn's actual Root admission facts; these grant no native privilege.
+pub(super) struct ReportAdmission {
+    closing: bool,
+    restart: ReportRestartAvailability,
+}
+impl ReportAdmission {
+    /// Retain this turn's current Root capture decision and actual closing state.
+    /// This inert value creates no source or native privilege.
+    pub(super) const fn new(closing: bool, restart: ReportRestartAvailability) -> Self {
+        Self { closing, restart }
+    }
+}
 /// Original funded Reporter/controller custody remains until its actual independent retirements.
 pub(super) struct IncidentReporting {
+    restart: ReportRestartAvailability,
     relay: Option<ReporterRelay>,
     key: Option<DiagnosticKey>,
     binding: Option<ReportBinding>,
@@ -107,6 +138,7 @@ pub(super) struct IncidentReporting {
     queue_until: Option<Moment>,
     receiving_session: ReporterSession,
     reporter_startup: Option<sugarsubstitute_execution::RegisteredStartupSource>,
+    recovery_source: Option<recovery::CurrentReportSource>,
     launch_input: Option<delivery::LaunchDraft>,
     session: Option<DiagnosticPipeSession>,
     session_installed: bool,
@@ -120,10 +152,13 @@ pub(super) struct IncidentReporting {
     export_work: Option<export::ExportWork>,
     pending_control: Option<ReporterControlInput>,
     native_retired: bool,
-    initial_loaded: bool,
+    initial_view_admitted: bool,
+    authenticated_peer_observed: Option<(DiagnosticKey, ProcessKey)>,
     stopping: Option<ShutdownBudget>,
     family_retired: bool,
     first: Option<Box<dyn Error>>,
+    secondary_receiving_failure: Option<receiving_failure::SecondaryFailure>,
+    omitted_receiving_failures: u64,
     dismiss_action: Option<ReportAction>,
     close_counter: Option<DiagnosticDeadline>,
     retained_effect: Option<IncidentEffect>,
@@ -143,6 +178,7 @@ const _: () = assert!(
 impl IncidentReporting {
     pub(super) const fn new() -> Self {
         Self {
+            restart: ReportRestartAvailability::Unavailable,
             relay: None,
             key: None,
             binding: None,
@@ -152,6 +188,7 @@ impl IncidentReporting {
             queue_until: None,
             receiving_session: ReporterSession::new(),
             reporter_startup: None,
+            recovery_source: None,
             launch_input: None,
             session: None,
             session_installed: false,
@@ -165,10 +202,13 @@ impl IncidentReporting {
             export_work: None,
             pending_control: None,
             native_retired: false,
-            initial_loaded: false,
+            initial_view_admitted: false,
+            authenticated_peer_observed: None,
             stopping: None,
             family_retired: false,
             first: None,
+            secondary_receiving_failure: None,
+            omitted_receiving_failures: 0,
             dismiss_action: None,
             close_counter: None,
             retained_effect: None,
@@ -203,17 +243,25 @@ impl IncidentReporting {
         executable: &Path,
         working: &Path,
         resources: &mut EntryResources<'_>,
-        closing: bool,
+        admission: ReportAdmission,
     ) -> Result<()> {
-        let result = self.advance(host, records, executable, working, resources, closing);
-        if let Err(cause) = result
-            && self.first.is_none()
-        {
-            self.first = Some(cause);
-            return Err("Actual report receiving failed with retained original custody".into());
+        self.restart = admission.restart;
+        let mut transition = ReportTransition::Retire;
+        let result = self.advance(
+            host,
+            records,
+            executable,
+            working,
+            resources,
+            admission.closing,
+            &mut transition,
+        );
+        if let Err(cause) = result {
+            return self.retain_transition_failure(transition, cause);
         }
         Ok(())
     }
+    #[allow(clippy::too_many_arguments)]
     fn advance(
         &mut self,
         host: &mut IncidentHost,
@@ -222,6 +270,7 @@ impl IncidentReporting {
         working: &Path,
         resources: &mut EntryResources<'_>,
         closing: bool,
+        transition: &mut ReportTransition,
     ) -> Result<()> {
         if closing
             || self.first.is_some()
@@ -230,27 +279,35 @@ impl IncidentReporting {
                 && self.store.is_none()
                 && self.export_work.is_none()
         {
+            *transition = ReportTransition::Retire;
             return self.retire(host, resources);
         }
         if self.binding.is_none() {
+            *transition = ReportTransition::Admit;
             self.admit(host, records, resources)?;
         }
         if self.binding.is_none() {
             return Ok(());
         }
+        *transition = ReportTransition::PrepareLaunch;
         self.prepare_launch(executable, working, resources)?;
         if !self.launched {
             return Ok(());
         }
+        *transition = ReportTransition::CaptureOutput;
         self.capture_output(host, resources)?;
+        *transition = ReportTransition::AdvanceStore;
         self.advance_store(host, resources)?;
+        *transition = ReportTransition::ConsumeEffect;
         self.consume_effect(host, resources)?;
+        *transition = ReportTransition::AdvanceExport;
         self.advance_export(host, resources)?;
         if self.selected.is_some()
             || self.export_work.as_ref().is_some_and(|work| work.awaiting_result())
         {
             return Ok(());
         }
+        *transition = ReportTransition::DriveRelay;
         self.drive_relay(resources)?;
         Ok(())
     }
@@ -294,3 +351,6 @@ impl IncidentReporting {
         Ok(DiagnosticRequestId::new(self.wire_request)?)
     }
 }
+
+#[path = "incident_reporting/recovery.rs"]
+mod recovery;

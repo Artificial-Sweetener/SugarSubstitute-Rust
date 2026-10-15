@@ -65,6 +65,7 @@ pub(super) enum Purpose {
     Other,
     Acquisition,
     OutputPull,
+    BackendRetry,
 }
 #[derive(Clone, Copy)]
 struct Pending {

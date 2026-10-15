@@ -268,7 +268,7 @@ fn supervisor_family_settlement_matches_full_historical_key_and_is_independent()
     )?;
     coord.observe(IncidentServiceObservation::Recovered {
         scope,
-        original_operation: historical_operation()?,
+        original_operation: Some(historical_operation()?),
         summary,
     })?;
     let source =

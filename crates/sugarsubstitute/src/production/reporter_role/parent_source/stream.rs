@@ -125,11 +125,13 @@ impl Stream {
             Phase::Begin => match self.plan.previous {
                 None => DiagnosticCommand::BeginView {
                     session,
+                    restart: self.plan.restart,
                     total: bytes.len() as u64,
                     sha256: digest,
                 },
                 Some(old) => DiagnosticCommand::ReplaceView {
                     session,
+                    restart: self.plan.restart,
                     old,
                     total: bytes.len() as u64,
                     sha256: digest,

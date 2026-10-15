@@ -126,6 +126,11 @@ impl DbgHelpSymbolProvider {
     pub fn secondary_failure(&self) -> Option<SymbolProviderFailure<'_>> {
         self.fields.as_ref().and_then(|f| f.secondary.as_ref()).map(SymbolProviderFailure)
     }
+    /// Inject only an external native status through the actual first-cause retention owner.
+    #[cfg(test)]
+    pub(crate) fn retain_native_fixture_failure(&mut self, cause: windows::core::Error) {
+        self.record(ProviderCause::Native(cause));
+    }
     fn record(&mut self, cause: ProviderCause) -> SymbolProviderFailureCode {
         let code = cause.code();
         if let Some(fields) = self.fields.as_mut()

@@ -138,7 +138,22 @@ impl IncidentCoordinator {
         index: usize,
     ) -> Result<IncidentEffects, IncidentDecisionError> {
         let record = self.record(index)?;
-        let effects = if record.restart_requested
+        let recovered_restart = record.restart_requested
+            && !record.restart_forwarded
+            && record.sources_retired
+            && matches!(record.source_scope, IncidentSourceScope::Recovered(source)
+                if source.historical_operation().is_none());
+        let effects = if recovered_restart {
+            match record.acknowledgement {
+                Some(acknowledgement) => {
+                    IncidentEffects::one(IncidentEffect::ForwardRecoveredRestartIntent {
+                        incident: record.seed.key(),
+                        acknowledgement,
+                    })
+                }
+                None => IncidentEffects::default(),
+            }
+        } else if record.restart_requested
             && !record.restart_forwarded
             && record.sources_retired
             && record.family_settled

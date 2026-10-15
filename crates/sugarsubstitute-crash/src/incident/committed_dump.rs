@@ -176,6 +176,18 @@ pub struct IncidentDumpReadLease {
     owner: IncidentDumpReader,
 }
 impl IncidentDumpReadLease {
+    /// Borrow the actual retained primary read/parser cause without projecting authority.
+    pub fn failure(&self) -> Option<DumpReadFailure<'_>> {
+        self.owner.failure()
+    }
+    /// Borrow the independent post-read cause while preserving the original primary.
+    pub fn secondary_failure(&self) -> Option<DumpReadFailure<'_>> {
+        self.owner.secondary_failure()
+    }
+    /// Borrow actual checked-retirement failure independently of read/parser outcomes.
+    pub fn retirement_failure(&self) -> Option<DumpReadFailure<'_>> {
+        self.owner.retirement_failure()
+    }
     /// Borrow exact schema2 summary, including immutable payload publication revision.
     pub fn summary(&self) -> Result<&StoredIncidentSummary, DumpReadCode> {
         self.owner.fields.stored.as_ref().ok_or(DumpReadCode::Identity)
@@ -306,6 +318,10 @@ impl std::fmt::Display for IncidentDumpReadLease {
 }
 impl std::error::Error for IncidentDumpReadLease {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(&self.owner)
+        self.owner.source()
     }
 }
+
+#[cfg(test)]
+#[path = "committed_dump/diagnostic_fixture.rs"]
+pub(crate) mod diagnostic_fixture;

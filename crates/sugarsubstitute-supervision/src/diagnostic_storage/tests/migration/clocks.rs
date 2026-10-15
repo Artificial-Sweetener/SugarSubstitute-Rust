@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Observe original job cancellation and globally fatal clocks through the actual execution owner.
 use super::*;
-use crate::diagnostic_storage::fixture::BoundaryClock;
+use sugarsubstitute_execution::clock_fixture::CallbackRegressionClock;
 #[test]
 fn diagnostic_migration_same_scope_new_job_cannot_mask_original_cancellation() -> TestResult {
     let wake = Arc::new(Wake::default());
@@ -90,7 +90,7 @@ fn diagnostic_migration_callback_panic_and_global_clock_failure_preserve_actual_
     use std::error::Error;
     for fatal in [false, true] {
         let wake = Arc::new(Wake::default());
-        let clock = Arc::new(TestClock(AtomicU64::new(17)));
+        let clock = CallbackRegressionClock::new(Moment::from_nanos(17));
         let owner = ExecutionOwner::new(clock.clone(), wake.clone())?;
         let client = owner.client();
         let scope =
@@ -109,7 +109,9 @@ fn diagnostic_migration_callback_panic_and_global_clock_failure_preserve_actual_
                 *validator.hook.lock().unwrap_or_else(std::sync::PoisonError::into_inner) =
                     Some(Box::new(move || {
                         if fatal {
-                            callback_clock.observe(16);
+                            // Only this callback's next real clock observation regresses;
+                            // execution guardians retain the healthy epoch until it is consumed.
+                            assert!(callback_clock.arm_current_callback(Moment::from_nanos(16)));
                         } else {
                             std::panic::resume_unwind(Box::new("injected semantic callback panic"));
                         }
@@ -163,7 +165,8 @@ fn diagnostic_migration_callback_panic_and_global_clock_failure_preserve_actual_
             assert!(storage.snapshot().disposition_retained());
             assert_eq!(storage.snapshot().stages(), 2);
             drop((storage, operation, permit, validator, filesystem, context));
-            assert_eq!(clock.0.load(Ordering::SeqCst), 16);
+            assert_eq!(clock.requested_regression(), Some(Moment::from_nanos(16)));
+            assert_eq!(clock.regressed_samples(), 1);
         } else {
             let cleanup =
                 client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?;

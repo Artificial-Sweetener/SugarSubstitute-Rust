@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Canonical schema1 binary framing with atomic encoder capacity preflight.
+//! Canonical schema2 binary framing with atomic encoder capacity preflight.
 use super::{identity, reader::Reader, writer::Writer, *};
 use DiagnosticWireError as E;
 use sugarsubstitute_contracts::incident::*;
@@ -12,7 +12,7 @@ pub fn encode(frame: DiagnosticFrame<'_>, output: &mut [u8]) -> Result<usize, E>
     let mut header = [0u8; MAX_HEADER_BYTES];
     let mut w = Writer::new(&mut header);
     w.put(b"SSDI")?;
-    w.u8(1)?;
+    w.u8(2)?;
     w.u8(0)?;
     let c = frame.context;
     let flags = u8::from(c.operation.is_some())
@@ -62,7 +62,7 @@ pub fn decode(bytes: &[u8]) -> Result<DiagnosticFrame<'_>, E> {
         return Err(E::Capacity);
     }
     let mut prefix = Reader::new(bytes);
-    if prefix.array::<4>()? != *b"SSDI" || prefix.u8()? != 1 {
+    if prefix.array::<4>()? != *b"SSDI" || prefix.u8()? != 2 {
         return Err(E::Schema);
     }
     let code = prefix.u8()?;

@@ -191,7 +191,7 @@ fn capacity_preflight_preserves_m1_marker_until_a_slot_can_reclaim() -> TestResu
     for instance in 1..=128 {
         coord.observe(IncidentServiceObservation::Recovered {
             scope: recovery,
-            original_operation: historical_operation()?,
+            original_operation: Some(historical_operation()?),
             summary: historical(instance, true)?,
         })?;
     }

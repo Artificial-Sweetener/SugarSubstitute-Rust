@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Resolve only the actual captured address against the pinned authenticated local PE/PDB.
 use super::*;
+#[path = "lookup/matching.rs"]
+mod matching;
 use crate::incident::CapturedExceptionFrame;
 use std::{os::windows::ffi::OsStrExt, path::Path};
 use sugarsubstitute_contracts::incident::{
@@ -32,14 +34,6 @@ fn wide(path: &Path, output: &mut [u16]) -> Result<(), ProviderCause> {
     }
     output[count] = 0;
     Ok(())
-}
-fn guid_bytes(guid: windows::core::GUID) -> [u8; 16] {
-    let mut out = [0; 16];
-    out[..4].copy_from_slice(&guid.data1.to_le_bytes());
-    out[4..6].copy_from_slice(&guid.data2.to_le_bytes());
-    out[6..8].copy_from_slice(&guid.data3.to_le_bytes());
-    out[8..].copy_from_slice(&guid.data4);
-    out
 }
 impl DbgHelpSymbolProvider {
     /// Resolve one validated exception using only actual authenticated selected files.
@@ -203,14 +197,14 @@ impl DbgHelpSymbolProvider {
                 .ok_or(ProviderCause::Identity)?],
         )
         .map_err(ProviderCause::Utf16)?;
-        if info.SymType != SymPdb
-            || info.PdbUnmatched.as_bool()
-            || info.DbgUnmatched.as_bool()
-            || info.ImageSize != frame.image_size()
-            || guid_bytes(info.PdbSig70) != selected_facts.pdb_guid()
-            || info.PdbAge != selected_facts.pdb_age()
-            || !same_pdb_name(selected.pdb_path().map_err(ProviderCause::Selection)?, &pdb_name)
-        {
+        if !matching::direct_pdb(
+            &info,
+            frame.pdb(),
+            frame.image_base(),
+            frame.image_size(),
+            selected.pdb_path().map_err(ProviderCause::Selection)?,
+            &pdb_name,
+        ) {
             return Err(ProviderCause::Identity);
         }
         let symbol = f.symbol.as_mut_ptr().cast::<SYMBOL_INFOW>();
@@ -265,31 +259,5 @@ impl DbgHelpSymbolProvider {
             None,
         );
         Ok(SymbolFrameObservation { frame, _original: origin.clone() })
-    }
-}
-
-fn same_pdb_name(expected: &Path, actual: &str) -> bool {
-    fn spelling(value: &str) -> &str {
-        if let Some(dos) = value.strip_prefix(r"\\?\")
-            && dos.as_bytes().first().is_some_and(u8::is_ascii_alphabetic)
-            && dos.as_bytes().get(1..3) == Some(br":\")
-        {
-            return dos;
-        }
-        value
-    }
-    expected.to_str().is_some_and(|value| spelling(value).eq_ignore_ascii_case(spelling(actual)))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn loaded_pdb_spelling_allows_only_same_absolute_dos_path() {
-        let expected = Path::new(r"\\?\E:\signed\SugarSubstitute.pdb");
-        assert!(same_pdb_name(expected, r"E:\signed\SugarSubstitute.pdb"));
-        assert!(same_pdb_name(expected, r"e:\SIGNED\SugarSubstitute.pdb"));
-        assert!(!same_pdb_name(expected, r"E:\other\SugarSubstitute.pdb"));
-        assert!(!same_pdb_name(expected, r"E:\signed\..\SugarSubstitute.pdb"));
     }
 }

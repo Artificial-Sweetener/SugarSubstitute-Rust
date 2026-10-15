@@ -57,6 +57,10 @@ impl ParentLifecycle {
                 .acquisition
                 .as_ref()
                 .is_some_and(super::acquisition::Acquisition::awaiting_grant_write)
+            || self
+                .recovery
+                .handoff
+                .is_some_and(|handoff| handoff.header.is_some() && !handoff.written)
             || self.retiring_write_pending()?)
     }
     /// Reuse the same authentic read loan after the actual progress-write receipt. This
@@ -149,5 +153,6 @@ fn received_payload_kind(bytes: &[u8]) -> &'static str {
         Payload::OutputPull { .. } => "OutputPull",
         Payload::MainFailed(_) => "MainFailed",
         Payload::SettleAttempt { .. } => "SettleAttempt",
+        Payload::RetryBackend { .. } => "RetryBackend",
     }
 }

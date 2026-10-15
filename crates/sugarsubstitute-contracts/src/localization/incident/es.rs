@@ -10,6 +10,7 @@ pub static ES: ReportMessages = ReportMessages {
     export: "Exportar informe",
     close: "Cerrar",
     restart: "Cerrar y solicitar reinicio",
+    restart_unavailable: "No se puede reiniciar en esta sesión. Cierra SugarSubstitute y vuelve a abrirlo.",
     include_dump: "Incluir volcado de memoria nativa",
     dump_warning: "Los volcados de memoria nativa pueden contener contraseñas e información privada. No están depurados.",
     save_title: "Exportar incidente",

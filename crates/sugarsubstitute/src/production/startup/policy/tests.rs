@@ -171,6 +171,36 @@ fn stale_main_navigation_cannot_advance_native_navigation_or_browser_authorizati
         )
         .is_err()
     );
+    use sugarsubstitute_contracts::lifecycle::{
+        ConnectionId, LeaseId, LeaseKey, ResourceGeneration, ResourceId, ResourceKey,
+    };
+    let identity = p.identity(&session);
+    let failed = LeaseKey {
+        run: identity.run,
+        connection: ConnectionId::new(1)?,
+        id: LeaseId::new(1)?,
+        resource: ResourceKey {
+            owner: identity.run.owner,
+            id: ResourceId::new(1)?,
+            generation: ResourceGeneration::new(1)?,
+        },
+    };
+    assert!(
+        p.native(
+            DesktopStartupObservation::BackendRetryRequested { identity: stale, failed },
+            Some(&mut session)
+        )
+        .is_err()
+    );
+    assert!(
+        p.native(DesktopStartupObservation::BackendRetryRequested { identity, failed }, None)
+            .is_err()
+    );
+    assert!(matches!(p.native(DesktopStartupObservation::BackendRetryRequested {
+        identity, failed,
+    }, Some(&mut session))?, StartupRoute::Native(DesktopStartupObservation::BackendRetryRequested {
+        identity: actual, failed: actual_failed,
+    }) if actual == identity && actual_failed == failed));
     assert_eq!(session.phase(), StartupPhase::ServerReady);
     Ok(())
 }

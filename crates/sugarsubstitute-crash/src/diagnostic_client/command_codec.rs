@@ -41,5 +41,6 @@ pub(super) const fn code(c: DiagnosticCommand<'_>) -> u8 {
         C::CopyResult { .. } => 29,
         C::ExportSelectionResult { .. } => 30,
         C::Result { .. } => 31,
+        C::RestartUnavailable { .. } => 32,
     }
 }

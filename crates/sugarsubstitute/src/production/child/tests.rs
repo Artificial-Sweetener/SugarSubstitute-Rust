@@ -54,6 +54,10 @@ fn real_driver_factory_cancelled_scope_keeps_partial_custody_until_actual_native
         native_scope: ScopeSpec { id: ScopeId::new(3)?, deadline: None },
         identity: (LaunchId::new(1)?, Generation::new(1)?),
         settings: MainWindowSettings {
+            recovery: sugarsubstitute_desktop::MainRecoveryLabels {
+                retry: sugarsubstitute_contracts::localization::messages("en").retry,
+                retry_ready: sugarsubstitute_contracts::localization::messages("en").retry_ready,
+            },
             logical_width: 1280,
             logical_height: 720,
             dark: true,

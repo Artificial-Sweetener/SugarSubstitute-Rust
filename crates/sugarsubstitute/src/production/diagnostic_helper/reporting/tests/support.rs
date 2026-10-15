@@ -97,6 +97,52 @@ pub(super) fn delivered(
         wait(wake, before)?;
     }
 }
+/// Observe the actual native Prepared bootstrap without installing or launching a child.
+pub(super) fn prepared_parent(
+    client: &ExecutionClient,
+    wake: &Wake,
+    source: &crate::production::reporter_role::parent_source::ReporterSource,
+) -> TestResult {
+    loop {
+        let before = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let batch = client.drain_completions(NonZeroUsize::MIN)?;
+        let facts = source.poll()?;
+        assert!(!facts.authenticated);
+        assert!(facts.process.is_none());
+        if source.prepare(|_| ())?.is_some() {
+            return Ok(());
+        }
+        if facts.failed || facts.pipe_settled {
+            return Err("Actual Reporter pipe failed before preparation".into());
+        }
+        if batch.remaining > 0 {
+            continue;
+        }
+        wait(wake, before)?;
+    }
+}
+/// Drive the real closed Parent until its original worker supplies checked pipe retirement.
+/// Completion wakes are causal observations; the existing wait bound only diagnoses a stalled test.
+pub(super) fn retired_parent(
+    client: &ExecutionClient,
+    wake: &Wake,
+    source: &crate::production::reporter_role::parent_source::ReporterSource,
+) -> TestResult {
+    loop {
+        let before = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let batch = client.drain_completions(NonZeroUsize::MIN)?;
+        let actual = source.poll_retiring()?;
+        assert!(!actual.authenticated);
+        assert!(actual.process.is_none());
+        if actual.pipe_settled {
+            return Ok(());
+        }
+        if batch.remaining > 0 {
+            continue;
+        }
+        wait(wake, before)?;
+    }
+}
 fn wait(wake: &Wake, before: u64) -> TestResult {
     let (count, timeout) = wake
         .changed

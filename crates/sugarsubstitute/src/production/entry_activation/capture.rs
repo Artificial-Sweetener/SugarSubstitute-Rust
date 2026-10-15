@@ -7,7 +7,7 @@ use std::{error::Error, path::Path};
 use sugarsubstitute_contracts::{
     crash::{CaptureBudget, CaptureState, CaptureTarget},
     execution::{CompletionBatch, JobClass, JobSpec, Moment, Operation, OwnedJob, Scope},
-    incident::BuildIdentity,
+    incident::{BuildIdentity, ReportRestartAvailability},
     lifecycle::{CoordinatorKey, ShutdownBudget},
 };
 use sugarsubstitute_crash::{CaptureStartInput, StartRejected, WindowsCrashCapture};
@@ -106,15 +106,20 @@ impl CaptureRegistration {
         self.rejected.is_some()
             || self.unbound_watch.is_some()
             || self.capture.errors().next().is_some()
-            || actual.owner != owner
-            || actual.state != CaptureState::Registered
-            || actual.handler.is_none()
-            || actual.handler_exit.is_some()
+            || !close_request_ready(actual, owner, self.capture.handler_lost())
     }
     /// Inspect the retained registration before attempting real attachment admission.
     pub(in crate::production) fn registration_ready(&self) -> bool {
         self.capture.snapshot().state == CaptureState::Registered
             && self.capture.snapshot().handler_exit.is_none()
+    }
+    /// Current Root decision for presentation/admission; it grants no attachment or restart capability.
+    pub(super) fn restart_availability(&self) -> ReportRestartAvailability {
+        if self.registration_ready() {
+            ReportRestartAvailability::Available
+        } else {
+            ReportRestartAvailability::Unavailable
+        }
     }
     /// Mint an attachment expectation exclusively from actual retained registration facts.
     pub(in crate::production) fn attach(
@@ -202,6 +207,22 @@ impl CaptureRegistration {
     }
 }
 
+/// A deliberate close request still enters every original native/role/claim retirement owner.
+/// Known registered loss is not a registration retry, healthy source or settlement proof.
+fn close_request_ready(
+    actual: sugarsubstitute_crash::CaptureSnapshot,
+    expected: CoordinatorKey,
+    handler_lost: bool,
+) -> bool {
+    actual.owner == expected
+        && actual.handler.is_some()
+        && match actual.state {
+            CaptureState::Registered => actual.handler_exit.is_none(),
+            CaptureState::Degraded => handler_lost && actual.handler_exit.is_some(),
+            _ => false,
+        }
+}
+
 fn report_failure(
     reported: &mut bool,
     cause: Option<&sugarsubstitute_crash::CrashError>,
@@ -215,6 +236,38 @@ fn report_failure(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn known_matching_handler_loss_permits_only_a_deliberate_close_request() -> Result<()> {
+        use sugarsubstitute_contracts::{crash::CaptureHandlerIdentity, lifecycle::*};
+        let owner = CoordinatorKey {
+            namespace: NamespaceId::new([1; 32]),
+            epoch: CoordinatorEpoch::new([2; 16])?,
+        };
+        let mut actual = sugarsubstitute_crash::CaptureSnapshot {
+            owner,
+            state: CaptureState::Degraded,
+            handler: Some(CaptureHandlerIdentity { process_id: 17, creation_time_100ns: 23 }),
+            handler_exit: Some(259),
+            callback_pin_bytes: 65536,
+            callback_pin_reservation_bytes: 2 * 1024 * 1024,
+        };
+        assert!(!close_request_ready(actual, owner, false));
+        assert!(close_request_ready(actual, owner, true));
+        let foreign = CoordinatorKey { epoch: CoordinatorEpoch::new([3; 16])?, ..owner };
+        assert!(!close_request_ready(actual, foreign, true));
+        actual.handler_exit = None;
+        assert!(!close_request_ready(actual, owner, true));
+        actual.state = CaptureState::Registered;
+        assert!(close_request_ready(actual, owner, false));
+        actual.state = CaptureState::Closing;
+        assert!(!close_request_ready(actual, owner, true));
+        actual.state = CaptureState::Closed;
+        assert!(!close_request_ready(actual, owner, true));
+        actual.state = CaptureState::Degraded;
+        actual.handler = None;
+        assert!(!close_request_ready(actual, owner, true));
+        Ok(())
+    }
     #[test]
     fn capture_failure_reports_original_once_without_reopening_registration() -> Result<()> {
         let request = InstalledReleaseOwner::new().capture_selection();

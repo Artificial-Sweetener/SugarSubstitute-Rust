@@ -13,3 +13,5 @@ mod retirement;
 mod storage;
 mod support;
 mod symbols;
+
+mod stored_recovery;

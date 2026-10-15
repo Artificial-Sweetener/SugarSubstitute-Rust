@@ -80,6 +80,12 @@ impl InstalledFrontendOwner {
             pending: None,
         }
     }
+    /// Match all four exact path spellings against this owner's retained input.
+    /// This inert comparison borrows the original selection, copies no proof and
+    /// neither inspects files nor establishes current native custody or readiness.
+    pub fn matches_selection(&self, input: &FrontendInstallationInput) -> bool {
+        self.input.same_selection(input)
+    }
     /// Admit one finite installed-file inspection, retaining partial native outputs outside its result.
     /// Requires Readiness/InfrastructureLifecycle, a finite deadline and the exact source reservation.
     /// # Errors

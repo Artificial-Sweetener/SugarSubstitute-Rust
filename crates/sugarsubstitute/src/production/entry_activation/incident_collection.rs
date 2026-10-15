@@ -238,7 +238,11 @@ fn advance(
             return Ok(());
         }
         incidents.host.failed_desktop(
-            backend.incident_policy(),
+            backend
+                .incident_policy(
+                    sugarsubstitute_application::supervision::ResourceStorageInput::Current,
+                )
+                .map_err(outer)?,
             material.fact,
             FailureEvidence::Unexplained,
             material.context,

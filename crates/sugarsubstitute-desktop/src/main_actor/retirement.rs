@@ -14,6 +14,8 @@ impl MainActor {
             return Err(DesktopError::message("retire_main", "main identity is stale or foreign"));
         }
         self.admission.close();
+        self.recovery.close();
+        let retry_failure = self.present_recovery_control().err();
         #[cfg(feature = "k1-native-qualification")]
         if let Some(preview) = &mut self.preview {
             preview.close();
@@ -27,7 +29,10 @@ impl MainActor {
         if let Some(constructor) = &mut self.constructor {
             constructor.cancel();
         }
-        Ok(())
+        match retry_failure {
+            Some(cause) => Err(cause),
+            None => Ok(()),
+        }
     }
 
     /// A true result requires every native receiver, creation callback, controller and HWND retired.

@@ -95,6 +95,13 @@ pub(super) fn dispatch(
                 session.observe(content, DesktopStartupObservation::CloseRequested)?;
             }
         }
+        Event::UserEvent(NativeAction::MainBackendRetry(action)) if !session.closing => {
+            let observation =
+                if let Some(main) = &mut session.main { main.retry_backend(action)? } else { None };
+            if let Some(observation) = observation {
+                session.observe(content, observation)?;
+            }
+        }
         Event::UserEvent(NativeAction::Disclosure)
             if !session.closing && !session.splash.retiring =>
         {

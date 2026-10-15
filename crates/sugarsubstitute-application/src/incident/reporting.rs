@@ -144,6 +144,11 @@ impl IncidentCoordinator {
         {
             return Err(IncidentDecisionError::MismatchedCommit);
         }
+        let recovered_restart = record.restart_requested
+            && record.sources_retired
+            && matches!(record.source_scope, IncidentSourceScope::Recovered(source)
+                if source.historical_operation().is_none())
+            && !record.restart_forwarded;
         let restart = record.restart_requested
             && record.sources_retired
             && record.family_settled
@@ -159,10 +164,20 @@ impl IncidentCoordinator {
         record.current = None;
         record.last_commit = Some(commit);
         record.phase = IncidentServicePhase::Acknowledged;
-        record.restart_forwarded =
-            restart && matches!(record.seed.key().subject(), IncidentSubject::Desktop(_));
+        record.restart_forwarded = recovered_restart
+            || restart && matches!(record.seed.key().subject(), IncidentSubject::Desktop(_));
         let close = IncidentEffect::CloseAfterDurableAck { binding, acknowledgement: ack };
         let queued = self.activate_queued_attempt(index)?;
+        if recovered_restart {
+            let intent = IncidentEffect::ForwardRecoveredRestartIntent {
+                incident: binding.incident(),
+                acknowledgement: ack,
+            };
+            return Ok(match queued {
+                Some(effect) => IncidentEffects::three(close, intent, effect),
+                None => IncidentEffects::pair(close, intent),
+            });
+        }
         let effects = match (restart_run, queued) {
             (Some(run), Some(effect)) => IncidentEffects::three(
                 close,

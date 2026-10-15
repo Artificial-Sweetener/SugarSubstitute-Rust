@@ -37,13 +37,23 @@ fn binding() -> Result<ReportBinding, Box<dyn Error>> {
 }
 fn view() -> Result<NativeReportView, Box<dyn Error>> {
     let (lease, _) = lease(512);
-    Ok(NativeReportView::from_claimed(binding()?, "报告\n".into(), lease.claim(512)?)?)
+    Ok(NativeReportView::from_claimed(
+        binding()?,
+        "报告\n".into(),
+        lease.claim(512)?,
+        ReportRestartAvailability::Available,
+    )?)
 }
 #[test]
 fn inert_view_transfer_keeps_exact_bytes_binding_and_noncloneable_credit()
 -> Result<(), Box<dyn Error>> {
     let (lease, released) = lease(512);
-    let view = NativeReportView::from_claimed(binding()?, "报告\n".into(), lease.claim(512)?)?;
+    let view = NativeReportView::from_claimed(
+        binding()?,
+        "报告\n".into(),
+        lease.claim(512)?,
+        ReportRestartAvailability::Available,
+    )?;
     assert_eq!(view.binding(), binding()?);
     assert_eq!(view.text(), "报告\n");
     drop(lease);
@@ -57,7 +67,13 @@ fn malformed_native_text_rejects_and_releases_its_owned_credit() -> Result<(), B
     for text in ["", "missing final line", "embedded\0data\n", "wrong\r\n"] {
         let (lease, released) = lease(512);
         assert!(
-            NativeReportView::from_claimed(binding()?, text.into(), lease.claim(512)?).is_err()
+            NativeReportView::from_claimed(
+                binding()?,
+                text.into(),
+                lease.claim(512)?,
+                ReportRestartAvailability::Available
+            )
+            .is_err()
         );
         drop(lease);
         assert_eq!(released.load(Ordering::SeqCst), 512);
@@ -70,8 +86,24 @@ fn allocation_capacity_and_header_credit_are_checked_separately_from_length()
     let (lease, _) = lease(1_000_000);
     let mut large = String::with_capacity(NativeReportView::MAX_BYTES + 1);
     large.push_str("small\n");
-    assert!(NativeReportView::from_claimed(binding()?, large, lease.claim(1_000_000)?).is_err());
-    assert!(NativeReportView::from_claimed(binding()?, "small\n".into(), lease.claim(6)?).is_err());
+    assert!(
+        NativeReportView::from_claimed(
+            binding()?,
+            large,
+            lease.claim(1_000_000)?,
+            ReportRestartAvailability::Available
+        )
+        .is_err()
+    );
+    assert!(
+        NativeReportView::from_claimed(
+            binding()?,
+            "small\n".into(),
+            lease.claim(6)?,
+            ReportRestartAvailability::Available
+        )
+        .is_err()
+    );
     Ok(())
 }
 #[test]

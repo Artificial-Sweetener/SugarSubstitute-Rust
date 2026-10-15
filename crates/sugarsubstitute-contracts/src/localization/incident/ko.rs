@@ -10,6 +10,7 @@ pub static KO: ReportMessages = ReportMessages {
     export: "보고서 내보내기",
     close: "닫기",
     restart: "닫고 다시 시작 요청",
+    restart_unavailable: "이 세션에서는 다시 시작할 수 없습니다. SugarSubstitute를 닫고 다시 열어 주세요.",
     include_dump: "네이티브 메모리 덤프 포함",
     dump_warning: "네이티브 메모리 덤프에는 암호와 개인 정보가 포함될 수 있으며 민감한 정보가 제거되지 않았습니다.",
     save_title: "사고 내보내기",

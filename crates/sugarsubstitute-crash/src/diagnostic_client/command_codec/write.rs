@@ -85,8 +85,9 @@ pub(in crate::diagnostic_client) fn write<'a>(
             (15, empty)
         }
         C::Retire => (16, empty),
-        C::BeginView { session, total, sha256 } => {
+        C::BeginView { session, restart, total, sha256 } => {
             w.u64(session.get())?;
+            w.u8(u8::from(restart.allows_restart()))?;
             w.u64(total)?;
             w.put(&sha256)?;
             (17, empty)
@@ -101,8 +102,9 @@ pub(in crate::diagnostic_client) fn write<'a>(
             w.put(&sha256)?;
             (19, empty)
         }
-        C::ReplaceView { session, old, total, sha256 } => {
+        C::ReplaceView { session, restart, old, total, sha256 } => {
             w.u64(session.get())?;
+            w.u8(u8::from(restart.allows_restart()))?;
             w.u64(old.get())?;
             w.u64(total)?;
             w.put(&sha256)?;
@@ -148,6 +150,10 @@ pub(in crate::diagnostic_client) fn write<'a>(
             w.u64(session.get())?;
             write_result(w, result)?;
             (29, empty)
+        }
+        C::RestartUnavailable { session } => {
+            w.u64(session.get())?;
+            (32, empty)
         }
         C::ExportSelectionResult { session, result } => {
             w.u64(session.get())?;

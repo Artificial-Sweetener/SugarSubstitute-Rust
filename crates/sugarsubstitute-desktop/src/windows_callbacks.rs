@@ -34,7 +34,7 @@ use windows::Win32::{
 pub(crate) struct Callback {
     proxy: EventLoopProxy<NativeAction>,
     timings: Option<TimingObserver>,
-    controls: RefCell<Vec<(HWND, u16, NativeAction)>>,
+    controls: RefCell<Vec<(HWND, u16, Option<NativeAction>)>>,
     paint_mode: crate::windows_controls::PaintMode,
 }
 
@@ -67,7 +67,7 @@ impl Callback {
         &self,
         hwnd: HWND,
         id: u16,
-        action: NativeAction,
+        action: Option<NativeAction>,
     ) -> Result<(), DesktopError> {
         let mut controls = self
             .controls
@@ -83,6 +83,33 @@ impl Callback {
         Ok(())
     }
 
+    /// Account the largest immutable action tuple before any native registration.
+    pub(crate) fn storage_bytes(count: usize) -> Option<usize> {
+        count
+            .checked_mul(size_of::<(HWND, u16, Option<NativeAction>)>())?
+            .checked_add(size_of::<Self>() + 2 * size_of::<usize>())
+    }
+    /// Replace one already-registered peer mapping; no borrow crosses a native call.
+    pub(crate) fn set_action(
+        &self,
+        hwnd: HWND,
+        id: u16,
+        action: Option<NativeAction>,
+    ) -> Result<(), DesktopError> {
+        let mut controls = self
+            .controls
+            .try_borrow_mut()
+            .map_err(|cause| DesktopError::new("update_native_action", cause))?;
+        let slot = controls
+            .iter_mut()
+            .find(|(peer, registered, _)| *peer == hwnd && *registered == id)
+            .ok_or_else(|| {
+                DesktopError::message("update_native_action", "retained peer missing")
+            })?;
+        slot.2 = action;
+        Ok(())
+    }
+
     /// Resolve only a registered peer HWND and, for parent notifications, the matching control ID.
     fn action(&self, hwnd: HWND, id: Option<u16>) -> Option<NativeAction> {
         match self.controls.try_borrow() {
@@ -91,7 +118,7 @@ impl Callback {
                 .find(|(peer, registered, _)| {
                     *peer == hwnd && id.is_none_or(|id| id == *registered)
                 })
-                .map(|(_, _, action)| *action),
+                .and_then(|(_, _, action)| *action),
             Err(error) => {
                 tracing::error!(operation = "resolve_accessible_identity", cause = %error, "Native identity inventory was unexpectedly borrowed");
                 None

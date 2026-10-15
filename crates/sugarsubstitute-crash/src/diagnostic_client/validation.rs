@@ -11,7 +11,7 @@ pub(super) fn check(frame: &DiagnosticFrame<'_>) -> Result<(), DiagnosticWireErr
         C::Result { kind, .. } => kind.code(),
         _ => command_codec::code(c),
     };
-    let reporter = (17..=30).contains(&code);
+    let reporter = (17..=30).contains(&code) || code == 32;
     let allowed = match code {
         16 => true,
         14 => frame.key.role() == DiagnosticRole::Symbolize,

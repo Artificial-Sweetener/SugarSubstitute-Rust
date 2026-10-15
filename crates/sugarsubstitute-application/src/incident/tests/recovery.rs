@@ -11,7 +11,7 @@ fn recovered_pending_uses_current_recovery_and_inert_original_source() -> TestRe
     let original = historical_operation()?;
     let observation = IncidentServiceObservation::Recovered {
         scope,
-        original_operation: original,
+        original_operation: Some(original),
         summary: summary.clone(),
     };
     let effects = coord.observe(observation.clone())?;
@@ -23,7 +23,7 @@ fn recovered_pending_uses_current_recovery_and_inert_original_source() -> TestRe
         _ => return Err("No recovered source".into()),
     };
     assert_eq!(source.recovery(), scope);
-    assert_eq!(source.historical_operation(), original);
+    assert_eq!(source.historical_operation(), Some(original));
     assert_eq!(source.incident(), summary.seed().key());
     assert_ne!(scope.operation().owner(), original.owner());
     assert_eq!(source.recovery().original(), context(20, 120)?.budget());
@@ -37,7 +37,7 @@ fn acknowledged_recovery_does_not_launch_and_requires_independent_settlement() -
     let summary = historical(1, true)?;
     let effects = coord.observe(IncidentServiceObservation::Recovered {
         scope,
-        original_operation: historical_operation()?,
+        original_operation: Some(historical_operation()?),
         summary: summary.clone(),
     })?;
     assert_eq!(effects.len(), 1);
@@ -73,7 +73,7 @@ fn recovery_does_not_reclassify_clean_desktop_exit_as_failed_incident() -> TestR
         assert_eq!(
             coord.observe(IncidentServiceObservation::Recovered {
                 scope,
-                original_operation: historical_operation()?,
+                original_operation: Some(historical_operation()?),
                 summary
             }),
             Err(IncidentDecisionError::WrongPhase)
@@ -89,7 +89,7 @@ fn closed_recovery_rejects_new_projection_but_accepts_late_source_retirement() -
     let summary = historical(1, true)?;
     let observation = IncidentServiceObservation::Recovered {
         scope,
-        original_operation: historical_operation()?,
+        original_operation: Some(historical_operation()?),
         summary: summary.clone(),
     };
     coord.observe(observation.clone())?;
@@ -119,7 +119,7 @@ fn changed_history_or_current_recovery_rejects_before_record_admission() -> Test
     assert_eq!(
         coord.observe(IncidentServiceObservation::Recovered {
             scope: changed,
-            original_operation: historical_operation()?,
+            original_operation: Some(historical_operation()?),
             summary: summary.clone()
         }),
         Err(IncidentDecisionError::StaleOperation)
@@ -128,7 +128,7 @@ fn changed_history_or_current_recovery_rejects_before_record_admission() -> Test
     assert_eq!(
         coord.observe(IncidentServiceObservation::Recovered {
             scope,
-            original_operation: foreign,
+            original_operation: Some(foreign),
             summary: summary.clone()
         }),
         Err(IncidentDecisionError::MismatchedCommit)
@@ -136,13 +136,13 @@ fn changed_history_or_current_recovery_rejects_before_record_admission() -> Test
     assert!(coord.snapshot(summary.seed().key()).is_none());
     coord.observe(IncidentServiceObservation::Recovered {
         scope,
-        original_operation: historical_operation()?,
+        original_operation: Some(historical_operation()?),
         summary: summary.clone(),
     })?;
     assert_eq!(
         coord.observe(IncidentServiceObservation::Recovered {
             scope,
-            original_operation: historical_operation()?,
+            original_operation: Some(historical_operation()?),
             summary: changed_summary(&summary)?
         }),
         Err(IncidentDecisionError::ChangedDuplicate)
@@ -160,7 +160,7 @@ fn recovered_attempt_uses_new_current_operation_and_keeps_original_publication()
     let original = historical_operation()?;
     let projection = IncidentServiceObservation::Recovered {
         scope: recovery,
-        original_operation: original,
+        original_operation: Some(original),
         summary: summary.clone(),
     };
     let effects = coord.observe(projection.clone())?;

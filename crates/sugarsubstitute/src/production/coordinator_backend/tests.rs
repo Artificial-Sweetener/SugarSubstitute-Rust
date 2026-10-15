@@ -43,6 +43,11 @@ pub(super) fn key() -> Result<CoordinatorKey> {
 pub(super) fn unadmitted_policy() -> Result<RetainedBackend> {
     let owner = key()?;
     let storage = storage_tests::claim(RetainedBackend::required_storage_bytes())?;
+    let mut credit = Some(super::super::entry_activation::funding::test_policy_credit(
+        storage_tests::claim(1_048_576)?,
+    )?);
+    let mut funding = PolicyFunding::new();
+    funding.adopt(&mut credit)?;
     let mut records = Vec::new();
     records.try_reserve_exact(64)?;
     records.resize_with(64, || None);
@@ -54,6 +59,7 @@ pub(super) fn unadmitted_policy() -> Result<RetainedBackend> {
         records: records.into_boxed_slice(),
         next_shutdown: 0,
         undelivered: None,
+        policy_funding: funding,
     };
     Ok(RetainedBackend { backend: Box::new(backend), _storage: storage })
 }
@@ -63,7 +69,12 @@ fn inert_authority_cannot_construct_backend_driver() -> Result<()> {
         sugarsubstitute_contracts::coordinator_entry::EntrySetupBudget::new(Moment::from_nanos(0))?;
     let authority = CoordinatorAuthority::new(original)?;
     let storage = storage_tests::claim(RetainedBackend::required_storage_bytes())?;
-    assert!(RetainedBackend::new(&authority, storage).is_err());
+    let mut credit = Some(super::super::entry_activation::funding::test_policy_credit(
+        storage_tests::claim(64 * 1024)?,
+    )?);
+    let bytes = credit.as_ref().ok_or("Actual credit absent")?.bytes();
+    assert!(RetainedBackend::new(&authority, storage, &mut credit).is_err());
+    assert_eq!(credit.as_ref().ok_or("Rejected constructor lost original credit")?.bytes(), bytes);
     assert!(authority.key().is_none());
     assert!(authority.registry().is_none());
     assert!(!authority.serving());
@@ -287,7 +298,10 @@ fn pending_actual_transition_blocks_mutation_until_original_replies_transfer() -
     let run =
         RunKey { owner: key()?, instance: InstanceId::new(1)?, generation: RunGeneration::new(1)? };
     let reply = ResourceReply { run, request: RequestId::new(3)?, outcome: RequestOutcome::Failed };
-    owner.retain_transition(&ResourceTransition { replies: vec![reply], effects: vec![] });
+    owner.retain_transition(&ResourceTransition {
+        replies: vec![reply],
+        ..ResourceTransition::default()
+    });
     assert!(owner.begin_delivery().is_err());
     let actual = owner.take_pending_transition().ok_or(LifecycleRejection::WrongPhase)?;
     assert_eq!(actual.replies, vec![reply]);
@@ -333,6 +347,8 @@ fn partial_backend_cleanup_keeps_actual_parent_budget_across_later_clock_and_rep
         budget,
         resolved: None,
         ready_origin: None,
+        ready_context: None,
+        managed_exit: None,
         scope,
         source: InstalledFrontendOwner::new(FrontendInstallationInput::new(
             path.clone(),

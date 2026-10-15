@@ -259,8 +259,12 @@ fn requested_settings(
     mut settings: MainWindowSettings,
     presentation: sugarsubstitute_contracts::configuration::Presentation,
 ) -> MainWindowSettings {
-    let labels =
-        sugarsubstitute_contracts::localization::messages(presentation.locale().as_str()).window;
+    let copy = sugarsubstitute_contracts::localization::messages(presentation.locale().as_str());
+    let labels = copy.window;
+    settings.recovery = sugarsubstitute_desktop::MainRecoveryLabels {
+        retry: copy.retry,
+        retry_ready: copy.retry_ready,
+    };
     settings.dark = presentation.theme() == sugarsubstitute_contracts::configuration::Theme::Dark;
     settings.labels = sugarsubstitute_desktop::MainCaptionLabels {
         minimize: labels.minimize,
@@ -282,6 +286,11 @@ mod settings_tests {
             for theme in [Theme::Light, Theme::Dark] {
                 let settings = requested_settings(
                     MainWindowSettings {
+                        recovery: sugarsubstitute_desktop::MainRecoveryLabels {
+                            retry: sugarsubstitute_contracts::localization::messages("en").retry,
+                            retry_ready: sugarsubstitute_contracts::localization::messages("en")
+                                .retry_ready,
+                        },
                         logical_width: 1280,
                         logical_height: 720,
                         dark: true,
@@ -294,7 +303,12 @@ mod settings_tests {
                     },
                     Presentation::new(locale.id, theme, false)?,
                 );
-                let expected = sugarsubstitute_contracts::localization::messages(locale.id).window;
+                let copy = sugarsubstitute_contracts::localization::messages(locale.id);
+                let expected = copy.window;
+                assert_eq!(
+                    (settings.recovery.retry, settings.recovery.retry_ready),
+                    (copy.retry, copy.retry_ready),
+                );
                 assert_eq!((settings.logical_width, settings.logical_height), (1280, 720));
                 assert_eq!(settings.dark, theme == Theme::Dark);
                 assert_eq!(

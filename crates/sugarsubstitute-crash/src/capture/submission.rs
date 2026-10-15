@@ -71,6 +71,7 @@ impl WindowsCrashCapture {
                 registered: false,
                 handler: None,
                 creator: None,
+                unexpected_handler_exit: None,
                 retired: false,
                 deadline: None,
                 close_deadline: None,

@@ -15,9 +15,9 @@ pub use identity::{
     RunGeneration, RunKey, ShutdownId,
 };
 pub use resource::{
-    BackendTarget, ClientBinding, ClientRegistration, RequestOutcome, ResourceCommand,
-    ResourceEffect, ResourceObservation, ResourceReply, ResourceRequest, ResourceTransition,
-    RunEnrollment,
+    BackendTarget, ClientBinding, ClientRegistration, GrantedResourceInvalidation,
+    GrantedResourceReplacement, RequestOutcome, ResourceCommand, ResourceEffect,
+    ResourceObservation, ResourceReply, ResourceRequest, ResourceTransition, RunEnrollment,
 };
 pub use watchdog::{
     UI_CHALLENGE_CADENCE, UI_SUSPICION_THRESHOLD, UiChallengeId, UiChallengeKey,

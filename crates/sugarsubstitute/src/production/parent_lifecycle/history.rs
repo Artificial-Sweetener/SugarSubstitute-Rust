@@ -12,11 +12,34 @@ use sugarsubstitute_supervision::lifecycle_protocol::WireHeader;
 
 pub(super) const SLOTS: usize = 8;
 
+/// One typed command retained inside its original replay slot before any backend effect.
+#[derive(Clone, Copy)]
+pub(super) enum HeldBackendCommand {
+    Acquire(sugarsubstitute_contracts::startup::MainIdentity),
+    Release(LeaseKey),
+    Reload {
+        identity: sugarsubstitute_contracts::startup::MainIdentity,
+        lease: LeaseKey,
+    },
+    Retry {
+        identity: sugarsubstitute_contracts::startup::MainIdentity,
+        failed: sugarsubstitute_supervision::lifecycle_protocol::LeaseReference,
+    },
+}
+/// Finite logical admission outcome, never a fabricated native job terminal.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum HeldBackendTerminal {
+    TimedOut,
+    Cancelled,
+}
+
 pub(super) struct Record {
     pub(super) header: WireHeader,
     digest: [u8; 32],
     pub(super) identity: Option<MainIdentity>,
     pub(super) reply: Option<Reply>,
+    pub(super) held_backend: Option<HeldBackendCommand>,
+    pub(super) held_terminal: Option<HeldBackendTerminal>,
     backend: Option<RequestOutcome>,
     backend_lease: Option<LeaseKey>,
     pub(super) sent: bool,
@@ -112,6 +135,8 @@ impl Requests {
             digest,
             identity: None,
             reply: None,
+            held_backend: None,
+            held_terminal: None,
             backend: None,
             backend_lease: None,
             sent: false,
@@ -236,6 +261,72 @@ impl Requests {
         }
     }
 
+    /// Borrow the one original command still awaiting global backend admission.
+    pub(super) fn held_backend(&self) -> Option<usize> {
+        self.records
+            .iter()
+            .position(|record| record.as_ref().is_some_and(|record| record.held_backend.is_some()))
+    }
+    /// Return the original held command exactly once; closed admission never blocks other record operations.
+    pub(super) fn poll_held_backend(
+        &mut self,
+        now: sugarsubstitute_contracts::execution::Moment,
+        open: bool,
+    ) -> Result<Option<(usize, HeldBackendCommand)>, ParentError> {
+        let Some(index) = self.held_backend() else {
+            return Ok(None);
+        };
+        if now >= self.get(index)?.until.ok_or(ParentError::WrongPhase)? {
+            self.timeout_held(index)?;
+            return Ok(None);
+        }
+        if !open {
+            return Ok(None);
+        }
+        let command = self.get_mut(index)?.held_backend.take().ok_or(ParentError::WrongPhase)?;
+        Ok(Some((index, command)))
+    }
+    /// Expire only never-admitted logical work at its retained cutoff. No cancellation or native settlement is inferred.
+    pub(super) fn timeout_held(&mut self, index: usize) -> Result<(), ParentError> {
+        let record = self.get_mut(index)?;
+        if record.held_backend.is_none() {
+            return Err(ParentError::WrongPhase);
+        }
+        record.held_terminal = Some(HeldBackendTerminal::TimedOut);
+        record.held_backend = None;
+        record.abandoned = true;
+        record.retired = true;
+        Ok(())
+    }
+
+    /// A deliberate close cancels only the still-unadmitted logical command.
+    pub(super) fn cancel_held(&mut self, index: usize) -> Result<(), ParentError> {
+        let record = self.get_mut(index)?;
+        if record.held_backend.is_none() {
+            return Err(ParentError::WrongPhase);
+        }
+        record.held_backend = None;
+        record.held_terminal = Some(HeldBackendTerminal::Cancelled);
+        record.abandoned = true;
+        record.retired = true;
+        Ok(())
+    }
+    /// Preserve expected admitted Retry timeout independently of its actual producer/write settlement.
+    pub(super) fn timeout_backend(&mut self, index: usize) -> Result<(), ParentError> {
+        let record = self.get_mut(index)?;
+        record.held_terminal = Some(HeldBackendTerminal::TimedOut);
+        record.abandoned = true;
+        Ok(())
+    }
+    /// The caller independently proves final backend observation and no outstanding native write.
+    pub(super) fn retire_timed_out(&mut self, index: usize) -> Result<(), ParentError> {
+        let record = self.get_mut(index)?;
+        if record.held_terminal != Some(HeldBackendTerminal::TimedOut) || !record.abandoned {
+            return Err(ParentError::WrongPhase);
+        }
+        record.retired = true;
+        Ok(())
+    }
     pub(super) fn next_reply(&self) -> Option<usize> {
         self.records.iter().position(|record| {
             record

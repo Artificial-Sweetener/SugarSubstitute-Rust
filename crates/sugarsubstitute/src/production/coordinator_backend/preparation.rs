@@ -9,15 +9,21 @@ impl CoordinatorBackend {
         input: &mut Option<BackendPreparation>,
         original_preparation: Option<ConnectionBudget>,
         original_shutdown: Option<ShutdownBudget>,
+        preferred: Option<ResourceKey>,
         resources: &mut BackendResources<'_>,
     ) -> Result<()> {
         let effects = transition.effects.clone();
         for effect in effects {
             match effect {
                 ResourceEffect::Prepare { resource, target } => {
-                    if let Err(cause) =
-                        self.prepare(resource, target, original_preparation, input, resources)
-                    {
+                    if let Err(cause) = self.prepare(
+                        resource,
+                        target,
+                        original_preparation,
+                        input,
+                        preferred,
+                        resources,
+                    ) {
                         if self.index(resource).is_ok() {
                             let next = self.failed(resource, cause, resources)?;
                             Self::merge(transition, next);
@@ -51,18 +57,35 @@ impl CoordinatorBackend {
         target: BackendTarget,
         original_budget: Option<ConnectionBudget>,
         input: &mut Option<BackendPreparation>,
+        preferred: Option<ResourceKey>,
         resources: &mut BackendResources<'_>,
     ) -> Result<()> {
-        let at = self
-            .records
-            .iter()
-            .position(Option::is_none)
-            .or_else(|| {
-                self.records.iter().position(|r| {
-                    r.as_ref().is_some_and(|r| r.settled && r.cleanup_failure.first().is_none())
+        let at = if let Some(previous) = preferred {
+            let at = self.index(previous)?;
+            let record = self.records[at].as_ref().ok_or(LifecycleRejection::StaleIdentity)?;
+            if !record.settled
+                || record.cleanup_failure.first().is_some()
+                || previous.id != key.id
+                || record.target != target
+            {
+                return Err(Box::new(LifecycleRejection::WrongPhase));
+            }
+            at
+        } else {
+            self.records
+                .iter()
+                .position(Option::is_none)
+                .or_else(|| {
+                    self.records.iter().position(|r| {
+                        r.as_ref().is_some_and(|r| {
+                            r.settled
+                                && r.cleanup_failure.first().is_none()
+                                && !self.policy.retains_outage_resource(r.key.id)
+                        })
+                    })
                 })
-            })
-            .ok_or(LifecycleRejection::Overloaded)?;
+                .ok_or(LifecycleRejection::Overloaded)?
+        };
         let original = input.as_ref().ok_or(LifecycleRejection::WrongPhase)?;
         if matches!(target, BackendTarget::Managed(_)) != original.environment.is_some() {
             return Err(Box::new(LifecycleRejection::WrongPhase));
@@ -82,6 +105,11 @@ impl CoordinatorBackend {
         {
             let environment =
                 original.environment.as_ref().ok_or(LifecycleRejection::WrongPhase)?;
+            super::super::coordinator_custody::CoordinatorCustody::validate_invocation_storage(
+                executable,
+                installation,
+                Some(environment),
+            )?;
             let captured = LaunchEnvironment::from_snapshot_utf16(environment.as_utf16(), &[])?;
             self.custody =
                 Some(Box::new(super::super::coordinator_custody::CoordinatorCustody::new(
@@ -117,6 +145,8 @@ impl CoordinatorBackend {
             budget,
             resolved: None,
             ready_origin: None,
+            ready_context: None,
+            managed_exit: None,
             scope,
             source: InstalledFrontendOwner::new(input.source),
             source_job: false,

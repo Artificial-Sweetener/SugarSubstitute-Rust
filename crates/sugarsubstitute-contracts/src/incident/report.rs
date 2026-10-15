@@ -57,6 +57,22 @@ pub enum ExportSelection {
     /// User explicitly consented to include sensitive unsanitized native memory evidence.
     TextAndNativeDump,
 }
+/// Current supervisor presentation decision, independently rechecked before restart intent admission.
+/// Historical capture evidence grants no current restart authority.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum ReportRestartAvailability {
+    /// Current capture/attachment source is unavailable; ordinary dismissal remains supported.
+    #[default]
+    Unavailable,
+    /// The current supervisor can admit its supported fresh-run path.
+    Available,
+}
+impl ReportRestartAvailability {
+    /// Return presentation eligibility only; the supervisor must still validate its actual owner.
+    pub const fn allows_restart(self) -> bool {
+        matches!(self, Self::Available)
+    }
+}
 /// Native reporter intent; no variant acknowledges storage or authorizes a restart.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ReportAction {

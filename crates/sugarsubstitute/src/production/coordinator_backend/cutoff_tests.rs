@@ -76,6 +76,8 @@ pub(super) fn creator(
         budget,
         resolved: None,
         ready_origin: None,
+        ready_context: None,
+        managed_exit: None,
         scope,
         source: InstalledFrontendOwner::new(FrontendInstallationInput::new(
             path.clone(),
@@ -185,7 +187,14 @@ fn existing_shared_join_and_replay_emit_no_fresh_creator_preparation() -> Result
         let mut transition = submit(&mut backend.policy, joining_request.clone())?;
         assert!(transition.effects.is_empty());
         assert_eq!(lease(&transition)?.resource, held.resource);
-        backend.effects(&mut transition, &mut None, Some(joiner_budget), None, &mut resources)?;
+        backend.effects(
+            &mut transition,
+            &mut None,
+            Some(joiner_budget),
+            None,
+            None,
+            &mut resources,
+        )?;
         assert_eq!(backend.record(held.resource)?.budget, budget);
         assert_eq!(backend.record(held.resource)?.scope.spec().deadline, Some(budget.until()));
         assert_eq!(backend.next_deadline(), original_deadline);
@@ -199,6 +208,7 @@ fn existing_shared_join_and_replay_emit_no_fresh_creator_preparation() -> Result
         &mut None,
         None,
         Some(ShutdownBudget::new(Moment::from_nanos(20))?),
+        None,
         &mut resources,
     )?;
     assert_eq!(backend.record(held.resource)?.budget, budget);

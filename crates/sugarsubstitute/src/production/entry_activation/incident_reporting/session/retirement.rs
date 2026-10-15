@@ -10,15 +10,17 @@ impl ReporterSession {
         &mut self,
         registry: &mut WindowsProcessRegistry,
         binding: ReportBinding,
+        expected: DiagnosticKey,
         source: &ReporterSource,
         process: ProcessKey,
     ) -> Result<()> {
         let facts = source.poll_retiring()?;
-        let expected = DiagnosticKey::new(
-            binding.incident().subject().coordinator(),
-            DiagnosticRole::Reporter,
-            DiagnosticSessionId::new(binding.session().get())?,
-        );
+        if expected.owner().namespace != binding.incident().subject().coordinator().namespace
+            || expected.role() != DiagnosticRole::Reporter
+            || expected.session().get() != binding.session().get()
+        {
+            return Err("Actual current Reporter key differs from historical data".into());
+        }
         let actual = registry.snapshot(process)?;
         if facts.process != Some(process)
             || !facts.pipe_settled

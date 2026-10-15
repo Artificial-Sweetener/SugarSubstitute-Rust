@@ -42,7 +42,7 @@ impl IncidentCoordinator {
             seed_context: Some(context),
             seed_scope: Some(scope),
             seed_committed: false,
-            original_publication: scope.operation(),
+            original_publication: Some(scope.operation()),
             source_scope: IncidentSourceScope::Live(scope),
             current: Some(scope),
             pending: Some(Pending::Seed),
@@ -128,7 +128,7 @@ impl IncidentCoordinator {
         record.failure_context = Some(context);
         record.current = Some(scope);
         record.source_scope = IncidentSourceScope::Live(scope);
-        record.original_publication = scope.operation();
+        record.original_publication = Some(scope.operation());
         record.pending = Some(Pending::Collection);
         record.phase = IncidentServicePhase::Collecting;
         self.next_operation = scope.operation().id().get();

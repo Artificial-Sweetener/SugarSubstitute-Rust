@@ -10,8 +10,6 @@ impl IncidentReporting {
     ) -> Result<()> {
         match self.relay()?.source().poll() {
             Ok(facts) => {
-                self.process = facts.process;
-                self.relay_needed |= facts.changed;
                 if facts.failed {
                     tracing::error!(
                         operation = "reporter_source_stopped",
@@ -19,11 +17,8 @@ impl IncidentReporting {
                             self.relay()?.source().failure(|cause| cause.is_some())?,
                         "Original Reporter native/source custody retained"
                     );
-                    return Err("Actual Reporter source failed with original cause retained".into());
                 }
-                if self.initial_loaded && !facts.authenticated {
-                    return Err("Actual loaded Reporter lost its authenticated peer".into());
-                }
+                self.observe_source_facts(facts)?;
             }
             Err(ReporterSourceIssue::Busy) => return Ok(()),
             Err(cause) => return Err(cause.into()),
@@ -133,13 +128,20 @@ impl IncidentReporting {
                         if self.binding != Some(command.binding()) {
                             return Err("Actual report action binding changed".into());
                         }
+                        let Some(copied) = restart_guard::admit(command, self.restart, || {
+                            Ok(host.report_action(command, request_context.request)?)
+                        })?
+                        else {
+                            self.reject_restart(command.binding(), request_context.relay_until)?;
+                            self.complete_observation()?;
+                            return Ok(());
+                        };
                         self.original = Some(request_context.request);
                         self.dismiss_action = Some(command.action());
                         self.close_request = self
                             .request
                             .as_ref()
                             .map(|request| request.authentication.issued.request());
-                        let copied = host.report_action(command, request_context.request)?;
                         if let Some(binding) = copied {
                             if binding != command.binding() {
                                 return Err("Original copy authorization binding changed".into());

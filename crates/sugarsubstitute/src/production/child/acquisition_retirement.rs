@@ -68,7 +68,7 @@ impl ProductionChild {
             Purpose::OutputPull => {
                 self.output.pending.is_some_and(|p| p.0 == header && p.1 == pending.original)
             }
-            Purpose::Other => false,
+            Purpose::Other | Purpose::BackendRetry => false,
         };
         if self.shutdown.closing()
             || self.attempt.is_some()

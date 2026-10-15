@@ -104,6 +104,46 @@ impl ReportingService {
         self.restored = Some(restored);
         Ok(restored)
     }
+    /// Validate the original caller input independently of actual service-issued restoration.
+    /// The composing owner must separately settle the same native family before returning its frame.
+    /// This observation grants no repository cleanup, native retirement or successful operation proof.
+    /// # Errors
+    /// Rejects changed correlation, a submitted input without its real restoration, or an occupied source.
+    pub(in crate::production) fn validate_retiring_input(
+        &self,
+        operation: LogicalStoreOperationKey,
+        binding: ReportBinding,
+        submitted: bool,
+        input: &ReportingInput,
+    ) -> Result<(), ReportingIssue> {
+        if input.operation != operation || input.binding() != binding {
+            return Err(ReportingIssue::Identity);
+        }
+        if let Some(marker) = self.restored {
+            return if marker.operation() == operation && marker.binding() == binding {
+                Ok(())
+            } else {
+                Err(ReportingIssue::Identity)
+            };
+        }
+        if submitted
+            || self.installed
+            || self.requested.is_some()
+            || self.work.occupied()
+            || self.work.terminal.is_some()
+            || self.presentation.occupied()
+            || self.presentation.terminal.is_some()
+            || self.cleanup.occupied()
+            || self.cleanup.terminal.is_some()
+            || self.cleanup_binding.is_some()
+            || self.view_slot.is_some()
+            || self.view_binding.is_some()
+            || !self.source.uninstalled()
+        {
+            return Err(ReportingIssue::Busy);
+        }
+        Ok(())
+    }
     /// Borrow the immutable passive marker after restoration, excluding file/worker retirement.
     pub(in crate::production) fn passive_restoration(&self) -> Option<PassiveReportingRestoration> {
         self.restored

@@ -52,7 +52,7 @@ impl IncidentRecoveryScope {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct RecoveredSourceScope {
     pub(super) recovery: IncidentRecoveryScope,
-    pub(super) historical_operation: LogicalStoreOperationKey,
+    pub(super) historical_operation: Option<LogicalStoreOperationKey>,
     pub(super) incident: IncidentKey,
     pub(super) expected_revision: IncidentRevision,
 }
@@ -61,8 +61,9 @@ impl RecoveredSourceScope {
     pub const fn recovery(self) -> IncidentRecoveryScope {
         self.recovery
     }
-    /// Return inert original publication identity without rebinding its epoch.
-    pub const fn historical_operation(self) -> LogicalStoreOperationKey {
+    /// Return an actually retained historical operation, or None for canonical Summary2 data.
+    /// The current scan operation never substitutes for absent historical provenance.
+    pub const fn historical_operation(self) -> Option<LogicalStoreOperationKey> {
         self.historical_operation
     }
     /// Return the historical subject.

@@ -100,20 +100,20 @@ fn full_maximal_recovery_rejects_the_next_incident_without_growth() -> TestResul
         let summary = maximal_summary(instance)?;
         coordinator.observe(IncidentServiceObservation::Recovered {
             scope,
-            original_operation: LogicalStoreOperationKey::new(
+            original_operation: Some(LogicalStoreOperationKey::new(
                 owner(2)?,
                 IncidentOperationId::new(instance)?,
-            ),
+            )),
             summary,
         })?;
     }
     assert_eq!(coordinator.records.iter().flatten().count(), MAX_INCIDENT_RECORDS);
     let result = coordinator.observe(IncidentServiceObservation::Recovered {
         scope,
-        original_operation: LogicalStoreOperationKey::new(
+        original_operation: Some(LogicalStoreOperationKey::new(
             owner(2)?,
             IncidentOperationId::new(129)?,
-        ),
+        )),
         summary: maximal_summary(129)?,
     });
     assert_eq!(result.err(), Some(IncidentDecisionError::Saturated));

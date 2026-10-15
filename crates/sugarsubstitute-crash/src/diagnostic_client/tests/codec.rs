@@ -4,11 +4,11 @@
 use super::{super::*, support::*};
 use sugarsubstitute_contracts::incident::*;
 #[test]
-fn recover_has_exact_schema1_prefix_and_original_counters() -> TestResult {
+fn recover_has_exact_schema2_prefix_and_original_counters() -> TestResult {
     let mut f = storage(1, DiagnosticCommand::Recover)?;
     f.context.incident = None;
     let bytes = encoded(f)?;
-    assert_eq!(&bytes[..14], &[83, 83, 68, 73, 1, 2, 13, 0, 159, 0, 0, 0, 0, 0]);
+    assert_eq!(&bytes[..14], &[83, 83, 68, 73, 2, 2, 13, 0, 159, 0, 0, 0, 0, 0]);
     assert_eq!(decode(&bytes)?, f);
     Ok(())
 }
@@ -43,7 +43,7 @@ fn publication_preserves_demand_utc_full_historical_subject_and_borrow() -> Test
 #[test]
 fn malformed_schema_reserved_fields_and_trailing_bytes_reject() -> TestResult {
     let bytes = encoded(storage(1, DiagnosticCommand::Load)?)?;
-    for (offset, value) in [(0, 0), (4, 2), (5, 99), (6, 128), (7, 1)] {
+    for (offset, value) in [(0, 0), (4, 1), (4, 3), (5, 99), (6, 128), (7, 1)] {
         let mut bad = bytes.clone();
         bad[offset] = value;
         assert!(decode(&bad).is_err());
@@ -161,6 +161,7 @@ fn replacing_old_or_equal_revision_rejects() -> TestResult {
     let f = reporter(
         1,
         DiagnosticCommand::ReplaceView {
+            restart: sugarsubstitute_contracts::incident::ReportRestartAvailability::Available,
             session: s,
             old: IncidentRevision::new(5)?,
             total: 1,
@@ -246,10 +247,16 @@ fn reporter_command_and_failure_categories_roundtrip() -> TestResult {
         IncidentUtc::from_unix_seconds(20)?,
     );
     for command in [
-        DiagnosticCommand::BeginView { session: s, total: 1, sha256: digest },
+        DiagnosticCommand::BeginView {
+            restart: sugarsubstitute_contracts::incident::ReportRestartAvailability::Available,
+            session: s,
+            total: 1,
+            sha256: digest,
+        },
         DiagnosticCommand::ViewChunk { session: s, chunk },
         DiagnosticCommand::EndView { session: s, sha256: digest },
         DiagnosticCommand::ReplaceView {
+            restart: sugarsubstitute_contracts::incident::ReportRestartAvailability::Available,
             session: s,
             old: IncidentRevision::new(4)?,
             total: 1,

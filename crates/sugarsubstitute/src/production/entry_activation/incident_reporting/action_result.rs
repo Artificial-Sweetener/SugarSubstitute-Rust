@@ -3,6 +3,39 @@
 //! Return a current authenticated copy authorization through the same original relay turn.
 use super::*;
 impl IncidentReporting {
+    /// Reject this authenticated restart request before policy acknowledgement or revision mutation.
+    /// The same original frame/token, finite cutoff and completion remain owned until real delivery.
+    pub(super) fn reject_restart(
+        &mut self,
+        binding: ReportBinding,
+        relay_until: Moment,
+    ) -> Result<()> {
+        if self.pending_control.is_some() || self.binding != Some(binding) {
+            return Err("Original restart rejection control remains occupied or foreign".into());
+        }
+        let original = self.request.as_ref().ok_or("Original restart request missing")?;
+        let key = self.key.ok_or("Actual Reporter key missing")?;
+        if original.authentication.received.key() != key {
+            return Err("Original restart request source changed".into());
+        }
+        let until = relay_until.min(original.context.budget().until());
+        self.pending_control = Some(ReporterControlInput {
+            key,
+            request: original.authentication.issued.request(),
+            context: DiagnosticContext {
+                incident: Some(DiagnosticIncident {
+                    key: binding.incident(),
+                    revision: binding.revision(),
+                }),
+                ..DiagnosticContext::default()
+            },
+            session: binding.session(),
+            until,
+            command: ReporterControl::RestartUnavailable,
+        });
+        self.relay_until = Some(until);
+        Ok(())
+    }
     /// Admit the native clipboard decision only after the actual policy accepted its binding.
     /// The original received frame and issued token remain held for router completion.
     /// # Errors

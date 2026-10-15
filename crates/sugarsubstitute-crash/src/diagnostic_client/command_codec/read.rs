@@ -54,11 +54,17 @@ pub(in crate::diagnostic_client) fn read<'a>(
         },
         15 => C::DiscardCapture(DumpId::new(r.array()?).map_err(|_| E::Identity)?),
         16 => C::Retire,
-        17 => C::BeginView { session: session(r)?, total: r.u64()?, sha256: r.array()? },
+        17 => C::BeginView {
+            session: session(r)?,
+            restart: restart(r)?,
+            total: r.u64()?,
+            sha256: r.array()?,
+        },
         18 => C::ViewChunk { session: session(r)?, chunk: read_chunk(r, payload)? },
         19 => C::EndView { session: session(r)?, sha256: r.array()? },
         20 => C::ReplaceView {
             session: session(r)?,
+            restart: restart(r)?,
             old: revision(r)?,
             total: r.u64()?,
             sha256: r.array()?,
@@ -81,10 +87,20 @@ pub(in crate::diagnostic_client) fn read<'a>(
         }
         29 => C::CopyResult { session: session(r)?, result: read_result(r)? },
         30 => C::ExportSelectionResult { session: session(r)?, result: read_result(r)? },
+        32 => C::RestartUnavailable { session: session(r)? },
         _ => return Err(E::Schema),
     };
     if !matches!(code, 3 | 4 | 5 | 8 | 9 | 18 | 24) && !payload.is_empty() {
         return Err(E::Shape);
     }
     Ok(c)
+}
+
+/// Accept only the two closed presentation values; no readiness privilege is decoded.
+fn restart(r: &mut Reader<'_>) -> Result<ReportRestartAvailability, E> {
+    Ok(if r.boolean()? {
+        ReportRestartAvailability::Available
+    } else {
+        ReportRestartAvailability::Unavailable
+    })
 }

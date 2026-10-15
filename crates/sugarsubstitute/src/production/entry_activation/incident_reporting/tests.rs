@@ -227,3 +227,9 @@ mod retirement_phase;
 
 #[path = "tests/launch_jobs.rs"]
 mod launch_jobs;
+
+#[path = "tests/source_observation.rs"]
+mod source_observation;
+
+#[path = "tests/receiving_failure.rs"]
+mod receiving_failure;

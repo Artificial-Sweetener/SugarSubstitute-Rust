@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Produce inert Copy request metadata through the real pure surface state for owner tests.
+//! Produce inert native action request metadata through the real pure surface state for owner tests.
 //!
 //! This default-off boundary fixture creates no window, handles, native observation,
 //! authentication, clipboard effects or presentation proof. It preserves the private
@@ -20,13 +20,43 @@ pub fn with_pending_report_copy<T>(
     current: ReportBinding,
     use_request: impl FnOnce(ReportRequestId, ReportCommand) -> T,
 ) -> Result<T, ReportSurfaceError> {
-    let mut state = State::new(old);
+    let mut state =
+        State::new(old, sugarsubstitute_contracts::incident::ReportRestartAvailability::Available);
     state.presented()?;
     state.preflight_replace(old, current)?;
-    state.replaced(current);
+    state.replaced(
+        current,
+        sugarsubstitute_contracts::incident::ReportRestartAvailability::Available,
+    );
     let request = state.request(current, Intent::Action(ReportAction::CopyText))?;
     Ok(use_request(request.id, ReportCommand::new(request.binding, ReportAction::CopyText)))
 }
+/// Exercise the real native request fence for a pending Restart without creating native resources.
+/// Matching metadata grants no process, acknowledgement, transport or clipboard capability.
+/// # Errors
+/// Returns an invalid original/current view or request-phase rejection.
+pub fn with_pending_report_restart<T>(
+    old: sugarsubstitute_contracts::incident::ReportBinding,
+    current: sugarsubstitute_contracts::incident::ReportBinding,
+    observe: impl FnOnce(
+        super::ReportRequestId,
+        sugarsubstitute_contracts::incident::ReportCommand,
+    ) -> T,
+) -> Result<T, super::ReportSurfaceError> {
+    use sugarsubstitute_contracts::incident::{
+        ReportAction, ReportCommand, ReportRestartAvailability,
+    };
+    let mut state = State::new(old, ReportRestartAvailability::Available);
+    state.presented()?;
+    state.preflight_replace(old, current)?;
+    state.replaced(current, ReportRestartAvailability::Available);
+    let request = state.request(current, Intent::Action(ReportAction::DismissAndRequestRestart))?;
+    Ok(observe(
+        request.id,
+        ReportCommand::new(request.binding, ReportAction::DismissAndRequestRestart),
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

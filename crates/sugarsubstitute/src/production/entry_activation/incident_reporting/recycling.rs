@@ -65,7 +65,13 @@ impl IncidentReporting {
         if !self.family_retired
             || self.failure().is_some()
             || self.dismiss_action == Some(ReportAction::DismissAndRequestRestart)
-            || matches!(self.retained_effect, Some(IncidentEffect::ForwardRestartIntent { .. }))
+            || matches!(
+                self.retained_effect,
+                Some(
+                    IncidentEffect::ForwardRestartIntent { .. }
+                        | IncidentEffect::ForwardRecoveredRestartIntent { .. }
+                )
+            )
         {
             return Ok(());
         }
@@ -109,7 +115,8 @@ impl IncidentReporting {
         self.export_work = None;
         self.pending_control = None;
         self.native_retired = false;
-        self.initial_loaded = false;
+        self.initial_view_admitted = false;
+        self.authenticated_peer_observed = None;
         self.stopping = None;
         self.family_retired = false;
         self.dismiss_action = None;

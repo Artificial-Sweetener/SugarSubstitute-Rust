@@ -96,6 +96,8 @@ pub enum DiagnosticCommand<'a> {
     BeginView {
         /// Reporter session.
         session: ReportSessionId,
+        /// Current supervisor restart presentation decision, not native authority.
+        restart: ReportRestartAvailability,
         /// Total redacted UTF8 bytes.
         total: u64,
         /// Complete digest.
@@ -119,6 +121,8 @@ pub enum DiagnosticCommand<'a> {
     ReplaceView {
         /// Same reporter session.
         session: ReportSessionId,
+        /// Current supervisor restart presentation decision, not native authority.
+        restart: ReportRestartAvailability,
         /// Exact previous visible revision.
         old: IncidentRevision,
         /// New total redacted UTF8 bytes.
@@ -168,6 +172,11 @@ pub enum DiagnosticCommand<'a> {
         session: ReportSessionId,
         /// Actual categorical outcome.
         result: DiagnosticActionResult,
+    },
+    /// Reject an impossible restart without acknowledgement, revision change or UI close.
+    RestartUnavailable {
+        /// Exact current reporter session; incident/revision/request remain in the frame.
+        session: ReportSessionId,
     },
     /// Actual categorical reporter failure, never automatic relaunch.
     ReporterFailed {

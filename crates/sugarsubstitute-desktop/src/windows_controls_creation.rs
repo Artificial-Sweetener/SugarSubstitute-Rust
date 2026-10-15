@@ -55,7 +55,18 @@ impl<P, C> Creation<P, C> {
         peers
             .try_reserve_exact(count)
             .map_err(|cause| DesktopError::new("allocate_accessible_peers", cause))?;
+        if peers.capacity() != count {
+            return Err(DesktopError::message(
+                "allocate_accessible_peers",
+                "peer capacity exceeded",
+            ));
+        }
         Ok(Self { parent: None, peers, count, attempted: false, complete: false, closing: false })
+    }
+
+    /// Include all retained original peer slots in the caller's pre-effect allocation bound.
+    pub(super) fn storage_bytes(count: usize) -> Option<usize> {
+        count.checked_mul(size_of::<PeerSlot<C>>())?.checked_add(size_of::<Self>())
     }
 
     /// Fence reentry before effects and retain every created slot before its next fallible step.

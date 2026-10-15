@@ -5,7 +5,8 @@ use super::*;
 impl ProductionChild {
     /// Drain only the original closed pull and actual ended parser; issue no jobs or new pulls.
     pub(super) fn retire_output(&mut self) -> Result<()> {
-        if self.output.job.is_some()
+        if self.output.replacement.as_ref().is_some_and(|replacement| replacement.pending())
+            || self.output.job.is_some()
             || self.output.owner_mut().is_some_and(|owner| owner.worker_pending())
         {
             return Ok(());

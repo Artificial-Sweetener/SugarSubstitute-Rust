@@ -17,6 +17,12 @@ pub(super) enum ProviderCause {
 }
 /// Borrow one actual provider failure without logging filenames, PDB text or native paths.
 pub struct SymbolProviderFailure<'a>(pub(super) &'a ProviderCause);
+impl SymbolProviderFailure<'_> {
+    /// Return the retained finite lookup/control category without formatting its native source.
+    pub fn code(&self) -> SymbolProviderFailureCode {
+        self.0.code()
+    }
+}
 impl fmt::Debug for SymbolProviderFailure<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("SymbolProviderFailure")

@@ -16,22 +16,34 @@ fn binding(revision: u64, session: u64) -> Result<ReportBinding, Box<dyn Error>>
     ))
 }
 fn ready() -> Result<State, Box<dyn Error>> {
-    let mut state = State::new(binding(1, 1)?);
+    let mut state = State::new(
+        binding(1, 1)?,
+        sugarsubstitute_contracts::incident::ReportRestartAvailability::Available,
+    );
     state.presented()?;
     state.preflight_replace(binding(1, 1)?, binding(2, 1)?)?;
-    state.replaced(binding(2, 1)?);
+    state.replaced(
+        binding(2, 1)?,
+        sugarsubstitute_contracts::incident::ReportRestartAvailability::Available,
+    );
     Ok(state)
 }
 #[test]
 fn presented_alone_cannot_admit_actions_before_actual_replacement() -> Result<(), Box<dyn Error>> {
-    let mut state = State::new(binding(1, 1)?);
+    let mut state = State::new(
+        binding(1, 1)?,
+        sugarsubstitute_contracts::incident::ReportRestartAvailability::Available,
+    );
     assert!(state.request(binding(1, 1)?, Intent::Action(ReportAction::CopyText)).is_err());
     state.presented()?;
     assert!(state.presented().is_err());
     assert!(state.request(binding(1, 1)?, Intent::Action(ReportAction::Dismiss)).is_err());
     state.preflight_replace(binding(1, 1)?, binding(2, 1)?)?;
     assert!(!state.actionable());
-    state.replaced(binding(2, 1)?);
+    state.replaced(
+        binding(2, 1)?,
+        sugarsubstitute_contracts::incident::ReportRestartAvailability::Available,
+    );
     assert!(state.actionable());
     Ok(())
 }
@@ -127,5 +139,61 @@ fn close_request_is_not_native_retirement_or_a_receipt() -> Result<(), Box<dyn E
     let receipt = state.receipt()?;
     assert!(receipt.presented());
     assert_eq!(receipt.replacements(), 1);
+    Ok(())
+}
+
+#[test]
+fn unavailable_restart_keeps_copy_export_and_dismiss_actionable_without_a_request()
+-> Result<(), Box<dyn Error>> {
+    let mut state = ready()?;
+    state.restart = ReportRestartAvailability::Unavailable;
+    let current = state.binding();
+    let restart = Intent::Action(ReportAction::DismissAndRequestRestart);
+    assert!(!restart.allowed(state.restart()));
+    assert!(state.request(current, restart).is_err());
+    assert_eq!(state.high_water, 0);
+    assert!(state.pending.is_none());
+    assert!(state.actionable());
+    for intent in [
+        Intent::Action(ReportAction::CopyText),
+        Intent::Export(ExportSelection::TextOnly),
+        Intent::Action(ReportAction::Dismiss),
+    ] {
+        assert!(intent.allowed(state.restart()));
+        state.request(current, intent)?;
+        state.completed_request();
+    }
+    assert!(!state.closing());
+    Ok(())
+}
+#[test]
+fn restart_rejection_requires_exact_pending_restart_and_never_closes_the_view()
+-> Result<(), Box<dyn Error>> {
+    let mut state = ready()?;
+    let current = state.binding();
+    let copy = state.request(current, Intent::Action(ReportAction::CopyText))?;
+    assert!(state.restart_unavailable(copy.id, current).is_err());
+    assert!(state.matching_request(copy.id, current).is_ok());
+    state.completed_request();
+    let request = state.request(current, Intent::Action(ReportAction::DismissAndRequestRestart))?;
+    assert!(state.restart_unavailable(request.id, binding(3, 1)?).is_err());
+    assert!(
+        state
+            .restart_unavailable(
+                ReportRequestId(NonZeroU64::new(request.id.get() + 1).ok_or("zero")?),
+                current
+            )
+            .is_err()
+    );
+    assert!(state.restart().allows_restart());
+    state.restart_unavailable(request.id, current)?;
+    assert!(!state.restart().allows_restart());
+    assert!(!state.closing());
+    assert!(state.actionable());
+    assert!(state.restart_unavailable(request.id, current).is_err());
+    assert!(
+        state.request(current, Intent::Action(ReportAction::DismissAndRequestRestart)).is_err()
+    );
+    state.request(current, Intent::Action(ReportAction::Dismiss))?;
     Ok(())
 }

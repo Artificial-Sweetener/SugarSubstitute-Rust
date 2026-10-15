@@ -13,6 +13,11 @@ use sugarsubstitute_contracts::{
 use sugarsubstitute_desktop::DesktopStartupObservation;
 
 /// Transfer an unchanged native fact or the single authoritative application effect.
+/// One synchronous route moves the native payload into the child owner without allocating.
+#[allow(
+    clippy::large_enum_variant,
+    reason = "Keep one native observation inline during its synchronous move into child custody; boxing adds an unadmitted allocation"
+)]
 pub(super) enum StartupRoute {
     Native(DesktopStartupObservation),
     Effect(StartupEffect),
@@ -178,7 +183,8 @@ impl StartupPolicy {
             | DesktopStartupObservation::FrontendReceipt { identity, .. }
             | DesktopStartupObservation::MainRevealed(identity)
             | DesktopStartupObservation::MainRetired(identity)
-            | DesktopStartupObservation::MainAbsent(identity) => {
+            | DesktopStartupObservation::MainAbsent(identity)
+            | DesktopStartupObservation::BackendRetryRequested { identity, .. } => {
                 session.is_some_and(|session| *identity == self.identity(session))
             }
             DesktopStartupObservation::Failed { identity, .. } => identity.is_none_or(|identity| {

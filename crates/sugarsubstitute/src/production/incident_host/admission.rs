@@ -43,6 +43,8 @@ pub(super) fn allocate_policy(
         return Err(PreparationCause::Capacity);
     }
     let claim = context.memory().claim(POLICY_BYTES).map_err(PreparationCause::Memory)?;
+    let recovery = super::super::diagnostic_helper::recovery::RecoveryService::new(context)
+        .map_err(PreparationCause::Memory)?;
     let seed = super::super::diagnostic_helper::SeedService::new(context)
         .map_err(PreparationCause::Memory)?;
     let collection = super::super::diagnostic_helper::collection::CollectionService::new(context)
@@ -61,6 +63,7 @@ pub(super) fn allocate_policy(
     });
     Ok(FundedPolicy {
         state: Some(FundedState { state, _claim: claim }),
+        recovery,
         seed,
         collection,
         reporting,

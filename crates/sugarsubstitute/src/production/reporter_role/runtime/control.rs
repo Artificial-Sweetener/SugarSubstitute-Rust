@@ -30,6 +30,9 @@ impl ReporterSession {
                     binding,
                     outcome: outcome(*result),
                 },
+                ControlDecision::RestartUnavailable => {
+                    ReportSurfaceUpdate::RestartUnavailable { request, binding }
+                }
                 ControlDecision::Close(acknowledgement) => {
                     ReportSurfaceUpdate::CloseAfterDurableAck {
                         binding,
@@ -71,6 +74,7 @@ impl ControlResult {
                 }
             }
             (ControlDecision::Export(_), ReportAction::Export(_)) => {}
+            (ControlDecision::RestartUnavailable, ReportAction::DismissAndRequestRestart) => {}
             (
                 ControlDecision::Close(acknowledgement),
                 ReportAction::Dismiss | ReportAction::DismissAndRequestRestart,

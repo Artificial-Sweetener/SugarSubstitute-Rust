@@ -10,6 +10,7 @@ pub static EN: ReportMessages = ReportMessages {
     export: "Export report",
     close: "Close",
     restart: "Close and request restart",
+    restart_unavailable: "Restart is unavailable in this session. Close SugarSubstitute and open it again.",
     include_dump: "Include native memory dump",
     dump_warning: "Native memory dumps can contain passwords and private information. They are not sanitized.",
     save_title: "Export incident",

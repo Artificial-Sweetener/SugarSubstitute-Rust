@@ -163,12 +163,20 @@ impl CoordinatorBackend {
                     RegistryObservation::Failed { error, .. } => {
                         Self::merge(&mut transition, self.failed(key, Box::new(error), resources)?);
                     }
-                    RegistryObservation::RootExited { code, .. } => {
-                        if self.records[at].as_ref().is_some_and(|r| r.shutdown.is_none()) {
-                            Self::merge(
-                                &mut transition,
-                                self.failed(key, Box::new(RootExit(code)), resources)?,
-                            );
+                    RegistryObservation::RootExited { process, code } => {
+                        let next =
+                            self.managed_exit_observation(key, ticket.process(), process, code)?;
+                        Self::merge(&mut transition, next);
+                        if self.records[at].as_ref().is_some_and(|record| record.shutdown.is_none())
+                        {
+                            match self.begin_cleanup(key, None, resources) {
+                                Ok(next) => Self::merge(&mut transition, next),
+                                Err(cause) => self.records[at]
+                                    .as_mut()
+                                    .ok_or(LifecycleRejection::StaleIdentity)?
+                                    .cleanup_failure
+                                    .retain(cause),
+                            }
                         }
                     }
                     RegistryObservation::RootObservationRetired { .. } => {}
@@ -267,11 +275,13 @@ impl CoordinatorBackend {
                     LoopbackOrigin::parse(&format!("http://127.0.0.1:{port}"), port)?
                 }
             };
+            let context = BackendReadyMetadata::capture(record.key, origin, &proof)?;
             record.readiness = Some(proof);
             let key = record.key;
             let transition = self.observe(ResourceObservation::Ready { resource: key, origin })?;
-            self.records[at].as_mut().ok_or(LifecycleRejection::StaleIdentity)?.ready_origin =
-                Some(origin);
+            let record = self.records[at].as_mut().ok_or(LifecycleRejection::StaleIdentity)?;
+            record.ready_origin = Some(origin);
+            record.ready_context = Some(context);
             return Ok(transition);
         }
         let cleanup_current = match record.shutdown {

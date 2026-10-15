@@ -112,6 +112,10 @@ impl SeedPreparation {
             job.cancel();
         }
     }
+    /// Actual finite preparation admission, independent of terminal delivery.
+    pub(super) const fn started(&self) -> bool {
+        self.admitted
+    }
     pub(super) fn delivered(&self) -> bool {
         self.job.is_none()
     }

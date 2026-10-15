@@ -51,6 +51,7 @@ fn unused_projection_source_return_keeps_first_cause_controls_and_original_charg
         post: None,
         _charge: None,
     });
+    let data_bytes = projection_data_bytes().ok_or("Projection partition underflow")?;
     let mut job = client.submit_blocking_owned_box(
         &scope,
         JobSpec {
@@ -62,8 +63,8 @@ fn unused_projection_source_return_keeps_first_cause_controls_and_original_charg
             replacement: None,
         },
         &mut input,
-        |mut retained, context| {
-            retained.input_mut()._charge = match context.memory().claim(PROJECTION_DATA_BYTES) {
+        move |mut retained, context| {
+            retained.input_mut()._charge = match context.memory().claim(data_bytes) {
                 Ok(claim) => Some(claim),
                 Err(cause) => {
                     retained.input_mut().cause = ProjectionCause::Claim(cause);

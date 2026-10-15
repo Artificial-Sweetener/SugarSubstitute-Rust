@@ -34,7 +34,12 @@ fn changed_binding_offset_kind_total_digest_preserve_original_progress() -> Test
     t.accept(b, chunk(b"a", 0, 2, hash))?;
     let mut changed_frame = reporter(
         1,
-        DiagnosticCommand::BeginView { session: ReportSessionId::new(8)?, total: 2, sha256: hash },
+        DiagnosticCommand::BeginView {
+            restart: sugarsubstitute_contracts::incident::ReportRestartAvailability::Available,
+            session: ReportSessionId::new(8)?,
+            total: 2,
+            sha256: hash,
+        },
         true,
     )?;
     changed_frame.context.incident.as_mut().ok_or("Missing incident")?.revision =
@@ -133,6 +138,7 @@ fn view_binding() -> Result<DiagnosticTransferBinding, Box<dyn std::error::Error
     Ok(DiagnosticTransferBinding::from_frame(&reporter(
         1,
         DiagnosticCommand::BeginView {
+            restart: sugarsubstitute_contracts::incident::ReportRestartAvailability::Available,
             session: ReportSessionId::new(8)?,
             total: 2,
             sha256: [0; 32],
@@ -209,6 +215,7 @@ fn reporter_stream_rejects_changed_current_session_and_reporter_binding() -> Tes
     let original = reporter(
         1,
         DiagnosticCommand::BeginView {
+            restart: sugarsubstitute_contracts::incident::ReportRestartAvailability::Available,
             session: ReportSessionId::new(8)?,
             total: 2,
             sha256: digest(b"ab"),
@@ -230,6 +237,8 @@ fn reporter_stream_rejects_changed_current_session_and_reporter_binding() -> Tes
             }
             1 => {
                 wrong.command = DiagnosticCommand::BeginView {
+                    restart:
+                        sugarsubstitute_contracts::incident::ReportRestartAvailability::Available,
                     session: ReportSessionId::new(9)?,
                     total: 2,
                     sha256: digest(b"ab"),

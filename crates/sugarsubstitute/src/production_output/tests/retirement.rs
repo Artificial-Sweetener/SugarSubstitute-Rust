@@ -75,7 +75,7 @@ fn closed_admitted_pull_validates_original_idle_without_job_or_ack() -> TestResu
     let b = binding()?;
     let h = header(b, 2)?;
     output.prepare_pull(h, Moment::from_nanos(100))?;
-    output.admitted_pull(h)?;
+    output.admitted_request(h)?;
     let reply = bytes(h, ReplyOutcome::OutputIdle(b.lease))?;
     assert!(matches!(output.validate_retiring_reply(&reply), Err(OutputError::Order)));
     output.close();
@@ -102,7 +102,7 @@ fn closed_delivery_requires_exact_next_id_and_never_publishes_or_acks() -> TestR
     let h = header(b, 2)?;
     output.acknowledged = NonZeroU64::new(4);
     output.prepare_pull(h, Moment::from_nanos(100))?;
-    output.admitted_pull(h)?;
+    output.admitted_request(h)?;
     output.close();
     for id in [4, 6, 5] {
         let wire = bytes(
@@ -146,7 +146,7 @@ fn worker_boundary(failure: bool) -> TestResult {
     let mut output = output(&rig)?;
     let h = header(binding()?, 2)?;
     output.prepare_pull(h, Moment::from_nanos(100))?;
-    output.admitted_pull(h)?;
+    output.admitted_request(h)?;
     let entered = Arc::new(Gate::default());
     let returned = Arc::new(Gate::default());
     let release = Release(returned.clone());
@@ -166,7 +166,7 @@ fn worker_boundary(failure: bool) -> TestResult {
                 return Err(OutputError::Identity);
             }
             worker::check(&context)?;
-            Ok(worker::Parsed { delivery: None, change: None, snapshot: None })
+            Ok(worker::Parsed { delivery: None, change: None, snapshot: None, notice: None })
         },
     )?);
     entered.wait()?;
@@ -210,7 +210,7 @@ fn successful_worker_completed_before_close_retains_actual_success_without_ack()
     let mut output = output(&rig)?;
     let h = header(binding()?, 2)?;
     output.prepare_pull(h, Moment::from_nanos(100))?;
-    output.admitted_pull(h)?;
+    output.admitted_request(h)?;
     let mut source = Some(output.source.clone());
     output.job = Some(rig.client.submit_blocking_owned_input(
         &rig.scope,
@@ -218,7 +218,7 @@ fn successful_worker_completed_before_close_retains_actual_success_without_ack()
         &mut source,
         |source, context| {
             source.check(&context)?;
-            Ok(worker::Parsed { delivery: None, change: None, snapshot: None })
+            Ok(worker::Parsed { delivery: None, change: None, snapshot: None, notice: None })
         },
     )?);
     rig.notice(&mut output)?;

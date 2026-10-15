@@ -41,9 +41,10 @@ pub(super) struct Session {
     pub(super) failure: Option<ReportSurfaceError>,
     pub(super) close_deadline: Option<Instant>,
     pub(super) picker: Option<save_dialog::UnretiredDialog>,
+    pub(super) prepared_save: Option<super::modal::PreparedSave>,
     retirement_attempted: bool,
     view: NativeReportView,
-    labels: &'static ReportMessages,
+    pub(super) labels: &'static ReportMessages,
 }
 #[cfg(test)]
 mod tests;
@@ -52,23 +53,30 @@ impl Session {
     pub(super) fn teardown_ready(&self) -> bool {
         self.state.closing() && self.native_retired && self.settled
     }
-    pub(super) fn new(options: ReportSurfaceOptions) -> Self {
-        Self {
-            state: State::new(options.view.binding()),
-            controls: None,
-            window: None,
-            window_id: None,
-            hwnd: HWND::default(),
-            destroyed: false,
-            native_retired: false,
-            settled: false,
-            failure: None,
-            close_deadline: None,
-            picker: None,
-            retirement_attempted: false,
-            view: options.view,
-            labels: options.labels,
-        }
+    pub(super) fn new(
+        options: ReportSurfaceOptions,
+    ) -> (Self, sugarsubstitute_contracts::execution::MemoryClaim) {
+        let storage = options.dispatch_storage;
+        (
+            Self {
+                state: State::new(options.view.binding(), options.view.restart()),
+                controls: None,
+                window: None,
+                window_id: None,
+                hwnd: HWND::default(),
+                destroyed: false,
+                native_retired: false,
+                settled: false,
+                failure: None,
+                close_deadline: None,
+                picker: None,
+                prepared_save: None,
+                retirement_attempted: false,
+                view: options.view,
+                labels: options.labels,
+            },
+            storage,
+        )
     }
     pub(super) fn initialize(
         &mut self,
@@ -102,12 +110,12 @@ impl Session {
             tracing::error!(operation = cause.operation(), error = %cause, "additional report surface failure");
         }
     }
-    pub(super) fn close(&mut self, content: &mut impl ReportSessionContent) {
+    pub(super) fn close_at(&mut self, content: &mut impl ReportSessionContent, now: Instant) {
         if self.close_deadline.is_some() {
             return;
         }
         self.state.shutdown();
-        let now = Instant::now();
+        self.prepared_save = None;
         self.close_deadline = Some(match now.checked_add(Duration::from_secs(15)) {
             Some(deadline) => deadline,
             None => {
@@ -119,7 +127,7 @@ impl Session {
             self.retain(cause);
         }
         if let Some(controls) = &self.controls
-            && let Err(cause) = controls.enable(false)
+            && let Err(cause) = controls.enable(false, self.state.restart())
         {
             self.retain(cause);
         }
@@ -129,6 +137,14 @@ impl Session {
         content: &mut impl ReportSessionContent,
         cause: ReportSurfaceError,
     ) {
+        self.fail_at(content, cause, Instant::now());
+    }
+    pub(super) fn fail_at(
+        &mut self,
+        content: &mut impl ReportSessionContent,
+        cause: ReportSurfaceError,
+        observed_at: Instant,
+    ) {
         self.retain(cause);
         if let Err(cause) = content.observe(ReportSurfaceObservation::Failed {
             binding: self.state.binding(),
@@ -136,7 +152,7 @@ impl Session {
         }) {
             self.retain(cause);
         }
-        self.close(content);
+        self.close_at(content, observed_at);
     }
     pub(super) fn poll(
         &mut self,
@@ -154,6 +170,14 @@ impl Session {
         content: &mut impl ReportSessionContent,
         update: ReportSurfaceUpdate,
     ) -> Result<(), ReportSurfaceError> {
+        self.apply_at(content, update, Instant::now())
+    }
+    pub(super) fn apply_at(
+        &mut self,
+        content: &mut impl ReportSessionContent,
+        update: ReportSurfaceUpdate,
+        observed_at: Instant,
+    ) -> Result<(), ReportSurfaceError> {
         match update {
             ReportSurfaceUpdate::None => {}
             ReportSurfaceUpdate::ReplaceView { old, current, view } => {
@@ -165,8 +189,8 @@ impl Session {
                     .as_ref()
                     .ok_or_else(|| ReportSurfaceError::rejected("report_replace_native_owner"))?
                     .replace(&view)?;
+                self.state.replaced(current, view.restart());
                 self.view = view;
-                self.state.replaced(current);
                 content.observe(ReportSurfaceObservation::ViewReplaced(current))?;
             }
             ReportSurfaceUpdate::CopyAuthorized { request, binding, counter, outcome } => {
@@ -214,13 +238,20 @@ impl Session {
                     }
                 }
             }
+            ReportSurfaceUpdate::RestartUnavailable { request, binding } => {
+                self.state.restart_unavailable(request, binding)?;
+                self.controls
+                    .as_mut()
+                    .ok_or_else(|| ReportSurfaceError::rejected("report_restart_native_owner"))?
+                    .status(self.labels.restart_unavailable)?;
+            }
             ReportSurfaceUpdate::CloseAfterDurableAck { binding, acknowledgement } => {
                 self.state.durable_close(binding, acknowledgement)?;
-                self.close(content);
+                self.close_at(content, observed_at);
             }
         }
         if let Some(controls) = &self.controls {
-            controls.enable(self.state.actionable())?;
+            controls.enable(self.state.actionable(), self.state.restart())?;
         }
         Ok(())
     }
@@ -236,38 +267,13 @@ impl Session {
             .controls
             .as_ref()
             .ok_or_else(|| ReportSurfaceError::rejected("report_input_native_owner"))?;
-        controls.enable(false)?;
+        controls.enable(false, self.state.restart())?;
         match input.intent {
             Intent::Action(action) => {
                 content.action(request.id, ReportCommand::new(request.binding, action))?
             }
             Intent::Export(selection) => {
-                let outcome = save_dialog::select(
-                    self.hwnd,
-                    request,
-                    selection,
-                    self.labels,
-                    &controls.lease,
-                    content,
-                )?;
-                self.picker = outcome.retirement;
-                if let Some(cause) = outcome.failure {
-                    return Err(cause);
-                }
-                if let Some(selection) = outcome.selection {
-                    content.observe(ReportSurfaceObservation::SaveSelected(selection))?;
-                } else {
-                    self.state.completed_request();
-                    content.observe(ReportSurfaceObservation::SaveCancelled {
-                        request: request.id,
-                        binding: request.binding,
-                    })?;
-                }
-                if let Some(update) = outcome.update {
-                    self.apply(content, update)?;
-                } else if let Some(controls) = &self.controls {
-                    controls.enable(self.state.actionable())?;
-                }
+                self.prepare_save(request, selection)?;
             }
         }
         Ok(())

@@ -31,16 +31,20 @@ impl ParentLifecycle {
         index: usize,
         reference: LeaseReference,
         acknowledged: Option<NonZeroU64>,
-        resources: &ParentResources<'_, '_>,
+        resources: &mut ParentResources<'_, '_>,
     ) -> Result<()> {
         if self.closed || self.cleanup.is_some() || self.attempt_cleanup.is_some() {
             return Err(ParentError::WrongPhase.into());
         }
-        let lease = self
-            .acquisition
-            .as_ref()
-            .ok_or(ParentError::WrongPhase)?
-            .output_lease(self.binding()?, reference)?;
+        let running = self.running_output_lease(reference, acknowledged, resources)?;
+        let lease = if let Some(lease) = running {
+            lease
+        } else {
+            self.acquisition
+                .as_ref()
+                .ok_or(ParentError::WrongPhase)?
+                .output_lease(self.binding()?, reference)?
+        };
         if self.output_lease != Some(lease) {
             return Err(ParentError::ForeignPeer.into());
         }
@@ -48,6 +52,9 @@ impl ParentLifecycle {
         if acknowledge_delivery(current, self.acknowledged_output, lease, acknowledged)? {
             self.acknowledged_output = acknowledged.map(|id| (lease, id));
             self.output = None;
+        }
+        if self.recovery_output_reply(index, resources)? {
+            return Ok(());
         }
         let id = NonZeroU64::new(
             self.next_delivery.checked_add(1).ok_or(ParentError::IdentityExhausted)?,
@@ -221,7 +228,7 @@ mod tests {
                 100,
                 1_000_000_000,
             )?,
-            storage,
+            &mut Some(crate::production::parent_lifecycle::causes::BackendCauses::new(storage)?),
         )?;
         parent.next_delivery = 1;
         parent.acknowledged_output = Some((old, id));

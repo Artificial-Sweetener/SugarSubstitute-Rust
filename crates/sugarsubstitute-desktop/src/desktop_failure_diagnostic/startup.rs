@@ -49,6 +49,7 @@ pub(crate) fn observation_kind(observation: &DesktopStartupObservation) -> &'sta
         DesktopStartupObservation::MainPreviewFailed { .. } => "MainPreviewFailed",
         DesktopStartupObservation::MainRetired(_) => "MainRetired",
         DesktopStartupObservation::MainAbsent(_) => "MainAbsent",
+        DesktopStartupObservation::BackendRetryRequested { .. } => "BackendRetryRequested",
         DesktopStartupObservation::CloseRequested => "CloseRequested",
         DesktopStartupObservation::Failed { .. } => "Failed",
     }

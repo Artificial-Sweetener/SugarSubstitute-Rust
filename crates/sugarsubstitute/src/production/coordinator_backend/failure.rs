@@ -102,7 +102,7 @@ impl FailureObservation {
         }
         if let Some(exit) = cause.downcast_ref::<RootExit>() {
             return Self {
-                exit_code: Some(exit.0),
+                exit_code: Some(exit.status),
                 ..Self::classified(FailureKind::RootExit, "root_exit")
             };
         }
@@ -169,10 +169,13 @@ impl std::fmt::Display for Stopped {
 }
 impl Error for Stopped {}
 #[derive(Debug)]
-pub(super) struct RootExit(pub(super) u32);
+pub(super) struct RootExit {
+    pub(super) process: ProcessKey,
+    pub(super) status: u32,
+}
 impl std::fmt::Display for RootExit {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Owned backend root exited: {}", self.0)
+        write!(f, "Owned backend root exited: {}", self.status)
     }
 }
 impl Error for RootExit {}

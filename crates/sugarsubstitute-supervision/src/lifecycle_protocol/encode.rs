@@ -101,6 +101,10 @@ fn payload(
             main_fields::write_identity(*identity, run, writer)?;
             writer.u64(acquisition.get())
         }
+        WirePayload::RetryBackend { identity, failed } => {
+            main_fields::write_identity(*identity, run, writer)?;
+            lease(*failed, writer)
+        }
     }
 }
 fn encode_target(

@@ -219,16 +219,12 @@ impl IncidentReporting {
             } else {
                 host.reporting_service()?
             };
-            let marker = service
-                .passive_restoration()
-                .ok_or("Original passive frame disposition missing")?;
-            if marker.operation() != work.scope.operation()
-                || marker.binding() != work.binding
-                || input.operation != marker.operation()
-                || input.binding() != marker.binding()
-            {
-                return Err("Original passive frame correlation changed".into());
-            }
+            service.validate_retiring_input(
+                work.scope.operation(),
+                work.binding,
+                work.submitted,
+                input,
+            )?;
             // The actual family is settled above; returning its frame permits checked pipe close.
             drop(input.authentication.take());
         }
@@ -262,14 +258,23 @@ impl IncidentReporting {
         if self.failure().is_none() && !host.closing() {
             let relay = self.relay.as_ref().ok_or("Actual Reporter recycling owner missing")?;
             if relay.recycling_ready(registry, self.key.ok_or("Actual Reporter key missing")?)? {
-                self.receiving_session.retire_healthy_preparation(binding)?;
+                self.receiving_session.retire_healthy_preparation(
+                    binding,
+                    self.key.ok_or("Actual Reporter key missing")?,
+                )?;
                 return self.advance_recycled_retirement(host, resources);
             }
         }
         if let Some(process) = self.process {
             let source =
                 self.relay.as_ref().ok_or("Actual retired Reporter source missing")?.source();
-            self.receiving_session.retire_original_family(registry, binding, source, process)?;
+            self.receiving_session.retire_original_family(
+                registry,
+                binding,
+                self.key.ok_or("Actual Reporter key missing")?,
+                source,
+                process,
+            )?;
             self.process = None;
         }
         if !host.closing()

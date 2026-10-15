@@ -22,7 +22,7 @@ fn recovery_failure_retains_original_budget_and_late_actual_completion() -> Test
     );
     coord.observe(IncidentServiceObservation::Recovered {
         scope,
-        original_operation: historical_operation()?,
+        original_operation: Some(historical_operation()?),
         summary: historical(1, true)?,
     })?;
     coord.observe(IncidentServiceObservation::RecoveryFinished { scope })?;
@@ -34,7 +34,7 @@ fn recovery_failure_retains_original_budget_and_late_actual_completion() -> Test
     assert_eq!(
         coord.observe(IncidentServiceObservation::Recovered {
             scope,
-            original_operation: historical_operation()?,
+            original_operation: Some(historical_operation()?),
             summary: historical(2, true)?
         }),
         Err(IncidentDecisionError::StaleOperation)
@@ -62,7 +62,7 @@ fn recovered_source_failure_preserves_correlation_after_recovery_closure() -> Te
     let summary = historical(1, true)?;
     coord.observe(IncidentServiceObservation::Recovered {
         scope: recovery,
-        original_operation: historical_operation()?,
+        original_operation: Some(historical_operation()?),
         summary: summary.clone(),
     })?;
     let source = coord
@@ -74,7 +74,7 @@ fn recovered_source_failure_preserves_correlation_after_recovery_closure() -> Te
         return Err("Expected recovered scope".into());
     };
     changed.historical_operation =
-        LogicalStoreOperationKey::new(owner(3)?, IncidentOperationId::new(8)?);
+        Some(LogicalStoreOperationKey::new(owner(3)?, IncidentOperationId::new(8)?));
     assert_eq!(
         coord.observe(IncidentServiceObservation::SourceRetirementFailed {
             scope: IncidentSourceScope::Recovered(changed)
@@ -120,7 +120,7 @@ fn first_source_failure_after_actual_retirement_rejects_without_new_failure() ->
     let summary = historical(1, true)?;
     coord.observe(IncidentServiceObservation::Recovered {
         scope,
-        original_operation: historical_operation()?,
+        original_operation: Some(historical_operation()?),
         summary: summary.clone(),
     })?;
     let source = coord

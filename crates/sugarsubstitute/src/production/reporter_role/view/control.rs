@@ -13,6 +13,7 @@ pub(in crate::production::reporter_role) enum ControlDecision {
     Copy(DiagnosticActionResult),
     Export(DiagnosticActionResult),
     Close(DurableAcknowledgement),
+    RestartUnavailable,
 }
 impl ControlResult {
     pub(in crate::production::reporter_role) fn from_frame(
@@ -24,6 +25,9 @@ impl ControlResult {
             }
             DiagnosticCommand::ExportSelectionResult { session, result } => {
                 Some((session, ControlDecision::Export(result)))
+            }
+            DiagnosticCommand::RestartUnavailable { session } => {
+                Some((session, ControlDecision::RestartUnavailable))
             }
             DiagnosticCommand::CloseAfterDurableAck { session, acknowledgement } => {
                 Some((session, ControlDecision::Close(acknowledgement)))

@@ -5,6 +5,8 @@
 mod acquisition_retirement;
 #[path = "child/attempt.rs"]
 mod attempt;
+#[path = "child/backend.rs"]
+mod backend;
 #[path = "child/bootstrap.rs"]
 mod bootstrap;
 #[path = "child/capture.rs"]
@@ -92,6 +94,7 @@ pub(in crate::production) struct ProductionChild {
     grant_header: Option<WireHeader>,
     main: main::MainPreparation,
     output: output::ChildOutput,
+    running_backend: Option<backend::RunningBackendBinding>,
     snapshot: Option<OutputSnapshot>,
     commands: [Option<DesktopStartupCommand>; 4],
     events: [Option<StartupEvent>; 2],
@@ -157,6 +160,7 @@ impl ProductionChild {
             grant_header: None,
             main: main::MainPreparation::new(settings),
             output: output::ChildOutput::new(),
+            running_backend: None,
             snapshot: None,
             commands: std::array::from_fn(|_| None),
             events: std::array::from_fn(|_| None),
@@ -369,6 +373,10 @@ impl ProductionChild {
             self.acquire.filter(|p| !p.retiring).map(|p| p.original),
             self.main.deadline().filter(|_| self.attempt.is_none()),
             self.output.deadline().filter(|_| self.attempt.is_none()),
+            self.running_backend
+                .as_ref()
+                .and_then(backend::RunningBackendBinding::retry_deadline)
+                .filter(|_| !self.shutdown.closing() && !self.output.replacement_stopped()),
             self.shutdown.deadline(),
             self.attempt.as_ref().and_then(attempt::AttemptCleanup::deadline),
             self.frontend_budget

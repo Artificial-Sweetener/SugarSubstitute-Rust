@@ -40,9 +40,12 @@ fn retained(cause: impl Error + Send + Sync + 'static) -> LifecycleFailure {
 }
 
 #[test]
-fn root_exit_diagnostic_keeps_exact_original_code_and_cause() {
+fn root_exit_diagnostic_keeps_exact_original_code_and_cause() -> Result<()> {
     for code in [2, 0xc000_00fd] {
-        let cause = Box::new(RootExit(code));
+        let cause = Box::new(RootExit {
+            process: ProcessKey { owner: super::super::tests::key()?, id: ProcessId::new(1)? },
+            status: code,
+        });
         let original = std::ptr::from_ref(cause.as_ref());
         let failure = LifecycleFailure::new(LifecycleFailureCode::Preparation, cause);
         let observation = FailureObservation::retained(&failure);
@@ -58,6 +61,7 @@ fn root_exit_diagnostic_keeps_exact_original_code_and_cause() {
             Some(original)
         );
     }
+    Ok(())
 }
 
 #[test]

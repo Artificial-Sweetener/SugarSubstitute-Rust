@@ -13,6 +13,8 @@ mod frame_audit;
 #[cfg(target_os = "windows")]
 mod headless;
 mod host_contract;
+#[cfg(any(target_os = "windows", test))]
+mod main_backend;
 mod main_environment;
 mod main_navigation;
 mod main_readiness;
@@ -104,9 +106,10 @@ pub use contract::{
 pub use runtime::run;
 
 pub use host_contract::{
-    DesktopStartupCommand, DesktopStartupObservation, MainCaptionLabels, MainIdentity,
-    MainRequestError, MainRetirementReason, MainWindowRequest, MainWindowSettings,
-    ServedFrontendVersions, StartupDesktopReceipt, StartupPreparationStep, StartupWindowContent,
+    DesktopStartupCommand, DesktopStartupObservation, MainBackendState, MainCaptionLabels,
+    MainIdentity, MainRecoveryLabels, MainRequestError, MainRetirementReason, MainWindowRequest,
+    MainWindowSettings, ServedFrontendVersions, StartupDesktopReceipt, StartupPreparationStep,
+    StartupWindowContent,
 };
 
 pub use main_environment::{MainEnvironmentError, MainEnvironmentFacts};

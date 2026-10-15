@@ -12,7 +12,7 @@ use std::{
 use sugarsubstitute_contracts::{execution::*, incident::*, lifecycle::*};
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner};
 use sugarsubstitute_supervision::diagnostic_storage::fixture::*;
-type TestError = Box<dyn Error + Send + Sync>;
+pub(super) type TestError = Box<dyn Error + Send + Sync>;
 pub(super) struct TestClock;
 impl Clock for TestClock {
     fn now(&self) -> Moment {

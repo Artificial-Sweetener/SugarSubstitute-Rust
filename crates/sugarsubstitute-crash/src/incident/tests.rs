@@ -88,3 +88,6 @@ mod allocation_lifecycle;
 mod allocation_layout;
 
 mod allocation_validation;
+
+#[cfg(windows)]
+mod pending;

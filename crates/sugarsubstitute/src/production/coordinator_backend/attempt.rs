@@ -27,9 +27,14 @@ impl CoordinatorBackend {
             return Ok(ResourceTransition::default());
         }
         let mut transition = ResourceTransition::default();
+        // A whole-run disconnect projects at least this one original lease's
+        // release/history/output peak without inventing a request identity.
+        self.preflight_policy(
+            sugarsubstitute_application::supervision::ResourceStorageInput::Disconnect(binding),
+        )?;
         // This lease was retained by the authenticated parent from the real Pending/Granted producer.
         self.policy.release_attempt(binding, lease, &mut transition)?;
-        self.effects(&mut transition, &mut None, None, Some(original), resources)?;
+        self.effects(&mut transition, &mut None, None, Some(original), None, resources)?;
         Ok(transition)
     }
     pub(crate) fn attempt_settled(&self, key: ResourceKey) -> bool {
@@ -64,6 +69,9 @@ impl CoordinatorBackend {
     ) -> Result<Option<LifecycleFailure>> {
         if !self.attempt_settled(key) {
             return Err(LifecycleRejection::WrongPhase.into());
+        }
+        if self.policy.retains_outage(key) && self.cleanup_failure(key).is_some() {
+            return Err(Box::new(LifecycleRejection::WrongPhase));
         }
         Ok(self.policy.take_failure(key)?)
     }

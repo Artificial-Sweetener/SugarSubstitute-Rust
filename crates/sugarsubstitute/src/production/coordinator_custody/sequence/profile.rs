@@ -98,7 +98,7 @@ fn actual_released_pending_profile_blocks_finish_until_original_job_consumption(
             30_000_000_000,
             1_000_000_000,
         )?,
-        parent_storage,
+        &mut Some(crate::production::parent_lifecycle::causes::BackendCauses::new(parent_storage)?),
     )?;
     assert!(desktop_parent.profile_completion(&batch, &mut profile)?.is_none());
     assert!(profile.snapshot().retirement_ready());

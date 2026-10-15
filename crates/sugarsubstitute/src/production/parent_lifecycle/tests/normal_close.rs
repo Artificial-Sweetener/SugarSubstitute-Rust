@@ -24,7 +24,7 @@ fn actor_for(instance: u64) -> Result<ParentLifecycle> {
             100,
             1_000_000_000,
         )?,
-        storage,
+        &mut Some(crate::production::parent_lifecycle::causes::BackendCauses::new(storage)?),
     )?)
 }
 fn intent(parent: &mut ParentLifecycle, kind: CompletionIntent) -> Result<ProcessKey> {

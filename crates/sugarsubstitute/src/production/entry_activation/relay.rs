@@ -28,14 +28,22 @@ pub(super) fn route(
             continue;
         };
         let delivered: Result<()> = (|| {
+            forwarded.capture_contexts(backend)?;
             for destination in records.iter_mut().flatten().map(|held| held.record.as_mut()) {
                 if let Some(retired) = &destination.retired {
                     forwarded.retire(retired)?;
                 } else if destination.parent.is_some() && !destination.closed {
-                    forwarded.deliver(destination.run, |transition| {
-                        with_parent(destination, backend, capture, resources, |parent, borrowed| {
-                            Ok(parent.backend_transition(transition, borrowed)?)
-                        })
+                    forwarded.deliver(destination.run, |transition, contexts| {
+                        with_parent(
+                            destination,
+                            backend,
+                            capture,
+                            resources,
+                            false,
+                            |parent, borrowed| {
+                                Ok(parent.backend_transition(transition, contexts, borrowed)?)
+                            },
+                        )
                     })?;
                 }
             }

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Encode bounded, untrusted lifecycle messages independently of native authentication.
 //!
-//! Wire version 3 uses little-endian integers and a fixed 104-byte header. Frames
+//! Wire version 5 uses little-endian integers and a fixed 104-byte header. Frames
 //! contain at most 65536 bytes including that header. Claimed identities, secrets
 //! and completion data establish no peer, process, filesystem or UI authority.
 //! Native channel owners authenticate peers and separately admit requests before
@@ -39,7 +39,7 @@
 //! NativeActivity carries positive u64 revision/u8 activity (1 active,2 inactive,
 //! 3 native-acknowledged suspension claim); OutputPull carries lease/u64 prior
 //! consumed delivery (0 absent). Decoding alone authenticates none of these facts.
-//! Reply tags 1..14 are documented on `ReplyOutcome`. Granted tag3 includes lease,
+//! Reply tags 1..16 are documented on `ReplyOutcome`. Granted tag3 includes lease,
 //! main identity, u8 loopback host/u16 port and two u8-counted ASCII version labels.
 //! Labels satisfy the shared readiness grammar and contain at most64 bytes.
 //! OutputDelivery carries lease/u64 delivery/u8 stream/u64 stream sequence/u8 gap
@@ -52,8 +52,27 @@
 //! StaleRequest, Overloaded, IdentityExhausted, InvalidClock and EndpointMismatch.
 //! Kind19 SettleAttempt carries the original positive u64 launch/navigation and
 //! Acquire request ID. The authenticated parent retains the resource association
-//! and acknowledges only real cleanup settlement. Version2 peers reject schema3;
-//! parent and captured child are installed together from the same release.
+//! and acknowledges only real cleanup settlement. Kind20 RetryBackend carries the
+//! exact Main identity and failed lease reference (40 payload bytes). Reply tag15
+//! BackendUnavailable carries failed lease/u32 status/u16 affected clients/u8 retry
+//! readiness (32 bytes including tag); client count is 1..64 and readiness is 0/1.
+//! Tag16 BackendReplaced carries Main identity/previous lease/current lease (65
+//! bytes including tag). Replacement may answer an exact pending RetryBackend or
+//! the existing OutputPull; the authenticated request owner issues one reply only.
+//! Tag16 conveys an actual historical Ready event and changes only the child's backend
+//! binding. Parent checks genuine producer metadata and the original installed selection;
+//! an exact successor death may already be retained when this handoff is sent. The child
+//! keeps recovery disabled through this reply. Its next authenticated current-lease
+//! OutputPull acknowledges consumption: Parent adopts a still-live Ready interest or,
+//! after exact new-death and absent-old validation, consumes only its binding ledger.
+//! Written alone never proves child adoption. Actual current output/idle permits recovery
+//! presentation; an immediate BackendUnavailable names the newly consumed failed binding.
+//! Native Reload remains supported for the original Main creation lease. A running
+//! successor's native Reload is unimplemented and rejected WrongPhase before effects;
+//! a stale original lease gains no release or reload authority. Web reload remains with
+//! the frontend owner. These copied wire facts grant no retry, current readiness,
+//! native adoption or teardown proof.
+//! Only schema5 is accepted; parent and captured child deploy together.
 //! Unknown tags and trailing bytes reject; no future operation is implied.
 mod binary;
 mod decode;
@@ -83,7 +102,7 @@ pub use target::{BorrowedBackendTarget, DecodedTarget, ManagedTargetRef};
 pub use utf16::{ArgumentRefs, Utf16Text};
 
 /// Exact supported wire version; unknown versions reject without negotiation.
-pub const WIRE_VERSION: u16 = 4;
+pub const WIRE_VERSION: u16 = 5;
 /// Exact header byte count, including the whole claimed run and deadline.
 pub const HEADER_BYTES: usize = 104;
 /// Maximum complete control frame, including header and payload.

@@ -288,6 +288,10 @@ impl DesktopStart {
         )?);
         Ok(true)
     }
+    /// This source has never crossed the actual registry launch admission boundary.
+    pub(super) const fn never_launched(&self) -> bool {
+        !self.attempted && self.ticket.is_none()
+    }
     pub(super) fn value(&self) -> Result<&ProjectedEntry> {
         match &self.projection.outcome {
             JobOutcome::Success(value) => Ok(value),

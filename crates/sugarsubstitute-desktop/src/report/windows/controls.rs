@@ -12,6 +12,7 @@ use crate::windows_subclass::{Registration, install, remove};
 use std::{ffi::c_void, rc::Rc};
 use sugarsubstitute_contracts::{
     execution::{MemoryClaim, MemoryLease},
+    incident::ReportRestartAvailability,
     localization::incident::ReportMessages,
 };
 use tao::{event_loop::EventLoopProxy, platform::windows::WindowExtWindows, window::Window};
@@ -78,7 +79,7 @@ impl Controls {
         let parent = self.callback.parent;
         // SAFETY: Stable typed Rc data and retained parent live on the creating thread.
         unsafe { install(parent, Some(procedure), &self.parent) }?;
-        let labels = [
+        let child_labels = [
             labels.explanation,
             view.text(),
             labels.include_dump,
@@ -88,7 +89,7 @@ impl Controls {
             labels.close,
             labels.restart,
         ];
-        for (index, label) in labels.into_iter().enumerate() {
+        for (index, label) in child_labels.into_iter().enumerate() {
             let text = Text::new(label, &self.lease)?;
             let (class, style) = match index {
                 1 => (
@@ -149,7 +150,10 @@ impl Controls {
             }?;
         }
         self.layout()?;
-        self.enable(false)?;
+        if !view.restart().allows_restart() {
+            self.status(labels.restart_unavailable)?;
+        }
+        self.enable(false, view.restart())?;
         Ok(())
     }
     pub(super) fn layout(&mut self) -> Result<(), ReportSurfaceError> {
@@ -210,9 +214,21 @@ impl Controls {
         }
         Ok(())
     }
-    pub(super) fn enable(&self, enabled: bool) -> Result<(), ReportSurfaceError> {
+    pub(super) fn enable(
+        &self,
+        enabled: bool,
+        restart: ReportRestartAvailability,
+    ) -> Result<(), ReportSurfaceError> {
         self.callback.enabled.set(false);
-        for peer in self.peers.iter().skip(2).flatten() {
+        self.callback.restart.set(restart);
+        for (index, peer) in self
+            .peers
+            .iter()
+            .enumerate()
+            .skip(2)
+            .filter_map(|(i, p)| p.as_ref().map(|peer| (i, peer)))
+        {
+            let enabled = enabled && (index != 7 || restart.allows_restart());
             // SAFETY: Actual current child is retained on its UI thread. BOOL means previous state.
             unsafe {
                 let _previous_enablement = EnableWindow(peer.hwnd, enabled);
@@ -226,7 +242,7 @@ impl Controls {
         Ok(())
     }
     pub(super) fn replace(&self, view: &NativeReportView) -> Result<(), ReportSurfaceError> {
-        self.enable(false)?;
+        self.enable(false, view.restart())?;
         let text = Text::new(view.text(), &self.lease)?;
         let children = self.callback.children.get();
         // SAFETY: The bounded temporary text is synchronously copied by the retained EDIT.

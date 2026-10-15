@@ -5,6 +5,7 @@ use super::*;
 pub(in super::super) struct Outcome {
     pub(in super::super) selection: Option<SaveSelection>,
     pub(in super::super) update: Option<ReportSurfaceUpdate>,
+    pub(in super::super) update_at: Option<Instant>,
     pub(in super::super) failure: Option<ReportSurfaceError>,
     pub(in super::super) retirement: Option<UnretiredDialog>,
 }
@@ -15,6 +16,7 @@ pub(in super::super) fn select<T: ReportSessionContent>(
     labels: &ReportMessages,
     lease: &MemoryLease,
     content: &mut T,
+    cancel_requested: Rc<dispatch::ModalCancellation>,
 ) -> Result<Outcome, ReportSurfaceError> {
     let claim = lease
         .claim(
@@ -68,6 +70,9 @@ pub(in super::super) fn select<T: ReportSessionContent>(
         destroyed: false,
         timer: 0,
         update: None,
+        update_at: None,
+        cancel_requested,
+        cancel_posted: false,
         failure: None,
         save,
         cancel_label,
@@ -117,6 +122,7 @@ pub(in super::super) fn select<T: ReportSessionContent>(
         return Ok(Outcome {
             selection: None,
             update: None,
+            update_at: None,
             failure: Some(cause),
             retirement: Some(UnretiredDialog::new(dialog)),
         });
@@ -125,8 +131,9 @@ pub(in super::super) fn select<T: ReportSessionContent>(
         return Err(cause);
     }
     let update = dialog.hook.update.take();
+    let update_at = dialog.hook.update_at;
     if update.is_some() {
-        return Ok(Outcome { selection: None, update, failure: None, retirement: None });
+        return Ok(Outcome { selection: None, update, update_at, failure: None, retirement: None });
     }
     if !selected {
         if native_error.0 != 0 {
@@ -135,7 +142,13 @@ pub(in super::super) fn select<T: ReportSessionContent>(
                 std::io::Error::from_raw_os_error(native_error.0 as i32),
             ));
         }
-        return Ok(Outcome { selection: None, update: None, failure: None, retirement: None });
+        return Ok(Outcome {
+            selection: None,
+            update: None,
+            update_at: None,
+            failure: None,
+            retirement: None,
+        });
     }
     let length = dialog
         .destination
@@ -159,6 +172,7 @@ pub(in super::super) fn select<T: ReportSessionContent>(
             _claim: dialog.claim,
         }),
         update: None,
+        update_at: None,
         failure: None,
         retirement: None,
     })

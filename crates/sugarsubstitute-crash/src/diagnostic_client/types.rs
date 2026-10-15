@@ -160,7 +160,7 @@ impl DiagnosticRequestKind {
         Self::from_code(command_codec::code(command))
     }
     pub(super) const fn from_code(code: u8) -> Result<Self, E> {
-        if code >= 1 && code <= 30 { Ok(Self(code)) } else { Err(E::Schema) }
+        if (code >= 1 && code <= 30) || code == 32 { Ok(Self(code)) } else { Err(E::Schema) }
     }
     pub(super) const fn code(self) -> u8 {
         self.0

@@ -15,11 +15,13 @@ impl ProductionActivation {
         batch: &CompletionBatch,
         resources: &mut EntryResources<'_>,
         closing: bool,
+        backend_commands_open: bool,
     ) -> Result<()> {
         let admission_closed = closing
             || record.failed.is_some()
             || record.pending_desktop_failure.is_some()
-            || record.restart.installation_pending;
+            || record.restart.installation_pending
+            || record.restart.closing_current();
         if !incidents.host.prepared() && !admission_closed {
             return Ok(());
         }
@@ -104,7 +106,12 @@ impl ProductionActivation {
         if !admission_closed && record.parent.is_none() {
             start.prepare_launch(executable, working, resources)?;
             if start.ticket.is_some() {
-                Self::construct_parent(start, &mut record.parent, &mut record.preparation)?;
+                Self::construct_parent(
+                    start,
+                    &mut record.parent,
+                    &mut record.preparation,
+                    &mut record.retained_causes,
+                )?;
             }
         }
         if let Some(ticket) = start.ticket {
@@ -145,9 +152,14 @@ impl ProductionActivation {
                 let Some(observation) = observation else {
                     break;
                 };
-                with_parent(record, backend, Some(capture), resources, |parent, borrowed| {
-                    Ok(parent.registry_observation(&observation, borrowed)?)
-                })?;
+                with_parent(
+                    record,
+                    backend,
+                    Some(capture),
+                    resources,
+                    false,
+                    |parent, borrowed| Ok(parent.registry_observation(&observation, borrowed)?),
+                )?;
             }
             let failed = record
                 .parent
@@ -160,11 +172,15 @@ impl ProductionActivation {
                 }
                 record.failed = Some(fact);
             }
-            let mut parent_activity =
-                with_parent(record, backend, Some(capture), resources, |parent, borrowed| {
-                    Ok(parent.activity(batch, borrowed)?)
-                })
-                .err();
+            let mut parent_activity = with_parent(
+                record,
+                backend,
+                Some(capture),
+                resources,
+                backend_commands_open,
+                |parent, borrowed| Ok(parent.activity(batch, borrowed)?),
+            )
+            .err();
             if parent_activity.as_ref().is_some_and(|cause| {
                 cause.downcast_ref::<crate::production::parent_lifecycle::ParentError>()
                     == Some(&crate::production::parent_lifecycle::ParentError::DesktopStopped)

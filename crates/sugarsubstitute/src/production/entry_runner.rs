@@ -146,7 +146,7 @@ impl<C: EntryActivation> RunFailure<C> {
     }
 }
 /// Format at most sixteen borrowed causes, preserving configuration-source redaction.
-struct FailureDisplay<'a>(&'a (dyn Error + 'static));
+pub(super) struct FailureDisplay<'a>(pub(super) &'a (dyn Error + 'static));
 impl fmt::Debug for FailureDisplay<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut cause = Some(self.0);

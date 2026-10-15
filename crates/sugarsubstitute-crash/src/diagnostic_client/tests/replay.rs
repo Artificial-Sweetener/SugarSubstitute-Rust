@@ -249,3 +249,37 @@ fn storage_retirement_cannot_renew_the_original_operation_deadline() -> TestResu
     assert_eq!(router.high_water(), 2);
     Ok(())
 }
+
+#[test]
+fn changing_restart_eligibility_cannot_reuse_an_original_authenticated_view_request() -> TestResult
+{
+    let session = binding()?.session();
+    let frame = reporter(
+        1,
+        DiagnosticCommand::BeginView {
+            session,
+            restart: ReportRestartAvailability::Unavailable,
+            total: 1,
+            sha256: [1; 32],
+        },
+        true,
+    )?;
+    let mut router = DiagnosticRequestRouter::new(frame.key);
+    let bytes = encoded(frame)?;
+    let token = issued(&mut router, &bytes)?;
+    assert!(matches!(router.admit(&bytes)?, DiagnosticAdmission::Pending));
+    let changed = DiagnosticFrame {
+        command: DiagnosticCommand::BeginView {
+            session,
+            restart: ReportRestartAvailability::Available,
+            total: 1,
+            sha256: [1; 32],
+        },
+        ..frame
+    };
+    assert_eq!(router.admit(&encoded(changed)?).err(), Some(DiagnosticWireError::ChangedDuplicate));
+    assert_eq!(router.high_water(), 1);
+    router.complete(&token, reply())?;
+    assert!(matches!(router.admit(&bytes)?, DiagnosticAdmission::Replay(_)));
+    Ok(())
+}

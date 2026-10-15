@@ -35,7 +35,18 @@ impl fmt::Debug for SymbolReportCause {
 }
 impl fmt::Display for SymbolReportCause {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Symbol report failed")
+        match self {
+            Self::Dump(code) => write!(f, "Committed dump rejected: {code:?}"),
+            Self::Frame(code) => write!(f, "Captured frame rejected: {code:?}"),
+            Self::Provider(code) => write!(f, "Symbol provider rejected: {code:?}"),
+            Self::State => f.write_str("Symbol report required owner unavailable"),
+            Self::Admission(_) => f.write_str("Symbol report admission failed"),
+            Self::Native(_) => f.write_str("Symbol report native selection or reader failed"),
+            Self::Decode(_) => f.write_str("Symbol report decode admission failed"),
+            Self::Utc(_) => f.write_str("Symbol report UTC observation failed"),
+            Self::Panic(_) => f.write_str("Symbol report worker panicked"),
+            Self::Stopped(kind) => write!(f, "Symbol report worker stopped: {kind:?}"),
+        }
     }
 }
 impl Error for SymbolReportCause {
@@ -60,9 +71,66 @@ pub struct SymbolReportFailure {
 impl SymbolReportFailure {
     /// Borrow original copied categories and worker failures without taking custody.
     pub fn causes(&self) -> impl Iterator<Item = &SymbolReportCause> {
-        self.causes.iter().flatten().chain(
-            self.data.iter().flat_map(|data| data.first.iter().chain(data.retirement.iter())),
+        self.data
+            .iter()
+            .flat_map(|data| data.first.iter())
+            .chain(self.causes.iter().flatten())
+            .chain(self.data.iter().flat_map(|data| data.retirement.iter()))
+    }
+    /// Borrow primary, post-read and retirement causes in their distinct retained cells.
+    /// Healthy committed ownership contributes no error to any of these observations.
+    pub fn dump_failures(&self) -> [Option<crate::incident::DumpReadFailure<'_>>; 3] {
+        let Some(data) = self.data.as_ref() else { return [None, None, None] };
+        if let Some(reader) = data.reader.as_ref() {
+            return [reader.failure(), reader.secondary_failure(), reader.retirement_failure()];
+        }
+        data.dump.as_ref().map_or([None, None, None], |dump| {
+            [dump.failure(), dump.secondary_failure(), dump.retirement_failure()]
+        })
+    }
+    /// Borrow provider lookup, post-call and retirement failures without replacing the primary.
+    pub fn provider_failures(&self) -> [Option<crate::incident::SymbolProviderFailure<'_>>; 3] {
+        self.data.as_ref().and_then(|data| data.provider.as_ref()).map_or(
+            [None, None, None],
+            |provider| {
+                [provider.failure(), provider.secondary_failure(), provider.retirement_failure()]
+            },
         )
+    }
+    /// Follow only the owner named by the original typed operation failure.
+    /// Independent later failures remain in their own cells rather than taking primary precedence.
+    fn original_source<'a>(&'a self, cause: &'a SymbolReportCause) -> &'a (dyn Error + 'static) {
+        if let Some(data) = self.data.as_ref() {
+            let retiring = data.retirement.as_ref().is_some_and(|held| std::ptr::eq(held, cause));
+            match cause {
+                SymbolReportCause::Dump(_)
+                | SymbolReportCause::Frame(crate::incident::SymbolFrameError::Source(_)) => {
+                    if let Some(reader) = data.reader.as_ref().filter(|reader| {
+                        reader.failure().is_some()
+                            || (retiring && reader.retirement_failure().is_some())
+                    }) {
+                        return reader;
+                    }
+                    if let Some(dump) = data.dump.as_ref().filter(|dump| {
+                        dump.failure().is_some()
+                            || (retiring && dump.retirement_failure().is_some())
+                    }) {
+                        return dump;
+                    }
+                }
+                SymbolReportCause::Provider(_) => {
+                    if let Some(provider) = data.provider.as_ref().filter(|provider| {
+                        provider.construction_failure().is_some()
+                            || provider.failure().is_some()
+                            || (retiring && provider.retirement_failure().is_some())
+                    }) {
+                        return provider;
+                    }
+                }
+                _ => {}
+            }
+        }
+        cause
     }
     /// True only after actual ordered checked cleanup, independent of failed Main outcome.
     pub fn settled(&self) -> bool {
@@ -81,22 +149,6 @@ impl fmt::Display for SymbolReportFailure {
 }
 impl Error for SymbolReportFailure {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        let data = self.data.as_ref();
-        if let Some(owner) =
-            data.and_then(|data| data.reader.as_ref()).filter(|owner| owner.source().is_some())
-        {
-            return Some(owner);
-        }
-        if let Some(owner) =
-            data.and_then(|data| data.dump.as_ref()).filter(|owner| owner.source().is_some())
-        {
-            return Some(owner);
-        }
-        if let Some(owner) =
-            data.and_then(|data| data.provider.as_ref()).filter(|owner| owner.source().is_some())
-        {
-            return Some(owner);
-        }
-        self.causes().next().map(|cause| cause as &(dyn Error + 'static))
+        self.causes().next().map(|cause| self.original_source(cause))
     }
 }

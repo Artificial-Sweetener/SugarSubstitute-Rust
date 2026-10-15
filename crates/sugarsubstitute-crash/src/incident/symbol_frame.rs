@@ -12,7 +12,7 @@ pub enum SymbolFrameError {
     Corrupt,
     /// Actual exception code/address differs from independently supplied native fault evidence.
     ExceptionMismatch,
-    /// Fault address does not belong to the exact identity-bearing module.
+    /// Fault address lacks one unambiguous, nonempty captured module range.
     UnknownModule,
     /// Complete CodeView GUID/age are unavailable or malformed.
     CodeView,
@@ -31,11 +31,11 @@ impl CapturedExceptionFrame {
     pub const fn address(self) -> u64 {
         self.address
     }
-    /// Actual identity-bearing module image base.
+    /// Actual exception-containing module image base.
     pub const fn image_base(self) -> u64 {
         self.base
     }
-    /// Actual module image size in bytes.
+    /// Actual exception-containing module image size in bytes.
     pub const fn image_size(self) -> u32 {
         self.size
     }
@@ -62,6 +62,8 @@ impl Read for IncidentDumpReadLease {
 }
 impl IncidentDumpReadLease {
     /// Extract the actual failing frame after same-file subject/build/UUID validation.
+    /// The validated annotation carrier establishes subject identity; the unique
+    /// exception-containing module supplies frame identity. They can be distinct images.
     /// It never follows dump-supplied paths or uses them to select symbols.
     /// Original failure attribution is preserved; categorical or unexplained evidence
     /// supplies no competing native exception pair. Supplied native faults must match exactly.
@@ -70,9 +72,10 @@ impl IncidentDumpReadLease {
     /// Original protected read/control failures stay in this same lease.
     pub fn exception_frame(&mut self) -> Result<CapturedExceptionFrame, SymbolFrameError> {
         let length = self.facts().map_err(SymbolFrameError::Source)?.bytes();
-        let index = self.parser_identity().map_err(SymbolFrameError::Source)?.module_index();
+        let annotation_index =
+            self.parser_identity().map_err(SymbolFrameError::Source)?.module_index();
         let failure = self.summary().map_err(SymbolFrameError::Source)?.summary().facts().failure();
-        extract(self, length, index, failure)
+        extract(self, length, annotation_index, failure)
     }
 }
 fn u32_at(bytes: &[u8], offset: usize) -> u32 {
@@ -99,7 +102,7 @@ fn bounded(offset: u64, count: u64, length: u64) -> Result<(), SymbolFrameError>
 fn extract(
     source: &mut impl Read,
     length: u64,
-    module_index: u32,
+    annotation_index: u32,
     failure: FailureEvidence,
 ) -> Result<CapturedExceptionFrame, SymbolFrameError> {
     let mut header = [0; 32];
@@ -159,19 +162,28 @@ fn extract(
     let count = u32_at(&module_count, 0);
     if count == 0
         || count > 4096
-        || module_index >= count
+        || annotation_index >= count
         || u64::from(size) < 4 + u64::from(count) * 108
     {
         return Err(SymbolFrameError::Corrupt);
     }
-    let mut module = [0; 108];
-    source.bytes(offset + 4 + u64::from(module_index) * 108, &mut module)?;
+    let mut selected = None;
+    for index in 0..count {
+        let mut module = [0; 108];
+        source.bytes(offset + 4 + u64::from(index) * 108, &mut module)?;
+        let base = u64_at(&module, 0);
+        let size = u32_at(&module, 8);
+        let end = base.checked_add(u64::from(size)).ok_or(SymbolFrameError::UnknownModule)?;
+        if size == 0 {
+            return Err(SymbolFrameError::UnknownModule);
+        }
+        if address >= base && address < end && selected.replace(module).is_some() {
+            return Err(SymbolFrameError::UnknownModule);
+        }
+    }
+    let module = selected.ok_or(SymbolFrameError::UnknownModule)?;
     let base = u64_at(&module, 0);
     let size = u32_at(&module, 8);
-    let end = base.checked_add(u64::from(size)).ok_or(SymbolFrameError::UnknownModule)?;
-    if size == 0 || address < base || address >= end {
-        return Err(SymbolFrameError::UnknownModule);
-    }
     let cv_size = u32_at(&module, 76);
     let cv = u64::from(u32_at(&module, 80));
     bounded(cv, u64::from(cv_size), length)?;

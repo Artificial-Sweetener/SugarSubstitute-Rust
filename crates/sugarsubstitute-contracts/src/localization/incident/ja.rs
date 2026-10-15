@@ -10,6 +10,7 @@ pub static JA: ReportMessages = ReportMessages {
     export: "レポートをエクスポート",
     close: "閉じる",
     restart: "閉じて再起動を要求",
+    restart_unavailable: "このセッションでは再起動できません。SugarSubstitute を終了して、もう一度開いてください。",
     include_dump: "ネイティブメモリダンプを含める",
     dump_warning: "ネイティブメモリダンプにはパスワードや個人情報が含まれる場合があります。機密情報は除去されていません。",
     save_title: "インシデントをエクスポート",

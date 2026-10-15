@@ -87,6 +87,16 @@ pub(super) fn drain(
                     owner.authorize_browser(identity).map(|()| None)
                 })?
             }
+            DesktopStartupCommand::PresentBackendOutage { identity, failed, state } => {
+                main_operation(session, content, |owner| {
+                    owner.present_backend(identity, failed, state).map(|()| None)
+                })?;
+            }
+            DesktopStartupCommand::ReplaceBackendOutage { identity, previous, failed, state } => {
+                main_operation(session, content, |owner| {
+                    owner.replace_backend(identity, previous, failed, state).map(|()| None)
+                })?;
+            }
             DesktopStartupCommand::ProbeFrontend(identity) => {
                 main_operation(session, content, |owner| owner.probe(identity).map(|()| None))?;
             }

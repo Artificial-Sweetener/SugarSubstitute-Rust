@@ -6,8 +6,10 @@ mod desktop_exit;
 mod incident_admission;
 mod main_authorization;
 mod resource_observations;
+mod resource_outage;
 mod resource_requests;
 mod resource_state;
+mod resource_storage;
 mod resources;
 mod run_enrollment;
 mod watchdog;
@@ -19,9 +21,11 @@ pub use main_authorization::{
     MainAuthorizationObservation, MainAuthorizationRejected, MainAuthorizationSession,
     MainAuthorizationSnapshot, MainAuthorizationStage,
 };
+pub use resource_outage::InvalidatedLeaseState;
 pub use resource_state::{
     MAX_LEASES, MAX_REQUESTS, MAX_RESOURCES, MAX_RUN_REQUESTS, MAX_RUNS, REQUEST_HISTORY,
     ResourcePhase,
 };
+pub use resource_storage::{ResourceStorageInput, ResourceStorageRequirement};
 pub use resources::{CoordinatorSnapshot, ResourceCoordinator, RunSettlementStatus};
 pub use watchdog::{UiChallengePhase, UiWatchdog, UiWatchdogSnapshot};

@@ -90,6 +90,12 @@ impl WindowsLaunchCommand {
             },
         })
     }
+    /// Bound requested layouts of all three native buffers under this owner's
+    /// unchanged32767-unit limit. This grants no command validation or launch.
+    pub const fn maximum_storage_bytes() -> u64 {
+        (size_of::<Self>() + 3 * MAX_UNITS * size_of::<u16>()) as u64
+    }
+
     /// Borrow immutable, explicit, unquoted lpApplicationName including its final NUL.
     pub fn application_name_utf16(&self) -> &[u16] {
         &self.buffers.application_name

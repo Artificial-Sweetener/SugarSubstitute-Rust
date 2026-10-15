@@ -227,3 +227,27 @@ fn failed_hwnd_destroy_keeps_slot_without_repeating_successful_callback_removal(
     assert!(owner.retired(port.callbacks_retired()));
     Ok(())
 }
+
+#[test]
+fn fourth_preallocated_retry_peer_retains_partial_native_failure_until_checked_retirement()
+-> Result<(), Box<dyn Error>> {
+    for point in [('C', 4), ('R', 4), ('I', 4)] {
+        let mut owner = Creation::new(4)?;
+        let mut port = Port::new(Some(point));
+        assert!(owner.initialize(&mut port).is_err());
+        assert!(!owner.writable());
+        assert!(port.released.borrow().is_empty());
+        assert!(owner.parent.is_some());
+        port.fail = None;
+        owner.shutdown(&mut port)?;
+        assert!(owner.retired(port.callbacks_retired()));
+        assert_eq!(port.released.borrow().last(), Some(&0));
+        for id in 1..=if point.0 == 'C' { 3 } else { 4 } {
+            assert_eq!(
+                port.released.borrow().iter().filter(|released| **released == id).count(),
+                1
+            );
+        }
+    }
+    Ok(())
+}

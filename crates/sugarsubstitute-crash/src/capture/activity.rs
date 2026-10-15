@@ -52,6 +52,12 @@ impl WindowsCrashCapture {
                             self.snapshot.handler_exit = Some(exit.exit_code);
                             self.pending_registration = false;
                             if self.snapshot.state != CaptureState::Closing {
+                                if let Some(shared) = &self.shared {
+                                    let mut native = lock(&shared.native);
+                                    if native.registered && native.handler == Some(actual) {
+                                        native.unexpected_handler_exit = Some(exit);
+                                    }
+                                }
                                 self.snapshot.state = CaptureState::Degraded;
                             }
                             updates.push(CaptureObservation::HandlerExited {

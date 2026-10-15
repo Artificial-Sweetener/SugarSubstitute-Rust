@@ -36,6 +36,15 @@ impl FrontendInstallationInput {
         }
         Ok(Self { package, metadata, cube, script })
     }
+    /// Compare exact spellings of all four independently selected source paths.
+    /// This borrows only `OsStr` values; it performs no filesystem access,
+    /// canonicalization, case folding or source inspection and grants no trust.
+    pub fn same_selection(&self, other: &Self) -> bool {
+        self.package.as_os_str() == other.package.as_os_str()
+            && self.metadata.as_os_str() == other.metadata.as_os_str()
+            && self.cube.as_os_str() == other.cube.as_os_str()
+            && self.script.as_os_str() == other.script.as_os_str()
+    }
     /// Reissue the same explicit inert selection for another finite inspection.
     /// This copies no proof or native owner. The composing parent retains its
     /// preclaimed input-copy partition until the new inspector takes custody.

@@ -4,13 +4,14 @@
 use super::ReportSurfaceError;
 use sugarsubstitute_contracts::{
     execution::{MemoryClaim, MemoryLease},
-    incident::{MAX_TEXT_ATTACHMENT_BYTES, ReportBinding},
+    incident::{MAX_TEXT_ATTACHMENT_BYTES, ReportBinding, ReportRestartAvailability},
     localization::{incident::ReportMessages, messages},
 };
 /// Complete immutable redacted report text and the same transferred allocation claim.
 pub struct NativeReportView {
     text: String,
     binding: ReportBinding,
+    restart: ReportRestartAvailability,
     _claim: MemoryClaim,
 }
 impl NativeReportView {
@@ -25,6 +26,7 @@ impl NativeReportView {
         binding: ReportBinding,
         text: String,
         claim: MemoryClaim,
+        restart: ReportRestartAvailability,
     ) -> Result<Self, ReportSurfaceError> {
         if text.is_empty()
             || text.len() > Self::MAX_BYTES
@@ -35,11 +37,15 @@ impl NativeReportView {
         {
             return Err(ReportSurfaceError::rejected("report_view_transfer"));
         }
-        Ok(Self { text, binding, _claim: claim })
+        Ok(Self { text, binding, restart, _claim: claim })
     }
     /// Borrow exact redacted text; no raw native error formatting is performed.
     pub fn text(&self) -> &str {
         &self.text
+    }
+    /// Return the authenticated composing host's inert presentation decision.
+    pub const fn restart(&self) -> ReportRestartAvailability {
+        self.restart
     }
     /// Return matching facts; construction did not authenticate the sender.
     pub const fn binding(&self) -> ReportBinding {
@@ -54,14 +60,18 @@ pub struct ReportSurfaceOptions {
     pub(super) width: u32,
     pub(super) height: u32,
     pub(super) lease: MemoryLease,
+    pub(super) dispatch_storage: sugarsubstitute_contracts::execution::MemoryClaim,
 }
 impl ReportSurfaceOptions {
     /// Known authored native buffer/header ceiling, excluding opaque OS widget allocations.
     pub const KNOWN_STORAGE_BYTES: u64 = 4 * 1024 * 1024;
+    /// Fixed ceiling for the single native Session/content box and UI-only dispatch metadata.
+    pub const DISPATCH_STORAGE_BYTES: u64 = 64 * 1024;
     /// Select canonical localized copy and logical geometry before native effects.
     ///
     /// # Errors
-    /// Rejects dimensions outside360..=8192 by280..=8192 or insufficient native credit.
+    /// Rejects dimensions outside360..=8192 by280..=8192 or insufficient native credit,
+    /// including the fixed dispatch reservation within the same known storage ceiling.
     /// The existing transferred view claim is retained separately through teardown.
     pub fn new(
         view: NativeReportView,
@@ -77,6 +87,17 @@ impl ReportSurfaceOptions {
         {
             return Err(ReportSurfaceError::rejected("report_surface_options"));
         }
-        Ok(Self { view, labels: messages(locale).report, dark, width, height, lease })
+        let dispatch_storage = lease
+            .claim(Self::DISPATCH_STORAGE_BYTES)
+            .map_err(|cause| ReportSurfaceError::new("report_dispatch_credit", cause))?;
+        Ok(Self {
+            view,
+            labels: messages(locale).report,
+            dark,
+            width,
+            height,
+            lease,
+            dispatch_storage,
+        })
     }
 }

@@ -116,3 +116,55 @@ fn source_locations_reject_relative_nul_and_excess_retained_capacity() {
         assert!(FrontendInstallationInput::new(invalid, valid(), valid(), valid()).is_err());
     }
 }
+
+#[test]
+fn exact_selection_checks_each_path_without_qualifying_an_inspection() -> TestResult {
+    fn selection(paths: [&str; 4]) -> Result<FrontendInstallationInput, FrontendSourceError> {
+        FrontendInstallationInput::new(
+            paths[0].into(),
+            paths[1].into(),
+            paths[2].into(),
+            paths[3].into(),
+        )
+    }
+    let paths = [
+        r"E:\selection\Package",
+        r"E:\selection\METADATA",
+        r"E:\selection\SugarCubes",
+        r"E:\selection\backend.py",
+    ];
+    let original = selection(paths)?;
+    let reissued = original.try_reissue()?;
+    assert!(original.same_selection(&reissued));
+    assert!(reissued.same_selection(&original));
+    let mut owner = InstalledFrontendOwner::new(original);
+    assert!(owner.matches_selection(&reissued));
+    assert!(owner.take_inspection()?.is_none());
+    for (index, different) in [
+        r"E:\selection\PACKAGE",
+        r"E:\selection\OTHER-METADATA",
+        r"E:\selection\OtherCube",
+        r"E:\selection\other.py",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mut changed = paths;
+        changed[index] = different;
+        let changed = selection(changed)?;
+        assert!(!reissued.same_selection(&changed));
+        assert!(!changed.same_selection(&reissued));
+        assert!(!owner.matches_selection(&changed));
+    }
+    for package in [r"E:/selection/Package", r"E:\selection\.\Package"] {
+        let mut changed = paths;
+        changed[0] = package;
+        let changed = selection(changed)?;
+        assert!(!reissued.same_selection(&changed));
+        assert!(!owner.matches_selection(&changed));
+    }
+    assert!(owner.matches_selection(&reissued));
+    assert!(owner.take_inspection()?.is_none());
+    assert!(crate::registry::lock(&owner.shared.retained).is_none());
+    Ok(())
+}

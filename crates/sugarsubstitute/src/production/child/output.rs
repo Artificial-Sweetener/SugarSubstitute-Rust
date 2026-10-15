@@ -7,6 +7,8 @@ use std::time::Duration;
 use sugarsubstitute_supervision::lifecycle_protocol::FrameCodec;
 #[path = "output/acquisition.rs"]
 mod acquisition;
+#[path = "output/recovery.rs"]
+mod recovery;
 #[path = "output/retirement.rs"]
 mod retirement;
 type Constructor = OwnedJob<OutputOwner, OutputError>;
@@ -22,6 +24,9 @@ pub(super) struct ChildOutput {
     applied: Option<crate::production_output::AppliedOutput>,
     retiring_frame: Option<ReceivedLifecycleFrame>,
     retirement_error_reported: bool,
+    replacement: Option<recovery::Replacement>,
+    retry_cause: Option<Box<dyn Error>>,
+    pub(super) retry_expired: bool,
 }
 impl ChildOutput {
     pub(super) fn new() -> Self {
@@ -36,6 +41,9 @@ impl ChildOutput {
             applied: None,
             retiring_frame: None,
             retirement_error_reported: false,
+            replacement: None,
+            retry_cause: None,
+            retry_expired: false,
         }
     }
     pub(super) fn begin(
@@ -55,6 +63,9 @@ impl ChildOutput {
         Ok(())
     }
     pub(super) fn capture(&mut self, batch: &CompletionBatch) {
+        if let Some(replacement) = &mut self.replacement {
+            replacement.capture(batch);
+        }
         if let Some(job) = &self.job {
             for n in &batch.notifications {
                 if (n.scope_id, n.job_id) == (job.scope_id(), job.spec().id) {
@@ -72,6 +83,9 @@ impl ChildOutput {
             _ => None,
         }
     }
+    pub(super) fn replacement_stopped(&self) -> bool {
+        self.replacement.as_ref().is_some_and(|replacement| replacement.stopped())
+    }
     /// Observe only this attempt's closed admission, not native or worker settlement.
     pub(super) fn closing(&self) -> bool {
         self.closed
@@ -81,10 +95,18 @@ impl ChildOutput {
         self.pending.is_some_and(|pending| pending.0 == header)
     }
     pub(super) fn deadline(&self) -> Option<Moment> {
+        if self.retry_expired
+            || self.replacement.as_ref().is_some_and(|replacement| replacement.stopped())
+        {
+            return None;
+        }
         self.pending.map(|p| p.1).or_else(|| self.job.as_ref().and_then(|j| j.spec().deadline))
     }
     pub(super) fn close(&mut self) {
         self.closed = true;
+        if let Some(replacement) = &mut self.replacement {
+            replacement.close();
+        }
         if let Some(job) = &self.job {
             job.cancel()
         }
@@ -105,6 +127,7 @@ impl ChildOutput {
     /// Actual finite construction/parser/frame custody; correlation alone is not a worker.
     pub(super) fn physical_pending(&self) -> bool {
         self.job.is_some()
+            || self.replacement.as_ref().is_some_and(|replacement| replacement.pending())
             || self.applied.is_some()
             || self.retiring_frame.is_some()
             || match self.terminal.as_ref().map(|t| &t.outcome) {
@@ -114,6 +137,7 @@ impl ChildOutput {
     }
     pub(super) fn pending(&self) -> bool {
         self.job.is_some()
+            || self.replacement.as_ref().is_some_and(|replacement| replacement.pending())
             || self.pending.is_some()
             || self.applied.is_some()
             || self.retiring_frame.is_some()
@@ -125,6 +149,7 @@ impl ChildOutput {
 }
 impl ProductionChild {
     pub(super) fn consume_output(&mut self) -> Result<()> {
+        self.advance_output_replacement()?;
         if self.output.terminal.is_none() && self.output.notice.is_some() {
             let job = self.output.job.as_mut().ok_or("Output constructor absent")?;
             let Some(completion) = job.try_take_completion() else {
@@ -210,6 +235,9 @@ impl ProductionChild {
         if self.shutdown.closing() {
             return Ok(());
         }
+        if self.consume_backend_notice()? {
+            return Ok(());
+        }
         let header = self.output.applied.as_ref().ok_or("Applied output disappeared")?.header;
         self.bootstrap.channel_mut().consume_reply(header)?;
         let applied = self
@@ -218,6 +246,16 @@ impl ProductionChild {
             .take()
             .ok_or("Applied output disappeared after metadata consumption")?;
         self.output.pending = None;
+        let current = self.output.binding.ok_or("Current output binding absent")?.lease;
+        if let Some(running) = &mut self.running_backend
+            && let Some(failed) = running.positive(current)?
+        {
+            self.push_command(DesktopStartupCommand::PresentBackendOutage {
+                identity: self.identity,
+                failed,
+                state: sugarsubstitute_desktop::MainBackendState::Recovered,
+            })?;
+        }
         tracing::debug!(operation="output_ingestion",change=?applied.change,source_bytes=applied.snapshot.as_ref().map(OutputSnapshot::source_bytes),"Consumed actual output revision");
         self.snapshot = applied.snapshot.or(self.snapshot.take());
         drop(applied.frame);
@@ -226,6 +264,14 @@ impl ProductionChild {
     pub(super) fn advance_output(&mut self) -> Result<()> {
         if self.output.closed {
             return self.retire_output();
+        }
+        self.ensure_running_backend()?;
+        self.expire_backend_retry()?;
+        if self.output.retry_expired {
+            return Ok(());
+        }
+        if self.output.replacement.is_some() {
+            return Ok(());
         }
         if let Some((header, _)) = self.output.pending
             && self.bootstrap.channel_mut().received_header()? == Some(header)
@@ -245,7 +291,7 @@ impl ProductionChild {
         if self.output.owner_mut().is_none() {
             return Ok(());
         }
-        if self.output.pending.is_none() {
+        if self.output.pending.is_none() && !self.prepare_backend_retry()? {
             let client = self.client()?.clone();
             let original = client.now()?.checked_add(Duration::from_secs(30))?;
             let original =
@@ -258,19 +304,23 @@ impl ProductionChild {
             self.bootstrap.channel_mut().output_pull(header)?;
             self.output.pending = Some((header, original));
         }
-        let pending = self.output.owner_mut().and_then(|owner| owner.pending_pull());
+        let pending = self.output.owner_mut().and_then(|owner| owner.pending_message());
         if let Some((message, original)) = pending
             && self.bootstrap.channel_mut().try_send(&message, original).or_else(
                 |cause| -> Result<bool> {
-                    self.recover_acquisition_expiry(cause)?;
-                    Ok(false)
+                    if self.output.retry_pending() {
+                        self.recover_unissued_backend_retry(cause)
+                    } else {
+                        self.recover_acquisition_expiry(cause)?;
+                        Ok(false)
+                    }
                 },
             )?
         {
             self.output
                 .owner_mut()
                 .ok_or("Output source disappeared")?
-                .admitted_pull(message.header)?;
+                .admitted_request(message.header)?;
         }
         Ok(())
     }

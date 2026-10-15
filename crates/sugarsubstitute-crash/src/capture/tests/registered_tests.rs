@@ -2,9 +2,29 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Real execution delivery with explicitly fake external process observation.
 use super::*;
+use sugarsubstitute_contracts::incident::{CaptureAbsence, CaptureEvidence, DumpId};
 use sugarsubstitute_execution::windows::{NativeObservationError, ProcessExit};
 
-fn run(outcome: u8) -> TestResult {
+fn assert_open_projection(source: &Shared, absence: CaptureAbsence) -> TestResult {
+    use crate::incident::{IncidentStoreError, collection::opened_evidence};
+    assert_eq!(opened_evidence(source, 1, None)?, CaptureEvidence::Unavailable(absence));
+    let dump = DumpId::new([5; 16])?;
+    assert_eq!(opened_evidence(source, 0, Some(dump))?, CaptureEvidence::Finished(dump));
+    assert!(matches!(opened_evidence(source, 0, None), Err(IncidentStoreError::MissingPayload)));
+    for (status, expected) in [
+        (2, CaptureAbsence::Busy),
+        (3, CaptureAbsence::Corrupt),
+        (4, CaptureAbsence::WrongIdentity),
+        (5, CaptureAbsence::Oversized),
+        (6, CaptureAbsence::DeadlineElapsed),
+    ] {
+        assert_eq!(opened_evidence(source, status, None)?, CaptureEvidence::Unavailable(expected));
+    }
+    assert!(matches!(opened_evidence(source, 7, None), Err(IncidentStoreError::RecoveryConflict)));
+    Ok(())
+}
+
+fn run(outcome: u8, closing: bool) -> TestResult {
     let rig = Rig::new()?;
     let port = Arc::new(FakePort::default());
     port.healthy.store(1, Ordering::Release);
@@ -54,9 +74,39 @@ fn run(outcome: u8) -> TestResult {
     );
     assert!(capture.snapshot().handler_exit.is_none());
     assert_eq!(rig.scope.snapshot().reserved_bytes, crate::input::STORAGE_BYTES as u64 + 4096);
+    let source = capture.shared.as_ref().ok_or("Registered source missing")?.clone();
+    let finished = capture.finished_source()?;
+    assert_open_projection(&source, CaptureAbsence::Missing)?;
+    if closing {
+        capture.submit_close(&rig.client, &rig.scope, close_spec(4, budget.until())?)?;
+    }
     observation_release.open();
     rig.observe_until(&mut capture, |owner| owner.watch.is_none())?;
-    assert_eq!(capture.snapshot().state, CaptureState::Degraded);
+    if !closing {
+        assert_eq!(capture.snapshot().state, CaptureState::Degraded);
+    }
+    let absence = if outcome == 0 && !closing {
+        CaptureAbsence::HandlerLost
+    } else {
+        CaptureAbsence::Missing
+    };
+    assert_eq!(capture.handler_lost(), outcome == 0 && !closing);
+    assert_open_projection(&source, absence)?;
+    let retained_exit = lock(&source.native).unexpected_handler_exit;
+    if outcome == 0 && !closing {
+        assert_eq!(
+            retained_exit,
+            Some(ProcessExit {
+                correlation,
+                process_id: 17,
+                creation_time_100ns: 23,
+                exit_code: 259,
+            })
+        );
+        assert!(capture.errors().next().is_none());
+    } else {
+        assert!(retained_exit.is_none());
+    }
     match outcome {
         0 => assert_eq!(capture.snapshot().handler_exit, Some(259)),
         1 => {
@@ -71,20 +121,32 @@ fn run(outcome: u8) -> TestResult {
         let completion = rig.completion(job)?;
         assert!(matches!(completion.outcome, JobOutcome::Cancelled));
     }
-    capture.submit_close(&rig.client, &rig.scope, close_spec(4, budget.until())?)?;
+    if !closing {
+        capture.submit_close(&rig.client, &rig.scope, close_spec(4, budget.until())?)?;
+    }
     rig.observe_until(&mut capture, |owner| owner.snapshot().state == CaptureState::Closed)?;
+    assert_open_projection(&source, absence)?;
+    assert_eq!(port.dropped.load(Ordering::Acquire), 0);
+    drop(finished);
+    drop(source);
     assert_eq!(port.dropped.load(Ordering::Acquire), 1);
     Ok(())
 }
 #[test]
 fn registered_fake_handler_reports_matching_actual_typed_exit_including_259() -> TestResult {
-    run(0)
+    run(0, false)
 }
 #[test]
 fn registered_fake_handler_late_watch_failure_retains_cause_and_degrades() -> TestResult {
-    run(1)
+    run(1, false)
 }
 #[test]
 fn registered_fake_handler_mismatched_typed_identity_never_reports_exit() -> TestResult {
-    run(2)
+    run(2, false)
+}
+
+#[test]
+fn registered_handler_exit_during_requested_close_keeps_missing_and_original_custody() -> TestResult
+{
+    run(0, true)
 }

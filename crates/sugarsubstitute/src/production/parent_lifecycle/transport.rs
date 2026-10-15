@@ -135,6 +135,7 @@ impl ParentLifecycle {
                             attempt.retirement_written(self.requests.get(index)?.header);
                         }
                         self.requests.get_mut(index)?.sent = true;
+                        self.recovery_written(index)?;
                         self.finish_attempt_write(
                             self.requests.get(index)?.header,
                             resources.execution.client.now()?,

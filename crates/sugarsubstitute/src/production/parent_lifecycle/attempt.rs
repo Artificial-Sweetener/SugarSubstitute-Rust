@@ -30,13 +30,11 @@ pub(super) struct AttemptSettlement {
     pub(super) retirement: Option<(WireHeader, bool)>,
     pub(super) ready: bool,
 }
-/// Borrow the original producer cause and exact attempt/campaign correlation after settlement.
+/// Retain the original producer cause with its exact Main and backend resource after checked settlement.
 /// Reporting consumes a semantic snapshot while this owner retains its native cause.
 pub(crate) struct SettledAttemptFailure {
-    pub(crate) origin: WireHeader,
     pub(crate) identity: MainIdentity,
     pub(crate) resource: ResourceKey,
-    pub(crate) campaign_scope: Option<ScopeId>,
     pub(crate) cause: sugarsubstitute_contracts::lifecycle::LifecycleFailure,
 }
 impl std::fmt::Debug for SettledAttemptFailure {
@@ -49,7 +47,7 @@ impl std::fmt::Debug for SettledAttemptFailure {
 }
 impl std::fmt::Display for SettledAttemptFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Original settled startup attempt failure")
+        f.write_str("Original settled backend failure")
     }
 }
 impl Error for SettledAttemptFailure {
@@ -222,31 +220,22 @@ impl ParentLifecycle {
         let attempt = self.attempt_cleanup.as_ref().ok_or(ParentError::WrongPhase)?;
         if let Some(resource) = attempt.resource
             && resources.backend.failure(resource).is_some()
-            && self.settled_attempt_failures.iter().all(Option::is_some)
         {
-            return Err(ParentError::Overloaded.into());
-        }
-        if let Some(resource) = attempt.resource
-            && resources.backend.failure(resource).is_some()
-            && let Some(cause) = resources.backend.take_attempt_failure(resource)?
-        {
-            let retained = SettledAttemptFailure {
-                origin: attempt.origin,
-                identity: attempt.identity,
-                resource,
-                campaign_scope: resources.backend.campaign_scope(resource),
-                cause,
-            };
+            let origin = attempt.origin;
+            let identity = attempt.identity;
+            let campaign_scope = resources.backend.campaign_scope(resource);
             let slot = self
-                .settled_attempt_failures
-                .iter_mut()
-                .find(|slot| slot.is_none())
+                .backend_causes
+                .as_mut()
+                .ok_or(ParentError::WrongPhase)?
+                .free_slot()
                 .ok_or(ParentError::Overloaded)?;
-            *slot = Some(retained);
-            let retained = self.settled_attempt_failure().ok_or(ParentError::WrongPhase)?;
-            tracing::info!(operation="startup_attempt_settled",request=?retained.origin.request,
-                    identity=?retained.identity,resource=?retained.resource,campaign_scope=?retained.campaign_scope,
+            if let Some(cause) = resources.backend.take_attempt_failure(resource)? {
+                *slot = Some(SettledAttemptFailure { identity, resource, cause });
+                tracing::info!(operation="startup_attempt_settled",request=?origin.request,
+                    identity=?identity,resource=?resource,campaign_scope=?campaign_scope,
                     "Original preparation cause retained after checked settlement");
+            }
         }
         self.stage_settlement_reply(index)
     }
@@ -273,6 +262,7 @@ impl ParentLifecycle {
         self.requests.settle_abandoned(attempt.origin.request.ok_or(ParentError::WrongPhase)?);
         self.acquisition = None;
         self.lease = None;
+        self.recovery = super::recovery::Recovery::default();
         self.reset_output();
         self.backend_failure_seen = false;
         self.backend_failed_resource = None;

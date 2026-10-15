@@ -63,7 +63,7 @@ pub(super) fn pending_for(
             100,
             1_000_000_000,
         )?,
-        storage,
+        &mut Some(crate::production::parent_lifecycle::causes::BackendCauses::new(storage)?),
     )?;
     let (index, _) = parent.requests.admit(h, b"original pending acquisition")?;
     parent.requests.acquisition(index, h.request.ok_or("Origin absent")?)?;

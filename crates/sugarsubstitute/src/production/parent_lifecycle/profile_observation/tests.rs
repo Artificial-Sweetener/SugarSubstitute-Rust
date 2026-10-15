@@ -118,7 +118,7 @@ fn parent_without_main_proof_drains_original_profile_release() -> TestResult {
             30_000_000_000,
             1_000_000_000,
         )?,
-        storage,
+        &mut Some(crate::production::parent_lifecycle::causes::BackendCauses::new(storage)?),
     )?;
     assert!(parent.profile_pending.is_none());
     let release = spec(2, PROFILE_OPERATION_BYTES)?;

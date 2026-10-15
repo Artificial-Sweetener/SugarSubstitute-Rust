@@ -33,7 +33,7 @@ fn actor() -> TestResult<ParentLifecycle> {
             100,
             1_000_000_000,
         )?,
-        storage,
+        &mut Some(crate::production::parent_lifecycle::causes::BackendCauses::new(storage)?),
     )?;
     parent.watchdog = Some(UiWatchdog::new(run, moment(0)));
     parent.ui_activity(UiWatchdogActivity::VisibleActive, moment(0))?;

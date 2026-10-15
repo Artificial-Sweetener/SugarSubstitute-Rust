@@ -53,6 +53,7 @@ pub(crate) struct NativeState {
     pub(crate) registered: bool,
     pub(crate) handler: Option<CaptureHandlerIdentity>,
     creator: Option<CaptureCreator>,
+    unexpected_handler_exit: Option<ProcessExit>,
     pub(crate) retired: bool,
     deadline: Option<Moment>,
     close_deadline: Option<Moment>,
@@ -68,6 +69,30 @@ impl NativeState {
             *slot = Some(cause);
         } else {
             self.omitted = self.omitted.saturating_add(1);
+        }
+    }
+}
+
+impl Shared {
+    /// Refine a native-confirmed missing report using this same registered source.
+    /// A retained exit is categorical evidence and grants no file or discard authority.
+    pub(crate) fn missing_capture_absence(
+        &self,
+    ) -> sugarsubstitute_contracts::incident::CaptureAbsence {
+        use sugarsubstitute_contracts::incident::CaptureAbsence;
+        let native = lock(&self.native);
+        if native.registered
+            && native.unexpected_handler_exit.is_some_and(|exit| {
+                native.handler
+                    == Some(CaptureHandlerIdentity {
+                        process_id: exit.process_id,
+                        creation_time_100ns: exit.creation_time_100ns,
+                    })
+            })
+        {
+            CaptureAbsence::HandlerLost
+        } else {
+            CaptureAbsence::Missing
         }
     }
 }
@@ -195,6 +220,15 @@ pub struct WindowsCrashCapture {
     execution_id: Option<sugarsubstitute_contracts::execution::ExecutionId>,
 }
 impl WindowsCrashCapture {
+    /// Observe only the actual matching unexpected registered-handler terminal retained by this source.
+    /// This grants no dump, registration retry, attachment or native retirement authority.
+    pub fn handler_lost(&self) -> bool {
+        self.shared.as_ref().is_some_and(|source| {
+            source.missing_capture_absence()
+                == sugarsubstitute_contracts::incident::CaptureAbsence::HandlerLost
+        })
+    }
+
     /// Construct an inert owner without loading a DLL or starting a process.
     /// Native registration is attempted at most once for this owner/process.
     pub fn new(owner: CoordinatorKey) -> Self {

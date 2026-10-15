@@ -134,7 +134,7 @@ fn every_reply_classification_has_explicit_stable_tags_and_exact_roundtrip() -> 
 #[test]
 fn unknown_reply_intent_and_zero_nested_identity_fail_closed() -> TestResult {
     for (payload, offset, replacement) in [
-        (WirePayload::Reply(ReplyOutcome::Acknowledged), 104, 15),
+        (WirePayload::Reply(ReplyOutcome::Acknowledged), 104, u8::MAX),
         (WirePayload::Reply(ReplyOutcome::Failed(LifecycleFailureCode::Deadline)), 105, 5),
         (WirePayload::Reply(ReplyOutcome::Rejected(LifecycleRejection::EndpointMismatch)), 105, 11),
         (

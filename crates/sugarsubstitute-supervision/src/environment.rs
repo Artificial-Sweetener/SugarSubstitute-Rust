@@ -104,6 +104,30 @@ impl LaunchEnvironment {
     pub fn into_utf16(self) -> Vec<u16> {
         self.block
     }
+    /// Bound new output and borrowed-entry storage for a copy with no overrides.
+    /// This inspects this owner's validated original block without allocation,
+    /// environment discovery or native launch. The caller keeps its input charge.
+    /// # Errors
+    /// Retains original snapshot/overflow rejection before any copying effect.
+    pub fn copy_storage_bytes(&self) -> Result<u64, LaunchEnvironmentError> {
+        let entries = entries::snapshot_count(&self.block)?;
+        entries
+            .checked_mul(size_of::<entries::Entry<'_>>())
+            .and_then(|bytes| {
+                self.block
+                    .len()
+                    .checked_mul(size_of::<u16>())
+                    .and_then(|output| bytes.checked_add(output))
+            })
+            .and_then(|bytes| u64::try_from(bytes).ok())
+            .ok_or(LaunchEnvironmentError::BlockTooLong)
+    }
+    /// Bound the same no-overrides copy before a concrete validated block exists.
+    /// The values are this owner's unchanged enforced unit/variable limits.
+    pub const fn maximum_copy_storage_bytes() -> u64 {
+        (MAX_VARIABLES * size_of::<entries::Entry<'static>>() + MAX_UNITS * size_of::<u16>()) as u64
+    }
+
     /// Account actual retained buffer capacity in bytes, excluding this stack owner.
     /// Opaque native allocations and borrowed preparation metadata are not included.
     /// This observable query grants no memory reservation or admission authority.
@@ -127,6 +151,19 @@ mod tests {
         let environment = LaunchEnvironment::from_snapshot_utf16(&[0, 0], &[])?;
         assert_eq!(environment.allocated_bytes()?, (environment.block.capacity() * 2) as u64);
         assert!(environment.allocated_bytes()? >= 4);
+        Ok(())
+    }
+    #[test]
+    fn no_override_copy_bound_covers_actual_output_and_private_entry_layouts()
+    -> Result<(), LaunchEnvironmentError> {
+        for raw in [vec![0, 0], "A=one\0B=two\0\0".encode_utf16().collect()] {
+            let original = LaunchEnvironment::from_snapshot_utf16(&raw, &[])?;
+            let declared = original.copy_storage_bytes()?;
+            let copied = LaunchEnvironment::from_snapshot_utf16(original.as_utf16(), &[])?;
+            assert!(declared >= copied.allocated_bytes()?);
+            assert!(declared <= LaunchEnvironment::maximum_copy_storage_bytes());
+            assert_eq!(copied.as_utf16(), original.as_utf16());
+        }
         Ok(())
     }
 }

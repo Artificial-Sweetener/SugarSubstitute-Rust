@@ -48,26 +48,17 @@ impl ResourceCoordinator {
                 for lease in leases {
                     self.finish_pending(lease, RequestOutcome::Granted(lease), &mut transition);
                 }
+                self.ready_replacements(key, &mut transition);
+            }
+            ResourceObservation::ManagedExited { status, failure, .. } => {
+                self.invalidate_granted(key, status, &mut transition);
+                self.apply_failure(key, failure, &mut transition);
             }
             ResourceObservation::Failed { failure, .. } => {
-                let leases = self
-                    .resources
-                    .get(&key.id)
-                    .map(|r| r.leases.values().copied().collect::<Vec<_>>())
-                    .unwrap_or_default();
-                if let Some(resource) = self.resources.get_mut(&key.id) {
-                    resource.failure = Some(failure);
-                    resource.phase = ResourcePhase::Uncertain;
-                    resource.leases.clear();
-                    if let Some(effect) = resource.cleanup() {
-                        transition.effects.push(effect);
-                    }
-                }
-                for lease in leases {
-                    self.finish_pending(lease, RequestOutcome::Failed, &mut transition);
-                }
+                self.apply_failure(key, failure, &mut transition);
             }
             ResourceObservation::Settled(_) => {
+                self.settled_outages(key);
                 if let Some(resource) = self.resources.get_mut(&key.id) {
                     resource.phase = ResourcePhase::Settled;
                     resource.claim = false;
@@ -81,6 +72,30 @@ impl ResourceCoordinator {
             }
         }
         Ok(transition)
+    }
+    fn apply_failure(
+        &mut self,
+        key: ResourceKey,
+        failure: LifecycleFailure,
+        transition: &mut ResourceTransition,
+    ) {
+        self.failed_replacements(key);
+        let leases = self
+            .resources
+            .get(&key.id)
+            .map(|r| r.leases.values().copied().collect::<Vec<_>>())
+            .unwrap_or_default();
+        if let Some(resource) = self.resources.get_mut(&key.id) {
+            resource.failure = Some(failure);
+            resource.phase = ResourcePhase::Uncertain;
+            resource.leases.clear();
+            if let Some(effect) = resource.cleanup() {
+                transition.effects.push(effect);
+            }
+        }
+        for lease in leases {
+            self.finish_pending(lease, RequestOutcome::Failed, transition);
+        }
     }
     fn validate_observation(
         &self,
@@ -129,6 +144,13 @@ impl ResourceCoordinator {
                     return Err(LifecycleRejection::EndpointMismatch);
                 }
                 true
+            }
+            ResourceObservation::ManagedExited { process, failure, .. } => {
+                managed
+                    && resource.process == Some(*process)
+                    && matches!(resource.phase, ResourcePhase::Starting | ResourcePhase::Ready)
+                    && resource.failure.is_none()
+                    && failure.code() == LifecycleFailureCode::UnexpectedExit
             }
             ResourceObservation::Failed { .. } => {
                 resource.phase != ResourcePhase::Settled && resource.failure.is_none()

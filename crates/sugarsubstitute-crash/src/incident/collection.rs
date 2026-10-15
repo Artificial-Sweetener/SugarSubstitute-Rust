@@ -91,21 +91,10 @@ impl CapturedReport {
         context: &JobContext,
     ) -> Result<CaptureEvidence, IncidentStoreError> {
         let token = self.token.as_mut().ok_or(IncidentStoreError::RecoveryConflict)?;
-        match token
+        let status = token
             .open(key, build, dump, context)
-            .map_err(|_| IncidentStoreError::RecoveryConflict)?
-        {
-            0 => Ok(CaptureEvidence::Finished(
-                token.dump().ok_or(IncidentStoreError::MissingPayload)?.0,
-            )),
-            1 => Ok(CaptureEvidence::Unavailable(CaptureAbsence::Missing)),
-            2 => Ok(CaptureEvidence::Unavailable(CaptureAbsence::Busy)),
-            3 => Ok(CaptureEvidence::Unavailable(CaptureAbsence::Corrupt)),
-            4 => Ok(CaptureEvidence::Unavailable(CaptureAbsence::WrongIdentity)),
-            5 => Ok(CaptureEvidence::Unavailable(CaptureAbsence::Oversized)),
-            6 => Ok(CaptureEvidence::Unavailable(CaptureAbsence::DeadlineElapsed)),
-            _ => Err(IncidentStoreError::RecoveryConflict),
-        }
+            .map_err(|_| IncidentStoreError::RecoveryConflict)?;
+        opened_evidence(&self.source, status, token.dump().map(|value| value.0))
     }
     /// Checked-close the native token followed by the actual generation read lease.
     /// # Errors
@@ -131,6 +120,27 @@ impl CapturedReport {
         token.retire_source(context).map_err(|_| IncidentStoreError::RecoveryConflict)
     }
 }
+/// Project an already-validated native open result without granting native authority.
+/// Only confirmed absence consults the identical source's actual handler-loss fact.
+/// # Errors
+/// Missing finished facts or an unknown native status retain categorical rejection.
+pub(crate) fn opened_evidence(
+    source: &Shared,
+    status: u32,
+    dump: Option<DumpId>,
+) -> Result<CaptureEvidence, IncidentStoreError> {
+    match status {
+        0 => Ok(CaptureEvidence::Finished(dump.ok_or(IncidentStoreError::MissingPayload)?)),
+        1 => Ok(CaptureEvidence::Unavailable(source.missing_capture_absence())),
+        2 => Ok(CaptureEvidence::Unavailable(CaptureAbsence::Busy)),
+        3 => Ok(CaptureEvidence::Unavailable(CaptureAbsence::Corrupt)),
+        4 => Ok(CaptureEvidence::Unavailable(CaptureAbsence::WrongIdentity)),
+        5 => Ok(CaptureEvidence::Unavailable(CaptureAbsence::Oversized)),
+        6 => Ok(CaptureEvidence::Unavailable(CaptureAbsence::DeadlineElapsed)),
+        _ => Err(IncidentStoreError::RecoveryConflict),
+    }
+}
+
 impl IncidentRepository {
     /// Prepare the genuine Capture source under this repository's sole original operation.
     /// # Errors

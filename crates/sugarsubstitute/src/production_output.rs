@@ -5,6 +5,9 @@
 //! A wire reply grants matching data only. Delivery ACK advances only after the
 //! actual finite parser result is observed; EOF never establishes process retirement.
 mod errors;
+mod recovery;
+pub(crate) use recovery::BackendNotice;
+use recovery::RequestKind;
 mod snapshot;
 mod state;
 mod worker;
@@ -39,6 +42,7 @@ struct Pending {
     header: WireHeader,
     original: Moment,
     admitted: bool,
+    kind: RequestKind,
 }
 /// Successful finite parser result; the original guard survives semantic consumption.
 pub(crate) struct AppliedOutput {
@@ -50,6 +54,8 @@ pub(crate) struct AppliedOutput {
     pub(crate) change: Option<sugarsubstitute_contracts::transcript::TranscriptChange>,
     /// Bounded styled view with original source custody for presentation.
     pub(crate) snapshot: Option<OutputSnapshot>,
+    /// Mounted-backend notice parsed under this same original frame and request.
+    pub(crate) notice: Option<BackendNotice>,
 }
 /// Own one transcript source, one real frame and one finite parser job.
 /// Dropping while work is active keeps source/frame with the worker; the host must
@@ -57,6 +63,7 @@ pub(crate) struct AppliedOutput {
 pub(crate) struct OutputOwner {
     source: state::Source,
     binding: OutputBinding,
+    main_identity: Option<sugarsubstitute_contracts::startup::MainIdentity>,
     pending: Option<Pending>,
     acknowledged: Option<NonZeroU64>,
     job: Option<OwnedJob<worker::Parsed, OutputError>>,
@@ -86,6 +93,7 @@ impl OutputOwner {
             Ok(Self {
                 source: state::Source::new(binding, &context)?,
                 binding,
+                main_identity: None,
                 pending: None,
                 acknowledged: None,
                 job: None,
@@ -103,44 +111,12 @@ impl OutputOwner {
         header: WireHeader,
         original: Moment,
     ) -> Result<WireMessage<'static>, OutputError> {
-        if self.closed || self.pending.is_some() || self.job.is_some() || self.terminal.is_some() {
-            return Err(OutputError::Order);
-        }
-        if header.run != self.binding.run
-            || header.connection != Some(self.binding.connection)
-            || header.request.is_none()
-            || header.deadline_qpc <= 0
-        {
-            return Err(OutputError::Identity);
-        }
-        self.pending = Some(Pending { header, original, admitted: false });
-        Ok(WireMessage {
-            header,
-            payload: WirePayload::OutputPull {
-                lease: self.binding.lease,
-                acknowledged_delivery: self.acknowledged,
-            },
-        })
-    }
-    /// Reborrow the same prepared pull through transport contention, never renew deadlines.
-    pub(crate) fn pending_pull(&self) -> Option<(WireMessage<'static>, Moment)> {
-        self.pending.filter(|p| !p.admitted).map(|p| {
-            (
-                WireMessage {
-                    header: p.header,
-                    payload: WirePayload::OutputPull {
-                        lease: self.binding.lease,
-                        acknowledged_delivery: self.acknowledged,
-                    },
-                },
-                p.original,
-            )
-        })
+        self.prepare_request(header, original, RequestKind::Pull(self.main_identity))
     }
     /// Record only after the actual channel accepted the prepared request.
     /// # Errors
     /// Rejects duplicate/changed admission without releasing its original pair.
-    pub(crate) fn admitted_pull(&mut self, header: WireHeader) -> Result<(), OutputError> {
+    pub(crate) fn admitted_request(&mut self, header: WireHeader) -> Result<(), OutputError> {
         let pending = self.pending.as_mut().ok_or(OutputError::Order)?;
         if pending.header != header || pending.admitted || self.closed {
             return Err(OutputError::Order);
@@ -256,6 +232,7 @@ impl OutputOwner {
             frame,
             change: parsed.change,
             snapshot: parsed.snapshot,
+            notice: parsed.notice,
         }))
     }
     /// Inspect the original pull during retirement; copied facts grant no native authority.
@@ -293,11 +270,14 @@ impl OutputOwner {
         }
         match message.payload {
             DecodedPayload::Reply(ReplyOutcome::OutputIdle(lease))
-                if lease == self.binding.lease => {}
+                if lease == self.binding.lease && matches!(pending.kind, RequestKind::Pull(_)) => {}
             DecodedPayload::Reply(ReplyOutcome::OutputDelivery(delivery))
                 if delivery.lease == self.binding.lease
+                    && matches!(pending.kind, RequestKind::Pull(_))
                     && Some(delivery.delivery_id.get())
                         == self.acknowledged.map_or(Some(1), |id| id.get().checked_add(1)) => {}
+            DecodedPayload::Reply(reply)
+                if recovery::notice(self.binding, pending, message.header, reply)?.is_some() => {}
             _ => return Err(OutputError::Identity),
         }
         Ok(message.header)

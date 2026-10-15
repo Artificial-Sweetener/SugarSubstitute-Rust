@@ -72,8 +72,15 @@ fn parent_projection_composes_complete_managed_command_from_empty_extras()
     let interpreter =
         bytes(&r"E:\comfyui\venv\Scripts\python.exe".encode_utf16().collect::<Vec<_>>());
     let original = managed_view(&root, &interpreter, &[], 0, "en")?;
-    let projected = fields(original)?;
-    let BackendTarget::Managed(launch) = projected.target else {
+    let capture = PathBuf::from(r"D:\SugarSubstitute-Rust\artifacts\inert-capture");
+    let available = projection_data_bytes().ok_or("Joined projection partition underflow")?;
+    let (claim, scope) = super::super::funding::tests::admitted(PROJECTION_BYTES, available)?;
+    assert_eq!(PROJECTION_BYTES, 4 * 1024 * 1024);
+    assert!(available < PROJECTION_BYTES);
+    assert_eq!(claim.bytes(), available);
+    assert_eq!(scope.snapshot().reserved_bytes, PROJECTION_BYTES);
+    let projected = fields(original, &capture, available)?;
+    let BackendTarget::Managed(launch) = &projected.target else {
         return Err("Managed target changed mode".into());
     };
     assert_eq!(
@@ -95,6 +102,21 @@ fn parent_projection_composes_complete_managed_command_from_empty_extras()
         return Err("Original mode changed".into());
     };
     assert!(arguments.is_empty());
+    // Initial and registered-restart projection use these same field/funding owners.
+    // This exercises their compiled joined partition without fabricating a registered source.
+    let mut input = ProjectionInput::without_request();
+    input.capture_root = capture;
+    input._charge = Some(claim);
+    let (data, policy) = capacity::funding(&mut input, &projected)?;
+    assert!(input._charge.is_none());
+    assert!(policy.bytes() > 0 && policy.bytes() < available);
+    assert_eq!(scope.snapshot().reserved_bytes, PROJECTION_BYTES);
+    drop(projected);
+    drop(input);
+    drop(policy);
+    assert_eq!(scope.snapshot().reserved_bytes, PROJECTION_BYTES);
+    drop(data);
+    assert_eq!(scope.snapshot().reserved_bytes, 0);
     Ok(())
 }
 
@@ -110,7 +132,13 @@ fn parent_projection_rejects_effective_command_overflow_without_changing_extra_s
         arguments.extend_from_slice(b"--cpu");
     }
     let original = managed_view(&root, &interpreter, &arguments, 58, "en")?;
-    let cause = fields(original).err().ok_or("Complete command limit bypassed")?;
+    let cause = fields(
+        original,
+        &PathBuf::new(),
+        projection_data_bytes().ok_or("Joined projection partition underflow")?,
+    )
+    .err()
+    .ok_or("Complete command limit bypassed")?;
     assert!(matches!(
         cause.downcast_ref::<sugarsubstitute_comfy::launch::ManagedLaunchError>(),
         Some(sugarsubstitute_comfy::launch::ManagedLaunchError::Configuration(
@@ -140,7 +168,12 @@ fn configured_japanese_locale_reaches_production_report_view_work_without_web_co
     let interpreter = bytes(&r"E:\python.exe".encode_utf16().collect::<Vec<_>>());
     let original =
         managed_view(&root, &interpreter, &[], 0, "ja").map_err(|cause| cause as Box<dyn Error>)?;
-    let projected = fields(original).map_err(|cause| cause as Box<dyn Error>)?;
+    let projected = fields(
+        original,
+        &PathBuf::new(),
+        projection_data_bytes().ok_or("Joined projection partition underflow")?,
+    )
+    .map_err(|cause| cause as Box<dyn Error>)?;
     assert_eq!(projected.locale.as_str(), "ja");
     let owner = CoordinatorKey {
         namespace: NamespaceId::new([1; 32]),

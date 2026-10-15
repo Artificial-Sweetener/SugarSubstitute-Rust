@@ -42,6 +42,9 @@ impl ParentLifecycle {
         let Some(budget) = self.cleanup else {
             return Ok(());
         };
+        if !self.recovery_close_cause(resources)? {
+            return Ok(());
+        }
         self.disconnect_attempted = true;
         match resources.backend.disconnect(self.run, self.connection, budget, resources.execution) {
             Ok(transition) => self.backend_replies(transition, resources),

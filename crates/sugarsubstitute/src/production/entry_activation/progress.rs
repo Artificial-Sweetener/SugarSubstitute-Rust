@@ -54,6 +54,7 @@ impl ProductionActivation {
                     .map(incident_reporting::PendingDesktopFailure::until)
             }))
             .chain(self.incidents.reporting.next_deadline())
+            .chain(self.incidents.recovery_deadline())
             .chain(self.records.iter().flatten().filter_map(|held| held.record.restart.deadline()))
             .min();
         self.next_wake = None;
@@ -90,6 +91,9 @@ impl ProductionActivation {
         resources: &mut EntryResources<'_>,
     ) -> Result<()> {
         self.receive_projections(resources)?;
+        if !self.closing && !self.incidents.recover_pending(&self.records, resources)? {
+            return Ok(());
+        }
         self.adopt_installed_restarts(resources)?;
         let Some(retained_backend) = &mut self.backend else {
             if let Some(record) =
@@ -162,12 +166,28 @@ impl ProductionActivation {
                         if self.failure.is_none() {
                             self.failure_resource.get_or_insert(key);
                         }
-                        failure.get_or_insert(cause);
+                        failure.get_or_insert(Box::new(backend_failure::OperationFailure::new(
+                            key, cause,
+                        )));
                     }
                     if let Err(cause) =
                         delivery.route(&mut self.records, backend, self.capture.as_ref(), resources)
                     {
                         failure.get_or_insert(cause);
+                    }
+                    match backend_failure::classify(backend, key) {
+                        Ok(backend_failure::Disposition::FatalCleanup) => {
+                            if self.failure.is_none() {
+                                self.failure_resource.get_or_insert(key);
+                            }
+                            failure.get_or_insert(Box::new(backend_failure::CleanupFailure {
+                                resource: key,
+                            }));
+                        }
+                        Ok(_) => {}
+                        Err(cause) => {
+                            failure.get_or_insert(cause);
+                        }
                     }
                     if failure.is_some() || delivery.pending() {
                         break;
@@ -176,7 +196,13 @@ impl ProductionActivation {
             }
         }
         let capture = self.capture.as_mut().ok_or("Actual capture owner missing")?;
-        for record in self.records.iter_mut().flatten().map(|held| held.record.as_mut()) {
+        for at in 0..self.records.len() {
+            let backend_commands_open = !self.closing
+                && failure.is_none()
+                && commands_open(&self.records, delivery, backend);
+            let Some(record) = self.records[at].as_mut().map(|held| held.record.as_mut()) else {
+                continue;
+            };
             if let Err(cause) = Self::adopt_failed_family(record, &mut self.incidents) {
                 failure.get_or_insert(cause);
             }
@@ -193,6 +219,7 @@ impl ProductionActivation {
                 batch,
                 resources,
                 self.closing || failure.is_some() || delivery.pending(),
+                backend_commands_open,
             ) {
                 if self.failure.is_none() {
                     self.failure_run.get_or_insert(record.run);
@@ -214,6 +241,7 @@ impl ProductionActivation {
                 failure.get_or_insert(cause);
             }
         }
+        let report_restart = capture.restart_availability();
         if let Err(cause) =
             relay::route(&mut self.records, backend, self.capture.as_ref(), resources)
         {
@@ -231,7 +259,10 @@ impl ProductionActivation {
             &self.executable,
             &self.working_directory,
             resources,
-            self.closing || failure.is_some(),
+            incident_reporting::ReportAdmission::new(
+                self.closing || failure.is_some(),
+                report_restart,
+            ),
         ) {
             failure.get_or_insert(cause);
         }
@@ -261,18 +292,31 @@ impl ProductionActivation {
             let Some(pending) = &mut self.pending[at] else {
                 continue;
             };
-            let Some(completion) = &pending.completion else {
+            let Some(completion) = &mut pending.completion else {
                 continue;
             };
-            if self.backend.is_none() && matches!(completion.outcome, JobOutcome::Success(_)) {
+            if self.backend.is_none()
+                && let JobOutcome::Success(value) = &mut completion.outcome
+            {
                 let storage = completion.memory.claim(RetainedBackend::required_storage_bytes())?;
-                self.backend =
-                    Some(RetainedBackend::new(resources.authority, storage).map_err(outer)?);
+                self.backend = Some(
+                    RetainedBackend::new(resources.authority, storage, &mut value.policy_credit)
+                        .map_err(outer)?,
+                );
                 self.backend
                     .as_mut()
                     .ok_or("Backend owner absent")?
                     .backend
                     .configure_custody(self.executable.clone(), self.working_directory.clone())
+                    .map_err(outer)?;
+            }
+            if let JobOutcome::Success(value) = &mut completion.outcome
+                && value.policy_credit.is_some()
+            {
+                self.backend
+                    .as_mut()
+                    .ok_or("Actual policy funding owner missing")?
+                    .add_projection_credit(&mut value.policy_credit)
                     .map_err(outer)?;
             }
             if self.delivery.is_none() && matches!(completion.outcome, JobOutcome::Success(_)) {
@@ -283,6 +327,8 @@ impl ProductionActivation {
             let storage = completion.memory.claim(size_of::<Record>() as u64)?;
             let projected =
                 pending.completion.take().ok_or("Actual projection completion missing")?;
+            let replied = pending.restart
+                && self.records[at].as_ref().is_some_and(|held| held.record.replied);
             let record = Record {
                 qualification: std::mem::take(&mut pending.qualification),
                 run: pending.run,
@@ -297,11 +343,12 @@ impl ProductionActivation {
                 attach_retirement: None,
                 start: None,
                 parent: None,
+                retained_causes: None,
                 preparation: None,
                 retired: None,
                 forwarded: None,
                 ui_suspected: false,
-                replied: pending.restart,
+                replied,
                 closed: false,
                 seed: incident_seed::SeedPreparation::new(),
                 seeded: false,
@@ -313,7 +360,15 @@ impl ProductionActivation {
                 pending_desktop_failure: None,
                 restart: restart::RestartState::for_projection(pending.restart),
             };
-            self.records[at] = Some(RetainedRecord { record: Box::new(record), _storage: storage });
+            let mut successor = RetainedRecord { record: Box::new(record), _storage: storage };
+            if let Some(previous) = self.records[at].as_mut() {
+                cause_transfer::before_replace(
+                    &mut previous.record,
+                    &mut successor.record,
+                    pending.restart,
+                )?;
+            }
+            self.records[at] = Some(successor);
             self.pending[at] = None;
         }
         Ok(())
@@ -339,6 +394,7 @@ pub(super) fn with_parent<T>(
     backend: &mut CoordinatorBackend,
     capture: Option<&CaptureRegistration>,
     resources: &mut EntryResources<'_>,
+    backend_commands_open: bool,
     call: impl FnOnce(&mut ParentLifecycle, &mut ParentResources<'_, '_>) -> Result<T>,
 ) -> Result<T> {
     let start = record.start.as_mut().ok_or("Actual desktop start missing")?;
@@ -358,9 +414,27 @@ pub(super) fn with_parent<T>(
         requested_profile: &value.profile_units,
         target: &value.target,
         finite,
+        backend_commands_open,
         backend,
         preparation: &mut record.preparation,
         execution: &mut execution,
     };
     call(parent, &mut borrowed)
+}
+
+/// Recompute across EVERY source before each Parent turn; a newly returned foreign result closes admission for later roles.
+/// Cleanup, current-binding pulls and real completion adoption do not use this command gate.
+fn commands_open(
+    records: &[Option<RetainedRecord>; 64],
+    delivery: &delivery::TransitionDelivery,
+    backend: &CoordinatorBackend,
+) -> bool {
+    !delivery.pending()
+        && !backend.delivery_pending()
+        && !records.iter().flatten().any(|held| {
+            held.record.forwarded.is_some()
+                || held.record.parent.as_ref().is_some_and(|parent| {
+                    parent.pending_backend_delivery() || parent.pending_backend_handoff()
+                })
+        })
 }

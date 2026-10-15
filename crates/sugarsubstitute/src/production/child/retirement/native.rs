@@ -13,6 +13,9 @@ impl ProductionChild {
             return self.advance_profile();
         }
         match self.observation.as_ref() {
+            Some(DesktopStartupObservation::BackendRetryRequested { identity, failed }) => {
+                self.backend_retry_requested(*identity, *failed)?;
+            }
             Some(DesktopStartupObservation::UiChallengeProcessed(key)) => {
                 self.bootstrap.channel_mut().ui_processed(*key)?;
             }

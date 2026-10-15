@@ -12,7 +12,7 @@ use std::{
 use sugarsubstitute_contracts::{
     configuration::{LoopbackOrigin, ProfileId},
     execution::{MemoryClaim, MemoryClaimError, MemoryLease},
-    lifecycle::{RunKey, UiChallengeKey, UiWatchdogActivity},
+    lifecycle::{LeaseKey, RunKey, UiChallengeKey, UiWatchdogActivity},
     startup::{LaunchId, ReadinessReceipt, StartupFailure},
 };
 
@@ -31,6 +31,28 @@ pub struct MainCaptionLabels {
     pub close: &'static str,
 }
 
+/// Borrow canonical localized connection-retry copy without allocating product text.
+#[derive(Clone, Copy, Debug)]
+pub struct MainRecoveryLabels {
+    /// Existing localized retry action.
+    pub retry: &'static str,
+    /// Existing localized actionable retry-ready status.
+    pub retry_ready: &'static str,
+}
+
+/// Present current backend recovery data; this state grants no backend admission.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MainBackendState {
+    /// Genuine old backend ownership remains unsettled; retry stays hidden.
+    Retiring,
+    /// The composing owner reports actual old settlement and retained cause.
+    RetryReady,
+    /// An explicit retry or shared-cohort successor is pending; retry is disabled.
+    Retrying,
+    /// The composing owner accepted a current same-origin replacement for this failed lease.
+    Recovered,
+}
+
 /// Configure the initial main client rectangle in logical pixels.
 #[derive(Clone, Copy, Debug)]
 pub struct MainWindowSettings {
@@ -42,6 +64,8 @@ pub struct MainWindowSettings {
     pub dark: bool,
     /// Localized native control names; web-owned text remains untouched.
     pub labels: MainCaptionLabels,
+    /// Canonical localized native backend retry action/status.
+    pub recovery: MainRecoveryLabels,
 }
 
 /// Retain version observations supplied by the verified served-source owner.
@@ -130,6 +154,8 @@ impl MainWindowRequest {
             settings.labels.maximize,
             settings.labels.restore,
             settings.labels.close,
+            settings.recovery.retry,
+            settings.recovery.retry_ready,
         ]
         .iter()
         .any(|label| label.is_empty() || label.len() > 128 || label.contains('\0'))
@@ -272,6 +298,28 @@ pub enum DesktopStartupCommand {
         /// Original finite campaign cutoff in absolute QPC ticks and ticks per second.
         source_deadline: sugarsubstitute_contracts::execution::CounterDeadline,
     },
+    /// Present one current Main's failed backend lease as inert recovery data.
+    /// Recovered clears only that exact retained outage; Parent validates actual replacement authority.
+    PresentBackendOutage {
+        /// Exact existing Main run, launch and navigation; no window/view recreation.
+        identity: MainIdentity,
+        /// Original failed backend interest; data does not authorize retry/replacement.
+        failed: LeaseKey,
+        /// Current composing-owner presentation, independent of frontend readiness.
+        state: MainBackendState,
+    },
+    /// Replace a rendered outage only through the composing owner's exact retained handoff lineage.
+    /// This handles successor failure before positive current-backend output, without false recovery.
+    ReplaceBackendOutage {
+        /// Same existing native Main; Root independently validates current backend authority.
+        identity: MainIdentity,
+        /// Exact currently rendered failed interest.
+        previous: LeaseKey,
+        /// Distinct successor's actual failed interest, same run/connection/owner.
+        failed: LeaseKey,
+        /// Recovery presentation for the successor failure; Recovered is invalid here.
+        state: MainBackendState,
+    },
     /// Retire the exact current native main lifetime before admitting another attempt.
     RetireMain {
         /// Exact current actor; a rendered identity grants no native authority.
@@ -349,6 +397,14 @@ pub enum DesktopStartupObservation {
     /// The native owner fenced this current attempt and observed no matching actor,
     /// constructor, callback or handle custody. This is distinct from retiring a created actor.
     MainAbsent(MainIdentity),
+    /// One native retry click consumed from the exact currently enabled outage control.
+    /// This pair is observational input; Parent independently authenticates and admits retry.
+    BackendRetryRequested {
+        /// Exact retained Main; the document/navigation remain unchanged.
+        identity: MainIdentity,
+        /// Failed lease captured by that control's current presentation revision.
+        failed: LeaseKey,
+    },
     /// Native close intent; the application chooses mode-appropriate cleanup.
     CloseRequested,
     /// Preserve a native cause independently of retained partial resource ownership.

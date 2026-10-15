@@ -7,6 +7,12 @@ mod admission;
 mod enrollment;
 #[path = "supervision/leases.rs"]
 mod leases;
+#[path = "supervision/outage.rs"]
+mod outage;
+#[path = "supervision/outage_capacity.rs"]
+mod outage_capacity;
+#[path = "supervision/resource_storage.rs"]
+mod resource_storage;
 #[path = "supervision/run_settlement.rs"]
 mod run_settlement;
 #[path = "supervision/support.rs"]

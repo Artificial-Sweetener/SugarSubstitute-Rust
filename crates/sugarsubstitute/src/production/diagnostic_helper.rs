@@ -171,3 +171,6 @@ pub(in crate::production) mod collection;
 
 #[path = "diagnostic_helper/reporting.rs"]
 pub(in crate::production) mod reporting;
+
+#[path = "diagnostic_helper/recovery.rs"]
+pub(in crate::production) mod recovery;

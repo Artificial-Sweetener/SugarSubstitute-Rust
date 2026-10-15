@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Hold actual profile identity through browser lifetime and checked family retirement.
 mod attempt;
+mod constructor_storage;
 mod custody;
 mod folder;
 mod launch;

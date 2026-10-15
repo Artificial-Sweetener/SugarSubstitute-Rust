@@ -20,6 +20,7 @@ impl IncidentHost {
         if let Some(JobOutcome::Success(controller)) =
             self.completion.as_ref().map(|value| &value.outcome)
         {
+            controller.policy.recovery.cancel();
             controller.policy.seed.cancel();
             controller.policy.collection.cancel();
             controller.policy.reporting.cancel();
@@ -56,7 +57,8 @@ impl IncidentHost {
         match self.completion.as_ref().map(|done| &done.outcome) {
             Some(JobOutcome::Success(controller)) => {
                 controller.policy.state.as_ref().is_none_or(|state| {
-                    state.state.effects.iter().any(Option::is_some)
+                    controller.policy.recovery.pending()
+                        || state.state.effects.iter().any(Option::is_some)
                         || state.state.coordinator.diagnostic_custody_pending()
                 })
             }

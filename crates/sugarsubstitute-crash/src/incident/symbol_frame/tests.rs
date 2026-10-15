@@ -135,3 +135,6 @@ fn unexplained_evidence_grants_no_missing_stream_foreign_module_or_corrupt_codev
 }
 #[path = "tests/receiving.rs"]
 mod receiving;
+
+#[path = "tests/selection.rs"]
+mod selection;

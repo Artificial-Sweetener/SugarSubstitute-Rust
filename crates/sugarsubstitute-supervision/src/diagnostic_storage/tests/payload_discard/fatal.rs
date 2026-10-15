@@ -2,14 +2,14 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain payload custody across callback panic and globally fatal execution clocks.
 use super::*;
-use crate::diagnostic_storage::fixture::BoundaryClock;
+use sugarsubstitute_execution::clock_fixture::CallbackRegressionClock;
 #[test]
 fn diagnostic_payload_discard_callback_panic_and_global_clock_failure_preserve_custody()
 -> TestResult {
     use std::error::Error;
     for fatal in [false, true] {
         let wake = Arc::new(Wake::default());
-        let clock = Arc::new(TestClock(AtomicU64::new(17)));
+        let clock = CallbackRegressionClock::new(Moment::from_nanos(17));
         let owner = ExecutionOwner::new(clock.clone(), wake.clone())?;
         let client = owner.client();
         let scope =
@@ -28,7 +28,9 @@ fn diagnostic_payload_discard_callback_panic_and_global_clock_failure_preserve_c
                 *validator.hook.lock().unwrap_or_else(std::sync::PoisonError::into_inner) =
                     Some(Box::new(move || {
                         if fatal {
-                            callback_clock.observe(16);
+                            // Only this callback's next real clock observation regresses;
+                            // execution guardians retain the healthy epoch until it is consumed.
+                            assert!(callback_clock.arm_current_callback(Moment::from_nanos(16)));
                         } else {
                             std::panic::resume_unwind(Box::new("injected semantic callback panic"));
                         }
@@ -114,7 +116,8 @@ fn diagnostic_payload_discard_callback_panic_and_global_clock_failure_preserve_c
                 original,
                 candidate,
             ));
-            assert_eq!(clock.0.load(Ordering::SeqCst), 16);
+            assert_eq!(clock.requested_regression(), Some(Moment::from_nanos(16)));
+            assert_eq!(clock.regressed_samples(), 1);
         } else {
             let cleanup =
                 client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?;

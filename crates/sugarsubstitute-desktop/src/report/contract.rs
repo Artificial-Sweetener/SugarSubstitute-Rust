@@ -123,6 +123,13 @@ pub enum ReportSurfaceUpdate {
         /// Host outcome proves neither native completion nor durable mutation.
         outcome: Result<(), ReportSurfaceFailure>,
     },
+    /// Exact requested restart is unavailable; this carries no acknowledgement or close authority.
+    RestartUnavailable {
+        /// Original native restart request.
+        request: ReportRequestId,
+        /// Exact currently displayed view.
+        binding: ReportBinding,
+    },
     /// Authenticated composing host accepted an actual durable acknowledgement.
     CloseAfterDurableAck {
         /// Exact requested current view.

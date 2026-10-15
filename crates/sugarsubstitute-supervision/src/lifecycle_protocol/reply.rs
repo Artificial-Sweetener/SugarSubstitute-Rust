@@ -51,6 +51,32 @@ pub enum ReplyOutcome<'a> {
     OutputIdle(LeaseReference),
     /// Tag14: bounded authorization/native stage failure; custody remains separately owned.
     MainStageFailed(MainStageFailure),
+    /// Tag15: copied managed outage state answering the original OutputPull.
+    /// Native cleanup, retained cause custody and retry admission remain separate.
+    BackendUnavailable {
+        /// Exact unavailable lease under this frame's run and connection.
+        failed: LeaseReference,
+        /// Complete unsigned actual root status; 259 is preserved.
+        status: u32,
+        /// Distinct affected Main runs, bounded to 1..64.
+        affected_clients: u16,
+        /// Copied actual cleanup/cause-transfer eligibility, never retry authority.
+        retry_ready: bool,
+    },
+    /// Tag16: one actual historical Ready event answering pending RetryBackend or OutputPull.
+    /// Changes only backend binding; a successor may already have an exact retained managed death.
+    /// The child keeps recovery disabled until its current ordinary output/idle response.
+    /// Its next authenticated current-lease OutputPull acknowledges handoff consumption;
+    /// the parent independently validates live adoption or exact new-death/absent-old state.
+    /// The owning request emits one response. Written alone never establishes adoption.
+    BackendReplaced {
+        /// Exact mounted Main identity, reconstructed with the original header run.
+        identity: MainIdentity,
+        /// Previously unavailable binding, retained for exact lineage validation.
+        previous: LeaseReference,
+        /// Genuine successor interest that actually reached Ready; not a current readiness grant.
+        current: LeaseReference,
+    },
 }
 pub(super) const fn failure_tag(code: LifecycleFailureCode) -> u8 {
     match code {

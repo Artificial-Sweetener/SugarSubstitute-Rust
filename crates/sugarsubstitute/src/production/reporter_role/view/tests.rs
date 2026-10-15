@@ -44,6 +44,8 @@ fn partial_or_wrong_offset_cannot_publish_view_and_complete_text_keeps_original_
         assert!(matches!(
             receiver.apply_frame(
                 frame(DiagnosticCommand::BeginView {
+                    restart:
+                        sugarsubstitute_contracts::incident::ReportRestartAvailability::Available,
                     session,
                     total: text.len() as u64,
                     sha256: hash
@@ -81,6 +83,8 @@ fn partial_or_wrong_offset_cannot_publish_view_and_complete_text_keeps_original_
         assert!(matches!(
             receiver.apply_frame(
                 frame(DiagnosticCommand::BeginView {
+                    restart:
+                        sugarsubstitute_contracts::incident::ReportRestartAvailability::Available,
                     session,
                     total: text.len() as u64,
                     sha256: hash
@@ -110,6 +114,7 @@ fn complete_wire_text_that_cannot_enter_native_controls_retains_original_bytes()
         let mut receiver = ViewReceiver::new(&context);
         receiver.apply_frame(
             frame(DiagnosticCommand::BeginView {
+                restart: sugarsubstitute_contracts::incident::ReportRestartAvailability::Available,
                 session,
                 total: text.len() as u64,
                 sha256: hash,
@@ -163,5 +168,49 @@ fn actual_control_keeps_original_absolute_counter_without_translating_it()
         );
         assert!(matches!(actual.decision, ControlDecision::Copy(DiagnosticActionResult::Success)));
         Ok(receiver)
+    })
+}
+
+#[test]
+fn complete_authenticated_view_retains_unavailable_restart_and_original_charge()
+-> Result<(), Box<dyn Error + Send + Sync>> {
+    admitted_value(crate::production::incident_host::CONTROLLER_BYTES, |context| {
+        use sha2::{Digest, Sha256};
+        let bytes = b"report\n";
+        let digest: [u8; 32] = Sha256::digest(bytes).into();
+        let session = ReportSessionId::new(1)?;
+        let mut receiver = ViewReceiver::new(&context);
+        receiver.apply_frame(
+            frame(DiagnosticCommand::BeginView {
+                session,
+                restart: ReportRestartAvailability::Unavailable,
+                total: bytes.len() as u64,
+                sha256: digest,
+            })?,
+            &context,
+        )?;
+        receiver.apply_frame(
+            frame(DiagnosticCommand::ViewChunk {
+                session,
+                chunk: DiagnosticChunk {
+                    kind: DiagnosticTransferKind::View,
+                    total: bytes.len() as u64,
+                    offset: 0,
+                    sha256: digest,
+                    bytes,
+                },
+            })?,
+            &context,
+        )?;
+        let PreparedView::Initial(text) = receiver.apply_frame(
+            frame(DiagnosticCommand::EndView { session, sha256: digest })?,
+            &context,
+        )?
+        else {
+            return Err("Complete unavailable view missing".into());
+        };
+        assert_eq!(text.restart, ReportRestartAvailability::Unavailable);
+        assert_eq!(text.text, "report\n");
+        Ok(text)
     })
 }

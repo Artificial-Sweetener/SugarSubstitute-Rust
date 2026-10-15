@@ -25,6 +25,7 @@ struct OriginalReporterRetirement {
 /// Recycled source stays closed until registry removal and Domain acceptance both finish.
 pub(super) struct RecycledReporterRetirement {
     pub(super) binding: ReportBinding,
+    key: DiagnosticKey,
     pub(super) startup: sugarsubstitute_execution::RegisteredStartupSource,
     pub(super) receipt: Option<RecycledReporter>,
     pub(super) registered: bool,
@@ -121,7 +122,11 @@ impl ReporterSession {
             },
         )
     }
-    pub(super) fn retire_healthy_preparation(&mut self, binding: ReportBinding) -> Result<()> {
+    pub(super) fn retire_healthy_preparation(
+        &mut self,
+        binding: ReportBinding,
+        key: DiagnosticKey,
+    ) -> Result<()> {
         let value = self.preparing()?;
         value.metadata.recyclable()?;
         value.launch.recyclable()?;
@@ -140,6 +145,7 @@ impl ReporterSession {
         };
         self.retirement = Some(ReporterRetirement::Recycled(RecycledReporterRetirement {
             binding,
+            key,
             startup,
             receipt: None,
             registered: false,
@@ -172,11 +178,13 @@ impl ReporterSession {
         };
         let receipt = original.receipt.as_ref().ok_or("Original Reporter receipt missing")?;
         let binding = original.binding;
-        let expected = DiagnosticKey::new(
-            binding.incident().subject().coordinator(),
-            DiagnosticRole::Reporter,
-            DiagnosticSessionId::new(binding.session().get())?,
-        );
+        let expected = original.key;
+        if expected.role() != DiagnosticRole::Reporter
+            || expected.owner().namespace != binding.incident().subject().coordinator().namespace
+            || expected.session().get() != binding.session().get()
+        {
+            return Err("Actual current Reporter role differs from historical data".into());
+        }
         if !original.registered || receipt.key() != expected {
             return Err("Actual accepted Reporter correlation changed".into());
         }

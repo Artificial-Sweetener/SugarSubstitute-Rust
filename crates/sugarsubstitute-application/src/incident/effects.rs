@@ -91,6 +91,15 @@ pub enum IncidentEffect {
         /// Actual committed acknowledgement.
         acknowledgement: DurableAcknowledgement,
     },
+    /// Forward recovered-report user intent after durable ACK and current reader retirement.
+    /// The historical subject grants no process/run ownership. The composing current-root
+    /// registered startup owner must separately close its actual current run and admit fresh launch.
+    ForwardRecoveredRestartIntent {
+        /// Immutable old incident whose visible report was explicitly acknowledged.
+        incident: IncidentKey,
+        /// Actual durable acknowledgement for that same historical incident.
+        acknowledgement: DurableAcknowledgement,
+    },
     /// Forward user intent after independent settlement; M1 retains launch authority.
     ForwardRestartIntent {
         /// Exact old desktop run.

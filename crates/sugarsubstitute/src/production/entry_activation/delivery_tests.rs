@@ -36,17 +36,19 @@ fn failed_later_recipient_keeps_actual_return_and_blocks_another_producer() -> R
             },
         ],
         effects: vec![],
+        invalidations: vec![],
+        replacements: vec![],
     };
     owner.produce(|| Ok(original.clone()))?;
     let accepted = Cell::new(0);
     assert!(
         owner
             .deliver(|held| {
-                held.deliver(a, |_| {
+                held.deliver(a, |_, _| {
                     accepted.set(accepted.get() + 1);
                     Ok(())
                 })?;
-                held.deliver(b, |_| Err("actual recipient failed".into()))
+                held.deliver(b, |_, _| Err("actual recipient failed".into()))
             })
             .is_err()
     );
@@ -62,11 +64,11 @@ fn failed_later_recipient_keeps_actual_return_and_blocks_another_producer() -> R
     );
     assert!(!invoked.get());
     owner.deliver(|held| {
-        held.deliver(a, |_| {
+        held.deliver(a, |_, _| {
             accepted.set(accepted.get() + 1);
             Ok(())
         })?;
-        held.deliver(b, |actual| {
+        held.deliver(b, |actual, _| {
             assert_eq!(actual, &original);
             Ok(())
         })
@@ -86,6 +88,8 @@ fn producer_failure_retains_pending_return_without_overwriting_prior_owner() -> 
             outcome: RequestOutcome::Failed,
         }],
         effects: vec![],
+        invalidations: vec![],
+        replacements: vec![],
     };
     assert!(owner.produce(|| Err("actual producer failed after its effects".into())).is_err());
     owner.capture_pending(|| Some(actual.clone()));
@@ -96,7 +100,7 @@ fn producer_failure_retains_pending_return_without_overwriting_prior_owner() -> 
     });
     assert!(!source_called.get());
     owner.deliver(|held| {
-        held.deliver(a, |returned| {
+        held.deliver(a, |returned, _| {
             assert_eq!(returned, &actual);
             Ok(())
         })

@@ -10,6 +10,7 @@ pub static ZH_HANS: ReportMessages = ReportMessages {
     export: "导出报告",
     close: "关闭",
     restart: "关闭并请求重启",
+    restart_unavailable: "此会话无法重新启动。请关闭 SugarSubstitute，然后重新打开。",
     include_dump: "包含原生内存转储",
     dump_warning: "原生内存转储可能包含密码和私人信息，未经净化。",
     save_title: "导出事件",

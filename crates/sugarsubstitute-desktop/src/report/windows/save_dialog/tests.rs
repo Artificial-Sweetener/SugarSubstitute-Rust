@@ -22,6 +22,9 @@ pub(super) fn state() -> Result<Hook, Box<dyn Error>> {
         destroyed: false,
         timer: 0,
         update: None,
+        update_at: None,
+        cancel_requested: dispatch::ModalCancellation::fixture(&lease)?,
+        cancel_posted: false,
         failure: None,
         save: Text::new("Save", &lease)?,
         cancel_label: Text::new("Cancel", &lease)?,
@@ -119,5 +122,47 @@ fn disarmed_native_hook_keeps_unchecked_initialization_custody_without_expired_b
     assert!(!state.retired());
     state.destroyed = true;
     assert!(!state.retired());
+    Ok(())
+}
+
+#[test]
+fn report_modal_deferred_close_posts_cancel_once_without_polling_or_retiring_hook()
+-> Result<(), Box<dyn Error>> {
+    let mut state = state()?;
+    assert!(!state.take_cancel());
+    state.cancel_requested.set(true);
+    assert!(state.take_cancel());
+    assert!(!state.take_cancel());
+    assert!(!state.active);
+    assert!(state.poller.is_some());
+    assert!(!state.initialized);
+    Ok(())
+}
+#[test]
+fn report_modal_update_observation_keeps_first_actual_close_control_instant()
+-> Result<(), Box<dyn Error>> {
+    use sugarsubstitute_contracts::{incident::*, lifecycle::*};
+    let owner = CoordinatorKey {
+        namespace: NamespaceId::new([1; 32]),
+        epoch: CoordinatorEpoch::new([2; 16])?,
+    };
+    let incident = IncidentKey::new(IncidentSubject::Supervisor(owner));
+    let binding = ReportBinding::new(incident, IncidentRevision::new(1)?, ReportSessionId::new(1)?);
+    let mut state = state()?;
+    assert!(state.begin_poll()?.is_some());
+    let acknowledgement = DurableAcknowledgement::new(
+        incident,
+        IncidentRevision::new(2)?,
+        IncidentUtc::from_unix_seconds(10)?,
+    );
+    assert!(
+        state.complete_poll(Ok(ReportSurfaceUpdate::CloseAfterDurableAck {
+            binding,
+            acknowledgement
+        }))
+    );
+    let original = state.update_at.ok_or("actual update observation time absent")?;
+    assert!(state.begin_poll()?.is_none());
+    assert_eq!(state.update_at, Some(original));
     Ok(())
 }

@@ -89,6 +89,7 @@ pub(in crate::production) enum ReporterControl {
     Copy(DiagnosticActionResult),
     Export(DiagnosticActionResult),
     Close(DurableAcknowledgement),
+    RestartUnavailable,
 }
 /// Fixed inert wire correlation supplied by the coordinator, never a renewed stream deadline.
 pub(in crate::production) struct ReporterControlInput {
@@ -306,6 +307,7 @@ pub(in crate::production) struct ReporterFacts {
 /// One immutable original context for the complete begin/chunks/end transfer.
 #[derive(Clone, Copy)]
 pub(in crate::production) struct ReporterViewPlan {
+    pub(in crate::production) restart: ReportRestartAvailability,
     pub(in crate::production) key: DiagnosticKey,
     pub(in crate::production) first_request: DiagnosticRequestId,
     pub(in crate::production) context: DiagnosticContext,

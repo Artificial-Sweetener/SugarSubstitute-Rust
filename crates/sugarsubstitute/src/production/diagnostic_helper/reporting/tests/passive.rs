@@ -98,6 +98,9 @@ fn reporting_actual_protected_passive_view_retains_first_cause_and_same_claim_ac
     assert!(!marker.is_symbols());
     assert_eq!(marker.terminal(), None);
     assert_eq!(service.passive_restoration(), Some(marker));
+    let restored = input.as_ref().ok_or("Actual restored View input missing")?;
+    service.validate_retiring_input(operation, binding, false, restored)?;
+    service.validate_retiring_input(operation, binding, true, restored)?;
     assert_eq!(input.as_ref().map(ReportingInput::binding), Some(binding));
     assert!(service.validate_passive_restoration(marker));
     let alias = service.source.alias();
@@ -133,6 +136,9 @@ fn reporting_actual_protected_passive_view_retains_first_cause_and_same_claim_ac
     assert_eq!(scope.snapshot().reserved_bytes, 0);
     Ok(())
 }
+
+#[path = "passive/uninstalled.rs"]
+mod uninstalled;
 
 #[derive(Default)]
 struct FilesystemGate {

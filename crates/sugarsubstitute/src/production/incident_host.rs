@@ -28,6 +28,7 @@ use sugarsubstitute_supervision::coordinator_entry::{EntryError, VerifiedEntryNa
 pub(in crate::production) const CONTROLLER_BYTES: u64 = 2 * 1024 * 1024;
 const POLICY_BYTES: u64 = CONTROLLER_BYTES
     - size_of::<PreparationInput>() as u64
+    - super::diagnostic_helper::recovery::RECOVERY_SOURCE_BYTES
     - super::diagnostic_helper::SEED_SOURCE_BYTES
     - super::diagnostic_helper::collection::COLLECTION_SOURCE_BYTES
     - super::diagnostic_helper::reporting::REPORT_SOURCE_BYTES
@@ -58,6 +59,7 @@ pub(in crate::production) struct FundedState {
 }
 struct FundedPolicy {
     state: Option<FundedState>,
+    recovery: super::diagnostic_helper::recovery::RecoveryService,
     seed: super::diagnostic_helper::SeedService,
     collection: super::diagnostic_helper::collection::CollectionService,
     reporting: super::diagnostic_helper::reporting::ReportingService,
@@ -130,6 +132,7 @@ enum HostCause {
     Admission(BlockingInputError),
     Identity(IdentityError),
     Decision(IncidentDecisionError),
+    Recovery(recovery::RecoveryAdoptionCause),
 }
 /// Own constructor terminal delivery and the actual funded state before capture/projection.
 /// Every method returns promptly on the parent composition thread.
@@ -213,6 +216,12 @@ impl IncidentHost {
         {
             return Some(cause);
         }
+        if let Some(JobOutcome::Success(controller)) =
+            self.completion.as_ref().map(|value| &value.outcome)
+            && let Some(cause) = controller.policy.recovery.failure()
+        {
+            return Some(cause);
+        }
         if let Some(JobOutcome::Failure(cause)) =
             self.completion.as_ref().map(|value| &value.outcome)
         {
@@ -222,6 +231,7 @@ impl IncidentHost {
             Some(HostCause::Admission(cause)) => Some(cause),
             Some(HostCause::Identity(cause)) => Some(cause),
             Some(HostCause::Decision(cause)) => Some(cause),
+            Some(HostCause::Recovery(cause)) => Some(cause),
             None => None,
         }
     }
@@ -241,3 +251,8 @@ mod reporting;
 mod symbols;
 
 pub(in crate::production) use symbols::AdoptedPassiveReporting;
+
+#[path = "incident_host/recovery.rs"]
+mod recovery;
+
+pub(in crate::production) use recovery::RecoveryProgress;

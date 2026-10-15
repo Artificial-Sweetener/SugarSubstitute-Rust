@@ -75,6 +75,7 @@ impl ParentLifecycle {
     /// All unrelated expiry remains a strict original error, not a recoverable label.
     pub(super) fn next_live_reply(&mut self, now: Moment) -> Result<Option<usize>> {
         self.expire_acquisition(now)?;
+        self.expire_recovery(now)?;
         for _ in 0..super::history::SLOTS {
             let Some(index) = self.requests.next_reply() else {
                 return Ok(None);

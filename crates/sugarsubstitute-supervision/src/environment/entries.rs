@@ -60,7 +60,7 @@ fn snapshot_entry(line: &[u16]) -> Result<Entry<'_>, LaunchEnvironmentError> {
     }
     Ok(Entry { name, value: Some(&line[separator + 1..]) })
 }
-fn snapshot_count(snapshot: &[u16]) -> Result<usize, LaunchEnvironmentError> {
+pub(super) fn snapshot_count(snapshot: &[u16]) -> Result<usize, LaunchEnvironmentError> {
     if !snapshot.ends_with(&[0, 0]) {
         return Err(LaunchEnvironmentError::InvalidSnapshot);
     }

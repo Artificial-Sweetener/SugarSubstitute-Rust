@@ -57,7 +57,7 @@ pub(super) struct Record {
     pub seed_context: Option<IncidentRequestContext>,
     pub seed_scope: Option<IncidentOperationScope>,
     pub seed_committed: bool,
-    pub original_publication: LogicalStoreOperationKey,
+    pub original_publication: Option<LogicalStoreOperationKey>,
     pub source_scope: IncidentSourceScope,
     pub current: Option<IncidentOperationScope>,
     pub pending: Option<Pending>,
@@ -103,7 +103,9 @@ impl Record {
             } else {
                 self.acknowledgement.is_some()
                     && self.sources_retired
-                    && self.family_settled
+                    && (self.family_settled
+                        || matches!(self.source_scope,
+                        IncidentSourceScope::Recovered(source) if source.historical_operation().is_none()))
                     && self.reporter_retired
             }
     }
@@ -113,7 +115,7 @@ impl Record {
             key: self.seed.key(),
             revision: self.revision(),
             phase: self.phase,
-            original_publication: Some(self.original_publication),
+            original_publication: self.original_publication,
             current_operation: self.current,
             source_scope: Some(self.source_scope),
             report_binding: self.binding,

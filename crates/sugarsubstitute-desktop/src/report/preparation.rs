@@ -31,9 +31,11 @@ pub trait ReportSessionPreparation: ReportSessionContent {
 /// No application window or Tao loop exists during preparation. Native waits pump bounded messages.
 /// # Errors
 /// Retain original preparation/cleanup causes and uncertain owner custody. Expiry grants no settlement.
+/// Reject oversized Session/content metadata before bootstrap creation or content start.
 pub fn run_prepared_report_surface<C: ReportSessionPreparation + 'static>(
     mut content: C,
 ) -> Result<ReportSurfaceReceipt, ReportSurfaceError> {
+    super::windows::validate_content_capacity::<Prepared<C>>()?;
     let bootstrap = Bootstrap::new()?;
     let mut failure = Failures::default();
     if let Err(cause) = call(|| content.start(bootstrap.wake())) {

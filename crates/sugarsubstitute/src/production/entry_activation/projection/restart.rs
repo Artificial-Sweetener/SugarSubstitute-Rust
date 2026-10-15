@@ -38,7 +38,9 @@ pub(super) fn project(
     let result = (|| -> Result<_, Box<dyn Error + Send + Sync>> {
         let data = input.input().restart.as_ref().ok_or("Registered restart input missing")?;
         check(&context, data.original.started(), data.original.until())?;
-        let fields = fields(data.source.view()?)?;
+        let available =
+            input.input()._charge.as_ref().ok_or("Original data claim missing")?.bytes();
+        let fields = fields(data.source.view()?, &input.input().capture_root, available)?;
         let client =
             input.input().client.as_ref().ok_or("Actual restart execution owner missing")?;
         let snapshot = client.restart_startup_snapshot(
@@ -62,10 +64,14 @@ pub(super) fn project(
         input.input_mut().snapshot = Some(snapshot);
         return Err(ProjectionFailure { retained: input });
     };
-    let Some(charge) = input.input_mut()._charge.take() else {
-        input.input_mut().snapshot = Some(snapshot);
-        input.input_mut().restart = Some(data);
-        return Err(ProjectionFailure { retained: input });
+    let (charge, policy_credit) = match capacity::funding(input.input_mut(), &fields) {
+        Ok(funding) => funding,
+        Err(cause) => {
+            input.input_mut().snapshot = Some(snapshot);
+            input.input_mut().restart = Some(data);
+            input.input_mut().cause = ProjectionCause::Operation(cause);
+            return Err(ProjectionFailure { retained: input });
+        }
     };
     Ok(ProjectedEntry {
         locale: fields.locale,
@@ -82,6 +88,7 @@ pub(super) fn project(
         frontend: Some(fields.frontend),
         backend_environment: fields.backend_environment,
         desktop_environment: Some(fields.desktop_environment),
+        policy_credit: Some(policy_credit),
         _charge: charge,
     })
 }

@@ -33,6 +33,10 @@ fn settings() -> MainWindowSettings {
             restore: "Restore",
             close: "Close",
         },
+        recovery: crate::MainRecoveryLabels {
+            retry: "Retry",
+            retry_ready: "Connection failed. Select here to retry",
+        },
     }
 }
 fn absolute() -> PathBuf {
@@ -222,5 +226,39 @@ fn url_normalization_cannot_authorize_alternate_hosts_schemes_ports_or_credentia
         assert!(!admits_url(origin, value), "Invalid URL admitted");
     }
     assert!(!admits_url(origin, &format!("{}{}", root_url(origin), "x".repeat(4096))));
+    Ok(())
+}
+
+#[test]
+fn recovery_labels_are_bounded_at_request_admission_before_native_initialization() -> Result {
+    for label in [
+        "",
+        "bad\0label",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    ] {
+        let mut invalid = settings();
+        invalid.recovery.retry_ready = label;
+        assert!(matches!(
+            request(invalid, absolute(), MainWindowRequest::KNOWN_STORAGE_BYTES, Arc::default())?,
+            Err(MainRequestError::CaptionLabel)
+        ));
+    }
+    Ok(())
+}
+#[test]
+fn every_canonical_locale_retry_pair_fits_the_original_native_request_budget() -> Result {
+    for messages in sugarsubstitute_contracts::localization::LOCALES {
+        let mut localized = settings();
+        localized.recovery =
+            MainRecoveryLabels { retry: messages.retry, retry_ready: messages.retry_ready };
+        let actual = request(
+            localized,
+            absolute(),
+            MainWindowRequest::KNOWN_STORAGE_BYTES,
+            Arc::default(),
+        )??;
+        assert_eq!(actual.settings().recovery.retry_ready, messages.retry_ready);
+        assert_eq!(actual.storage_lease().bytes(), MainWindowRequest::KNOWN_STORAGE_BYTES);
+    }
     Ok(())
 }

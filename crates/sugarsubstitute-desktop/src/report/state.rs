@@ -4,13 +4,20 @@
 use super::{ReportRequestId, ReportSurfaceError, ReportSurfaceReceipt};
 use std::num::NonZeroU64;
 use sugarsubstitute_contracts::incident::{
-    DurableAcknowledgement, ExportSelection, ReportAction, ReportBinding,
+    DurableAcknowledgement, ExportSelection, ReportAction, ReportBinding, ReportRestartAvailability,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum Intent {
     Action(ReportAction),
     Export(ExportSelection),
+}
+impl Intent {
+    /// Native callback and state owner use the same fence; presentation grants no host authority.
+    pub(super) const fn allowed(self, restart: ReportRestartAvailability) -> bool {
+        !matches!(self, Self::Action(ReportAction::DismissAndRequestRestart))
+            || restart.allows_restart()
+    }
 }
 #[derive(Clone, Copy)]
 pub(super) struct Request {
@@ -20,6 +27,7 @@ pub(super) struct Request {
 }
 pub(super) struct State {
     binding: ReportBinding,
+    restart: ReportRestartAvailability,
     refreshing: bool,
     presented: bool,
     closing: bool,
@@ -29,9 +37,10 @@ pub(super) struct State {
     pending: Option<Request>,
 }
 impl State {
-    pub(super) const fn new(binding: ReportBinding) -> Self {
+    pub(super) const fn new(binding: ReportBinding, restart: ReportRestartAvailability) -> Self {
         Self {
             binding,
+            restart,
             refreshing: true,
             presented: false,
             closing: false,
@@ -49,6 +58,23 @@ impl State {
     }
     pub(super) const fn actionable(&self) -> bool {
         self.presented && !self.refreshing && !self.closing && self.pending.is_none()
+    }
+    pub(super) const fn restart(&self) -> ReportRestartAvailability {
+        self.restart
+    }
+    /// Deny only the exact pending Restart; the original view and other actions remain usable.
+    pub(super) fn restart_unavailable(
+        &mut self,
+        id: ReportRequestId,
+        binding: ReportBinding,
+    ) -> Result<(), ReportSurfaceError> {
+        let pending = self.matching_request(id, binding)?;
+        if pending.intent != Intent::Action(ReportAction::DismissAndRequestRestart) {
+            return Err(ReportSurfaceError::rejected("report_restart_rejection_action"));
+        }
+        self.restart = ReportRestartAvailability::Unavailable;
+        self.completed_request();
+        Ok(())
     }
     pub(super) fn presented(&mut self) -> Result<(), ReportSurfaceError> {
         if self.presented || self.closing {
@@ -76,7 +102,8 @@ impl State {
         self.refreshing = true;
         Ok(())
     }
-    pub(super) fn replaced(&mut self, current: ReportBinding) {
+    pub(super) fn replaced(&mut self, current: ReportBinding, restart: ReportRestartAvailability) {
+        self.restart = restart;
         self.binding = current;
         self.refreshing = false;
         self.replacements += 1;
@@ -88,6 +115,7 @@ impl State {
     ) -> Result<Request, ReportSurfaceError> {
         if observed != self.binding
             || !self.actionable()
+            || !intent.allowed(self.restart)
             || matches!(intent, Intent::Action(ReportAction::Export(_)))
         {
             return Err(ReportSurfaceError::rejected("report_action_fence"));

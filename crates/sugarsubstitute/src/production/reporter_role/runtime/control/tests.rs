@@ -255,3 +255,73 @@ fn actual_pending_copy_keeps_first_wrong_wire_control_and_emits_no_surface_actio
     )??;
     Ok(())
 }
+
+#[test]
+fn authenticated_restart_rejection_resolves_only_matching_intent_without_ack_or_close()
+-> Result<(), Box<dyn std::error::Error>> {
+    let metadata = control()?;
+    let current =
+        ReportBinding::new(metadata.incident.key, metadata.incident.revision, metadata.session);
+    let old = ReportBinding::new(
+        current.incident(),
+        IncidentRevision::new(current.revision().get() - 1)?,
+        current.session(),
+    );
+    sugarsubstitute_desktop::report::copy_fixture::with_pending_report_restart(
+        old,
+        current,
+        |request, command| -> Result<(), Box<dyn std::error::Error>> {
+            let wire = DiagnosticRequestId::new(11)?;
+            let frame = DiagnosticFrame {
+                key: DiagnosticKey::new(
+                    current.incident().subject().coordinator(),
+                    DiagnosticRole::Reporter,
+                    DiagnosticSessionId::new(current.session().get())?,
+                ),
+                request: wire,
+                context: DiagnosticContext {
+                    incident: Some(metadata.incident),
+                    deadline: Some(DiagnosticDeadline::new(100, 10)?),
+                    ..DiagnosticContext::default()
+                },
+                command: DiagnosticCommand::RestartUnavailable { session: current.session() },
+            };
+            let mut bytes = [0u8; MAX_HEADER_BYTES];
+            let length = encode(frame, &mut bytes)?;
+            let rejected =
+                ControlResult::from_frame(decode(&bytes[..length])?)?.ok_or("Rejection missing")?;
+            assert!(rejected.validate(command, wire).is_ok());
+            assert!(
+                rejected
+                    .validate(ReportCommand::new(current, ReportAction::Dismiss), wire)
+                    .is_err()
+            );
+            assert!(rejected.validate(command, DiagnosticRequestId::new(12)?).is_err());
+            let role = ReporterRole::parse(
+                [
+                    "--internal-production-reporter",
+                    "--bootstrap",
+                    "1",
+                    "--until-qpc",
+                    "100",
+                    "--qpc-frequency",
+                    "10",
+                    "--locale",
+                    "en",
+                ]
+                .map(std::ffi::OsString::from),
+            )?;
+            let mut session = ReporterSession::new(role);
+            session.pending = Some((request, command, wire));
+            session.current = Some(current);
+            session.control(rejected)?;
+            assert!(session.pending.is_none());
+            assert_eq!(session.current, Some(current));
+            assert!(
+                matches!(session.update,Some(ReportSurfaceUpdate::RestartUnavailable { request:actual,binding }) if actual==request && binding==current)
+            );
+            Ok(())
+        },
+    )??;
+    Ok(())
+}

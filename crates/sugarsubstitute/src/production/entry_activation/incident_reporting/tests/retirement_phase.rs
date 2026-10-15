@@ -29,14 +29,38 @@ fn retirement_phase_actual_unobserved_preparation_cannot_issue_recycle_or_dispos
         Some(client.submit_blocking(&scope, spec()?, |context| {
             Err(delivery::Failure::test_cause(&context, "Original phase failure"))
         })?);
-    assert!(receiving.receiving_session.retire_healthy_preparation(inert_binding()?).is_err());
+    assert!(
+        receiving
+            .receiving_session
+            .retire_healthy_preparation(
+                inert_binding()?,
+                DiagnosticKey::new(
+                    inert_binding()?.incident().subject().coordinator(),
+                    DiagnosticRole::Reporter,
+                    DiagnosticSessionId::new(inert_binding()?.session().get())?
+                )
+            )
+            .is_err()
+    );
     assert!(receiving.receiving_session.preparing()?.metadata.job.is_some());
     assert!(receiving.receiving_session.recycled().is_none());
     assert!(receiving.receiving_session.retired().is_none());
     assert!(receiving.receiving_session.validate_disposal().is_err());
     assert!(receiving.normal_close_budget().is_none());
     receiving.capture(&batch(&client, &wake)?)?;
-    assert!(receiving.receiving_session.retire_healthy_preparation(inert_binding()?).is_err());
+    assert!(
+        receiving
+            .receiving_session
+            .retire_healthy_preparation(
+                inert_binding()?,
+                DiagnosticKey::new(
+                    inert_binding()?.incident().subject().coordinator(),
+                    DiagnosticRole::Reporter,
+                    DiagnosticSessionId::new(inert_binding()?.session().get())?
+                )
+            )
+            .is_err()
+    );
     drop(owner);
     assert_eq!(scope.snapshot().reserved_bytes, 16 * 1024);
     drop(receiving);
@@ -58,7 +82,19 @@ fn retirement_phase_repeated_failure_denial_keeps_same_cause_and_original_delive
     let original =
         std::ptr::from_ref(receiving.failure().ok_or("Actual phase cause missing")?).cast::<()>();
     for _ in 0..2 {
-        assert!(receiving.receiving_session.retire_healthy_preparation(inert_binding()?).is_err());
+        assert!(
+            receiving
+                .receiving_session
+                .retire_healthy_preparation(
+                    inert_binding()?,
+                    DiagnosticKey::new(
+                        inert_binding()?.incident().subject().coordinator(),
+                        DiagnosticRole::Reporter,
+                        DiagnosticSessionId::new(inert_binding()?.session().get())?
+                    )
+                )
+                .is_err()
+        );
         assert!(receiving.receiving_session.recycled().is_none());
         assert!(receiving.receiving_session.retired().is_none());
         assert!(receiving.receiving_session.validate_disposal().is_err());

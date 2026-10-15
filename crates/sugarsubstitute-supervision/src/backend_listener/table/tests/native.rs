@@ -108,6 +108,8 @@ fn actual_sdk_workspace_is_funded_once_retained_after_job_and_freed_before_final
     drop(job);
     drop(completion.memory);
     drop(completion.native_handles);
+    // Terminal delivery precedes worker-context destruction; join while both returned claims remain held.
+    drop(executor);
     assert_eq!(scope.snapshot().reserved_bytes, 16 * 1024 * 1024);
     drop(storage);
     assert_eq!(scope.snapshot().reserved_bytes, 16 * 1024 * 1024);

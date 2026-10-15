@@ -55,6 +55,13 @@ impl NativeWriteExpiry {
             ) if *expected == lease && *expected_ack == acknowledged_delivery => {
                 Purpose::OutputPull
             }
+            (
+                WirePayload::RetryBackend { identity: expected, failed: expected_failed },
+                sugarsubstitute_supervision::lifecycle_protocol::DecodedPayload::RetryBackend {
+                    identity,
+                    failed,
+                },
+            ) if *expected == identity && *expected_failed == failed => Purpose::BackendRetry,
             _ => return Err(Box::new(error)),
         };
         Ok(Self { header: message.header, original, purpose, cause: error })

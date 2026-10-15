@@ -10,17 +10,28 @@ use sugarsubstitute_contracts::{
 pub(super) struct RestartState {
     original: Option<EntrySetupBudget>,
     admitted: bool,
+    fresh_shutdown: Option<ShutdownBudget>,
     pub(super) installation_pending: bool,
 }
 impl RestartState {
     pub(super) const fn new() -> Self {
-        Self { original: None, admitted: false, installation_pending: false }
+        Self { original: None, admitted: false, fresh_shutdown: None, installation_pending: false }
     }
     pub(super) fn for_projection(restart: bool) -> Self {
         Self { installation_pending: restart, ..Self::new() }
     }
     pub(super) fn deadline(&self) -> Option<Moment> {
-        if self.admitted { None } else { self.original.map(EntrySetupBudget::until) }
+        if self.admitted {
+            None
+        } else {
+            self.original
+                .map(EntrySetupBudget::until)
+                .or_else(|| self.fresh_shutdown.map(|budget| budget.settle_until))
+        }
+    }
+    /// The existing original cleanup interval closes admission for this current source.
+    pub(super) fn closing_current(&self) -> bool {
+        self.fresh_shutdown.is_some() && !self.admitted
     }
 }
 impl ProductionActivation {
@@ -29,9 +40,10 @@ impl ProductionActivation {
         if self.closing || !resources.authority.serving() {
             return Ok(());
         }
-        let Some(previous) = self.incidents.reporting.restart_run(&mut self.incidents.host)? else {
+        let Some(target) = self.incidents.reporting.restart_run(&mut self.incidents.host)? else {
             return Ok(());
         };
+        let previous = target.run();
         let Some(at) = self
             .records
             .iter()
@@ -52,8 +64,48 @@ impl ProductionActivation {
         {
             return Err("Actual restart coordinator changed".into());
         }
+        let current_recovery =
+            matches!(target, incident_reporting::RestartTarget::CurrentRecovery(_));
+        // A seed already admitted for this current startup must complete its genuine
+        // launch/exit path. It cannot be reclassified as a never-issued record.
+        if current_recovery
+            && record.seed.started()
+            && record.start.as_ref().is_none_or(|start| start.ticket.is_none())
+            && record.retired.is_none()
+        {
+            return Ok(());
+        }
+        if current_recovery && !record.closed {
+            let budget = match record.restart.fresh_shutdown {
+                Some(budget) => budget,
+                None => {
+                    let budget = ShutdownBudget::new(resources.client.now()?)?;
+                    record.restart.fresh_shutdown = Some(budget);
+                    budget
+                }
+            };
+            let backend = self.backend.as_mut().ok_or("Actual current restart backend missing")?;
+            Self::close_record(
+                record,
+                backend.backend.as_mut(),
+                self.capture.as_ref(),
+                resources,
+                budget,
+            )?;
+        }
+        let never_issued = current_recovery
+            && record.closed
+            && record.parent.is_none()
+            && !record.seed.started()
+            && !record.seeded
+            && record.failed.is_none()
+            && record.start.as_ref().is_none_or(|start| start.never_launched());
+        if never_issued && let Some(completed) = &mut record.projected {
+            projection::return_unused_source(&mut completed.outcome);
+        }
         if !record.closed
-            || record.retired.as_ref().is_none_or(|actual| actual.run() != previous)
+            || (!never_issued
+                && record.retired.as_ref().is_none_or(|actual| actual.run() != previous))
             || !record.seed.delivered()
             || !record.collection.delivered()
             || record.attach.is_some()
@@ -75,8 +127,12 @@ impl ProductionActivation {
         if resources.finite.owner_id() != resources.native.owner_id() {
             return Err("Actual restart execution owners changed".into());
         }
-        let start = record.start.as_ref().ok_or("Actual registered desktop source missing")?;
-        let JobOutcome::Success(value) = &start.projection.outcome else {
+        let completed = if let Some(start) = &record.start {
+            &start.projection
+        } else {
+            record.projected.as_ref().ok_or("Actual registered current projection missing")?
+        };
+        let JobOutcome::Success(value) = &completed.outcome else {
             return Err("Actual registered startup missing".into());
         };
         let run = RunKey { generation: previous.generation.next()?, ..previous };

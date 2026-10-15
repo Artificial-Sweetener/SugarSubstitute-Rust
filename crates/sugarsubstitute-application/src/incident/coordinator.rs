@@ -106,11 +106,13 @@ impl IncidentCoordinator {
             .iter()
             .position(Option::is_none)
             .or_else(|| {
-                if self.recovery.is_some() && !self.recovery_closed {
-                    None
-                } else {
-                    self.records.iter().position(|r| r.as_ref().is_some_and(Record::reclaimable))
-                }
+                self.records.iter().position(|slot| {
+                    slot.as_ref().is_some_and(|record| {
+                    record.reclaimable() && (self.recovery.is_none() || self.recovery_closed
+                        || matches!(record.source_scope, IncidentSourceScope::Recovered(source)
+                            if source.historical_operation().is_none()))
+                })
+                })
             })
             .ok_or(IncidentDecisionError::Saturated)
     }

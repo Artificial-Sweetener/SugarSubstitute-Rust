@@ -130,6 +130,11 @@ pub(super) fn transaction(rig: &Rig) -> TestResult<ProfileTransaction> {
                 std::path::PathBuf::from(r"E:\profile"),
                 ServedFrontendVersions::new("1.0.0".to_owned(), "1.0.0".to_owned())?,
                 MainWindowSettings {
+                    recovery: sugarsubstitute_desktop::MainRecoveryLabels {
+                        retry: sugarsubstitute_contracts::localization::messages("en").retry,
+                        retry_ready: sugarsubstitute_contracts::localization::messages("en")
+                            .retry_ready,
+                    },
                     logical_width: 800,
                     logical_height: 600,
                     dark: true,

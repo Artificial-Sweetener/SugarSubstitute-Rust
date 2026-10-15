@@ -64,6 +64,10 @@ pub enum ResourceCommand {
     Release(LeaseKey),
     /// Retain this exact lease across an authorized frontend reload.
     Reload(LeaseKey),
+    /// Request retry of this connection's exact invalidated managed lease.
+    /// The application checks actual predecessor settlement and retained target;
+    /// this request supplies neither a new target nor native restart authority.
+    RetryDead(LeaseKey),
 }
 /// Decode operation data; the owner separately checks the registered binding.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -103,6 +107,24 @@ pub struct ResourceReply {
     /// Recorded bounded result.
     pub outcome: RequestOutcome,
 }
+/// Notify one exact granted lease of its managed resource's observed death.
+/// This matching fact grants no process control or proof of native settlement.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GrantedResourceInvalidation {
+    /// Full original run, connection, resource generation and lease identity.
+    pub lease: LeaseKey,
+    /// Original unsigned 32-bit native managed process exit status, without narrowing.
+    pub status: u32,
+}
+/// Associate an invalidated lease with its already-retained successor interest.
+/// Receipt does not authorize Main construction, native effects or child adoption.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GrantedResourceReplacement {
+    /// Exact invalidated predecessor association.
+    pub previous: LeaseKey,
+    /// Exact successor interest whose resource has reached actual readiness.
+    pub current: LeaseKey,
+}
 /// Ask the native registry to perform one operation; not proof of execution.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ResourceEffect {
@@ -124,13 +146,19 @@ pub enum ResourceEffect {
         resource: ResourceKey,
     },
 }
-/// Return bounded replies and effects; duplicate requests return no effects.
+/// Return bounded resource results and effects under their full original identities.
+/// The application bounds each lease notification vector to 256 associations.
+/// These in-process values are not serialized or native authority.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ResourceTransition {
     /// At most 256 admitted lease/request replies; each retains exact identity.
     pub replies: Vec<ResourceReply>,
     /// At most 64 effects when a run disconnects; ordinary requests emit at most one.
     pub effects: Vec<ResourceEffect>,
+    /// At most 256 granted leases invalidated by an actual managed resource exit.
+    pub invalidations: Vec<GrantedResourceInvalidation>,
+    /// At most 256 exact predecessor/successor pairs after successor readiness.
+    pub replacements: Vec<GrantedResourceReplacement>,
 }
 /// Report actual adapter facts; never accepted as decoded request payloads.
 #[derive(Debug)]
@@ -151,6 +179,20 @@ pub enum ResourceObservation {
         /// Verified endpoint.
         origin: LoopbackOrigin,
     },
+    /// The registered managed process actually exited unexpectedly.
+    /// The adapter supplies the original registry binding, status and owned cause;
+    /// EOF, attachment loss or frontend disconnection cannot establish this fact.
+    ManagedExited {
+        /// Exact managed acquisition lifetime.
+        resource: ResourceKey,
+        /// Original same-process native registry identity, never an OS PID.
+        process: ProcessKey,
+        /// Original unsigned 32-bit native process exit status.
+        status: u32,
+        /// Original owned cause classified as `LifecycleFailureCode::UnexpectedExit`.
+        /// The application validates its classification and current process binding.
+        failure: LifecycleFailure,
+    },
     /// Preparation/cleanup failed; native ownership remains retained until settlement.
     Failed {
         /// Acquisition lifetime.
@@ -169,6 +211,7 @@ impl ResourceObservation {
             Self::ClaimAcquired(key) | Self::Settled(key) => *key,
             Self::OwnedStarted { resource, .. }
             | Self::Ready { resource, .. }
+            | Self::ManagedExited { resource, .. }
             | Self::Failed { resource, .. } => *resource,
         }
     }

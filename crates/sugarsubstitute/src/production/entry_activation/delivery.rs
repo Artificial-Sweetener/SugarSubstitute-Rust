@@ -54,14 +54,22 @@ impl TransitionDelivery {
         resources: &mut EntryResources<'_>,
     ) -> Result<()> {
         self.deliver(|forwarded| {
+            forwarded.capture_contexts(backend)?;
             for record in records.iter_mut().flatten().map(|held| held.record.as_mut()) {
                 if let Some(retired) = &record.retired {
                     forwarded.retire(retired)?;
                 } else if record.parent.is_some() && !record.closed {
-                    forwarded.deliver(record.run, |transition| {
-                        with_parent(record, backend, capture, resources, |parent, borrowed| {
-                            Ok(parent.backend_transition(transition, borrowed)?)
-                        })
+                    forwarded.deliver(record.run, |transition, contexts| {
+                        with_parent(
+                            record,
+                            backend,
+                            capture,
+                            resources,
+                            false,
+                            |parent, borrowed| {
+                                Ok(parent.backend_transition(transition, contexts, borrowed)?)
+                            },
+                        )
                     })?;
                 }
             }
