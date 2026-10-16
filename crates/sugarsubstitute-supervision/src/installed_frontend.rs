@@ -13,6 +13,7 @@ pub mod boundary_fixture;
 mod manifest;
 #[allow(unsafe_code)]
 mod native;
+mod progress;
 mod state;
 #[cfg(test)]
 mod tests;

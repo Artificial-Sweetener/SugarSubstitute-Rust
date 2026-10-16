@@ -80,12 +80,14 @@ impl SplashDemo {
                     },
                     bounds: ControlBounds { x: 466.0, y: 0.0, width: 46.0, height: 32.0 },
                     close: false,
+                    visible: true,
                 },
                 AccessibleControl {
                     id: 2,
                     label: messages.cancel,
                     bounds: ControlBounds { x: 512.0, y: 0.0, width: 46.0, height: 32.0 },
                     close: true,
+                    visible: true,
                 },
             ],
         })

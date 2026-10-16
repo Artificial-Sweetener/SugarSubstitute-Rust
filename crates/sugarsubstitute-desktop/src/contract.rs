@@ -152,6 +152,8 @@ pub struct AccessibleControl {
     pub bounds: ControlBounds,
     /// Route activation to the surface's native close operation.
     pub close: bool,
+    /// Expose this stable peer and enable its callback action; false hides and disables it.
+    pub visible: bool,
 }
 
 /// Bound an accessible control to its painted logical client rectangle.
@@ -220,7 +222,8 @@ pub trait WindowContent {
     /// Report whether the current presentation needs a continuous animation cadence.
     /// Static content waits for native expose, input, or application events.
     fn animating(&self) -> bool;
-    /// Borrow the complete accessible pushbutton snapshot for this surface.
+    /// Borrow every stable accessible peer for this surface, including hidden controls.
+    /// IDs and native-close actions stay fixed; visibility changes preserve the peer lifetime.
     /// Identities and geometry match the painted controls; the adapter owns native peers.
     fn accessible_controls(&self) -> &[AccessibleControl];
     /// Activate a content-owned control by its registered identity; return visible dirty state.

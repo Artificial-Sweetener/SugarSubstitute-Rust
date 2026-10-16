@@ -12,12 +12,12 @@ use windows::Win32::UI::{
     },
 };
 
-/// Initial id4 is a genuine disabled, nonvisible child; splash peer policy is unchanged.
-pub(super) fn initial_style(mode: PaintMode, id: u16) -> WINDOW_STYLE {
+/// Hidden snapshots and the Main retry peer begin as disabled, nonvisible children.
+pub(super) fn initial_style(mode: PaintMode, id: u16, visible: bool) -> WINDOW_STYLE {
     WS_CHILD
         | WS_TABSTOP
         | WINDOW_STYLE(BS_PUSHBUTTON as u32)
-        | if matches!(mode, PaintMode::NativeButtons(_)) && id == 4 {
+        | if !visible || matches!(mode, PaintMode::NativeButtons(_)) && id == 4 {
             WS_DISABLED
         } else {
             WS_VISIBLE
@@ -85,6 +85,7 @@ impl Controls {
             apply(&mut port, presentation)?;
         }
         peer.value.snapshot.label = presentation.label;
+        peer.value.snapshot.visible = presentation.visible;
         Ok(())
     }
 }

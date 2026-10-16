@@ -253,3 +253,5 @@ fn cleanup_failure_preserves_partial_state_charge_and_original_cause() -> TestRe
 }
 
 mod stopped;
+
+mod progress;

@@ -233,7 +233,7 @@ impl MainActor {
             width,
             window.is_maximized(),
             settings.labels,
-            self.recovery.presentation(settings.recovery).label,
+            self.recovery.presentation(settings.recovery),
         ))
     }
     pub(super) fn resize(&mut self) -> Result<(), DesktopError> {

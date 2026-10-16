@@ -188,6 +188,7 @@ impl CoordinatorBackend {
         record.source_job = true;
         record.source_closed = false;
         tracing::info!(operation="backend_preparation_transition",resource=?key,stage="SourceSubmitted",
+            job=?spec.id,scope=?record.scope.id(),original_until=?spec.deadline,
             "Original backend preparation advanced");
         if let BackendTarget::Managed(configuration) = &record.target {
             let spec = Self::spec(

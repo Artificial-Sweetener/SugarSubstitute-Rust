@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Pin local source files, hash their complete bytes and retain enumeration handles before use.
 use super::{
+    progress::{Phase, Progress},
     state::{Inspection, SourcePort, checkpoint},
     *,
 };
@@ -27,71 +28,92 @@ impl SourcePort for SystemPort {
         retained: &mut Inspection,
         context: &JobContext,
     ) -> Result<(), FrontendSourceError> {
-        retained
-            .handles
-            .try_reserve_exact(16384)
-            .map_err(|e| FrontendSourceError::new("source_handle_storage", e))?;
-        let mut manifest = FrontendSourceManifest {
-            frontend: String::new(),
-            cube: String::new(),
-            assets: Vec::new(),
-            cube_paths: Vec::new(),
-            script: PathBuf::new(),
-            script_hash: [0; 32],
-        };
-        let package = pin_directory(&input.package, retained, context)?;
-        let cube = pin_directory(&input.cube, retained, context)?;
-        if cube.file_name().and_then(|name| name.to_str()) != Some("SugarCubes") {
-            return Err(FrontendSourceError::invalid("cube_extension_directory_name"));
-        }
-        let script = pin(&input.script, false, retained, context)?;
-        manifest.script = paths::final_path(
-            &retained.handles[script],
-            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
-                &retained.handles[script].budget(),
+        let mut progress = Progress::new(context);
+        let result: Result<(), FrontendSourceError> = (|| {
+            retained
+                .handles
+                .try_reserve_exact(16384)
+                .map_err(|e| FrontendSourceError::new("source_handle_storage", e))?;
+            let mut manifest = FrontendSourceManifest {
+                frontend: String::new(),
+                cube: String::new(),
+                assets: Vec::new(),
+                cube_paths: Vec::new(),
+                script: PathBuf::new(),
+                script_hash: [0; 32],
+            };
+            let package = pin_directory(&input.package, retained, context)?;
+            let cube = pin_directory(&input.cube, retained, context)?;
+            if cube.file_name().and_then(|name| name.to_str()) != Some("SugarCubes") {
+                return Err(FrontendSourceError::invalid("cube_extension_directory_name"));
+            }
+            progress.phase(Phase::BackendScript, context.now(), retained.handles.len());
+            let script = pin(&input.script, false, retained, context)?;
+            manifest.script = paths::final_path(
+                &retained.handles[script],
+                &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                    &retained.handles[script].budget(),
+                )
+                .map_err(|cause| FrontendSourceError::new("source_native_phase", cause))?,
+                crate::protected_storage::native_name::NativeNameDestination::Ordinary,
             )
-            .map_err(|cause| FrontendSourceError::new("source_native_phase", cause))?,
-            crate::protected_storage::native_name::NativeNameDestination::Ordinary,
-        )
-        .and_then(crate::protected_storage::native_name::NativeName::into_ordinary)
-        .map_err(|e| FrontendSourceError::new("backend_script_path", e))?;
-        let length = file_size(script, MAX_FRONTEND_ASSET_BYTES, retained, context)?;
-        let mut digest = Sha256::new();
-        if stream(script, retained, context, |chunk| {
-            digest.update(chunk);
+            .and_then(crate::protected_storage::native_name::NativeName::into_ordinary)
+            .map_err(|e| FrontendSourceError::new("backend_script_path", e))?;
+            let length = file_size(script, MAX_FRONTEND_ASSET_BYTES, retained, context)?;
+            let mut digest = Sha256::new();
+            if stream(script, retained, context, &mut progress, |chunk| {
+                digest.update(chunk);
+                Ok(())
+            })? != length
+            {
+                return Err(FrontendSourceError::invalid("backend_script_changed_length"));
+            }
+            manifest.script_hash = digest.finalize().into();
+            progress.phase(Phase::FrontendMetadata, context.now(), retained.handles.len());
+            let metadata =
+                read_metadata(&input.metadata, 64 * 1024, retained, context, &mut progress)?;
+            manifest.frontend = super::manifest::distribution_version(&metadata)?;
+            progress.phase(Phase::CubeMetadata, context.now(), retained.handles.len());
+            manifest.cube = super::manifest::cube_version(&read_metadata(
+                &cube.join("pyproject.toml"),
+                64 * 1024,
+                retained,
+                context,
+                &mut progress,
+            )?)?;
+            super::manifest::cube_web_directory(&read_metadata(
+                &cube.join("__init__.py"),
+                1024 * 1024,
+                retained,
+                context,
+                &mut progress,
+            )?)?;
+            progress.phase(Phase::FrontendInventory, context.now(), retained.handles.len());
+            inventory(
+                &package.join("static"),
+                false,
+                &mut manifest,
+                retained,
+                context,
+                &mut progress,
+            )?;
+            progress.phase(Phase::CubeInventory, context.now(), retained.handles.len());
+            inventory(&cube.join("web"), true, &mut manifest, retained, context, &mut progress)?;
+            progress.phase(Phase::Manifest, context.now(), retained.handles.len());
+            if manifest.assets.is_empty()
+                || manifest.cube_paths.is_empty()
+                || !manifest.assets.iter().any(|asset| asset.path == "/index.html")
+            {
+                return Err(FrontendSourceError::invalid("source_runtime_inventory"));
+            }
+            manifest.assets.sort_by(|a, b| a.path.cmp(&b.path));
+            manifest.cube_paths.sort();
+            checkpoint(context)?;
+            retained.manifest = Some(Arc::new(manifest));
             Ok(())
-        })? != length
-        {
-            return Err(FrontendSourceError::invalid("backend_script_changed_length"));
-        }
-        manifest.script_hash = digest.finalize().into();
-        let metadata = read_metadata(&input.metadata, 64 * 1024, retained, context)?;
-        manifest.frontend = super::manifest::distribution_version(&metadata)?;
-        manifest.cube = super::manifest::cube_version(&read_metadata(
-            &cube.join("pyproject.toml"),
-            64 * 1024,
-            retained,
-            context,
-        )?)?;
-        super::manifest::cube_web_directory(&read_metadata(
-            &cube.join("__init__.py"),
-            1024 * 1024,
-            retained,
-            context,
-        )?)?;
-        inventory(&package.join("static"), false, &mut manifest, retained, context)?;
-        inventory(&cube.join("web"), true, &mut manifest, retained, context)?;
-        if manifest.assets.is_empty()
-            || manifest.cube_paths.is_empty()
-            || !manifest.assets.iter().any(|asset| asset.path == "/index.html")
-        {
-            return Err(FrontendSourceError::invalid("source_runtime_inventory"));
-        }
-        manifest.assets.sort_by(|a, b| a.path.cmp(&b.path));
-        manifest.cube_paths.sort();
-        checkpoint(context)?;
-        retained.manifest = Some(Arc::new(manifest));
-        Ok(())
+        })();
+        progress.finish(context.now(), retained.handles.len(), result.is_ok());
+        result
     }
     fn close(
         &self,
@@ -222,11 +244,12 @@ fn read_metadata(
     maximum: u64,
     retained: &mut Inspection,
     context: &JobContext,
+    progress: &mut Progress,
 ) -> Result<Vec<u8>, FrontendSourceError> {
     let index = pin(path, false, retained, context)?;
     let length = file_size(index, maximum, retained, context)?;
     let mut bytes = Vec::with_capacity(length as usize);
-    stream(index, retained, context, |chunk| {
+    stream(index, retained, context, progress, |chunk| {
         bytes.extend_from_slice(chunk);
         Ok(())
     })?;
@@ -256,6 +279,7 @@ fn stream(
     index: usize,
     retained: &Inspection,
     context: &JobContext,
+    progress: &mut Progress,
     mut consume: impl FnMut(&[u8]) -> Result<(), FrontendSourceError>,
 ) -> Result<u64, FrontendSourceError> {
     let mut scratch = [0; FRONTEND_STREAM_BYTES];
@@ -272,6 +296,7 @@ fn stream(
         if read == 0 {
             return Ok(total);
         }
+        progress.bytes(read as usize);
         total = total
             .checked_add(u64::from(read))
             .filter(|n| *n <= MAX_FRONTEND_ASSET_BYTES)
@@ -285,6 +310,7 @@ fn inventory(
     manifest: &mut FrontendSourceManifest,
     retained: &mut Inspection,
     context: &JobContext,
+    progress: &mut Progress,
 ) -> Result<(), FrontendSourceError> {
     let root = pin_directory(root, retained, context)?;
     let mut pending = vec![PathBuf::new()];
@@ -299,6 +325,7 @@ fn inventory(
             .map_err(|e| FrontendSourceError::new("source_enumeration_path", e))?;
         checkpoint(context)?;
         let mut data = WIN32_FIND_DATAW::default();
+        progress.directory();
         // SAFETY: The owned wildcard path and writable result structure live throughout the call.
         let raw = unsafe { FindFirstFileW(PCWSTR(query.as_ptr()), &mut data) }
             .map_err(|e| FrontendSourceError::new("source_enumeration_start", e))?;
@@ -314,6 +341,7 @@ fn inventory(
                 .map_err(|e| FrontendSourceError::new("source_entry_unicode", e))?;
             if name != "." && name != ".." {
                 entries += 1;
+                progress.entry();
                 if entries > 8192 || data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT.0 != 0 {
                     return Err(FrontendSourceError::invalid("source_entry_bound_or_reparse"));
                 }
@@ -336,7 +364,7 @@ fn inventory(
                     let index = pin(&root.join(child), false, retained, context)?;
                     let bytes = file_size(index, MAX_FRONTEND_ASSET_BYTES, retained, context)?;
                     let mut digest = Sha256::new();
-                    let observed = stream(index, retained, context, |chunk| {
+                    let observed = stream(index, retained, context, progress, |chunk| {
                         digest.update(chunk);
                         Ok(())
                     })?;
@@ -357,6 +385,7 @@ fn inventory(
                         FrontendAsset { path, bytes, hash: digest.finalize().into(), identity },
                         cube,
                     )?;
+                    progress.asset();
                 }
             }
             checkpoint(context)?;

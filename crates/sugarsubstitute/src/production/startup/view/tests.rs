@@ -87,7 +87,9 @@ fn recovery_control_is_localized_and_inert_until_policy_observes_settlement()
     for phase in [StartupPhase::PreparingConnection, StartupPhase::Failed, StartupPhase::Cancelling]
     {
         view.phase(phase);
-        assert_eq!(view.controls().len(), 2);
+        assert_eq!(view.controls().len(), 3);
+        assert_eq!(view.controls().iter().map(|control| control.id).collect::<Vec<_>>(), [1, 2, 3]);
+        assert!(!view.controls()[2].visible);
         assert!(!view.activate(3));
         view.pointer(PointerAction::Press, retry);
         view.pointer(PointerAction::Release, retry);
@@ -95,12 +97,15 @@ fn recovery_control_is_localized_and_inert_until_policy_observes_settlement()
     }
     view.phase(StartupPhase::Stopped);
     assert_eq!(view.controls()[2].label, "Retry");
+    assert!(view.controls()[2].visible);
     assert!(!view.controls()[2].close);
     view.pointer(PointerAction::Press, retry);
     view.pointer(PointerAction::Release, retry);
     assert!(view.take_retry());
     assert!(!view.take_retry());
     view.phase(StartupPhase::SplashFirstFrame);
+    assert_eq!(view.controls().len(), 3);
+    assert!(!view.controls()[2].visible);
     assert!(!view.activate(3));
     Ok(())
 }

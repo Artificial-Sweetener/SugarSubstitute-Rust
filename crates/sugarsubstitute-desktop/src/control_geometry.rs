@@ -71,6 +71,7 @@ mod tests {
             label: "Show Comfy output",
             bounds: ControlBounds { x: 466.0, y: 0.0, width: 46.0, height: 32.0 },
             close: false,
+            visible: true,
         };
         assert_eq!(
             physical_bounds(&control, 1.25)?,

@@ -107,6 +107,7 @@ impl InstalledFrontendOwner {
         let input = self.input.clone();
         let port = self.port.clone();
         let job = execution.submit_blocking(scope, spec, move |context| {
+            super::progress::worker_started(&context);
             checkpoint(&context)?;
             let claim = Arc::new(
                 context

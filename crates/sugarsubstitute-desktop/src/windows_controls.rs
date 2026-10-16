@@ -37,6 +37,10 @@ mod creation;
 use creation::{Creation, NativePort};
 #[path = "windows_controls_retry.rs"]
 mod retry;
+#[path = "windows_controls_state.rs"]
+mod state;
+#[path = "windows_controls_visibility.rs"]
+mod visibility;
 
 /// Retain a stable native identity and the last applied content snapshot.
 struct Peer {
@@ -112,7 +116,7 @@ impl Controls {
         self.creation.initialize(&mut port)
     }
 
-    /// Apply disclosure labels and DPI bounds without reconstructing native identities.
+    /// Apply labels, DPI bounds and availability without reconstructing native identities.
     pub(crate) fn update(&mut self, controls: &[AccessibleControl]) -> Result<(), DesktopError> {
         if !self.creation.writable() {
             return Err(DesktopError::message(
@@ -121,20 +125,18 @@ impl Controls {
             ));
         }
         validate_controls(controls)?;
-        if controls.len() != self.creation.peers.len() {
-            return Err(DesktopError::message(
-                "update_accessible_controls",
-                "control inventory changed during the surface lifetime",
-            ));
-        }
+        state::validate_inventory(&self.planned, controls)?;
         for (control, peer) in
             controls.iter().zip(self.creation.peers.iter_mut().map(|slot| &mut slot.value))
         {
-            if control.id != peer.snapshot.id || control.close != peer.snapshot.close {
-                return Err(DesktopError::message(
-                    "update_accessible_controls",
-                    "control identity or native action changed",
-                ));
+            if !control.visible {
+                visibility::update(
+                    &self.callback,
+                    self.creation.parent.as_ref(),
+                    peer,
+                    self.paint_mode,
+                    *control,
+                )?;
             }
             if control.label != peer.snapshot.label {
                 let label: Vec<u16> = control.label.encode_utf16().chain(Some(0)).collect();
@@ -158,6 +160,15 @@ impl Controls {
                 }
                 .map_err(|error| DesktopError::new("update_accessible_bounds", error))?;
                 peer.rect = rect;
+            }
+            if control.visible {
+                visibility::update(
+                    &self.callback,
+                    self.creation.parent.as_ref(),
+                    peer,
+                    self.paint_mode,
+                    *control,
+                )?;
             }
             peer.snapshot = *control;
         }
@@ -183,8 +194,12 @@ impl Controls {
         }
         // SAFETY: GetFocus only reads this calling UI thread's focus identity.
         let focus = unsafe { GetFocus() };
-        if let Some(peer) =
-            self.creation.peers.iter().map(|slot| &slot.value).find(|peer| peer.hwnd == focus)
+        if let Some(peer) = self
+            .creation
+            .peers
+            .iter()
+            .map(|slot| &slot.value)
+            .find(|peer| peer.snapshot.visible && peer.hwnd == focus)
         {
             let mut rect = peer.rect;
             rect.left += 3;
@@ -265,7 +280,7 @@ impl NativePort for ControlPort<'_> {
                 WINDOW_EX_STYLE::default(),
                 w!("BUTTON"),
                 PCWSTR(label.as_ptr()),
-                retry::initial_style(self.paint_mode, control.id),
+                retry::initial_style(self.paint_mode, control.id, control.visible),
                 rect.left,
                 rect.top,
                 rect.right - rect.left,
@@ -285,18 +300,7 @@ impl NativePort for ControlPort<'_> {
         })
     }
     fn register_peer(&mut self, peer: &Self::Peer) -> Result<(), DesktopError> {
-        self.callback.register(
-            peer.hwnd,
-            peer.snapshot.id,
-            match self.paint_mode {
-                PaintMode::NativeButtons(_) if peer.snapshot.id == 4 => None,
-                PaintMode::NativeButtons(identity) => {
-                    Some(NativeAction::MainControl(identity, peer.snapshot.id))
-                }
-                PaintMode::PreparedPixels if peer.snapshot.close => Some(NativeAction::Close),
-                PaintMode::PreparedPixels => Some(NativeAction::Activate(peer.snapshot.id)),
-            },
-        )
+        self.callback.register(peer.hwnd, peer.snapshot.id, action(self.paint_mode, peer.snapshot))
     }
     fn install_peer(&mut self, peer: &Self::Peer) -> Result<(), DesktopError> {
         let registration = peer.registration.as_ref().ok_or_else(|| {
@@ -331,5 +335,18 @@ impl NativePort for ControlPort<'_> {
     }
     fn callbacks_retired(&self) -> bool {
         Rc::strong_count(self.callback) == 1
+    }
+}
+
+/// Derive callback eligibility from the same current snapshot before native input can route.
+fn action(mode: PaintMode, control: AccessibleControl) -> Option<NativeAction> {
+    if !control.visible {
+        return None;
+    }
+    match mode {
+        PaintMode::NativeButtons(_) if control.id == 4 => None,
+        PaintMode::NativeButtons(identity) => Some(NativeAction::MainControl(identity, control.id)),
+        PaintMode::PreparedPixels if control.close => Some(NativeAction::Close),
+        PaintMode::PreparedPixels => Some(NativeAction::Activate(control.id)),
     }
 }

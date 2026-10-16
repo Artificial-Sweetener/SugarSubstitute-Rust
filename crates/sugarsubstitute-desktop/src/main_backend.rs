@@ -119,7 +119,9 @@ impl Recovery {
     }
     /// Native callbacks carry this whole immutable tuple, never id4 alone.
     pub(crate) fn action(&self) -> Option<RetryAction> {
-        let (failed, MainBackendState::RetryReady) = self.outage? else { return None };
+        let (failed, MainBackendState::RetryReady) = self.outage? else {
+            return None;
+        };
         (!self.closed).then_some(RetryAction {
             identity: self.identity,
             failed,
@@ -159,18 +161,18 @@ impl Recovery {
         self.closed = true;
     }
 }
-/// Keep original caption identities/geometry while reserving the fourth native peer.
+/// Keep caption identities/geometry while carrying the actual recovery owner's Retry availability.
 pub(crate) fn caption_controls(
     width: f64,
     maximized: bool,
     labels: crate::MainCaptionLabels,
-    retry: &'static str,
+    retry: RetryPresentation,
 ) -> [crate::AccessibleControl; 4] {
     let names = [
         labels.minimize,
         if maximized { labels.restore } else { labels.maximize },
         labels.close,
-        retry,
+        retry.label,
     ];
     std::array::from_fn(|index| crate::AccessibleControl {
         id: index as u16 + 1,
@@ -182,6 +184,7 @@ pub(crate) fn caption_controls(
             height: 40.0,
         },
         close: index == 2,
+        visible: index != 3 || retry.visible,
     })
 }
 #[cfg(test)]

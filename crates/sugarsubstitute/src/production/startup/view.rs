@@ -54,18 +54,21 @@ impl StartupView {
                     label: messages.show_output,
                     bounds: ControlBounds { x: 466.0, y: 0.0, width: 46.0, height: 32.0 },
                     close: false,
+                    visible: true,
                 },
                 AccessibleControl {
                     id: 2,
                     label: messages.cancel,
                     bounds: ControlBounds { x: 512.0, y: 0.0, width: 46.0, height: 32.0 },
                     close: true,
+                    visible: true,
                 },
                 AccessibleControl {
                     id: 3,
                     label: messages.retry,
                     bounds: ControlBounds { x: 24.0, y: 486.0, width: 510.0, height: 48.0 },
                     close: false,
+                    visible: false,
                 },
             ],
         }
@@ -106,6 +109,7 @@ impl StartupView {
     }
     /// Project the sole application phase into native copy and accessible affordances.
     pub(super) fn phase(&mut self, phase: StartupPhase) {
+        self.controls[2].visible = phase == StartupPhase::Stopped;
         self.appearance.status = match phase {
             StartupPhase::Failed | StartupPhase::Cancelling => {
                 sugarsubstitute_splash::StartupStatus::Settling
@@ -176,13 +180,9 @@ impl StartupView {
         }
         true
     }
-    /// Expose stable native accessibility peers for the exact painted caption controls.
+    /// Keep every native identity preallocated; phase changes only Retry visibility and eligibility.
     pub(super) fn controls(&self) -> &[AccessibleControl] {
-        if self.appearance.status == sugarsubstitute_splash::StartupStatus::RetryReady {
-            &self.controls
-        } else {
-            &self.controls[..2]
-        }
+        &self.controls
     }
     /// Activate only the non-close disclosure control; desktop owns native close intent.
     pub(super) fn activate(&mut self, id: u16) -> bool {

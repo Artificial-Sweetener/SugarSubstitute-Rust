@@ -173,7 +173,7 @@ fn closing_and_exhausted_revision_never_reset_or_wrap_action_identity() -> TestR
     Ok(())
 }
 #[test]
-fn caption_fourth_peer_keeps_original_close_minimize_maximize_and_resize_geometry() {
+fn caption_fourth_peer_keeps_original_close_minimize_maximize_and_resize_geometry() -> TestResult {
     let captions = crate::MainCaptionLabels {
         minimize: "min",
         maximize: "max",
@@ -181,7 +181,12 @@ fn caption_fourth_peer_keeps_original_close_minimize_maximize_and_resize_geometr
         close: "close",
     };
     for (width, maximized) in [(304.0, false), (1280.0, false), (1600.0, true)] {
-        let controls = caption_controls(width, maximized, captions, "Retry");
+        let controls = caption_controls(
+            width,
+            maximized,
+            captions,
+            Recovery::new(identity()?).presentation(labels()),
+        );
         assert_eq!(controls.map(|control| control.id), [1, 2, 3, 4]);
         for (index, control) in controls[..3].iter().enumerate() {
             assert_eq!(control.bounds.x, width - 144.0 + index as f64 * 48.0);
@@ -193,6 +198,7 @@ fn caption_fourth_peer_keeps_original_close_minimize_maximize_and_resize_geometr
         assert!(controls[3].bounds.x + controls[3].bounds.width <= controls[0].bounds.x);
         assert!(!controls[3].close);
     }
+    Ok(())
 }
 #[test]
 fn duplicate_presentation_is_inert_and_shared_retrying_has_no_click_mapping() -> TestResult {

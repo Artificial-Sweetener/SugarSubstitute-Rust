@@ -92,16 +92,16 @@ impl RetryPort for Port {
 fn initial_fourth_native_peer_has_no_visible_or_enabled_style_and_others_are_unchanged()
 -> TestResult {
     let (identity, _) = current()?;
-    let hidden = initial_style(PaintMode::NativeButtons(identity), 4);
+    let hidden = initial_style(PaintMode::NativeButtons(identity), 4, false);
     assert_eq!(hidden & WS_VISIBLE, WINDOW_STYLE::default());
     assert_eq!(hidden & WS_DISABLED, WS_DISABLED);
     assert_eq!(hidden & WS_CHILD, WS_CHILD);
     for id in 1..=3 {
-        let existing = initial_style(PaintMode::NativeButtons(identity), id);
+        let existing = initial_style(PaintMode::NativeButtons(identity), id, true);
         assert_eq!(existing & WS_VISIBLE, WS_VISIBLE);
         assert_eq!(existing & WS_DISABLED, WINDOW_STYLE::default());
     }
-    assert_eq!(initial_style(PaintMode::PreparedPixels, 4) & WS_VISIBLE, WS_VISIBLE);
+    assert_eq!(initial_style(PaintMode::PreparedPixels, 4, true) & WS_VISIBLE, WS_VISIBLE);
     Ok(())
 }
 #[test]
@@ -166,4 +166,69 @@ fn compiled_largest_retry_layout_fits_original_metadata_and_overflow_rejects() {
     assert!(bytes.is_some_and(|bytes| bytes <= 512 * 1024));
     assert!(Controls::storage_bytes(usize::MAX).is_none());
     assert_eq!(crate::MainWindowRequest::KNOWN_STORAGE_BYTES, 4 * 1024 * 1024);
+}
+
+/// The generic resize boundary cannot construct a Main retry action; only Recovery supplies it.
+impl super::super::state::VisibilityPort for Port {
+    fn live(&self) -> Result<(), DesktopError> {
+        RetryPort::live(self)
+    }
+    fn action(&mut self, _available: bool) -> Result<(), DesktopError> {
+        RetryPort::action(self, None)
+    }
+    fn enabled(&mut self, enabled: bool) -> Result<(), DesktopError> {
+        RetryPort::enabled(self, enabled)
+    }
+    fn visible(&mut self, visible: bool) -> Result<(), DesktopError> {
+        RetryPort::visible(self, visible)
+    }
+}
+
+#[test]
+fn actual_recovery_caption_resize_keeps_ready_action_and_retrying_disabled_peer() -> TestResult {
+    let (identity, failed) = current()?;
+    let mut owner = Recovery::new(identity);
+    let labels = MainRecoveryLabels { retry: "Retry", retry_ready: "Retry ready" };
+    let captions = crate::MainCaptionLabels {
+        minimize: "Minimize",
+        maximize: "Maximize",
+        restore: "Restore",
+        close: "Close",
+    };
+    let mut port = Port::new();
+    owner.present(identity, failed, MainBackendState::RetryReady)?;
+    let ready = owner.presentation(labels);
+    apply(&mut port, ready)?;
+    let actual_action = port.action.ok_or("Actual Main retry mapping absent")?;
+    let mut retained = crate::main_backend::caption_controls(1280.0, false, captions, ready);
+    // The existing present_retry commits actual native visibility into this retained peer snapshot.
+    retained[3].visible = port.visible;
+    port.calls.clear();
+    for (width, maximized) in [(1600.0, true), (960.0, false)] {
+        let resized = crate::main_backend::caption_controls(
+            width,
+            maximized,
+            captions,
+            owner.presentation(labels),
+        );
+        super::super::state::validate_inventory(&retained, &resized)?;
+        super::super::state::update_visibility(retained[3], resized[3], &mut port)?;
+        assert!(port.visible && port.enabled);
+        assert_eq!(port.action, Some(actual_action));
+        assert!(port.calls.is_empty());
+        retained = resized;
+    }
+    assert!(owner.consume(actual_action)?.is_some());
+    apply(&mut port, owner.presentation(labels))?;
+    assert!(port.visible && !port.enabled && port.action.is_none());
+    retained[3].visible = port.visible;
+    port.calls.clear();
+    let resized =
+        crate::main_backend::caption_controls(1920.0, true, captions, owner.presentation(labels));
+    super::super::state::validate_inventory(&retained, &resized)?;
+    super::super::state::update_visibility(retained[3], resized[3], &mut port)?;
+    assert!(port.visible && !port.enabled && port.action.is_none());
+    assert!(port.calls.is_empty());
+    assert!(owner.consume(actual_action)?.is_none());
+    Ok(())
 }
