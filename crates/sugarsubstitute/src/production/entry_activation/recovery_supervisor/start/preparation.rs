@@ -237,12 +237,8 @@ impl DesktopStart {
         if pipe.control().prepared_key() != Some(state.grant.key()) {
             return Ok(false);
         }
-        pipe.control().validate_current_admission()?;
-        self.pipe
-            .as_ref()
-            .ok_or("Actual direct UI transport missing")?
-            .control
-            .validate_current_admission()?;
+        let direct = self.pipe.as_ref().ok_or("Actual direct UI transport missing")?;
+        pipe.control().validate_prepared_carrier(&state.grant, &direct.control)?;
         let registry = resources.authority.registry().ok_or("Actual recovery registry missing")?;
         self.profile
             .recovery_launch_acknowledgement_allowed(registry, &state.grant, previous)

@@ -20,6 +20,24 @@ pub struct RecoveryCarrierBootstrapRejection {
     pub desktop: LifecyclePipeBootstrap,
 }
 impl RecoveryPipeControl {
+    /// Revalidate the exact grant's two prepared, pinned Root servers before durable ACK.
+    /// The registry separately retains their genuine paired bootstrap and held creation input.
+    /// No peer exists yet; authenticated current admission applies after carrier activation.
+    /// This observation grants no native effect or authority to postpone later checks.
+    /// # Errors
+    /// Rejects foreign Core/job/grant/run, missing pins, stopped or enrolled sessions,
+    /// cancellation, closed ancestors and expiration of either original deadline.
+    pub fn validate_prepared_carrier(
+        &self,
+        grant: &RegisteredRecoveryGrant,
+        desktop: &LifecyclePipeControl,
+    ) -> Result<(), AdmissionError> {
+        crate::lifecycle_pipe::current_admission::prepared_recovery_pair(
+            &self.inner,
+            grant,
+            &desktop.inner,
+        )
+    }
     /// Pair this genuine Root grant/session with its actual pre-admitted direct UI server.
     /// Both fixed pipes and their original deadlines already exist before the durable ACK.
     /// The carrier inherits genuine OS sections; capture tokens/addresses and coordinator

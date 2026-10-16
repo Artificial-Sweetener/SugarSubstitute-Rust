@@ -3,6 +3,7 @@
 //! Model only external pipe effects while the production owner advances every lifetime.
 use super::*;
 pub(super) struct Boundary {
+    pub(super) inherited: AtomicUsize,
     pub(super) context_override: Mutex<Option<JobContext>>,
     pub(super) clock_probe: Mutex<Option<(Role, crate::runtime_test_support::ClockCallback)>>,
     pub(super) binding: Mutex<Option<PeerBinding>>,
@@ -60,6 +61,7 @@ pub(super) struct Boundary {
 impl Boundary {
     pub(super) fn new() -> Arc<Self> {
         Arc::new(Self {
+            inherited: AtomicUsize::new(19),
             clock_probe: Mutex::new(None),
             context_override: Mutex::new(None),
             binding: Mutex::new(None),
@@ -161,7 +163,7 @@ impl PipeLease for Lease {
         if self.0.fail_prepare.load(Ordering::Acquire) {
             return Err(failure("partial_pipe_creation"));
         }
-        Ok(19)
+        Ok(self.0.inherited.load(Ordering::Acquire))
     }
     fn binding(&self) -> Option<PeerBinding> {
         lock(&self.0.binding).or_else(|| run().ok().map(PeerBinding::Desktop))

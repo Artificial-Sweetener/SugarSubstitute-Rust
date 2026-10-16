@@ -155,8 +155,21 @@ pub(crate) fn prepared_bootstrap_locked(
     pin: &LifecyclePipeBootstrap,
     now: Moment,
 ) -> Result<(), AdmissionError> {
-    if !control.shared.same_allocation(&pin.shared)
-        || control.shared.child
+    if !control.shared.same_allocation(&pin.shared) {
+        return Err(AdmissionError::InvalidCaptureAdmission);
+    }
+    prepared_source_locked(core, state, control, now)
+}
+
+/// Recheck one genuinely owned prepared server while its actual pin is retained by the carrier.
+/// The caller holds Core's final fence and separately owns/checks the original pair and enrollment.
+pub(crate) fn prepared_source_locked(
+    core: &Core,
+    state: &crate::admission::State,
+    control: &Control,
+    now: Moment,
+) -> Result<(), AdmissionError> {
+    if control.shared.child
         || control.shared.core.upgrade().is_none_or(|actual| !std::ptr::eq(actual.as_ref(), core))
     {
         return Err(AdmissionError::InvalidCaptureAdmission);
@@ -190,6 +203,44 @@ pub(crate) fn prepared_bootstrap_locked(
         || pipe.authenticated
         || pipe.enrolled
         || pipe.peer.is_some()
+    {
+        return Err(AdmissionError::InvalidCaptureAdmission);
+    }
+    Ok(())
+}
+
+/// Revalidate both original pre-ACK servers without requiring their not-yet-created peers.
+/// Clock sampling precedes the single Core fence; current authenticated admission stays distinct.
+pub(crate) fn prepared_recovery_pair(
+    recovery: &Control,
+    grant: &crate::RegisteredRecoveryGrant,
+    desktop: &Control,
+) -> Result<(), AdmissionError> {
+    let core = recovery.shared.core.upgrade().ok_or(AdmissionError::InvalidCaptureAdmission)?;
+    let now = core.clock.metadata().map_err(AdmissionError::Unexpected)?;
+    let state = lock(&core.state);
+    grant.state()?.validate_locked(&core, &state, now)?;
+    let original =
+        recovery.shared.recovery_grant.as_ref().ok_or(AdmissionError::InvalidCaptureAdmission)?;
+    if !original.same_grant(grant)
+        || recovery.shared.same_allocation(&desktop.shared)
+        || desktop.shared.captured
+        || recovery.shared.original_deadline != grant.original_budget().until()
+        || desktop.shared.original_deadline != recovery.shared.original_deadline
+    {
+        return Err(AdmissionError::InvalidCaptureAdmission);
+    }
+    prepared_source_locked(&core, &state, recovery, now)?;
+    prepared_source_locked(&core, &state, desktop, now)?;
+    let root = lock(&recovery.shared.state);
+    let ui = lock(&desktop.shared.state);
+    if root.binding != Some(PeerBinding::Recovery(grant.key()))
+        || ui.binding != Some(PeerBinding::Desktop(grant.key().run()))
+        || root.inherited == ui.inherited
+        || root.deadline.is_none()
+        || ui.deadline.is_none()
+        || root.deadline.map(|deadline| deadline.frequency())
+            != ui.deadline.map(|deadline| deadline.frequency())
     {
         return Err(AdmissionError::InvalidCaptureAdmission);
     }

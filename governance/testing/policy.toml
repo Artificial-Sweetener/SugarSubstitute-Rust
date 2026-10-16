@@ -29,7 +29,7 @@ minimum_tests = 784
 package = "sugarsubstitute-execution"
 root = "crates/sugarsubstitute-execution"
 concern = "Genuine once-only recovery delegation, held process creation, bounded paired transport and capture-before-containment ownership; Admission, CPU scheduling, cancellation, retained ownership and observed worker teardown; authenticated bounded coordinator entry transport, replay and native issue fences; original whole preparation/native environment custody, retained error aliases and actual source/client staging fences; same-ledger capture bundle admission/cleanup, typed native dispatch, original ancestor and handshake fences, physical mapping/capsule retention; original finite custodied creation through both native acknowledgements and retained cleanup aliases; same-ledger BackendCustody capture pins, authenticated v5 inherited input and unchanged preflight budgets; one-shot callback-targeted injected clock regression with independent actual worker observations and sticky original global failure"
-minimum_tests = 613
+minimum_tests = 616
 
 [[owners]]
 package = "sugarsubstitute-xtask"

@@ -238,3 +238,47 @@ pub(crate) fn recovery_frame(
 
 #[path = "recovery_fixture/retirement_tests.rs"]
 mod retirement_tests;
+
+/// Create the ordinary direct UI server with only its native kernel boundary replaced.
+pub(crate) fn prepared_direct_server(
+    rig: &Rig,
+    grant: &RegisteredRecoveryGrant,
+    scope_id: u64,
+    job_id: u64,
+) -> TestResult<(
+    Scope,
+    LifecyclePipeSession,
+    LifecyclePipeBootstrap,
+    crate::lifecycle_pipe::enrollment::Enrollment,
+)> {
+    let scope = rig
+        .client
+        .create_native_scope(ScopeSpec { id: ScopeId::new(scope_id)?, deadline: None }, None)?;
+    let boundary = Boundary::new();
+    boundary.inherited.store(20, Ordering::Release);
+    *lock(&boundary.binding) = Some(PeerBinding::Desktop(grant.key().run()));
+    let mut specification =
+        spec(job_id, JobClass::NativeObservation, crate::lifecycle_pipe::MIN_LIFECYCLE_PIPE_BYTES)?;
+    specification.operation = Operation::NativeLifecycle;
+    let session = crate::lifecycle_pipe::reserve(
+        &rig.client.core,
+        &scope,
+        specification,
+        Some(grant.key().run()),
+        grant.original_budget().until(),
+        Box::new(Lease(boundary)),
+    )?;
+    let pin = loop {
+        let revision = rig.wake.count();
+        if let Some(pin) = session.control.take_bootstrap()? {
+            break pin;
+        }
+        rig.client.drain_completions(NonZeroUsize::MIN)?;
+        if let Some(pin) = session.control.take_bootstrap()? {
+            break pin;
+        }
+        rig.wake.wait_after(revision)?;
+    };
+    let enrollment = crate::lifecycle_pipe::enrollment::Enrollment::take(&session.control.inner)?;
+    Ok((scope, session, pin, enrollment))
+}
