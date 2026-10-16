@@ -264,6 +264,21 @@ const _: () = {
     assert!(std::mem::offset_of!(Open<'_>, current) == 248);
 };
 
+#[path = "abi/origin.rs"]
+mod origin;
+pub(super) use origin::{Discard2, Open2, Recover2, RecoveryOrigin};
+
+const _: () = {
+    assert!(size_of::<RecoveryOrigin>() == 96);
+    assert!(size_of::<Open2<'_>>() == 424);
+    assert!(size_of::<Discard2<'_>>() == 160);
+    assert!(size_of::<Recover2<'_>>() == 216);
+};
+pub(super) type Open2Fn = for<'a> unsafe extern "C" fn(*const Open2<'a>, *mut Output);
+pub(super) type Discard2Fn =
+    for<'a> unsafe extern "C" fn(*const Discard2<'a>, *mut DispositionOutput);
+pub(super) type Recover2Fn =
+    for<'a> unsafe extern "C" fn(*const Recover2<'a>, *mut DispositionOutput);
 pub(super) type OpenFn = for<'a> unsafe extern "C" fn(*const Open<'a>, *mut Output);
 pub(super) type ReadFn = for<'a> unsafe extern "C" fn(*const Read<'a>, *mut Output);
 pub(super) type RetireFn = for<'a> unsafe extern "C" fn(*const Call<'a>, *mut Output);
@@ -277,9 +292,16 @@ pub(super) type RecoverFn =
 #[derive(Clone, Copy)]
 pub(in crate::native) struct Api {
     pub(super) open: OpenFn,
+    pub(super) open2: Open2Fn,
+    pub(super) discard2: Discard2Fn,
+    pub(super) recover2: Recover2Fn,
     pub(super) read: ReadFn,
     pub(super) retire: RetireFn,
     pub(super) prepare: PrepareFn,
     pub(super) discard: DiscardFn,
     pub(super) recover: RecoverFn,
 }
+
+#[cfg(test)]
+#[path = "abi/origin_tests.rs"]
+mod origin_tests;

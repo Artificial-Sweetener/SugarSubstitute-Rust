@@ -37,6 +37,10 @@ pub(in crate::production) struct SeedService {
     cleanup_completion: Option<JobCompletion<bool, SeedServiceIssue>>,
     cleanup_terminal: Option<TerminalKind>,
     cleanup_binding: Option<(ScopeId, Moment)>,
+    input_identity: Option<recovery::SeedIdentity>,
+    source_retired: bool,
+    retirement_claim: Option<MemoryClaim>,
+    retirement_memory: Option<MemoryClaimError>,
 }
 impl SeedService {
     /// Claim source/control storage inside the original pre-capture controller reservation.
@@ -55,6 +59,10 @@ impl SeedService {
             cleanup_completion: None,
             cleanup_terminal: None,
             cleanup_binding: None,
+            input_identity: None,
+            source_retired: false,
+            retirement_claim: None,
+            retirement_memory: None,
         })
     }
     /// Submit the exact retained input under one finite original8MiB scope and deadline.
@@ -73,7 +81,12 @@ impl SeedService {
         if scope.owner_id() != self.source.owner() {
             return Err(SeedServiceIssue::Identity);
         }
+        let identity = input
+            .as_ref()
+            .map(recovery::SeedIdentity::from_input)
+            .ok_or(SeedServiceIssue::Identity)?;
         self.source.install(input)?;
+        self.input_identity = Some(identity);
         self.installed = true;
         self.retry(client, scope, jobs, until)
     }
@@ -187,6 +200,7 @@ impl SeedService {
         self.requested = None;
         self.cleanup_binding = None;
         self.installed = false;
+        self.input_identity = None;
         Ok(())
     }
     /// Observe central delivery separately from file closure and actual worker joins.
@@ -219,3 +233,7 @@ mod cleanup;
 #[cfg(test)]
 #[path = "service/seed_failure_tests.rs"]
 mod seed_failure_tests;
+
+#[path = "service/recovery.rs"]
+mod recovery;
+pub(in crate::production) use recovery::RetiredRecoverySeed;

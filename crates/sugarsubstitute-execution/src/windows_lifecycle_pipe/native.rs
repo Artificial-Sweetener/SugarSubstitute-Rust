@@ -12,6 +12,7 @@ use sugarsubstitute_contracts::{
     backend_custody::BackendCustodyKey,
     incident::{DiagnosticKey, DiagnosticRole},
     lifecycle::{ProcessKey, RunKey},
+    recovery_supervisor::RecoveryGrantKey,
 };
 use windows::{
     Win32::{
@@ -43,6 +44,8 @@ pub(super) const CLIENT_ACCESS: u32 = FILE_READ_DATA.0
     | FILE_WRITE_ATTRIBUTES.0
     | SYNCHRONIZE.0;
 pub(crate) struct Lease {
+    pub(in crate::windows_lifecycle_pipe) recovery_pair:
+        Option<Box<super::recovery_pair::NativeRecoveryPair>>,
     pub(in crate::windows_lifecycle_pipe) captured_parent:
         Option<super::captured::parent::ParentSource>,
     pub(in crate::windows_lifecycle_pipe) captured_client: bool,
@@ -83,6 +86,7 @@ impl Lease {
         expected: bootstrap::Kind,
     ) -> Self {
         Self {
+            recovery_pair: None,
             captured_parent: None,
             captured_client: false,
             captured_facts: None,
@@ -127,6 +131,7 @@ impl Lease {
             + size_of::<security::Descriptor>()
             + size_of::<[u32; 128]>()
             + size_of::<bootstrap::Data>()
+            + super::recovery_pair::NativeRecoveryPair::storage_bytes()
     }
     /// Install the original captured map/control claim before any mapping effect.
     pub(in crate::windows_lifecycle_pipe) fn install_captured_mapping(
@@ -171,6 +176,16 @@ impl Lease {
     pub(crate) fn backend_custody_client(original: LifecyclePipeDeadline) -> Self {
         Self::new(false, None, Some(original), bootstrap::Kind::BackendCustody)
     }
+    /// Construct the dedicated Root successor endpoint without native effects.
+    pub(crate) fn recovery_server(key: RecoveryGrantKey) -> Self {
+        Self::new(true, Some(PeerBinding::Recovery(key)), None, bootstrap::Kind::Recovery)
+    }
+    /// Decode only the private recovery bootstrap of the dedicated invocation.
+    pub(crate) fn recovery_client(original: LifecyclePipeDeadline) -> Self {
+        let mut owner = Self::new(false, None, Some(original), bootstrap::Kind::Recovery);
+        owner.recovery_pair = Some(Box::new(super::recovery_pair::NativeRecoveryPair::new()));
+        owner
+    }
     fn operation(
         &mut self,
         role: Role,
@@ -180,10 +195,33 @@ impl Lease {
 }
 impl PipeLease for Lease {
     fn adopt(&mut self, input: PeerInput) -> Result<(), (Box<LifecyclePipeFailure>, PeerInput)> {
+        if let PeerInput::RecoveryInherited { section, desktop_section } = &input
+            && let Err(cause) = crate::windows_recovery_supervisor::inheritance::validate_pair_slots(
+                *section as u64,
+                *desktop_section as u64,
+            )
+        {
+            return Err((Box::new(error("recovery_pair_input_slots", cause)), input));
+        }
         if let Err(cause) = self.input.reserve_custody("pipe_adopt_input_accounting") {
             return Err((Box::new(cause.into()), input));
         }
+        if matches!(&input, PeerInput::RecoveryInherited { .. }) {
+            let Some(pair) = self.recovery_pair.as_mut() else {
+                return Err((Box::new(failure("recovery_pair_wrong_purpose")), input));
+            };
+            if let Err(cause) = pair.reserve_input() {
+                return Err((Box::new(cause), input));
+            }
+        }
         match input {
+            PeerInput::RecoveryInherited { section, desktop_section } => {
+                // Both actual outputs are adopted before later schema/native checks.
+                self.input.adopt_partial(HANDLE(section as *mut _));
+                if let Some(pair) = &mut self.recovery_pair {
+                    pair.adopt(desktop_section);
+                }
+            }
             PeerInput::Owned { handle, process } => {
                 self.process = process;
                 self.input.adopt_partial(HANDLE(handle.into_raw_handle()));
@@ -334,6 +372,9 @@ impl PipeLease for Lease {
         if self.captured_client {
             self.authenticate_captured_child(peer)?;
         }
+        if let Some(pair) = &mut self.recovery_pair {
+            pair.authenticate(peer)?;
+        }
         Ok(peer)
     }
     fn inherited_capture_processes(&self) -> Option<[usize; 2]> {
@@ -341,6 +382,11 @@ impl PipeLease for Lease {
     }
     fn take_captured_startup(&mut self) -> Option<super::captured::child::CapturedInput> {
         self.captured_ready.take()
+    }
+    fn take_recovery_desktop_bootstrap(
+        &mut self,
+    ) -> Option<crate::recovery_supervisor::root_desktop::RootDesktopBootstrapLoan> {
+        self.recovery_pair.as_mut().and_then(|pair| pair.take())
     }
     fn take_completed_write(&mut self) -> Option<u32> {
         self.operations[Role::Write.index()]
@@ -372,6 +418,11 @@ impl PipeLease for Lease {
             return Ok(false);
         }
         self.pipe.close("pipe_close_connection")?;
+        if let Some(pair) = &mut self.recovery_pair
+            && !pair.retire()?
+        {
+            return Ok(false);
+        }
         // Untaken authenticated loans return outside all internal owner locks.
         drop(self.captured_ready.take());
         if !self.section.retire(pinned)? {

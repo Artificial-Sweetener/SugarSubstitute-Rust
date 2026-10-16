@@ -23,6 +23,7 @@ type Result<T> = std::result::Result<T, Box<dyn Error>>;
 /// Own one actual process-lifetime registration; unavailable trust remains a real failure.
 pub(in crate::production) struct CaptureRegistration {
     pub(super) capture: WindowsCrashCapture,
+    root_storage: storage::CaptureRootStorage,
     rejected: Option<StartRejected>,
     unbound_watch: Option<OwnedJob<ProcessExit, NativeObservationError>>,
     attempted: bool,
@@ -32,6 +33,7 @@ impl CaptureRegistration {
     pub(super) fn new(owner: CoordinatorKey) -> Self {
         Self {
             capture: WindowsCrashCapture::new(owner),
+            root_storage: storage::CaptureRootStorage::new(),
             rejected: None,
             unbound_watch: None,
             attempted: false,
@@ -98,6 +100,10 @@ impl CaptureRegistration {
     /// Consume actual registration/watch/retirement facts without synthesizing success.
     pub(super) fn observe(&mut self, batch: &CompletionBatch) -> Result<()> {
         self.capture.observe(batch);
+        if self.root_storage.source().is_none() && self.registration_ready() {
+            self.root_storage.retain(self.capture.retain_root_source()?);
+        }
+        self.root_storage.observe()?;
         report_failure(&mut self.failure_reported, self.capture.errors().next())
     }
     /// Borrow unresolved registration/failure custody without closing the live helper.
@@ -115,11 +121,15 @@ impl CaptureRegistration {
     }
     /// Current Root decision for presentation/admission; it grants no attachment or restart capability.
     pub(super) fn restart_availability(&self) -> ReportRestartAvailability {
-        if self.registration_ready() {
+        if self.registration_ready() || self.fresh_supervisor_required() {
             ReportRestartAvailability::Available
         } else {
             ReportRestartAvailability::Unavailable
         }
+    }
+    /// Known lost one-shot registration requires a new subordinate; old clients remain degraded.
+    pub(super) fn fresh_supervisor_required(&self) -> bool {
+        self.capture.handler_lost() && self.root_source().is_some()
     }
     /// Mint an attachment expectation exclusively from actual retained registration facts.
     pub(in crate::production) fn attach(
@@ -163,9 +173,24 @@ impl CaptureRegistration {
         };
         Ok(self.capture.request_attach_bootstrap(client, native, spec, expected)?)
     }
-    /// Close only after all actual desktop source pins/handlers may retire.
-    /// Keep the same original shutdown budget and every uncertain owner.
+    /// Close the independently retained protected Root only after all consumers retire.
+    /// This uses the same original Root shutdown budget through central finite execution.
     pub(super) fn close(
+        &mut self,
+        budget: ShutdownBudget,
+        resources: &EntryResources<'_>,
+    ) -> Result<bool> {
+        let storage = self.root_storage.close(budget, resources)?;
+        let registration = self.close_registration(budget, resources)?;
+        Ok(registration && storage)
+    }
+    /// Borrow actual retained protected-root opening custody independently of handler health.
+    pub(super) fn root_source(&self) -> Option<&sugarsubstitute_crash::CaptureRootSource> {
+        self.root_storage.source()
+    }
+    /// Retire only the original handler registration, preserving genuine Root opening custody.
+    /// Recovery can replace its own fresh family while unrelated live clients retain Root policy.
+    pub(super) fn close_registration(
         &mut self,
         budget: ShutdownBudget,
         resources: &EntryResources<'_>,
@@ -303,3 +328,6 @@ mod tests {
         Ok(())
     }
 }
+
+#[path = "capture/storage.rs"]
+mod storage;

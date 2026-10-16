@@ -208,6 +208,41 @@ impl BackendCustodyMemory {
         core.changed();
         Ok(())
     }
+    /// Change only an occupied recovery turn's original timer stage.
+    fn recovery_timer(
+        &self,
+        index: usize,
+        now: Moment,
+        until: Moment,
+        begin: bool,
+    ) -> Result<(), AdmissionError> {
+        let owner = self.0.as_ref().ok_or(AdmissionError::ShuttingDown)?;
+        let core = owner.core.upgrade().ok_or(AdmissionError::ShuttingDown)?;
+        {
+            let mut state = crate::scope::lock(&core.state);
+            let record =
+                state.jobs.get_mut(&owner.context.job_id()).ok_or(AdmissionError::ShuttingDown)?;
+            if record.phase != JobPhase::Running
+                || record
+                    .memory
+                    .as_ref()
+                    .is_none_or(|memory| !memory.matches_lease(owner.context.memory()))
+            {
+                return Err(AdmissionError::ShuttingDown);
+            }
+            let slots = record.custody_deadlines.as_mut().ok_or(AdmissionError::ShuttingDown)?;
+            let accepted = if begin {
+                slots.capture(index, until)
+            } else {
+                slots.after_capture(index, now, until)
+            };
+            if !accepted {
+                return Err(AdmissionError::NativeResources(sugarsubstitute_contracts::execution::NativeResourceError::OriginalAdmissionRetired));
+            }
+        }
+        core.changed();
+        Ok(())
+    }
     fn observe(&self, retiring: bool) -> Result<Moment, AdmissionError> {
         self.observe_at(retiring, false)
     }
@@ -321,6 +356,15 @@ impl BackendCustodySlotMemory {
     pub(super) fn arm_turn(&self, until: Moment) -> Result<(), AdmissionError> {
         let owner = self.claim.as_ref().ok_or(AdmissionError::ShuttingDown)?;
         self.metadata.arm_cleanup(owner.index, until)
+    }
+    pub(super) fn recovery_timer(
+        &self,
+        now: Moment,
+        until: Moment,
+        begin: bool,
+    ) -> Result<(), AdmissionError> {
+        let owner = self.claim.as_ref().ok_or(AdmissionError::ShuttingDown)?;
+        self.metadata.recovery_timer(owner.index, now, until, begin)
     }
     pub(super) fn finish_turn(&self) {
         let Some(owner) = &self.claim else {

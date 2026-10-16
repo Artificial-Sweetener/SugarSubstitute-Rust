@@ -385,8 +385,10 @@ fn rejected_native_name_and_sid_slots_keep_exact_original_inputs() -> TestResult
             original.namespace_control()?,
             original.clone(),
         ));
+        let before = storage.shared._allocation.fixture_residual_bytes();
         let rejection =
             NativeName::retained(&mut name_input).err().ok_or("Oversized name accepted")?;
+        assert_eq!(storage.shared._allocation.fixture_residual_bytes(), before);
         let (retained, _, _, retained_origin) =
             name_input.as_ref().ok_or("Rejected name consumed")?;
         assert_eq!(retained.capacity(), path_capacity);

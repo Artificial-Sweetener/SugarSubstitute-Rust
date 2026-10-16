@@ -27,10 +27,39 @@ impl State {
             return Ok(());
         }
         self.stopping = true;
-        let proof = self.control.cleanup(until)?;
+        self.stop_until = Some(until);
         for entry in self.registrations.iter_mut().flatten() {
-            entry.stop(proof.until())?;
+            entry.stop(until)?;
         }
+        self.begin_containment()
+    }
+    /// Involuntary transport/owner loss preserves recovery capture even before wait delivery.
+    /// Explicit authenticated ProfileStop/Finish retain their ordinary cleanup semantics.
+    pub(super) fn stop_lost(&mut self, until: Moment) -> Result<(), ClaimError> {
+        if self.stopping {
+            return Ok(());
+        }
+        self.stopping = true;
+        self.stop_until = Some(until);
+        for entry in self.registrations.iter_mut().flatten() {
+            entry.owner_lost(until)?;
+        }
+        self.begin_containment()
+    }
+    /// Retain global helper custody through every fresh generation's capture phase.
+    fn begin_containment(&self) -> Result<(), ClaimError> {
+        if !self.stopping
+            || self.registrations.iter().flatten().any(super::entry::Entry::capture_pending)
+        {
+            return Ok(());
+        }
+        let until = self
+            .registrations
+            .iter()
+            .flatten()
+            .filter_map(super::entry::Entry::recovery_settle_until)
+            .fold(self.stop_until.unwrap_or(Moment::from_nanos(u64::MAX)), Moment::min);
+        self.control.cleanup(until)?;
         Ok(())
     }
     /// Parent death and actual root waits select cleanup; neither proves Released.
@@ -41,14 +70,15 @@ impl State {
         wake: &BackendCustodyWake,
     ) -> Result<bool, ClaimError> {
         if self.parent.as_ref().is_some_and(|parent| parent.signaled()) {
-            self.stop(Moment::from_nanos(u64::MAX))?;
+            self.stop_lost(Moment::from_nanos(u64::MAX))?;
         }
         let mut failures: [Option<ClaimError>; 8] = std::array::from_fn(|_| None);
         let mut failure = None;
         for entry in self.registrations.iter_mut().flatten() {
             if !entry.cleaning() && entry.root_signaled() {
-                entry.stop(Moment::from_nanos(u64::MAX))?;
+                entry.owner_lost(Moment::from_nanos(u64::MAX))?;
             }
+            entry.advance_owner_loss()?;
             if !entry.cleaning() || entry.settled() {
                 continue;
             }
@@ -62,6 +92,7 @@ impl State {
                 }
             }
         }
+        self.begin_containment()?;
         if let Some(cause) = failure {
             self.fail(cause.clone());
             for secondary in failures.into_iter().flatten() {

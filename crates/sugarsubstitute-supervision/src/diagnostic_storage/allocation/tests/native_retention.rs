@@ -13,7 +13,7 @@ fn scan_generations_saturate_and_reuse_only_after_actual_retention_drop() -> Tes
         let mut count = 0;
         let mut rejected = false;
         for slot in &mut held {
-            match original.scan_retention(&context) {
+            match original.scan_retention(DIAGNOSTIC_SCAN_BOUND, &context) {
                 Ok(retention) => {
                     *slot = Some(retention);
                     count += 1;
@@ -31,11 +31,15 @@ fn scan_generations_saturate_and_reuse_only_after_actual_retention_drop() -> Tes
         let alias = first.clone();
         drop(first);
         assert_eq!(
-            original.scan_retention(&context).err().ok_or("Live alias released capacity")?.code(),
+            original
+                .scan_retention(DIAGNOSTIC_SCAN_BOUND, &context)
+                .err()
+                .ok_or("Live alias released capacity")?
+                .code(),
             Code::Capacity
         );
         drop(alias);
-        held[0] = Some(original.scan_retention(&context)?);
+        held[0] = Some(original.scan_retention(DIAGNOSTIC_SCAN_BOUND, &context)?);
         storage.retire(&operation, &context)?;
         drop(operation);
         drop(storage);
@@ -55,7 +59,7 @@ fn native_scan_last_alias_retains_claim_after_storage_and_job_binding_drop() -> 
     admitted(|context, _| {
         let (mut storage, operation) = setup(&context, Filesystem::new())?;
         let original = operation.shared._allocation.native_grant();
-        let generation = original.scan_retention(&context)?;
+        let generation = original.scan_retention(DIAGNOSTIC_SCAN_BOUND, &context)?;
         let alias = generation.clone();
         storage.retire(&operation, &context)?;
         drop(operation);
@@ -193,6 +197,116 @@ fn native_stage_generation_saturates_and_keeps_original_until_its_unique_last_dr
         drop(original);
         assert!(context.memory().claim(1).is_err());
         drop(held);
+        assert_eq!(
+            context.memory().claim(DIAGNOSTIC_STORAGE_BYTES)?.bytes(),
+            DIAGNOSTIC_STORAGE_BYTES
+        );
+        Ok(())
+    })
+}
+
+#[test]
+fn native_observation_growth_keeps_old_vector_on_rejection_and_all_alias_credit() -> TestResult {
+    use crate::{
+        diagnostic_storage::inventory::{ObservedEntry, Scan},
+        protected_storage::record_file::StreamingPort,
+    };
+    admitted(|context, _| {
+        let (mut storage, operation) = setup(&context, Filesystem::new())?;
+        let owner = storage.shared._allocation.clone();
+        let original = owner.native_grant();
+        let mut scan = Scan { entries: Vec::new(), complete: false, _native_retention: None };
+        let baseline = owner.fixture_residual_bytes().ok_or("Original ledger absent")?;
+        StreamingPort::reserve_native_observations(&mut scan, 2048, &original, &context)?;
+        for index in 1..=32_u8 {
+            scan.entries.push(ObservedEntry {
+                digest: [index; 32],
+                class: DiagnosticEntryClass::Journal,
+                identity: [index; 24],
+                bytes: index as u64,
+                protected_regular: true,
+                payload_group: None,
+            });
+        }
+        let original_bytes = StreamingPort::diagnostic_scan_state_layout(2048)?.retained_bytes();
+        let replacement_bytes =
+            StreamingPort::diagnostic_scan_state_layout(DIAGNOSTIC_SCAN_BOUND)?.retained_bytes();
+        assert_eq!(owner.fixture_residual_bytes(), Some(baseline + original_bytes));
+        let alias = scan._native_retention.as_ref().ok_or("Original vector loan absent")?.clone();
+        let original_pointer = scan.entries.as_ptr();
+        for capacity in [0, 1024, DIAGNOSTIC_SCAN_BOUND + 1] {
+            assert!(
+                StreamingPort::reserve_native_observations(
+                    &mut scan, capacity, &original, &context
+                )
+                .is_err()
+            );
+            assert_eq!(scan.entries.as_ptr(), original_pointer);
+            assert_eq!(scan.entries.len(), 32);
+            assert_eq!(owner.fixture_residual_bytes(), Some(baseline + original_bytes));
+        }
+        let mut buffers = Vec::new();
+        while owner.fixture_residual_bytes().ok_or("Original ledger absent")? + replacement_bytes
+            <= DIAGNOSTIC_RESIDUAL_BYTES
+        {
+            buffers.push(storage.record_buffer(&operation, &context)?);
+        }
+        let before = owner.fixture_residual_bytes().ok_or("Original ledger absent")?;
+        let rejected = StreamingPort::reserve_native_observations(
+            &mut scan,
+            DIAGNOSTIC_SCAN_BOUND,
+            &original,
+            &context,
+        )
+        .err()
+        .ok_or("Uncharged replacement overlap admitted")?;
+        assert_eq!(
+            rejected
+                .source()
+                .and_then(|cause| cause.downcast_ref::<DiagnosticNativeAllocationFailure>())
+                .ok_or("Original cumulative admission cause replaced")?
+                .code(),
+            Code::Capacity
+        );
+        assert_eq!(scan.entries.as_ptr(), original_pointer);
+        assert_eq!(scan.entries.capacity(), 2048);
+        assert_eq!(scan.entries.iter().map(|entry| entry.bytes).sum::<u64>(), 528);
+        assert_eq!(owner.fixture_residual_bytes(), Some(before));
+        let causes = ClaimError::diagnostic_native_cause_layout()?.retained_bytes()
+            + ClaimError::diagnostic_secondary_cause_layout()?.retained_bytes();
+        while owner.fixture_residual_bytes().ok_or("Original ledger absent")?
+            + replacement_bytes
+            + causes
+            > DIAGNOSTIC_RESIDUAL_BYTES
+        {
+            drop(buffers.pop().ok_or("Actual overlap buffer absent")?);
+        }
+        let before = owner.fixture_residual_bytes().ok_or("Original ledger absent")?;
+        StreamingPort::reserve_native_observations(
+            &mut scan,
+            DIAGNOSTIC_SCAN_BOUND,
+            &original,
+            &context,
+        )?;
+        assert_eq!(scan.entries.capacity(), DIAGNOSTIC_SCAN_BOUND);
+        assert_eq!(scan.entries.iter().map(|entry| entry.bytes).sum::<u64>(), 528);
+        assert_eq!(owner.fixture_residual_bytes(), Some(before + replacement_bytes));
+        drop(alias);
+        assert_eq!(
+            owner.fixture_residual_bytes(),
+            Some(before + replacement_bytes - original_bytes)
+        );
+        let final_alias =
+            scan._native_retention.as_ref().ok_or("Replacement vector loan absent")?.clone();
+        storage.retire(&operation, &context)?;
+        drop(operation);
+        drop(storage);
+        drop(original);
+        drop(owner);
+        drop(buffers);
+        drop(scan);
+        assert!(context.memory().claim(1).is_err());
+        drop(final_alias);
         assert_eq!(
             context.memory().claim(DIAGNOSTIC_STORAGE_BYTES)?.bytes(),
             DIAGNOSTIC_STORAGE_BYTES

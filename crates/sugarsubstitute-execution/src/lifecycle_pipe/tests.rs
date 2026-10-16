@@ -255,3 +255,9 @@ fn partial_creation_failure_retains_first_cause_through_failed_close_and_actual_
     drop(rig.owner);
     Ok(())
 }
+
+#[path = "recovery_fixture.rs"]
+mod recovery_fixture;
+pub(crate) use recovery_fixture::{
+    RecoveryChildBoundary, recovery_child, recovery_frame, recovery_parent, recovery_server,
+};

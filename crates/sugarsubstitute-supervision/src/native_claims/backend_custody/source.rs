@@ -34,6 +34,7 @@ pub(super) struct State {
     pub(super) initialized: bool,
     pub(super) established: bool,
     pub(super) stopping: bool,
+    pub(super) stop_until: Option<sugarsubstitute_contracts::execution::Moment>,
     pub(super) settled: bool,
     pub(super) failed: bool,
     pub(super) first: Option<ClaimError>,
@@ -84,6 +85,7 @@ impl BackendCustodySource {
                     initialized: false,
                     established: false,
                     stopping: false,
+                    stop_until: None,
                     settled: false,
                     failed: false,
                     first: None,
@@ -121,6 +123,34 @@ impl BackendCustodySource {
             cause: FailureCause::Native(cause),
             memory: self.memory.clone(),
         })
+    }
+    /// Read cached recovery capture custody; uncertainty conservatively retains the helper.
+    /// This observation does not authorize native effects or establish capture success.
+    pub fn recovery_capture_pending(&self) -> bool {
+        self.owner.as_ref().is_none_or(|owner| {
+            super::super::lock(owner).as_ref().is_none_or(|state| {
+                state.registrations.iter().flatten().any(super::entry::Entry::capture_pending)
+            })
+        })
+    }
+    /// Return the immutable outer bound while recovery capture is still pending.
+    /// No actual settlement is inferred from reaching this limit.
+    pub fn recovery_retirement_until(
+        &self,
+    ) -> Option<sugarsubstitute_contracts::execution::Moment> {
+        let owner = self.owner.as_ref()?;
+        super::super::lock(owner)
+            .as_ref()?
+            .registrations
+            .iter()
+            .flatten()
+            .filter_map(super::entry::Entry::recovery_settle_until)
+            .min()
+    }
+    /// Return only the actual helper control's first post-capture containment cutoff.
+    pub fn retirement_until(&self) -> Option<sugarsubstitute_contracts::execution::Moment> {
+        let owner = self.owner.as_ref()?;
+        super::super::lock(owner).as_ref()?.control.cleanup_until()
     }
     /// Observe only actual cached unresolved custody; it grants no Released authority.
     pub fn unresolved(&self) -> bool {

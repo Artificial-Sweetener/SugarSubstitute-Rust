@@ -21,12 +21,19 @@ pub enum SymbolFrameError {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CapturedExceptionFrame {
     code: u32,
+    captured_at: sugarsubstitute_contracts::incident::IncidentUtc,
     address: u64,
     base: u64,
     size: u32,
     pdb: PdbIdentity,
 }
 impl CapturedExceptionFrame {
+    /// Actual whole Unix UTC seconds recorded in this same minidump header.
+    /// This is source metadata, independent of the observer's process exit or clock.
+    pub const fn captured_at(self) -> sugarsubstitute_contracts::incident::IncidentUtc {
+        self.captured_at
+    }
+
     /// Actual exception address in the captured process address space.
     pub const fn address(self) -> u64 {
         self.address
@@ -75,7 +82,7 @@ impl IncidentDumpReadLease {
         let annotation_index =
             self.parser_identity().map_err(SymbolFrameError::Source)?.module_index();
         let failure = self.summary().map_err(SymbolFrameError::Source)?.summary().facts().failure();
-        extract(self, length, annotation_index, failure)
+        extract(self, length, Some(annotation_index), failure)
     }
 }
 fn u32_at(bytes: &[u8], offset: usize) -> u32 {
@@ -102,7 +109,7 @@ fn bounded(offset: u64, count: u64, length: u64) -> Result<(), SymbolFrameError>
 fn extract(
     source: &mut impl Read,
     length: u64,
-    annotation_index: u32,
+    annotation_index: Option<u32>,
     failure: FailureEvidence,
 ) -> Result<CapturedExceptionFrame, SymbolFrameError> {
     let mut header = [0; 32];
@@ -162,7 +169,7 @@ fn extract(
     let count = u32_at(&module_count, 0);
     if count == 0
         || count > 4096
-        || annotation_index >= count
+        || annotation_index.is_some_and(|index| index >= count)
         || u64::from(size) < 4 + u64::from(count) * 108
     {
         return Err(SymbolFrameError::Corrupt);
@@ -199,7 +206,12 @@ fn extract(
     guid.copy_from_slice(&codeview[4..20]);
     let pdb = PdbIdentity::new(guid, u32_at(&codeview, 20))
         .map_err(|_: IncidentError| SymbolFrameError::CodeView)?;
-    Ok(CapturedExceptionFrame { code, address, base, size, pdb })
+    let captured_at = sugarsubstitute_contracts::incident::IncidentUtc::from_unix_seconds(
+        i64::from(u32_at(&header, 20)),
+    )
+    .map_err(|_| SymbolFrameError::Corrupt)?;
+    Ok(CapturedExceptionFrame { code, captured_at, address, base, size, pdb })
 }
+mod finished;
 #[cfg(test)]
 mod tests;

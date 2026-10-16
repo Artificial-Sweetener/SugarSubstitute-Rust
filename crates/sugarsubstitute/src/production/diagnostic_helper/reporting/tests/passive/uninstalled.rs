@@ -35,7 +35,7 @@ fn reporting_uninstalled_view_survives_failure_and_real_never_launched_parent_re
     let input = ReportingInput {
         request: namespace.diagnostic_write_request(operation)?,
         operation,
-        work: ReportingWork::View { binding, locale: "en" },
+        work: ReportingWork::View { binding, locale: "en", root_capture_degraded: false },
         authentication: None,
     };
     let original_input = std::ptr::from_ref(&input);

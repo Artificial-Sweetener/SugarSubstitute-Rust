@@ -10,6 +10,7 @@ impl Family {
             || self.watch_duplicate.is_some()
             || self.members.iter().flatten().any(|member| member.handle.is_some())
             || self.attributes_initialized
+            || self.recovery_carrier.is_some()
             || self.fixture_events.is_some()
             || self.lifecycle_bootstrap.is_some()
             || self.diagnostic_bootstrap.is_some()
@@ -54,6 +55,9 @@ impl Family {
     pub(crate) fn prepare_inheritance(&mut self) -> Result<(), RegistryError> {
         if self.attributes_initialized {
             return Err(RegistryError::invalid("live_inheritance_reuse"));
+        }
+        if self.recovery_carrier.is_some() {
+            return self.prepare_recovery_carrier_inheritance();
         }
         let fixture = if let Some(events) = &self.fixture_events {
             let view = events.borrow_inheritance();
@@ -112,7 +116,7 @@ impl Family {
         Ok(())
     }
     pub(crate) fn configure_stdio(&self, startup: &mut STARTUPINFOW) {
-        if self.output_pin.is_some() {
+        if self.output_pin.is_some() || self.recovery_stdio {
             startup.dwFlags |= STARTF_USESTDHANDLES;
             startup.hStdInput = HANDLE(self.stdio_handles[0] as *mut _);
             startup.hStdOutput = HANDLE(self.stdio_handles[1] as *mut _);
@@ -144,6 +148,7 @@ impl Family {
         if self.attributes_initialized {
             return Err(RegistryError::invalid("output_release_before_attributes"));
         }
+        drop(self.recovery_carrier.take());
         drop(self.fixture_events.take());
         drop(self.lifecycle_bootstrap.take());
         drop(self.diagnostic_bootstrap.take());
@@ -154,6 +159,7 @@ impl Family {
         self.inherited_handles = [0; 6];
         self.inherited_count = 0;
         self.stdio_handles = [0; 3];
+        self.recovery_stdio = false;
         Ok(())
     }
 }

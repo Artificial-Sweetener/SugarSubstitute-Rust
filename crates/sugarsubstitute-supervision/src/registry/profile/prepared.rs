@@ -12,6 +12,7 @@ use sugarsubstitute_contracts::{
 
 /// Actual native family/destination precede their original finite memory custody.
 pub(crate) struct PreparedDesktop {
+    pub(crate) recovery_grant: Option<sugarsubstitute_execution::RegisteredRecoveryGrant>,
     pub(crate) family: Option<FamilyStorage>,
     pub(crate) destination: Option<CustodyDestination>,
     pub(crate) parent: BackendCustodyParent,
@@ -217,7 +218,18 @@ impl PreparedDesktop {
         port: Arc<dyn NativePort>,
         client: &ExecutionClient,
         context: &JobContext,
+        recovery_grant: Option<sugarsubstitute_execution::RegisteredRecoveryGrant>,
     ) -> Result<Self, RegistryError> {
+        if let Some(grant) = &recovery_grant {
+            grant
+                .check_context(context)
+                .map_err(|cause| RegistryError::new("recovery_profile_original", cause))?;
+            if key.run() != grant.key().run()
+                || context.deadline() != Some(grant.original_budget().until())
+            {
+                return Err(RegistryError::invalid("recovery_profile_binding"));
+            }
+        }
         if !parent.matches_execution(client) {
             return Err(RegistryError::invalid("profile_prepared_execution"));
         }
@@ -226,6 +238,7 @@ impl PreparedDesktop {
             context.deadline().ok_or_else(|| RegistryError::invalid("profile_prepared_cutoff"))?;
         let family = Family::allocate_owned(context.memory())?;
         let mut value = Self {
+            recovery_grant,
             family: Some(family),
             destination: Some(CustodyDestination::new(&parent)),
             parent,

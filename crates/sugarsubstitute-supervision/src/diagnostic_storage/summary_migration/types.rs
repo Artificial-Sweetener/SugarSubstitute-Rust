@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Distinguish inert migration expectations from actual retained storage authority.
 use super::*;
-use sugarsubstitute_contracts::incident::{IncidentKey, IncidentRevision};
+use sugarsubstitute_contracts::incident::{IncidentKey, IncidentRevision, SummaryMigrationStep};
 
 /// Maximum preserved migration archives; admission includes the pending reservation.
 pub const DIAGNOSTIC_MIGRATION_ARCHIVE_BOUND: usize = 128;
@@ -11,12 +11,13 @@ pub const DIAGNOSTIC_MIGRATION_ARCHIVE_BOUND: usize = 128;
 pub enum DiagnosticSummaryMigrationCase {
     /// The untouched legacy Summary is current.
     Original,
-    /// The recorded schema2 candidate already became current.
+    /// The recorded canonical successor candidate already became current.
     Candidate,
 }
 /// Bound recorded expectations; native observations are constructed separately by storage.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DiagnosticSummaryMigrationPlan {
+    pub(super) step: SummaryMigrationStep,
     pub(super) historical: LogicalStoreOperationKey,
     pub(super) incident: IncidentKey,
     pub(super) revision: IncidentRevision,
@@ -27,12 +28,39 @@ pub struct DiagnosticSummaryMigrationPlan {
     pub(super) journal_sha256: [u8; 32],
 }
 impl DiagnosticSummaryMigrationPlan {
-    /// Validate complete bounded recorded facts for the fixed schema1 to schema2 migration.
+    /// Validate complete bounded recorded facts for the supported schema1 to schema2 migration.
     /// # Errors
     /// Rejects foreign namespace, equal/reserved identities or digests, inconsistent
     /// original-copy bytes, empty/oversized streams and a zero journal digest.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
+        historical: LogicalStoreOperationKey,
+        incident: IncidentKey,
+        revision: IncidentRevision,
+        payload_revision: Option<IncidentRevision>,
+        original_file: RecordedDiagnosticFileFacts,
+        original_stage: RecordedDiagnosticFileFacts,
+        candidate_stage: RecordedDiagnosticFileFacts,
+        journal_sha256: [u8; 32],
+    ) -> Result<Self, DiagnosticRecoveryValidationError> {
+        Self::for_step(
+            SummaryMigrationStep::OneToTwo,
+            historical,
+            incident,
+            revision,
+            payload_revision,
+            original_file,
+            original_stage,
+            candidate_stage,
+            journal_sha256,
+        )
+    }
+    /// Validate one supported exact schema step with unchanged native storage bounds.
+    /// # Errors
+    /// Rejects the same incomplete, foreign or aliased recorded facts as the public legacy constructor.
+    #[allow(clippy::too_many_arguments)]
+    pub fn for_step(
+        step: SummaryMigrationStep,
         historical: LogicalStoreOperationKey,
         incident: IncidentKey,
         revision: IncidentRevision,
@@ -59,6 +87,7 @@ impl DiagnosticSummaryMigrationPlan {
             ));
         }
         Ok(Self {
+            step,
             historical,
             incident,
             revision,
@@ -68,6 +97,10 @@ impl DiagnosticSummaryMigrationPlan {
             candidate_stage,
             journal_sha256,
         })
+    }
+    /// Return the exact original/candidate schema pair bound by the canonical journal digest.
+    pub const fn step(&self) -> SummaryMigrationStep {
+        self.step
     }
     /// Observe the full historical key; it never authorizes the current operation.
     pub const fn historical_operation(&self) -> LogicalStoreOperationKey {
@@ -93,7 +126,7 @@ impl DiagnosticSummaryMigrationPlan {
     pub const fn original_stage(&self) -> RecordedDiagnosticFileFacts {
         self.original_stage
     }
-    /// Observe expected exact schema2 candidate facts.
+    /// Observe expected exact successor-schema candidate facts.
     pub const fn candidate_stage(&self) -> RecordedDiagnosticFileFacts {
         self.candidate_stage
     }
@@ -144,7 +177,7 @@ impl DiagnosticSummaryMigrationArchiveDecision {
 /// Storage retains every source and invokes callbacks outside its state mutex,
 /// then revalidates exact source custody and original execution context.
 pub trait DiagnosticSummaryMigrationValidator {
-    /// Prove strict legacy1 to canonical2 byte equality and complete domain facts.
+    /// Prove strict original to canonical successor byte equality and complete domain facts.
     /// # Errors
     /// Preserves strict decoding, conversion, identity and payload-reference causes.
     fn validate_preparation(
@@ -177,7 +210,7 @@ pub trait DiagnosticSummaryMigrationValidator {
         original_stage: &DiagnosticRecoverySource,
         candidate: &DiagnosticRecoverySource,
     ) -> Result<(), DiagnosticRecoveryValidationError>;
-    /// Validate archived facts against strict legacy1 and derived canonical2 SHA/length.
+    /// Validate archived facts against strict original and derived canonical successor SHA/length.
     /// Current Summary is not required and no Summary authority is returned.
     /// # Errors
     /// Rejects inconsistent archived original or derived candidate facts.

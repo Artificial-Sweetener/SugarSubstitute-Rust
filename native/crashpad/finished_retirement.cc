@@ -50,26 +50,41 @@ void Invalid(SsFinishedResultV1* output) noexcept {
 }  // namespace sugarsubstitute::finished
 
 using namespace sugarsubstitute::finished;
-void ss_finished_open_v1(const SsFinishedOpenInputV1* input, SsFinishedResultV1* output) {
-  if (!output) return;
-  Invalid(output);
-  if (!input || input->abi_version != 1 || input->reserved || !input->borrowed_database ||
-      !input->borrowed_metrics || !ValidSubject(input->subject) ||
-      !ValidBuild(input->build_length, input->build) || !ValidDeadline(input->original_operation) ||
-      input->has_uuid > 1 || (input->has_uuid == 0 &&
-          std::any_of(std::begin(input->optional_uuid), std::end(input->optional_uuid), [](auto b) { return !!b; }))) return;
-  if (input->has_uuid && std::all_of(std::begin(input->optional_uuid), std::end(input->optional_uuid), [](auto b) { return !b; })) return;
-  auto owner=CreateLease(WindowsFiles(),input->current,input->original_operation,*output,NativeLeaseAllocation);
+namespace sugarsubstitute::finished {
+void OpenOwned(const SsFinishedOpenInputV1& input,const SsRecoveryCaptureOriginV2* origin,
+               const SsLogicalStoreOperationV1* operation,SsFinishedResultV1& output) noexcept {
+  auto owner=CreateLease(WindowsFiles(),input.current,input.original_operation,output,NativeLeaseAllocation);
   if(!owner)return;
   auto& expected = owner->expected;
-  expected.borrowed_database = input->borrowed_database; expected.borrowed_metrics = input->borrowed_metrics;
-  memcpy(expected.expected_database_identity,input->expected_database_identity,24);
-  memcpy(expected.expected_metrics_identity,input->expected_metrics_identity,24);
-  expected.subject = input->subject; expected.build_length = input->build_length;
-  memcpy(expected.build,input->build,64);memcpy(expected.optional_uuid,input->optional_uuid,16);expected.has_uuid=input->has_uuid;
-  owner->Result(*output);  // publish the real token before the first acquisition.
-  Invocation invocation(*owner,input->current);
-  Query(invocation); owner->Result(*output);
+  expected.borrowed_database = input.borrowed_database; expected.borrowed_metrics = input.borrowed_metrics;
+  memcpy(expected.expected_database_identity,input.expected_database_identity,24);
+  memcpy(expected.expected_metrics_identity,input.expected_metrics_identity,24);
+  expected.subject = input.subject; expected.build_length = input.build_length;
+  memcpy(expected.build,input.build,64);memcpy(expected.optional_uuid,input.optional_uuid,16);expected.has_uuid=input.has_uuid;
+  owner->Result(output);  // publish the real token before the first acquisition.
+  Invocation invocation(*owner,input.current);
+  if (!origin || (operation && BindRecoveryOrigin(invocation,*origin,input.subject,*operation)))
+    Query(invocation);
+  owner->Result(output);
+}
+}
+namespace {
+bool ValidOpen(const SsFinishedOpenInputV1* input) noexcept {
+  if (!input || input->abi_version!=1 || input->reserved || !input->borrowed_database || !input->borrowed_metrics ||
+      !ValidSubject(input->subject) || !ValidBuild(input->build_length,input->build) || !ValidDeadline(input->original_operation) ||
+      input->has_uuid>1 || (input->has_uuid==0 && std::any_of(std::begin(input->optional_uuid),std::end(input->optional_uuid),[](auto b){return !!b;}))) return false;
+  return !input->has_uuid || std::any_of(std::begin(input->optional_uuid),std::end(input->optional_uuid),[](auto b){return !!b;});
+}
+}
+void ss_finished_open_v1(const SsFinishedOpenInputV1* input,SsFinishedResultV1* output) {
+  if (!output) return; Invalid(output);
+  if (!ValidOpen(input)) return;
+  OpenOwned(*input,nullptr,nullptr,*output);
+}
+void ss_finished_open_v2(const SsFinishedOpenInputV2* input,SsFinishedResultV1* output) {
+  if (!output) return; Invalid(output);
+  if (!input || input->abi_version!=2 || input->reserved || !ValidOpen(&input->query)) return;
+  OpenOwned(input->query,&input->origin,&input->operation,*output);
 }
 void ss_finished_read_v1(const SsFinishedReadInputV1* input, SsFinishedResultV1* output) {
   if (!output) return;

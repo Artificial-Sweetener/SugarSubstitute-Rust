@@ -9,6 +9,8 @@ pub(super) enum StoreRecord {
     Ledger { ledger: LedgerRecord },
     SummaryEviction { journal: Box<JournalRecord> },
     CapturePromotion { journal: Box<CaptureJournalRecord> },
+    RecoveryCaptureOrigin { journal: Box<OriginJournalRecord> },
+    RecoveryCapturePromotion { journal: Box<RecoveryCaptureJournalRecord> },
     SummaryMigration(Box<MigrationRecord>),
     SummaryMigrationArchive(Box<MigrationArchiveRecord>),
     PayloadDiscard { journal: Box<PayloadDiscardRecord> },
@@ -20,6 +22,8 @@ enum Kind {
     Ledger,
     SummaryEviction,
     CapturePromotion,
+    RecoveryCapturePromotion,
+    RecoveryCaptureOrigin,
     SummaryMigration,
     SummaryMigrationArchive,
     PayloadDiscard,
@@ -64,9 +68,11 @@ impl Kind {
     fn fields(self) -> &'static [&'static str] {
         match self {
             Self::Ledger => &["record", "ledger"],
-            Self::SummaryEviction | Self::CapturePromotion | Self::PayloadDiscard => {
-                &["record", "journal"]
-            }
+            Self::SummaryEviction
+            | Self::CapturePromotion
+            | Self::RecoveryCaptureOrigin
+            | Self::RecoveryCapturePromotion
+            | Self::PayloadDiscard => &["record", "journal"],
             Self::SummaryMigration => &[
                 "record",
                 "operation",
@@ -204,6 +210,17 @@ impl<'de> DeserializeSeed<'de> for ContentSeed {
             Kind::SummaryEviction => Ok(StoreRecord::SummaryEviction {
                 journal: typed::<_, JournalMember<JournalRecord>>(deserializer, self.0)?.journal,
             }),
+            Kind::RecoveryCaptureOrigin => Ok(StoreRecord::RecoveryCaptureOrigin {
+                journal: typed::<_, JournalMember<OriginJournalRecord>>(deserializer, self.0)?
+                    .journal,
+            }),
+            Kind::RecoveryCapturePromotion => Ok(StoreRecord::RecoveryCapturePromotion {
+                journal: typed::<_, JournalMember<RecoveryCaptureJournalRecord>>(
+                    deserializer,
+                    self.0,
+                )?
+                .journal,
+            }),
             Kind::CapturePromotion => Ok(StoreRecord::CapturePromotion {
                 journal: typed::<_, JournalMember<CaptureJournalRecord>>(deserializer, self.0)?
                     .journal,
@@ -286,7 +303,17 @@ pub(super) fn decode(bytes: &[u8]) -> Result<StoreRecord, IncidentStoreError> {
             .content
             .0;
     let (schema, content) = super::super::codec_parse::parse_seed(bytes, EnvelopeSeed(kind))?;
-    if schema != 1 {
+    if schema
+        != if matches!(
+            content,
+            StoreRecord::RecoveryCapturePromotion { .. }
+                | StoreRecord::RecoveryCaptureOrigin { .. }
+        ) {
+            2
+        } else {
+            1
+        }
+    {
         return Err(IncidentStoreError::UnsupportedSchema(schema));
     }
     Ok(content)

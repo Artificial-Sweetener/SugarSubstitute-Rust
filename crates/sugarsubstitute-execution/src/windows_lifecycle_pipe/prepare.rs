@@ -117,6 +117,9 @@ impl Lease {
         if frequency != original.frequency as u64 || now >= original.ticks as u64 {
             return Err(failure("pipe_expired_bootstrap"));
         }
+        if let Some(pair) = &mut self.recovery_pair {
+            pair.prepare(data, context)?;
+        }
         self.binding = Some(data.binding);
         Ok(0)
     }

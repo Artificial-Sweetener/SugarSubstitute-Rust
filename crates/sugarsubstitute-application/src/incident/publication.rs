@@ -32,6 +32,36 @@ impl IncidentCoordinator {
         record.phase = IncidentServicePhase::SeedCommitted;
         Ok(IncidentEffects::default())
     }
+    /// Retire only one actually stopped seed publication after the adapter checked its files.
+    /// Preserve its original failure and persisted content without claiming a successful commit,
+    /// source removal, family settlement or clean exit.
+    pub(super) fn seed_publication_retired(
+        &mut self,
+        scope: IncidentOperationScope,
+    ) -> Result<IncidentEffects, IncidentDecisionError> {
+        let index = self.index(scope.incident())?;
+        let record = self.record(index)?;
+        if record.seed_scope != Some(scope) {
+            return Err(IncidentDecisionError::StaleOperation);
+        }
+        if record.seed_committed || record.failure.is_some() || record.summary.is_some() {
+            return Err(IncidentDecisionError::WrongPhase);
+        }
+        if record.pending.is_none()
+            && record.current.is_none()
+            && record.first_failure == Some(IncidentServiceFailure::SeedPublication)
+        {
+            return Ok(IncidentEffects::default());
+        }
+        if record.pending != Some(Pending::Seed) || record.current != Some(scope) {
+            return Err(IncidentDecisionError::WrongPhase);
+        }
+        let record = self.record_mut(index)?;
+        record.latch_failure(IncidentServiceFailure::SeedPublication);
+        record.pending = None;
+        record.current = None;
+        Ok(IncidentEffects::default())
+    }
     /// Prepare exact terminal collection content under the original failure scope.
     pub(super) fn collected(
         &mut self,

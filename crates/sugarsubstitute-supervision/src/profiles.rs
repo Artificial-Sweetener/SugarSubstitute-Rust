@@ -40,6 +40,7 @@ pub(crate) const fn carrier_metadata_bytes() -> u64 {
     (size_of::<storage::NativeState>()
         + size_of::<crate::registry::profile::prepared::PreparedDesktop>()
         + size_of::<crate::registry::profile::prepared::PreparedDesktopCarrier>()
+        + size_of::<crate::registry_input::recovery::RecoveryCarrierLaunch>()
         + 2 * 65532
         + 2 * 8192
         + 2 * size_of::<usize>()) as u64

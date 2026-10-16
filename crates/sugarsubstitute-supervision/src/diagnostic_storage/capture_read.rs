@@ -11,6 +11,7 @@ pub struct ProtectedCaptureReadLease {
     owner: CaptureReadOwner,
     shared: Option<Shared>,
     operation: LogicalStoreOperationKey,
+    reserved_handles: usize,
 }
 /// Borrow only the same actual directory pins during one synchronous checked ABI call.
 /// The genuine current context and guard cannot be retained in a native token.
@@ -59,10 +60,12 @@ impl DiagnosticStorage {
             return Err(error(operation.key, Code::Capacity));
         }
         state.data_mut()?.capture_reads += 1;
+        state.data_mut()?.capture_handles += 2;
         *output = Some(ProtectedCaptureReadLease {
             owner,
             shared: Some(self.shared.clone()),
             operation: operation.key,
+            reserved_handles: 2,
         });
         drop(state);
         let lease = output.as_mut().ok_or_else(|| error(operation.key, Code::Closed))?;
@@ -75,6 +78,17 @@ impl DiagnosticStorage {
     }
 }
 impl ProtectedCaptureReadLease {
+    /// Observe full matching origin from the actual retained source, never another capability.
+    pub fn origin(
+        &self,
+    ) -> Result<sugarsubstitute_contracts::crash::CaptureGenerationOrigin, DiagnosticStorageError>
+    {
+        self.owner
+            .data
+            .as_ref()
+            .map(|data| data.origin)
+            .ok_or_else(|| error(self.operation, Code::Closed))
+    }
     pub(super) fn matches_storage(
         &self,
         shared: &Shared,
@@ -115,6 +129,10 @@ impl ProtectedCaptureReadGuard<'_> {
             .current(self.current)
             .map_err(|cause| native(self.lease.operation, Code::Closed, cause))
     }
+    /// Observe the exact genuine current storage operation, independent of historical origin.
+    pub const fn current_operation(&self) -> LogicalStoreOperationKey {
+        self.lease.operation
+    }
     /// Observe original generation ownership without rebasing historical identity.
     pub fn coordinator(&self) -> Result<CoordinatorKey, DiagnosticStorageError> {
         self.lease
@@ -123,6 +141,14 @@ impl ProtectedCaptureReadGuard<'_> {
             .as_ref()
             .map(|data| data.coordinator)
             .ok_or_else(|| error(self.lease.operation, Code::Closed))
+    }
+    /// Return exact origin matching facts retained by the real protected source pin.
+    /// This does not construct or authenticate another generation/source capability.
+    pub fn origin(
+        &self,
+    ) -> Result<sugarsubstitute_contracts::crash::CaptureGenerationOrigin, DiagnosticStorageError>
+    {
+        self.lease.origin()
     }
     /// Borrow the actual database directory only for the synchronous native ABI call.
     /// # Errors
@@ -164,6 +190,20 @@ impl Drop for ProtectedCaptureReadLease {
             match state.capture_reads.checked_sub(1) {
                 Some(count) => {
                     state.capture_reads = count;
+                    if let Some(handles) = state.capture_handles.checked_sub(self.reserved_handles)
+                    {
+                        state.capture_handles = handles;
+                    } else {
+                        state.closed = true;
+                        state.allocation.close();
+                        drop(state);
+                        std::mem::forget(shared);
+                        tracing::error!(
+                            operation = "capture_handle_slot_retained",
+                            "Original capture handle accounting retained"
+                        );
+                        return;
+                    }
                     drop(state);
                     drop(shared);
                 }
@@ -182,3 +222,16 @@ impl Drop for ProtectedCaptureReadLease {
         }
     }
 }
+
+mod recovery;
+
+pub(super) mod origin;
+pub(super) use origin::recognized_origin;
+pub use origin::{
+    CheckedRecoveryCaptureOrigin, RecordedRecoveryCaptureOrigin, RecoveryCaptureOriginValidator,
+};
+
+mod historical;
+
+mod promotion;
+pub use promotion::{CapturePromotionValidator, RecordedCapturePromotion};

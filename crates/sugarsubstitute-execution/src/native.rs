@@ -192,9 +192,9 @@ pub(crate) enum NativeWork {
     CoordinatorEntry(crate::coordinator_entry::EntryWork),
     CaptureAttach(Box<crate::capture_attach::AttachWork>),
     DesktopCapture(Box<crate::desktop_capture::work::DesktopCaptureWork>),
-    CustodiedProcess(
-        Box<crate::backend_custody::process::worker::Work>,
-        crate::backend_custody::process::CustodiedProcessMemory,
+    ProcessCreation(
+        Box<crate::process_creation::worker::Work>,
+        crate::process_creation::ProcessCreationMemory,
     ),
     BackendCustody(
         Box<crate::backend_custody::worker::Work>,
@@ -202,6 +202,10 @@ pub(crate) enum NativeWork {
     ),
 }
 impl NativeWork {
+    /// Only a held creation may enter its native owner on stop without activation.
+    pub(crate) fn held_creation(&self) -> bool {
+        matches!(self, Self::ProcessCreation(work, _) if work.held)
+    }
     pub(crate) fn ready(&self) -> bool {
         match self {
             Self::Process(work) => work.binding.ready(),
@@ -213,7 +217,7 @@ impl NativeWork {
             Self::CoordinatorEntry(_) => true,
             Self::CaptureAttach(_) => true,
             Self::DesktopCapture(_) => true,
-            Self::CustodiedProcess(_, _) => true,
+            Self::ProcessCreation(work, _) => !work.held,
             Self::BackendCustody(work, _) => work.binding.ready(),
         }
     }
@@ -234,7 +238,7 @@ impl NativeWork {
     }
     pub(crate) fn initial_deadlines(&self) -> Option<crate::native_deadlines::Deadlines> {
         match self {
-            Self::CustodiedProcess(work, _) => {
+            Self::ProcessCreation(work, _) => {
                 Some(crate::native_deadlines::Deadlines::handshake(work.until))
             }
             Self::LifecyclePipe(work) => Some(crate::lifecycle_pipe::initial_deadlines(work)),

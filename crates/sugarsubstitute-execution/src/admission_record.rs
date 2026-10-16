@@ -15,7 +15,7 @@ impl Record {
             sugarsubstitute_contracts::execution::MemoryLeaseObservation::new(context.memory());
         Record {
             #[cfg(any(windows, test))]
-            custodied_process: matches!(&kind, RequestKind::CustodiedProcess(_)),
+            process_creation: matches!(&kind, RequestKind::ProcessCreation(_)),
             #[cfg(any(windows, test))]
             custody_deadlines: if matches!(&kind, RequestKind::BackendCustody { .. }) {
                 Some(Box::new(crate::backend_custody::deadlines::Deadlines::new()))

@@ -82,6 +82,102 @@ impl RetainedFamilyProof {
         self.check_context(context)?;
         Ok(identity)
     }
+    /// Retain a current exact member duplicate while preserving every failed native output.
+    /// The Root calls this on its admitted finite worker while the child stays suspended.
+    /// A later failure restores the duplicate to the same checked-close family slot.
+    pub(crate) fn duplicate_member(
+        &self,
+        expected: Identity,
+        context: &JobContext,
+    ) -> Result<WatchInput, RegistryError> {
+        if self.qualify_member(expected.pid, context)? != expected {
+            return Err(RegistryError::invalid("recovery_member_birth"));
+        }
+        self.check_context(context)?;
+        let mut native = lock(&self.shared.native);
+        let family =
+            native.family.as_mut().ok_or_else(|| RegistryError::invalid("family_retired"))?;
+        if family.sealed || family.forced || family.closure_committed || family.incomplete {
+            return Err(RegistryError::invalid("family_retiring"));
+        }
+        let index = family
+            .members
+            .iter()
+            .position(|slot| {
+                slot.as_ref().is_some_and(|member| {
+                    member.identity == expected && !member.exited && member.handle.is_some()
+                })
+            })
+            .ok_or_else(|| RegistryError::invalid("recovery_member_identity"))?;
+        let input = self.shared.port.duplicate(family, index)?;
+        if let Err(cause) = self.check_context(context) {
+            match input {
+                WatchInput::Native(handle) => {
+                    use std::os::windows::io::IntoRawHandle;
+                    family.watch_duplicate = Some(handle.into_raw_handle() as usize);
+                }
+                #[cfg(test)]
+                WatchInput::Simulated => {}
+            }
+            return Err(cause);
+        }
+        Ok(input)
+    }
+    /// Enroll the same physical member in Root's genuine direct pipe before resume.
+    /// Rejected duplication/enrollment retains the native slot and identical enrollment.
+    pub(crate) fn enroll_member(
+        &self,
+        expected: Identity,
+        run: sugarsubstitute_contracts::lifecycle::RunKey,
+        input: &mut Option<
+            sugarsubstitute_execution::windows_lifecycle_pipe::LifecycleDesktopEnrollment,
+        >,
+        context: &JobContext,
+    ) -> Result<(), RegistryError> {
+        if input.as_ref().is_none_or(|enrollment| enrollment.run() != run)
+            || self.ticket.binding != FamilyBinding::Desktop(run)
+            || self.qualify_member(expected.pid, context)? != expected
+        {
+            return Err(RegistryError::invalid("recovery_lifecycle_member_source"));
+        }
+        self.check_context(context)?;
+        let mut native = lock(&self.shared.native);
+        let family =
+            native.family.as_mut().ok_or_else(|| RegistryError::invalid("family_retired"))?;
+        if family.sealed || family.forced || family.closure_committed || family.incomplete {
+            return Err(RegistryError::invalid("family_retiring"));
+        }
+        let index = family
+            .members
+            .iter()
+            .position(|slot| {
+                slot.as_ref().is_some_and(|member| {
+                    member.identity == expected && !member.exited && member.handle.is_some()
+                })
+            })
+            .ok_or_else(|| RegistryError::invalid("recovery_lifecycle_member_identity"))?;
+        let handle = self.shared.port.duplicate(family, index)?;
+        #[cfg(test)]
+        let WatchInput::Native(handle) = handle else {
+            return Err(RegistryError::invalid("recovery_lifecycle_native_input"));
+        };
+        #[cfg(not(test))]
+        let WatchInput::Native(handle) = handle;
+        let Some(enrollment) = input.take() else {
+            use std::os::windows::io::IntoRawHandle;
+            family.watch_duplicate = Some(handle.into_raw_handle() as usize);
+            return Err(RegistryError::invalid("recovery_lifecycle_enrollment_missing"));
+        };
+        match enrollment.enroll(run, self.ticket.process, handle) {
+            Ok(()) => Ok(()),
+            Err(rejected) => {
+                use std::os::windows::io::IntoRawHandle;
+                family.watch_duplicate = Some(rejected.process.into_raw_handle() as usize);
+                *input = Some(rejected.enrollment);
+                Err(RegistryError::new("recovery_lifecycle_enrollment", rejected.error))
+            }
+        }
+    }
     fn check_context(&self, context: &JobContext) -> Result<(), RegistryError> {
         if context.owner_id() != self.execution
             || context.spec().class != JobClass::InfrastructureLifecycle

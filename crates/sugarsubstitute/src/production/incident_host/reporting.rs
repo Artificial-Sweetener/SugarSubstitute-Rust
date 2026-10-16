@@ -60,6 +60,19 @@ impl IncidentHost {
             HostIssue::Decision
         })
     }
+    /// Reserve a distinct existing journal operation for actual pre-ACK recovery preparation.
+    /// This leaves report mutation/presentation state intact and grants no native authority.
+    pub(in crate::production) fn admit_recovery_capture_origin(
+        &mut self,
+        binding: ReportBinding,
+        context: IncidentRequestContext,
+    ) -> Result<IncidentOperationScope, HostIssue> {
+        let state = self.vacant()?;
+        state.coordinator.admit_recovery_capture_origin(binding, context).map_err(|cause| {
+            self.cause.get_or_insert(HostCause::Decision(cause));
+            HostIssue::Decision
+        })
+    }
     /// Observe an authenticated Presented frame after its Core validation.
     pub(in crate::production) fn observe_presented(
         &mut self,

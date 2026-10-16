@@ -4,6 +4,7 @@
 use super::*;
 use sugarsubstitute_crash::diagnostic_client::{DiagnosticCommand, DiagnosticIncident};
 /// Require the exact actual same-session original frame for presentation and dismissal.
+#[expect(clippy::result_large_err, reason = "Keep funded ReportingOperation cause inline")]
 pub(super) fn validate(input: &ReportingInput) -> Result<(), ReportingCause> {
     let Some(expected) = expected_command(&input.work, input.authentication.is_some())? else {
         return Ok(());
@@ -25,6 +26,7 @@ pub(super) fn validate(input: &ReportingInput) -> Result<(), ReportingCause> {
     Ok(())
 }
 /// Decide only the required closed command shape; a true flag alone grants no authentication.
+#[expect(clippy::result_large_err, reason = "Keep funded ReportingOperation cause inline")]
 pub(super) fn expected_command(
     work: &ReportingWork,
     has_frame: bool,

@@ -28,7 +28,15 @@ impl IncidentReporting {
             return Err("Report repository already occupied".into());
         }
         let work = match kind {
-            StoreKind::View { .. } | StoreKind::ExportView => self.view_work(binding)?,
+            StoreKind::View { .. } | StoreKind::ExportView => {
+                let mut work = self.view_work(binding)?;
+                if matches!(kind, StoreKind::ExportView)
+                    && let ReportingWork::View { root_capture_degraded, .. } = &mut work
+                {
+                    *root_capture_degraded = false;
+                }
+                work
+            }
             StoreKind::Attempt(attempt) => ReportingWork::Attempt { binding, attempt },
             StoreKind::Acknowledge(command) => ReportingWork::Acknowledge { command, at },
             StoreKind::Symbols => {
@@ -369,6 +377,7 @@ impl IncidentReporting {
         Ok(ReportingWork::View {
             binding,
             locale: self.locale.ok_or("Registered report locale missing")?.as_str(),
+            root_capture_degraded: self.fresh_supervisor,
         })
     }
 }

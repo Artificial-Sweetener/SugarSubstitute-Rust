@@ -32,6 +32,27 @@ impl Entry {
             Self::Profile(value) => value.stop(until),
         }
     }
+    pub(super) fn owner_lost(&mut self, until: Moment) -> Result<(), ClaimError> {
+        match self {
+            Self::Backend(value) => value.stop(until),
+            Self::Profile(value) => value.owner_lost(until),
+        }
+    }
+    pub(super) fn advance_owner_loss(&mut self) -> Result<(), ClaimError> {
+        match self {
+            Self::Backend(_) => Ok(()),
+            Self::Profile(value) => value.advance_owner_loss(),
+        }
+    }
+    pub(super) fn capture_pending(&self) -> bool {
+        matches!(self, Self::Profile(value) if value.capture_pending())
+    }
+    pub(super) fn recovery_settle_until(&self) -> Option<Moment> {
+        match self {
+            Self::Backend(_) => None,
+            Self::Profile(value) => value.recovery_settle_until(),
+        }
+    }
     pub(super) fn root_signaled(&self) -> bool {
         match self {
             Self::Backend(value) => value.root_signaled(),

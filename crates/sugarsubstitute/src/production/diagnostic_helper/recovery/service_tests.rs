@@ -301,3 +301,54 @@ fn completed_read_cause_and_uncertain_cleanup_remain_visible_with_original_escap
     assert_eq!(scope.snapshot().reserved_bytes, 0);
     Ok(())
 }
+
+#[test]
+fn recovery_phase_rearming_waits_for_actual_terminal_and_checked_native_cleanup()
+-> Result<(), TestError> {
+    let wake = Arc::new(Wake::default());
+    let owner = ExecutionOwner::new(Arc::new(TestClock), wake.clone())?;
+    let client = owner.client();
+    let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
+    let jobs = JobSequence::new();
+    let mut metadata = spec(jobs.allocate()?);
+    metadata.reservation_bytes = RECOVERY_SOURCE_BYTES;
+    let mut constructor =
+        client.submit_blocking(&scope, metadata, |context| RecoveryService::new(&context))?;
+    let completed = observe(&client, &wake, &mut constructor)?;
+    let mut service = match completed.outcome {
+        JobOutcome::Success(service) => service,
+        _ => return Err("recovery admission failed".into()),
+    };
+    drop(completed.memory);
+    drop(constructor);
+    let source = service.source.alias();
+    service.work.job =
+        Some(client.submit_blocking(&scope, spec(jobs.allocate()?), move |context| {
+            let fixture = DiagnosticStorageFixture::new().map_err(|_| RecoveryIssue::Failed)?;
+            let mut operation = prepared(&context, &fixture).map_err(|_| RecoveryIssue::Failed)?;
+            operation.next = Some(RecoveryPhase::Capture { after: Some([7; 32]) });
+            *source.loan()?.operation()? = operation;
+            Ok(true)
+        })?);
+    service.installed = true;
+    assert!(service.next_step().is_err());
+    assert!(service.final_scan_ready().is_err());
+    delivered(&mut service, &client, &wake, false)?;
+    assert!(service.next_step().is_err());
+    service.submit_cleanup(&client, &scope, &jobs, Moment::from_nanos(100))?;
+    delivered(&mut service, &client, &wake, true)?;
+    assert_eq!(service.next_step()?, Some(RecoveryPhase::Capture { after: Some([7; 32]) }));
+    assert!(!service.final_scan_ready()?);
+    // No genuine input was issued by this external-disk fixture. It cannot synthesize another op.
+    let mut missing = None;
+    assert!(service.advance(&mut missing).is_err());
+    assert!(service.delivered() && service.files_retired());
+    assert_eq!(service.next_step()?, Some(RecoveryPhase::Capture { after: Some([7; 32]) }));
+    service.source.release()?;
+    service.work.completion = None;
+    service.cleanup.completion = None;
+    drop(service);
+    drop(owner);
+    assert_eq!(scope.snapshot().reserved_bytes, 0);
+    Ok(())
+}

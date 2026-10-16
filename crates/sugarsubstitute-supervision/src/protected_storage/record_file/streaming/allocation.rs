@@ -17,11 +17,15 @@ impl StreamingPort {
         Ok(NativeRoleLayout { retained: bytes, peak: bytes })
     }
     /// Describe the returned native observation vector and its final shared retention.
-    pub(crate) fn diagnostic_scan_state_layout() -> Result<NativeRoleLayout, NativeLayoutFailure> {
-        let observations =
-            Layout::array::<diagnostic::inventory::ObservedEntry>(DIAGNOSTIC_SCAN_BOUND)
-                .map_err(|_| NativeLayoutFailure::Overflow)?
-                .size();
+    pub(crate) fn diagnostic_scan_state_layout(
+        capacity: usize,
+    ) -> Result<NativeRoleLayout, NativeLayoutFailure> {
+        if !(1..=DIAGNOSTIC_SCAN_BOUND).contains(&capacity) {
+            return Err(NativeLayoutFailure::Overflow);
+        }
+        let observations = Layout::array::<diagnostic::inventory::ObservedEntry>(capacity)
+            .map_err(|_| NativeLayoutFailure::Overflow)?
+            .size();
         let bytes = observations
             .checked_add(DiagnosticNativeScanRetention::control_bytes())
             .and_then(|bytes| bytes.checked_add(size_of::<diagnostic::inventory::Scan>()))

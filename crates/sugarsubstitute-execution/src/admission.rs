@@ -55,7 +55,9 @@ pub(crate) enum RequestKind<'a> {
     #[cfg(any(windows, test))]
     Native,
     #[cfg(any(windows, test))]
-    CustodiedProcess(&'a crate::backend_custody::BackendCustodyParentStorage),
+    RecoveryPipe(&'a crate::RegisteredRecoveryGrant),
+    #[cfg(any(windows, test))]
+    ProcessCreation(&'a crate::process_creation::source::Source),
     #[cfg(any(windows, test))]
     BackendCustody {
         source: &'a crate::lifecycle_pipe::SharedRef,
@@ -71,7 +73,7 @@ pub(crate) enum RequestKind<'a> {
 
 pub(crate) struct Record {
     #[cfg(any(windows, test))]
-    pub(crate) custodied_process: bool,
+    pub(crate) process_creation: bool,
     #[cfg(any(windows, test))]
     pub(crate) custody_deadlines: Option<Box<crate::backend_custody::deadlines::Deadlines>>,
     pub(crate) memory: Option<sugarsubstitute_contracts::execution::MemoryLeaseObservation>,

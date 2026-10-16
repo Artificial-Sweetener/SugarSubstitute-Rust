@@ -121,7 +121,16 @@ fn source_facts_locked(
         return Err(Rejection::Admission(AdmissionError::DeadlineExpired { deadline, now }));
     }
     let slots = record.native_deadlines.ok_or_else(closed)?;
-    if slots.stopped() || crate::symbol_admission::original_stop(state, shared.id, now).is_some() {
+    if slots.stopped()
+        || crate::symbol_admission::original_stop(state, shared.id, now).is_some()
+        || crate::coordinator_entry::recovery_grant::original_stop(
+            core,
+            state,
+            shared.recovery_grant.as_ref(),
+            now,
+        )
+        .is_some()
+    {
         return Err(closed());
     }
     if let Some(deadline) = slots.expired_deadline(now) {
@@ -133,6 +142,56 @@ fn source_facts_locked(
     }
     if !pipe.connected || !pipe.authenticated {
         return Err(Rejection::Pipe(LifecyclePipeError::NotReady));
+    }
+    Ok(())
+}
+
+/// Validate an actual prepared Root server before child enrollment/authentication exists.
+/// This separate private stage never relaxes the authenticated current-session fence.
+pub(crate) fn prepared_bootstrap_locked(
+    core: &Core,
+    state: &crate::admission::State,
+    control: &Control,
+    pin: &LifecyclePipeBootstrap,
+    now: Moment,
+) -> Result<(), AdmissionError> {
+    if !control.shared.same_allocation(&pin.shared)
+        || control.shared.child
+        || control.shared.core.upgrade().is_none_or(|actual| !std::ptr::eq(actual.as_ref(), core))
+    {
+        return Err(AdmissionError::InvalidCaptureAdmission);
+    }
+    let record =
+        state.jobs.get(&control.shared.id).ok_or(AdmissionError::InvalidCaptureAdmission)?;
+    if !control.owner.matches_record(record)
+        || record.phase != JobPhase::Running
+        || record.retiring
+        || record.memory.is_none()
+        || state.stopping
+        || core.clock.failed()
+    {
+        return Err(AdmissionError::InvalidCaptureAdmission);
+    }
+    let cutoff = crate::admission_liveness::scope_deadline(core, state, record)?;
+    if cutoff.is_some_and(|until| until <= now)
+        || control.shared.original_deadline <= now
+        || record
+            .native_deadlines
+            .is_none_or(|slots| slots.stopped() || slots.expired_deadline(now).is_some())
+    {
+        return Err(AdmissionError::InvalidCaptureAdmission);
+    }
+    let pipe = lock(&control.shared.state);
+    if pipe.stopped
+        || !pipe.prepared
+        || !pipe.pin
+        || pipe.inherited == 0
+        || pipe.connected
+        || pipe.authenticated
+        || pipe.enrolled
+        || pipe.peer.is_some()
+    {
+        return Err(AdmissionError::InvalidCaptureAdmission);
     }
     Ok(())
 }

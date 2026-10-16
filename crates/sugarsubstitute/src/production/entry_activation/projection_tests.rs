@@ -188,11 +188,14 @@ fn configured_japanese_locale_reaches_production_report_view_work_without_web_co
     let mut receiving = super::super::incident_reporting::IncidentReporting::new();
     assert!(receiving.view_work(binding).is_err());
     receiving.configure_locale(projected.locale)?;
-    let ReportingWork::View { binding: actual, locale } = receiving.view_work(binding)? else {
+    let ReportingWork::View { binding: actual, locale, root_capture_degraded } =
+        receiving.view_work(binding)?
+    else {
         return Err("Report view work changed kind".into());
     };
     assert_eq!(actual, binding);
     assert_eq!(locale, "ja");
+    assert!(!root_capture_degraded);
     assert!(receiving.configure_locale(LocaleId::new("en")?).is_err());
     assert!(matches!(receiving.view_work(binding), Ok(ReportingWork::View { locale: "ja", .. })));
     Ok(())

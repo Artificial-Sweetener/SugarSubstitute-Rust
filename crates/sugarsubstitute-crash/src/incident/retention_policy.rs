@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Select bounded retention victims and observe checked reclamation independently of authority.
-use super::{IncidentRepository, IncidentStoreError, StoredIncidentSummary, decode_summary};
+use super::{IncidentRepository, IncidentStoreError, StoredIncidentSummary};
 use sugarsubstitute_contracts::execution::JobContext;
 use sugarsubstitute_contracts::incident::*;
 use sugarsubstitute_supervision::diagnostic_storage::*;
@@ -89,8 +89,9 @@ impl IncidentRepository {
                 }
                 let (bytes, facts, index) = self.read_candidate(entry, context)?;
                 let mut decode = self.storage.recovery_decode(&self.operation, context)?;
-                let stored =
-                    super::allocation::decode(&mut decode, || decode_summary(bytes.as_bytes()))?;
+                let stored = super::allocation::decode(&mut decode, || {
+                    super::codec_summary::decode_current_summary(bytes.as_bytes())
+                })?;
                 self.namespace(stored.summary().seed().key())?;
                 self.reads.get_mut(index)?.bind_object(
                     DiagnosticObject::Summary(stored.summary().seed().key()),

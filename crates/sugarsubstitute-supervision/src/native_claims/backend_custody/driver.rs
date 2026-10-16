@@ -357,7 +357,7 @@ impl BackendCustodyDriver for Driver {
                 .access()
                 .map_err(|cause| NativeObservationError::new("custody_source_access", cause))?;
             access.state().and_then(|state| {
-                state.stop(Moment::from_nanos(u64::MAX))?;
+                state.stop_lost(Moment::from_nanos(u64::MAX))?;
                 state.progress(context, self.source.memory(), wake)
             })
         };

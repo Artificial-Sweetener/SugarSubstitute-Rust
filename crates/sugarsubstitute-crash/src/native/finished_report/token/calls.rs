@@ -25,9 +25,28 @@ impl Token {
             fields.state.failures.retain(Failure::Control(ControlCause::Source(cause)));
             Issue::Current
         })?;
-        if owner != key.subject().coordinator() || fields.operation.owner() != owner {
+        let origin = guard.origin().map_err(|cause| {
+            fields.state.failures.retain(Failure::Control(ControlCause::Source(cause)));
+            Issue::Current
+        })?;
+        let relation = match origin {
+            sugarsubstitute_contracts::crash::CaptureGenerationOrigin::Coordinator(actual) => {
+                actual == owner
+                    && owner == key.subject().coordinator()
+                    && fields.operation.owner() == owner
+            }
+            sugarsubstitute_contracts::crash::CaptureGenerationOrigin::Recovery(_) => {
+                fields.operation == guard.current_operation()
+                    && fields.operation.owner().namespace == origin.coordinator().namespace
+                    && origin.capture_key().is_ok_and(|key| key == owner)
+                    && origin.contains(key.subject()).is_ok_and(|matching| matching)
+            }
+        };
+        if !relation {
             return Err(Issue::Identity);
         }
+        let recovery = abi::RecoveryOrigin::from_origin(origin, fields.operation)
+            .map_err(|_| Issue::Identity)?;
         let identities = guard.identities().map_err(|cause| {
             fields.state.failures.retain(Failure::Control(ControlCause::Source(cause)));
             Issue::Current
@@ -69,7 +88,25 @@ impl Token {
         fields.phase = Phase::Issued;
         // SAFETY: genuine pinned API, pre-admitted fixed owner, live exact generation handles
         // and synchronous exclusive control/output borrows remain valid until return.
-        unsafe { (fields.state.api.open)(&input, &mut output) };
+        if let Some(origin) = recovery {
+            let key = fields.operation;
+            let input = abi::Open2 {
+                version: 2,
+                reserved: 0,
+                origin,
+                operation: abi::Operation {
+                    namespace: *key.owner().namespace.bytes(),
+                    epoch: *key.owner().epoch.bytes(),
+                    id: key.id().get(),
+                },
+                query: input,
+            };
+            // SAFETY: genuine Root-local pins, exact origin and original current source stay borrowed.
+            unsafe { (fields.state.api.open2)(&input, &mut output) };
+        } else {
+            // SAFETY: strict original Coordinator identity and v1 borrowed owners are unchanged.
+            unsafe { (fields.state.api.open)(&input, &mut output) };
+        }
         let control = current.take_failure();
         drop(current);
         fields.observe(&output, control)?;

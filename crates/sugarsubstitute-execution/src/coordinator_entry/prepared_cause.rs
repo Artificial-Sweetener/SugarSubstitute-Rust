@@ -9,6 +9,7 @@ use crate::{
     native::NativeObservationError,
 };
 use std::{error::Error, fmt};
+use sugarsubstitute_contracts::coordinator_entry::EntryShapeError;
 
 /// Inert typed classification of one retained cause; it grants no native privileges.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -42,8 +43,18 @@ pub enum EntryPreparedCauseKind {
 }
 /// Borrow genuine source data without an owned Arc or original-custody projection.
 pub struct EntryPreparedCause(RawCause);
+// Only ownerless source data enters the cached ledger. A full transport error
+// would reintroduce its whole preparation/retirement owner through the type graph.
 enum RawCause {
-    Transport(Box<EntryTransportError>),
+    Inert(EntryPreparedCauseKind),
+    Shape(EntryShapeError),
+    Clock(NativeObservationError),
+    PeerDisconnected(NativeObservationError),
+    EndpointAbsent(NativeObservationError),
+    Native {
+        cause: NativeObservationError,
+        identity_unrestored: bool,
+    },
     Preparation(PreparationSource),
     Retirement {
         original: Box<EntryPreparedCause>,
@@ -82,7 +93,33 @@ impl EntryPreparedCause {
                     identity_unrestored,
                 })
             }
-            other => Self(RawCause::Transport(Box::new(other))),
+            EntryTransportError::Closed => Self(RawCause::Inert(EntryPreparedCauseKind::Closed)),
+            EntryTransportError::Busy => Self(RawCause::Inert(EntryPreparedCauseKind::Busy)),
+            EntryTransportError::InvalidOperation => {
+                Self(RawCause::Inert(EntryPreparedCauseKind::InvalidOperation))
+            }
+            EntryTransportError::InvalidDeadline => {
+                Self(RawCause::Inert(EntryPreparedCauseKind::InvalidDeadline))
+            }
+            EntryTransportError::InvalidPhase => {
+                Self(RawCause::Inert(EntryPreparedCauseKind::InvalidPhase))
+            }
+            EntryTransportError::Authentication => {
+                Self(RawCause::Inert(EntryPreparedCauseKind::Authentication))
+            }
+            EntryTransportError::Malformed => {
+                Self(RawCause::Inert(EntryPreparedCauseKind::Malformed))
+            }
+            EntryTransportError::Capacity => {
+                Self(RawCause::Inert(EntryPreparedCauseKind::Capacity))
+            }
+            EntryTransportError::Shape(cause) => Self(RawCause::Shape(cause)),
+            EntryTransportError::Clock(cause) => Self(RawCause::Clock(cause)),
+            EntryTransportError::PeerDisconnected(cause) => Self(RawCause::PeerDisconnected(cause)),
+            EntryTransportError::EndpointAbsent(cause) => Self(RawCause::EndpointAbsent(cause)),
+            EntryTransportError::Native { cause, identity_unrestored } => {
+                Self(RawCause::Native { cause, identity_unrestored })
+            }
         }
     }
     fn foreign(owner: &EntryPreparationOwner) -> Self {
@@ -100,20 +137,13 @@ impl EntryPreparedCause {
         match &self.0 {
             RawCause::Preparation(_) => EntryPreparedCauseKind::Preparation,
             RawCause::Retirement { .. } => EntryPreparedCauseKind::Retirement,
-            RawCause::Transport(error) => match error.as_ref() {
-                EntryTransportError::Closed => EntryPreparedCauseKind::Closed,
-                EntryTransportError::Busy => EntryPreparedCauseKind::Busy,
-                EntryTransportError::InvalidOperation => EntryPreparedCauseKind::InvalidOperation,
-                EntryTransportError::InvalidDeadline => EntryPreparedCauseKind::InvalidDeadline,
-                EntryTransportError::InvalidPhase => EntryPreparedCauseKind::InvalidPhase,
-                EntryTransportError::Authentication => EntryPreparedCauseKind::Authentication,
-                EntryTransportError::Malformed => EntryPreparedCauseKind::Malformed,
-                EntryTransportError::Shape(_) => EntryPreparedCauseKind::Shape,
-                EntryTransportError::Capacity => EntryPreparedCauseKind::Capacity,
-                EntryTransportError::Clock(_) => EntryPreparedCauseKind::Clock,
-                EntryTransportError::Native { .. } => EntryPreparedCauseKind::Native,
-                _ => EntryPreparedCauseKind::Retirement,
-            },
+            RawCause::Inert(kind) => *kind,
+            RawCause::Shape(_) => EntryPreparedCauseKind::Shape,
+            RawCause::Clock(_) => EntryPreparedCauseKind::Clock,
+            RawCause::Native { .. } => EntryPreparedCauseKind::Native,
+            RawCause::PeerDisconnected(_) | RawCause::EndpointAbsent(_) => {
+                EntryPreparedCauseKind::Retirement
+            }
         }
     }
     /// Borrow nonclone actual original preparation control/error data.
@@ -129,9 +159,12 @@ impl EntryPreparedCause {
     }
     fn native(&self) -> Option<&NativeObservationError> {
         match &self.0 {
-            RawCause::Transport(error) => error.native_cause(),
+            RawCause::Clock(cause)
+            | RawCause::PeerDisconnected(cause)
+            | RawCause::EndpointAbsent(cause)
+            | RawCause::Native { cause, .. } => Some(cause),
             RawCause::Retirement { original, cleanup, .. } => original.native().or(Some(cleanup)),
-            RawCause::Preparation(_) => None,
+            RawCause::Preparation(_) | RawCause::Inert(_) | RawCause::Shape(_) => None,
         }
     }
     pub(super) fn panic(&self) -> Option<&sugarsubstitute_contracts::execution::PanicCause> {
@@ -143,18 +176,25 @@ impl EntryPreparedCause {
             RawCause::Retirement { original, cleanup, .. } => {
                 original.panic().or_else(|| cleanup.owner_panic_cause())
             }
-            RawCause::Transport(error) => {
-                error.native_cause().and_then(NativeObservationError::owner_panic_cause)
-            }
+            RawCause::Clock(cause)
+            | RawCause::PeerDisconnected(cause)
+            | RawCause::EndpointAbsent(cause)
+            | RawCause::Native { cause, .. } => cause.owner_panic_cause(),
+            RawCause::Inert(_) | RawCause::Shape(_) => None,
         }
     }
     pub(super) fn fatal(&self) -> bool {
         match &self.0 {
-            RawCause::Transport(error) => error.requires_process_shutdown(),
+            RawCause::Native { identity_unrestored, .. } => *identity_unrestored,
             RawCause::Retirement { original, identity_unrestored, .. } => {
                 *identity_unrestored || original.fatal()
             }
-            RawCause::Preparation(_) => false,
+            RawCause::Preparation(_)
+            | RawCause::Inert(_)
+            | RawCause::Shape(_)
+            | RawCause::Clock(_)
+            | RawCause::PeerDisconnected(_)
+            | RawCause::EndpointAbsent(_) => false,
         }
     }
     pub(super) fn contains_panic(&self) -> bool {
@@ -180,12 +220,10 @@ impl Error for EntryPreparedCause {
             }
             RawCause::Retirement { original, .. } => Some(original.as_ref()),
             // Preserve the genuine underlying primary; the cloneable native wrapper stays private.
-            RawCause::Transport(error) => match error.as_ref() {
-                EntryTransportError::Clock(cause) | EntryTransportError::Native { cause, .. } => {
-                    cause.source()
-                }
-                other => other.source(),
-            },
+            RawCause::Clock(cause) | RawCause::Native { cause, .. } => cause.source(),
+            RawCause::PeerDisconnected(cause) | RawCause::EndpointAbsent(cause) => Some(cause),
+            RawCause::Shape(cause) => Some(cause),
+            RawCause::Inert(_) => None,
         }
     }
 }

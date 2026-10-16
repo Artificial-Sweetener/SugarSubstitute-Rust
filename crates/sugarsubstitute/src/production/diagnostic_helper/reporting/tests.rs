@@ -139,7 +139,9 @@ fn reporting_actual_view_uses_separate_finite_credit_and_two_nonclone_disposal_s
                 IncidentUtc::from_unix_seconds(110).map_err(|_| ReportingIssue::Busy)?
             );
             let current = binding(ack.committed().summary()).map_err(|_| ReportingIssue::Busy)?;
-            operation.load_current(current, "ja", &context).map_err(|_| ReportingIssue::Busy)?;
+            operation
+                .load_current(current, "ja", true, &context)
+                .map_err(|_| ReportingIssue::Busy)?;
             let after = fixture.snapshot().active_identity(payload).ok_or(ReportingIssue::Busy)?;
             assert_eq!(before.file_identity(), after.file_identity());
             assert_eq!(before.sha256(), after.sha256());
@@ -179,6 +181,9 @@ fn reporting_actual_view_uses_separate_finite_credit_and_two_nonclone_disposal_s
     assert!(view.view().text().ends_with('\n'));
     assert!(!view.view().text().contains('\r'));
     assert!(view.view().text().contains("レポート"));
+    assert!(view.view().text().contains(
+        sugarsubstitute_contracts::localization::messages("ja").report.recovery_capture_degraded
+    ));
     assert!(view.view().text().len() <= ReportView::MAX_BYTES);
     assert_eq!(view.view().binding().revision().get(), 4);
     let second = service.source.reserve_view()?;
@@ -296,7 +301,7 @@ fn reporting_stale_view_retains_actual_loaded_summary_without_text_or_mutation()
                 ReportSessionId::new(7)?,
             );
             let before = fixture.snapshot().mutation_count();
-            operation.first = operation.load_current(stale, "en", &context).err();
+            operation.first = operation.load_current(stale, "en", false, &context).err();
             assert!(matches!(
                 operation.failure(),
                 Some(ReportingCause::Store(IncidentStoreError::StaleRevision))

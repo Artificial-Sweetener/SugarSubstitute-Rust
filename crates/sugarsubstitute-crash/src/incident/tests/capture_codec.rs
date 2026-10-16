@@ -4,6 +4,51 @@
 use super::*;
 use serde_json::{Value, json};
 
+#[cfg(windows)]
+#[test]
+fn historical_replay_moves_exact_decoded_plan_and_keeps_claim_after_rejection()
+-> Result<(), Box<dyn Error>> {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    };
+    use sugarsubstitute_contracts::execution::{MemoryLease, MemoryRelease};
+    struct Release(Arc<AtomicU64>);
+    impl MemoryRelease for Release {
+        fn release(&self, bytes: u64) {
+            self.0.fetch_add(bytes, Ordering::SeqCst);
+        }
+    }
+    let released = Arc::new(AtomicU64::new(0));
+    let bytes = HistoricalCaptureRecovery::required_storage_bytes();
+    let lease = MemoryLease::new(bytes, Box::new(Release(released.clone())));
+    let mut recovery = HistoricalCaptureRecovery::new(lease.claim(bytes)?)?;
+    let ledger = SummaryEvictions::new(owner(2)?.namespace, 0, 0, 0, None)?;
+    assert!(recovery.retain_replay(IncidentStoreState::Ledger(ledger)).is_err());
+    assert!(recovery.replay.is_none());
+    assert!(lease.claim(1).is_err());
+    let encoded =
+        encode_store_state(&IncidentStoreState::CapturePromotion(Box::new(capture_plan(false)?)))?;
+    let decoded = decode_store_state(&encoded)?;
+    let IncidentStoreState::CapturePromotion(plan) = &decoded else {
+        return Err("Decoded promotion changed record kind".into());
+    };
+    let original = std::ptr::from_ref(plan.as_ref());
+    recovery.retain_replay(decoded)?;
+    assert!(std::ptr::eq(original, recovery.replay.as_deref().ok_or("Retained plan absent")?));
+    assert!(recovery.retain_replay(decode_store_state(&encoded)?).is_err());
+    assert!(recovery.reset().is_err());
+    assert!(std::ptr::eq(original, recovery.replay.as_deref().ok_or("Original plan replaced")?));
+    assert!(lease.claim(1).is_err());
+    assert_eq!(released.load(Ordering::SeqCst), 0);
+    drop(recovery);
+    assert_eq!(lease.claim(bytes)?.bytes(), bytes);
+    assert_eq!(released.load(Ordering::SeqCst), 0);
+    drop(lease);
+    assert_eq!(released.load(Ordering::SeqCst), bytes);
+    Ok(())
+}
+
 pub(super) fn capture_plan(discarded: bool) -> Result<CaptureDispositionPlan, Box<dyn Error>> {
     let source = CaptureRecordedFileFacts::new([3; 24], [3; 32], 512)?;
     let summary = CaptureRecordedFileFacts::new([8; 24], [8; 32], 64)?;
@@ -11,7 +56,7 @@ pub(super) fn capture_plan(discarded: bool) -> Result<CaptureDispositionPlan, Bo
         LogicalStoreOperationKey::new(owner(9)?, IncidentOperationId::new(1)?),
         seed()?.key(),
         IncidentRevision::new(3)?,
-        owner(2)?,
+        sugarsubstitute_contracts::crash::CaptureGenerationOrigin::Coordinator(owner(2)?),
         DumpId::new([7; 16])?,
         BuildIdentity::new("build_1")?,
         [10; 24],

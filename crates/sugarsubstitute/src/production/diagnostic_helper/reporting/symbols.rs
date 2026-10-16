@@ -25,6 +25,7 @@ impl ReportingSymbols {
     }
 }
 /// Verify original actual owner/effective deadline before opening any protected reporting storage.
+#[expect(clippy::result_large_err, reason = "Keep funded ReportingOperation cause inline")]
 pub(super) fn validate(input: &ReportingInput, context: &JobContext) -> Result<(), ReportingCause> {
     let ReportingWork::Symbols { result, .. } = &input.work else {
         return Ok(());
@@ -43,6 +44,7 @@ pub(super) fn validate(input: &ReportingInput, context: &JobContext) -> Result<(
     Ok(())
 }
 /// Record using disjoint owned destinations while the same original sealed input remains borrowed.
+#[expect(clippy::result_large_err, reason = "Keep funded ReportingOperation cause inline")]
 pub(super) fn record(
     repository: &mut Option<IncidentRepository>,
     output: &mut Option<IncidentCommit>,

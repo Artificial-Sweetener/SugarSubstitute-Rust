@@ -8,6 +8,7 @@ use super::{
 };
 use serde::{Deserialize, Serialize};
 use sugarsubstitute_contracts::{
+    crash::CaptureGenerationOrigin,
     incident::{
         BuildIdentity, DumpId, IncidentKey, IncidentRevision, LogicalStoreOperationKey,
         MAX_PAYLOAD_BYTES, PayloadDiscard,
@@ -90,6 +91,7 @@ pub struct CaptureDispositionPlan {
     incident: IncidentKey,
     incident_revision: IncidentRevision,
     capture_generation: CoordinatorKey,
+    capture_origin: CaptureGenerationOrigin,
     uuid: DumpId,
     build: BuildIdentity,
     database_identity: [u8; 24],
@@ -106,7 +108,7 @@ impl CaptureDispositionPlan {
         historical_operation: LogicalStoreOperationKey,
         incident: IncidentKey,
         incident_revision: IncidentRevision,
-        capture_generation: CoordinatorKey,
+        capture_origin: CaptureGenerationOrigin,
         uuid: DumpId,
         build: BuildIdentity,
         database_identity: [u8; 24],
@@ -131,8 +133,18 @@ impl CaptureDispositionPlan {
                 summary_file
             }
         };
-        if historical_operation.owner().namespace != incident.subject().coordinator().namespace
-            || capture_generation != incident.subject().coordinator()
+        let capture_generation = capture_origin.capture_key()?;
+        let relation = match capture_origin {
+            CaptureGenerationOrigin::Coordinator(owner) => {
+                owner == incident.subject().coordinator()
+                    && historical_operation.owner().namespace == owner.namespace
+            }
+            CaptureGenerationOrigin::Recovery(_) => {
+                historical_operation.owner().namespace == capture_origin.coordinator().namespace
+                    && capture_origin.contains(incident.subject())?
+            }
+        };
+        if !relation
             || database_identity == [0; 24]
             || metrics_identity == [0; 24]
             || !(CRASHPAD_METADATA_HEADER_BYTES + CRASHPAD_METADATA_RECORD_BYTES..=1_048_576)
@@ -157,6 +169,7 @@ impl CaptureDispositionPlan {
             incident,
             incident_revision,
             capture_generation,
+            capture_origin,
             uuid,
             build,
             database_identity,
@@ -183,6 +196,10 @@ impl CaptureDispositionPlan {
     /// Return the historical actual-generation matching key.
     pub const fn capture_generation(&self) -> CoordinatorKey {
         self.capture_generation
+    }
+    /// Return exact persisted Root/run/grant origin, independently of its physical correlation key.
+    pub const fn capture_origin(&self) -> CaptureGenerationOrigin {
+        self.capture_origin
     }
     /// Return the nonzero canonical dump UUID matching bytes.
     pub const fn uuid(&self) -> DumpId {
@@ -282,6 +299,17 @@ pub(super) struct CaptureJournalRecord {
 }
 impl CaptureJournalRecord {
     pub(super) fn into_plan(self) -> Result<CaptureDispositionPlan, IncidentStoreError> {
+        self.into_origin_plan(None)
+    }
+    fn into_origin_plan(
+        self,
+        origin: Option<CaptureGenerationOrigin>,
+    ) -> Result<CaptureDispositionPlan, IncidentStoreError> {
+        let generation = self.capture_generation.into_owner()?;
+        let origin = origin.unwrap_or(CaptureGenerationOrigin::Coordinator(generation));
+        if origin.capture_key()? != generation {
+            return Err(IncidentStoreError::RecoveryConflict);
+        }
         let completion = match self.completion {
             CompletionRecord::Promoted { summary_file, payload_file } => {
                 CaptureDispositionCompletion::Promoted {
@@ -301,7 +329,7 @@ impl CaptureJournalRecord {
             self.historical_operation.into_operation()?,
             self.incident.into_key()?,
             IncidentRevision::new(self.incident_revision)?,
-            self.capture_generation.into_owner()?,
+            origin,
             DumpId::new(self.uuid)?,
             self.build.into_facts()?,
             self.database_identity,
@@ -354,3 +382,10 @@ impl From<&CaptureDispositionPlan> for CaptureJournalRecord {
         }
     }
 }
+
+mod recovery;
+pub(super) use recovery::RecoveryCaptureJournalRecord;
+
+mod origin_record;
+pub(super) use origin_record::OriginJournalRecord;
+pub use origin_record::RecoveryCaptureOriginRecord;

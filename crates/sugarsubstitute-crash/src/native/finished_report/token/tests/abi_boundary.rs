@@ -213,5 +213,25 @@ pub(super) fn dispositions(key: usize) -> u32 {
 }
 unsafe extern "C" fn recover(_: *const abi::Recover<'_>, _: *mut abi::DispositionOutput) {}
 pub(super) fn api() -> abi::Api {
-    abi::Api { open, read, retire, prepare, discard, recover }
+    abi::Api { open, open2, read, retire, prepare, discard, recover, discard2, recover2 }
+}
+
+/// This fixture forwards only the external producer result; real Rust source/identity gates run above it.
+unsafe extern "C" fn open2(input: *const abi::Open2<'_>, output: *mut abi::Output) {
+    // SAFETY: real Token supplies these complete synchronous borrowed inputs.
+    unsafe { open(&(*input).query, output) };
+}
+unsafe extern "C" fn discard2(
+    input: *const abi::Discard2<'_>,
+    output: *mut abi::DispositionOutput,
+) {
+    // SAFETY: real Token supplies the complete borrowed disposition and exclusive output.
+    unsafe { discard(&(*input).disposition, output) };
+}
+unsafe extern "C" fn recover2(
+    input: *const abi::Recover2<'_>,
+    output: *mut abi::DispositionOutput,
+) {
+    // SAFETY: real Token supplies the complete borrowed recovery and exclusive output.
+    unsafe { recover(&(*input).disposition, output) };
 }

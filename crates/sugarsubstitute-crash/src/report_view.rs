@@ -27,7 +27,8 @@ impl ReportView {
     pub const TRANSFER_HEADER_BYTES: u64 = 512;
 
     /// Format supplied committed facts and at most four already redacted diagnostic tails.
-    /// This neither reads files nor authenticates the supplied summary or binding.
+    /// The coverage flag adds localized presentation copy within the same allocation bound.
+    /// It neither reads files nor authenticates facts or grants native capture authority.
     ///
     /// # Errors
     /// Rejects mismatched binding/namespace, over-bound tail inventories, allocation
@@ -39,6 +40,7 @@ impl ReportView {
         tails: &[RedactedTextChunk],
         locale: &str,
         lease: &MemoryLease,
+        root_capture_degraded: bool,
     ) -> Result<Self, ReportViewError> {
         if summary.seed().key() != binding.incident()
             || summary.revision() != binding.revision()
@@ -55,6 +57,9 @@ impl ReportView {
         let labels = messages(locale).report;
         let mut writer = Writer::new(Self::MAX_BYTES, labels.omitted)?;
         write_facts(&mut writer, summary, evictions, labels);
+        if root_capture_degraded {
+            writer.line(labels.recovery_capture_degraded);
+        }
         writer.line(labels.diagnostics);
         for tail in tails {
             writer.bytes(tail.as_bytes());
@@ -85,10 +90,12 @@ fn write_facts(
     w.line(l.explanation);
     w.named(l.build, format_args!("{}", summary.seed().build().as_str()));
     w.named(l.revision, format_args!("{}", summary.revision().get()));
-    let status = match summary.facts().exit() {
-        ExitAttribution::Desktop { status, .. } | ExitAttribution::Supervisor { status } => status,
-    };
-    w.named(l.exit_code, format_args!("{status}"));
+    match summary.facts().exit() {
+        ExitAttribution::Desktop { status, .. } | ExitAttribution::Supervisor { status } => {
+            w.named(l.exit_code, format_args!("{status}"));
+        }
+        ExitAttribution::CaptureOnly => w.line(l.exit_unobserved),
+    }
     match summary.facts().failure() {
         FailureEvidence::Unexplained => w.line(l.unexplained),
         FailureEvidence::Startup(code) => {

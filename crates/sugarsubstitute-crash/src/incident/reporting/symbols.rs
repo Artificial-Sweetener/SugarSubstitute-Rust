@@ -33,6 +33,10 @@ impl IncidentRepository {
     /// # Errors
     /// Preserves actual origin/storage errors; rejects foreign execution, renewed/expired work,
     /// stale incident/revision/dump/build, live intent or uncertain activation without a commit.
+    #[expect(
+        clippy::result_large_err,
+        reason = "Return the exact repository or origin cause inline under its existing admitted diagnostic storage ownership"
+    )]
     pub fn record_symbols(
         &mut self,
         binding: ReportBinding,

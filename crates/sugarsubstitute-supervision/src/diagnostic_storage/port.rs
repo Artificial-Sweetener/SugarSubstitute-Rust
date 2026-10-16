@@ -57,7 +57,7 @@ impl State {
 
     pub(super) fn live_handles(&self) -> usize {
         self.port.as_ref().map_or(self.retiring_handles, OwnedPort::live_handles)
-            + self.capture_reads * 2
+            + self.capture_handles
             + if self.finished_owner.is_some() {
                 finished_owner::FINISHED_NATIVE_OUTPUTS
             } else {

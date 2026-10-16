@@ -5,25 +5,27 @@ use super::*;
 impl ReporterRelay {
     /// Cached genuine funding/empty-state observation, granting no native retirement authority.
     pub(in crate::production) fn idle_funded(&self) -> bool {
-        self.job.is_none()
-            && self.completion.is_none()
+        matches!(self.work, RelayWork::Idle)
             && self.original.is_none()
             && self.admission.is_none()
             && self.identity.is_none()
             && self.source.idle_funded()
     }
     fn recyclable_delivery(&self) -> Result<(), ReporterSourceIssue> {
-        if self.job.is_some() {
+        if matches!(self.work, RelayWork::Admitted(_)) {
             return Err(ReporterSourceIssue::Busy);
         }
-        if self.admission.is_some() || self.identity.is_some() {
+        if matches!(self.work, RelayWork::Rejected(_)) || self.identity.is_some() {
             return Err(ReporterSourceIssue::Admission);
         }
-        if let Some(done) = &self.completion {
+        if let RelayWork::Delivered(done) = &self.work {
             if !self.matched {
                 return Err(ReporterSourceIssue::Identity);
             }
-            if !matches!(done.outcome, JobOutcome::Success(())) {
+            if !matches!(
+                done.outcome,
+                JobOutcome::Success(worker::RelayTurn::Advanced | worker::RelayTurn::Deferred)
+            ) {
                 return Err(ReporterSourceIssue::Parent);
             }
         }
@@ -54,7 +56,8 @@ impl ReporterRelay {
     ) -> Result<DisposedReporter, ReporterSourceIssue> {
         self.recyclable_delivery()?;
         let disposition = self.source.finish_recycled(receipt)?;
-        self.completion = None;
+        self.admission = None;
+        self.work = RelayWork::Idle;
         self.terminal = None;
         self.original = None;
         self.matched = false;

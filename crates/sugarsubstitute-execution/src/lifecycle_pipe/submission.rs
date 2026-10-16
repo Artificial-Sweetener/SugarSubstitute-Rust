@@ -68,6 +68,10 @@ pub(crate) fn admit_owned<T: Send + 'static, M>(
         ));
     }
     let captured = matches!(&kind, RequestKind::CapturedLifecycle(_));
+    let recovery_grant = match &kind {
+        RequestKind::RecoveryPipe(grant) => Some((*grant).clone()),
+        _ => None,
+    };
     core.admit_owned(scope, spec, kind, input, |input, context, cancel, timing| {
         let admitted = timing.admitted;
         let handshake = timing
@@ -78,6 +82,7 @@ pub(crate) fn admit_owned<T: Send + 'static, M>(
         let job = Job::new(scope.id(), spec, admitted, cancel, Arc::downgrade(core));
         let shared = SharedRef::new(
             Shared {
+                recovery_grant,
                 child: admission.binding.is_none(),
                 captured,
                 original_deadline: handshake,

@@ -13,13 +13,26 @@ impl Descriptor {
     pub(crate) fn new(sid: &[u8], phase: &mut NativePhase<'_>) -> Result<Self, ClaimError> {
         phase.security()?;
         let bytes = descriptor::expected(sid).map_err(|operation| phase.invalid(operation))?;
+        Ok(Self::from_bytes(bytes))
+    }
+    /// Build the closed recovery Job security policy using the same checked SID serializer.
+    pub(crate) fn recovery_job(
+        sid: &[u8],
+        phase: &mut NativePhase<'_>,
+    ) -> Result<Self, ClaimError> {
+        phase.security()?;
+        let bytes =
+            descriptor::expected_recovery_job(sid).map_err(|operation| phase.invalid(operation))?;
+        Ok(Self::from_bytes(bytes))
+    }
+    fn from_bytes(bytes: Vec<u8>) -> Self {
         let words = bytes
             .chunks(4)
             .map(|part| {
                 u32::from_le_bytes(std::array::from_fn(|i| part.get(i).copied().unwrap_or(0)))
             })
             .collect();
-        Ok(Self { words })
+        Self { words }
     }
     pub(crate) fn attributes(&self) -> SECURITY_ATTRIBUTES {
         SECURITY_ATTRIBUTES {
@@ -36,7 +49,35 @@ pub(crate) fn verify(
     sid: &[u8],
     phase: &mut NativePhase<'_>,
 ) -> Result<(), ClaimError> {
-    phase.check_budget(&handle.budget())?;
+    verify_borrowed(handle.raw(), &handle.budget(), sid, phase)
+}
+/// Verify a caller-retained kernel object using the same bounded authoritative descriptor policy.
+/// The native adapter retains unique handle ownership and supplies its original admitted budget.
+pub(crate) fn verify_borrowed(
+    handle: windows::Win32::Foundation::HANDLE,
+    budget: &crate::native_claims::files::Budget,
+    sid: &[u8],
+    phase: &mut NativePhase<'_>,
+) -> Result<(), ClaimError> {
+    verify_borrowed_using(handle, budget, sid, phase, descriptor::verify)
+}
+/// Verify the exact original recovery Job security policy while its native adapter retains it.
+pub(crate) fn verify_recovery_job_borrowed(
+    handle: windows::Win32::Foundation::HANDLE,
+    budget: &crate::native_claims::files::Budget,
+    sid: &[u8],
+    phase: &mut NativePhase<'_>,
+) -> Result<(), ClaimError> {
+    verify_borrowed_using(handle, budget, sid, phase, descriptor::verify_recovery_job)
+}
+fn verify_borrowed_using(
+    handle: windows::Win32::Foundation::HANDLE,
+    budget: &crate::native_claims::files::Budget,
+    sid: &[u8],
+    phase: &mut NativePhase<'_>,
+    verify: fn(&[u8], &[u8]) -> Result<(), &'static str>,
+) -> Result<(), ClaimError> {
+    phase.check_budget(budget)?;
     phase.security()?;
     let mut words = vec![0_u32; descriptor::MAXIMUM_BYTES / 4];
     let mut needed = 0;
@@ -46,7 +87,7 @@ pub(crate) fn verify(
     // without copying it. No native allocation depends on the foreign ACL size.
     unsafe {
         GetKernelObjectSecurity(
-            handle.raw(),
+            handle,
             INFORMATION,
             Some(PSECURITY_DESCRIPTOR(words.as_mut_ptr().cast())),
             descriptor::MAXIMUM_BYTES as u32,
@@ -59,7 +100,7 @@ pub(crate) fn verify(
     }
     // SAFETY: Successful native output reported this checked byte count inside the owned allocation.
     let bytes = unsafe { std::slice::from_raw_parts(words.as_ptr().cast::<u8>(), needed as usize) };
-    descriptor::verify(bytes, sid).map_err(|operation| phase.invalid(operation))?;
+    verify(bytes, sid).map_err(|operation| phase.invalid(operation))?;
     phase.check()
 }
 

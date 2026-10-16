@@ -31,6 +31,20 @@ pub(in crate::production) enum RecoveryProgress {
     Finished,
 }
 impl IncidentHost {
+    /// Allocate the next current Root key while retaining the exact active recovery command.
+    /// This grants no native writer/path authority; the actual namespace request and finite
+    /// central job supply those capabilities independently.
+    pub(in crate::production) fn next_recovery_storage_operation(
+        &mut self,
+        scope: IncidentRecoveryScope,
+    ) -> Result<LogicalStoreOperationKey, HostIssue> {
+        let state = self.state()?;
+        state.coordinator.next_recovery_storage_operation(scope).map_err(|cause| {
+            self.cause.get_or_insert(HostCause::Decision(cause));
+            HostIssue::Decision
+        })
+    }
+
     pub(in crate::production) fn begin_recovery(
         &mut self,
         original: IncidentOperationBudget,
@@ -177,6 +191,7 @@ impl IncidentHost {
         Ok(progress)
     }
 }
+#[expect(clippy::result_large_err, reason = "Keep allocation-free recovery error contract")]
 fn append(
     slots: &mut [Option<IncidentEffect>; MAX_INCIDENT_EFFECTS],
     effect: IncidentEffect,

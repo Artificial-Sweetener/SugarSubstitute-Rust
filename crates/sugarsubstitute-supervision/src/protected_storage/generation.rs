@@ -2,19 +2,16 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exclusive generation activation uses the retained validated parent chain.
 use super::*;
-fn name(coordinator: CoordinatorKey) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
+fn name(origin: CaptureGenerationOrigin) -> Result<String, ClaimError> {
     let mut result = String::with_capacity(107);
-    result.push_str("capture-v1-");
-    for byte in coordinator.namespace.bytes().iter().chain(coordinator.epoch.bytes()) {
-        result.push(HEX[(byte >> 4) as usize] as char);
-        result.push(HEX[(byte & 15) as usize] as char);
-    }
-    result
+    origin
+        .write_name(&mut result)
+        .map_err(|cause| ClaimError::new("capture_generation_name", cause))?;
+    Ok(result)
 }
 pub(super) fn create(
     state: &mut State,
-    coordinator: CoordinatorKey,
+    origin: CaptureGenerationOrigin,
     context: &JobContext,
 ) -> Result<(), ClaimError> {
     if !state.budget.is_ordinary() {
@@ -25,10 +22,12 @@ pub(super) fn create(
     if state.attempted || state.profile_leaf {
         return Err(ClaimError::invalid("generation_already_attempted"));
     }
+    let coordinator =
+        origin.capture_key().map_err(|cause| ClaimError::new("capture_generation_key", cause))?;
     let (root, identity, root_index) =
         state.root.as_ref().ok_or_else(|| ClaimError::invalid("missing_protected_root"))?;
     let root_index = *root_index;
-    let directory = root.path()?.join(name(coordinator));
+    let directory = root.path()?.join(name(origin)?);
     let database = directory.join("database");
     let metrics = directory.join("metrics");
     for path in [&directory, &database, &metrics] {
@@ -52,6 +51,7 @@ pub(super) fn create(
         metrics: metrics.clone(),
         ready: false,
         coordinator,
+        origin,
         slots: [usize::MAX; 2],
         identities: [[0; 24]; 2],
     });
@@ -115,10 +115,19 @@ mod tests {
             namespace: NamespaceId::new([1; 32]),
             epoch: CoordinatorEpoch::new([2; 16])?,
         };
-        assert_eq!(name(key), format!("capture-v1-{}{}", "01".repeat(32), "02".repeat(16)));
-        assert_eq!(Path::new(&name(key)).components().count(), 1);
+        assert_eq!(
+            name(CaptureGenerationOrigin::Coordinator(key))?,
+            format!("capture-v1-{}{}", "01".repeat(32), "02".repeat(16))
+        );
+        assert_eq!(
+            Path::new(&name(CaptureGenerationOrigin::Coordinator(key))?).components().count(),
+            1
+        );
         let other = CoordinatorKey { epoch: CoordinatorEpoch::new([3; 16])?, ..key };
-        assert_ne!(name(key), name(other));
+        assert_ne!(
+            name(CaptureGenerationOrigin::Coordinator(key))?,
+            name(CaptureGenerationOrigin::Coordinator(other))?
+        );
         Ok(())
     }
 }

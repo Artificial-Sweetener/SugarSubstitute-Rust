@@ -31,6 +31,13 @@ impl ProductionActivation {
             self.closing = true;
         }
         let result = self.advance(batch, resources);
+        // The selected recovery owns its independent finite work and cleanup even
+        // when another owner failed this turn; no pending outcome is inferred.
+        let recovery = self.advance_fresh_restart(batch, resources);
+        let result = match (result, recovery) {
+            (Ok(()), next) => next,
+            (Err(cause), _) => Err(cause),
+        };
         // Failed adapters cannot prevent deadline consumption or keep a past native
         // wake spinning. Actual late completions are still observed on every batch.
         if let Err(cause) = self.arm_next_wake(resources.client, Instant::now()) {
@@ -83,7 +90,14 @@ impl ProductionActivation {
                     .as_ref()
                     .map(incident_reporting::PendingDesktopFailure::until)
             }))
-            .chain(self.incidents.reporting.next_deadline())
+            .chain(self.records.iter().flatten().flat_map(|held| {
+                held.record
+                    .failed_shutdown
+                    .into_iter()
+                    .flat_map(|budget| [budget.graceful_until, budget.settle_until])
+            }))
+            .chain(self.recovery_pending.iter().flat_map(|pending| pending.deadlines()))
+            .chain(self.incidents.reporting.deadlines())
             .chain(self.incidents.recovery_deadline())
             .chain(self.records.iter().flatten().filter_map(|held| held.record.restart.deadline()))
     }
@@ -107,8 +121,25 @@ impl ProductionActivation {
         resources: &mut EntryResources<'_>,
     ) -> Result<()> {
         self.receive_projections(resources)?;
-        if !self.closing && !self.incidents.recover_pending(&self.records, resources)? {
-            return Ok(());
+        if !self.closing {
+            // The current Root's genuine retained source authorizes historical opening;
+            // historical path/build/origin facts cannot stand in for this registration.
+            if let Some(value) = self.records.iter().flatten().find_map(|held| {
+                match &held.record.projected.as_ref()?.outcome {
+                    JobOutcome::Success(value) => Some(value),
+                    _ => None,
+                }
+            }) {
+                let capture = self.capture.as_mut().ok_or("Actual Root capture owner missing")?;
+                capture.start(&value.capture_root, value.until, resources)?;
+                if capture.root_source().is_none() {
+                    return Ok(());
+                }
+            }
+            let source = self.capture.as_ref().and_then(CaptureRegistration::root_source);
+            if !self.incidents.recover_pending(&self.records, source, resources)? {
+                return Ok(());
+            }
         }
         self.adopt_installed_restarts(resources)?;
         let Some(retained_backend) = &mut self.backend else {
@@ -269,6 +300,7 @@ impl ProductionActivation {
             }
         }
         let report_restart = capture.restart_availability();
+        let fresh_supervisor_required = capture.fresh_supervisor_required();
         if let Err(cause) =
             relay::route(&mut self.records, backend, self.capture.as_ref(), resources)
         {
@@ -289,6 +321,7 @@ impl ProductionActivation {
             incident_reporting::ReportAdmission::new(
                 self.closing || failure.is_some(),
                 report_restart,
+                fresh_supervisor_required,
             ),
         ) {
             failure.get_or_insert(cause);
@@ -296,107 +329,10 @@ impl ProductionActivation {
         if let Some(cause) = failure {
             return Err(cause);
         }
-        self.advance_restart(resources)?;
-        Ok(())
-    }
-    fn receive_projections(&mut self, resources: &EntryResources<'_>) -> Result<()> {
-        for pending in self.pending.iter_mut().flatten() {
-            if let Some(job) = &mut pending.job
-                && let Some(completion) = job.try_take_completion()
-            {
-                pending.completion = Some(completion);
-                pending.job = None;
-            }
-        }
-        if self.closing {
-            for pending in self.pending.iter_mut().flatten() {
-                if let Some(completed) = &mut pending.completion {
-                    projection::return_unused_source(&mut completed.outcome);
-                }
-            }
-        }
-        for at in 0..self.pending.len() {
-            let Some(pending) = &mut self.pending[at] else {
-                continue;
-            };
-            let Some(completion) = &mut pending.completion else {
-                continue;
-            };
-            if self.backend.is_none()
-                && let JobOutcome::Success(value) = &mut completion.outcome
-            {
-                let storage = completion.memory.claim(RetainedBackend::required_storage_bytes())?;
-                self.backend = Some(
-                    RetainedBackend::new(resources.authority, storage, &mut value.policy_credit)
-                        .map_err(outer)?,
-                );
-                self.backend
-                    .as_mut()
-                    .ok_or("Backend owner absent")?
-                    .backend
-                    .configure_custody(self.executable.clone(), self.working_directory.clone())
-                    .map_err(outer)?;
-            }
-            if let JobOutcome::Success(value) = &mut completion.outcome
-                && value.policy_credit.is_some()
-            {
-                self.backend
-                    .as_mut()
-                    .ok_or("Actual policy funding owner missing")?
-                    .add_projection_credit(&mut value.policy_credit)
-                    .map_err(outer)?;
-            }
-            if self.delivery.is_none() && matches!(completion.outcome, JobOutcome::Success(_)) {
-                let storage =
-                    completion.memory.claim(delivery::TransitionDelivery::storage_bytes())?;
-                self.delivery = Some(delivery::TransitionDelivery::new(storage)?);
-            }
-            let storage = completion.memory.claim(size_of::<Record>() as u64)?;
-            let projected =
-                pending.completion.take().ok_or("Actual projection completion missing")?;
-            let replied = pending.restart
-                && self.records[at].as_ref().is_some_and(|held| held.record.replied);
-            let record = Record {
-                qualification: std::mem::take(&mut pending.qualification),
-                run: pending.run,
-                launch: pending.launch,
-                navigation: pending.navigation,
-                connection: pending.connection,
-                projected: Some(projected),
-                attach: None,
-                attached_memory: None,
-                attach_failure: None,
-                released_attach: None,
-                attach_retirement: None,
-                start: None,
-                parent: None,
-                retained_causes: None,
-                preparation: None,
-                retired: None,
-                forwarded: None,
-                ui_suspected: false,
-                replied,
-                closed: false,
-                seed: incident_seed::SeedPreparation::new(),
-                seeded: false,
-                collection: incident_collection::IncidentCollection::new(),
-                failed: None,
-                failed_cause: None,
-                failed_shutdown: None,
-                failed_family_adopted: false,
-                pending_desktop_failure: None,
-                restart: restart::RestartState::for_projection(pending.restart),
-            };
-            let mut successor = RetainedRecord { record: Box::new(record), _storage: storage };
-            if let Some(previous) = self.records[at].as_mut() {
-                cause_transfer::before_replace(
-                    &mut previous.record,
-                    &mut successor.record,
-                    pending.restart,
-                )?;
-            }
-            self.records[at] = Some(successor);
-            self.pending[at] = None;
+        if self.incidents.reporting.deferred_fresh_restart().is_none()
+            && self.recovery_pending.is_none()
+        {
+            self.advance_restart(resources)?;
         }
         Ok(())
     }

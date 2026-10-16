@@ -61,6 +61,10 @@ mod lifecycle_pipe;
 mod mailbox;
 mod memory;
 mod native_resources;
+#[cfg(any(windows, test))]
+pub mod process_creation;
+#[cfg(any(windows, test))]
+pub mod recovery_supervisor;
 mod symbol_provider;
 pub use symbol_provider::{
     SymbolProviderAdmission, SymbolProviderOrigin, SymbolProviderRetirement,
@@ -116,6 +120,8 @@ pub mod windows_fixture;
 pub mod windows_lifecycle_pipe;
 #[cfg(windows)]
 pub mod windows_output;
+#[cfg(windows)]
+pub mod windows_recovery_supervisor;
 
 /// Deterministic external clock injection for tests using the real execution owner.
 #[cfg(any(test, feature = "boundary-fixtures"))]

@@ -83,6 +83,7 @@ impl SeedOperation {
             }
         }
     }
+    #[expect(clippy::result_large_err, reason = "Keep funded SeedOperation cause inline")]
     fn publish(
         &mut self,
         seed: IncidentSeed,
@@ -154,7 +155,7 @@ impl SeedOperation {
 mod service;
 #[path = "diagnostic_helper/source.rs"]
 mod source;
-pub(in crate::production) use service::{SeedService, SeedServiceIssue};
+pub(in crate::production) use service::{RetiredRecoverySeed, SeedService, SeedServiceIssue};
 pub(in crate::production) use source::SEED_SOURCE_BYTES;
 
 #[path = "diagnostic_helper/seed_failure.rs"]

@@ -4,7 +4,10 @@
 use super::{
     IncidentStoreError,
     codec::{STATE_BOUND, required_option, utc},
-    codec_capture::{CaptureDispositionPlan, CaptureJournalRecord},
+    codec_capture::{
+        CaptureDispositionPlan, CaptureJournalRecord, OriginJournalRecord,
+        RecoveryCaptureJournalRecord, RecoveryCaptureOriginRecord,
+    },
     codec_identity::{OperationRecord, SubjectRecord},
     codec_migration::{
         MigrationArchiveRecord, MigrationRecord, SummaryMigrationArchive, SummaryMigrationJournal,
@@ -152,9 +155,11 @@ impl SummaryEvictionJournal {
         self.candidate_sha256
     }
 }
-/// Closed schema-one store records; journals share the registered store-state format.
+/// Closed persisted store records; recovery origins and capture journals use schema two.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum IncidentStoreState {
+    /// Prelaunch historical Root/run/grant record; decoded facts grant no authority.
+    RecoveryCaptureOrigin(RecoveryCaptureOriginRecord),
     /// Current immutable cumulative ledger.
     Ledger(SummaryEvictions),
     /// One victim-bound summary-eviction tombstone awaiting actual settlement.
@@ -272,11 +277,14 @@ struct JournalRecord {
 /// # Errors
 /// Returns strict encoding/bound errors; construction remains separate from durability.
 pub fn encode_store_state(state: &IncidentStoreState) -> Result<Vec<u8>, IncidentStoreError> {
-    super::codec_encode::encode(1, StoreRecord::from(state), STATE_BOUND)
+    super::codec_encode::encode(schema(state), StoreRecord::from(state), STATE_BOUND)
 }
 impl From<&IncidentStoreState> for StoreRecord {
     fn from(state: &IncidentStoreState) -> Self {
         match state {
+            IncidentStoreState::RecoveryCaptureOrigin(record) => {
+                StoreRecord::RecoveryCaptureOrigin { journal: Box::new(record.into()) }
+            }
             IncidentStoreState::Ledger(ledger) => StoreRecord::Ledger { ledger: (*ledger).into() },
             IncidentStoreState::SummaryEviction(journal) => StoreRecord::SummaryEviction {
                 journal: Box::new(JournalRecord {
@@ -298,7 +306,14 @@ impl From<&IncidentStoreState> for StoreRecord {
                 StoreRecord::SummaryMigrationArchive(Box::new(archive.as_ref().into()))
             }
             IncidentStoreState::CapturePromotion(plan) => {
-                StoreRecord::CapturePromotion { journal: Box::new(plan.as_ref().into()) }
+                match RecoveryCaptureJournalRecord::from_plan(plan) {
+                    Some(journal) => {
+                        StoreRecord::RecoveryCapturePromotion { journal: Box::new(journal) }
+                    }
+                    None => {
+                        StoreRecord::CapturePromotion { journal: Box::new(plan.as_ref().into()) }
+                    }
+                }
             }
             IncidentStoreState::PayloadDiscard(journal) => {
                 StoreRecord::PayloadDiscard { journal: Box::new(journal.as_ref().into()) }
@@ -311,19 +326,25 @@ pub(super) fn write_store_state<W: std::io::Write>(
     state: &IncidentStoreState,
     output: W,
 ) -> Result<(), IncidentStoreError> {
-    super::codec_encode::write(1, &StoreRecord::from(state), output)
+    super::codec_encode::write(schema(state), &StoreRecord::from(state), output)
 }
-/// Decode strict schema-one store bytes and revalidate both ledger hashes and arithmetic.
+/// Decode strict supported store variants and revalidate complete matching identities.
 /// # Errors
 /// Rejects unknown variants/fields/versions, third states, overflow and identity mismatch.
 pub fn decode_store_state(bytes: &[u8]) -> Result<IncidentStoreState, IncidentStoreError> {
     Ok(match record::decode(bytes)? {
+        StoreRecord::RecoveryCaptureOrigin { journal } => {
+            IncidentStoreState::RecoveryCaptureOrigin(journal.into_record()?)
+        }
         StoreRecord::Ledger { ledger } => IncidentStoreState::Ledger(ledger.into_ledger()?),
         StoreRecord::SummaryMigration(journal) => {
             IncidentStoreState::SummaryMigration(Box::new(journal.into_journal()?))
         }
         StoreRecord::SummaryMigrationArchive(archive) => {
             IncidentStoreState::SummaryMigrationArchive(Box::new(archive.into_archive()?))
+        }
+        StoreRecord::RecoveryCapturePromotion { journal } => {
+            IncidentStoreState::CapturePromotion(Box::new(journal.into_plan()?))
         }
         StoreRecord::CapturePromotion { journal } => {
             IncidentStoreState::CapturePromotion(Box::new(journal.into_plan()?))
@@ -354,4 +375,20 @@ pub fn decode_store_state(bytes: &[u8]) -> Result<IncidentStoreState, IncidentSt
 }
 pub(super) fn digest(bytes: &[u8]) -> [u8; 32] {
     Sha256::digest(bytes).into()
+}
+
+/// Existing record encodings retain schema1 exactly; full recovery-origin and recovery capture-promotion records use2.
+fn schema(state: &IncidentStoreState) -> u32 {
+    match state {
+        IncidentStoreState::RecoveryCaptureOrigin(_) => 2,
+        IncidentStoreState::CapturePromotion(plan)
+            if matches!(
+                plan.capture_origin(),
+                sugarsubstitute_contracts::crash::CaptureGenerationOrigin::Recovery(_)
+            ) =>
+        {
+            2
+        }
+        _ => 1,
+    }
 }

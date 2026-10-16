@@ -32,7 +32,7 @@ struct Fields {
     input: Option<CaptureStartInput>,
     build: [u8; 64],
     build_length: usize,
-    storage: sugarsubstitute_supervision::ProtectedStorageRoot,
+    storage: Option<sugarsubstitute_supervision::ProtectedStorageRoot>,
     process: Option<usize>,
     process_exited: bool,
     api: Option<bridge::Api>,
@@ -75,7 +75,8 @@ impl Capture {
             size_of::<Fields>()
                 + size_of::<Capture>()
                 + size_of::<crate::capture::Shared>()
-                + 2 * size_of::<usize>()
+                + size_of::<crate::capture::root_storage::Owner>()
+                + 4 * size_of::<usize>()
                 + 64
                 < 16 * 1024
         );
@@ -92,7 +93,7 @@ impl Capture {
                 input: None,
                 build: [0; 64],
                 build_length: 0,
-                storage: protected,
+                storage: Some(protected),
                 process: None,
                 process_exited: false,
                 api: None,
@@ -191,6 +192,26 @@ impl CaptureLease for Capture {
         context: &JobContext,
     ) -> Result<(), CrashError> {
         registration::register(self.fields()?, input, owner, context)
+    }
+    fn take_root_storage(&mut self) -> Result<crate::native::RootStorageParts, CrashError> {
+        let fields = self.fields()?;
+        if !fields.registered
+            || fields.stop_requested
+            || fields.io_retired
+            || fields.input.as_ref().is_none_or(|input| input.recovery.is_some())
+        {
+            return Err(CrashError::invalid(CaptureOperation::Observation));
+        }
+        let api = fields
+            .api
+            .as_ref()
+            .ok_or_else(|| CrashError::invalid(CaptureOperation::Observation))?
+            .finished;
+        let storage = fields
+            .storage
+            .take()
+            .ok_or_else(|| CrashError::invalid(CaptureOperation::Observation))?;
+        Ok(crate::native::RootStorageParts { storage, api })
     }
     fn creator(&self) -> Option<crate::capture::CaptureCreator> {
         self.fields.as_ref().and_then(|fields| fields.creator)
@@ -296,10 +317,11 @@ impl CaptureLease for Capture {
         if let Some(cause) = fields.close_report(report) {
             return Err(cause);
         }
-        fields
-            .storage
-            .retire(context)
-            .map_err(|cause| CrashError::new(CaptureOperation::Retirement, cause))?;
+        if let Some(storage) = &mut fields.storage {
+            storage
+                .retire(context)
+                .map_err(|cause| CrashError::new(CaptureOperation::Retirement, cause))?;
+        }
         if let Some(original) = fields.original.as_ref()
             && (fields.selected.is_some() || fields.lease.is_some() || fields.parts.is_some())
         {
@@ -363,7 +385,7 @@ impl Drop for Capture {
                 || fields.parts.is_some()
                 || !fields.pins.is_empty()
                 || (fields.api.is_some() && !fields.io_retired)
-                || !fields.storage.is_retired()
+                || fields.storage.as_ref().is_some_and(|storage| !storage.is_retired())
             {
                 // Only a specific unresolved native operation/failed close retains
                 // these actual owners. It does not claim logical/native settlement.

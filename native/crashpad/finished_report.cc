@@ -246,4 +246,45 @@ void Lease::Result(SsFinishedResultV1& output) noexcept {
   if (facts_valid) output.facts = facts;
   output.actual_read_bytes = read_bytes; output.actual_reclaimed_bytes = reclaimed;
 }
+
+bool RecoverySubject(const SsRecoveryCaptureOriginV2& origin,const SsFinishedSubjectV1& subject) noexcept {
+  if (!ValidSubject(subject) || memcmp(origin.namespace_id,subject.namespace_id,32)) return false;
+  if (origin.origin_kind==1) return !memcmp(origin.root_epoch,subject.epoch,16);
+  if (origin.origin_kind!=2) return false;
+  if (subject.tag==Desktop) return !memcmp(origin.root_epoch,subject.epoch,16) &&
+      subject.instance==origin.instance && subject.generation==origin.generation;
+  return subject.tag==Supervisor && !memcmp(origin.capture_epoch,subject.epoch,16);
+}
+bool RecoveryOperation(const SsRecoveryCaptureOriginV2& origin,const SsLogicalStoreOperationV1& operation) noexcept {
+  // Matching data only. Rust supplies a genuine current operation and a protected-read
+  // bound origin before this private ABI; historical Root epochs are not current authority.
+  return ValidOperation(operation) && !memcmp(origin.namespace_id,operation.namespace_id,32);
+}
+bool BindRecoveryOrigin(Invocation& invocation,const SsRecoveryCaptureOriginV2& origin,
+                        const SsFinishedSubjectV1& subject,const SsLogicalStoreOperationV1& operation) noexcept {
+  auto& owner=invocation.state;
+  if (owner.recovery_origin_bound || origin.reserved ||
+      std::all_of(std::begin(origin.namespace_id),std::end(origin.namespace_id),[](auto b){return !b;}) || (origin.origin_kind!=1 && origin.origin_kind!=2) ||
+      (origin.origin_kind==1 && (origin.instance || origin.generation || origin.grant || memcmp(origin.capture_epoch,origin.root_epoch,16))) ||
+      (origin.origin_kind==2 && (!origin.instance || !origin.generation || !origin.grant)) ||
+      std::all_of(std::begin(origin.root_epoch),std::end(origin.root_epoch),[](auto b){return !b;}) ||
+      std::all_of(std::begin(origin.capture_epoch),std::end(origin.capture_epoch),[](auto b){return !b;}) ||
+      !RecoverySubject(origin,subject) || !RecoveryOperation(origin,operation)) return owner.Fail(ERROR_INVALID_DATA);
+  if (origin.origin_kind==1) {
+    owner.recovery_origin=origin;owner.recovery_current_operation=operation;owner.recovery_origin_bound=true;return true;
+  }
+  constexpr char domain[]="SugarSubstitute.recovery-supervisor.capture.v1";
+  std::array<uint8_t,sizeof(domain)+48+24> bytes{};
+  memcpy(bytes.data(),domain,sizeof(domain));
+  memcpy(bytes.data()+sizeof(domain),origin.namespace_id,32);
+  memcpy(bytes.data()+sizeof(domain)+32,origin.root_epoch,16);
+  const uint64_t fields[]={origin.instance,origin.generation,origin.grant};
+  for (size_t field=0;field<3;++field) for(size_t byte=0;byte<8;++byte)
+    bytes[sizeof(domain)+48+field*8+byte]=static_cast<uint8_t>(fields[field]>>(byte*8));
+  std::array<uint8_t,32> digest{};
+  if (!invocation.DigestBytes(bytes,digest.data())) return false;
+  if (memcmp(digest.data(),origin.capture_epoch,16)) return owner.Fail(ERROR_INVALID_DATA);
+  owner.recovery_origin=origin; owner.recovery_current_operation=operation; owner.recovery_origin_bound=true;
+  return true;
+}
 }  // namespace sugarsubstitute::finished

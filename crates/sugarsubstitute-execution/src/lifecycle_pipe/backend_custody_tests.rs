@@ -13,8 +13,8 @@ mod captured_constructor;
 #[cfg(windows)]
 #[path = "captured_purpose_tests.rs"]
 mod captured_purpose;
-#[path = "custodied_process_tests.rs"]
-mod custodied_process;
+#[path = "process_creation_tests.rs"]
+mod process_creation;
 
 /// Construct matching protocol facts without manufacturing a native permit.
 fn key() -> TestResult<BackendCustodyKey> {
@@ -468,3 +468,6 @@ fn contention_observation_uses_existing_timer_and_never_renews_original_cleanup(
 
 #[path = "backend_custody_cancel_tests.rs"]
 mod cancel_start;
+
+#[path = "backend_custody/recovery_retirement_tests.rs"]
+mod recovery_retirement_tests;

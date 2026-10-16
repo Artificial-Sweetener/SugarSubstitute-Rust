@@ -226,3 +226,29 @@ mod retirement;
 mod tests;
 #[path = "token/validation.rs"]
 mod validation;
+
+impl Token {
+    pub(crate) fn adopt_capture_intent(
+        &mut self,
+        storage: &mut sugarsubstitute_supervision::diagnostic_storage::DiagnosticStorage,
+        journal: &mut sugarsubstitute_supervision::diagnostic_storage::DiagnosticReadLease,
+        summary: &mut sugarsubstitute_supervision::diagnostic_storage::DiagnosticReadLease,
+        payload: Option<&mut sugarsubstitute_supervision::diagnostic_storage::DiagnosticReadLease>,
+        operation: &sugarsubstitute_supervision::diagnostic_storage::DiagnosticStorageOperation,
+        context: &JobContext,
+    ) -> Result<
+        sugarsubstitute_supervision::diagnostic_storage::DiagnosticCaptureIntent,
+        crate::incident::IncidentStoreError,
+    > {
+        let fields =
+            self.fields.as_mut().ok_or(crate::incident::IncidentStoreError::RecoveryConflict)?;
+        Ok(storage.adopt_capture_intent_for_generation(
+            &mut fields.generation,
+            journal,
+            summary,
+            payload,
+            operation,
+            context,
+        )?)
+    }
+}

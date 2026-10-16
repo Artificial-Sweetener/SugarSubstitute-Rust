@@ -30,12 +30,13 @@ impl ProductionActivation {
         backend
             .close_custody(
                 budget,
-                self.records.iter().flatten().all(|held| {
-                    held.record
-                        .start
-                        .as_ref()
-                        .is_none_or(|start| start.profile.snapshot().retirement_ready())
-                }),
+                self.recovery_pending.as_ref().is_none_or(|pending| pending.settled())
+                    && self.records.iter().flatten().all(|held| {
+                        held.record
+                            .start
+                            .as_ref()
+                            .is_none_or(|start| start.profile.snapshot().retirement_ready())
+                    }),
                 &mut progress::backend_resources(resources, self.capture.as_ref()),
             )
             .map_err(outer)?;
@@ -102,6 +103,8 @@ impl ProductionActivation {
             )?;
         }
         let start = record.start.as_mut().ok_or("Original desktop start missing")?;
+        let recovery_retired = start.close_recovery(resources, &budget)?;
+
         if let Some(output) = &mut start.output {
             if record.parent.is_some() {
                 output.observe_shutdown(
@@ -118,7 +121,10 @@ impl ProductionActivation {
                 )?;
             }
         }
-        if record.parent.is_none() && !start.close_unlaunched()? {
+        let unlaunched_closed = record.parent.is_some() || start.close_unlaunched()?;
+        // Held recovery creation owns direct bootstrap pins until the actual registry
+        // observes cancellation. Both close owners must progress before joint settlement.
+        if !unlaunched_closed && start.recovery.is_none() {
             return Ok(());
         }
         if let Some(ticket) = start.ticket {
@@ -208,7 +214,14 @@ impl ProductionActivation {
                     .map_err(outer)?;
             }
         } else {
-            record.closed = true;
+            record.closed = recovery_retired && unlaunched_closed;
+            if record.closed && start.recovery.is_some() {
+                let registry = resources
+                    .authority
+                    .registry_mut()
+                    .ok_or("Actual rejected recovery registry missing")?;
+                record.closed = retirement::retire_unparented_recovery(start, registry)?;
+            }
         }
         Ok(())
     }

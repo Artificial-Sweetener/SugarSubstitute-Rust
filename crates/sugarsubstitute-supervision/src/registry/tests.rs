@@ -295,3 +295,5 @@ mod settled_failure;
 
 #[path = "tests/cleanup_admission.rs"]
 mod cleanup_admission;
+
+mod recovery_member;

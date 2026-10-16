@@ -5,6 +5,7 @@
 pub mod incident;
 pub mod presentation;
 pub mod readiness;
+pub mod recovery_supervisor;
 pub mod startup;
 pub mod supervision;
 pub mod transcript;

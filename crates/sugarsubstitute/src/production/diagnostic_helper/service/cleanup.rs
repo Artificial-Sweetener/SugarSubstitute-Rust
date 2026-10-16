@@ -95,6 +95,7 @@ impl SeedService {
         matches!(
             self.cleanup_completion.as_ref().map(|value| &value.outcome),
             Some(JobOutcome::Success(true))
-        ) && self.source.inspect(SeedOperation::files_retired) == Some(true)
+        ) && (self.source_retired
+            || self.source.inspect(SeedOperation::files_retired) == Some(true))
     }
 }

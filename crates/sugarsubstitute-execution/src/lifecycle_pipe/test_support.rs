@@ -6,6 +6,8 @@ pub(super) struct Boundary {
     pub(super) context_override: Mutex<Option<JobContext>>,
     pub(super) clock_probe: Mutex<Option<(Role, crate::runtime_test_support::ClockCallback)>>,
     pub(super) binding: Mutex<Option<PeerBinding>>,
+    pub(super) read_payload: Mutex<Option<Vec<u8>>>,
+    pub(super) original_counter: Mutex<Option<LifecyclePipeDeadline>>,
     pub(super) authenticated_binding: Mutex<Option<PeerBinding>>,
     pub(super) preparing_connect: Gate,
     pub(super) hold_connect: AtomicBool,
@@ -61,6 +63,8 @@ impl Boundary {
             clock_probe: Mutex::new(None),
             context_override: Mutex::new(None),
             binding: Mutex::new(None),
+            read_payload: Mutex::new(None),
+            original_counter: Mutex::new(None),
             authenticated_binding: Mutex::new(None),
             preparing_connect: Gate::default(),
             hold_connect: AtomicBool::new(false),
@@ -163,7 +167,7 @@ impl PipeLease for Lease {
         lock(&self.0.binding).or_else(|| run().ok().map(PeerBinding::Desktop))
     }
     fn deadline(&self) -> Option<LifecyclePipeDeadline> {
-        LifecyclePipeDeadline::new(1000, 1000).ok()
+        (*lock(&self.0.original_counter)).or_else(|| LifecyclePipeDeadline::new(1000, 1000).ok())
     }
     fn capability(&self) -> Option<[u8; 32]> {
         Some([7; 32])
@@ -193,7 +197,13 @@ impl PipeLease for Lease {
             if self.0.fail_read.load(Ordering::Acquire) {
                 return Err(failure("concurrent_read_failure"));
             }
-            bytes[..5].copy_from_slice(b"Hello");
+            let payload = lock(&self.0.read_payload);
+            let payload = payload.as_deref().unwrap_or(b"Hello");
+            let length = payload.len();
+            if length > bytes.len() {
+                return Err(failure("fake_read_payload_capacity"));
+            }
+            bytes[..length].copy_from_slice(payload);
             self.0.reading.open();
             if self.0.panic_read.swap(false, Ordering::AcqRel) {
                 std::panic::resume_unwind(Box::new("Pending read issue panic"));
@@ -201,7 +211,7 @@ impl PipeLease for Lease {
             Ok(if self.0.pending_read.load(Ordering::Acquire) {
                 Progress::Pending
             } else {
-                Progress::Complete(5)
+                Progress::Complete(length as u32)
             })
         })
     }
@@ -295,6 +305,20 @@ impl PipeLease for Lease {
             birth: 99,
             session: 1,
         })
+    }
+    fn take_recovery_desktop_bootstrap(
+        &mut self,
+    ) -> Option<crate::recovery_supervisor::root_desktop::RootDesktopBootstrapLoan> {
+        let key = self.binding()?.recovery()?;
+        let until = self.deadline()?;
+        let counter = sugarsubstitute_contracts::execution::CounterDeadline::new(
+            until.ticks(),
+            until.frequency(),
+        )
+        .ok()?;
+        Some(crate::recovery_supervisor::root_desktop::RootDesktopBootstrapLoan::fixture(
+            key, counter,
+        ))
     }
     fn take_completed_write(&mut self) -> Option<u32> {
         lock(&self.0.retired_write).take()

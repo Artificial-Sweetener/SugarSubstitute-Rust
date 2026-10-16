@@ -273,7 +273,14 @@ fn advance(
                 Some(incidents.host.namespace()?.diagnostic_write_request(scope.operation())?);
         }
         if collection.capture.is_none() {
-            collection.capture = Some(capture.capture.finished_source()?);
+            let root =
+                capture.root_source().ok_or("Actual retained Root storage source missing")?;
+            collection.capture =
+                Some(if let Some(grant) = record.start.as_ref().and_then(DesktopStart::grant) {
+                    root.recovery_finished_source(grant)?
+                } else {
+                    root.finished_source()
+                });
         }
         let submitted = incidents.host.submit_collection(
             resources.client,

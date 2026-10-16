@@ -111,8 +111,15 @@ impl Token {
             fields.state.failures.retain(Failure::Control(ControlCause::Source(cause)));
             Issue::Current
         })?;
+        let origin = guard.origin().map_err(|cause| {
+            fields.state.failures.retain(Failure::Control(ControlCause::Source(cause)));
+            Issue::Current
+        })?;
+        let recovery_origin = abi::RecoveryOrigin::from_origin(origin, fields.operation)
+            .map_err(|_| Issue::Identity)?;
         if identities != [prepared.database_identity, prepared.metrics_identity]
             || owner != plan.capture_generation()
+            || origin != plan.capture_origin()
         {
             return Err(Issue::Identity);
         }
@@ -182,11 +189,25 @@ impl Token {
             fields.phase = Phase::Issued;
             // SAFETY: the actual retained historical generation, genuine current fence,
             // preheld fixed roles and same PIN-backed ABI own every synchronous borrow.
-            unsafe { (fields.state.api.recover)(&input, &mut output) };
+            if let Some(origin) = recovery_origin {
+                let input = abi::Recover2 { version: 2, reserved: 0, origin, disposition: input };
+                // SAFETY: exact origin and genuine current journal/source fences remain borrowed.
+                unsafe { (fields.state.api.recover2)(&input, &mut output) };
+            } else {
+                // SAFETY: original strict Coordinator origin retains its supported v1 ABI.
+                unsafe { (fields.state.api.recover)(&input, &mut output) };
+            }
         } else {
             // SAFETY: the same real pinned API/token, actual immutable completion pins,
             // preheld CPP/Rust roles and synchronous exclusive current/output borrows.
-            unsafe { (fields.state.api.discard)(&input, &mut output) };
+            if let Some(origin) = recovery_origin {
+                let input = abi::Discard2 { version: 2, reserved: 0, origin, disposition: input };
+                // SAFETY: same Root-local token, exact full origin and actual completion fence.
+                unsafe { (fields.state.api.discard2)(&input, &mut output) };
+            } else {
+                // SAFETY: original strict Coordinator origin retains the supported v1 path.
+                unsafe { (fields.state.api.discard)(&input, &mut output) };
+            }
         }
         let control = current.take_failure();
         drop(current);

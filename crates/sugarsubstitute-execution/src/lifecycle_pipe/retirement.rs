@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Deliver checked physical settlement independently of the original operation outcome.
-use super::{LifecyclePipeControl, SharedRef, lock};
+use super::{Control, LifecyclePipeControl, SharedRef, lock};
 use sugarsubstitute_contracts::{
     execution::{ExecutionId, JobSpec, ScopeId},
     lifecycle::RunKey,
@@ -27,6 +27,13 @@ pub struct LifecyclePipeRetirement {
 }
 
 impl LifecyclePipeRetirement {
+    /// Match the actual retained recovery transport allocation, independently of key facts.
+    pub fn matches_recovery(
+        &self,
+        control: &crate::recovery_supervisor::RecoveryPipeControl,
+    ) -> bool {
+        self.shared.same_allocation(&control.inner.shared)
+    }
     /// Match the actual diagnostic session allocation independently of copied peer facts.
     pub fn matches_diagnostic(
         &self,
@@ -65,8 +72,7 @@ impl crate::diagnostic_pipe::DiagnosticPipeControl {
     /// Terminal delivery, close intent and expired budgets cannot manufacture this proof.
     /// All native owners, buffers, returned loans and launch pins must actually retire.
     pub fn take_checked_retirement(&self) -> Option<LifecyclePipeRetirement> {
-        let facts = lock(&self.inner.shared.state).checked_retirement.take()?;
-        Some(LifecyclePipeRetirement { shared: self.inner.shared.clone(), facts })
+        self.inner.take_checked_retirement()
     }
 }
 
@@ -78,7 +84,16 @@ impl LifecyclePipeControl {
     /// panic, cancellation intent, a terminal notice and memory disposal cannot mint it.
     /// This cache-only transfer invokes no clock/provider/native call or new allocation.
     pub fn take_checked_retirement(&self) -> Option<LifecyclePipeRetirement> {
-        let facts = lock(&self.inner.shared.state).checked_retirement.take()?;
-        Some(LifecyclePipeRetirement { shared: self.inner.shared.clone(), facts })
+        self.inner.take_checked_retirement()
+    }
+}
+
+impl Control {
+    /// Transfer only the worker-published physical retirement from this original allocation.
+    /// Every purpose-specific control uses this same one-shot owner; the worker remains
+    /// the sole publisher after native lease, buffers, returned loans and pins retire.
+    pub(crate) fn take_checked_retirement(&self) -> Option<LifecyclePipeRetirement> {
+        let facts = lock(&self.shared.state).checked_retirement.take()?;
+        Some(LifecyclePipeRetirement { shared: self.shared.clone(), facts })
     }
 }

@@ -12,6 +12,7 @@ mod helper;
 mod identity;
 mod report;
 mod summary;
+mod summary_migration;
 mod symbols;
 #[cfg(test)]
 mod tests;
@@ -23,6 +24,7 @@ pub use helper::*;
 pub use identity::*;
 pub use report::*;
 pub use summary::*;
+pub use summary_migration::SummaryMigrationStep;
 pub use symbols::*;
 pub use time::*;
 

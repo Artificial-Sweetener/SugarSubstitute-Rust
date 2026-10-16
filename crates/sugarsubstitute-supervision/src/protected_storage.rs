@@ -40,6 +40,7 @@ use std::{
     sync::Arc,
 };
 use sugarsubstitute_contracts::{
+    crash::{CaptureGenerationOrigin, RecoveryCaptureIdentity},
     execution::{ExecutionId, JobContext, MemoryClaim, Moment},
     lifecycle::CoordinatorKey,
 };
@@ -82,6 +83,7 @@ pub struct ProtectedStorageGeneration {
     pub(crate) metrics: PathBuf,
     pub(crate) ready: bool,
     coordinator: CoordinatorKey,
+    origin: CaptureGenerationOrigin,
     slots: [usize; 2],
     identities: [[u8; 24]; 2],
 }
@@ -201,7 +203,41 @@ impl ProtectedStorageRoot {
         context: &JobContext,
     ) -> Result<(), ClaimError> {
         let state = self.state.as_mut().ok_or_else(|| ClaimError::invalid("retired_storage"))?;
-        generation::create(state, coordinator, context)
+        generation::create(state, CaptureGenerationOrigin::Coordinator(coordinator), context)
+    }
+    /// Exclusively create the canonical generation from a genuine fresh-process Root grant.
+    /// The same protected Root file identity must match the authenticated original Root pin.
+    /// # Errors
+    /// Rejects foreign/stopped source, changed Root identity, reparse/security uncertainty,
+    /// existing generation or partial/repeated creation. All returned outputs remain owned.
+    pub fn create_recovery_capture_generation(
+        &mut self,
+        source: &sugarsubstitute_execution::recovery_supervisor::AuthenticatedRecoveryOrigin,
+        context: &JobContext,
+    ) -> Result<(), ClaimError> {
+        source
+            .check_capture_context(context)
+            .map_err(|cause| ClaimError::new("recovery_capture_context", cause))?;
+        let state = self.state.as_mut().ok_or_else(|| ClaimError::invalid("retired_storage"))?;
+        if state
+            .root
+            .as_ref()
+            .is_none_or(|(_, identity, _)| *identity != source.capture_root_identity())
+        {
+            return Err(state.budget.rejection("recovery_capture_root_identity"));
+        }
+        generation::create(
+            state,
+            CaptureGenerationOrigin::Recovery(RecoveryCaptureIdentity::from_grant(source.key())),
+            context,
+        )?;
+        source
+            .check_capture_context(context)
+            .map_err(|cause| ClaimError::new("recovery_capture_context", cause))
+    }
+    /// Observe the actual retained canonical Root identity as matching data only.
+    pub fn root_identity(&self) -> Option<[u8; 24]> {
+        self.state.as_ref()?.root.as_ref().map(|(_, identity, _)| *identity)
     }
     /// Borrow only a completely validated newly created generation.
     pub fn generation(&self) -> Option<&ProtectedStorageGeneration> {

@@ -256,3 +256,6 @@ pub(in crate::production) use symbols::AdoptedPassiveReporting;
 mod recovery;
 
 pub(in crate::production) use recovery::RecoveryProgress;
+
+#[path = "incident_host/seed_retirement.rs"]
+mod seed_retirement;

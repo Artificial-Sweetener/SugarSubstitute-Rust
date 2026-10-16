@@ -144,3 +144,6 @@ mod tests {
 
 mod target;
 pub use target::CaptureTarget;
+
+mod origin;
+pub use origin::{CaptureGenerationOrigin, CaptureOriginNameError, RecoveryCaptureIdentity};

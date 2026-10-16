@@ -15,3 +15,8 @@ mod support;
 mod symbols;
 
 mod stored_recovery;
+
+#[path = "reporting/recovery_origin_tests.rs"]
+mod recovery_origin;
+
+mod seed_retirement;

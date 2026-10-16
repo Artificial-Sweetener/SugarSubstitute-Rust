@@ -15,15 +15,22 @@ pub(in crate::production) enum ReporterParentFailure {
 }
 pub(super) enum OriginalCause {
     Parent(ReporterParentFailure),
+    Admission(AdmissionError),
     Wire(DiagnosticWireError),
     Time(time::ReporterTimeCause),
     Source(ReporterSourceIssue),
-    Worker(JobCompletion<(), ReporterSourceIssue>),
+    Worker(JobCompletion<worker::RelayTurn, ReporterSourceIssue>),
+}
+/// A terminal admission has no worker; a failed worker has no terminal admission.
+pub(super) enum ReporterSecondaryFailure {
+    Worker { _completion: JobCompletion<worker::RelayTurn, ReporterSourceIssue> },
+    Admission { _cause: AdmissionError },
 }
 /// Nonclone original cause and source lease remain owned outside all metadata locks.
 pub(in crate::production) struct OwnedReporterFailure {
     pub(super) cause: OriginalCause,
-    pub(super) _worker: Option<JobCompletion<(), ReporterSourceIssue>>,
+    pub(super) _secondary: Option<ReporterSecondaryFailure>,
+    pub(super) _admission: Option<AdmissionError>,
     pub(super) _source: ReporterSource,
 }
 impl std::fmt::Debug for OwnedReporterFailure {
@@ -50,6 +57,7 @@ impl Error for OwnedReporterFailure {
             OriginalCause::Parent(ReporterParentFailure::Send(cause)) => Some(cause),
             OriginalCause::Parent(ReporterParentFailure::Transport(cause)) => Some(cause),
             OriginalCause::Time(cause) => Some(cause),
+            OriginalCause::Admission(cause) => Some(cause),
             OriginalCause::Source(cause) => Some(cause),
             OriginalCause::Worker(done) => match &done.outcome {
                 JobOutcome::Failure(cause) => Some(cause),
@@ -95,6 +103,11 @@ impl ReporterSource {
         };
         let Some(cause) = cause else { return Ok(None) };
         state.failure_transferred = true;
-        Ok(Some(OwnedReporterFailure { cause, _worker: None, _source: self.alias() }))
+        Ok(Some(OwnedReporterFailure {
+            cause,
+            _secondary: None,
+            _admission: None,
+            _source: self.alias(),
+        }))
     }
 }

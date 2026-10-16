@@ -6,6 +6,7 @@ use sugarsubstitute_crash::diagnostic_client::{
     DiagnosticCommand, DiagnosticFrame, DiagnosticIncident,
 };
 /// This runs on original Core before constructing either native file owner.
+#[expect(clippy::result_large_err, reason = "Keep funded export Operation cause inline")]
 pub(super) fn validate(input: &ExportInput) -> Result<ReportExportIntent, ExportCause> {
     input.issued.matches_received(&input.received).map_err(ExportCause::Wire)?;
     let protected = input.protected.as_ref().ok_or(ExportCause::State)?;
@@ -26,6 +27,7 @@ pub(super) fn destination_rejection(cause: &ExportCause) -> bool {
     )
 }
 /// Matching facts constrain the selected intent; authentication is checked by `validate`.
+#[expect(clippy::result_large_err, reason = "Keep funded export Operation cause inline")]
 fn selection(
     frame: DiagnosticFrame<'_>,
     owner: sugarsubstitute_contracts::lifecycle::CoordinatorKey,

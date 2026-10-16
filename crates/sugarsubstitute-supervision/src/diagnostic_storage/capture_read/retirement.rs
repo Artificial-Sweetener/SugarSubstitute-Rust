@@ -31,6 +31,10 @@ impl ProtectedCaptureReadLease {
             .capture_reads
             .checked_sub(1)
             .ok_or_else(|| error(self.operation, Code::InvalidIdentity))?;
+        state.capture_handles = state
+            .capture_handles
+            .checked_sub(self.reserved_handles)
+            .ok_or_else(|| error(self.operation, Code::InvalidIdentity))?;
         drop(state);
         drop(self.shared.take());
         Ok(())

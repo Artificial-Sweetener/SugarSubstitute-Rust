@@ -49,6 +49,9 @@ impl WindowsProfileLease {
             {
                 let prepared =
                     state.desktop_custody.as_mut().ok_or(ClaimAdmissionError::Identity)?;
+                if prepared.recovery_grant.is_some() {
+                    return Err(ClaimAdmissionError::Identity);
+                }
                 if prepared.published_ack.as_ref().is_none_or(|ack|
                     ack.receipt()!=sugarsubstitute_contracts::backend_custody::BackendCustodyReceipt::ProfilePublished(prepared.key)) {
                     return Err(ClaimAdmissionError::Busy);

@@ -72,6 +72,7 @@ impl std::borrow::Borrow<ReportView> for PreparedReportView {
 }
 impl ReportingOperation {
     /// Format exact immutable committed facts solely from this finite presentation reservation.
+    #[expect(clippy::result_large_err, reason = "Keep funded ReportingOperation cause inline")]
     pub(super) fn prepare_view(&mut self, context: &JobContext) -> Result<(), ReportingCause> {
         if context.spec().reservation_bytes != REPORT_VIEW_JOB_BYTES
             || self.view.is_some()
@@ -84,16 +85,24 @@ impl ReportingOperation {
             return Err(ReportingCause::Identity);
         }
         self.check_view_controls(context)?;
-        let (binding, locale) = self.view_request.ok_or(ReportingCause::Identity)?;
+        let (binding, locale, root_capture_degraded) =
+            self.view_request.ok_or(ReportingCause::Identity)?;
         let current = self.loaded.as_ref().ok_or(ReportingCause::Identity)?;
         let metadata =
             context.memory().claim(VIEW_METADATA_BYTES).map_err(ReportingCause::Memory)?;
         let stored =
             StoredIncidentSummary::new(current.summary().clone(), current.payload_revision())?;
         let evictions = current.evictions();
-        let view =
-            ReportView::format(stored.summary(), binding, evictions, &[], locale, context.memory())
-                .map_err(ReportingCause::View)?;
+        let view = ReportView::format(
+            stored.summary(),
+            binding,
+            evictions,
+            &[],
+            locale,
+            context.memory(),
+            root_capture_degraded,
+        )
+        .map_err(ReportingCause::View)?;
         self.view =
             Some(Box::new(PreparedViewContent { view, stored, evictions, _metadata: metadata }));
         self.check_view_controls(context)

@@ -18,8 +18,8 @@ mod input;
 mod native;
 #[cfg(windows)]
 pub use capture::{
-    CaptureBootstrapRejection, CaptureBuildIdentity, CaptureCreator, CaptureSnapshot,
-    CaptureUpdates, FinishedCaptureSource, StartRejected, WindowsCrashCapture,
+    CaptureBootstrapRejection, CaptureBuildIdentity, CaptureCreator, CaptureRootSource,
+    CaptureSnapshot, CaptureUpdates, FinishedCaptureSource, StartRejected, WindowsCrashCapture,
 };
 pub use error::{CrashAdmissionError, CrashError};
 pub use input::CaptureStartInput;

@@ -15,6 +15,7 @@ use std::ops::Range;
 pub struct PreparedStartupSnapshot {
     pub(super) launch: Option<AuthenticatedEntryLaunch>,
     pub(super) registered: Option<super::registered_startup::RegisteredSnapshot>,
+    pub(super) delegated: Option<crate::recovery_supervisor::startup::SourceRef>,
     pub(super) body: Range<usize>,
 }
 
@@ -53,7 +54,12 @@ impl AuthenticatedEntryLaunch {
             Ok::<_, EntryTransportError>(protocol::HEADER_BYTES..self.frame.length)
         };
         match validate() {
-            Ok(body) => Ok(PreparedStartupSnapshot { launch: Some(self), registered: None, body }),
+            Ok(body) => Ok(PreparedStartupSnapshot {
+                launch: Some(self),
+                registered: None,
+                delegated: None,
+                body,
+            }),
             Err(error) => Err(StartupSnapshotRejection { error, launch: self }),
         }
     }
@@ -77,12 +83,15 @@ impl PreparedStartupSnapshot {
     /// # Errors
     /// Rejects missing original frame custody or an invalid retained body range.
     pub(crate) fn body(&self) -> Result<&[u8], EntryTransportError> {
-        match (&self.launch, &self.registered) {
-            (Some(launch), None) => {
+        match (&self.launch, &self.registered, &self.delegated) {
+            (Some(launch), None, None) => {
                 launch.frame.bytes().get(self.body.clone()).ok_or(EntryTransportError::Malformed)
             }
-            (None, Some(registered)) => {
+            (None, Some(registered), None) => {
                 registered.body().get(self.body.clone()).ok_or(EntryTransportError::Malformed)
+            }
+            (None, None, Some(delegated)) => {
+                delegated.body.get(self.body.clone()).ok_or(EntryTransportError::Malformed)
             }
             _ => Err(EntryTransportError::Malformed),
         }
@@ -93,10 +102,37 @@ impl PreparedStartupSnapshot {
     /// # Errors
     /// Rejects a missing frame or mismatched original SSCE1 correlation.
     pub(crate) fn admission_binding(&self) -> Result<StartupAdmissionBinding, EntryTransportError> {
-        match (&self.launch, &self.registered) {
-            (Some(_), None) => admission::project(self).map(StartupAdmissionBinding::Entry),
-            (None, Some(registered)) => Ok(StartupAdmissionBinding::Registered(registered.clone())),
+        match (&self.launch, &self.registered, &self.delegated) {
+            (Some(_), None, None) => admission::project(self).map(StartupAdmissionBinding::Entry),
+            (None, Some(registered), None) => {
+                Ok(StartupAdmissionBinding::Registered(registered.clone()))
+            }
+            (None, None, Some(delegated)) => {
+                Ok(StartupAdmissionBinding::Delegated(delegated.clone()))
+            }
             _ => Err(EntryTransportError::Malformed),
+        }
+    }
+}
+
+impl PreparedStartupSnapshot {
+    /// Transfer only the sealed child-side authenticated recovery source.
+    pub(crate) fn delegated(source: crate::recovery_supervisor::startup::SourceRef) -> Self {
+        let length = source.length;
+        Self { launch: None, registered: None, delegated: Some(source), body: 0..length }
+    }
+}
+
+impl PreparedStartupSnapshot {
+    /// Borrow the genuine paired-source loan; ordinary Entry snapshots cannot supply it.
+    #[cfg(windows)]
+    pub(crate) fn recovery_source(
+        &self,
+    ) -> Option<&crate::recovery_supervisor::startup::SourceRef> {
+        if self.launch.is_none() && self.registered.is_none() {
+            self.delegated.as_ref()
+        } else {
+            None
         }
     }
 }

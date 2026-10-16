@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Route actual registry exit evidence without equating it with family/profile retirement.
 use super::{ParentError, ParentLifecycle, ParentResources};
-use sugarsubstitute_contracts::lifecycle::{ConnectionId, DesktopObservation, RunKey};
+use sugarsubstitute_contracts::lifecycle::{ConnectionId, DesktopObservation, ProcessKey, RunKey};
 use sugarsubstitute_supervision::RegistryObservation;
 
 impl ParentLifecycle {
@@ -68,11 +68,38 @@ impl ParentLifecycle {
         if *process != resources.process {
             return Ok(());
         }
+        self.observe_desktop_exit(*process, *code)
+    }
+    /// Consume the exact independently watched recovery UI exit once.
+    /// The composing recovery Record suppresses carrier-root exit routing and retains
+    /// this original member owner through its actual terminal and family cleanup.
+    /// Source expiry and watch cancellation cannot fabricate an actual UI exit.
+    /// # Errors
+    /// Rejects foreign run/family custody and repeated or inconsistent exit delivery.
+    pub(crate) fn recovery_desktop_exit(
+        &mut self,
+        desktop: &sugarsubstitute_supervision::RecoveryEnrolledDesktop,
+        resources: &ParentResources<'_, '_>,
+    ) -> std::result::Result<(), ParentError> {
+        if desktop.key().run() != self.run || desktop.process() != resources.process {
+            return Err(ParentError::ForeignPeer);
+        }
+        let Some(actual) = desktop.actual_exit() else {
+            return Ok(());
+        };
+        self.observe_desktop_exit(resources.process, actual.exit_code)
+    }
+    /// Both authenticated adapters preserve the same family correlation and exit owner.
+    /// This private transition grants no process, profile, pipe or resource settlement.
+    fn observe_desktop_exit(
+        &mut self,
+        process: ProcessKey,
+        code: u32,
+    ) -> std::result::Result<(), ParentError> {
         if self.exit.is_none() {
             self.exit = Some(
                 sugarsubstitute_application::supervision::DesktopExitTransaction::new(
-                    self.run,
-                    resources.process,
+                    self.run, process,
                 )
                 .map_err(|_| ParentError::ForeignPeer)?,
             );
@@ -80,9 +107,8 @@ impl ParentLifecycle {
         self.exit
             .as_mut()
             .ok_or(ParentError::WrongPhase)?
-            .observe(DesktopObservation::Exited { process: *process, code: i64::from(*code) })
-            .map_err(|_| ParentError::WrongPhase)?;
-        Ok(())
+            .observe(DesktopObservation::Exited { process, code: i64::from(code) })
+            .map_err(|_| ParentError::WrongPhase)
     }
 }
 
@@ -117,3 +143,7 @@ impl ParentLifecycle {
         Ok(Some(RetiredRegistration { run: self.run, registered: self.registered }))
     }
 }
+
+#[cfg(test)]
+#[path = "retirement/recovery_tests.rs"]
+mod recovery_tests;

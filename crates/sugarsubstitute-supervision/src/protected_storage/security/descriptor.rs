@@ -8,6 +8,13 @@ const CONTROL: u16 = 0x8000 | 0x1000 | 0x0004 | 0x0010;
 const SYSTEM: &[u8] = &[1, 1, 0, 0, 0, 0, 0, 5, 18, 0, 0, 0];
 const MEDIUM: &[u8] = &[1, 1, 0, 0, 0, 0, 0, 16, 0, 32, 0, 0];
 pub(super) fn expected(sid: &[u8]) -> Result<Vec<u8>, &'static str> {
+    expected_rights(sid, 0x001f01ff, 3)
+}
+/// Restrict a real recovery containment Job to its account/SYSTEM with no child ACL inheritance.
+pub(super) fn expected_recovery_job(sid: &[u8]) -> Result<Vec<u8>, &'static str> {
+    expected_rights(sid, 0x001f003f, 0)
+}
+fn expected_rights(sid: &[u8], rights: u32, inheritance: u8) -> Result<Vec<u8>, &'static str> {
     if sid.len() < 8
         || sid.len() > 68
         || sid[0] != 1
@@ -16,7 +23,7 @@ pub(super) fn expected(sid: &[u8]) -> Result<Vec<u8>, &'static str> {
     {
         return Err("sid_shape");
     }
-    let dacl = acl(&[ace(0, 3, 0x001f01ff, sid), ace(0, 3, 0x001f01ff, SYSTEM)]);
+    let dacl = acl(&[ace(0, inheritance, rights, sid), ace(0, inheritance, rights, SYSTEM)]);
     let sacl = acl(&[ace(17, 0, 1, MEDIUM)]);
     let mut bytes = vec![0; 20];
     bytes[0] = 1;
@@ -96,6 +103,13 @@ fn compare_acl(actual: &[u8], expected: &[u8], field: usize) -> Result<(), &'sta
     Ok(())
 }
 pub(super) fn verify(bytes: &[u8], sid: &[u8]) -> Result<(), &'static str> {
+    verify_expected(bytes, sid, expected(sid)?)
+}
+/// Require the same canonical descriptor structure and the exact closed Job rights policy.
+pub(super) fn verify_recovery_job(bytes: &[u8], sid: &[u8]) -> Result<(), &'static str> {
+    verify_expected(bytes, sid, expected_recovery_job(sid)?)
+}
+fn verify_expected(bytes: &[u8], sid: &[u8], expected: Vec<u8>) -> Result<(), &'static str> {
     if !(20..=MAXIMUM_BYTES).contains(&bytes.len())
         || bytes[0] != 1
         || short(bytes, 2)? & CONTROL != CONTROL
@@ -105,7 +119,6 @@ pub(super) fn verify(bytes: &[u8], sid: &[u8]) -> Result<(), &'static str> {
     if owner(bytes)? != sid {
         return Err("foreign_storage_security");
     }
-    let expected = expected(sid)?;
     compare_acl(bytes, &expected, 16)?;
     compare_acl(bytes, &expected, 12)
 }

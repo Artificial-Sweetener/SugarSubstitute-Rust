@@ -127,5 +127,7 @@ impl IncidentReporting {
         self.rejected_received = None;
         self.close_request = None;
         self.symbols = None;
+        self.fresh_supervisor = false;
+        self.deferred_restart = None;
     }
 }

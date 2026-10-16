@@ -54,6 +54,18 @@ fn actual_table_capacity_and_identity_pin_retain_original_constructor_charge() -
         let profile_carrier =
             size_of::<Option<crate::registry::profile::prepared::PreparedDesktopCarrier>>();
         assert_eq!(profile_carrier, 16);
+        let recovery_carrier =
+            size_of::<Option<Box<crate::registry_input::recovery::RecoveryCarrierLaunch>>>();
+        assert_eq!(recovery_carrier, 8);
+        assert_eq!(
+            size_of::<sugarsubstitute_execution::RecoveryGrantCustody>(),
+            size_of::<usize>()
+        );
+        assert!(
+            sugarsubstitute_execution::RegisteredRecoveryGrant::control_storage_bytes()
+                + size_of::<super::super::creation_job::HeldRecoveryCreation>()
+                <= 4096
+        );
         assert_eq!(
             WindowsProcessRegistry::storage_bytes(),
             253_792
@@ -62,9 +74,10 @@ fn actual_table_capacity_and_identity_pin_retain_original_constructor_charge() -
                         + custody_input
                         + family_guards
                         + custody_owners
-                        + profile_carrier) as u64
+                        + profile_carrier
+                        + recovery_carrier) as u64
         );
-        assert_eq!(WindowsProcessRegistry::storage_bytes(), 366_976);
+        assert_eq!(WindowsProcessRegistry::storage_bytes(), 368_024);
         assert!(WindowsProcessRegistry::storage_bytes() <= bytes);
         assert_eq!(bytes, 370_120);
         // The boxed native family's own identity growth remains covered by its

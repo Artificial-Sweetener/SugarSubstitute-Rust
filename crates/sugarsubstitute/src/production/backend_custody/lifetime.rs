@@ -217,7 +217,7 @@ impl Lifetime {
         if let Some(source) = &self.source
             && let Some(cause) = source.failure()
         {
-            if source.unresolved() {
+            if source.unresolved() && !source.recovery_capture_pending() {
                 source.exit_unresolved_helper()?;
             }
             return Err(Box::new(cause));
@@ -249,7 +249,12 @@ impl Lifetime {
             }
             Ok(())
         };
-        if let (Some(execution), Some(until)) = (&mut self.execution, self.until) {
+        if let Some(source) = &self.source {
+            self.until = source.retirement_until().or_else(|| source.recovery_retirement_until());
+        }
+        if self.source.as_ref().is_none_or(|source| !source.recovery_capture_pending())
+            && let (Some(execution), Some(until)) = (&mut self.execution, self.until)
+        {
             execution.request_shutdown(until);
         }
         observed
@@ -290,11 +295,15 @@ impl Lifetime {
         if let Some(source) = &self.source
             && source.unresolved()
         {
-            let mut exit = source.failure().is_some();
+            let pending_capture = source.recovery_capture_pending();
+            let mut exit = source.failure().is_some() && !pending_capture;
             if !exit && let (Some(until), Some(client)) = (self.until, &self.client) {
                 match client.now() {
                     Ok(now) => exit = now >= until,
-                    Err(cause) => retain(&mut failure, Err(Box::new(cause))),
+                    Err(cause) => {
+                        retain(&mut failure, Err(Box::new(cause)));
+                        exit = true;
+                    }
                 }
             }
             if exit {

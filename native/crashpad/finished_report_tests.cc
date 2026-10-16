@@ -6,6 +6,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace sf = sugarsubstitute::finished;
@@ -111,10 +112,12 @@ struct Builder {
   uint32_t Text(const std::string& text) {const auto off=Add(text.size()+5);Put(bytes,off,static_cast<uint32_t>(text.size()));std::copy(text.begin(),text.end(),bytes.begin()+off+4);return off;}
   uint32_t Dict(const std::vector<std::pair<std::string,std::string>>& pairs) {const auto off=Add(4+pairs.size()*8);Put(bytes,off,static_cast<uint32_t>(pairs.size()));for(size_t i=0;i<pairs.size();++i){const auto key=Text(pairs[i].first),value=Text(pairs[i].second);Put(bytes,off+4+i*8,key);Put(bytes,off+8+i*8,value);}return off;}
 };
-Bytes Dump() {
+Bytes Dump(std::string_view epoch="abababababababababababababababab",std::string_view subject_epoch={}) {
   Builder b;b.Add(32);const auto dir=b.Add(24),mods=b.Add(112),cp=b.Add(64),links=b.Add(16),info=b.Add(28);
-  std::string coordinator;for(size_t i=0;i<32;++i)coordinator+="12";for(size_t i=0;i<16;++i)coordinator+="ab";
-  const auto dict=b.Dict({{"product","SugarSubstitute"},{"build","b7"},{"role","supervisor"},{"coordinator",coordinator},{"subject","s1:"+coordinator}});
+  std::string name_space;for(size_t i=0;i<32;++i)name_space+="12";
+  const std::string coordinator=name_space+std::string(epoch);
+  const std::string subject="s1:"+name_space+std::string(subject_epoch.empty()?epoch:subject_epoch);
+  const auto dict=b.Dict({{"product","SugarSubstitute"},{"build","b7"},{"role","supervisor"},{"coordinator",coordinator},{"subject",subject}});
   Put(b.bytes,0,0x504d444d);Put(b.bytes,4,0xa793);Put(b.bytes,8,2);Put(b.bytes,12,dir);
   Put(b.bytes,dir,4);Put(b.bytes,dir+4,112);Put(b.bytes,dir+8,mods);Put(b.bytes,dir+12,0x43500001);Put(b.bytes,dir+16,64);Put(b.bytes,dir+20,cp);
   Put(b.bytes,mods,1);Put(b.bytes,cp,1);std::copy_n(native_uuid,16,b.bytes.begin()+cp+4);
@@ -236,10 +239,11 @@ bool EffectFailures() {
   for(uint32_t effect=start+1;effect<=end;++effect){Fixture f;if(!f.Query())return false;f.api.fail_effect=effect;if(f.Prepare()||f.owner->prepared||f.api.files[L"db/metadata"].bytes!=Metadata()||f.api.handles.empty())return false;}
   return true;
 }
-bool RecoverCase(unsigned mode) {
+bool RecoverCase(unsigned mode,bool historical=false) {
   Fixture f;
   if (!f.Query() || !f.Prepare()) return false;
-  const auto permit=f.Permit(true);
+  auto permit=f.Permit(true);
+  if(historical){std::fill_n(permit.current_operation.epoch,16,uint8_t{0xcd});permit.current_operation.id=42;}
   const auto candidate=Bytes(f.owner->candidate.begin(),f.owner->candidate.begin()+f.owner->candidate_bytes);
   const auto source_name=L"db/reports/12345678-90ab-cdef-1122-334455667788.dmp";
   if (mode != 0 && mode != 3) f.api.files[L"db/metadata"].bytes=candidate;
@@ -254,11 +258,22 @@ bool RecoverCase(unsigned mode) {
   SsFinishedRecoverInputV1 input{};input.borrowed_database=1;input.borrowed_metrics=2;
   memcpy(input.expected_database_identity,permit.prepared.database_identity,24);memcpy(input.expected_metrics_identity,permit.prepared.metrics_identity,24);
   input.borrowed_live_recovery_permit=&permit;input.original_current_operation={100,1};
+  if(historical){
+    SsRecoveryCaptureOriginV2 origin{};origin.origin_kind=1;
+    memcpy(origin.namespace_id,permit.prepared.subject.namespace_id,32);
+    memcpy(origin.root_epoch,permit.prepared.subject.epoch,16);memcpy(origin.capture_epoch,origin.root_epoch,16);
+    sf::Invocation invocation(*f.owner,f.Source());
+    if(!sf::BindRecoveryOrigin(invocation,origin,permit.prepared.subject,permit.current_operation))return false;
+  }
   const bool settled=f.Recover(input);
   if (mode == 3 || mode == 5) return !settled && !f.owner->reclaimed && !f.api.handles.empty();
   return settled && f.api.handles.empty() && f.owner->absent_mask==3 &&
       f.owner->reclaimed==((mode==2||mode==4)?0:permit.prepared.source.bytes) &&
       f.api.files[L"db/metadata"].bytes==candidate;
+}
+bool HistoricalCoordinatorReplaysActualOriginalCandidateAndAbsence(){
+  for(unsigned mode=0;mode<6;++mode)if(!RecoverCase(mode,true))return false;
+  return true;
 }
 bool OriginalPresent(){return RecoverCase(0);}
 bool CandidatePresent(){return RecoverCase(1);}
@@ -455,9 +470,97 @@ bool QpcOriginAndBoundedSecondaryPacking() {
   return true;
 }
 
+bool RecoveryOriginCurrentOperationIsIndependentAndExactlyLatched() {
+  Fixture f;SsRecoveryCaptureOriginV2 origin{};origin.origin_kind=2;
+  std::fill_n(origin.namespace_id,32,uint8_t{0x12});std::fill_n(origin.root_epoch,16,uint8_t{0x55});
+  origin.instance=3;origin.generation=4;origin.grant=6;
+  constexpr uint8_t epoch[16]={0xdc,0xee,0x25,0x92,0x09,0x63,0xbb,0x09,0x6c,0xd6,0x82,0x6d,0x73,0x15,0x68,0x38};memcpy(origin.capture_epoch,epoch,16);
+  memcpy(f.owner->expected.subject.epoch,epoch,16);
+  constexpr char hex[]="0123456789abcdef";std::string replacement;
+  for(auto byte:epoch){replacement+=hex[byte>>4];replacement+=hex[byte&15];}
+  auto& dump=f.api.files[L"db/reports/12345678-90ab-cdef-1122-334455667788.dmp"].bytes;
+  dump=Dump(replacement);
+  auto current=f.Key();std::fill_n(current.epoch,16,uint8_t{0xcd});current.id=42;
+  sf::Invocation invocation(*f.owner,f.Source());
+  if(!sf::BindRecoveryOrigin(invocation,origin,f.owner->expected.subject,current)||
+      !sf::SameOperation(f.owner->recovery_current_operation,current)||!f.Query()||!f.PrepareKey(current))return false;
+  auto permit=f.Permit();permit.current_operation=current;
+  return f.Disposition(permit)&&f.api.handles.empty();
+}
+bool RecoveryOriginRejectsChangedCurrentPreparationBeforeFileEffects() {
+  Fixture f;
+  f.owner->facts_valid=true;f.owner->recovery_origin_bound=true;
+  f.owner->recovery_current_operation=f.Key();f.owner->recovery_current_operation.id=42;
+  auto changed=f.owner->recovery_current_operation;changed.id=43;
+  const auto before=f.api.effects;
+  return !f.PrepareKey(changed)&&f.api.effects==before&&f.api.handles.empty();
+}
+bool RecoveryOriginSubjectRequiresExactOldRunOrDerivedProducer() {
+  SsRecoveryCaptureOriginV2 origin{};origin.origin_kind=2;origin.namespace_id[0]=1;origin.root_epoch[0]=2;
+  origin.instance=3;origin.generation=4;origin.grant=5;origin.capture_epoch[0]=6;
+  SsFinishedSubjectV1 subject{};subject.tag=Desktop;subject.namespace_id[0]=1;
+  subject.epoch[0]=2;subject.instance=3;subject.generation=4;
+  if(!sf::RecoverySubject(origin,subject))return false;
+  ++subject.generation;if(sf::RecoverySubject(origin,subject))return false;
+  subject.tag=Supervisor;subject.instance=subject.generation=0;
+  if(sf::RecoverySubject(origin,subject))return false;
+  subject.epoch[0]=6;if(!sf::RecoverySubject(origin,subject))return false;
+  subject.namespace_id[0]=9;return !sf::RecoverySubject(origin,subject);
+}
+
+bool HistoricalCoordinatorOriginRejectsMixedFormsBeforeEffects() {
+  for (unsigned malformed=0;malformed<10;++malformed) {
+    Fixture f;SsRecoveryCaptureOriginV2 origin{};origin.origin_kind=1;
+    memcpy(origin.namespace_id,f.owner->expected.subject.namespace_id,32);
+    memcpy(origin.root_epoch,f.owner->expected.subject.epoch,16);
+    memcpy(origin.capture_epoch,origin.root_epoch,16);
+    if(malformed==1)origin.instance=1;
+    if(malformed==2)origin.grant=1;
+    if(malformed==3)origin.capture_epoch[0]^=1;
+    if(malformed==4)origin.origin_kind=3;
+    if(malformed==5)origin.reserved=1;
+    if(malformed==6)origin.generation=1;
+    if(malformed==7)memset(origin.root_epoch,0,16);
+    if(malformed==8)memset(origin.namespace_id,0,32);
+    if(malformed==9)origin.origin_kind=0;
+    auto current=f.Key();current.epoch[0]^=1;current.id=42;
+    sf::Invocation invocation(*f.owner,f.Source());const auto before=f.api.effects;
+    const bool accepted=sf::BindRecoveryOrigin(invocation,origin,f.owner->expected.subject,current);
+    if(accepted!=(malformed==0)||f.api.effects!=before)return false;
+    if(accepted&&!sf::SameOperation(f.owner->recovery_current_operation,current))return false;
+  }
+  return true;
+}
+
+bool MixedRecoveryAnnotationsRemainRejectedAndOwned() {
+  Fixture f;SsRecoveryCaptureOriginV2 origin{};origin.origin_kind=2;
+  std::fill_n(origin.namespace_id,32,uint8_t{0x12});std::fill_n(origin.root_epoch,16,uint8_t{0x55});
+  origin.instance=3;origin.generation=4;origin.grant=6;
+  constexpr uint8_t epoch[16]={0xdc,0xee,0x25,0x92,0x09,0x63,0xbb,0x09,0x6c,0xd6,0x82,0x6d,0x73,0x15,0x68,0x38};
+  memcpy(origin.capture_epoch,epoch,16);memcpy(f.owner->expected.subject.epoch,epoch,16);
+  constexpr char hex[]="0123456789abcdef";std::string selected;
+  for(auto byte:epoch){selected+=hex[byte>>4];selected+=hex[byte&15];}
+  const auto path=L"db/reports/12345678-90ab-cdef-1122-334455667788.dmp";
+  f.api.files[path].bytes=Dump(selected,"abababababababababababababababab");
+  const auto before=f.api.files[path].bytes;const auto metadata=f.api.files[L"db/metadata"].bytes;
+  auto current=f.Key();std::fill_n(current.epoch,16,uint8_t{0xcd});current.id=42;
+  sf::Invocation invocation(*f.owner,f.Source());
+  if(!sf::BindRecoveryOrigin(invocation,origin,f.owner->expected.subject,current)||f.Query()||
+      f.owner->facts_valid||f.owner->prepared||f.owner->reclaimed||f.owner->status!=Missing||
+      f.api.files[path].bytes!=before||f.api.files[L"db/metadata"].bytes!=metadata||!f.api.files[path].present)return false;
+  f.owner->in_cleanup=true;f.owner->cleanup={1000,1};f.owner->cleanup_latched=true;
+  return f.Retire()&&f.api.handles.empty()&&!f.owner->locked;
+}
+
 }
 int main() {
-  const std::pair<const char*,bool(*)()> tests[]={{"empty-structural-attachments",EmptyStructuralAttachments},{"unhandled-attachments-retained",RejectUnhandledAttachments},{"normal",Normal},{"discard-after-read-retirement",DiscardAfterReadReturnsCheckedRetirement},{"stopped-discard-after-read-cleanup",StoppedDiscardAfterReadRetainsUntilCleanup},{"foreign-key",BoundsAndWrongKey},{"partial-open",PartialOutput},{"late-output",LatePartial},{"lock-busy",LockBusy},{"failed-close",FailedCloseRetains},{"collision",Collision},{"third-image",ThirdImage},{"every-prepare-effect",EffectFailures},{"original-present",OriginalPresent},{"candidate-present",CandidatePresent},{"candidate-absent",CandidateAbsent},{"original-absent",OriginalAbsent},{"prior-all-absent",PriorAllAbsent},{"changed-metadata-inode",ChangedMetadataInode},{"every-disposition-effect",DispositionFailures},{"CNG-sha256-vector",HashVector},{"first-cause-post-timeout",FirstCauseWinsPostTimeout},{"query-once",QueryIsOneShot},{"incomplete-inventory",IncompleteInventory},{"foreign-generation",ForeignGeneration},{"distinct-epoch-stage",DistinctEpochStageNames},{"cancel-partial-cleanup-source",CancelAfterPartialOutputAndCleanup},{"cancel-each-prepare",CancelAtEachPreparationEffect},{"cancel-each-disposition",CancelAtEachDispositionEffect}};
+  const std::pair<const char*,bool(*)()> tests[]={{"empty-structural-attachments",EmptyStructuralAttachments},{"unhandled-attachments-retained",RejectUnhandledAttachments},{"normal",Normal},{"discard-after-read-retirement",DiscardAfterReadReturnsCheckedRetirement},{"stopped-discard-after-read-cleanup",StoppedDiscardAfterReadRetainsUntilCleanup},{"foreign-key",BoundsAndWrongKey},{"partial-open",PartialOutput},{"late-output",LatePartial},{"lock-busy",LockBusy},{"failed-close",FailedCloseRetains},{"collision",Collision},{"third-image",ThirdImage},{"every-prepare-effect",EffectFailures},{"original-present",OriginalPresent},{"candidate-present",CandidatePresent},{"candidate-absent",CandidateAbsent},{"original-absent",OriginalAbsent},{"prior-all-absent",PriorAllAbsent},{"changed-metadata-inode",ChangedMetadataInode},{"every-disposition-effect",DispositionFailures},{"CNG-sha256-vector",HashVector},{"first-cause-post-timeout",FirstCauseWinsPostTimeout},{"query-once",QueryIsOneShot},{"incomplete-inventory",IncompleteInventory},{"foreign-generation",ForeignGeneration},{"distinct-epoch-stage",DistinctEpochStageNames},{"cancel-partial-cleanup-source",CancelAfterPartialOutputAndCleanup},{"cancel-each-prepare",CancelAtEachPreparationEffect},{"cancel-each-disposition",CancelAtEachDispositionEffect},
+    {"recovery-current-operation",RecoveryOriginCurrentOperationIsIndependentAndExactlyLatched},
+    {"recovery-changed-preparation",RecoveryOriginRejectsChangedCurrentPreparationBeforeFileEffects},
+    {"recovery-exact-subject",RecoveryOriginSubjectRequiresExactOldRunOrDerivedProducer},
+    {"historical-coordinator-mixed-origin",HistoricalCoordinatorOriginRejectsMixedFormsBeforeEffects},
+    {"historical-coordinator-replay",HistoricalCoordinatorReplaysActualOriginalCandidateAndAbsence},
+    {"recovery-mixed-annotations",MixedRecoveryAnnotationsRemainRejectedAndOwned}};
   for(const auto& [name,test]:tests)if(!test()){std::printf("FAILED %s\n",name);return 1;}
   if(!ClosedControlValidation()||!CancelledPreflightAllocatesNoLease()||!PreflightPreservesAllocationCause()){std::printf("FAILED control preflight\n");return 1;}
   if(!EqualCodesPreserveActualNativeFirstOrigin()||!ControlFirstNoEffectsAndNoNativeEcho()||!QpcOriginAndBoundedSecondaryPacking()){std::printf("FAILED cause origins\n");return 1;}

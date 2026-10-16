@@ -7,6 +7,7 @@ mod fences;
 mod lifecycle;
 mod preservation;
 mod retry;
+mod steps;
 use super::*;
 use crate::diagnostic_storage::fixture::DiagnosticFixtureFailure;
 use sha2::{Digest, Sha256};

@@ -60,6 +60,7 @@ pub(super) fn project(
 pub(crate) enum StartupAdmissionBinding {
     Entry(EntryAdmissionBinding),
     Registered(super::super::registered_startup::RegisteredSnapshot),
+    Delegated(crate::recovery_supervisor::startup::SourceRef),
 }
 impl StartupAdmissionBinding {
     pub(crate) fn validate_current_locked(
@@ -71,7 +72,24 @@ impl StartupAdmissionBinding {
     ) -> Result<Moment, EntryTransportError> {
         match self {
             Self::Entry(entry) => entry.validate_current_locked(core, state, run, now),
+            Self::Delegated(source) => {
+                source.validate_locked(core, state, run, now).map_err(|cause| {
+                    EntryTransportError::Native {
+                        cause: crate::native::NativeObservationError::new(
+                            "delegated_startup_admission",
+                            cause,
+                        ),
+                        identity_unrestored: false,
+                    }
+                })
+            }
             Self::Registered(registered) => {
+                if lock(&registered.source.state()?.progress)
+                    .recovery_issued
+                    .is_some_and(|key| key.run() == run)
+                {
+                    return Err(EntryTransportError::Authentication);
+                }
                 registered.validate_current_locked(core, state, run, now)
             }
         }
@@ -85,7 +103,7 @@ impl StartupAdmissionBinding {
     ) -> Result<Option<Moment>, EntryTransportError> {
         match self {
             Self::Entry(entry) => entry.registered_owner_locked(core, state, run, now),
-            Self::Registered(_) => Err(EntryTransportError::Authentication),
+            Self::Registered(_) | Self::Delegated(_) => Err(EntryTransportError::Authentication),
         }
     }
 }

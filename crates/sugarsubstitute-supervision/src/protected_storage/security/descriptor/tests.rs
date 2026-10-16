@@ -57,3 +57,21 @@ fn malformed_foreign_ranges_ace_counts_and_capacity_reject_before_copying() -> T
     assert!(expected(&[1; 69]).is_err());
     Ok(())
 }
+
+#[test]
+fn recovery_job_descriptor_cannot_be_substituted_for_file_security()
+-> Result<(), Box<dyn std::error::Error>> {
+    let sid = &[1, 1, 0, 0, 0, 0, 0, 5, 21, 0, 0, 0];
+    let file = expected(sid)?;
+    let job = expected_recovery_job(sid)?;
+    verify(&file, sid)?;
+    verify_recovery_job(&job, sid)?;
+    assert!(verify(&job, sid).is_err());
+    assert!(verify_recovery_job(&file, sid).is_err());
+    let foreign = &[1, 1, 0, 0, 0, 0, 0, 5, 22, 0, 0, 0];
+    assert!(verify_recovery_job(&job, foreign).is_err());
+    let mut unprotected = job;
+    unprotected[3] &= !0x10;
+    assert!(verify_recovery_job(&unprotected, sid).is_err());
+    Ok(())
+}

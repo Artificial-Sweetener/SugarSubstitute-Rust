@@ -94,6 +94,7 @@ fn original_prepared_reply_drains_after_close_without_granting_new_setup() -> Te
         &parent,
         3,
         BackendCustodyCommand::ProfilePrepare {
+            recovery_grant: None,
             profile: key,
             job: 40,
             directory: 44,

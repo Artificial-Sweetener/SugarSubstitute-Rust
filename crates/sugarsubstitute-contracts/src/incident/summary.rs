@@ -75,6 +75,9 @@ impl IncidentSeed {
 /// External exit attribution supplied by its owner; no status classification occurs here.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ExitAttribution {
+    /// An actual finished native capture was recovered without an observed process exit.
+    /// Neither a numeric exit status nor M1 classification is inferred from its exception.
+    CaptureOnly,
     /// M1 supplied an exact desktop classification and actual native status.
     Desktop {
         /// Authoritative M1 classification, retained unchanged even for native zero.
@@ -166,7 +169,14 @@ impl IncidentSummary {
                 (seed.key.subject(), facts.exit),
                 (IncidentSubject::Desktop(_), ExitAttribution::Desktop { .. })
                     | (IncidentSubject::Supervisor(_), ExitAttribution::Supervisor { .. })
+                    | (_, ExitAttribution::CaptureOnly)
             )
+        {
+            return Err(IncidentError::MismatchedFacts);
+        }
+        if facts.exit == ExitAttribution::CaptureOnly
+            && (!matches!(facts.capture, CaptureEvidence::Finished(_))
+                || !matches!(facts.failure, FailureEvidence::NativeFault { .. }))
         {
             return Err(IncidentError::MismatchedFacts);
         }

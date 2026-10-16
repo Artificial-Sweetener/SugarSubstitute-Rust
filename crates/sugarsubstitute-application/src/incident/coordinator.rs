@@ -191,6 +191,7 @@ impl IncidentCoordinator {
             }
             ExportFinished { scope, binding } => self.export_finished(scope, binding),
             Failed { scope, failure } => self.operation_failed(scope, failure),
+            SeedPublicationRetired { scope } => self.seed_publication_retired(scope),
             ReporterRetired { binding } => self.reporter_retired(binding),
             SourcesRetired { scope } => self.sources_retired(scope),
             SourceRetirementFailed { scope } => self.source_retirement_failed(scope),

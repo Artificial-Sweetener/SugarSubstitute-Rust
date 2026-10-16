@@ -17,6 +17,9 @@ pub enum BackendCustodyCommand {
     ProfilePrepare {
         /// Genuine desktop run and original prepared registry family identity.
         profile: ProfileCustodyKey,
+        /// Fresh recovery grant correlation, authenticated by the existing Root session.
+        /// Ordinary profile preparation retains the strict original wire tag.
+        recovery_grant: Option<crate::recovery_supervisor::RecoveryGrantId>,
         /// Destination duplicate of that empty prepared Job.
         job: u64,
         /// Destination duplicate of the pinned protected profile directory.

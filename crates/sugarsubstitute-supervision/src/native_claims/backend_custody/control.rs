@@ -39,6 +39,11 @@ impl WitnessControl {
         }
         Ok(proof)
     }
+    /// Observe the already-latched actual helper cleanup, without sampling or renewing it.
+    pub(crate) fn cleanup_until(&self) -> Option<Moment> {
+        let state = self.state.as_ref()?;
+        super::super::lock(state).as_ref().map(BackendCustodyCleanup::until)
+    }
     /// Observe providers outside the state lock and preserve actual first control.
     pub(crate) fn check(&self) -> Result<(), ClaimError> {
         let state =

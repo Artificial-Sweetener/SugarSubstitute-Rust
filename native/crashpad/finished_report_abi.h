@@ -242,4 +242,48 @@ static_assert(offsetof(SsFinishedResultV1,cleanup_origin_bits)==84);
 static_assert(offsetof(SsFinishedCallV1,current)==32);
 static_assert(offsetof(SsFinishedOpenInputV1,current)==248);
 static_assert(offsetof(SsFinishedRecoverInputV1,current)==96);
+
+// Recovery origin is exact historical matching data. The current Root operation is
+// independently supplied by genuine Root-local pins/current controls. Historical
+// Recovery Root/run/grant comes from an actual canonical durable origin journal;
+// CoordinatorHistorical comes only from an actual canonical complete Promotion read.
+// Every kind still requires the genuine current Root and retained directory pins.
+// neither namespace equality nor capture_epoch supplies opening authority.
+// The domain-separated capture epoch is correlation, never a replacement Root authority.
+struct SsRecoveryCaptureOriginV2 {
+  uint8_t namespace_id[32];
+  uint8_t root_epoch[16];
+  uint64_t instance;
+  uint64_t generation;
+  uint64_t grant;
+  uint8_t capture_epoch[16];
+  uint32_t origin_kind; //1 CoordinatorHistorical,2 Recovery; never current authority.
+  uint32_t reserved;
+};
+struct SsFinishedOpenInputV2 {
+  uint32_t abi_version;
+  uint32_t reserved;
+  SsRecoveryCaptureOriginV2 origin;
+  SsLogicalStoreOperationV1 operation;
+  SsFinishedOpenInputV1 query;
+};
+struct SsFinishedDiscardInputV2 {
+  uint32_t abi_version;
+  uint32_t reserved;
+  SsRecoveryCaptureOriginV2 origin;
+  SsFinishedDiscardInputV1 disposition;
+};
+struct SsFinishedRecoverInputV2 {
+  uint32_t abi_version;
+  uint32_t reserved;
+  SsRecoveryCaptureOriginV2 origin;
+  SsFinishedRecoverInputV1 disposition;
+};
+static_assert(sizeof(SsRecoveryCaptureOriginV2)==96);
+static_assert(sizeof(SsFinishedOpenInputV2)==424);
+static_assert(sizeof(SsFinishedDiscardInputV2)==160);
+static_assert(sizeof(SsFinishedRecoverInputV2)==216);
+extern "C" __declspec(dllexport) void ss_finished_open_v2(const SsFinishedOpenInputV2*, SsFinishedResultV1*);
+extern "C" __declspec(dllexport) void ss_finished_discard_v2(const SsFinishedDiscardInputV2*, SsFinishedDispositionResultV1*);
+extern "C" __declspec(dllexport) void ss_finished_recover_disposition_v2(const SsFinishedRecoverInputV2*, SsFinishedDispositionResultV1*);
 #endif

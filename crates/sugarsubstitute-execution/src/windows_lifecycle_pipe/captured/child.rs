@@ -158,7 +158,13 @@ impl Lease {
             return Err(failure("captured_child_replay"));
         }
         let facts = self.captured_facts.as_ref().ok_or_else(|| failure("captured_child_facts"))?;
-        if parent.pid != facts.creator_pid || parent.birth != facts.creator_birth {
+        let data = self.data.as_ref().ok_or_else(|| failure("captured_child_base"))?;
+        let expected_parent = if facts.recovery.is_some() {
+            (data.pid, data.birth)
+        } else {
+            (facts.creator_pid, facts.creator_birth)
+        };
+        if (parent.pid, parent.birth) != expected_parent {
             return Err(failure("captured_parent_peer_mismatch"));
         }
         for (handle, raw) in self.capture_processes.iter_mut().zip(facts.processes) {

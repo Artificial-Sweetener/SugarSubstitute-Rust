@@ -83,6 +83,24 @@ impl Source {
         drop(operation);
         Ok(())
     }
+    /// Compact only checked-closed failed records after moving passive causes to their service.
+    /// Retained input from rejected admission has performed no native effects. Drop outside the lock.
+    pub(super) fn release_failed_retired(&self) -> Result<(), SeedServiceIssue> {
+        let (operation, input) = {
+            let mut state =
+                self.shared.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            if state.operation.as_ref().is_none_or(|operation| !operation.files_retired()) {
+                return Err(SeedServiceIssue::Busy);
+            }
+            let operation = state.operation.take();
+            let input = state.input.take();
+            state.started = false;
+            (operation, input)
+        };
+        drop(operation);
+        drop(input);
+        Ok(())
+    }
     pub(super) fn begin(&self) -> Result<(Loan, SeedInput), SeedServiceIssue> {
         let mut state = self.shared.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         if state.started {

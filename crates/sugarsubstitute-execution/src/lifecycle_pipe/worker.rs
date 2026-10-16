@@ -102,7 +102,16 @@ impl ActiveState {
         }
         let state = lock(&core.state);
         if let Some(reason) =
-            crate::symbol_admission::original_stop(&state, self.context.job_id(), now)
+            crate::symbol_admission::original_stop(&state, self.context.job_id(), now).or_else(
+                || {
+                    crate::coordinator_entry::recovery_grant::original_stop(
+                        core,
+                        &state,
+                        self.work.shared.recovery_grant.as_ref(),
+                        now,
+                    )
+                },
+            )
         {
             self.outcome = Some(crate::task::stopped_outcome(reason));
             return true;

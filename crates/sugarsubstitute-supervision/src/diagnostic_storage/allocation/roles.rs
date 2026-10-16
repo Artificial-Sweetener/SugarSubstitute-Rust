@@ -20,7 +20,8 @@ pub(super) const CORRELATION_CONTROL_BYTES: usize = size_of::<ArcAllocation<()>>
 pub(super) const OWNER_BASE_BYTES: usize = size_of::<ArcAllocation<Mutex<State>>>()
     + DIAGNOSTIC_STAGE_BOUND * size_of::<stage::RetainedStage>()
     + DIAGNOSTIC_READ_BOUND * size_of::<read::RetainedRead>()
-    + DIAGNOSTIC_MIGRATION_ARCHIVE_BOUND * size_of::<summary_migration::MigrationArchive>();
+    + DIAGNOSTIC_MIGRATION_ARCHIVE_BOUND * size_of::<summary_migration::MigrationArchive>()
+    + capture_read::origin::ORIGIN_BOUND * size_of::<capture_read::origin::RecognizedOrigin>();
 #[repr(C)]
 struct SummaryResult {
     summary: IncidentSummary,
@@ -128,6 +129,8 @@ const _: () = assert!(
 );
 
 pub(super) enum ResidualRole {
+    CaptureOrigin,
+    CaptureOriginRead,
     Record,
     Seed,
     Preflight,
@@ -148,6 +151,8 @@ pub(super) enum ResidualRole {
 impl ResidualRole {
     pub(super) const fn bytes(&self) -> usize {
         match self {
+            Self::CaptureOrigin => DIAGNOSTIC_CAPTURE_ORIGIN_COMMIT_INLINE_BYTES,
+            Self::CaptureOriginRead => DIAGNOSTIC_CAPTURE_ORIGIN_READ_INLINE_BYTES,
             Self::IncidentValidationInner => incident_validation::inner_destination_bytes(),
             Self::IncidentValidationOuter => incident_validation::outer_destination_bytes(),
             Self::Record => DIAGNOSTIC_SUMMARY_RESULT_INLINE_BYTES + SUMMARY_DYNAMIC,
@@ -194,3 +199,8 @@ impl ResidualRole {
         }
     }
 }
+
+mod capture_origin;
+pub use capture_origin::{
+    DIAGNOSTIC_CAPTURE_ORIGIN_COMMIT_INLINE_BYTES, DIAGNOSTIC_CAPTURE_ORIGIN_READ_INLINE_BYTES,
+};

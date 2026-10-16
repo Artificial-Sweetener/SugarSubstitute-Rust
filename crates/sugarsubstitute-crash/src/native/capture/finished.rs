@@ -26,7 +26,7 @@ impl Capture {
         }
         if report.generation.is_none() {
             storage.prepare_capture_read(
-                &mut fields.storage,
+                fields.storage.as_mut().ok_or(IncidentStoreError::RecoveryConflict)?,
                 &mut report.generation,
                 operation,
                 context,

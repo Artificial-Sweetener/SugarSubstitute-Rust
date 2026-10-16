@@ -30,6 +30,7 @@ pub(in crate::incident) enum ValidationFailure {
 }
 /// Losslessly retain the smaller incident leaves, separate from their complete native variant.
 pub(in crate::incident) enum StoreLeaf {
+    MigrationValidation(DiagnosticRecoveryValidationError),
     RecordBound,
     UnsupportedSchema(u32),
     Codec(serde_json::Error),
@@ -67,6 +68,9 @@ impl ValidationFailure {
                     Code::ArithmeticOverflow => Self::StoreArithmetic(source),
                     Code::InvalidIdentity => Self::StoreIdentity(source),
                 };
+            }
+            IncidentStoreError::MigrationValidation(source) => {
+                StoreLeaf::MigrationValidation(source)
             }
             IncidentStoreError::RecordBound => StoreLeaf::RecordBound,
             IncidentStoreError::UnsupportedSchema(schema) => StoreLeaf::UnsupportedSchema(schema),
@@ -132,6 +136,7 @@ impl ValidationFailure {
 impl StoreLeaf {
     fn into_error(self) -> IncidentStoreError {
         match self {
+            Self::MigrationValidation(source) => IncidentStoreError::MigrationValidation(source),
             Self::RecordBound => IncidentStoreError::RecordBound,
             Self::UnsupportedSchema(schema) => IncidentStoreError::UnsupportedSchema(schema),
             Self::Codec(source) => IncidentStoreError::Codec(source),

@@ -110,7 +110,7 @@ pub(super) async fn supervise(core: Arc<Core>) {
                 let commands =
                     timers_enabled && matches!(record.phase, JobPhase::Queued | JobPhase::Running);
                 let capture_cleanup = (record.native_custody.is_some() && record.held_native())
-                    || (record.custodied_process && record.phase == JobPhase::Running);
+                    || (record.process_creation && record.phase == JobPhase::Running);
                 if let Some(slots) = &mut record.native_deadlines {
                     let (command_deadline, command_expired) =
                         if commands { slots.scan(now) } else { (None, false) };

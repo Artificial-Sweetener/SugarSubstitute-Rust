@@ -302,3 +302,7 @@ impl IncidentFlow {
 
 #[path = "incident_flow/recovery.rs"]
 mod recovery;
+
+#[path = "incident_flow/recovery_seed.rs"]
+mod recovery_seed;
+pub(super) use crate::production::diagnostic_helper::RetiredRecoverySeed;

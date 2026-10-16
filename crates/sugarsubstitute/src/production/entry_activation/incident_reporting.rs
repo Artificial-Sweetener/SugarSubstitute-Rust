@@ -5,13 +5,18 @@
 mod action_result;
 #[path = "incident_reporting/admission.rs"]
 mod admission;
+#[path = "incident_reporting/deadlines.rs"]
+mod deadlines;
 #[path = "incident_reporting/delivery.rs"]
 mod delivery;
 #[path = "incident_reporting/desktop_failure.rs"]
 mod desktop_failure;
+#[path = "incident_reporting/fresh_restart.rs"]
+mod fresh_restart;
 #[path = "incident_reporting/restart_guard.rs"]
 mod restart_guard;
 pub(super) use desktop_failure::{DesktopFailureDisposition, PendingDesktopFailure};
+pub(super) use fresh_restart::DeferredFreshRestart;
 #[path = "incident_reporting/custody.rs"]
 mod custody;
 #[path = "incident_reporting/retirement.rs"]
@@ -118,16 +123,23 @@ struct NativeRequest {
 pub(super) struct ReportAdmission {
     closing: bool,
     restart: ReportRestartAvailability,
+    fresh_supervisor: bool,
 }
 impl ReportAdmission {
     /// Retain this turn's current Root capture decision and actual closing state.
     /// This inert value creates no source or native privilege.
-    pub(super) const fn new(closing: bool, restart: ReportRestartAvailability) -> Self {
-        Self { closing, restart }
+    pub(super) const fn new(
+        closing: bool,
+        restart: ReportRestartAvailability,
+        fresh_supervisor: bool,
+    ) -> Self {
+        Self { closing, restart, fresh_supervisor }
     }
 }
 /// Original funded Reporter/controller custody remains until its actual independent retirements.
 pub(super) struct IncidentReporting {
+    fresh_supervisor: bool,
+    deferred_restart: Option<DeferredFreshRestart>,
     restart: ReportRestartAvailability,
     relay: Option<ReporterRelay>,
     key: Option<DiagnosticKey>,
@@ -178,6 +190,8 @@ const _: () = assert!(
 impl IncidentReporting {
     pub(super) const fn new() -> Self {
         Self {
+            fresh_supervisor: false,
+            deferred_restart: None,
             restart: ReportRestartAvailability::Unavailable,
             relay: None,
             key: None,
@@ -246,6 +260,7 @@ impl IncidentReporting {
         admission: ReportAdmission,
     ) -> Result<()> {
         self.restart = admission.restart;
+        self.fresh_supervisor = admission.fresh_supervisor;
         let mut transition = ReportTransition::Retire;
         let result = self.advance(
             host,
@@ -332,18 +347,6 @@ impl IncidentReporting {
                 || self.binding.is_none()
                     && self.relay.as_ref().is_some_and(ReporterRelay::idle_funded)
                 || self.family_retired && self.store.is_none() && self.export_work.is_none())
-    }
-    /// Earliest retained finite cutoff feeds the existing native wake; it creates no timer.
-    pub(super) fn next_deadline(&self) -> Option<Moment> {
-        self.stopping
-            .map(|budget| budget.settle_until)
-            .or_else(|| {
-                self.store
-                    .as_ref()
-                    .map(|work| work.cleanup_until.unwrap_or(work.scope.original().until()))
-            })
-            .or_else(|| self.export_work.as_ref().and_then(|work| work.until()))
-            .or(self.queue_until)
     }
     fn allocate_wire(&mut self) -> Result<DiagnosticRequestId> {
         self.wire_request =

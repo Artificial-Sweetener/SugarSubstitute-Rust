@@ -59,6 +59,7 @@ impl WindowsCrashCapture {
             }
         };
         let shared = Arc::new(Shared {
+            root_source: Mutex::new(std::sync::Weak::new()),
             attempts: Mutex::new(None),
             owner: self.owner,
             build: Mutex::new(None),

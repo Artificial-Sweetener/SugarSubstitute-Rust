@@ -37,6 +37,9 @@ pub(super) struct ProfileRegistration {
     sid: Vec<u8>,
     until: Moment,
     root_adopted: bool,
+    recovery_grant: Option<sugarsubstitute_contracts::recovery_supervisor::RecoveryGrantId>,
+    capture_wait: bool,
+    recovery_settle_until: Option<Moment>,
     publication_acknowledged: bool,
     cleaning: bool,
     settled: bool,
@@ -67,6 +70,9 @@ impl ProfileRegistration {
     ) -> Result<bool, ClaimError> {
         if self.settled {
             return Ok(true);
+        }
+        if self.capture_wait {
+            return Ok(false);
         }
         let proof = self.slot.cleanup_proof()?;
         proof.check().map_err(|cause| ClaimError::new("profile_custody_cleanup", cause))?;
@@ -173,7 +179,9 @@ impl ProfileRegistration {
         command: &Command,
         until: Moment,
     ) -> Result<Self, ClaimError> {
-        let Command::ProfilePrepare { profile, record, claim_identity, .. } = command else {
+        let Command::ProfilePrepare { profile, recovery_grant, record, claim_identity, .. } =
+            command
+        else {
             return Err(ClaimError::invalid("profile_custody_prepare_command"));
         };
         let original = CustodiedRecord::decode(record)?;
@@ -195,6 +203,9 @@ impl ProfileRegistration {
             sid: sid.to_vec(),
             until,
             root_adopted: false,
+            recovery_grant: *recovery_grant,
+            capture_wait: false,
+            recovery_settle_until: None,
             publication_acknowledged: false,
             cleaning: false,
             settled: false,
@@ -305,3 +316,5 @@ impl ProfileRegistration {
         Ok(())
     }
 }
+
+mod loss;

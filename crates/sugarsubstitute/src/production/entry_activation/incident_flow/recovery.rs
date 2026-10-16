@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Recover before new seeds while retaining current startup as the only fresh-launch authority.
 use super::*;
-use crate::production::diagnostic_helper::recovery::{RecoveryInput, RecoveryIssue};
+use crate::production::diagnostic_helper::recovery::{RecoveryInput, RecoveryIssue, RecoveryPhase};
 use std::time::{SystemTime, UNIX_EPOCH};
 use sugarsubstitute_application::incident::{IncidentOperationBudget, IncidentRecoveryScope};
 use sugarsubstitute_contracts::incident::IncidentUtc;
@@ -15,6 +15,7 @@ pub(super) struct RecoveryFlow {
     scan_ready: bool,
     cursor: usize,
     active: Option<sugarsubstitute_contracts::incident::IncidentKey>,
+    at: Option<IncidentUtc>,
 }
 impl RecoveryFlow {
     pub(super) const fn new() -> Self {
@@ -27,6 +28,7 @@ impl RecoveryFlow {
             scan_ready: false,
             cursor: 0,
             active: None,
+            at: None,
         }
     }
     pub(super) fn pending(&self) -> bool {
@@ -38,6 +40,7 @@ impl IncidentFlow {
     pub(in crate::production::entry_activation) fn recover_pending(
         &mut self,
         records: &[Option<RetainedRecord>; 64],
+        capture: Option<&sugarsubstitute_crash::CaptureRootSource>,
         resources: &mut EntryResources<'_>,
     ) -> Result<bool> {
         if self.recovery.done {
@@ -77,11 +80,16 @@ impl IncidentFlow {
             let at = IncidentUtc::from_unix_seconds(i64::try_from(
                 SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
             )?)?;
+            let storage_operation = self.host.next_recovery_storage_operation(scope)?;
             self.recovery.input = Some(RecoveryInput {
-                request: self.host.namespace()?.diagnostic_write_request(scope.operation())?,
+                request: self.host.namespace()?.diagnostic_write_request(storage_operation)?,
                 scope,
                 at,
+                storage_operation,
+                capture: capture.cloned(),
+                phase: RecoveryPhase::Migrate,
             });
+            self.recovery.at = Some(at);
             self.recovery.scope = Some(scope);
         }
         let scope = self.recovery.scope.ok_or("Original recovery missing")?;
@@ -130,6 +138,28 @@ impl IncidentFlow {
         }
         if !service.files_retired() {
             return Ok(false);
+        }
+        if let Some(phase) = service.next_step()? {
+            let storage_operation = if phase == RecoveryPhase::Scan {
+                scope.operation()
+            } else {
+                self.host.next_recovery_storage_operation(scope)?
+            };
+            self.recovery.input = Some(RecoveryInput {
+                request: self.host.namespace()?.diagnostic_write_request(storage_operation)?,
+                scope,
+                at: self.recovery.at.ok_or("Original recovery UTC observation missing")?,
+                storage_operation,
+                capture: capture.cloned(),
+                phase,
+            });
+            self.host.recovery_service()?.advance(&mut self.recovery.input)?;
+            self.recovery.submitted = false;
+            self.recovery.cleanup_until = None;
+            return Ok(false);
+        }
+        if !service.final_scan_ready()? {
+            return Err("Actual final recovery scan missing after checked retirement".into());
         }
         self.recovery.scan_ready = true;
         self.advance_pending()?;

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Enumerate bounded native directory pages and preserve every unknown candidate.
+mod capacity;
 mod names;
 use super::*;
 use crate::diagnostic_storage::inventory::{ObservedEntry, Scan};
@@ -13,20 +14,10 @@ impl StreamingPort {
         // No recovery operation may use a predecessor after this scan is invalidated.
         // Its owned leaves and vector drop before their actual allocation guard.
         self.stage_candidates = None;
-        let retention =
-            self.original.scan_retention(context).map_err(ClaimError::diagnostic_allocation)?;
         let mut session = session::Session::scan(&self.original, context)?;
         let mut stages = NativeStageScan { candidates: Vec::new(), _allocation: None };
-        let mut scan =
-            Scan { entries: Vec::new(), complete: false, _native_retention: Some(retention) };
-        scan.entries.try_reserve_exact(DIAGNOSTIC_SCAN_BOUND).map_err(|cause| {
-            session
-                .phase(context)
-                .error("diagnostic_scan_reservation", BoundedNativeCause::Reserve(cause))
-        })?;
-        if scan.entries.capacity() != DIAGNOSTIC_SCAN_BOUND {
-            return Err(session.phase(context).invalid("diagnostic_scan_capacity"));
-        }
+        let mut scan = Scan { entries: Vec::new(), complete: false, _native_retention: None };
+        Self::reserve_native_observations(&mut scan, 32, &self.original, context)?;
         let directory = self.directory.as_ref().ok_or_else(|| self.reject())?.path.clone();
         let index = self.reserve_file(directory.clone(), 0, FileGrant::DirectoryScan, context)?;
         let id = self.files[index].fields()?.id;
@@ -192,6 +183,20 @@ impl StreamingPort {
                             }
                             Err(cause) => return Err(cause),
                         }
+                    }
+                    if scan.entries.len() == scan.entries.capacity() {
+                        let capacity = scan
+                            .entries
+                            .capacity()
+                            .checked_mul(2)
+                            .filter(|capacity| *capacity <= DIAGNOSTIC_SCAN_BOUND)
+                            .ok_or_else(|| self.reject())?;
+                        Self::reserve_native_observations(
+                            &mut scan,
+                            capacity,
+                            &self.original,
+                            context,
+                        )?;
                     }
                     scan.entries.push(observed);
                 }

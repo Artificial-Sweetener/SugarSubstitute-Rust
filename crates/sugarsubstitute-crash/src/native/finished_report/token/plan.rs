@@ -44,7 +44,7 @@ impl Token {
             fields.operation,
             summary.seed().key(),
             summary.revision(),
-            fields.operation.owner(),
+            fields.generation.origin()?,
             uuid,
             summary.seed().build().clone(),
             prepared.database_identity,

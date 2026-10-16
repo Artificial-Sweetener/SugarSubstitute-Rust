@@ -3,6 +3,7 @@
 //! Serialize exact report mutations and fence actions until actual view refresh.
 mod attempts;
 mod queued;
+mod recovery_origin;
 mod symbols;
 
 use super::{

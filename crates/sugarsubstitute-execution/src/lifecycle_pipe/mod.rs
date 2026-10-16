@@ -22,7 +22,7 @@ pub(crate) use current_admission::validated as with_current_session;
 pub(crate) mod enrollment;
 mod issue;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 mod types;
 pub(crate) mod worker;
 use crate::{
@@ -59,6 +59,8 @@ pub(crate) enum PeerInput {
     Owned { handle: std::os::windows::io::OwnedHandle, process: Option<ProcessKey> },
     #[cfg(windows)]
     Inherited { section: usize },
+    #[cfg(windows)]
+    RecoveryInherited { section: usize, desktop_section: usize },
     #[cfg(test)]
     Simulated,
 }
@@ -102,6 +104,12 @@ pub(crate) trait PipeLease: Send {
     ) -> Option<crate::windows_lifecycle_pipe::captured::child::CapturedInput> {
         None
     }
+    /// Actual paired Root section loan after independent kernel/capability authentication.
+    fn take_recovery_desktop_bootstrap(
+        &mut self,
+    ) -> Option<crate::recovery_supervisor::root_desktop::RootDesktopBootstrapLoan> {
+        None
+    }
     fn take_completed_write(&mut self) -> Option<u32>;
     fn retire(&mut self, launch_pinned: bool) -> Result<bool, LifecyclePipeFailure>;
 }
@@ -137,6 +145,9 @@ impl Drop for Authentication {
 }
 pub(crate) struct State {
     pub(crate) custody_worker_permit_taken: bool,
+    pub(crate) recovery_startup_taken: bool,
+    pub(crate) recovery_desktop_bootstrap:
+        Option<crate::recovery_supervisor::root_desktop::RootDesktopBootstrapLoan>,
     pub(crate) custody_parent_storage_taken: bool,
     checked_retirement: Option<retirement::CheckedRetirement>,
     #[cfg(windows)]
@@ -179,6 +190,8 @@ impl State {
     fn new(binding: Option<PeerBinding>) -> Self {
         Self {
             custody_worker_permit_taken: false,
+            recovery_startup_taken: false,
+            recovery_desktop_bootstrap: None,
             custody_parent_storage_taken: false,
             checked_retirement: None,
             #[cfg(windows)]
@@ -227,6 +240,7 @@ impl State {
     }
 }
 pub(crate) struct Shared {
+    pub(crate) recovery_grant: Option<crate::RegisteredRecoveryGrant>,
     pub(crate) child: bool,
     pub(crate) captured: bool,
     pub(crate) original_deadline: Moment,

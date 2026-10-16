@@ -193,3 +193,6 @@ pub(in crate::windows_lifecycle_pipe) fn backend_layout()
         native::Lease::storage_bytes(),
     )
 }
+
+mod recovery_section;
+pub use recovery_section::RecoveryDesktopBootstrap;

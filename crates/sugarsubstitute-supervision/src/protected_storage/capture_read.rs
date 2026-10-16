@@ -5,13 +5,16 @@
 pub(crate) mod fixture;
 mod native;
 pub(crate) mod pin;
+mod recovery;
 use super::*;
 use pin::ReadPin;
 pub(crate) struct CaptureReadData {
     pub(crate) handles: [Handle; 2],
     pub(crate) coordinator: CoordinatorKey,
+    pub(crate) origin: CaptureGenerationOrigin,
     pub(crate) identities: [[u8; 24]; 2],
     pub(crate) ready: bool,
+    pub(crate) recovery_handles: Vec<Handle>,
     sid: [u8; 72],
     sid_length: usize,
     causes: NativeCauseDestinations,
@@ -24,11 +27,13 @@ pub(crate) struct CaptureReadOwner {
 }
 impl CaptureReadOwner {
     pub(crate) fn layout() -> Result<files::NativeRoleLayout, files::NativeLayoutFailure> {
-        let bytes = size_of::<CaptureReadData>();
+        let bytes = size_of::<CaptureReadData>() + 5 * size_of::<Handle>();
         Ok(files::NativeRoleLayout { retained: bytes, peak: bytes })
     }
     pub(crate) fn held(&self) -> bool {
-        self.data.as_ref().is_some_and(|data| data.handles.iter().any(Handle::is_armed))
+        self.data.as_ref().is_some_and(|data| {
+            data.handles.iter().chain(data.recovery_handles.iter()).any(Handle::is_armed)
+        })
     }
     pub(crate) fn current(&self, context: &JobContext) -> Result<(), ClaimError> {
         let data = self.data.as_ref().ok_or_else(|| ClaimError::invalid("capture_read_closed"))?;
@@ -42,7 +47,7 @@ impl CaptureReadOwner {
 impl Drop for CaptureReadOwner {
     fn drop(&mut self) {
         if let Some(data) = self.data.take() {
-            if data.handles.iter().any(Handle::is_armed) {
+            if data.handles.iter().chain(data.recovery_handles.iter()).any(Handle::is_armed) {
                 std::mem::forget(data);
                 if let Some(allocation) = self.allocation.take() {
                     std::mem::forget(allocation);
@@ -97,8 +102,10 @@ impl ProtectedStorageRoot {
                     Handle::new(windows::Win32::Foundation::HANDLE::default(), budget),
                 ],
                 coordinator: generation.coordinator,
+                origin: generation.origin,
                 identities: generation.identities,
                 ready: false,
+                recovery_handles: Vec::new(),
                 sid: copied_sid,
                 sid_length: sid.len(),
                 causes,
@@ -107,5 +114,13 @@ impl ProtectedStorageRoot {
             })),
             allocation: Some(allocation),
         })
+    }
+}
+
+impl ProtectedStorageRoot {
+    pub(crate) fn capture_origin(&self) -> Option<CaptureGenerationOrigin> {
+        let state = self.state.as_ref()?;
+        let generation = state.generation.as_ref().filter(|generation| generation.ready)?;
+        Some(generation.origin)
     }
 }

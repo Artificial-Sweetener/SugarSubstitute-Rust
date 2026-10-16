@@ -7,6 +7,7 @@ pub(crate) mod captured;
 mod startup_mapping;
 pub(crate) use startup_mapping::{StartupViewLoan, StartupViewRetention};
 mod captured_layout;
+mod recovery_pair;
 pub use crate::lifecycle_pipe::MIN_CAPTURED_LIFECYCLE_PIPE_BYTES;
 pub use crate::lifecycle_pipe::{
     AuthenticatedStartupSnapshot, LifecycleClientCapability, LifecyclePipeBootstrap,
@@ -23,7 +24,7 @@ use crate::{
     scope::lock,
 };
 pub use captured::child::CapturedStartup;
-pub use captured::parent::CapturedLifecycleStart;
+pub use captured::parent::{CapturedLifecycleStart, RecoveryDesktopBootstrap};
 use std::{
     fmt,
     os::windows::io::{BorrowedHandle, OwnedHandle},

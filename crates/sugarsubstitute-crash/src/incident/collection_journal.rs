@@ -191,7 +191,8 @@ impl IncidentRepository {
         drop(bytes);
         let (summary, payload, intent_file) =
             self.reads.three_mut(journal.summary_index, journal.payload_index, index)?;
-        journal.intent = Some(self.storage.adopt_capture_intent(
+        journal.intent = Some(token.adopt_capture_intent(
+            &mut self.storage,
             intent_file,
             summary,
             Some(payload),
@@ -324,3 +325,5 @@ impl IncidentRepository {
         Ok(())
     }
 }
+
+mod recovery;

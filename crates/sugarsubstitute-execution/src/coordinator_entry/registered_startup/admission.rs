@@ -7,7 +7,7 @@ use sugarsubstitute_contracts::execution::{
     AdmissionError, CancelControl, JobClass, JobContext, Operation,
 };
 
-pub(in crate::coordinator_entry) fn scope_current(
+pub(crate) fn scope_current(
     state: &State,
     mut id: ScopeId,
 ) -> Result<Option<Moment>, EntryTransportError> {
@@ -104,7 +104,7 @@ impl ExecutionClient {
             entry,
             original_scope: context.scope_id(),
             body,
-            progress: Mutex::new(Progress { current: run, issued: None }),
+            progress: Mutex::new(Progress { current: run, issued: None, recovery_issued: None }),
             _memory: claim,
         }))))
     }

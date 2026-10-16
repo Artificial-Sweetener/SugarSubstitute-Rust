@@ -13,6 +13,7 @@ use sugarsubstitute_supervision::diagnostic_storage::*;
 /// remain borrowed from this owner, independently of categorical repository rejection.
 pub struct CapturedReport {
     pub(crate) source: Arc<Shared>,
+    pub(crate) recovery_origin: bool,
     copy: Option<CopyState>,
     pub(super) journal: Option<super::collection_journal::JournalState>,
     pub(crate) generation: Option<ProtectedCaptureReadLease>,
@@ -34,6 +35,7 @@ impl CapturedReport {
     pub(crate) fn new(source: Arc<Shared>) -> Self {
         Self {
             source,
+            recovery_origin: false,
             copy: None,
             journal: None,
             generation: None,
@@ -94,7 +96,14 @@ impl CapturedReport {
         let status = token
             .open(key, build, dump, context)
             .map_err(|_| IncidentStoreError::RecoveryConflict)?;
-        opened_evidence(&self.source, status, token.dump().map(|value| value.0))
+        let evidence = opened_evidence(&self.source, status, token.dump().map(|value| value.0))?;
+        if self.recovery_origin
+            && matches!(evidence, CaptureEvidence::Unavailable(CaptureAbsence::HandlerLost))
+        {
+            Ok(CaptureEvidence::Unavailable(CaptureAbsence::Missing))
+        } else {
+            Ok(evidence)
+        }
     }
     /// Checked-close the native token followed by the actual generation read lease.
     /// # Errors

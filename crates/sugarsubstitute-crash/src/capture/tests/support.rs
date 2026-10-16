@@ -292,6 +292,9 @@ impl NativePort for FakePort {
     }
 }
 impl CaptureLease for FakeLease {
+    fn take_root_storage(&mut self) -> Result<crate::native::RootStorageParts, CrashError> {
+        Err(CrashError::invalid(sugarsubstitute_contracts::crash::CaptureOperation::Observation))
+    }
     fn prepare_finished(
         &mut self,
         _: &mut crate::incident::CapturedReport,

@@ -8,6 +8,7 @@ struct Entry {
     due: bool,
     progress: Option<Moment>,
     progress_due: bool,
+    capture: bool,
 }
 ///64 actual backend cutoffs plus the helper's own close-only cutoff.
 pub(crate) struct Deadlines {
@@ -21,8 +22,46 @@ impl Deadlines {
         if let Some(slot) = self.slots.get_mut(index)
             && slot.is_none()
         {
-            *slot = Some(Entry { until, due: false, progress: None, progress_due: false });
+            *slot = Some(Entry {
+                until,
+                due: false,
+                progress: None,
+                progress_due: false,
+                capture: false,
+            });
         }
+    }
+    /// Arm only the original recovery capture stage on an unused timer cell.
+    pub(crate) fn capture(&mut self, index: usize, until: Moment) -> bool {
+        let Some(slot) = self.slots.get_mut(index) else {
+            return false;
+        };
+        if slot.is_some() {
+            return false;
+        }
+        *slot =
+            Some(Entry { until, due: false, progress: None, progress_due: false, capture: true });
+        true
+    }
+    /// Consume the one capture stage after its actual cutoff, then freeze containment.
+    pub(crate) fn after_capture(&mut self, index: usize, now: Moment, until: Moment) -> bool {
+        let Some(slot) = self.slots.get_mut(index) else {
+            return false;
+        };
+        let Some(entry) = slot.as_ref() else {
+            return false;
+        };
+        if !entry.capture || now < entry.until || until <= entry.until {
+            return false;
+        }
+        *slot = Some(Entry {
+            until,
+            due: now >= until,
+            progress: None,
+            progress_due: false,
+            capture: false,
+        });
+        true
     }
     /// Schedule only one contention observation inside the unchanged cutoff.
     pub(crate) fn progress(&mut self, index: usize, at: Moment) -> bool {

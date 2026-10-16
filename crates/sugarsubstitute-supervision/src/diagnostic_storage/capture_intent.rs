@@ -74,6 +74,43 @@ impl DiagnosticStorage {
         operation: &DiagnosticStorageOperation,
         context: &JobContext,
     ) -> Result<DiagnosticCaptureIntent, DiagnosticStorageError> {
+        self.adopt_capture_pins((journal, summary, payload), operation, context, None)
+    }
+    /// Adopt actual completion pins using the same retained native generation's checked origin.
+    /// This supports historical Root epochs and derived recovery producers without transferring
+    /// coordinator authority. Matching data alone cannot construct the supplied generation lease.
+    /// # Errors
+    /// Foreign source storage, changed native pins or an unrelated subject rejects before adoption.
+    pub fn adopt_capture_intent_for_generation(
+        &mut self,
+        generation: &mut ProtectedCaptureReadLease,
+        journal: &mut DiagnosticReadLease,
+        summary: &mut DiagnosticReadLease,
+        payload: Option<&mut DiagnosticReadLease>,
+        operation: &DiagnosticStorageOperation,
+        context: &JobContext,
+    ) -> Result<DiagnosticCaptureIntent, DiagnosticStorageError> {
+        if !generation.matches_storage(&self.shared, operation.key) {
+            return Err(error(operation.key, Code::InvalidIdentity));
+        }
+        let origin = {
+            let guard = generation.borrow(context)?;
+            guard.origin()?
+        };
+        self.adopt_capture_pins((journal, summary, payload), operation, context, Some(origin))
+    }
+    fn adopt_capture_pins(
+        &mut self,
+        reads: (
+            &mut DiagnosticReadLease,
+            &mut DiagnosticReadLease,
+            Option<&mut DiagnosticReadLease>,
+        ),
+        operation: &DiagnosticStorageOperation,
+        context: &JobContext,
+        origin: Option<sugarsubstitute_contracts::crash::CaptureGenerationOrigin>,
+    ) -> Result<DiagnosticCaptureIntent, DiagnosticStorageError> {
+        let (journal, summary, payload) = reads;
         let mut state = self.check(operation, context)?;
         let data = state.data_mut()?;
         if !data.writer
@@ -97,7 +134,12 @@ impl DiagnosticStorage {
         let DiagnosticObject::Summary(key) = summary.object else {
             return Err(error(operation.key, Code::InvalidIdentity));
         };
-        if historical.owner().namespace != operation.key.owner().namespace || key.subject().coordinator() != historical.owner()
+        if historical.owner().namespace != operation.key.owner().namespace || !match origin {
+                None=>key.subject().coordinator()==historical.owner(),
+                Some(origin)=>origin.coordinator().namespace==historical.owner().namespace
+                    &&origin.contains(key.subject()).map_err(|cause|native(operation.key,Code::InvalidIdentity,
+                        ClaimError::new("capture_intent_origin",cause)))?,
+            }
             || journal.id == summary.id || journal.facts.identity == summary.facts.identity
             || payload.as_ref().is_some_and(|p| {
                 !matches!(p.object, DiagnosticObject::Payload(actual, _, sugarsubstitute_contracts::incident::AttachmentKind::Minidump) if actual == key)

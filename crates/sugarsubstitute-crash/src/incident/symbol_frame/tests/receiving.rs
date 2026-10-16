@@ -112,7 +112,7 @@ fn unexplained_failed_exit_collection_summary_reaches_symbol_metadata_and_same_r
             _ => None,
         })
         .ok_or("Collected summary did not admit its Reporter")?;
-    let frame = extract(&mut input(), 512, 0, stored.summary().facts().failure())
+    let frame = extract(&mut input(), 512, Some(0), stored.summary().facts().failure())
         .map_err(|cause| std::io::Error::other(format!("actual bounded extractor: {cause:?}")))?;
     assert_eq!((frame.code(), frame.address()), (0xc0000005, 0x1008));
     assert_eq!(before.facts().exit(), *attribution);

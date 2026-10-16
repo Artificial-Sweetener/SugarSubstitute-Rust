@@ -3,6 +3,8 @@
 //! Project one registered startup specification under its admitted finite allocation.
 #[path = "projection/capacity.rs"]
 mod capacity;
+#[path = "projection/receiving.rs"]
+mod receiving;
 #[path = "projection/restart.rs"]
 mod restart;
 pub(super) use restart::RestartProjection;

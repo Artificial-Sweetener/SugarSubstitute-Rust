@@ -137,6 +137,7 @@ fn profile_commands_keep_genuine_run_and_prepared_family_in_fixed384_bytes() -> 
         BackendCustodyCommand::ProfilePublished { profile },
         BackendCustodyCommand::Receipt(BackendCustodyReceipt::ProfilePublished(profile)),
         BackendCustodyCommand::ProfilePrepare {
+            recovery_grant: None,
             profile,
             job: 40,
             directory: 44,
@@ -184,3 +185,6 @@ fn profile_commands_keep_genuine_run_and_prepared_family_in_fixed384_bytes() -> 
     );
     Ok(())
 }
+
+#[path = "tests/recovery_profile.rs"]
+mod recovery_profile;

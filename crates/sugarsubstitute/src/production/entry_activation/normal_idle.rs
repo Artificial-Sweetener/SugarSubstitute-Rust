@@ -18,6 +18,7 @@ impl ProductionActivation {
             || self.failure_resource.is_some()
             || self.incidents.diagnostic_custody_pending()
             || self.pending.iter().any(Option::is_some)
+            || self.recovery_pending.as_ref().is_some_and(|pending| !pending.settled())
             || self.delivery.as_ref().is_some_and(|delivery| delivery.pending())
         {
             return None;

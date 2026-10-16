@@ -22,7 +22,10 @@ impl ProtectedStorageRoot {
             .ok_or_else(|| source.budget.rejection("capture_read_generation_unavailable"))?;
         let data =
             owner.data.as_mut().ok_or_else(|| source.budget.rejection("capture_read_closed"))?;
-        if data.coordinator != generation.coordinator || data.identities != generation.identities {
+        if data.coordinator != generation.coordinator
+            || data.origin != generation.origin
+            || data.identities != generation.identities
+        {
             return Err(source.budget.rejection("capture_read_generation_changed"));
         }
         let CaptureReadData {
@@ -135,6 +138,10 @@ impl CaptureReadOwner {
             for handle in &mut data.handles {
                 handle.close_diagnostic(control, &mut data.causes)?;
             }
+            for handle in data.recovery_handles.iter_mut().rev() {
+                handle.close_diagnostic(control, &mut data.causes)?;
+            }
+            data.recovery_handles.clear();
             data.ready = false;
         }
         // The actual native cells and source pin drop before their outside current credit.

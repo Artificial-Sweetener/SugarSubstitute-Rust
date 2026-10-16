@@ -252,6 +252,23 @@ pub(in crate::diagnostic_storage) struct Residual {
     bytes: usize,
 }
 impl Residual {
+    /// Retain a completed immutable destination's checked physical capacity.
+    /// The original claim and owner stay held; only unused preliminary credit returns.
+    pub(super) fn retain_capacity(
+        &mut self,
+        bytes: usize,
+    ) -> Result<(), native::DiagnosticNativeAllocationFailure> {
+        let released =
+            self.bytes.checked_sub(bytes).ok_or_else(|| self.owner.native_rejection())?;
+        let inner = self.owner.inner.as_ref().ok_or_else(|| self.owner.native_rejection())?;
+        let mut state = inner.lock();
+        let next = state.residual.checked_sub(released).ok_or_else(|| {
+            native::DiagnosticNativeAllocationFailure::rejected(state.current, Code::Admission)
+        })?;
+        state.residual = next;
+        self.bytes = bytes;
+        Ok(())
+    }
     pub(super) fn adopt_correlation(mut self) {
         self.bytes = 0;
     }

@@ -83,7 +83,7 @@ migrations = []
 id = "windows-resource-claim-generation"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/native_claims/account.rs", "crates/sugarsubstitute-supervision/src/native_claims/backend_file.rs", "crates/sugarsubstitute-supervision/src/native_claims/files.rs", "crates/sugarsubstitute-supervision/src/native_claims/mod.rs", "crates/sugarsubstitute-supervision/src/native_claims/paths.rs", "crates/sugarsubstitute-supervision/src/native_claims/records.rs", "crates/sugarsubstitute-supervision/src/native_claims/records/storage.rs", "crates/sugarsubstitute-supervision/src/protected_storage/account.rs", "crates/sugarsubstitute-supervision/src/protected_storage/account/namespace_directory.rs", "crates/sugarsubstitute-supervision/src/protected_storage/exclusion.rs", "crates/sugarsubstitute-supervision/src/protected_storage/exclusion/operation.rs", "crates/sugarsubstitute-supervision/src/protected_storage/paths.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/boundary.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/context.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/native.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/native/read.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/native/stage.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/publication.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/retirement.rs", "crates/sugarsubstitute-supervision/src/protected_storage/security.rs", "crates/sugarsubstitute-supervision/src/protected_storage/security/descriptor.rs", "crates/sugarsubstitute-supervision/src/protected_storage/exclusion/reader.rs"]
-source_sha256 = "sha256:72f32660c2e2d356e580c704dce2cac0fef4771aecd9a1f05b7f99fe847e2012"
+source_sha256 = "sha256:30312d31c53e298c65433c5357b35344d617f1cc6472d5aff08431e5d15d3986"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 2
@@ -119,7 +119,7 @@ migrations = []
 id = "native-lifecycle-bootstrap"
 owner = "sugarsubstitute-execution"
 sources = ["crates/sugarsubstitute-execution/src/windows_lifecycle_pipe/bootstrap.rs", "crates/sugarsubstitute-execution/src/windows_lifecycle_pipe/bootstrap_section.rs"]
-source_sha256 = "sha256:2d38d014351e0bb152474d26fba4aea226130789dc0be0a39e5c4115d076a574"
+source_sha256 = "sha256:350e9bf62629e9fd15a930461fc8f99ca550f7fa5d0d40f209da220e59f6a59c"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1
@@ -154,8 +154,8 @@ migrations = []
 [[formats]]
 id = "windows-capture-generation-namespace"
 owner = "sugarsubstitute-supervision"
-sources = ["crates/sugarsubstitute-supervision/src/native_claims/files.rs", "crates/sugarsubstitute-supervision/src/protected_storage.rs", "crates/sugarsubstitute-supervision/src/protected_storage/account.rs", "crates/sugarsubstitute-supervision/src/protected_storage/account/namespace_directory.rs", "crates/sugarsubstitute-supervision/src/protected_storage/directories.rs", "crates/sugarsubstitute-supervision/src/protected_storage/generation.rs", "crates/sugarsubstitute-supervision/src/protected_storage/paths.rs", "crates/sugarsubstitute-supervision/src/protected_storage/security.rs", "crates/sugarsubstitute-supervision/src/protected_storage/security/descriptor.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/context.rs", "crates/sugarsubstitute-supervision/src/protected_storage/account/diagnostic_root.rs"]
-source_sha256 = "sha256:7836638bc3b70898eaf5df00f122e510f84e135239697f03ba32aea354a1e801"
+sources = ["crates/sugarsubstitute-supervision/src/native_claims/files.rs", "crates/sugarsubstitute-supervision/src/protected_storage.rs", "crates/sugarsubstitute-supervision/src/protected_storage/account.rs", "crates/sugarsubstitute-supervision/src/protected_storage/account/diagnostic_root.rs", "crates/sugarsubstitute-supervision/src/protected_storage/account/namespace_directory.rs", "crates/sugarsubstitute-supervision/src/protected_storage/directories.rs", "crates/sugarsubstitute-supervision/src/protected_storage/generation.rs", "crates/sugarsubstitute-supervision/src/protected_storage/paths.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/context.rs", "crates/sugarsubstitute-supervision/src/protected_storage/security.rs", "crates/sugarsubstitute-supervision/src/protected_storage/security/descriptor.rs"]
+source_sha256 = "sha256:5bb64edf802cc9a50e65f0b0980d0e77de13f9a5a22a394161bce34b65709627"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 1
@@ -167,7 +167,7 @@ migrations = []
 id = "windows-native-capture-bridge"
 owner = "sugarsubstitute-crash"
 sources = ["crates/sugarsubstitute-crash/src/native/bridge.rs", "crates/sugarsubstitute-crash/src/native/finished_report/abi.rs", "crates/sugarsubstitute-crash/src/native/finished_report/api.rs", "crates/sugarsubstitute-crash/src/native/finished_report/control.rs", "crates/sugarsubstitute-crash/src/native/finished_report/observation.rs"]
-source_sha256 = "sha256:92298d38286ecebabc5faca0cfc4ddd2fbfa65e4a638d14901fd90b0a005e6ad"
+source_sha256 = "sha256:cd14c6ea82b04f72b7fe386f732f0bc2b3637080cbf180d34d3d0070e8e54830"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1
@@ -203,48 +203,8 @@ migrations = []
 [[formats]]
 id = "windows-profile-exclusion-generation"
 owner = "sugarsubstitute-supervision"
-sources = [
-  "crates/sugarsubstitute-supervision/src/native_claims/files.rs",
-  "crates/sugarsubstitute-supervision/src/profiles.rs",
-  "crates/sugarsubstitute-supervision/src/profiles/attempt.rs",
-  "crates/sugarsubstitute-supervision/src/profiles/folder.rs",
-  "crates/sugarsubstitute-supervision/src/profiles/launch.rs",
-  "crates/sugarsubstitute-supervision/src/profiles/proof.rs",
-  "crates/sugarsubstitute-supervision/src/profiles/record.rs",
-  "crates/sugarsubstitute-supervision/src/profiles/storage.rs",
-  "crates/sugarsubstitute-supervision/src/profiles/submission.rs",
-  "crates/sugarsubstitute-supervision/src/protected_storage.rs",
-  "crates/sugarsubstitute-supervision/src/protected_storage/account.rs",
-  "crates/sugarsubstitute-supervision/src/protected_storage/account/namespace_directory.rs",
-  "crates/sugarsubstitute-supervision/src/protected_storage/directories.rs",
-  "crates/sugarsubstitute-supervision/src/protected_storage/exclusion.rs",
-  "crates/sugarsubstitute-supervision/src/protected_storage/leaf.rs",
-  "crates/sugarsubstitute-supervision/src/protected_storage/paths.rs",
-  "crates/sugarsubstitute-supervision/src/protected_storage/record_file.rs",
-  "crates/sugarsubstitute-supervision/src/protected_storage/security.rs",
-  "crates/sugarsubstitute-supervision/src/protected_storage/security/descriptor.rs",
-  "crates/sugarsubstitute-supervision/src/registry/family_proof.rs",
-  "crates/sugarsubstitute-supervision/src/registry/profile.rs",
-  "crates/sugarsubstitute-supervision/src/protected_storage/record_file/boundary.rs",
-  "crates/sugarsubstitute-supervision/src/protected_storage/record_file/native.rs",
-  "crates/sugarsubstitute-supervision/src/protected_storage/record_file/native/read.rs",
-  "crates/sugarsubstitute-supervision/src/protected_storage/record_file/native/stage.rs",
-  "crates/sugarsubstitute-supervision/src/protected_storage/record_file/publication.rs",
-  "crates/sugarsubstitute-supervision/src/protected_storage/record_file/retirement.rs",
-  "crates/sugarsubstitute-supervision/src/protected_storage/record_file/context.rs",
-  "crates/sugarsubstitute-supervision/src/profiles/storage/disposal.rs",
-  "crates/sugarsubstitute-supervision/src/profiles/custody.rs",
-  "crates/sugarsubstitute-supervision/src/profiles/migration.rs",
-  "crates/sugarsubstitute-supervision/src/profiles/record/custody.rs",
-  "crates/sugarsubstitute-supervision/src/registry/profile/prepared.rs",
-  "crates/sugarsubstitute-supervision/src/native_claims/backend_custody/profile_registration.rs",
-  "crates/sugarsubstitute-supervision/src/native_claims/backend_custody/entry.rs",
-  "crates/sugarsubstitute-supervision/src/native_claims/backend_custody/profile_commands.rs",
-  "crates/sugarsubstitute-supervision/src/profiles/custody/preparation.rs",
-  "crates/sugarsubstitute-supervision/src/profiles/custody/acknowledgement.rs",
-  "crates/sugarsubstitute-supervision/src/profiles/release_observation.rs",
-]
-source_sha256 = "sha256:ddedd449bd00f35ea09fb4f3ae734a49f1ba27455eedbe87245a80878b3df2bc"
+sources = ["crates/sugarsubstitute-supervision/src/native_claims/files.rs", "crates/sugarsubstitute-supervision/src/profiles.rs", "crates/sugarsubstitute-supervision/src/profiles/attempt.rs", "crates/sugarsubstitute-supervision/src/profiles/folder.rs", "crates/sugarsubstitute-supervision/src/profiles/launch.rs", "crates/sugarsubstitute-supervision/src/profiles/proof.rs", "crates/sugarsubstitute-supervision/src/profiles/record.rs", "crates/sugarsubstitute-supervision/src/profiles/storage.rs", "crates/sugarsubstitute-supervision/src/profiles/submission.rs", "crates/sugarsubstitute-supervision/src/protected_storage.rs", "crates/sugarsubstitute-supervision/src/protected_storage/account.rs", "crates/sugarsubstitute-supervision/src/protected_storage/account/namespace_directory.rs", "crates/sugarsubstitute-supervision/src/protected_storage/directories.rs", "crates/sugarsubstitute-supervision/src/protected_storage/exclusion.rs", "crates/sugarsubstitute-supervision/src/protected_storage/leaf.rs", "crates/sugarsubstitute-supervision/src/protected_storage/paths.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file.rs", "crates/sugarsubstitute-supervision/src/protected_storage/security.rs", "crates/sugarsubstitute-supervision/src/protected_storage/security/descriptor.rs", "crates/sugarsubstitute-supervision/src/registry/family_proof.rs", "crates/sugarsubstitute-supervision/src/registry/profile.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/boundary.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/native.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/native/read.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/native/stage.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/publication.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/retirement.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/context.rs", "crates/sugarsubstitute-supervision/src/profiles/storage/disposal.rs", "crates/sugarsubstitute-supervision/src/profiles/custody.rs", "crates/sugarsubstitute-supervision/src/profiles/migration.rs", "crates/sugarsubstitute-supervision/src/profiles/record/custody.rs", "crates/sugarsubstitute-supervision/src/registry/profile/prepared.rs", "crates/sugarsubstitute-supervision/src/native_claims/backend_custody/profile_registration.rs", "crates/sugarsubstitute-supervision/src/native_claims/backend_custody/entry.rs", "crates/sugarsubstitute-supervision/src/native_claims/backend_custody/profile_commands.rs", "crates/sugarsubstitute-supervision/src/profiles/custody/preparation.rs", "crates/sugarsubstitute-supervision/src/profiles/custody/acknowledgement.rs", "crates/sugarsubstitute-supervision/src/profiles/release_observation.rs"]
+source_sha256 = "sha256:b29498ad5a337b056c2a253a479d763b177edd3ffd94a722ada030d7e235c02d"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 2
@@ -256,7 +216,7 @@ migrations = ["1->2"]
 id = "incident-run-seed-v1"
 owner = "sugarsubstitute-crash"
 sources = ["crates/sugarsubstitute-crash/src/incident/codec.rs", "crates/sugarsubstitute-crash/src/incident/codec_identity.rs", "crates/sugarsubstitute-crash/src/incident/codec_seed.rs", "crates/sugarsubstitute-crash/src/incident/error.rs"]
-source_sha256 = "sha256:d0dab22909449bd64476a5acad518bed2cb39d0508920407a4f9da5c5f3db10a"
+source_sha256 = "sha256:64dbf0a6e210e50b6c218c6324872502d8e0c9b2a9ce966612837acd5f156402"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 1
@@ -267,20 +227,20 @@ migrations = []
 [[formats]]
 id = "incident-summary-v2"
 owner = "sugarsubstitute-crash"
-sources = ["crates/sugarsubstitute-crash/src/incident/codec.rs", "crates/sugarsubstitute-crash/src/incident/codec_evidence.rs", "crates/sugarsubstitute-crash/src/incident/codec_identity.rs", "crates/sugarsubstitute-crash/src/incident/codec_seed.rs", "crates/sugarsubstitute-crash/src/incident/codec_summary.rs", "crates/sugarsubstitute-crash/src/incident/codec_symbols.rs", "crates/sugarsubstitute-crash/src/incident/error.rs"]
-source_sha256 = "sha256:c83b837b2c9e20065914418f0de547682e0d4165a6f9ba341a564e77bc244442"
+sources = ["crates/sugarsubstitute-crash/src/incident/codec.rs", "crates/sugarsubstitute-crash/src/incident/codec_evidence.rs", "crates/sugarsubstitute-crash/src/incident/codec_identity.rs", "crates/sugarsubstitute-crash/src/incident/codec_migration.rs", "crates/sugarsubstitute-crash/src/incident/codec_seed.rs", "crates/sugarsubstitute-crash/src/incident/codec_summary.rs", "crates/sugarsubstitute-crash/src/incident/codec_summary/exit.rs", "crates/sugarsubstitute-crash/src/incident/codec_symbols.rs", "crates/sugarsubstitute-crash/src/incident/error.rs"]
+source_sha256 = "sha256:d490cc0e51eec4f11edc8544336a5d940675a5be87f38f95a802deac2cfd4083"
 classification = "authoritative_state"
 preservation = "must_preserve"
-current_version = 2
-accepted_versions = [1, 2]
+current_version = 3
+accepted_versions = [1, 2, 3]
 compatibility = "migrate"
-migrations = ["1->2"]
+migrations = ["1->2", "2->3"]
 
 [[formats]]
 id = "incident-store-state-v1"
 owner = "sugarsubstitute-crash"
 sources = ["crates/sugarsubstitute-crash/src/incident/codec.rs", "crates/sugarsubstitute-crash/src/incident/codec_capture.rs", "crates/sugarsubstitute-crash/src/incident/codec_evidence.rs", "crates/sugarsubstitute-crash/src/incident/codec_identity.rs", "crates/sugarsubstitute-crash/src/incident/codec_ledger.rs", "crates/sugarsubstitute-crash/src/incident/codec_migration.rs", "crates/sugarsubstitute-crash/src/incident/codec_retention.rs", "crates/sugarsubstitute-crash/src/incident/error.rs", "crates/sugarsubstitute-crash/src/incident/codec_capture/completion.rs", "crates/sugarsubstitute-crash/src/incident/codec_ledger/record.rs"]
-source_sha256 = "sha256:ccc5be8ad2c8acb8bc903e514c3f6de832bebf410360fcdcf6bd6cce1d873c10"
+source_sha256 = "sha256:56f9455082148a3cd751e23f71638b0f75d3a38e6b9dea80408db2249c68e1ec"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 1
@@ -292,7 +252,7 @@ migrations = []
 id = "release-symbol-association-v1"
 owner = "sugarsubstitute-crash"
 sources = ["crates/sugarsubstitute-crash/src/incident/codec.rs", "crates/sugarsubstitute-crash/src/incident/codec_symbols.rs", "crates/sugarsubstitute-crash/src/incident/error.rs"]
-source_sha256 = "sha256:51919051eab9bf0c4cff0500c31dba6041cf3b2596e56394ec7ba63f5d605e47"
+source_sha256 = "sha256:e0332f5301a1f9589cc0f12ca89e56ef86815e0759106adc85ccabda6bd4cd6b"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 1
@@ -304,7 +264,7 @@ migrations = []
 id = "symbolized-fault-report-v1"
 owner = "sugarsubstitute-crash"
 sources = ["crates/sugarsubstitute-crash/src/incident/codec.rs", "crates/sugarsubstitute-crash/src/incident/codec_symbols.rs", "crates/sugarsubstitute-crash/src/incident/error.rs"]
-source_sha256 = "sha256:51919051eab9bf0c4cff0500c31dba6041cf3b2596e56394ec7ba63f5d605e47"
+source_sha256 = "sha256:e0332f5301a1f9589cc0f12ca89e56ef86815e0759106adc85ccabda6bd4cd6b"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 1
@@ -328,21 +288,8 @@ migrations = []
 [[formats]]
 id = "windows-diagnostic-object-layout"
 owner = "sugarsubstitute-supervision"
-sources = [
-  "crates/sugarsubstitute-supervision/src/diagnostic_storage/types.rs",
-  "crates/sugarsubstitute-supervision/src/protected_storage/record_file/streaming.rs",
-  "crates/sugarsubstitute-supervision/src/protected_storage/record_file/streaming/layout.rs",
-  "crates/sugarsubstitute-supervision/src/protected_storage/record_file/streaming/inventory/names.rs",
-  "crates/sugarsubstitute-supervision/src/protected_storage/account/diagnostic_root.rs",
-  "crates/sugarsubstitute-supervision/src/protected_storage/diagnostic.rs",
-  "crates/sugarsubstitute-supervision/src/committed_reader/prepare.rs",
-  "crates/sugarsubstitute-supervision/src/coordinator_entry/read_namespace.rs",
-  "crates/sugarsubstitute-supervision/src/diagnostic_storage/allocation/ledger.rs",
-  "crates/sugarsubstitute-supervision/src/diagnostic_storage/allocation/native.rs",
-  "crates/sugarsubstitute-supervision/src/protected_storage/record_file/native.rs",
-  "crates/sugarsubstitute-supervision/src/protected_storage/record_file/streaming/lifecycle.rs",
-]
-source_sha256 = "sha256:38bbd4a18a6e8f663528d4eab8f78b3a4f4c0cec814278641a943f8337dbef54"
+sources = ["crates/sugarsubstitute-supervision/src/committed_reader/prepare.rs", "crates/sugarsubstitute-supervision/src/coordinator_entry/read_namespace.rs", "crates/sugarsubstitute-supervision/src/diagnostic_storage/allocation/ledger.rs", "crates/sugarsubstitute-supervision/src/diagnostic_storage/allocation/native.rs", "crates/sugarsubstitute-supervision/src/diagnostic_storage/allocation/native/scan.rs", "crates/sugarsubstitute-supervision/src/diagnostic_storage/constructor.rs", "crates/sugarsubstitute-supervision/src/diagnostic_storage/types.rs", "crates/sugarsubstitute-supervision/src/protected_storage/account/diagnostic_root.rs", "crates/sugarsubstitute-supervision/src/protected_storage/diagnostic.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/native.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/streaming.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/streaming/inventory/names.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/streaming/layout.rs", "crates/sugarsubstitute-supervision/src/protected_storage/record_file/streaming/lifecycle.rs"]
+source_sha256 = "sha256:71e9bebdd1763175bcee37c2d2c84ac332c827f29c6f2c890c4905be23c22887"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 1
@@ -354,7 +301,7 @@ migrations = []
 id = "native-diagnostic-bootstrap"
 owner = "sugarsubstitute-execution"
 sources = ["crates/sugarsubstitute-execution/src/windows_lifecycle_pipe/bootstrap.rs", "crates/sugarsubstitute-execution/src/windows_lifecycle_pipe/bootstrap_section.rs"]
-source_sha256 = "sha256:2d38d014351e0bb152474d26fba4aea226130789dc0be0a39e5c4115d076a574"
+source_sha256 = "sha256:350e9bf62629e9fd15a930461fc8f99ca550f7fa5d0d40f209da220e59f6a59c"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 2
@@ -378,7 +325,7 @@ migrations = []
 id = "native-captured-lifecycle-bootstrap"
 owner = "sugarsubstitute-execution"
 sources = ["crates/sugarsubstitute-execution/src/windows_lifecycle_pipe/bootstrap.rs", "crates/sugarsubstitute-execution/src/windows_lifecycle_pipe/bootstrap_section.rs", "crates/sugarsubstitute-execution/src/windows_lifecycle_pipe/captured/codec.rs", "crates/sugarsubstitute-execution/src/windows_lifecycle_pipe/captured/parent.rs", "crates/sugarsubstitute-execution/src/windows_lifecycle_pipe/captured/child.rs"]
-source_sha256 = "sha256:10449e94708d6d39ca00ef8389aae0ba43850c4908041450d3123ce0ef411545"
+source_sha256 = "sha256:5412d1e477df71cbea8b01962ff5872da371d82c2280459f7a1219f808d8e52b"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 3
@@ -426,7 +373,7 @@ migrations = []
 id = "authenticated-backend-custody-session"
 owner = "sugarsubstitute-contracts"
 sources = ["crates/sugarsubstitute-contracts/src/backend_custody.rs", "crates/sugarsubstitute-contracts/src/backend_custody/codec.rs", "crates/sugarsubstitute-contracts/src/backend_custody/profile.rs", "crates/sugarsubstitute-contracts/src/backend_custody/codec/command.rs"]
-source_sha256 = "sha256:64d4857b2dc1e950315b8fafc6c6abad287f30e1352e4c9467aeefe25bd86696"
+source_sha256 = "sha256:591b920c2271d5ddaf537de163caaf601ebb71ebc84cbf639c288dab411006ba"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1
@@ -438,7 +385,7 @@ migrations = []
 id = "native-captured-backend-custody-bootstrap"
 owner = "sugarsubstitute-execution"
 sources = ["crates/sugarsubstitute-execution/src/windows_lifecycle_pipe/bootstrap.rs", "crates/sugarsubstitute-execution/src/windows_lifecycle_pipe/bootstrap_section.rs", "crates/sugarsubstitute-execution/src/windows_lifecycle_pipe/captured/codec.rs", "crates/sugarsubstitute-execution/src/windows_lifecycle_pipe/captured/backend.rs", "crates/sugarsubstitute-execution/src/windows_lifecycle_pipe/captured/child.rs"]
-source_sha256 = "sha256:7bc8d7fc319d8b411d5be7f30866e87fa69be11cdd7990309a6f3d17faac2a8c"
+source_sha256 = "sha256:5f1ff16d00551aaa54aa412f10729c460fe7f23ed0773b77b4a8761d4879b7a3"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 5
@@ -476,6 +423,104 @@ id = "child-native-qualification-diagnostic"
 owner = "sugarsubstitute-desktop"
 sources = ["crates/sugarsubstitute-desktop/src/qualification_trace.rs", "crates/sugarsubstitute-desktop/src/qualification_trace/native.rs"]
 source_sha256 = "sha256:2631a9a67872959d07e8ea214afbf3af40a3490f8c8fb8c3681be0d1f2db1d41"
+classification = "protocol"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
+id = "authenticated-recovery-supervisor-session"
+owner = "sugarsubstitute-contracts"
+sources = ["crates/sugarsubstitute-contracts/src/recovery_supervisor.rs", "crates/sugarsubstitute-contracts/src/recovery_supervisor/identity.rs", "crates/sugarsubstitute-contracts/src/recovery_supervisor/wire.rs", "crates/sugarsubstitute-contracts/src/recovery_supervisor/wire/codec.rs", "crates/sugarsubstitute-contracts/src/recovery_supervisor/wire/fields.rs", "crates/sugarsubstitute-contracts/src/recovery_supervisor/wire/key.rs", "crates/sugarsubstitute-contracts/src/recovery_supervisor/wire/payload.rs"]
+source_sha256 = "sha256:bfe1a8ee849b23b9733ef7804860978adf0d5fcccb7cf3d58b1acef0cb4e77b0"
+classification = "protocol"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
+id = "native-recovery-supervisor-bootstrap"
+owner = "sugarsubstitute-execution"
+sources = ["crates/sugarsubstitute-execution/src/windows_lifecycle_pipe/bootstrap.rs", "crates/sugarsubstitute-execution/src/windows_lifecycle_pipe/bootstrap_section.rs", "crates/sugarsubstitute-execution/src/windows_lifecycle_pipe/recovery_pair.rs"]
+source_sha256 = "sha256:25d1a9737f7f42947c876c0d9d38fd741b186b6fb489f854df9a08488112ed12"
+classification = "protocol"
+preservation = "must_preserve"
+current_version = 6
+accepted_versions = [6]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
+id = "native-recovery-captured-desktop-bootstrap"
+owner = "sugarsubstitute-execution"
+sources = ["crates/sugarsubstitute-execution/src/windows_lifecycle_pipe/captured/child.rs", "crates/sugarsubstitute-execution/src/windows_lifecycle_pipe/captured/codec.rs", "crates/sugarsubstitute-execution/src/windows_lifecycle_pipe/captured/parent/recovery_section.rs"]
+source_sha256 = "sha256:a1d260b44c87a77de4c99f5faebecdbb975bc42177addaf12879729d9180d153"
+classification = "protocol"
+preservation = "must_preserve"
+current_version = 2
+accepted_versions = [2]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
+id = "incident-recovery-capture-origin-v2"
+owner = "sugarsubstitute-crash"
+sources = ["crates/sugarsubstitute-crash/src/incident/codec_capture.rs", "crates/sugarsubstitute-crash/src/incident/codec_capture/origin_record.rs", "crates/sugarsubstitute-crash/src/incident/codec_capture/recovery.rs", "crates/sugarsubstitute-crash/src/incident/codec_identity.rs", "crates/sugarsubstitute-crash/src/incident/codec_ledger.rs", "crates/sugarsubstitute-crash/src/incident/codec_ledger/record.rs", "crates/sugarsubstitute-crash/src/incident/recovery_origin.rs"]
+source_sha256 = "sha256:235cc43195ea4c69fdd1dddb17c946deec2070b17ada71ce9f54fb02af7b9187"
+classification = "authoritative_state"
+preservation = "must_preserve"
+current_version = 2
+accepted_versions = [2]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
+id = "incident-recovery-capture-promotion-v2"
+owner = "sugarsubstitute-crash"
+sources = ["crates/sugarsubstitute-crash/src/incident/codec_capture.rs", "crates/sugarsubstitute-crash/src/incident/codec_capture/recovery.rs", "crates/sugarsubstitute-crash/src/incident/codec_ledger.rs", "crates/sugarsubstitute-crash/src/incident/codec_ledger/record.rs"]
+source_sha256 = "sha256:931af0d8bf2f3a84d06ce9b2d6d5d08dace9a5f5f5669f24412ae063de6fc9d1"
+classification = "authoritative_state"
+preservation = "must_preserve"
+current_version = 2
+accepted_versions = [2]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
+id = "windows-native-finished-capture-origin-v2"
+owner = "sugarsubstitute-crash"
+sources = ["crates/sugarsubstitute-crash/src/native/finished_report/abi.rs", "crates/sugarsubstitute-crash/src/native/finished_report/abi/origin.rs", "crates/sugarsubstitute-crash/src/native/finished_report/api.rs", "crates/sugarsubstitute-crash/src/native/finished_report/token/calls.rs", "crates/sugarsubstitute-crash/src/native/finished_report/token/disposition.rs"]
+source_sha256 = "sha256:87b84e01b6b0d20a60c7511a458d70e60a5bfa90f7ca53dd79b7462b5d1e0eb2"
+classification = "protocol"
+preservation = "must_preserve"
+current_version = 2
+accepted_versions = [2]
+compatibility = "reject"
+migrations = []
+
+# Domain-separated capture-v1 key/name and exact origin-to-subject correlation.
+[[formats]]
+id = "capture-generation-origin-v1"
+owner = "sugarsubstitute-contracts"
+sources = ["crates/sugarsubstitute-contracts/src/crash/origin.rs"]
+source_sha256 = "sha256:954e2b1d751966a61c7ab0e92c205b1a5dd1dfdd3ebf9115fd51686c120abc81"
+classification = "protocol"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
+# Closed source/candidate schema-pair grammar in schema-one migration intent/archive records.
+[[formats]]
+id = "incident-summary-migration-step-pair-v1"
+owner = "sugarsubstitute-contracts"
+sources = ["crates/sugarsubstitute-contracts/src/incident/summary_migration.rs"]
+source_sha256 = "sha256:73c6a6f552dca9a4cbfff4557a0e8b22c68c1c9cc790098c88cfb54464b4ea28"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1

@@ -11,6 +11,8 @@ use sugarsubstitute_supervision::diagnostic_storage::{
 /// This capability has no public constructor, path projection or cloning API.
 pub struct FinishedCaptureSource {
     shared: Arc<Shared>,
+    root: Option<super::CaptureRootSource>,
+    grant: Option<sugarsubstitute_execution::RegisteredRecoveryGrant>,
 }
 impl WindowsCrashCapture {
     /// Retain the actual registered capture source before submitting collection work.
@@ -23,10 +25,16 @@ impl WindowsCrashCapture {
             return Err(IncidentStoreError::RecoveryConflict);
         }
         drop(native);
-        Ok(FinishedCaptureSource { shared: shared.clone() })
+        let root = lock(&shared.root_source)
+            .upgrade()
+            .map(|owner| super::CaptureRootSource { owner, source: shared.clone() });
+        Ok(FinishedCaptureSource { shared: shared.clone(), root, grant: None })
     }
 }
 impl FinishedCaptureSource {
+    pub(super) fn from_root(root: super::CaptureRootSource) -> Self {
+        Self { shared: root.source.clone(), root: Some(root), grant: None }
+    }
     /// Install a genuine finished source in a finite admitted Storage worker.
     /// The same Capture source remains retained until this report is retired and dropped.
     /// # Errors
@@ -39,6 +47,13 @@ impl FinishedCaptureSource {
         operation: &DiagnosticStorageOperation,
         context: &JobContext,
     ) -> Result<(), IncidentStoreError> {
+        if let Some(root) = &self.root {
+            return if let Some(grant) = &self.grant {
+                root.prepare_recovery_finished(grant, output, storage, operation, context)
+            } else {
+                root.prepare(None, output, storage, operation, context)
+            };
+        }
         let shared = &self.shared;
         if shared.execution_id != context.owner_id() || operation.key().owner() != shared.owner {
             return Err(IncidentStoreError::RecoveryConflict);
@@ -62,5 +77,32 @@ impl FinishedCaptureSource {
                 IncidentStoreError::RecoveryConflict
             })?
             .prepare_finished(report, storage, operation, context)
+    }
+}
+
+impl super::CaptureRootSource {
+    /// Retain this actual Root and genuine grant for one fresh recovery generation.
+    /// This performs only checked execution-source observation and cloning; no file/native effect.
+    /// # Errors
+    /// Foreign or revoked grants/Core identity and unavailable actual Root pins reject selection.
+    pub fn recovery_finished_source(
+        &self,
+        grant: &sugarsubstitute_execution::RegisteredRecoveryGrant,
+    ) -> Result<FinishedCaptureSource, IncidentStoreError> {
+        grant.check().map_err(|cause|IncidentStoreError::Storage(
+            sugarsubstitute_supervision::diagnostic_storage::DiagnosticStorageError::from_recovery_grant(cause)))?;
+        let execution=grant.execution_id().map_err(|cause|IncidentStoreError::Storage(
+            sugarsubstitute_supervision::diagnostic_storage::DiagnosticStorageError::from_recovery_grant(cause)))?;
+        if grant.key().run().owner != self.source.owner
+            || execution != self.source.execution_id
+            || self.root_identity().is_none()
+        {
+            return Err(IncidentStoreError::RecoveryConflict);
+        }
+        Ok(FinishedCaptureSource {
+            shared: self.source.clone(),
+            root: Some(self.clone()),
+            grant: Some(grant.clone()),
+        })
     }
 }

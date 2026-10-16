@@ -4,14 +4,14 @@ platforms = ["windows", "macos", "linux"]
 [[owners]]
 package = "sugarsubstitute-contracts"
 root = "crates/sugarsubstitute-contracts"
-concern = "Owned contracts, localization, memory claims, immutable frames, scoped lifecycle and bounded transcript facts; bounded incident evidence, durable acknowledgment facts and namespace eviction ledger; bounded coordinator-entry identity, launch input and setup deadlines; sole five-locale native incident report messages and complete consent disclosure; fixed authenticated backend custody framing and exact purpose/session matching; authoritative capture target and domain-separated helper Supervisor subject"
-minimum_tests = 109
+concern = "Closed recovery correlation, physical generation identity, summary migration steps and localized capture degradation and unknown exit text; Owned contracts, localization, memory claims, immutable frames, scoped lifecycle and bounded transcript facts; bounded incident evidence, durable acknowledgment facts and namespace eviction ledger; bounded coordinator-entry identity, launch input and setup deadlines; sole five-locale native incident report messages and complete consent disclosure; fixed authenticated backend custody framing and exact purpose/session matching; authoritative capture target and domain-separated helper Supervisor subject"
+minimum_tests = 127
 
 [[owners]]
 package = "sugarsubstitute-application"
 root = "crates/sugarsubstitute-application"
-concern = "Acknowledged startup, settled retry, frame publication, backend leases, desktop exit, UI challenge and bounded transcript policy; original connection and frontend campaign deadlines; indexed actual-tail selection and shared immutable snapshot admission; bounded incident publication, report CAS, recovery and independent retirement policy"
-minimum_tests = 200
+concern = "Exact pre-ACK recovery admission, fresh operation allocation and independent failed-seed policy retirement; Acknowledged startup, settled retry, frame publication, backend leases, desktop exit, UI challenge and bounded transcript policy; original connection and frontend campaign deadlines; indexed actual-tail selection and shared immutable snapshot admission; bounded incident publication, report CAS, recovery and independent retirement policy"
+minimum_tests = 212
 
 [[owners]]
 package = "sugarsubstitute-comfy"
@@ -22,14 +22,14 @@ minimum_tests = 87
 [[owners]]
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
-concern = "Production desktop startup and retirement through actual execution, authenticated parent/child transport, shared backends, profiles and native window adapters; retained failures, captured startup, bounded console rendering and isolated qualification roles; contained headless backend witness invocation and original-budget Finish lifecycle; genuine boxed incident construction and bounded original terminal/cause diagnostics; unique heap activation ownership outside the persistent native pump frame; original launched-profile release consumption and precise Finish request status"
-minimum_tests = 712
+concern = "Fresh subordinate recovery composition with unchanged Root authority, admission before ACK, independent real receiving and checked cleanup; Production desktop startup and retirement through actual execution, authenticated parent/child transport, shared backends, profiles and native window adapters; retained failures, captured startup, bounded console rendering and isolated qualification roles; contained headless backend witness invocation and original-budget Finish lifecycle; genuine boxed incident construction and bounded original terminal/cause diagnostics; unique heap activation ownership outside the persistent native pump frame; original launched-profile release consumption and precise Finish request status"
+minimum_tests = 754
 
 [[owners]]
 package = "sugarsubstitute-execution"
 root = "crates/sugarsubstitute-execution"
-concern = "Admission, CPU scheduling, cancellation, retained ownership and observed worker teardown; authenticated bounded coordinator entry transport, replay and native issue fences; original whole preparation/native environment custody, retained error aliases and actual source/client staging fences; same-ledger capture bundle admission/cleanup, typed native dispatch, original ancestor and handshake fences, physical mapping/capsule retention; original finite custodied creation through both native acknowledgements and retained cleanup aliases; same-ledger BackendCustody capture pins, authenticated v5 inherited input and unchanged preflight budgets; one-shot callback-targeted injected clock regression with independent actual worker observations and sticky original global failure"
-minimum_tests = 580
+concern = "Genuine once-only recovery delegation, held process creation, bounded paired transport and capture-before-containment ownership; Admission, CPU scheduling, cancellation, retained ownership and observed worker teardown; authenticated bounded coordinator entry transport, replay and native issue fences; original whole preparation/native environment custody, retained error aliases and actual source/client staging fences; same-ledger capture bundle admission/cleanup, typed native dispatch, original ancestor and handshake fences, physical mapping/capsule retention; original finite custodied creation through both native acknowledgements and retained cleanup aliases; same-ledger BackendCustody capture pins, authenticated v5 inherited input and unchanged preflight budgets; one-shot callback-targeted injected clock regression with independent actual worker observations and sticky original global failure"
+minimum_tests = 608
 
 [[owners]]
 package = "sugarsubstitute-xtask"
@@ -40,8 +40,8 @@ minimum_tests = 50
 [[owners]]
 package = "sugarsubstitute-supervision"
 root = "crates/sugarsubstitute-supervision"
-concern = "Windows launch inputs, retained containment, resource exclusions, actual claim retirement, attempt-bound profile proofs and bounded lifecycle framing; Retained installed-file/hash custody and actual connected-loopback peer identity; authenticated fixed capture roles, same-job selected bundle and module credit custody, checked current-image/PE/PDB association and bounded original close retention; authenticated parent/witness association, independent dual exclusions, exact suspended-root transfer and checked custody retirement; phase-specific original profile release observation and retained actual Finish status"
-minimum_tests = 552
+concern = "Exact recovery family enrollment and handler observation, protected historical origin opening and contiguous summary migration; Windows launch inputs, retained containment, resource exclusions, actual claim retirement, attempt-bound profile proofs and bounded lifecycle framing; Retained installed-file/hash custody and actual connected-loopback peer identity; authenticated fixed capture roles, same-job selected bundle and module credit custody, checked current-image/PE/PDB association and bounded original close retention; authenticated parent/witness association, independent dual exclusions, exact suspended-root transfer and checked custody retirement; phase-specific original profile release observation and retained actual Finish status"
+minimum_tests = 571
 
 [[owners]]
 package = "sugarsubstitute-splash"
@@ -58,5 +58,5 @@ minimum_tests = 327
 [[owners]]
 package = "sugarsubstitute-crash"
 root = "crates/sugarsubstitute-crash"
-concern = "Bounded capture input, immutable budgets, retained partial registration and actual native retirement; bounded charged redacted report views, categorical absence and symbol failures; closed bounded diagnostic wire, replay high-water, exact result and transfer correlation, original transport guard custody; genuine installed bundle selection before capture effects, outside-lock parent loans, typed v2 failure adoption and process-lifetime module/source retention; source-derived exception facts preserve authoritative mechanism and dev-only semantic exit/collection/symbol/Reporter owner flow"
-minimum_tests = 261
+concern = "Actual retained recovery capture origins, checked historical publication and native promotion replay, unknown-exit summaries and bounded report presentation; Bounded capture input, immutable budgets, retained partial registration and actual native retirement; bounded charged redacted report views, categorical absence and symbol failures; closed bounded diagnostic wire, replay high-water, exact result and transfer correlation, original transport guard custody; genuine installed bundle selection before capture effects, outside-lock parent loans, typed v2 failure adoption and process-lifetime module/source retention; source-derived exception facts preserve authoritative mechanism and dev-only semantic exit/collection/symbol/Reporter owner flow"
+minimum_tests = 280

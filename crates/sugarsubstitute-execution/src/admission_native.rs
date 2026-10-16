@@ -14,7 +14,8 @@ impl Core {
         let mut state = lock(&self.state);
         let index = state.queue.iter().position(|queued| {
             if let Work::Native(work) = &queued.work {
-                work.ready()
+                (work.ready()
+                    || (work.held_creation() && stop_reason_at(&queued.context, now).is_some()))
                     && (stop_reason_at(&queued.context, now).is_some()
                         || Self::has_capacity(&state, queued.context.spec().class))
             } else {

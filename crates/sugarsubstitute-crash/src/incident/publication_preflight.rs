@@ -79,17 +79,13 @@ impl IncidentRepository {
     {
         let inventory = self.inventory(context)?;
         if inventory.unknown_entries() != 0
-            || inventory.entries().any(|entry| {
-                matches!(
-                    entry.class(),
-                    DiagnosticEntryClass::Journal
-                        | DiagnosticEntryClass::Stage
-                        | DiagnosticEntryClass::Quarantine
-                )
-            })
+            || inventory
+                .entries()
+                .any(|entry| matches!(entry.class(), DiagnosticEntryClass::Quarantine))
         {
             return Err(IncidentStoreError::RecoveryConflict);
         }
+        self.recognize_summary_archives(&inventory, context)?;
         let custody = self.storage.recovery_collection(&self.operation, context)?;
         let mut collection = super::allocation::SummaryCollection::new(custody)?;
         let (mut referenced_bytes, mut referenced_files, mut referenced_groups) =
@@ -119,7 +115,7 @@ impl IncidentRepository {
             } else {
                 let mut decode = self.storage.recovery_decode(&self.operation, context)?;
                 let stored = super::allocation::decode(&mut decode, || {
-                    super::decode_summary(bytes.as_bytes())
+                    super::codec_summary::decode_current_summary(bytes.as_bytes())
                 })?;
                 let summary = stored.summary();
                 self.namespace(summary.seed().key())?;

@@ -40,7 +40,8 @@ pub(crate) use startup_snapshot::StartupAdmissionBinding;
 pub use startup_snapshot::{PreparedStartupSnapshot, StartupSnapshotRejection};
 mod registered_startup;
 pub use registered_startup::{
-    REGISTERED_STARTUP_BYTES, RegisteredRestartAdmission, RegisteredStartupSource,
+    REGISTERED_STARTUP_BYTES, RecoveryGrantCustody, RecoveryGrantRejection,
+    RegisteredRecoveryGrant, RegisteredRestartAdmission, RegisteredStartupSource,
 };
 use state::{Command, Connection, Reply, RequestRoute, Shared, State};
 use std::sync::{Arc, Mutex, Weak};
@@ -49,3 +50,7 @@ pub use types::*;
 pub(crate) fn initial_deadlines(work: &EntryWork) -> crate::native_deadlines::Deadlines {
     crate::native_deadlines::Deadlines::handshake(work.shared.original_preparation)
 }
+
+pub(crate) use registered_startup::recovery as recovery_grant;
+
+pub(crate) use registered_startup::admission::scope_current as startup_scope_current;

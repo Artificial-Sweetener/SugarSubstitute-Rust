@@ -34,12 +34,12 @@ fn legacy(summary: &IncidentSummary) -> Result<Vec<u8>, IncidentStoreError> {
     )
 }
 #[test]
-fn schema_two_roundtrips_retained_and_unavailable_generations() -> Result<(), Box<dyn Error>> {
+fn schema_three_roundtrips_retained_and_unavailable_generations() -> Result<(), Box<dyn Error>> {
     let retained = retained_summary()?;
     let stored = StoredIncidentSummary::new(retained.clone(), Some(retained.revision()))?;
     let bytes = encode_summary(&stored)?;
     assert_eq!(decode_summary(&bytes)?, stored);
-    assert!(std::str::from_utf8(&bytes)?.starts_with("{\"schema_version\":2,"));
+    assert!(std::str::from_utf8(&bytes)?.starts_with("{\"schema_version\":3,"));
     let unavailable = StoredIncidentSummary::new(summary()?, None)?;
     let bytes = encode_summary(&unavailable)?;
     assert!(std::str::from_utf8(&bytes)?.contains("\"payload_revision\":null"));
@@ -75,6 +75,7 @@ fn legacy_conversion_preserves_input_and_derives_only_legacy_revision() -> Resul
     let original = bytes.clone();
     assert!(decode_summary(&bytes).is_err());
     let migrated = migrate_summary_v1(&bytes)?;
+    assert!(std::str::from_utf8(&migrated)?.starts_with("{\"schema_version\":2,"));
     let stored = decode_summary(&migrated)?;
     assert_eq!(stored.summary(), &retained);
     assert_eq!(stored.payload_revision(), Some(retained.revision()));
@@ -104,7 +105,7 @@ fn migration_rejects_unknown_fields_versions_duplicates_and_bounds() -> Result<(
     for changed in [
         valid.replace("\"summary\":{", "\"unknown\":0,\"summary\":{"),
         valid.replace("\"payload_revision\":null", "\"payload_revision\":null,\"unknown\":0"),
-        valid.replace("\"schema_version\":2", "\"schema_version\":9"),
+        valid.replace("\"schema_version\":3", "\"schema_version\":9"),
     ] {
         assert!(decode_summary(changed.as_bytes()).is_err());
         assert!(migrate_summary_v1(changed.as_bytes()).is_err());
@@ -167,5 +168,62 @@ fn payload_generation_cannot_precede_historical_seed_revision() -> Result<(), Bo
     let summary = IncidentSummary::new(seed, IncidentRevision::new(5)?, baseline.facts().clone())?;
     assert!(StoredIncidentSummary::new(summary.clone(), Some(IncidentRevision::new(3)?)).is_err());
     assert!(StoredIncidentSummary::new(summary, Some(IncidentRevision::new(4)?)).is_ok());
+    Ok(())
+}
+
+#[test]
+fn explicit_two_to_three_preserves_original_and_all_domain_generations()
+-> Result<(), Box<dyn Error>> {
+    let summary = retained_summary()?;
+    let original = migrate_summary_v1(&legacy(&summary)?)?;
+    let untouched = original.clone();
+    let candidate = migrate_summary_v2(&original)?;
+    let stored = decode_summary(&candidate)?;
+    assert_eq!(stored.summary(), &summary);
+    assert_eq!(stored.payload_revision(), Some(summary.revision()));
+    assert_eq!(candidate, encode_summary(&stored)?);
+    assert_eq!(original, untouched);
+    assert_eq!(migrate_summary_v2(&candidate)?, candidate);
+    assert!(migrate_summary_v1(&candidate).is_err());
+    assert!(migrate_summary_v2(&legacy(&summary)?).is_err());
+    Ok(())
+}
+#[test]
+fn capture_only_schema_three_has_no_exit_status_and_legacy_schemas_reject_it()
+-> Result<(), Box<dyn Error>> {
+    let base = summary()?;
+    let facts = base.facts();
+    let capture = IncidentSummary::new(
+        base.seed().clone(),
+        base.revision(),
+        SummaryFacts::new(
+            facts.retention(),
+            ExitAttribution::CaptureOnly,
+            FailureEvidence::NativeFault { code: 1, address: 4096 },
+            CaptureEvidence::Finished(DumpId::new([3; 16])?),
+            facts.payload().clone(),
+            facts.reporting(),
+            SymbolOutcome::NotRequested,
+        ),
+    )?;
+    let stored = StoredIncidentSummary::new(capture.clone(), None)?;
+    let text = String::from_utf8(encode_summary(&stored)?)?;
+    assert!(text.contains("\"exit\":{\"subject\":\"capture_only\"}"));
+    assert_eq!(decode_summary(text.as_bytes())?, stored);
+    for version in [1, 2, 4, 99] {
+        let changed =
+            text.replace("\"schema_version\":3", &format!("\"schema_version\":{version}"));
+        assert!(decode_summary(changed.as_bytes()).is_err());
+        assert!(migrate_summary_v1(changed.as_bytes()).is_err());
+        assert!(migrate_summary_v2(changed.as_bytes()).is_err());
+    }
+    assert!(migrate_summary_v1(&legacy(&capture)?).is_err());
+    for field in ["\"status\":0,", "\"kind\":\"unexpected\","] {
+        let changed = text.replace(
+            "\"subject\":\"capture_only\"",
+            &format!("{field}\"subject\":\"capture_only\""),
+        );
+        assert!(decode_summary(changed.as_bytes()).is_err());
+    }
     Ok(())
 }

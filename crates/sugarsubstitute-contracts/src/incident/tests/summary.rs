@@ -198,3 +198,48 @@ fn actual_frame_without_source_line_and_unresolved_symbols_remain_honest()
     assert_eq!(summary.facts().failure(), FailureEvidence::Unexplained);
     Ok(())
 }
+
+#[test]
+fn capture_only_summary_keeps_subject_without_inventing_a_process_status()
+-> Result<(), Box<dyn std::error::Error>> {
+    for key in [desktop()?, IncidentKey::new(IncidentSubject::Supervisor(owner()?))] {
+        let supplied = FailureEvidence::NativeFault { code: 0xc0000005, address: 0x7010 };
+        let summary = IncidentSummary::new(
+            seed(key)?,
+            IncidentRevision::new(1)?,
+            facts(
+                ExitAttribution::CaptureOnly,
+                supplied,
+                CaptureEvidence::Finished(DumpId::new([5; 16])?),
+                SymbolOutcome::NotRequested,
+            )?,
+        )?;
+        assert_eq!(summary.seed().key(), key);
+        assert_eq!(summary.facts().exit(), ExitAttribution::CaptureOnly);
+        assert_eq!(summary.facts().failure(), supplied);
+    }
+    Ok(())
+}
+#[test]
+fn capture_only_summary_requires_both_finished_capture_and_actual_native_exception_facts()
+-> Result<(), Box<dyn std::error::Error>> {
+    for (capture, failure) in [
+        (
+            CaptureEvidence::Unavailable(CaptureAbsence::Missing),
+            FailureEvidence::NativeFault { code: 1, address: 2 },
+        ),
+        (CaptureEvidence::Awaiting, FailureEvidence::NativeFault { code: 1, address: 2 }),
+        (CaptureEvidence::Finished(DumpId::new([5; 16])?), FailureEvidence::Unexplained),
+        (CaptureEvidence::Finished(DumpId::new([5; 16])?), FailureEvidence::RustPanic),
+    ] {
+        assert!(
+            IncidentSummary::new(
+                seed(desktop()?)?,
+                IncidentRevision::new(1)?,
+                facts(ExitAttribution::CaptureOnly, failure, capture, SymbolOutcome::NotRequested)?
+            )
+            .is_err()
+        );
+    }
+    Ok(())
+}

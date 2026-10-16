@@ -4,6 +4,7 @@
 use super::*;
 use sugarsubstitute_contracts::lifecycle::RunKey;
 pub(crate) mod prepared;
+mod recovery;
 
 pub(crate) struct ProfileFamily {
     pub(crate) identity: RegistryIdentity,

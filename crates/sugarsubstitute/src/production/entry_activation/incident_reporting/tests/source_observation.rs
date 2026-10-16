@@ -35,7 +35,7 @@ fn reporter_initial_view_admission_keeps_preauth_pending_without_renewing_origin
         assert!(receiving.initial_view_admitted);
         assert_eq!(receiving.report_budget, Some(original));
         assert_eq!(receiving.queue_until, Some(original.until()));
-        assert_eq!(receiving.next_deadline(), Some(original.until()));
+        assert_eq!(receiving.deadlines().collect::<Vec<_>>(), vec![original.until()]);
         assert!(receiving.relay_needed);
         assert!(receiving.failure().is_none());
     }
@@ -150,6 +150,9 @@ fn reporter_close_and_unproven_recycling_cannot_reset_observed_authentication() 
     assert!(receiving.finish_accepted_session().is_err());
     assert_eq!(receiving.authenticated_peer_observed, Some((key, process)));
     assert_eq!(receiving.normal_close_budget(), None);
-    assert_eq!(receiving.next_deadline(), Some(budget.settle_until));
+    assert_eq!(
+        receiving.deadlines().collect::<Vec<_>>(),
+        vec![budget.graceful_until, budget.settle_until]
+    );
     Ok(())
 }

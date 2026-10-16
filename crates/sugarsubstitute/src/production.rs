@@ -43,3 +43,6 @@ mod diagnostic_helper;
 mod incident_host;
 #[path = "production/reporter_role.rs"]
 mod reporter_role;
+
+#[path = "production/recovery_supervisor.rs"]
+mod recovery_supervisor;

@@ -124,7 +124,7 @@ enum Active {
     CaptureAttach(crate::capture_attach::worker::Active),
     Environment(crate::entry_preparation::retirement::EntryPreparationRetirement),
     DesktopCapture(DesktopCaptureOwner),
-    CustodiedProcess(crate::backend_custody::process::worker::Owner),
+    ProcessCreation(crate::process_creation::worker::Owner),
     BackendCustody(crate::backend_custody::worker::Active),
 }
 impl Active {
@@ -165,8 +165,8 @@ impl Active {
             NativeWork::Output(work) => {
                 Self::Output(crate::output::worker::Active::new(work, queued.context, core, now))
             }
-            NativeWork::CustodiedProcess(work, memory) => {
-                Self::CustodiedProcess(crate::backend_custody::process::worker::Owner::new(
+            NativeWork::ProcessCreation(work, memory) => {
+                Self::ProcessCreation(crate::process_creation::worker::Owner::new(
                     work,
                     memory,
                     queued.context,
@@ -197,7 +197,7 @@ impl Active {
             Self::CaptureAttach(active) => active.fail_owner(cause),
             Self::Environment(active) => active.fail_owner(cause),
             Self::DesktopCapture(owner) => owner.active.fail_owner(cause),
-            Self::CustodiedProcess(active) => active.fail_owner(cause),
+            Self::ProcessCreation(active) => active.fail_owner(cause),
             Self::BackendCustody(active) => active.fail_owner(cause),
         }
     }
@@ -213,7 +213,7 @@ impl Active {
             Self::CaptureAttach(active) => active.progress(core, now, clock_available),
             Self::Environment(active) => active.progress(core),
             Self::DesktopCapture(owner) => owner.active.progress(core, now, clock_available),
-            Self::CustodiedProcess(active) => active.progress(core, now, clock_available),
+            Self::ProcessCreation(active) => active.progress(core, now, clock_available),
             Self::BackendCustody(active) => active.progress(core, now, clock_available),
         }
     }
@@ -229,7 +229,7 @@ impl Active {
             Self::CaptureAttach(active) => active.completed(),
             Self::Environment(active) => active.completed(),
             Self::DesktopCapture(owner) => owner.active.completed(),
-            Self::CustodiedProcess(active) => active.completed(),
+            Self::ProcessCreation(active) => active.completed(),
             Self::BackendCustody(active) => active.completed(),
         }
     }

@@ -15,7 +15,8 @@ pub(super) fn retire(
     parent: &ParentLifecycle,
     registry: &mut WindowsProcessRegistry,
 ) -> Result<Option<RetiredDesktop>, Box<dyn Error>> {
-    if !start.profile.snapshot().retirement_ready()
+    if !start.recovery_settled()
+        || !start.profile.snapshot().retirement_ready()
         || !parent.native_retired()
         || start.output.as_ref().is_some_and(|output| !output.settled())
     {
@@ -36,4 +37,32 @@ pub(super) fn retire(
     registry.retire_settled(ticket.process())?;
     start.ticket = None;
     Ok(Some(RetiredDesktop::new(registration)))
+}
+
+/// Remove an actually settled rejected recovery carrier without manufacturing UI registration.
+/// The same source must already have retired its direct pipe/watch/profile/output owners.
+pub(super) fn retire_unparented_recovery(
+    start: &mut DesktopStart,
+    registry: &mut WindowsProcessRegistry,
+) -> Result<bool, Box<dyn Error>> {
+    if start.recovery.is_none()
+        || !start.recovery_settled()
+        || !start.profile.snapshot().retirement_ready()
+        || start.output.as_ref().is_some_and(|output| !output.settled())
+    {
+        return Ok(false);
+    }
+    let Some(ticket) = start.ticket else {
+        return Ok(true);
+    };
+    if ticket.binding() != FamilyBinding::Desktop(start.run) {
+        return Err("Recovery carrier retirement binding mismatch".into());
+    }
+    let actual = registry.snapshot(ticket.process())?;
+    if actual.binding != ticket.binding() || !actual.settled {
+        return Ok(false);
+    }
+    registry.retire_settled(ticket.process())?;
+    start.ticket = None;
+    Ok(true)
 }

@@ -14,11 +14,13 @@ use sugarsubstitute_contracts::execution::{AdmissionError, NativeHandleClaim, Na
 pub(crate) enum OutputAccounting {
     Symbol { handles: Arc<NativeHandleClaim>, original: EffectContext },
     Capture(CaptureEventClaim),
+    Creation(crate::process_creation::ProcessCreationMemory),
 }
 /// Preserve the exact original output guard through partial native failures.
 pub(crate) enum OutputCredit {
     Symbol { _guard: NativeHandleOutput },
     Capture { _guard: CaptureEventOutput },
+    Creation { _guard: crate::process_creation::SectionOutput },
 }
 impl OutputAccounting {
     /// Retain original guard/port identity without creating a quota or native privilege.
@@ -30,6 +32,7 @@ impl OutputAccounting {
         match self {
             Self::Symbol { original, .. } => original.check(),
             Self::Capture(original) => original.check(),
+            Self::Creation(original) => original.check_effect().map(|_| ()),
         }
     }
     /// Match the sealed original target before a fresh child cleanup effect.
@@ -56,6 +59,10 @@ impl OutputAccounting {
             Self::Symbol { handles, .. } => handles
                 .reserve_output()
                 .map(|guard| OutputCredit::Symbol { _guard: guard })
+                .map_err(|cause| NativeObservationError::new(stage, cause)),
+            Self::Creation(original) => original
+                .reserve_section_output()
+                .map(|guard| OutputCredit::Creation { _guard: guard })
                 .map_err(|cause| NativeObservationError::new(stage, cause)),
             Self::Capture(handles) => handles
                 .reserve_output()

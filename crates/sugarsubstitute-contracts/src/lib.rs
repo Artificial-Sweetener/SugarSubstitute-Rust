@@ -12,5 +12,6 @@ pub mod incident;
 pub mod lifecycle;
 pub mod localization;
 pub mod presentation;
+pub mod recovery_supervisor;
 pub mod startup;
 pub mod transcript;

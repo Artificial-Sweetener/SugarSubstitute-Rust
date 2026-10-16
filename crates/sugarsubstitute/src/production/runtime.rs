@@ -49,6 +49,11 @@ pub(crate) fn execute<I: IntoIterator<Item = OsString>>(
         )?)?;
         return Ok(None);
     }
+    if arguments.peek().is_some_and(|value| super::recovery_supervisor::role::matches_prefix(value))
+    {
+        super::recovery_supervisor::run(arguments)?;
+        return Ok(None);
+    }
     let qualification = super::qualification::QualificationIntent::root(&mut arguments)?;
     if arguments.peek().is_some_and(|value| value == "--internal-production-desktop") {
         run_desktop(DesktopRole::parse(arguments)?, diagnostics)?;

@@ -29,7 +29,39 @@ pub(crate) struct BindFailed {
     pub(crate) permit: ProcessWatchPermit,
     pub(crate) cause: CrashError,
 }
+/// Genuine process-local storage and process-PIN finished entry points move together.
+pub(crate) struct RootStorageParts {
+    pub(crate) storage: sugarsubstitute_supervision::ProtectedStorageRoot,
+    api: finished_report::Api,
+}
+impl RootStorageParts {
+    pub(crate) fn install(
+        &self,
+        report: &mut crate::incident::CapturedReport,
+        context: &JobContext,
+        execution: &sugarsubstitute_execution::ExecutionClient,
+    ) -> Result<(), crate::incident::IncidentStoreError> {
+        use crate::incident::IncidentStoreError;
+        finished_report::Token::install(
+            &mut report.token,
+            self.api,
+            &mut report.generation,
+            &mut report.cpp,
+            &mut report.rust,
+            context,
+        )
+        .map_err(|_| IncidentStoreError::RecoveryConflict)?;
+        report
+            .token
+            .as_mut()
+            .ok_or(IncidentStoreError::RecoveryConflict)?
+            .encode_deadline(execution)
+            .map_err(|_| IncidentStoreError::RecoveryConflict)
+    }
+}
 pub(crate) trait CaptureLease: Send {
+    /// Move actual already-registered Root storage without native effects or a new claim.
+    fn take_root_storage(&mut self) -> Result<RootStorageParts, CrashError>;
     fn prepare_finished(
         &mut self,
         report: &mut crate::incident::CapturedReport,

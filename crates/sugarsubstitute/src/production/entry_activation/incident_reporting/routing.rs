@@ -8,6 +8,9 @@ impl IncidentReporting {
         host: &mut IncidentHost,
         resources: &EntryResources<'_>,
     ) -> Result<()> {
+        if self.relay()?.deadline().is_some() {
+            self.relay()?.check_deadline(resources.client.now()?)?;
+        }
         match self.relay()?.source().poll() {
             Ok(facts) => {
                 if facts.failed {
@@ -26,7 +29,7 @@ impl IncidentReporting {
         if !self.relay()?.worker_delivered() {
             return Ok(());
         }
-        let output = self.relay.as_mut().ok_or("Actual report relay missing")?.take_output()?;
+        let delivery = self.relay.as_mut().ok_or("Actual report relay missing")?.take_delivery()?;
         if self.relay()?.worker_terminal().is_some() {
             let relay = self.relay()?;
             tracing::error!(
@@ -38,14 +41,25 @@ impl IncidentReporting {
             );
             return Err("Actual report Core relay failed with original completion retained".into());
         }
-        if let Some(output) = output {
-            self.relay_until = None;
+        if let Some(output) = self.consume_relay_delivery(delivery) {
             self.route(host, output)?;
-        } else if self.relay_until.is_some() {
-            self.relay_until = None;
         }
         let _resources = resources;
         Ok(())
+    }
+    /// Only actual source progress ends a relay interval; pending and deferred turns retain it.
+    fn consume_relay_delivery(&mut self, delivery: ReporterDelivery) -> Option<ReporterOutput> {
+        match delivery {
+            ReporterDelivery::Pending => None,
+            ReporterDelivery::Deferred => {
+                self.relay_needed = true;
+                None
+            }
+            ReporterDelivery::Advanced(output) => {
+                self.relay_until = None;
+                output
+            }
+        }
     }
     fn route(&mut self, host: &mut IncidentHost, output: ReporterOutput) -> Result<()> {
         match output {
@@ -128,6 +142,19 @@ impl IncidentReporting {
                         if self.binding != Some(command.binding()) {
                             return Err("Actual report action binding changed".into());
                         }
+                        if self.fresh_supervisor
+                            && command.action() == ReportAction::DismissAndRequestRestart
+                        {
+                            if self.deferred_restart.is_some() {
+                                return Err("Actual fresh restart request already retained".into());
+                            }
+                            self.deferred_restart = Some(DeferredFreshRestart::new(
+                                command,
+                                request_context.request,
+                                request_context.relay_until,
+                            ));
+                            return Ok(());
+                        }
                         let Some(copied) = restart_guard::admit(command, self.restart, || {
                             Ok(host.report_action(command, request_context.request)?)
                         })?
@@ -200,7 +227,7 @@ impl IncidentReporting {
         }
         Ok(())
     }
-    fn complete_observation(&mut self) -> Result<()> {
+    pub(super) fn complete_observation(&mut self) -> Result<()> {
         let original = self.request.take().ok_or("Original observer request missing")?;
         self.completion = Some(ReporterCompletion {
             received: original.authentication.received,
@@ -210,6 +237,16 @@ impl IncidentReporting {
         Ok(())
     }
     pub(super) fn drive_relay(&mut self, resources: &EntryResources<'_>) -> Result<()> {
+        if self.relay()?.retry_pending() {
+            let relay = self.relay.as_mut().ok_or("Actual original report relay missing")?;
+            match relay.retry(resources.client, resources.finite, resources.jobs) {
+                Ok(()) => self.relay_needed = false,
+                Err(ReporterSourceIssue::Busy) => {}
+                Err(ReporterSourceIssue::Admission) if relay.admission_retryable() => {}
+                Err(cause) => return Err(cause.into()),
+            }
+            return Ok(());
+        }
         let source = self.relay()?.source().alias();
         if self.completion.is_some() {
             match source.install_completion(&mut self.completion) {
@@ -239,9 +276,32 @@ impl IncidentReporting {
         let relay = self.relay.as_mut().ok_or("Actual report relay missing")?;
         match relay.submit(resources.client, resources.finite, resources.jobs, until) {
             Ok(()) => self.relay_needed = false,
-            Err(ReporterSourceIssue::Admission | ReporterSourceIssue::Busy) => {}
+            Err(ReporterSourceIssue::Busy) => {}
+            Err(ReporterSourceIssue::Admission) if relay.admission_retryable() => {}
             Err(cause) => return Err(cause.into()),
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn pending_and_deferred_delivery_keep_original_interval_until_actual_progress() {
+        let mut receiving = IncidentReporting::new();
+        let original = Moment::from_nanos(45_000_000_000);
+        receiving.relay_until = Some(original);
+        assert!(receiving.consume_relay_delivery(ReporterDelivery::Pending).is_none());
+        assert_eq!(receiving.relay_until, Some(original));
+        assert!(!receiving.relay_needed);
+        assert!(receiving.consume_relay_delivery(ReporterDelivery::Deferred).is_none());
+        assert_eq!(receiving.relay_until, Some(original));
+        assert!(receiving.relay_needed);
+        assert!(receiving.consume_relay_delivery(ReporterDelivery::Pending).is_none());
+        assert_eq!(receiving.relay_until, Some(original));
+        assert!(receiving.consume_relay_delivery(ReporterDelivery::Advanced(None)).is_none());
+        assert_eq!(receiving.relay_until, None);
+        assert!(receiving.failure().is_none());
     }
 }

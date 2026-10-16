@@ -44,8 +44,12 @@ mod progress;
 mod progress_deadline_tests;
 #[path = "entry_activation/projection.rs"]
 mod projection;
+#[path = "entry_activation/record.rs"]
+mod record;
 #[path = "entry_activation/record_progress.rs"]
 mod record_progress;
+#[path = "entry_activation/recovery_supervisor.rs"]
+mod recovery_supervisor;
 #[path = "entry_activation/relay.rs"]
 mod relay;
 #[path = "entry_activation/restart.rs"]
@@ -90,52 +94,7 @@ type Result<T> = std::result::Result<T, Box<dyn Error>>;
 fn outer(cause: Box<dyn Error + Send + Sync>) -> Box<dyn Error> {
     cause
 }
-struct Record {
-    qualification: super::qualification::QualificationIntent,
-    run: RunKey,
-    launch: LaunchId,
-    navigation: Generation,
-    connection: ConnectionId,
-    projected: Option<JobCompletion<ProjectedEntry, ProjectionFailure>>,
-    attach: Option<OwnedJob<CaptureAttachLaunchPin, CaptureAttachFailure>>,
-    attached_memory: Option<MemoryLease>,
-    attach_failure: Option<JobCompletion<CaptureAttachLaunchPin, CaptureAttachFailure>>,
-    released_attach: Option<JobCompletion<CaptureAttachRetirement, CaptureAttachFailure>>,
-    attach_retirement:
-        Option<std::result::Result<CaptureAttachRetirementReport, CaptureAttachFailure>>,
-    start: Option<DesktopStart>,
-    parent: Option<Box<ParentLifecycle>>,
-    retained_causes: Option<crate::production::parent_lifecycle::causes::BackendCauses>,
-    preparation: Option<BackendPreparation>,
-    retired: Option<retirement::RetiredDesktop>,
-    forwarded: Option<forwarding::Forwarded>,
-    ui_suspected: bool,
-    replied: bool,
-    closed: bool,
-    seed: incident_seed::SeedPreparation,
-    seeded: bool,
-    collection: incident_collection::IncidentCollection,
-    failed: Option<sugarsubstitute_application::supervision::FailedDesktopFact>,
-    failed_cause: Option<Box<dyn Error>>,
-    failed_shutdown: Option<ShutdownBudget>,
-    failed_family_adopted: bool,
-    pending_desktop_failure: Option<incident_reporting::PendingDesktopFailure>,
-    restart: restart::RestartState,
-}
-struct PendingProjection {
-    qualification: super::qualification::QualificationIntent,
-    run: RunKey,
-    launch: LaunchId,
-    navigation: Generation,
-    connection: ConnectionId,
-    job: Option<OwnedJob<ProjectedEntry, ProjectionFailure>>,
-    completion: Option<JobCompletion<ProjectedEntry, ProjectionFailure>>,
-    restart: bool,
-}
-struct RetainedRecord {
-    record: Box<Record>,
-    _storage: MemoryClaim,
-}
+use record::{PendingProjection, Record, RetainedRecord};
 /// Own bounded retained records and the process's one actual capture registration.
 /// No constructor grants native effects, trust, serving state or child readiness.
 pub(crate) struct ProductionActivation {
@@ -150,6 +109,10 @@ pub(crate) struct ProductionActivation {
     pending: [Option<PendingProjection>; 64],
     next_instance: u64,
     next_connection: u64,
+    next_recovery_grant: u64,
+    recovery_pending: Option<recovery_supervisor::RetainedPreparation>,
+    failed_recoveries: [Option<recovery_supervisor::RetainedPreparation>; 64],
+    recovery_denial: Option<Box<dyn Error>>,
     closing: bool,
     shutdown: Option<ShutdownBudget>,
     failure: Option<Box<dyn Error>>,
@@ -181,6 +144,10 @@ impl ProductionActivation {
             pending: [const { None }; 64],
             next_instance: 0,
             next_connection: 0,
+            next_recovery_grant: 0,
+            recovery_pending: None,
+            failed_recoveries: [const { None }; 64],
+            recovery_denial: None,
             closing: false,
             shutdown: None,
             failure: None,
@@ -204,6 +171,14 @@ impl ProductionActivation {
         }
     }
     fn failure_source(&self) -> Option<&(dyn Error + 'static)> {
+        if let Some(cause) = self
+            .recovery_pending
+            .iter()
+            .chain(self.failed_recoveries.iter().flatten())
+            .find_map(|pending| pending.failure_source())
+        {
+            return Some(cause);
+        }
         if let Some(cause) = self.incidents.reporting.failure() {
             return Some(cause);
         }
@@ -256,6 +231,9 @@ impl ProductionActivation {
                                     .as_ref()
                                     .and_then(|start| start.output.as_ref())
                                     .and_then(|output| output.failure())
+                            })
+                            .or_else(|| {
+                                record.start.as_ref().and_then(DesktopStart::recovery_failure)
                             })
                             .or_else(|| match &record.projected.as_ref()?.outcome {
                                 JobOutcome::Failure(cause) => Some(cause as &(dyn Error + 'static)),
@@ -431,13 +409,15 @@ impl EntryActivation for ProductionActivation {
         let Some(mut resources) = resources else {
             return Ok(self.records.iter().all(Option::is_none)
                 && self.pending.iter().all(Option::is_none)
+                && self.recovery_pending.is_none()
                 && self.capture.is_none());
         };
         if let Err(cause) = self.activity(batch, &mut resources) {
             self.preserve(cause);
         }
         self.close_records(&mut resources)?;
-        Ok(self.records.iter().flatten().all(|retained| retained.record.closed)
+        Ok(self.recovery_pending.as_ref().is_none_or(|pending| pending.settled())
+            && self.records.iter().flatten().all(|retained| retained.record.closed)
             && self.records.iter().flatten().all(|retained| retained.record.seed.delivered())
             && self.records.iter().flatten().all(|retained| retained.record.collection.delivered())
             && self.incidents.reporting.settled()
@@ -456,6 +436,7 @@ impl EntryActivation for ProductionActivation {
         if !self.closing
             || self.records.iter().flatten().any(|retained| !retained.record.closed)
             || self.pending.iter().any(Option::is_some)
+            || self.recovery_pending.as_ref().is_some_and(|pending| !pending.settled())
         {
             return Err("Actual activation resources remain unsettled".into());
         }

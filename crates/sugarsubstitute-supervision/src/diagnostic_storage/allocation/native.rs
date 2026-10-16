@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Select closed native destinations under the original storage operation.
+mod scan;
 use super::*;
 use crate::native_claims::files::{NativeLayoutFailure, NativeRoleLayout};
 use crate::protected_storage::{
@@ -11,6 +12,7 @@ use crate::protected_storage::{
     record_file::StreamingPort,
     security,
 };
+pub(crate) use scan::DiagnosticNativeScanRetention;
 
 /// Retain the sole original allocation ledger without exposing its claim.
 #[derive(Clone)]
@@ -31,48 +33,22 @@ impl DiagnosticNativeOwnerLoan {
 pub(crate) struct DiagnosticNativeNameLoan {
     _allocation: DiagnosticAllocationLoan,
 }
+impl DiagnosticNativeNameLoan {
+    /// Keep the completed immutable path's actual capacity under its original owner.
+    /// The full preliminary destination was admitted before path construction.
+    /// # Errors
+    /// Rejects capacity beyond the same original loan without releasing its credit.
+    pub(crate) fn retain_path_capacity(
+        &mut self,
+        path: &std::path::PathBuf,
+    ) -> Result<(), DiagnosticNativeAllocationFailure> {
+        self._allocation.retain_capacity(path.capacity())
+    }
+}
 /// Retain one finite native scratch session, including its nested phases.
 pub(crate) struct DiagnosticNativeScratchLoan {
     role: NativeRole,
     allocation: DiagnosticAllocationLoan,
-}
-/// Retain a complete native directory scan generation.
-pub(crate) struct DiagnosticNativeScanLoan {
-    _allocation: DiagnosticAllocationLoan,
-}
-/// Retain both native scan vectors through their actual final data/control drops.
-pub(crate) struct DiagnosticNativeScanRetention {
-    credit: Option<std::sync::Arc<NativeScanCredit>>,
-    original: DiagnosticNativeGrant,
-}
-struct NativeScanCredit {
-    _allocation: DiagnosticNativeScanLoan,
-}
-#[repr(C)]
-struct NativeScanArcStorage {
-    strong: std::sync::atomic::AtomicUsize,
-    weak: std::sync::atomic::AtomicUsize,
-    data: NativeScanCredit,
-}
-impl DiagnosticNativeScanRetention {
-    /// Describe this actual pinned shared control; the value grants no capacity.
-    pub(crate) const fn control_bytes() -> usize {
-        size_of::<NativeScanArcStorage>()
-    }
-}
-impl Clone for DiagnosticNativeScanRetention {
-    fn clone(&self) -> Self {
-        Self { credit: self.credit.clone(), original: self.original.clone() }
-    }
-}
-impl Drop for DiagnosticNativeScanRetention {
-    fn drop(&mut self) {
-        if let Some(credit) = self.credit.take()
-            && let Some(credit) = std::sync::Arc::into_inner(credit)
-        {
-            drop(credit);
-        }
-    }
 }
 /// Retain the actual account SID bytes and their control.
 pub(crate) struct DiagnosticNativeSidLoan {
@@ -97,7 +73,7 @@ pub(super) enum NativeRole {
     PathScratch,
     AccountScratch,
     AccountSid,
-    ScanState,
+    ScanState(usize),
     StageScan,
     ScanPage,
     NativeHash,
@@ -130,7 +106,7 @@ impl NativeRole {
             Self::PathScratch => Self::with_nested_security(paths::diagnostic_path_layout()?),
             Self::AccountScratch => account::diagnostic_account_layout(),
             Self::AccountSid => NativeSid::diagnostic_layout(),
-            Self::ScanState => StreamingPort::diagnostic_scan_state_layout(),
+            Self::ScanState(entries) => StreamingPort::diagnostic_scan_state_layout(entries),
             Self::StageScan => StreamingPort::diagnostic_stage_scan_layout(),
             Self::ScanPage => {
                 Self::with_nested_security(StreamingPort::diagnostic_scan_page_layout()?)
@@ -296,18 +272,6 @@ impl DiagnosticNativeGrant {
         context: &JobContext,
     ) -> Result<DiagnosticNativeSidLoan, DiagnosticNativeAllocationFailure> {
         Ok(DiagnosticNativeSidLoan { _allocation: self.current(NativeRole::AccountSid, context)? })
-    }
-    /// Admit each native scan generation independently before replacing its predecessor.
-    pub(crate) fn scan_retention(
-        &self,
-        context: &JobContext,
-    ) -> Result<DiagnosticNativeScanRetention, DiagnosticNativeAllocationFailure> {
-        let allocation =
-            DiagnosticNativeScanLoan { _allocation: self.current(NativeRole::ScanState, context)? };
-        Ok(DiagnosticNativeScanRetention {
-            credit: Some(std::sync::Arc::new(NativeScanCredit { _allocation: allocation })),
-            original: self.clone(),
-        })
     }
     /// Admit the separate complete nonempty stage-candidate destination.
     pub(crate) fn stage_scan_owner(

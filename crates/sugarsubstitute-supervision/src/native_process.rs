@@ -46,6 +46,8 @@ pub(crate) struct Family {
     pub(crate) query: Vec<usize>,
     pub(crate) attributes_initialized: bool,
     pub(crate) job_list: [usize; 1],
+    pub(crate) recovery_carrier:
+        Option<Box<crate::registry_input::recovery::RecoveryCarrierLaunch>>,
     pub(crate) fixture_events: Option<FixtureChildEvents>,
     pub(crate) lifecycle_bootstrap: Option<LifecyclePipeBootstrap>,
     pub(crate) lifecycle_enrollment: Option<LifecycleDesktopEnrollment>,
@@ -59,6 +61,7 @@ pub(crate) struct Family {
     pub(crate) output_identity: Option<sugarsubstitute_execution::windows_output::OutputIdentity>,
     pub(crate) inherited_handles: [usize; 6],
     pub(crate) inherited_count: usize,
+    pub(crate) recovery_stdio: bool,
     pub(crate) stdio_handles: [usize; 3],
     pub(crate) sealed: bool,
     pub(crate) incomplete: bool,
@@ -66,16 +69,14 @@ pub(crate) struct Family {
     pub(crate) resumed: bool,
     pub(crate) closure_committed: bool,
     custody: Option<crate::native_claims::backend_custody::pool::WitnessSlot>,
-    creation_memory:
-        Option<sugarsubstitute_execution::backend_custody::process::CustodiedProcessMemory>,
+    creation_memory: Option<sugarsubstitute_execution::process_creation::ProcessCreationMemory>,
 }
 /// Keep the complete native allocation before its unchanged original family claim.
 /// Custody families instead retain their already-funded slot outside this owner.
 pub(crate) struct FamilyStorage {
     family: Box<Family>,
     _memory: Option<MemoryClaim>,
-    _creation_memory:
-        Option<sugarsubstitute_execution::backend_custody::process::CustodiedProcessMemory>,
+    _creation_memory: Option<sugarsubstitute_execution::process_creation::ProcessCreationMemory>,
 }
 impl std::ops::Deref for FamilyStorage {
     type Target = Family;
@@ -126,6 +127,7 @@ impl Family {
                 query,
                 attributes_initialized: false,
                 job_list: [0],
+                recovery_carrier: None,
                 fixture_events: None,
                 lifecycle_bootstrap: None,
                 lifecycle_enrollment: None,
@@ -139,6 +141,7 @@ impl Family {
                 output_identity: None,
                 inherited_handles: [0; 6],
                 inherited_count: 0,
+                recovery_stdio: false,
                 stdio_handles: [0; 3],
                 sealed: false,
                 incomplete: false,
@@ -154,7 +157,7 @@ impl Family {
     }
     /// Allocate the identical native Family under its already-admitted creation claim.
     pub(crate) fn custodied(
-        memory: &sugarsubstitute_execution::backend_custody::process::CustodiedProcessMemory,
+        memory: &sugarsubstitute_execution::process_creation::ProcessCreationMemory,
         consumer_bytes: usize,
     ) -> Result<FamilyStorage, RegistryError> {
         if Self::storage_bytes() + consumer_bytes > memory.bytes() as usize {
@@ -168,7 +171,7 @@ impl Family {
     /// Count native Family storage before the same original fixed allocation.
     pub(crate) const fn storage_bytes() -> usize {
         size_of::<Self>()+2048*size_of::<usize>()+(MAX_MEMBERS+2)*size_of::<usize>()+size_of::<FamilyStorage>()
-            + sugarsubstitute_execution::backend_custody::process::CustodiedProcessMemory::control_storage_bytes()
+            + sugarsubstitute_execution::process_creation::ProcessCreationMemory::control_storage_bytes()
     }
     /// End fresh creation checks only after actual resumed-family ownership transfers.
     pub(crate) fn creation_transferred(&mut self) {
@@ -286,3 +289,7 @@ mod diagnostic;
 mod inheritance;
 mod lifecycle;
 mod membership;
+mod recovery_carrier;
+
+mod recovery_child;
+pub(crate) use recovery_child::close_recovery_input;

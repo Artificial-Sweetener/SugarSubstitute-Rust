@@ -4,6 +4,10 @@
 use super::*;
 use sugarsubstitute_supervision::committed_reader::CommittedReadObject;
 impl IncidentDumpReader {
+    #[expect(
+        clippy::result_large_err,
+        reason = "Preserve the full original reader cause inline in its admitted 768 KiB decode owner"
+    )]
     pub(super) fn validate(
         &mut self,
         key: IncidentKey,
@@ -68,6 +72,10 @@ impl IncidentDumpReader {
         Ok(())
     }
 }
+#[expect(
+    clippy::result_large_err,
+    reason = "Preserve the shared inline reader-cause contract; this pure validator allocates no error storage"
+)]
 pub(in crate::incident) fn validate_summary(
     stored: &StoredIncidentSummary,
     key: IncidentKey,

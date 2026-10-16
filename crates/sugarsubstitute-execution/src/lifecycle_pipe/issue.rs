@@ -35,7 +35,15 @@ impl Issue<'_> {
         let state = lock(&self.core.state);
         let stopping = state.stopping;
         let record = state.jobs.get(&self.shared.id);
-        let original_stop = crate::symbol_admission::original_stop(&state, self.shared.id, at);
+        let original_stop = crate::symbol_admission::original_stop(&state, self.shared.id, at)
+            .or_else(|| {
+                crate::coordinator_entry::recovery_grant::original_stop(
+                    self.core,
+                    &state,
+                    self.shared.recovery_grant.as_ref(),
+                    at,
+                )
+            });
         let current = self.context.owner_id() == self.core.id
             && record.is_some_and(|r| {
                 !r.retiring

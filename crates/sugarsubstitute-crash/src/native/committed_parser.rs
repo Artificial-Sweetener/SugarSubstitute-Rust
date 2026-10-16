@@ -176,6 +176,10 @@ extern "C" fn check(context: *mut c_void) -> u32 {
         }
     }
 }
+#[expect(
+    clippy::result_large_err,
+    reason = "Preserve the full original reader cause inline in its admitted 768 KiB decode owner"
+)]
 pub(crate) fn validate(
     reader: &mut IncidentDumpReader,
     key: IncidentKey,

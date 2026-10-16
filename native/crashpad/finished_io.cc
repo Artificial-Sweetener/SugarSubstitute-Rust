@@ -190,7 +190,13 @@ class WindowsApi final : public FileApi {
   DWORD Close(HANDLE file) noexcept override { return CloseHandle(file) ? 0 : Last(); }
   DWORD Scan(HANDLE directory, ScanRole role, bool restart, std::span<uint8_t> page,
       uint32_t& entries, uint64_t& bytes, bool& end, bool& complete) noexcept override {
-    entries = 0; bytes = 0; end = false; complete = true;
+    entries = 0; bytes = 0; end = false; complete = false;
+    // Reject invalid caller storage before the OS can advance this cursor or
+    // write FILE_ID_BOTH_DIR_INFO records requiring an eight-byte boundary.
+    if (page.size() < sizeof(FILE_ID_BOTH_DIR_INFO) ||
+        page.size() > std::numeric_limits<DWORD>::max() ||
+        reinterpret_cast<uintptr_t>(page.data()) % alignof(FILE_ID_BOTH_DIR_INFO)) return ERROR_INVALID_PARAMETER;
+    complete = true;
     if (!GetFileInformationByHandleEx(directory, restart ? FileIdBothDirectoryRestartInfo : FileIdBothDirectoryInfo,
         page.data(), static_cast<DWORD>(page.size()))) {
       const auto error = Last(); if (error == ERROR_NO_MORE_FILES) { end = true; return 0; } return error;

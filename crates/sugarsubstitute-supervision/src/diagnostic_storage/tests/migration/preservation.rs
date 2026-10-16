@@ -140,7 +140,8 @@ fn diagnostic_migration_128_recognitions_reject_129_preparation_before_create() 
         let mut next_identity = [0; 24];
         next_identity[0] = 2;
         for id in 1..=128 {
-            let historical = key(id)?;
+            let historical =
+                LogicalStoreOperationKey::new(owner_key(1)?, IncidentOperationId::new(id)?);
             let copy = filesystem.put_stage(object, historical, LEGACY);
             let plan = DiagnosticSummaryMigrationPlan::new(
                 historical,

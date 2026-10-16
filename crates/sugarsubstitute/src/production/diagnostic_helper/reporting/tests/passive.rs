@@ -75,7 +75,7 @@ fn reporting_actual_protected_passive_view_retains_first_cause_and_same_claim_ac
     let mut input = Some(ReportingInput {
         request,
         operation,
-        work: ReportingWork::View { binding, locale: "en" },
+        work: ReportingWork::View { binding, locale: "en", root_capture_degraded: false },
         authentication: None,
     });
     let jobs = crate::job_sequence::JobSequence::new();
@@ -207,7 +207,7 @@ fn reporting_actual_queued_cancellation_restores_protected_input_and_keeps_origi
     let mut input = Some(ReportingInput {
         request: namespace.diagnostic_write_request(operation)?,
         operation,
-        work: ReportingWork::View { binding, locale: "en" },
+        work: ReportingWork::View { binding, locale: "en", root_capture_degraded: false },
         authentication: None,
     });
     let gate = std::sync::Arc::new(FilesystemGate::default());

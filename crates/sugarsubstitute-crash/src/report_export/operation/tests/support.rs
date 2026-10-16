@@ -180,6 +180,7 @@ pub(super) fn export(
                 &[],
                 "en",
                 context.memory(),
+                false,
             )
             .map_err(io::Error::other)
         },

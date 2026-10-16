@@ -74,6 +74,14 @@ impl WindowsProcessRegistry {
         input: &mut Option<WindowsLaunchInput>,
     ) -> Result<LaunchTicket, RegistryAdmissionError> {
         let original = input.as_ref().ok_or(RegistryAdmissionError::InvalidSpecification)?;
+        if original.recovery_carrier.is_some()
+            || original
+                .profile_custody
+                .as_ref()
+                .is_some_and(|profile| profile.value.recovery_grant.is_some())
+        {
+            return Err(RegistryAdmissionError::InvalidSpecification);
+        }
         if let Some(profile) = &original.profile_custody
             && (binding!=FamilyBinding::Desktop(profile.value.key.run()) || !profile.value.identity.same_as(&self.identity)
                 || original.managed_custody.is_some() || original.backend_custody.is_some()
@@ -265,7 +273,7 @@ impl WindowsProcessRegistry {
             let mut retained = Some(shared.clone());
             let client = execution.clone();
             execution
-                .submit_custodied_process(
+                .submit_custody_creation(
                     creation_scope,
                     creation,
                     parent.storage(),

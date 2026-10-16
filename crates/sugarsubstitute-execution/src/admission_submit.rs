@@ -55,7 +55,8 @@ impl Core {
                     | RequestKind::DesktopCapture(_)
                     | RequestKind::CapturedLifecycle(_)
                     | RequestKind::BackendCustody { .. }
-                    | RequestKind::CustodiedProcess(_)
+                    | RequestKind::ProcessCreation(_)
+                    | RequestKind::RecoveryPipe(_)
             );
         #[cfg(all(feature = "k1-native-qualification", any(windows, test)))]
         let fresh_metadata =
@@ -108,13 +109,14 @@ impl Core {
                     (&kind, spec.class),
                     (
                         RequestKind::Native
+                            | RequestKind::RecoveryPipe(_)
                             | RequestKind::BackendCustody { .. }
                             | RequestKind::CapturedLifecycle(_)
                             | RequestKind::CaptureAttach(_)
                             | RequestKind::SymbolNative { .. },
                         JobClass::NativeObservation
                     ) | (
-                        RequestKind::DesktopCapture(_) | RequestKind::CustodiedProcess(_),
+                        RequestKind::DesktopCapture(_) | RequestKind::ProcessCreation(_),
                         JobClass::InfrastructureLifecycle
                     )
                 );

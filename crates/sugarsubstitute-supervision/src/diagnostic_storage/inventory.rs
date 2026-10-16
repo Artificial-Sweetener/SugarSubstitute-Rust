@@ -177,21 +177,21 @@ impl DiagnosticStorage {
         }
         let namespace =
             state.data_mut()?.namespace.ok_or_else(|| error(operation.key, Code::Closed))?;
-        let scan_preflight = allocation::scan_binding(
+        // These preliminary maximum destinations own no vectors and are disjoint.
+        // Actual observed-count destinations are admitted together below while the
+        // native observation vector still retains its separate original claim.
+        drop(allocation::scan_binding(
             &state.data_mut()?.allocation,
             operation.key,
             DIAGNOSTIC_SCAN_BOUND,
-        )?;
-        // Reject an already-unavailable returned destination before enumeration.
-        // Actual vector construction admits it again after the native session ends.
+        )?);
+        // Reject an individually unavailable returned destination before enumeration.
         drop(allocation::inventory(
             &state.data_mut()?.allocation,
             operation.key,
             DIAGNOSTIC_SCAN_BOUND,
         )?);
-        // No cached vectors exist under this temporary maximum-capacity admission.
-        // The native scan owns its separate actual vector, page and control loans.
-        drop(scan_preflight);
+        // Native enumeration independently owns its actual vector, page and control.
         let scan = state
             .call_native(|port| port.scan(context))?
             .map_err(|cause| native(operation.key, Code::InventoryIncomplete, cause))?;

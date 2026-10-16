@@ -16,6 +16,7 @@ use sugarsubstitute_contracts::{
 };
 use sugarsubstitute_execution::windows_lifecycle_pipe::{
     InheritedLifecycleBootstrap, LifecyclePipeBootstrap, LifecyclePipeDeadline,
+    RecoveryDesktopBootstrap,
 };
 
 /// Lexical child input; the actual captured transport authenticates its inherited section.
@@ -57,21 +58,37 @@ impl DesktopRole {
         })
     }
 }
-/// Encode only facts from the actual pinned bootstrap and the retained parent run.
-/// This runs under the existing projected entry charge; no secret capability is copied.
-pub(super) fn arguments(
-    bootstrap: &LifecyclePipeBootstrap,
-    run: RunKey,
-    launch: LaunchId,
-    navigation: Generation,
+/// Borrow one of the two actual prepared section owners; raw section facts cannot construct it.
+pub(in crate::production) enum DesktopRoleSource<'a> {
+    /// Ordinary Root-created captured lifecycle section.
+    Root(&'a LifecyclePipeBootstrap),
+    /// Fresh supervisor's genuine combined Root/capture section.
+    Recovery(&'a RecoveryDesktopBootstrap),
+}
+/// Encode the sole child argument grammar from an actual pinned bootstrap and Root record.
+/// This runs under the original projection/creation charge; no secret capability is copied.
+pub(in crate::production) fn arguments(
+    source: DesktopRoleSource<'_>,
+    identity: sugarsubstitute_contracts::startup::MainIdentity,
     qualification: &super::super::qualification::QualificationIntent,
 ) -> Result<Vec<Vec<u16>>, Box<dyn Error + Send + Sync>> {
-    if bootstrap.run() != Some(run) {
-        return Err("Desktop bootstrap run mismatch".into());
-    }
-    let original = bootstrap.deadline().ok_or("Desktop bootstrap deadline unavailable")?;
-    let inherited = bootstrap.borrow_inheritance();
-    let token = inherited.section.as_raw_handle() as usize;
+    let (token, original) = match source {
+        DesktopRoleSource::Root(bootstrap) => {
+            if bootstrap.run() != Some(identity.run) {
+                return Err("Desktop bootstrap run mismatch".into());
+            }
+            let original = bootstrap.deadline().ok_or("Desktop bootstrap deadline unavailable")?;
+            (bootstrap.borrow_inheritance().section.as_raw_handle() as usize, original)
+        }
+        DesktopRoleSource::Recovery(bootstrap) => {
+            let (actual, original) = bootstrap.role_facts()?;
+            if actual != identity {
+                return Err("Recovery Desktop identity mismatch".into());
+            }
+            (bootstrap.borrow_inheritance()?.section.as_raw_handle() as usize, original)
+        }
+    };
+    let sugarsubstitute_contracts::startup::MainIdentity { run, launch, navigation } = identity;
     let mut output = Vec::new();
     output.try_reserve_exact(19)?;
     for value in [

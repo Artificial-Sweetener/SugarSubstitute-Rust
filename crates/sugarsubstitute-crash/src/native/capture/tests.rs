@@ -159,7 +159,7 @@ fn actual_original_partitions_and_trusted_bundle_exactly_fit_four_mebibytes()
             memory.claim(1).err().ok_or("Actual owners undercharged live allocations")?;
         assert_eq!(rejected.available_bytes, 0);
         assert!(fields.pins.is_empty());
-        assert!(fields.storage.is_retired());
+        assert!(fields.storage.as_ref().is_none_or(|storage| storage.is_retired()));
         assert!(
             size_of::<super::Fields>()
                 + size_of::<super::Capture>()

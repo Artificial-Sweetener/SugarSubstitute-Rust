@@ -97,16 +97,18 @@ pub(super) fn classified(
                     )
                     .1 == entry.digest
             }),
-            DiagnosticEntryClass::Journal => data.archives.iter().any(|archive| {
-                archive.generation == data.scan_generation
-                    && archive.archive.identity == entry.identity
-                    && archive.archive.bytes == entry.bytes
-                    && crate::protected_storage::record_file::diagnostic_object_binding(
-                        DiagnosticObject::Journal(archive.historical),
-                        key.owner().namespace,
-                    )
-                    .1 == entry.digest
-            }),
+            DiagnosticEntryClass::Journal => {
+                data.archives.iter().any(|archive| {
+                    archive.generation == data.scan_generation
+                        && archive.archive.identity == entry.identity
+                        && archive.archive.bytes == entry.bytes
+                        && crate::protected_storage::record_file::diagnostic_object_binding(
+                            DiagnosticObject::Journal(archive.historical),
+                            key.owner().namespace,
+                        )
+                        .1 == entry.digest
+                }) || capture_read::recognized_origin(data, entry)
+            }
             _ => true,
         };
         if !recognized {

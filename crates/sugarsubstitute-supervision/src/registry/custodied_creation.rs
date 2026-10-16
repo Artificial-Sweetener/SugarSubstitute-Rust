@@ -10,8 +10,8 @@ use sugarsubstitute_contracts::{
     backend_custody::{BackendCustodyCommand as Command, BackendCustodyReceipt as Receipt},
     execution::{MemoryClaim, Moment},
 };
-use sugarsubstitute_execution::backend_custody::process::{
-    CustodiedProcessDriver, CustodiedProcessMemory, CustodiedProcessProgress, CustodiedProcessWake,
+use sugarsubstitute_execution::process_creation::{
+    ProcessCreationDriver, ProcessCreationMemory, ProcessCreationProgress, ProcessCreationWake,
 };
 
 /// Complete captured input data remains covered before its original transient claim.
@@ -33,7 +33,7 @@ pub(super) struct Driver {
     queued: Option<Command>,
     nonce: Option<u64>,
     facts: Option<CreationFacts>,
-    memory: Option<CustodiedProcessMemory>,
+    memory: Option<ProcessCreationMemory>,
     phase: Phase,
     client: ExecutionClient,
     ticket: LaunchTicket,
@@ -67,10 +67,10 @@ impl Driver {
         shared: SharedOwner,
         mut input: WindowsLaunchInput,
         context: &JobContext,
-        memory: &CustodiedProcessMemory,
+        memory: &ProcessCreationMemory,
         client: ExecutionClient,
         ticket: LaunchTicket,
-    ) -> Result<Box<dyn CustodiedProcessDriver>, NativeObservationError> {
+    ) -> Result<Box<dyn ProcessCreationDriver>, NativeObservationError> {
         if Family::storage_bytes() + size_of::<Self>() > memory.bytes() as usize {
             return Err(native(RegistryError::invalid("custodied_family_capacity")));
         }
@@ -79,6 +79,20 @@ impl Driver {
         let (source, family, destination, phase) = if let Some(mut profile) = profile {
             profile_metadata = Some(profile.memory);
             let profile = &mut profile.value;
+            if let Some(grant) = &profile.recovery_grant {
+                grant.check_context(context).map_err(|cause| {
+                    native(RegistryError::new("custodied_recovery_context", cause))
+                })?;
+                if input
+                    .recovery_carrier
+                    .as_ref()
+                    .is_none_or(|carrier| carrier.grant.key() != grant.key())
+                {
+                    return Err(native(RegistryError::invalid("custodied_recovery_carrier")));
+                }
+            } else if input.recovery_carrier.is_some() {
+                return Err(native(RegistryError::invalid("custodied_ordinary_carrier")));
+            }
             if ticket.binding != FamilyBinding::Desktop(profile.key.run())
                 || context
                     .deadline()
@@ -236,6 +250,7 @@ impl Driver {
             .ok_or_else(|| RegistryError::invalid("custodied_input"))?
             .value;
         if matches!(self.source, Source::Profile { .. }) {
+            family.adopt_recovery_carrier(input)?;
             family.adopt_lifecycle(input)?;
             family.adopt_output(input, self.ticket.binding)?;
             family.prepare_inheritance()?;
@@ -298,12 +313,12 @@ impl Driver {
         Ok(())
     }
 }
-impl CustodiedProcessDriver for Driver {
+impl ProcessCreationDriver for Driver {
     fn initialize(
         &mut self,
         _: &JobContext,
-        memory: &CustodiedProcessMemory,
-        _: CustodiedProcessWake,
+        memory: &ProcessCreationMemory,
+        _: ProcessCreationWake,
     ) -> Result<(), NativeObservationError> {
         if self.memory.as_ref().is_none_or(|actual| !actual.same_allocation(memory)) {
             return Err(native(RegistryError::invalid("custodied_memory_changed")));
@@ -314,7 +329,7 @@ impl CustodiedProcessDriver for Driver {
         &mut self,
         context: &JobContext,
         _: Moment,
-    ) -> Result<CustodiedProcessProgress, NativeObservationError> {
+    ) -> Result<ProcessCreationProgress, NativeObservationError> {
         let result = (|| {
             self.source
                 .parent()
@@ -365,9 +380,9 @@ impl CustodiedProcessDriver for Driver {
                 }
             }
             Ok(if matches!(self.phase, Phase::Started) {
-                CustodiedProcessProgress::Started
+                ProcessCreationProgress::Started
             } else {
-                CustodiedProcessProgress::Pending
+                ProcessCreationProgress::Pending
             })
         })();
         result.map_err(native)

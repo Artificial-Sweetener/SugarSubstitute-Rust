@@ -20,6 +20,14 @@ pub(in crate::profiles) fn prepare(
         .desktop_custody
         .as_mut()
         .ok_or_else(|| ClaimError::invalid("profile_prepare_owner"))?;
+    if let Some(grant) = &prepared.recovery_grant {
+        grant
+            .check_context(context)
+            .map_err(|cause| ClaimError::new("recovery_profile_prepare_original", cause))?;
+        if prepared.key.run() != grant.key().run() {
+            return Err(ClaimError::invalid("recovery_profile_prepare_binding"));
+        }
+    }
     let original =
         record::custody::CustodiedRecord::new(record, prepared.parent.key(), prepared.key)?;
     let until = prepared
@@ -27,6 +35,15 @@ pub(in crate::profiles) fn prepare(
         .encode_lifecycle_deadline(prepared.until)
         .map_err(|cause| ClaimError::new("profile_custody_prepare_counter", cause))?;
     let root = state.root.as_ref().ok_or_else(|| ClaimError::invalid("profile_custody_root"))?;
+    if let Some(grant) = &prepared.recovery_grant {
+        let (_, _, sid) = root.profile_folder()?;
+        prepared
+            .family
+            .as_mut()
+            .ok_or_else(|| ClaimError::invalid("recovery_profile_family"))?
+            .secure_recovery_inheritance(sid, &budget, grant, context)
+            .map_err(|cause| ClaimError::new("recovery_profile_job_security", cause))?;
+    }
     let writer = paths::file_identity(
         &file.handle,
         &mut crate::protected_storage::native_phase::NativePhase::ordinary(&budget)?,
@@ -54,6 +71,7 @@ pub(in crate::profiles) fn prepare(
         .map_err(|cause| ClaimError::new("profile_custody_duplicate_directory", cause))?;
     let command =
         sugarsubstitute_contracts::backend_custody::BackendCustodyCommand::ProfilePrepare {
+            recovery_grant: prepared.recovery_grant.as_ref().map(|grant| grant.key().id()),
             profile: prepared.key,
             job,
             directory,

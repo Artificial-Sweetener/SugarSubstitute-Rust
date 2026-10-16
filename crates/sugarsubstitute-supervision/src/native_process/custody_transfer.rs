@@ -246,7 +246,7 @@ impl CustodyDestination {
     /// Returns false while any actual unacknowledged destination output remains retained.
     pub(crate) fn close_acknowledged(
         &mut self,
-        proof: &sugarsubstitute_execution::backend_custody::process::CustodiedProcessRetirement,
+        proof: &sugarsubstitute_execution::process_creation::ProcessCreationRetirement,
     ) -> Result<bool, RegistryError> {
         proof
             .check()

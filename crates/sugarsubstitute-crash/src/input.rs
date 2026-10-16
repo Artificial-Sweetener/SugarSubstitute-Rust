@@ -25,6 +25,9 @@ pub(crate) const MAX_ANCESTORS: usize = 128;
 /// Caller paths, digests and build labels cannot select executable capture files.
 pub struct CaptureStartInput {
     pub(crate) capture_root: PathBuf,
+    #[cfg(windows)]
+    pub(crate) recovery:
+        Option<sugarsubstitute_execution::recovery_supervisor::AuthenticatedRecoveryOrigin>,
     pub(crate) selection: Option<sugarsubstitute_supervision::CaptureSelectionRequest>,
 }
 impl CaptureStartInput {
@@ -39,7 +42,30 @@ impl CaptureStartInput {
             return Err(CrashError::invalid(CaptureOperation::Runtime));
         }
         validate_path(&capture_root)?;
-        Ok(Self { capture_root, selection: Some(selection) })
+        Ok(Self {
+            capture_root,
+            #[cfg(windows)]
+            recovery: None,
+            selection: Some(selection),
+        })
+    }
+    /// Retain only the authenticated Root recovery source for this fresh process.
+    /// Root's protected path is copied under the existing native-input reservation;
+    /// registration independently verifies its actual pinned directory identity.
+    /// # Errors
+    /// Rejects a stopped genuine source or an invalid bounded local Root path.
+    #[cfg(windows)]
+    pub fn recovery(
+        source: sugarsubstitute_execution::recovery_supervisor::AuthenticatedRecoveryOrigin,
+        selection: sugarsubstitute_supervision::CaptureSelectionRequest,
+    ) -> Result<Self, CrashError> {
+        use std::os::windows::ffi::OsStringExt;
+        source.check().map_err(|cause| CrashError::new(CaptureOperation::Runtime, cause))?;
+        let units: Vec<u16> = source.capture_root_units().collect();
+        let path = PathBuf::from(std::ffi::OsString::from_wide(&units));
+        let mut result = Self::new(path, selection)?;
+        result.recovery = Some(source);
+        Ok(result)
     }
     /// Reserve the original fixed claims and one actual two-MiB selected bundle claim.
     /// The original claims remain16384 source,966656 native/input,65536 callback,

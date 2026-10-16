@@ -283,3 +283,6 @@ impl DiagnosticStorage {
         Ok(DiagnosticRecordBuffer { bytes, _allocation: allocation })
     }
 }
+
+mod capture_origin;
+pub use capture_origin::DiagnosticRecoveryCaptureOriginLoan;

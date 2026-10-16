@@ -4,6 +4,10 @@
 use super::*;
 use sugarsubstitute_supervision::committed_reader::CommittedReadObject;
 impl IncidentDumpReader {
+    #[expect(
+        clippy::result_large_err,
+        reason = "Preserve the full original reader cause inline in its admitted 768 KiB decode owner"
+    )]
     pub(super) fn source(
         &mut self,
         object: CommittedReadObject,
@@ -31,6 +35,10 @@ impl IncidentDumpReader {
         }
         Ok(slot)
     }
+    #[expect(
+        clippy::result_large_err,
+        reason = "Preserve the full original reader cause inline in its admitted 768 KiB decode owner"
+    )]
     pub(crate) fn read_dump(
         &mut self,
         offset: u64,
@@ -46,6 +54,10 @@ impl IncidentDumpReader {
             .read_chunk(slot, offset, output)
             .map_err(DumpReadCause::Native)
     }
+    #[expect(
+        clippy::result_large_err,
+        reason = "Preserve the full original reader cause inline in its admitted 768 KiB decode owner"
+    )]
     pub(crate) fn control(&self) -> Result<(), DumpReadCause> {
         self.native
             .as_ref()
@@ -60,6 +72,10 @@ impl IncidentDumpReader {
         let result = self.check_current_inner();
         result.map_err(|cause| self.record(cause))
     }
+    #[expect(
+        clippy::result_large_err,
+        reason = "Preserve the full original reader cause inline in its admitted 768 KiB decode owner"
+    )]
     pub(super) fn check_current_inner(&mut self) -> Result<(), DumpReadCause> {
         let slot = self.fields.summary_slot.as_ref().ok_or(DumpReadCause::Identity)?;
         self.native

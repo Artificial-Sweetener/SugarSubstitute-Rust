@@ -53,7 +53,10 @@ bool ValidatePermit(Invocation& invocation, const SsCaptureDispositionV1& permit
       !ValidSubject(p.subject) || !ValidBuild(p.build_length, p.build) ||
       !ValidOperation(p.historical_operation) || !ValidOperation(permit.current_operation) ||
       !Nonzero(p.uuid, 16) || memcmp(p.historical_operation.namespace_id, p.subject.namespace_id, 32) ||
-      memcmp(p.historical_operation.epoch, p.subject.epoch, 16) ||
+      (owner.recovery_origin_bound ?
+          (!RecoverySubject(owner.recovery_origin,p.subject) || !RecoveryOperation(owner.recovery_origin,p.historical_operation) ||
+           !SameOperation(owner.recovery_current_operation,permit.current_operation)) :
+          memcmp(p.historical_operation.epoch, p.subject.epoch, 16)) ||
       memcmp(permit.current_operation.namespace_id, p.subject.namespace_id, 32) ||
       !Facts(p.source, kDumpLimit) || !Facts(p.metadata_preimage, kMetadataLimit) ||
       !Facts(p.original_stage.file, kMetadataLimit) || !Facts(p.candidate_stage.file, kMetadataLimit) ||
@@ -124,7 +127,8 @@ bool Prepare(Invocation& invocation, const SsLogicalStoreOperationV1& operation)
   auto& owner = invocation.state;
   if (!owner.facts_valid || owner.prepared || owner.primary || !ValidOperation(operation) ||
       memcmp(operation.namespace_id, owner.facts.subject.namespace_id, 32) ||
-      memcmp(operation.epoch, owner.facts.subject.epoch, 16)) return owner.Fail(ERROR_INVALID_STATE);
+      (owner.recovery_origin_bound ? !SameOperation(owner.recovery_current_operation,operation) :
+          memcmp(operation.epoch,owner.facts.subject.epoch,16))) return owner.Fail(ERROR_INVALID_STATE);
   auto& p = owner.preparation; p.abi_version = 1; p.historical_operation = operation;
   p.subject = owner.facts.subject; memcpy(p.uuid, owner.facts.uuid, 16);
   p.build_length = owner.facts.build_length; memcpy(p.build, owner.facts.build, 64);
@@ -265,7 +269,7 @@ void ss_finished_prepare_disposition_v1(const SsFinishedPrepareInputV1* input, S
   }
   owner.Result(output->state); ReleaseSRWLockExclusive(&owner.gate);
 }
-void ss_finished_discard_v1(const SsFinishedDiscardInputV1* input, SsFinishedDispositionResultV1* output) {
+static void DiscardOwned(const SsFinishedDiscardInputV1* input, const SsRecoveryCaptureOriginV2* origin, SsFinishedDispositionResultV1* output) {
   if (!output) return;
   *output = {}; output->state.abi_version = 1; output->state.status = Failed; output->state.primary_error = ERROR_INVALID_PARAMETER;
   output->state.primary_origin=FinishedCauseNative;
@@ -275,11 +279,13 @@ void ss_finished_discard_v1(const SsFinishedDiscardInputV1* input, SsFinishedDis
   if (!TryAcquireSRWLockExclusive(&owner->gate)) { BusyResult(output->state, input->call.lease); return; }
   owner->read_bytes = 0;
   Invocation invocation(*owner,input->call.current);
-  const bool settled = OperationCall(invocation, input->call) && Disposition(invocation, *input->borrowed_live_permit);
+  const bool bound = origin ? owner->recovery_origin_bound && !memcmp(origin,&owner->recovery_origin,sizeof(*origin)) : !owner->recovery_origin_bound;
+  const bool settled = bound && OperationCall(invocation,input->call) && Disposition(invocation,*input->borrowed_live_permit);
+  if (!bound) owner->Fail(ERROR_INVALID_DATA);
   DispositionResult(owner, settled, *output); ReleaseSRWLockExclusive(&owner->gate);
   if (settled) delete owner;
 }
-void ss_finished_recover_disposition_v1(const SsFinishedRecoverInputV1* input, SsFinishedDispositionResultV1* output) {
+static void RecoverOwned(const SsFinishedRecoverInputV1* input,const SsRecoveryCaptureOriginV2* origin,SsFinishedDispositionResultV1* output) {
   if (!output) return;
   *output = {}; output->state.abi_version = 1; output->state.status = Failed; output->state.primary_error = ERROR_INVALID_PARAMETER;
   output->state.primary_origin=FinishedCauseNative;
@@ -289,7 +295,23 @@ void ss_finished_recover_disposition_v1(const SsFinishedRecoverInputV1* input, S
   auto owner=CreateLease(WindowsFiles(),input->current,input->original_current_operation,output->state,NativeLeaseAllocation);
   if(!owner)return;
   Invocation invocation(*owner,input->current);
-  const bool settled = Recover(invocation, *input);
+  const auto& prepared=input->borrowed_live_recovery_permit->prepared;
+  const bool settled = (!origin || BindRecoveryOrigin(invocation,*origin,prepared.subject,input->borrowed_live_recovery_permit->current_operation)) && Recover(invocation,*input);
   DispositionResult(owner, settled, *output);
   if (settled) delete owner;
+}
+
+void ss_finished_discard_v1(const SsFinishedDiscardInputV1* input,SsFinishedDispositionResultV1* output) {
+  DiscardOwned(input,nullptr,output);
+}
+void ss_finished_discard_v2(const SsFinishedDiscardInputV2* input,SsFinishedDispositionResultV1* output) {
+  if (!input || input->abi_version!=2 || input->reserved) {DiscardOwned(nullptr,nullptr,output);return;}
+  DiscardOwned(&input->disposition,&input->origin,output);
+}
+void ss_finished_recover_disposition_v1(const SsFinishedRecoverInputV1* input,SsFinishedDispositionResultV1* output) {
+  RecoverOwned(input,nullptr,output);
+}
+void ss_finished_recover_disposition_v2(const SsFinishedRecoverInputV2* input,SsFinishedDispositionResultV1* output) {
+  if (!input || input->abi_version!=2 || input->reserved) {RecoverOwned(nullptr,nullptr,output);return;}
+  RecoverOwned(&input->disposition,&input->origin,output);
 }

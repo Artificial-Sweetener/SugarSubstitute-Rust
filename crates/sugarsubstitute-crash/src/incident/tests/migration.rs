@@ -267,3 +267,40 @@ fn migration_decoder_redacts_persisted_fields_and_preserves_original_cause()
     assert!(json.line() > 0 && json.column() > 0);
     Ok(())
 }
+
+#[test]
+fn two_to_three_journal_archive_preserves_explicit_contiguous_step_and_legacy_constructor()
+-> Result<(), Box<dyn Error>> {
+    use sugarsubstitute_contracts::incident::SummaryMigrationStep as Step;
+    let old = journal()?;
+    assert_eq!(old.step(), Step::OneToTwo);
+    let new = SummaryMigrationJournal::for_step(
+        Step::TwoToThree,
+        old.operation(),
+        old.incident(),
+        old.revision(),
+        old.payload_revision(),
+        old.original_file(),
+        old.original_stage(),
+        old.candidate_stage(),
+    )?;
+    for state in [
+        IncidentStoreState::SummaryMigration(Box::new(new.clone())),
+        IncidentStoreState::SummaryMigrationArchive(Box::new(SummaryMigrationArchive::new(
+            new.clone(),
+        )?)),
+    ] {
+        let bytes = encode_store_state(&state)?;
+        assert_eq!(decode_store_state(&bytes)?, state);
+        let text = std::str::from_utf8(&bytes)?;
+        assert!(text.contains("\"source_schema\":2,\"candidate_schema\":3"));
+        for pair in [(0, 3), (1, 3), (2, 2), (3, 4), (3, 2)] {
+            let changed = text.replace(
+                "\"source_schema\":2,\"candidate_schema\":3",
+                &format!("\"source_schema\":{},\"candidate_schema\":{}", pair.0, pair.1),
+            );
+            assert!(decode_store_state(changed.as_bytes()).is_err());
+        }
+    }
+    Ok(())
+}

@@ -54,7 +54,7 @@ pub(in crate::production) struct ReportingAuthentication {
 /// Report use cases; authenticated dismissal retains the original received and issued loans.
 pub(in crate::production) enum ReportingWork {
     /// Load the same current committed summary for a separately admitted presentation worker.
-    View { binding: ReportBinding, locale: &'static str },
+    View { binding: ReportBinding, locale: &'static str, root_capture_degraded: bool },
     /// Persist actual presentation from an original authenticated Presented frame, or failure.
     /// Host-observed native terminal failures need no incoming frame; the host supplies that fact.
     Attempt { binding: ReportBinding, attempt: ReportAttempt },
@@ -120,7 +120,7 @@ pub(in crate::production) struct ReportingOperation {
     opening: Option<DiagnosticStoreOpening>,
     loaded: Option<CommittedIncident>,
     view: Option<Box<PreparedViewContent>>,
-    view_request: Option<(ReportBinding, &'static str)>,
+    view_request: Option<(ReportBinding, &'static str, bool)>,
     original_deadline: Option<Moment>,
     view_last_observed: Option<Moment>,
     attempt: Option<IncidentCommit>,
@@ -189,6 +189,7 @@ impl ReportingOperation {
         }
     }
     /// Resolve genuine existing protected storage under the actual original Core admission.
+    #[expect(clippy::result_large_err, reason = "Keep funded ReportingOperation cause inline")]
     fn open_and_run(&mut self, context: &JobContext) -> Result<(), ReportingCause> {
         let input = self.input.as_ref().ok_or(ReportingCause::Identity)?;
         if context.spec().reservation_bytes != DIAGNOSTIC_STORAGE_BYTES
@@ -215,11 +216,12 @@ impl ReportingOperation {
         self.run(context)
     }
     /// Preserve each authoritative repository result in its distinct owned destination.
+    #[expect(clippy::result_large_err, reason = "Keep funded ReportingOperation cause inline")]
     fn run(&mut self, context: &JobContext) -> Result<(), ReportingCause> {
         let input = self.input.as_ref().ok_or(ReportingCause::Identity)?;
         match &input.work {
-            ReportingWork::View { binding, locale } => {
-                self.load_current(*binding, locale, context)?;
+            ReportingWork::View { binding, locale, root_capture_degraded } => {
+                self.load_current(*binding, locale, *root_capture_degraded, context)?;
             }
             ReportingWork::Attempt { binding, attempt } => {
                 self.record_attempt(*binding, *attempt, context)?;
@@ -240,6 +242,7 @@ impl ReportingOperation {
         Ok(())
     }
     /// Retain actual checked metadata activation without changing immutable failure or payload.
+    #[expect(clippy::result_large_err, reason = "Keep funded ReportingOperation cause inline")]
     fn record_attempt(
         &mut self,
         binding: ReportBinding,
@@ -251,6 +254,7 @@ impl ReportingOperation {
         Ok(())
     }
     /// Retain the real acknowledgement commit at the exact supplied command and injected UTC.
+    #[expect(clippy::result_large_err, reason = "Keep funded ReportingOperation cause inline")]
     fn acknowledge(
         &mut self,
         command: ReportCommand,
@@ -262,10 +266,12 @@ impl ReportingOperation {
         Ok(())
     }
     /// Retain actual validated current summary even when expected binding rejects presentation.
+    #[expect(clippy::result_large_err, reason = "Keep funded ReportingOperation cause inline")]
     fn load_current(
         &mut self,
         binding: ReportBinding,
         locale: &'static str,
+        root_capture_degraded: bool,
         context: &JobContext,
     ) -> Result<(), ReportingCause> {
         let repository = self.repository.as_mut().ok_or(ReportingCause::Identity)?;
@@ -274,11 +280,12 @@ impl ReportingOperation {
         if current.summary().revision() != binding.revision() {
             return Err(ReportingCause::Store(IncidentStoreError::StaleRevision));
         }
-        self.view_request = Some((binding, locale));
+        self.view_request = Some((binding, locale, root_capture_degraded));
         self.original_deadline = context.deadline();
         Ok(())
     }
     /// Observe real cancellation/time before allocation and after bounded formatting.
+    #[expect(clippy::result_large_err, reason = "Keep funded ReportingOperation cause inline")]
     fn check_view_controls(&mut self, context: &JobContext) -> Result<(), ReportingCause> {
         if context.cancellation_requested() {
             return Err(ReportingCause::Cancelled);

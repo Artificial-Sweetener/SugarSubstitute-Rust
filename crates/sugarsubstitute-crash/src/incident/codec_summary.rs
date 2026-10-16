@@ -43,6 +43,7 @@ impl SummaryRecord {
         )?;
         let exit = match self.exit {
             ExitRecord::Supervisor { status } => ExitAttribution::Supervisor { status },
+            ExitRecord::CaptureOnly => ExitAttribution::CaptureOnly,
             ExitRecord::Desktop { kind, status } => ExitAttribution::Desktop {
                 kind: match kind {
                     ExitKindRecord::Normal => DesktopExitKind::Normal,
@@ -94,6 +95,7 @@ impl From<&IncidentSummary> for SummaryRecord {
             acknowledged: facts.retention().acknowledged().map(IncidentUtc::unix_seconds),
             exit: match facts.exit() {
                 ExitAttribution::Supervisor { status } => ExitRecord::Supervisor { status },
+                ExitAttribution::CaptureOnly => ExitRecord::CaptureOnly,
                 ExitAttribution::Desktop { kind, status } => ExitRecord::Desktop {
                     status,
                     kind: match kind {
@@ -171,11 +173,11 @@ struct StoredRecord {
     #[serde(deserialize_with = "super::codec::required_option")]
     payload_revision: Option<u64>,
 }
-/// Encode canonical schema-two whole summary bytes within 64KiB.
+/// Encode canonical schema-three whole summary bytes within 64KiB.
 /// # Errors
 /// Preserves encoding causes and rejects oversized complete records.
 pub fn encode_summary(summary: &StoredIncidentSummary) -> Result<Vec<u8>, IncidentStoreError> {
-    super::codec_encode::encode(2, StoredRecord::from(summary), super::codec::STATE_BOUND)
+    super::codec_encode::encode(3, StoredRecord::from(summary), super::codec::STATE_BOUND)
 }
 impl From<&StoredIncidentSummary> for StoredRecord {
     fn from(summary: &StoredIncidentSummary) -> Self {
@@ -190,9 +192,10 @@ pub(super) fn write_summary<W: std::io::Write>(
     summary: &StoredIncidentSummary,
     output: W,
 ) -> Result<(), IncidentStoreError> {
-    super::codec_encode::write(2, &StoredRecord::from(summary), output)
+    super::codec_encode::write(3, &StoredRecord::from(summary), output)
 }
-/// Decode only strict schema-two summary bytes; legacy conversion is explicit.
+/// Decode strict schema-two/three summaries; capture-only attribution requires schema three.
+/// Reading legacy facts grants no native format activation; durable conversion is explicit.
 /// # Errors
 /// Rejects unknown fields/versions, inconsistent payload references and malformed bytes.
 pub fn decode_summary(bytes: &[u8]) -> Result<StoredIncidentSummary, IncidentStoreError> {
@@ -200,8 +203,12 @@ pub fn decode_summary(bytes: &[u8]) -> Result<StoredIncidentSummary, IncidentSto
         return Err(IncidentStoreError::RecordBound);
     }
     let record: super::codec::Record<StoredRecord> = super::codec_parse::parse(bytes)?;
-    if record.schema_version != 2 {
+    if !matches!(record.schema_version, 2 | 3) {
         return Err(IncidentStoreError::UnsupportedSchema(record.schema_version));
+    }
+    if record.schema_version == 2 && matches!(&record.content.summary.exit, ExitRecord::CaptureOnly)
+    {
+        return Err(IncidentStoreError::RecoveryConflict);
     }
     StoredIncidentSummary::new(
         record.content.summary.into_summary()?,
@@ -221,13 +228,76 @@ pub fn migrate_summary_v1(bytes: &[u8]) -> Result<Vec<u8>, IncidentStoreError> {
     let envelope: super::codec::Record<serde::de::IgnoredAny> = super::codec_parse::parse(bytes)?;
     match envelope.schema_version {
         1 => {
-            let summary = super::codec::decode::<SummaryRecord>(bytes, super::codec::STATE_BOUND)?
-                .into_summary()?;
+            let record = super::codec::decode::<SummaryRecord>(bytes, super::codec::STATE_BOUND)?;
+            if matches!(&record.exit, ExitRecord::CaptureOnly) {
+                return Err(IncidentStoreError::RecoveryConflict);
+            }
+            let summary = record.into_summary()?;
             let revision = matches!(summary.facts().payload(), PayloadDisposition::Retained(_))
                 .then_some(summary.revision());
-            encode_summary(&StoredIncidentSummary::new(summary, revision)?)
+            encode_legacy_two(&StoredIncidentSummary::new(summary, revision)?)
         }
-        2 => encode_summary(&decode_summary(bytes)?),
+        2 => encode_legacy_two(&decode_summary(bytes)?),
         version => Err(IncidentStoreError::UnsupportedSchema(version)),
     }
+}
+
+/// Convert strict schema-two bytes to canonical schema three without modifying their original bytes.
+/// Current schema-three input is validated and canonically re-encoded for idempotence.
+/// # Errors
+/// Rejects schema one/unknown versions, capture-only in schema two, malformed or oversized bytes.
+pub fn migrate_summary_v2(bytes: &[u8]) -> Result<Vec<u8>, IncidentStoreError> {
+    encode_summary(&decode_summary(bytes)?)
+}
+/// Preserve the established public one-to-two conversion result exactly.
+fn encode_legacy_two(summary: &StoredIncidentSummary) -> Result<Vec<u8>, IncidentStoreError> {
+    if matches!(summary.summary().facts().exit(), ExitAttribution::CaptureOnly) {
+        return Err(IncidentStoreError::RecoveryConflict);
+    }
+    super::codec_encode::encode(2, StoredRecord::from(summary), super::codec::STATE_BOUND)
+}
+
+/// Build at most one validated contiguous candidate; current bytes undergo strict full decoding.
+/// The caller retains its real decode loan until all temporary domain/buffer allocations drop.
+#[cfg(windows)]
+pub(super) fn migration_candidate(
+    bytes: &[u8],
+) -> Result<
+    Option<(
+        sugarsubstitute_contracts::incident::SummaryMigrationStep,
+        StoredIncidentSummary,
+        Vec<u8>,
+    )>,
+    IncidentStoreError,
+> {
+    use sugarsubstitute_contracts::incident::SummaryMigrationStep as Step;
+    if bytes.len() > super::codec::STATE_BOUND {
+        return Err(IncidentStoreError::RecordBound);
+    }
+    let record: super::codec::Record<serde::de::IgnoredAny> = super::codec_parse::parse(bytes)?;
+    let (step, candidate) = match record.schema_version {
+        1 => (Step::OneToTwo, migrate_summary_v1(bytes)?),
+        2 => (Step::TwoToThree, migrate_summary_v2(bytes)?),
+        3 => {
+            decode_summary(bytes)?;
+            return Ok(None);
+        }
+        version => return Err(IncidentStoreError::UnsupportedSchema(version)),
+    };
+    let summary = decode_summary(&candidate)?;
+    Ok(Some((step, summary, candidate)))
+}
+
+/// Ordinary repository reads/mutations require current schema after checked durable migration.
+/// Public legacy reading remains separate and cannot silently activate a successor format.
+#[cfg(windows)]
+pub(super) fn decode_current_summary(
+    bytes: &[u8],
+) -> Result<StoredIncidentSummary, IncidentStoreError> {
+    let stored = decode_summary(bytes)?;
+    let record: super::codec::Record<serde::de::IgnoredAny> = super::codec_parse::parse(bytes)?;
+    if record.schema_version != 3 {
+        return Err(IncidentStoreError::UnsupportedSchema(record.schema_version));
+    }
+    Ok(stored)
 }

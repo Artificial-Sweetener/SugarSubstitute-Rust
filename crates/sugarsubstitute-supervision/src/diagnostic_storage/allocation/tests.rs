@@ -7,6 +7,8 @@ use std::io::Write;
 mod incident_validation;
 #[path = "tests/inventory_cardinality.rs"]
 mod inventory_cardinality;
+#[path = "tests/native_name.rs"]
+mod native_name;
 #[path = "tests/native_owner.rs"]
 mod native_owner;
 #[path = "tests/native_retention.rs"]

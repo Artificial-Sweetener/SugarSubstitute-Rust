@@ -6,6 +6,10 @@
 //! processes have no registry entry. Normal teardown settles and retires every
 //! record before executor shutdown. Drop is owned containment, never clean proof.
 pub(crate) mod family_proof;
+mod recovery_handler;
+mod recovery_member;
+pub use recovery_handler::{RecoveryHandlerWatch, RecoveryHandlerWatchRejection};
+pub use recovery_member::{RecoveryDesktopWatch, RecoveryEnrolledDesktop};
 pub(crate) mod profile;
 
 use crate::{
@@ -119,6 +123,7 @@ struct Record {
     root_spec: (sugarsubstitute_contracts::execution::ScopeId, JobId),
     root_watch: Option<WatchJob>,
     root_notice: bool,
+    recovery_watch_issued: bool,
     root: Option<Identity>,
     root_exit: Option<ProcessExit>,
     last_member_exit: Option<ProcessExit>,
@@ -343,3 +348,9 @@ mod tests;
 
 #[cfg(test)]
 pub(crate) mod construction_fixture;
+
+mod recovery_child;
+pub use recovery_child::{
+    InheritedRecoveryJobInput, RecoveryChildCreation, RecoveryChildCreationRejection,
+    RecoveryChildInput, RecoveryChildInputRejection, RecoveryChildStatus,
+};

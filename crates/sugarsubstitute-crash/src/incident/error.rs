@@ -37,6 +37,11 @@ pub enum IncidentStoreFailureCode {
 
 /// A bounded incident record could not be validated or committed.
 pub enum IncidentStoreError {
+    /// The exact typed migration-plan validator rejected original/candidate expectations.
+    #[cfg(windows)]
+    MigrationValidation(
+        sugarsubstitute_supervision::diagnostic_storage::DiagnosticRecoveryValidationError,
+    ),
     /// Encoded bytes exceeded the format's fixed limit.
     RecordBound,
     /// The format's schema is outside its explicit accepted version set.
@@ -85,6 +90,8 @@ impl IncidentStoreError {
             Self::Allocation(_) => Code::Capacity,
             Self::Facts(IncidentError::EvictionCountExhausted) => Code::EvictionCountExhausted,
             Self::Facts(_) | Self::Identity(_) | Self::RecoveryConflict => Code::Corrupt,
+            #[cfg(windows)]
+            Self::MigrationValidation(_) => Code::Corrupt,
             Self::ChangedDuplicate => Code::ChangedDuplicate,
             Self::StaleRevision => Code::StaleRevision,
             Self::RetainedPayloadRequiresDisposition => Code::RetainedPayloadRequiresDisposition,
@@ -106,6 +113,8 @@ impl IncidentStoreError {
 impl fmt::Debug for IncidentStoreError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let code = match self {
+            #[cfg(windows)]
+            Self::MigrationValidation(_) => "MigrationValidation",
             Self::RecordBound => "RecordBound",
             Self::UnsupportedSchema(_) => "UnsupportedSchema",
             Self::Codec(_) => "Codec",
@@ -134,6 +143,8 @@ impl fmt::Debug for IncidentStoreError {
 impl fmt::Display for IncidentStoreError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            #[cfg(windows)]
+            Self::MigrationValidation(_)=>f.write_str("Incident migration expectations rejected"),
             Self::RecordBound => f.write_str("Incident record exceeds its admitted bound"),
             Self::UnsupportedSchema(version) => write!(f, "Unsupported incident schema {version}"),
             Self::Codec(_) => f.write_str("Invalid incident record encoding"),
@@ -158,6 +169,8 @@ impl fmt::Display for IncidentStoreError {
 impl Error for IncidentStoreError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
+            #[cfg(windows)]
+            Self::MigrationValidation(error) => Some(error),
             Self::Codec(error) => Some(error),
             #[cfg(windows)]
             Self::RetainedCodec(error) => Some(error.parser_error()),
@@ -194,5 +207,16 @@ impl From<IdentityError> for IncidentStoreError {
 impl From<serde_json::Error> for IncidentStoreError {
     fn from(error: serde_json::Error) -> Self {
         Self::Codec(error)
+    }
+}
+
+#[cfg(windows)]
+impl From<sugarsubstitute_supervision::diagnostic_storage::DiagnosticRecoveryValidationError>
+    for IncidentStoreError
+{
+    fn from(
+        cause: sugarsubstitute_supervision::diagnostic_storage::DiagnosticRecoveryValidationError,
+    ) -> Self {
+        Self::MigrationValidation(cause)
     }
 }

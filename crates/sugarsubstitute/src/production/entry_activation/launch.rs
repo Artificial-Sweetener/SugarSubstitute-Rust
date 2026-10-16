@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Transfer actual capture and profile custody into one contained desktop launch.
+#[path = "launch/construction.rs"]
+mod construction;
 use super::{
     desktop_output::DesktopOutput,
     desktop_role,
@@ -13,12 +15,9 @@ use sugarsubstitute_contracts::{
     lifecycle::{ConnectionId, RunKey},
     startup::LaunchId,
 };
-use sugarsubstitute_execution::{
-    windows_capture_attach::CaptureAttachLaunchPin,
-    windows_lifecycle_pipe::{
-        CapturedLifecycleStart, LifecycleDesktopEnrollment, LifecyclePipeBootstrap,
-        LifecyclePipeDeadline, LifecyclePipeSession, MIN_CAPTURED_LIFECYCLE_PIPE_BYTES,
-    },
+use sugarsubstitute_execution::windows_lifecycle_pipe::{
+    CapturedLifecycleStart, LifecycleDesktopEnrollment, LifecyclePipeBootstrap,
+    LifecyclePipeDeadline, LifecyclePipeSession, MIN_CAPTURED_LIFECYCLE_PIPE_BYTES,
 };
 use sugarsubstitute_supervision::{
     ClaimLaunchJobs, LaunchTicket, WindowsLaunchCommand, WindowsLaunchInput,
@@ -28,86 +27,37 @@ type Result<T> = std::result::Result<T, Box<dyn Error>>;
 /// Retain original projection charge through all profile, section and creation work.
 /// The parent lifecycle actor exclusively consumes the pipe's actual terminal result.
 pub(super) struct DesktopStart {
-    qualification: crate::production::qualification::QualificationIntent,
+    pub(in crate::production::entry_activation) qualification:
+        crate::production::qualification::QualificationIntent,
     pub(super) run: RunKey,
     pub(super) launch: LaunchId,
     pub(super) navigation: Generation,
     pub(super) connection: ConnectionId,
+    pub(super) recovery: Option<super::recovery_supervisor::start::RecoveryStart>,
     pub(super) projection: JobCompletion<ProjectedEntry, ProjectionFailure>,
     pub(super) profile: WindowsProfileLease,
     pub(super) pipe: Option<LifecyclePipeSession>,
     pub(super) output: Option<DesktopOutput>,
-    pipe_terminal: Option<
+    pub(in crate::production::entry_activation) pipe_terminal: Option<
         JobCompletion<
             sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeReport,
             sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeFailure,
         >,
     >,
-    checked_retirement:
+    pub(in crate::production::entry_activation) checked_retirement:
         Option<sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeRetirement>,
-    captured: Option<CapturedLifecycleStart>,
-    bootstrap: Option<LifecyclePipeBootstrap>,
-    enrollment: Option<LifecycleDesktopEnrollment>,
-    prepared: Option<ProfileDesktopLaunch>,
+    pub(in crate::production::entry_activation) captured: Option<CapturedLifecycleStart>,
+    pub(in crate::production::entry_activation) bootstrap: Option<LifecyclePipeBootstrap>,
+    pub(in crate::production::entry_activation) enrollment: Option<LifecycleDesktopEnrollment>,
+    pub(in crate::production::entry_activation) prepared: Option<ProfileDesktopLaunch>,
     pub(super) ticket: Option<LaunchTicket>,
     pub(super) original: Option<LifecyclePipeDeadline>,
-    acquired: bool,
-    publication_issued: bool,
-    custody_watch: Option<(ScopeSpec, JobSpec)>,
-    attempted: bool,
+    pub(in crate::production::entry_activation) acquired: bool,
+    pub(in crate::production::entry_activation) publication_issued: bool,
+    pub(in crate::production::entry_activation) custody_watch: Option<(ScopeSpec, JobSpec)>,
+    pub(in crate::production::entry_activation) attempted: bool,
 }
 impl DesktopStart {
-    /// Bind only actual projected source and native attachment pin to current authority.
-    /// No key, creator identity or native source can be reconstructed from observations.
-    pub(super) fn new(
-        identity: sugarsubstitute_contracts::startup::MainIdentity,
-        qualification: crate::production::qualification::QualificationIntent,
-        connection: ConnectionId,
-        mut projection: JobCompletion<ProjectedEntry, ProjectionFailure>,
-        pin: CaptureAttachLaunchPin,
-        resources: &mut EntryResources<'_>,
-    ) -> Result<Self> {
-        let sugarsubstitute_contracts::startup::MainIdentity { run, launch, navigation } = identity;
-        if resources.authority.key() != Some(run.owner) || !resources.authority.serving() {
-            return Err("Actual coordinator authority unavailable".into());
-        }
-        let value = match &mut projection.outcome {
-            JobOutcome::Success(value) => value,
-            _ => return Err("Actual entry projection did not succeed".into()),
-        };
-        let now = resources.client.now()?;
-        if now >= value.until {
-            return Err("Original entry deadline expired".into());
-        }
-        let registry =
-            resources.authority.registry().ok_or("Actual process registry unavailable")?;
-        let profile = WindowsProfileLease::new(run, value.requested_profile.clone(), registry)?;
-        let snapshot =
-            value.snapshot.take().ok_or("Original startup snapshot already transferred")?;
-        Ok(Self {
-            qualification,
-            run,
-            launch,
-            navigation,
-            connection,
-            projection,
-            profile,
-            pipe: None,
-            output: None,
-            pipe_terminal: None,
-            checked_retirement: None,
-            captured: Some(CapturedLifecycleStart::new(pin, snapshot)),
-            bootstrap: None,
-            enrollment: None,
-            prepared: None,
-            ticket: None,
-            original: None,
-            acquired: false,
-            publication_issued: false,
-            custody_watch: None,
-            attempted: false,
-        })
-    }
     /// Admit acquisition only after this complete record is retained by Activation.
     pub(super) fn acquire_profile(
         &mut self,
@@ -162,6 +112,9 @@ impl DesktopStart {
     }
     /// Reserve the actual captured source before allocating its one native bootstrap.
     pub(super) fn reserve_channel(&mut self, resources: &EntryResources<'_>) -> Result<()> {
+        if self.recovery.is_some() {
+            return self.reserve_recovery_channel(resources);
+        }
         if self.pipe.is_some() {
             return Ok(());
         }
@@ -191,6 +144,10 @@ impl DesktopStart {
         working_directory: &Path,
         resources: &mut EntryResources<'_>,
     ) -> Result<bool> {
+        if self.recovery.is_some() {
+            self.progress_recovery(resources)?;
+            return Ok(self.ticket.is_some());
+        }
         if self.ticket.is_some() {
             return Ok(true);
         }
@@ -226,10 +183,12 @@ impl DesktopStart {
         if self.prepared.is_none() {
             let bootstrap = self.bootstrap.as_ref().ok_or("Actual bootstrap pin missing")?;
             let arguments = desktop_role::arguments(
-                bootstrap,
-                self.run,
-                self.launch,
-                self.navigation,
+                desktop_role::DesktopRoleSource::Root(bootstrap),
+                sugarsubstitute_contracts::startup::MainIdentity {
+                    run: self.run,
+                    launch: self.launch,
+                    navigation: self.navigation,
+                },
                 &self.qualification,
             )
             .map_err(super::outer)?;
@@ -307,6 +266,11 @@ impl DesktopStart {
     /// Release only never-launched pins, then observe checked retirement of the actual pipe.
     /// Every outcome retains its complete guard; only an independent checked proof permits settlement.
     pub(super) fn close_unlaunched(&mut self) -> Result<bool> {
+        let recovery_settled = if let Some(recovery) = &mut self.recovery {
+            recovery.close_precommit()?
+        } else {
+            true
+        };
         self.prepared = None;
         self.bootstrap = None;
         self.enrollment = None;
@@ -322,7 +286,7 @@ impl DesktopStart {
             true
         };
         let Some(pipe) = &mut self.pipe else {
-            return Ok(output_settled);
+            return Ok(output_settled && recovery_settled);
         };
         pipe.control.close();
         while pipe.control.take_observation().is_some() {}
@@ -343,6 +307,7 @@ impl DesktopStart {
         // The complete original outcome remains retained independently of physical settlement.
         // A failure terminal cannot substitute for the actual checked worker proof.
         Ok(output_settled
+            && recovery_settled
             && self.checked_retirement.as_ref().is_some_and(|proof| {
                 proof.matches(&pipe.control)
                     && proof.scope_id() == terminal.scope_id

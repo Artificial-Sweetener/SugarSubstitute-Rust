@@ -22,16 +22,23 @@ const _: () = assert!(
         + size_of::<RecoveryOperation>()
         + size_of::<RecoveryService>()
         + 4 * size_of::<usize>()
-        < RECOVERY_SOURCE_BYTES as usize
+        < (RECOVERY_SOURCE_BYTES - HistoricalCaptureRecovery::required_storage_bytes()) as usize
 );
 impl Source {
     pub(super) fn new(context: &JobContext) -> Result<Self, MemoryClaimError> {
-        let claim = context.memory().claim(RECOVERY_SOURCE_BYTES)?;
+        let claim = context
+            .memory()
+            .claim(RECOVERY_SOURCE_BYTES - HistoricalCaptureRecovery::required_storage_bytes())?;
+        let historical =
+            context.memory().claim(HistoricalCaptureRecovery::required_storage_bytes())?;
+        let mut operation = RecoveryOperation::new();
+        // The exact fixed claim was checked above; constructor performs no native effect.
+        operation.historical = Some(HistoricalCaptureRecovery::new(historical)?);
         Ok(Self {
             shared: Arc::new(Shared {
                 state: Mutex::new(State {
                     input: None,
-                    operation: Some(Box::new(RecoveryOperation::new())),
+                    operation: Some(Box::new(operation)),
                     started: false,
                 }),
                 owner: context.owner_id(),
@@ -85,6 +92,17 @@ impl Source {
         operation.input = state.input.take();
         state.started = true;
         Ok(Loan { source: self.alias(), operation: Some(operation) })
+    }
+    /// Re-arm only after the service observed actual terminal and checked native retirement.
+    /// The same funded operation persists; input remains with the caller on rejection.
+    pub(super) fn advance(&self, input: &mut Option<RecoveryInput>) -> Result<(), RecoveryIssue> {
+        let mut loan = self.loan()?;
+        loan.operation()?.rearm(input)?;
+        let next = loan.operation()?.input.take().ok_or(RecoveryIssue::Identity)?;
+        let mut state = self.shared.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        state.started = false;
+        state.input = Some(next);
+        Ok(())
     }
     pub(super) fn loan(&self) -> Result<Loan, RecoveryIssue> {
         let mut state = self.shared.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);

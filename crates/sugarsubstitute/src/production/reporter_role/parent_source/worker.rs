@@ -4,14 +4,23 @@
 use super::*;
 use sha2::{Digest, Sha256};
 pub(in crate::production) const REPORTER_CORE_BYTES: u64 = 64 * 1024;
+/// One finite worker either inspected the genuine source or found its loan temporarily held.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum RelayTurn {
+    /// The worker borrowed and checked the original source; its actual output may still be pending.
+    Advanced,
+    /// Another genuine caller holds the source loan; no source state or native authority was inspected.
+    Deferred,
+}
 impl ReporterSource {
-    /// Execute one bounded relay turn; controls reject without disposing native/session custody.
+    /// Execute one bounded relay turn; only unavailable loan acquisition defers without source mutation.
+    /// Semantic errors after acquisition retain their actual failure and native/session custody.
     pub(super) fn process(
         &self,
         context: &JobContext,
         read_now: impl FnOnce() -> Result<Moment, ExecutionError>,
         encode_until: impl FnOnce(Moment) -> Result<CounterDeadline, NativeObservationError>,
-    ) -> Result<(), ReporterSourceIssue> {
+    ) -> Result<RelayTurn, ReporterSourceIssue> {
         if context.owner_id() != self.shared.owner
             || context.spec().reservation_bytes != REPORTER_CORE_BYTES
             || context.spec().operation != Operation::NativeLifecycle
@@ -20,7 +29,11 @@ impl ReporterSource {
         {
             return Err(ReporterSourceIssue::Identity);
         }
-        let mut loan = self.loan()?;
+        let mut loan = match self.loan() {
+            Ok(loan) => loan,
+            Err(ReporterSourceIssue::Busy) => return Ok(RelayTurn::Deferred),
+            Err(cause) => return Err(cause),
+        };
         let state = loan.state()?;
         if state.failure_transferred {
             return Err(ReporterSourceIssue::Parent);
@@ -39,7 +52,7 @@ impl ReporterSource {
             state.first.get_or_insert(cause);
             return Err(cause);
         }
-        Ok(())
+        Ok(RelayTurn::Advanced)
     }
     /// Caller requests another read only after disposing prior received custody at its owner.
     pub(in crate::production) fn resume_read(&self) -> Result<(), ReporterSourceIssue> {

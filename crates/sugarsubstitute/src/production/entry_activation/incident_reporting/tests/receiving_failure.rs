@@ -118,7 +118,7 @@ fn reporter_repeated_secondary_failures_count_omissions_with_three_finite_diagno
     assert_eq!(dropped.load(Ordering::Acquire), 1000);
     assert_eq!(receiving.report_budget, Some(original));
     assert_eq!(receiving.queue_until, Some(original.until()));
-    assert_eq!(receiving.next_deadline(), Some(original.until()));
+    assert_eq!(receiving.deadlines().collect::<Vec<_>>(), vec![original.until()]);
     drop(receiving);
     assert_eq!(dropped.load(Ordering::Acquire), 1002);
     Ok(())

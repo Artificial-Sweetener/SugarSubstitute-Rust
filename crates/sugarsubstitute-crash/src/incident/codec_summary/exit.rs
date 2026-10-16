@@ -7,6 +7,7 @@ use super::*;
 pub(super) enum ExitRecord {
     Desktop { kind: ExitKindRecord, status: i64 },
     Supervisor { status: i64 },
+    CaptureOnly,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -22,6 +23,7 @@ pub(super) enum ExitKindRecord {
 enum Tag {
     Desktop,
     Supervisor,
+    CaptureOnly,
 }
 #[derive(Deserialize)]
 #[serde(field_identifier, rename_all = "snake_case")]
@@ -73,6 +75,14 @@ impl<'de> Deserialize<'de> for ExitRecord {
                         kind: kind.ok_or_else(|| A::Error::missing_field("kind"))?,
                         status: status.ok_or_else(|| A::Error::missing_field("status"))?,
                     }),
+                    Tag::CaptureOnly => {
+                        if kind.is_some() || status.is_some() {
+                            return Err(A::Error::custom(
+                                "Capture-only attribution has no exit fields",
+                            ));
+                        }
+                        Ok(ExitRecord::CaptureOnly)
+                    }
                     Tag::Supervisor => {
                         if kind.is_some() {
                             return Err(A::Error::unknown_field("kind", &["subject", "status"]));

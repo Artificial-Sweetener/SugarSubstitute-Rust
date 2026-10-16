@@ -72,6 +72,7 @@ impl Operation {
             self.first.get_or_insert(cause);
         }
     }
+    #[expect(clippy::result_large_err, reason = "Keep funded export Operation cause inline")]
     fn execute_inner(
         &mut self,
         client: &ExecutionClient,
@@ -234,6 +235,7 @@ impl Operation {
             && self.decode.is_none()
             && self.source.capacity() == 0
     }
+    #[expect(clippy::result_large_err, reason = "Keep funded export Operation cause inline")]
     fn read(&mut self, object: CommittedReadObject) -> Result<CommittedReadSlot, ExportCause> {
         let native = self.native.as_mut().ok_or(ExportCause::State)?;
         let slot = native.open(object).map_err(ExportCause::Native)?;
@@ -255,6 +257,7 @@ impl Operation {
         }
         Ok(slot)
     }
+    #[expect(clippy::result_large_err, reason = "Keep funded export Operation cause inline")]
     fn check_current(&mut self) -> Result<(), ExportCause> {
         self.native
             .as_mut()
@@ -263,6 +266,7 @@ impl Operation {
             .map_err(ExportCause::Native)
     }
     /// Create and use receiving retirement only inside its own still-Running factory.
+    #[expect(clippy::result_large_err, reason = "Keep funded export Operation cause inline")]
     pub(super) fn retire_receiving(
         &mut self,
         client: &ExecutionClient,
@@ -291,6 +295,7 @@ impl Operation {
         Ok(())
     }
     /// Create and use source retirement only inside its own still-Running factory.
+    #[expect(clippy::result_large_err, reason = "Keep funded export Operation cause inline")]
     pub(super) fn retire_source(
         &mut self,
         client: &ExecutionClient,

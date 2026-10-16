@@ -114,6 +114,12 @@ pub enum IncidentServiceObservation {
         /// Actual categorical failure.
         failure: IncidentServiceFailure,
     },
+    /// The exact failed or cancelled seed worker terminated and its files were checked closed.
+    /// Original persisted bytes and adapter causes remain preserved; no seed commit is implied.
+    SeedPublicationRetired {
+        /// Exact original seed publication scope.
+        scope: IncidentOperationScope,
+    },
     /// Actual reporter failed; no new reporter or incident is admitted.
     ReporterFailed {
         /// Exact outstanding reporter.

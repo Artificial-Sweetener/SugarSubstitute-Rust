@@ -29,7 +29,8 @@ pub(super) fn plan(
 ) -> Result<DiagnosticSummaryMigrationPlan, TestError> {
     let bytes =
         encode_store_state(&IncidentStoreState::SummaryMigration(Box::new(journal.clone())))?;
-    Ok(DiagnosticSummaryMigrationPlan::new(
+    Ok(DiagnosticSummaryMigrationPlan::for_step(
+        journal.step(),
         journal.operation(),
         journal.incident(),
         journal.revision(),
@@ -116,10 +117,17 @@ pub(super) fn restart_journal(
     fixture: &DiagnosticStorageFixture,
     repository: &IncidentRepository,
     candidate_current: bool,
+    step: SummaryMigrationStep,
 ) -> Result<SummaryMigrationJournal, TestError> {
     let summary = original()?;
-    let original_bytes = legacy(&summary)?;
-    let candidate_bytes = migrate_summary_v1(&original_bytes)?;
+    let original_bytes = match step {
+        SummaryMigrationStep::OneToTwo => legacy(&summary)?,
+        SummaryMigrationStep::TwoToThree => migrate_summary_v1(&legacy(&summary)?)?,
+    };
+    let candidate_bytes = match step {
+        SummaryMigrationStep::OneToTwo => migrate_summary_v1(&original_bytes)?,
+        SummaryMigrationStep::TwoToThree => migrate_summary_v2(&original_bytes)?,
+    };
     let object = DiagnosticObject::Summary(summary.seed().key());
     let current = repository.operation();
     let historical = LogicalStoreOperationKey::new(
@@ -136,7 +144,8 @@ pub(super) fn restart_journal(
     } else {
         fixture.put_stage(object, historical, &candidate_bytes)?
     };
-    let journal = SummaryMigrationJournal::new(
+    let journal = SummaryMigrationJournal::for_step(
+        step,
         historical,
         summary.seed().key(),
         summary.revision(),

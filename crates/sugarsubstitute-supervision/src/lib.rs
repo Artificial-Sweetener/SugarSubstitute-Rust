@@ -92,6 +92,7 @@ pub use claims::{CLAIM_OPERATION_BYTES, WindowsResourceClaims};
 pub use environment::{EnvironmentOverride, LaunchEnvironment, LaunchEnvironmentError};
 #[cfg(windows)]
 pub use managed_output::RejectedManagedOutputLaunch;
+#[cfg(windows)]
 pub use native_claims::backend_custody::{
     BackendCustodyDriverInputError, BackendCustodyFailure, BackendCustodySource,
 };
@@ -104,4 +105,16 @@ pub use registry_input::{RejectedOutputLaunch, WindowsLaunchInput};
 #[cfg(windows)]
 pub use registry_types::{
     FamilyBinding, LaunchTicket, RegistryObservation, RegistrySnapshot, RootObservationOutcome,
+};
+
+#[cfg(windows)]
+pub use registry::{
+    RecoveryDesktopWatch, RecoveryEnrolledDesktop, RecoveryHandlerWatch,
+    RecoveryHandlerWatchRejection,
+};
+
+#[cfg(windows)]
+pub use registry::{
+    InheritedRecoveryJobInput, RecoveryChildCreation, RecoveryChildCreationRejection,
+    RecoveryChildInput, RecoveryChildInputRejection, RecoveryChildStatus,
 };

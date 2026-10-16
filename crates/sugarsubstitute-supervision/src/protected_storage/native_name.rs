@@ -186,7 +186,7 @@ impl NativeName {
             DiagnosticNativeGrant,
         )>,
     ) -> Result<Self, ClaimError> {
-        let (path, _, _, original) = input.as_ref().ok_or_else(|| {
+        let (path, allocation, _, original) = input.as_mut().ok_or_else(|| {
             ClaimError::capture_allocation(
                 crate::installed_release::CaptureCapacityFailure::missing(),
             )
@@ -194,6 +194,7 @@ impl NativeName {
         if path.capacity() > 192 * 1024 {
             return Err(ClaimError::diagnostic_allocation(original.reject_native_state()));
         }
+        allocation.retain_path_capacity(path).map_err(ClaimError::diagnostic_allocation)?;
         let (path, allocation, control, original) = input.take().ok_or_else(|| {
             ClaimError::capture_allocation(
                 crate::installed_release::CaptureCapacityFailure::missing(),

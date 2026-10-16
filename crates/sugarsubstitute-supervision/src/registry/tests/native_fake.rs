@@ -15,6 +15,8 @@ pub(super) struct Fake {
     pub(super) fail_close_after_job: AtomicBool,
     pub(super) fail_resume_close: AtomicBool,
     pub(super) fail_duplicate: AtomicBool,
+    pub(super) partial_duplicate_failure: AtomicBool,
+    pub(super) duplicates: AtomicUsize,
     pub(super) fail_enrollment: AtomicBool,
     pub(super) hold_enrollment: AtomicBool,
     pub(super) enrollment_entered: AtomicBool,
@@ -144,7 +146,15 @@ impl NativePort for Fake {
         family.release_inheritance()?;
         Ok(())
     }
-    fn duplicate(&self, _: &mut Family, _: usize) -> Result<WatchInput, RegistryError> {
+    fn duplicate(&self, family: &mut Family, _: usize) -> Result<WatchInput, RegistryError> {
+        self.duplicates.fetch_add(1, Ordering::AcqRel);
+        if self.partial_duplicate_failure.load(Ordering::Acquire) {
+            family.watch_duplicate = Some(14);
+            return Err(RegistryError::new(
+                "duplicate_watch_process",
+                std::io::Error::from_raw_os_error(6),
+            ));
+        }
         if self.fail_duplicate.load(Ordering::Acquire) {
             return Err(RegistryError::new(
                 "duplicate_watch_process",
@@ -228,6 +238,24 @@ impl NativePort for Fake {
                 Some(native_process::Member { handle: Some(13), identity: LEAF, exited: false });
             family.count = 2;
         }
+        // Exact external Job query bytes are independent of retained historical members.
+        family.query.fill(0);
+        let mut pids = [0usize; 2];
+        let mut count = 0;
+        if self.root_alive.load(Ordering::Acquire) {
+            pids[count] = ROOT.pid as usize;
+            count += 1;
+        }
+        if self.include_leaf.load(Ordering::Acquire) && self.leaf_alive.load(Ordering::Acquire) {
+            pids[count] = LEAF.pid as usize;
+            count += 1;
+        }
+        let header = [(count as u32).to_ne_bytes(), (count as u32).to_ne_bytes()].concat();
+        for (index, chunk) in header.chunks_exact(size_of::<usize>()).enumerate() {
+            family.query[index] = usize::from_ne_bytes(std::array::from_fn(|at| chunk[at]));
+        }
+        let start = 8 / size_of::<usize>();
+        family.query[start..start + count].copy_from_slice(&pids[..count]);
         Ok(native_process::Inventory {
             empty: !self.root_alive.load(Ordering::Acquire)
                 && !self.leaf_alive.load(Ordering::Acquire),
@@ -259,6 +287,7 @@ impl NativePort for Fake {
         self.changed.notify_all();
         family.job = None;
         family.thread = None;
+        family.watch_duplicate = None;
         drop(family.diagnostic_enrollment.take());
         for member in family.members.iter_mut().flatten() {
             member.handle = None;

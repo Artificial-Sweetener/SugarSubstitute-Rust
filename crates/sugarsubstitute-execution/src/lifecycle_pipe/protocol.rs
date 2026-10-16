@@ -171,6 +171,11 @@ impl ActiveState {
                 .as_mut()
                 .ok_or_else(|| failure("pipe_missing_lease"))?
                 .authenticate(&authentication.candidate)?;
+            let root_desktop =
+                self.lease.as_mut().and_then(|lease| lease.take_recovery_desktop_bootstrap());
+            if let Some(root_desktop) = root_desktop {
+                lock(&self.work.shared.state).recovery_desktop_bootstrap = Some(root_desktop);
+            }
             #[cfg(windows)]
             let captured = self.lease.as_mut().and_then(|lease| lease.take_captured_startup());
             // Adopt both outputs before the fresh stop/eligibility decision. On veto,

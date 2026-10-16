@@ -23,7 +23,11 @@ pub use finished_owner::{
     ProtectedFinishedRustRetention,
 };
 mod capture_read;
-pub use capture_read::{ProtectedCaptureReadGuard, ProtectedCaptureReadLease};
+pub use capture_read::{
+    CapturePromotionValidator, CheckedRecoveryCaptureOrigin, ProtectedCaptureReadGuard,
+    ProtectedCaptureReadLease, RecordedCapturePromotion, RecordedRecoveryCaptureOrigin,
+    RecoveryCaptureOriginValidator,
+};
 mod capture_intent;
 pub use capture_intent::{
     CAPTURE_RETIREMENT_ERROR_BYTES, DiagnosticCaptureFence, DiagnosticCaptureIntent,
@@ -155,12 +159,14 @@ struct State {
     stages: Vec<stage::RetainedStage>,
     reads: Vec<read::RetainedRead>,
     capture_reads: usize,
+    capture_handles: usize,
     finished_owner: Option<u64>,
     capture: Option<capture_intent::RetainedCapture>,
     deletion: Option<deletion::RetainedDeletion>,
     migration: Option<allocation::RetainedIntent<summary_migration::MigrationIntent>>,
     payload: Option<allocation::RetainedIntent<payload_discard::intent::PayloadIntent>>,
     archives: Vec<summary_migration::MigrationArchive>,
+    origins: Vec<capture_read::origin::RecognizedOrigin>,
     scan_generation: u64,
     scan_entries: Vec<inventory::ObservedEntry>,
     next_lease: u64,
@@ -172,79 +178,8 @@ struct State {
 pub struct DiagnosticStorage {
     shared: Shared,
 }
+mod constructor;
 impl DiagnosticStorage {
-    /// Retain the complete8MiB claim before any filesystem effect.
-    /// # Errors
-    /// Rejects insufficient claim or bounded owner-state allocation failure.
-    pub fn new(memory: MemoryClaim) -> Result<Self, DiagnosticStorageError> {
-        if memory.bytes() < DIAGNOSTIC_STORAGE_BYTES {
-            return Err(DiagnosticStorageError::rejected(None, Code::Capacity));
-        }
-        let allocation = allocation::owner(memory)?;
-        let port =
-            crate::protected_storage::record_file::StreamingPort::admit(allocation.native_grant())
-                .map_err(|cause| DiagnosticStorageError::native(None, Code::Admission, cause))?;
-        Self::from_port(allocation, port)
-    }
-    fn from_port(
-        allocation: allocation::DiagnosticAllocationOwner,
-        port: OwnedPort,
-    ) -> Result<Self, DiagnosticStorageError> {
-        let reservation = allocation::reservation(&allocation, None)?;
-        let mut stages = Vec::new();
-        let mut reads = Vec::new();
-        let mut archives = Vec::new();
-        stages
-            .try_reserve_exact(DIAGNOSTIC_STAGE_BOUND)
-            .and_then(|()| reads.try_reserve_exact(DIAGNOSTIC_READ_BOUND))
-            .and_then(|()| archives.try_reserve_exact(DIAGNOSTIC_MIGRATION_ARCHIVE_BOUND))
-            .map_err(|cause| reservation.failed(cause))?;
-        if stages.capacity() != DIAGNOSTIC_STAGE_BOUND
-            || reads.capacity() != DIAGNOSTIC_READ_BOUND
-            || archives.capacity() != DIAGNOSTIC_MIGRATION_ARCHIVE_BOUND
-        {
-            return Err(DiagnosticStorageError::rejected(None, Code::Capacity));
-        }
-        Ok(Self {
-            shared: Shared {
-                _allocation: allocation.clone(),
-                inner: Arc::new(Mutex::new(State {
-                    port: Some(port),
-                    active_access: false,
-                    retiring_handles: 0,
-                    retiring_files: 0,
-                    owner: None,
-                    execution: None,
-                    last_observed: None,
-                    high_water: 0,
-                    operation: None,
-                    namespace: None,
-                    writer: false,
-                    genesis: None,
-                    inventory_complete: false,
-                    charged_bytes: 0,
-                    payload_groups: Vec::new(),
-                    seeds: Vec::new(),
-                    summaries: Vec::new(),
-                    closed: false,
-                    stages,
-                    reads,
-                    capture_reads: 0,
-                    finished_owner: None,
-                    capture: None,
-                    deletion: None,
-                    migration: None,
-                    payload: None,
-                    archives,
-                    scan_generation: 0,
-                    scan_entries: Vec::new(),
-                    next_lease: 1,
-                    _scan_allocation: None,
-                    allocation,
-                })),
-            },
-        })
-    }
     /// Establish complete identity and the original effective deadline before effects.
     /// # Errors
     /// Rejects foreign execution/coordinator, retired/replayed IDs, live predecessors,
@@ -382,6 +317,7 @@ impl DiagnosticStorage {
         self.shared.check(operation, context)
     }
 }
+
 impl Drop for DiagnosticStorage {
     fn drop(&mut self) {
         if lock(&self.shared).live_handles() != 0 {

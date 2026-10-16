@@ -23,7 +23,7 @@ mod time;
 mod worker;
 use super::parent::{ReporterFunding, ReporterLaunch, ReporterParent};
 use crate::production::diagnostic_helper::reporting::PreparedReportView;
-pub(in crate::production) use controller::ReporterRelay;
+pub(in crate::production) use controller::{ReporterDelivery, ReporterRelay};
 use std::sync::{Arc, Mutex, TryLockError};
 use sugarsubstitute_contracts::{execution::*, incident::*, lifecycle::ProcessKey};
 use sugarsubstitute_crash::diagnostic_client::*;

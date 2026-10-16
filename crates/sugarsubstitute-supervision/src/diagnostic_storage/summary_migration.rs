@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Preserve legacy Summary bytes before sealed canonical schema2 activation.
+//! Preserve legacy Summary bytes before sealed canonical successor summary activation.
 mod archive;
 pub(super) mod intent;
 mod recovery;
@@ -27,6 +27,9 @@ impl DiagnosticStorage {
         let mut state = self.check(operation, context)?;
         stage::mutation(&mut state, operation.key)?;
         classified(&mut state, operation.key)?;
+        if state.data_mut()?.archives.iter().any(|archive| archive.historical == operation.key) {
+            return Err(error(operation.key, Code::Busy));
+        }
         let Some(object @ DiagnosticObject::Summary(_)) = source.object else {
             return Err(error(operation.key, Code::InvalidIdentity));
         };
@@ -292,5 +295,22 @@ impl DiagnosticSummaryMigrationJournalStage {
             return Err(error(self.operation, Code::ChangedIdentity));
         }
         Ok(DiagnosticStageFacts(facts))
+    }
+}
+
+impl DiagnosticStorage {
+    /// Require every current-scan Journal and Stage to be a genuinely recognized migration archive/copy.
+    /// Full canonical file identity, complete digest/length and current scan generation were checked
+    /// by recognize_summary_migration_archive; arbitrary class flags cannot grant this admission.
+    /// # Errors
+    /// Rejects incomplete or changed scans, unknown/unresolved journals/stages or foreign operations.
+    pub fn validate_preserved_migration_inventory(
+        &mut self,
+        operation: &DiagnosticStorageOperation,
+        context: &JobContext,
+    ) -> Result<(), DiagnosticStorageError> {
+        let mut state = self.check(operation, context)?;
+        stage::mutation(&mut state, operation.key)?;
+        classified(&mut state, operation.key)
     }
 }

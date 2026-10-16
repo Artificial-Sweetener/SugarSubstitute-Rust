@@ -20,6 +20,7 @@ impl Record {
             root_spec,
             root_watch: None,
             root_notice: false,
+            recovery_watch_issued: false,
             root: None,
             root_exit: None,
             last_member_exit: None,

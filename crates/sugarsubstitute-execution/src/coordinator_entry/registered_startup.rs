@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Preserve one actual registered startup specification beyond its original Entry loan.
-pub(super) mod admission;
+pub(crate) mod admission;
+pub(crate) mod recovery;
 mod witness;
 use super::{EntryTransportError, PreparedStartupSnapshot, StartupAdmissionBinding, protocol};
 use crate::{
     admission::{Core, State},
     scope::lock,
 };
+pub use recovery::{RecoveryGrantCustody, RecoveryGrantRejection, RegisteredRecoveryGrant};
 use std::sync::{Arc, Mutex};
 use sugarsubstitute_contracts::{
     coordinator_entry::{EntryLaunchRequestView, EntrySetupBudget},
@@ -31,6 +33,8 @@ pub(super) struct StateOwned {
 pub(super) struct Progress {
     pub(super) current: RunKey,
     pub(super) issued: Option<(JobId, ScopeId, EntrySetupBudget)>,
+    pub(super) recovery_issued:
+        Option<sugarsubstitute_contracts::recovery_supervisor::RecoveryGrantKey>,
 }
 
 /// Closed historical specification issued only by the actual authenticated Entry producer.
@@ -129,6 +133,6 @@ impl RegisteredSnapshot {
 impl PreparedStartupSnapshot {
     pub(super) fn registered(registered: RegisteredSnapshot) -> Result<Self, EntryTransportError> {
         let length = registered.source.state()?.body.len();
-        Ok(Self { launch: None, registered: Some(registered), body: 0..length })
+        Ok(Self { launch: None, registered: Some(registered), delegated: None, body: 0..length })
     }
 }

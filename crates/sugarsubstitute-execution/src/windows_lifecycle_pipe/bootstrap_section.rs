@@ -230,7 +230,9 @@ impl Section {
                 crate::windows_lifecycle_pipe::captured::codec::BASE_BYTES
                     + crate::windows_lifecycle_pipe::captured::codec::PREFIX_BYTES
             }
-            super::Kind::Diagnostic(_) => return Err(failure("captured_mapping_purpose")),
+            super::Kind::Diagnostic(_) | super::Kind::Recovery => {
+                return Err(failure("captured_mapping_purpose"));
+            }
         };
         if extent < minimum {
             return Err(failure("captured_mapping_extent"));
@@ -266,6 +268,41 @@ impl Section {
                 )
             },
         )
+    }
+    /// Publish one strict combined section from the genuine Root loan and fresh capture pin.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Borrow genuine Root bootstrap and fresh capture fields directly into the single admitted mapping"
+    )]
+    pub(crate) fn publish_recovery(
+        &mut self,
+        descriptor: &mut security::Descriptor,
+        root: &[u8; 1024],
+        key: sugarsubstitute_contracts::recovery_supervisor::RecoveryGrantKey,
+        endpoint: crate::capture_attach::types::CaptureEndpointObservation,
+        processes: [usize; 2],
+        counter: sugarsubstitute_contracts::execution::CounterDeadline,
+        body: &[u8],
+    ) -> Result<(), LifecyclePipeFailure> {
+        let owner = self.owner.as_mut().ok_or_else(|| failure("pipe_mapping_owner"))?;
+        owner.map_limit = crate::windows_lifecycle_pipe::captured::codec::MAX_LOGICAL_BYTES;
+        owner.publish_with(descriptor, 2048 + 16 + body.len(), |destination| {
+            crate::windows_lifecycle_pipe::captured::codec::encode_recovery(
+                destination,
+                root,
+                key,
+                endpoint,
+                processes,
+                counter,
+                body,
+            )
+        })
+    }
+    /// Inspect actual retained slots; this never substitutes for a checked close.
+    pub(crate) fn retired(&self) -> bool {
+        self.owner.as_ref().is_none_or(|owner| {
+            owner.view == 0 && owner.master.value() == 0 && owner.inherited.value() == 0
+        })
     }
     /// Read one captured section; cache observations alone grant no authentication.
     pub(crate) fn read_captured(

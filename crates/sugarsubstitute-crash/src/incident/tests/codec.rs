@@ -21,8 +21,8 @@ fn strict_fields_nullable_fields_and_versions_are_required() -> Result<(), Box<d
     let bytes = encode_summary(&StoredIncidentSummary::new(summary()?, None)?)?;
     let text = String::from_utf8(bytes)?;
     for changed in [
-        text.replace("\"schema_version\":2", "\"schema_version\":3"),
-        text.replace("\"schema_version\":2", "\"schema_version\":2,\"unknown\":true"),
+        text.replace("\"schema_version\":3", "\"schema_version\":4"),
+        text.replace("\"schema_version\":3", "\"schema_version\":3,\"unknown\":true"),
         text.replace("\"acknowledged\":null,", ""),
         text.replace("\"last\":null", "\"last\":null,\"extra\":0"),
         text.replace("\"unexplained\"", "\"invented\""),

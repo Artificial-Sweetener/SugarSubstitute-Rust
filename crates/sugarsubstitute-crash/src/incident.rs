@@ -40,6 +40,10 @@ mod codec_parse;
 mod codec_retention;
 mod codec_seed;
 mod codec_summary;
+#[cfg(windows)]
+mod summary_migration_runtime;
+#[cfg(windows)]
+pub use summary_migration_runtime::SummaryMigrationWork;
 mod codec_symbols;
 mod codec_text;
 #[cfg(windows)]
@@ -103,7 +107,7 @@ pub use codec::{
 pub(crate) use codec_capture::{CRASHPAD_METADATA_HEADER_BYTES, CRASHPAD_METADATA_RECORD_BYTES};
 pub use codec_capture::{
     CaptureDispositionCompletion, CaptureDispositionPlan, CaptureMetadataStageRole,
-    CaptureRecordedFileFacts,
+    CaptureRecordedFileFacts, RecoveryCaptureOriginRecord,
 };
 pub use codec_ledger::{
     IncidentFileFacts, IncidentStoreState, SummaryEvictionJournal, decode_store_state,
@@ -112,7 +116,7 @@ pub use codec_ledger::{
 pub use codec_migration::{SummaryMigrationArchive, SummaryMigrationJournal};
 pub use codec_retention::{PayloadDiscardJournal, PayloadDiscardVictimFacts};
 pub use codec_summary::{
-    StoredIncidentSummary, decode_summary, encode_summary, migrate_summary_v1,
+    StoredIncidentSummary, decode_summary, encode_summary, migrate_summary_v1, migrate_summary_v2,
 };
 pub use error::{IncidentStoreError, IncidentStoreFailureCode};
 pub use evidence::{IncidentLogCode, RedactedDiagnosticFact, RedactedTextChunk};
@@ -122,3 +126,13 @@ mod tests;
 
 mod pending;
 pub use pending::PendingIncidentSnapshot;
+
+#[cfg(windows)]
+mod recovery_origin;
+#[cfg(windows)]
+pub use recovery_origin::{IncidentRecoveryCaptureOriginValidator, RecoveryCaptureOriginCommit};
+
+#[cfg(windows)]
+mod historical_capture;
+#[cfg(windows)]
+pub use historical_capture::{HistoricalCaptureRecovery, HistoricalCaptureRecoveryState};

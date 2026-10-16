@@ -7,7 +7,7 @@ use super::{
     SummaryMigrationJournal, codec_ledger::digest, decode_store_state, decode_summary,
     encode_store_state, migrate_summary_v1,
 };
-use sugarsubstitute_contracts::incident::LogicalStoreOperationKey;
+use sugarsubstitute_contracts::incident::{LogicalStoreOperationKey, SummaryMigrationStep};
 use sugarsubstitute_supervision::diagnostic_storage::{
     DiagnosticEntryClass, DiagnosticObject, DiagnosticReadFacts, DiagnosticRecoveryDecodeLoan,
     DiagnosticRecoverySource, DiagnosticRecoveryValidationCode as Code,
@@ -61,7 +61,7 @@ impl DiagnosticSummaryMigrationValidator for IncidentSummaryMigrationValidator {
                 original_semantics(summary.as_bytes(), journal)?;
                 DiagnosticSummaryMigrationCase::Original
             } else if matches(summary.facts(), journal.candidate_stage()) {
-                let stored = decode_summary(summary.as_bytes()).map_err(codec_error)?;
+                let stored = candidate_summary(summary.as_bytes(), journal)?;
                 semantic(&stored, journal)?;
                 DiagnosticSummaryMigrationCase::Candidate
             } else {
@@ -147,7 +147,8 @@ fn planned(
     if current.owner().namespace != plan.historical_operation().owner().namespace {
         return Err(Failure::rejected(Code::InvalidIdentity));
     }
-    let journal = SummaryMigrationJournal::new(
+    let journal = SummaryMigrationJournal::for_step(
+        plan.step(),
         plan.historical_operation(),
         plan.incident(),
         plan.revision(),
@@ -169,7 +170,8 @@ fn plan(
     journal: &SummaryMigrationJournal,
     sha256: [u8; 32],
 ) -> Result<DiagnosticSummaryMigrationPlan, Failure> {
-    DiagnosticSummaryMigrationPlan::new(
+    DiagnosticSummaryMigrationPlan::for_step(
+        journal.step(),
         journal.operation(),
         journal.incident(),
         journal.revision(),
@@ -231,14 +233,18 @@ fn original_copy(
     Ok(())
 }
 fn original_semantics(bytes: &[u8], journal: &SummaryMigrationJournal) -> Result<Vec<u8>, Failure> {
-    // Explicit migration also accepts schema2 for idempotence; the original MUST be1.
+    // The persisted typed step fixes the original schema before any conversion.
     let record: super::codec::Record<serde::de::IgnoredAny> = super::codec_parse::parse(bytes)
         .map_err(|cause| codec_error(IncidentStoreError::from(cause)))?;
-    if record.schema_version != 1 {
+    if record.schema_version != journal.step().source_schema() {
         return Err(Failure::rejected(Code::InvalidSchema));
     }
-    let migrated = migrate_summary_v1(bytes).map_err(codec_error)?;
-    semantic(&decode_summary(&migrated).map_err(codec_error)?, journal)?;
+    let migrated = match journal.step() {
+        SummaryMigrationStep::OneToTwo => migrate_summary_v1(bytes),
+        SummaryMigrationStep::TwoToThree => super::codec_summary::migrate_summary_v2(bytes),
+    }
+    .map_err(codec_error)?;
+    semantic(&candidate_summary(&migrated, journal)?, journal)?;
     Ok(migrated)
 }
 fn conversion(
@@ -253,7 +259,19 @@ fn conversion(
     if converted.as_slice() != candidate.as_bytes() {
         return Err(Failure::rejected(Code::InvalidIdentity));
     }
-    semantic(&decode_summary(candidate.as_bytes()).map_err(codec_error)?, journal)
+    semantic(&candidate_summary(candidate.as_bytes(), journal)?, journal)
+}
+/// A candidate must use the exact step's schema even when legacy reading remains supported.
+fn candidate_summary(
+    bytes: &[u8],
+    journal: &SummaryMigrationJournal,
+) -> Result<StoredIncidentSummary, Failure> {
+    let record: super::codec::Record<serde::de::IgnoredAny> = super::codec_parse::parse(bytes)
+        .map_err(|cause| codec_error(IncidentStoreError::from(cause)))?;
+    if record.schema_version != journal.step().candidate_schema() {
+        return Err(Failure::rejected(Code::InvalidSchema));
+    }
+    decode_summary(bytes).map_err(codec_error)
 }
 fn semantic(
     stored: &StoredIncidentSummary,

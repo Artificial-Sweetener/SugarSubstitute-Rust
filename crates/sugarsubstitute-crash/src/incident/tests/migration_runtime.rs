@@ -61,10 +61,29 @@ fn actual_summary_migration_preserves_copy_and_fences_report_until_archive_settl
         assert_eq!(fixture.snapshot().mutation_count(), effects);
         let archive = finish(&mut repository, &mut permit, &journal, &context)?;
         assert_eq!(archive.historical_operation(), journal.operation());
-        let loaded = repository.load(summary.seed().key(), &context)?;
-        assert_eq!(loaded.summary(), &summary);
-        let advanced = repository.record_attempt(viewed, ReportAttempt::Presented, &context)?;
-        assert_eq!(advanced.revision().get(), 3);
+        let mut loaded = repository.storage.read(
+            DiagnosticObject::Summary(summary.seed().key()),
+            65536,
+            &repository.operation,
+            &context,
+        )?;
+        let loaded_source = loaded.whole_source(&context)?;
+        assert_eq!(decode_summary(loaded_source.as_bytes())?.summary(), &summary);
+        assert!(
+            std::str::from_utf8(loaded_source.as_bytes())?.starts_with("{\"schema_version\":2,")
+        );
+        drop(loaded_source);
+        loaded.retire(&context)?;
+        let before = fixture.snapshot().mutation_count();
+        assert!(matches!(
+            repository.load(summary.seed().key(), &context),
+            Err(IncidentStoreError::UnsupportedSchema(2))
+        ));
+        assert!(matches!(
+            repository.record_attempt(viewed, ReportAttempt::Presented, &context),
+            Err(IncidentStoreError::UnsupportedSchema(2))
+        ));
+        assert_eq!(fixture.snapshot().mutation_count(), before);
         repository.storage.inventory(&repository.operation, &context)?;
         let mut read = repository.storage.read(
             DiagnosticObject::Journal(journal.operation()),
@@ -86,7 +105,12 @@ fn actual_summary_migration_preserves_copy_and_fences_report_until_archive_settl
             recognized.original_stage().file_identity(),
             journal.original_stage().identity()
         );
-        assert_eq!(repository.load(summary.seed().key(), &context)?.summary(), advanced.summary());
+        let before = fixture.snapshot().mutation_count();
+        assert!(matches!(
+            repository.load(summary.seed().key(), &context),
+            Err(IncidentStoreError::UnsupportedSchema(2))
+        ));
+        assert_eq!(fixture.snapshot().mutation_count(), before);
         repository.retire(&context)?;
         assert_eq!(fixture.snapshot().live_outputs(), 0);
         Ok(())
@@ -183,6 +207,115 @@ fn actual_legacy_unknown_field_retains_decoder_cause_and_all_partial_owners() ->
         assert_eq!(repository.snapshot().stages(), 2);
         assert_eq!(repository.snapshot().reads(), 1);
         assert!(context.memory().claim(1).is_err());
+        repository.retire(&context)?;
+        assert_eq!(fixture.snapshot().live_outputs(), 0);
+        Ok(())
+    })
+}
+
+#[test]
+fn actual_two_to_three_migration_archives_untouched_bytes_before_current_pending_scan() -> TestResult
+{
+    admitted(|context| {
+        let (fixture, mut repository) = setup(&context)?;
+        let summary = original()?;
+        let bytes = migrate_summary_v1(&legacy(&summary)?)?;
+        let untouched = bytes.clone();
+        fixture.put(DiagnosticObject::Summary(summary.seed().key()), &bytes)?;
+        let mut work = None;
+        assert!(repository.migrate_one_pending_summary(&mut work, &context)?);
+        let actual = work.as_ref().ok_or("Missing actual migration owner")?;
+        assert!(actual.completed());
+        assert_eq!(actual.operation(), repository.operation());
+        let active = fixture
+            .snapshot()
+            .active_identity(DiagnosticObject::Summary(summary.seed().key()))
+            .ok_or("Current candidate absent")?;
+        assert_eq!(
+            active.sha256(),
+            super::super::codec_ledger::digest(&migrate_summary_v2(&bytes)?)
+        );
+        assert_eq!(bytes, untouched);
+        let mut archive = repository.storage.read(
+            DiagnosticObject::Journal(repository.operation()),
+            65536,
+            &repository.operation,
+            &context,
+        )?;
+        let mutations = fixture.snapshot().mutation_count();
+        let outputs = fixture.snapshot().live_outputs();
+        let stale = repository
+            .storage
+            .recognize_summary_migration_archive(
+                &mut archive,
+                &IncidentSummaryMigrationValidator,
+                &repository.operation,
+                &context,
+            )
+            .err()
+            .ok_or("Stale inventory admitted archive recognition")?;
+        assert_eq!(stale.code(), DiagnosticStorageFailureCode::InventoryIncomplete);
+        assert_eq!(fixture.snapshot().mutation_count(), mutations);
+        assert_eq!(fixture.snapshot().live_outputs(), outputs);
+        repository.storage.inventory(&repository.operation, &context)?;
+        let unclassified = repository
+            .storage
+            .validate_preserved_migration_inventory(&repository.operation, &context)
+            .err()
+            .ok_or("Unrecognized current-scan archive was classified")?;
+        assert_eq!(unclassified.code(), DiagnosticStorageFailureCode::InventoryIncomplete);
+        let recognized = repository.storage.recognize_summary_migration_archive(
+            &mut archive,
+            &IncidentSummaryMigrationValidator,
+            &repository.operation,
+            &context,
+        )?;
+        assert_eq!(
+            recognized.original_stage().sha256(),
+            super::super::codec_ledger::digest(&bytes)
+        );
+        repository
+            .storage
+            .validate_preserved_migration_inventory(&repository.operation, &context)?;
+        let effects = fixture.snapshot().mutation_count();
+        assert!(repository.migrate_one_pending_summary(&mut work, &context).is_err());
+        assert_eq!(fixture.snapshot().mutation_count(), effects);
+        let pending =
+            repository.pending_incidents(IncidentUtc::from_unix_seconds(110)?, &context)?;
+        drop(pending);
+        assert_eq!(fixture.snapshot().mutation_count(), effects);
+        fixture.put(
+            DiagnosticObject::Journal(repository.operation()),
+            b"{\"schema_version\":99,\"content\":{}}",
+        )?;
+        let effects = fixture.snapshot().mutation_count();
+        assert!(
+            repository.pending_incidents(IncidentUtc::from_unix_seconds(110)?, &context).is_err()
+        );
+        assert_eq!(fixture.snapshot().mutation_count(), effects);
+        repository.retire(&context)?;
+        assert_eq!(fixture.snapshot().live_outputs(), 0);
+        Ok(())
+    })
+}
+#[test]
+fn two_to_three_partial_close_failure_retains_real_work_and_rejects_reissued_effects() -> TestResult
+{
+    admitted(|context| {
+        let (fixture, mut repository) = setup(&context)?;
+        let summary = original()?;
+        let bytes = migrate_summary_v1(&legacy(&summary)?)?;
+        fixture.put(DiagnosticObject::Summary(summary.seed().key()), &bytes)?;
+        fixture.set_failure(fixture::DiagnosticFixtureFailure::Close, true);
+        let mut work = None;
+        assert!(repository.migrate_one_pending_summary(&mut work, &context).is_err());
+        assert!(work.as_ref().is_some_and(|work| !work.completed()));
+        assert!(fixture.snapshot().live_outputs() > 0);
+        let effects = fixture.snapshot().mutation_count();
+        assert!(repository.migrate_one_pending_summary(&mut work, &context).is_err());
+        assert_eq!(fixture.snapshot().mutation_count(), effects);
+        assert!(repository.retire(&context).is_err());
+        fixture.set_failure(fixture::DiagnosticFixtureFailure::Close, false);
         repository.retire(&context)?;
         assert_eq!(fixture.snapshot().live_outputs(), 0);
         Ok(())

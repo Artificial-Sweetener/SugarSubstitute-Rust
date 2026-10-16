@@ -19,6 +19,8 @@ pub struct ReportMessages {
     pub title: &'static str,
     /// Locally stored incident explanation, independent of failure classification.
     pub explanation: &'static str,
+    /// Explicit existing coordinator/client coverage after fresh-supervisor recovery.
+    pub recovery_capture_degraded: &'static str,
     /// Copy redacted text action.
     pub copy: &'static str,
     /// Select local export action.
@@ -81,6 +83,8 @@ pub struct ReportMessages {
     pub revision: &'static str,
     /// Accepted native exit status label.
     pub exit_code: &'static str,
+    /// Process exit was not observed; native fault evidence remains independent.
+    pub exit_unobserved: &'static str,
     /// Capture availability label.
     pub capture: &'static str,
     /// Actual failing frame label.
@@ -101,10 +105,11 @@ pub struct ReportMessages {
 
 impl ReportMessages {
     /// Borrow every owned label for complete-coverage validation.
-    pub fn labels(&self) -> [&'static str; 59] {
+    pub fn labels(&self) -> [&'static str; 61] {
         [
             self.title,
             self.explanation,
+            self.recovery_capture_degraded,
             self.copy,
             self.export,
             self.close,
@@ -136,6 +141,7 @@ impl ReportMessages {
             self.build,
             self.revision,
             self.exit_code,
+            self.exit_unobserved,
             self.capture,
             self.symbols,
             self.diagnostics,

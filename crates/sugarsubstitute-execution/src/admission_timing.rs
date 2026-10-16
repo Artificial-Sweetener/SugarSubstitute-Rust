@@ -29,6 +29,26 @@ pub(crate) fn validate(
     now: Moment,
 ) -> Result<AdmittedTiming, AdmissionError> {
     #[cfg(any(windows, test))]
+    if let RequestKind::RecoveryPipe(grant) = kind {
+        let grant = grant.state()?;
+        let until = grant.validate_locked(core, state, now)?;
+        if spec.operation != Operation::NativeLifecycle
+            || spec.class != JobClass::NativeObservation
+            || spec.reservation_bytes != crate::lifecycle_pipe::MIN_LIFECYCLE_PIPE_BYTES
+            || effective_deadline.is_some()
+            || spec.deadline.is_some()
+            || spec.replacement.is_some()
+            || grant.stages.lock().map_or(true, |stages| stages.pipe.is_some() || stages.closed)
+        {
+            return Err(AdmissionError::InvalidCaptureAdmission);
+        }
+        let cutoff = receiving_cutoff(state, receiving_scope, now)?;
+        return Ok(AdmittedTiming {
+            admitted: now,
+            native_handshake: Some(cutoff.map_or(until, |c| c.min(until))),
+        });
+    }
+    #[cfg(any(windows, test))]
     if let RequestKind::BackendCustody { source, original } = kind {
         crate::backend_custody::submission::validate_locked(core, state, source, original, now)?;
         if receiving_cutoff(state, receiving_scope, now)?.is_some() || effective_deadline.is_some()
@@ -39,8 +59,8 @@ pub(crate) fn validate(
         }
     }
     #[cfg(any(windows, test))]
-    if let RequestKind::CustodiedProcess(parent) = kind {
-        parent.validate_locked(core, state, now)?;
+    if let RequestKind::ProcessCreation(source) = kind {
+        source.admit_locked(core, state, spec, now)?;
         let cutoff = crate::scope::earliest(
             receiving_cutoff(state, receiving_scope, now)?,
             effective_deadline,

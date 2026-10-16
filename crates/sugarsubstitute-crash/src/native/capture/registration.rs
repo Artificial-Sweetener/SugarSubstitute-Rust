@@ -82,14 +82,39 @@ pub(super) fn register(
         fields.input.as_ref().ok_or_else(|| CrashError::invalid(CaptureOperation::Runtime))?;
     fields
         .storage
+        .as_mut()
+        .ok_or_else(|| CrashError::invalid(CaptureOperation::Runtime))?
         .resolve(&input.capture_root, context)
         .map_err(|cause| CrashError::new(CaptureOperation::Runtime, cause))?;
-    fields
-        .storage
-        .create_capture_generation(owner, context)
+    let capture_origin = if let Some(source) = &input.recovery {
+        if source.key().run().owner != owner {
+            return Err(CrashError::invalid(CaptureOperation::Runtime));
+        }
+        fields
+            .storage
+            .as_mut()
+            .ok_or_else(|| CrashError::invalid(CaptureOperation::Runtime))?
+            .create_recovery_capture_generation(source, context)
+            .map_err(|cause| CrashError::new(CaptureOperation::Runtime, cause))?;
+        sugarsubstitute_contracts::crash::CaptureGenerationOrigin::Recovery(
+            sugarsubstitute_contracts::crash::RecoveryCaptureIdentity::from_grant(source.key()),
+        )
+    } else {
+        fields
+            .storage
+            .as_mut()
+            .ok_or_else(|| CrashError::invalid(CaptureOperation::Runtime))?
+            .create_capture_generation(owner, context)
+            .map_err(|cause| CrashError::new(CaptureOperation::Runtime, cause))?;
+        sugarsubstitute_contracts::crash::CaptureGenerationOrigin::Coordinator(owner)
+    };
+    let capture_key = capture_origin
+        .capture_key()
         .map_err(|cause| CrashError::new(CaptureOperation::Runtime, cause))?;
     let generation = fields
         .storage
+        .as_ref()
+        .ok_or_else(|| CrashError::invalid(CaptureOperation::Runtime))?
         .generation()
         .ok_or_else(|| CrashError::invalid(CaptureOperation::Runtime))?;
     let database = pins::wide(generation.database_path())?;
@@ -110,7 +135,9 @@ pub(super) fn register(
     fields.api = Some(api);
     let mut coordinator = [0u8; 96];
     const HEX: &[u8; 16] = b"0123456789abcdef";
-    for (index, byte) in owner.namespace.bytes().iter().chain(owner.epoch.bytes()).enumerate() {
+    for (index, byte) in
+        capture_key.namespace.bytes().iter().chain(capture_key.epoch.bytes()).enumerate()
+    {
         coordinator[index * 2] = HEX[(byte >> 4) as usize];
         coordinator[index * 2 + 1] = HEX[(byte & 15) as usize];
     }

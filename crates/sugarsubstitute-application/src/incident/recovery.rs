@@ -8,6 +8,22 @@ use super::{
 use sugarsubstitute_contracts::incident::*;
 
 impl IncidentCoordinator {
+    /// Reserve one distinct storage operation for an adjacent migration or one historical capture.
+    /// The exact current recovery scope and its original sixty-second ancestor remain unchanged.
+    /// # Errors
+    /// Foreign/finished recovery or identity exhaustion leaves the operation high-water untouched.
+    pub fn next_recovery_storage_operation(
+        &mut self,
+        scope: IncidentRecoveryScope,
+    ) -> Result<LogicalStoreOperationKey, IncidentDecisionError> {
+        if self.recovery != Some(scope) || self.recovery_closed {
+            return Err(IncidentDecisionError::StaleOperation);
+        }
+        let operation = self.operation()?;
+        self.next_operation = operation.id().get();
+        Ok(operation)
+    }
+
     /// Begin one current recovery operation; exact retry retains the original interval.
     /// A completed recovery cannot be reopened and exhaustion precedes any effects.
     pub fn begin_recovery(

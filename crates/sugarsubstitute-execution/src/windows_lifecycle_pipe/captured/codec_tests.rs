@@ -15,7 +15,7 @@ use sugarsubstitute_contracts::{
 };
 
 /// Construct inert matching fixtures; no Registered/native handles are produced.
-fn fixtures() -> TestResult<(bootstrap::Data, CaptureEndpointObservation)> {
+pub(super) fn fixtures() -> TestResult<(bootstrap::Data, CaptureEndpointObservation)> {
     let owner = CoordinatorKey {
         namespace: NamespaceId::new([1; 32]),
         epoch: CoordinatorEpoch::new([2; 16])?,

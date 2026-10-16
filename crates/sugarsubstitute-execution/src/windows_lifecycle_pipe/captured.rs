@@ -15,3 +15,6 @@ mod backend_codec_tests;
 
 #[cfg(test)]
 mod mapping_install_tests;
+
+#[cfg(test)]
+mod recovery_codec_tests;

@@ -8,6 +8,7 @@ use super::{
     codec_ledger::FileRecord,
 };
 use serde::{Deserialize, Serialize};
+use sugarsubstitute_contracts::incident::SummaryMigrationStep;
 use sugarsubstitute_contracts::incident::{
     IncidentKey, IncidentRevision, LogicalStoreOperationKey,
 };
@@ -15,6 +16,7 @@ use sugarsubstitute_contracts::incident::{
 /// Recorded exact summary migration intent; construction grants no native authority.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SummaryMigrationJournal {
+    step: SummaryMigrationStep,
     operation: LogicalStoreOperationKey,
     incident: IncidentKey,
     revision: IncidentRevision,
@@ -38,6 +40,31 @@ impl SummaryMigrationJournal {
         original_stage: IncidentFileFacts,
         candidate_stage: IncidentFileFacts,
     ) -> Result<Self, IncidentStoreError> {
+        Self::for_step(
+            SummaryMigrationStep::OneToTwo,
+            operation,
+            incident,
+            revision,
+            payload_revision,
+            original_file,
+            original_stage,
+            candidate_stage,
+        )
+    }
+    /// Bind a supported contiguous format step to distinct preserved original/candidate inodes.
+    /// # Errors
+    /// Rejects foreign namespaces, changed copies, aliases or inconsistent payload generations.
+    #[allow(clippy::too_many_arguments)]
+    pub fn for_step(
+        step: SummaryMigrationStep,
+        operation: LogicalStoreOperationKey,
+        incident: IncidentKey,
+        revision: IncidentRevision,
+        payload_revision: Option<IncidentRevision>,
+        original_file: IncidentFileFacts,
+        original_stage: IncidentFileFacts,
+        candidate_stage: IncidentFileFacts,
+    ) -> Result<Self, IncidentStoreError> {
         if operation.owner().namespace != incident.subject().coordinator().namespace
             || original_file.identity() == original_stage.identity()
             || original_file.identity() == candidate_stage.identity()
@@ -50,6 +77,7 @@ impl SummaryMigrationJournal {
             return Err(IncidentStoreError::RecoveryConflict);
         }
         Ok(Self {
+            step,
             operation,
             incident,
             revision,
@@ -58,6 +86,10 @@ impl SummaryMigrationJournal {
             original_stage,
             candidate_stage,
         })
+    }
+    /// Return the immutable supported original/candidate schema pair.
+    pub const fn step(&self) -> SummaryMigrationStep {
+        self.step
     }
     /// Observe the complete historical coordinator and operation key.
     pub const fn operation(&self) -> LogicalStoreOperationKey {
@@ -99,7 +131,8 @@ impl SummaryMigrationArchive {
     /// # Errors
     /// Returns the journal's identity/namespace/fact rejection if expectations conflict.
     pub fn new(journal: SummaryMigrationJournal) -> Result<Self, IncidentStoreError> {
-        let journal = SummaryMigrationJournal::new(
+        let journal = SummaryMigrationJournal::for_step(
+            journal.step,
             journal.operation,
             journal.incident,
             journal.revision,
@@ -136,8 +169,8 @@ impl From<&SummaryMigrationJournal> for MigrationRecord {
             incident: journal.incident.into(),
             revision: journal.revision.get(),
             payload_revision: journal.payload_revision.map(IncidentRevision::get),
-            source_schema: 1,
-            candidate_schema: 2,
+            source_schema: journal.step.source_schema(),
+            candidate_schema: journal.step.candidate_schema(),
             original_file: journal.original_file.into(),
             original_stage: journal.original_stage.into(),
             candidate_stage: journal.candidate_stage.into(),
@@ -146,10 +179,10 @@ impl From<&SummaryMigrationJournal> for MigrationRecord {
 }
 impl MigrationRecord {
     pub(super) fn into_journal(self) -> Result<SummaryMigrationJournal, IncidentStoreError> {
-        if self.source_schema != 1 || self.candidate_schema != 2 {
-            return Err(IncidentStoreError::RecoveryConflict);
-        }
-        SummaryMigrationJournal::new(
+        let step = SummaryMigrationStep::from_schemas(self.source_schema, self.candidate_schema)
+            .ok_or(IncidentStoreError::RecoveryConflict)?;
+        SummaryMigrationJournal::for_step(
+            step,
             self.operation.into_operation()?,
             self.incident.into_key()?,
             IncidentRevision::new(self.revision)?,

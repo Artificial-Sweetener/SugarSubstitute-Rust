@@ -61,6 +61,7 @@ impl BackendCustodyFrame {
             }
             BackendCustodyCommand::ProfilePrepare {
                 profile,
+                recovery_grant,
                 job,
                 directory,
                 record,
@@ -68,7 +69,10 @@ impl BackendCustodyFrame {
                 until_ticks,
                 frequency,
             } => {
-                bytes[10] = 12;
+                bytes[10] = if recovery_grant.is_some() { 20 } else { 12 };
+                if let Some(grant) = recovery_grant {
+                    put(&mut bytes, 320, grant.get());
+                }
                 profile_put(&mut bytes, profile);
                 put(&mut bytes, 104, job);
                 put(&mut bytes, 112, directory);
@@ -220,8 +224,16 @@ impl BackendCustodyFrame {
             19 => {
                 BackendCustodyCommand::Receipt(BackendCustodyReceipt::ProfilePublished(profile()?))
             }
-            12 => BackendCustodyCommand::ProfilePrepare {
+            12 | 20 => BackendCustodyCommand::ProfilePrepare {
                 profile: profile()?,
+                recovery_grant: if bytes[10] == 20 {
+                    Some(
+                        crate::recovery_supervisor::RecoveryGrantId::new(get(bytes, 320))
+                            .map_err(|_| BackendCustodyWireError::Identity)?,
+                    )
+                } else {
+                    None
+                },
                 job: get(bytes, 104),
                 directory: get(bytes, 112),
                 until_ticks: get(bytes, 120) as i64,

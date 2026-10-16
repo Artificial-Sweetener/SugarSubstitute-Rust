@@ -265,3 +265,6 @@ mod quiescence;
 
 #[path = "witness_tests.rs"]
 mod witness;
+
+#[path = "recovery_tests.rs"]
+mod recovery;

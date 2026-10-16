@@ -60,6 +60,27 @@ impl ProductionActivation {
         let Some(start) = &mut record.start else {
             return Ok(());
         };
+        let recovery_progress = start.progress_recovery(resources);
+        if start.recovery_owner_failed() {
+            return recovery_progress
+                .and_then(|()| Err("Actual recovery execution owner failed".into()));
+        }
+        recovery_progress?;
+        let enrolled = start.with_recovery_desktop(|_| true)?.unwrap_or(false);
+        let local_recovery_failed =
+            start.recovery_failed() || (start.recovery_handler_lost() && !enrolled);
+        if local_recovery_failed {
+            let budget = match record.failed_shutdown {
+                Some(value) => value,
+                None => {
+                    let value = ShutdownBudget::new(resources.client.now()?)?;
+                    record.failed_shutdown = Some(value);
+                    value
+                }
+            };
+            Self::close_record(record, backend, Some(capture), resources, budget)?;
+            return Ok(());
+        }
         let output_failure = start.output.as_mut().and_then(|output| {
             output
                 .observe(
@@ -80,7 +101,7 @@ impl ProductionActivation {
                 return Err("Actual profile acquisition stopped".into());
             }
         }
-        if !admission_closed {
+        if !admission_closed && start.recovery.is_none() {
             let parent = if let Some(parent) = backend.profile_custody_parent() {
                 Some(parent)
             } else {
@@ -152,14 +173,36 @@ impl ProductionActivation {
                 let Some(observation) = observation else {
                     break;
                 };
-                with_parent(
+                let carrier_exit =
+                    record.start.as_ref().is_some_and(|start| start.recovery.is_some())
+                        && matches!(
+                            observation,
+                            sugarsubstitute_supervision::RegistryObservation::RootExited { .. }
+                        );
+                if !carrier_exit {
+                    with_parent(
+                        record,
+                        backend,
+                        Some(capture),
+                        resources,
+                        false,
+                        |parent, borrowed| Ok(parent.registry_observation(&observation, borrowed)?),
+                    )?;
+                }
+            }
+            let mut recovery = record.start.as_mut().and_then(|start| start.recovery.take());
+            if let Some(mode) = &mut recovery {
+                let result = with_parent(
                     record,
                     backend,
                     Some(capture),
                     resources,
                     false,
-                    |parent, borrowed| Ok(parent.registry_observation(&observation, borrowed)?),
-                )?;
+                    |parent, borrowed| mode.deliver_ui_exit(parent, borrowed),
+                );
+                record.start.as_mut().ok_or("Actual recovery start disappeared")?.recovery =
+                    recovery;
+                result?;
             }
             let failed = record
                 .parent
@@ -210,13 +253,20 @@ impl ProductionActivation {
             if parent_activity.is_none()
                 && let Some(pending) = &record.pending_desktop_failure
             {
-                let root_exited = resources
-                    .authority
-                    .registry()
-                    .ok_or("Actual desktop registry missing")?
-                    .snapshot(ticket.process())?
-                    .root_exit
-                    .is_some();
+                let start = record.start.as_ref().ok_or("Actual failed desktop start missing")?;
+                let root_exited = if start.recovery.is_some() {
+                    start
+                        .with_recovery_desktop(|desktop| desktop.actual_exit().is_some())?
+                        .unwrap_or(false)
+                } else {
+                    resources
+                        .authority
+                        .registry()
+                        .ok_or("Actual desktop registry missing")?
+                        .snapshot(ticket.process())?
+                        .root_exit
+                        .is_some()
+                };
                 match pending.disposition(
                     failed,
                     record.run,

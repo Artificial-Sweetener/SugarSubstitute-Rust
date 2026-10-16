@@ -46,8 +46,13 @@ class Lease final {
   SsCapturePreparationV1 preparation{};
   SsCaptureDispositionV1 disposition{};
   QueryIdentity expected{};
+  SsRecoveryCaptureOriginV2 recovery_origin{};
+  SsLogicalStoreOperationV1 recovery_current_operation{};
+  bool recovery_origin_bound = false;
   std::array<uint8_t, kMetadataLimit> metadata{}, original{}, candidate{};
-  std::array<uint8_t, 65536> scratch{};
+  // FILE_ID_BOTH_DIR_INFO pages require eight-byte alignment, including this
+  // member after byte-sized recovery state and metadata images.
+  alignas(FILE_ID_BOTH_DIR_INFO) std::array<uint8_t, 65536> scratch{};
   uint32_t metadata_bytes = 0, candidate_bytes = 0;
   std::array<wchar_t, 41> source_name{};
   std::array<std::array<wchar_t, 80>, 2> stage_names{};
@@ -82,6 +87,13 @@ class Invocation final : public ParseControl, public DumpSource {
   bool Absent(Slot parent, const wchar_t* leaf) noexcept;
   bool Retire() noexcept;
 };
+// Validate the complete typed relation through the same real hash and current-control owner.
+bool RecoverySubject(const SsRecoveryCaptureOriginV2&, const SsFinishedSubjectV1&) noexcept;
+bool RecoveryOperation(const SsRecoveryCaptureOriginV2&, const SsLogicalStoreOperationV1&) noexcept;
+bool BindRecoveryOrigin(Invocation&, const SsRecoveryCaptureOriginV2&, const SsFinishedSubjectV1&,
+                        const SsLogicalStoreOperationV1&) noexcept;
+void OpenOwned(const SsFinishedOpenInputV1&,const SsRecoveryCaptureOriginV2*,
+               const SsLogicalStoreOperationV1*,SsFinishedResultV1&) noexcept;
 static_assert(sizeof(Lease) + SsFinishedTemporaryBytesV1 <= SsFinishedOwnerStorageBytesV1);
 static_assert(static_cast<uint32_t>(SlotCount) + 2 <= SsFinishedNativeOutputsV1);
 Checkpoint ObserveCurrent(const SsFinishedControlSourceV1& source) noexcept;

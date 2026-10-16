@@ -38,6 +38,9 @@ impl WindowsPort {
         run: RunKey,
         key: ProcessKey,
     ) -> Result<(), RegistryError> {
+        if family.recovery_carrier.is_some() {
+            return self.enroll_recovery_carrier(family, run, key);
+        }
         if family.lifecycle_run.is_none() {
             return Ok(());
         }

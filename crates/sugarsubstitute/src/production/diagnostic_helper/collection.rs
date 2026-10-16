@@ -72,6 +72,7 @@ impl CollectionOperation {
             self.first = Some(cause);
         }
     }
+    #[expect(clippy::result_large_err, reason = "Keep funded CollectionOperation cause inline")]
     fn collect(
         &mut self,
         input: CollectionInput,

@@ -37,6 +37,3 @@ pub use types::{
     BackendCustodyPipeObservation, BackendCustodyPipeReport, VerifiedBackendCustodyPeer,
 };
 pub use worker::{BackendCustodyWorkerFailure, BackendCustodyWorkerReport};
-
-/// Finite managed creation retained through actual custody acknowledgements.
-pub mod process;

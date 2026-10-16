@@ -353,7 +353,8 @@ impl IncidentRepository {
         self.pending = None;
         Ok(IncidentCommit { stored, operation: self.operation.key(), actual })
     }
-    /// Load validated current summary and actual namespace ledger under writer custody.
+    /// Load current-schema summary and actual namespace ledger under writer custody.
+    /// Checked durable migration must settle before ordinary repository reads or mutations.
     /// # Errors
     /// Missing/corrupt/wrong-key summaries or ledgers preserve actual failed-read custody.
     pub fn load(

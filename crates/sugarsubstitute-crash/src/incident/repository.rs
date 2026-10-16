@@ -156,8 +156,9 @@ impl IncidentRepository {
             let (bytes, facts, index) = self.read_candidate(candidate, context)?;
             let custody = self.storage.recovery_record(&self.operation, context)?;
             let mut decode = self.storage.recovery_decode(&self.operation, context)?;
-            let summary =
-                super::allocation::decode(&mut decode, || super::decode_summary(bytes.as_bytes()))?;
+            let summary = super::allocation::decode(&mut decode, || {
+                super::codec_summary::decode_current_summary(bytes.as_bytes())
+            })?;
             let summary = super::allocation::RetainedSummary::new(summary, custody);
             self.reads
                 .get_mut(index)?

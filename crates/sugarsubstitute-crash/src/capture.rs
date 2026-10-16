@@ -19,6 +19,8 @@ pub use attach::CaptureBootstrapRejection;
 mod loan;
 pub(crate) use loan::observe_registered_endpoint;
 mod finished;
+pub(crate) mod root_storage;
+pub use root_storage::CaptureRootSource;
 mod submission;
 #[cfg(test)]
 pub(crate) mod tests;
@@ -35,6 +37,8 @@ pub(crate) fn lock<T>(value: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 pub(crate) struct Shared {
+    // Weak control retires before the native allocation which covers it.
+    root_source: Mutex<std::sync::Weak<root_storage::Owner>>,
     pub(crate) native: Mutex<NativeState>,
     pub(crate) attempts: Mutex<Option<Box<crate::capture_endpoint::Attempts>>>,
     pub(crate) owner: CoordinatorKey,

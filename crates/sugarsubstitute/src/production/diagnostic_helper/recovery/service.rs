@@ -191,9 +191,10 @@ impl RecoveryService {
             reservation_bytes: 4096,
             replacement: None,
         };
+        let cleanup_client = client.clone();
         match client.submit_blocking(scope, spec, move |context| {
             let mut loan = source.loan()?;
-            Ok(loan.operation()?.retire(&context))
+            Ok(loan.operation()?.retire_capture(&cleanup_client, &context))
         }) {
             Ok(job) => {
                 self.cleanup_requested = Some(requested);
@@ -208,6 +209,47 @@ impl RecoveryService {
     }
     pub(in crate::production) fn files_retired(&self) -> bool {
         self.cleanup.success() && self.source.inspect(|operation| operation.retired) == Some(true)
+    }
+    /// Return only the next bounded phase after actual work and checked cleanup succeeded.
+    pub(in crate::production) fn next_step(&self) -> Result<Option<RecoveryPhase>, RecoveryIssue> {
+        if !self.work.success() || !self.files_retired() || self.failure.is_some() {
+            return Err(RecoveryIssue::Busy);
+        }
+        self.source
+            .inspect(|operation| {
+                if operation.failed() { Err(RecoveryIssue::Failed) } else { Ok(operation.next) }
+            })
+            .ok_or(RecoveryIssue::Busy)?
+    }
+    /// Accept a new genuine operation for one phase under the same original recovery scope/budget.
+    /// No native input, result or file owner from the prior phase can be discarded before settlement.
+    pub(in crate::production) fn advance(
+        &mut self,
+        input: &mut Option<RecoveryInput>,
+    ) -> Result<(), RecoveryIssue> {
+        if self.next_step()?.is_none() {
+            return Err(RecoveryIssue::Identity);
+        }
+        self.source.advance(input)?;
+        self.work = Delivery::new();
+        self.cleanup = Delivery::new();
+        self.cleanup_requested = None;
+        Ok(())
+    }
+    /// A pending snapshot exists only after the original scope operation's final checked scan.
+    pub(in crate::production) fn final_scan_ready(&self) -> Result<bool, RecoveryIssue> {
+        if self.next_step()?.is_some() {
+            return Ok(false);
+        }
+        self.source
+            .inspect(|operation| {
+                Ok(operation.pending.is_some()
+                    && operation.input.as_ref().is_some_and(|input| {
+                        input.phase == RecoveryPhase::Scan
+                            && input.storage_operation == input.scope.operation()
+                    }))
+            })
+            .ok_or(RecoveryIssue::Busy)?
     }
     pub(in crate::production) fn pending(&self) -> bool {
         self.installed && !self.adopted || self.work.job.is_some() || self.cleanup.job.is_some()

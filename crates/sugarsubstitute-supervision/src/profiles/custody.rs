@@ -3,6 +3,7 @@
 //! Advance genuine profile preparation and actual Held activation with original custody receipts.
 pub(super) mod acknowledgement;
 pub(super) mod preparation;
+mod recovery;
 use super::*;
 use crate::registry::profile::prepared::PreparedDesktop;
 pub(super) struct Release {
@@ -146,47 +147,7 @@ impl WindowsProfileLease {
         parent: &crate::BackendCustodyParent,
         watch: (sugarsubstitute_contracts::execution::ScopeSpec, JobSpec),
     ) -> Result<JobId, ClaimAdmissionError> {
-        if self.acquire_attempted || !parent.established() {
-            return Err(ClaimAdmissionError::Closed);
-        }
-        self.registry_matches(registry)?;
-        self.validate_submission(scope, spec)?;
-        if !parent.matches_execution(execution) {
-            return Err(ClaimAdmissionError::Identity);
-        }
-        let (identity, key, native) = registry
-            .reserve_profile_family(self.run, parent.key(), execution, watch.0, watch.1)
-            .map_err(ClaimAdmissionError::Registry)?;
-        let parent = parent.clone();
-        let client = execution.clone();
-        let path = self.path.clone();
-        let run = self.run;
-        let port = self.port.clone();
-        self.submit(
-            execution,
-            scope,
-            spec,
-            move |state, context| {
-                state.desktop_custody = Some(
-                    PreparedDesktop::new(identity, key, parent, native, &client, context)
-                        .map_err(|cause| ClaimError::new("profile_prepare_desktop_job", cause))?,
-                );
-                if let Some(prepared) = &state.desktop_custody {
-                    state.custody_release = Some(Release {
-                        parent: prepared.parent.clone(),
-                        key: prepared.key,
-                        until: None,
-                        nonce: None,
-                        counter: None,
-                        ack: None,
-                    });
-                }
-                port.acquire(state, &path, run, context)
-            },
-            false,
-        )?;
-        self.acquire_attempted = true;
-        Ok(spec.id)
+        self.submit_profile_custodied_acquire(execution, registry, scope, spec, parent, watch, None)
     }
     /// Consume only the authentic original Prepared receipt before admitting Held write.
     /// # Errors

@@ -107,7 +107,8 @@ fn report_preserves_each_capture_absence_and_symbol_failure_in_every_locale()
                 PayloadDisposition::Quarantined,
                 SymbolOutcome::Unresolved(UnresolvedSymbols::new(symbol, None)?),
             )?;
-            let view = ReportView::format(&s, binding(&s)?, ledger(&s)?, &[], locale, &lease)?;
+            let view =
+                ReportView::format(&s, binding(&s)?, ledger(&s)?, &[], locale, &lease, false)?;
             assert!(view.text().contains(messages(locale).report.capture_absence[index]));
             assert!(view.text().contains(messages(locale).report.symbol_failure[index]));
             assert!(view.text().contains(messages(locale).report.quarantined));
@@ -133,7 +134,7 @@ fn report_startup_failure_retains_actual_category_without_unexpected_or_native_i
             PayloadDisposition::Unavailable,
             SymbolOutcome::NotRequested,
         )?;
-        let view = ReportView::format(&s, binding(&s)?, ledger(&s)?, &[], "en", &lease)?;
+        let view = ReportView::format(&s, binding(&s)?, ledger(&s)?, &[], "en", &lease, false)?;
         assert!(view.text().contains(messages("en").report.startup_failure[startup_reason(code)]));
         assert!(!view.text().contains("stopped unexpectedly"));
         assert!(!view.text().contains(messages("en").report.native_fault));
@@ -144,7 +145,7 @@ fn report_startup_failure_retains_actual_category_without_unexpected_or_native_i
 fn unavailable_capture_does_not_infer_clean_exit_or_native_fault() -> Result<(), Box<dyn Error>> {
     let s = summary()?;
     let (lease, _) = lease(1_000_000);
-    let view = ReportView::format(&s, binding(&s)?, ledger(&s)?, &[], "en", &lease)?;
+    let view = ReportView::format(&s, binding(&s)?, ledger(&s)?, &[], "en", &lease, false)?;
     assert!(view.text().contains("Unexplained termination"));
     assert!(view.text().contains("Exit status: 0"));
     assert!(!view.text().contains("Native exception"));
@@ -159,12 +160,12 @@ fn exact_namespace_revision_and_inventory_reject_before_credit() -> Result<(), B
     let wrong =
         ReportBinding::new(s.seed().key(), IncidentRevision::new(3)?, ReportSessionId::new(1)?);
     assert!(matches!(
-        ReportView::format(&s, wrong, ledger(&s)?, &[], "en", &lease),
+        ReportView::format(&s, wrong, ledger(&s)?, &[], "en", &lease, false),
         Err(ReportViewError::Identity)
     ));
     let wrong_ledger = SummaryEvictions::new(NamespaceId::new([2; 32]), 0, 0, 0, None)?;
     assert!(matches!(
-        ReportView::format(&s, binding(&s)?, wrong_ledger, &[], "en", &lease),
+        ReportView::format(&s, binding(&s)?, wrong_ledger, &[], "en", &lease, false),
         Err(ReportViewError::Identity)
     ));
     let tails: Vec<_> = (0..5)
@@ -175,7 +176,7 @@ fn exact_namespace_revision_and_inventory_reject_before_credit() -> Result<(), B
         })
         .collect::<Result<_, _>>()?;
     assert!(matches!(
-        ReportView::format(&s, binding(&s)?, ledger(&s)?, &tails, "en", &lease),
+        ReportView::format(&s, binding(&s)?, ledger(&s)?, &tails, "en", &lease, false),
         Err(ReportViewError::Tails)
     ));
     let claim = lease.claim(lease.bytes())?;
@@ -187,7 +188,7 @@ fn transferred_text_keeps_one_credit_until_actual_allocation_drop() -> Result<()
     let s = summary()?;
     let bytes = ReportView::MAX_BYTES as u64 + ReportView::TRANSFER_HEADER_BYTES;
     let (lease, released) = lease(bytes);
-    let view = ReportView::format(&s, binding(&s)?, ledger(&s)?, &[], "en", &lease)?;
+    let view = ReportView::format(&s, binding(&s)?, ledger(&s)?, &[], "en", &lease, false)?;
     assert!(lease.claim(1).is_err());
     let (_, text, claim) = view.into_parts();
     drop(lease);
@@ -204,7 +205,7 @@ fn every_registered_report_locale_formats_utf8_with_canonical_fallback()
     let s = summary()?;
     let (lease, _) = lease(1_000_000);
     for locale in ["en", "zh-Hans", "ja", "ko", "es", "unknown"] {
-        let view = ReportView::format(&s, binding(&s)?, ledger(&s)?, &[], locale, &lease)?;
+        let view = ReportView::format(&s, binding(&s)?, ledger(&s)?, &[], locale, &lease, false)?;
         assert!(view.text().starts_with(messages(locale).report.title));
         assert!(view.text().contains(messages(locale).report.unexplained));
     }
@@ -224,3 +225,7 @@ fn bounded_writer_preserves_unicode_and_explicit_omission_inside_ceiling()
     assert!(Writer::new(3, "marker").is_err());
     Ok(())
 }
+
+mod degraded;
+
+mod capture_only;

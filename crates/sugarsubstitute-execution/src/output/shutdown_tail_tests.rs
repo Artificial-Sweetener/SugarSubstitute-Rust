@@ -63,6 +63,7 @@ fn actual_late_tail_is_delivered_before_dual_eof_and_checked_retirement() -> Tes
 }
 #[test]
 fn final_eof_does_not_hide_a_genuine_checked_retirement_error() -> TestResult {
+    use std::error::Error;
     let rig = Rig::new()?;
     let boundary = Boundary::new();
     let hold = RetirementHold::new(&boundary);
@@ -73,12 +74,42 @@ fn final_eof_does_not_hide_a_genuine_checked_retirement_error() -> TestResult {
     assert!(actual.completion.try_take_completion().is_none());
     // Preparation drains execution notices, so inject the checked failure only after it settles.
     boundary.fail_retire.store(1, Ordering::Release);
+    boundary.wake(0)?;
+    let observed_failure = loop {
+        let count = rig.wake.count();
+        if let Err(cause) = rig.client.drain_completions(NonZeroUsize::MIN) {
+            break cause;
+        }
+        assert!(actual.completion.try_take_completion().is_none());
+        rig.wake.wait_after(count)?;
+    };
+    assert_eq!(observed_failure.operation(), Operation::NativeLifecycle);
+    let mut source: &(dyn Error + 'static) = &observed_failure;
+    let native = loop {
+        if let Some(native) = source.downcast_ref::<NativeObservationError>() {
+            break native;
+        }
+        source = source.source().ok_or("Original checked retirement cause missing")?;
+    };
+    assert_eq!(native.stage(), "output_checked_retirement");
+    assert_eq!(boundary.fail_retire.load(Ordering::Acquire), 0);
+    assert_eq!(boundary.closes.load(Ordering::Acquire), 0);
+    assert!(!actual.control.snapshot().retired);
+    assert_eq!(actual.control.snapshot().eof, [true; 2]);
+    assert_eq!(lock(&rig.client.core.state).bytes, MIN_WINDOWS_OUTPUT_BYTES);
+    assert!(actual.completion.try_take_completion().is_none());
+    // A failed checked close retains its owner. Only this later external readiness change retries it.
     drop(hold);
     let JobOutcome::Failure(cause) = completion(&rig, &mut actual)?.outcome else {
         return Err("Original checked retirement failure must remain a failure".into());
     };
     assert_eq!(cause.stage(), "output_checked_retirement");
+    assert!(std::ptr::eq(
+        native.source().ok_or("Observed original cause missing")?,
+        cause.source().ok_or("Terminal original cause missing")?,
+    ));
     assert!(actual.control.snapshot().retired);
+    assert_eq!(boundary.closes.load(Ordering::Acquire), 1);
     assert_eq!(actual.control.snapshot().eof, [true; 2]);
     Ok(())
 }
