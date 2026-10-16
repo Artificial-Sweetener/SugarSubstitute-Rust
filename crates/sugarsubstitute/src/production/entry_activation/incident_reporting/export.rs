@@ -33,6 +33,7 @@ enum ExportMaterial {
 }
 /// Actual scopes, immutable job identities and whole custody remain within original metadata.
 pub(super) struct ExportWork {
+    transaction: Option<DiagnosticTransaction>,
     material: ExportMaterial,
     jobs: scopes::ExportJobs,
     bound: bool,
@@ -91,6 +92,7 @@ impl IncidentReporting {
         let read = host.admit_report_view(binding, selected.context)?;
         let at = selected.context.at();
         self.export_work = Some(ExportWork {
+            transaction: None,
             material: ExportMaterial::Selected {
                 original: self.selected.take().ok_or("Original selected frame missing")?,
                 view: None,
@@ -126,6 +128,7 @@ impl IncidentReporting {
         &mut self,
         host: &mut IncidentHost,
         resources: &EntryResources<'_>,
+        transactions: &mut DiagnosticTransactions,
     ) -> Result<()> {
         if self.export_work.is_none() {
             return Ok(());
@@ -166,9 +169,19 @@ impl IncidentReporting {
                 .export_service()?
                 .take_unsubmitted_input()?
                 .ok_or("Original rejected export input missing after actual cancellation")?;
+            transactions.retired(scope.operation(), &mut work.transaction)?;
             // Genuine unpaired cancellation deliveries precede the failed action result.
             // No native Main ran, and this request never creates a second admission attempt.
             return self.complete_rejected_export_control(scope, binding, input);
+        }
+        if !work.bound
+            && !transactions.admit(
+                DiagnosticTransactionRole::Export,
+                scope.operation(),
+                &mut work.transaction,
+            )?
+        {
+            return Ok(());
         }
         work.jobs.prepare(resources.jobs)?;
         if !work.bound {
@@ -283,6 +296,7 @@ impl IncidentReporting {
         if !service.checked_terminal() {
             return Ok(());
         }
+        transactions.retired(scope.operation(), &mut work.transaction)?;
         self.complete_export_control(host, scope, binding)
     }
     /// Observe original guarded causes while the service retains their exact owned lifetimes.

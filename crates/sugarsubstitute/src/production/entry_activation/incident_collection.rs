@@ -6,6 +6,7 @@ mod material;
 #[cfg(test)]
 #[path = "incident_collection/tests.rs"]
 mod tests;
+use super::incident_flow::transactions::{DiagnosticTransaction, DiagnosticTransactionRole};
 use super::*;
 use crate::production::incident_host::{CollectionSources, HostIssue};
 use material::FailurePreparation;
@@ -17,6 +18,7 @@ use sugarsubstitute_supervision::diagnostic_storage::ProtectedDiagnosticWriteReq
 /// Keep the exact original native exit, finite preparation, source loans and first cause.
 /// All inline control storage is covered by the containing Record's original projection claim.
 pub(super) struct IncidentCollection {
+    transaction: Option<DiagnosticTransaction>,
     preparation: FailurePreparation,
     fact: Option<FailedDesktopFact>,
     original: Option<IncidentOperationBudget>,
@@ -36,6 +38,7 @@ impl IncidentCollection {
     /// Construct inert controls before actual registry observation or source selection.
     pub(super) const fn new() -> Self {
         Self {
+            transaction: None,
             preparation: FailurePreparation::new(),
             fact: None,
             original: None,
@@ -203,6 +206,7 @@ fn advance(
         if collection.scope != Some(restored) || incidents.collection_run != Some(record.run) {
             return Err("Actual passive collection restoration identity changed".into());
         }
+        incidents.transactions.retired(restored.operation(), &mut collection.transaction)?;
         collection.admission_abandoned = true;
         incidents.collection_run = None;
         return Err(
@@ -215,6 +219,7 @@ fn advance(
         if collection.scope != Some(restored) || incidents.collection_run != Some(record.run) {
             return Err("Actual unsubmitted collection restoration identity changed".into());
         }
+        incidents.transactions.retired(restored.operation(), &mut collection.transaction)?;
         collection.admission_abandoned = true;
         incidents.collection_run = None;
         return Err(
@@ -234,7 +239,7 @@ fn advance(
         return Ok(());
     }
     if collection.scope.is_none() {
-        if incidents.host.next_effect()?.is_some() {
+        if !incidents.transactions.available() || incidents.host.next_effect()?.is_some() {
             return Ok(());
         }
         incidents.host.failed_desktop(
@@ -282,6 +287,13 @@ fn advance(
                     root.finished_source()
                 });
         }
+        if !incidents.transactions.admit(
+            DiagnosticTransactionRole::Collection,
+            scope.operation(),
+            &mut collection.transaction,
+        )? {
+            return Ok(());
+        }
         let submitted = incidents.host.submit_collection(
             resources.client,
             resources.finite,
@@ -295,6 +307,10 @@ fn advance(
         );
         if collection.request.is_none() && collection.capture.is_none() {
             collection.installed = true;
+        } else if collection.request.is_some() && collection.capture.is_some() {
+            incidents.transactions.retired(scope.operation(), &mut collection.transaction)?;
+        } else {
+            return Err("Actual collection source transfer split its original custody".into());
         }
         match submitted {
             Ok(()) => collection.submitted = true,
@@ -345,6 +361,7 @@ fn advance(
         }
         return Ok(());
     }
+    incidents.transactions.retired(scope.operation(), &mut collection.transaction)?;
     if incidents.host.collection_failed() {
         collection.checked_cleanup = true;
         incidents.collection_run = None;

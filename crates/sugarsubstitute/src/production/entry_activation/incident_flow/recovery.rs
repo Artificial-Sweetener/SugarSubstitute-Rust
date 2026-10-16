@@ -7,6 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use sugarsubstitute_application::incident::{IncidentOperationBudget, IncidentRecoveryScope};
 use sugarsubstitute_contracts::incident::IncidentUtc;
 pub(super) struct RecoveryFlow {
+    transaction: Option<transactions::DiagnosticTransaction>,
     scope: Option<IncidentRecoveryScope>,
     input: Option<RecoveryInput>,
     submitted: bool,
@@ -20,6 +21,7 @@ pub(super) struct RecoveryFlow {
 impl RecoveryFlow {
     pub(super) const fn new() -> Self {
         Self {
+            transaction: None,
             scope: None,
             input: None,
             submitted: false,
@@ -94,6 +96,13 @@ impl IncidentFlow {
         }
         let scope = self.recovery.scope.ok_or("Original recovery missing")?;
         if !self.recovery.submitted {
+            if !self.transactions.admit(
+                transactions::DiagnosticTransactionRole::Recovery,
+                scope.operation(),
+                &mut self.recovery.transaction,
+            )? {
+                return Ok(false);
+            }
             let service = self.host.recovery_service()?;
             let submitted = service.submit(
                 resources.client,
@@ -161,6 +170,7 @@ impl IncidentFlow {
         if !service.final_scan_ready()? {
             return Err("Actual final recovery scan missing after checked retirement".into());
         }
+        self.transactions.retired(scope.operation(), &mut self.recovery.transaction)?;
         self.recovery.scan_ready = true;
         self.advance_pending()?;
         Ok(true)
@@ -187,6 +197,7 @@ impl IncidentFlow {
         if !self.recovery.pending() {
             return Ok(true);
         }
+        let scope = self.recovery.scope.ok_or("Original recovery missing")?;
         let service = if self.host.closing() {
             self.host.retiring_recovery_service()?
         } else {
@@ -195,6 +206,7 @@ impl IncidentFlow {
         service.cancel();
         if !service.delivered() {
             if service.restore_unsubmitted(&mut self.recovery.input)? {
+                self.transactions.retired(scope.operation(), &mut self.recovery.transaction)?;
                 self.recovery.done = true;
                 return Ok(true);
             }
@@ -212,7 +224,11 @@ impl IncidentFlow {
         if service.cleanup_stopped() {
             return Err("Original recovery cleanup terminal retained".into());
         }
-        Ok(service.files_retired())
+        let retired = service.files_retired();
+        if retired {
+            self.transactions.retired(scope.operation(), &mut self.recovery.transaction)?;
+        }
+        Ok(retired)
     }
     pub(in crate::production::entry_activation) fn recovery_deadline(&self) -> Option<Moment> {
         if self.recovery.done || self.recovery.scan_ready {

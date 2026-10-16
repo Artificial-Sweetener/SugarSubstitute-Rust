@@ -13,6 +13,7 @@ use sugarsubstitute_contracts::{
 };
 
 struct SeedTransaction {
+    transaction: Option<transactions::DiagnosticTransaction>,
     run: RunKey,
     scope: IncidentOperationScope,
     submitted: bool,
@@ -27,6 +28,7 @@ pub(super) struct IncidentFlow {
     setup_until: Option<Moment>,
     preparing: bool,
     seed: Option<SeedTransaction>,
+    pub(super) transactions: transactions::DiagnosticTransactions,
     pub(super) collection_run: Option<RunKey>,
     recovery: recovery::RecoveryFlow,
 }
@@ -74,6 +76,7 @@ impl IncidentFlow {
         }
         let retired = service.files_retired();
         if retired {
+            self.transactions.retired(active.scope.operation(), &mut active.transaction)?;
             self.seed = None;
         }
         Ok(retired)
@@ -86,6 +89,7 @@ impl IncidentFlow {
             setup_until: None,
             preparing: false,
             seed: None,
+            transactions: transactions::DiagnosticTransactions::new(),
             collection_run: None,
             recovery: recovery::RecoveryFlow::new(),
         }
@@ -114,6 +118,7 @@ impl IncidentFlow {
             let owner = resources.authority.key().ok_or("Actual incident coordinator missing")?;
             let namespace =
                 resources.entry.take_namespace().ok_or("Actual incident namespace missing")?;
+            self.transactions.bind(owner)?;
             self.setup_until = Some(namespace.original_preparation().until());
             self.preparation = Some(PreparationInput::new(namespace, owner));
         }
@@ -150,17 +155,30 @@ impl IncidentFlow {
     }
     /// Seed only the same already held profile and enrolled run before native child creation.
     /// Every denial preserves original data and source custody; retries reuse one cutoff.
+    /// Ordinary startup waits pending historical reports. A genuine same-run recovery grant
+    /// admits its pre-ACK seed because that report's ACK depends on this checked fresh preparation.
     pub(super) fn seed_ready(
         &mut self,
         record: &mut Record,
         capture: &CaptureRegistration,
         backend: &mut CoordinatorBackend,
         resources: &mut EntryResources<'_>,
+        recovery: Option<&sugarsubstitute_execution::RegisteredRecoveryGrant>,
     ) -> Result<bool> {
         if record.seeded {
             return Ok(true);
         }
-        if !self.seed_busy() && self.host.next_effect()?.is_some() {
+        if let Some(grant) = recovery {
+            grant.check()?;
+            if grant.key().run() != record.run {
+                return Err("Actual recovery seed grant changed run".into());
+            }
+        }
+        if !self.seed_busy()
+            && (recovery.is_none() && self.recovery.pending()
+                || !self.transactions.available()
+                || self.host.next_effect()?.is_some())
+        {
             return Ok(false);
         }
         if self.collection_run.is_some() {
@@ -218,6 +236,22 @@ impl IncidentFlow {
             let seed = seed.clone();
             let request = self.host.namespace()?.diagnostic_write_request(scope.operation())?;
             let mut input = Some(SeedInput { request, operation: scope.operation(), seed });
+            let mut transaction = None;
+            if !self.transactions.admit(
+                transactions::DiagnosticTransactionRole::Seed,
+                scope.operation(),
+                &mut transaction,
+            )? {
+                return Err("Actual seed admission changed within the same native turn".into());
+            }
+            self.seed = Some(SeedTransaction {
+                transaction,
+                run: record.run,
+                scope,
+                submitted: false,
+                cleanup_until: None,
+                cleanup_submitted: false,
+            });
             let submitted = self.host.seed_service()?.submit(
                 resources.client,
                 resources.finite,
@@ -226,19 +260,17 @@ impl IncidentFlow {
                 &mut input,
             );
             if input.is_some() {
+                let active = self.seed.as_mut().ok_or("Actual seed transaction missing")?;
+                self.transactions.retired(active.scope.operation(), &mut active.transaction)?;
+                self.seed = None;
                 return Err("Actual seed source did not retain original input".into());
             }
             match self.host.take_effect()? {
                 Some(IncidentEffect::PublishSeed { scope: actual, .. }) if actual == scope => {}
                 _ => return Err("Actual retained seed command identity changed".into()),
             }
-            self.seed = Some(SeedTransaction {
-                run: record.run,
-                scope,
-                submitted: submitted.is_ok(),
-                cleanup_until: None,
-                cleanup_submitted: false,
-            });
+            self.seed.as_mut().ok_or("Actual seed transaction missing")?.submitted =
+                submitted.is_ok();
             if let Err(cause) = submitted
                 && cause != SeedServiceIssue::Admission
             {
@@ -282,6 +314,7 @@ impl IncidentFlow {
             return Ok(false);
         }
         let scope = active.scope;
+        self.transactions.retired(active.scope.operation(), &mut active.transaction)?;
         self.host.adopt_seed_service(scope)?;
         record.seeded = true;
         self.seed = None;
@@ -290,6 +323,10 @@ impl IncidentFlow {
 }
 
 impl IncidentFlow {
+    /// Observe cached application transaction custody after independently pumping every close owner.
+    pub(super) fn diagnostic_transactions_settled(&self) -> bool {
+        self.transactions.settled()
+    }
     pub(super) fn seed_busy(&self) -> bool {
         self.seed.is_some()
     }
@@ -313,6 +350,9 @@ impl IncidentFlow {
         self.reporting.idle_block()
     }
 }
+
+#[path = "incident_flow/transactions.rs"]
+pub(super) mod transactions;
 
 #[path = "incident_flow/recovery.rs"]
 mod recovery;

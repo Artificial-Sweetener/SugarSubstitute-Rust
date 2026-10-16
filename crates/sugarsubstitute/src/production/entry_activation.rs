@@ -419,13 +419,25 @@ impl EntryActivation for ProductionActivation {
         if let Err(cause) = self.activity(batch, &mut resources) {
             self.preserve(cause);
         }
-        self.close_records(&mut resources)?;
+        // Incident cleanup owns finite jobs independently of Reporter and desktop
+        // settlement; attempt it while original cleanup admission is still open.
+        let incident_close = self.incidents.close_seed(&resources, budget);
+        let records_close = self.close_records(&mut resources);
+        let incident_closed = match (incident_close, records_close) {
+            (Err(cause), Err(later)) => {
+                self.preserve(later);
+                return Err(cause);
+            }
+            (Err(cause), Ok(())) | (Ok(_), Err(cause)) => return Err(cause),
+            (Ok(closed), Ok(())) => closed,
+        };
         Ok(self.recovery_pending.as_ref().is_none_or(|pending| pending.settled())
             && self.records.iter().flatten().all(|retained| retained.record.closed)
             && self.records.iter().flatten().all(|retained| retained.record.seed.delivered())
             && self.records.iter().flatten().all(|retained| retained.record.collection.delivered())
             && self.incidents.reporting.settled()
-            && self.incidents.close_seed(&resources, budget)?
+            && incident_closed
+            && self.incidents.diagnostic_transactions_settled()
             && self.pending.iter().all(Option::is_none)
             && self.delivery.as_ref().is_none_or(|delivery| !delivery.pending())
             && self.backend.as_ref().is_none_or(|retained| retained.backend.settled())
@@ -438,6 +450,7 @@ impl EntryActivation for ProductionActivation {
     }
     fn finish(&mut self) -> Result<()> {
         if !self.closing
+            || !self.incidents.diagnostic_transactions_settled()
             || self.records.iter().flatten().any(|retained| !retained.record.closed)
             || self.pending.iter().any(Option::is_some)
             || self.recovery_pending.as_ref().is_some_and(|pending| !pending.settled())

@@ -48,6 +48,7 @@ impl IncidentReporting {
         let observer = original.as_ref().map(|request| request.reply);
         let authentication = original.map(|request| request.authentication);
         self.store = Some(StoreWork {
+            transaction: None,
             scope,
             binding,
             kind,
@@ -182,11 +183,22 @@ impl IncidentReporting {
         &mut self,
         host: &mut IncidentHost,
         resources: &EntryResources<'_>,
+        transactions: &mut DiagnosticTransactions,
     ) -> Result<()> {
         let Some(work) = &mut self.store else { return Ok(()) };
         let service = host.reporting_service()?;
         let until = work.scope.original().until();
         if !work.installed {
+            if resources.client.now()? >= until {
+                return Err("Original report namespace admission cutoff elapsed".into());
+            }
+            if !transactions.admit(
+                DiagnosticTransactionRole::Reporting,
+                work.scope.operation(),
+                &mut work.transaction,
+            )? {
+                return Ok(());
+            }
             let submitted = service.submit(
                 resources.client,
                 resources.finite,
@@ -282,6 +294,7 @@ impl IncidentReporting {
             }
             return Ok(());
         }
+        transactions.retired(work.scope.operation(), &mut work.transaction)?;
         self.adopt_store(host)
     }
     fn adopt_store(&mut self, host: &mut IncidentHost) -> Result<()> {

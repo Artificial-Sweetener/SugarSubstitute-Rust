@@ -9,6 +9,7 @@ impl SymbolReceiving {
         &mut self,
         resources: &EntryResources<'_>,
         closing: bool,
+        transactions: &mut DiagnosticTransactions,
     ) -> Result<bool> {
         self.closing |= closing;
         let runtime = (resources.finite.owner_id(), resources.finite.id());
@@ -18,17 +19,33 @@ impl SymbolReceiving {
             self.runtime = Some(runtime);
         }
         if self.delivered {
-            return Ok(self.native_settled());
+            let settled = self.native_settled();
+            if settled {
+                transactions.retired(self.read_scope.operation(), &mut self.transaction)?;
+            }
+            return Ok(settled);
         }
         if self.service.is_none() && (closing || self.first.is_some()) {
+            transactions.retired(self.read_scope.operation(), &mut self.transaction)?;
             self.ready = !closing;
             return Ok(true);
         }
         if self.service.is_none() {
+            if resources.client.now()? >= self.until() {
+                return Err("Original Symbol namespace admission cutoff elapsed".into());
+            }
+            if !transactions.admit(
+                DiagnosticTransactionRole::Symbols,
+                self.read_scope.operation(),
+                &mut self.transaction,
+            )? {
+                return Ok(false);
+            }
             let cleanup = match resources.jobs.allocate() {
                 Ok(id) => id,
                 Err(cause) => {
                     self.first = Some(SymbolReceivingCause::Identity(cause));
+                    transactions.retired(self.read_scope.operation(), &mut self.transaction)?;
                     self.ready = true;
                     return Ok(true);
                 }
@@ -37,6 +54,7 @@ impl SymbolReceiving {
                 Ok(id) => id,
                 Err(cause) => {
                     self.first = Some(SymbolReceivingCause::Identity(cause));
+                    transactions.retired(self.read_scope.operation(), &mut self.transaction)?;
                     self.ready = true;
                     return Ok(true);
                 }
@@ -52,6 +70,7 @@ impl SymbolReceiving {
                 Ok(service) => self.service = Some(service),
                 Err(cause) => {
                     self.record_admission(cause);
+                    transactions.retired(self.read_scope.operation(), &mut self.transaction)?;
                     return Ok(self.service.is_none() && self.first.is_some());
                 }
             }
@@ -88,7 +107,11 @@ impl SymbolReceiving {
                 self.failure = Some(failure);
             }
         }
-        Ok(self.native_settled())
+        let settled = self.native_settled();
+        if settled {
+            transactions.retired(self.read_scope.operation(), &mut self.transaction)?;
+        }
+        Ok(settled)
     }
     fn record_admission(&mut self, cause: AdmissionError) {
         if matches!(

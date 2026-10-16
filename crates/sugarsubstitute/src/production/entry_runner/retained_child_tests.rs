@@ -14,7 +14,7 @@ impl fmt::Display for OriginalChildFailure {
 impl Error for OriginalChildFailure {}
 struct RetainedChild {
     identity: Arc<()>,
-    failure: Option<Box<OriginalChildFailure>>,
+    failure: Option<Box<dyn Error>>,
     budget: Option<ShutdownBudget>,
     close_calls: usize,
     cleanup_ready: bool,
@@ -59,7 +59,7 @@ impl EntryActivation for RetainedChild {
         false
     }
     fn failure_source(&self) -> Option<&(dyn Error + 'static)> {
-        self.failure.as_deref().map(|failure| failure as &(dyn Error + 'static))
+        self.failure.as_deref()
     }
     fn next_deadline(&self) -> Option<Instant> {
         None
@@ -137,10 +137,24 @@ fn finish_cleanup(
     assert!(runner.child_closed);
     assert!(runner.intake_settled);
     assert!(!runner.finished);
-    // Same actual adapter Drop/joins used by the existing runner scope tests.
-    drop(runner.execution.take());
-    assert!(runner.poll_shutdown()?);
+    let until = runner.cleanup_deadline.ok_or("Original cleanup deadline missing")?;
+    while !runner.poll_shutdown()? {
+        if Instant::now() >= until {
+            return Err("Original Runner cleanup failed to observe actual worker settlement".into());
+        }
+        std::hint::spin_loop();
+    }
+    let actual =
+        runner.execution.as_ref().ok_or("Execution was dropped before joins")?.poll_shutdown()?;
+    assert!(actual.settled);
+    assert!(actual.unresolved_job_ids.is_empty());
+    assert!(
+        actual.workers.async_finished
+            && actual.workers.cpu_finished
+            && actual.workers.native_finished
+    );
     runner.finish_shutdown()?;
+    assert!(runner.execution.is_none());
     assert!(runner.finished);
     assert_eq!(runner.child.finish_calls, 1);
     assert_eq!(runner.child.close_calls, 1);
@@ -240,4 +254,102 @@ fn later_child_cleanup_failure_preserves_the_first_owned_origin() -> Result<(), 
     assert!(!runner.child_closed);
     assert_eq!(runner.drain(NonZeroUsize::MIN)?, HeadlessStep::Shutdown);
     finish_cleanup(&mut runner, original)
+}
+
+#[derive(Debug)]
+enum FundedFiniteFailure {
+    Memory(sugarsubstitute_contracts::execution::MemoryClaimError),
+    Source { identity: Arc<()>, _storage: sugarsubstitute_contracts::execution::MemoryClaim },
+}
+impl fmt::Display for FundedFiniteFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Original finite source failure")
+    }
+}
+impl Error for FundedFiniteFailure {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Memory(cause) => Some(cause),
+            Self::Source { .. } => None,
+        }
+    }
+}
+
+#[test]
+fn failed_finite_source_remains_funded_through_runner_poll_and_actual_worker_joins()
+-> Result<(), Box<dyn Error>> {
+    use sugarsubstitute_contracts::execution::{JobClass, JobOutcome, JobSpec, Operation};
+    let mut runner = runner()?;
+    let client = runner.client()?.clone();
+    let identity = Arc::new(());
+    let retained_identity = identity.clone();
+    let spec = JobSpec {
+        id: runner.jobs.allocate()?,
+        operation: Operation::NativeLifecycle,
+        class: JobClass::InfrastructureLifecycle,
+        deadline: Some(runner.child.budget.ok_or("Original budget missing")?.settle_until),
+        reservation_bytes: 4096,
+        replacement: None,
+    };
+    assert!(size_of::<FundedFiniteFailure>() <= spec.reservation_bytes as usize);
+    let mut job = client.submit_blocking(
+        runner.finite.as_ref().ok_or("Original finite scope missing")?,
+        spec,
+        move |context| {
+            let storage = context.memory().claim(4096).map_err(FundedFiniteFailure::Memory)?;
+            Err::<(), _>(FundedFiniteFailure::Source {
+                identity: retained_identity,
+                _storage: storage,
+            })
+        },
+    )?;
+    let remaining = spec
+        .deadline
+        .ok_or("Original finite deadline missing")?
+        .checked_duration_since(client.now()?)?;
+    let until =
+        Instant::now().checked_add(remaining).ok_or("Original finite result wait overflow")?;
+    let actual = loop {
+        client.drain_completions(NonZeroUsize::MIN)?;
+        if let Some(actual) = job.try_take_completion() {
+            break actual;
+        }
+        if Instant::now() >= until {
+            return Err("Original finite source did not deliver its actual failure".into());
+        }
+        std::hint::spin_loop();
+    };
+    assert_eq!(actual.scope_id, runner.finite.as_ref().ok_or("Finite scope lost")?.id());
+    assert_eq!(actual.spec, spec);
+    let JobOutcome::Failure(cause) = actual.outcome else {
+        return Err("Actual finite source failure was replaced".into());
+    };
+    let FundedFiniteFailure::Source { identity: observed, .. } = &cause else {
+        return Err("Original reservation could not fund its source".into());
+    };
+    assert!(Arc::ptr_eq(observed, &identity));
+    runner.child.failure = Some(Box::new(cause));
+    let original =
+        runner.child.failure_source().ok_or("Actual source missing")? as *const dyn Error;
+    assert!(runner.drain(NonZeroUsize::MIN).is_err());
+    assert!(runner.closing);
+    assert!(runner.execution.is_some());
+    assert!(!runner.child_closed);
+    assert!(!runner.finished);
+    let budget = runner.shutdown;
+    assert!(runner.drain(NonZeroUsize::MIN).is_err());
+    assert_eq!(runner.drain(NonZeroUsize::MIN)?, HeadlessStep::Shutdown);
+    finish_cleanup(&mut runner, original)?;
+    assert_eq!(runner.shutdown, budget);
+    drop(actual.memory);
+    drop(job);
+    let scope = runner.finite.take().ok_or("Original finite scope lost after joins")?;
+    assert_eq!(scope.snapshot().reserved_bytes, 4096);
+    assert!(std::ptr::eq(
+        original,
+        runner.failure_source().ok_or("Original source lost after joins")?
+    ));
+    drop(runner);
+    assert_eq!(scope.snapshot().reserved_bytes, 0);
+    Ok(())
 }

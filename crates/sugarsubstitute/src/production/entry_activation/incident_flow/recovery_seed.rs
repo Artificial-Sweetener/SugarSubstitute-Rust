@@ -47,6 +47,7 @@ impl IncidentFlow {
         if !service.files_retired() {
             return Ok(None);
         }
+        self.transactions.retired(active.scope.operation(), &mut active.transaction)?;
         if globally_closing {
             // The closed controller keeps the actual results and native/data credit.
             // Global shutdown has no live policy admission to adopt or detach here.

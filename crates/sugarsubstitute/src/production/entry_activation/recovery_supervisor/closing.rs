@@ -61,6 +61,13 @@ impl RecoveryPreparation {
         {
             first.get_or_insert(Box::new(cause));
         }
+        if self.origin.as_ref().is_none_or(OriginPublication::files_retired)
+            && let Some(held) = &mut self.origin_scope
+            && let Err(cause) =
+                root.incidents.transactions.retired(held.scope.operation(), &mut held.transaction)
+        {
+            first.get_or_insert(Box::new(cause));
+        }
         if let Some(record) = &mut self.record {
             if let Some(start) = &mut record.record.start
                 && let Err(cause) = start.close_recovery(resources, &budget)
@@ -100,6 +107,7 @@ impl RecoveryPreparation {
                                 && start.profile.snapshot().retirement_ready()
                         })
                 })
+                && self.origin_scope.as_ref().is_none_or(|held| held.transaction.is_none())
                 && self.origin.as_ref().is_none_or(|origin| origin.files_retired()))
     }
 }

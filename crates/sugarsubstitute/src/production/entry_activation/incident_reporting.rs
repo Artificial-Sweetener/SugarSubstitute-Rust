@@ -46,6 +46,9 @@ use symbols::SymbolReceiving;
 #[cfg(test)]
 #[path = "incident_reporting/tests.rs"]
 mod tests;
+use super::incident_flow::transactions::{
+    DiagnosticTransaction, DiagnosticTransactionRole, DiagnosticTransactions,
+};
 use super::*;
 use crate::production::{
     diagnostic_helper::reporting::*,
@@ -97,6 +100,7 @@ enum StoreKind {
     Acknowledge(ReportCommand),
 }
 struct StoreWork {
+    transaction: Option<DiagnosticTransaction>,
     scope: IncidentOperationScope,
     binding: ReportBinding,
     kind: StoreKind,
@@ -250,6 +254,7 @@ impl IncidentReporting {
         Ok(())
     }
     /// Retain exact first caller/provider cause with all original inputs and native owners.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn progress(
         &mut self,
         host: &mut IncidentHost,
@@ -258,6 +263,7 @@ impl IncidentReporting {
         working: &Path,
         resources: &mut EntryResources<'_>,
         admission: ReportAdmission,
+        transactions: &mut DiagnosticTransactions,
     ) -> Result<()> {
         self.restart = admission.restart;
         self.fresh_supervisor = admission.fresh_supervisor;
@@ -270,6 +276,7 @@ impl IncidentReporting {
             resources,
             admission.closing,
             &mut transition,
+            transactions,
         );
         if let Err(cause) = result {
             return self.retain_transition_failure(transition, cause);
@@ -286,6 +293,7 @@ impl IncidentReporting {
         resources: &mut EntryResources<'_>,
         closing: bool,
         transition: &mut ReportTransition,
+        transactions: &mut DiagnosticTransactions,
     ) -> Result<()> {
         if closing
             || self.first.is_some()
@@ -295,11 +303,11 @@ impl IncidentReporting {
                 && self.export_work.is_none()
         {
             *transition = ReportTransition::Retire;
-            return self.retire(host, resources);
+            return self.retire(host, resources, transactions);
         }
         if self.binding.is_none() {
             *transition = ReportTransition::Admit;
-            self.admit(host, records, resources)?;
+            self.admit(host, records, resources, transactions)?;
         }
         if self.binding.is_none() {
             return Ok(());
@@ -312,11 +320,11 @@ impl IncidentReporting {
         *transition = ReportTransition::CaptureOutput;
         self.capture_output(host, resources)?;
         *transition = ReportTransition::AdvanceStore;
-        self.advance_store(host, resources)?;
+        self.advance_store(host, resources, transactions)?;
         *transition = ReportTransition::ConsumeEffect;
         self.consume_effect(host, resources)?;
         *transition = ReportTransition::AdvanceExport;
-        self.advance_export(host, resources)?;
+        self.advance_export(host, resources, transactions)?;
         if self.selected.is_some()
             || self.export_work.as_ref().is_some_and(|work| work.awaiting_result())
         {

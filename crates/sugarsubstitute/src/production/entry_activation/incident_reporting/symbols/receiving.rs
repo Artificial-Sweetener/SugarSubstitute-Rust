@@ -43,6 +43,7 @@ impl IncidentReporting {
         &mut self,
         host: &mut IncidentHost,
         resources: &EntryResources<'_>,
+        transactions: &mut DiagnosticTransactions,
     ) -> Result<bool> {
         if self.symbols.is_none() {
             let needed = match host.next_effect()? {
@@ -75,7 +76,7 @@ impl IncidentReporting {
             self.symbols = Some(SymbolReceiving::new(&self.retained_effect, read, &mut request)?);
         }
         let symbols = self.symbols.as_mut().ok_or("Original Symbol receiving owner missing")?;
-        if !symbols.advance_native(resources, false)? {
+        if !symbols.advance_native(resources, false, transactions)? {
             if symbols.result_delivered() && symbols.native_failed() {
                 return Err(
                     "Actual Symbol retirement remains uncertain with original capsule retained"
@@ -100,6 +101,7 @@ impl IncidentReporting {
             let binding = symbols.binding();
             let input = symbols.take_metadata_input(host)?;
             self.store = Some(StoreWork {
+                transaction: None,
                 scope,
                 binding,
                 kind: StoreKind::Symbols,
@@ -118,14 +120,14 @@ impl IncidentReporting {
                 stream_until: None,
             });
         }
-        if let Some(ready) = self.advance_passive_symbols(host)? {
+        if let Some(ready) = self.advance_passive_symbols(host, transactions)? {
             if !ready {
                 self.check_passive_cutoff(resources)?;
             }
             return Ok(ready);
         }
-        if let Err(cause) = self.advance_store(host, resources) {
-            if let Some(ready) = self.advance_passive_symbols(host)? {
+        if let Err(cause) = self.advance_store(host, resources, transactions) {
+            if let Some(ready) = self.advance_passive_symbols(host, transactions)? {
                 if !ready {
                     self.check_passive_cutoff(resources)?;
                 }
@@ -133,7 +135,7 @@ impl IncidentReporting {
             }
             return Err(cause);
         }
-        if let Some(ready) = self.advance_passive_symbols(host)? {
+        if let Some(ready) = self.advance_passive_symbols(host, transactions)? {
             if !ready {
                 self.check_passive_cutoff(resources)?;
             }

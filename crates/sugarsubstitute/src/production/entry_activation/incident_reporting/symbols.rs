@@ -24,6 +24,7 @@ mod tests;
 /// Same protected request, sealed native result and CAS scope while the parent retains its Launch.
 /// No copied incident identity can construct a provider observation or terminal memory lease.
 pub(super) struct SymbolReceiving {
+    transaction: Option<DiagnosticTransaction>,
     binding: ReportBinding,
     read_scope: IncidentOperationScope,
     request: Option<SymbolReportRequest>,
@@ -103,6 +104,7 @@ impl SymbolReceiving {
             dump,
         );
         Ok(Self {
+            transaction: None,
             binding: *binding,
             read_scope,
             request: Some(request),

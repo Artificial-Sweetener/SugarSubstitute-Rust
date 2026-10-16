@@ -13,10 +13,23 @@ impl ProductionActivation {
             && let Some(selected) = self.incidents.reporting.deferred_fresh_restart()
             && let Err(cause) = self.begin_fresh_restart(selected, resources)
         {
+            // Retain before rejection delivery can fail. This cause is local to
+            // the denied request and does not become a global idle/close veto.
+            if self.recovery_denial.is_none() {
+                let memory =
+                    cause.downcast_ref::<sugarsubstitute_contracts::execution::MemoryClaimError>();
+                tracing::warn!(
+                    operation = "fresh_recovery_admission_rejected",
+                    incident = ?selected.binding().incident(),
+                    original_until_ns = selected.original_until().as_nanos(),
+                    requested_bytes = ?memory.map(|value| value.requested_bytes),
+                    available_bytes = ?memory.map(|value| value.available_bytes),
+                    cause = %cause,
+                    "Fresh recovery constructor rejected before acknowledgement"
+                );
+                self.recovery_denial = Some(cause);
+            }
             self.incidents.reporting.reject_deferred_fresh_restart()?;
-            // No native/preparation owner transferred on this constructor rejection.
-            // Retain the first actual cause in the existing Root error owner.
-            self.recovery_denial.get_or_insert(cause);
             return Ok(());
         }
         let Some(mut pending) = self.recovery_pending.take() else {

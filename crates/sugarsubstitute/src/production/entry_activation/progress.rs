@@ -332,6 +332,7 @@ impl ProductionActivation {
                 report_restart,
                 fresh_supervisor_required,
             ),
+            &mut self.incidents.transactions,
         ) {
             failure.get_or_insert(cause);
         }

@@ -33,21 +33,36 @@ impl RecoveryPreparation {
             return Ok(false);
         }
         let capture = root.capture.as_ref().ok_or("Actual Root capture owner missing")?;
-        if !root.incidents.seed_ready(record, capture, backend, resources)? {
+        let grant = self.grant.as_ref().ok_or("Actual recovery grant missing")?;
+        if !root.incidents.seed_ready(record, capture, backend, resources, Some(grant))? {
             return Ok(false);
         }
-        let grant = self.grant.as_ref().ok_or("Actual recovery grant missing")?;
         if self.origin.is_none() {
             if self.origin_rejected.is_some() {
                 return Err("Original recovery origin constructor rejection retained".into());
             }
             if self.origin_scope.is_none() {
-                self.origin_scope = Some(root.incidents.host.admit_recovery_capture_origin(
-                    self.selected.binding(),
-                    self.selected.context(),
-                )?);
+                self.origin_scope = Some(OriginAdmission {
+                    scope: root.incidents.host.admit_recovery_capture_origin(
+                        self.selected.binding(),
+                        self.selected.context(),
+                    )?,
+                    transaction: None,
+                });
             }
-            let scope = self.origin_scope.ok_or("Actual recovery origin operation missing")?;
+            let held =
+                self.origin_scope.as_mut().ok_or("Actual recovery origin operation missing")?;
+            let scope = held.scope;
+            if resources.client.now()? >= scope.original().until() {
+                return Err("Original recovery origin namespace admission cutoff elapsed".into());
+            }
+            if !root.incidents.transactions.admit(
+                DiagnosticTransactionRole::RecoveryOrigin,
+                scope.operation(),
+                &mut held.transaction,
+            )? {
+                return Ok(false);
+            }
             let request =
                 root.incidents.host.namespace()?.diagnostic_write_request(scope.operation())?;
             let start = record.start.as_ref().ok_or("Actual recovery projection missing")?;
@@ -79,7 +94,13 @@ impl RecoveryPreparation {
             )?;
         }
         let origin = self.origin.as_mut().ok_or("Actual recovery origin owner missing")?;
-        origin.poll(resources.client, resources.cleanup, resources.jobs)?;
+        let progress = origin.poll(resources.client, resources.cleanup, resources.jobs);
+        if origin.files_retired() {
+            let held =
+                self.origin_scope.as_mut().ok_or("Actual recovery origin admission missing")?;
+            root.incidents.transactions.retired(held.scope.operation(), &mut held.transaction)?;
+        }
+        progress?;
         if !origin.ready(grant)? {
             return Ok(false);
         }

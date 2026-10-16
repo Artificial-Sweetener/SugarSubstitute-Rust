@@ -8,8 +8,9 @@ impl IncidentReporting {
         host: &mut IncidentHost,
         records: &mut [Option<RetainedRecord>; 64],
         resources: &EntryResources<'_>,
+        transactions: &mut DiagnosticTransactions,
     ) -> Result<()> {
-        if !self.advance_symbol_receiving(host, resources)? {
+        if !self.advance_symbol_receiving(host, resources, transactions)? {
             return Ok(());
         }
         let Some(binding) = self.next_launch_binding(host)? else { return Ok(()) };

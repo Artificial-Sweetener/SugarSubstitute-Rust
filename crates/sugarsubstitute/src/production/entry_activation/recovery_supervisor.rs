@@ -17,6 +17,7 @@ mod projecting;
 mod session;
 #[path = "recovery_supervisor/start.rs"]
 pub(super) mod start;
+use super::incident_flow::transactions::{DiagnosticTransaction, DiagnosticTransactionRole};
 use super::*;
 use origin::OriginPublication;
 use sugarsubstitute_contracts::{
@@ -42,6 +43,11 @@ impl std::ops::DerefMut for RetainedPreparation {
         &mut self.pending
     }
 }
+/// Keep one origin operation's application admission through actual native publication retirement.
+struct OriginAdmission {
+    scope: sugarsubstitute_application::incident::IncidentOperationScope,
+    transaction: Option<DiagnosticTransaction>,
+}
 /// Keep the selected original source and its native preparation state together.
 pub(super) struct RecoveryPreparation {
     at: usize,
@@ -56,7 +62,7 @@ pub(super) struct RecoveryPreparation {
     record: Option<RetainedRecord>,
     origin: Option<OriginPublication>,
     origin_rejected: Option<origin::OriginPublicationRejection>,
-    origin_scope: Option<sugarsubstitute_application::incident::IncidentOperationScope>,
+    origin_scope: Option<OriginAdmission>,
     retired_seed: Option<incident_flow::RetiredRecoverySeed>,
     seed_settled: bool,
     old_shutdown: Option<ShutdownBudget>,

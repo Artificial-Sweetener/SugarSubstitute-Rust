@@ -18,6 +18,7 @@ impl IncidentReporting {
     pub(in crate::production::entry_activation::incident_reporting) fn advance_passive_symbols(
         &mut self,
         host: &mut IncidentHost,
+        transactions: &mut DiagnosticTransactions,
     ) -> Result<Option<bool>> {
         let Some(symbols) = &mut self.symbols else { return Ok(None) };
         if symbols.closing || symbols.ready || symbols.passive.is_some() {
@@ -58,6 +59,7 @@ impl IncidentReporting {
         {
             return Err("Original passive Symbols marker changed kind or scope".into());
         }
+        transactions.retired(work.scope.operation(), &mut work.transaction)?;
         if symbols.adopted_passive.is_none() {
             if !service.validate_passive_restoration(marker) {
                 return Ok(Some(false));

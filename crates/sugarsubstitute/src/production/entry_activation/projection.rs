@@ -34,7 +34,7 @@ use sugarsubstitute_supervision::{
 
 /// Bound known projection buffers; the original frame keeps its own native loan.
 pub(super) const PROJECTION_BYTES: u64 = 4 * 1024 * 1024;
-// The other two MiB remain available for distinct funded parent lifecycle storage.
+// Keep co-resident lifecycle storage separate from the projected data claim.
 pub(super) const fn projection_data_bytes() -> Option<u64> {
     let bytes = match PROJECTION_BYTES.checked_sub(super::ParentLifecycle::storage_bytes()) {
         Some(bytes) => bytes,
@@ -52,7 +52,12 @@ pub(super) const fn projection_data_bytes() -> Option<u64> {
         Some(bytes) => bytes,
         None => return None,
     };
-    let bytes = match bytes.checked_sub(size_of::<ProjectionInput>() as u64) {
+    // The original worker input retires before this same reservation can host recovery.
+    let input_bytes = size_of::<ProjectionInput>();
+    let recovery_bytes = size_of::<super::recovery_supervisor::RecoveryPreparation>();
+    let input_or_recovery_bytes =
+        if input_bytes > recovery_bytes { input_bytes } else { recovery_bytes };
+    let bytes = match bytes.checked_sub(input_or_recovery_bytes as u64) {
         Some(bytes) => bytes,
         None => return None,
     };

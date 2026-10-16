@@ -8,11 +8,16 @@ impl IncidentReporting {
         &mut self,
         host: &mut IncidentHost,
         resources: &EntryResources<'_>,
+        transactions: &mut DiagnosticTransactions,
     ) -> Result<bool> {
         let Some(work) = self.export_work.as_mut() else { return Ok(true) };
         if matches!(work.material, ExportMaterial::Returned { .. }) {
             return Ok(true);
         }
+        let Some(IncidentEffect::Export { scope, .. }) = self.retained_effect.as_ref() else {
+            return Err("Original retiring export operation missing".into());
+        };
+        let operation = scope.operation();
         let service =
             if host.closing() { host.retiring_export_service()? } else { host.export_service()? };
         if !work.submitted {
@@ -20,6 +25,7 @@ impl IncidentReporting {
                 let Some(input) = service.take_unsubmitted_input()? else { return Ok(false) };
                 work.material = ExportMaterial::Input(input);
             }
+            transactions.retired(operation, &mut work.transaction)?;
             return Ok(true);
         }
         service.cancel();
@@ -36,6 +42,7 @@ impl IncidentReporting {
             let Some(terminal) = service.take_terminal() else { return Ok(false) };
             work.material = ExportMaterial::Retiring(terminal);
         }
+        transactions.retired(operation, &mut work.transaction)?;
         Ok(true)
     }
     /// Return original incoming tokens only after actual family settlement; keep whole view/custody.

@@ -22,6 +22,7 @@ impl IncidentReporting {
         &mut self,
         host: &mut IncidentHost,
         resources: &mut EntryResources<'_>,
+        transactions: &mut DiagnosticTransactions,
     ) -> Result<()> {
         if self.stopping.is_none() {
             self.request_close(ShutdownBudget::new(resources.client.now()?)?);
@@ -30,7 +31,7 @@ impl IncidentReporting {
         if !self.receiving_session.delivered() {
             return Ok(());
         }
-        if !self.retire_symbols(host, resources)? {
+        if !self.retire_symbols(host, resources, transactions)? {
             return Ok(());
         }
         if self.relay.is_none()
@@ -71,7 +72,7 @@ impl IncidentReporting {
             self.family_retired = true;
             return Ok(());
         }
-        if !self.retire_export(host, resources)? {
+        if !self.retire_export(host, resources, transactions)? {
             return Ok(());
         }
         if let Some(work) = &mut self.store {
@@ -140,6 +141,7 @@ impl IncidentReporting {
                     self.store_failure = service.take_failure();
                 }
             }
+            transactions.retired(work.scope.operation(), &mut work.transaction)?;
         }
         let relay = self.relay.as_ref().ok_or("Actual Reporter close owner missing")?;
         relay.cancel();

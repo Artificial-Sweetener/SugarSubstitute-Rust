@@ -9,9 +9,10 @@ impl IncidentReporting {
         &mut self,
         host: &mut IncidentHost,
         resources: &EntryResources<'_>,
+        transactions: &mut DiagnosticTransactions,
     ) -> Result<bool> {
         let Some(symbols) = &mut self.symbols else { return Ok(true) };
-        if !symbols.advance_native(resources, true)? {
+        if !symbols.advance_native(resources, true, transactions)? {
             return Ok(false);
         }
         let Some(work) = &mut self.store else { return Ok(symbols.settled()) };
@@ -22,6 +23,7 @@ impl IncidentReporting {
             // The identical unissued input remains owned here; no native writer existed.
             if work.input.is_some() {
                 symbols.metadata_retired = true;
+                transactions.retired(work.scope.operation(), &mut work.transaction)?;
             }
             return Ok(symbols.settled());
         }
@@ -42,6 +44,7 @@ impl IncidentReporting {
             Ok(_) => {
                 symbols.restore_metadata(service, &mut work.input)?;
                 work.installed = false;
+                transactions.retired(work.scope.operation(), &mut work.transaction)?;
                 return Ok(symbols.settled());
             }
             Err(ReportingIssue::Busy | ReportingIssue::Started) => {}
@@ -66,6 +69,7 @@ impl IncidentReporting {
         if self.store_failure.is_none() {
             self.store_failure = service.take_failure();
         }
+        transactions.retired(work.scope.operation(), &mut work.transaction)?;
         symbols.observe_metadata_retirement(service);
         Ok(symbols.settled())
     }

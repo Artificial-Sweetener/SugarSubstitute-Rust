@@ -120,7 +120,7 @@ impl ProductionActivation {
             start.acquire_profile(&parent, resources)?;
             start.reserve_channel(resources)?;
         }
-        if !admission_closed && !incidents.seed_ready(record, capture, backend, resources)? {
+        if !admission_closed && !incidents.seed_ready(record, capture, backend, resources, None)? {
             return Ok(());
         }
         let start = record.start.as_mut().ok_or("Actual desktop start disappeared")?;

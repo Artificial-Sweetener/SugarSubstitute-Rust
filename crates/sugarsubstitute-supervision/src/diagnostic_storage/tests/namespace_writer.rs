@@ -236,3 +236,60 @@ fn genuine_committed_reader_loan_never_acquires_diagnostic_writer_authority()
         other => Err(format!("Actual reader-only rejection failed: {other:?}").into()),
     }
 }
+#[test]
+fn genuine_namespace_writer_loan_collision_retains_invalid_identity_without_foreign_epoch()
+-> Result<(), Box<dyn std::error::Error>> {
+    run(true, PinFault::None, DIAGNOSTIC_STORAGE_BYTES, |namespace, context| {
+        use crate::coordinator_entry::read_namespace::NamespaceReadLoan;
+        use std::error::Error;
+        let mut first = DiagnosticStorage::new(context.memory().claim(DIAGNOSTIC_STORAGE_BYTES)?)?;
+        let first_key = operation(&namespace, 1)?;
+        let first_operation = first.begin_operation(first_key, &context)?;
+        let first_grant = native_grant(&mut first, &first_operation, &context)?;
+        let first_request = namespace.diagnostic_write_request(first_key)?;
+        let original_loan = NamespaceReadLoan::take_writer(&first_request, &first_grant, &context)?;
+        assert!(original_loan.validate_writer(&first_grant, &context).is_ok());
+        let next_key = LogicalStoreOperationKey::new(
+            CoordinatorKey {
+                namespace: namespace.namespace(),
+                epoch: CoordinatorEpoch::new([2; 16])?,
+            },
+            IncidentOperationId::new(2)?,
+        );
+        let next_request = namespace.diagnostic_write_request(next_key)?;
+        let mut concurrent =
+            DiagnosticStorage::new(context.memory().claim(DIAGNOSTIC_STORAGE_BYTES)?)?;
+        let concurrent_operation = concurrent.begin_operation(next_key, &context)?;
+        let rejected = concurrent
+            .resolve_namespace(&next_request, &concurrent_operation, &context)
+            .err()
+            .ok_or("The same native namespace capsule was lent twice")?;
+        assert_eq!(rejected.code(), Code::ForeignProtection);
+        let claim = rejected
+            .source()
+            .and_then(|cause| cause.downcast_ref::<crate::ClaimError>())
+            .ok_or("Original native claim cause missing")?;
+        assert_eq!(claim.operation(), "diagnostic_native_allocation");
+        let allocation = claim
+            .source()
+            .and_then(|cause| cause.downcast_ref::<DiagnosticNativeAllocationFailure>())
+            .ok_or("Original namespace allocation cause missing")?;
+        assert_eq!(allocation.code(), Code::InvalidIdentity);
+        assert!(allocation.operation().is_none());
+        assert!(original_loan.validate_writer(&first_grant, &context).is_ok());
+        concurrent.retire(&concurrent_operation, &context)?;
+        drop(concurrent_operation);
+        drop(concurrent);
+        drop(original_loan);
+        let mut after_return =
+            DiagnosticStorage::new(context.memory().claim(DIAGNOSTIC_STORAGE_BYTES)?)?;
+        let after_operation = after_return.begin_operation(next_key, &context)?;
+        assert!(matches!(
+            after_return.resolve_namespace(&next_request, &after_operation, &context)?,
+            DiagnosticStoreOpening::Created(_)
+        ));
+        after_return.retire(&after_operation, &context)?;
+        first.retire(&first_operation, &context)?;
+        Ok(())
+    })
+}
