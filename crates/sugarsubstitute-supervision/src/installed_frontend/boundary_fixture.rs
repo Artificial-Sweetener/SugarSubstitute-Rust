@@ -59,8 +59,7 @@ impl SourcePort for FixedSource {
         state.manifest = Some(Arc::new(manifest));
         Ok(())
     }
-    fn close(&self, state: &mut Inspection, _: &JobContext) -> Result<(), FrontendSourceError> {
-        state.manifest = None;
+    fn close(&self, _state: &mut Inspection, _: &JobContext) -> Result<(), FrontendSourceError> {
         Ok(())
     }
 }

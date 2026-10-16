@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Retain actual installed frontend files independently of disposable job observations.
+//! Inspect installed frontend bytes under strict temporary pins and retain an immutable snapshot.
 //!
 //! Every effect requires an admitted finite Readiness/InfrastructureLifecycle context.
 //! The composing owner retains this capsule before submitting its factory. Cancellation
 //! can discard a job result without disposing partial files or their original charge.
+//! Successful inspection releases every file/search handle before publishing the snapshot.
+//! Its active generation retains expected hashes, not a lock or guarantee over current disk bytes.
 //! Attachment uses this read-only owner without acquiring backend/process authority.
 
 #[cfg(feature = "boundary-fixtures")]

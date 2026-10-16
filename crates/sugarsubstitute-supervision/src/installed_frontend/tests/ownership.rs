@@ -62,6 +62,7 @@ struct Boundary {
     clock: Arc<TestClock>,
     late: bool,
     fail_close: bool,
+    releases: AtomicU64,
     lease: Mutex<Option<InstalledFrontendLease>>,
 }
 impl SourcePort for Boundary {
@@ -80,20 +81,19 @@ impl SourcePort for Boundary {
         }
         Ok(())
     }
-    fn close(&self, state: &mut Inspection, _: &JobContext) -> Result<(), FrontendSourceError> {
+    fn close(&self, _state: &mut Inspection, _: &JobContext) -> Result<(), FrontendSourceError> {
         if crate::registry::lock(&self.lease)
             .as_ref()
             .is_some_and(|lease| lease.validate_live().is_ok())
         {
             return Err(FrontendSourceError::invalid("fake_close_entered_before_retirement"));
         }
-        if self.fail_close {
+        if self.releases.fetch_add(1, Ordering::AcqRel) != 0 && self.fail_close {
             return Err(FrontendSourceError::new(
                 "fake_close",
                 std::io::Error::other("original-close-cause"),
             ));
         }
-        state.manifest = None;
         Ok(())
     }
 }
@@ -122,8 +122,13 @@ impl Harness {
             "E:\\fixture\\main.py".into(),
         )?;
         let mut owner = InstalledFrontendOwner::new(input);
-        let boundary =
-            Arc::new(Boundary { clock: clock.clone(), late, fail_close, lease: Mutex::new(None) });
+        let boundary = Arc::new(Boundary {
+            clock: clock.clone(),
+            late,
+            fail_close,
+            releases: AtomicU64::new(0),
+            lease: Mutex::new(None),
+        });
         owner.port = boundary.clone();
         Ok(Self { owner, executor, client, scope, wake, clock, boundary })
     }
@@ -284,3 +289,40 @@ fn completed_source_lease_survives_elapsed_preparation_until_actual_explicit_clo
     assert_eq!(lease._claim.bytes(), FRONTEND_SOURCE_BYTES);
     Ok(())
 }
+
+#[test]
+fn completed_snapshot_releases_inspection_before_delivery_and_final_close_is_idempotent()
+-> TestResult {
+    let mut harness = Harness::new(false, false)?;
+    harness.inspect()?;
+    assert_eq!(harness.boundary.releases.load(Ordering::Acquire), 1);
+    let lease = harness.owner.take_inspection()?.ok_or("Missing completed snapshot")?;
+    lease.validate_live()?;
+    {
+        let retained = crate::registry::lock(&harness.owner.shared.retained);
+        let retained = retained.as_ref().ok_or("Snapshot owner missing")?;
+        assert!(retained.handles.is_empty());
+        assert_eq!(retained.search, 0);
+        assert!(retained.manifest.is_some());
+    }
+    assert!(matches!(
+        harness.close()?.outcome,
+        sugarsubstitute_contracts::execution::JobOutcome::Success(())
+    ));
+    assert!(lease.validate_live().is_err());
+    assert!(crate::registry::lock(&harness.owner.shared.retained).is_none());
+    assert_eq!(harness.boundary.releases.load(Ordering::Acquire), 2);
+    let mut again =
+        harness.owner.submit_close(&harness.client, &harness.scope, Harness::spec(3, 2000)?)?;
+    harness
+        .wake
+        .until(&harness.client, || matches!(again.status().phase, JobPhase::Terminal(_)))?;
+    assert!(matches!(
+        again.try_take_completion().ok_or("Missing repeated close")?.outcome,
+        sugarsubstitute_contracts::execution::JobOutcome::Success(())
+    ));
+    assert_eq!(harness.boundary.releases.load(Ordering::Acquire), 2);
+    Ok(())
+}
+
+mod native_snapshot;

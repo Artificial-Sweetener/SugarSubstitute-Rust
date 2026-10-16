@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Retain native file custody before admission and qualify only actual successful delivery.
+//! Retain incomplete native inspection custody and publish only checked, unlocked snapshots.
 use super::*;
 use crate::native_claims::files::Handle;
 use std::sync::{
@@ -27,6 +27,7 @@ pub(super) trait SourcePort: Send + Sync {
         retained: &mut Inspection,
         context: &JobContext,
     ) -> Result<(), FrontendSourceError>;
+    /// Release native file/search custody while preserving the completed immutable manifest.
     fn close(
         &self,
         retained: &mut Inspection,
@@ -129,6 +130,11 @@ impl InstalledFrontendOwner {
                 guard.as_mut().ok_or_else(|| FrontendSourceError::invalid("source_custody"))?;
             port.inspect(&input, retained, &context)?;
             checkpoint(&context)?;
+            port.close(retained, &context)?;
+            checkpoint(&context)?;
+            if !retained.handles.is_empty() || retained.search != 0 {
+                return Err(FrontendSourceError::invalid("source_inspection_files_retained"));
+            }
             shared.live.store(true, Ordering::Release);
             Ok(())
         })?;
@@ -219,7 +225,8 @@ impl InstalledFrontendOwner {
     }
 }
 
-/// Keep immutable expected bytes alongside their retained canonical file owners.
+/// Keep immutable observed paths, versions and expected hashes for one active snapshot generation.
+/// File inspection pins are already closed; this lease does not freeze or revalidate disk bytes.
 /// This read-only lease grants no backend stop, process launch or arbitrary HTTP authority.
 #[derive(Clone)]
 pub struct InstalledFrontendLease {
@@ -232,9 +239,10 @@ impl InstalledFrontendLease {
     pub fn manifest(&self) -> &FrontendSourceManifest {
         &self.manifest
     }
-    /// Check that explicit native closure has not retired this generation.
+    /// Check that explicit owner closure has not retired this completed snapshot generation.
+    /// Current served bytes must still be checked against this snapshot by the readiness owner.
     /// # Errors
-    /// Rejects retired or incomplete native custody.
+    /// Rejects retired or incomplete snapshot ownership.
     pub fn validate_live(&self) -> Result<(), FrontendSourceError> {
         if self.shared.live.load(Ordering::Acquire) {
             Ok(())

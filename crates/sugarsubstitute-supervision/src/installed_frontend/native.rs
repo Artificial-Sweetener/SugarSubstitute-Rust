@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Pin local source files, hash their complete bytes and retain enumeration handles before use.
+//! Pin local sources for complete bounded hashing, then checked-close inspection custody.
 use super::{
     progress::{Phase, Progress},
     state::{Inspection, SourcePort, checkpoint},
@@ -127,7 +127,6 @@ impl SourcePort for SystemPort {
             checkpoint(context)?;
         }
         retained.handles.clear();
-        retained.manifest = None;
         Ok(())
     }
 }

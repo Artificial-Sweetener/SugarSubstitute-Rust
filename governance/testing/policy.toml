@@ -41,7 +41,7 @@ minimum_tests = 50
 package = "sugarsubstitute-supervision"
 root = "crates/sugarsubstitute-supervision"
 concern = "Exact recovery family enrollment and handler observation, protected historical origin opening and contiguous summary migration; Windows launch inputs, retained containment, resource exclusions, actual claim retirement, attempt-bound profile proofs and bounded lifecycle framing; Retained installed-file/hash custody and actual connected-loopback peer identity; authenticated fixed capture roles, same-job selected bundle and module credit custody, checked current-image/PE/PDB association and bounded original close retention; authenticated parent/witness association, independent dual exclusions, exact suspended-root transfer and checked custody retirement; phase-specific original profile release observation and retained actual Finish status"
-minimum_tests = 582
+minimum_tests = 585
 
 [[owners]]
 package = "sugarsubstitute-splash"

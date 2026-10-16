@@ -77,7 +77,7 @@ impl FrontendInstallationInput {
     }
 }
 
-/// One actual retained runtime file and its exact served URL/hash/length observation.
+/// One inspected runtime file and its immutable served URL/hash/length snapshot.
 pub struct FrontendAsset {
     pub(crate) path: String,
     pub(crate) bytes: u64,
@@ -93,7 +93,7 @@ impl FrontendAsset {
     pub const fn bytes(&self) -> u64 {
         self.bytes
     }
-    /// Return SHA-256 of the actual retained file bytes, not a RECORD/version claim.
+    /// Return SHA-256 observed under inspection pins; later disk changes do not alter it.
     pub const fn sha256(&self) -> [u8; 32] {
         self.hash
     }
@@ -104,7 +104,8 @@ impl fmt::Debug for FrontendAsset {
     }
 }
 
-/// Immutable actual-file observations held by an installed source lease.
+/// Immutable inspection observations held by an active snapshot lease.
+/// Native inspection handles are closed before publication; current disk content may change.
 pub struct FrontendSourceManifest {
     pub(crate) frontend: String,
     pub(crate) cube: String,
@@ -114,11 +115,11 @@ pub struct FrontendSourceManifest {
     pub(crate) script_hash: [u8; 32],
 }
 impl FrontendSourceManifest {
-    /// Borrow the actual canonical retained backend script path.
+    /// Borrow the backend script path canonicalized during completed inspection.
     pub fn backend_script(&self) -> &Path {
         &self.script
     }
-    /// Return SHA-256 of the complete independently retained backend script.
+    /// Return SHA-256 of the complete backend script observed during inspection.
     pub const fn backend_script_sha256(&self) -> [u8; 32] {
         self.script_hash
     }

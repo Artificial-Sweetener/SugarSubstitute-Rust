@@ -41,9 +41,8 @@ impl SourcePort for StoppingSource {
         }
         Ok(())
     }
-    fn close(&self, state: &mut Inspection, _: &JobContext) -> Result<(), FrontendSourceError> {
+    fn close(&self, _state: &mut Inspection, _: &JobContext) -> Result<(), FrontendSourceError> {
         self.closed.store(true, Ordering::Release);
-        state.manifest = None;
         Ok(())
     }
 }
