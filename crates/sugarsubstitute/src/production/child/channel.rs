@@ -37,6 +37,9 @@ pub(super) mod expiry;
 mod incoming;
 #[path = "channel/observations.rs"]
 mod observations;
+#[cfg(test)]
+#[path = "channel/output_polling_fixture.rs"]
+mod output_polling_fixture;
 #[path = "channel/retirement.rs"]
 mod retirement;
 #[path = "channel/ui.rs"]

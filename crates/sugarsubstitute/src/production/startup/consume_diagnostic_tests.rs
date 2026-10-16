@@ -114,3 +114,36 @@ fn actual_delivery_success_and_single_child_failure_preserve_effects_and_direct_
     ));
     Ok(())
 }
+
+#[test]
+fn actual_consume_execution_envelope_projects_native_code_and_preserves_original_box()
+-> Result<(), Box<dyn Error>> {
+    use sugarsubstitute_contracts::execution::{ExecutionError, Operation};
+    use sugarsubstitute_execution::windows::NativeObservationError;
+    let native = Box::new(NativeObservationError::new(
+        "execution_qpc_counter",
+        std::io::Error::from_raw_os_error(233),
+    ));
+    let native_address = native.as_ref() as *const NativeObservationError;
+    let original = Box::new(ExecutionError::new(Operation::NativeLifecycle, native));
+    let original_address = original.as_ref() as *const ExecutionError;
+    let error = observe::<()>(StartupConsumeStage::ExecutionDrain, Err(original))
+        .err()
+        .ok_or("Actual execution error absent")?;
+    let retained = error.downcast_ref::<StartupConsumeFailure>().ok_or("Consumer facts absent")?;
+    assert_eq!(retained.stage(), StartupConsumeStage::ExecutionDrain);
+    assert_eq!(
+        retained.code(),
+        Code::Native(sugarsubstitute_desktop::StartupNativeCause::CounterQuery, Some(233))
+    );
+    assert!(std::ptr::eq(
+        original_address,
+        retained.original().downcast_ref::<ExecutionError>().ok_or("Original Box lost")?
+    ));
+    assert!(std::ptr::eq(
+        native_address,
+        NativeObservationError::from_execution_cause(retained.original())
+            .ok_or("Native custody lost")?
+    ));
+    Ok(())
+}

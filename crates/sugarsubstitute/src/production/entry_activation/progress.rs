@@ -253,8 +253,17 @@ impl ProductionActivation {
             if let Err(cause) = Self::adopt_failed_family(record, &mut self.incidents) {
                 failure.get_or_insert(cause);
             }
-            if record.closed || record.retired.is_some() {
-                continue;
+            let retired = record.retired.as_ref();
+            match progress_retired_record(&mut record.closed, retired.is_some(), || {
+                let retired = retired.ok_or("Original desktop retirement receipt missing")?;
+                backend.settle_run(retired).map_err(outer)
+            }) {
+                Ok(true) => {}
+                Ok(false) => continue,
+                Err(cause) => {
+                    failure.get_or_insert(cause);
+                    continue;
+                }
             }
             if let Err(cause) = Self::progress_record(
                 record,
@@ -401,3 +410,26 @@ fn commands_open(
                 })
         })
 }
+
+/// Continue native record progress only while its retained owner remains live.
+/// The caller supplies the same backend settlement boundary and keeps the sealed
+/// native receipt. A pending policy settlement retains the record for later turns;
+/// a failed boundary returns its exact cause without marking the record closed.
+fn progress_retired_record(
+    closed: &mut bool,
+    retired: bool,
+    settle: impl FnOnce() -> Result<bool>,
+) -> Result<bool> {
+    if *closed {
+        return Ok(false);
+    }
+    if retired {
+        *closed = settle()?;
+        return Ok(false);
+    }
+    Ok(true)
+}
+
+#[cfg(test)]
+#[path = "progress_retired_tests.rs"]
+mod retired_tests;

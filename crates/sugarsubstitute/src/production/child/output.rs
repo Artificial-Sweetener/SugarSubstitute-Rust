@@ -7,6 +7,8 @@ use std::time::Duration;
 use sugarsubstitute_supervision::lifecycle_protocol::FrameCodec;
 #[path = "output/acquisition.rs"]
 mod acquisition;
+#[path = "output/polling.rs"]
+mod polling;
 #[path = "output/recovery.rs"]
 mod recovery;
 #[path = "output/retirement.rs"]
@@ -21,6 +23,7 @@ pub(super) struct ChildOutput {
     terminal: Option<Terminal>,
     pub(super) pending: Option<(WireHeader, Moment)>,
     closed: bool,
+    pub(super) pull_after: Option<Moment>,
     applied: Option<crate::production_output::AppliedOutput>,
     retiring_frame: Option<ReceivedLifecycleFrame>,
     retirement_error_reported: bool,
@@ -38,6 +41,7 @@ impl ChildOutput {
             terminal: None,
             pending: None,
             closed: false,
+            pull_after: None,
             applied: None,
             retiring_frame: None,
             retirement_error_reported: false,
@@ -100,10 +104,14 @@ impl ChildOutput {
         {
             return None;
         }
-        self.pending.map(|p| p.1).or_else(|| self.job.as_ref().and_then(|j| j.spec().deadline))
+        self.pending
+            .map(|p| p.1)
+            .or_else(|| self.job.as_ref().and_then(|j| j.spec().deadline))
+            .or(self.pull_after)
     }
     pub(super) fn close(&mut self) {
         self.closed = true;
+        self.pull_after = None;
         if let Some(replacement) = &mut self.replacement {
             replacement.close();
         }
@@ -238,6 +246,9 @@ impl ProductionChild {
         if self.consume_backend_notice()? {
             return Ok(());
         }
+        let idle =
+            self.output.applied.as_ref().ok_or("Applied output disappeared")?.change.is_none();
+        let pull_after = polling::after_reply(self.client()?.now()?, idle)?;
         let header = self.output.applied.as_ref().ok_or("Applied output disappeared")?.header;
         self.bootstrap.channel_mut().consume_reply(header)?;
         let applied = self
@@ -246,6 +257,7 @@ impl ProductionChild {
             .take()
             .ok_or("Applied output disappeared after metadata consumption")?;
         self.output.pending = None;
+        self.output.pull_after = pull_after;
         let current = self.output.binding.ok_or("Current output binding absent")?.lease;
         if let Some(running) = &mut self.running_backend
             && let Some(failed) = running.positive(current)?
@@ -292,6 +304,9 @@ impl ProductionChild {
             return Ok(());
         }
         if self.output.pending.is_none() && !self.prepare_backend_retry()? {
+            if !self.output.pull_due(self.client()?.now()?) {
+                return Ok(());
+            }
             let client = self.client()?.clone();
             let original = client.now()?.checked_add(Duration::from_secs(30))?;
             let original =
@@ -327,33 +342,5 @@ impl ProductionChild {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn close_keeps_pending_pull_with_output_owner_and_blocks_early_frame_release() -> Result<()> {
-        let run = RunKey {
-            owner: CoordinatorKey {
-                namespace: NamespaceId::new([7; 32]),
-                epoch: CoordinatorEpoch::new([8; 16])?,
-            },
-            instance: InstanceId::new(1)?,
-            generation: RunGeneration::new(1)?,
-        };
-        let header = WireHeader {
-            run,
-            connection: Some(ConnectionId::new(1)?),
-            request: Some(RequestId::new(2)?),
-            deadline_qpc: 100,
-        };
-        let mut output = ChildOutput::new();
-        output.pending = Some((header, Moment::from_nanos(100)));
-        output.close();
-        assert!(output.closing() && output.pending());
-        assert!(output.owns_reply(header));
-        assert!(!output.owns_reply(WireHeader { request: Some(RequestId::new(3)?), ..header }));
-        assert!(output.release_frame().is_err());
-        assert_eq!(output.deadline(), Some(Moment::from_nanos(100)));
-        assert_eq!(output.pending, Some((header, Moment::from_nanos(100))));
-        Ok(())
-    }
-}
+#[path = "output/tests.rs"]
+mod tests;

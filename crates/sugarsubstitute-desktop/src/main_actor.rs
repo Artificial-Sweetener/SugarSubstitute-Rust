@@ -266,11 +266,18 @@ impl MainActor {
     /// Request one actual current document sample, preserving any pending sample's identity.
     pub(crate) fn probe(&mut self, identity: crate::MainIdentity) -> Result<(), DesktopError> {
         self.admission.frontend(identity)?;
-        if let Some(target) = self.readiness()?.poll_probe().map_err(readiness_error)? {
+        if let Some(target) =
+            self.readiness()?.poll_probe(std::time::Instant::now()).map_err(readiness_error)?
+        {
             let parameters = evidence::probe_parameters(target, self.request()?)?;
             self.receivers()?.call(Command::Probe(target), "Runtime.evaluate", &parameters)?;
         }
         Ok(())
+    }
+
+    /// Return the current incomplete sample wake for the outer native event loop.
+    pub(crate) fn next_probe_deadline(&self) -> Option<std::time::Instant> {
+        self.readiness.as_ref().and_then(MainReadiness::next_probe_deadline)
     }
 
     /// Reveal only after the application has accepted readiness and actual splash retirement.

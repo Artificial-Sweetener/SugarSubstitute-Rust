@@ -221,9 +221,14 @@ pub(in crate::production::child) struct Rig {
 impl Rig {
     /// Start one original execution owner, with only clock/wake faked externally.
     pub(in crate::production::child) fn new() -> Result<Self, Box<dyn Error + Send + Sync>> {
+        Self::with_clock(Arc::new(FrozenClock))
+    }
+    /// Reuse actual admission/completion custody with a deterministic external clock.
+    pub(in crate::production::child) fn with_clock(
+        clock: Arc<dyn Clock>,
+    ) -> Result<Self, Box<dyn Error + Send + Sync>> {
         let wake = Arc::new(Wake::default());
-        let owner =
-            sugarsubstitute_execution::ExecutionOwner::new(Arc::new(FrozenClock), wake.clone())?;
+        let owner = sugarsubstitute_execution::ExecutionOwner::new(clock, wake.clone())?;
         let client = owner.client();
         let scope =
             client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;

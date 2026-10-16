@@ -53,12 +53,13 @@ fn captured(emit: impl FnOnce() -> Result) -> Result<Vec<Fields>> {
 
 #[test]
 fn accepted_navigation_and_barrier_receipts_are_once_and_current() -> Result {
+    let now = std::time::Instant::now();
     let identity = identity()?;
     let events = captured(|| {
         let mut owner = owner()?;
         let target = loaded(&mut owner)?;
         owner.navigation_completed(true)?;
-        owner.dom_result(target, Some(positive(target)?))?;
+        owner.dom_result(target, Some(positive(target)?), now)?;
         owner.barrier_complete(target)?;
         assert_eq!(owner.barrier_complete(target), Err(ReadinessFault::StaleProbe));
         Ok(())
@@ -75,12 +76,13 @@ fn accepted_navigation_and_barrier_receipts_are_once_and_current() -> Result {
 
 #[test]
 fn rejected_navigation_or_invalidated_barrier_emits_no_success_receipt() -> Result {
+    let now = std::time::Instant::now();
     let events = captured(|| {
         let mut invalid = owner()?;
         assert_eq!(invalid.navigation_completed(true), Err(ReadinessFault::NativeNavigationFailed));
         let mut current = owner()?;
         let target = loaded(&mut current)?;
-        current.dom_result(target, Some(positive(target)?))?;
+        current.dom_result(target, Some(positive(target)?), now)?;
         current.invalidate(ReadinessFault::SetupFailed);
         assert_eq!(current.barrier_complete(target), Err(ReadinessFault::SetupFailed));
         Ok(())

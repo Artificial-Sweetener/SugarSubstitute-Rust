@@ -61,6 +61,7 @@ struct EvaluationResult {
 pub(super) fn consume(
     owner: &mut MainReadiness,
     observation: Observation<'_>,
+    now: std::time::Instant,
 ) -> Result<Effect, DesktopError> {
     let payload = observation.payload;
     let mut effect = Effect::None;
@@ -131,7 +132,7 @@ pub(super) fn consume(
                             .map_err(|cause| DesktopError::new("parse_main_receipt", cause))?,
                     )
                 };
-                if owner.dom_result(target, receipt).map_err(readiness_error)? {
+                if owner.dom_result(target, receipt, now).map_err(readiness_error)? {
                     effect = Effect::Barrier(Box::new(target));
                 }
                 Ok(())

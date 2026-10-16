@@ -12,6 +12,7 @@ use crate::{
     main_readiness_storage::{ContextRecord, DocumentTables, FrameRecord},
     main_readiness_types::{ConsoleArgument, ConsoleKind, DocumentId, ProbeTarget, ReadinessFault},
 };
+use std::time::{Duration, Instant};
 use sugarsubstitute_contracts::{
     configuration::LoopbackOrigin,
     execution::MemoryLease,
@@ -21,6 +22,16 @@ use sugarsubstitute_contracts::{
 #[cfg(any(target_os = "windows", test))]
 #[path = "main_readiness_snapshot.rs"]
 pub(crate) mod snapshot;
+
+/// Bound repeated incomplete DOM samples without delaying their native callbacks.
+const INCOMPLETE_PROBE_INTERVAL: Duration = Duration::from_millis(100);
+
+/// Retain one incomplete current-document sample until its native retry deadline.
+#[derive(Clone, Copy)]
+struct RetryProbe {
+    target: ProbeTarget,
+    until: Instant,
+}
 
 struct PendingProbe {
     target: ProbeTarget,
@@ -40,6 +51,7 @@ pub(crate) struct MainReadiness {
     fault: Option<ReadinessFault>,
     pending: Option<PendingProbe>,
     next_operation: u64,
+    retry_probe: Option<RetryProbe>,
     completed: bool,
     positive: bool,
 }
@@ -87,6 +99,7 @@ impl MainReadiness {
             fault: None,
             pending: None,
             next_operation: 1,
+            retry_probe: None,
             completed: false,
             positive: false,
         })
@@ -219,6 +232,7 @@ impl MainReadiness {
             self.fault = Some(fault);
         }
         self.pending = None;
+        self.retry_probe = None;
     }
 
     /// Retain the two exact primitive diagnostics emitted by the inspected frontend dispatcher.
@@ -281,16 +295,33 @@ impl MainReadiness {
     }
 
     /// Poll this exact document without replacing an issued evaluation or its native barrier.
-    /// `None` preserves pending target/receipt custody and grants no readiness or renewed cutoff.
+    /// `now` belongs to the native event-loop clock. An incomplete result waits for
+    /// its stored retry wake; issued evaluations and barriers retain their exact custody.
     /// # Errors
     /// Rejects unhealthy or stale pending document facts before coalescing a repeated poll.
-    pub(crate) fn poll_probe(&mut self) -> Result<Option<ProbeTarget>, ReadinessFault> {
+    pub(crate) fn poll_probe(
+        &mut self,
+        now: Instant,
+    ) -> Result<Option<ProbeTarget>, ReadinessFault> {
         self.check_health()?;
         if let Some(pending) = &self.pending {
             self.check_target(pending.target)?;
             return Ok(None);
         }
+        if let Some(retry) = self.retry_probe {
+            if let Err(fault) = self.check_document(retry.target) {
+                return self.reject(fault);
+            }
+            if now < retry.until {
+                return Ok(None);
+            }
+        }
         self.issue_probe()
+    }
+
+    /// Return the native retry wake only after an incomplete current-document result.
+    pub(crate) fn next_probe_deadline(&self) -> Option<Instant> {
+        self.retry_probe.map(|retry| retry.until)
     }
 
     /// Construct one new operation only when no actual evaluation or barrier is issued.
@@ -317,19 +348,26 @@ impl MainReadiness {
         };
         self.next_operation = next;
         self.pending = Some(PendingProbe { target, receipt: None });
+        self.retry_probe = None;
         Ok(Some(target))
     }
 
     /// Retain a validated positive DOM receipt until the same-session native completion barrier.
-    /// `None` means the actual bounded DOM sample is incomplete and releases this evaluation slot.
+    /// `None` releases this evaluation slot and schedules its next sample one hundred
+    /// milliseconds after the injected native callback-consumption time.
     pub(crate) fn dom_result(
         &mut self,
         target: ProbeTarget,
         receipt: Option<ReadinessReceipt>,
+        now: Instant,
     ) -> Result<bool, ReadinessFault> {
         self.check_target(target)?;
         let Some(receipt) = receipt else {
+            let Some(next) = now.checked_add(INCOMPLETE_PROBE_INTERVAL) else {
+                return self.reject(ReadinessFault::ObservationOverflow);
+            };
             self.pending = None;
+            self.retry_probe = Some(RetryProbe { target, until: next });
             return Ok(false);
         };
         if receipt.launch() != self.identity.launch
@@ -350,6 +388,7 @@ impl MainReadiness {
             return self.reject(ReadinessFault::MalformedObservation);
         }
         pending.receipt = Some(receipt);
+        self.retry_probe = None;
         Ok(true)
     }
 
@@ -394,8 +433,14 @@ impl MainReadiness {
     }
     fn check_target(&mut self, target: ProbeTarget) -> Result<(), ReadinessFault> {
         self.check_health()?;
-        let current = self.pending.as_ref().is_some_and(|pending| pending.target == target)
-            && self.default_context == Some(target.context)
+        if !self.pending.as_ref().is_some_and(|pending| pending.target == target) {
+            return Err(ReadinessFault::StaleProbe);
+        }
+        self.check_document(target)
+    }
+    /// Validate the current native document independently of callback or retry custody.
+    fn check_document(&self, target: ProbeTarget) -> Result<(), ReadinessFault> {
+        let current = self.default_context == Some(target.context)
             && self
                 .root
                 .is_some_and(|root| root.id == target.frame && root.loader == target.loader);

@@ -28,3 +28,30 @@ pub(crate) fn aggregate_errors(causes: Vec<ExecutionError>) -> ExecutionError {
     );
     ExecutionError::new(operation, Box::new(TeardownCauses(causes)))
 }
+
+#[cfg(any(windows, test))]
+impl crate::native::NativeObservationError {
+    /// Borrow the original native failure through execution-owned error envelopes.
+    ///
+    /// Only concrete `ExecutionError` boxes and this adapter's teardown aggregate
+    /// are followed. An aggregate's first cause remains authoritative even when
+    /// opaque; later failures never replace it. The owned acyclic envelopes are
+    /// traversed with constant stack usage, without allocation, formatting, native
+    /// effects, or arbitrary `Error::source` callbacks. Custody remains unchanged.
+    pub fn from_execution_cause<'a>(
+        mut cause: &'a (dyn std::error::Error + 'static),
+    ) -> Option<&'a Self> {
+        loop {
+            if let Some(native) = cause.downcast_ref::<Self>() {
+                return Some(native);
+            }
+            if let Some(execution) = cause.downcast_ref::<ExecutionError>() {
+                cause = <ExecutionError as std::error::Error>::source(execution)?;
+            } else if let Some(aggregate) = cause.downcast_ref::<TeardownCauses>() {
+                cause = aggregate.0.first()?;
+            } else {
+                return None;
+            }
+        }
+    }
+}

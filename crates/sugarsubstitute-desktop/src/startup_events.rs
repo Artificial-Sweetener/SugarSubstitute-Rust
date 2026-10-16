@@ -288,11 +288,11 @@ pub(super) fn wait(
     content: &impl StartupWindowContent,
     limit: Option<Instant>,
 ) -> ControlFlow {
-    let application = content.next_deadline();
-    let deadline = match (application, limit) {
-        (Some(a), Some(b)) => Some(a.min(b)),
-        (a, b) => a.or(b),
-    };
+    let deadline = wait_deadline(
+        content.next_deadline(),
+        limit,
+        session.main.as_ref().and_then(MainActor::next_probe_deadline),
+    );
     if session.closing
         || (session.splash.retiring && !session.splash.retired)
         || session.main.as_ref().is_some_and(MainActor::needs_progress)
@@ -313,3 +313,16 @@ pub(super) fn wait(
         )
     }
 }
+
+/// Keep incomplete DOM retries independent of splash visibility and animation.
+fn wait_deadline(
+    application: Option<Instant>,
+    limit: Option<Instant>,
+    probe: Option<Instant>,
+) -> Option<Instant> {
+    [application, limit, probe].into_iter().flatten().min()
+}
+
+#[cfg(test)]
+#[path = "startup_wait_tests.rs"]
+mod wait_tests;

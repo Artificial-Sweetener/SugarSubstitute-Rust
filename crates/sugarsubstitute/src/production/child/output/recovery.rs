@@ -158,9 +158,11 @@ impl ProductionChild {
                 self.present_retry_failed()?;
             }
         }
+        let pull_after = polling::after_reply(self.client()?.now()?, true)?;
         let header = self.output.applied.as_ref().ok_or("Original notice frame absent")?.header;
         self.bootstrap.channel_mut().consume_reply(header)?;
         self.output.pending = None;
+        self.output.pull_after = pull_after;
         // Return the actual passive loan only after semantic and correlation consumption.
         self.output.applied = None;
         Ok(true)
@@ -237,6 +239,7 @@ impl ProductionChild {
         // The old parser already ended and its loan/request retired; old snapshots keep old credit.
         self.output.terminal = Some(completion);
         self.output.binding = Some(binding);
+        self.output.pull_after = None;
         self.output.replacement = None;
         self.output.retry_expired = false;
         Ok(())

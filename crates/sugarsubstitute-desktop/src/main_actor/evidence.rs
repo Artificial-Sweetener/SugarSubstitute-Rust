@@ -26,7 +26,7 @@ impl MainActor {
         let mut effect = Effect::None;
         // The pure decoder/readiness owner performs no native calls while queue storage is borrowed.
         let consumed = events.consume(|observation| {
-            match decode_observation(self.readiness()?, observation) {
+            match decode_observation(self.readiness()?, observation, std::time::Instant::now()) {
                 Ok(decoded) => effect = decoded,
                 Err((cause, kind)) => {
                     self.failure_observation = kind;
@@ -91,9 +91,10 @@ impl MainActor {
 fn decode_observation(
     owner: &mut MainReadiness,
     observation: Observation<'_>,
+    now: std::time::Instant,
 ) -> Result<Effect, (DesktopError, &'static str)> {
     let kind = observation_kind(observation.kind, observation.command);
-    decode::consume(owner, observation).map_err(|cause| (cause, kind))
+    decode::consume(owner, observation, now).map_err(|cause| (cause, kind))
 }
 
 /// Map actual queued callback identities without retaining any native payload.

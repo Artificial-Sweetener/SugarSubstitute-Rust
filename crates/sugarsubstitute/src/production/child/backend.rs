@@ -247,6 +247,7 @@ impl ProductionChild {
             return Ok(());
         }
         self.output.retry_expired = false;
+        self.output.pull_after = None;
         self.push_command(DesktopStartupCommand::PresentBackendOutage {
             identity,
             failed,

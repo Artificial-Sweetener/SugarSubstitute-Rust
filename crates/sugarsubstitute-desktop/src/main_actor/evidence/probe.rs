@@ -5,7 +5,7 @@
 use super::*;
 
 /// Module import consumes the installed owner, without running setup or registering another extension.
-/// `_setupDone` is the inspected 0.15.0 SugarCubes UI's completed async setup observation.
+/// `_setupDone` observes completion of the SugarCubes UI owner's async setup.
 const SAMPLE: &str = r#"(async()=>{
 const app=window.comfyAPI?.app?.app;
 if(!app?.isGraphReady||app.vueAppReady!==true||!app.positionConversion||!window.SugarCubes||
@@ -17,8 +17,7 @@ const registered=Array.isArray(app?.extensions)&&app.extensions.includes(cubes.s
 const graph=!!app?.graph&&app.canvas?.graph===app.graph;
 const connected=!!canvas?.isConnected&&!!bounds&&bounds.width>0&&bounds.height>0;
 const loading=document.readyState==='complete'&&!app?.configuringGraph&&
- !Array.from(document.querySelectorAll('[data-testid="loading-overlay"],.p-progressspinner')).some(el=>
-  el.isConnected&&el.getBoundingClientRect().width>0&&getComputedStyle(el).visibility!=='hidden');
+ !document.getElementById('splash-loader');
 const ready=cubes.sugarCubesUI?._setupDone===true&&!!window.SugarCubes&&
  typeof window.SugarCubes.openLibrary==='function';
 if(!(graph&&connected&&loading&&registered&&ready))return 'null';

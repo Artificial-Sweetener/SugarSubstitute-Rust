@@ -10,7 +10,11 @@ fn completion(
     command: Command,
     payload: &str,
 ) -> Result<Effect, (DesktopError, &'static str)> {
-    decode_observation(owner, Observation { kind: Kind::Command, command: Some(command), payload })
+    decode_observation(
+        owner,
+        Observation { kind: Kind::Command, command: Some(command), payload },
+        std::time::Instant::now(),
+    )
 }
 
 fn malformed(
@@ -34,8 +38,9 @@ fn positive(target: ProbeTarget) -> Result<ReadinessReceipt, Box<dyn Error>> {
 #[test]
 fn exact_owned_probe_exception_rejects_and_keeps_issued_target_without_native_effect()
 -> Result<(), Box<dyn Error>> {
+    let now = std::time::Instant::now();
     let mut owner = loaded()?;
-    let target = owner.poll_probe()?.ok_or("Missing owned evaluation")?;
+    let target = owner.poll_probe(now)?.ok_or("Missing owned evaluation")?;
     malformed(
         completion(
             &mut owner,
@@ -44,10 +49,12 @@ fn exact_owned_probe_exception_rejects_and_keeps_issued_target_without_native_ef
         ),
         "Probe",
     )?;
-    assert_eq!(owner.poll_probe()?, None);
+    assert_eq!(owner.poll_probe(now)?, None);
     assert!(!owner.ready());
-    assert!(!owner.dom_result(target, None)?);
-    let next = owner.poll_probe()?.ok_or("Issued target custody changed")?;
+    assert!(!owner.dom_result(target, None, now)?);
+    let next = owner
+        .poll_probe(now + std::time::Duration::from_millis(100))?
+        .ok_or("Issued target custody changed")?;
     assert_eq!(next.operation, target.operation + 1);
     assert_eq!(next.identity, target.identity);
     Ok(())
@@ -56,9 +63,10 @@ fn exact_owned_probe_exception_rejects_and_keeps_issued_target_without_native_ef
 #[test]
 fn exact_owned_barrier_exception_cannot_transfer_a_positive_dom_receipt()
 -> Result<(), Box<dyn Error>> {
+    let now = std::time::Instant::now();
     let mut owner = loaded()?;
-    let target = owner.poll_probe()?.ok_or("Missing owned evaluation")?;
-    assert!(owner.dom_result(target, Some(positive(target)?))?);
+    let target = owner.poll_probe(now)?.ok_or("Missing owned evaluation")?;
+    assert!(owner.dom_result(target, Some(positive(target)?), now)?);
     malformed(
         completion(
             &mut owner,
@@ -67,7 +75,7 @@ fn exact_owned_barrier_exception_cannot_transfer_a_positive_dom_receipt()
         ),
         "Barrier",
     )?;
-    assert_eq!(owner.poll_probe()?, None);
+    assert_eq!(owner.poll_probe(now)?, None);
     assert!(!owner.ready());
     Ok(())
 }
@@ -75,6 +83,7 @@ fn exact_owned_barrier_exception_cannot_transfer_a_positive_dom_receipt()
 #[test]
 fn native_process_context_and_navigation_failures_stay_sticky_after_positive_dom()
 -> Result<(), Box<dyn Error>> {
+    let now = std::time::Instant::now();
     for (kind, payload, expected) in [
         (Kind::ProcessFailed { kind: 1 }, "", ReadinessFault::SetupFailed),
         (Kind::ContextDestroyed, r#"{"executionContextId":7}"#, ReadinessFault::ContextLost),
@@ -82,10 +91,10 @@ fn native_process_context_and_navigation_failures_stay_sticky_after_positive_dom
         (Kind::Navigation { succeeded: false }, "", ReadinessFault::NativeNavigationFailed),
     ] {
         let mut owner = loaded()?;
-        let target = owner.poll_probe()?.ok_or("Missing owned evaluation")?;
-        assert!(owner.dom_result(target, Some(positive(target)?))?);
+        let target = owner.poll_probe(now)?.ok_or("Missing owned evaluation")?;
+        assert!(owner.dom_result(target, Some(positive(target)?), now)?);
         assert!(consume(&mut owner, kind, payload).is_err());
-        assert_eq!(owner.poll_probe(), Err(expected));
+        assert_eq!(owner.poll_probe(now), Err(expected));
         assert_eq!(owner.barrier_complete(target), Err(expected));
         assert!(!owner.ready());
     }
@@ -95,8 +104,9 @@ fn native_process_context_and_navigation_failures_stay_sticky_after_positive_dom
 #[test]
 fn malformed_or_foreign_owned_completions_cannot_replace_current_native_evidence()
 -> Result<(), Box<dyn Error>> {
+    let now = std::time::Instant::now();
     let mut owner = loaded()?;
-    let target = owner.poll_probe()?.ok_or("Missing owned evaluation")?;
+    let target = owner.poll_probe(now)?.ok_or("Missing owned evaluation")?;
     let mut foreign = target;
     foreign.identity.launch = LaunchId::new(2)?;
     let Err((cause, kind)) = completion(
@@ -117,12 +127,15 @@ fn malformed_or_foreign_owned_completions_cannot_replace_current_native_evidence
         (Command::Barrier(target), r#"{"result":{"type":"number","value":1}}"#, "Barrier"),
     ] {
         malformed(completion(&mut owner, command, payload), kind)?;
-        assert_eq!(owner.poll_probe()?, None);
+        assert_eq!(owner.poll_probe(now)?, None);
         assert!(!owner.ready());
     }
-    assert!(!owner.dom_result(target, None)?);
+    assert!(!owner.dom_result(target, None, now)?);
     assert_eq!(
-        owner.poll_probe()?.ok_or("Current target custody lost")?.operation,
+        owner
+            .poll_probe(now + std::time::Duration::from_millis(100))?
+            .ok_or("Current target custody lost")?
+            .operation,
         target.operation + 1
     );
     Ok(())

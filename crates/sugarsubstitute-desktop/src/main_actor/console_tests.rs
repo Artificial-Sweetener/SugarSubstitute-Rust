@@ -25,6 +25,7 @@ fn event(kind: &str, arguments: serde_json::Value) -> String {
 #[test]
 fn valid_console_stack_and_remote_preview_preserve_pending_probe_without_readiness()
 -> Result<(), Box<dyn Error>> {
+    let now = std::time::Instant::now();
     let preview: Vec<_> = (0..48)
         .map(|index| {
             serde_json::json!({
@@ -41,12 +42,14 @@ fn valid_console_stack_and_remote_preview_preserve_pending_probe_without_readine
     assert!(payload.len() < crate::main_events::PAYLOAD_BYTES);
     assert!(bounded_json(&payload).is_err());
     let mut owner = loaded()?;
-    let target = owner.poll_probe()?.ok_or("Missing genuine probe")?;
+    let target = owner.poll_probe(now)?.ok_or("Missing genuine probe")?;
     assert!(matches!(consume(&mut owner, Kind::Console, &payload)?, Effect::None));
-    assert_eq!(owner.poll_probe()?, None);
+    assert_eq!(owner.poll_probe(now)?, None);
     assert!(!owner.ready());
-    assert!(!owner.dom_result(target, None)?);
-    let next = owner.poll_probe()?.ok_or("Missing next genuine probe")?;
+    assert!(!owner.dom_result(target, None, now)?);
+    let next = owner
+        .poll_probe(now + std::time::Duration::from_millis(100))?
+        .ok_or("Missing next genuine probe")?;
     assert_eq!(next.operation, target.operation + 1);
     assert_eq!(next.identity, target.identity);
     Ok(())
@@ -55,6 +58,7 @@ fn valid_console_stack_and_remote_preview_preserve_pending_probe_without_readine
 #[test]
 fn projected_console_keeps_exact_primitive_setup_failures_and_ignores_object_descriptions()
 -> Result<(), Box<dyn Error>> {
+    let now = std::time::Instant::now();
     for (kind, message, fault) in [
         (
             "error",
@@ -78,7 +82,7 @@ fn projected_console_keeps_exact_primitive_setup_failures_and_ignores_object_des
             ),
             Some(&fault)
         );
-        assert_eq!(owner.poll_probe(), Err(fault));
+        assert_eq!(owner.poll_probe(now), Err(fault));
         assert!(!owner.ready());
         let mut ordinary = loaded()?;
         consume(
@@ -101,7 +105,7 @@ fn projected_console_keeps_exact_primitive_setup_failures_and_ignores_object_des
                 ]),
             ),
         )?;
-        assert!(ordinary.poll_probe()?.is_some());
+        assert!(ordinary.poll_probe(now)?.is_some());
         assert!(!ordinary.ready());
     }
     Ok(())

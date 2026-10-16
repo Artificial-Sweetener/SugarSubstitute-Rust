@@ -306,3 +306,6 @@ mod qualification;
 #[cfg(feature = "k1-native-qualification")]
 #[path = "../../preview_arming/capture_tests.rs"]
 mod preview;
+
+#[path = "registered_lifetime_race_tests.rs"]
+mod races;

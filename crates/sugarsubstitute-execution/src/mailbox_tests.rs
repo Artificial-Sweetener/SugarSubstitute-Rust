@@ -151,3 +151,93 @@ fn fatal_drain_rearms_retained_terminal_backlog_outside_the_mailbox_lock() -> Te
     assert_eq!(wake.calls.load(Ordering::Acquire), 3);
     Ok(())
 }
+
+#[test]
+fn mailbox_native_projection_borrows_original_first_leaf_through_nested_owned_aggregates()
+-> TestResult {
+    use crate::native::NativeObservationError;
+    let first = Box::new(NativeObservationError::new(
+        "execution_qpc_counter",
+        std::io::Error::from_raw_os_error(233),
+    ));
+    let address = first.as_ref() as *const NativeObservationError;
+    let mailbox = Mailbox::new(Arc::new(Wake::default()));
+    mailbox.record_failure(crate::runtime::aggregate_errors(vec![ExecutionError::new(
+        Operation::NativeLifecycle,
+        first,
+    )]));
+    mailbox.record_failure(ExecutionError::new(
+        Operation::NativeLifecycle,
+        Box::new(NativeObservationError::new(
+            "later_failure",
+            std::io::Error::from_raw_os_error(5),
+        )),
+    ));
+    let error = mailbox.drain(NonZeroUsize::MIN).err().ok_or("Mailbox failure absent")?;
+    let native = NativeObservationError::from_execution_cause(&error)
+        .ok_or("Original native projection absent")?;
+    assert!(std::ptr::eq(address, native));
+    assert_eq!(native.stage(), "execution_qpc_counter");
+    assert_eq!(native.win32_code(), Some(233));
+    assert!(
+        NativeObservationError::from_execution_cause(native)
+            .is_some_and(|actual| std::ptr::eq(actual, native))
+    );
+    Ok(())
+}
+
+struct OpaqueProjectionCause {
+    callbacks: Arc<std::sync::atomic::AtomicUsize>,
+    dropped: Arc<std::sync::atomic::AtomicUsize>,
+}
+impl std::fmt::Debug for OpaqueProjectionCause {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.callbacks.fetch_add(1, Ordering::SeqCst);
+        formatter.write_str("PRIVATE")
+    }
+}
+impl std::fmt::Display for OpaqueProjectionCause {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.callbacks.fetch_add(1, Ordering::SeqCst);
+        formatter.write_str("PRIVATE")
+    }
+}
+impl std::error::Error for OpaqueProjectionCause {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.callbacks.fetch_add(1, Ordering::SeqCst);
+        Some(self)
+    }
+}
+impl Drop for OpaqueProjectionCause {
+    fn drop(&mut self) {
+        self.dropped.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+#[test]
+fn mailbox_native_projection_stops_at_original_opaque_cause_without_callbacks_or_custody_loss()
+-> TestResult {
+    use crate::native::NativeObservationError;
+    let callbacks = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let dropped = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let mailbox = Mailbox::new(Arc::new(Wake::default()));
+    mailbox.record_failure(ExecutionError::new(
+        Operation::NativeLifecycle,
+        Box::new(OpaqueProjectionCause { callbacks: callbacks.clone(), dropped: dropped.clone() }),
+    ));
+    mailbox.record_failure(ExecutionError::new(
+        Operation::NativeLifecycle,
+        Box::new(NativeObservationError::new(
+            "later_native_failure",
+            std::io::Error::from_raw_os_error(233),
+        )),
+    ));
+    let error = mailbox.drain(NonZeroUsize::MIN).err().ok_or("Mailbox failure absent")?;
+    assert!(NativeObservationError::from_execution_cause(&error).is_none());
+    assert_eq!(callbacks.load(Ordering::SeqCst), 0);
+    assert_eq!(dropped.load(Ordering::SeqCst), 0);
+    drop(error);
+    assert_eq!(dropped.load(Ordering::SeqCst), 1);
+    assert_eq!(callbacks.load(Ordering::SeqCst), 0);
+    Ok(())
+}

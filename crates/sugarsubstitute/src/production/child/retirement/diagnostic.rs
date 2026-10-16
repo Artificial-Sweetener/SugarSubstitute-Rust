@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Project only passive original capture and supported direct native/control causes.
+//! Project passive capture facts and concrete original native/control causes.
 use super::*;
 
 impl ProductionChild {
-    /// Inspect supported direct returned types; never sample capture or walk error sources.
+    /// Inspect concrete owner envelopes; never sample capture or walk arbitrary sources.
     pub(in crate::production) fn startup_cause_code(
         cause: &(dyn Error + 'static),
     ) -> sugarsubstitute_desktop::StartupCauseCode {
         cause_code(cause)
     }
-    /// Borrow the original snapshot and inspect supported direct error types without providers.
+    /// Borrow the original snapshot and concrete owned causes without providers.
     pub(in crate::production) fn close_diagnostic(
         &self,
         cause: &(dyn Error + 'static),
@@ -36,7 +36,7 @@ pub(super) fn capture_category(
     }
 }
 
-/// Inspect supported direct native/control types without walking arbitrary sources.
+/// Inspect concrete native/control owners without walking arbitrary sources.
 pub(super) fn cause_code(
     cause: &(dyn Error + 'static),
 ) -> sugarsubstitute_desktop::StartupCauseCode {
@@ -44,7 +44,7 @@ pub(super) fn cause_code(
         StartupCauseCode as Code, StartupNativeCause as Native, StartupRequestCause as Request,
     };
     if let Some(native) =
-        cause.downcast_ref::<sugarsubstitute_execution::windows::NativeObservationError>()
+        sugarsubstitute_execution::windows::NativeObservationError::from_execution_cause(cause)
     {
         let stage = if native.contains_owner_panic() {
             Native::OwnerPanic

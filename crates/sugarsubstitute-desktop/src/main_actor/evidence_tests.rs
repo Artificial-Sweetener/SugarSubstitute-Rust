@@ -40,7 +40,7 @@ fn owner() -> Result<MainReadiness, Box<dyn Error>> {
     )?)
 }
 fn consume(owner: &mut MainReadiness, kind: Kind, payload: &str) -> Result<Effect, DesktopError> {
-    decode::consume(owner, Observation { kind, command: None, payload })
+    decode::consume(owner, Observation { kind, command: None, payload }, std::time::Instant::now())
 }
 
 /// Admit actual decoded root/context/navigation facts for all evidence owner regressions.
@@ -80,6 +80,7 @@ fn duplicate_native_context_identity_is_rejected_by_typed_decoder() -> Result<()
 #[test]
 fn actual_decoded_setup_failure_remains_sticky_through_later_positive_inputs()
 -> Result<(), Box<dyn Error>> {
+    let now = std::time::Instant::now();
     let mut owner = owner()?;
     owner.navigation_started()?;
     consume(
@@ -95,7 +96,7 @@ fn actual_decoded_setup_failure_remains_sticky_through_later_positive_inputs()
     consume(&mut owner, Kind::Navigation { succeeded: true }, "")?;
     assert!(consume(&mut owner, Kind::Console,
         r#"{"type":"error","executionContextId":7,"args":[{"type":"string","value":"Error calling extension 'SugarCubes.UI' method 'setup'"}]}"#).is_err());
-    assert!(owner.poll_probe().is_err());
+    assert!(owner.poll_probe(now).is_err());
     assert!(!owner.ready());
     Ok(())
 }
@@ -119,6 +120,7 @@ fn malformed_frame_keeps_actual_observation_kind_and_original_decode_cause()
             command: None,
             payload: r#"{"frame":{"id":"root","url":"http://127.0.0.1:8188/"}}"#,
         },
+        std::time::Instant::now(),
     ) else {
         return Err("Missing actual native frame decoder failure".into());
     };

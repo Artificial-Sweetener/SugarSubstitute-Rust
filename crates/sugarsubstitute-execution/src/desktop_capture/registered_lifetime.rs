@@ -14,7 +14,10 @@ use sugarsubstitute_contracts::execution::{
 
 /// A successful registration ends only its finite job cutoff. The same actual
 /// scope/owner and native custody continue until cancellation or explicit cleanup.
-/// This validator grants no new effects and never changes the original context.
+/// The Core->cleanup->stage fence observes a recorded cleanup request even before
+/// the cleanup claimant sets `cleanup.stopped`, or after the caller's
+/// earlier live observation became stale. Only the same registered owner and its
+/// original stop reason qualify. This grants no effects or changed context.
 pub(super) fn stop(
     core: &Core,
     work: &DesktopCaptureWork,
@@ -38,9 +41,15 @@ pub(super) fn stop(
         return Err(AdmissionError::InvalidCaptureAdmission);
     }
     {
+        let _cleanup = lock(&work.shared.cleanup.state);
         let stage = lock(&work.shared.state);
-        if !stage.registered_published || stage.phase != DesktopCapturePhase::Registered {
+        if !stage.registered_published {
             return Err(AdmissionError::InvalidCaptureAdmission);
+        }
+        match (stage.phase, stage.stopped_outcome) {
+            (DesktopCapturePhase::Cleaning, Some(reason)) => return Ok(Some(reason)),
+            (DesktopCapturePhase::Registered, None) => {}
+            _ => return Err(AdmissionError::InvalidCaptureAdmission),
         }
     }
     match crate::admission_liveness::scope_ancestry_deadline(core, &state, record) {

@@ -89,9 +89,12 @@ fn recovery_grant_consumes_actual_snapshot_preserves_exact_original_credit_and_b
     assert_eq!(rig.scope.snapshot().reserved_bytes, before);
     alias.check()?;
     drop(alias);
+    // Typed terminal publication precedes the supervisor's final context retirement.
+    close(&rig, &mut session)?;
+    drop(rig.owner);
     assert_eq!(rig.scope.snapshot().reserved_bytes, before - BYTES);
     drop(source);
-    close(&rig, &mut session)
+    Ok(())
 }
 #[test]
 fn recovery_grant_rejects_foreign_key_memory_and_core_without_latching_or_consuming_source()
@@ -228,7 +231,10 @@ fn recovery_grant_final_control_retires_before_original_claimed_payload_and_all_
         &rig.scope,
     )?;
     drop(completed);
+    // Typed terminal publication precedes the supervisor's final context retirement.
+    close(&rig, &mut session)?;
+    drop(rig.owner);
     assert_eq!(rig.scope.snapshot().reserved_bytes, before - BYTES);
     drop(source);
-    close(&rig, &mut session)
+    Ok(())
 }
