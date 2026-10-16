@@ -86,7 +86,10 @@ impl ProductionActivation {
             let decision = if capture.normal_close_pending(record.run.owner) {
                 Err("CaptureClosePending")
             } else {
-                role_decision(record)
+                recovery_retirement(
+                    record.start.as_ref().is_none_or(DesktopStart::recovery_settled),
+                )
+                .and_then(|()| role_decision(record))
             };
             match decision {
                 Ok(role) => Some(role),
@@ -133,6 +136,13 @@ impl ProductionActivation {
     }
 }
 
+/// Keep Root Entry live until its existing recovery control has genuinely retired.
+/// Per-role cleanup remains eligible to send Stop and consume Retired before this global fence.
+pub(in crate::production::entry_activation) fn recovery_retirement(
+    retired: bool,
+) -> std::result::Result<(), &'static str> {
+    if retired { Ok(()) } else { Err("RecoveryRetirement") }
+}
 /// Classify the exact first veto at the authoritative role policy.
 fn role_decision(record: &Record) -> std::result::Result<Role, &'static str> {
     if record.collection.pending() {

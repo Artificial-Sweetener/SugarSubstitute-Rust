@@ -67,5 +67,11 @@ fn root_recovery_metadata_is_bounded_without_root_path_copy_and_closed_owner_gra
     assert!(empty.begin_close(CounterDeadline::new(1, 1)?, Moment::from_nanos(1)).is_err());
     let facts = empty.poll(Path::new(""), Moment::from_nanos(1));
     assert!(!facts.retired && !facts.handler_needed && !facts.desktop_needed);
+    assert_eq!(
+        crate::production::entry_activation::normal_idle::recovery_retirement(facts.retired),
+        Err("RecoveryRetirement")
+    );
+    assert_eq!(crate::production::entry_activation::normal_idle::recovery_retirement(true), Ok(()));
+    assert!(empty.take_retired().is_err());
     Ok(())
 }

@@ -87,8 +87,25 @@ fn recovery_creation_is_preheld_before_ack_and_runs_once_only_after_the_exact_pe
     let rig = Rig::new()?;
     let boundary = Boundary::new(&rig, true)?;
     let (_scope, mut entry) = server(&rig, &boundary)?;
-    let (source, memory) = registered(&rig, request_snapshot(&rig, &boundary, &entry)?)?;
+    let startup = request_snapshot(&rig, &boundary, &entry)?;
+    let launch = startup.launch.as_ref().ok_or("Actual authenticated launch missing")?;
+    let connection = launch.peer().connection();
+    let request = launch.request_id();
+    let reply_until = crate::coordinator_entry::schedule::probe(rig.client.now()?, launch.until())?;
+    let (source, memory) = registered(&rig, startup)?;
     drop(memory);
+    entry.control.reply(
+        connection,
+        request,
+        sugarsubstitute_contracts::coordinator_entry::EntryOperationId::new(1)?,
+        reply_until,
+        sugarsubstitute_contracts::coordinator_entry::EntryOutcome::Accepted(run()?),
+    )?;
+    fact(&rig, &entry.control, |fact| matches!(fact, EntryTransportObservation::Written { .. }))?;
+    fact(&rig, &entry.control, |fact| {
+        matches!(fact,
+        EntryTransportObservation::ConnectionRetired { connection: actual, .. } if *actual == connection)
+    })?;
     let mut completed = issued(&rig, &source)?;
     let snapshot = take(&mut completed)?;
     let grant =
@@ -142,8 +159,17 @@ fn recovery_creation_is_preheld_before_ack_and_runs_once_only_after_the_exact_pe
     assert!(repeated.is_some());
     drop(repeated);
     drop(actual);
+    assert!(lock(&grant.state()?.stages).committed);
+    grant.check()?;
+    // Global Entry retirement revokes this still-owned committed pipe's genuine source.
+    // Application per-role Stop/Retired cleanup must finish before that global fence.
+    assert!(entry.control.try_close_when_idle()?);
+    assert!(grant.check().is_err());
+    let retired =
+        observed_stage("recovery pipe retirement", rig.completion(&mut recovery.completion))?;
+    assert!(matches!(retired.outcome, JobOutcome::Cancelled));
+    drop(retired);
     recovery.control.close();
-    drop(observed_stage("recovery pipe retirement", rig.completion(&mut recovery.completion))?);
     custody.control.close();
     drop(observed_stage("custody pipe retirement", rig.completion(&mut custody.completion))?);
     drop(parent);
