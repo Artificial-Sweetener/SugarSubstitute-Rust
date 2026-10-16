@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compose the fresh subordinate's original execution, capture and actual Desktop lifetimes.
+#[path = "lifetime/observations.rs"]
+mod observations;
 #[path = "lifetime/progress.rs"]
 mod progress;
 #[path = "lifetime/retirement.rs"]
 mod retirement;
+#[path = "lifetime/retirement_notice.rs"]
+mod retirement_notice;
 use super::{
     capture::Capture,
     channel::{Channel, Outgoing, Sent},
@@ -54,6 +58,7 @@ pub(super) struct Lifetime {
     child_cleanup_submitted: bool,
     stage: Stage,
     cleanup: Cleanup,
+    notice: retirement_notice::RetirementNotice,
     setup_wake: Option<Instant>,
     cleanup_wake: Option<Instant>,
     closing: bool,
@@ -83,6 +88,7 @@ impl Lifetime {
             child_cleanup_submitted: false,
             stage: Stage::Startup,
             cleanup: Cleanup::new(),
+            notice: retirement_notice::RetirementNotice::new(),
             setup_wake: None,
             cleanup_wake: None,
             closing: false,
@@ -142,6 +148,15 @@ impl Lifetime {
                 }
             }
         }
+        if failure.is_none() {
+            retain(&mut failure, self.observe_protocol());
+        }
+        if failure.is_some() {
+            self.notice.abandon();
+            if let Some(channel) = &mut self.channel {
+                channel.request_close();
+            }
+        }
         failure.map_or(Ok(()), Err)
     }
 }
@@ -174,7 +189,11 @@ impl HeadlessLifetime for Lifetime {
     }
     fn prepare_native_runtime(&mut self, max: NonZeroUsize) -> Result<StartupPreparationStep> {
         self.drain(max)?;
-        match self.progress()? {
+        match if self.notice.stop_received() {
+            Ok(HeadlessStep::Shutdown)
+        } else {
+            self.progress()
+        }? {
             HeadlessStep::Shutdown => Ok(StartupPreparationStep::Closing),
             HeadlessStep::Active if self.stage == Stage::Running => {
                 Ok(StartupPreparationStep::Ready)
@@ -184,7 +203,13 @@ impl HeadlessLifetime for Lifetime {
     }
     fn activity(&mut self, max: NonZeroUsize) -> Result<HeadlessStep> {
         self.drain(max)?;
-        if self.closing { Ok(HeadlessStep::Active) } else { self.progress() }
+        if self.closing {
+            Ok(HeadlessStep::Active)
+        } else if self.notice.stop_received() {
+            Ok(HeadlessStep::Shutdown)
+        } else {
+            self.progress()
+        }
     }
     fn next_deadline(&self) -> Option<Instant> {
         if self.closing {

@@ -32,6 +32,7 @@ pub(super) enum Sent {
     CaptureRegistered,
     DesktopCreated,
     DesktopExited,
+    Retired,
 }
 /// Closed lifecycle messages emitted only by this subordinate's actual owners.
 pub(super) enum Outgoing {
@@ -39,6 +40,7 @@ pub(super) enum Outgoing {
     CaptureRegistered { supervisor: RecoveryProcessIdentity, handler: RecoveryProcessIdentity },
     DesktopCreated(RecoveryProcessIdentity),
     DesktopExited { process: RecoveryProcessIdentity, status: u32 },
+    Retired,
 }
 struct Write {
     receipt: receipt::Receipt,

@@ -207,26 +207,15 @@ impl CoordinatorBackend {
         batch: &CompletionBatch,
         resources: &mut BackendResources<'_>,
     ) -> Result<ResourceTransition> {
-        let custody_ready = match &mut self.custody {
-            Some(custody) => custody.advance(resources)?,
-            None => self.custody_options.is_none(),
+        let custody = match &mut self.custody {
+            Some(custody) => custody.advance(resources),
+            None => Ok(self.custody_options.is_none()),
         };
+        let (custody_ready, step) = self.consume_existing(at, batch, resources, custody)?;
         if custody_ready {
             self.claim_resolved(at, resources)?;
         }
-        let record = self.records[at].as_mut().ok_or(LifecycleRejection::StaleIdentity)?;
-        consume_source(record)?;
-        if let Some(output) = &mut record.output
-            && !record.output_observed
-            && let Some(completion) = output.completion.try_take_completion()
-        {
-            record.output_observed = true;
-            if record.shutdown.is_none() {
-                return Err(Box::new(OutputTerminalFailure(completion)));
-            }
-            record.output_terminal = Some(completion);
-        }
-        let step = record.campaign.consume(batch, resources.client.now()?)?;
+        let record = self.records[at].as_ref().ok_or(LifecycleRejection::StaleIdentity)?;
         if record.shutdown.is_none() {
             self.launch(at, resources)?;
             self.probe(at, resources)?;
@@ -295,6 +284,67 @@ impl CoordinatorBackend {
             }
         }
         Ok(ResourceTransition::default())
+    }
+    /// Adopt already-owned results even when the fresh custody admission failed.
+    /// Later observation causes use the record's existing bounded cleanup slots.
+    fn consume_existing(
+        &mut self,
+        at: usize,
+        batch: &CompletionBatch,
+        resources: &BackendResources<'_>,
+        custody: Result<bool>,
+    ) -> Result<(bool, CampaignStep)> {
+        let (custody_ready, mut failure) = match custody {
+            Ok(ready) => (ready, None),
+            Err(cause) => (false, Some(cause)),
+        };
+        let record = self.records[at].as_mut().ok_or(LifecycleRejection::StaleIdentity)?;
+        if let Err(cause) = consume_source(record) {
+            if failure.is_none() {
+                failure = Some(cause);
+            } else {
+                record.cleanup_failure.retain(cause);
+            }
+        }
+        if let Some(output) = &mut record.output
+            && !record.output_observed
+            && let Some(completion) = output.completion.try_take_completion()
+        {
+            record.output_observed = true;
+            if record.shutdown.is_none() {
+                let cause = Box::new(OutputTerminalFailure(completion));
+                if failure.is_none() {
+                    failure = Some(cause);
+                } else {
+                    record.cleanup_failure.retain(cause);
+                }
+            } else {
+                record.output_terminal = Some(completion);
+            }
+        }
+        let step = resources
+            .client
+            .now()
+            .map_err(|cause| Box::new(cause) as Box<dyn Error + Send + Sync>)
+            .and_then(|now| {
+                record
+                    .campaign
+                    .consume(batch, now)
+                    .map_err(|cause| Box::new(cause) as Box<dyn Error + Send + Sync>)
+            });
+        match step {
+            Ok(step) => match failure {
+                Some(cause) => Err(cause),
+                None => Ok((custody_ready, step)),
+            },
+            Err(cause) => match failure {
+                Some(first) => {
+                    record.cleanup_failure.retain(cause);
+                    Err(first)
+                }
+                None => Err(cause),
+            },
+        }
     }
     /// Retain the complete first failure in policy before diagnostics and cleanup.
     pub(super) fn failed(

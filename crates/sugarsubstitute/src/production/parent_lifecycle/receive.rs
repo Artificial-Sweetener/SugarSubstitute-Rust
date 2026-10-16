@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Retain the single actual read loan across acquisition write receipts before semantic routing.
+//! Retain one actual read loan across acquisition receipts or shared output loan contention.
 use super::{ParentError, ParentLifecycle, ParentResources, Result, types::WritePurpose};
 use sugarsubstitute_execution::windows_lifecycle_pipe::{
     LifecyclePipeError, LifecyclePipeOperationId, ReceivedLifecycleFrame,
@@ -35,18 +35,24 @@ impl ParentLifecycle {
             self.acquisition_receive = Some((operation.get(), frame));
             return Ok(());
         }
-        if let Err(error) = self.receive(frame.as_bytes(), resources) {
-            let payload_kind = received_payload_kind(frame.as_bytes());
-            tracing::error!(operation="parent_received_payload_rejected",payload_kind,run=?self.run,
+        match self.receive(frame.as_bytes(), resources) {
+            Ok(true) => Ok(()),
+            Ok(false) => {
+                self.acquisition_receive = Some((operation.get(), frame));
+                Ok(())
+            }
+            Err(error) => {
+                let payload_kind = received_payload_kind(frame.as_bytes());
+                tracing::error!(operation="parent_received_payload_rejected",payload_kind,run=?self.run,
             native_operation=operation.get(),main_stage=?self.main.stage(),
             retained_delivery=self.output.as_ref().map(|delivery| delivery.id.get()),
             last_issued_delivery=self.next_delivery,
             native_output_rejection=?error.downcast_ref::<sugarsubstitute_execution::windows_output::WindowsOutputError>(),
             "Actual received payload rejected; original frame and error retained");
-            self.rejected_frame = Some(frame);
-            return Err(error);
+                self.rejected_frame = Some(frame);
+                Err(error)
+            }
         }
-        Ok(())
     }
     /// Retain the existing read loan while progress is writing, or while an original
     /// Grant must finish before cancellation can close its ready resource. No capability
@@ -63,8 +69,9 @@ impl ParentLifecycle {
                 .is_some_and(|handoff| handoff.header.is_some() && !handoff.written)
             || self.retiring_write_pending()?)
     }
-    /// Reuse the same authentic read loan after the actual progress-write receipt. This
-    /// preserves its header, bytes and original cutoff; no read or request queue is added.
+    /// Reconsider the same authentic frame after receipt or output-capacity activity.
+    /// Normal admission still validates its original header, bytes, authority and cutoff.
+    /// A contended output pull retains the frame and prevents another native read.
     pub(super) fn resume_acquisition_receive(
         &mut self,
         resources: &mut ParentResources<'_, '_>,
@@ -75,15 +82,21 @@ impl ParentLifecycle {
         let Some((operation, frame)) = self.acquisition_receive.take() else {
             return Ok(());
         };
-        if let Err(cause) = self.receive(frame.as_bytes(), resources) {
-            tracing::error!(operation="parent_acquisition_received_payload_rejected",payload_kind=received_payload_kind(frame.as_bytes()),
+        match self.receive(frame.as_bytes(), resources) {
+            Ok(true) => Ok(()),
+            Ok(false) => {
+                self.acquisition_receive = Some((operation, frame));
+                Ok(())
+            }
+            Err(cause) => {
+                tracing::error!(operation="parent_acquisition_received_payload_rejected",payload_kind=received_payload_kind(frame.as_bytes()),
                 run=?self.run,native_operation=operation,main_stage=?self.main.stage(),
                 native_output_rejection=?cause.downcast_ref::<sugarsubstitute_execution::windows_output::WindowsOutputError>(),
-                "Original received frame and cause retained after actual progress write");
-            self.rejected_frame = Some(frame);
-            return Err(cause);
+                "Original deferred frame and cause retained after admission reconsideration");
+                self.rejected_frame = Some(frame);
+                Err(cause)
+            }
         }
-        Ok(())
     }
     /// Borrow this actor's receive-admission decision without native effects or new timing.
     /// A validated final ExitCompleted request latches its reply index before ACK issue.
@@ -92,6 +105,7 @@ impl ParentLifecycle {
     pub(super) fn receive_admission_open(&self) -> bool {
         self.read.is_none()
             && self.acquisition_receive.is_none()
+            && self.output_receive_until.is_none()
             && self.connected
             && !self.closed
             && self.close_after_reply.is_none()

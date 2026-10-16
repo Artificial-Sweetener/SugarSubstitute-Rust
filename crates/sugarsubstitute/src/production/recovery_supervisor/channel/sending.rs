@@ -13,6 +13,7 @@ impl Outgoing {
             Self::DesktopCreated(value) => {
                 (RecoveryCommand::DesktopCreated(value), Sent::DesktopCreated)
             }
+            Self::Retired => (RecoveryCommand::Retired, Sent::Retired),
             Self::DesktopExited { process, status } => {
                 (RecoveryCommand::DesktopExited { process, status }, Sent::DesktopExited)
             }
@@ -80,5 +81,29 @@ impl Channel {
                 Err(Box::new(cause))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn retired_mapping_uses_original_complete_native_receipt_without_partial_close() -> Result<()> {
+        let (command, sent) = Outgoing::Retired.command();
+        assert!(matches!(command, RecoveryCommand::Retired));
+        assert_eq!(sent, Sent::Retired);
+        let operation = LifecyclePipeOperationId::new(3)?;
+        let foreign = LifecyclePipeOperationId::new(4)?;
+        let bytes = RECOVERY_HEADER_BYTES as u32;
+        let mut receipt = receipt::Receipt::new(operation, 2, RECOVERY_HEADER_BYTES);
+        assert!(receipt.written(operation, bytes, 1).is_err());
+        assert!(receipt.issued(foreign).is_err());
+        receipt.issued(operation)?;
+        assert!(receipt.written(foreign, bytes, 1).is_err());
+        assert!(receipt.written(operation, bytes - 1, 1).is_err());
+        assert!(receipt.written(operation, bytes, 0).is_err());
+        receipt.written(operation, bytes, 1)?;
+        assert!(receipt.returned(operation).is_err());
+        Ok(())
     }
 }

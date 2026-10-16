@@ -38,6 +38,21 @@ pub(super) struct Retirement {
     total_observed: bool,
 }
 impl Retirement {
+    /// Adopt the existing pipe's actual terminal independently of fresh admission.
+    /// Its original guard remains here until full family and transport retirement.
+    pub(super) fn observe_terminal(&mut self, parent: &BackendCustodyParent) -> Result<()> {
+        if self.terminal.is_none() {
+            self.terminal = parent
+                .take_terminal()
+                .map_err(|cause| diagnostics::failed("pipe_terminal", cause))?;
+        }
+        let Some(terminal) = &self.terminal else { return Ok(()) };
+        match &terminal.outcome {
+            JobOutcome::Failure(cause) => Err(Box::new(cause.clone())),
+            JobOutcome::Panicked(cause) => Err(Box::new(RetirementPanicked(cause.clone()))),
+            outcome => Err(Box::new(RetirementRejected::Terminal(outcome.kind()))),
+        }
+    }
     /// Freeze one unchanged original transaction, including pre-parent attachment cleanup.
     fn freeze(&mut self, budget: ShutdownBudget) -> Result<ShutdownBudget> {
         let original = *self.original.get_or_insert(budget);

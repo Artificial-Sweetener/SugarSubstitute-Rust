@@ -93,7 +93,11 @@ impl Wake {
         }
     }
 }
-fn exercise_source_stop(shutdown_first: bool, timed_out: bool) -> Result<()> {
+fn exercise_source_stop(
+    shutdown_first: bool,
+    timed_out: bool,
+    admission_fails: bool,
+) -> Result<()> {
     let clock = Arc::new(HeldClock::default());
     let wake = Arc::new(Wake::default());
     let execution = ExecutionOwner::new(clock.clone(), wake.clone())?;
@@ -165,6 +169,20 @@ fn exercise_source_stop(shutdown_first: bool, timed_out: bool) -> Result<()> {
     )?;
     record.source_job = true;
     record.source_closed = false;
+    if admission_fails {
+        record.output = Some(client.reserve_windows_output(
+            &native,
+            JobSpec {
+                id: jobs.allocate()?,
+                operation: Operation::NativeLifecycle,
+                class: JobClass::NativeObservation,
+                reservation_bytes: MIN_WINDOWS_OUTPUT_BYTES,
+                deadline: None,
+                replacement: None,
+            },
+            sugarsubstitute_execution::windows_output::OutputIdentity::Managed(key),
+        )?);
+    }
     backend.records[0] = Some(record);
     let mut resources = BackendResources {
         client: &client,
@@ -267,7 +285,77 @@ fn exercise_source_stop(shutdown_first: bool, timed_out: bool) -> Result<()> {
             },
         )
     })?;
-    consume_source(backend.records[0].as_mut().ok_or("Original source record absent")?)?;
+    if admission_fails {
+        wake.until(&client, || {
+            backend.records[0].as_ref().and_then(|record| record.output.as_ref()).is_some_and(
+                |output| {
+                    matches!(
+                        output.completion.status().phase,
+                        sugarsubstitute_contracts::execution::JobPhase::Terminal(_)
+                    )
+                },
+            )
+        })?;
+        assert!(!backend.record(key)?.output_observed);
+        assert!(backend.record(key)?.source_close.is_some());
+        let stopped =
+            client.create_scope(ScopeSpec { id: scopes.allocate()?, deadline: None }, None)?;
+        stopped.cancel();
+        let mut input = Some(());
+        let admission = client
+            .submit_blocking_owned_input::<(), std::io::Error, _, _>(
+                &stopped,
+                JobSpec {
+                    id: jobs.allocate()?,
+                    operation: Operation::Readiness,
+                    class: JobClass::InfrastructureLifecycle,
+                    deadline: Some(Moment::from_nanos(2000)),
+                    reservation_bytes: 4096,
+                    replacement: None,
+                },
+                &mut input,
+                |(), _| Ok(()),
+            )
+            .err()
+            .ok_or("Stopped scope admitted fresh work")?;
+        assert!(input.is_some());
+        let cause: Box<dyn Error + Send + Sync> = Box::new(admission);
+        let first = std::ptr::from_ref(cause.as_ref());
+        let batch = client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
+        let returned = backend
+            .consume_existing(0, &batch, &resources, Err(cause))
+            .err()
+            .ok_or("Fresh admission failure was hidden")?;
+        assert!(std::ptr::eq(std::ptr::from_ref(returned.as_ref()), first));
+        assert!(returned.downcast_ref::<sugarsubstitute_execution::BlockingInputError>().is_some());
+        assert_eq!(stopped.snapshot().reserved_bytes, 0);
+        assert!(backend.record(key)?.output_observed);
+        assert!(matches!(
+            backend.record(key)?.output_terminal.as_ref().map(|done| &done.outcome),
+            Some(JobOutcome::Cancelled)
+        ));
+        assert!(
+            backend
+                .record(key)?
+                .output
+                .as_ref()
+                .is_some_and(|output| output.control.snapshot().retired)
+        );
+        assert!(native.snapshot().reserved_bytes >= MIN_WINDOWS_OUTPUT_BYTES);
+        assert_eq!(backend.record(key)?.shutdown, shutdown);
+        assert_eq!(backend.record(key)?.budget, budget);
+        assert!(!backend.attempt_settled(key));
+        assert_eq!(
+            backend
+                .failure(key)
+                .and_then(Error::source)
+                .and_then(|cause| cause.downcast_ref::<std::io::Error>())
+                .map(std::ptr::from_ref),
+            Some(pointer),
+        );
+    } else {
+        consume_source(backend.records[0].as_mut().ok_or("Original source record absent")?)?;
+    }
     assert!(backend.record(key)?.source_closed);
     assert!(matches!(
         backend.record(key)?.source_terminal.as_ref().map(|done| &done.outcome),
@@ -286,7 +374,7 @@ fn exercise_source_stop(shutdown_first: bool, timed_out: bool) -> Result<()> {
 #[test]
 fn backend_source_terminal_cancel_and_timeout_during_cleanup_keep_original_failure() -> Result<()> {
     for timed_out in [false, true] {
-        exercise_source_stop(true, timed_out)?;
+        exercise_source_stop(true, timed_out, false)?;
     }
     Ok(())
 }
@@ -295,5 +383,11 @@ fn backend_source_terminal_cancel_and_timeout_during_cleanup_keep_original_failu
 #[test]
 fn backend_source_terminal_cancel_before_cleanup_remains_failure_until_explicit_close() -> Result<()>
 {
-    exercise_source_stop(false, false)
+    exercise_source_stop(false, false, false)
+}
+
+/// A genuine admission rejection cannot prevent queued source/output closes from being adopted.
+#[test]
+fn custody_admission_failure_still_adopts_real_source_and_output_cleanup_terminals() -> Result<()> {
+    exercise_source_stop(true, false, true)
 }

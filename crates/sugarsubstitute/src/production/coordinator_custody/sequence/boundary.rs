@@ -214,6 +214,14 @@ pub(super) struct Port {
     terminal_taken: bool,
 }
 impl Port {
+    pub(super) fn observe_terminal(&mut self, owner: &mut Retirement) -> Result<()> {
+        let result = owner.observe_terminal(self.parent()?);
+        self.terminal_taken |= owner.terminal.is_some();
+        result
+    }
+    pub(super) fn parent(&self) -> Result<&BackendCustodyParent> {
+        self.parent.as_ref().ok_or_else(|| "Actual original pipe absent".into())
+    }
     pub(super) fn key(
         &self,
     ) -> std::result::Result<BackendCustodyKey, Box<dyn Error + Send + Sync>> {

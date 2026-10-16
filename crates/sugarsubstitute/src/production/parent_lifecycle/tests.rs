@@ -11,6 +11,8 @@ mod attempt_cleanup;
 mod expiry_retirement;
 #[path = "tests/normal_close.rs"]
 mod normal_close;
+#[path = "tests/output_wait.rs"]
+mod output_wait;
 #[path = "tests/ownership.rs"]
 mod ownership;
 use super::{ParentError, ParentLifecycle, Reply, folders::Folders, history::Requests};

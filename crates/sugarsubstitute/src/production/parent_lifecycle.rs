@@ -26,6 +26,8 @@ mod normal_close;
 pub(crate) use normal_close::DesktopCloseRequest;
 #[path = "parent_lifecycle/output.rs"]
 mod output;
+#[path = "parent_lifecycle/output_wait.rs"]
+mod output_wait;
 #[path = "parent_lifecycle/profile_observation.rs"]
 mod profile_observation;
 #[path = "parent_lifecycle/receive.rs"]
@@ -125,6 +127,7 @@ pub(crate) struct ParentLifecycle {
     activity_failure_origin: ParentActivityFailureOrigin,
     rejected_frame: Option<ReceivedLifecycleFrame>,
     acquisition_receive: Option<(u64, ReceivedLifecycleFrame)>,
+    output_receive_until: Option<Moment>,
     failure: Option<Cause>,
     secondary: [Option<Cause>; 8],
     omitted_causes: u64,
@@ -212,6 +215,7 @@ impl ParentLifecycle {
             activity_failure_origin: ParentActivityFailureOrigin::Coordinator,
             rejected_frame: None,
             acquisition_receive: None,
+            output_receive_until: None,
             failure: None,
             secondary: [const { None }; 8],
             omitted_causes: 0,
@@ -291,6 +295,8 @@ impl ParentLifecycle {
         self.check_main_deadline(resources)?;
         *step = "advance_attempt_cleanup";
         self.advance_attempt_cleanup(resources)?;
+        *step = "resume_received";
+        self.resume_acquisition_receive(resources)?;
         *step = "send_next";
         self.send_next(resources)?;
         *step = "receive_next";
@@ -316,6 +322,7 @@ impl ParentLifecycle {
         // so the actual pipe worker can finish checked native retirement.
         self.rejected_frame = None;
         self.acquisition_receive = None;
+        self.output_receive_until = None;
         self.output = None;
         if let Some(write) = &self.write {
             let _fact = write.admission.revoke();
@@ -433,6 +440,7 @@ impl ParentLifecycle {
             self.profile_pending.as_ref().map(|pending| pending.original),
             self.main_deadline(),
             self.requests.next_deadline(),
+            self.output_receive_until,
         ]
         .into_iter()
         .flatten()

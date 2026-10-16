@@ -207,3 +207,36 @@ fn pending_issue_panic_keeps_admitted_storage_through_blocked_retirement() -> Te
     assert_eq!(boundary.closes.load(Ordering::Acquire), 1);
     Ok(())
 }
+
+#[test]
+fn actual_output_loan_release_wakes_parked_consumers_after_native_worker_has_retired() -> TestResult
+{
+    let rig = Rig::new()?;
+    let boundary = Boundary::new();
+    lock(&boundary.data)[0].push_back(b"first".to_vec());
+    lock(&boundary.data)[0].push_back(b"second".to_vec());
+    boundary.eof[0].store(true, Ordering::Release);
+    boundary.eof[1].store(true, Ordering::Release);
+    let mut session = session(&rig, &boundary)?;
+    assert!(matches!(completion(&rig, &mut session)?.outcome, JobOutcome::Success(_)));
+    assert!(session.control.snapshot().retired);
+    let guard = session.control.take_batch()?.ok_or("First batch absent")?;
+    assert_eq!(guard.batch().ok_or("Managed batch absent")?.bytes(), b"first");
+    assert!(!session.control.loan_available());
+    assert_eq!(session.control.take_batch().err(), Some(WindowsOutputError::LoanBusy));
+    let retained = session.control.snapshot();
+    rig.client.drain_completions(NonZeroUsize::new(32).ok_or("Drain bound absent")?)?;
+    let observed = rig.wake.count();
+    drop(guard);
+    assert!(rig.wake.count() > observed);
+    assert!(session.control.loan_available());
+    let next = session.control.take_batch()?.ok_or("Second batch absent")?;
+    let batch = next.batch().ok_or("Second managed batch absent")?;
+    assert_eq!(batch.bytes(), b"second");
+    assert_eq!(batch.sequence().get(), 2);
+    assert_eq!(batch.gap(), None);
+    assert_eq!(session.control.snapshot().counters[0].read_bytes, retained.counters[0].read_bytes);
+    assert_eq!(boundary.closes.load(Ordering::Acquire), 1);
+    drop(next);
+    Ok(())
+}

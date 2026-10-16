@@ -78,6 +78,7 @@ impl CoordinatorCustody {
         let Some(parent) = self.parent.clone() else {
             return Ok(false);
         };
+        self.retirement.observe_terminal(&parent)?;
         if let Some(ticket) = self.ticket {
             resources
                 .authority

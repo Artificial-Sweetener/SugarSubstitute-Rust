@@ -120,7 +120,13 @@ fn queued_output(check: impl FnOnce(&CoordinatorBackend, ResourceKey) -> Result<
         return Err("Actual provisional lease missing".into());
     };
     let budget = ConnectionBudget::new(ConnectionBudgetKind::Managed, Moment::from_nanos(0))?;
-    let mut record = cutoff_tests::creator(lease.resource, target, budget, scope)?;
+    let record = cutoff_tests::creator(lease.resource, target, budget, scope)?;
+    owner.records[0] = Some(record);
+    // An absent stream is the supported empty-console result, including attached
+    // backends. Only an actual native batch loan may close the readiness gate.
+    assert!(owner.output_loan_available(lease.resource)?);
+    assert!(owner.take_output(lease.resource)?.is_none());
+    let record = owner.records[0].as_mut().ok_or("Original backend disappeared")?;
     record.output = Some(client.reserve_windows_output(
         &native,
         JobSpec {
@@ -133,7 +139,8 @@ fn queued_output(check: impl FnOnce(&CoordinatorBackend, ResourceKey) -> Result<
         },
         OutputIdentity::Managed(lease.resource),
     )?);
-    owner.records[0] = Some(record);
+    assert!(record.output.as_ref().ok_or("Original output disappeared")?.control.loan_available());
+    assert!(owner.output_loan_available(lease.resource)?);
     let result = check(owner, lease.resource);
     let record = owner.records[0].as_mut().ok_or("Original backend disappeared")?;
     let output = record.output.as_mut().ok_or("Original output disappeared")?;

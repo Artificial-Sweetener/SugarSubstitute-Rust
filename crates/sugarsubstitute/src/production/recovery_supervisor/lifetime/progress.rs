@@ -2,57 +2,12 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Advance only from genuine startup, registration, native write and child observations.
 use super::*;
-use sugarsubstitute_contracts::recovery_supervisor::wire::{
-    RecoveryCommand, RecoveryReceiver, decode,
-};
 impl Lifetime {
     pub(super) fn progress(&mut self) -> Result<HeadlessStep> {
         let client = self.client.as_ref().ok_or("Recovery execution absent")?;
         let finite = self.finite.as_ref().ok_or("Recovery finite scope absent")?;
         let native = self.native.as_ref().ok_or("Recovery native scope absent")?;
         let channel = self.channel.as_mut().ok_or("Recovery channel absent")?;
-        if !matches!(self.stage, Stage::Running | Stage::ExitedQueued | Stage::Finished)
-            && client.now()? >= channel.original_until()
-        {
-            return Err("Original recovery setup deadline expired".into());
-        }
-        if let Some(sent) = channel.take_sent() {
-            self.stage = match (sent, self.stage) {
-                (Sent::Hello, stage) => stage,
-                (Sent::StartupAccepted, Stage::AcceptedQueued) => {
-                    let capture = self.capture.as_mut().ok_or("Fresh capture owner absent")?;
-                    capture.start(client, native, finite, &self.jobs)?;
-                    Stage::Registering
-                }
-                (Sent::CaptureRegistered, Stage::RegisteredQueued) => {
-                    self.capture
-                        .as_mut()
-                        .ok_or("Fresh capture owner absent")?
-                        .attach(client, native, &self.jobs)?;
-                    Stage::Attaching
-                }
-                (Sent::DesktopCreated, Stage::CreatedQueued) => Stage::Enrollment,
-                (Sent::DesktopExited, Stage::ExitedQueued) => Stage::Finished,
-                _ => return Err("Recovery actual write phase rejected".into()),
-            };
-        }
-        if self.origin.is_some()
-            && let Some(frame) = channel.control_frame()
-        {
-            match decode(frame.as_bytes(), RecoveryReceiver::Supervisor)?.command {
-                RecoveryCommand::Stop(counter) => {
-                    channel.control().validate_current_admission()?;
-                    let until = client.decode_lifecycle_deadline(sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeDeadline::new(counter.ticks(), counter.frequency())?)?;
-                    self.cleanup.root_stop(client.now()?, until)?;
-                    return Ok(HeadlessStep::Shutdown);
-                }
-                RecoveryCommand::Failed(code) => {
-                    return Err(format!("Actual Root stopped recovery: {code:?}").into());
-                }
-                RecoveryCommand::DesktopEnrolled(_) => {}
-                _ => return Err("Recovery post-startup Root command rejected".into()),
-            }
-        }
         match self.stage {
             Stage::Startup => {
                 if self.origin.is_none()

@@ -11,11 +11,13 @@ use sugarsubstitute_supervision::lifecycle_protocol::{
 };
 
 impl ParentLifecycle {
+    /// Consume an authentic frame, or retain it before admission while shared output is loaned.
+    /// False requires the caller to keep this exact original frame and its finite cutoff.
     pub(super) fn receive(
         &mut self,
         bytes: &[u8],
         resources: &mut ParentResources<'_, '_>,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         if self.peer.is_some() {
             resources.session.control.validate_current_admission()?;
         }
@@ -60,15 +62,20 @@ impl ParentLifecycle {
                 resources.session.control.original_deadline(),
             )?;
             self.hello = true;
-            return Ok(());
+            return Ok(true);
         }
         if self.peer.is_none() || header.connection != Some(self.connection) {
             return Err(ParentError::ForeignPeer.into());
         }
+        if self.requests.inspect(header, bytes)?.1
+            && self.defer_output_receive(header, &decoded.payload, resources)?
+        {
+            return Ok(false);
+        }
         let (index, fresh) = self.requests.admit(header, bytes)?;
         if !fresh {
             self.requests.get_mut(index)?.sent = false;
-            return Ok(());
+            return Ok(true);
         }
         if let DecodedPayload::OutputPull { lease, acknowledged_delivery } = decoded.payload {
             let supplied = resources.execution.client.decode_counter_deadline(
@@ -85,7 +92,7 @@ impl ParentLifecycle {
                 supplied,
                 resources.execution.client.now()?,
             )? {
-                return Ok(());
+                return Ok(true);
             }
         }
         let mut until = if matches!(decoded.payload, DecodedPayload::UiResponse(_)) {
@@ -123,7 +130,7 @@ impl ParentLifecycle {
             }
             self.register(resources)?;
             self.requests.get_mut(index)?.reply = Some(Reply::Acknowledged);
-            return Ok(());
+            return Ok(true);
         }
         let binding = self.binding()?;
         let request = header.request.ok_or(ParentError::WrongPhase)?;
@@ -285,7 +292,7 @@ impl ParentLifecycle {
             }
             _ => return Err(ParentError::WrongPhase.into()),
         }
-        Ok(())
+        Ok(true)
     }
 
     pub(super) fn lease(&self, reference: LeaseReference) -> Result<LeaseKey> {

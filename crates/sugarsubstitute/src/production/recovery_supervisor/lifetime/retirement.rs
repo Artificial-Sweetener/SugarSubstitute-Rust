@@ -12,7 +12,10 @@ impl Lifetime {
         self.setup_wake = None;
         self.enrollment = None;
         self.startup = None;
-        if let Some(channel) = &mut self.channel {
+        // A healthy adopted session must receive Root Stop and transfer Retired first.
+        if self.origin.is_none()
+            && let Some(channel) = &mut self.channel
+        {
             channel.request_close();
         }
         if let Some(capture) = &mut self.capture {
@@ -124,6 +127,27 @@ impl Lifetime {
             false
         };
         let child_settled = self.child.as_ref().is_none_or(RecoveryChildCreation::settled);
+        if failure.is_some() {
+            self.notice.abandon();
+        }
+        let local_retired = capture_safe && child_settled && capture_settled;
+        if let Some(channel) = &mut self.channel {
+            match self.notice.action(now, budget.settle_until, local_retired) {
+                retirement_notice::Action::Wait => {}
+                retirement_notice::Action::Send => {
+                    match channel.try_send(&Outgoing::Retired, budget.settle_until) {
+                        Ok(true) => self.notice.queued(now, budget.settle_until, local_retired)?,
+                        Ok(false) => {}
+                        Err(cause) => {
+                            self.notice.abandon();
+                            channel.request_close();
+                            retain(&mut failure, Err(cause));
+                        }
+                    }
+                }
+                retirement_notice::Action::Close => channel.request_close(),
+            }
+        }
         let channel_settled = self.channel.as_ref().is_none_or(Channel::settled);
         let local_settled = capture_settled && child_settled && channel_settled;
         if (local_settled || now >= budget.settle_until)

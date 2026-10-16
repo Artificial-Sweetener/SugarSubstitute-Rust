@@ -5,6 +5,13 @@ use super::{AdmittedOutputBatch, CoordinatorBackend, ResourceKey, Result};
 use sugarsubstitute_execution::windows_output::WindowsOutputError;
 
 impl CoordinatorBackend {
+    /// Observe the exact resource's delivery-slot availability without taking bytes.
+    /// This grants no output permission; take_output repeats native admission.
+    pub(crate) fn output_loan_available(&self, key: ResourceKey) -> Result<bool> {
+        let record = self.record(key)?;
+        Ok(record.output.as_ref().is_none_or(|output| output.control.loan_available()))
+    }
+
     /// Transfer one charged output guard from the exact retained backend generation.
     /// An admitted worker awaiting construction has no data yet. Its original job,
     /// reservation and terminal observation stay with the backend owner.

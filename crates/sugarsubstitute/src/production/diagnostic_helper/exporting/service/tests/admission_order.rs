@@ -178,7 +178,8 @@ fn partial_export_overload_observes_original_cancellation_before_fresh_user_requ
     assert!(!service.expected_receiving_failure());
     assert!(service.take_terminal().is_none());
     service.release_unsubmitted()?;
-    assert_eq!(scopes[0].snapshot().reserved_bytes, 0);
+    // Cancellation delivery does not join the worker context tail. Its original
+    // reservation reaches zero after the execution-owner join and result disposal below.
     // A new authored request may start after the failed request has actually retired.
     // No old permit/spec is edited or reused; central admission decides the new attempt.
     for _ in 0..4 {
@@ -233,6 +234,9 @@ fn partial_export_overload_observes_original_cancellation_before_fresh_user_requ
     drop(controller);
     drop(owner);
     drop(service);
+    for scope in &scopes {
+        assert_eq!(scope.snapshot().reserved_bytes, 0);
+    }
     assert_eq!(scope.snapshot().reserved_bytes, 0);
     Ok(())
 }

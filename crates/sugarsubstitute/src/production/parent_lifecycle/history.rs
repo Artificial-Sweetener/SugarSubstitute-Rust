@@ -92,9 +92,11 @@ impl Requests {
         Self { records: [const { None }; SLOTS], high_water: 0 }
     }
 
-    /// Admission precedes target conversion, providers and every native effect.
-    pub(super) fn admit(
-        &mut self,
+    /// Inspect the existing replay/identity/capacity predicates without allocating or
+    /// changing request high-water. Waiting for external capacity cannot hide a
+    /// changed duplicate, stale request or exhausted replay window.
+    pub(super) fn inspect(
+        &self,
         header: WireHeader,
         bytes: &[u8],
     ) -> Result<(usize, bool), RequestRejection> {
@@ -124,6 +126,21 @@ impl Requests {
                 .map(|(index, _)| index)
         });
         let index = index.ok_or(ParentError::Overloaded)?;
+        Ok((index, true))
+    }
+
+    /// Admission precedes target conversion, providers and every native effect.
+    pub(super) fn admit(
+        &mut self,
+        header: WireHeader,
+        bytes: &[u8],
+    ) -> Result<(usize, bool), RequestRejection> {
+        let (index, fresh) = self.inspect(header, bytes)?;
+        if !fresh {
+            return Ok((index, false));
+        }
+        let request = header.request.ok_or(ParentError::WrongPhase)?;
+        let digest: [u8; 32] = Sha256::digest(bytes).into();
         let mut output_bytes = Vec::new();
         output_bytes.try_reserve_exact(32768).map_err(RequestRejection::Allocation)?;
         if output_bytes.capacity() != 32768 {

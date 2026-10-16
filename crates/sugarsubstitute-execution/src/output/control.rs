@@ -36,6 +36,12 @@ impl WindowsOutputControl {
         s.pin = true;
         Ok(WindowsChildStdio { shared: self.shared.clone() })
     }
+    /// Borrow delivery-slot readiness without taking bytes or granting a batch.
+    /// A concurrent take still requires take_batch; releasing its actual guard
+    /// signals the existing completion wake so parked consumers can reconsider.
+    pub fn loan_available(&self) -> bool {
+        !lock(&self.shared.state).loan
+    }
     /// Drain one copied, independently charged authoritative batch.
     /// LoanBusy explicitly rejects a second live guard. EOF is ordered after all
     /// retained same-stream bytes; checked cancellation retirement emits gap-only
@@ -112,6 +118,11 @@ impl Drop for AdmittedOutputBatch {
             lock(&self.shared.state).loan = false;
         }
         self.shared.changed();
+        if let Some(core) = self.shared.core.upgrade()
+            && core.mailbox.signal_capacity()
+        {
+            core.mailbox.deliver_wake();
+        }
     }
 }
 /// Own exactly stdin/stdout/stderr inherited parent copies from one output session.

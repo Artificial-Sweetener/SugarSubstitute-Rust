@@ -170,3 +170,41 @@ fn unestablished_startup_cleanup_requires_actual_pipe_retirement() -> TestResult
     fixture.close_fixture()?;
     Ok(())
 }
+
+/// Observing an actually stopped pipe preserves its terminal without claiming family retirement.
+#[test]
+fn stopped_pipe_terminal_is_adopted_before_fresh_admission_and_retained_until_cleanup() -> TestResult
+{
+    use sugarsubstitute_contracts::execution::JobId;
+    let mut fixture = Fixture::new(Some(111))?;
+    let key = fixture.port.key()?;
+    fixture.port.parent()?.close()?;
+    fixture.terminal(JobId::new(1)?)?;
+    let mut owner = Retirement::default();
+    for _ in 0..2 {
+        let cause = fixture
+            .port
+            .observe_terminal(&mut owner)
+            .err()
+            .ok_or("Stopped pipe granted fresh admission")?;
+        assert!(matches!(
+            cause.downcast_ref::<RetirementRejected>(),
+            Some(RetirementRejected::Terminal(TerminalKind::Cancelled))
+        ));
+        let terminal = owner.terminal.as_ref().ok_or("Actual pipe terminal lost")?;
+        assert_eq!(terminal.spec.id, JobId::new(1)?);
+        assert_eq!(terminal.scope_id, fixture.scope.id());
+        assert!(matches!(terminal.outcome, JobOutcome::Cancelled));
+        assert!(!owner.settled && !owner.pipe_closed && owner.original.is_none());
+        assert!(fixture.scope.snapshot().reserved_bytes > 0);
+    }
+    let budget = ShutdownBudget::new(fixture.client.now()?)?;
+    fixture.port.family_retired = true;
+    fixture.settle(&mut owner, budget, false, key)?;
+    assert!(owner.settled && owner.pipe_closed);
+    assert_eq!(owner.original, Some(budget));
+    assert!(fixture.scope.snapshot().reserved_bytes > 0);
+    drop(owner);
+    fixture.close_fixture()?;
+    Ok(())
+}

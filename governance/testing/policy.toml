@@ -23,13 +23,13 @@ minimum_tests = 91
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
 concern = "Fresh subordinate recovery composition with unchanged Root authority, admission before ACK, independent real receiving and checked cleanup; Production desktop startup and retirement through actual execution, authenticated parent/child transport, shared backends, profiles and native window adapters; retained failures, captured startup, bounded console rendering and isolated qualification roles; contained headless backend witness invocation and original-budget Finish lifecycle; genuine boxed incident construction and bounded original terminal/cause diagnostics; unique heap activation ownership outside the persistent native pump frame; original launched-profile release consumption and precise Finish request status; actual Desktop probe formatter and sole bounded Root stderr diagnostic decoding"
-minimum_tests = 785
+minimum_tests = 793
 
 [[owners]]
 package = "sugarsubstitute-execution"
 root = "crates/sugarsubstitute-execution"
 concern = "Genuine once-only recovery delegation, held process creation, bounded paired transport and capture-before-containment ownership; Admission, CPU scheduling, cancellation, retained ownership and observed worker teardown; authenticated bounded coordinator entry transport, replay and native issue fences; original whole preparation/native environment custody, retained error aliases and actual source/client staging fences; same-ledger capture bundle admission/cleanup, typed native dispatch, original ancestor and handshake fences, physical mapping/capsule retention; original finite custodied creation through both native acknowledgements and retained cleanup aliases; same-ledger BackendCustody capture pins, authenticated v5 inherited input and unchanged preflight budgets; one-shot callback-targeted injected clock regression with independent actual worker observations and sticky original global failure"
-minimum_tests = 616
+minimum_tests = 618
 
 [[owners]]
 package = "sugarsubstitute-xtask"
