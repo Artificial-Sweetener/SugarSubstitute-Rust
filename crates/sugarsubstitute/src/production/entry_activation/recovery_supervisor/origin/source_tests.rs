@@ -137,3 +137,87 @@ fn actual_worker_panic_preserves_repository_and_failed_close_cause_until_checked
     assert_eq!(scope.snapshot().reserved_bytes, 0);
     Ok(())
 }
+
+#[test]
+fn recovery_origin_repository_cleanup_closes_shared_journal_read_across_distinct_scope()
+-> Result<(), TestError> {
+    use sugarsubstitute_contracts::incident::{IncidentOperationId, LogicalStoreOperationKey};
+    use sugarsubstitute_contracts::lifecycle::{CoordinatorEpoch, CoordinatorKey, NamespaceId};
+    use sugarsubstitute_supervision::diagnostic_storage::{
+        DiagnosticObject, DiagnosticStorageFailureCode,
+    };
+    let (owner, client, wake, scope) = owner()?;
+    let cleanup = client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?;
+    assert_ne!(scope.id(), cleanup.id());
+    let jobs = JobSequence::new();
+    let source = source(&client, &scope, &wake, &jobs)?;
+    let fixture = Arc::new(DiagnosticStorageFixture::new()?);
+    let worker_source = source.alias()?;
+    let external = fixture.clone();
+    let mut worker = client.submit_blocking(
+        &scope,
+        spec(jobs.allocate()?, DIAGNOSTIC_STORAGE_BYTES),
+        move |context| -> Result<_, TestError> {
+            let mut loan = worker_source.loan(true)?;
+            let (publication, read) = operation::tests::prepared_read(&context, &external)?;
+            **loan.operation.as_mut().ok_or("Original publication slot missing")? = publication;
+            Ok(read)
+        },
+    )?;
+    let read = success(observe(&client, &wake, &mut worker)?)?;
+    let facts = read.facts();
+    assert_eq!(fixture.snapshot().live_outputs(), 1);
+    let external = fixture.clone();
+    let mut normal_close = client.submit_blocking(
+        &cleanup,
+        spec(jobs.allocate()?, 32 * 1024),
+        move |context| -> Result<_, TestError> {
+            let mut read = read;
+            let before = external.snapshot().live_outputs();
+            let cause = read
+                .retire(&context)
+                .err()
+                .ok_or("Normal read close accepted foreign cleanup scope")?;
+            assert_eq!(cause.code(), DiagnosticStorageFailureCode::InvalidIdentity);
+            assert_eq!(external.snapshot().live_outputs(), before);
+            Ok(read)
+        },
+    )?;
+    let read = success(observe(&client, &wake, &mut normal_close)?)?;
+    let mut service = OriginPublication::from_source(source.alias()?);
+    assert!(!service.close(&client, &cleanup, &jobs)?);
+    capture_until(&client, &wake, |batch| {
+        service.capture(batch)?;
+        Ok(service.close(&client, &cleanup, &jobs)?)
+    })?;
+    assert!(service.files_retired());
+    assert!(source.retired());
+    assert!(service.failure().is_none());
+    let loan = source.loan(false)?;
+    let actual = operation::tests::snapshot(
+        loan.operation.as_deref().ok_or("Retired publication missing")?,
+    )?;
+    assert!(actual.admission_closed());
+    assert!(!actual.writer_held());
+    assert_eq!(actual.reads(), 0);
+    assert_eq!(actual.live_handles(), 0);
+    drop(loan);
+    assert_eq!(fixture.snapshot().live_outputs(), 0);
+    let object = DiagnosticObject::Journal(LogicalStoreOperationKey::new(
+        CoordinatorKey {
+            namespace: NamespaceId::new([1; 32]),
+            epoch: CoordinatorEpoch::new([2; 16])?,
+        },
+        IncidentOperationId::new(1)?,
+    ));
+    assert_eq!(fixture.snapshot().active_identity(object), Some(facts));
+    drop((worker, normal_close));
+    drop(owner);
+    assert!(scope.snapshot().reserved_bytes >= 4 * 1024 * 1024 + DIAGNOSTIC_STORAGE_BYTES);
+    drop((service, source, fixture));
+    assert_eq!(scope.snapshot().reserved_bytes, DIAGNOSTIC_STORAGE_BYTES);
+    drop(read);
+    assert_eq!(scope.snapshot().reserved_bytes, 0);
+    assert_eq!(cleanup.snapshot().reserved_bytes, 0);
+    Ok(())
+}

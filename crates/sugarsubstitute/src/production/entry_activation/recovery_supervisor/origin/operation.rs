@@ -108,21 +108,11 @@ impl Publication {
         }
         Ok(())
     }
-    /// Close the actual checked read before the repository; failures preserve every original slot.
+    /// Retire the repository's complete native read/file custody through its checked cleanup owner.
+    /// The origin output keeps its shared read pin and funding until successful source compaction.
     pub(super) fn retire(&mut self, context: &JobContext) -> Result<bool, OriginIssue> {
         if self.retired {
             return Ok(true);
-        }
-        if let Some(output) = &mut self.output
-            && let Err(cause) = output.retire(context)
-        {
-            self.cleanup.get_or_insert_with(|| {
-                Arc::new(failure::FailureData::store(
-                    OriginFailureCategory::OriginReadCleanup,
-                    cause,
-                ))
-            });
-            return Err(OriginIssue::Cleanup);
         }
         if let Some(repository) = &mut self.repository
             && let Err(cause) = repository.retire(context)

@@ -8,6 +8,8 @@ use sugarsubstitute_execution::RegisteredRecoveryGrant;
 use sugarsubstitute_supervision::diagnostic_storage::*;
 /// One original origin preparation, retained before any publication effect.
 /// Only checked() exposes completed real read custody; a partial value cannot release creation.
+/// Its read pin shares the repository's retained native slot. The repository owns checked retirement;
+/// this value and its original funding remain retained until that entire close succeeds.
 pub struct RecoveryCaptureOriginCommit {
     record: RecoveryCaptureOriginRecord,
     seed: Option<SeedCommit>,
@@ -26,16 +28,6 @@ impl RecoveryCaptureOriginCommit {
     /// Observe original preparation key, never a renewed budget.
     pub const fn operation(&self) -> sugarsubstitute_contracts::incident::LogicalStoreOperationKey {
         self.record.operation()
-    }
-    /// Checked-close the actual retained canonical read before repository cleanup.
-    /// The durable journal remains intact and its immutable activation facts remain owned.
-    /// # Errors
-    /// Preserves original context/native close failure and retains the same live read slot.
-    pub fn retire(&mut self, context: &JobContext) -> Result<(), IncidentStoreError> {
-        if let Some(checked) = &mut self.checked {
-            checked.retire(context)?;
-        }
-        Ok(())
     }
     /// Borrow only actually completed protected origin custody.
     /// # Errors

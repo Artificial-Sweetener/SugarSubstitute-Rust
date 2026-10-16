@@ -7,7 +7,6 @@ pub(in crate::production) enum OriginFailureCategory {
     Memory,
     Grant,
     Publication,
-    OriginReadCleanup,
     RepositoryCleanup,
 }
 /// Actual provider error stays charged with the retained operation and its original guard.
