@@ -56,6 +56,7 @@ pub(super) enum Observation {
     Connection(Connection),
     Close(crate::production::close_diagnostic::CloseTrace),
     MainFailure(MainFailure),
+    Probe(sugarsubstitute_desktop::frontend_probe_diagnostic::Record),
     #[cfg(feature = "k1-native-qualification")]
     Qualification(qualification::Qualification),
 }
@@ -71,6 +72,8 @@ pub(super) struct Diagnostic {
     emitted: u8,
     failure_seen: bool,
     main_failure_seen: bool,
+    probe_emitted: u8,
+    probe_timeout_seen: bool,
 }
 impl Diagnostic {
     pub(super) const fn new() -> Self {
@@ -84,6 +87,8 @@ impl Diagnostic {
             emitted: 0,
             failure_seen: false,
             main_failure_seen: false,
+            probe_emitted: 0,
+            probe_timeout_seen: false,
         }
     }
     /// The authenticated output owner validates Run before these inert byte facts.
@@ -122,7 +127,21 @@ impl Diagnostic {
                         self.discard = false;
                         continue;
                     }
-                    if let Some(close) = close::parse(&self.bytes[..self.length]) {
+                    if let Some(probe) =
+                        sugarsubstitute_desktop::frontend_probe_diagnostic::Record::parse(
+                            &self.bytes[..self.length],
+                        )
+                    {
+                        let timeout = probe.stage
+                            == sugarsubstitute_desktop::frontend_probe_diagnostic::Stage::Timeout;
+                        if timeout && !self.probe_timeout_seen {
+                            self.probe_timeout_seen = true;
+                            emit(Observation::Probe(probe));
+                        } else if !timeout && self.probe_emitted < 16 {
+                            self.probe_emitted += 1;
+                            emit(Observation::Probe(probe));
+                        }
+                    } else if let Some(close) = close::parse(&self.bytes[..self.length]) {
                         if self.emitted < 30 {
                             self.emitted += 1;
                             emit(Observation::Close(close));

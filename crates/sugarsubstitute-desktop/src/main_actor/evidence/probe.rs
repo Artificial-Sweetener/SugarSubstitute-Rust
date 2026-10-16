@@ -8,19 +8,33 @@ use super::*;
 /// `_setupDone` observes completion of the SugarCubes UI owner's async setup.
 const SAMPLE: &str = r#"(async()=>{
 const app=window.comfyAPI?.app?.app;
-if(!app?.isGraphReady||app.vueAppReady!==true||!app.positionConversion||!window.SugarCubes||
- !Array.isArray(app.extensions)||!app.extensions.some(extension=>extension.name==='SugarCubes.UI'))return 'null';
+let missing=0;
+const check=(condition,bit)=>{if(!condition)missing|=bit;return !!condition;};
+check(app?.isGraphReady,1);
+check(app?.vueAppReady===true,2);
+check(app?.positionConversion,4);
+const publicApi=window.SugarCubes;
+check(publicApi,8);
+const extensions=app?.extensions;
+const extensionArray=check(Array.isArray(extensions),16);
+check(extensionArray&&extensions.some(extension=>extension.name==='SugarCubes.UI'),32);
+if(missing)return JSON.stringify({incomplete:missing});
 const cubes=await import('/extensions/SugarCubes/comfyui/ui.js');
 const canvas=app?.canvas?.canvas;
 const bounds=canvas?.getBoundingClientRect();
-const registered=Array.isArray(app?.extensions)&&app.extensions.includes(cubes.sugarCubesExtension);
-const graph=!!app?.graph&&app.canvas?.graph===app.graph;
-const connected=!!canvas?.isConnected&&!!bounds&&bounds.width>0&&bounds.height>0;
-const loading=document.readyState==='complete'&&!app?.configuringGraph&&
- !document.getElementById('splash-loader');
-const ready=cubes.sugarCubesUI?._setupDone===true&&!!window.SugarCubes&&
- typeof window.SugarCubes.openLibrary==='function';
-if(!(graph&&connected&&loading&&registered&&ready))return 'null';
+const registered=check(Array.isArray(app?.extensions)&&app.extensions.includes(cubes.sugarCubesExtension),64);
+const graph=check(!!app?.graph&&app.canvas?.graph===app.graph,128);
+const connected=check(!!canvas?.isConnected&&!!bounds&&bounds.width>0&&bounds.height>0,256);
+const complete=check(document.readyState==='complete',512);
+const configured=check(!app?.configuringGraph,1024);
+const splash=check(!document.getElementById('splash-loader'),2048);
+const loading=complete&&configured&&splash;
+const setup=check(cubes.sugarCubesUI?._setupDone===true,4096);
+const readyApi=window.SugarCubes;
+const api=check(readyApi,16384);
+const library=check(!!readyApi&&typeof readyApi.openLibrary==='function',8192);
+const ready=setup&&api&&library;
+if(missing)return JSON.stringify({incomplete:missing});
 return JSON.stringify({schema_version:1,launch_id:LAUNCH,navigation_generation:NAV,
  outcome:{status:'ready',evidence:{frontend_version:FRONT,sugarcubes_version:CUBES,
  app_graph_ready:graph,canvas_connected:connected,loading_finished:loading,

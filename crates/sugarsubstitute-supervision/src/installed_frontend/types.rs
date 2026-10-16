@@ -5,7 +5,9 @@ use std::{
     error::Error,
     fmt,
     path::{Path, PathBuf},
+    sync::Arc,
 };
+use sugarsubstitute_contracts::execution::{JobCompletion, JobOutcome, PanicCause, TerminalKind};
 
 /// Explicit independently selected local sources; HTTP cannot manufacture this input.
 /// Paths are lexical until the admitted native inspection resolves and pins them.
@@ -139,16 +141,40 @@ impl FrontendSourceManifest {
 }
 
 /// Preserve an original installation boundary cause with redacted ordinary diagnostics.
+#[derive(Clone)]
 pub struct FrontendSourceError {
     stage: &'static str,
-    cause: Box<dyn Error + Send + Sync>,
+    cause: Arc<dyn Error + Send + Sync>,
 }
 impl FrontendSourceError {
     pub(crate) fn new(stage: &'static str, cause: impl Error + Send + Sync + 'static) -> Self {
-        Self { stage, cause: Box::new(cause) }
+        Self { stage, cause: Arc::new(cause) }
     }
     pub(crate) fn invalid(stage: &'static str) -> Self {
         Self::new(stage, std::io::Error::other("Installed frontend boundary rejected"))
+    }
+    /// Retain the genuine completion, including panic and byte custody, before returning its marker.
+    pub(crate) fn terminal(
+        completion: JobCompletion<(), FrontendSourceError>,
+        matched: bool,
+    ) -> Self {
+        Self::new(
+            if matched { "source_terminal" } else { "source_delivery_identity" },
+            InspectionTerminal { completion, matched },
+        )
+    }
+    /// Borrow actual execution terminal metadata only after original delivery identity matched.
+    /// Domain failures and rejected foreign completions return `None`; this grants no native closure.
+    pub fn terminal_kind(&self) -> Option<TerminalKind> {
+        let original = self.cause.downcast_ref::<InspectionTerminal>()?;
+        original.matched.then_some(original.completion.outcome.kind())
+    }
+    /// Borrow the original bounded panic payload without formatting or logging it.
+    pub fn panic_cause(&self) -> Option<&PanicCause> {
+        match &self.cause.downcast_ref::<InspectionTerminal>()?.completion.outcome {
+            JobOutcome::Panicked(cause) => Some(cause),
+            _ => None,
+        }
     }
     /// Borrow the stable operation label without private paths or metadata.
     pub const fn stage(&self) -> &'static str {
@@ -168,5 +194,32 @@ impl fmt::Debug for FrontendSourceError {
 impl Error for FrontendSourceError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(self.cause.as_ref())
+    }
+}
+
+/// Original typed terminal remains owned independently of partial file inspection and explicit closure.
+struct InspectionTerminal {
+    completion: JobCompletion<(), FrontendSourceError>,
+    matched: bool,
+}
+impl fmt::Debug for InspectionTerminal {
+    fn fmt(&self, output: &mut fmt::Formatter<'_>) -> fmt::Result {
+        output
+            .debug_struct("InspectionTerminal")
+            .field("kind", &self.completion.outcome.kind())
+            .finish_non_exhaustive()
+    }
+}
+impl fmt::Display for InspectionTerminal {
+    fn fmt(&self, output: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(output, "Installed inspection terminal: {:?}", self.completion.outcome.kind())
+    }
+}
+impl Error for InspectionTerminal {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match &self.completion.outcome {
+            JobOutcome::Failure(cause) => Some(cause),
+            _ => None,
+        }
     }
 }

@@ -24,24 +24,30 @@ function element(selectors = [], id = '') {
 }
 
 // Fake only the external document and imported owner exports; the real SAMPLE decides readiness.
-async function inspect({ splash = false, extra = [], graphReady = true, setupDone = true } = {}) {
-  const extension = { name: 'SugarCubes.UI' };
+async function inspect({ splash = false, extra = [], graphReady = true, setupDone = true,
+  vueReady = true, position = true, api = true, extensions = true, named = true,
+  registered = true, graphSame = true, connected = true, width = 640,
+  complete = true, configuring = false, library = true, apiAfterImport = true } = {}) {
+  const extension = { name: named ? 'SugarCubes.UI' : 'Other' };
   const graph = {};
   const elements = [...extra];
   if (splash) elements.push(element([], 'splash-loader'));
   const app = {
     isGraphReady: graphReady,
-    vueAppReady: true,
-    positionConversion: {},
-    extensions: [extension],
+    vueAppReady: vueReady,
+    positionConversion: position ? {} : null,
+    extensions: extensions ? [extension] : null,
     graph,
-    canvas: { graph, canvas: element() },
-    configuringGraph: false,
+    canvas: { graph: graphSame ? graph : {}, canvas: {
+      ...element(), isConnected: connected,
+      getBoundingClientRect: () => ({ width, height: 480 }),
+    } },
+    configuringGraph: configuring,
   };
   const context = createContext({
-    window: { comfyAPI: { app: { app } }, SugarCubes: { openLibrary() {} } },
+    window: { comfyAPI: { app: { app } }, SugarCubes: api ? { openLibrary: library ? () => {} : null } : null },
     document: {
-      readyState: 'complete',
+      readyState: complete ? 'complete' : 'loading',
       getElementById: (id) => elements.find((item) => item.id === id) ?? null,
       querySelectorAll: (selector) => elements.filter((item) =>
         selector.split(',').some((part) => item.selectors.includes(part.trim()))),
@@ -53,7 +59,7 @@ async function inspect({ splash = false, extra = [], graphReady = true, setupDon
     CUBES: '0.15.3',
   });
   const owner = new SyntheticModule(['sugarCubesExtension', 'sugarCubesUI'], function () {
-    this.setExport('sugarCubesExtension', extension);
+    this.setExport('sugarCubesExtension', registered ? extension : { name: 'SugarCubes.UI' });
     this.setExport('sugarCubesUI', { _setupDone: setupDone });
   }, { context });
   await owner.link(() => assert.fail('The owner fake has no imports'));
@@ -61,6 +67,7 @@ async function inspect({ splash = false, extra = [], graphReady = true, setupDon
   const script = new Script(sample, {
     importModuleDynamically: (specifier) => {
       assert.equal(specifier, '/extensions/SugarCubes/comfyui/ui.js');
+      if (!apiAfterImport) context.window.SugarCubes = null;
       return owner;
     },
   });
@@ -87,7 +94,7 @@ test('completed startup transfers the actual receipt with current identities and
 });
 
 test('the dedicated ComfyUI startup splash blocks readiness until removed', async () => {
-  assert.equal(await inspect({ splash: true }), null);
+  assert.deepEqual(await inspect({ splash: true }), { incomplete: 2048 });
 });
 
 test('an unrelated visible PrimeVue progress spinner does not block startup readiness', async () => {
@@ -101,9 +108,25 @@ test('an unrelated visible LoadingOverlay does not block startup readiness', asy
 });
 
 test('removing the startup splash does not replace actual graph readiness', async () => {
-  assert.equal(await inspect({ graphReady: false }), null);
+  assert.deepEqual(await inspect({ graphReady: false }), { incomplete: 1 });
 });
 
 test('removing the startup splash does not replace completed SugarCubes setup', async () => {
-  assert.equal(await inspect({ setupDone: false }), null);
+  assert.deepEqual(await inspect({ setupDone: false }), { incomplete: 4096 });
+});
+
+test('actual sample identifies each remaining blocked condition without receipt rights', async () => {
+  for (const [options, incomplete] of [
+    [{ vueReady: false }, 2], [{ position: false }, 4], [{ api: false }, 8],
+    [{ extensions: false }, 16 | 32], [{ named: false }, 32],
+    [{ registered: false }, 64], [{ graphSame: false }, 128],
+    [{ connected: false }, 256], [{ width: 0 }, 256],
+    [{ complete: false }, 512], [{ configuring: true }, 1024],
+    [{ library: false }, 8192], [{ apiAfterImport: false }, 8192 | 16384],
+  ]) assert.deepEqual(await inspect(options), { incomplete });
+});
+
+test('actual sample preserves simultaneous failed checks after the same owner import', async () => {
+  assert.deepEqual(await inspect({ splash: true, configuring: true, setupDone: false }),
+    { incomplete: 2048 | 1024 | 4096 });
 });

@@ -75,7 +75,10 @@ impl FailureObservation {
             return Self::classified(FailureKind::Other, "unclassified");
         };
         if let Some(source) = cause.downcast_ref::<FrontendSourceError>() {
-            return Self::classified(FailureKind::Source, source.stage());
+            return Self {
+                terminal: source.terminal_kind(),
+                ..Self::classified(FailureKind::Source, source.stage())
+            };
         }
         if let Some(transport) = cause
             .downcast_ref::<sugarsubstitute_comfy::readiness_transport::ReadinessTransportError>(

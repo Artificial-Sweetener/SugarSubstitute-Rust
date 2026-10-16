@@ -98,6 +98,8 @@ use record::{PendingProjection, Record, RetainedRecord};
 /// Own bounded retained records and the process's one actual capture registration.
 /// No constructor grants native effects, trust, serving state or child readiness.
 pub(crate) struct ProductionActivation {
+    #[cfg(any(test, feature = "k1-native-qualification"))]
+    idle_gate: std::cell::Cell<Option<normal_idle::qualification::IdleGate>>,
     incidents: incident_flow::IncidentFlow,
     qualification: Option<super::qualification::QualificationIntent>,
     executable: PathBuf,
@@ -133,6 +135,8 @@ impl ProductionActivation {
             LaunchConfiguration::validate_path(path)?;
         }
         Ok(Box::new(Self {
+            #[cfg(any(test, feature = "k1-native-qualification"))]
+            idle_gate: std::cell::Cell::new(None),
             incidents: incident_flow::IncidentFlow::new(),
             qualification: None,
             executable,

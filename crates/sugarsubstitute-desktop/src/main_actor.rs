@@ -5,6 +5,7 @@
 mod admission;
 mod construction;
 mod evidence;
+mod probe_diagnostics;
 mod recovery;
 #[cfg(any(feature = "k1-native-qualification", test))]
 mod render_preview;
@@ -62,6 +63,7 @@ pub(crate) struct MainActor {
     pointer: crate::Pointer,
     native_storage: Option<sugarsubstitute_contracts::execution::MemoryClaim>,
     failure_observation: &'static str,
+    probe_diagnostics: probe_diagnostics::ProbeDiagnostics,
     #[cfg(feature = "k1-native-qualification")]
     preview: Option<render_preview::Capture>,
     #[cfg(feature = "k1-native-qualification")]
@@ -114,6 +116,7 @@ impl MainActor {
             pointer: crate::Pointer::default(),
             native_storage: Some(native_storage),
             failure_observation: "None",
+            probe_diagnostics: probe_diagnostics::ProbeDiagnostics::default(),
             #[cfg(feature = "k1-native-qualification")]
             preview: None,
             #[cfg(feature = "k1-native-qualification")]
@@ -271,6 +274,7 @@ impl MainActor {
         {
             let parameters = evidence::probe_parameters(target, self.request()?)?;
             self.receivers()?.call(Command::Probe(target), "Runtime.evaluate", &parameters)?;
+            self.probe_diagnostics.submitted(target);
         }
         Ok(())
     }

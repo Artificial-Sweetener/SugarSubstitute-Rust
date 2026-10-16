@@ -52,7 +52,9 @@ impl IncidentFlow {
         if !self.close_recovery(resources, budget)? {
             return Ok(false);
         }
-        let Some(active) = &mut self.seed else { return Ok(true) };
+        let Some(active) = &mut self.seed else {
+            return Ok(true);
+        };
         let service = if self.host.closing() {
             self.host.retiring_seed_service()?
         } else {
@@ -174,7 +176,9 @@ impl IncidentFlow {
         let selected =
             capture.capture.registration_build().ok_or("Actual selected build missing")?;
         record.seed.submit(record.run, selected, resources, start.value()?.until)?;
-        let Some(material) = record.seed.material()? else { return Ok(false) };
+        let Some(material) = record.seed.material()? else {
+            return Ok(false);
+        };
         if let Some(active) = &self.seed {
             if active.run != record.run {
                 return Ok(false);
@@ -289,14 +293,24 @@ impl IncidentFlow {
     pub(super) fn seed_busy(&self) -> bool {
         self.seed.is_some()
     }
-    /// Inspect original preparation, seed, collection and receiving custody before idle close.
-    pub(super) fn diagnostic_custody_pending(&self) -> bool {
-        self.recovery.pending()
-            || self.preparation.is_some()
-            || self.seed.is_some()
-            || self.collection_run.is_some()
-            || self.host.diagnostic_custody_pending()
-            || self.reporting.diagnostic_custody_pending()
+    /// Classify retained cached duties for qualification without advancing any owner.
+    pub(super) fn idle_block(&self) -> Option<&'static str> {
+        if self.recovery.pending() {
+            return Some("IncidentRecovery");
+        }
+        if self.preparation.is_some() {
+            return Some("IncidentPreparation");
+        }
+        if self.seed.is_some() {
+            return Some("IncidentSeed");
+        }
+        if self.collection_run.is_some() {
+            return Some("IncidentCollection");
+        }
+        if self.host.diagnostic_custody_pending() {
+            return Some("IncidentHost");
+        }
+        self.reporting.idle_block()
     }
 }
 

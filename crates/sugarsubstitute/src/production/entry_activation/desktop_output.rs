@@ -183,6 +183,21 @@ impl DesktopOutput {
                     diagnostic::Observation::Qualification(observed) => {
                         qualification::relay(self.run, current, observed);
                     }
+                    diagnostic::Observation::Probe(record) => {
+                        if record.stage == sugarsubstitute_desktop::frontend_probe_diagnostic::Stage::Timeout {
+                            tracing::warn!(operation="desktop_child_frontend_probe",run=?self.run,
+                                stage=?record.stage,launch=record.launch,navigation=record.navigation,
+                                probe_operation=record.probe_operation,issued=record.issued,
+                                completed=record.completed,blocked=record.blocked,
+                                "Observed closed actual frontend probe custody at original expiry");
+                        } else {
+                            tracing::info!(operation="desktop_child_frontend_probe",run=?self.run,
+                                stage=?record.stage,launch=record.launch,navigation=record.navigation,
+                                probe_operation=record.probe_operation,issued=record.issued,
+                                completed=record.completed,blocked=record.blocked,
+                                "Observed closed actual frontend probe custody");
+                        }
+                    }
                     diagnostic::Observation::Close(close) => {
                         diagnostic::close::relay(self.run, close);
                     }

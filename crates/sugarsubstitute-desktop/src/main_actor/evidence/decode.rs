@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Bind actual CDP frame/context identities and primitive diagnostics to the current native document.
 
+use super::super::probe_diagnostics::Blocked;
 use super::*;
 use crate::main_readiness_types::ReadinessFault;
 use serde::Deserialize;
@@ -124,7 +125,8 @@ pub(super) fn consume(
                     .as_ref()
                     .and_then(serde_json::Value::as_str)
                     .ok_or_else(|| readiness_error(ReadinessFault::MalformedObservation))?;
-                let receipt = if text == "null" {
+                let blocked = Blocked::decode(text)?;
+                let receipt = if blocked.is_some() {
                     None
                 } else {
                     Some(
@@ -134,6 +136,8 @@ pub(super) fn consume(
                 };
                 if owner.dom_result(target, receipt, now).map_err(readiness_error)? {
                     effect = Effect::Barrier(Box::new(target));
+                } else if let Some(blocked) = blocked {
+                    effect = Effect::Incomplete(blocked);
                 }
                 Ok(())
             }

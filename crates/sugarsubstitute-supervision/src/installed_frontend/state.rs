@@ -62,7 +62,8 @@ pub struct InstalledFrontendOwner {
     input: Arc<FrontendInstallationInput>,
     pub(super) shared: Arc<Shared>,
     pub(super) port: Arc<dyn SourcePort>,
-    submitted: Option<(ScopeId, JobId, Moment)>,
+    submitted: Option<(ScopeId, JobSpec, Moment)>,
+    terminal: Option<FrontendSourceError>,
     execution: Option<sugarsubstitute_contracts::execution::ExecutionId>,
     client: Option<ExecutionClient>,
     pub(super) pending: Option<OwnedJob<(), FrontendSourceError>>,
@@ -75,6 +76,7 @@ impl InstalledFrontendOwner {
             shared: Arc::new(Shared { retained: Mutex::new(None), live: AtomicBool::new(false) }),
             port: Arc::new(super::native::SystemPort),
             submitted: None,
+            terminal: None,
             execution: None,
             client: None,
             pending: None,
@@ -129,7 +131,7 @@ impl InstalledFrontendOwner {
             shared.live.store(true, Ordering::Release);
             Ok(())
         })?;
-        self.submitted = Some((scope.id(), spec.id, deadline));
+        self.submitted = Some((scope.id(), spec, deadline));
         self.execution = Some(scope.owner_id());
         self.client = Some(execution.clone());
         self.pending = Some(job);
@@ -138,7 +140,8 @@ impl InstalledFrontendOwner {
     /// Qualify the exact delivered success and current deadline before exposing expected source facts.
     /// A cancelled, late, foreign or failed completion cannot create a lease.
     /// # Errors
-    /// Preserves executor clock errors or rejects unusable delivery.
+    /// Preserves domain failures and actual stopped/panicked terminal custody. Only matched
+    /// delivery exposes terminal metadata; no stopped result grants a lease or physical closure.
     pub fn take_inspection(
         &mut self,
     ) -> Result<Option<InstalledFrontendLease>, FrontendSourceError> {
@@ -146,13 +149,23 @@ impl InstalledFrontendOwner {
             return Ok(None);
         };
         self.pending = None;
+        let matched = self.submitted.is_some_and(|(scope, spec, _)| {
+            completion.scope_id == scope && completion.spec == spec
+        });
+        if !matched {
+            let cause = FrontendSourceError::terminal(completion, false);
+            self.terminal = Some(cause.clone());
+            return Err(cause);
+        }
         match completion.outcome {
             JobOutcome::Success(()) => (),
             JobOutcome::Failure(cause) => return Err(cause),
-            _ => return Err(FrontendSourceError::invalid("source_terminal")),
+            _ => {
+                let cause = FrontendSourceError::terminal(completion, true);
+                self.terminal = Some(cause.clone());
+                return Err(cause);
+            }
         }
-        let (scope, job, _) =
-            self.submitted.ok_or_else(|| FrontendSourceError::invalid("source_not_submitted"))?;
         let guard = crate::registry::lock(&self.shared.retained);
         let retained =
             guard.as_ref().ok_or_else(|| FrontendSourceError::invalid("source_no_custody"))?;
@@ -160,10 +173,8 @@ impl InstalledFrontendOwner {
             .client
             .as_ref()
             .ok_or_else(|| FrontendSourceError::invalid("source_no_executor"))?;
-        if completion.scope_id != scope
-            || completion.spec.id != job
-            || execution.now().map_err(|e| FrontendSourceError::new("source_delivery_clock", e))?
-                >= retained.deadline
+        if execution.now().map_err(|e| FrontendSourceError::new("source_delivery_clock", e))?
+            >= retained.deadline
         {
             return Err(FrontendSourceError::invalid("source_delivery_identity_or_deadline"));
         }

@@ -109,6 +109,7 @@ impl SourcePort for SystemPort {
         Ok(())
     }
 }
+/// Pin one selected object, preserving strict regular-file validation and independent canonical identity.
 fn pin(
     path: &Path,
     directory: bool,
@@ -119,30 +120,25 @@ fn pin(
     if retained.handles.len() > 16382 {
         return Err(FrontendSourceError::invalid("source_handle_inventory"));
     }
-    let index = paths::open_retained(
-        path,
-        directory,
-        false,
-        Budget::Protected(retained.claim.clone()),
-        &mut retained.handles,
-        &mut crate::protected_storage::native_phase::NativePhase::ordinary(
-            &(Budget::Protected(retained.claim.clone())),
-        )
-        .map_err(|cause| FrontendSourceError::new("source_native_phase", cause))?,
-    )
-    .map_err(|e| FrontendSourceError::new("source_open", e))?;
-    checkpoint(context)?;
-    if !directory {
-        paths::validate_regular(
-            &retained.handles[index],
-            None,
-            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
-                &retained.handles[index].budget(),
+    let index = {
+        let budget = Budget::Protected(retained.claim.clone());
+        let mut phase = crate::protected_storage::native_phase::NativePhase::ordinary(&budget)
+            .map_err(|cause| FrontendSourceError::new("source_native_phase", cause))?;
+        if directory {
+            paths::open_retained(
+                path,
+                true,
+                false,
+                budget.clone(),
+                &mut retained.handles,
+                &mut phase,
             )
-            .map_err(|cause| FrontendSourceError::new("source_native_phase", cause))?,
-        )
-        .map_err(|e| FrontendSourceError::new("source_regular_file", e))?;
-    }
+        } else {
+            paths::open_regular_retained(path, budget.clone(), &mut retained.handles, &mut phase)
+        }
+        .map_err(|e| FrontendSourceError::new("source_open", e))?
+    };
+    checkpoint(context)?;
     let canonical = paths::final_path(
         &retained.handles[index],
         &mut crate::protected_storage::native_phase::NativePhase::ordinary(

@@ -19,6 +19,7 @@ impl MainActor {
                 .readiness
                 .as_ref()
                 .ok_or_else(|| DesktopError::message("main_readiness", "readiness retired"))?;
+            self.probe_diagnostics.timeout(identity);
             DesktopError::observe_frontend_timeout(identity, owner.wait_snapshot());
         }
         Ok(())

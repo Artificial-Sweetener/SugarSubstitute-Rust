@@ -14,6 +14,7 @@ use sugarsubstitute_contracts::startup::ReadinessReceipt;
 enum Effect {
     None,
     Hook(bool),
+    Incomplete(super::probe_diagnostics::Blocked),
     Barrier(Box<ProbeTarget>),
     Receipt(ReadinessReceipt),
 }
@@ -24,12 +25,22 @@ impl MainActor {
     ) -> Result<Option<DesktopStartupObservation>, DesktopError> {
         let events = self.events()?.clone();
         let mut effect = Effect::None;
+        let mut completed_probe = None;
         // The pure decoder/readiness owner performs no native calls while queue storage is borrowed.
         let consumed = events.consume(|observation| {
+            let command = observation.command;
+            completed_probe = match command {
+                Some(Command::Probe(target)) => Some(target),
+                _ => None,
+            };
             match decode_observation(self.readiness()?, observation, std::time::Instant::now()) {
                 Ok(decoded) => effect = decoded,
                 Err((cause, kind)) => {
                     self.failure_observation = kind;
+                    if let Some(Command::Probe(target)) = command {
+                        self.probe_diagnostics
+                            .completed(target, super::probe_diagnostics::Disposition::Fault);
+                    }
                     return Err(cause);
                 }
             }
@@ -40,6 +51,15 @@ impl MainActor {
         }
         let result = match effect {
             Effect::None => None,
+            Effect::Incomplete(blocked) => {
+                if let Some(target) = completed_probe {
+                    self.probe_diagnostics.completed(
+                        target,
+                        super::probe_diagnostics::Disposition::Incomplete(blocked),
+                    );
+                }
+                None
+            }
             Effect::Hook(runtime) => {
                 if self.admission.hook_completed(runtime)? {
                     self.admission.navigation_admitted()?;
@@ -64,6 +84,8 @@ impl MainActor {
                 }
             }
             Effect::Barrier(target) => {
+                self.probe_diagnostics
+                    .completed(*target, super::probe_diagnostics::Disposition::Receipt);
                 // Same native CDP session and exact execution context; later health observations
                 // remain queued before this completion can transfer evidence to the application.
                 let parameters = format!(

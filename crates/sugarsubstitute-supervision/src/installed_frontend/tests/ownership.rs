@@ -101,7 +101,7 @@ struct Harness {
     owner: InstalledFrontendOwner,
     executor: ExecutionOwner,
     client: ExecutionClient,
-    scope: Scope,
+    scope: Arc<Scope>,
     wake: Arc<Wake>,
     clock: Arc<TestClock>,
     boundary: Arc<Boundary>,
@@ -112,8 +112,9 @@ impl Harness {
         let wake = Arc::new(Wake::default());
         let executor = ExecutionOwner::new(clock.clone(), wake.clone())?;
         let client = executor.client();
-        let scope =
-            client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
+        let scope = Arc::new(
+            client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?,
+        );
         let input = FrontendInstallationInput::new(
             "E:\\fixture\\package".into(),
             "E:\\fixture\\METADATA".into(),
@@ -250,3 +251,5 @@ fn cleanup_failure_preserves_partial_state_charge_and_original_cause() -> TestRe
     assert!(lease.validate_live().is_err());
     Ok(())
 }
+
+mod stopped;

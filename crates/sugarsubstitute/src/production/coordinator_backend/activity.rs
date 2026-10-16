@@ -215,21 +215,7 @@ impl CoordinatorBackend {
             self.claim_resolved(at, resources)?;
         }
         let record = self.records[at].as_mut().ok_or(LifecycleRejection::StaleIdentity)?;
-        if record.source_job {
-            match record.source.take_inspection() {
-                Ok(Some(source)) => {
-                    record.source_job = false;
-                    record.source_lease = Some(source);
-                    tracing::info!(operation="backend_preparation_transition",resource=?record.key,stage="SourceTerminal",outcome="Success",
-                        "Original backend preparation advanced");
-                }
-                Ok(None) => {}
-                Err(cause) => {
-                    record.source_job = false;
-                    return Err(Box::new(cause));
-                }
-            }
-        }
+        consume_source(record)?;
         if let Some(output) = &mut record.output
             && !record.output_observed
             && let Some(completion) = output.completion.try_take_completion()
@@ -239,13 +225,6 @@ impl CoordinatorBackend {
                 return Err(Box::new(OutputTerminalFailure(completion)));
             }
             record.output_terminal = Some(completion);
-        }
-        if let Some(close) = &mut record.source_close
-            && let Some(completion) = close.try_take_completion()
-        {
-            record.source_closed = matches!(completion.outcome, JobOutcome::Success(()));
-            record.source_terminal = Some(completion);
-            record.source_close = None;
         }
         let step = record.campaign.consume(batch, resources.client.now()?)?;
         if record.shutdown.is_none() {
@@ -355,3 +334,45 @@ impl CoordinatorBackend {
         Ok(transition)
     }
 }
+
+/// Consume only this generation's actual source jobs; terminal metadata never proves file closure.
+fn consume_source(record: &mut Backend) -> Result<()> {
+    if record.source_job {
+        match record.source.take_inspection() {
+            Ok(Some(source)) => {
+                record.source_job = false;
+                record.source_lease = Some(source);
+                tracing::info!(operation="backend_preparation_transition",resource=?record.key,stage="SourceTerminal",outcome="Success",
+                    "Original backend preparation advanced");
+            }
+            Ok(None) => {}
+            Err(cause) => {
+                record.source_job = false;
+                if record.shutdown.is_some()
+                    && matches!(
+                        cause.terminal_kind(),
+                        Some(TerminalKind::Cancelled | TerminalKind::TimedOut)
+                    )
+                {
+                    tracing::info!(operation="backend_preparation_transition",resource=?record.key,
+                        stage="SourceTerminal",outcome=?cause.terminal_kind(),
+                        "Original source inspection stopped during existing cleanup");
+                } else {
+                    return Err(Box::new(cause));
+                }
+            }
+        }
+    }
+    if let Some(close) = &mut record.source_close
+        && let Some(completion) = close.try_take_completion()
+    {
+        record.source_closed = matches!(completion.outcome, JobOutcome::Success(()));
+        record.source_terminal = Some(completion);
+        record.source_close = None;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "source_terminal_tests.rs"]
+mod source_terminal_tests;

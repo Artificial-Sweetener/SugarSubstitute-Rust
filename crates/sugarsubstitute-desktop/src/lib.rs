@@ -10,6 +10,8 @@ mod contract;
 #[cfg(target_os = "windows")]
 mod control_geometry;
 mod frame_audit;
+/// Closed schema-one frontend probe observations; these fields grant no readiness authority.
+pub mod frontend_probe_diagnostic;
 #[cfg(target_os = "windows")]
 mod headless;
 mod host_contract;

@@ -428,3 +428,6 @@ fn terminal_acquisition_metadata_requires_complete_order_and_rejects_extra_raw_f
         assert!(parse_connection(extension.as_bytes()).is_none());
     }
 }
+
+#[path = "diagnostic/probe_tests.rs"]
+mod probe;

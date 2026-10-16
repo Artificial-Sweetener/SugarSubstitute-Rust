@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Propagate deliberate current-role close through original budgets and actual pending owners.
+#[cfg(any(test, feature = "k1-native-qualification"))]
+#[path = "normal_idle/qualification.rs"]
+pub(super) mod qualification;
 use super::*;
 use crate::production::parent_lifecycle::DesktopCloseRequest;
 
@@ -9,38 +12,92 @@ enum Role {
     Normal { budget: ShutdownBudget, retired: bool },
     SettledFailedDesktop,
 }
+/// A denial belongs to at most one existing run or resource.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum IdleIdentity {
+    Global,
+    Run(RunKey),
+    Resource(ResourceKey),
+}
+/// The first policy veto retains only existing owner identity and a closed diagnostic label.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct IdleBlock {
+    reason: &'static str,
+    identity: IdleIdentity,
+}
+// Denials remain inline and below Clippy's large-result threshold on every target.
+const _: () = assert!(std::mem::size_of::<IdleBlock>() < 128);
+impl IdleBlock {
+    /// Identify one global retained duty without inventing a run or resource.
+    const fn global(reason: &'static str) -> Self {
+        Self { reason, identity: IdleIdentity::Global }
+    }
+}
 impl ProductionActivation {
-    /// Borrow actual current custody; the existing close owners prove all settlement after this request.
+    /// Borrow the original close budget and qualify only changes in the actual decision.
     pub(super) fn normal_close_budget(&self) -> Option<ShutdownBudget> {
-        if self.closing
-            || self.failure_source().is_some()
-            || self.failure_run.is_some()
-            || self.failure_resource.is_some()
-            || self.incidents.diagnostic_custody_pending()
-            || self.pending.iter().any(Option::is_some)
-            || self.recovery_pending.as_ref().is_some_and(|pending| !pending.settled())
-            || self.delivery.as_ref().is_some_and(|delivery| delivery.pending())
-        {
-            return None;
+        let decision = self.normal_close_decision();
+        #[cfg(any(test, feature = "k1-native-qualification"))]
+        self.observe_idle_gate(&decision);
+        decision.ok()
+    }
+    /// Evaluate each existing owner veto once, preserving short-circuit order.
+    fn normal_close_decision(&self) -> std::result::Result<ShutdownBudget, IdleBlock> {
+        if self.closing {
+            return Err(IdleBlock::global("Closing"));
         }
-        let backend = &self.backend.as_ref()?.backend;
-        if backend.delivery_pending()
-            || backend
-                .resource_keys()
-                .into_iter()
-                .flatten()
-                .any(|key| backend.failure(key).is_some() || backend.cleanup_failure(key).is_some())
-        {
-            return None;
+        if self.failure_source().is_some() {
+            return Err(IdleBlock::global("FailureSource"));
         }
-        let capture = self.capture.as_ref()?;
-        let roles = self.records.iter().flatten().map(|held| {
-            if capture.normal_close_pending(held.record.run.owner) {
-                return None;
+        if self.failure_run.is_some() {
+            return Err(IdleBlock::global("FailureRun"));
+        }
+        if self.failure_resource.is_some() {
+            return Err(IdleBlock::global("FailureResource"));
+        }
+        if let Some(reason) = self.incidents.idle_block() {
+            return Err(IdleBlock::global(reason));
+        }
+        if self.pending.iter().any(Option::is_some) {
+            return Err(IdleBlock::global("PendingProjection"));
+        }
+        if self.recovery_pending.as_ref().is_some_and(|pending| !pending.settled()) {
+            return Err(IdleBlock::global("PendingRecovery"));
+        }
+        if self.delivery.as_ref().is_some_and(|delivery| delivery.pending()) {
+            return Err(IdleBlock::global("PendingDelivery"));
+        }
+        let backend = &self.backend.as_ref().ok_or(IdleBlock::global("MissingBackend"))?.backend;
+        if backend.delivery_pending() {
+            return Err(IdleBlock::global("BackendDelivery"));
+        }
+        for key in backend.resource_keys().into_iter().flatten() {
+            if backend.failure(key).is_some() || backend.cleanup_failure(key).is_some() {
+                return Err(IdleBlock {
+                    reason: "BackendFailure",
+                    identity: IdleIdentity::Resource(key),
+                });
             }
-            role(&held.record)
+        }
+        let capture = self.capture.as_ref().ok_or(IdleBlock::global("MissingCapture"))?;
+        let mut blocked = None;
+        let roles = self.records.iter().flatten().map(|held| {
+            let record = &held.record;
+            let decision = if capture.normal_close_pending(record.run.owner) {
+                Err("CaptureClosePending")
+            } else {
+                role_decision(record)
+            };
+            match decision {
+                Ok(role) => Some(role),
+                Err(reason) => {
+                    blocked = Some(IdleBlock { reason, identity: IdleIdentity::Run(record.run) });
+                    None
+                }
+            }
         });
         original_budget(roles, self.incidents.reporting.normal_close_budget())
+            .ok_or(blocked.unwrap_or(IdleBlock::global("MissingAcceptedCloseIntent")))
     }
     /// Borrow only this accepted deliberate role's original grace-expired transaction.
     /// The exact launch ticket remains with existing native/profile/capture cleanup owners;
@@ -69,51 +126,77 @@ impl ProductionActivation {
     }
     /// Borrow one eligible role for ordinary cleanup while another role may keep Root serving.
     pub(super) fn normal_role_budget(record: &Record) -> Option<ShutdownBudget> {
-        match role(record)? {
-            Role::Normal { budget, .. } => Some(budget),
-            Role::SettledFailedDesktop => None,
+        match role_decision(record) {
+            Ok(Role::Normal { budget, .. }) => Some(budget),
+            Ok(Role::SettledFailedDesktop) | Err(_) => None,
         }
     }
 }
 
-fn role(record: &Record) -> Option<Role> {
-    if record.collection.pending()
-        || !record.collection.delivered()
-        || record.pending_desktop_failure.is_some()
-        || record.seed.failure().is_some()
-        || record.attach.is_some()
-        || record.attach_failure.is_some()
-        || record.released_attach.is_some()
-        || record.attach_retirement.is_some()
-        || record.projected.is_some()
-        || record.forwarded.is_some()
-        || !record.replied
-    {
-        return None;
+/// Classify the exact first veto at the authoritative role policy.
+fn role_decision(record: &Record) -> std::result::Result<Role, &'static str> {
+    if record.collection.pending() {
+        return Err("CollectionPending");
+    }
+    if !record.collection.delivered() {
+        return Err("CollectionDelivery");
+    }
+    if record.pending_desktop_failure.is_some() {
+        return Err("PendingDesktopFailure");
+    }
+    if record.seed.failure().is_some() {
+        return Err("SeedFailure");
+    }
+    if record.attach.is_some() {
+        return Err("Attachment");
+    }
+    if record.attach_failure.is_some() {
+        return Err("AttachmentFailure");
+    }
+    if record.released_attach.is_some() {
+        return Err("ReleasedAttachment");
+    }
+    if record.attach_retirement.is_some() {
+        return Err("AttachmentRetirement");
+    }
+    if record.projected.is_some() {
+        return Err("Projection");
+    }
+    if record.forwarded.is_some() {
+        return Err("Forwarded");
+    }
+    if !record.replied {
+        return Err("EntryReply");
     }
     if record.failed.is_some() {
         return settled_failed_role(record);
     }
-    let parent = record.parent.as_ref()?;
+    let parent = record.parent.as_ref().ok_or("MissingParent")?;
     if !parent.normal_cleanup_ready() {
-        return None;
+        return Err("ParentNormalCleanup");
     }
-    let request: DesktopCloseRequest = parent.normal_close_request()?;
-    let start = record.start.as_ref()?;
+    let request: DesktopCloseRequest =
+        parent.normal_close_request().ok_or("MissingNormalCloseRequest")?;
+    let start = record.start.as_ref().ok_or("MissingStart")?;
     if start.run != record.run
         || start.launch != record.launch
         || start.navigation != record.navigation
         || start.connection != record.connection
         || request.run() != record.run
-        || start.profile.snapshot().pending
-        || start.value().is_err()
-        || start.output.as_ref().is_none_or(|output| output.normal_close_pending())
     {
-        return None;
+        return Err("NormalRoleIdentity");
+    }
+    if start.profile.snapshot().pending {
+        return Err("ProfilePending");
+    }
+    if start.value().is_err() {
+        return Err("StartFailure");
+    }
+    if start.output.as_ref().is_none_or(|output| output.normal_close_pending()) {
+        return Err("NormalOutputPending");
     }
     let retired = match (&record.retired, start.ticket) {
         (Some(retired), None) if retired.run() == record.run && retired.registered() => {
-            // Retain the original unresolved cutoff until run-local policy settlement.
             record.closed
         }
         (None, Some(ticket))
@@ -123,9 +206,9 @@ fn role(record: &Record) -> Option<Role> {
         {
             false
         }
-        _ => return None,
+        _ => return Err("NormalRetirementIdentity"),
     };
-    Some(Role::Normal { budget: request.budget(), retired })
+    Ok(Role::Normal { budget: request.budget(), retired })
 }
 /// All roles must be eligible. Earliest unresolved transactions remain binding;
 /// genuinely completed historical transactions use only the latest original close intent.
@@ -136,7 +219,9 @@ fn original_budget(
     let mut unresolved = None;
     let mut completed = reporter;
     for role in roles {
-        let Role::Normal { budget, retired } = role? else { continue };
+        let Role::Normal { budget, retired } = role? else {
+            continue;
+        };
         if retired {
             completed = Some(completed.map_or(budget, |old: ShutdownBudget| {
                 if old.started < budget.started { budget } else { old }
@@ -154,11 +239,11 @@ fn original_budget(
 /// Historical failure never supplies a new close intent or replaces an unknown fatal cause.
 /// The actual Parent exit, native/registry/profile retirement and accepted incident family
 /// transition must agree before its completed old budget stops constraining another role.
-fn settled_failed_role(record: &Record) -> Option<Role> {
-    let fact = record.failed?;
-    let retired = record.retired.as_ref()?;
-    let parent = record.parent.as_ref()?;
-    let start = record.start.as_ref()?;
+fn settled_failed_role(record: &Record) -> std::result::Result<Role, &'static str> {
+    let fact = record.failed.ok_or("MissingFailedFact")?;
+    let retired = record.retired.as_ref().ok_or("MissingRetiredDesktop")?;
+    let parent = record.parent.as_ref().ok_or("MissingFailedParent")?;
+    let start = record.start.as_ref().ok_or("MissingFailedStart")?;
     let expected_cause = match record.failed_cause.as_deref() {
         Some(cause) => {
             cause.downcast_ref::<crate::production::parent_lifecycle::ParentError>()
@@ -166,28 +251,63 @@ fn settled_failed_role(record: &Record) -> Option<Role> {
         }
         None => parent.failure().is_none(),
     };
-    if !record.closed
-        || !record.failed_family_adopted
-        || !record.collection.completed_failed(fact)
-        || !expected_cause
-        || fact.run() != record.run
-        || retired.run() != record.run
-        || !retired.registered()
-        || !parent.native_retired()
-        || !parent.settled()
-        || parent.failed_incident(record.run, fact.process()).ok()? != Some(fact)
-        || start.run != record.run
-        || start.launch != record.launch
-        || start.navigation != record.navigation
-        || start.connection != record.connection
-        || start.ticket.is_some()
-        || start.profile.snapshot().pending
-        || !start.profile.snapshot().released
-        || start.output.as_ref().is_some_and(|output| !output.settled())
-    {
-        return None;
+    if !record.closed {
+        return Err("RunPolicySettlement");
     }
-    Some(Role::SettledFailedDesktop)
+    if !record.failed_family_adopted {
+        return Err("FailedFamilyAdoption");
+    }
+    if !record.collection.completed_failed(fact) {
+        return Err("FailedCollectionCompletion");
+    }
+    if !expected_cause {
+        return Err("UnexpectedFailedCause");
+    }
+    if fact.run() != record.run {
+        return Err("FailedFactIdentity");
+    }
+    if retired.run() != record.run {
+        return Err("FailedRetirementRun");
+    }
+    if !retired.registered() {
+        return Err("FailedRetirementRegistration");
+    }
+    if !parent.native_retired() {
+        return Err("FailedParentNative");
+    }
+    if !parent.settled() {
+        return Err("FailedParentSettlement");
+    }
+    if parent.failed_incident(record.run, fact.process()).map_err(|_| "FailedIncidentError")?
+        != Some(fact)
+    {
+        return Err("FailedIncidentIdentity");
+    }
+    if start.run != record.run {
+        return Err("FailedStartRun");
+    }
+    if start.launch != record.launch {
+        return Err("FailedStartLaunch");
+    }
+    if start.navigation != record.navigation {
+        return Err("FailedStartNavigation");
+    }
+    if start.connection != record.connection {
+        return Err("FailedStartConnection");
+    }
+    if start.ticket.is_some() {
+        return Err("FailedTicketRetained");
+    }
+    if start.profile.snapshot().pending {
+        return Err("FailedProfilePending");
+    }
+    if !start.profile.snapshot().released {
+        return Err("FailedProfileRelease");
+    }
+    if start.output.as_ref().is_some_and(|output| !output.settled()) {
+        return Err("FailedOutputSettlement");
+    }
+    Ok(Role::SettledFailedDesktop)
 }
 #[cfg(test)]
 #[path = "normal_idle_tests.rs"]

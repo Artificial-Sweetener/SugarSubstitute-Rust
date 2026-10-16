@@ -167,7 +167,7 @@ fn normal_idle_partial_unlaunched_or_failed_record_never_becomes_a_normal_role()
     assert!(
         ProductionActivation::overdue_role_budget(&record, Moment::from_nanos(u64::MAX)).is_none()
     );
-    assert!(role(&record).is_none());
+    assert!(role_decision(&record).is_err());
     Ok(())
 }
 

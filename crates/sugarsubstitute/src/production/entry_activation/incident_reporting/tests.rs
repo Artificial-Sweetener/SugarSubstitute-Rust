@@ -187,12 +187,12 @@ fn incident_reporting_idle_guard_keeps_actual_metadata_until_matching_delivery()
     let client = execution.client();
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
     let mut receiving = IncidentReporting::new();
-    assert!(!receiving.diagnostic_custody_pending());
+    assert!(receiving.idle_block().is_none());
     receiving.receiving_session.preparing_mut()?.metadata.job =
         Some(client.submit_blocking(&scope, spec()?, |context| {
             Err(delivery::Failure::test_cause(&context, "Original metadata boundary failure"))
         })?);
-    assert!(receiving.diagnostic_custody_pending());
+    assert!(receiving.idle_block().is_some());
     let actual = batch(&client, &wake)?;
     let foreign_scope = ScopeId::new(2)?;
     let foreign = CompletionBatch {
@@ -204,10 +204,10 @@ fn incident_reporting_idle_guard_keeps_actual_metadata_until_matching_delivery()
         remaining: 0,
     };
     receiving.capture(&foreign)?;
-    assert!(receiving.diagnostic_custody_pending());
+    assert!(receiving.idle_block().is_some());
     assert_eq!(scope.snapshot().reserved_bytes, 16 * 1024);
     receiving.capture(&actual)?;
-    assert!(!receiving.diagnostic_custody_pending());
+    assert!(receiving.idle_block().is_none());
     assert!(receiving.failure().is_some());
     drop(execution);
     assert_eq!(scope.snapshot().reserved_bytes, 16 * 1024);
