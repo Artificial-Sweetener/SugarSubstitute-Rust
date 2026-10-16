@@ -16,6 +16,8 @@ pub(super) use main::MainFailure;
 pub(super) mod qualification;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct Phase {
+    pub(super) channel_phase: &'static str,
+    pub(super) capture_input: &'static str,
     pub(super) capture_admitted: bool,
     pub(super) capture: bool,
     pub(super) registered: bool,
@@ -237,6 +239,22 @@ fn parse(bytes: &[u8]) -> Option<Phase> {
         return None;
     }
     let mut fields = fields.split_ascii_whitespace();
+    let channel_phase = match fields.next()?.strip_prefix("channel_phase=")? {
+        "Unadmitted" => "Unadmitted",
+        "Admitted" => "Admitted",
+        "Prepared" => "Prepared",
+        "Connected" => "Connected",
+        "Authenticated" => "Authenticated",
+        _ => return None,
+    };
+    let capture_input = match fields.next()?.strip_prefix("capture_input=")? {
+        "Unchecked" => "Unchecked",
+        "NoPeer" => "NoPeer",
+        "Absent" => "Absent",
+        "Transferred" => "Transferred",
+        "Closed" => "Closed",
+        _ => return None,
+    };
     let capture_admitted = boolean(fields.next()?, "capture_admitted=")?;
     let capture = boolean(fields.next()?, "capture=")?;
     let registered = boolean(fields.next()?, "registered=")?;
@@ -270,6 +288,8 @@ fn parse(bytes: &[u8]) -> Option<Phase> {
         return None;
     }
     Some(Phase {
+        channel_phase,
+        capture_input,
         capture_admitted,
         capture,
         registered,

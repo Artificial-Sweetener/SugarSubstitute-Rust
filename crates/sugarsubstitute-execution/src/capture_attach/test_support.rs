@@ -44,6 +44,7 @@ pub(super) struct Boundary {
     pub(super) retiring: Gate,
     pub(super) closed: Gate,
     pub(super) source_retired: Gate,
+    pub(super) source_return_gate: Mutex<Option<Arc<Gate>>>,
     pub(super) source_attempted: Gate,
     pub(super) source_blocked: AtomicBool,
     pub(super) ready: AtomicBool,
@@ -99,7 +100,16 @@ impl CaptureEndpointSource for Boundary {
             ));
         }
         self.retirements.fetch_add(1, Ordering::AcqRel);
+        let source_return = lock(&self.source_return_gate).clone();
         self.source_retired.open();
+        if let Some(source_return) = source_return {
+            source_return.wait().map_err(|cause| {
+                CaptureEndpointSourceError::new(
+                    "controlled_source_return",
+                    std::io::Error::other(cause.to_string()),
+                )
+            })?;
+        }
         Ok(())
     }
 }
@@ -189,6 +199,9 @@ impl Drop for ReleaseBoundary {
         self.boundary.ready.store(true, Ordering::Release);
         self.boundary.close_allowed.store(true, Ordering::Release);
         self.boundary.source_blocked.store(false, Ordering::Release);
+        if let Some(source_return) = lock(&self.boundary.source_return_gate).as_ref() {
+            source_return.open();
+        }
         if let Some(signal) = lock(&self.boundary.signal).as_ref() {
             signal.complete();
         }

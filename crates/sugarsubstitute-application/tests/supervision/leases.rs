@@ -210,3 +210,114 @@ fn attempt_release_preserves_other_clients_and_requires_actual_last_lease_settle
     assert!(next.resource.generation.get() > b.resource.generation.get());
     Ok(())
 }
+
+#[test]
+fn managed_provisional_clients_keep_other_wait_after_elapsed_preparation_and_fail_on_exact_exit()
+-> TestResult {
+    use sugarsubstitute_application::startup::{
+        ConnectionBudget, ConnectionBudgetKind, ProbeBudgetError,
+    };
+    use sugarsubstitute_contracts::execution::Moment;
+
+    let mut coordinator = ResourceCoordinator::new(owner()?);
+    register(&mut coordinator, 1, "managed-wait-first")?;
+    register(&mut coordinator, 2, "managed-wait-second")?;
+    let first_request = request(1, 1, ResourceCommand::Acquire(target(8188, true)?))?;
+    let second_request = request(2, 1, ResourceCommand::Acquire(target(8188, true)?))?;
+    let first = lease(&submit(&mut coordinator, first_request.clone())?)?;
+    let second = lease(&submit(&mut coordinator, second_request.clone())?)?;
+    assert_eq!(first.resource, second.resource);
+    assert_ne!(first.id, second.id);
+    observe(&mut coordinator, ResourceObservation::ClaimAcquired(first.resource))?;
+    let process = ProcessKey { owner: owner()?, id: ProcessId::new(1)? };
+    observe(
+        &mut coordinator,
+        ResourceObservation::OwnedStarted { resource: first.resource, process },
+    )?;
+    let before = coordinator.snapshot();
+    assert_eq!(before.leases, 2);
+    assert_eq!(before.outstanding_requests, 2);
+    // This public policy receives trusted process facts; it creates no native proof.
+    let preparation = ConnectionBudget::new(ConnectionBudgetKind::Managed, Moment::from_nanos(0))?;
+    let now = Moment::from_nanos(600_000_000_000);
+    assert_eq!(preparation.probe_until(now), Err(ProbeBudgetError::Expired));
+    assert_eq!(preparation.managed_probe_until(now)?, Moment::from_nanos(602_000_000_000));
+    assert_eq!(coordinator.snapshot(), before);
+    let mut cancelled = ResourceTransition::default();
+    coordinator.release_attempt(
+        ClientBinding { run: first.run, connection: first.connection },
+        first,
+        &mut cancelled,
+    )?;
+    assert!(cancelled.effects.is_empty());
+    assert_eq!(
+        cancelled.replies,
+        vec![ResourceReply {
+            run: first.run,
+            request: first_request.id,
+            outcome: RequestOutcome::Cancelled
+        }]
+    );
+    assert_eq!(coordinator.snapshot().leases, 1);
+    assert_eq!(coordinator.snapshot().outstanding_requests, 1);
+    assert_eq!(coordinator.resource_phase(second.resource), Some(ResourcePhase::Starting));
+    assert_eq!(
+        submit(&mut coordinator, second_request.clone())?.replies[0].outcome,
+        RequestOutcome::Pending(second)
+    );
+    let wrong = coordinator
+        .observe(ResourceObservation::ManagedExited {
+            resource: second.resource,
+            process: ProcessKey { id: ProcessId::new(2)?, ..process },
+            status: 37,
+            failure: LifecycleFailure::new(
+                LifecycleFailureCode::UnexpectedExit,
+                Box::new(std::io::Error::other("foreign process")),
+            ),
+        })
+        .err()
+        .ok_or("Foreign process exit accepted")?;
+    assert_eq!(wrong.reason, LifecycleRejection::WrongPhase);
+    assert_eq!(coordinator.snapshot().outstanding_requests, 1);
+    let exited = observe(
+        &mut coordinator,
+        ResourceObservation::ManagedExited {
+            resource: second.resource,
+            process,
+            status: 37,
+            failure: LifecycleFailure::new(
+                LifecycleFailureCode::UnexpectedExit,
+                Box::new(std::io::Error::other("original managed exit")),
+            ),
+        },
+    )?;
+    assert_eq!(
+        exited.replies,
+        vec![ResourceReply {
+            run: second.run,
+            request: second_request.id,
+            outcome: RequestOutcome::Failed
+        }]
+    );
+    assert_eq!(exited.effects, vec![ResourceEffect::StopOwned { resource: second.resource }]);
+    assert!(exited.invalidations.is_empty());
+    assert_eq!(coordinator.snapshot().leases, 0);
+    assert_eq!(coordinator.snapshot().outstanding_requests, 0);
+    assert_eq!(
+        submit(&mut coordinator, first_request)?.replies[0].outcome,
+        RequestOutcome::Cancelled
+    );
+    assert_eq!(
+        submit(&mut coordinator, second_request)?.replies[0].outcome,
+        RequestOutcome::Failed
+    );
+    assert_eq!(
+        coordinator.take_failure(second.resource).map(|_| ()),
+        Err(LifecycleRejection::WrongPhase)
+    );
+    observe(&mut coordinator, ResourceObservation::Settled(second.resource))?;
+    let failure =
+        coordinator.take_failure(second.resource)?.ok_or("Original exit cause missing")?;
+    assert_eq!(failure.source().ok_or("Missing exit source")?.to_string(), "original managed exit");
+    Ok(())
+}

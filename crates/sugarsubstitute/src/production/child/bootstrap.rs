@@ -3,7 +3,10 @@
 //! Prepare the real captured child and authenticated configuration before native UI.
 use super::{
     capture::ChildCapture,
-    channel::ChildChannel,
+    channel::{
+        ChildChannel,
+        preparation::{CaptureInput, HandshakePhase},
+    },
     configuration::{
         self, ChildConfigurationFailure, PreparedChildConfiguration, PreparedChildStartup,
     },
@@ -50,6 +53,8 @@ pub(super) enum ChildBootstrapIssue {
 /// Closed diagnostic facts; none grants native, configuration or readiness authority.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct PreparationObservation {
+    channel_phase: HandshakePhase,
+    capture_input: CaptureInput,
     capture_admitted: bool,
     capture: bool,
     registered: bool,
@@ -385,11 +390,13 @@ impl ChildBootstrap {
     }
 
     /// Observe actual preparation transitions after all admission/native guards are released.
-    /// Only booleans and the original typed phase are logged; cause custody stays owned.
+    /// Only closed phase/input categories and booleans are logged; cause custody stays owned.
     pub(super) fn report_preparation(&mut self) {
         if let Some(observation) = self.changed_preparation() {
             tracing::info!(
                 operation = "child_preparation_transition",
+                channel_phase = ?observation.channel_phase,
+                capture_input = ?observation.capture_input,
                 capture_admitted = observation.capture_admitted,
                 capture = observation.capture,
                 registered = observation.registered,
@@ -413,6 +420,8 @@ impl ChildBootstrap {
     /// Borrow closed actual preparation predicates independently of fallible logging.
     pub(super) fn preparation_observation(&self) -> PreparationObservation {
         PreparationObservation {
+            channel_phase: self.channel.handshake_phase(),
+            capture_input: self.channel.capture_input(),
             capture_admitted: self.capture.admitted(),
             capture: self.capture.ready(),
             registered: self.channel.registered(),

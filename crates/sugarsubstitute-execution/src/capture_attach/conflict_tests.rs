@@ -3,7 +3,7 @@
 
 //! Prove full-run conflicts follow actual custody rather than result or scope identity.
 use super::{test_support::*, *};
-use crate::runtime_test_support::{Rig, TestResult};
+use crate::runtime_test_support::{Gate, Rig, TestResult};
 use std::sync::atomic::Ordering;
 use sugarsubstitute_contracts::{execution::*, incident::BuildIdentity, lifecycle::*};
 use types::*;
@@ -93,19 +93,27 @@ fn running_terminal_consumption_ack_and_uncertain_cleanup_keep_same_run_conflict
     ));
     rejected(&rig, &second, attach_spec(999)?, expected()?)?;
     assert_eq!(first.snapshot().reserved_bytes, 16_384);
+    let source_return = Arc::new(Gate::default());
+    *lock(&boundary.source_return_gate) = Some(source_return.clone());
     boundary.settle()?;
     boundary.source_retired.wait()?;
-    loop {
-        let previous = rig.wake.count();
-        if !retirement.shared.custody.held() {
-            break;
-        }
-        rig.client.drain_completions(std::num::NonZeroUsize::MIN)?;
-        if !retirement.shared.custody.held() {
-            break;
-        }
-        rig.wake.wait_after(previous)?;
-    }
+    assert!(retirement.shared.custody.held());
+    // Acknowledge the earlier Uncertain wake while the actual external callback
+    // is held. No later producer signal can stand in for the custody release.
+    let batch = rig.client.drain_completions(std::num::NonZeroUsize::MIN)?;
+    assert!(batch.notifications.is_empty());
+    assert_eq!(batch.remaining, 0);
+    let previous = rig.wake.count();
+    source_return.open();
+    rig.wake.wait_after(previous)?;
+    assert!(!retirement.shared.custody.held());
+    assert!(matches!(
+        retirement.shared.custody.snapshot(),
+        CaptureCleanupSnapshot::Latched { budget: original, .. } if original == budget
+    ));
+    let batch = rig.client.drain_completions(std::num::NonZeroUsize::MIN)?;
+    assert!(batch.notifications.is_empty());
+    assert_eq!(batch.remaining, 0);
     // Failed 999 admissions advanced no identity high-water. Actual settled
     // custody permits id2; historical replay belongs to the real source ledger.
     let next = Arc::new(Boundary::default());

@@ -4,7 +4,7 @@
 use super::{ParentError, ParentLifecycle, ParentResources, Reply, Result};
 use sugarsubstitute_application::supervision::MainAuthorizationObservation as Main;
 use sugarsubstitute_contracts::lifecycle::{
-    ClientBinding, DesktopObservation, LeaseKey, ResourceCommand, ResourceRequest,
+    BackendTarget, ClientBinding, DesktopObservation, LeaseKey, ResourceCommand, ResourceRequest,
 };
 use sugarsubstitute_supervision::lifecycle_protocol::{
     DecodedPayload, FrameCodec, LeaseReference, WireHeader,
@@ -115,7 +115,7 @@ impl ParentLifecycle {
         }
         until = self.cleanup_control_deadline(&decoded.payload, until);
         if matches!(decoded.payload, DecodedPayload::OutputPull { .. }) && self.lease.is_none() {
-            until = until.min(self.acquisition.as_ref().ok_or(ParentError::WrongPhase)?.original);
+            until = self.acquisition.as_ref().ok_or(ParentError::WrongPhase)?.output_until(until);
             if resources.execution.client.now()? >= until {
                 return Err(sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeError::DeadlineExpired.into());
             }
@@ -147,6 +147,22 @@ impl ParentLifecycle {
                 if identity.run != self.run || target.to_domain()? != *resources.target {
                     return Err(ParentError::ForeignPeer.into());
                 }
+                let kind = match resources.target {
+                    BackendTarget::Managed(_) => {
+                        sugarsubstitute_application::startup::ConnectionBudgetKind::Managed
+                    }
+                    BackendTarget::Attached(_) => {
+                        sugarsubstitute_application::startup::ConnectionBudgetKind::Attached
+                    }
+                };
+                self.requests.get_mut(index)?.identity = Some(identity);
+                self.requests.acquisition(index, request)?;
+                self.acquisition = Some(super::acquisition::Acquisition::new(
+                    binding, header, identity, until, kind,
+                )?);
+                if kind.waits_for_owned_process() {
+                    self.requests.wait_for_owned_process(index)?;
+                }
                 self.hold_backend_command(
                     index,
                     super::history::HeldBackendCommand::Acquire(identity),
@@ -162,6 +178,10 @@ impl ParentLifecycle {
                 {
                     return Err(ParentError::ForeignPeer.into());
                 }
+                if !matches!(resources.target, BackendTarget::Managed(_)) {
+                    return Err(ParentError::WrongPhase.into());
+                }
+                self.requests.wait_for_owned_process(index)?;
                 self.hold_backend_command(
                     index,
                     super::history::HeldBackendCommand::Retry { identity, failed },

@@ -370,7 +370,7 @@ impl ProductionChild {
             self.bootstrap.ui_deadline(),
             #[cfg(feature = "k1-native-qualification")]
             self.bootstrap.preview_deadline(),
-            self.acquire.filter(|p| !p.retiring).map(|p| p.original),
+            self.acquire.filter(|p| !p.retiring).and_then(connection::PendingAcquire::deadline),
             self.main.deadline().filter(|_| self.attempt.is_none()),
             self.output.deadline().filter(|_| self.attempt.is_none()),
             self.running_backend

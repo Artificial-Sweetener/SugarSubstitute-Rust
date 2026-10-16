@@ -58,13 +58,15 @@ impl ParentLifecycle {
         {
             return Ok(false);
         }
-        let Some(lease) = self.output_lease else { return Ok(false) };
+        let Some(lease) = self.output_lease else {
+            return Ok(false);
+        };
         if super::replies::reference(lease) != reference {
             return Ok(false);
         }
         super::output::acknowledge_delivery(None, self.acknowledged_output, lease, acknowledged)?;
         let until = if self.lease.is_none() {
-            supplied.min(self.acquisition.as_ref().ok_or(ParentError::WrongPhase)?.original)
+            self.acquisition.as_ref().ok_or(ParentError::WrongPhase)?.output_until(supplied)
         } else {
             supplied
         };

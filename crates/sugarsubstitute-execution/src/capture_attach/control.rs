@@ -150,6 +150,7 @@ impl Custody {
     pub(crate) fn stopped(&self) -> bool {
         lock(&self.state).stopped
     }
+    /// Release the original claim and wake target admission after native/source custody settles.
     pub(crate) fn release_memory(&self) {
         let memory = {
             let mut state = lock(&self.state);
@@ -159,7 +160,16 @@ impl Custody {
                 None
             }
         };
+        let released = memory.is_some();
         drop(memory);
+        // The immutable report may already contain Uncertain. Actual late release
+        // still makes the exact target admissible, including after sampling ends.
+        if released
+            && let Some(core) = self.core.upgrade()
+            && core.mailbox.signal_capacity()
+        {
+            core.mailbox.deliver_wake();
+        }
     }
 }
 

@@ -2,7 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Encode bounded, untrusted lifecycle messages independently of native authentication.
 //!
-//! Wire version 5 uses little-endian integers and a fixed 104-byte header. Frames
+//! Wire version 6 uses little-endian integers and a fixed 104-byte header. Managed
+//! Acquire/Retry headers bound admission; accepted requests await the owned backend
+//! until Ready, cancellation or exit. Every native transfer remains finite. Frames
 //! contain at most 65536 bytes including that header. Claimed identities, secrets
 //! and completion data establish no peer, process, filesystem or UI authority.
 //! Native channel owners authenticate peers and separately admit requests before
@@ -102,7 +104,7 @@ pub use target::{BorrowedBackendTarget, DecodedTarget, ManagedTargetRef};
 pub use utf16::{ArgumentRefs, Utf16Text};
 
 /// Exact supported wire version; unknown versions reject without negotiation.
-pub const WIRE_VERSION: u16 = 5;
+pub const WIRE_VERSION: u16 = 6;
 /// Exact header byte count, including the whole claimed run and deadline.
 pub const HEADER_BYTES: usize = 104;
 /// Maximum complete control frame, including header and payload.

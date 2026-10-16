@@ -142,16 +142,14 @@ impl CoordinatorBackend {
                     RegistryObservation::ContainedStarted { process } => {
                         tracing::info!(operation="backend_preparation_transition",resource=?key,stage="LaunchStarted",
                             "Original backend preparation advanced");
-                        self.records[at]
-                            .as_mut()
-                            .ok_or(LifecycleRejection::StaleIdentity)?
-                            .started = true;
                         Self::merge(
                             &mut transition,
-                            self.observe(ResourceObservation::OwnedStarted {
-                                resource: key,
+                            self.managed_started_observation(
+                                key,
+                                ticket.process(),
                                 process,
-                            })?,
+                                resources.client.now()?,
+                            )?,
                         );
                     }
                     RegistryObservation::FamilySettled { .. } => {
@@ -226,7 +224,7 @@ impl CoordinatorBackend {
             && record.readiness.is_none()
             && let Some(proof) = record.campaign.take_readiness()
         {
-            record.budget.probe_until(resources.client.now()?)?;
+            record.campaign.probe_until(resources.client.now()?)?;
             proof.validate_current()?;
             if proof.managed_resource()
                 != matches!(record.target, BackendTarget::Managed(_)).then_some(record.key)
@@ -264,9 +262,7 @@ impl CoordinatorBackend {
                 return Err(Box::new(cause));
             }
             if !record.campaign.settled() && cleanup_current {
-                let until = record
-                    .shutdown
-                    .map_or(record.budget.until(), |(_, budget)| budget.settle_until);
+                let until = record.campaign.cleanup_deadline(resources.client.now()?)?;
                 let spec = Self::spec(
                     resources,
                     Operation::Readiness,

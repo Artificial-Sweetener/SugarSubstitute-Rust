@@ -255,3 +255,32 @@ fn cleanup_failure_preserves_partial_state_charge_and_original_cause() -> TestRe
 mod stopped;
 
 mod progress;
+
+#[test]
+fn completed_source_lease_survives_elapsed_preparation_until_actual_explicit_close() -> TestResult {
+    let mut harness = Harness::new(false, false)?;
+    harness.inspect()?;
+    let lease = harness.owner.take_inspection()?.ok_or("Missing completed source lease")?;
+    let original_assets = lease.manifest().assets().len();
+    harness.clock.0.store(600_000_000_000, Ordering::Release);
+    lease.validate_live()?;
+    assert_eq!(lease.manifest().assets().len(), original_assets);
+    assert_eq!(lease._claim.bytes(), FRONTEND_SOURCE_BYTES);
+    assert!(crate::registry::lock(&harness.owner.shared.retained).is_some());
+    *crate::registry::lock(&harness.boundary.lease) = Some(lease.clone());
+    let mut job = harness.owner.submit_close(
+        &harness.client,
+        &harness.scope,
+        Harness::spec(2, 615_000_000_000)?,
+    )?;
+    assert!(lease.validate_live().is_err());
+    harness.wake.until(&harness.client, || matches!(job.status().phase, JobPhase::Terminal(_)))?;
+    let completion = job.try_take_completion().ok_or("Missing actual source cleanup")?;
+    assert!(matches!(
+        completion.outcome,
+        sugarsubstitute_contracts::execution::JobOutcome::Success(())
+    ));
+    assert!(crate::registry::lock(&harness.owner.shared.retained).is_none());
+    assert_eq!(lease._claim.bytes(), FRONTEND_SOURCE_BYTES);
+    Ok(())
+}

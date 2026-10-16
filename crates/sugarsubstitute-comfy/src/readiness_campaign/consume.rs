@@ -23,7 +23,8 @@ impl ReadinessCampaign {
     ) -> Result<CampaignStep, CampaignError> {
         self.observe_now(now)?;
         self.last_now = now;
-        if !self.ready && now >= self.budget.until() && !self.terminal {
+        if !self.ready && self.campaign_until().is_some_and(|until| now >= until) && !self.terminal
+        {
             self.terminal = true;
             self.retry = false;
             self.next_input_at = None;
@@ -77,6 +78,7 @@ impl ReadinessCampaign {
                     }
                 }
             }
+            self.freeze_cleanup_deadline(now)?;
             return Ok(if self.terminal { CampaignStep::Failed } else { CampaignStep::Progressed });
         }
         if let Some(job) = &mut self.cleanup
@@ -96,15 +98,16 @@ impl ReadinessCampaign {
                         let delays_ms = [50, 100, 200, 400, 800, 1000];
                         let delay = delays_ms[self.retry_index.min(delays_ms.len() - 1)];
                         self.retry_index = (self.retry_index + 1).min(delays_ms.len() - 1);
-                        let remaining = self
-                            .budget
-                            .until()
-                            .checked_duration_since(now)
-                            .map_err(CampaignError::Time)?;
-                        self.next_input_at = Some(
-                            now.checked_add(remaining.min(Duration::from_millis(delay)))
-                                .map_err(CampaignError::Time)?,
-                        );
+                        let delay = Duration::from_millis(delay);
+                        let delay = match self.campaign_until() {
+                            Some(until) => until
+                                .checked_duration_since(now)
+                                .map_err(CampaignError::Time)?
+                                .min(delay),
+                            None => delay,
+                        };
+                        self.next_input_at =
+                            Some(now.checked_add(delay).map_err(CampaignError::Time)?);
                         self.retry = false;
                         return Ok(CampaignStep::Progressed);
                     }

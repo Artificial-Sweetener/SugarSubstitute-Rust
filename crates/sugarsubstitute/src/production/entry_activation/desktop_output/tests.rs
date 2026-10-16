@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Fake only byte chunks and logger writer/time boundaries; parsed facts grant no authority.
 use super::*;
-const LINE: &str = "operation=\"child_preparation_transition\" capture_admitted=true capture=false registered=false configuration=false original_failure=None capture_failure=None failure_retained=false";
+const LINE: &str = "operation=\"child_preparation_transition\" channel_phase=Authenticated capture_input=Transferred capture_admitted=true capture=false registered=false configuration=false original_failure=None capture_failure=None failure_retained=false";
 #[cfg(not(feature = "k1-native-qualification"))]
 #[test]
 fn default_build_discards_compact_qualification_records() {
@@ -49,7 +49,19 @@ fn closed_fields_accept_all_known_issues_but_reject_extensions_duplicates_and_un
         );
         assert_eq!(actual.map(|phase| phase.capture_failure), Some(class));
     }
+    for phase in ["Unadmitted", "Admitted", "Prepared", "Connected", "Authenticated"] {
+        let line = LINE.replace("channel_phase=Authenticated", &format!("channel_phase={phase}"));
+        assert_eq!(parse(line.as_bytes()).map(|value| value.channel_phase), Some(phase));
+    }
+    for input in ["Unchecked", "NoPeer", "Absent", "Transferred", "Closed"] {
+        let line = LINE.replace("capture_input=Transferred", &format!("capture_input={input}"));
+        assert_eq!(parse(line.as_bytes()).map(|value| value.capture_input), Some(input));
+    }
     for bad in [
+        LINE.replace("channel_phase=Authenticated", "channel_phase=Authenticated(secret)"),
+        LINE.replace("capture_input=Transferred", "capture_input=Unknown"),
+        LINE.replace("channel_phase=Authenticated ", ""),
+        LINE.replace("capture_input=Transferred", "capture_input=Transferred capture_input=Absent"),
         LINE.replace("capture_failure=None", "capture_failure=Native(secret)"),
         LINE.replace("capture_failure=None", "capture_failure=Unknown"),
         LINE.replace("capture_failure=None", "capture_failure=0xC0000005"),
@@ -220,7 +232,7 @@ pub(in super::super) fn formatted_owner_diagnostics(
 fn actual_production_text_formatter_with_writer_and_time_boundaries_preserves_closed_fields()
 -> Result<(), Box<dyn std::error::Error>> {
     let bytes = formatted_owner_diagnostics(|| {
-        tracing::info!(operation="child_preparation_transition",capture_admitted=true,capture=false,
+        tracing::info!(operation="child_preparation_transition",channel_phase=%"Authenticated",capture_input=%"Transferred",capture_admitted=true,capture=false,
             registered=false,configuration=false,original_failure=?None::<u8>,capture_failure=%"None",failure_retained=false,
             "Child pre-UI preparation conditions changed");
         for stage in [Connection::Queued, Connection::Admitted, Connection::ReplyReceived] {

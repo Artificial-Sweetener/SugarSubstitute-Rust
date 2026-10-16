@@ -27,6 +27,7 @@ pub(super) struct RunningBackendBinding {
     outage: Option<Outage>,
     retry: Option<ConnectionBudget>,
     retry_expired: bool,
+    retry_admitted: bool,
     awaiting_positive: Option<LeaseReference>,
 }
 impl RunningBackendBinding {
@@ -45,6 +46,7 @@ impl RunningBackendBinding {
             outage: None,
             retry: None,
             retry_expired: false,
+            retry_admitted: false,
             awaiting_positive: None,
         })
     }
@@ -118,14 +120,28 @@ impl RunningBackendBinding {
             outage.displayed = MainBackendState::Retrying;
         }
         self.retry_expired = false;
+        self.retry_admitted = false;
         self.retry = Some(budget);
         Ok(RetryRequestDisposition::Queued)
     }
+    /// The actual channel accepted this exact managed retry; its original write remains finite.
+    pub(super) fn retry_admitted(&mut self) -> Result<()> {
+        if self.retry.is_none() || self.retry_expired || self.retry_admitted {
+            return Err("Managed retry admission differs".into());
+        }
+        self.retry_admitted = true;
+        Ok(())
+    }
     pub(super) fn retry_deadline(&self) -> Option<Moment> {
-        self.retry.filter(|_| !self.retry_expired).map(|budget| budget.until())
+        self.retry
+            .filter(|_| !self.retry_expired && !self.retry_admitted)
+            .map(|budget| budget.until())
     }
     pub(super) fn expire_retry(&mut self, now: Moment) -> Option<LeaseKey> {
-        if self.retry_expired || self.retry.is_none_or(|budget| now < budget.until()) {
+        if self.retry_expired
+            || self.retry_admitted
+            || self.retry.is_none_or(|budget| now < budget.until())
+        {
             return None;
         }
         self.retry_expired = true;
@@ -180,6 +196,7 @@ impl RunningBackendBinding {
         self.current = current;
         self.retry = None;
         self.retry_expired = false;
+        self.retry_admitted = false;
         Ok(())
     }
     /// The worker has consumed an authenticated ordinary reply for the new current binding.
@@ -197,6 +214,7 @@ impl RunningBackendBinding {
         if self.retry.take().is_none() {
             return Err("No original retry owns this disposition".into());
         }
+        self.retry_admitted = false;
         let outage = self.outage.as_mut().ok_or("Original retry outage absent")?;
         outage.ready = false;
         outage.displayed = MainBackendState::Retiring;

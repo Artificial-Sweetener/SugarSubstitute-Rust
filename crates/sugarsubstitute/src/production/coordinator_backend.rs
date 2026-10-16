@@ -418,10 +418,13 @@ impl CoordinatorBackend {
             .flat_map(|record| match record.shutdown {
                 Some((_, budget)) => record.cleanup_failure.deadlines(budget),
                 None => [
-                    record
-                        .campaign
-                        .next_deadline()
-                        .or_else(|| record.readiness.is_none().then_some(record.budget.until())),
+                    record.campaign.next_deadline().or_else(|| {
+                        record
+                            .readiness
+                            .is_none()
+                            .then(|| record.campaign.campaign_until())
+                            .flatten()
+                    }),
                     None,
                 ],
             })

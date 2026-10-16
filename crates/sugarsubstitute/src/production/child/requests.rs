@@ -73,6 +73,7 @@ struct Pending {
     original: Moment,
     phase: Phase,
     purpose: Purpose,
+    waits_for_owned_process: bool,
 }
 
 /// Retain immutable matching facts separately from native transport/frame custody.
@@ -124,7 +125,13 @@ impl ClientRequests {
             request: Some(request),
             deadline_qpc: encoded.ticks(),
         };
-        *slot = Some(Pending { header, original, phase: Phase::Prepared, purpose: Purpose::Other });
+        *slot = Some(Pending {
+            header,
+            original,
+            phase: Phase::Prepared,
+            purpose: Purpose::Other,
+            waits_for_owned_process: false,
+        });
         self.latest = latest;
         Ok(header)
     }
@@ -174,7 +181,7 @@ impl ClientRequests {
         if pending.phase != Phase::Admitted {
             return Err(RequestError::Order);
         }
-        if now >= pending.original {
+        if now >= pending.original && !pending.waits_for_owned_process {
             return Err(RequestError::Deadline);
         }
         pending.phase = Phase::Received;
@@ -194,13 +201,18 @@ impl ClientRequests {
             self.received(header, now)
         }
     }
-    /// Designate only a never-admitted original Acquire as supporting schema4 progress.
-    pub(super) fn acquisition(&mut self, header: WireHeader) -> Result<(), RequestError> {
+    /// Bind the configured target policy before finite native admission; no readiness is inferred.
+    pub(super) fn acquisition(
+        &mut self,
+        header: WireHeader,
+        kind: sugarsubstitute_application::startup::ConnectionBudgetKind,
+    ) -> Result<(), RequestError> {
         let pending = self.find_mut(header)?;
         if pending.phase != Phase::Prepared || pending.purpose != Purpose::Other {
             return Err(RequestError::Order);
         }
         pending.purpose = Purpose::Acquisition;
+        pending.waits_for_owned_process = kind.waits_for_owned_process();
         Ok(())
     }
     /// Consume one validated nonfinal frame, retaining its original slot and cutoff.
@@ -210,7 +222,7 @@ impl ClientRequests {
         if pending.purpose != Purpose::Acquisition || pending.phase != Phase::Received {
             return Err(RequestError::Order);
         }
-        if now >= pending.original {
+        if now >= pending.original && !pending.waits_for_owned_process {
             return Err(RequestError::Deadline);
         }
         pending.phase = Phase::Admitted;

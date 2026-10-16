@@ -251,6 +251,7 @@ impl BackendCustodyParent {
         })
     }
     /// Take original pipe terminal only after the actual callbacks, handles and loans settle.
+    /// A concurrent short state loan remains pending; actual observation failures stay errors.
     pub fn take_terminal(
         &self,
     ) -> Result<
@@ -262,7 +263,7 @@ impl BackendCustodyParent {
         >,
         BackendCustodyParentFailure,
     > {
-        self.access(|state| Ok(state.session.take_terminal()))
+        Ok(self.try_access(|state| Ok(state.session.take_terminal()))?.flatten())
     }
     /// Take/reinstall the identical stable owner outside provider/native calls.
     fn access<T>(

@@ -44,11 +44,14 @@ impl ParentLifecycle {
         ) && let Some(acquisition) = &self.acquisition
             && let Some(lease) = acquisition.progress()
         {
-            let (header, original) = (acquisition.header, acquisition.original);
+            let header = acquisition.header;
+            let now = resources.execution.client.now()?;
+            let original =
+                self.acquisition.as_mut().ok_or(ParentError::WrongPhase)?.progress_deadline(now)?;
             let now = resources.execution.client.now()?;
             if now >= original {
                 self.expire_acquisition(now)?;
-                return Ok(());
+                return Err(sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeError::DeadlineExpired.into());
             }
             self.begin_output_sequence(lease)?;
             if self.write_message(
@@ -77,7 +80,8 @@ impl ParentLifecycle {
         }
         let record = self.requests.get(index)?;
         let header = record.header;
-        let until = record.until.ok_or(ParentError::WrongPhase)?;
+        let until = self.requests.reply_deadline(index, resources.execution.client.now()?)?;
+        let record = self.requests.get(index)?;
         let now = resources.execution.client.now()?;
         if now >= until {
             self.expire_acquisition(now)?;

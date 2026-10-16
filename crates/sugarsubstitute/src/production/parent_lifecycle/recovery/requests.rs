@@ -201,18 +201,36 @@ impl ParentLifecycle {
         backend_commands_open: bool,
     ) -> Result<Option<(usize, super::super::history::HeldBackendCommand)>> {
         use super::super::history::HeldBackendCommand;
-        let Some(index) = self.requests.held_backend() else { return Ok(None) };
+        let Some(index) = self.requests.held_backend() else {
+            return Ok(None);
+        };
         let command = self.requests.get(index)?.held_backend.ok_or(ParentError::WrongPhase)?;
         let release = matches!(command, HeldBackendCommand::Release(_));
         if self.closed || (self.cleanup.is_some() && !release) {
             self.requests.cancel_held(index)?;
+            self.retain_held_terminal(index)?;
             return Ok(None);
         }
         let cleanup_command = release || matches!(command, HeldBackendCommand::Reload { .. });
         let open = self.forwarded.is_none()
             && !backend_delivery_pending
             && (cleanup_command || backend_commands_open);
-        Ok(self.requests.poll_held_backend(now, open)?)
+        let command = self.requests.poll_held_backend(now, open)?;
+        self.retain_held_terminal(index)?;
+        Ok(command)
+    }
+    /// Preserve a genuine never-admitted terminal for the configured managed semantic waiter.
+    /// This admits no backend effect and supplies no native settlement witness.
+    fn retain_held_terminal(&mut self, index: usize) -> Result<()> {
+        let record = self.requests.get(index)?;
+        if self.requests.managed_waiting(index)?
+            && record.held_terminal.is_some()
+            && let Some(acquisition) = &mut self.acquisition
+            && acquisition.header == record.header
+        {
+            acquisition.reply(record.header, record.reply.ok_or(ParentError::WrongPhase)?)?;
+        }
+        Ok(())
     }
     /// Retry only the original command after Root's shared gate opens, never its deadline or an admitted effect.
     pub(in crate::production::parent_lifecycle) fn advance_backend_commands(
@@ -233,7 +251,7 @@ impl ParentLifecycle {
         let until = self.requests.get(index)?.until.ok_or(ParentError::WrongPhase)?;
         match command {
             HeldBackendCommand::Acquire(identity) => {
-                if self.acquisition.is_some()
+                if self.acquisition.as_ref().is_none_or(|acquisition| acquisition.header != header)
                     || self.cleanup.is_some()
                     || self.attempt_cleanup.is_some()
                     || self.main.stage()
@@ -243,13 +261,6 @@ impl ParentLifecycle {
                 }
                 let request = header.request.ok_or(ParentError::WrongPhase)?;
                 self.requests.get_mut(index)?.identity = Some(identity);
-                self.requests.acquisition(index, request)?;
-                self.acquisition = Some(super::super::acquisition::Acquisition::new(
-                    self.binding()?,
-                    header,
-                    identity,
-                    until,
-                )?);
                 self.backend_request(
                     self.binding()?,
                     ResourceRequest {
@@ -307,7 +318,12 @@ impl ParentLifecycle {
         let Some(retry) = self.recovery.retry else {
             return Ok(());
         };
-        if now < retry.until {
+        if self.requests.managed_waiting(
+            self.requests
+                .find(retry.header.request.ok_or(ParentError::WrongPhase)?)
+                .ok_or(ParentError::StaleRequest)?,
+        )? || now < retry.until
+        {
             return Ok(());
         }
         let index = self

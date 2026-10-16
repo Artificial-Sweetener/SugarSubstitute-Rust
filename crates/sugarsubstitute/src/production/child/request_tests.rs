@@ -284,7 +284,8 @@ fn nonfinal_acquisition_keeps_original_slot_deadline_and_capacity_until_final() 
     let mut requests = requests()?;
     let until = Moment::from_nanos(1000);
     let h = requests.prepare(until, CounterDeadline::new(2000, 100)?)?;
-    requests.acquisition(h)?;
+    requests
+        .acquisition(h, sugarsubstitute_application::startup::ConnectionBudgetKind::Attached)?;
     requests.admitted(h)?;
     requests.received(h, Moment::from_nanos(20))?;
     requests.progress(h, Moment::from_nanos(21))?;
@@ -315,8 +316,13 @@ fn progress_cannot_resume_foreign_nonacquire_expired_or_consumed_requests() -> T
     assert_eq!(requests.progress(control, Moment::from_nanos(21)), Err(RequestError::Order));
     requests.consumed(control)?;
     let h = requests.prepare(until, CounterDeadline::new(2000, 100)?)?;
-    requests.acquisition(h)?;
-    assert!(requests.acquisition(h).is_err());
+    requests
+        .acquisition(h, sugarsubstitute_application::startup::ConnectionBudgetKind::Attached)?;
+    assert!(
+        requests
+            .acquisition(h, sugarsubstitute_application::startup::ConnectionBudgetKind::Attached)
+            .is_err()
+    );
     requests.admitted(h)?;
     requests.received(h, Moment::from_nanos(20))?;
     assert_eq!(
@@ -332,3 +338,62 @@ fn progress_cannot_resume_foreign_nonacquire_expired_or_consumed_requests() -> T
 
 #[path = "requests/retirement_tests.rs"]
 mod retirement_tests;
+
+#[test]
+fn managed_admitted_acquisition_waits_beyond_three_minutes_with_finite_output_requests()
+-> TestResult {
+    use sugarsubstitute_application::startup::ConnectionBudgetKind;
+    let mut ledger = requests()?;
+    let until = Moment::from_nanos(180_000_000_000);
+    let h = ledger.prepare(until, CounterDeadline::new(18000, 100)?)?;
+    ledger.acquisition(h, ConnectionBudgetKind::Managed)?;
+    assert_eq!(ledger.outbound(h, until, until), Err(RequestError::Deadline));
+    assert_eq!(ledger.received(h, Moment::from_nanos(360_000_000_000)), Err(RequestError::Order));
+    ledger.outbound(h, until, Moment::from_nanos(1))?;
+    ledger.admitted(h)?;
+    let late = Moment::from_nanos(360_000_000_000);
+    ledger.received(h, late)?;
+    ledger.progress(h, late)?;
+    let pull_until = late.checked_add(std::time::Duration::from_secs(30))?;
+    let pull = ledger.prepare(pull_until, CounterDeadline::new(39000, 100)?)?;
+    ledger.output_pull(pull)?;
+    ledger.outbound(pull, pull_until, late)?;
+    ledger.admitted(pull)?;
+    assert_eq!(ledger.received(pull, pull_until), Err(RequestError::Deadline));
+    assert_eq!(
+        ledger.received(WireHeader { deadline_qpc: h.deadline_qpc + 1, ..h }, late),
+        Err(RequestError::Identity)
+    );
+    ledger.received(h, late)?;
+    ledger.consumed(h)?;
+    assert_eq!(ledger.received(h, late), Err(RequestError::Identity));
+    Ok(())
+}
+#[test]
+fn attached_acquisition_and_unadmitted_managed_requests_keep_original_cutoff() -> TestResult {
+    use sugarsubstitute_application::startup::ConnectionBudgetKind;
+    let mut ledger = requests()?;
+    let h = prepare(&mut ledger)?;
+    ledger.acquisition(h, ConnectionBudgetKind::Attached)?;
+    ledger.admitted(h)?;
+    assert_eq!(ledger.received(h, Moment::from_nanos(500)), Err(RequestError::Deadline));
+    let managed = prepare(&mut ledger)?;
+    ledger.acquisition(managed, ConnectionBudgetKind::Managed)?;
+    assert_eq!(
+        ledger.outbound(managed, Moment::from_nanos(500), Moment::from_nanos(500)),
+        Err(RequestError::Deadline)
+    );
+    Ok(())
+}
+#[test]
+fn admitted_managed_retry_keeps_exact_header_while_waiting_for_original_producer() -> TestResult {
+    let mut ledger = requests()?;
+    let h = prepare(&mut ledger)?;
+    ledger.backend_retry(h)?;
+    ledger.outbound(h, Moment::from_nanos(500), Moment::from_nanos(1))?;
+    ledger.admitted(h)?;
+    ledger.received(h, Moment::from_nanos(360_000_000_000))?;
+    assert_eq!(ledger.progress(h, Moment::from_nanos(360_000_000_000)), Err(RequestError::Order));
+    ledger.consumed(h)?;
+    Ok(())
+}

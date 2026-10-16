@@ -103,7 +103,7 @@ fn enriched_startup_failure_reuses_one_first_failure_slot_after_saturated_progre
     let mut seen = Vec::new();
     for sequence in 1..=80 {
         let line = format!(
-            "operation=\"child_preparation_transition\" capture_admitted=true capture=false registered=false configuration=false original_failure=None capture_failure=None failure_retained={}\n",
+            "operation=\"child_preparation_transition\" channel_phase=Authenticated capture_input=Transferred capture_admitted=true capture=false registered=false configuration=false original_failure=None capture_failure=None failure_retained={}\n",
             sequence % 2 == 0
         );
         owner.feed(OutputStream::Stderr, sequence, false, false, line.as_bytes(), |value| {

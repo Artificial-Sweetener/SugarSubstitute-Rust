@@ -18,6 +18,14 @@ pub enum ConnectionBudgetKind {
     Managed,
 }
 
+impl ConnectionBudgetKind {
+    /// Observe managed process exit/cancellation while readiness remains pending.
+    /// Attached connections retain their finite observation interval and grant no process control.
+    pub const fn waits_for_owned_process(self) -> bool {
+        matches!(self, Self::Managed)
+    }
+}
+
 /// Reject a probe start without changing the original campaign budget.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProbeBudgetError {
@@ -27,6 +35,8 @@ pub enum ProbeBudgetError {
     Expired,
     /// Supplied remaining interval exceeds the configured original role bound.
     IntervalTooLong,
+    /// A managed-live probe was requested for an attached connection.
+    WrongOwnership,
 }
 
 impl fmt::Display for ProbeBudgetError {
@@ -34,6 +44,9 @@ impl fmt::Display for ProbeBudgetError {
         match self {
             Self::Clock(cause) => cause.fmt(formatter),
             Self::Expired => formatter.write_str("Original connection campaign deadline elapsed"),
+            Self::WrongOwnership => {
+                formatter.write_str("Managed-live timing requires managed ownership")
+            }
             Self::IntervalTooLong => {
                 formatter.write_str("Connection interval exceeds its role bound")
             }
@@ -45,7 +58,7 @@ impl Error for ProbeBudgetError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Clock(cause) => Some(cause),
-            Self::Expired | Self::IntervalTooLong => None,
+            Self::Expired | Self::IntervalTooLong | Self::WrongOwnership => None,
         }
     }
 }
@@ -114,6 +127,25 @@ impl ConnectionBudget {
     /// Return the immutable campaign deadline in that same clock epoch.
     pub const fn until(&self) -> Moment {
         self.until
+    }
+
+    /// Bound one managed-live probe by two seconds without an aggregate startup cutoff.
+    ///
+    /// This arithmetic grants no process authority. The composing host must first
+    /// observe its actual owned managed child live and retain that child's exit
+    /// watch and explicit cancellation. The finite preparation budget is unchanged.
+    ///
+    /// # Errors
+    /// Rejects attached ownership, regression before the original start and checked
+    /// addition overflow. Elapsed preparation time alone does not reject a live probe.
+    pub fn managed_probe_until(&self, attempt_started: Moment) -> Result<Moment, ProbeBudgetError> {
+        if self.kind != ConnectionBudgetKind::Managed {
+            return Err(ProbeBudgetError::WrongOwnership);
+        }
+        if attempt_started < self.started {
+            return Err(ProbeBudgetError::Clock(TimeError::Regression));
+        }
+        attempt_started.checked_add(Duration::from_secs(2)).map_err(ProbeBudgetError::Clock)
     }
 
     /// Bound one probe by two seconds and the remaining original campaign interval.

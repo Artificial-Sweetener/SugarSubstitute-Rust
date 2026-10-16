@@ -4,6 +4,7 @@
 mod clock;
 mod harness;
 mod incremental;
+mod managed;
 mod terminal;
 use super::*;
 use crate::readiness_transport::campaign_fixture::Behavior;

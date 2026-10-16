@@ -55,10 +55,12 @@ fn actual_parent_first_cause_survives_finish_and_native_pipe_cancellation() -> T
     let parent = BackendCustodyParent::new(&mut session)?;
     assert!(session.is_none());
     assert_eq!(parent.finish_status(), crate::BackendCustodyFinishStatus::Unissued);
-    parent.access(|_| {
+    let loaned_terminal = parent.access(|_| {
         assert_eq!(parent.finish_status(), crate::BackendCustodyFinishStatus::Unavailable);
-        Ok(())
-    })?;
+        Ok(parent.take_terminal())
+    })??;
+    assert!(loaned_terminal.is_none());
+    assert!(parent.cached_failure().is_none());
     assert_eq!(parent.finish_status(), crate::BackendCustodyFinishStatus::Unissued);
     let original = NativeObservationError::new(
         "original_external_boundary",

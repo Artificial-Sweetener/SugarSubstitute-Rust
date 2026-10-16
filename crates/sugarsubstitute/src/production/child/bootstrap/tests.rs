@@ -189,10 +189,17 @@ fn preparation_diagnostics_suppress_repeats_and_retain_redacted_original_failure
     let calls = Arc::new(AtomicUsize::new(0));
     let mut child = bootstrap(&calls, None)?;
     let initial = child.changed_preparation().ok_or("Initial observation missing")?;
+    assert_eq!(initial.channel_phase, HandshakePhase::Unadmitted);
+    assert_eq!(initial.capture_input, CaptureInput::Unchecked);
     assert!(!initial.capture_admitted);
     assert!(!initial.capture && !initial.registered && !initial.configuration);
     assert_eq!(initial.original_failure, None);
     assert!(!initial.failure_retained);
+    assert!(child.changed_preparation().is_none());
+    assert!(child.channel.take_captured_startup().is_none());
+    let waiting = child.changed_preparation().ok_or("Actual no-peer poll observation missing")?;
+    assert_eq!(waiting.channel_phase, HandshakePhase::Unadmitted);
+    assert_eq!(waiting.capture_input, CaptureInput::NoPeer);
     assert!(child.changed_preparation().is_none());
     child.record(ChildBootstrapIssue::Deadline, Box::new(std::io::Error::other("private-path")));
     let failure = child.changed_preparation().ok_or("Failure transition missing")?;

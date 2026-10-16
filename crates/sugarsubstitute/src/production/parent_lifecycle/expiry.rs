@@ -80,8 +80,8 @@ impl ParentLifecycle {
             let Some(index) = self.requests.next_reply() else {
                 return Ok(None);
             };
+            let until = self.requests.reply_deadline(index, now)?;
             let record = self.requests.get(index)?;
-            let until = record.until.ok_or(ParentError::WrongPhase)?;
             if now < until {
                 return Ok(Some(index));
             }

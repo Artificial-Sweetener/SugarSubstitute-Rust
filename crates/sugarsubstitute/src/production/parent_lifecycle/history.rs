@@ -47,6 +47,8 @@ pub(super) struct Record {
     acquisition: Option<RequestId>,
     retired: bool,
     pub(super) until: Option<sugarsubstitute_contracts::execution::Moment>,
+    managed_waiting: bool,
+    transfer_until: Option<sugarsubstitute_contracts::execution::Moment>,
     pub(super) output_bytes: Box<[u8]>,
 }
 
@@ -88,6 +90,47 @@ pub(super) struct Requests {
 }
 
 impl Requests {
+    /// Retain authenticated configured-managed intent; this grants no process or Ready authority.
+    /// A held command keeps its finite admission cutoff and must publish an actual terminal.
+    pub(super) fn wait_for_owned_process(&mut self, index: usize) -> Result<(), ParentError> {
+        let record = self.get_mut(index)?;
+        if record.held_backend.is_some()
+            || record.reply.is_some()
+            || record.sent
+            || record.abandoned
+        {
+            return Err(ParentError::WrongPhase);
+        }
+        record.managed_waiting = true;
+        Ok(())
+    }
+    /// Freeze one finite native final transfer without changing the original wire header.
+    pub(super) fn reply_deadline(
+        &mut self,
+        index: usize,
+        now: sugarsubstitute_contracts::execution::Moment,
+    ) -> Result<
+        sugarsubstitute_contracts::execution::Moment,
+        Box<dyn std::error::Error + Send + Sync>,
+    > {
+        let record = self.get_mut(index)?;
+        if !record.managed_waiting {
+            return Ok(record.until.ok_or(ParentError::WrongPhase)?);
+        }
+        if record.reply.is_none() {
+            return Err(ParentError::WrongPhase.into());
+        }
+        if let Some(until) = record.transfer_until {
+            return Ok(until);
+        }
+        let until = now.checked_add(std::time::Duration::from_secs(30))?;
+        record.transfer_until = Some(until);
+        Ok(until)
+    }
+    /// Borrow configured managed intent; a held command is still subject to finite admission.
+    pub(super) fn managed_waiting(&self, index: usize) -> Result<bool, ParentError> {
+        Ok(self.get(index)?.managed_waiting)
+    }
     pub(super) const fn new() -> Self {
         Self { records: [const { None }; SLOTS], high_water: 0 }
     }
@@ -161,6 +204,8 @@ impl Requests {
             acquisition: None,
             retired: false,
             until: None,
+            managed_waiting: false,
+            transfer_until: None,
             output_bytes: output_bytes.into_boxed_slice(),
         });
         self.high_water = request.get();
@@ -311,8 +356,14 @@ impl Requests {
         }
         record.held_terminal = Some(HeldBackendTerminal::TimedOut);
         record.held_backend = None;
-        record.abandoned = true;
-        record.retired = true;
+        if record.managed_waiting {
+            record.reply = Some(Reply::Failed(
+                sugarsubstitute_contracts::lifecycle::LifecycleFailureCode::Deadline,
+            ));
+        } else {
+            record.abandoned = true;
+            record.retired = true;
+        }
         Ok(())
     }
 
@@ -324,8 +375,12 @@ impl Requests {
         }
         record.held_backend = None;
         record.held_terminal = Some(HeldBackendTerminal::Cancelled);
-        record.abandoned = true;
-        record.retired = true;
+        if record.managed_waiting {
+            record.reply = Some(Reply::Cancelled);
+        } else {
+            record.abandoned = true;
+            record.retired = true;
+        }
         Ok(())
     }
     /// Preserve expected admitted Retry timeout independently of its actual producer/write settlement.
@@ -357,7 +412,13 @@ impl Requests {
             .iter()
             .flatten()
             .filter(|record| !record.sent && !record.abandoned)
-            .filter_map(|record| record.until)
+            .filter_map(|record| {
+                if record.managed_waiting && record.held_backend.is_none() {
+                    record.transfer_until
+                } else {
+                    record.until
+                }
+            })
             .min()
     }
 }

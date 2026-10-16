@@ -224,6 +224,7 @@ fn written_attempt_main_retirement_without_whole_close_intent_never_arms_role_fo
         original,
         identity,
         Moment::from_nanos(1),
+        sugarsubstitute_application::startup::ConnectionBudgetKind::Attached,
     )?;
     acquisition.observe_retirement(binding, identity, retired)?;
     // These are the same copied transport observations used by the actual owner; no

@@ -14,6 +14,29 @@ pub(crate) enum RecoverableBackendFailure {
 }
 
 impl CoordinatorBackend {
+    /// Consume only the matching retained registry ContainedStarted observation.
+    /// This admits a live wait, never Ready, listener ownership or native settlement.
+    pub(super) fn managed_started_observation(
+        &mut self,
+        key: ResourceKey,
+        expected: ProcessKey,
+        observed: ProcessKey,
+        now: Moment,
+    ) -> Result<ResourceTransition> {
+        if expected != observed || expected.owner != key.owner {
+            return Err(Box::new(LifecycleRejection::StaleIdentity));
+        }
+        let at = self.index(key)?;
+        let record = self.records[at].as_mut().ok_or(LifecycleRejection::StaleIdentity)?;
+        if !matches!(record.target, BackendTarget::Managed(_)) {
+            return Err(Box::new(LifecycleRejection::WrongPhase));
+        }
+        if record.shutdown.is_none() {
+            record.campaign.admit_managed_live(now)?;
+        }
+        record.started = true;
+        self.observe(ResourceObservation::OwnedStarted { resource: key, process: observed })
+    }
     /// Route the exact retained launch's original native RootExited observation.
     /// Expected cleanup exits produce no outage. A root exit never asserts family,
     /// listener, source, output or claim settlement; their original owners still run.

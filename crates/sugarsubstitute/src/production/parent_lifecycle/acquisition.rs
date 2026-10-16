@@ -18,6 +18,8 @@ pub(super) use write_state::WriteObservation;
 pub(super) struct Acquisition {
     pub(super) header: WireHeader,
     pub(super) original: Moment,
+    kind: sugarsubstitute_application::startup::ConnectionBudgetKind,
+    progress_until: Option<Moment>,
     original_identity: MainIdentity,
     identity: MainIdentity,
     lease: Option<LeaseKey>,
@@ -44,12 +46,29 @@ enum Disposition {
     Cancelled,
 }
 impl Acquisition {
+    /// Clamp only attached provisional pulls to their aggregate connection deadline.
+    pub(super) fn output_until(&self, supplied: Moment) -> Moment {
+        if self.kind.waits_for_owned_process() { supplied } else { supplied.min(self.original) }
+    }
+    /// Freeze one finite progress transfer when genuine data first becomes available.
+    pub(super) fn progress_deadline(
+        &mut self,
+        now: Moment,
+    ) -> Result<Moment, sugarsubstitute_contracts::execution::TimeError> {
+        if let Some(until) = self.progress_until {
+            return Ok(until);
+        }
+        let until = self.output_until(now.checked_add(std::time::Duration::from_secs(30))?);
+        self.progress_until = Some(until);
+        Ok(until)
+    }
     /// Freeze the accepted Acquire before backend effects; no IO or allocation occurs.
     pub(super) fn new(
         binding: ClientBinding,
         header: WireHeader,
         identity: MainIdentity,
         original: Moment,
+        kind: sugarsubstitute_application::startup::ConnectionBudgetKind,
     ) -> Result<Self, ParentError> {
         if header.run != binding.run
             || header.connection != Some(binding.connection)
@@ -61,6 +80,8 @@ impl Acquisition {
         Ok(Self {
             header,
             original,
+            kind,
+            progress_until: None,
             original_identity: identity,
             identity,
             lease: None,
@@ -219,7 +240,8 @@ impl Acquisition {
     /// Fence only an unfinished original acquisition at its unchanged cutoff.
     /// A timely written Grant owns the running lease beyond acquisition expiry.
     pub(super) fn expire(&mut self, now: Moment) -> bool {
-        if now < self.original
+        if self.kind.waits_for_owned_process()
+            || now < self.original
             || (!self.retiring && self.disposition == Some(Disposition::Granted) && self.sent)
         {
             return false;
@@ -333,7 +355,9 @@ impl Acquisition {
             || (self.lease.is_none()
                 && !matches!(
                     self.disposition,
-                    Some(Disposition::Failed(_) | Disposition::Rejected(_))
+                    Some(
+                        Disposition::Failed(_) | Disposition::Rejected(_) | Disposition::Cancelled
+                    )
                 ))
         {
             return Err(ParentError::WrongPhase);

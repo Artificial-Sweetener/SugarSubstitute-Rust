@@ -12,6 +12,7 @@ pub(super) struct PendingAcquire {
     pub(super) header: WireHeader,
     pub(super) original: Moment,
     pub(super) admitted: bool,
+    pub(super) kind: ConnectionBudgetKind,
     pub(super) retiring: bool,
 }
 /// The original acquire owner retains one reply through cancellation; matching metadata
@@ -82,6 +83,10 @@ impl ConnectionStage {
     }
 }
 impl PendingAcquire {
+    /// Finite preparation ends at actual native admission; managed readiness has no aggregate cap.
+    pub(super) fn deadline(self) -> Option<Moment> {
+        (!self.admitted || !self.kind.waits_for_owned_process()).then_some(self.original)
+    }
     /// Retain the original reply in its existing acquisition slot. Cancellation does not
     /// move it through a different owner's failure slot or replace an already retained loan.
     /// The original ledger performs cutoff/disposition checks before actual consumption.
@@ -108,7 +113,7 @@ impl PendingAcquire {
     }
     /// Reject the unchanged original cutoff before wire effects or reply-loan transfer.
     pub(super) fn check_current(self, now: Moment) -> std::io::Result<()> {
-        if now >= self.original {
+        if self.deadline().is_some_and(|until| now >= until) {
             Err(std::io::Error::new(
                 std::io::ErrorKind::TimedOut,
                 "Original connection acquisition budget expired",
@@ -141,10 +146,11 @@ impl ProductionChild {
         let budget = ConnectionBudget::new(kind, self.client()?.now()?)?;
         self.connection_budget = Some(budget);
         let header = self.bootstrap.channel_mut().prepare_request(budget.until())?;
-        self.bootstrap.channel_mut().acquisition(header)?;
+        self.bootstrap.channel_mut().acquisition(header, kind)?;
         self.acquire = Some(PendingAcquire {
             header,
             original: budget.until(),
+            kind,
             admitted: false,
             retiring: false,
         });
@@ -230,7 +236,7 @@ impl ProductionChild {
                     return Err("Startup event slots full before grant".into());
                 }
                 let (lease, origin) = (grant.lease, grant.origin);
-                self.adopt_output(lease, pending.original, true)?;
+                self.adopt_output(lease, true)?;
                 self.lease = Some(lease);
                 self.grant_header = Some(pending.header);
                 self.acquire = None;
@@ -240,7 +246,7 @@ impl ProductionChild {
                 ))
             }
             DecodedPayload::Reply(ReplyOutcome::Pending(lease)) => {
-                self.adopt_output(lease, pending.original, false)?;
+                self.adopt_output(lease, false)?;
                 self.bootstrap.channel_mut().consume_progress(pending.header)?;
                 self.grant = None;
                 ConnectionStage::OutputReserved.report();

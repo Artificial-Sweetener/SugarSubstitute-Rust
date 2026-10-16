@@ -60,7 +60,13 @@ fn granted() -> Result<ParentLifecycle> {
     let (index, _) = parent.requests.admit(h, b"original acquisition boundary bytes")?;
     parent.requests.get_mut(index)?.identity = Some(id);
     parent.requests.get_mut(index)?.until = Some(moment(180));
-    let mut acquisition = Acquisition::new(binding()?, h, id, moment(180))?;
+    let mut acquisition = Acquisition::new(
+        binding()?,
+        h,
+        id,
+        moment(180),
+        sugarsubstitute_application::startup::ConnectionBudgetKind::Attached,
+    )?;
     for outcome in [RequestOutcome::Pending(lease), RequestOutcome::Granted(lease)] {
         parent.requests.observe_backend(index, outcome)?;
         acquisition.observe_backend(h, outcome)?;
@@ -173,8 +179,13 @@ fn churn_does_not_accept_foreign_prior_request_identity_or_current_lease() -> Re
 
 #[test]
 fn cleanup_requires_original_checked_write_and_exact_counter_binding() -> Result<()> {
-    let mut retained =
-        Acquisition::new(binding()?, acquisition_header()?, identity()?, moment(180))?;
+    let mut retained = Acquisition::new(
+        binding()?,
+        acquisition_header()?,
+        identity()?,
+        moment(180),
+        sugarsubstitute_application::startup::ConnectionBudgetKind::Attached,
+    )?;
     retained.observe_backend(acquisition_header()?, RequestOutcome::Granted(lease()?))?;
     retained
         .reply(acquisition_header()?, Reply::Granted { lease: lease()?, identity: identity()? })?;
@@ -231,7 +242,13 @@ fn cleanup_requires_original_checked_write_and_exact_counter_binding() -> Result
         resource: ResourceKey { generation: ResourceGeneration::new(2)?, ..lease()?.resource },
         ..lease()?
     };
-    let mut successor = Acquisition::new(binding()?, next_header, next_identity, moment(400))?;
+    let mut successor = Acquisition::new(
+        binding()?,
+        next_header,
+        next_identity,
+        moment(400),
+        sugarsubstitute_application::startup::ConnectionBudgetKind::Attached,
+    )?;
     successor.observe_backend(next_header, RequestOutcome::Granted(next_lease))?;
     successor.reply(next_header, Reply::Granted { lease: next_lease, identity: next_identity })?;
     complete_acquisition_write(&mut successor, next_header)?;
@@ -330,7 +347,13 @@ fn expired_cleanup_keeps_original_acquisition_and_cannot_acknowledge_or_renew() 
 fn no_lease_denial_survives_replay_eviction_without_inventing_backend_retirement() -> Result<()> {
     let mut parent = actor()?;
     let h = acquisition_header()?;
-    let mut retained = Acquisition::new(binding()?, h, identity()?, moment(180))?;
+    let mut retained = Acquisition::new(
+        binding()?,
+        h,
+        identity()?,
+        moment(180),
+        sugarsubstitute_application::startup::ConnectionBudgetKind::Attached,
+    )?;
     retained.reply(h, Reply::Rejected(LifecycleRejection::WrongPhase))?;
     complete_acquisition_write(&mut retained, h)?;
     parent.acquisition = Some(retained);
@@ -349,7 +372,13 @@ fn no_lease_denial_survives_replay_eviction_without_inventing_backend_retirement
 #[test]
 fn changed_producer_lease_and_final_denial_preserve_first_original() -> Result<()> {
     let h = acquisition_header()?;
-    let mut retained = Acquisition::new(binding()?, h, identity()?, moment(180))?;
+    let mut retained = Acquisition::new(
+        binding()?,
+        h,
+        identity()?,
+        moment(180),
+        sugarsubstitute_application::startup::ConnectionBudgetKind::Attached,
+    )?;
     retained.observe_backend(h, RequestOutcome::Pending(lease()?))?;
     let wrong = LeaseKey { id: LeaseId::new(2)?, ..lease()? };
     assert_eq!(
@@ -372,5 +401,107 @@ fn changed_producer_lease_and_final_denial_preserve_first_original() -> Result<(
     );
     assert_eq!(retained.header, h);
     assert_eq!(retained.original, moment(180));
+    Ok(())
+}
+
+#[test]
+fn managed_wait_owns_late_final_reply_and_one_finite_transfer_without_rebasing_header() -> Result<()>
+{
+    use sugarsubstitute_application::startup::ConnectionBudgetKind;
+    let mut parent = actor()?;
+    let h = acquisition_header()?;
+    let (index, _) = parent.requests.admit(h, b"actual managed original acquire")?;
+    parent.requests.get_mut(index)?.until = Some(moment(180));
+    parent.requests.wait_for_owned_process(index)?;
+    parent.acquisition = Some(Acquisition::new(
+        binding()?,
+        h,
+        identity()?,
+        moment(180),
+        ConnectionBudgetKind::Managed,
+    )?);
+    parent.expire_acquisition(moment(360)).map_err(|cause| cause as Box<dyn Error>)?;
+    assert!(!parent.acquisition.as_ref().ok_or("Acquisition missing")?.retiring());
+    assert_eq!(parent.requests.next_deadline(), None);
+    assert_eq!(
+        parent.acquisition.as_ref().ok_or("Acquisition missing")?.output_until(moment(390)),
+        moment(390)
+    );
+    parent.requests.get_mut(index)?.reply = Some(Reply::Failed(
+        sugarsubstitute_contracts::lifecycle::LifecycleFailureCode::Preparation,
+    ));
+    assert_eq!(
+        parent.next_live_reply(moment(360)).map_err(|cause| cause as Box<dyn Error>)?,
+        Some(index)
+    );
+    assert_eq!(parent.requests.next_deadline(), Some(moment(390)));
+    assert_eq!(
+        parent
+            .requests
+            .reply_deadline(index, moment(389))
+            .map_err(|cause| cause as Box<dyn Error>)?,
+        moment(390)
+    );
+    assert_eq!(parent.requests.get(index)?.header, h);
+    assert_eq!(parent.requests.get(index)?.until, Some(moment(180)));
+    assert!(parent.next_live_reply(moment(390)).is_err());
+    Ok(())
+}
+#[test]
+fn managed_progress_transfer_is_frozen_and_attached_pull_stays_capped() -> Result<()> {
+    use sugarsubstitute_application::startup::ConnectionBudgetKind;
+    let h = acquisition_header()?;
+    let mut managed =
+        Acquisition::new(binding()?, h, identity()?, moment(180), ConnectionBudgetKind::Managed)?;
+    assert_eq!(managed.progress_deadline(moment(360))?, moment(390));
+    assert_eq!(managed.progress_deadline(moment(389))?, moment(390));
+    assert!(!managed.expire(moment(360)));
+    let mut attached =
+        Acquisition::new(binding()?, h, identity()?, moment(180), ConnectionBudgetKind::Attached)?;
+    assert_eq!(attached.output_until(moment(390)), moment(180));
+    assert_eq!(attached.progress_deadline(moment(170))?, moment(180));
+    assert!(attached.expire(moment(180)));
+    Ok(())
+}
+
+#[test]
+fn held_managed_preparation_timeout_publishes_finite_failure_without_admitting_backend()
+-> Result<()> {
+    use super::super::history::{HeldBackendCommand, HeldBackendTerminal};
+    use sugarsubstitute_application::startup::ConnectionBudgetKind;
+    let mut parent = actor()?;
+    let h = acquisition_header()?;
+    let id = identity()?;
+    let (index, _) = parent.requests.admit(h, b"configured managed acquire awaiting admission")?;
+    parent.requests.get_mut(index)?.until = Some(moment(180));
+    parent.requests.wait_for_owned_process(index)?;
+    parent.requests.get_mut(index)?.held_backend = Some(HeldBackendCommand::Acquire(id));
+    parent.acquisition =
+        Some(Acquisition::new(binding()?, h, id, moment(180), ConnectionBudgetKind::Managed)?);
+    assert_eq!(parent.requests.next_deadline(), Some(moment(180)));
+    assert!(
+        parent
+            .next_backend_command(moment(180), true, true)
+            .map_err(|cause| cause as Box<dyn Error>)?
+            .is_none()
+    );
+    assert_eq!(parent.requests.get(index)?.held_terminal, Some(HeldBackendTerminal::TimedOut));
+    assert!(parent.requests.get(index)?.held_backend.is_none());
+    assert_eq!(
+        parent.next_live_reply(moment(180)).map_err(|cause| cause as Box<dyn Error>)?,
+        Some(index)
+    );
+    assert!(matches!(
+        parent.requests.get(index)?.reply,
+        Some(Reply::Failed(sugarsubstitute_contracts::lifecycle::LifecycleFailureCode::Deadline))
+    ));
+    assert_eq!(
+        parent
+            .requests
+            .reply_deadline(index, moment(200))
+            .map_err(|cause| cause as Box<dyn Error>)?,
+        moment(210)
+    );
+    assert_eq!(parent.requests.get(index)?.header, h);
     Ok(())
 }

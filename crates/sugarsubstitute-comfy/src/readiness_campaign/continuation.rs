@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Resume the same closed partial HTTP owner under the original campaign cutoff.
+//! Resume the same closed partial HTTP owner under its applicable finite probe interval.
 use super::*;
 
 impl ReadinessCampaign {
@@ -14,12 +14,12 @@ impl ReadinessCampaign {
         if self.terminal || self.ready || self.attempt.is_some() || self.cleanup.is_some() {
             return Ok(false);
         }
-        let until = self.budget.probe_until(now).map_err(CampaignError::Budget)?;
+        let until = self.probe_until(now)?;
         Ok(self.owner.as_ref().is_some_and(|owner| owner.continuation_fits(now, until)))
     }
 
     /// Submit a finite phase against the identical source/listener/claim/cursor.
-    /// Each actual phase remains bounded by two seconds and original campaign time.
+    /// Each phase remains bounded by two seconds and any applicable finite campaign cutoff.
     /// # Errors
     /// Rejects unavailable/foreign/cancelled scope, late or excessive deadlines,
     /// and phases too short to progress the retained asset cohort;
@@ -39,7 +39,7 @@ impl ReadinessCampaign {
             return Err(CampaignError::Rejected(CampaignRejection::WrongPhase));
         }
         self.validate_scope(scope).inspect_err(|_| self.terminal = true)?;
-        let until = self.budget.probe_until(now).map_err(CampaignError::Budget)?;
+        let until = self.probe_until(now)?;
         if spec.deadline.is_none_or(|at| {
             at <= now
                 || at > until

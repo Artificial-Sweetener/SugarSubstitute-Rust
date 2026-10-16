@@ -203,6 +203,7 @@ impl DesktopOutput {
                     }
                     diagnostic::Observation::Preparation(phase) => {
                         tracing::info!(operation="desktop_child_preparation",run=?self.run,
+                            channel_phase=%phase.channel_phase,capture_input=%phase.capture_input,
                             capture_admitted=phase.capture_admitted,capture=phase.capture,registered=phase.registered,
                             configuration=phase.configuration,original_failure=?phase.original_failure,
                             capture_failure=%phase.capture_failure,failure_retained=phase.failure_retained,

@@ -40,6 +40,8 @@ mod observations;
 #[cfg(test)]
 #[path = "channel/output_polling_fixture.rs"]
 mod output_polling_fixture;
+#[path = "channel/preparation.rs"]
+pub(super) mod preparation;
 #[path = "channel/retirement.rs"]
 mod retirement;
 #[path = "channel/ui.rs"]
@@ -88,6 +90,7 @@ pub(super) struct ChildChannel {
     received: Option<ReceivedLifecycleFrame>,
     admission: ChannelAdmission,
     terminal: Option<Terminal>,
+    capture_input: preparation::CaptureInput,
 }
 impl ChildChannel {
     /// Retain the lexical inherited token without any native operation.
@@ -118,6 +121,7 @@ impl ChildChannel {
             received: None,
             admission: ChannelAdmission::new(),
             terminal: None,
+            capture_input: preparation::CaptureInput::Unchecked,
         }
     }
 
@@ -215,15 +219,6 @@ impl ChildChannel {
     /// Kernel authentication or Welcome alone cannot establish this wire phase.
     pub(super) fn registered(&self) -> bool {
         self.admission.open() && self.exchange == Exchange::Application && self.peer.is_some()
-    }
-
-    /// Move the pair produced by actual kernel/capability/full-run authentication once.
-    /// No copied peer facts, handshake state or input token can construct this pair.
-    pub(super) fn take_captured_startup(&self) -> Option<CapturedStartup> {
-        if !self.admission.open() || self.peer.is_none() {
-            return None;
-        }
-        self.session.as_ref()?.control.take_captured_startup()
     }
 
     /// Borrow completed wire binding; neither method grants browser/backend readiness.

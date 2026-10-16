@@ -43,7 +43,7 @@ fn fixture() -> Result<(ProductionChild, Rig, Arc<Frozen>)> {
     assert!(matches!(completion.outcome, JobOutcome::Success(_)));
     child.output.terminal = Some(completion);
     child.output.job = None;
-    child.output.acquisition_until = None;
+    child.output.provisional = false;
     Ok((child, rig, clock))
 }
 /// Reaching the missing native boundary proves real ledger and output-owner preparation happened.
@@ -133,5 +133,22 @@ fn close_clears_idle_wake_and_prevents_preparing_a_new_request() -> Result<()> {
     assert!(child.output.pending.is_none());
     assert_eq!(child.output.pull_after, None);
     assert_eq!(child.output.deadline(), None);
+    Ok(())
+}
+
+#[test]
+fn provisional_managed_output_after_three_minutes_keeps_finite_pulls_and_close_custody()
+-> Result<()> {
+    let (mut child, _rig, clock) = fixture()?;
+    child.output.provisional = true;
+    clock.0.store(360_000_000_000, Ordering::SeqCst);
+    let original = prepared(&mut child)?;
+    assert_eq!(original.1, Moment::from_nanos(390_000_000_000));
+    clock.0.store(361_000_000_000, Ordering::SeqCst);
+    assert_eq!(prepared(&mut child)?, original);
+    child.output.close();
+    assert!(child.output.pending());
+    assert_eq!(child.output.pending, Some(original));
+    assert_eq!(child.output.deadline(), Some(original.1));
     Ok(())
 }

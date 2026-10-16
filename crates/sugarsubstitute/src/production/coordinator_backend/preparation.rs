@@ -123,7 +123,10 @@ impl CoordinatorBackend {
         }
         let campaign = ReadinessCampaign::new(target.clone(), budget)?;
         let scope = resources.client.create_scope(
-            ScopeSpec { id: resources.scopes.allocate()?, deadline: Some(budget.until()) },
+            ScopeSpec {
+                id: resources.scopes.allocate()?,
+                deadline: (!kind.waits_for_owned_process()).then_some(budget.until()),
+            },
             Some(resources.native),
         )?;
         let original = input.as_ref().ok_or(LifecycleRejection::WrongPhase)?;
@@ -326,7 +329,7 @@ impl CoordinatorBackend {
                 Operation::Readiness,
                 JobClass::InfrastructureLifecycle,
                 sugarsubstitute_comfy::readiness_transport::READINESS_TRANSPORT_BYTES,
-                Some(record.budget.probe_until(now)?),
+                Some(record.campaign.probe_until(now)?),
             )?;
             record.campaign.submit_continuation(resources.client, &record.scope, spec)?;
             return Ok(());
@@ -357,7 +360,7 @@ impl CoordinatorBackend {
             Operation::Readiness,
             JobClass::InfrastructureLifecycle,
             sugarsubstitute_comfy::readiness_transport::READINESS_TRANSPORT_BYTES,
-            Some(record.budget.probe_until(now)?),
+            Some(record.campaign.probe_until(now)?),
         )?;
         record.campaign.submit_attempt(resources.client, &record.scope, spec, input)?;
         Ok(())

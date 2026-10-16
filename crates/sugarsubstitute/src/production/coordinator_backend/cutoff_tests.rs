@@ -255,3 +255,6 @@ fn reload_keeps_ready_shared_lease_without_a_preparation_budget() -> Result<()> 
     assert_eq!(policy.snapshot().leases, 1);
     Ok(())
 }
+
+#[path = "cutoff_tests/managed.rs"]
+mod managed;

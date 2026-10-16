@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Coordinate actual HTTP attempts and explicit cleanup under one original startup budget.
+//! Coordinate actual HTTP attempts and explicit cleanup with finite operation deadlines.
 //!
 //! The host supplies fresh installed-source/listener inputs only when requested,
 //! routes its central completion batch here, and schedules native waits using
@@ -12,6 +12,7 @@ mod continuation;
 mod error;
 #[cfg(test)]
 mod tests;
+mod timing;
 use crate::readiness_transport::{
     ReadinessProbeInput, ReadinessProbeOwner, ReadinessTransportError, VerifiedReadiness,
 };
@@ -47,10 +48,11 @@ struct Attempt {
     scope: ScopeId,
     until: Moment,
 }
-/// Own one real probe and one observed cleanup job across an original connection campaign.
+/// Own one real probe and cleanup job across finite preparation or admitted managed-live readiness.
 pub struct ReadinessCampaign {
     target: BackendTarget,
     budget: ConnectionBudget,
+    managed_live: bool,
     owner: Option<ReadinessProbeOwner>,
     attempt: Option<Attempt>,
     cleanup: Option<OwnedJob<(), ReadinessTransportError>>,
@@ -67,7 +69,7 @@ pub struct ReadinessCampaign {
     failure: Option<CampaignError>,
 }
 impl ReadinessCampaign {
-    /// Bind one effective target to its original thirty- or one-hundred-eighty-second budget.
+    /// Bind an effective target to its original finite attachment or managed-preparation budget.
     /// # Errors
     /// Rejects budget/target ownership mismatch and attached localhost/IPv6 origins.
     pub fn new(target: BackendTarget, budget: ConnectionBudget) -> Result<Self, CampaignError> {
@@ -84,6 +86,7 @@ impl ReadinessCampaign {
         Ok(Self {
             target,
             budget,
+            managed_live: false,
             owner: None,
             attempt: None,
             cleanup: None,
@@ -100,7 +103,7 @@ impl ReadinessCampaign {
             failure: None,
         })
     }
-    /// Ask whether original time and actual predecessor settlement permit fresh input.
+    /// Ask whether current timing and actual predecessor settlement permit fresh input.
     /// # Errors
     /// Rejects clock regression and original campaign expiry without mutating state.
     pub fn needs_input(&self, now: Moment) -> Result<bool, CampaignError> {
@@ -108,7 +111,7 @@ impl ReadinessCampaign {
         if self.terminal || self.ready || self.owner.is_some() {
             return Ok(false);
         }
-        self.budget.probe_until(now).map_err(CampaignError::Budget)?;
+        self.probe_until(now)?;
         Ok(self.next_input_at.is_some_and(|at| now >= at))
     }
     /// Submit one actual probe with fresh retained source and listener input.
@@ -151,7 +154,7 @@ impl ReadinessCampaign {
         self.validate_scope(scope).inspect_err(|_| {
             self.terminal = true;
         })?;
-        let until = self.budget.probe_until(now).map_err(CampaignError::Budget)?;
+        let until = self.probe_until(now)?;
         if spec.deadline.is_none_or(|at| at <= now || at > until) {
             return Err(CampaignError::Rejected(CampaignRejection::InvalidSpecification));
         }
@@ -169,8 +172,7 @@ impl ReadinessCampaign {
     }
     /// Submit explicit actual close on the original cleanup boundary.
     ///
-    /// First retry cleanup freezes its supplied finite deadline within the
-    /// original campaign. Cancellation/final cleanup uses the first shutdown's
+    /// Retry cleanup retains its first finite deadline. Final cleanup uses the first shutdown's
     /// original settle deadline. Rejected/failed closes retain custody and their
     /// first deadline; a later request cannot renew it.
     /// # Errors
@@ -191,8 +193,7 @@ impl ReadinessCampaign {
         if self.attempt.is_some() || self.cleanup.is_some() || self.owner.is_none() {
             return Err(CampaignError::Rejected(CampaignRejection::WrongPhase));
         }
-        let ancestor = self.shutdown.map_or(self.budget.until(), |budget| budget.settle_until);
-        let until = self.cleanup_until.unwrap_or(ancestor);
+        let until = self.cleanup_deadline(now)?;
         if spec.deadline.is_none_or(|at| at <= now || at > until) {
             return Err(CampaignError::Rejected(CampaignRejection::InvalidSpecification));
         }
@@ -211,33 +212,34 @@ impl ReadinessCampaign {
     /// Close admission and request actual attempt cancellation using the first shutdown budget.
     /// This does not close native outputs or establish settlement.
     pub fn cancel(&mut self, shutdown: ShutdownBudget) {
-        if self.shutdown.is_none() {
-            self.shutdown = Some(shutdown);
+        let shutdown = *self.shutdown.get_or_insert(shutdown);
+        if let Some(until) = &mut self.cleanup_until {
+            *until = (*until).min(shutdown.settle_until);
         }
         self.close_admission();
     }
     /// Return the next absolute original deadline or backoff wake in the same clock epoch.
     /// Retained terminal custody and actual cleanup keep their first deadline visible
     /// after readiness; live readiness has no remaining startup wake. An asset
-    /// continuation without its retirement reserve waits for the original cutoff.
+    /// continuation retains its finite phase interval; attached readiness retains the original cutoff.
     pub fn next_deadline(&self) -> Option<Moment> {
         if let Some(attempt) = &self.attempt {
-            Some(attempt.until.min(self.budget.until()))
+            Some(self.campaign_until().map_or(attempt.until, |until| attempt.until.min(until)))
         } else if !self.terminal
             && self.owner.as_ref().is_some_and(ReadinessProbeOwner::continuation_ready)
         {
-            let runnable = self.budget.probe_until(self.last_now).is_ok_and(|until| {
+            let runnable = self.probe_until(self.last_now).is_ok_and(|until| {
                 self.owner
                     .as_ref()
                     .is_some_and(|owner| owner.continuation_fits(self.last_now, until))
             });
-            Some(if runnable { self.last_now } else { self.budget.until() })
+            if runnable { Some(self.last_now) } else { self.campaign_until() }
         } else if self.owner.is_some() && (self.terminal || !self.ready || self.cleanup.is_some()) {
-            Some(self.cleanup_until.unwrap_or_else(|| {
-                self.shutdown.map_or(self.budget.until(), |budget| budget.settle_until)
-            }))
+            self.cleanup_until
+                .or_else(|| self.shutdown.map(|budget| budget.settle_until))
+                .or_else(|| self.campaign_until())
         } else if !self.terminal && !self.ready {
-            self.next_input_at.map(|at| at.min(self.budget.until()))
+            self.next_input_at.map(|at| self.campaign_until().map_or(at, |until| at.min(until)))
         } else {
             None
         }

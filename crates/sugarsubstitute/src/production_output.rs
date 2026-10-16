@@ -159,9 +159,17 @@ impl OutputOwner {
         let mut source = Some(self.source.clone());
         let binding = self.binding;
         let acknowledged = self.acknowledged;
+        let original = match pending.kind {
+            RequestKind::Retry(_) => client
+                .now()
+                .map_err(OutputError::Clock)?
+                .checked_add(std::time::Duration::from_secs(30))
+                .map_err(OutputError::Time)?,
+            RequestKind::Pull(_) => pending.original,
+        };
         match client.submit_blocking_owned_input(
             scope,
-            spec(job, pending.original, TRANSFER_BYTES),
+            spec(job, original, TRANSFER_BYTES),
             &mut source,
             move |source, context| worker::parse(&source, binding, pending, acknowledged, &context),
         ) {
@@ -187,9 +195,15 @@ impl OutputOwner {
     /// # Errors
     /// Failed/cancelled/panicked/mismatched completions retain original frame and terminal data.
     pub(crate) fn take_applied(&mut self) -> Result<Option<AppliedOutput>, OutputError> {
-        let Some(noticed) = self.noticed else { return Ok(None) };
-        let Some(job) = &mut self.job else { return Ok(None) };
-        let Some(completion) = job.try_take_completion() else { return Ok(None) };
+        let Some(noticed) = self.noticed else {
+            return Ok(None);
+        };
+        let Some(job) = &mut self.job else {
+            return Ok(None);
+        };
+        let Some(completion) = job.try_take_completion() else {
+            return Ok(None);
+        };
         let matching = completion.scope_id == job.scope_id()
             && completion.spec == job.spec()
             && completion.outcome.kind() == noticed;
@@ -245,7 +259,9 @@ impl OutputOwner {
         if !self.closed || self.job.is_some() {
             return false;
         }
-        let Some(terminal) = &self.terminal else { return false };
+        let Some(terminal) = &self.terminal else {
+            return false;
+        };
         matches!(
             (cause, &terminal.outcome),
             (OutputError::Terminal(TerminalKind::Success), JobOutcome::Success(_))

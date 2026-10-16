@@ -176,7 +176,7 @@ impl Harness {
         self.fixtures.0.push(fixture.clone());
         let owner = ReadinessProbeOwner::from_fixture(input, fixture.clone());
         let now = self.now();
-        let spec = self.spec(self.campaign.budget.probe_until(now)?)?;
+        let spec = self.spec(self.campaign.probe_until(now)?)?;
         self.campaign.submit_owner(&self.client, &self.attempt, spec, owner, now)?;
         Ok(fixture)
     }
@@ -205,7 +205,7 @@ impl Harness {
     /// Admit the next real <=2sec job against the original retained campaign owner.
     pub(super) fn continue_probe(&mut self) -> TestResult<JobId> {
         let now = self.now();
-        let spec = self.spec(self.campaign.budget.probe_until(now)?)?;
+        let spec = self.spec(self.campaign.probe_until(now)?)?;
         Ok(self.campaign.submit_continuation(&self.client, &self.attempt, spec)?)
     }
     pub(super) fn save_batch(&mut self, batch: CompletionBatch) {

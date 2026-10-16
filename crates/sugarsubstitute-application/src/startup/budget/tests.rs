@@ -66,6 +66,8 @@ fn connection_kind_preserves_distinct_original_campaigns() -> Result<(), TimeErr
     let attached = ConnectionBudget::new(ConnectionBudgetKind::Attached, started)?;
     let managed = ConnectionBudget::new(ConnectionBudgetKind::Managed, started)?;
     assert_eq!(attached.kind(), ConnectionBudgetKind::Attached);
+    assert!(!attached.kind().waits_for_owned_process());
+    assert!(managed.kind().waits_for_owned_process());
     assert_eq!(managed.kind(), ConnectionBudgetKind::Managed);
     assert_eq!(attached.started(), started);
     assert_eq!(managed.started(), started);
@@ -175,5 +177,38 @@ fn frontend_deadline_admits_last_start_and_rejects_overflow() -> Result<(), Time
         FrontendBudget::new(Moment::from_nanos(last_start.as_nanos() + 1)),
         Err(TimeError::Overflow)
     );
+    Ok(())
+}
+
+#[test]
+fn managed_live_probe_remains_two_seconds_beyond_original_preparation_without_renewing_it()
+-> Result<(), Box<dyn Error>> {
+    let budget = ConnectionBudget::new(ConnectionBudgetKind::Managed, Moment::from_nanos(7))?;
+    let original = budget;
+    for now in [budget.until(), Moment::from_nanos(600_000_000_007)] {
+        assert_eq!(budget.managed_probe_until(now)?, now.checked_add(Duration::from_secs(2))?);
+        assert_eq!(budget.probe_until(now), Err(ProbeBudgetError::Expired));
+    }
+    assert_eq!(budget, original);
+    Ok(())
+}
+
+#[test]
+fn managed_live_probe_rejects_attached_regression_and_overflow() -> Result<(), Box<dyn Error>> {
+    let managed = ConnectionBudget::new(ConnectionBudgetKind::Managed, Moment::from_nanos(7))?;
+    let attached = ConnectionBudget::new(ConnectionBudgetKind::Attached, Moment::from_nanos(7))?;
+    assert_eq!(
+        attached.managed_probe_until(attached.started()),
+        Err(ProbeBudgetError::WrongOwnership)
+    );
+    assert_eq!(
+        managed.managed_probe_until(Moment::from_nanos(6)),
+        Err(ProbeBudgetError::Clock(TimeError::Regression))
+    );
+    assert_eq!(
+        managed.managed_probe_until(Moment::from_nanos(u64::MAX)),
+        Err(ProbeBudgetError::Clock(TimeError::Overflow))
+    );
+    assert!(ProbeBudgetError::WrongOwnership.source().is_none());
     Ok(())
 }

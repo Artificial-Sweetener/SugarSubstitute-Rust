@@ -12,6 +12,10 @@ use sugarsubstitute_supervision::lifecycle_protocol::ProtocolError;
 pub(crate) enum OutputError {
     /// Central finite-job admission failed before the parser ran.
     Input(sugarsubstitute_execution::BlockingInputError),
+    /// The actual execution clock failed before finite parser admission.
+    Clock(sugarsubstitute_contracts::execution::ExecutionError),
+    /// Checked finite parser deadline addition overflowed.
+    Time(sugarsubstitute_contracts::execution::TimeError),
     /// Original job reservation cannot fund the declared source/scratch bound.
     Claim(MemoryClaimError),
     /// Genuine closed wire decoding failed.
@@ -43,6 +47,8 @@ impl Error for OutputError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Input(e) => Some(e),
+            Self::Clock(e) => Some(e),
+            Self::Time(e) => Some(e),
             Self::Claim(e) => Some(e),
             Self::Protocol(e) => Some(e),
             Self::Transcript(e) => Some(e),

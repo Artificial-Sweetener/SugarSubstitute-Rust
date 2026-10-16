@@ -13,7 +13,9 @@ pub struct WireHeader {
     pub connection: Option<ConnectionId>,
     /// Absent in Hello, Welcome and server UiChallenge; positive otherwise.
     pub request: Option<RequestId>,
-    /// Positive absolute Windows QPC tick deadline, unchanged on retransmission.
+    /// Positive absolute Windows QPC admission deadline, unchanged on retransmission/reply.
+    /// Managed Acquire/Retry may await the actual producer beyond admission; each
+    /// native transfer has its own finite deadline. Other requests retain their cutoff.
     pub deadline_qpc: i64,
 }
 impl WireHeader {

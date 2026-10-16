@@ -43,6 +43,7 @@ impl ClientRequests {
             return Err(RequestError::Order);
         }
         pending.purpose = Purpose::BackendRetry;
+        pending.waits_for_owned_process = true;
         Ok(())
     }
     /// Inspect only original queue admission; a prepared request has issued no native write.

@@ -7,7 +7,7 @@ impl ChildOutput {
     pub(super) fn grant(&mut self, binding: OutputBinding) -> Result<()> {
         if self.closed
             || self.binding != Some(binding)
-            || self.acquisition_until.is_none()
+            || !self.provisional
             || (self.job.is_none()
                 && !self
                     .terminal
@@ -16,7 +16,7 @@ impl ChildOutput {
         {
             return Err("Granted output source differs or original constructor is absent".into());
         }
-        self.acquisition_until = None;
+        self.provisional = false;
         Ok(())
     }
 }
@@ -26,7 +26,6 @@ impl ProductionChild {
     pub(in super::super) fn adopt_output(
         &mut self,
         lease: sugarsubstitute_supervision::lifecycle_protocol::LeaseReference,
-        original: Moment,
         granted: bool,
     ) -> Result<()> {
         if !self.connection_budget.is_some_and(|budget| {
@@ -63,7 +62,11 @@ impl ProductionChild {
                 self.bootstrap.scope().ok_or("Actual child scope absent")?,
                 id,
                 binding,
-                original,
+                self.client
+                    .as_ref()
+                    .ok_or("Actual child client absent")?
+                    .now()?
+                    .checked_add(Duration::from_secs(30))?,
             )?;
         }
         if granted {
@@ -153,7 +156,7 @@ mod tests {
         output.grant(binding).map_err(|cause| cause.to_string())?;
         assert_eq!(output.job.as_ref().ok_or("Original job replaced")?.spec(), spec);
         assert_eq!(output.binding, Some(binding));
-        assert_eq!(output.acquisition_until, None);
+        assert!(!output.provisional);
         assert_eq!(rig.scope.snapshot().reserved_bytes, reserved);
         assert!(output.grant(binding).is_err());
         assert!(output.begin(&rig.client, &rig.scope, JobId::new(2)?, binding, original).is_err());
@@ -175,7 +178,7 @@ mod tests {
         let mut foreign = binding;
         foreign.connection = ConnectionId::new(2)?;
         assert!(output.grant(foreign).is_err());
-        assert_eq!(output.acquisition_until, Some(original));
+        assert!(output.provisional);
         output.close();
         assert!(output.grant(binding).is_err());
         assert!(output.pending());

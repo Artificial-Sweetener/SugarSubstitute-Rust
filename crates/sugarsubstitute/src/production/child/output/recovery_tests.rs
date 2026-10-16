@@ -217,3 +217,21 @@ fn queued_old_retry_after_actual_binding_consumption_is_obsolete_without_new_wir
     assert!(running.retry(identity, running.key(successor(9)?), Moment::from_nanos(73)).is_err());
     Ok(())
 }
+
+#[test]
+fn admitted_retry_waits_beyond_three_minutes_without_renewing_finite_preparation() -> Result<()> {
+    let (identity, binding) = fixture()?;
+    let mut running = RunningBackendBinding::new(identity, binding)?;
+    running.unavailable(binding.lease, true)?;
+    let failed = running.key(binding.lease);
+    running.retry(identity, failed, Moment::from_nanos(0))?;
+    let original = running.retry_request().ok_or("Original retry absent")?.2;
+    running.retry_admitted()?;
+    assert_eq!(running.retry_deadline(), None);
+    assert_eq!(running.expire_retry(Moment::from_nanos(360_000_000_000)), None);
+    assert_eq!(running.retry_request().ok_or("Original retry lost")?.2, original);
+    assert!(running.retry_admitted().is_err());
+    assert_eq!(running.retry_failed()?, failed);
+    assert_eq!(running.retry_request(), None);
+    Ok(())
+}

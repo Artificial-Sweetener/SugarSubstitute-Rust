@@ -6,7 +6,7 @@ use super::*;
 fn acquisition_retirement_fences_exact_cutoff_without_late_ordinary_authority() -> TestResult {
     let mut r = requests()?;
     let h = prepare(&mut r)?;
-    r.acquisition(h)?;
+    r.acquisition(h, sugarsubstitute_application::startup::ConnectionBudgetKind::Attached)?;
     r.admitted(h)?;
     assert_eq!(r.received(h, Moment::from_nanos(500)), Err(RequestError::Deadline));
     assert!(r.retire(h, Purpose::Acquisition)?);
@@ -27,7 +27,7 @@ fn acquisition_retirement_fences_exact_cutoff_without_late_ordinary_authority() 
 fn acquisition_retirement_keeps_queued_receipt_slot_and_other_owner_bounds() -> TestResult {
     let mut r = requests()?;
     let h = prepare(&mut r)?;
-    r.acquisition(h)?;
+    r.acquisition(h, sugarsubstitute_application::startup::ConnectionBudgetKind::Attached)?;
     r.admitted(h)?;
     r.received(h, Moment::from_nanos(499))?;
     r.retire(h, Purpose::Acquisition)?;
@@ -59,13 +59,13 @@ fn acquisition_local_withdrawal_requires_prepared_or_genuine_returned_no_issue_p
 {
     let mut r = requests()?;
     let h = prepare(&mut r)?;
-    r.acquisition(h)?;
+    r.acquisition(h, sugarsubstitute_application::startup::ConnectionBudgetKind::Attached)?;
     let prepared = r.withdraw_acquisition(h)?;
     assert_eq!(prepared.header(), h);
     assert_eq!(prepared.original(), Moment::from_nanos(500));
     assert!(!prepared.native_was_admitted());
     let issued = prepare(&mut r)?;
-    r.acquisition(issued)?;
+    r.acquisition(issued, sugarsubstitute_application::startup::ConnectionBudgetKind::Attached)?;
     r.admitted(issued)?;
     assert!(r.withdraw_acquisition(issued).is_err());
     r.retire(issued, Purpose::Acquisition)?;
@@ -87,7 +87,7 @@ fn retiring_nonfinal_acquire_preserves_original_wait_without_reopening_output_or
 -> TestResult {
     let mut r = requests()?;
     let h = prepare(&mut r)?;
-    r.acquisition(h)?;
+    r.acquisition(h, sugarsubstitute_application::startup::ConnectionBudgetKind::Attached)?;
     r.admitted(h)?;
     r.retire(h, Purpose::Acquisition)?;
     r.received_retiring(h)?;
@@ -106,7 +106,7 @@ fn acquisition_deadline_projection_rejects_unrelated_original_errors_without_cha
 -> TestResult {
     let mut r = requests()?;
     let h = prepare(&mut r)?;
-    r.acquisition(h)?;
+    r.acquisition(h, sugarsubstitute_application::startup::ConnectionBudgetKind::Attached)?;
     assert!(matches!(r.expiry(h, RequestError::Order), Err(RequestError::Order)));
     let exact = r.expiry(
         h,
@@ -132,7 +132,7 @@ fn acquisition_expired_retained_loan_adoption_preserves_queue_order_and_final_co
 -> TestResult {
     let mut r = requests()?;
     let h = prepare(&mut r)?;
-    r.acquisition(h)?;
+    r.acquisition(h, sugarsubstitute_application::startup::ConnectionBudgetKind::Attached)?;
     r.admitted(h)?;
     assert_eq!(r.received(h, Moment::from_nanos(500)), Err(RequestError::Deadline));
     r.retire(h, Purpose::Acquisition)?;

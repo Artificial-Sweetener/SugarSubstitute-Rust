@@ -66,6 +66,7 @@ fn activity_ack_before_acquire_grant_keeps_original_owner_and_cutoffs()
     requests.outbound(acquire, acquire_until, Moment::from_nanos(10))?;
     requests.admitted(acquire)?;
     let pending = PendingAcquire {
+        kind: sugarsubstitute_application::startup::ConnectionBudgetKind::Attached,
         header: acquire,
         original: acquire_until,
         admitted: true,
@@ -183,7 +184,13 @@ fn quiet_admitted_acquire_expires_without_transferring_or_replacing_original_req
     let header = requests.prepare(until, CounterDeadline::new(2000, 100)?)?;
     requests.outbound(header, until, client.now()?)?;
     requests.admitted(header)?;
-    let pending = PendingAcquire { header, original: until, admitted: true, retiring: false };
+    let pending = PendingAcquire {
+        kind: sugarsubstitute_application::startup::ConnectionBudgetKind::Attached,
+        header,
+        original: until,
+        admitted: true,
+        retiring: false,
+    };
     let mut effects = 0;
     assert!(
         pending
@@ -229,7 +236,13 @@ fn late_acquire_reply_cannot_transfer_matching_or_foreign_frame_at_or_after_cuto
     let header = requests.prepare(until, CounterDeadline::new(2000, 100)?)?;
     requests.outbound(header, until, client.now()?)?;
     requests.admitted(header)?;
-    let pending = PendingAcquire { header, original: until, admitted: true, retiring: false };
+    let pending = PendingAcquire {
+        kind: sugarsubstitute_application::startup::ConnectionBudgetKind::Attached,
+        header,
+        original: until,
+        admitted: true,
+        retiring: false,
+    };
     // Receive the original wire metadata before expiry; the semantic owner has not taken bytes.
     requests.received(header, client.now()?)?;
     let mut bytes = [0; 512];
@@ -268,10 +281,19 @@ fn retiring_acquire_retains_exact_original_loan_without_readmission_or_renewal()
     let mut ledger = requests()?;
     let original = Moment::from_nanos(1000);
     let header = ledger.prepare(original, CounterDeadline::new(2000, 100)?)?;
-    ledger.acquisition(header)?;
+    ledger.acquisition(
+        header,
+        sugarsubstitute_application::startup::ConnectionBudgetKind::Attached,
+    )?;
     ledger.outbound(header, original, Moment::from_nanos(10))?;
     ledger.admitted(header)?;
-    let pending = PendingAcquire { header, original, admitted: true, retiring: false };
+    let pending = PendingAcquire {
+        kind: sugarsubstitute_application::startup::ConnectionBudgetKind::Attached,
+        header,
+        original,
+        admitted: true,
+        retiring: false,
+    };
     let mut grant = None;
     let mut takes = 0;
     let foreign = WireHeader { deadline_qpc: header.deadline_qpc + 1, ..header };
@@ -318,5 +340,43 @@ fn retiring_acquire_retains_exact_original_loan_without_readmission_or_renewal()
             .retain_retiring(&mut absent, Some(header), || Some([0, 0]))
             .is_err()
     );
+    Ok(())
+}
+
+#[test]
+fn managed_pending_owner_has_no_elapsed_wake_after_admission_and_retains_cancel_identity()
+-> std::result::Result<(), Box<dyn Error>> {
+    let mut ledger = requests()?;
+    let original = Moment::from_nanos(180_000_000_000);
+    let h = ledger.prepare(original, CounterDeadline::new(18000, 100)?)?;
+    let mut pending = PendingAcquire {
+        header: h,
+        original,
+        admitted: false,
+        retiring: false,
+        kind: ConnectionBudgetKind::Managed,
+    };
+    assert_eq!(pending.deadline(), Some(original));
+    assert!(pending.check_current(original).is_err());
+    pending.admitted = true;
+    assert_eq!(pending.deadline(), None);
+    let late = Moment::from_nanos(360_000_000_000);
+    pending.check_current(late)?;
+    assert_eq!(
+        pending.take_matching(
+            late,
+            Some(WireHeader { deadline_qpc: h.deadline_qpc + 1, ..h }),
+            || Some(7)
+        )?,
+        None
+    );
+    pending.retiring = true;
+    let mut frame = None;
+    assert_eq!(
+        pending.retain_retiring(&mut frame, Some(h), || Some(7))?,
+        RetiringAcquireFrame::Transferred
+    );
+    assert_eq!(frame, Some(7));
+    assert_eq!(pending.original, original);
     Ok(())
 }

@@ -11,19 +11,19 @@ minimum_tests = 127
 package = "sugarsubstitute-application"
 root = "crates/sugarsubstitute-application"
 concern = "Exact pre-ACK recovery admission, fresh operation allocation and independent failed-seed policy retirement; Acknowledged startup, settled retry, frame publication, backend leases, desktop exit, UI challenge and bounded transcript policy; original connection and frontend campaign deadlines; indexed actual-tail selection and shared immutable snapshot admission; bounded incident publication, report CAS, recovery and independent retirement policy"
-minimum_tests = 212
+minimum_tests = 215
 
 [[owners]]
 package = "sugarsubstitute-comfy"
 root = "crates/sugarsubstitute-comfy"
 concern = "Bounded startup schema, effective managed argv and observed ComfyUI response contracts; Bounded fixed WinHTTP requests, installed runtime asset hash verification, deterministic readiness-owner custody and feature-gated external boundary fixtures; original-budget readiness campaigns and typed native retry classification"
-minimum_tests = 91
+minimum_tests = 95
 
 [[owners]]
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
 concern = "Fresh subordinate recovery composition with unchanged Root authority, admission before ACK, independent real receiving and checked cleanup; Production desktop startup and retirement through actual execution, authenticated parent/child transport, shared backends, profiles and native window adapters; retained failures, captured startup, bounded console rendering and isolated qualification roles; contained headless backend witness invocation and original-budget Finish lifecycle; genuine boxed incident construction and bounded original terminal/cause diagnostics; unique heap activation ownership outside the persistent native pump frame; original launched-profile release consumption and precise Finish request status; actual Desktop probe formatter and sole bounded Root stderr diagnostic decoding"
-minimum_tests = 793
+minimum_tests = 803
 
 [[owners]]
 package = "sugarsubstitute-execution"
@@ -41,7 +41,7 @@ minimum_tests = 50
 package = "sugarsubstitute-supervision"
 root = "crates/sugarsubstitute-supervision"
 concern = "Exact recovery family enrollment and handler observation, protected historical origin opening and contiguous summary migration; Windows launch inputs, retained containment, resource exclusions, actual claim retirement, attempt-bound profile proofs and bounded lifecycle framing; Retained installed-file/hash custody and actual connected-loopback peer identity; authenticated fixed capture roles, same-job selected bundle and module credit custody, checked current-image/PE/PDB association and bounded original close retention; authenticated parent/witness association, independent dual exclusions, exact suspended-root transfer and checked custody retirement; phase-specific original profile release observation and retained actual Finish status"
-minimum_tests = 581
+minimum_tests = 582
 
 [[owners]]
 package = "sugarsubstitute-splash"
