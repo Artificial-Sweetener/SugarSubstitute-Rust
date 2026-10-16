@@ -32,10 +32,13 @@ mod recycling;
 #[path = "incident_reporting/restart.rs"]
 mod restart;
 pub(super) use restart::{RestartAcceptance, RestartTarget};
+#[path = "incident_reporting/native_retirement.rs"]
+mod native_retirement;
 #[path = "incident_reporting/receiving_failure.rs"]
 mod receiving_failure;
 #[path = "incident_reporting/routing.rs"]
 mod routing;
+use native_retirement::NativeRetirement;
 #[path = "incident_reporting/source_observation.rs"]
 mod source_observation;
 #[path = "incident_reporting/store.rs"]
@@ -174,7 +177,7 @@ pub(super) struct IncidentReporting {
     selected: Option<SelectedReportExport>,
     export_work: Option<export::ExportWork>,
     pending_control: Option<ReporterControlInput>,
-    native_retired: bool,
+    native_retirement: NativeRetirement,
     initial_view_admitted: bool,
     authenticated_peer_observed: Option<(DiagnosticKey, ProcessKey)>,
     stopping: Option<ShutdownBudget>,
@@ -227,7 +230,7 @@ impl IncidentReporting {
             selected: None,
             export_work: None,
             pending_control: None,
-            native_retired: false,
+            native_retirement: NativeRetirement::Awaiting,
             initial_view_admitted: false,
             authenticated_peer_observed: None,
             stopping: None,
@@ -303,13 +306,7 @@ impl IncidentReporting {
         transition: &mut ReportTransition,
         transactions: &mut DiagnosticTransactions,
     ) -> Result<()> {
-        if closing
-            || self.first.is_some()
-            || self.native_retired
-                && self.completion.is_none()
-                && self.store.is_none()
-                && self.export_work.is_none()
-        {
+        if closing || self.first.is_some() || self.native_close_ready() {
             *transition = ReportTransition::Retire;
             return self.retire(host, resources, transactions);
         }
@@ -327,6 +324,10 @@ impl IncidentReporting {
         }
         *transition = ReportTransition::CaptureOutput;
         self.capture_output(host, resources)?;
+        if self.native_close_ready() {
+            *transition = ReportTransition::Retire;
+            return self.retire(host, resources, transactions);
+        }
         *transition = ReportTransition::AdvanceStore;
         self.advance_store(
             host,
@@ -348,6 +349,13 @@ impl IncidentReporting {
         *transition = ReportTransition::DriveRelay;
         self.drive_relay(resources)?;
         Ok(())
+    }
+    /// The final router completion is consumed before natural close can cancel any relay work.
+    fn native_close_ready(&self) -> bool {
+        self.native_retirement.completed()
+            && self.completion.is_none()
+            && self.store.is_none()
+            && self.export_work.is_none()
     }
     fn relay(&self) -> Result<&ReporterRelay> {
         self.relay.as_ref().ok_or_else(|| "Actual Reporter relay missing".into())

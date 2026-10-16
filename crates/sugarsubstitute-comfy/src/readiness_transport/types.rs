@@ -155,7 +155,10 @@ impl VerifiedReadiness {
 pub enum ProbeRetryDisposition {
     /// A native request failed to establish or retain its first unverified connection.
     TransientConnectionUnavailable,
-    /// Trust, shape, identity, deadline, cancellation, admission or cleanup failed.
+    /// The execution owner delivered a genuine finite probe timeout, with original custody retained.
+    /// Only an admitted managed-live campaign may retry after actual cleanup.
+    ProbeIntervalElapsed,
+    /// Trust, shape, identity, other deadlines, cancellation, admission or cleanup failed.
     Terminal,
 }
 
@@ -184,6 +187,15 @@ impl ReadinessTransportError {
             stage,
             cause: Box::new(cause),
             disposition: ProbeRetryDisposition::TransientConnectionUnavailable,
+            body: None,
+        }
+    }
+    /// Retain actual finite-attempt expiry without treating it as connection or readiness proof.
+    pub(super) fn elapsed(stage: &'static str, cause: impl Error + Send + Sync + 'static) -> Self {
+        Self {
+            stage,
+            cause: Box::new(cause),
+            disposition: ProbeRetryDisposition::ProbeIntervalElapsed,
             body: None,
         }
     }

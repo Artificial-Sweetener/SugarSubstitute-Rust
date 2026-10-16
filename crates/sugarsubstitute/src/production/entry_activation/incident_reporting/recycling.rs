@@ -22,7 +22,9 @@ impl IncidentReporting {
                 Err(cause) => return Err(cause.into()),
             }
         }
-        let Some(receipt) = &original.receipt else { return Ok(()) };
+        let Some(receipt) = &original.receipt else {
+            return Ok(());
+        };
         if !matches!(
             receipt.native_outcome(),
             Some(TerminalKind::Cancelled | TerminalKind::Success)
@@ -114,7 +116,7 @@ impl IncidentReporting {
         self.selected = None;
         self.export_work = None;
         self.pending_control = None;
-        self.native_retired = false;
+        self.native_retirement = NativeRetirement::Awaiting;
         self.initial_view_admitted = false;
         self.authenticated_peer_observed = None;
         self.stopping = None;

@@ -5,7 +5,7 @@
 use super::*;
 use sugarsubstitute_contracts::configuration::LaunchConfiguration;
 
-fn managed_campaign() -> TestResult<ReadinessCampaign> {
+pub(super) fn managed_campaign() -> TestResult<ReadinessCampaign> {
     let root = std::env::temp_dir().join("managed-campaign-policy");
     let config = LaunchConfiguration::new(root.clone(), root.join("python.exe"), vec![], 8188)?;
     Ok(ReadinessCampaign::new(

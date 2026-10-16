@@ -30,7 +30,7 @@ impl fmt::Display for ProbeTerminal {
 }
 impl Error for ProbeTerminal {}
 
-/// Consume the genuine typed completion; terminal outcomes never become transient connection failures.
+/// Preserve genuine terminal provenance; finite timeout policy belongs to the campaign owner.
 pub(super) fn observe(
     outcome: JobOutcome<(), ReadinessTransportError>,
 ) -> Result<(), ReadinessTransportError> {
@@ -41,7 +41,12 @@ pub(super) fn observe(
         JobOutcome::Panicked(cause) => {
             return Err(ReadinessTransportError::new("attempt_panicked", ProbePanic(cause)));
         }
-        JobOutcome::TimedOut => ("attempt_timed_out", None),
+        JobOutcome::TimedOut => {
+            return Err(ReadinessTransportError::elapsed(
+                "attempt_timed_out",
+                ProbeTerminal { kind, replacement: None },
+            ));
+        }
         JobOutcome::Cancelled => ("attempt_cancelled", None),
         JobOutcome::Coalesced { replacement } => ("attempt_coalesced", Some(replacement)),
     };
@@ -53,11 +58,10 @@ mod tests {
     use super::*;
     use crate::readiness_transport::ProbeRetryDisposition;
     #[test]
-    fn original_terminal_dispositions_and_replacement_are_retained_without_retry()
+    fn original_cancellation_and_coalescing_retain_disposition_without_retry()
     -> Result<(), Box<dyn Error>> {
         let replacement = JobId::new(17)?;
         for (outcome, expected, stage, replaced) in [
-            (JobOutcome::TimedOut, TerminalKind::TimedOut, "attempt_timed_out", None),
             (JobOutcome::Cancelled, TerminalKind::Cancelled, "attempt_cancelled", None),
             (
                 JobOutcome::Coalesced { replacement },
@@ -76,6 +80,20 @@ mod tests {
             assert_eq!(cause.kind, expected);
             assert_eq!(cause.replacement, replaced);
         }
+        Ok(())
+    }
+    #[test]
+    fn actual_finite_probe_timeout_retains_typed_terminal_as_context_dependent_expiry()
+    -> Result<(), Box<dyn Error>> {
+        let error = observe(JobOutcome::TimedOut).err().ok_or("Actual timeout lost")?;
+        assert_eq!(error.stage(), "attempt_timed_out");
+        assert_eq!(error.retry_disposition(), ProbeRetryDisposition::ProbeIntervalElapsed);
+        let original = error
+            .source()
+            .and_then(|cause| cause.downcast_ref::<ProbeTerminal>())
+            .ok_or("Typed timeout provenance lost")?;
+        assert_eq!(original.kind, TerminalKind::TimedOut);
+        assert_eq!(original.replacement, None);
         Ok(())
     }
 }

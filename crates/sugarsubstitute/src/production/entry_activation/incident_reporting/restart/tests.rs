@@ -56,7 +56,9 @@ fn restart_copied_ack_and_retirement_flags_preserve_whole_forward_without_native
     let mut receiving = IncidentReporting::new();
     receiving.binding = Some(binding);
     receiving.family_retired = true;
-    receiving.native_retired = true;
+    let final_request = DiagnosticRequestId::new(7)?;
+    receiving.native_retirement.receive(final_request)?;
+    assert!(receiving.native_retirement.consume_completion(final_request, true)?);
     receiving.dismiss_action = Some(ReportAction::DismissAndRequestRestart);
     receiving.retained_effect = Some(IncidentEffect::ForwardRestartIntent { run, acknowledgement });
     let mut host = IncidentHost::new();

@@ -74,14 +74,26 @@ impl IncidentReporting {
                     self.rejected_completion = Some((received, issued));
                     return Err(cause);
                 }
+                let final_retirement =
+                    match self.native_retirement.consume_completion(issued.request(), accepted) {
+                        Ok(final_retirement) => final_retirement,
+                        Err(cause) => {
+                            self.rejected_completion = Some((received, issued));
+                            return Err(cause.into());
+                        }
+                    };
                 drop(received);
                 let _issued = issued;
                 if self.store.as_ref().is_some_and(|work| work.adopted) {
                     host.reporting_service()?.release_adopted()?;
                     self.store = None;
                 }
-                self.relay()?.source().resume_read()?;
-                self.relay_needed = true;
+                if final_retirement {
+                    self.relay_needed = false;
+                } else {
+                    self.relay()?.source().resume_read()?;
+                    self.relay_needed = true;
+                }
             }
             ReporterOutput::ControlWritten(_operation) => {
                 self.relay_needed = false;
@@ -201,7 +213,14 @@ impl IncidentReporting {
                         if self.binding != Some(binding) {
                             return Err("Actual NativeRetired binding changed".into());
                         }
-                        self.native_retired = true;
+                        let request = self
+                            .request
+                            .as_ref()
+                            .ok_or("Original NativeRetired request missing")?
+                            .authentication
+                            .issued
+                            .request();
+                        self.native_retirement.receive(request)?;
                         self.complete_observation()?;
                     }
                     ReporterObservation::Copy { binding, result } => {

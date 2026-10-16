@@ -2,6 +2,136 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Real incomplete/failed preparation cannot create native retirement or accepted disposal.
 use super::*;
+#[derive(Default)]
+struct QueueBoundary {
+    state: Mutex<(usize, bool)>,
+    changed: Condvar,
+}
+impl QueueBoundary {
+    fn hold(&self) -> std::result::Result<(), Box<dyn Error + Send + Sync>> {
+        let mut state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        state.0 += 1;
+        self.changed.notify_all();
+        let (state, timed) = self
+            .changed
+            .wait_timeout_while(state, Duration::from_secs(10), |state| !state.1)
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if timed.timed_out() && !state.1 {
+            return Err("Controlled external worker boundary was not released".into());
+        }
+        Ok(())
+    }
+    fn wait_all(&self, workers: usize) -> Result<()> {
+        let (state, timed) = self
+            .changed
+            .wait_timeout_while(
+                self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
+                Duration::from_secs(10),
+                |state| state.0 != workers,
+            )
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if timed.timed_out() && state.0 != workers {
+            return Err("Actual finite workers did not reach controlled external boundary".into());
+        }
+        Ok(())
+    }
+    fn release(&self) {
+        self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).1 = true;
+        self.changed.notify_all();
+    }
+}
+struct ReleaseQueue(Arc<QueueBoundary>);
+impl Drop for ReleaseQueue {
+    fn drop(&mut self) {
+        self.0.release();
+    }
+}
+#[test]
+fn final_reporter_observation_waits_for_actual_queued_completion_before_natural_close() -> Result<()>
+{
+    let wake = Arc::new(Wake::default());
+    let owner = ExecutionOwner::new(Arc::new(TestClock), wake.clone())?;
+    let client = owner.client();
+    let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
+    let gate = Arc::new(QueueBoundary::default());
+    let _release = ReleaseQueue(gate.clone());
+    let workers = owner.limits().blocking_workers;
+    let mut blockers = Vec::new();
+    for index in 0..workers {
+        let mut specification = spec()?;
+        specification.id = JobId::new(u64::try_from(index)? + 1)?;
+        specification.reservation_bytes = 0;
+        let boundary = gate.clone();
+        blockers.push(client.submit_blocking(&scope, specification, move |_| boundary.hold())?);
+    }
+    gate.wait_all(workers)?;
+    let mut specification = spec()?;
+    specification.id = JobId::new(u64::try_from(workers)? + 1)?;
+    let until = specification.deadline.ok_or("Original final completion cutoff absent")?;
+    let execution = client.clone();
+    let mut delivery = delivery::Delivery::new();
+    delivery.job = Some(client.submit_blocking(&scope, specification, move |context| {
+        delivery::prepare_counter(&execution, until, &context)
+    })?);
+    let job = delivery.job.as_ref().ok_or("Actual queued completion missing")?;
+    assert_eq!(job.status().phase, JobPhase::Queued);
+    let mut receiving = IncidentReporting::new();
+    let request = DiagnosticRequestId::new(7)?;
+    // Passive Host phase input, not a fabricated authenticated frame or native retirement proof.
+    receiving.native_retirement.receive(request)?;
+    assert!(!receiving.native_close_ready());
+    if receiving.native_close_ready() {
+        job.cancel();
+    }
+    assert!(!job.status().cancellation_requested);
+    gate.release();
+    while delivery.job.is_some() {
+        delivery.capture(&batch(&client, &wake)?)?;
+    }
+    assert!(!receiving.native_close_ready());
+    assert!(delivery.value()?.is_some());
+    assert!(matches!(
+        delivery.completion.as_ref().map(|done| &done.outcome),
+        Some(JobOutcome::Success(_))
+    ));
+    // Only the same accepted completion chooses the no-further-read disposition.
+    assert!(receiving.native_retirement.consume_completion(request, true)?);
+    assert!(receiving.native_close_ready());
+    assert_eq!(delivery.completion.as_ref().map(|done| done.spec.deadline), Some(Some(until)));
+    for mut blocker in blockers {
+        loop {
+            if let Some(done) = blocker.try_take_completion() {
+                assert!(matches!(done.outcome, JobOutcome::Success(())));
+                break;
+            }
+            batch(&client, &wake)?;
+        }
+    }
+    drop(owner);
+    assert_eq!(scope.snapshot().reserved_bytes, 16 * 1024);
+    drop(delivery);
+    assert_eq!(scope.snapshot().reserved_bytes, 0);
+    Ok(())
+}
+#[test]
+fn missing_rejected_or_foreign_final_completion_never_admits_natural_close() -> Result<()> {
+    let request = DiagnosticRequestId::new(7)?;
+    let foreign = DiagnosticRequestId::new(8)?;
+    let mut receiving = IncidentReporting::new();
+    assert!(!receiving.native_retirement.consume_completion(request, true)?);
+    assert!(!receiving.native_close_ready());
+    receiving.native_retirement.receive(request)?;
+    assert!(receiving.native_retirement.receive(request).is_err());
+    for (actual, accepted) in [(request, false), (foreign, true)] {
+        assert!(receiving.native_retirement.consume_completion(actual, accepted).is_err());
+        assert_eq!(receiving.native_retirement, NativeRetirement::Received(request));
+        assert!(!receiving.native_close_ready());
+    }
+    assert!(receiving.native_retirement.consume_completion(request, true)?);
+    assert!(receiving.native_close_ready());
+    assert!(receiving.native_retirement.consume_completion(request, true).is_err());
+    Ok(())
+}
 fn inert_binding() -> Result<ReportBinding> {
     use sugarsubstitute_contracts::lifecycle::*;
     let run = RunKey {

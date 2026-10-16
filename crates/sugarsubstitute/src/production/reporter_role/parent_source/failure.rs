@@ -3,6 +3,7 @@
 //! Transfer original failure custody only after actual family and same-session pipe retirement.
 use super::*;
 use std::error::Error;
+use sugarsubstitute_execution::windows::NativeObservationError;
 use sugarsubstitute_supervision::{FamilyBinding, RegistryAdmissionError, RegistryInputError};
 /// Exact original Parent failure, including the whole failed native completion and its charge.
 pub(in crate::production) enum ReporterParentFailure {
@@ -40,7 +41,53 @@ impl std::fmt::Debug for OwnedReporterFailure {
 }
 impl std::fmt::Display for OwnedReporterFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Reporter retained its original checked failure")
+        match &self.cause {
+            OriginalCause::Parent(ReporterParentFailure::Native(done)) => {
+                let native = match &done.outcome {
+                    JobOutcome::Failure(cause) => Some(cause.native_cause()),
+                    _ => None,
+                };
+                write!(
+                    f,
+                    "Reporter original failure: ParentNative terminal={:?} code={:?} owner_panic={}",
+                    done.outcome.kind(),
+                    native.and_then(NativeObservationError::win32_code),
+                    native.is_some_and(NativeObservationError::contains_owner_panic)
+                )
+            }
+            OriginalCause::Parent(ReporterParentFailure::Wire(cause)) => {
+                write!(f, "Reporter original failure: ParentWire({cause:?})")
+            }
+            OriginalCause::Parent(ReporterParentFailure::Launch(_)) => {
+                f.write_str("Reporter original failure: ParentLaunch")
+            }
+            OriginalCause::Parent(ReporterParentFailure::Input(_)) => {
+                f.write_str("Reporter original failure: ParentInput")
+            }
+            OriginalCause::Parent(ReporterParentFailure::Send(_)) => {
+                f.write_str("Reporter original failure: ParentSend")
+            }
+            OriginalCause::Parent(ReporterParentFailure::Transport(cause)) => {
+                write!(f, "Reporter original failure: ParentTransport({cause:?})")
+            }
+            OriginalCause::Admission(_) => f.write_str("Reporter original failure: Admission"),
+            OriginalCause::Wire(cause) => write!(f, "Reporter original failure: Wire({cause:?})"),
+            OriginalCause::Time(_) => f.write_str("Reporter original failure: Clock"),
+            OriginalCause::Source(cause) => {
+                write!(f, "Reporter original failure: Source({cause:?})")
+            }
+            OriginalCause::Worker(done) => {
+                let issue = match &done.outcome {
+                    JobOutcome::Failure(issue) => Some(*issue),
+                    _ => None,
+                };
+                write!(
+                    f,
+                    "Reporter original failure: Worker terminal={:?} issue={issue:?}",
+                    done.outcome.kind()
+                )
+            }
+        }
     }
 }
 impl Error for OwnedReporterFailure {

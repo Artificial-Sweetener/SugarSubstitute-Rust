@@ -4,6 +4,35 @@
 use super::*;
 use crate::production::incident_host::tests::admitted_value;
 #[test]
+fn original_reporter_failure_formats_closed_transport_code_without_losing_cause_or_funding()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    admitted_value(crate::production::incident_host::CONTROLLER_BYTES, |context| {
+        let mut funding = Some(ReporterFunding::new(&context)?);
+        let source = ReporterSource::new(&mut funding)?;
+        let failure = OwnedReporterFailure {
+            cause: OriginalCause::Parent(ReporterParentFailure::Transport(
+                LifecyclePipeError::Closed,
+            )),
+            _secondary: None,
+            _admission: None,
+            _source: source,
+        };
+        use std::error::Error;
+        let original =
+            std::ptr::from_ref(failure.source().ok_or("Original cause absent")?).cast::<()>();
+        assert_eq!(format!("{failure:?}"), "Reporter original failure: ParentTransport(Closed)");
+        assert_eq!(
+            failure.source().and_then(|cause| cause.downcast_ref::<LifecyclePipeError>()),
+            Some(&LifecyclePipeError::Closed)
+        );
+        assert_eq!(
+            std::ptr::from_ref(failure.source().ok_or("Original cause lost")?).cast::<()>(),
+            original
+        );
+        Ok(failure)
+    })
+}
+#[test]
 fn original_funding_transfers_once_and_last_alias_keeps_controller_charge_through_join()
 -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     admitted_value(crate::production::incident_host::CONTROLLER_BYTES, |context| {
