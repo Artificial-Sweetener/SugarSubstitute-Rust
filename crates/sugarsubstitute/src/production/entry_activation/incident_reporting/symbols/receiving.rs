@@ -126,7 +126,14 @@ impl IncidentReporting {
             }
             return Ok(ready);
         }
-        if let Err(cause) = self.advance_store(host, resources, transactions) {
+        if let Err(cause) = self.advance_store(
+            host,
+            resources.client,
+            resources.finite,
+            resources.cleanup,
+            resources.jobs,
+            transactions,
+        ) {
             if let Some(ready) = self.advance_passive_symbols(host, transactions)? {
                 if !ready {
                     self.check_passive_cutoff(resources)?;

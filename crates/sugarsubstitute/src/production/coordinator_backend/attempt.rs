@@ -34,6 +34,8 @@ impl CoordinatorBackend {
         )?;
         // This lease was retained by the authenticated parent from the real Pending/Granted producer.
         self.policy.release_attempt(binding, lease, &mut transition)?;
+        self.output_clients.remove_lease(lease);
+        self.release_consumed_output();
         self.effects(&mut transition, &mut None, None, Some(original), None, resources)?;
         Ok(transition)
     }

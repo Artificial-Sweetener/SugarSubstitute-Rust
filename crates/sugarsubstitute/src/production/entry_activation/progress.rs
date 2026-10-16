@@ -58,15 +58,26 @@ impl ProductionActivation {
         anchor: Instant,
     ) -> Result<()> {
         self.next_wake = None;
-        let mut deadlines = self.wake_deadlines().peekable();
-        if deadlines.peek().is_none() {
-            return Ok(());
-        }
-        let now = client.now()?;
-        let until = deadlines.filter(|until| *until > now).min();
-        if let Some(until) = until {
-            self.next_wake = anchor.checked_add(until.checked_duration_since(now)?);
-        }
+        let deadline = {
+            let mut deadlines = self.wake_deadlines().peekable();
+            if deadlines.peek().is_some() {
+                let now = client.now()?;
+                deadlines
+                    .filter(|until| *until > now)
+                    .min()
+                    .map(|until| {
+                        Ok::<_, Box<dyn Error>>(
+                            anchor.checked_add(until.checked_duration_since(now)?),
+                        )
+                    })
+                    .transpose()?
+                    .flatten()
+            } else {
+                None
+            }
+        };
+        self.next_wake =
+            if self.incidents.reporting.take_continuation() { Some(anchor) } else { deadline };
         Ok(())
     }
     /// Enumerate bounded original owner candidates before selecting one native wake.

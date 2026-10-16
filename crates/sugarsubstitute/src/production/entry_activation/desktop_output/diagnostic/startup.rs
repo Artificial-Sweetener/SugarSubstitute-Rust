@@ -103,6 +103,21 @@ fn signed(value: &str) -> Option<i32> {
 }
 
 pub(super) fn code(value: &str) -> Option<Code> {
+    if let Some(value) = value.strip_prefix("Transcript(").and_then(|v| v.strip_suffix(')')) {
+        use sugarsubstitute_contracts::transcript::TranscriptError as Transcript;
+        return Some(Code::Transcript(match value {
+            "ZeroIdentity" => Transcript::ZeroIdentity,
+            "Bound" => Transcript::Bound,
+            "EmptyGap" => Transcript::EmptyGap,
+            "InvalidStyle" => Transcript::InvalidStyle,
+            "ForeignResource" => Transcript::ForeignResource,
+            "Sequence" => Transcript::Sequence,
+            "StreamEnded" => Transcript::StreamEnded,
+            "Exhausted" => Transcript::Exhausted,
+            "SnapshotCapacity" => Transcript::SnapshotCapacity,
+            _ => return None,
+        }));
+    }
     if let Some(value) = value.strip_prefix("Bootstrap(").and_then(|v| v.strip_suffix(')')) {
         use sugarsubstitute_desktop::StartupBootstrapCause as Bootstrap;
         return Some(Code::Bootstrap(match value {

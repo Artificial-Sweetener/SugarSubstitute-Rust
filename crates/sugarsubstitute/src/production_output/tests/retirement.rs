@@ -141,7 +141,12 @@ fn closed_delivery_requires_exact_next_id_and_never_publishes_or_acks() -> TestR
     Ok(())
 }
 
-fn worker_boundary(failure: bool) -> TestResult {
+fn worker_boundary(failure: Option<OutputError>) -> TestResult {
+    let genuine_failure = failure.is_some();
+    let transcript = match &failure {
+        Some(OutputError::Transcript(cause)) => Some(*cause),
+        _ => None,
+    };
     let mut rig = Rig::new()?;
     let mut output = output(&rig)?;
     let h = header(binding()?, 2)?;
@@ -162,8 +167,8 @@ fn worker_boundary(failure: bool) -> TestResult {
             source.check(&context)?;
             worker_entered.open();
             returned.wait().map_err(|_| OutputError::Poisoned)?;
-            if failure {
-                return Err(OutputError::Identity);
+            if let Some(cause) = failure {
+                return Err(cause);
             }
             worker::check(&context)?;
             Ok(worker::Parsed { delivery: None, change: None, snapshot: None, notice: None })
@@ -180,8 +185,13 @@ fn worker_boundary(failure: bool) -> TestResult {
     rig.notice(&mut output)?;
     let cause = output.take_applied().err().ok_or("Closed terminal not observed")?;
     assert!(!output.worker_pending());
-    assert_eq!(output.expected_retirement_terminal(&cause), !failure);
-    if failure {
+    assert_eq!(output.expected_retirement_terminal(&cause), !genuine_failure);
+    if let Some(expected) = transcript {
+        assert!(matches!(cause, OutputError::Transcript(actual) if actual == expected));
+        assert!(
+            matches!(output.failure(), Some(OutputError::Transcript(actual)) if *actual == expected)
+        );
+    } else if genuine_failure {
         assert!(matches!(output.failure(), Some(OutputError::Identity)));
     }
     assert!(output.terminal.is_some());
@@ -197,11 +207,14 @@ fn worker_boundary(failure: bool) -> TestResult {
 #[test]
 fn closed_running_worker_cancellation_waits_for_actual_return_and_keeps_original_pull() -> TestResult
 {
-    worker_boundary(false)
+    worker_boundary(None)
 }
 #[test]
 fn closed_running_worker_keeps_genuine_failure_across_actual_cancellation() -> TestResult {
-    worker_boundary(true)
+    for cause in [OutputError::Identity, OutputError::Transcript(TranscriptError::Sequence)] {
+        worker_boundary(Some(cause))?;
+    }
+    Ok(())
 }
 
 #[test]

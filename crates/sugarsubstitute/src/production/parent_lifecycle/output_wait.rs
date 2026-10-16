@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Park one authentic pull before request admission while another client owns its shared loan.
+//! Park an authentic pull only while an external native loan prevents safe output admission.
 use super::{ParentError, ParentLifecycle, ParentResources, Result};
 use std::num::NonZeroU64;
 use sugarsubstitute_contracts::{
     execution::{CounterDeadline, Moment},
-    lifecycle::ResourceKey,
+    lifecycle::LeaseKey,
 };
 use sugarsubstitute_supervision::lifecycle_protocol::{DecodedPayload, LeaseReference, WireHeader};
 
@@ -37,7 +37,7 @@ impl ParentLifecycle {
         })
     }
 
-    /// Keep the original cutoff while waiting for another client's loan. Own ACKs
+    /// Keep the original cutoff while waiting for external native capacity. Own ACKs
     /// and recovery notices must route immediately. Expiry returns through normal
     /// admission, including the existing provisional-acquisition retirement rule.
     /// The callback borrows only the external owner's actual capacity observation.
@@ -47,7 +47,7 @@ impl ParentLifecycle {
         acknowledged: Option<NonZeroU64>,
         supplied: Moment,
         now: Moment,
-        available: impl FnOnce(ResourceKey) -> Result<bool>,
+        available: impl FnOnce(LeaseKey) -> Result<bool>,
     ) -> Result<bool> {
         self.output_receive_until = None;
         if self.closed
@@ -70,7 +70,7 @@ impl ParentLifecycle {
         } else {
             supplied
         };
-        if now >= until || available(lease.resource)? {
+        if now >= until || available(lease)? {
             return Ok(false);
         }
         self.output_receive_until = Some(until);

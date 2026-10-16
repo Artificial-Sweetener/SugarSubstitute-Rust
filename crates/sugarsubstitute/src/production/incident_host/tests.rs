@@ -10,7 +10,7 @@ use std::{
 use sugarsubstitute_execution::ExecutionOwner;
 
 #[path = "tests/constructor.rs"]
-mod constructor;
+pub(in crate::production) mod constructor;
 
 #[test]
 fn deferred_report_record_fits_real_original_policy_admission_until_checked_disposal()
@@ -41,7 +41,7 @@ impl Clock for TestClock {
     }
 }
 #[derive(Default)]
-struct Wake {
+pub(in crate::production) struct Wake {
     value: Mutex<u64>,
     changed: Condvar,
 }
@@ -69,7 +69,7 @@ fn spec(id: JobId) -> JobSpec {
         replacement: None,
     }
 }
-fn completion<T: Send + 'static, E: Send + 'static>(
+pub(in crate::production) fn completion<T: Send + 'static, E: Send + 'static>(
     client: &ExecutionClient,
     wake: &Wake,
     job: &mut OwnedJob<T, E>,

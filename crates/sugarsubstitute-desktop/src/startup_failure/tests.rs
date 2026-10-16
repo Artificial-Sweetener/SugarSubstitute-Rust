@@ -48,6 +48,14 @@ fn startup_closed_codes_format_canonical_native_and_request_facts() {
         StartupCauseCode::Request(StartupRequestCause::Deadline).to_string(),
         "Request(Deadline)"
     );
+    assert_eq!(
+        StartupCauseCode::direct(&TranscriptError::Sequence),
+        StartupCauseCode::Transcript(TranscriptError::Sequence)
+    );
+    assert_eq!(
+        StartupCauseCode::Transcript(TranscriptError::Sequence).to_string(),
+        "Transcript(Sequence)"
+    );
     assert_eq!(StartupCauseCode::Os(i32::MIN).to_string(), "Os(-2147483648)");
     assert_eq!(
         StartupCauseCode::direct(&std::io::Error::from_raw_os_error(233)),

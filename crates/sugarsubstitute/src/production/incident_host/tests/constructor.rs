@@ -300,3 +300,6 @@ fn constructor_panic_diagnostic_keeps_payload_private_and_original_completion_ow
     assert_eq!(scope.snapshot().reserved_bytes, 0);
     Ok(())
 }
+
+#[path = "report_queue.rs"]
+pub(in crate::production) mod report_queue;

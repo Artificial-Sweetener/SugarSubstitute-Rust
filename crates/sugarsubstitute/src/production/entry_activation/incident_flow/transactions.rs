@@ -67,6 +67,16 @@ impl DiagnosticTransactions {
         Ok(())
     }
 
+    /// Bind real inert transaction policy for composed owner tests, without native authority.
+    #[cfg(test)]
+    pub(in crate::production::entry_activation) fn bound_fixture(
+        owner: CoordinatorKey,
+    ) -> Result<Self, DiagnosticTransactionError> {
+        let mut transactions = Self::new();
+        transactions.bind(owner)?;
+        Ok(transactions)
+    }
+
     /// Inspect application capacity without starting work or changing an original deadline.
     pub(in crate::production::entry_activation) const fn available(&self) -> bool {
         self.active.is_none()

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Drain admitted owned process streams independently of transcript presentation.
+#[cfg(any(test, feature = "boundary-fixtures"))]
+pub mod boundary_fixture;
 mod control;
 mod queue;
 #[cfg(test)]

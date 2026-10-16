@@ -57,6 +57,7 @@ pub(super) fn unadmitted_policy() -> Result<RetainedBackend> {
         owner,
         policy: ResourceCoordinator::new(owner),
         records: records.into_boxed_slice(),
+        output_clients: output::Subscribers::new()?,
         next_shutdown: 0,
         undelivered: None,
         policy_funding: funding,
@@ -262,7 +263,7 @@ fn unavailable_authority_preserves_input_and_both_identity_sequences() -> Result
     };
     assert!(owner.readiness(stale).is_none());
     assert!(owner.ready_origin(stale)?.is_none());
-    assert!(owner.take_output(stale).is_err());
+    assert!(owner.index(stale).is_err());
     assert!(owner.cleanup_failure(stale).is_none());
     assert!(owner.failure(stale).is_none());
     assert!(owner.deadlines().min().is_none());
@@ -374,6 +375,7 @@ fn partial_backend_cleanup_keeps_actual_parent_budget_across_later_clock_and_rep
         started: false,
         family_settled: false,
         output: None,
+        output_fanout: output::ResourceOutput::default(),
         output_terminal: None,
         output_observed: false,
         campaign: ReadinessCampaign::new(target, budget)?,

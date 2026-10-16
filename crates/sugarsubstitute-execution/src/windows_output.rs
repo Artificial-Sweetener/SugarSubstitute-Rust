@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Continuously drain exactly owned stdout/stderr through the central native owner.
+#[cfg(any(test, feature = "boundary-fixtures"))]
+pub use crate::output::boundary_fixture;
 pub use crate::output::{
     AdmittedOutputBatch, DesktopOutputBatch, MAX_WINDOWS_OUTPUT_CHUNKS,
     MAX_WINDOWS_OUTPUT_QUEUED_BYTES, MIN_WINDOWS_OUTPUT_BYTES, OutputIdentity, WindowsChildStdio,

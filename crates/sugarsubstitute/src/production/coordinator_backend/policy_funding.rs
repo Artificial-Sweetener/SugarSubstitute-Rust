@@ -103,6 +103,7 @@ impl RetainedBackend {
     /// This minimum alone does not fund growing resource policy tables.
     pub(crate) const fn required_storage_bytes() -> u64 {
         (size_of::<CoordinatorBackend>() + 64 * size_of::<Option<Backend>>()) as u64
+            + output::Subscribers::storage_bytes()
             + crate::production::coordinator_custody::WITNESS_STORAGE_BYTES
     }
     /// Construct only from an actually serving claims/registry association.
@@ -134,6 +135,7 @@ impl RetainedBackend {
             owner,
             policy: ResourceCoordinator::new(owner),
             records: records.into_boxed_slice(),
+            output_clients: output::Subscribers::new()?,
             next_shutdown: 0,
             undelivered: None,
             policy_funding: funding,

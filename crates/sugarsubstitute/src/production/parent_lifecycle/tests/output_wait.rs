@@ -22,7 +22,7 @@ fn shared_output_wait_keeps_original_request_unadmitted_until_capacity_returns()
         assert!(
             parent
                 .wait_output_loan(reference, None, until, now, |key| {
-                    assert_eq!(key, lease.resource);
+                    assert_eq!(key, lease);
                     calls.set(calls.get() + 1);
                     Ok(false)
                 })

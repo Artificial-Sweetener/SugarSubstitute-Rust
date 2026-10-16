@@ -112,6 +112,32 @@ fn actual_delivery_success_and_single_child_failure_preserve_effects_and_direct_
         address,
         actual.original().downcast_ref::<std::io::Error>().ok_or("Original child issue lost")?
     ));
+    for transcript in [
+        sugarsubstitute_contracts::transcript::TranscriptError::ZeroIdentity,
+        sugarsubstitute_contracts::transcript::TranscriptError::Bound,
+        sugarsubstitute_contracts::transcript::TranscriptError::EmptyGap,
+        sugarsubstitute_contracts::transcript::TranscriptError::InvalidStyle,
+        sugarsubstitute_contracts::transcript::TranscriptError::ForeignResource,
+        sugarsubstitute_contracts::transcript::TranscriptError::Sequence,
+        sugarsubstitute_contracts::transcript::TranscriptError::StreamEnded,
+        sugarsubstitute_contracts::transcript::TranscriptError::Exhausted,
+        sugarsubstitute_contracts::transcript::TranscriptError::SnapshotCapacity,
+    ] {
+        let original = Box::new(crate::production_output::OutputError::Transcript(transcript));
+        let address = original.as_ref() as *const crate::production_output::OutputError;
+        let error = delivery(Ok(42), Err(original)).err().ok_or("Transcript child error absent")?;
+        let retained =
+            error.downcast_ref::<StartupConsumeFailure>().ok_or("Transcript facts absent")?;
+        assert_eq!(retained.stage(), StartupConsumeStage::ChildDelivery);
+        assert_eq!(retained.code(), Code::Transcript(transcript));
+        assert!(std::ptr::eq(
+            address,
+            retained
+                .original()
+                .downcast_ref::<crate::production_output::OutputError>()
+                .ok_or("Original transcript Box lost")?
+        ));
+    }
     Ok(())
 }
 

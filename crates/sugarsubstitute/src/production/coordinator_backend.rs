@@ -24,7 +24,10 @@ mod cutoff_tests;
 mod failure;
 use failure::{FailureKind, FailureObservation, OutputTerminalFailure, RootExit, Stopped};
 #[path = "coordinator_backend/output.rs"]
-mod output;
+pub(in crate::production) mod output;
+#[cfg(test)]
+#[path = "coordinator_backend/output_fixture.rs"]
+pub(in crate::production) mod output_fixture;
 #[path = "coordinator_backend/policy_funding.rs"]
 mod policy_funding;
 #[path = "coordinator_backend/preparation.rs"]
@@ -129,6 +132,7 @@ struct Backend {
     started: bool,
     family_settled: bool,
     output: Option<WindowsOutputSession>,
+    output_fanout: output::ResourceOutput,
     output_terminal: Option<
         JobCompletion<
             WindowsOutputReport,
@@ -153,6 +157,7 @@ pub(crate) struct CoordinatorBackend {
     owner: CoordinatorKey,
     policy: ResourceCoordinator,
     records: Box<[Option<Backend>]>,
+    output_clients: output::Subscribers,
     next_shutdown: u64,
     undelivered: Option<ResourceTransition>,
     // These original data-backed credits outlive every source, policy and return above.
@@ -261,7 +266,15 @@ impl CoordinatorBackend {
             sugarsubstitute_application::supervision::ResourceStorageInput::Request(&request),
         )?;
         self.begin_delivery()?;
+        let released = match &request.command {
+            ResourceCommand::Release(lease) => Some(*lease),
+            _ => None,
+        };
         let mut transition = self.policy.request(binding, request)?;
+        if let Some(lease) = released {
+            self.output_clients.remove_lease(lease);
+            self.release_consumed_output();
+        }
         self.retain_transition(&transition);
         self.effects(&mut transition, input, original, None, preferred, resources)?;
         Ok(self.undelivered.take().unwrap_or_default())
@@ -286,6 +299,8 @@ impl CoordinatorBackend {
         )?;
         self.begin_delivery()?;
         let mut transition = self.policy.disconnect_run(run, connection)?;
+        self.output_clients.remove_client(run, connection);
+        self.release_consumed_output();
         self.retain_transition(&transition);
         self.effects(&mut transition, &mut None, None, Some(original), None, resources)?;
         Ok(self.undelivered.take().unwrap_or_default())

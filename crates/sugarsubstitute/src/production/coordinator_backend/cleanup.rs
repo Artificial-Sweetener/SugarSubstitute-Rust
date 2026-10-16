@@ -23,6 +23,8 @@ impl CoordinatorBackend {
         };
         self.next_shutdown = next;
         record.shutdown = Some((shutdown, budget));
+        self.output_clients.remove_resource(key);
+        record.output_fanout.current = None;
         record.readiness = None;
         record.campaign.cancel(budget);
         record.scope.cancel();

@@ -356,3 +356,9 @@ impl ReportingOperation {
         self.retired
     }
 }
+
+#[cfg(test)]
+pub(in crate::production) use service::tests::{
+    continuation_fixture::{acknowledge_fixture, presented_fixture},
+    support::original as fixture_original,
+};

@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Serialize actual protected reads, guarded CAS and checked cleanup before pure adoption.
 use super::*;
+use crate::job_sequence::JobSequence;
 impl IncidentReporting {
     /// Retain one canonical locale projected from this registered failed desktop configuration.
     /// # Errors
@@ -71,6 +72,7 @@ impl IncidentReporting {
             stream_plan: None,
             stream_until: None,
         });
+        self.continuation = Some(ReportContinuation::AdvanceStore);
         Ok(())
     }
     pub(super) fn consume_effect(
@@ -182,14 +184,17 @@ impl IncidentReporting {
     pub(super) fn advance_store(
         &mut self,
         host: &mut IncidentHost,
-        resources: &EntryResources<'_>,
+        client: &ExecutionClient,
+        finite: &Scope,
+        cleanup: &Scope,
+        jobs: &JobSequence,
         transactions: &mut DiagnosticTransactions,
     ) -> Result<()> {
         let Some(work) = &mut self.store else { return Ok(()) };
         let service = host.reporting_service()?;
         let until = work.scope.original().until();
         if !work.installed {
-            if resources.client.now()? >= until {
+            if client.now()? >= until {
                 return Err("Original report namespace admission cutoff elapsed".into());
             }
             if !transactions.admit(
@@ -199,13 +204,7 @@ impl IncidentReporting {
             )? {
                 return Ok(());
             }
-            let submitted = service.submit(
-                resources.client,
-                resources.finite,
-                resources.jobs,
-                until,
-                &mut work.input,
-            );
+            let submitted = service.submit(client, finite, jobs, until, &mut work.input);
             work.installed = work.input.is_none();
             match submitted {
                 Ok(()) => work.submitted = true,
@@ -214,7 +213,7 @@ impl IncidentReporting {
             }
         }
         if !work.submitted {
-            match service.retry(resources.client, resources.finite, resources.jobs, until) {
+            match service.retry(client, finite, jobs, until) {
                 Ok(()) => work.submitted = true,
                 Err(ReportingIssue::Admission) => return Ok(()),
                 Err(cause) => return Err(cause.into()),
@@ -235,20 +234,20 @@ impl IncidentReporting {
             && work.counter.job.is_none()
             && work.counter.completion.is_none()
         {
-            let client = resources.client.clone();
+            let counter_client = client.clone();
             let cutoff = service.view_cutoff().unwrap_or(until);
             work.stream_until = Some(cutoff);
-            work.counter.job = Some(resources.client.submit_blocking(
-                resources.finite,
+            work.counter.job = Some(client.submit_blocking(
+                finite,
                 JobSpec {
-                    id: resources.jobs.allocate()?,
+                    id: jobs.allocate()?,
                     operation: Operation::NativeLifecycle,
                     class: JobClass::InfrastructureLifecycle,
                     deadline: Some(cutoff),
                     reservation_bytes: 16 * 1024,
                     replacement: None,
                 },
-                move |context| delivery::prepare_counter(&client, cutoff, &context),
+                move |context| delivery::prepare_counter(&counter_client, cutoff, &context),
             )?);
         }
         if !matches!(work.kind, StoreKind::ExportView | StoreKind::Symbols) {
@@ -258,9 +257,9 @@ impl IncidentReporting {
         if matches!(work.kind, StoreKind::View { .. } | StoreKind::ExportView) {
             if !work.view_submitted {
                 match service.submit_view(
-                    resources.client,
-                    resources.finite,
-                    resources.jobs,
+                    client,
+                    finite,
+                    jobs,
                     service.view_cutoff().ok_or("Actual loaded view cutoff missing")?,
                 ) {
                     Ok(()) => work.view_submitted = true,
@@ -273,14 +272,13 @@ impl IncidentReporting {
             }
         }
         if work.cleanup_until.is_none() {
-            work.cleanup_until =
-                Some(resources.client.now()?.checked_add(Duration::from_secs(15))?);
+            work.cleanup_until = Some(client.now()?.checked_add(Duration::from_secs(15))?);
         }
         if !work.cleanup_submitted {
             match service.submit_cleanup(
-                resources.client,
-                resources.cleanup,
-                resources.jobs,
+                client,
+                cleanup,
+                jobs,
                 work.cleanup_until.ok_or("Original report cleanup cutoff missing")?,
             ) {
                 Ok(()) => work.cleanup_submitted = true,

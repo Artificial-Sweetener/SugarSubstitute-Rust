@@ -69,7 +69,9 @@ impl CompletionWake for Wake {
     }
 }
 
-fn queued_output(check: impl FnOnce(&CoordinatorBackend, ResourceKey) -> Result<()>) -> Result<()> {
+fn queued_output(
+    check: impl FnOnce(&mut CoordinatorBackend, LeaseKey) -> Result<()>,
+) -> Result<()> {
     let clock = Arc::new(HeldClock::default());
     let wake = Arc::new(Wake::default());
     let executor = ExecutionOwner::new(clock.clone(), wake.clone())?;
@@ -124,8 +126,8 @@ fn queued_output(check: impl FnOnce(&CoordinatorBackend, ResourceKey) -> Result<
     owner.records[0] = Some(record);
     // An absent stream is the supported empty-console result, including attached
     // backends. Only an actual native batch loan may close the readiness gate.
-    assert!(owner.output_loan_available(lease.resource)?);
-    assert!(owner.take_output(lease.resource)?.is_none());
+    assert!(owner.output_loan_available(lease)?);
+    assert!(owner.take_output(lease, &mut [])?.is_none());
     let record = owner.records[0].as_mut().ok_or("Original backend disappeared")?;
     record.output = Some(client.reserve_windows_output(
         &native,
@@ -140,8 +142,8 @@ fn queued_output(check: impl FnOnce(&CoordinatorBackend, ResourceKey) -> Result<
         OutputIdentity::Managed(lease.resource),
     )?);
     assert!(record.output.as_ref().ok_or("Original output disappeared")?.control.loan_available());
-    assert!(owner.output_loan_available(lease.resource)?);
-    let result = check(owner, lease.resource);
+    assert!(owner.output_loan_available(lease)?);
+    let result = check(owner, lease);
     let record = owner.records[0].as_mut().ok_or("Original backend disappeared")?;
     let output = record.output.as_mut().ok_or("Original output disappeared")?;
     assert_eq!(output.control.take_batch().err(), Some(WindowsOutputError::NotReady));
@@ -184,7 +186,7 @@ fn queued_output(check: impl FnOnce(&CoordinatorBackend, ResourceKey) -> Result<
 fn admitted_output_waiting_for_native_construction_is_idle_data() -> Result<()> {
     queued_output(|owner, key| {
         for _ in 0..3 {
-            assert!(owner.take_output(key)?.is_none());
+            assert!(owner.take_output(key, &mut [])?.is_none());
         }
         Ok(())
     })
@@ -192,13 +194,22 @@ fn admitted_output_waiting_for_native_construction_is_idle_data() -> Result<()> 
 #[test]
 fn foreign_output_generation_cannot_touch_the_original_queued_source() -> Result<()> {
     queued_output(|owner, key| {
-        let foreign = ResourceKey { generation: key.generation.next()?, ..key };
-        assert!(owner.take_output(foreign).is_err());
-        let foreign = ResourceKey {
-            owner: CoordinatorKey { epoch: CoordinatorEpoch::new([9; 16])?, ..key.owner },
+        let foreign = LeaseKey {
+            resource: ResourceKey { generation: key.resource.generation.next()?, ..key.resource },
             ..key
         };
-        assert!(owner.take_output(foreign).is_err());
+        assert!(owner.output_loan_available(foreign).is_err());
+        let foreign = LeaseKey {
+            resource: ResourceKey {
+                owner: CoordinatorKey {
+                    epoch: CoordinatorEpoch::new([9; 16])?,
+                    ..key.resource.owner
+                },
+                ..key.resource
+            },
+            ..key
+        };
+        assert!(owner.output_loan_available(foreign).is_err());
         Ok(())
     })
 }

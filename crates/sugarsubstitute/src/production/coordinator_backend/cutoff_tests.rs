@@ -103,6 +103,7 @@ pub(super) fn creator(
         started: false,
         family_settled: false,
         output: None,
+        output_fanout: output::ResourceOutput::default(),
         output_terminal: None,
         output_observed: false,
         campaign: ReadinessCampaign::new(target, budget)?,

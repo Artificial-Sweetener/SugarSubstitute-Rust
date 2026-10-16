@@ -2,18 +2,18 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain actual raw output until exact client consumption, including bounded replay bytes.
 use super::{ParentError, ParentLifecycle, ParentResources, Reply, Result};
+use crate::production::coordinator_backend::output::OutputReceipt;
 use std::num::NonZeroU64;
 use sugarsubstitute_contracts::{
     lifecycle::LeaseKey,
     transcript::{OutputGap, OutputStream, StreamSequence},
 };
-use sugarsubstitute_execution::windows_output::AdmittedOutputBatch;
 use sugarsubstitute_supervision::lifecycle_protocol::LeaseReference;
 
 pub(super) struct Delivery {
     pub(super) id: NonZeroU64,
     pub(super) lease: LeaseKey,
-    pub(super) guard: AdmittedOutputBatch,
+    pub(super) receipt: OutputReceipt,
 }
 #[derive(Clone, Copy)]
 pub(super) struct OutputFacts {
@@ -48,11 +48,7 @@ impl ParentLifecycle {
         if self.output_lease != Some(lease) {
             return Err(ParentError::ForeignPeer.into());
         }
-        let current = self.output.as_ref().map(|delivery| (delivery.lease, delivery.id));
-        if acknowledge_delivery(current, self.acknowledged_output, lease, acknowledged)? {
-            self.acknowledged_output = acknowledged.map(|id| (lease, id));
-            self.output = None;
-        }
+        self.consume_output_ack(lease, acknowledged, resources.backend)?;
         if self.recovery_output_reply(index, resources)? {
             return Ok(());
         }
@@ -60,31 +56,52 @@ impl ParentLifecycle {
             self.next_delivery.checked_add(1).ok_or(ParentError::IdentityExhausted)?,
         )
         .ok_or(ParentError::IdentityExhausted)?;
-        let Some(guard) = resources.backend.take_output(lease.resource)? else {
-            self.requests.get_mut(index)?.reply = Some(Reply::OutputIdle(lease));
-            return Ok(());
-        };
-        // Adopt the actual loan before any subsequent bounds/identity failure.
-        self.output = Some(Delivery { id, lease, guard });
-        self.next_delivery = id.get();
-        let batch = self
-            .output
-            .as_ref()
-            .and_then(|delivery| delivery.guard.batch())
-            .ok_or(ParentError::WrongPhase)?;
-        if batch.resource() != lease.resource || batch.bytes().len() > 32768 {
-            return Err(ParentError::ForeignPeer.into());
+        self.retain_output_delivery(index, lease, id, resources.backend)?;
+        Ok(())
+    }
+    /// Advance this Parent only after its exact old delivery and backend receipt both match.
+    pub(in crate::production) fn consume_output_ack(
+        &mut self,
+        lease: LeaseKey,
+        acknowledged: Option<NonZeroU64>,
+        backend: &mut crate::production::coordinator_backend::CoordinatorBackend,
+    ) -> Result<()> {
+        let current = self.output.as_ref().map(|delivery| (delivery.lease, delivery.id));
+        if acknowledge_delivery(current, self.acknowledged_output, lease, acknowledged)? {
+            let delivery = self.output.as_ref().ok_or(ParentError::WrongPhase)?;
+            backend.acknowledge_output(lease, &delivery.receipt)?;
+            self.acknowledged_output = acknowledged.map(|id| (lease, id));
+            self.output = None;
+        }
+        Ok(())
+    }
+    /// The caller has validated the authentic pull/lease and disposed only its matching ACK.
+    /// Copy into this already-admitted request buffer; the backend retains the genuine source.
+    pub(in crate::production) fn retain_output_delivery(
+        &mut self,
+        index: usize,
+        lease: LeaseKey,
+        id: NonZeroU64,
+        backend: &mut crate::production::coordinator_backend::CoordinatorBackend,
+    ) -> Result<()> {
+        if self.output.is_some() || self.output_lease != Some(lease) {
+            return Err(ParentError::WrongPhase.into());
         }
         let record = self.requests.get_mut(index)?;
-        record.output_bytes[..batch.bytes().len()].copy_from_slice(batch.bytes());
+        let Some(delivery) = backend.take_output(lease, &mut record.output_bytes)? else {
+            record.reply = Some(Reply::OutputIdle(lease));
+            return Ok(());
+        };
+        self.output = Some(Delivery { id, lease, receipt: delivery.receipt });
+        self.next_delivery = id.get();
         record.reply = Some(Reply::Output(OutputFacts {
             lease,
             id,
-            stream: batch.stream(),
-            sequence: batch.sequence(),
-            gap: batch.gap(),
-            end: batch.end(),
-            count: batch.bytes().len(),
+            stream: delivery.stream,
+            sequence: delivery.sequence,
+            gap: delivery.gap,
+            end: delivery.end,
+            count: delivery.count,
         }));
         Ok(())
     }
@@ -244,3 +261,7 @@ mod tests {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "output/fanout_tests.rs"]
+mod fanout_tests;

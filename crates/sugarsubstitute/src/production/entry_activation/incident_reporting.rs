@@ -91,6 +91,12 @@ enum ReportTransition {
     AdvanceExport,
     DriveRelay,
 }
+/// One pending native turn for work queued after its progress phase.
+#[derive(Clone, Copy, Debug)]
+enum ReportContinuation {
+    ConsumeEffect,
+    AdvanceStore,
+}
 #[derive(Clone, Copy)]
 enum StoreKind {
     View { previous: Option<IncidentRevision> },
@@ -144,6 +150,7 @@ impl ReportAdmission {
 pub(super) struct IncidentReporting {
     fresh_supervisor: bool,
     deferred_restart: Option<DeferredFreshRestart>,
+    continuation: Option<ReportContinuation>,
     restart: ReportRestartAvailability,
     relay: Option<ReporterRelay>,
     key: Option<DiagnosticKey>,
@@ -196,6 +203,7 @@ impl IncidentReporting {
         Self {
             fresh_supervisor: false,
             deferred_restart: None,
+            continuation: None,
             restart: ReportRestartAvailability::Unavailable,
             relay: None,
             key: None,
@@ -320,7 +328,14 @@ impl IncidentReporting {
         *transition = ReportTransition::CaptureOutput;
         self.capture_output(host, resources)?;
         *transition = ReportTransition::AdvanceStore;
-        self.advance_store(host, resources, transactions)?;
+        self.advance_store(
+            host,
+            resources.client,
+            resources.finite,
+            resources.cleanup,
+            resources.jobs,
+            transactions,
+        )?;
         *transition = ReportTransition::ConsumeEffect;
         self.consume_effect(host, resources)?;
         *transition = ReportTransition::AdvanceExport;

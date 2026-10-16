@@ -86,6 +86,10 @@ pub(super) fn cause_code(
             bootstrap::ChildBootstrapIssue::Configuration => Bootstrap::Configuration,
             bootstrap::ChildBootstrapIssue::Deadline => Bootstrap::Deadline,
         })
+    } else if let Some(crate::production_output::OutputError::Transcript(transcript)) =
+        cause.downcast_ref::<crate::production_output::OutputError>()
+    {
+        Code::Transcript(*transcript)
     } else if let Some(closed) =
         cause.downcast_ref::<sugarsubstitute_desktop::StartupCloseFailure>()
     {

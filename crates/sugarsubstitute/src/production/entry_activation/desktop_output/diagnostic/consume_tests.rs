@@ -42,12 +42,25 @@ fn consumer_failure_grammar_rejects_foreign_observation_fields_unknown_categorie
         "Os(-2147483648)",
         "Request(Deadline)",
         "Opaque",
+        "Transcript(ZeroIdentity)",
+        "Transcript(Bound)",
+        "Transcript(EmptyGap)",
+        "Transcript(InvalidStyle)",
+        "Transcript(ForeignResource)",
+        "Transcript(Sequence)",
+        "Transcript(StreamEnded)",
+        "Transcript(Exhausted)",
+        "Transcript(SnapshotCapacity)",
     ] {
         assert!(parse_failure(LINE.replace("Bootstrap(Transport)", code).as_bytes()).is_some());
     }
     for code in [
         "Bootstrap(Transport,1)",
         "Bootstrap(Unknown)",
+        "Transcript(Unknown)",
+        "Transcript(Sequence,1)",
+        "Transcript(Sequence(secret))",
+        "Transcript(sequence)",
         "NativeOs(CounterQuery,4294967296)",
         "Os(+1)",
         "Os(-0)",
@@ -97,22 +110,35 @@ fn actual_production_consumer_formatter_roundtrips_closed_stage_category_within_
         Stage::EffectRouting,
         Stage::DeadlineRefresh,
     ] {
-        let category = Code::Native(
-            sugarsubstitute_desktop::StartupNativeCause::CounterConversion,
-            Some(u32::MAX),
-        );
-        let bytes = super::super::tests::formatted_owner_diagnostics(|| {
-            tracing::warn!(operation="desktop_failure_transition",boundary=%"PollFrame",kind=%"Other",consume_stage=?stage,category=%category,"First owned desktop failure retained");
-        })?;
-        assert!(bytes.starts_with(b"2026-10-13T"));
-        assert!(bytes.split(|byte| *byte == b'\n').all(|line| line.len() <= 512));
-        let mut owner = Diagnostic::new();
-        let mut seen = Vec::new();
-        owner.feed(OutputStream::Stderr, 1, false, false, &bytes, |v| seen.push(v));
-        assert_eq!(seen.len(), 1);
-        assert!(
-            matches!(seen[0],Observation::Failure(f) if f.startup.is_none()&&f.consume==Some(ConsumeFailureDetail{stage,code:category}))
-        );
+        use sugarsubstitute_contracts::transcript::TranscriptError as Transcript;
+        for category in [
+            Code::Native(
+                sugarsubstitute_desktop::StartupNativeCause::CounterConversion,
+                Some(u32::MAX),
+            ),
+            Code::Transcript(Transcript::ZeroIdentity),
+            Code::Transcript(Transcript::Bound),
+            Code::Transcript(Transcript::EmptyGap),
+            Code::Transcript(Transcript::InvalidStyle),
+            Code::Transcript(Transcript::ForeignResource),
+            Code::Transcript(Transcript::Sequence),
+            Code::Transcript(Transcript::StreamEnded),
+            Code::Transcript(Transcript::Exhausted),
+            Code::Transcript(Transcript::SnapshotCapacity),
+        ] {
+            let bytes = super::super::tests::formatted_owner_diagnostics(|| {
+                tracing::warn!(operation="desktop_failure_transition",boundary=%"PollFrame",kind=%"Other",consume_stage=?stage,category=%category,"First owned desktop failure retained");
+            })?;
+            assert!(bytes.starts_with(b"2026-10-13T"));
+            assert!(bytes.split(|byte| *byte == b'\n').all(|line| line.len() <= 512));
+            let mut owner = Diagnostic::new();
+            let mut seen = Vec::new();
+            owner.feed(OutputStream::Stderr, 1, false, false, &bytes, |v| seen.push(v));
+            assert_eq!(seen.len(), 1);
+            assert!(
+                matches!(seen[0],Observation::Failure(f) if f.startup.is_none()&&f.consume==Some(ConsumeFailureDetail{stage,code:category}))
+            );
+        }
     }
     Ok(())
 }

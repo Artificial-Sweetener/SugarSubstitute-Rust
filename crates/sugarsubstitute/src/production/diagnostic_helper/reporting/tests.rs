@@ -4,7 +4,7 @@
 #[path = "tests/snapshot.rs"]
 mod snapshot;
 #[path = "tests/support.rs"]
-mod support;
+pub(in crate::production) mod support;
 use super::*;
 #[path = "tests/passive.rs"]
 mod passive;
@@ -325,3 +325,6 @@ fn reporting_stale_view_retains_actual_loaded_summary_without_text_or_mutation()
     assert_eq!(scope.snapshot().reserved_bytes, 0);
     Ok(())
 }
+
+#[path = "tests/continuation_fixture.rs"]
+pub(in crate::production) mod continuation_fixture;

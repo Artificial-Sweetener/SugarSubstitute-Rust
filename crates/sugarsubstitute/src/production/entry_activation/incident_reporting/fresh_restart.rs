@@ -101,15 +101,27 @@ impl IncidentReporting {
             return Ok(false);
         }
         grant.check()?;
-        if host.report_action(selected.command, selected.context)?.is_some() {
-            return Err("Unexpected copy authorization for Restart".into());
-        }
+        self.enqueue_prepared_restart_acknowledgement(host, selected.command, selected.context)?;
         self.original = Some(selected.context);
         self.dismiss_action = Some(ReportAction::DismissAndRequestRestart);
         self.close_request =
             self.request.as_ref().map(|request| request.authentication.issued.request());
         self.deferred_restart = None;
         Ok(true)
+    }
+    /// Retain the genuine policy effect and one native turn after fresh preparation completed.
+    /// This grants no native frame, write capability or durable acknowledgement.
+    pub(super) fn enqueue_prepared_restart_acknowledgement(
+        &mut self,
+        host: &mut IncidentHost,
+        command: ReportCommand,
+        context: IncidentRequestContext,
+    ) -> Result<()> {
+        if host.report_action(command, context)?.is_some() {
+            return Err("Unexpected copy authorization for Restart".into());
+        }
+        self.continuation = Some(ReportContinuation::ConsumeEffect);
+        Ok(())
     }
     /// Return actionable rejection without ACK when genuine preparation cannot complete.
     pub(in crate::production::entry_activation) fn reject_deferred_fresh_restart(

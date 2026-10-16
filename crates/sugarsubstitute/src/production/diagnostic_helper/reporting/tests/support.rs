@@ -184,7 +184,7 @@ pub(super) fn success<T, E: Into<TestError>>(
         _ => Err("actual report worker did not succeed".into()),
     }
 }
-pub(super) fn original() -> Result<IncidentSummary, TestError> {
+pub(in crate::production) fn original() -> Result<IncidentSummary, TestError> {
     let owner = CoordinatorKey {
         namespace: NamespaceId::new([1; 32]),
         epoch: CoordinatorEpoch::new([2; 16])?,

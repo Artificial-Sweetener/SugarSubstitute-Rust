@@ -12,7 +12,7 @@ mod restoration;
 mod symbols;
 #[cfg(test)]
 #[path = "tests.rs"]
-mod tests;
+pub(super) mod tests;
 #[path = "service/view.rs"]
 mod view;
 pub(in crate::production) use renewal::RetainedPassiveReporting;

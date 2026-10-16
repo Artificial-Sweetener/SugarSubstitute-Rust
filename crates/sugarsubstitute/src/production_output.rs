@@ -211,9 +211,21 @@ impl OutputOwner {
         self.noticed = None;
         if !matching || self.closed || completion.outcome.kind() != TerminalKind::Success {
             let kind = completion.outcome.kind();
+            // Project only the closed transcript category from the matching original outcome.
+            // The complete error, frame and charge remain in this same retained completion.
+            let cause = if matching {
+                match &completion.outcome {
+                    JobOutcome::Failure(OutputError::Transcript(cause)) => {
+                        OutputError::Transcript(*cause)
+                    }
+                    _ => OutputError::Terminal(kind),
+                }
+            } else {
+                OutputError::Identity
+            };
             self.terminal = Some(completion);
             self.closed = true;
-            return Err(if matching { OutputError::Terminal(kind) } else { OutputError::Identity });
+            return Err(cause);
         }
         let Some(pending) = self.pending else {
             self.terminal = Some(completion);

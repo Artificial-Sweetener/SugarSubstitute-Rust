@@ -233,3 +233,6 @@ mod source_observation;
 
 #[path = "tests/receiving_failure.rs"]
 mod receiving_failure;
+
+#[path = "tests/continuation.rs"]
+mod continuation;
