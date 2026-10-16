@@ -80,7 +80,8 @@ pub(crate) trait EntryActivation {
     /// Borrow actual deliberate close intent only when current role and diagnostic custody permit it.
     /// This samples no clock and proves neither intake quiescence nor native settlement.
     fn normal_close_requested(&self) -> bool;
-    /// Borrow its original retained failure without separating its custody.
+    /// Borrow its original retained fatal failure without separating its custody.
+    /// An exposed source closes runner admission even when the last turn returned Active.
     fn failure_source(&self) -> Option<&(dyn Error + 'static)>;
     /// Return its actual next native-thread wake without introducing timers.
     fn next_deadline(&self) -> Option<Instant>;
@@ -344,6 +345,16 @@ impl<C: EntryActivation> EntryRunner<C> {
         if let Err(cause) = self.request_shutdown() {
             self.retain(cause);
         }
+    }
+    /// Retain a newly exposed fatal child source once, preserving any earlier primary owner.
+    /// The child keeps its exact cause; this marker only starts the existing failure path.
+    fn observe_retained_child_failure(&mut self) -> bool {
+        let failed = self.child.failure_source().is_some();
+        if failed && self.first_origin.is_none() {
+            self.first_origin = Some(FailureOrigin::Child);
+            self.retain("Actual child retained a fatal failure after its turn".into());
+        }
+        failed
     }
     fn failure_source(&self) -> Option<&(dyn Error + 'static)> {
         match self.first_origin {

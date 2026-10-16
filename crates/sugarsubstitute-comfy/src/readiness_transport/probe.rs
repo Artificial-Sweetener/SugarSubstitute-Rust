@@ -14,6 +14,10 @@ use sugarsubstitute_contracts::execution::JobContext;
 const ASSETS_PER_STEP: usize = 64;
 /// Larger cohorts reserve a full second before issuing another asset body.
 const HEADROOM_ASSET_THRESHOLD: usize = 4;
+/// One asset and its checked native retirement retain the same original phase headroom.
+pub(super) fn asset_headroom(total: usize) -> Duration {
+    if total > HEADROOM_ASSET_THRESHOLD { Duration::from_secs(1) } else { Duration::ZERO }
+}
 #[derive(Clone, Copy)]
 pub(super) struct ExpectedAsset<'a> {
     pub(super) path: &'a str,
@@ -88,10 +92,9 @@ pub(super) fn inspect(
         let until = context
             .deadline()
             .ok_or_else(|| ReadinessTransportError::invalid("attempt_deadline"))?;
-        if total > HEADROOM_ASSET_THRESHOLD
-            && !until
-                .checked_duration_since(now)
-                .is_ok_and(|remaining| remaining > Duration::from_secs(1))
+        if !until
+            .checked_duration_since(now)
+            .is_ok_and(|remaining| remaining > asset_headroom(total))
         {
             break;
         }

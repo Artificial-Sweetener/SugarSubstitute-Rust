@@ -29,7 +29,7 @@ use sugarsubstitute_execution::ExecutionClient;
 /// Report immediate progression without implying native completion from queued work.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CampaignStep {
-    /// Actual attempt, cleanup or original backoff remains outstanding.
+    /// Actual work/backoff remains outstanding, or retained asset work awaits the original cutoff.
     Waiting,
     /// Previous native outputs closed; a fresh authoritative input may be supplied.
     NeedsInput,
@@ -218,14 +218,20 @@ impl ReadinessCampaign {
     }
     /// Return the next absolute original deadline or backoff wake in the same clock epoch.
     /// Retained terminal custody and actual cleanup keep their first deadline visible
-    /// after readiness; live readiness has no remaining startup wake.
+    /// after readiness; live readiness has no remaining startup wake. An asset
+    /// continuation without its retirement reserve waits for the original cutoff.
     pub fn next_deadline(&self) -> Option<Moment> {
         if let Some(attempt) = &self.attempt {
             Some(attempt.until.min(self.budget.until()))
         } else if !self.terminal
             && self.owner.as_ref().is_some_and(ReadinessProbeOwner::continuation_ready)
         {
-            Some(self.last_now.min(self.budget.until()))
+            let runnable = self.budget.probe_until(self.last_now).is_ok_and(|until| {
+                self.owner
+                    .as_ref()
+                    .is_some_and(|owner| owner.continuation_fits(self.last_now, until))
+            });
+            Some(if runnable { self.last_now } else { self.budget.until() })
         } else if self.owner.is_some() && (self.terminal || !self.ready || self.cleanup.is_some()) {
             Some(self.cleanup_until.unwrap_or_else(|| {
                 self.shutdown.map_or(self.budget.until(), |budget| budget.settle_until)

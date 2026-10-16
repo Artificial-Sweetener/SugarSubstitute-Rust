@@ -47,8 +47,10 @@ impl ReadinessCampaign {
                     self.attempt = None;
                     return Ok(if self.terminal {
                         CampaignStep::Failed
-                    } else {
+                    } else if self.needs_continuation(now)? {
                         CampaignStep::NeedsContinuation
+                    } else {
+                        CampaignStep::Waiting
                     });
                 }
                 Ok(None) => return Ok(CampaignStep::Waiting),

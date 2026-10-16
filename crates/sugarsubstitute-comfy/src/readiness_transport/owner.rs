@@ -2,7 +2,10 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain admitted native HTTP outputs independently of cancellation and payload disposal.
 use super::{types::*, *};
-use std::sync::{Arc, Mutex};
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 #[cfg(test)]
 use sugarsubstitute_contracts::execution::JobOutcome;
 use sugarsubstitute_contracts::execution::{
@@ -72,7 +75,8 @@ pub struct ReadinessProbeOwner {
     port: Arc<dyn HttpPort>,
     pending: Option<OwnedJob<(), ReadinessTransportError>>,
     submitted: bool,
-    partial: bool,
+    /// Actual timely partial delivery retains its next phase requirement; pending work clears it.
+    continuation_headroom: Option<Duration>,
     client: Option<ExecutionClient>,
     execution: Option<sugarsubstitute_contracts::execution::ExecutionId>,
     /// The genuine original attempt scope remains the sole continuation destination.
@@ -103,7 +107,7 @@ impl ReadinessProbeOwner {
             port: Arc::new(super::native::SystemPort),
             pending: None,
             submitted: false,
-            partial: false,
+            continuation_headroom: None,
             client: None,
             execution: None,
             attempt_scope: None,
@@ -133,7 +137,7 @@ impl ReadinessProbeOwner {
         spec: JobSpec,
     ) -> Result<JobId, AdmissionError> {
         validate(spec)?;
-        if !self.partial
+        if self.continuation_headroom.is_none()
             || self.pending.is_some()
             || self.execution != Some(scope.owner_id())
             || self.attempt_scope != Some(scope.id())
@@ -212,7 +216,7 @@ impl ReadinessProbeOwner {
         })?;
         self.pending = Some(job);
         self.submitted = true;
-        self.partial = false;
+        self.continuation_headroom = None;
         self.client = Some(client.clone());
         self.execution = Some(scope.owner_id());
         self.attempt_scope = Some(scope.id());
@@ -220,7 +224,15 @@ impl ReadinessProbeOwner {
     }
     /// Passive readiness to admit another same-owner phase; grants no verified readiness.
     pub(crate) fn continuation_ready(&self) -> bool {
-        self.partial && self.pending.is_none()
+        self.continuation_headroom.is_some() && self.pending.is_none()
+    }
+    /// Ask whether this actual partial cohort can perform work inside the supplied unchanged phase.
+    /// Metadata-only confirmation remains admissible below the asset retirement reserve.
+    pub(crate) fn continuation_fits(&self, now: Moment, until: Moment) -> bool {
+        self.pending.is_none()
+            && self.continuation_headroom.is_some_and(|headroom| {
+                until.checked_duration_since(now).is_ok_and(|remaining| remaining > headroom)
+            })
     }
     /// Consume this owner's actual completion and qualify fresh delivery before creating readiness proof.
     /// # Errors
@@ -233,7 +245,7 @@ impl ReadinessProbeOwner {
                 return Ok(None);
             };
             self.pending = None;
-            self.partial = false;
+            self.continuation_headroom = None;
             tracing::info!(operation="readiness_attempt_terminal",job=?completion.spec.id,
             scope=?completion.scope_id,outcome=?completion.outcome.kind(),
             "Actual owned readiness attempt completion consumed");
@@ -265,7 +277,12 @@ impl ReadinessProbeOwner {
                 state.peer.ok_or_else(|| ReadinessTransportError::invalid("attempt_no_peer"))?;
             state.verified_assets = state.candidate_assets;
             if !state.candidate_complete {
-                self.partial = true;
+                let total = self.input.source.manifest().assets().len();
+                self.continuation_headroom = Some(if state.verified_assets < total {
+                    super::probe::asset_headroom(total)
+                } else {
+                    Duration::ZERO
+                });
                 return Ok(None);
             }
             Ok(Some(VerifiedReadiness { input: self.input.clone(), peer }))

@@ -192,6 +192,28 @@ impl ParentLifecycle {
         self.requests.get_mut(index)?.held_backend = Some(command);
         Ok(())
     }
+    /// Admit retained Release during accepted exit intent; a physically closing channel cancels all work.
+    /// Original request deadlines and pending producer delivery remain binding during role cleanup.
+    pub(in crate::production::parent_lifecycle) fn next_backend_command(
+        &mut self,
+        now: sugarsubstitute_contracts::execution::Moment,
+        backend_delivery_pending: bool,
+        backend_commands_open: bool,
+    ) -> Result<Option<(usize, super::super::history::HeldBackendCommand)>> {
+        use super::super::history::HeldBackendCommand;
+        let Some(index) = self.requests.held_backend() else { return Ok(None) };
+        let command = self.requests.get(index)?.held_backend.ok_or(ParentError::WrongPhase)?;
+        let release = matches!(command, HeldBackendCommand::Release(_));
+        if self.closed || (self.cleanup.is_some() && !release) {
+            self.requests.cancel_held(index)?;
+            return Ok(None);
+        }
+        let cleanup_command = release || matches!(command, HeldBackendCommand::Reload { .. });
+        let open = self.forwarded.is_none()
+            && !backend_delivery_pending
+            && (cleanup_command || backend_commands_open);
+        Ok(self.requests.poll_held_backend(now, open)?)
+    }
     /// Retry only the original command after Root's shared gate opens, never its deadline or an admitted effect.
     pub(in crate::production::parent_lifecycle) fn advance_backend_commands(
         &mut self,
@@ -199,27 +221,10 @@ impl ParentLifecycle {
     ) -> Result<()> {
         use super::super::history::HeldBackendCommand;
         use sugarsubstitute_contracts::lifecycle::LifecycleRejection;
-        if self.closed || self.cleanup.is_some() {
-            if let Some(index) = self.requests.held_backend() {
-                self.requests.cancel_held(index)?;
-            }
-            return Ok(());
-        }
-        let local_effect_open = self.forwarded.is_none() && !resources.backend.delivery_pending();
-        let cleanup_command = if let Some(index) = self.requests.held_backend() {
-            matches!(
-                self.requests.get(index)?.held_backend,
-                Some(
-                    super::super::history::HeldBackendCommand::Release(_)
-                        | super::super::history::HeldBackendCommand::Reload { .. }
-                )
-            )
-        } else {
-            false
-        };
-        let Some((index, command)) = self.requests.poll_held_backend(
+        let Some((index, command)) = self.next_backend_command(
             resources.execution.client.now()?,
-            local_effect_open && (cleanup_command || resources.backend_commands_open),
+            resources.backend.delivery_pending(),
+            resources.backend_commands_open,
         )?
         else {
             return Ok(());

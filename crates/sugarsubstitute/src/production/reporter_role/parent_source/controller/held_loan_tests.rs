@@ -139,6 +139,13 @@ fn held_loan(case: Case) -> TestResult {
     assert!(matches!(alias.loan(), Err(ReporterSourceIssue::Busy)));
     assert_eq!(scope.snapshot().terminal_unobserved, 0);
     assert_eq!(scope.snapshot().reserved_bytes, CONTROLLER_BYTES + worker::REPORTER_CORE_BYTES);
+    // Terminal publication precedes supervisor context destruction. Keep this exact
+    // original reservation stable until the existing executor has actually joined.
+    let original_core_credit = match &relay.work {
+        RelayWork::Delivered(done) => done.memory.clone(),
+        _ => return Err("Actual original Core reservation missing".into()),
+    };
+    assert_eq!(original_core_credit.bytes(), worker::REPORTER_CORE_BYTES);
     if matches!(case, Case::Deferred | Case::Rejected | Case::Capacity | Case::RetryExpired) {
         assert!(matches!(relay.take_delivery()?, ReporterDelivery::Deferred));
         assert!(relay.retry_pending());
@@ -146,7 +153,7 @@ fn held_loan(case: Case) -> TestResult {
         assert_eq!(relay.worker_terminal(), None);
         assert_eq!(relay.original, Some(original));
         assert_eq!(relay.deadline(), Some(until));
-        assert_eq!(scope.snapshot().reserved_bytes, CONTROLLER_BYTES);
+        assert_eq!(scope.snapshot().reserved_bytes, CONTROLLER_BYTES + worker::REPORTER_CORE_BYTES);
         let before = jobs.allocate()?.get();
         for _ in 0..16 {
             assert_eq!(relay.retry(&client, &scope, &jobs), Err(ReporterSourceIssue::Busy));
@@ -164,7 +171,10 @@ fn held_loan(case: Case) -> TestResult {
             assert!(matches!(relay.work, RelayWork::Idle));
             assert_eq!(relay.original, Some(original));
             assert_eq!(scope.snapshot().running, 1);
-            assert_eq!(scope.snapshot().reserved_bytes, CONTROLLER_BYTES);
+            assert_eq!(
+                scope.snapshot().reserved_bytes,
+                CONTROLLER_BYTES + worker::REPORTER_CORE_BYTES
+            );
         }
     } else {
         if case == Case::Mismatched {
@@ -211,7 +221,7 @@ fn held_loan(case: Case) -> TestResult {
             assert_eq!(relay.worker_failure(), Some(&ReporterSourceIssue::Busy));
             assert_eq!(
                 scope.snapshot().reserved_bytes,
-                CONTROLLER_BYTES + worker::REPORTER_CORE_BYTES
+                CONTROLLER_BYTES + original_core_credit.bytes() + worker::REPORTER_CORE_BYTES
             );
         }
         Case::Rejected => {
@@ -230,7 +240,10 @@ fn held_loan(case: Case) -> TestResult {
             assert!(matches!(relay.take_delivery()?, ReporterDelivery::Pending));
             assert_eq!(relay.original, Some(original));
             assert_eq!(relay.deadline(), Some(until));
-            assert_eq!(scope.snapshot().reserved_bytes, CONTROLLER_BYTES);
+            assert_eq!(
+                scope.snapshot().reserved_bytes,
+                CONTROLLER_BYTES + worker::REPORTER_CORE_BYTES
+            );
             assert!(alias.loan()?.state()?.first.is_none());
         }
         Case::RetryExpired => {
@@ -246,7 +259,10 @@ fn held_loan(case: Case) -> TestResult {
             ));
             assert_eq!(relay.original, Some(original));
             assert_eq!(relay.deadline(), Some(until));
-            assert_eq!(scope.snapshot().reserved_bytes, CONTROLLER_BYTES);
+            assert_eq!(
+                scope.snapshot().reserved_bytes,
+                CONTROLLER_BYTES + worker::REPORTER_CORE_BYTES
+            );
             assert!(alias.loan()?.state()?.first.is_none());
         }
         Case::Capacity => {
@@ -275,7 +291,10 @@ fn held_loan(case: Case) -> TestResult {
             assert!(!relay.admission_retryable());
             assert_eq!(relay.original, Some(original));
             assert_eq!(relay.deadline(), Some(until));
-            assert_eq!(scope.snapshot().reserved_bytes, CONTROLLER_BYTES);
+            assert_eq!(
+                scope.snapshot().reserved_bytes,
+                CONTROLLER_BYTES + worker::REPORTER_CORE_BYTES
+            );
             for credit in &mut credits {
                 assert!(matches!(
                     terminal(&client, &wake, credit)?.outcome,
@@ -290,18 +309,26 @@ fn held_loan(case: Case) -> TestResult {
     drop(holder);
     drop(blocker);
     drop(relay);
+    drop(owner);
     let worker_retained = retained
         .as_ref()
         .is_some_and(|failure| matches!(failure, failure::ReporterSecondaryFailure::Worker { .. }));
     assert_eq!(
         scope.snapshot().reserved_bytes,
-        CONTROLLER_BYTES + if worker_retained { worker::REPORTER_CORE_BYTES } else { 0 }
+        CONTROLLER_BYTES
+            + original_core_credit.bytes()
+            + if worker_retained && case == Case::Deferred {
+                worker::REPORTER_CORE_BYTES
+            } else {
+                0
+            }
     );
     drop(retained);
+    assert_eq!(scope.snapshot().reserved_bytes, CONTROLLER_BYTES + original_core_credit.bytes());
+    drop(original_core_credit);
     assert_eq!(scope.snapshot().reserved_bytes, CONTROLLER_BYTES);
     drop(alias);
     assert_eq!(scope.snapshot().reserved_bytes, 0);
-    drop(owner);
     Ok(())
 }
 #[test]

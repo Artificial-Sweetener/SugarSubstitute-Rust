@@ -53,6 +53,9 @@ impl Write for Sink {
 }
 fn recorded(emit: impl FnOnce() -> Result<()>) -> Result<String> {
     let bytes = Arc::new(Mutex::new(Vec::new()));
+    // Keep shared first-registration interest independent of unsubscribed test threads.
+    // The pinned tracing-core fast path otherwise samples their empty default.
+    let _callsite_registry = tracing::Dispatch::new(tracing_subscriber::registry());
     let subscriber = tracing_subscriber::fmt()
         .with_writer(Sink(bytes.clone()))
         .without_time()
@@ -61,6 +64,30 @@ fn recorded(emit: impl FnOnce() -> Result<()>) -> Result<String> {
     tracing::subscriber::with_default(subscriber, emit)?;
     let bytes = bytes.lock().map_err(|_| "Trace fixture poisoned")?.clone();
     Ok(String::from_utf8(bytes)?)
+}
+/// Exercise one shared callsite through the actual fixture formatter and an empty dispatcher.
+fn capture_probe(marker: &str) {
+    tracing::error!(
+        operation = "reporter_receiving_capture_fixture",
+        marker,
+        "Scoped receiving capture probe"
+    );
+}
+#[test]
+fn recorded_capture_survives_unsubscribed_first_registration_of_its_actual_callsite() -> Result<()>
+{
+    let trace = recorded(|| {
+        tracing::dispatcher::with_default(&tracing::Dispatch::none(), || {
+            capture_probe("unsubscribed-first");
+        });
+        capture_probe("captured");
+        Ok(())
+    })?;
+    assert_eq!(trace.lines().count(), 1);
+    assert_eq!(trace.matches("operation=\"reporter_receiving_capture_fixture\"").count(), 1);
+    assert!(trace.contains("captured"));
+    assert!(!trace.contains("unsubscribed-first"));
+    Ok(())
 }
 #[test]
 fn reporter_secondary_transition_retains_exact_error_and_original_first_identity() -> Result<()> {

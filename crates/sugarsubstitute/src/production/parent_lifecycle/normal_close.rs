@@ -5,6 +5,25 @@ use super::ParentLifecycle;
 pub(crate) use sugarsubstitute_application::supervision::DesktopCloseRequest;
 
 impl ParentLifecycle {
+    /// Constrain authenticated cleanup controls to the original role transaction without changing their header.
+    pub(super) fn cleanup_control_deadline(
+        &self,
+        payload: &sugarsubstitute_supervision::lifecycle_protocol::DecodedPayload<'_>,
+        supplied: sugarsubstitute_contracts::execution::Moment,
+    ) -> sugarsubstitute_contracts::execution::Moment {
+        use sugarsubstitute_supervision::lifecycle_protocol::DecodedPayload;
+        if matches!(
+            payload,
+            DecodedPayload::MainRetired(_)
+                | DecodedPayload::Release(_)
+                | DecodedPayload::ExitIntent { .. }
+                | DecodedPayload::ExitCompleted(_)
+        ) {
+            self.cleanup.map_or(supplied, |budget| supplied.min(budget.settle_until))
+        } else {
+            supplied
+        }
+    }
     /// Preserve this role's accepted transaction when global cleanup has an earlier cutoff.
     /// This inert command argument neither renews the global deadline nor admits native cleanup.
     pub(crate) fn cleanup_budget(&self, global: super::ShutdownBudget) -> super::ShutdownBudget {

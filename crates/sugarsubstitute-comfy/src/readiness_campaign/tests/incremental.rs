@@ -222,3 +222,104 @@ fn single_phase_cohort_confirms_current_metadata_after_all_asset_bodies() -> Tes
     assert!(harness.campaign.take_readiness().is_none());
     harness.finish()
 }
+
+#[test]
+fn actual_zero_asset_phase_waits_for_original_cutoff_without_resubmission() -> TestResult {
+    let mut h = Harness::with_asset_count(132)?;
+    h.set_time(28_500_000_000);
+    let external = h.submit(Behavior::Success, Some("get"), false, None)?;
+    external.entered()?;
+    h.set_time(29_000_000_000);
+    external.release();
+    assert_eq!(h.completion()?, CampaignStep::Waiting);
+    let charge = h.retained_bytes();
+    assert!(charge > 0);
+    for now in [29_000_000_000, 29_500_000_000, 29_999_999_999] {
+        h.set_time(now);
+        for _ in 0..32 {
+            assert_eq!(h.campaign.consume(&empty_batch(), h.now())?, CampaignStep::Waiting);
+            assert!(!h.campaign.needs_continuation(h.now())?);
+            assert_eq!(h.campaign.next_deadline(), Some(Moment::from_nanos(30_000_000_000)));
+            assert!(h.campaign.failure().is_none());
+            assert!(h.campaign.take_readiness().is_none());
+            assert_eq!(h.retained_bytes(), charge);
+        }
+    }
+    assert_eq!(
+        *external.requests.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
+        ["/system_stats", "/extensions"]
+    );
+    h.set_time(30_000_000_000);
+    assert_eq!(h.campaign.consume(&empty_batch(), h.now())?, CampaignStep::Failed);
+    assert!(matches!(h.campaign.failure(), Some(CampaignError::Budget(ProbeBudgetError::Expired))));
+    assert_eq!(h.campaign.budget.until(), Moment::from_nanos(30_000_000_000));
+    h.finish()
+}
+
+#[test]
+fn partial_asset_headroom_has_exact_admission_boundary_and_original_wait() -> TestResult {
+    let mut h = Harness::with_asset_count(132)?;
+    let external = h.submit(Behavior::Success, None, false, None)?;
+    assert_eq!(h.completion()?, CampaignStep::NeedsContinuation);
+    let before = external.requests.lock().unwrap_or_else(std::sync::PoisonError::into_inner).len();
+    assert_eq!(before, 66);
+    h.set_time(28_999_999_999);
+    assert!(h.campaign.needs_continuation(h.now())?);
+    assert_eq!(h.campaign.consume(&empty_batch(), h.now())?, CampaignStep::NeedsContinuation);
+    assert_eq!(h.campaign.next_deadline(), Some(h.now()));
+    h.set_time(29_000_000_000);
+    assert!(!h.campaign.needs_continuation(h.now())?);
+    assert_eq!(h.campaign.consume(&empty_batch(), h.now())?, CampaignStep::Waiting);
+    assert_eq!(h.campaign.next_deadline(), Some(Moment::from_nanos(30_000_000_000)));
+    assert!(matches!(h.continue_probe(), Err(error)
+        if error.downcast_ref::<CampaignError>().is_some_and(|cause|
+            matches!(cause, CampaignError::Rejected(CampaignRejection::WrongPhase)))));
+    assert_eq!(
+        external.requests.lock().unwrap_or_else(std::sync::PoisonError::into_inner).len(),
+        before
+    );
+    assert!(h.campaign.failure().is_none());
+    h.set_time(30_000_000_000);
+    assert_eq!(h.campaign.consume(&empty_batch(), h.now())?, CampaignStep::Failed);
+    h.finish()
+}
+
+#[test]
+fn final_metadata_only_phase_can_finish_below_asset_headroom() -> TestResult {
+    let mut h = Harness::with_asset_count(128)?;
+    let external = h.submit(Behavior::Success, None, false, None)?;
+    assert_eq!(h.completion()?, CampaignStep::NeedsContinuation);
+    h.continue_probe()?;
+    assert_eq!(h.completion()?, CampaignStep::NeedsContinuation);
+    let before = external.requests.lock().unwrap_or_else(std::sync::PoisonError::into_inner).len();
+    assert_eq!(before, 130);
+    h.set_time(29_500_000_000);
+    assert!(h.campaign.needs_continuation(h.now())?);
+    h.continue_probe()?;
+    assert_eq!(h.completion()?, CampaignStep::Ready);
+    let requests = external.requests.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    assert_eq!(&requests[before..], ["/system_stats", "/extensions"]);
+    drop(requests);
+    let proof = h.campaign.take_readiness().ok_or("Missing actual final confirmation")?;
+    assert_eq!(proof.source().manifest().assets().len(), 128);
+    proof.validate_current()?;
+    assert_eq!(h.campaign.budget.until(), Moment::from_nanos(30_000_000_000));
+    drop(proof);
+    h.finish()
+}
+
+#[test]
+fn requested_short_continuation_cannot_admit_zero_asset_work() -> TestResult {
+    let mut h = Harness::with_asset_count(132)?;
+    h.submit(Behavior::Success, None, false, None)?;
+    assert_eq!(h.completion()?, CampaignStep::NeedsContinuation);
+    let spec = h.spec(Moment::from_nanos(1_000_000_000))?;
+    assert!(matches!(
+        h.campaign.submit_continuation(&h.client, &h.attempt, spec),
+        Err(CampaignError::Rejected(CampaignRejection::InvalidSpecification))
+    ));
+    assert!(h.campaign.needs_continuation(h.now())?);
+    h.continue_probe()?;
+    assert_eq!(h.completion()?, CampaignStep::NeedsContinuation);
+    h.finish()
+}

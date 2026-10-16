@@ -106,15 +106,7 @@ impl ParentLifecycle {
         ) {
             until = until.min(self.main.snapshot().frontend_until.ok_or(ParentError::WrongPhase)?);
         }
-        if matches!(
-            decoded.payload,
-            DecodedPayload::MainRetired(_)
-                | DecodedPayload::ExitIntent { .. }
-                | DecodedPayload::ExitCompleted(_)
-        ) && let Some(budget) = self.cleanup
-        {
-            until = until.min(budget.settle_until);
-        }
+        until = self.cleanup_control_deadline(&decoded.payload, until);
         if matches!(decoded.payload, DecodedPayload::OutputPull { .. }) && self.lease.is_none() {
             until = until.min(self.acquisition.as_ref().ok_or(ParentError::WrongPhase)?.original);
             if resources.execution.client.now()? >= until {

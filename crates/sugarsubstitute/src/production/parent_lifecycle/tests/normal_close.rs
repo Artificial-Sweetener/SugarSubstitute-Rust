@@ -288,3 +288,6 @@ fn accepted_whole_close_without_final_completion_arms_original_role_grace_and_pr
     assert!(peer.shutdown().is_none());
     Ok(())
 }
+
+#[path = "normal_close/release_admission.rs"]
+mod release_admission;

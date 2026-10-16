@@ -239,3 +239,6 @@ fn actual_runner_retains_schema_failure_and_joins_without_environment_capture()
 
 #[path = "scope_admission_tests.rs"]
 mod scope_admission;
+
+#[path = "retained_child_tests.rs"]
+mod retained_child;

@@ -116,6 +116,7 @@ impl<C: EntryActivation> EntryRunner<C> {
                     }
                 }
             }
+            self.observe_retained_child_failure();
             if self.failure.is_some() && !self.failure_reported {
                 self.failure_reported = true;
                 return Err("Production ownership failure remains retained".into());
@@ -139,6 +140,9 @@ impl<C: EntryActivation> EntryRunner<C> {
             if step == HeadlessStep::Shutdown {
                 self.request_shutdown()?;
             }
+        }
+        if self.observe_retained_child_failure() {
+            return Err("Actual child owner failed with retained original cause".into());
         }
         if !self.initial_completed
             && self.client()?.now()? >= self.original.ok_or("Original setup missing")?.until()

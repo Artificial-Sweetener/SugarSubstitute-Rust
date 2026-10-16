@@ -5,6 +5,8 @@ use super::*;
 
 impl ReadinessCampaign {
     /// Observe qualified partial progress without granting readiness or fresh input authority.
+    /// Pending assets retain their existing retirement reserve; insufficient original
+    /// time waits for the original cutoff rather than admitting an empty phase.
     /// # Errors
     /// Rejects clock regression or expiry of the unchanged original campaign.
     pub fn needs_continuation(&self, now: Moment) -> Result<bool, CampaignError> {
@@ -12,14 +14,15 @@ impl ReadinessCampaign {
         if self.terminal || self.ready || self.attempt.is_some() || self.cleanup.is_some() {
             return Ok(false);
         }
-        self.budget.probe_until(now).map_err(CampaignError::Budget)?;
-        Ok(self.owner.as_ref().is_some_and(ReadinessProbeOwner::continuation_ready))
+        let until = self.budget.probe_until(now).map_err(CampaignError::Budget)?;
+        Ok(self.owner.as_ref().is_some_and(|owner| owner.continuation_fits(now, until)))
     }
 
     /// Submit a finite phase against the identical source/listener/claim/cursor.
     /// Each actual phase remains bounded by two seconds and original campaign time.
     /// # Errors
-    /// Rejects unavailable/foreign/cancelled scope, late or excessive deadlines;
+    /// Rejects unavailable/foreign/cancelled scope, late or excessive deadlines,
+    /// and phases too short to progress the retained asset cohort;
     /// preserves the same owner and closes admission on execution failure.
     pub fn submit_continuation(
         &mut self,
@@ -37,7 +40,11 @@ impl ReadinessCampaign {
         }
         self.validate_scope(scope).inspect_err(|_| self.terminal = true)?;
         let until = self.budget.probe_until(now).map_err(CampaignError::Budget)?;
-        if spec.deadline.is_none_or(|at| at <= now || at > until) {
+        if spec.deadline.is_none_or(|at| {
+            at <= now
+                || at > until
+                || !self.owner.as_ref().is_some_and(|owner| owner.continuation_fits(now, at))
+        }) {
             return Err(CampaignError::Rejected(CampaignRejection::InvalidSpecification));
         }
         let owner =
