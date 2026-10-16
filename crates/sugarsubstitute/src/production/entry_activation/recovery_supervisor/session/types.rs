@@ -178,7 +178,8 @@ pub(in crate::production::entry_activation::recovery_supervisor) struct State {
     pub(in crate::production::entry_activation::recovery_supervisor) desktop_exit_advisory:
         Option<(RecoveryProcessIdentity, u32)>,
     pub(in crate::production::entry_activation::recovery_supervisor) enrolled_reply: bool,
-    pub(in crate::production::entry_activation::recovery_supervisor) subordinate_retired: bool,
+    pub(in crate::production::entry_activation::recovery_supervisor) subordinate_retired:
+        super::framing::RetirementReceipt,
     pub(in crate::production::entry_activation::recovery_supervisor) closing: Option<Closing>,
     pub(in crate::production::entry_activation::recovery_supervisor) pipe_terminal:
         Option<JobCompletion<RecoveryPipeReport, LifecyclePipeFailure>>,

@@ -169,7 +169,7 @@ impl RootRecoverySession {
                 desktop_advisory: None,
                 desktop_exit_advisory: None,
                 enrolled_reply: false,
-                subordinate_retired: false,
+                subordinate_retired: framing::RetirementReceipt::default(),
                 closing: None,
                 pipe_terminal: None,
                 pipe_verified: false,

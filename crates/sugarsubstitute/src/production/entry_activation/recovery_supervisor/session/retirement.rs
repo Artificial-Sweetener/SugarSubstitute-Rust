@@ -55,7 +55,7 @@ impl State {
             || self.failures.first.is_some()
             || self.peer.is_none()
             || self.plan.stage != Stage::Active
-            || (self.subordinate_retired && both_exited);
+            || (self.subordinate_retired.received() && both_exited);
         if !stop {
             return;
         }

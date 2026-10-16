@@ -3,6 +3,35 @@
 //! Advance only fully completed native writes, retaining one pending admission.
 use super::*;
 use std::os::windows::ffi::OsStrExt;
+/// Passive receive phase only: authenticated observation never substitutes native watch retirement.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(super) enum RetirementReceipt {
+    #[default]
+    Awaiting,
+    Received,
+}
+impl RetirementReceipt {
+    /// Called after the existing same-peer/key/sequence decoder and close-order checks.
+    pub(super) fn receive(&mut self, closing: bool) -> Result<(), SessionCode> {
+        if !closing || *self == Self::Received {
+            return Err(SessionCode::Order);
+        }
+        *self = Self::Received;
+        Ok(())
+    }
+    /// A final accepted message ends receive admission while independent owners keep retiring.
+    pub(super) const fn read_open(self) -> bool {
+        matches!(self, Self::Awaiting)
+    }
+    /// Report final protocol receipt independently of physical worker retirement.
+    pub(super) const fn received(self) -> bool {
+        matches!(self, Self::Received)
+    }
+    /// Invoke the existing native read admission only while the final message remains unreceived.
+    pub(super) fn admit_read<E>(self, effect: impl FnOnce() -> Result<(), E>) -> Result<(), E> {
+        if self.read_open() { effect() } else { Ok(()) }
+    }
+}
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(super) enum Stage {
     #[default]
@@ -333,22 +362,28 @@ impl State {
         if self.desktop_advisory.is_some() && !self.enrolled_reply && self.closing.is_none() {
             return Ok(());
         }
-        let operation = self.next_operation()?;
-        if self.peer.is_some() && (self.enrolled_reply || self.closing.is_some()) {
-            self.pipe.control().read_passive(operation).map_err(SessionCause::Pipe)?;
-        } else if self.closing.is_none() && self.failures.first.is_none() {
-            self.pipe
-                .control()
-                .read(operation, self.grant.original_budget().until())
-                .map_err(SessionCause::Pipe)?;
-        } else {
-            return Ok(());
-        }
-        self.read = Some(operation);
-        Ok(())
+        self.subordinate_retired.admit_read(|| {
+            let operation = self.next_operation()?;
+            if self.peer.is_some() && (self.enrolled_reply || self.closing.is_some()) {
+                self.pipe.control().read_passive(operation).map_err(SessionCause::Pipe)?;
+            } else if self.closing.is_none() && self.failures.first.is_none() {
+                self.pipe
+                    .control()
+                    .read(operation, self.grant.original_budget().until())
+                    .map_err(SessionCause::Pipe)?;
+            } else {
+                return Ok(());
+            }
+            self.read = Some(operation);
+            Ok(())
+        })
     }
 }
 
 #[cfg(test)]
 #[path = "framing_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "final_receive_tests.rs"]
+mod final_receive_tests;

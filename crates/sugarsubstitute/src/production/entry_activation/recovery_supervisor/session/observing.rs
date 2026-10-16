@@ -58,8 +58,15 @@ impl State {
                 {
                     return Err(SessionCause::Protocol(SessionCode::Binding));
                 }
+                let retired = matches!(&frame.command, RecoveryCommand::Retired);
                 self.command(frame.command)?;
                 self.sequence = frame.sequence;
+                if retired {
+                    tracing::info!(operation="recovery_supervisor_retired_received", key=?self.grant.key(),
+                        sequence=frame.sequence, native_operation=?operation,
+                        stop_written=self.closing.as_ref().is_some_and(|close| close.sent),
+                        "Exact authenticated recovery Retired command accepted; receive admission ended");
+                }
             }
             RecoveryPipeObservation::WriteIssued { operation, .. } => {
                 self.plan.issued(operation)?
@@ -77,6 +84,9 @@ impl State {
                     Role::Stop => {
                         if let Some(close) = &mut self.closing {
                             close.sent = true;
+                            tracing::info!(operation="recovery_supervisor_stop_written", key=?self.grant.key(),
+                                native_operation=?operation, bytes, original_until=?close.until,
+                                "Original recovery Stop native write completion consumed");
                         }
                     }
                     _ => {}
@@ -150,10 +160,9 @@ impl State {
                 self.desktop_exit_advisory = Some((process, status));
             }
             RecoveryCommand::Retired => {
-                if self.closing.is_none() || self.subordinate_retired {
-                    return Err(SessionCause::Protocol(SessionCode::Order));
-                }
-                self.subordinate_retired = true;
+                self.subordinate_retired
+                    .receive(self.closing.is_some())
+                    .map_err(SessionCause::Protocol)?;
             }
             RecoveryCommand::Failed(code) => return Err(SessionCause::Remote(code)),
             _ => return Err(SessionCause::Protocol(SessionCode::Order)),
