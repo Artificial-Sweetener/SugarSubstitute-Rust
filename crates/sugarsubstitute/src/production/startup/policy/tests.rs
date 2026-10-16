@@ -368,15 +368,19 @@ fn partial_start_close_without_session_routes_only_matching_native_retirement() 
 }
 
 #[test]
-fn actual_closing_splash_retirement_is_forwarded_without_revealing_or_advancing_cancelled_session()
+fn actual_closing_splash_retirement_is_consumed_without_revealing_or_advancing_cancelled_session()
 -> TestResult {
     let (mut p, mut session) = policy(false)?;
     backend_ready(&mut p, &mut session)?;
     assert!(matches!(p.close(Some(&mut session))?, Some(StartupEffect::CleanupConnection { .. })));
     let launch = session.launch();
+    assert!(matches!(
+        p.native(DesktopStartupObservation::SplashRetired(launch), Some(&mut session))?,
+        StartupRoute::None
+    ));
     assert!(
-        matches!(p.native(DesktopStartupObservation::SplashRetired(launch), Some(&mut session))?,
-        StartupRoute::Native(DesktopStartupObservation::SplashRetired(actual)) if actual == launch)
+        p.native(DesktopStartupObservation::SplashRetired(LaunchId::new(2)?), Some(&mut session))
+            .is_err()
     );
     assert_eq!(session.phase(), StartupPhase::Cancelling);
     Ok(())
@@ -427,3 +431,6 @@ fn qualification_capture_kind_cannot_grant_startup_policy_and_retains_original_c
     assert!(!owner.closing);
     Ok(())
 }
+
+#[path = "child_routing_tests.rs"]
+mod child_routing_tests;

@@ -2,8 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Test actual local owner admission and native absence using deterministic execution time.
 use super::*;
-use crate::production::child::frontend_deadline::tests::child;
 use crate::production::child::requests::RequestError;
+use crate::production::child::test_support::child;
 use std::sync::atomic::Ordering;
 #[test]
 fn local_acquisition_retirement_requires_actual_current_absence_and_never_synthesizes_remote_ack()

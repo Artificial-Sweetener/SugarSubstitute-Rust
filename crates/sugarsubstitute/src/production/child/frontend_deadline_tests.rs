@@ -2,77 +2,12 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise actual expiry admission and bounded custody with an injected execution clock.
 use super::*;
-use std::sync::{
-    Arc,
-    atomic::{AtomicU64, Ordering},
-};
+use crate::production::child::test_support::child;
+use std::sync::atomic::Ordering;
 use sugarsubstitute_application::startup::{SessionFailure, StartupSession};
 use sugarsubstitute_contracts::configuration::{
     ConnectionConfiguration, LoopbackOrigin, Presentation, ProfileId, StartupConfiguration, Theme,
 };
-pub(in crate::production::child) struct Frozen(pub(in crate::production::child) AtomicU64);
-impl Clock for Frozen {
-    fn now(&self) -> Moment {
-        Moment::from_nanos(self.0.load(Ordering::SeqCst))
-    }
-    fn sleep_until(&self, _: Moment) -> WaitFuture {
-        Box::pin(std::future::pending())
-    }
-}
-struct Wake;
-impl CompletionWake for Wake {
-    fn wake(&self) -> std::result::Result<(), ExecutionError> {
-        Ok(())
-    }
-}
-pub(in crate::production::child) fn child()
--> Result<(ProductionChild, sugarsubstitute_execution::ExecutionOwner, Arc<Frozen>)> {
-    let run = RunKey {
-        owner: CoordinatorKey {
-            namespace: NamespaceId::new([7; 32]),
-            epoch: CoordinatorEpoch::new([8; 16])?,
-        },
-        instance: InstanceId::new(1)?,
-        generation: RunGeneration::new(1)?,
-    };
-    let clock = Arc::new(Frozen(AtomicU64::new(0)));
-    let owner = sugarsubstitute_execution::ExecutionOwner::new(clock.clone(), Arc::new(Wake))?;
-    let identity = (LaunchId::new(1)?, Generation::new(1)?);
-    let bootstrap = ChildBootstrap::new(
-        channel::ChildChannel::new(
-            InheritedLifecycleBootstrap::new(1)?,
-            LifecyclePipeDeadline::new(100, 100)?,
-            run,
-        ),
-        capture::ChildCapture::new(Box::new(test_support::InertDriver(Arc::default()))),
-        ScopeSpec { id: ScopeId::new(3)?, deadline: None },
-        identity,
-    )?;
-    let mut child = ProductionChild::assemble(
-        bootstrap,
-        run,
-        identity,
-        MainWindowSettings {
-            recovery: sugarsubstitute_desktop::MainRecoveryLabels {
-                retry: sugarsubstitute_contracts::localization::messages("en").retry,
-                retry_ready: sugarsubstitute_contracts::localization::messages("en").retry_ready,
-            },
-            logical_width: 1280,
-            logical_height: 720,
-            dark: true,
-            labels: sugarsubstitute_desktop::MainCaptionLabels {
-                minimize: "min",
-                maximize: "max",
-                restore: "restore",
-                close: "close",
-            },
-        },
-        crate::diagnostics::DiagnosticHealth::fixture(),
-    );
-    child.client = Some(owner.client());
-    child.frontend_budget = Some(FrontendBudget::new(Moment::from_nanos(0))?);
-    Ok((child, owner, clock))
-}
 fn loading(child: &ProductionChild) -> Result<StartupSession> {
     let mut s = StartupSession::new(
         child.identity.launch,

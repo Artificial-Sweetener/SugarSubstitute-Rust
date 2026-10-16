@@ -42,7 +42,7 @@ mod retirement;
 pub(in crate::production) use retirement::ShutdownInitiation;
 #[cfg(test)]
 #[path = "child/test_support.rs"]
-mod test_support;
+pub(in crate::production) mod test_support;
 use crate::{
     job_sequence::JobSequence,
     production_output::{OutputOwner, OutputSnapshot},

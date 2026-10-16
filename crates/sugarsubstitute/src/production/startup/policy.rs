@@ -109,6 +109,8 @@ impl StartupPolicy {
         })
     }
     /// Route full-key native observations; numeric folder/PID facts stay unprivileged.
+    /// Closing consumes matching presentation facts; full native retirement
+    /// still reaches the child owner that holds shutdown settlement.
     /// # Errors
     /// Rejects foreign identity or application ordering before granting any UI command.
     pub(super) fn native(
@@ -128,6 +130,11 @@ impl StartupPolicy {
         if self.closing {
             return Ok(match observation {
                 DesktopStartupObservation::CloseRequested => StartupRoute::Close,
+                DesktopStartupObservation::SplashPresented(_)
+                | DesktopStartupObservation::SplashRetired(_)
+                | DesktopStartupObservation::NavigationStarted(_)
+                | DesktopStartupObservation::FrontendReceipt { .. }
+                | DesktopStartupObservation::MainRevealed(_) => StartupRoute::None,
                 other => StartupRoute::Native(other),
             });
         }

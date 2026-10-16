@@ -4,7 +4,7 @@
 use super::*;
 use crate::production::child::{
     configuration::tests::Rig,
-    frontend_deadline::tests::{Frozen, child},
+    test_support::{Frozen, child},
 };
 use std::sync::{Arc, atomic::Ordering};
 
