@@ -70,6 +70,11 @@ function ensureThemeStyles(document) {
             .flatMap((style) => [true, false].map((dark) => `[data-sc-theme="${style}"][data-sc-color-scheme="${dark ? 'dark' : 'light'}"]{${visualStyleTokens(style, dark)}}`))
             .join('\n') +
             `
+    .sc-context-menu[data-sc-theme="spectrum"] {
+      padding:4px; border-width:1px; border-style:solid; border-color:var(--sc-border);
+      border-radius:var(--sc-control-radius); background:var(--sc-surface-secondary);
+      color:var(--sc-text); box-shadow:var(--sc-shadow-medium);
+    }
     .sc-substitute-frame[data-sc-theme="spectrum"] {
       background:var(--sc-native-frame-background,var(--sc-surface-secondary));
       --sc-frame-muted:var(--sc-native-frame-foreground,var(--sc-text-secondary));
