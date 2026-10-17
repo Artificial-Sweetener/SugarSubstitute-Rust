@@ -20,7 +20,7 @@ import { fluentAccentColorTokens } from './FluentThemeRuntime.js';
 const scopes =
   ':is(#graph-canvas-container, [data-sc-style-theme-root], [data-sc-style-surface], [data-sc-style-popup], [data-sc-floating-surface], [data-sc-modal-appearance], [data-sc-model-appearance], [id^="SugarCubes."], .sugarcubes-cube-face, .sugarcubes-workflow-masonry, .sc-cube-stack-host, .sc-overrides-toolbar, .sugarcubes-settings-row)';
 
-/** Override local Microsoft themes without overwriting host tokens outside owned roots. */
+/** Bridge the accepted accent into scoped provider tokens without overwriting unrelated host themes. */
 export function accentThemeCss(color: string, dark: boolean): string {
   const tokens = fluentAccentColorTokens(color, dark);
   const declarations = Object.entries(tokens)
@@ -45,6 +45,7 @@ export function accentThemeCss(color: string, dark: boolean): string {
     --sc-brand-indicator:var(--sc-accent-indicator) !important;
     --sc-brand-indicator-hover:var(--sc-accent-hover) !important;
     --sc-focus-ring:var(--sc-accent-indicator) !important;
+    --spectrum-focus-indicator-color:var(--sc-accent-indicator) !important;
     --sc-text-on-accent:var(--sc-accent-foreground) !important;
     --spectrum-accent-color-700:var(--sc-accent-indicator) !important;
     --spectrum-accent-color-800:var(--sc-accent-indicator) !important;
