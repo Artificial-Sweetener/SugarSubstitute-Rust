@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Compose Fluent advanced disclosure for native graph and stable projected mounts. */
+/** Compose themed advanced disclosure for native graph and stable projected mounts. */
 import type { NativeCardBoundary } from './NativeCardAdapter.js';
 import { NativeGraphAdvancedDisclosure } from './NativeGraphAdvancedDisclosure.js';
 import { NativeProjectedAdvancedDisclosure } from './NativeProjectedAdvancedDisclosure.js';

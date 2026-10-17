@@ -101,6 +101,11 @@ class SpectrumTabGroup extends Tabs {
 
 /** Expose the real text input through the finder control contract. */
 class SpectrumFinderInput extends Textfield {
+  /** Accept native and declarative focus requests before the first connected render. */
+  override focus(): void {
+    this.focusInput(false);
+  }
+
   /** Wait for Adobe's connected render before focusing its real input. */
   focusInput(selectAll: boolean): void {
     void this.updateComplete

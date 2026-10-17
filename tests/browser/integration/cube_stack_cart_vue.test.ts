@@ -14,8 +14,10 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove the actual Vue cart renders safe text and preserves draft controls across search and reordering. */
-import { afterEach, expect, jest, test } from '@jest/globals';
+import { afterAll, beforeAll, afterEach, expect, jest, test } from '@jest/globals';
 import { nextTick } from 'vue';
+import { Textfield } from '@spectrum-web-components/textfield/src/Textfield.js';
+import type { FinderInputControl } from '../../../frontend/comfyui/ui/surface/appearance/FinderControls.js';
 import { createFallbackIconModel } from '../../../frontend/comfyui/ui/core/CubeFallbackIconRenderer.js';
 import { mountCubeStackCart } from '../../../frontend/comfyui/ui/picker/vue/CubeStackCartRuntime.js';
 import type {
@@ -25,13 +27,36 @@ import type {
 } from '../../../frontend/comfyui/ui/picker/CubeStackCartView.js';
 
 const releases: (() => void)[] = [];
+const resizeObserverDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'ResizeObserver');
+
+/** Supply the external browser geometry API while cart proofs exercise real Adobe input behavior. */
+class CartResizeObserver implements ResizeObserver {
+  /** Leave geometry delivery to manual browser proofs. */
+  observe(_target: Element): void {}
+  /** Release a target without manufacturing geometry changes. */
+  unobserve(_target: Element): void {}
+  /** Release the fixture observer. */
+  disconnect(): void {}
+}
+
+beforeAll(() => {
+  Object.defineProperty(globalThis, 'ResizeObserver', {
+    configurable: true,
+    value: CartResizeObserver,
+  });
+});
+afterAll(() => {
+  if (resizeObserverDescriptor)
+    Object.defineProperty(globalThis, 'ResizeObserver', resizeObserverDescriptor);
+  else Reflect.deleteProperty(globalThis, 'ResizeObserver');
+});
 afterEach(() => {
   for (const release of releases.splice(0)) release();
   document.body.replaceChildren();
   jest.restoreAllMocks();
 });
 
-test.each(['fluent', 'comfy'] as const)(
+test.each(['fluent', 'comfy', 'spectrum'] as const)(
   'shows the same literal model overlay in the %s library and staged cart',
   async (appearance) => {
     const f = fixture();
@@ -131,8 +156,30 @@ test('switches appearance while retaining captured rows and search value', async
   f.view.update({ ...f.state, appearance: 'fluent' });
   await nextTick();
   expect(f.cartButton(0)).toBe(button);
-  expect(f.element.querySelector('fluent-text-input')?.getAttribute('value')).toBe('literal');
+  expect(f.element.querySelector<FinderInputControl>('fluent-text-input')?.value).toBe('literal');
   expect(f.element.querySelector('.sc-cube-stack')?.getAttribute('data-appearance')).toBe('fluent');
+  f.view.update({ ...f.state, appearance: 'spectrum' });
+  await nextTick();
+  const spectrum = f.element.querySelector('sc-spectrum-search');
+  if (!(spectrum instanceof Textfield))
+    throw new TypeError('Expected the real Adobe search field.');
+  spectrum.focus();
+  await spectrum.updateComplete;
+  await Promise.resolve();
+  expect(spectrum.value).toBe('literal');
+  expect(spectrum.shadowRoot?.querySelector('input')?.getAttribute('aria-label')).toBe(
+    'Search cubes',
+  );
+  expect(document.activeElement).toBe(spectrum);
+  expect(f.cartButton(0)).toBe(button);
+  spectrum.value = 'missing';
+  spectrum.dispatchEvent(new Event('input', { bubbles: true }));
+  await nextTick();
+  expect(f.element.textContent).toContain('No cubes found.');
+  f.view.update({ ...f.state, appearance: 'spectrum', pending: true });
+  await nextTick();
+  expect(f.element.querySelector('sc-spectrum-search')).toBe(spectrum);
+  expect(spectrum.value).toBe('missing');
 });
 
 /** Bind real Vue applications while mocking only externally owned draft commands and canvas drawing. */

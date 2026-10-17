@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Follow the host's Fluent preference and theme without replacing live picker state. */
+/** Follow the host's themed preference and theme without replacing live picker state. */
 import type { VisualStyle } from '../surface/appearance/VisualStyle.js';
 import { isRecord } from '../types/common.js';
 import {
@@ -34,7 +34,7 @@ export class ModelPickerAppearance {
   #active = false;
   #dark = true;
 
-  /** Bind appearance to the same persisted preference as native Fluent cards. */
+  /** Bind appearance to the same persisted preference as native themed cards. */
   constructor(
     documentRef: Document,
     private readonly app: unknown,
@@ -113,7 +113,7 @@ export class ModelPickerAppearance {
     for (const surface of this.#surfaces) this.#apply(surface);
   };
 
-  /** Apply Microsoft tokens only to Fluent surfaces; native controls inherit Comfy tokens. */
+  /** Apply selected design-system tokens only to styled surfaces; native controls inherit Comfy tokens. */
   #apply(surface: HTMLElement): void {
     const style = this.#visualStyle();
     surface.dataset.scModelAppearance = style === 'comfy' ? 'native' : style;

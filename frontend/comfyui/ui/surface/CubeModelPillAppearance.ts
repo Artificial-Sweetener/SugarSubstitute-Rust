@@ -30,7 +30,7 @@ const foregroundTokens = [
 const fallbackBackground = '#60cdff';
 const fallbackForeground = '#171b20';
 
-/** Follow the active Fluent or host accent for every DOM pill. */
+/** Follow the active themed or host accent for every DOM pill. */
 export const CUBE_MODEL_PILL_BACKGROUND = tokenFallback(backgroundTokens, fallbackBackground);
 /** Resolve the shared readable foreground before the host's default letterform treatment. */
 export const CUBE_MODEL_PILL_FOREGROUND = tokenFallback(foregroundTokens, fallbackForeground);

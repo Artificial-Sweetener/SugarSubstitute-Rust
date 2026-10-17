@@ -30,7 +30,7 @@ export class NativeSeedMenuHost {
     #popup = null;
     #row = null;
     #closing = false;
-    /** Resolve native fields at their explicit interaction boundary, independently of Fluent styling. */
+    /** Resolve native fields at their explicit interaction boundary, independently of themed styling. */
     constructor(app, document, reuse, reportError) {
         this.document = document;
         this.reportError = reportError;

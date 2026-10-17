@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Own the Fluent-wide native suppression and floating scrollbar presentation. */
+/** Own the themed-wide native suppression and floating scrollbar presentation. */
 export function nativeScrollbarCss() {
     return `
     * { scrollbar-width:none!important; scrollbar-gutter:auto!important; }

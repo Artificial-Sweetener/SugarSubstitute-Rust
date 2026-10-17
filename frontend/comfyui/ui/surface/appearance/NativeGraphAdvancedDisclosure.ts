@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Adapt native advanced-field disclosure to the shared Fluent accordion motion. */
+/** Adapt native advanced-field disclosure to the shared themed accordion motion. */
 import { CardDisclosureMotion } from '../motion/CardDisclosureMotion.js';
 import type { NativeCardBoundary } from './NativeCardAdapter.js';
 import { NATIVE_NODE_CARD_DISPOSE_EVENT } from '../NativeNodeCardRenderer.js';

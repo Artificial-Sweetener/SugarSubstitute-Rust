@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Render Fluent choice rows with the selected row aligned over its canvas control. */
+/** Render themed choice rows with the selected row aligned over its canvas control. */
 
 import { defineComponent, h, nextTick, onBeforeUnmount, ref, Teleport, type PropType } from 'vue';
 import { FloatingSurface } from '../../../menus/FloatingSurface.js';

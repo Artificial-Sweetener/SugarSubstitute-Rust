@@ -45,7 +45,7 @@ export class NativeBooleanSegments {
   readonly #bindings = new Map<HTMLElement, SegmentBinding>();
   readonly #createControls: (documentRef: Document) => BooleanSegmentsControls;
 
-  /** Receive the official Fluent control at the third-party boundary. */
+  /** Receive the official themed control at the third-party boundary. */
   constructor(createControls: (documentRef: Document) => BooleanSegmentsControls) {
     this.#createControls = createControls;
   }
@@ -77,7 +77,7 @@ export class NativeBooleanSegments {
     }
   }
 
-  /** Restore the host's current controls when Fluent appearance ends. */
+  /** Restore the host's current controls when themed appearance ends. */
   clear(): void {
     for (const binding of this.#bindings.values()) binding.release();
     this.#bindings.clear();

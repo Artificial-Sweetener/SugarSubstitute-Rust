@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Define SugarCubes settings organization independently of native and Fluent control rendering. */
+/** Define SugarCubes settings organization independently of native and themed control rendering. */
 export const sugarCubesSettingsSections = {
   appearance: { label: 'Appearance', priority: 1000 },
   stack: { label: 'Cube stack', priority: 900 },

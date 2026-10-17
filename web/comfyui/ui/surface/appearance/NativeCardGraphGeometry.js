@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Reconcile native socket caches after a graph card first receives Fluent layout styling. */
+/** Reconcile native socket caches after a graph card first receives themed layout styling. */
 import { loadComfyNativeSlotLayoutSync } from '../ComfyRuntimeModuleLoader.js';
 /** Coalesce initial graph styling without rebuilding inventory or responding to popup activity. */
 export class NativeCardGraphGeometry {

@@ -13,13 +13,13 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Render server-owned settings without forcing Fluent presentation into native Comfy pages. */
+/** Render server-owned settings without forcing themed presentation into native Comfy pages. */
 export interface SettingsCheckbox extends HTMLElement {
   checked: boolean;
   disabled?: boolean;
 }
 
-/** Let the containing settings context choose native or Fluent control tokens. */
+/** Let the containing settings context choose native or themed control tokens. */
 export function createSettingsCheckbox(document: Document): HTMLInputElement {
   const input = document.createElement('input');
   input.type = 'checkbox';

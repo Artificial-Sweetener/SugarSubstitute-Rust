@@ -15,12 +15,12 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Theme only native dropdown portals linked to identified standard settings controls. */
 import { applyOwnedTheme } from '../surface/appearance/ThemeService.js';
-/** Preserve native popup identity and isolate bespoke plugin menus from Fluent control styling. */
+/** Preserve native popup identity and isolate bespoke plugin menus from themed control styling. */
 export class SettingsPopupTheme {
     #owned = new Set();
     #linked = new Set();
     /** Associate one portal with its native aria-controls anchor instead of claiming all listboxes. */
-    reconcile(overlay, roots, fluent, dark) {
+    reconcile(overlay, roots, styled, dark) {
         const list = overlay.querySelector('[role="listbox"]');
         const linked = !!list?.id &&
             [...roots].some((root) => [...root.querySelectorAll('[data-sc-setting-kind="standard"] [aria-controls]')].some((control) => control.getAttribute('aria-controls') === list.id));
@@ -30,7 +30,7 @@ export class SettingsPopupTheme {
             return;
         }
         this.#linked.add(overlay);
-        if (!fluent) {
+        if (!styled) {
             this.#release(overlay);
             return;
         }
@@ -39,9 +39,9 @@ export class SettingsPopupTheme {
         applyOwnedTheme(overlay, dark);
     }
     /** Reconcile retained portals when settings mode, palette or dialog lifetime changes. */
-    refresh(roots, fluent, dark) {
+    refresh(roots, styled, dark) {
         for (const overlay of this.#linked)
-            this.reconcile(overlay, roots, fluent, dark);
+            this.reconcile(overlay, roots, styled, dark);
     }
     /** Restore host inheritance when the settings presentation retires. */
     dispose() {

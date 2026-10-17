@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Render Substitute's single numbered batch selector using anchored Fluent rows. */
+/** Render Substitute's single numbered batch selector using anchored themed rows. */
 
 import { defineComponent, h, type PropType } from 'vue';
 import type { CanvasCommand } from '../../domain/CanvasViewPort.js';

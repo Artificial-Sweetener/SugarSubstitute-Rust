@@ -31,7 +31,7 @@ const minorWords = new Set(('a above about across after against along amid among
     'except for from in inside into near nor of off on onto or out over past per since so ' +
     'than the through till to under until up upon versus via with within without yet').split(' '));
 /** Format visible labels while preserving authored slash prefixes and uppercase words. */
-export function formatFluentDisplayLabel(label) {
+export function formatDisplayLabel(label) {
     const overrideKey = label.toLowerCase().replaceAll(' ', '_');
     const override = Object.hasOwn(labelOverrides, overrideKey)
         ? labelOverrides[overrideKey]

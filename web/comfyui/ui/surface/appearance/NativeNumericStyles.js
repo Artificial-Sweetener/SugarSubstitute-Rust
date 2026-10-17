@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Arrange native number spinners and Substitute's slider pairs through Fluent styling. */
+/** Arrange native number spinners and Substitute's slider pairs through themed styling. */
 /** Keep number geometry scoped to positively identified native components in both views. */
 export function nativeNumericCss() {
     return `

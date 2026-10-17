@@ -21,7 +21,7 @@ export function applySettingsRowShellStyle(element: HTMLElement): void {
     'display:flex;flex-direction:column;align-items:flex-start;gap:8px;min-width:0;text-align:left';
 }
 
-/** Let explanatory copy inherit the active native or Fluent text palette. */
+/** Let explanatory copy inherit the active native or themed text palette. */
 export function applySettingsSummaryStyle(element: HTMLElement): void {
   element.style.cssText =
     'font-size:12px;line-height:1.5;white-space:pre-wrap;color:var(--sc-settings-muted,var(--p-text-muted-color,var(--descrip-text)));max-width:48rem';

@@ -38,7 +38,7 @@ export class NativeSeedMenuHost {
   #row: HTMLButtonElement | null = null;
   #closing = false;
 
-  /** Resolve native fields at their explicit interaction boundary, independently of Fluent styling. */
+  /** Resolve native fields at their explicit interaction boundary, independently of themed styling. */
   constructor(
     app: unknown,
     private readonly document: Document,

@@ -13,7 +13,7 @@ export class ModelPickerAppearance {
     #surfaces = new Set();
     #active = false;
     #dark = true;
-    /** Bind appearance to the same persisted preference as native Fluent cards. */
+    /** Bind appearance to the same persisted preference as native themed cards. */
     constructor(documentRef, app) {
         this.app = app;
         this.#document = documentRef;
@@ -76,7 +76,7 @@ export class ModelPickerAppearance {
         for (const surface of this.#surfaces)
             this.#apply(surface);
     };
-    /** Apply Microsoft tokens only to Fluent surfaces; native controls inherit Comfy tokens. */
+    /** Apply selected design-system tokens only to styled surfaces; native controls inherit Comfy tokens. */
     #apply(surface) {
         const style = this.#visualStyle();
         surface.dataset.scModelAppearance = style === 'comfy' ? 'native' : style;

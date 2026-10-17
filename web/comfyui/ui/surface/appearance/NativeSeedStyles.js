@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Match Substitute's seed editor geometry and shared Fluent interaction tokens. */
+/** Match Substitute's seed editor geometry and shared themed interaction tokens. */
 /** Style only recognized native seed fields in both graph and masonry. */
 export function nativeSeedCss() {
     return `

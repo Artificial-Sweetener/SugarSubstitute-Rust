@@ -17,6 +17,7 @@
 import { computed, defineComponent, h, ref, TransitionGroup, type PropType } from 'vue';
 import { CubeStackRow } from '../../surface/stack/vue/CubeStackRow.js';
 import { useCubeStackFocus } from '../../surface/stack/vue/CubeStackFocus.js';
+import { searchInputTag } from '../../surface/appearance/ControlFactory.js';
 import type { CubeStackRowModel } from '../../surface/stack/CubeStackView.js';
 import type {
   CubeStackCartViewActions,
@@ -171,11 +172,12 @@ export const CubeStackCart = defineComponent({
         [
           h('div', { class: 'sc-cube-stack-cart__header' }, [
             h('p', { class: 'sc-cube-stack-cart__library-label' }, 'Cube library'),
-            h(props.state.appearance === 'fluent' ? 'fluent-text-input' : 'input', {
+            h(searchInputTag(props.state.appearance), {
               class: 'sc-cube-stack-cart__search',
               type: 'search',
               placeholder: 'Search cubes',
               'aria-label': 'Search cubes',
+              label: 'Search cubes',
               value: query.value,
               onInput: (event: Event) => {
                 const target = event.currentTarget;

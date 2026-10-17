@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Delegate Fluent titlebar gestures to existing native collapse and activation controls. */
+/** Delegate themed titlebar gestures to existing native collapse and activation controls. */
 
 interface HeaderBinding {
   header: HTMLElement;
@@ -92,7 +92,7 @@ export class NativeCardTitlebar {
     }
   }
 
-  /** Release annotations and listeners when Fluent presentation ends. */
+  /** Release annotations and listeners when themed presentation ends. */
   clear(): void {
     for (const binding of this.#bindings.values()) binding.release();
     this.#bindings.clear();

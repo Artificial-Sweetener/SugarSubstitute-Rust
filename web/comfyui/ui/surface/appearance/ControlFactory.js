@@ -73,3 +73,11 @@ export function workflowTabAccessorySlot(document, position) {
 export function buttonTag(style) {
     return style === 'comfy' ? 'button' : style === 'spectrum' ? 'sp-action-button' : 'fluent-button';
 }
+/** Select a registered text-field adapter for declarative search views. */
+export function searchInputTag(style) {
+    return style === 'comfy'
+        ? 'input'
+        : style === 'spectrum'
+            ? 'sc-spectrum-search'
+            : 'fluent-text-input';
+}

@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Own Fluent advanced motion across projected native component replacements. */
+/** Own themed advanced motion across projected native component replacements. */
 import type { CardDisclosureMotion } from '../motion/CardDisclosureMotion.js';
 import type { NativeProjectedAdvancedInputMount } from '../NativeProjectedAdvancedInputs.js';
 import type { NativeCardBoundary } from './NativeCardAdapter.js';
@@ -57,7 +57,7 @@ export class NativeProjectedAdvancedDisclosure {
     this.#bindings.set(mount.target, { motion, unsubscribe });
   }
 
-  /** Commit the latest request and detach every projected presentation when Fluent ends. */
+  /** Commit the latest request and detach every projected presentation when themed ends. */
   clear(): void {
     for (const target of [...this.#bindings.keys()]) this.#release(target);
   }

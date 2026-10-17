@@ -18,7 +18,7 @@
 export class NativeBooleanSegments {
     #bindings = new Map();
     #createControls;
-    /** Receive the official Fluent control at the third-party boundary. */
+    /** Receive the official themed control at the third-party boundary. */
     constructor(createControls) {
         this.#createControls = createControls;
     }
@@ -45,7 +45,7 @@ export class NativeBooleanSegments {
                 this.#bindings.set(row, this.#bind(row, native));
         }
     }
-    /** Restore the host's current controls when Fluent appearance ends. */
+    /** Restore the host's current controls when themed appearance ends. */
     clear() {
         for (const binding of this.#bindings.values())
             binding.release();
