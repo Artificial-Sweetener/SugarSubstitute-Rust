@@ -2,12 +2,14 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Drive real configuration, environment, namespace discovery and coordinator election.
 //! Original scopes, typed failures and native owner custody survive partial startup.
+#[path = "entry_bootstrap/failure.rs"]
+mod failure;
 use super::{configuration, options::ProductionEntryOptions};
 use crate::job_sequence::JobSequence;
 use std::{error::Error, fmt, path::PathBuf};
 use sugarsubstitute_contracts::{
     configuration::{ConfigurationError, LaunchConfiguration},
-    coordinator_entry::EntrySetupBudget,
+    coordinator_entry::{EntryOwnerDegradation, EntrySetupBudget},
     execution::{
         CompletionBatch, JobClass, JobCompletion, JobOutcome, JobSpec, Moment, Operation, OwnedJob,
         Scope, TerminalKind,
@@ -37,6 +39,8 @@ pub(crate) enum EntryBootstrapIssue {
     Adoption,
     Input,
     NativeOwner,
+    Degraded(EntryOwnerDegradation),
+    Stopped(TerminalKind),
     Cleanup,
 }
 impl fmt::Display for EntryBootstrapIssue {
@@ -189,18 +193,14 @@ impl EntryBootstrap {
             match owner.consume(batch) {
                 Ok(observation) => observation,
                 Err(cause) => {
-                    if self.failure.is_none() && self.failed_preparation.is_none() {
-                        self.failure = Some(Failure::Native(cause));
-                    } else if self.cleanup_failure.is_none() {
-                        self.cleanup_failure = Some(CleanupFailure::Native(cause));
-                    }
-                    self.request_close();
+                    self.retain_native_failure(cause);
                     return Err(EntryBootstrapIssue::NativeOwner);
                 }
             }
         } else {
             None
         };
+        let observation = self.observe(observation)?;
         self.advance(jobs)?;
         Ok(observation)
     }
@@ -275,40 +275,6 @@ impl EntryBootstrap {
     /// Mutate the actual owner; this exposes no native handles or raw scheduler.
     pub(crate) fn owner_mut(&mut self) -> Option<&mut CoordinatorEntryOwner> {
         self.owner.as_mut()
-    }
-    /// Borrow a retained primary source; complete preparation outcomes stay owned here.
-    pub(crate) fn failure_source(&self) -> Option<&(dyn Error + 'static)> {
-        if let Some(completion) = &self.failed_preparation {
-            return match &completion.outcome {
-                JobOutcome::Failure(cause) => Some(cause),
-                _ => None,
-            };
-        }
-        match self.failure.as_ref()? {
-            Failure::Submission(cause) => Some(cause.as_ref()),
-            Failure::Adoption(rejected) => Some(rejected.cause()),
-            Failure::Input(cause) => Some(cause),
-            Failure::Admission(cause) => Some(cause),
-            Failure::Native(cause) => Some(cause),
-        }
-    }
-    /// Borrow the first cleanup failure separately from original startup failure.
-    pub(crate) fn cleanup_failure(&self) -> Option<&(dyn Error + 'static)> {
-        match self.cleanup_failure.as_ref()? {
-            CleanupFailure::Admission(cause) => Some(cause),
-            CleanupFailure::Native(cause) => Some(cause),
-        }
-    }
-    /// Borrow the original factory's later control observation without separating custody.
-    pub(crate) fn post_control(&self) -> Option<&sugarsubstitute_execution::EntryPreparationError> {
-        let JobOutcome::Failure(failure) = &self.failed_preparation.as_ref()?.outcome else {
-            return None;
-        };
-        let sugarsubstitute_execution::EntryPreparationCause::Factory(cause) = failure.cause()
-        else {
-            return None;
-        };
-        cause.post_control()
     }
     /// Fence ordinary work and cancel actual outstanding preparation once.
     pub(crate) fn request_close(&mut self) {
