@@ -58,3 +58,13 @@ test('boundary jitter retains the preview until the held tab deliberately crosse
   expect(workflowTabDragPlacement(3, 0, 85, 1).target).toBe(1);
   expect(workflowTabDragPlacement(3, 0, 84, 1).target).toBe(0);
 });
+
+test('condensed tabs displace neighbors and resolve thresholds at their actual width', () => {
+  expect(workflowTabDragPlacement(3, 0, 120, 0, 120)).toEqual({
+    target: 1,
+    draggedLeft: 120,
+    offsets: [120, -120, 0],
+  });
+  expect(workflowTabDragPlacement(3, 0, 65, 0, 120).target).toBe(0);
+  expect(workflowTabDragPlacement(3, 0, 66, 0, 120).target).toBe(1);
+});

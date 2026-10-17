@@ -15,7 +15,8 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Present the native actionbar as Substitute's fixed override row beside the orb's pin. */
 export const substituteToolbarCss = `
-  :root[data-sc-substitute-frame] [data-sc-substitute-toolbar-menu] { margin-left:0; background:var(--comfy-menu-bg,#202020); }
+  :root[data-sc-substitute-frame] [data-sc-substitute-toolbar-menu] { margin-left:0; padding-top:0; gap:0;
+    background:var(--comfy-menu-bg,#202020); }
   :root[data-sc-substitute-frame] [data-sc-workflow-selector],
   :root[data-sc-substitute-frame] [data-sc-substitute-workflow-column] { display:none!important; }
   :root[data-sc-substitute-frame] [data-sc-substitute-toolbar-line] { display:block; min-width:0; height:44px; min-height:44px;

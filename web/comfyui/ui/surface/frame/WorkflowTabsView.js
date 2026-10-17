@@ -17,6 +17,7 @@
 import { createWorkflowTab, createWorkflowTablist } from '../appearance/FluentThemeRuntime.js';
 import { ContextMenu } from '../../menus/ContextMenu.js';
 import { WORKFLOW_TAB_WIDTH } from './WorkflowTabStyles.js';
+import { scrollWheelDistance } from '../ScrollWheelDistance.js';
 import { WorkflowTabPointerDrag } from './WorkflowTabPointerDrag.js';
 /** Retain keyed controls, literal titles, native keyboard navigation and one-shot activity animation. */
 export class WorkflowTabsView {
@@ -30,13 +31,16 @@ export class WorkflowTabsView {
     #drag;
     #projecting = false;
     #selection = '';
+    #tabWidth = WORKFLOW_TAB_WIDTH;
+    #menuRequest = 0;
+    #menuTarget = null;
     /** Bind interaction intents without retaining host workflow objects in presentation. */
     constructor(document, actions, viewport) {
         this.document = document;
         this.actions = actions;
         this.viewport = viewport;
         this.#menu = new ContextMenu(document);
-        this.#drag = new WorkflowTabPointerDrag(viewport, this.element, (from, to) => actions.reorder(from, to), (error) => actions.report(error), () => this.#updateOrbAdjacency());
+        this.#drag = new WorkflowTabPointerDrag(viewport, this.element, (from, to) => actions.reorder(from, to), (error) => actions.report(error), () => this.#updateOrbAdjacency(), () => this.#tabWidth);
         this.element.setAttribute('aria-label', 'Workflows');
         this.viewport.addEventListener('scroll', this.#scrolled);
         this.element.addEventListener('change', () => {
@@ -54,6 +58,11 @@ export class WorkflowTabsView {
         this.#projecting = true;
         this.#order = tabs;
         const open = new Set(tabs.map((tab) => tab.id));
+        if (this.#menuTarget && !open.has(this.#menuTarget)) {
+            this.#menuRequest++;
+            this.#menuTarget = null;
+            this.#menu.close();
+        }
         for (const [id, view] of this.#tabs)
             if (!open.has(id)) {
                 view.element.remove();
@@ -98,46 +107,52 @@ export class WorkflowTabsView {
         const width = this.viewport.clientWidth;
         if (index < 0 || width <= 0)
             return;
-        const left = index * WORKFLOW_TAB_WIDTH;
-        const right = left + WORKFLOW_TAB_WIDTH;
+        const left = index * this.#tabWidth;
+        const right = left + this.#tabWidth;
         if (left < this.viewport.scrollLeft)
             this.viewport.scrollLeft = left;
         else if (right > this.viewport.scrollLeft + width)
             this.viewport.scrollLeft = Math.max(0, right - width);
     }
     /** Keep selection and the orb cutout aligned after the enclosing strip changes width. */
-    resize() {
+    resize(width) {
+        this.#drag.cancelForResize();
+        this.#tabWidth = width;
         if (!this.#drag.active)
             this.#revealSelected(this.#order.findIndex((tab) => tab.selected));
         this.#updateOrbAdjacency();
     }
+    /** Preserve captured pointer alignment when endpoint arrows change the viewport allocation. */
+    refreshScrollLayout() {
+        this.#drag.viewportChanged();
+        this.#updateOrbAdjacency();
+    }
     /** Project scroll position without rebuilding controls or changing selected workflow policy. */
     #scrolled = () => this.#updateOrbAdjacency();
-    /** Preserve reference horizontal wheel scrolling across both tabs and the trailing add button. */
+    /** Scroll horizontally using either wheel axis and normalize line and page deltas. */
     #wheel = (event) => {
         if (this.viewport.scrollWidth <= this.viewport.clientWidth)
             return;
         event.preventDefault();
-        this.viewport.scrollLeft += event.deltaY || event.deltaX;
+        this.viewport.scrollLeft += scrollWheelDistance(event, 'horizontal', this.viewport.clientWidth);
     };
     /** Keep the cutout aligned to the orb when the uniform-width tab strip scrolls or reorders. */
     #updateOrbAdjacency() {
         if (this.#drag.active)
             return;
-        const selected = this.#order.findIndex((tab) => tab.selected);
-        this.element.toggleAttribute('data-selected', selected >= 0);
-        this.element.style.setProperty('--sc-selected-offset', `${String(selected * WORKFLOW_TAB_WIDTH)}px`);
-        this.element.style.setProperty('--sc-tab-scroll', `${String(this.viewport.scrollLeft)}px`);
-        const index = Math.floor(Math.max(0, this.viewport.scrollLeft) / WORKFLOW_TAB_WIDTH);
-        const adjacent = this.#order[index]?.id;
+        const index = Math.floor(Math.max(0, this.viewport.scrollLeft) / this.#tabWidth);
+        const adjacent = this.viewport.hasAttribute('data-sc-overflow')
+            ? undefined
+            : this.#order[index]?.id;
         for (const [id, tab] of this.#tabs) {
             tab.element.toggleAttribute('data-orb-adjacent', id === adjacent);
             if (id === adjacent)
-                tab.element.style.setProperty('--sc-tab-cutout-x', `${String(-17 + this.viewport.scrollLeft - index * WORKFLOW_TAB_WIDTH)}px`);
+                tab.element.style.setProperty('--sc-tab-cutout-x', `${String(-17 + this.viewport.scrollLeft - index * this.#tabWidth)}px`);
         }
     }
     /** Release floating interaction and official Fluent focus bindings through normal disconnection. */
     dispose() {
+        this.#menuRequest++;
         this.#drag.dispose();
         this.#menu.close();
         this.viewport.removeEventListener('scroll', this.#scrolled);
@@ -167,6 +182,14 @@ export class WorkflowTabsView {
             this.#run(() => this.actions.close(id));
         });
         close.addEventListener('focusin', (event) => event.stopPropagation());
+        // Fluent selects a tab on focus; a context press must preserve the active workflow.
+        for (const type of ['pointerdown', 'mousedown'])
+            element.addEventListener(type, (event) => {
+                if (event instanceof MouseEvent && event.button === 2) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+            });
         // Match Comfy's mouse-release boundary; embedded hosts may omit auxclick.
         element.addEventListener('mouseup', (event) => {
             if (event.button === 1) {
@@ -176,12 +199,8 @@ export class WorkflowTabsView {
         });
         element.addEventListener('contextmenu', (event) => {
             event.preventDefault();
-            this.#menu.open({
-                label: 'Workflow actions',
-                trigger: element,
-                anchor: { kind: 'pointer', x: event.clientX, y: event.clientY },
-                entries: [{ label: 'Close tab', select: () => this.#run(() => this.actions.close(id)) }],
-            });
+            event.stopPropagation();
+            void this.#openMenu(id, element, event);
         });
         element.addEventListener('keydown', (event) => {
             if (event.altKey && ['ArrowLeft', 'ArrowRight'].includes(event.key)) {
@@ -197,6 +216,32 @@ export class WorkflowTabsView {
         element.addEventListener('animationcancel', () => element.removeAttribute('data-shimmer'));
         element.append(shimmer, title, close);
         return { element, title, close, unread: false };
+    }
+    /** Keep shared dismissal authoritative while Comfy lazily publishes the requested tab's actions. */
+    async #openMenu(id, element, event) {
+        const request = ++this.#menuRequest;
+        this.#menuTarget = id;
+        const options = {
+            label: 'Workflow actions',
+            trigger: element,
+            focusReturn: this.document.getElementById(this.element.activeid),
+            returnFocusOnSelect: false,
+            anchor: { kind: 'pointer', x: event.clientX, y: event.clientY },
+        };
+        this.#menu.open({
+            ...options,
+            entries: [{ label: 'Loading workflow actions…', disabled: true }],
+        });
+        try {
+            const entries = await this.actions.menu(id);
+            if (request === this.#menuRequest && element.isConnected && this.#menu.isOpen())
+                this.#menu.updateEntries(entries);
+        }
+        catch (error) {
+            if (request === this.#menuRequest)
+                this.#menu.close();
+            this.actions.report(error);
+        }
     }
     /** Report host action failure without resetting any workflow or canvas state. */
     #run(action) {

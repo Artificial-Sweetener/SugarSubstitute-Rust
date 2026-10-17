@@ -51,8 +51,8 @@ export interface CubeStackSurface {
 /** Expose the existing rail preference authority to alternative frame controls. */
 export interface CubeStackFrameControls {
   readonly available: boolean;
-  readonly compact: boolean;
-  toggleCompact(): Promise<void>;
+  readonly action: 'add' | 'expand' | 'collapse';
+  activate(): Promise<void>;
   menu(): readonly ContextMenuEntry[];
   subscribe(listener: () => void): () => void;
 }
@@ -105,11 +105,13 @@ export class CubeStackHost {
       get available() {
         return host.#frameAvailable();
       },
-      get compact() {
-        return preferences.snapshot.compact;
+      get action() {
+        return host.#frameAction();
       },
-      toggleCompact: async () => {
-        if (this.#frameAvailable()) await preferences.setCompact(!preferences.snapshot.compact);
+      activate: async () => {
+        if (!this.#frameAvailable()) return;
+        if (this.#frameAction() === 'add') options.openCart();
+        else await preferences.setCompact(!preferences.snapshot.compact);
       },
       menu: () => this.presentationMenu(),
       subscribe: (listener) => {
@@ -190,7 +192,7 @@ export class CubeStackHost {
   async transition(entering: boolean): Promise<void> {
     this.#surfaceVisible = entering;
     this.#publishFrame();
-    await this.#present(entering && this.#preferences.snapshot.visible);
+    await this.#present(entering && this.#stackVisible());
   }
 
   /** Refresh literal row presentation after an identified card or canonical permission change. */
@@ -235,7 +237,7 @@ export class CubeStackHost {
       this.#reorder = reorder;
       this.#unsubscribeReorder = reorder?.subscribe(() => this.#reconcile()) ?? null;
     }
-    if (!this.#preferences.snapshot.visible) {
+    if (!this.#stackVisible()) {
       this.#view?.previewCubeOrder(null);
       this.#view?.setStackWidth(0);
       if (!this.#motion?.canAnimate) this.#unmount();
@@ -243,8 +245,7 @@ export class CubeStackHost {
         const element = this.#element;
         void this.#present(false)
           .then((completed) => {
-            if (completed && this.#element === element && !this.#preferences.snapshot.visible)
-              this.#unmount();
+            if (completed && this.#element === element && !this.#stackVisible()) this.#unmount();
           })
           .catch(this.#options.reportError);
       }
@@ -281,20 +282,34 @@ export class CubeStackHost {
     this.#publishFrame();
   }
 
-  /** Allow compact controls only while the accepted masonry surface actually presents its stack. */
+  /** Offer the cart for empty masonry and compact controls for a presented stack. */
   #frameAvailable(): boolean {
     return (
       !this.#disposed &&
       this.#view !== null &&
-      this.#mounted !== null &&
       this.#surfaceVisible &&
-      this.#preferences.snapshot.visible
+      (!this.#hasCubes() || (this.#mounted !== null && this.#preferences.snapshot.visible))
     );
   }
 
-  /** Publish only changed availability or compact state to frame affordances. */
+  /** Use the mounted top-level projection as the sole cube-presence authority. */
+  #hasCubes(): boolean {
+    return this.#view?.sections.some((section) => section.cube !== null) === true;
+  }
+
+  /** Keep an empty workflow out of rail layout without changing persisted preferences. */
+  #stackVisible(): boolean {
+    return this.#preferences.snapshot.visible && this.#hasCubes();
+  }
+
+  /** Resolve the toolbar intent independently of whether graph mode currently disables it. */
+  #frameAction(): CubeStackFrameControls['action'] {
+    return !this.#hasCubes() ? 'add' : this.#preferences.snapshot.compact ? 'expand' : 'collapse';
+  }
+
+  /** Publish only changed availability or intent to frame affordances. */
   #publishFrame(): void {
-    const signature = `${this.#frameAvailable()}:${this.#preferences.snapshot.compact}`;
+    const signature = `${this.#frameAvailable()}:${this.#frameAction()}`;
     if (signature === this.#frameSignature) return;
     this.#frameSignature = signature;
     for (const listener of this.#frameListeners) listener();

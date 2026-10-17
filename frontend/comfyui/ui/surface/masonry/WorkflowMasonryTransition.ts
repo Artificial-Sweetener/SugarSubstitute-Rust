@@ -32,7 +32,7 @@ export interface WorkflowMasonryTransitionSurface {
   surface: HTMLElement;
   backdrop: HTMLElement;
   cards: readonly WorkflowMasonryTransitionCard[];
-  graph: WorkflowMasonryGraphSnapshot;
+  measureGraph(): WorkflowMasonryGraphSnapshot;
   reveal?: WorkflowMasonryGraphReveal;
 }
 
@@ -68,14 +68,15 @@ export class WorkflowMasonryTransition {
       },
       { opacity: to },
     ];
+    const graph = reducedMotion ? null : view.measureGraph();
     const reveal = view.reveal?.frames(entering) ?? [];
-    if (!reducedMotion) {
+    if (graph) {
       requests.push(...reveal);
       requests.push({
         element: view.backdrop,
         frames: opacityFrames(view.backdrop, entering ? 0 : 1, entering ? 1 : 0),
       });
-      for (const layer of view.graph.layers)
+      for (const layer of graph.layers)
         requests.push({
           element: layer,
           frames: opacityFrames(layer, entering ? 1 : 0, entering ? 0 : 1),
@@ -90,10 +91,10 @@ export class WorkflowMasonryTransition {
       for (const card of view.cards) {
         const destination = card.cell.getBoundingClientRect();
         if (destination.width <= 0 || destination.height <= 0) continue;
-        const measured = view.graph.cards.get(card.id);
+        const measured = graph.cards.get(card.id);
         let graphAssembly = measured ? this.#graphAssemblies.get(measured.element) : undefined;
         const source = graphAssembly?.source ?? measured;
-        if (!source?.visible && !rectanglesIntersect(destination, view.graph.viewport)) continue;
+        if (!source?.visible && !rectanglesIntersect(destination, graph.viewport)) continue;
         if (!source) {
           requests.push({
             element: card.cell,

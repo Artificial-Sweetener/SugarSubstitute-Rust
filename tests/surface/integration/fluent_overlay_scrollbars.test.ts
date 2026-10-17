@@ -480,3 +480,28 @@ test.each([false, true])(
     host.clear();
   },
 );
+
+test('workflow tab navigation remains handle-free through appearance and renderer lifetimes', async () => {
+  const area = scrollArea();
+  area.id = 'sc-workflow-strip';
+  area.setAttribute('data-sc-scrollbar-managed', '');
+  const frame = document.createElement('header');
+  frame.style.position = 'relative';
+  frame.append(area);
+  document.body.append(frame);
+  const frames: FrameRequestCallback[] = [];
+  jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+    frames.push(callback);
+    return frames.length;
+  });
+  const global = new FluentOverlayScrollbarHost(document, jest.fn());
+  global.enable();
+  await flush(frames);
+  expect(document.querySelectorAll(`[aria-controls="${area.id}"]`)).toHaveLength(0);
+  global.clear();
+  global.enable();
+  await flush(frames);
+  expect(document.querySelectorAll(`[aria-controls="${area.id}"]`)).toHaveLength(0);
+  expect(area.hasAttribute('data-sc-scrollbar-managed')).toBe(true);
+  global.clear();
+});

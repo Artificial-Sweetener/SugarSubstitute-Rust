@@ -149,6 +149,9 @@ export class SubstituteFrameHost {
       workflows: {
         activate: (id) => this.#adapter?.activate(id, this.options.sessions.read().open),
         close: (id) => this.#adapter?.close(id, this.options.sessions.read().open),
+        menu: (id) =>
+          this.#adapter?.menu(id, this.options.sessions.read().open, this.options.report) ??
+          Promise.reject(new Error('Comfy workflow controls are unavailable.')),
         reorder: (from, to) => this.#adapter?.reorder(from, to),
         create: () => command('Comfy.NewBlankWorkflow'),
         report: this.options.report,

@@ -18,7 +18,6 @@ import { afterAll, afterEach, beforeAll, expect, jest, test } from '@jest/global
 import { Updates } from '@microsoft/fast-element';
 import { WorkflowTabsView } from '../../../frontend/comfyui/ui/surface/frame/WorkflowTabsView.js';
 import { WorkflowTabPointerDrag } from '../../../frontend/comfyui/ui/surface/frame/WorkflowTabPointerDrag.js';
-import { substituteFrameCss } from '../../../frontend/comfyui/ui/surface/frame/SubstituteFrameStyles.js';
 import { workflowSessionId } from '../../../frontend/comfyui/ui/execution/domain/ExecutionIdentity.js';
 
 const internals = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'attachInternals');
@@ -45,14 +44,6 @@ afterAll(() => {
 afterEach(() => {
   document.body.replaceChildren();
   jest.restoreAllMocks();
-});
-
-test('selected-corner pseudo-elements inherit the host offset that Chromium animates', () => {
-  // JSDOM cannot compute shadow pseudo-elements; enforce the native CSS property contract here.
-  const registration = /@property --sc-selected-offset\s*\{([^}]+)\}/u.exec(
-    substituteFrameCss,
-  )?.[1];
-  expect(registration).toMatch(/inherits\s*:\s*true\s*;/u);
 });
 
 /** Deliver the browser pointer boundary without relying on JSDOM's missing PointerEvent constructor. */
@@ -109,7 +100,14 @@ test('pointer movement animates a transient permutation and commits once on rele
   });
   const view = new WorkflowTabsView(
     document,
-    { activate: jest.fn(), close: jest.fn(), reorder, create: jest.fn(), report: jest.fn() },
+    {
+      activate: jest.fn(),
+      close: jest.fn(),
+      menu: async () => [],
+      reorder,
+      create: jest.fn(),
+      report: jest.fn(),
+    },
     viewport,
   );
   viewport.append(view.element);
@@ -175,7 +173,14 @@ test('middle-button release closes once even when the host omits auxclick', asyn
   const id = workflowSessionId('middle-close');
   const view = new WorkflowTabsView(
     document,
-    { activate: jest.fn(), close, reorder: jest.fn(), create: jest.fn(), report: jest.fn() },
+    {
+      activate: jest.fn(),
+      close,
+      menu: async () => [],
+      reorder: jest.fn(),
+      create: jest.fn(),
+      report: jest.fn(),
+    },
     viewport,
   );
   viewport.append(view.element);

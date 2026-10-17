@@ -119,7 +119,8 @@ export class FluentOverlayScrollbarHost {
     /** Exclude owned layers and policy styles from rediscovery. */
     #owned(element) {
         return (!!element.closest('.sc-fluent-scrollbar-layer') ||
-            element.hasAttribute('data-sc-scrollbar-policy'));
+            element.hasAttribute('data-sc-scrollbar-policy') ||
+            element.hasAttribute('data-sc-scrollbar-managed'));
     }
     /** Subscribe once per light or open shadow tree. */
     #observe(root) {

@@ -35,11 +35,15 @@ export class CubeStackHost {
             get available() {
                 return host.#frameAvailable();
             },
-            get compact() {
-                return preferences.snapshot.compact;
+            get action() {
+                return host.#frameAction();
             },
-            toggleCompact: async () => {
-                if (this.#frameAvailable())
+            activate: async () => {
+                if (!this.#frameAvailable())
+                    return;
+                if (this.#frameAction() === 'add')
+                    options.openCart();
+                else
                     await preferences.setCompact(!preferences.snapshot.compact);
             },
             menu: () => this.presentationMenu(),
@@ -114,7 +118,7 @@ export class CubeStackHost {
     async transition(entering) {
         this.#surfaceVisible = entering;
         this.#publishFrame();
-        await this.#present(entering && this.#preferences.snapshot.visible);
+        await this.#present(entering && this.#stackVisible());
     }
     /** Refresh literal row presentation after an identified card or canonical permission change. */
     valuesChanged() {
@@ -157,7 +161,7 @@ export class CubeStackHost {
             this.#reorder = reorder;
             this.#unsubscribeReorder = reorder?.subscribe(() => this.#reconcile()) ?? null;
         }
-        if (!this.#preferences.snapshot.visible) {
+        if (!this.#stackVisible()) {
             this.#view?.previewCubeOrder(null);
             this.#view?.setStackWidth(0);
             if (!this.#motion?.canAnimate)
@@ -166,7 +170,7 @@ export class CubeStackHost {
                 const element = this.#element;
                 void this.#present(false)
                     .then((completed) => {
-                    if (completed && this.#element === element && !this.#preferences.snapshot.visible)
+                    if (completed && this.#element === element && !this.#stackVisible())
                         this.#unmount();
                 })
                     .catch(this.#options.reportError);
@@ -201,17 +205,28 @@ export class CubeStackHost {
         this.#scrollSelection?.refresh(state.rows.map((row) => row.id));
         this.#publishFrame();
     }
-    /** Allow compact controls only while the accepted masonry surface actually presents its stack. */
+    /** Offer the cart for empty masonry and compact controls for a presented stack. */
     #frameAvailable() {
         return (!this.#disposed &&
             this.#view !== null &&
-            this.#mounted !== null &&
             this.#surfaceVisible &&
-            this.#preferences.snapshot.visible);
+            (!this.#hasCubes() || (this.#mounted !== null && this.#preferences.snapshot.visible)));
     }
-    /** Publish only changed availability or compact state to frame affordances. */
+    /** Use the mounted top-level projection as the sole cube-presence authority. */
+    #hasCubes() {
+        return this.#view?.sections.some((section) => section.cube !== null) === true;
+    }
+    /** Keep an empty workflow out of rail layout without changing persisted preferences. */
+    #stackVisible() {
+        return this.#preferences.snapshot.visible && this.#hasCubes();
+    }
+    /** Resolve the toolbar intent independently of whether graph mode currently disables it. */
+    #frameAction() {
+        return !this.#hasCubes() ? 'add' : this.#preferences.snapshot.compact ? 'expand' : 'collapse';
+    }
+    /** Publish only changed availability or intent to frame affordances. */
     #publishFrame() {
-        const signature = `${this.#frameAvailable()}:${this.#preferences.snapshot.compact}`;
+        const signature = `${this.#frameAvailable()}:${this.#frameAction()}`;
         if (signature === this.#frameSignature)
             return;
         this.#frameSignature = signature;

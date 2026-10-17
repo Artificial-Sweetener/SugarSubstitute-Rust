@@ -192,6 +192,7 @@ test('commits inset layout once and animates from the current painted position a
   });
   motion.set(element, content, 82, layout);
   expect(effects).toHaveLength(0);
+  expect(content.getBoundingClientRect).not.toHaveBeenCalled();
   motion.set(element, content, 248, layout);
   expect(effects[0]?.frames).toEqual([
     { transform: 'translateX(-166px)' },

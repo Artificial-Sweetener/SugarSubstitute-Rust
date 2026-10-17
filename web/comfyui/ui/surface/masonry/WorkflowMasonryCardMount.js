@@ -51,14 +51,15 @@ export class WorkflowMasonryCardMount {
     }
     /** Reacquire only this card after its source owner replaces controls during a policy change. */
     #onInvalidated = () => {
-        queueMicrotask(() => {
+        this.#options.requestRemount((source) => {
             if (this.#disposed)
-                return;
-            const source = this.#options.getSource();
+                return false;
             this.#transfer = source ? prepareNativeCardPresentation(source, this.#onInvalidated) : null;
+            this.#host?.dispose();
+            this.#host = null;
             this.#mounted = false;
             this.mount();
-            this.#options.onRemounted();
+            return true;
         });
     };
 }
