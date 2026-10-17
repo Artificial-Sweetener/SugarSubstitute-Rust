@@ -58,12 +58,7 @@ pub(in crate::windows_lifecycle_pipe) fn encode_recovery(
     source: CounterDeadline,
     body: &[u8],
 ) -> Result<(), LifecyclePipeFailure> {
-    let counter = crate::lifecycle_pipe::LifecyclePipeDeadline::new(
-        i64::from_le_bytes(read(root, 88)?),
-        i64::from_le_bytes(read(root, 96)?),
-    )
-    .map_err(|cause| super::super::native::error("recovery_ui_original_counter", cause))?;
-    let data = bootstrap::decode(root, counter, bootstrap::Kind::Desktop)?;
+    let data = decode_root(root)?;
     encode_fields(destination, &data, Some((root, key)), endpoint, processes, source, body)
 }
 fn encode_fields(
@@ -168,7 +163,9 @@ pub(in crate::windows_lifecycle_pipe) fn logical_bytes(
     Ok(BASE_BYTES + PREFIX_BYTES + length)
 }
 /// Validate the full serialized envelope before actual native authentication.
-/// Original successful v1/v2 codecs remain separately strict and unchanged.
+/// Recovery preserves exact Root authority bytes while narrowing its returned enrollment to
+/// the supplied child cutoff. Its capture source cannot outlive either cutoff. Ordinary
+/// v1/v2 and SSCG1 continue to require exact supplied/base deadline equality.
 pub(in crate::windows_lifecycle_pipe) fn decode(
     bytes: &[u8],
     original: LifecyclePipeDeadline,
@@ -192,12 +189,20 @@ pub(in crate::windows_lifecycle_pipe) fn decode(
         None
     };
     let data = if let Some(key) = recovery {
-        let data = bootstrap::decode(base, original, kind)?;
+        let mut data = decode_root(base)?;
         if data.binding != crate::lifecycle_pipe::PeerBinding::Desktop(key.run())
             || data.capability == [0; 32]
         {
             return Err(failure("recovery_ui_root_binding"));
         }
+        if original.frequency() != data.deadline.frequency()
+            || original.ticks() > data.deadline.ticks()
+        {
+            return Err(failure("recovery_ui_enrollment_bounds"));
+        }
+        // The immutable Root deadline bounds authority; the supplied child deadline
+        // remains the narrower enrollment already admitted by the native client.
+        data.deadline = original;
         data
     } else {
         bootstrap::decode_captured_base(base, original, kind)?
@@ -300,6 +305,16 @@ pub(in crate::windows_lifecycle_pipe) fn decode(
             payload: BASE_BYTES + PREFIX_BYTES..logical,
         },
     ))
+}
+/// Validate immutable Root authority against its exact embedded deadline before any
+/// recovery-only narrowing. This parser grants no native peer or section authority.
+fn decode_root(root: &[u8; 1024]) -> Result<bootstrap::Data, LifecyclePipeFailure> {
+    let counter = LifecyclePipeDeadline::new(
+        i64::from_le_bytes(read(root, 88)?),
+        i64::from_le_bytes(read(root, 96)?),
+    )
+    .map_err(|cause| super::super::native::error("recovery_ui_original_counter", cause))?;
+    bootstrap::decode(root, counter, bootstrap::Kind::Desktop)
 }
 /// Pointer-sized matching values must describe distinct nonpseudo inherited slots.
 fn valid_handles(values: [usize; 2]) -> bool {

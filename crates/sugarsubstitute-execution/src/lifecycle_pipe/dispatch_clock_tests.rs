@@ -133,3 +133,38 @@ fn earlier_pending_read_deadline_expiring_during_write_preparation_vetoes_native
     assert_eq!(admission.revoke(), NativeWriteRevocation::Retired);
     Ok(())
 }
+
+#[test]
+fn narrowed_child_handshake_expires_before_later_observed_authority_without_native_connect()
+-> TestResult {
+    let rig = Rig::new()?;
+    let scope = scope(&rig)?;
+    let boundary = Boundary::new();
+    *lock(&boundary.original_counter) = Some(LifecyclePipeDeadline::new(1000, 1_000_000_000)?);
+    boundary.hold_connect.store(true, Ordering::Release);
+    let mut specification = spec(1, JobClass::NativeObservation, MIN_LIFECYCLE_PIPE_BYTES)?;
+    specification.operation = Operation::NativeLifecycle;
+    let mut session = reserve(
+        &rig.client.core,
+        &scope,
+        specification,
+        Some(run()?),
+        Moment::from_nanos(900),
+        Box::new(Lease(boundary.clone())),
+    )?;
+    session.control.bind_input(PeerInput::Simulated);
+    boundary.preparing_connect.wait()?;
+    assert_eq!(session.control.original_deadline(), Moment::from_nanos(900));
+    assert_eq!(
+        lock(&session.control.inner.shared.state).deadline,
+        Some(LifecyclePipeDeadline::new(1000, 1_000_000_000)?)
+    );
+    rig.clock.advance(900);
+    boundary.connect_release.open();
+    assert!(matches!(failures::completion(&rig, &mut session)?.outcome, JobOutcome::TimedOut));
+    assert_eq!(boundary.closes.load(Ordering::Acquire), 1);
+    while let Some(observed) = session.control.take_observation() {
+        assert!(!matches!(observed, LifecyclePipeObservation::Connected));
+    }
+    Ok(())
+}

@@ -27,12 +27,18 @@ impl Messages {
     pub(super) fn select(&self, start: i32, end: i32) -> Result<(), DesktopError> {
         let range = CHARRANGE { cpMin: start, cpMax: end };
         // SAFETY: The exact affine peer synchronously reads this typed live range.
-        unsafe {
-            SendMessageW(self.0, EM_EXSETSEL, None, Some(LPARAM((&raw const range) as isize)));
-        }
+        let result = unsafe {
+            SendMessageW(self.0, EM_EXSETSEL, None, Some(LPARAM((&raw const range) as isize))).0
+        };
         let actual = self.selection();
         if start >= 0 && actual.cpMin != start || end >= 0 && actual.cpMax != end {
-            return Err(rejected("console_selection_restore"));
+            return Err(DesktopError::message(
+                "console_selection_restore",
+                format!(
+                    "requested ({start}, {end}), observed ({}, {}), native result {result}",
+                    actual.cpMin, actual.cpMax
+                ),
+            ));
         }
         Ok(())
     }

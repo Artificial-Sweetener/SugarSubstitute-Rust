@@ -100,3 +100,57 @@ fn duplicate_zero_overflow_pseudo_and_wrong_direction_section_slots_are_rejected
     assert!(validate_pair_data(&bootstrap::encode(&ui)?, &ui).is_err());
     Ok(())
 }
+
+#[test]
+fn paired_native_owner_minimum_roundtrips_combined_child_without_rewriting_root_authority() -> Result
+{
+    use crate::capture_attach::types::*;
+    use crate::windows_lifecycle_pipe::captured::codec;
+    use sugarsubstitute_contracts::{crash::*, execution::Moment};
+    let recovery = recovery()?;
+    let mut root = desktop(&recovery)?;
+    root.deadline = LifecyclePipeDeadline::new(101, 1000)?;
+    let authority = bootstrap::encode(&root)?;
+    let (_, admitted) = validate_pair_data(&authority, &recovery)?;
+    assert_eq!(admitted.ticks(), 100);
+    let creator = CaptureProcessFacts::new(71, 99)?;
+    let handler = CaptureProcessFacts::new(72, 100)?;
+    let key = recovery.binding.recovery().ok_or("recovery fixture")?;
+    let expected = CaptureAttachExpectation::new(
+        key.run().owner,
+        CaptureTarget::Desktop(key.run()),
+        &BuildIdentity::new("test_build")?,
+        creator,
+        handler,
+        CaptureBudget::new(Moment::from_nanos(0))?,
+    )?;
+    let endpoint = CaptureEndpointObservation::new(
+        &expected,
+        CaptureEndpointProvenance::CreatorInherited,
+        creator,
+        handler,
+        &r"\\.\pipe\capture_test".encode_utf16().collect::<Vec<_>>(),
+    )?;
+    let mut bytes = vec![0; codec::BASE_BYTES + codec::PREFIX_BYTES + 1];
+    codec::encode_recovery(
+        &mut bytes,
+        &authority,
+        key,
+        endpoint,
+        [81, 82],
+        CounterDeadline::new(90, 1000)?,
+        &[1],
+    )?;
+    let supplied = LifecyclePipeDeadline::new(admitted.ticks(), admitted.frequency())?;
+    let (actual, facts) = codec::decode(&bytes, supplied, bootstrap::Kind::Desktop)?;
+    assert_eq!(actual.deadline, supplied);
+    assert_eq!(facts.source.ticks(), 90);
+    assert_eq!(&bytes[..1024], &authority);
+    assert_eq!(actual.binding, root.binding);
+    assert_eq!(actual.capability, root.capability);
+    assert!(
+        codec::decode(&bytes, LifecyclePipeDeadline::new(102, 1000)?, bootstrap::Kind::Desktop)
+            .is_err()
+    );
+    Ok(())
+}

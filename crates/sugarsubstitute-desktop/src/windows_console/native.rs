@@ -32,6 +32,17 @@ use windows::{
     },
     core::{PCWSTR, w},
 };
+/// Keep creation hidden with one readonly child style for production and native fixtures.
+pub(super) fn peer_style() -> WINDOW_STYLE {
+    WS_CHILD
+        | WS_TABSTOP
+        | WS_VSCROLL
+        | WINDOW_STYLE(
+            (ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | ES_NOHIDESEL) as u32
+                | ES_NOOLEDRAGDROP
+                | ES_SAVESEL,
+        )
+}
 /// A loaded system module stays retained before any following COM/child effect.
 pub(super) struct Library {
     module: Cell<Option<HMODULE>>,
@@ -112,14 +123,7 @@ impl NativePort for Port<'_> {
                 WINDOW_EX_STYLE::default(),
                 w!("RICHEDIT50W"),
                 w!(""),
-                WS_CHILD
-                    | WS_TABSTOP
-                    | WS_VSCROLL
-                    | WINDOW_STYLE(
-                        (ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | ES_NOHIDESEL) as u32
-                            | ES_NOOLEDRAGDROP
-                            | ES_SAVESEL,
-                    ),
+                peer_style(),
                 rect.left,
                 rect.top,
                 rect.right - rect.left,

@@ -9,7 +9,8 @@ use windows::{
         Foundation::{CO_E_NOTINITIALIZED, RPC_E_CHANGED_MODE, RPC_E_WRONG_THREAD},
         System::{
             Com::{
-                APTTYPE, APTTYPE_CURRENT, APTTYPE_MAINSTA, APTTYPE_STA, APTTYPEQUALIFIER_NONE,
+                APTTYPE, APTTYPE_CURRENT, APTTYPE_MAINSTA, APTTYPE_MTA, APTTYPE_STA,
+                APTTYPEQUALIFIER, APTTYPEQUALIFIER_IMPLICIT_MTA, APTTYPEQUALIFIER_NONE,
                 COINIT_APARTMENTTHREADED, CoGetApartmentType, CoInitializeEx, CoUninitialize,
             },
             Threading::GetCurrentThreadId,
@@ -18,8 +19,15 @@ use windows::{
     core::Error,
 };
 
+/// Preserve both native facts so inherited MTA state cannot impersonate explicit initialization.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct Apartment {
+    kind: APTTYPE,
+    qualifier: APTTYPEQUALIFIER,
+}
+
 trait Boundary {
-    fn query(&mut self) -> Result<APTTYPE, Error>;
+    fn query(&mut self) -> Result<Apartment, Error>;
     fn acquire(&mut self) -> Result<(), Error>;
     fn release(&mut self) -> Result<(), Error>;
 }
@@ -38,21 +46,28 @@ struct Owner<B: Boundary> {
 }
 impl<B: Boundary> Owner<B> {
     fn enter(mut boundary: B) -> Result<Self, DesktopError> {
-        let ownership = match boundary.query() {
-            Ok(kind) if kind == APTTYPE_STA || kind == APTTYPE_MAINSTA => Ownership::Borrowed,
+        let acquire = match boundary.query() {
+            Ok(Apartment { kind, qualifier })
+                if (kind == APTTYPE_STA || kind == APTTYPE_MAINSTA)
+                    && qualifier == APTTYPEQUALIFIER_NONE =>
+            {
+                false
+            }
+            Ok(Apartment { kind: APTTYPE_MTA, qualifier: APTTYPEQUALIFIER_IMPLICIT_MTA }) => true,
             Ok(_) => {
                 return Err(DesktopError::new(
                     "ui_apartment_query",
                     Error::from(RPC_E_CHANGED_MODE),
                 ));
             }
-            Err(cause) if cause.code() == CO_E_NOTINITIALIZED => {
-                boundary
-                    .acquire()
-                    .map_err(|cause| DesktopError::new("ui_apartment_acquire", cause))?;
-                Ownership::Acquired
-            }
+            Err(cause) if cause.code() == CO_E_NOTINITIALIZED => true,
             Err(cause) => return Err(DesktopError::new("ui_apartment_query", cause)),
+        };
+        let ownership = if acquire {
+            boundary.acquire().map_err(|cause| DesktopError::new("ui_apartment_acquire", cause))?;
+            Ownership::Acquired
+        } else {
+            Ownership::Borrowed
         };
         Ok(Self { boundary, ownership, affinity: PhantomData })
     }
@@ -81,17 +96,17 @@ struct NativeBoundary {
     thread: u32,
 }
 impl Boundary for NativeBoundary {
-    fn query(&mut self) -> Result<APTTYPE, Error> {
+    fn query(&mut self) -> Result<Apartment, Error> {
         let mut kind = APTTYPE_CURRENT;
         let mut qualifier = APTTYPEQUALIFIER_NONE;
         // SAFETY: Valid writable scalar outputs; the UI caller owns this current thread.
         unsafe {
             CoGetApartmentType(&mut kind, &mut qualifier)?;
         }
-        Ok(kind)
+        Ok(Apartment { kind, qualifier })
     }
     fn acquire(&mut self) -> Result<(), Error> {
-        // SAFETY: Query proved no apartment; acquire exactly one reference on this UI thread.
+        // SAFETY: Query proved no explicit initialization; acquire one reference on this UI thread.
         unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok() }
     }
     fn release(&mut self) -> Result<(), Error> {
@@ -111,8 +126,8 @@ impl Boundary for NativeBoundary {
 /// This owner is not Send; dropping it performs no native cleanup and grants no settlement proof.
 pub(super) struct UiApartment(Owner<NativeBoundary>);
 impl UiApartment {
-    /// Borrow a proven existing STA or acquire one reference when the thread is uninitialized.
-    /// Preserve query/acquisition causes and reject MTA before any Wry effects.
+    /// Borrow an ordinary STA or acquire one reference for an uninitialized or implicit-MTA thread.
+    /// Preserve query/acquisition causes; reject explicit MTA, neutral and unsupported qualifiers.
     pub(super) fn enter() -> Result<Self, DesktopError> {
         // SAFETY: Scalar current-thread observation; no retained kernel handle is created.
         let thread = unsafe { GetCurrentThreadId() };
