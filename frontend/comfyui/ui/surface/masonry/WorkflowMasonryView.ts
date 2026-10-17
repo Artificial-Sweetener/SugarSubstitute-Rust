@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own the continuous scroll surface and measured native card placement. */
+import { WorkflowMasonryRemountQueue } from './WorkflowMasonryRemountQueue.js';
 import type { CubeNode } from '../../cube/node/ComfyCubeNodeFactory.js';
 import type { CubeFaceCardStateService } from '../CubeFaceCardStateService.js';
 import type { NativeNodeCardRenderer } from '../NativeNodeCardRenderer.js';
@@ -58,6 +59,7 @@ export class WorkflowMasonryView {
   readonly #options: WorkflowMasonryViewOptions;
   readonly #views = new Map<string, WorkflowMasonrySectionView>();
   readonly #geometry: NativeCardGeometryObserver;
+  readonly #remounts: WorkflowMasonryRemountQueue;
   readonly #motion = new SurfaceMotion();
   readonly #stackInset = new MasonryStackInsetMotion();
   readonly #presentation: SurfacePresentationBoundary;
@@ -90,12 +92,22 @@ export class WorkflowMasonryView {
     this.element.tabIndex = 0;
     this.element.addEventListener('wheel', this.#onWheel, { passive: false });
     this.element.addEventListener(DISCLOSURE_LAYOUT_EVENT, this.#onDisclosureLayout);
+    options.document.addEventListener('pointerdown', this.#onInteraction, true);
+    options.document.addEventListener('keydown', this.#onInteraction, true);
     this.#content = options.document.createElement('div');
     this.#content.className = 'sugarcubes-workflow-masonry__content';
     this.element.append(this.#content);
     this.#geometry = new NativeCardGeometryObserver(options.document, () => {
       if (!this.#mounting) this.#requestLayout();
     });
+    this.#remounts = new WorkflowMasonryRemountQueue(
+      () => this.#options.getSources?.() ?? new Map(),
+      () => {
+        if (this.#mounting || this.element.hasAttribute('data-sc-masonry-preparing')) return;
+        this.#geometry.request();
+        this.#options.onCardsChanged?.();
+      },
+    );
   }
 
   /** Read original source geometry before attaching the new surface or changing graph interaction. */
@@ -144,12 +156,7 @@ export class WorkflowMasonryView {
           cardState: this.#options.cardState,
           openCube: this.#options.openCube,
           motion: this.#motion,
-          getSource: (id) => this.#options.getSources?.().get(id) ?? null,
-          onRemounted: () => {
-            // Let native appearance finish before measuring newly rebound controls.
-            if (!this.#mounting) this.#geometry.request();
-            this.#options.onCardsChanged?.();
-          },
+          requestRemount: (id, rebind) => this.#remounts.request(id, rebind),
         });
         this.#views.set(section.id, view);
       }
@@ -418,8 +425,8 @@ export class WorkflowMasonryView {
     });
   }
 
-  /** Hold settled endpoints during assembly and reconcile any queued resize afterward. */
-  setTransitioning(transitioning: boolean): void {
+  /** Hold assembly endpoints and keep restored hydration instantaneous until the next user intent. */
+  setTransitioning(transitioning: boolean, animateLayout = true): void {
     if (transitioning && !this.#transitioning) {
       this.element.scrollTo?.({ top: this.element.scrollTop, behavior: 'instant' });
       if (this.#pendingLayout || this.element.hasAttribute('data-sc-masonry-preparing')) {
@@ -429,20 +436,29 @@ export class WorkflowMasonryView {
       this.#motion.finishAnimations();
     }
     this.#transitioning = transitioning;
-    if (!transitioning) this.#motion.settle();
+    if (!transitioning && animateLayout) this.#motion.settle();
     if (!transitioning && this.#pendingLayout) {
       this.#pendingLayout = false;
       this.layout();
     }
   }
 
+  /** Enable subsequent responsive and disclosure motion after the restored view receives user intent. */
+  readonly #onInteraction = (): void => {
+    if (!this.#transitioning && !this.element.hasAttribute('data-sc-masonry-preparing'))
+      this.#motion.settle();
+  };
+
   /** Release observers and native mounts before restoring singleton custom widgets. */
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
+    this.#options.document.removeEventListener('pointerdown', this.#onInteraction, true);
+    this.#options.document.removeEventListener('keydown', this.#onInteraction, true);
     this.element.removeEventListener(DISCLOSURE_LAYOUT_EVENT, this.#onDisclosureLayout);
     this.element.removeEventListener('wheel', this.#onWheel);
     this.#generation += 1;
+    this.#remounts.dispose();
     this.#geometry.dispose();
     this.#presentation.cancel();
     this.#motion.dispose();

@@ -92,7 +92,8 @@ function fixture(sourceX = 40, destinationX = 320) {
     cell,
     effects,
     transition: new WorkflowMasonryTransition(),
-    options: { surface, backdrop, cards: [{ id: 'root:1', cell }], graph },
+    graph,
+    options: { surface, backdrop, cards: [{ id: 'root:1', cell }], measureGraph: () => graph },
   };
 }
 
@@ -195,7 +196,7 @@ test('allocates no moving-card effects for endpoints outside the viewport or red
 
 test('fades an unmatched card without inventing a graph position', async () => {
   const setup = fixture();
-  setup.options.graph.cards.clear();
+  setup.graph.cards.clear();
   const entry = setup.transition.run(setup.options, true, false);
   expect(setup.effects.find((effect) => effect.element === setup.element)?.frames).toEqual([
     { opacity: 0 },
@@ -274,7 +275,7 @@ test('reverses a loose card from its displayed width without replacing its origi
   setup.source.style.width = '260px';
   setup.source.style.height = '150px';
   setup.source.style.transform = 'matrix(1.1, 0, 0, 1.1, 100, 80)';
-  setup.options.graph.cards.set('root:1', {
+  setup.graph.cards.set('root:1', {
     element: setup.source,
     rectangle: rectangle(200, 150, 286, 110),
     layoutWidth: 260,

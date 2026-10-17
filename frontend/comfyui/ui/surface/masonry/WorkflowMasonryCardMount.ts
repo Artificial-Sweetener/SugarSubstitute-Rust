@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Reuse a mounted Cube card or own a temporary native projection for one masonry cell. */
+import type { WorkflowMasonryRebind } from './WorkflowMasonryRemountQueue.js';
 import type { ComfyNode } from '../../types/graph.js';
 import type { ProjectedNodeCard } from '../NodeCardProjection.js';
 import { NativeNodeCardHost } from '../NativeNodeCardHost.js';
@@ -28,9 +29,8 @@ export interface WorkflowMasonryCardMountOptions {
   card: ProjectedNodeCard;
   renderer: NativeNodeCardRenderer;
   source: HTMLElement | null;
-  getSource(): HTMLElement | null;
+  requestRemount(rebind: WorkflowMasonryRebind): void;
   onActivationChange(node: ComfyNode, enabled: boolean): void;
-  onRemounted(): void;
 }
 
 /** Release only presentation resources owned here, keeping source native widgets alive. */
@@ -88,13 +88,14 @@ export class WorkflowMasonryCardMount {
 
   /** Reacquire only this card after its source owner replaces controls during a policy change. */
   readonly #onInvalidated = (): void => {
-    queueMicrotask(() => {
-      if (this.#disposed) return;
-      const source = this.#options.getSource();
+    this.#options.requestRemount((source) => {
+      if (this.#disposed) return false;
       this.#transfer = source ? prepareNativeCardPresentation(source, this.#onInvalidated) : null;
+      this.#host?.dispose();
+      this.#host = null;
       this.#mounted = false;
       this.mount();
-      this.#options.onRemounted();
+      return true;
     });
   };
 }

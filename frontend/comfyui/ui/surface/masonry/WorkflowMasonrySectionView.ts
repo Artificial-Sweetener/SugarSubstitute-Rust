@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose existing Cube card presentation within one continuous workflow section. */
+import type { WorkflowMasonryRebind } from './WorkflowMasonryRemountQueue.js';
 import type { CubeNode } from '../../cube/node/ComfyCubeNodeFactory.js';
 import type { CubeFaceCardStateService } from '../CubeFaceCardStateService.js';
 import { WorkflowMasonryCardMount } from './WorkflowMasonryCardMount.js';
@@ -43,8 +44,7 @@ export interface WorkflowMasonrySectionViewOptions {
   cardState: CubeFaceCardStateService;
   motion: SurfaceMotion;
   openCube(node: CubeNode): void;
-  getSource(id: string): HTMLElement | null;
-  onRemounted(): void;
+  requestRemount(id: string, rebind: WorkflowMasonryRebind): void;
 }
 
 /** Retain the shared optional-node menu while reconciling native card membership. */
@@ -117,10 +117,9 @@ export class WorkflowMasonrySectionView {
             card,
             renderer,
             source: section.cube ? (sources.get(card.id) ?? null) : null,
-            getSource: () => (section.cube ? this.#options.getSource(card.id) : null),
+            requestRemount: (rebind) => this.#options.requestRemount(card.id, rebind),
             onActivationChange: (node, enabled) =>
               this.#options.cardState.setEnabled(section.target, String(node.id ?? ''), enabled),
-            onRemounted: this.#options.onRemounted,
           }),
           node: card.node,
           activation: card.showActivationControl,

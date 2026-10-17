@@ -36,6 +36,10 @@ export interface ContextMenuOptions {
   readonly entries: readonly ContextMenuEntry[];
   readonly anchor: FloatingAnchor;
   readonly trigger?: HTMLElement | null;
+  /** Return focus independently when focusing the originating control would change selection. */
+  readonly focusReturn?: HTMLElement | null;
+  /** Let commands that open host surfaces take focus without first refocusing another control. */
+  readonly returnFocusOnSelect?: boolean;
   readonly attributes?: Readonly<Record<string, string>>;
   readonly closed?: () => void;
   readonly focusChecked?: boolean;
@@ -66,14 +70,18 @@ export class ContextMenu {
     ContextMenu.#active.set(this.#document, this);
     this.#options = options;
     this.#previous =
-      options.trigger ??
-      (this.#document.activeElement instanceof HTMLElement ? this.#document.activeElement : null);
+      options.focusReturn !== undefined
+        ? options.focusReturn
+        : (options.trigger ??
+          (this.#document.activeElement instanceof HTMLElement
+            ? this.#document.activeElement
+            : null));
     this.#openLevel(options.entries, options.anchor, null, 0);
     this.#document.addEventListener('keydown', this.#key, true);
     if (options.focusChecked)
       this.#levels[0]?.rows.find((row) => row.getAttribute('aria-checked') === 'true')?.focus();
     if (!this.#levels[0]?.rows.some((row) => row === this.#document.activeElement))
-      this.#levels[0]?.rows[0]?.focus();
+      (this.#levels[0]?.rows[0] ?? this.#levels[0]?.surface.element)?.focus();
   }
 
   /** Report the complete tree's lifetime rather than one submenu's state. */
@@ -82,7 +90,10 @@ export class ContextMenu {
   }
 
   /** Close every level, release listeners and restore the originating control's focus. */
-  readonly close = (): void => {
+  readonly close = (): void => this.#close(true);
+
+  /** Keep dismissal and command handoff under the same focus and exclusivity owner. */
+  #close(returnFocus: boolean): void {
     if (ContextMenu.#active.get(this.#document) === this)
       ContextMenu.#active.delete(this.#document);
     const options = this.#options;
@@ -91,9 +102,9 @@ export class ContextMenu {
     this.#document.removeEventListener('keydown', this.#key, true);
     const previous = this.#previous;
     this.#previous = null;
-    if (previous?.isConnected) previous.focus();
+    if (returnFocus && previous?.isConnected) previous.focus();
     options?.closed?.();
-  };
+  }
 
   /** Render official Fluent controls with literal text and feature-owned icon slots. */
   #openLevel(
@@ -106,6 +117,7 @@ export class ContextMenu {
     const menu = createFluentMenuList(this.#document);
     menu.className = 'sc-context-menu';
     menu.setAttribute('role', 'menu');
+    menu.setAttribute('tabindex', '-1');
     menu.setAttribute('aria-label', this.#options?.label ?? 'Actions');
     menu.style.setProperty('width', 'max-content');
     menu.style.setProperty('font-family', 'var(--fontFamilyBase)');
@@ -137,7 +149,7 @@ export class ContextMenu {
     this.#trim(1);
     level.surface.element.replaceChildren();
     level.rows.splice(0, level.rows.length, ...this.#renderRows(level.surface.element, entries, 0));
-    level.rows[Math.max(0, index)]?.focus();
+    (level.rows[Math.max(0, index)] ?? level.surface.element).focus();
     level.surface.reposition();
   }
 
@@ -221,7 +233,7 @@ export class ContextMenu {
           row.setAttribute('aria-expanded', 'true');
           this.#levels[depth + 1]?.rows[0]?.focus();
         } else {
-          if (!entry.keepOpen) this.close();
+          if (!entry.keepOpen) this.#close(this.#options?.returnFocusOnSelect !== false);
           entry.select?.();
         }
       };

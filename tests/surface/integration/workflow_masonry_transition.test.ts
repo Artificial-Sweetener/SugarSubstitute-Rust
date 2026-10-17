@@ -29,6 +29,7 @@ test('fades the background in both directions without replacing native card layo
   const transition = new WorkflowMasonryTransition();
   const geometry = jest.spyOn(setup.card, 'getBoundingClientRect');
   const entry = transition.run(setup.view, true, false);
+  expect(setup.view.measureGraph).toHaveBeenCalledTimes(1);
   expect(setup.frames).toEqual([[{ opacity: 0 }, { opacity: 1 }]]);
   expect(setup.options[0]).toMatchObject({
     duration: fluentMotion.duration,
@@ -109,10 +110,29 @@ test('runs graph navigation fades on the masonry timeline and retains suppressio
   expect(setup.toolbar.style.opacity).toBe('1');
 });
 
+test('measures graph endpoints before reveal writes and skips them for instant restoration', async () => {
+  const setup = fixture(true);
+  const measure = setup.view.measureGraph;
+  measure.mockImplementation(() => {
+    expect(setup.toolbar.style.opacity).toBe('1');
+    return { cards: new Map(), layers: [], viewport: setup.surface.getBoundingClientRect() };
+  });
+  const transition = new WorkflowMasonryTransition();
+  const entry = transition.run(setup.view, true, false);
+  expect(measure).toHaveBeenCalledTimes(1);
+  setup.effects.forEach((effect) => effect.finish());
+  await entry;
+  measure.mockClear();
+  await transition.run(setup.view, false, true);
+  expect(measure).not.toHaveBeenCalled();
+  setup.view.reveal?.dispose();
+});
+
 test('switches graph navigation immediately with reduced masonry motion', async () => {
   const setup = fixture(true);
   const transition = new WorkflowMasonryTransition();
   await transition.run(setup.view, true, true);
+  expect(setup.view.measureGraph).not.toHaveBeenCalled();
   expect(setup.effects).toHaveLength(0);
   expect(setup.toolbar.style.opacity).toBe('0');
   expect(setup.minimap.inert).toBe(true);
@@ -172,7 +192,11 @@ function fixture(chrome = false) {
     surface,
     backdrop,
     cards: [],
-    graph: { cards: new Map(), layers: [], viewport: surface.getBoundingClientRect() },
+    measureGraph: jest.fn(() => ({
+      cards: new Map(),
+      layers: [],
+      viewport: surface.getBoundingClientRect(),
+    })),
     ...(chrome ? { reveal } : {}),
   };
   return { surface, backdrop, card, effects, frames, options, view, toolbar, minimap };

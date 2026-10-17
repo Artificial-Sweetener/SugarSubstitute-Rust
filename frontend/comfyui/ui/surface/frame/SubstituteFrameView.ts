@@ -22,6 +22,7 @@ import { applyOwnedFluentTheme } from '../appearance/FluentThemeRuntime.js';
 import type { CubeStackFrameControls } from '../stack/CubeStackHost.js';
 import type { FrameWorkflowTab } from './ComfyFrameWorkflowAdapter.js';
 import type { WorkflowSessionId } from '../../execution/domain/ExecutionIdentity.js';
+import { createCubeAddIconElement } from '../CubeAddIcon.js';
 
 export interface SubstituteFrameViewActions {
   readonly workflows: WorkflowTabsActions;
@@ -40,6 +41,8 @@ export class SubstituteFrameView {
   readonly #overflowMenu: ContextMenu;
   readonly #stripLayout: WorkflowTabStripLayout;
   readonly #stackButton: HTMLElement;
+  readonly #stackGlyph: HTMLElement;
+  readonly #addGlyph: HTMLElement;
   readonly #stopStack: () => void;
   #presented: readonly FrameWorkflowTab[] = [];
   #dark: boolean | null = null;
@@ -57,6 +60,8 @@ export class SubstituteFrameView {
     this.#overflowMenu = new ContextMenu(document);
     const viewport = document.createElement('div');
     viewport.className = 'sc-workflow-strip';
+    viewport.id = 'sc-workflow-strip';
+    viewport.setAttribute('data-sc-scrollbar-managed', '');
     this.#tabs = new WorkflowTabsView(document, actions.workflows, viewport);
     this.#orb = new AppOrbView(
       document,
@@ -70,7 +75,7 @@ export class SubstituteFrameView {
       ],
       actions.report,
     );
-    const create = this.#button('New workflow', '+', () => actions.workflows.create());
+    const create = this.#button('New workflow', '', () => actions.workflows.create());
     create.classList.add('sc-workflow-new');
     const overflow = this.#button('More workflows', '⌄', () =>
       this.#overflowMenu.open({
@@ -87,20 +92,25 @@ export class SubstituteFrameView {
     );
     overflow.classList.add('sc-workflow-overflow');
     overflow.setAttribute('aria-haspopup', 'menu');
-    viewport.append(this.#tabs.element, create);
+    const previous = this.#button('Scroll workflows left', '', () => undefined);
+    const next = this.#button('Scroll workflows right', '', () => undefined);
+    previous.classList.add('sc-workflow-scroll', 'sc-workflow-scroll--previous');
+    next.classList.add('sc-workflow-scroll');
+    viewport.append(this.#tabs.element);
     this.#stripLayout = new WorkflowTabStripLayout(
       document,
       this.element,
       viewport,
       this.#tabs.element,
-      overflow,
-      () => this.#tabs.resize(),
+      { overflow, previous, next },
+      (width) => this.#tabs.resize(width),
       () => this.#overflowMenu.close(),
+      () => this.#tabs.refreshScrollLayout(),
     );
     const cluster = document.createElement('div');
     cluster.className = 'sc-orb-actions';
     this.#stackButton = this.#button('Cube stack', '', () => {
-      if (actions.stack.available) void actions.stack.toggleCompact().catch(actions.report);
+      if (actions.stack.available) void actions.stack.activate().catch(actions.report);
     });
     this.#stackButton.addEventListener('contextmenu', (event) => {
       event.preventDefault();
@@ -111,7 +121,17 @@ export class SubstituteFrameView {
         entries: actions.stack.menu(),
       });
     });
-    this.#stackButton.append(this.#glyph('sc-orb-stack-icon', 'panel-left.svg'));
+    this.#stackGlyph = this.#glyph('sc-orb-stack-icon', 'panel-left.svg');
+    this.#addGlyph = createCubeAddIconElement(document);
+    // Fit the shared 16px cube and its 3px badge overhang to the replaced 13px stack glyph.
+    Object.assign(this.#addGlyph.style, {
+      position: 'absolute',
+      left: '5px',
+      top: '18.5px',
+      transform: `scale(${String(13 / 19)})`,
+      transformOrigin: 'top left',
+    });
+    this.#stackButton.append(this.#stackGlyph, this.#addGlyph);
     this.#stopStack = actions.stack.subscribe(() => this.#updateStack());
     this.#updateStack();
     const overrides = this.#button('Set Global Override', '', () =>
@@ -124,7 +144,7 @@ export class SubstituteFrameView {
     chevron.setAttribute('aria-hidden', 'true');
     overrides.append(this.#glyph('sc-orb-pin-icon', 'pin.svg'), chevron);
     cluster.append(this.#stackButton, overrides);
-    this.element.append(this.#orb.element, viewport, overflow, cluster);
+    this.element.append(this.#orb.element, previous, viewport, next, create, overflow, cluster);
   }
 
   /** Retain tab identities through workflow and activity updates. */
@@ -156,23 +176,31 @@ export class SubstituteFrameView {
     this.element.remove();
   }
 
-  /** Keep the original compact toggle and glyph synchronized with the rail's preference owner. */
+  /** Present the stack owner's current cart or compact intent with the shared cube-chrome icon. */
   #updateStack(): void {
-    const compact = this.actions.stack.compact;
-    const label = compact ? 'Expand Cube stack' : 'Collapse Cube stack';
+    const action = this.actions.stack.action;
+    const compact = action === 'expand';
+    const label =
+      action === 'add' ? 'Add Cube' : compact ? 'Expand Cube stack' : 'Collapse Cube stack';
     this.#stackButton.setAttribute('aria-label', label);
     this.#stackButton.toggleAttribute('disabled', !this.actions.stack.available);
     this.#stackButton.title = this.actions.stack.available
       ? label
-      : 'Show the Cube stack in masonry to expand or collapse it';
-    this.#stackButton.setAttribute('aria-pressed', String(compact));
+      : 'Switch to masonry to use Cube stack controls';
+    if (action === 'add') {
+      this.#stackButton.removeAttribute('aria-pressed');
+      this.#stackButton.setAttribute('aria-haspopup', 'dialog');
+    } else {
+      this.#stackButton.setAttribute('aria-pressed', String(compact));
+      this.#stackButton.removeAttribute('aria-haspopup');
+    }
+    this.#addGlyph.style.display = action === 'add' ? '' : 'none';
+    this.#stackGlyph.style.display = action === 'add' ? 'none' : '';
     const filename = compact ? 'panel-left-regular.svg' : 'panel-left.svg';
-    this.#stackButton
-      .querySelector<HTMLElement>('.sc-orb-stack-icon')
-      ?.style.setProperty(
-        '--sc-orb-glyph',
-        `url("${new URL(`../../../../orb/${filename}`, import.meta.url).href}")`,
-      );
+    this.#stackGlyph.style.setProperty(
+      '--sc-orb-glyph',
+      `url("${new URL(`../../../../orb/${filename}`, import.meta.url).href}")`,
+    );
   }
 
   /** Load trusted packaged artwork through a theme-tinted mask. */

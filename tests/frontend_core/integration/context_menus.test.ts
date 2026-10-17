@@ -123,6 +123,54 @@ test('reconciles checked choices without replacing the floating surface', () => 
   menu.close();
 });
 
+test('returns focus to an explicit selection owner after asynchronous row updates', () => {
+  const active = document.createElement('button');
+  const contextTarget = document.createElement('button');
+  document.body.append(active, contextTarget);
+  const targetFocused = jest.fn();
+  contextTarget.addEventListener('focus', targetFocused);
+  const menu = new ContextMenu(document);
+  menu.open({
+    label: 'Workflow actions',
+    trigger: contextTarget,
+    focusReturn: active,
+    anchor: { kind: 'pointer', x: 20, y: 20 },
+    entries: [{ label: 'Loading', disabled: true }],
+  });
+  expect(document.activeElement).toBe(document.querySelector('[role="menu"]'));
+  menu.updateEntries([{ label: 'Close Other Tabs' }]);
+  expect(document.activeElement?.textContent).toBe('Close Other Tabs');
+  expect(targetFocused).not.toHaveBeenCalled();
+  menu.close();
+  expect(document.activeElement).toBe(active);
+  expect(targetFocused).not.toHaveBeenCalled();
+  active.remove();
+  contextTarget.remove();
+});
+
+test('command handoff can suppress trigger focus while ordinary dismissal still returns it', () => {
+  const active = document.createElement('button');
+  document.body.append(active);
+  const focused = jest.fn();
+  active.addEventListener('focus', focused);
+  const menu = new ContextMenu(document);
+  const options = {
+    label: 'Workflow actions',
+    focusReturn: active,
+    returnFocusOnSelect: false,
+    anchor: { kind: 'pointer' as const, x: 20, y: 20 },
+    entries: [{ label: 'Save As' }],
+  };
+  menu.open(options);
+  document.querySelector<HTMLElement>('[role="menuitem"]')!.click();
+  expect(focused).not.toHaveBeenCalled();
+  expect(document.activeElement).toBe(document.body);
+  menu.open(options);
+  menu.close();
+  expect(document.activeElement).toBe(active);
+  active.remove();
+});
+
 test('pointer context menus dismiss on the originating surface without consuming its next interaction', () => {
   const surface = document.createElement('section');
   const child = document.createElement('button');

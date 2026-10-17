@@ -81,6 +81,72 @@ test('activation and inactive close invoke the existing native handlers without 
   expect(() => adapter.close(id, sessions)).toThrow('action surface changed');
 });
 
+test('the tab menu reads native actions for an inactive workflow without activating it', async () => {
+  const id = workflowSessionId('inactive');
+  const workflow = { path: 'inactive', isModified: false };
+  const store = { openWorkflows: [workflow], activeWorkflow: null };
+  const native = document.createElement('div');
+  const tab = document.createElement('div');
+  tab.className = 'workflow-tab';
+  const label = document.createElement('span');
+  label.className = 'workflow-label';
+  label.textContent = 'Inactive';
+  tab.append(label);
+  native.append(tab);
+  const appRoot = document.createElement('div');
+  appRoot.id = 'vue-app';
+  appRoot.append(native);
+  document.body.append(appRoot);
+  const menuSurface = document.createElement('div');
+  menuSurface.setAttribute('role', 'menu');
+  const command = jest.fn();
+  const tree: Record<string, unknown> = { children: [] };
+  const setOpen = jest.fn((open: boolean) => {
+    tree.children = open
+      ? [
+          {
+            type: { __name: 'ContextMenuContent' },
+            el: menuSurface,
+            children: [
+              {
+                type: { __name: 'WorkflowActionsList' },
+                props: { items: [{ label: 'Duplicate', command }] },
+              },
+            ],
+          },
+        ]
+      : [];
+  });
+  Object.defineProperty(appRoot, '_vnode', {
+    value: {
+      type: { __name: 'WorkflowTab' },
+      component: {
+        props: { workflowOption: { workflow } },
+        subTree: {
+          type: { __name: 'ContextMenuRoot' },
+          component: {
+            provides: { [Symbol('ContextMenuRootContext')]: { onOpenChange: setOpen } },
+            subTree: tree,
+          },
+        },
+      },
+    },
+  });
+  const adapter = new ComfyFrameWorkflowAdapter({ extensionManager: { workflow: store } }, native);
+  const entries = await adapter.menu(
+    id,
+    [{ sessionId: id, path: 'inactive', title: 'Inactive', generation: 0 }],
+    jest.fn(),
+  );
+  expect(entries.map((entry) => entry.label)).toEqual(['Duplicate']);
+  expect(store.activeWorkflow).toBeNull();
+  expect(setOpen.mock.calls).toEqual([[true], [false]]);
+  expect(document.documentElement.hasAttribute('data-sc-tab-menu-capture')).toBe(false);
+  entries[0]?.select?.();
+  expect(command).toHaveBeenCalledTimes(1);
+  appRoot.remove();
+});
+
 test('command delegation preserves asynchronous failures for the frame error boundary', async () => {
   const execute = jest.fn(async (id: string) => {
     if (id === 'Comfy.SaveWorkflow') throw new Error('save failed');

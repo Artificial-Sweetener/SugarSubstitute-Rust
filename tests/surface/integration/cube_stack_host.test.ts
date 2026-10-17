@@ -401,6 +401,7 @@ function setup(analysisAvailable = true, available = true, frame?: SubstituteFra
   const move = jest.fn(async (_id: string, _delta: -1 | 1) => undefined);
   const revealSearchResults = jest.fn();
   const refreshSurface = jest.fn(async () => undefined);
+  const openCart = jest.fn();
   const host = new CubeStackHost({
     document,
     app: {
@@ -435,7 +436,7 @@ function setup(analysisAvailable = true, available = true, frame?: SubstituteFra
     resolveSource: () => null,
     revealSearchResults,
     refreshSurface,
-    openCart: jest.fn(),
+    openCart,
     remove: jest.fn(),
     contextMenu: jest.fn(),
     closeTransient: jest.fn(),
@@ -451,6 +452,7 @@ function setup(analysisAvailable = true, available = true, frame?: SubstituteFra
     listeners,
     revealSearchResults,
     refreshSurface,
+    openCart,
   };
 }
 
@@ -499,6 +501,38 @@ function cubeNode(id: string): CubeNode {
   };
 }
 
+test('empty masonry reserves no rail and introduces the first cube through existing drawer motion', async () => {
+  const fixture = setup();
+  const first = fixture.surface.sections[0]!;
+  fixture.surface.sections = [];
+  fixture.host.setup();
+  fixture.host.ready(fixture.surface);
+  await nextTick();
+  expect(document.querySelector('.sc-cube-stack-host')).toBeNull();
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(0);
+  expect(fixture.host.frameControls.available).toBe(true);
+  expect(fixture.host.frameControls.action).toBe('add');
+  await fixture.host.frameControls.activate();
+  expect(fixture.openCart).toHaveBeenCalledTimes(1);
+  expect(fixture.host.frameControls.action).toBe('add');
+  const present = jest.spyOn(CubeStackDrawerMotion.prototype, 'setVisible');
+  fixture.surface.sections = [first];
+  fixture.host.ready(fixture.surface);
+  await nextTick();
+  expect(document.querySelectorAll('.sc-cube-stack-row')).toHaveLength(1);
+  expect(present).toHaveBeenCalledWith(true);
+  expect(fixture.host.frameControls.action).toBe('collapse');
+  fixture.surface.sections = [];
+  fixture.host.valuesChanged();
+  await nextTick();
+  expect(document.querySelector('.sc-cube-stack-host')).toBeNull();
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(0);
+  expect(fixture.host.frameControls.action).toBe('add');
+  await fixture.host.transition(false);
+  await fixture.host.frameControls.activate();
+  expect(fixture.openCart).toHaveBeenCalledTimes(1);
+});
+
 test('frame compact control follows visible masonry without changing preferences while unavailable', async () => {
   const fixture = setup();
   fixture.host.setup();
@@ -506,31 +540,31 @@ test('frame compact control follows visible masonry without changing preferences
   const changed = jest.fn();
   const stop = controls.subscribe(changed);
   expect(controls.available).toBe(false);
-  await controls.toggleCompact();
-  expect(controls.compact).toBe(false);
+  await controls.activate();
+  expect(controls.action).toBe('add');
   fixture.host.ready(fixture.surface, true);
   expect(controls.available).toBe(false);
   await fixture.host.transition(true);
   expect(controls.available).toBe(true);
   expect(changed).toHaveBeenCalled();
-  await controls.toggleCompact();
-  expect(controls.compact).toBe(true);
+  await controls.activate();
+  expect(controls.action).toBe('expand');
   await fixture.host.transition(false);
   expect(controls.available).toBe(false);
-  await controls.toggleCompact();
-  expect(controls.compact).toBe(true);
+  await controls.activate();
+  expect(controls.action).toBe('expand');
   await fixture.host.transition(true);
   fixture.settings.get(CUBE_STACK_VISIBLE_SETTING)?.onChange(false);
   expect(controls.available).toBe(false);
-  await controls.toggleCompact();
-  expect(controls.compact).toBe(true);
+  await controls.activate();
+  expect(controls.action).toBe('expand');
   fixture.settings.get(CUBE_STACK_VISIBLE_SETTING)?.onChange(true);
   expect(controls.available).toBe(true);
   fixture.host.release();
   expect(controls.available).toBe(false);
   fixture.host.ready(fixture.surface, false);
   expect(controls.available).toBe(true);
-  expect(controls.compact).toBe(true);
+  expect(controls.action).toBe('expand');
   stop();
   changed.mockClear();
   fixture.host.release();

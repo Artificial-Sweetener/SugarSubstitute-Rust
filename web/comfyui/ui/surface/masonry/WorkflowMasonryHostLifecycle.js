@@ -84,6 +84,7 @@ export class WorkflowMasonryHostLifecycle {
             notifyRendererFallback: options.notifyRendererFallback,
             reportError: options.reportError,
             onStateChange: () => this.#refreshButton(),
+            onSurfaceMounting: (view, preparing) => this.#stack.ready(view, preparing),
             onSurfaceReady: (view, preparing) => {
                 this.#search.ready(view);
                 this.#stack.ready(view, preparing);

@@ -23,10 +23,10 @@ import { WorkflowMasonryView } from './WorkflowMasonryView.js';
 import { WorkflowMasonryTransition } from './WorkflowMasonryTransition.js';
 import type { WorkflowMasonryLinkMotion } from './WorkflowMasonryLinkMotion.js';
 import { WorkflowMasonryGraphReveal } from './WorkflowMasonryGraphReveal.js';
+import { WorkflowMasonryGraphVisibility } from './WorkflowMasonryGraphVisibility.js';
 import { SurfacePresentationBoundary } from '../motion/SurfacePresentationBoundary.js';
 import {
   measureWorkflowMasonryGraph,
-  workflowMasonryGraphLayers,
   workflowMasonryGraphCards,
 } from './WorkflowMasonryGraphGeometry.js';
 
@@ -43,6 +43,7 @@ export interface WorkflowMasonryControllerOptions {
   notifyRendererFallback(): void;
   reportError(error: unknown): void;
   onStateChange(): void;
+  onSurfaceMounting?(view: WorkflowMasonryView, preparing: boolean): void;
   onSurfaceReady?(view: WorkflowMasonryView, preparing: boolean): void;
   onSurfaceLeaving?(): void;
   onSurfaceValuesChanged?(): void;
@@ -65,14 +66,14 @@ export class WorkflowMasonryController {
   #topology = '';
   #renderer: NativeNodeCardRenderer | null = null;
   #links: WorkflowMasonryLinkMotion | null = null;
-  readonly #graphInert = new Map<HTMLElement, boolean>();
-  readonly #hiddenGraphRoots = new Set<HTMLElement>();
+  readonly #graphVisibility: WorkflowMasonryGraphVisibility;
   readonly #scrollPositions = new WeakMap<object, number>();
   #viewScope: object | null = null;
 
   /** Bind host capabilities without importing host globals or owning graph mutations. */
   constructor(options: WorkflowMasonryControllerOptions) {
     this.#options = options;
+    this.#graphVisibility = new WorkflowMasonryGraphVisibility(options.getContainer);
     this.#acquisition = new NativeRendererAcquisition(options.document);
     this.#settled = new SurfacePresentationBoundary(options.document);
   }
@@ -96,9 +97,8 @@ export class WorkflowMasonryController {
     this.#desired = desired;
     const generation = ++this.#generation;
     this.#transition.cancel();
-    this.#releaseView(
-      desired && !this.#suspensions.has('app') && !this.#suspensions.has('subgraph'),
-    );
+    this.#releaseView(this.#retainGraphSuppression());
+    if (this.#retainGraphSuppression()) this.#graphVisibility.setHidden(true);
     this.#options.onStateChange();
     if (this.active && this.#options.isNodes2()) await this.#show(generation, false);
   }
@@ -110,13 +110,12 @@ export class WorkflowMasonryController {
     else this.#suspensions.delete(reason);
     const generation = ++this.#generation;
     this.#transition.cancel();
-    this.#releaseView(
-      this.#desired && !this.#suspensions.has('app') && !this.#suspensions.has('subgraph'),
-    );
+    this.#releaseView(this.#retainGraphSuppression());
+    if (this.#retainGraphSuppression()) this.#graphVisibility.setHidden(true);
     this.#options.onStateChange();
     if (!this.active || !this.#options.isNodes2()) return;
-    // Comfy commits its mode before Vue reveals the graph container and native controls.
-    await this.#settled.settled(1);
+    // Mode/editor changes precede native visibility; configuration resumes after the observed load commits.
+    if (reason !== 'configure') await this.#settled.settled(1);
     if (generation === this.#generation && this.active) await this.#show(generation, false);
   }
 
@@ -130,7 +129,7 @@ export class WorkflowMasonryController {
     this.#links?.hold(!this.#desired);
     this.#options.onStateChange();
     if (!this.#desired) {
-      this.#setGraphHidden(false);
+      this.#graphVisibility.setHidden(false);
       try {
         if (!this.#view?.element.hasAttribute('data-sc-masonry-transition'))
           await this.#view?.settlePresentation();
@@ -173,7 +172,7 @@ export class WorkflowMasonryController {
           document: this.#options.document,
           sections,
           cardState: this.#options.getCardState(),
-          getSources: () => workflowMasonryGraphCards(container, this.#options.getSections()),
+          getSources: () => workflowMasonryGraphCards(container, this.#view?.sections ?? sections),
           openCube: (cube) => this.#options.openCube(cube),
           onCardsChanged: () => {
             if (this.#view && this.#desired) this.#options.onSurfaceReady?.(this.#view, animate);
@@ -185,7 +184,8 @@ export class WorkflowMasonryController {
         this.#reveal.reconcile(container, sections);
         const sources = this.#view.prepareSources();
         container.append(this.#view.backdrop, this.#view.element);
-        this.#setGraphInert(true);
+        this.#options.onSurfaceMounting?.(this.#view, animate);
+        this.#graphVisibility.setInert(true);
         this.#mounting = this.#view.mountCards(renderer, sources);
       }
       await this.#mounting;
@@ -201,7 +201,7 @@ export class WorkflowMasonryController {
         if (generation === this.#generation && this.#viewScope && this.#view)
           this.#view.element.scrollTop = this.#scrollPositions.get(this.#viewScope) ?? 0;
       }
-      if (generation === this.#generation && this.#desired) this.#setGraphHidden(true);
+      if (generation === this.#generation && this.#desired) this.#graphVisibility.setHidden(true);
     } catch (error: unknown) {
       if (generation !== this.#generation) return;
       this.leaveImmediately();
@@ -269,7 +269,7 @@ export class WorkflowMasonryController {
     const view = this.#view;
     const container = this.#container;
     if (!view || !container) return;
-    this.#setGraphInert(true);
+    this.#graphVisibility.setInert(true);
     view.setTransitioning(true);
     const reducedMotion = !animate || this.#reducedMotion();
     if (reducedMotion && this.#links) {
@@ -288,7 +288,7 @@ export class WorkflowMasonryController {
           surface: view.element,
           backdrop: view.backdrop,
           cards: view.transitionCards(),
-          graph: measureWorkflowMasonryGraph(container, this.#options.getSections()),
+          measureGraph: () => measureWorkflowMasonryGraph(container, view.sections),
           ...(this.#reveal ? { reveal: this.#reveal } : {}),
         },
         entering,
@@ -296,13 +296,13 @@ export class WorkflowMasonryController {
       ),
     ]);
     if (entering && !view.element.hasAttribute('data-sc-masonry-transition'))
-      view.setTransitioning(false);
+      view.setTransitioning(false, animate);
   }
 
   /** Remove presentation resources while preserving canonical graph and edit state. */
   #releaseView(retainGraphSuppression = false): void {
     this.#acquisition.cancel();
-    if (!retainGraphSuppression) this.#setGraphHidden(false);
+    if (!retainGraphSuppression) this.#graphVisibility.setHidden(false);
     this.#settled.cancel();
     const links = this.#links;
     this.#links = null;
@@ -337,38 +337,13 @@ export class WorkflowMasonryController {
     );
   }
 
-  /** Keep graph visible behind the fade and suppress it only after masonry is opaque. */
-  #setGraphHidden(hidden: boolean): void {
-    this.#setGraphInert(hidden);
-    if (!hidden) {
-      for (const element of this.#hiddenGraphRoots) delete element.dataset.sugarcubesMasonry;
-      this.#hiddenGraphRoots.clear();
-      return;
-    }
-    const container = this.#container;
-    if (!container) return;
-    const graphRoot = container.closest<HTMLElement>('#graph-canvas-container');
-    for (const element of new Set([container, graphRoot])) {
-      if (!element) continue;
-      this.#hiddenGraphRoots.add(element);
-      element.dataset.sugarcubesMasonry = 'true';
-    }
-  }
-
-  /** Keep graph controls dormant while presentation owns the pointer, retaining host inert state. */
-  #setGraphInert(hidden: boolean): void {
-    if (!hidden) {
-      for (const [element, inert] of this.#graphInert) element.inert = inert;
-      this.#graphInert.clear();
-    }
-    const container = this.#container;
-    if (!container) return;
-    if (hidden) {
-      for (const layer of workflowMasonryGraphLayers(container)) {
-        if (!this.#graphInert.has(layer)) this.#graphInert.set(layer, layer.inert);
-        if (!layer.inert) layer.inert = true;
-      }
-    }
+  /** Cover graph replacement until the committed destination can safely expose its own view. */
+  #retainGraphSuppression(): boolean {
+    return (
+      (this.#desired || this.#suspensions.has('configure')) &&
+      !this.#suspensions.has('app') &&
+      !this.#suspensions.has('subgraph')
+    );
   }
 }
 

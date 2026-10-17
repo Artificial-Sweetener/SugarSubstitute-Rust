@@ -29,8 +29,8 @@ export function workflowTabDragPlacement(
   origin: number,
   delta: number,
   previousTarget = origin,
+  width = WORKFLOW_TAB_WIDTH,
 ): WorkflowTabDragPlacement {
-  const width = WORKFLOW_TAB_WIDTH;
   const draggedLeft = Math.max(0, Math.min((count - 1) * width, origin * width + delta));
   let target = Math.max(0, Math.min(count - 1, previousTarget));
   while (target < count - 1 && draggedLeft >= (target + 0.5) * width + 6) target++;

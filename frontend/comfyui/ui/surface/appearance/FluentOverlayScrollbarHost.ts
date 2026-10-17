@@ -133,7 +133,8 @@ export class FluentOverlayScrollbarHost {
   #owned(element: HTMLElement): boolean {
     return (
       !!element.closest('.sc-fluent-scrollbar-layer') ||
-      element.hasAttribute('data-sc-scrollbar-policy')
+      element.hasAttribute('data-sc-scrollbar-policy') ||
+      element.hasAttribute('data-sc-scrollbar-managed')
     );
   }
 

@@ -22,6 +22,7 @@ import { AppOrbView } from '../../../frontend/comfyui/ui/surface/frame/AppOrbVie
 import { SubstituteFrameView } from '../../../frontend/comfyui/ui/surface/frame/SubstituteFrameView.js';
 import { substituteFrameCss } from '../../../frontend/comfyui/ui/surface/frame/SubstituteFrameStyles.js';
 import { ContextMenu } from '../../../frontend/comfyui/ui/menus/ContextMenu.js';
+import type { ContextMenuEntry } from '../../../frontend/comfyui/ui/menus/ContextMenu.js';
 import { WorkflowSessionStore } from '../../../frontend/comfyui/ui/execution/application/WorkflowSessionStore.js';
 import { WorkflowOutputActivity } from '../../../frontend/comfyui/ui/execution/application/WorkflowOutputActivity.js';
 import { workflowSessionId } from '../../../frontend/comfyui/ui/execution/domain/ExecutionIdentity.js';
@@ -101,8 +102,8 @@ test('mode restores host presentation and preserves native controls, graph, and 
     palette: { theme: { color: '#479ef5', dark: true }, subscribe: () => () => undefined },
     stackControls: () => ({
       available: true,
-      compact: false,
-      toggleCompact: async () => undefined,
+      action: 'collapse',
+      activate: async () => undefined,
       menu: () => [],
       subscribe: () => () => undefined,
     }),
@@ -138,6 +139,7 @@ test('literal titles and keyed tabs survive reorder and activity refresh without
   const actions = {
     activate: jest.fn(),
     close: jest.fn(),
+    menu: async () => [],
     reorder: jest.fn(),
     create: jest.fn(),
     report: jest.fn(),
@@ -156,13 +158,13 @@ test('literal titles and keyed tabs survive reorder and activity refresh without
   const unread = document.getElementById(`sc-workflow-${b}`)!;
   expect(first.querySelector('img')).toBeNull();
   expect(first.textContent).toContain(tabs[0]!.title);
-  expect(view.element.style.getPropertyValue('--sc-selected-offset')).toBe('0px');
+  expect(view.element.activeid).toBe(first.id);
   expect(unread.hasAttribute('data-shimmer')).toBe(true);
   unread.dispatchEvent(new Event('animationend'));
   view.update([...tabs].reverse(), (id) => id === b);
   await settle();
   expect(document.getElementById(`sc-workflow-${a}`)).toBe(first);
-  expect(view.element.style.getPropertyValue('--sc-selected-offset')).toBe('180px');
+  expect(view.element.activeid).toBe(first.id);
   expect(unread.hasAttribute('data-unread')).toBe(true);
   expect(unread.hasAttribute('data-shimmer')).toBe(false);
   first.dispatchEvent(
@@ -177,9 +179,10 @@ test('frame actions retain stack policy, settings access, override anchor and un
   const command = jest.fn();
   const openOverrides = jest.fn();
   let compact = true;
+  let empty = false;
   let available = false;
   let refresh = (): void => undefined;
-  const toggleCompact = jest.fn(async () => {
+  const activate = jest.fn(async () => {
     compact = !compact;
     refresh();
   });
@@ -188,6 +191,7 @@ test('frame actions retain stack policy, settings access, override anchor and un
     workflows: {
       activate: jest.fn(),
       close: jest.fn(),
+      menu: async () => [],
       reorder: jest.fn(),
       create: jest.fn(),
       report: jest.fn(),
@@ -199,10 +203,10 @@ test('frame actions retain stack policy, settings access, override anchor and un
       get available() {
         return available;
       },
-      get compact() {
-        return compact;
+      get action() {
+        return empty ? 'add' : compact ? 'expand' : 'collapse';
       },
-      toggleCompact,
+      activate,
       menu: () => [{ label: 'Show Cube stack', checked: true }],
       subscribe: (listener) => {
         refresh = listener;
@@ -215,7 +219,7 @@ test('frame actions retain stack policy, settings access, override anchor and un
   expect(stack.hasAttribute('disabled')).toBe(true);
   stack.click();
   await settle();
-  expect(toggleCompact).not.toHaveBeenCalled();
+  expect(activate).not.toHaveBeenCalled();
   expect(compact).toBe(true);
   available = true;
   refresh();
@@ -223,8 +227,26 @@ test('frame actions retain stack policy, settings access, override anchor and un
   expect(stack.hasAttribute('disabled')).toBe(false);
   stack.click();
   await settle();
-  expect(toggleCompact).toHaveBeenCalledTimes(1);
+  expect(activate).toHaveBeenCalledTimes(1);
   expect(stack.getAttribute('aria-label')).toBe('Collapse Cube stack');
+  empty = true;
+  refresh();
+  expect(stack.getAttribute('aria-label')).toBe('Add Cube');
+  expect(stack.getAttribute('aria-haspopup')).toBe('dialog');
+  expect(stack.hasAttribute('aria-pressed')).toBe(false);
+  expect(stack.querySelector<HTMLElement>('[data-sugarcubes-add-cube-icon]')?.style.display).toBe(
+    '',
+  );
+  expect(stack.querySelector<HTMLElement>('.sc-orb-stack-icon')?.style.display).toBe('none');
+  const addIcon = stack.querySelector<HTMLElement>('[data-sugarcubes-add-cube-icon]')!;
+  const scale = Number(addIcon.style.transform.match(/^scale\(([^)]+)\)$/)?.[1]);
+  expect(19 * scale).toBeCloseTo(13);
+  expect(addIcon.style.left).toBe('5px');
+  expect(addIcon.style.top).toBe('18.5px');
+  empty = false;
+  refresh();
+  expect(stack.getAttribute('aria-label')).toBe('Collapse Cube stack');
+  expect(stack.hasAttribute('aria-haspopup')).toBe(false);
   const open = jest.spyOn(ContextMenu.prototype, 'open');
   stack.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
   expect(open.mock.calls.at(-1)?.[0].entries[0]?.label).toBe('Show Cube stack');
@@ -259,6 +281,7 @@ test('overflow activation reveals the selected tab and activity preserves delibe
     {
       activate: jest.fn(),
       close: jest.fn(),
+      menu: async () => [],
       reorder: jest.fn(),
       create: jest.fn(),
       report: jest.fn(),
@@ -301,14 +324,21 @@ test('new-workflow control follows the tabs and overflow appears only when the s
   const create = jest.fn();
   const activate = jest.fn();
   const view = new SubstituteFrameView(document, {
-    workflows: { activate, close: jest.fn(), reorder: jest.fn(), create, report: jest.fn() },
+    workflows: {
+      activate,
+      close: jest.fn(),
+      menu: async () => [],
+      reorder: jest.fn(),
+      create,
+      report: jest.fn(),
+    },
     command: jest.fn(),
     openOverrides: jest.fn(),
     report: jest.fn(),
     stack: {
       available: true,
-      compact: true,
-      toggleCompact: async () => undefined,
+      action: 'expand',
+      activate: async () => undefined,
       menu: () => [],
       subscribe: () => () => undefined,
     },
@@ -330,8 +360,15 @@ test('new-workflow control follows the tabs and overflow appears only when the s
   expect(getComputedStyle(add).width).toBe('32px');
   expect(getComputedStyle(add).height).toBe('24px');
   expect(getComputedStyle(add).minHeight).toBe('24px');
-  expect(add.previousElementSibling?.tagName.toLowerCase()).toBe('sc-workflow-tablist');
-  expect(add.parentElement?.classList.contains('sc-workflow-strip')).toBe(true);
+  expect(getComputedStyle(add).marginLeft).toBe('3px');
+  expect(add.textContent).toBe('');
+  expect(add.getAttribute('aria-label')).toBe('New workflow');
+  expect(add.parentElement).toBe(view.element);
+  expect(view.element.querySelector('.sc-workflow-strip')?.contains(add)).toBe(false);
+  expect(
+    view.element.querySelector('.sc-workflow-strip')?.hasAttribute('data-sc-scrollbar-managed'),
+  ).toBe(true);
+  expect(view.element.querySelector('[role="scrollbar"]')).toBeNull();
   add.click();
   expect(create).toHaveBeenCalledTimes(1);
   width = 500;
@@ -353,3 +390,131 @@ test('new-workflow control follows the tabs and overflow appears only when the s
   expect(overflow.hidden).toBe(true);
   view.dispose();
 });
+
+test('condensed selection and both wheel axes use allocated geometry without rebuilding tabs', async () => {
+  const viewport = document.createElement('div');
+  const view = new WorkflowTabsView(
+    document,
+    {
+      activate: jest.fn(),
+      close: jest.fn(),
+      menu: async () => [],
+      reorder: jest.fn(),
+      create: jest.fn(),
+      report: jest.fn(),
+    },
+    viewport,
+  );
+  viewport.append(view.element);
+  document.body.append(viewport);
+  Object.defineProperty(viewport, 'clientWidth', { value: 200 });
+  Object.defineProperty(viewport, 'scrollWidth', { value: 480 });
+  view.resize(120);
+  const tabs = ['a', 'b', 'c', 'd'].map((key, index) => ({
+    id: workflowSessionId(key),
+    title: key,
+    selected: index === 3,
+    modified: false,
+  }));
+  view.update(tabs, () => false);
+  await settle();
+  expect(viewport.scrollLeft).toBe(280);
+  const control = view.element.firstElementChild;
+  expect(view.element.activeid).toBe(`sc-workflow-${tabs[3]!.id}`);
+  viewport.scrollLeft = 0;
+  const vertical = new WheelEvent('wheel', { deltaY: 2, deltaMode: 1, cancelable: true });
+  viewport.dispatchEvent(vertical);
+  expect(vertical.defaultPrevented).toBe(true);
+  expect(viewport.scrollLeft).toBe(32);
+  viewport.dispatchEvent(new WheelEvent('wheel', { deltaX: 45, deltaY: 1, cancelable: true }));
+  expect(viewport.scrollLeft).toBe(77);
+  viewport.dispatchEvent(new WheelEvent('wheel', { deltaY: -1, deltaMode: 2, cancelable: true }));
+  expect(viewport.scrollLeft).toBe(-123);
+  view.update(tabs, () => true);
+  expect(view.element.firstElementChild).toBe(control);
+  view.dispose();
+});
+
+test('tab menus retain the inactive target and use shared rendering and outside dismissal', async () => {
+  const viewport = document.createElement('div');
+  const actions = {
+    activate: jest.fn(),
+    close: jest.fn(),
+    reorder: jest.fn(),
+    create: jest.fn(),
+    report: jest.fn(),
+    menu: jest.fn(async () => [
+      { label: '<img src=x>', disabled: true },
+      { label: 'Close Other Tabs', select: jest.fn() },
+    ]),
+  };
+  const view = new WorkflowTabsView(document, actions, viewport);
+  viewport.append(view.element);
+  document.body.append(viewport);
+  const ids = ['active', 'inactive'].map(workflowSessionId);
+  view.update(
+    ids.map((id, index) => ({ id, title: String(id), selected: index === 0, modified: false })),
+    () => false,
+  );
+  await settle();
+  const target = document.getElementById(`sc-workflow-${ids[1]}`)!;
+  for (const type of ['pointerdown', 'mousedown']) {
+    const press = new MouseEvent(type, { button: 2, bubbles: true, cancelable: true });
+    target.dispatchEvent(press);
+    expect(press.defaultPrevented).toBe(true);
+  }
+  target.dispatchEvent(
+    new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 90, clientY: 20 }),
+  );
+  await settle();
+  expect(actions.menu).toHaveBeenCalledWith(ids[1]);
+  expect(actions.activate).not.toHaveBeenCalled();
+  const menu = document.querySelector('[role="menu"]')!;
+  expect(menu.classList.contains('sc-context-menu')).toBe(true);
+  expect(menu.textContent).toContain('<img src=x>');
+  expect(menu.querySelector('img')).toBeNull();
+  expect(menu.querySelector('[aria-disabled="true"]')).not.toBeNull();
+  target.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+  expect(document.querySelector('[role="menu"]')).toBeNull();
+  expect(actions.activate).not.toHaveBeenCalled();
+  view.dispose();
+});
+
+test.each(['dismiss', 'remove', 'dispose'] as const)(
+  'late native action delivery cannot reopen a menu after %s',
+  async (end) => {
+    const viewport = document.createElement('div');
+    let deliver: (entries: readonly ContextMenuEntry[]) => void = () => undefined;
+    const pending = new Promise<readonly ContextMenuEntry[]>((resolve) => {
+      deliver = resolve;
+    });
+    const view = new WorkflowTabsView(
+      document,
+      {
+        activate: jest.fn(),
+        close: jest.fn(),
+        reorder: jest.fn(),
+        create: jest.fn(),
+        report: jest.fn(),
+        menu: () => pending,
+      },
+      viewport,
+    );
+    viewport.append(view.element);
+    document.body.append(viewport);
+    const id = workflowSessionId('pending');
+    view.update([{ id, title: 'Pending', selected: true, modified: false }], () => false);
+    await settle();
+    document
+      .getElementById(`sc-workflow-${id}`)!
+      .dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    if (end === 'dismiss')
+      document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    else if (end === 'remove') view.update([], () => false);
+    else view.dispose();
+    deliver([{ label: 'Late action' }]);
+    await settle();
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+    if (end !== 'dispose') view.dispose();
+  },
+);

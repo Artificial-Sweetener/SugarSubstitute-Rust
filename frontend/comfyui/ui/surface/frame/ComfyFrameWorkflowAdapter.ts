@@ -17,6 +17,8 @@
 import { isRecord, type UnknownRecord } from '../../types/common.js';
 import type { WorkflowSessionContext } from '../../execution/domain/WorkflowSession.js';
 import type { WorkflowSessionId } from '../../execution/domain/ExecutionIdentity.js';
+import type { ContextMenuEntry } from '../../menus/ContextMenu.js';
+import { ComfyWorkflowTabMenuAdapter } from './ComfyWorkflowTabMenuAdapter.js';
 
 export interface FrameWorkflowTab {
   readonly id: WorkflowSessionId;
@@ -29,6 +31,7 @@ export interface FrameWorkflowTab {
 export class ComfyFrameWorkflowAdapter {
   readonly #manager: UnknownRecord;
   readonly #workflow: UnknownRecord;
+  readonly #menus: ComfyWorkflowTabMenuAdapter;
 
   /** Validate the public store and retain the existing native tab component as its action port. */
   constructor(
@@ -40,6 +43,7 @@ export class ComfyFrameWorkflowAdapter {
       throw new Error('Comfy workflow controls are unavailable.');
     this.#manager = manager;
     this.#workflow = manager.workflow;
+    this.#menus = new ComfyWorkflowTabMenuAdapter(native.ownerDocument);
   }
 
   /** Project only host-owned labels, order and dirty state onto existing session identities. */
@@ -76,6 +80,17 @@ export class ComfyFrameWorkflowAdapter {
     tab.dispatchEvent(
       new MouseEventType('mouseup', { button: 1, bubbles: true, cancelable: true }),
     );
+  }
+
+  /** Project the retained native tab's complete action model without changing the active workflow. */
+  menu(
+    id: WorkflowSessionId,
+    sessions: readonly WorkflowSessionContext[],
+    report: (error: unknown) => void,
+  ): Promise<readonly ContextMenuEntry[]> {
+    const tab = this.#nativeTab(id, sessions);
+    const session = sessions.find((candidate) => candidate.sessionId === id);
+    return this.#menus.read(tab, session?.path, report);
   }
 
   /** Reorder through the host store without mutating workflow contents or session identities. */

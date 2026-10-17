@@ -22,6 +22,7 @@ export class WorkflowTabPointerDrag {
     viewport;
     reorder;
     report;
+    tabWidth;
     #preview;
     #tabs = [];
     #candidate = null;
@@ -30,12 +31,13 @@ export class WorkflowTabPointerDrag {
     #awaitingOrder = false;
     #document;
     /** Bind one delegated pointer lifetime to the scrolling workflow strip. */
-    constructor(viewport, list, reorder, report, restored) {
+    constructor(viewport, list, reorder, report, restored, tabWidth = () => WORKFLOW_TAB_WIDTH) {
         this.viewport = viewport;
         this.reorder = reorder;
         this.report = report;
+        this.tabWidth = tabWidth;
         this.#document = viewport.ownerDocument;
-        this.#preview = new WorkflowTabDragPreview(list, viewport, restored);
+        this.#preview = new WorkflowTabDragPreview(list, viewport, restored, tabWidth);
         viewport.addEventListener('pointerdown', this.#down);
         viewport.addEventListener('scroll', this.#scrolled);
         viewport.addEventListener('click', this.#click, true);
@@ -79,15 +81,15 @@ export class WorkflowTabPointerDrag {
         if (!tab)
             return;
         this.#cancel();
+        const viewportLeft = this.viewport.getBoundingClientRect().left;
         this.#candidate = {
             pointerId: event.pointerId,
             origin,
             x: event.clientX,
             y: event.clientY,
             scroll: this.viewport.scrollLeft,
-            startLeft: tab.getBoundingClientRect().left -
-                this.viewport.getBoundingClientRect().left +
-                this.viewport.scrollLeft,
+            startLeft: tab.getBoundingClientRect().left - viewportLeft + this.viewport.scrollLeft,
+            viewportLeft,
             pointer: event.clientX,
             tabs: this.#tabs,
             started: false,
@@ -120,10 +122,12 @@ export class WorkflowTabPointerDrag {
     #placement(candidate) {
         const placement = workflowTabDragPlacement(candidate.tabs.length, candidate.origin, candidate.pointer -
             candidate.x +
+            candidate.viewportLeft -
+            this.viewport.getBoundingClientRect().left +
             this.viewport.scrollLeft -
             candidate.scroll +
             candidate.startLeft -
-            candidate.origin * WORKFLOW_TAB_WIDTH, candidate.target);
+            candidate.origin * this.tabWidth(), candidate.target, this.tabWidth());
         candidate.target = placement.target;
         return placement;
     }
@@ -135,6 +139,10 @@ export class WorkflowTabPointerDrag {
     }
     /** Preserve the grab position when wheel input or host scrolling changes the viewport. */
     #scrolled = () => this.#project();
+    /** Reproject a captured tab after endpoint controls move the viewport beneath its pointer. */
+    viewportChanged() {
+        this.#project();
+    }
     /** Continue reaching offscreen slots while a held pointer rests at the viewport edge. */
     #edgeScroll() {
         if (this.#scrollFrame !== null)
@@ -232,6 +240,10 @@ export class WorkflowTabPointerDrag {
             this.#cancel();
         }
     };
+    /** Retire a gesture before its slot allocation changes. */
+    cancelForResize() {
+        this.#cancel();
+    }
     /** Remove every delegated listener, capture, autoscroll and animation on frame retirement. */
     dispose() {
         this.#cancel();

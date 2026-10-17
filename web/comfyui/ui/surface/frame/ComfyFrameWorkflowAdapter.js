@@ -15,11 +15,13 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Adapt Comfy's mounted workflow action surface without reimplementing workflow policies. */
 import { isRecord } from '../../types/common.js';
+import { ComfyWorkflowTabMenuAdapter } from './ComfyWorkflowTabMenuAdapter.js';
 /** Keep external component compatibility isolated from the Fluent view and session identity owner. */
 export class ComfyFrameWorkflowAdapter {
     native;
     #manager;
     #workflow;
+    #menus;
     /** Validate the public store and retain the existing native tab component as its action port. */
     constructor(app, native) {
         this.native = native;
@@ -28,6 +30,7 @@ export class ComfyFrameWorkflowAdapter {
             throw new Error('Comfy workflow controls are unavailable.');
         this.#manager = manager;
         this.#workflow = manager.workflow;
+        this.#menus = new ComfyWorkflowTabMenuAdapter(native.ownerDocument);
     }
     /** Project only host-owned labels, order and dirty state onto existing session identities. */
     read(sessions) {
@@ -61,6 +64,12 @@ export class ComfyFrameWorkflowAdapter {
             throw new Error('Comfy workflow close event is unavailable.');
         // Vue compiles WorkflowTab @click.middle to mouseup; click opens its hover preview instead.
         tab.dispatchEvent(new MouseEventType('mouseup', { button: 1, bubbles: true, cancelable: true }));
+    }
+    /** Project the retained native tab's complete action model without changing the active workflow. */
+    menu(id, sessions, report) {
+        const tab = this.#nativeTab(id, sessions);
+        const session = sessions.find((candidate) => candidate.sessionId === id);
+        return this.#menus.read(tab, session?.path, report);
     }
     /** Reorder through the host store without mutating workflow contents or session identities. */
     reorder(from, to) {

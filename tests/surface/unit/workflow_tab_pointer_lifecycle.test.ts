@@ -107,12 +107,7 @@ function mount(deferred = false) {
   });
   Object.defineProperty(list, 'animate', { value: animate });
   tabs[0]!.setAttribute('aria-selected', 'true');
-  const restored = jest.fn(() =>
-    list.style.setProperty(
-      '--sc-selected-offset',
-      `${String(tabs.indexOf(tabs.find((tab) => tab.getAttribute('aria-selected') === 'true')!) * 180)}px`,
-    ),
-  );
+  const restored = jest.fn();
   const report = jest.fn();
   const accept = (next: HTMLElement[]): void => {
     const positions = drag.beforeUpdate(next.map((tab) => tab.id));
@@ -237,19 +232,31 @@ test('host failures report the original cause and restore accepted order', () =>
   expect([...f.list.children]).toEqual(f.tabs);
 });
 
-test('preview cutouts and selected outline follow the held tab; cancel restores canonical shape', () => {
+test('preview cutouts follow the held tab and cancellation restores its canonical shape', () => {
   const f = mount();
   pointer(f.tabs[0]!, 'pointerdown', 50);
   pointer(document, 'pointermove', 140);
-  expect(f.tabs[0]!.style.getPropertyValue('--sc-tab-cutout-radius')).toBe('12.5px');
-  expect(f.tabs[1]!.style.getPropertyValue('--sc-tab-cutout-radius')).toBe('12.5px');
+  expect(f.tabs[0]!.style.getPropertyValue('--sc-tab-cutout-radius')).toBe('13px');
+  expect(f.tabs[1]!.style.getPropertyValue('--sc-tab-cutout-radius')).toBe('13px');
   expect(f.tabs[0]!.style.paddingLeft).toBe('26px');
   expect(f.tabs[1]!.style.paddingLeft).toBe('26px');
-  expect(f.list.style.getPropertyValue('--sc-selected-offset')).toBe('90px');
+  expect(f.tabs[0]!.style.transform).toBe('translateX(90px)');
   f.viewport.dispatchEvent(new Event('contextmenu', { bubbles: true }));
   expect(f.tabs[0]!.style.getPropertyValue('--sc-tab-cutout-radius')).toBe('');
   expect(f.tabs[0]!.style.paddingLeft).toBe('');
-  expect(f.list.style.getPropertyValue('--sc-selected-offset')).toBe('0px');
+  expect(f.tabs[0]!.style.transform).toBe('');
+  expect(f.restored).toHaveBeenCalledTimes(2);
+});
+
+test('endpoint arrow allocation preserves a held tab under the same pointer', () => {
+  const f = mount();
+  pointer(f.tabs[0]!, 'pointerdown', 50);
+  pointer(document, 'pointermove', 140);
+  expect(f.tabs[0]!.style.transform).toBe('translateX(90px)');
+  jest.spyOn(f.viewport, 'getBoundingClientRect').mockReturnValue(rect(32, 508));
+  f.drag.viewportChanged();
+  expect(f.drag.active).toBe(true);
+  expect(f.tabs[0]!.style.transform).toBe('translateX(58px)');
 });
 
 test('overflow edge scrolling reaches offscreen slots and unmount stops every resource', () => {

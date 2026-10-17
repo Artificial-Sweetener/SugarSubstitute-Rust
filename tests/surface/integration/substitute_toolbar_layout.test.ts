@@ -18,6 +18,7 @@ import { jest } from '@jest/globals';
 import { SubstituteToolbarLayout } from '../../../frontend/comfyui/ui/surface/frame/SubstituteToolbarLayout.js';
 import { ComfyGenerationQueueSurface } from '../../../frontend/comfyui/ui/surface/frame/ComfyGenerationQueueSurface.js';
 import { substituteFrameCss } from '../../../frontend/comfyui/ui/surface/frame/SubstituteFrameStyles.js';
+import { workflowTabCss } from '../../../frontend/comfyui/ui/surface/frame/WorkflowTabStyles.js';
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -55,10 +56,15 @@ test('frame paint stays independent of view mode and queue overflow cannot expan
   ).toBe(false);
 
   const menu = document.createElement('div');
+  menu.className = 'native-toolbar-menu';
+  const nativeSpacing = document.createElement('style');
+  nativeSpacing.textContent = '.native-toolbar-menu { padding-top:4px; gap:4px; }';
+  document.head.append(nativeSpacing);
   menu.setAttribute('data-sc-substitute-toolbar-menu', '');
   const line = document.createElement('div');
   line.setAttribute('data-sc-substitute-toolbar-line', '');
-  menu.append(line);
+  const progress = document.createElement('div');
+  menu.append(line, progress);
   document.body.append(menu);
   document.documentElement.setAttribute('data-sc-substitute-frame', '');
   const layout = new SubstituteToolbarLayout(document);
@@ -75,13 +81,62 @@ test('frame paint stays independent of view mode and queue overflow cannot expan
     expect(paint?.style.getPropertyValue('background')).toBe('var(--comfy-menu-bg,#202020)');
   }
   expect(getComputedStyle(line).height).toBe('44px');
+  expect(getComputedStyle(menu).paddingTop).toBe('0px');
+  expect(getComputedStyle(menu).gap).toBe('0');
   const queue = document.createElement('div');
   queue.style.height = '600px';
   line.append(queue);
   expect(getComputedStyle(line).height).toBe('44px');
   expect(getComputedStyle(line).overflow).toBe('visible');
   expect(getComputedStyle(queue).height).toBe('600px');
+  document.documentElement.removeAttribute('data-sc-substitute-frame');
+  expect(getComputedStyle(menu).paddingTop).toBe('4px');
+  expect(getComputedStyle(menu).gap).toBe('4px');
   layout.dispose();
+});
+
+test('selected tabs share the opaque toolbar surface in either palette and while held', () => {
+  const style = document.createElement('style');
+  style.textContent = workflowTabCss;
+  document.head.append(style);
+  const rules = [...(style.sheet?.cssRules ?? [])].filter(
+    (rule): rule is CSSStyleRule => rule instanceof CSSStyleRule,
+  );
+  const selectedPaint = rules.filter(
+    (rule) =>
+      rule.selectorText.includes("[aria-selected='true']") &&
+      !rule.selectorText.includes(':not(') &&
+      !rule.selectorText.includes('::after') &&
+      rule.style.getPropertyValue('background'),
+  );
+  expect(selectedPaint).toHaveLength(1);
+  expect(selectedPaint[0]?.style.getPropertyValue('background')).toBe(
+    'var(--comfy-menu-bg,#202020)',
+  );
+});
+
+test('Substitute workspace removes native side margins without moving unrelated splitters', () => {
+  const nativeStyle = document.createElement('style');
+  nativeStyle.textContent = '.splitter-overlay-bottom { margin:0 4px 4px; }';
+  const frameStyle = document.createElement('style');
+  frameStyle.textContent = substituteFrameCss;
+  document.head.append(nativeStyle, frameStyle);
+  const workspace = document.createElement('div');
+  workspace.className = 'splitter-overlay-bottom';
+  const graph = document.createElement('div');
+  graph.className = 'graph-canvas-panel';
+  workspace.append(graph);
+  const unrelated = document.createElement('div');
+  unrelated.className = 'splitter-overlay-bottom';
+  document.body.append(workspace, unrelated);
+  document.documentElement.setAttribute('data-sc-substitute-frame', '');
+  expect(getComputedStyle(workspace).marginLeft).toBe('0px');
+  expect(getComputedStyle(workspace).marginRight).toBe('0px');
+  expect(getComputedStyle(workspace).marginBottom).toBe('4px');
+  expect(getComputedStyle(unrelated).marginLeft).toBe('4px');
+  document.documentElement.removeAttribute('data-sc-substitute-frame');
+  expect(getComputedStyle(workspace).marginLeft).toBe('4px');
+  expect(getComputedStyle(workspace).marginRight).toBe('4px');
 });
 
 test('workflow and native toolbar wrappers receive reversible marks without moving host controls', async () => {

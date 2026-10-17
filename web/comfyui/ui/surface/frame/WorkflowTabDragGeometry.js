@@ -16,8 +16,7 @@
 /** Resolve drag previews from committed slots, independent of animated browser geometry. */
 import { WORKFLOW_TAB_WIDTH } from './WorkflowTabStyles.js';
 /** Move to the held tab's nearest slot with a small dead band to prevent boundary chatter. */
-export function workflowTabDragPlacement(count, origin, delta, previousTarget = origin) {
-    const width = WORKFLOW_TAB_WIDTH;
+export function workflowTabDragPlacement(count, origin, delta, previousTarget = origin, width = WORKFLOW_TAB_WIDTH) {
     const draggedLeft = Math.max(0, Math.min((count - 1) * width, origin * width + delta));
     let target = Math.max(0, Math.min(count - 1, previousTarget));
     while (target < count - 1 && draggedLeft >= (target + 0.5) * width + 6)

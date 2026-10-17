@@ -23,18 +23,20 @@ export class MasonryStackInsetMotion {
     set(element, content, width, layout) {
         if (this.#width === width)
             return;
-        const before = content.getBoundingClientRect().left;
         const initial = this.#width === null;
+        const animated = !initial &&
+            typeof content.animate === 'function' &&
+            !element.ownerDocument.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+        const before = animated ? content.getBoundingClientRect().left : 0;
         this.#width = width;
         this.#animation?.cancel();
         this.#animation = null;
         element.style.setProperty('--sc-masonry-stack-width', `${String(width)}px`);
         layout();
+        if (!animated)
+            return;
         const delta = before - content.getBoundingClientRect().left;
-        if (initial ||
-            Math.abs(delta) < 0.5 ||
-            typeof content.animate !== 'function' ||
-            element.ownerDocument.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
+        if (Math.abs(delta) < 0.5)
             return;
         const animation = content.animate([{ transform: `translateX(${String(delta)}px)` }, { transform: 'translateX(0px)' }], { duration: fluentMotion.duration, easing: fluentMotion.easing });
         this.#animation = animation;
