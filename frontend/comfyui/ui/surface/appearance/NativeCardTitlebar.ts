@@ -18,7 +18,7 @@
 interface HeaderBinding {
   header: HTMLElement;
   collapse: HTMLButtonElement | null;
-  activation: HTMLInputElement | null;
+  activation: (HTMLElement & { checked: boolean; disabled: boolean }) | null;
   original: Map<string, string | null>;
   controls: Map<HTMLButtonElement, Map<string, string | null>>;
   release(): void;
@@ -50,9 +50,9 @@ export class NativeCardTitlebar {
     binding.collapse = header.querySelector<HTMLButtonElement>(
       '[data-testid="node-collapse-button"]',
     );
-    binding.activation = header.querySelector<HTMLInputElement>(
-      '[data-cube-card-activation] input',
-    );
+    binding.activation = header.querySelector<
+      HTMLElement & { checked: boolean; disabled: boolean }
+    >('[data-cube-card-activation] [data-sc-activation-switch]');
     const canActivate = binding.activation !== null && !binding.activation.disabled;
     const canCollapse = hasContent && binding.collapse !== null && !binding.collapse.disabled;
     const projected = root.closest('.sugarcubes-cube-face__node-card') !== null;

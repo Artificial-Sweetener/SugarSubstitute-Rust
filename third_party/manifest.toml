@@ -6,7 +6,7 @@ source = "https://github.com/adobe/spectrum-web-components"
 revision = "2deb514ca7f46aae865b97375af9ef3a21afdfc5"
 version = "1.12.5"
 modifications = "Official components bundled with esbuild. Typed adapters normalize numeric values, tab selection, asynchronous focus readiness and connected presentation moves; upstream source is unchanged."
-source_paths = ["1st-gen/packages/action-button","1st-gen/packages/base","1st-gen/packages/button","1st-gen/packages/checkbox","1st-gen/packages/divider","1st-gen/packages/field-label","1st-gen/packages/help-text","1st-gen/packages/icon","1st-gen/packages/icons-ui","1st-gen/packages/icons-workflow","1st-gen/packages/iconset","1st-gen/packages/infield-button","1st-gen/packages/menu","1st-gen/packages/number-field","1st-gen/packages/overlay","1st-gen/packages/popover","1st-gen/packages/reactive-controllers","1st-gen/packages/shared","1st-gen/packages/slider","1st-gen/packages/tabs","1st-gen/packages/textfield","1st-gen/packages/tooltip"]
+source_paths = ["1st-gen/packages/action-button","1st-gen/packages/base","1st-gen/packages/button","1st-gen/packages/checkbox","1st-gen/packages/divider","1st-gen/packages/field-label","1st-gen/packages/help-text","1st-gen/packages/icon","1st-gen/packages/icons-ui","1st-gen/packages/icons-workflow","1st-gen/packages/iconset","1st-gen/packages/infield-button","1st-gen/packages/menu","1st-gen/packages/number-field","1st-gen/packages/overlay","1st-gen/packages/popover","1st-gen/packages/reactive-controllers","1st-gen/packages/shared","1st-gen/packages/slider","1st-gen/packages/switch","1st-gen/packages/tabs","1st-gen/packages/textfield","1st-gen/packages/tooltip"]
 runtime_files = ["web/comfyui/ui/surface/appearance/SpectrumThemeRuntime.js"]
 
 [[component]]

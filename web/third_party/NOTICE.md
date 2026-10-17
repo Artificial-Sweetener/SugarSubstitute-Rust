@@ -9,7 +9,7 @@ the applicable license texts.
 Copyright 2026 Adobe. All rights reserved.
 
 Spectrum Web Components 1.12.5 supplies the Spectrum 2 visual style, with
-official controls and scoped Spectrum 2 foundations. Upstream component sources
+official controls, including activation switches, and scoped Spectrum 2 foundations. Upstream component sources
 are unchanged; SugarCubes adapters translate their APIs to shared presentation
 contracts. The pinned repository and source paths are recorded in the manifest.
 The Apache-2.0 repository license and ISC theme-package license are included as

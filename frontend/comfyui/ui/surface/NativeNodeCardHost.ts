@@ -16,10 +16,7 @@
 /** Adapt real Cube-graph nodes to Comfy's host-owned native card renderer. */
 
 import type { ComfyNode } from '../types/graph.js';
-import {
-  createCubeFaceActivationControl,
-  updateCubeFaceActivationControl,
-} from './CubeFaceActivationControl.js';
+import { CubeFaceActivationControl } from './CubeFaceActivationControl.js';
 import type { CubeFaceCardDecision } from './CubeFaceCardPolicy.js';
 import type { ProjectedNodeCard } from './NodeCardProjection.js';
 import { cubeFaceNodeHasVisibleWidgets } from './CubeFaceNodePresentationPolicy.js';
@@ -37,7 +34,7 @@ import type {
 export class NativeNodeCardHost {
   readonly #renderer: NativeNodeCardRenderer;
   readonly #mounts: NativeNodeCardMount[] = [];
-  readonly #activation = new Map<ComfyNode, HTMLLabelElement>();
+  readonly #activation = new Map<ComfyNode, CubeFaceActivationControl>();
   readonly #leases: Array<() => void> = [];
 
   /** Create a host that delegates all node rendering to Comfy. */
@@ -85,10 +82,10 @@ export class NativeNodeCardHost {
     const target = cell.ownerDocument.createElement('div');
     target.className = 'sugarcubes-cube-face__native-card-mount';
     cell.append(target);
-    const headerAccessory = card.showActivationControl
-      ? createCubeFaceActivationControl(cell.ownerDocument, card, onActivationChange)
+    const activation = card.showActivationControl
+      ? new CubeFaceActivationControl(cell.ownerDocument, card, onActivationChange)
       : null;
-    if (headerAccessory) this.#activation.set(node, headerAccessory);
+    if (activation) this.#activation.set(node, activation);
     const widgetSources = card.widgetSources ?? [];
     const widgets = new NativeWidgetElementLease([
       node,
@@ -108,7 +105,7 @@ export class NativeNodeCardHost {
         widgetSources,
         ...options,
         allowRename: false,
-        ...(headerAccessory ? { headerAccessory } : {}),
+        ...(activation ? { headerAccessory: activation.root } : {}),
       }),
     );
   }
@@ -117,13 +114,14 @@ export class NativeNodeCardHost {
   refresh(cards: readonly CubeFaceCardDecision[] = []): void {
     for (const card of cards) {
       const control = this.#activation.get(card.node);
-      if (control) updateCubeFaceActivationControl(control, card);
+      if (control) control.update(card);
     }
     for (const mount of this.#mounts) mount.refresh();
   }
 
   /** Unmount this view's cards while retaining Comfy's shared renderer service. */
   dispose(): void {
+    for (const control of this.#activation.values()) control.dispose();
     for (const mount of this.#mounts.splice(0)) mount.unmount();
     for (const release of this.#leases.splice(0)) release();
     this.#activation.clear();

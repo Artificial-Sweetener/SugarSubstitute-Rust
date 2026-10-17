@@ -20,6 +20,8 @@ import '@spectrum-web-components/menu/sp-menu.js';
 import '@spectrum-web-components/menu/sp-menu-item.js';
 import { MenuItem } from '@spectrum-web-components/menu/src/MenuItem.js';
 import '@spectrum-web-components/checkbox/sp-checkbox.js';
+import '@spectrum-web-components/switch/sp-switch.js';
+import { Switch } from '@spectrum-web-components/switch/src/Switch.js';
 import { Slider } from '@spectrum-web-components/slider/src/Slider.js';
 import { Tabs } from '@spectrum-web-components/tabs/src/Tabs.js';
 import '@spectrum-web-components/tabs/sp-tab.js';
@@ -33,6 +35,24 @@ import type { NumericSliderControl } from './NativeNumericControls.js';
 import type { BooleanCheckboxControl } from './NativeToggleRows.js';
 import type { BooleanSegmentsControls } from './NativeBooleanSegments.js';
 import type { FinderInputControl } from './FinderControls.js';
+import type { ActivationSwitchControl } from './ActivationSwitchControl.js';
+
+/** Preserve a focused activation control when its provider changes before Lit's first render. */
+class SpectrumActivationSwitch extends Switch {
+  /** Focus Adobe's native input only after it has connected and rendered. */
+  override focus(options?: FocusOptions): void {
+    void this.updateComplete
+      .then(() => {
+        if (this.isConnected) super.focus(options);
+      })
+      .catch((error: unknown) =>
+        console.error('Spectrum activation switch could not receive focus.', { error }),
+      );
+  }
+
+  /** Retain the active input across supported graph and masonry moves. */
+  connectedMoveCallback(): void {}
+}
 
 /** Defer initial focus until Adobe has completed its first connected tabindex update. */
 class SpectrumMenuItem extends MenuItem {
@@ -141,6 +161,8 @@ if (!customElements.get('sc-spectrum-search'))
   customElements.define('sc-spectrum-search', SpectrumFinderInput);
 if (!customElements.get('sc-spectrum-menu-item'))
   customElements.define('sc-spectrum-menu-item', SpectrumMenuItem);
+if (!customElements.get('sc-spectrum-switch'))
+  customElements.define('sc-spectrum-switch', SpectrumActivationSwitch);
 
 const base = spectrumRootTokens(core.cssText) + ';' + spectrumRootTokens(scale.cssText);
 const palettes = {
@@ -179,6 +201,33 @@ export function createSpectrumCheckbox(document: Document): BooleanCheckboxContr
   const checkbox = document.createElement('sp-checkbox');
   checkbox.setAttribute('size', 's');
   return checkbox;
+}
+
+/** Delegate activation gestures and keyboard behavior to Adobe's actual switch. */
+export function createSpectrumActivationSwitch(document: Document): ActivationSwitchControl {
+  const control = document.createElement('sc-spectrum-switch');
+  if (!(control instanceof SpectrumActivationSwitch))
+    throw new TypeError('Spectrum switch registration is incompatible.');
+  control.setAttribute('size', 's');
+  control.emphasized = true;
+  return {
+    root: control,
+    control,
+    synchronize: (checked, actionLabel, stateLabel) => {
+      control.checked = checked;
+      control.textContent = stateLabel;
+      control.setAttribute('aria-label', actionLabel);
+      void control.updateComplete
+        .then(() => {
+          control.focusElement.setAttribute('aria-label', actionLabel);
+        })
+        .catch((error: unknown) =>
+          console.error('Spectrum activation switch could not update its accessible name.', {
+            error,
+          }),
+        );
+    },
+  };
 }
 
 /** Create Adobe's tab group with stable identities and its own keyboard navigation. */

@@ -19,11 +19,66 @@ import { ComfySettingsCatalog } from '../../../frontend/comfyui/ui/settings/Comf
 import { SettingsWorkspaceSurface } from '../../../frontend/comfyui/ui/settings/SettingsWorkspaceSurface.js';
 import { SettingsWorkspaceHost } from '../../../frontend/comfyui/ui/settings/SettingsWorkspaceHost.js';
 import { SettingsPopupTheme } from '../../../frontend/comfyui/ui/settings/SettingsPopupTheme.js';
+import { publishVisualStyle } from '../../../frontend/comfyui/ui/surface/appearance/VisualStyleBoundary.js';
+import { Switch } from '@spectrum-web-components/switch/src/Switch.js';
 
 afterEach(() => {
   document.body.replaceChildren();
   document.head.replaceChildren();
   jest.restoreAllMocks();
+  document.documentElement.removeAttribute('data-sc-visual-style');
+});
+
+test('Spectrum settings retain the native value and persistence owner while switching providers reversibly', async () => {
+  const f = fixture();
+  const row = f.rows[0];
+  const input = row?.querySelector('input');
+  if (!row || !input) throw new Error('Missing standard setting');
+  input.type = 'checkbox';
+  input.setAttribute('aria-label', '<img src=x> Enabled');
+  const native = document.createElement('div');
+  native.dataset.pcName = 'toggleswitch';
+  input.before(native);
+  native.append(input);
+  const persisted = jest.fn();
+  input.addEventListener('change', persisted);
+  const surface = new SettingsWorkspaceSurface(f.root, f.catalog);
+  publishVisualStyle(document, 'spectrum');
+  surface.update(true, true);
+  const control = row.querySelector('[data-sc-settings-switch]');
+  if (!(control instanceof Switch)) throw new Error('Expected an actual Spectrum switch');
+  await control.updateComplete;
+  expect(native.hidden).toBe(true);
+  expect(row.querySelector('img')).toBeNull();
+  expect(control.focusElement.getAttribute('aria-label')).toBe('<img src=x> Enabled');
+  control.click();
+  await control.updateComplete;
+  expect(input.checked).toBe(true);
+  expect(persisted).toHaveBeenCalledTimes(1);
+  input.checked = false;
+  input.dispatchEvent(new Event('change'));
+  await control.updateComplete;
+  expect(control.checked).toBe(false);
+  input.disabled = true;
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  await control.updateComplete;
+  expect(control.disabled).toBe(true);
+  control.click();
+  expect(persisted).toHaveBeenCalledTimes(2);
+  input.disabled = false;
+  surface.update(true, false);
+  await control.updateComplete;
+  expect(row.querySelector('[data-sc-settings-switch]')).toBe(control);
+  control.focus();
+  await control.updateComplete;
+  publishVisualStyle(document, 'fluent');
+  surface.update(true, false);
+  expect(row.querySelector('[data-sc-settings-switch]')).toBeNull();
+  expect(native.hidden).toBe(false);
+  expect(row.querySelector('input')).toBe(input);
+  expect(document.activeElement).toBe(input);
+  expect(persisted).toHaveBeenCalledTimes(2);
+  surface.dispose();
 });
 
 /** Build the observed host boundaries with an independently owned plugin page. */
