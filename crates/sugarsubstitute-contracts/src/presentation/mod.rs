@@ -12,3 +12,6 @@ mod frame;
 pub use frame::{
     FrameError, FrameFormat, FrameIdentity, FrameShape, FrameValidator, PreparedFrame,
 };
+
+mod console;
+pub use console::{ConsolePresentation, NATIVE_CONSOLE_STORAGE_BYTES, console_color};

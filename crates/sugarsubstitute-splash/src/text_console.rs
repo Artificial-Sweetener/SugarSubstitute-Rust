@@ -6,7 +6,9 @@ use super::memory::PaintSpec;
 use crate::Theme;
 use std::{io, num::NonZeroUsize};
 use sugarsubstitute_contracts::execution::MemoryLease;
-use sugarsubstitute_contracts::transcript::{AnsiColor, TextStyle};
+#[cfg(test)]
+use sugarsubstitute_contracts::transcript::AnsiColor;
+use sugarsubstitute_contracts::transcript::TextStyle;
 use tiny_skia::Pixmap;
 
 /// Retain validated UTF-8/UTF-16 boundaries after bounded row projection.
@@ -80,46 +82,6 @@ pub(crate) trait ConsoleFont {
 /// External glyph cursor advances one bounded native/raster operation on owned plans.
 pub(crate) trait ConsoleGlyph {
     fn step(&mut self, target: &mut Pixmap, maximum: NonZeroUsize) -> io::Result<bool>;
-}
-
-/// Preserve the original terminal's basic palette; extended colors follow ANSI indices.
-pub(crate) fn color(value: AnsiColor, theme: Theme, background: bool) -> Option<[u8; 3]> {
-    const BASIC: [[u8; 3]; 16] = [
-        [0x17, 0x19, 0x1c],
-        [0xf6, 0x61, 0x51],
-        [0x33, 0xd1, 0x7a],
-        [0xe5, 0xa5, 0x0a],
-        [0x35, 0x84, 0xe4],
-        [0xc0, 0x61, 0xcb],
-        [0x33, 0xc7, 0xde],
-        [0xde, 0xdd, 0xda],
-        [0x77, 0x76, 0x7b],
-        [0xff, 0x7b, 0x72],
-        [0x57, 0xe3, 0x89],
-        [0xf8, 0xe4, 0x5c],
-        [0x62, 0xa0, 0xea],
-        [0xdc, 0x8a, 0xdd],
-        [0x5b, 0xc8, 0xaf],
-        [0xff, 0xff, 0xff],
-    ];
-    Some(match value {
-        AnsiColor::Default if background => return None,
-        AnsiColor::Default => {
-            if theme == Theme::Dark {
-                [255; 3]
-            } else {
-                [0; 3]
-            }
-        }
-        AnsiColor::Rgb(r, g, b) => [r, g, b],
-        AnsiColor::Indexed(i @ 0..=15) => BASIC[usize::from(i)],
-        AnsiColor::Indexed(i @ 16..=231) => {
-            let n = i - 16;
-            let component = |v: u8| if v == 0 { 0 } else { 55 + 40 * v };
-            [component(n / 36), component((n / 6) % 6), component(n % 6)]
-        }
-        AnsiColor::Indexed(i) => [8 + 10 * (i - 232); 3],
-    })
 }
 
 /// Copy one actual shaper range rectangle before its native/layout owner returns.

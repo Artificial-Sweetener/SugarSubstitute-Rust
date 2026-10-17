@@ -137,7 +137,13 @@ pub(super) fn started() -> Result<(PreparationDriver, Arc<Wake>, ExecutionOwner)
     let owner = ExecutionOwner::new(Arc::new(FrozenClock), wake.clone())?;
     let client = owner.client();
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
-    let mut driver = PreparationDriver::new("en", client, scope, JobSequence::new())?;
+    let mut driver = PreparationDriver::new(
+        "en",
+        client,
+        scope,
+        JobSequence::new(),
+        sugarsubstitute_contracts::presentation::ConsolePresentation::Raster,
+    )?;
     driver.set_visible(true)?;
     Ok((driver, wake, owner))
 }

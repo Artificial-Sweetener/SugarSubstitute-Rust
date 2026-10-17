@@ -2,7 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Route native input while preserving caption drag and suppressing closing mutations.
 
-use crate::{DesktopError, HitTarget, KeyAction, Pointer, PointerAction, WindowContent};
+#[cfg(not(windows))]
+use crate::KeyAction;
+use crate::{DesktopError, HitTarget, Pointer, PointerAction, WindowContent};
 use tao::{
     event::{ElementState, MouseButton, WindowEvent},
     keyboard::Key,
@@ -15,6 +17,8 @@ pub(crate) struct InputEffect {
     pub(crate) dirty: bool,
     pub(crate) expose: bool,
     pub(crate) close: bool,
+    #[cfg(windows)]
+    pub(crate) focus: Option<bool>,
 }
 
 /// Forward UI-affine input; caller never invokes this once the close phase begins.
@@ -68,7 +72,16 @@ pub(crate) fn dispatch(
         {
             match event.logical_key {
                 Key::Escape => effect.close = true,
-                Key::Tab => effect.dirty = content.key(KeyAction::Tab),
+                Key::Tab => {
+                    #[cfg(windows)]
+                    {
+                        effect.focus = Some(crate::windows_controls::shift_pressed());
+                    }
+                    #[cfg(not(windows))]
+                    {
+                        effect.dirty = content.key(KeyAction::Tab);
+                    }
+                }
                 _ => {}
             }
         }

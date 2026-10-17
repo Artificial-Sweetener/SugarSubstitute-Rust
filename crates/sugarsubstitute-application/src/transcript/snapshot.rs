@@ -6,11 +6,11 @@ use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
 };
-use sugarsubstitute_contracts::{lifecycle::ResourceKey, transcript::*};
-/// Maximum records referenced by a visible snapshot.
-pub const MAX_SNAPSHOT_RECORDS: usize = 128;
 /// Maximum UTF-8 text pinned by a visible snapshot.
-pub const MAX_SNAPSHOT_BYTES: usize = 256 * 1024;
+pub use sugarsubstitute_contracts::transcript::MAX_SNAPSHOT_BYTES;
+/// Maximum records referenced by a visible snapshot.
+pub use sugarsubstitute_contracts::transcript::MAX_SNAPSHOT_RECORDS;
+use sugarsubstitute_contracts::{lifecycle::ResourceKey, transcript::*};
 const MAX_SNAPSHOTS: usize = 4;
 #[derive(Default)]
 pub(super) struct SnapshotAdmission {

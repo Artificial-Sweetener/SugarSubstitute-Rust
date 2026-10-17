@@ -43,6 +43,7 @@ fn request(scale: f64, expanded: bool) -> TestResult<SplashRenderRequest> {
         feedback: ProgressFrame { completed: 0.4, activity: Some(0.5) },
         bootstrap: false,
         console: None,
+        console_presentation: sugarsubstitute_contracts::presentation::ConsolePresentation::Raster,
     })
 }
 fn initialize(rig: &Rig) -> TestResult<SplashRenderer> {
@@ -432,3 +433,6 @@ fn transcript_credit_returns_with_ordinary_error_until_result_disposal() -> Test
     drop(held);
     Ok(())
 }
+
+#[path = "render_native_console_tests.rs"]
+mod native_console;

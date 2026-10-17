@@ -54,3 +54,22 @@ impl Clone for OutputSnapshot {
         Self { view: self.view.clone(), source: self.source.clone() }
     }
 }
+
+/// Borrow the actual immutable pin while original source funding remains retained here.
+impl sugarsubstitute_desktop::ConsoleText for OutputSnapshot {
+    fn resource(&self) -> sugarsubstitute_contracts::lifecycle::ResourceKey {
+        self.transcript().resource()
+    }
+    fn revision(&self) -> u64 {
+        self.transcript().revision()
+    }
+    fn len(&self) -> usize {
+        self.transcript().records().len()
+    }
+    fn record(
+        &self,
+        index: usize,
+    ) -> Option<&sugarsubstitute_contracts::transcript::TranscriptRecord> {
+        self.transcript().records().nth(index)
+    }
+}

@@ -37,8 +37,13 @@ impl ProductionStartup {
                 .take()
                 .ok_or_else(|| std::io::Error::other("Original render scope absent"))?;
             let locale = startup.session().configuration().presentation().locale().as_str();
-            let render =
-                PreparationDriver::new(locale, self.execution.client()?, scope, self.jobs.clone())?;
+            let render = PreparationDriver::new(
+                locale,
+                self.execution.client()?,
+                scope,
+                self.jobs.clone(),
+                sugarsubstitute_contracts::presentation::ConsolePresentation::Native,
+            )?;
             self.preparation = Some(render);
             self.preparation
                 .as_mut()

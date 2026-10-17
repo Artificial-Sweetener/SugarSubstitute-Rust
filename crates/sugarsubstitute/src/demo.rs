@@ -270,6 +270,9 @@ impl WindowContent for SplashDemo {
     }
 
     /// Expose only the two existing caption controls through stable native identities.
+    fn console(&self) -> Option<sugarsubstitute_desktop::ConsoleView<'_>> {
+        None
+    }
     fn accessible_controls(&self) -> &[AccessibleControl] {
         &self.controls
     }

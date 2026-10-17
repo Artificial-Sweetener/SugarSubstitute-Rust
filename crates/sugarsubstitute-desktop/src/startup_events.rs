@@ -66,6 +66,16 @@ pub(super) fn dispatch(
                     &mut session.pointer,
                     &mut session.pressed,
                 )?;
+                if let Some(backward) = effect.focus {
+                    session
+                        .splash
+                        .controls
+                        .as_ref()
+                        .ok_or_else(|| {
+                            DesktopError::message("splash_focus", "original controls absent")
+                        })?
+                        .focus_next(backward)?;
+                }
                 if effect.close {
                     session.observe(content, DesktopStartupObservation::CloseRequested)?;
                 }
@@ -102,12 +112,15 @@ pub(super) fn dispatch(
                 session.observe(content, observation)?;
             }
         }
-        Event::UserEvent(NativeAction::Disclosure)
+        Event::UserEvent(NativeAction::FocusNext(backward))
             if !session.closing && !session.splash.retiring =>
         {
-            if content.key(crate::KeyAction::Tab) {
-                session.splash.state.dirty();
-            }
+            session
+                .splash
+                .controls
+                .as_ref()
+                .ok_or_else(|| DesktopError::message("splash_focus", "original controls absent"))?
+                .focus_next(backward)?;
         }
         Event::UserEvent(NativeAction::FocusChanged)
             if !session.closing && !session.splash.retiring =>

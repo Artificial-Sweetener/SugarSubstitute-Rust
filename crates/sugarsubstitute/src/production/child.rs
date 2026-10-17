@@ -329,6 +329,13 @@ impl ProductionChild {
     pub(in crate::production) fn main_construction_pending(&self) -> bool {
         self.main.construction_pending()
     }
+    /// Borrow the actual immutable native-console source while its complete original
+    /// source custody remains with this child. The affine adapter copies before this borrow ends.
+    pub(in crate::production) fn console_text(
+        &self,
+    ) -> Option<&dyn sugarsubstitute_desktop::ConsoleText> {
+        self.snapshot.as_ref().map(|view| view as &dyn sugarsubstitute_desktop::ConsoleText)
+    }
     /// Borrow only the actual bounded source-custodied transcript view.
     pub(in crate::production) fn transcript(&self) -> Option<OutputSnapshot> {
         self.snapshot.clone()

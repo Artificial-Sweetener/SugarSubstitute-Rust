@@ -5,13 +5,13 @@
 use super::{FontOwner, GlyphPaint, runs::Collector};
 use crate::text::{
     console::{
-        self, Background, BackgroundPaint, ConsoleFont, ConsoleGlyph, ConsolePaintSpec,
-        ConsoleRowView,
+        Background, BackgroundPaint, ConsoleFont, ConsoleGlyph, ConsolePaintSpec, ConsoleRowView,
     },
     memory::{self, Allocation, MAX_GLYPHS, MAX_RUNS, METADATA_BYTES},
 };
 use std::{cell::RefCell, ffi::c_void, io, num::NonZeroUsize};
 use sugarsubstitute_contracts::execution::MemoryLease;
+use sugarsubstitute_contracts::presentation::console_color;
 use tiny_skia::Pixmap;
 use windows::{
     Win32::{Foundation::E_INVALIDARG, Graphics::DirectWrite::*},
@@ -98,7 +98,7 @@ impl ConsoleFont for FontOwner {
             };
             let effect: IDWritePixelSnapping = ComObject::new(ColorEffect).to_interface();
             let identity = effect.cast::<IUnknown>()?;
-            let foreground = console::color(run.style.foreground, spec.surface.theme, false)
+            let foreground = console_color(run.style.foreground, spec.surface.theme, false)
                 .ok_or_else(|| io::Error::other("Console foreground absent"))?;
             // SAFETY: The layout retains each effect; exact identities are retained by its callback owner.
             unsafe {
@@ -113,7 +113,7 @@ impl ConsoleFont for FontOwner {
                 layout.SetDrawingEffect(&identity, range)?;
             }
             colors.push((identity, foreground));
-            if let Some(background) = console::color(run.style.background, spec.surface.theme, true)
+            if let Some(background) = console_color(run.style.background, spec.surface.theme, true)
             {
                 ranges.push((range, background));
             }

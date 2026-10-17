@@ -6,7 +6,9 @@
 mod bootstrap;
 mod cadence;
 mod completion_wake;
+mod console;
 mod contract;
+pub use console::{ConsoleText, ConsoleView};
 #[cfg(target_os = "windows")]
 mod control_geometry;
 mod frame_audit;

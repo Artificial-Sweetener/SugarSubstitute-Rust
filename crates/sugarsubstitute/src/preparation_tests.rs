@@ -482,3 +482,6 @@ fn console_uninvoked_factory_keeps_pin_until_real_terminal_disposal() -> Result<
     }
     Ok(())
 }
+
+#[path = "preparation_console_tests.rs"]
+mod console;

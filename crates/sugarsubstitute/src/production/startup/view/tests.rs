@@ -66,11 +66,13 @@ fn accessible_disclosure_label_waits_for_matching_frame_publication() -> Result<
 }
 
 #[test]
-fn keyboard_and_reduced_motion_use_the_same_actual_disclosure_and_animation()
+fn keyboard_focus_does_not_activate_disclosure_and_reduced_motion_stays_static()
 -> Result<(), Box<dyn Error>> {
     let mut v = view(true)?;
     assert!(!v.motion());
-    assert!(v.key(KeyAction::Tab));
+    assert!(!v.key(KeyAction::Tab));
+    assert!(!v.appearance.expanded);
+    assert!(v.activate(1));
     assert!(v.appearance.expanded);
     let original = v.animation.frame(Duration::ZERO);
     v.animation.tick(Duration::from_secs(3600));
@@ -107,5 +109,47 @@ fn recovery_control_is_localized_and_inert_until_policy_observes_settlement()
     assert_eq!(view.controls().len(), 3);
     assert!(!view.controls()[2].visible);
     assert!(!view.activate(3));
+    Ok(())
+}
+
+#[test]
+fn native_console_visibility_tracks_published_disclosure_and_preserves_identity_across_collapse()
+-> Result<(), Box<dyn Error>> {
+    let mut view = view(true)?;
+    assert!(!view.console(None).visible);
+    assert!(view.activate(1));
+    assert!(!view.console(None).visible);
+    view.publish_controls();
+    assert!(view.console(None).visible);
+    let label = view.console(None).label;
+    assert_eq!(label, "Comfy output");
+    assert!(view.activate(1));
+    assert!(view.console(None).visible);
+    view.publish_controls();
+    assert!(!view.console(None).visible);
+    assert_eq!(view.console(None).label, label);
+    assert!(view.activate(1));
+    view.publish_controls();
+    assert!(view.console(None).visible);
+    Ok(())
+}
+#[test]
+fn readonly_console_geometry_preserves_original_retry_peer_and_locale_owner()
+-> Result<(), Box<dyn Error>> {
+    for messages in sugarsubstitute_contracts::localization::LOCALES {
+        let mut view =
+            StartupView::new(Presentation::new(messages.id, RequestedTheme::Dark, true)?);
+        view.activate(1);
+        view.publish_controls();
+        let before = view.console(None);
+        assert_eq!(before.label, messages.output);
+        assert!(before.visible);
+        assert_eq!(before.bounds.height, 166.0);
+        view.phase(StartupPhase::Stopped);
+        let console = view.console(None);
+        assert!(console.bounds.y + console.bounds.height <= view.controls()[2].bounds.y);
+        assert!(view.controls()[2].visible);
+        assert!(view.activate(3));
+    }
     Ok(())
 }

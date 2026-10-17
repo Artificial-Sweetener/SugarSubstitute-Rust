@@ -59,6 +59,7 @@ pub(crate) struct PreparationDriver {
     renderer: Option<PreparationTransfer<SplashRenderer>>,
     pending: Option<PendingPreparation>,
     console_binding: Option<(ResourceKey, u64)>,
+    console_presentation: sugarsubstitute_contracts::presentation::ConsolePresentation,
     next_identity: Generation,
     state_dirty: bool,
     closing: bool,
@@ -73,11 +74,14 @@ impl PreparationDriver {
     /// execution, mailbox routing, original shutdown budget and actual worker joins.
     /// The supplied scope must belong to `client`; real admission rejects foreign
     /// or closed scopes before a render factory can acquire cache ownership.
+    /// `console_presentation` assigns the sole text owner for this surface lifetime;
+    /// Native mode admits the empty native peer independently of source availability.
     pub(crate) fn new(
         locale: &str,
         client: ExecutionClient,
         scope: Scope,
         jobs: JobSequence,
+        console_presentation: sugarsubstitute_contracts::presentation::ConsolePresentation,
     ) -> Result<Self, Box<dyn Error>> {
         Ok(Self {
             locale: locale.to_owned(),
@@ -94,6 +98,7 @@ impl PreparationDriver {
             renderer: None,
             pending: None,
             console_binding: None,
+            console_presentation,
             next_identity: Generation::new(1)?,
             state_dirty: false,
             closing: false,
@@ -161,6 +166,15 @@ impl PreparationDriver {
             return Ok(());
         }
         let sequence = self.allocate_identity()?;
+        // Native text has its own affine copied-document owner. Raster work needs
+        // only the accepted source revision, not an extra immutable snapshot credit.
+        let console = if self.console_presentation
+            == sugarsubstitute_contracts::presentation::ConsolePresentation::Native
+        {
+            None
+        } else {
+            console
+        };
         let request = SplashRenderRequest {
             shape,
             appearance,
@@ -173,6 +187,7 @@ impl PreparationDriver {
             },
             bootstrap: !self.bootstrap_published,
             console,
+            console_presentation: self.console_presentation,
         };
         self.pending = Some(PendingPreparation::new(request));
         self.submit_pending()

@@ -18,6 +18,8 @@ pub struct Messages {
     pub show_output: &'static str,
     /// Accessible intent for the expanded output button.
     pub hide_output: &'static str,
+    /// Accessible name of the retained read-only backend output console.
+    pub output: &'static str,
     /// Accessible intent for the close button.
     pub cancel: &'static str,
     /// Failed startup status.
@@ -43,6 +45,7 @@ pub static LOCALES: &[Messages] = &[
         loading: "Loading...",
         show_output: "Show Comfy output",
         hide_output: "Hide Comfy output",
+        output: "Comfy output",
         cancel: "Cancel loading",
         connection_failed: "Connection failed",
         cleanup_pending: "Connection failed. Finishing cleanup...",
@@ -57,6 +60,7 @@ pub static LOCALES: &[Messages] = &[
         loading: "正在加载...",
         show_output: "显示 Comfy 输出",
         hide_output: "隐藏 Comfy 输出",
+        output: "Comfy 输出",
         cancel: "取消加载",
         connection_failed: "连接失败",
         cleanup_pending: "连接失败，正在完成清理...",
@@ -71,6 +75,7 @@ pub static LOCALES: &[Messages] = &[
         loading: "読み込み中...",
         show_output: "Comfy の出力を表示",
         hide_output: "Comfy の出力を非表示",
+        output: "Comfy の出力",
         cancel: "読み込みをキャンセル",
         connection_failed: "接続に失敗しました",
         cleanup_pending: "接続に失敗しました。終了処理中...",
@@ -85,6 +90,7 @@ pub static LOCALES: &[Messages] = &[
         loading: "불러오는 중...",
         show_output: "Comfy 출력 표시",
         hide_output: "Comfy 출력 숨기기",
+        output: "Comfy 출력",
         cancel: "불러오기 취소",
         connection_failed: "연결 실패",
         cleanup_pending: "연결 실패. 정리 중...",
@@ -99,6 +105,7 @@ pub static LOCALES: &[Messages] = &[
         loading: "Cargando...",
         show_output: "Mostrar la salida de Comfy",
         hide_output: "Ocultar la salida de Comfy",
+        output: "Salida de Comfy",
         cancel: "Cancelar la carga",
         connection_failed: "Error de conexión",
         cleanup_pending: "Error de conexión. Finalizando limpieza...",
@@ -130,6 +137,7 @@ mod tests {
                     locale.loading,
                     locale.show_output,
                     locale.hide_output,
+                    locale.output,
                     locale.cancel,
                     locale.connection_failed,
                     locale.cleanup_pending,

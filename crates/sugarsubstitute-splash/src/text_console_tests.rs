@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Verify real palette, clipped shaped rectangles and premultiplied composition.
 use super::*;
+use sugarsubstitute_contracts::presentation::console_color;
 
 #[test]
 fn palette_preserves_source_basics_extended_indices_rgb_and_defaults() {
@@ -11,22 +12,22 @@ fn palette_preserves_source_basics_extended_indices_rgb_and_defaults() {
     ];
     for (index, v) in expected.into_iter().enumerate() {
         assert_eq!(
-            color(AnsiColor::Indexed(index as u8), Theme::Dark, false),
+            console_color(AnsiColor::Indexed(index as u8), Theme::Dark, false),
             Some([(v >> 16) as u8, (v >> 8) as u8, v as u8])
         );
     }
     for index in 0..=255 {
-        assert!(color(AnsiColor::Indexed(index), Theme::Light, true).is_some());
+        assert!(console_color(AnsiColor::Indexed(index), Theme::Light, true).is_some());
     }
     for (index, rgb) in
         [(16, [0, 0, 0]), (21, [0, 0, 255]), (231, [255, 255, 255]), (232, [8; 3]), (255, [238; 3])]
     {
-        assert_eq!(color(AnsiColor::Indexed(index), Theme::Dark, false), Some(rgb));
+        assert_eq!(console_color(AnsiColor::Indexed(index), Theme::Dark, false), Some(rgb));
     }
-    assert_eq!(color(AnsiColor::Rgb(12, 34, 56), Theme::Dark, false), Some([12, 34, 56]));
-    assert_eq!(color(AnsiColor::Default, Theme::Dark, false), Some([255; 3]));
-    assert_eq!(color(AnsiColor::Default, Theme::Light, false), Some([0; 3]));
-    assert_eq!(color(AnsiColor::Default, Theme::Dark, true), None);
+    assert_eq!(console_color(AnsiColor::Rgb(12, 34, 56), Theme::Dark, false), Some([12, 34, 56]));
+    assert_eq!(console_color(AnsiColor::Default, Theme::Dark, false), Some([255; 3]));
+    assert_eq!(console_color(AnsiColor::Default, Theme::Light, false), Some([0; 3]));
+    assert_eq!(console_color(AnsiColor::Default, Theme::Dark, true), None);
 }
 
 #[test]

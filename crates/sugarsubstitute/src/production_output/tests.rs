@@ -262,6 +262,7 @@ fn real_cpu_raster_returns_complete_guarded_output_source_until_result_disposal(
         feedback: ProgressFrame { completed: 0.0, activity: None },
         bootstrap: true,
         console: Some(crate::preparation_task::RenderConsole::from(view.clone())),
+        console_presentation: sugarsubstitute_contracts::presentation::ConsolePresentation::Native,
     };
     let bytes = request.reservation_bytes();
     let mut raster = rig.client.submit_cpu(

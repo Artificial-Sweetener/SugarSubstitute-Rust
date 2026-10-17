@@ -228,6 +228,10 @@ impl WindowContent for ProductionStartup {
             && (self.view.as_ref().is_some_and(StartupView::motion)
                 || !self.preparation.as_ref().is_some_and(PreparationDriver::enriched))
     }
+    fn console(&self) -> Option<sugarsubstitute_desktop::ConsoleView<'_>> {
+        let view = self.view.as_ref()?;
+        Some(view.console(self.child.console_text()))
+    }
     fn accessible_controls(&self) -> &[AccessibleControl] {
         self.view.as_ref().map_or(&[], StartupView::controls)
     }

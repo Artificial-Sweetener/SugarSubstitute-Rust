@@ -108,6 +108,9 @@ impl WindowContent for Content {
     fn animating(&self) -> bool {
         false
     }
+    fn console(&self) -> Option<crate::ConsoleView<'_>> {
+        None
+    }
     fn accessible_controls(&self) -> &[AccessibleControl] {
         &[]
     }

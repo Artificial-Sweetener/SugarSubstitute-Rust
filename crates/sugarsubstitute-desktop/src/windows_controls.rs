@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Own native accessible button peers while the content owner paints their pixels.
+//! Own native accessible buttons and the bounded read-only console through checked retirement.
 //!
 //! All HWNDs, callbacks and stable callback data live on the creating event-loop
 //! thread. Every installed subclass retains an Rc reference until explicit removal
@@ -35,12 +35,17 @@ use windows::{
 #[path = "windows_controls_creation.rs"]
 mod creation;
 use creation::{Creation, NativePort};
+#[path = "windows_console.rs"]
+mod console;
+#[path = "windows_controls_focus.rs"]
+mod focus;
 #[path = "windows_controls_retry.rs"]
 mod retry;
 #[path = "windows_controls_state.rs"]
 mod state;
 #[path = "windows_controls_visibility.rs"]
 mod visibility;
+pub(crate) use focus::{focus_window, shift_pressed};
 
 /// Retain a stable native identity and the last applied content snapshot.
 struct Peer {
@@ -66,6 +71,7 @@ pub(crate) struct Controls {
     creation: Creation<Registration<Callback>, Peer>,
     planned: Vec<AccessibleControl>,
     paint_mode: PaintMode,
+    console: Option<console::Console>,
 }
 
 impl Controls {
@@ -90,7 +96,14 @@ impl Controls {
             ));
         }
         planned.extend_from_slice(controls);
-        Ok(Self { window, callback, creation: Creation::new(controls.len())?, planned, paint_mode })
+        Ok(Self {
+            window,
+            callback,
+            creation: Creation::new(controls.len())?,
+            planned,
+            paint_mode,
+            console: None,
+        })
     }
 
     /// Include the largest current peers, actions, subclass Rc states and label conversion.
@@ -178,6 +191,13 @@ impl Controls {
     /// End every native callback borrow before returning a surface outcome.
     /// Any OS cleanup failure remains an observable failed terminal result.
     pub(crate) fn shutdown(&mut self) -> Result<(), DesktopError> {
+        if let Some(console) = self.console.as_mut() {
+            console.shutdown(&self.window)?;
+            if !console.retired() {
+                return Ok(());
+            }
+        }
+        self.console = None;
         let mut port = ControlPort {
             window: &self.window,
             callback: &self.callback,
@@ -232,7 +252,8 @@ impl Controls {
 impl Controls {
     /// Require every peer and native callback registration to be actually retired.
     pub(crate) fn retired(&self) -> bool {
-        self.creation.retired(Rc::strong_count(&self.callback) == 1)
+        self.console.as_ref().is_none_or(console::Console::retired)
+            && self.creation.retired(Rc::strong_count(&self.callback) == 1)
     }
 }
 

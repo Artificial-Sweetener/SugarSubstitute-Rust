@@ -23,6 +23,7 @@ pub(super) struct StartupView {
     messages: &'static Messages,
     controls: [AccessibleControl; 3],
     retry_requested: bool,
+    console_expanded: bool,
 }
 impl StartupView {
     /// Resolve owned text through the sole locale registry; allocate no raster resources.
@@ -47,6 +48,7 @@ impl StartupView {
             reduced_motion: presentation.reduced_motion(),
             pressed: None,
             retry_requested: false,
+            console_expanded: false,
             messages,
             controls: [
                 AccessibleControl {
@@ -73,6 +75,25 @@ impl StartupView {
             ],
         }
     }
+    /// Describe the existing console inner rectangle only after matching frame publication.
+    /// Leave the settled Retry peer's original rectangle available above this native child.
+    pub(super) fn console<'a>(
+        &self,
+        text: Option<&'a dyn sugarsubstitute_desktop::ConsoleText>,
+    ) -> sugarsubstitute_desktop::ConsoleView<'a> {
+        sugarsubstitute_desktop::ConsoleView {
+            label: self.messages.output,
+            bounds: ControlBounds {
+                x: 30.0,
+                y: 362.0,
+                width: 498.0,
+                height: if self.controls[2].visible { 118.0 } else { 166.0 },
+            },
+            visible: self.console_expanded,
+            dark: self.appearance.theme == Theme::Dark,
+            text,
+        }
+    }
     /// Two acknowledged milestones: backend ready, then actual frontend ready.
     /// Elapsed time drives only activity/motion and never advances completed work.
     pub(super) fn progress(&self, phase: StartupPhase) -> ProgressFrame {
@@ -97,6 +118,7 @@ impl StartupView {
     }
     /// Match the accessible disclosure label to the last successfully published frame.
     pub(super) fn publish_controls(&mut self) {
+        self.console_expanded = self.appearance.expanded;
         self.controls[0].label = if self.appearance.expanded {
             self.messages.hide_output
         } else {
@@ -173,12 +195,9 @@ impl StartupView {
         }
         before != (self.appearance.expanded, self.appearance.hovered, self.appearance.pressed)
     }
-    /// Route keyboard disclosure to the same presentation-only state.
-    pub(super) fn key(&mut self, action: KeyAction) -> bool {
-        match action {
-            KeyAction::Tab => self.appearance.expanded = !self.appearance.expanded,
-        }
-        true
+    /// Focus navigation never activates disclosure or changes startup state.
+    pub(super) fn key(&mut self, _action: KeyAction) -> bool {
+        false
     }
     /// Keep every native identity preallocated; phase changes only Retry visibility and eligibility.
     pub(super) fn controls(&self) -> &[AccessibleControl] {

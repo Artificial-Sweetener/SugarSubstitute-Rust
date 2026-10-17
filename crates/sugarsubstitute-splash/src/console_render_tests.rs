@@ -2,9 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Fake external shaping while exercising actual projection, row order and original pins.
 use super::*;
-use crate::text::console::{Background, BackgroundPaint, color};
+use crate::text::console::{Background, BackgroundPaint};
 use sugarsubstitute_application::transcript::TranscriptStore;
-use sugarsubstitute_contracts::{lifecycle::*, transcript::*};
+use sugarsubstitute_contracts::{lifecycle::*, presentation::console_color, transcript::*};
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 fn store(text: &str) -> Result<TranscriptStore, Box<dyn std::error::Error>> {
@@ -103,7 +103,7 @@ impl ConsoleFont for Fonts {
         // Only external shaped geometry is fake; the clipping/composition owner is real.
         let spans = vec![Background {
             bounds: [28.0, spec.top(), 34.0, spec.top() + 1.0],
-            color: color(row.runs[0].style.foreground, Theme::Dark, false)
+            color: console_color(row.runs[0].style.foreground, Theme::Dark, false)
                 .ok_or_else(|| io::Error::other("Foreground absent"))?,
         }];
         Ok(Paint(BackgroundPaint::new(spans, spec)?))

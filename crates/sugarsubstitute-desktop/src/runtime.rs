@@ -7,8 +7,6 @@
 pub(crate) mod callback_failure;
 use crate::native_surface::{callback_kind, input, invalidate, presentation, state, surface_shape};
 
-#[cfg(target_os = "windows")]
-use crate::KeyAction;
 use crate::cadence::{advance_deadline, closing_wait, presentation_wait};
 use crate::completion_wake as wake;
 #[cfg(target_os = "linux")]
@@ -179,6 +177,12 @@ pub fn run(
                                     if effect.close {
                                         surface.close(&mut content);
                                     }
+                                    #[cfg(windows)]
+                                    if let Some(backward) = effect.focus
+                                        && let Err(cause) = controls.focus_next(backward)
+                                    {
+                                        surface.fail(&mut content, cause);
+                                    }
                                     if effect.dirty {
                                         surface.dirty();
                                     }
@@ -208,9 +212,9 @@ pub fn run(
                             }
                         }
                         #[cfg(target_os = "windows")]
-                        Event::UserEvent(NativeAction::Disclosure) if !surface.closing => {
-                            if content.key(KeyAction::Tab) {
-                                surface.dirty();
+                        Event::UserEvent(NativeAction::FocusNext(backward)) if !surface.closing => {
+                            if let Err(cause) = controls.focus_next(backward) {
+                                surface.fail(&mut content, cause);
                             }
                         }
                         #[cfg(target_os = "windows")]

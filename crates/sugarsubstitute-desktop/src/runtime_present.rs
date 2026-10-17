@@ -59,6 +59,7 @@ impl Presentations {
                 #[cfg(target_os = "windows")]
                 {
                     controls.update(content.accessible_controls())?;
+                    controls.present_console(frame, content.console())?;
                     controls.draw_focus()?;
                 }
                 #[cfg(not(target_os = "windows"))]

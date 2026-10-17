@@ -70,6 +70,9 @@ impl WindowContent for UnusedContent {
     fn animating(&self) -> bool {
         false
     }
+    fn console(&self) -> Option<sugarsubstitute_desktop::ConsoleView<'_>> {
+        None
+    }
     fn accessible_controls(&self) -> &[AccessibleControl] {
         &[]
     }

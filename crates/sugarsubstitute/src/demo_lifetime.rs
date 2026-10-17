@@ -19,8 +19,13 @@ impl SplashDemo {
         let client = self.execution.as_ref().ok_or("Demo execution absent")?.client();
         let scope =
             client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
-        let mut preparation =
-            PreparationDriver::new(&self.locale, client, scope, JobSequence::new())?;
+        let mut preparation = PreparationDriver::new(
+            &self.locale,
+            client,
+            scope,
+            JobSequence::new(),
+            sugarsubstitute_contracts::presentation::ConsolePresentation::Raster,
+        )?;
         preparation.set_visible(self.visible)?;
         self.preparation = Some(preparation);
         Ok(())

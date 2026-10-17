@@ -24,9 +24,9 @@ pub(crate) enum NativeAction {
     /// Request application-owned close.
     #[cfg(target_os = "windows")]
     Close,
-    /// Forward the splash disclosure shortcut.
+    /// Traverse only current visible native splash peers, preserving Shift direction.
     #[cfg(target_os = "windows")]
-    Disclosure,
+    FocusNext(bool),
     /// Repaint a retained splash source after its native focus cue changes.
     #[cfg(target_os = "windows")]
     FocusChanged,

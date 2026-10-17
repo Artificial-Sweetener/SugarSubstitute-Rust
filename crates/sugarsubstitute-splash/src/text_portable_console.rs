@@ -8,14 +8,14 @@ use super::{
 };
 use crate::text::{
     console::{
-        self, Background, BackgroundPaint, ConsoleFont, ConsoleGlyph, ConsolePaintSpec,
-        ConsoleRowView,
+        Background, BackgroundPaint, ConsoleFont, ConsoleGlyph, ConsolePaintSpec, ConsoleRowView,
     },
     memory::{self, Allocation, MAX_GLYPHS, MAX_RUNS, METADATA_BYTES},
 };
 use cosmic_text::{Attrs, Buffer, Color, Family, Metrics, Shaping, Weight, Wrap};
 use std::{io, num::NonZeroUsize};
 use sugarsubstitute_contracts::execution::MemoryLease;
+use sugarsubstitute_contracts::presentation::console_color;
 use tiny_skia::Pixmap;
 
 impl ConsoleFont for FontOwner {
@@ -56,7 +56,7 @@ impl ConsoleFont for FontOwner {
         let default_attrs = Attrs::new().family(Family::SansSerif).color(default_color);
         let spans = row.runs.iter().enumerate().map(|(index, run)| {
             let [r, g, b] =
-                console::color(run.style.foreground, surface.theme, false).unwrap_or([0; 3]);
+                console_color(run.style.foreground, surface.theme, false).unwrap_or([0; 3]);
             (
                 &row.text[run.start as usize..run.end as usize],
                 default_attrs
@@ -77,7 +77,7 @@ impl ConsoleFont for FontOwner {
                     .runs
                     .get(glyph.metadata)
                     .ok_or_else(|| io::Error::other("Console glyph style absent"))?;
-                if let Some(color) = console::color(style.style.background, surface.theme, true) {
+                if let Some(color) = console_color(style.style.background, surface.theme, true) {
                     let left = 30.0 + glyph.x / surface.scale;
                     backgrounds.push(Background {
                         bounds: [

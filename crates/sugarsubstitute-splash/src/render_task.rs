@@ -49,6 +49,9 @@ pub struct SplashRenderRequest<T = TranscriptSnapshot> {
     /// Actual immutable transcript pin, retained through validation and result disposal.
     /// Root verifies its resource against the current managed resource; presentation grants no authority.
     pub console: Option<T>,
+    /// Sole text presentation owner, including before the first source record arrives.
+    /// Native mode reserves its independent bounded document beside the two pixel copies.
+    pub console_presentation: sugarsubstitute_contracts::presentation::ConsolePresentation,
 }
 impl<T> SplashRenderRequest<T> {
     /// Bound output plus live scratch and the host's later RGBA/BGRA retained pair.
@@ -59,7 +62,7 @@ impl<T> SplashRenderRequest<T> {
     /// previous claim is dropped; no pixel copy occurs. Allocation capacity is checked.
     pub fn reservation_bytes(&self) -> u64 {
         let output = self.shape.byte_len() as u64;
-        (2 * output).max(output + self.scratch_bytes())
+        (2 * output).max(output + self.scratch_bytes()) + self.console_presentation.storage_bytes()
     }
     /// Bound stage scratch independently from decoded cache ownership.
     fn scratch_bytes(&self) -> u64 {
@@ -197,7 +200,14 @@ impl<T: TranscriptView> SplashRenderTask<T> {
             if !raster.step_admitted(
                 renderer,
                 Some(lease.clone()),
-                self.request.console.as_ref().map(TranscriptView::transcript),
+                self.request
+                    .console
+                    .as_ref()
+                    .filter(|_| {
+                        self.request.console_presentation
+                            == sugarsubstitute_contracts::presentation::ConsolePresentation::Raster
+                    })
+                    .map(TranscriptView::transcript),
             )? {
                 return Ok(None);
             }

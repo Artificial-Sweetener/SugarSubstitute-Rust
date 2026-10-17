@@ -9,6 +9,10 @@ use std::{error::Error, fmt};
 
 /// Maximum bytes inspected in one parser turn.
 pub const MAX_BATCH_BYTES: usize = 32 * 1024;
+/// Maximum records pinned by one immutable presentation view.
+pub const MAX_SNAPSHOT_RECORDS: usize = 128;
+/// Maximum UTF-8 bytes pinned by one immutable presentation view.
+pub const MAX_SNAPSHOT_BYTES: usize = 256 * 1024;
 /// Maximum UTF-8 text retained in one record.
 pub const MAX_RECORD_BYTES: usize = 64 * 1024;
 /// Maximum retained records, including incomplete lines.

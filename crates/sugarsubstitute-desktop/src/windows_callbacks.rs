@@ -13,7 +13,7 @@ use crate::{
 };
 use std::cell::RefCell;
 #[path = "timing_native_callback.rs"]
-mod timing;
+pub(crate) mod timing;
 use crate::timing::{NativeCallbackKind, TimingObserver};
 use tao::event_loop::EventLoopProxy;
 use timing::NativeCallbackObservation;
@@ -57,6 +57,12 @@ impl Callback {
             ));
         }
         Ok(Self { proxy, timings, controls: RefCell::new(controls), paint_mode })
+    }
+    pub(crate) fn proxy(&self) -> EventLoopProxy<NativeAction> {
+        self.proxy.clone()
+    }
+    pub(crate) fn timings(&self) -> Option<TimingObserver> {
+        self.timings.clone()
     }
     pub(crate) fn prepared_pixels(&self) -> bool {
         self.paint_mode == crate::windows_controls::PaintMode::PreparedPixels
@@ -254,23 +260,27 @@ pub(crate) unsafe extern "system" fn child_proc(
             WM_SETFOCUS | WM_KILLFOCUS if callback.prepared_pixels() => {
                 callback.send(NativeAction::FocusChanged)
             }
-            WM_KEYDOWN if callback.prepared_pixels() => match wparam.0 {
-                0x1b => {
-                    callback.send(NativeAction::Close);
-                    return LRESULT(0);
-                }
-                0x09 => {
-                    callback.send(NativeAction::Disclosure);
-                    return LRESULT(0);
-                }
-                0x0d => {
-                    if let Some(action) = callback.action(hwnd, None) {
-                        callback.send(action);
+            WM_KEYDOWN if callback.prepared_pixels() && callback.action(hwnd, None).is_some() => {
+                match wparam.0 {
+                    0x1b => {
+                        callback.send(NativeAction::Close);
+                        return LRESULT(0);
                     }
-                    return LRESULT(0);
+                    0x09 => {
+                        callback.send(NativeAction::FocusNext(
+                            crate::windows_controls::shift_pressed(),
+                        ));
+                        return LRESULT(0);
+                    }
+                    0x0d if lparam.0 & (1 << 30) == 0 => {
+                        if let Some(action) = callback.action(hwnd, None) {
+                            callback.send(action);
+                        }
+                        return LRESULT(0);
+                    }
+                    _ => {}
                 }
-                _ => {}
-            },
+            }
             _ => {}
         }
         // SAFETY: Preserve WM_GETOBJECT, BM_CLICK and OS-managed focused/pressed button state.

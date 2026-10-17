@@ -59,7 +59,7 @@ pub struct DesktopReceipt {
 /// Report every whole-frame source transition in an explicitly audited native run.
 ///
 /// Comparison includes device dimensions and every premultiplied RGBA byte.
-/// Native focus overlays and compositor effects are outside this source audit.
+/// Native focus overlays, native console text and compositor effects are outside this source audit.
 #[derive(Debug)]
 pub struct FrameAuditReceipt {
     /// First successfully presented source frame, retained with its original allocation.
@@ -226,6 +226,13 @@ pub trait WindowContent {
     /// IDs and native-close actions stay fixed; visibility changes preserve the peer lifetime.
     /// Identities and geometry match the painted controls; the adapter owns native peers.
     fn accessible_controls(&self) -> &[AccessibleControl];
+    /// Borrow the genuine latest immutable transcript for an optional read-only console.
+    /// The adapter claims copied storage from a newly funded frame before native effects;
+    /// text revision, pixel identity and application lifecycle authority remain independent.
+    /// Surfaces select console ownership for their full lifetime. After the first Some,
+    /// collapse with visible=false; retain the same borrowed source contract on later frames.
+    /// When present, the standard native console reserves surface-local control ID4.
+    fn console(&self) -> Option<crate::ConsoleView<'_>>;
     /// Activate a content-owned control by its registered identity; return visible dirty state.
     /// Native-close controls are consumed by the adapter and never forwarded here.
     fn activate(&mut self, id: u16) -> bool;
