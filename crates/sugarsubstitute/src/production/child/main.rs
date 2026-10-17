@@ -154,7 +154,10 @@ impl ProductionChild {
         prepared: &mut PreparedChildStartup,
         origin: LoopbackOrigin,
     ) -> Result<()> {
-        if self.frontend_budget.is_some() || self.main.pending() || self.main.terminal.is_some() {
+        if (self.frontend_budget.is_some() && !self.reload.as_ref().is_some_and(|r| r.granted()))
+            || self.main.pending()
+            || self.main.terminal.is_some()
+        {
             return Err("Main construction duplicated".into());
         }
         let budget = FrontendBudget::new(self.client()?.now()?)?;
@@ -180,8 +183,10 @@ impl ProductionChild {
             origin,
             settings,
             original: budget.until(),
+            reloading: self.reload.as_ref().is_some_and(|r| r.granted()),
         });
         self.main.job = Some(worker::submit(&client, scope, id, &mut self.main.input)?);
+        self.reload = None;
         Ok(())
     }
     pub(super) fn consume_main(&mut self) -> Result<()> {

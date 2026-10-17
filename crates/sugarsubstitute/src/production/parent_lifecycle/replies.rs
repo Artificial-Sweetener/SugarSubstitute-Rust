@@ -109,6 +109,9 @@ impl ParentLifecycle {
                 ReplyOutcome::FolderChunkAccepted { identity, next_offset_units: next }
             }
             Reply::Environment(identity) => {
+                if let Some(refresh) = &self.frontend_refresh {
+                    refresh.proof(identity, self.lease.ok_or(ParentError::WrongPhase)?)?;
+                }
                 if self
                     .environment
                     .as_ref()
@@ -119,6 +122,9 @@ impl ParentLifecycle {
                 ReplyOutcome::EnvironmentAuthorized(identity)
             }
             Reply::Browser { identity, pid } => {
+                if let Some(refresh) = &self.frontend_refresh {
+                    refresh.proof(identity, self.lease.ok_or(ParentError::WrongPhase)?)?;
+                }
                 if self
                     .browser
                     .as_ref()
@@ -145,7 +151,21 @@ impl ParentLifecycle {
                 })
             }
             Reply::Released => ReplyOutcome::Released,
-            Reply::Reloaded(lease) => ReplyOutcome::Reloaded(reference(lease)),
+            Reply::Reloaded { lease, identity } => {
+                let refresh = self.frontend_refresh.as_ref().ok_or(ParentError::WrongPhase)?;
+                let proof = refresh.proof(identity, lease)?;
+                let source = proof.source().manifest();
+                ReplyOutcome::Reloaded(GrantedContext {
+                    lease: reference(lease),
+                    identity,
+                    origin: resources
+                        .backend
+                        .ready_origin(lease.resource)?
+                        .ok_or(ParentError::WrongPhase)?,
+                    frontend: VersionLabel::new(source.frontend_version())?,
+                    sugarcubes: VersionLabel::new(source.cube_version())?,
+                })
+            }
             Reply::Cancelled => ReplyOutcome::Cancelled,
             Reply::Failed(code) => ReplyOutcome::Failed(code),
             Reply::Rejected(code) => ReplyOutcome::Rejected(code),

@@ -83,6 +83,27 @@ impl InstalledFrontendOwner {
             pending: None,
         }
     }
+    /// Create another bounded inspector for this exact independently selected installation.
+    /// Copies no manifest, native pin, deadline, completion or lease generation. Each owner
+    /// must submit and retire its own inspection through the same execution boundary.
+    pub fn fresh_snapshot(&self) -> Self {
+        Self {
+            input: self.input.clone(),
+            shared: Arc::new(Shared { retained: Mutex::new(None), live: AtomicBool::new(false) }),
+            port: self.port.clone(),
+            submitted: None,
+            terminal: None,
+            execution: None,
+            client: None,
+            pending: None,
+        }
+    }
+    /// Cancel only this inspector's actual pending job; completion and partial custody remain owned.
+    pub fn request_cancel(&self) {
+        if let Some(job) = &self.pending {
+            job.cancel();
+        }
+    }
     /// Match all four exact path spellings against this owner's retained input.
     /// This inert comparison borrows the original selection, copies no proof and
     /// neither inspects files nor establishes current native custody or readiness.

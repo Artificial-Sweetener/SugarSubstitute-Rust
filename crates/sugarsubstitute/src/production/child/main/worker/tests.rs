@@ -55,6 +55,7 @@ fn absent_grant_is_worker_state_failure_and_retains_actual_projected_input()
             },
         },
         original,
+        reloading: false,
     });
     let mut job = submit(&rig.client, &rig.scope, JobId::new(2)?, &mut construction)?;
     assert!(construction.is_none());

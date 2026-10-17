@@ -57,6 +57,7 @@ pub(crate) struct MainActor {
     events: Option<Rc<Events>>,
     readiness: Option<MainReadiness>,
     revealed: bool,
+    reload: crate::main_reload::ReloadAdmission,
     retired: bool,
     navigations: u64,
     material: Option<NativeMaterial>,
@@ -110,6 +111,7 @@ impl MainActor {
             events: Some(events),
             readiness: Some(readiness),
             revealed: false,
+            reload: crate::main_reload::ReloadAdmission::default(),
             retired: false,
             navigations: 0,
             material: None,
@@ -215,6 +217,17 @@ impl MainActor {
         {
             return Ok(Some(DesktopStartupObservation::CloseRequested));
         }
+        if let Some(kind) = self.events()?.process_failed()
+            && let Some(reason) =
+                self.reload.request(self.revealed, crate::MainReloadReason::ProcessFailed)
+        {
+            tracing::warn!(operation="main_process_failed", identity=?self.identity(), kind,
+                "Actual WebView process failure requested checked frontend replacement");
+            return Ok(Some(DesktopStartupObservation::MainReloadRequested {
+                identity: self.identity(),
+                reason,
+            }));
+        }
         if let Some(cause) = self.view.as_ref().and_then(WebView::take_owned_error) {
             return Err(DesktopError::new("main_owned_callback", cause));
         }
@@ -306,6 +319,7 @@ impl MainActor {
         // Restore this actor's caption inset before publishing reveal or sealing a capture.
         self.resize()?;
         self.confirm_visible()?;
+        self.receivers()?.reveal_navigation();
         self.revealed = true;
         #[cfg(feature = "k1-native-qualification")]
         tracing::info!(operation="main_revealed", identity=?identity,

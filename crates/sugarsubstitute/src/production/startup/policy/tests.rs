@@ -434,3 +434,26 @@ fn qualification_capture_kind_cannot_grant_startup_policy_and_retains_original_c
 
 #[path = "child_routing_tests.rs"]
 mod child_routing_tests;
+
+#[test]
+fn native_reload_routes_only_current_main_and_whole_close_fences_replacement_intent() -> TestResult
+{
+    let (mut owner, mut session) = policy(false)?;
+    frontend_ready(&mut owner, &mut session)?;
+    owner.native(DesktopStartupObservation::SplashRetired(session.launch()), Some(&mut session))?;
+    let identity = owner.identity(&session);
+    owner.native(DesktopStartupObservation::MainRevealed(identity), Some(&mut session))?;
+    let request = |identity| DesktopStartupObservation::MainReloadRequested {
+        identity,
+        reason: sugarsubstitute_desktop::MainReloadReason::Navigation,
+    };
+    let foreign = MainIdentity { launch: LaunchId::new(2)?, ..identity };
+    assert!(owner.native(request(foreign), Some(&mut session)).is_err());
+    assert!(matches!(
+        owner.native(request(identity), Some(&mut session))?,
+        StartupRoute::Native(DesktopStartupObservation::MainReloadRequested { .. })
+    ));
+    owner.close(Some(&mut session))?;
+    assert!(matches!(owner.native(request(identity), Some(&mut session))?, StartupRoute::None));
+    Ok(())
+}

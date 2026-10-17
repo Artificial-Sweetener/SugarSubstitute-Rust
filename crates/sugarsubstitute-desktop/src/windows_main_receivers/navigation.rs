@@ -17,6 +17,8 @@ const EVENT_COUNT: usize = if cfg!(feature = "k1-native-qualification") { 6 } el
 struct State {
     origin: LoopbackOrigin,
     active: Cell<bool>,
+    revealed: Cell<bool>,
+    reload_requested: Cell<bool>,
     navigation: Cell<Option<u64>>,
     #[cfg(feature = "k1-native-qualification")]
     content: Cell<Option<(u64, bool)>>,
@@ -40,6 +42,8 @@ impl Navigation {
             state: Rc::new(State {
                 origin,
                 active: Cell::new(false),
+                revealed: Cell::new(false),
+                reload_requested: Cell::new(false),
                 navigation: Cell::new(None),
                 #[cfg(feature = "k1-native-qualification")]
                 content: Cell::new(None),
@@ -59,6 +63,9 @@ impl Navigation {
         }
         self.state.active.set(true);
         Ok(())
+    }
+    pub(super) fn revealed(&self) {
+        self.state.revealed.set(true);
     }
     pub(super) fn install(
         &mut self,
@@ -81,6 +88,7 @@ impl Navigation {
                         let mut pointer = PWSTR::null();
                         let mut id = 0;
                         let mut admitted = false;
+                        let mut request_reload = false;
                         if let Some(args) = args {
                             let status = args.Uri(&mut pointer);
                             let returned = NativeString(pointer);
@@ -110,6 +118,16 @@ impl Navigation {
                                     if admitted && state.active.get() {
                                         state.navigation.set(Some(id));
                                     }
+                                    if !admitted
+                                        && state.active.get()
+                                        && state.revealed.get()
+                                        && id != 0
+                                        && crate::main_navigation::admits_url(state.origin, text)
+                                    {
+                                        request_reload = !state.reload_requested.replace(true);
+                                        text.clear();
+                                        return Ok(());
+                                    }
                                     if !admitted {
                                         return Err(DesktopError::message(
                                             "native_navigation_input",
@@ -119,6 +137,9 @@ impl Navigation {
                                     text.clear();
                                     Ok(())
                                 });
+                            }
+                            if request_reload {
+                                captured.record(Kind::ReloadRequested, |_| Ok(()));
                             }
                             if let Err(cause) = args.SetCancel(!admitted) {
                                 captured.fail(DesktopError::new("cancel_native_navigation", cause));

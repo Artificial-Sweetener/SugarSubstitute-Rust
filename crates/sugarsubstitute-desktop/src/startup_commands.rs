@@ -4,7 +4,7 @@
 
 use super::{
     DesktopError, DesktopStartupObservation, EventLoopProxy, MainActor, NativeAction, Session,
-    StartupWindowContent, activity, main, main_operation,
+    StartupWindowContent, activity, main, main_fence::MainCustody, main_operation,
 };
 use crate::DesktopStartupCommand;
 
@@ -42,11 +42,22 @@ pub(super) fn drain(
             }
             DesktopStartupCommand::PrepareMain(request) => {
                 session.main_fence.prepare(request.identity(), content.main_identity())?;
+                let prior = match &session.main {
+                    Some(main) if main.retired() => MainCustody::CheckedRetired(main.identity()),
+                    Some(_) => MainCustody::Outstanding,
+                    None => MainCustody::Absent,
+                };
+                let replacement = session.main_fence.replacement(
+                    request.identity(),
+                    content.main_identity(),
+                    prior,
+                    session.splash.retired && session.splash_retirement_reported,
+                )?;
                 if !session.splash.presented
-                    || session.splash.retiring
+                    || (session.splash.retiring && !replacement)
                     || request.identity().launch != content.launch_id()
                     || request.identity().run != content.run_key()
-                    || session.splash.launch != request.identity().launch
+                    || (session.splash.launch != request.identity().launch && !replacement)
                     || session.main.as_ref().is_some_and(|main| !main.retired())
                 {
                     return Err(DesktopError::message(

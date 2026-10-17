@@ -62,6 +62,17 @@ impl ParentLifecycle {
             header,
             resources.profile.snapshot().pending,
         )? {
+            if let Some(refresh) = &mut self.frontend_refresh {
+                refresh.close(sugarsubstitute_contracts::lifecycle::ShutdownBudget::new(
+                    resources.execution.client.now()?,
+                )?);
+                refresh.absent_ack = Some(index);
+                refresh.schedule_cleanup(resources)?;
+                if !refresh.retired() {
+                    return Ok(());
+                }
+            }
+            self.frontend_refresh = None;
             self.requests.get_mut(index)?.reply = Some(Reply::Acknowledged);
             self.trace_retirement_ack(header, super::retirement_trace::AckStage::Staged, None);
             return Ok(());

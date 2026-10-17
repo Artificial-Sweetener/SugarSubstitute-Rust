@@ -174,6 +174,9 @@ impl Receivers {
     }
 
     /// Open only the exact current trusted frontend navigation after both authorization fences.
+    pub(super) fn reveal_navigation(&self) {
+        self.navigation.revealed();
+    }
     pub(crate) fn begin_navigation(&self) -> Result<(), DesktopError> {
         self.navigation.begin()
     }

@@ -223,22 +223,18 @@ impl Recovery {
     pub(super) fn live_lease(&self) -> Option<LeaseKey> {
         self.outage.is_none().then(|| self.running.map(|value| value.lease)).flatten()
     }
-    /// Native Reload remains implemented for the original creation lease only.
-    /// The callback owns all backend/Main/profile effects and cannot run for stale or successor authority.
+    /// Admit reload only for the exact healthy current backend interest.
+    /// Completed handoffs preserve the mounted document; stale and pending interests cannot act.
     pub(super) fn reload<T>(
         &self,
-        creation: Option<LeaseKey>,
         reference: sugarsubstitute_supervision::lifecycle_protocol::LeaseReference,
         effect: impl FnOnce(LeaseKey) -> Result<T>,
-    ) -> Result<Option<T>> {
+    ) -> Result<T> {
         let lease = self.live_lease().ok_or(ParentError::WrongPhase)?;
         if super::replies::reference(lease) != reference {
             return Err(ParentError::ForeignPeer.into());
         }
-        if creation != Some(lease) {
-            return Ok(None);
-        }
-        effect(lease).map(Some)
+        effect(lease)
     }
     /// Validate the exact mounted current Main without recreating a browser/profile or authorization.
     pub(super) fn main_identity(owner: &ParentLifecycle, identity: MainIdentity) -> Result<()> {

@@ -71,11 +71,11 @@ migrations = []
 id = "windows-lifecycle-control"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/lifecycle_protocol.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/binary.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/decode.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/encode.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/errors.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/frame.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/payload.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/reply.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/target.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/utf16.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/main_fields.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/main_types.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/output.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/raw_windows.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/reply_codec.rs"]
-source_sha256 = "sha256:bf587c15a36e144fc2e0204f3865d3c354165c13fe7639d12148d8df71c85acd"
+source_sha256 = "sha256:1c3eaf79e272d7b6d1e87b5bbd1d1e158fee1f19543b36c95c05210e9f208d73"
 classification = "protocol"
 preservation = "must_preserve"
-current_version = 6
-accepted_versions = [6]
+current_version = 7
+accepted_versions = [7]
 compatibility = "reject"
 migrations = []
 

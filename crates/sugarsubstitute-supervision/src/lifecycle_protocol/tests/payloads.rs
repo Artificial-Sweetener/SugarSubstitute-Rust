@@ -91,15 +91,11 @@ fn every_reply_classification_has_explicit_stable_tags_and_exact_roundtrip() -> 
         (ReplyOutcome::Released, vec![4]),
         (ReplyOutcome::Cancelled, vec![6]),
     ];
-    for (reply, tag) in
-        [(ReplyOutcome::Pending(reference), 2), (ReplyOutcome::Reloaded(reference), 5)]
-    {
-        let mut bytes = vec![tag];
-        for value in [17u64, 19, 23] {
-            bytes.extend(value.to_le_bytes());
-        }
-        outcomes.push((reply, bytes));
+    let mut pending = vec![2];
+    for value in [17u64, 19, 23] {
+        pending.extend(value.to_le_bytes());
     }
+    outcomes.push((ReplyOutcome::Pending(reference), pending));
     for (failure, tag) in [
         (LifecycleFailureCode::Preparation, 1),
         (LifecycleFailureCode::Cleanup, 2),
@@ -187,5 +183,27 @@ fn capability_is_borrowed_and_all_debug_paths_redact_its_bytes() -> TestResult {
         assert!(!formatted.contains("capability-secret"));
         assert!(!formatted.contains("115, 101, 110"));
     }
+    Ok(())
+}
+
+#[test]
+fn reloaded_context_has_exact_new_identity_origin_versions_and_rejects_lease_only_payload()
+-> TestResult {
+    let run = header(11)?.run;
+    let context = GrantedContext {
+        lease: lease()?,
+        identity: MainIdentity { run, launch: LaunchId::new(2)?, navigation: Generation::new(3)? },
+        origin: LoopbackOrigin::parse("http://127.0.0.1:8188", 8188)?,
+        frontend: VersionLabel::new("1.47.11")?,
+        sugarcubes: VersionLabel::new("0.15.3")?,
+    };
+    let bytes = encoded(WirePayload::Reply(ReplyOutcome::Reloaded(context)))?;
+    assert_eq!(bytes[HEADER_BYTES], 5);
+    assert!(
+        matches!(FrameCodec::decode(&bytes)?.payload,DecodedPayload::Reply(ReplyOutcome::Reloaded(actual)) if actual==context)
+    );
+    let mut old = bytes[..HEADER_BYTES + 25].to_vec();
+    set_length(&mut old);
+    assert!(FrameCodec::decode(&old).is_err());
     Ok(())
 }

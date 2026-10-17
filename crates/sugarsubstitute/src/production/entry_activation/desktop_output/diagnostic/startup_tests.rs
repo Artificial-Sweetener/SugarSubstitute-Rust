@@ -172,8 +172,11 @@ fn startup_failure_unknown_oversize_gap_eof_and_stdout_cannot_publish_or_stitch_
 
 #[test]
 fn actual_main_absence_failure_enrichment_uses_its_own_closed_observation_token() {
-    let line = LINE.replace("observation=CloseRequested", "observation=MainAbsent");
-    let actual = parse_failure(line.as_bytes()).and_then(|failure| failure.startup);
-    assert_eq!(actual.map(|facts| facts.observation), Some("MainAbsent"));
-    assert_eq!(parse_failure(line.replace("MainAbsent", "MainAbsenceClaim").as_bytes()), None);
+    for observation in ["MainAbsent", "MainReloadRequested"] {
+        let line =
+            LINE.replace("observation=CloseRequested", &format!("observation={observation}"));
+        let actual = parse_failure(line.as_bytes()).and_then(|failure| failure.startup);
+        assert_eq!(actual.map(|facts| facts.observation), Some(observation));
+        assert_eq!(parse_failure(format!("{line}Unknown").as_bytes()), None);
+    }
 }

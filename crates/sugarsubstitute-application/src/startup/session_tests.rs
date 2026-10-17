@@ -376,3 +376,6 @@ fn configured_retry_requires_settlement_and_waits_for_new_native_presentation() 
     assert_eq!(effect, Some(StartupEffect::PrepareConnection { launch: LaunchId::new(5)? }));
     Ok(())
 }
+
+#[path = "session_tests/reload.rs"]
+mod reload;

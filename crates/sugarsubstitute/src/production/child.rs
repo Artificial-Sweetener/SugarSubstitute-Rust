@@ -35,6 +35,8 @@ mod profile_transaction;
 #[cfg(feature = "k1-native-qualification")]
 #[path = "child/qualification.rs"]
 mod qualification;
+#[path = "child/reload.rs"]
+mod reload;
 #[path = "child/requests.rs"]
 mod requests;
 #[path = "child/retirement.rs"]
@@ -88,6 +90,7 @@ pub(in crate::production) struct ProductionChild {
     attempt: Option<attempt::AttemptCleanup>,
     frontend_budget: Option<FrontendBudget>,
     frontend_timed_out: bool,
+    reload: Option<reload::FrontendReload>,
     acquire: Option<connection::PendingAcquire>,
     lease: Option<LeaseReference>,
     grant: Option<ReceivedLifecycleFrame>,
@@ -154,6 +157,7 @@ impl ProductionChild {
             attempt: None,
             frontend_budget: None,
             frontend_timed_out: false,
+            reload: None,
             acquire: None,
             lease: None,
             grant: None,
@@ -378,6 +382,7 @@ impl ProductionChild {
                 .and_then(backend::RunningBackendBinding::retry_deadline)
                 .filter(|_| !self.shutdown.closing() && !self.output.replacement_stopped()),
             self.shutdown.deadline(),
+            self.reload.as_ref().filter(|_| !self.shutdown.closing()).map(|reload| reload.until()),
             self.attempt.as_ref().and_then(attempt::AttemptCleanup::deadline),
             self.frontend_budget
                 .filter(|_| self.attempt.is_none() && !self.frontend_timed_out)

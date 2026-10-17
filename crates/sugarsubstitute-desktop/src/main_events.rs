@@ -32,6 +32,7 @@ pub(crate) enum Kind {
     ContextsCleared,
     Console,
     NavigationStarting,
+    ReloadRequested,
     Navigation { succeeded: bool },
     ProcessFailed { kind: i32 },
     Command,
@@ -68,6 +69,7 @@ pub(crate) struct Events {
     storage: RefCell<Storage>,
     accepting: Cell<bool>,
     callback_depth: Cell<usize>,
+    process_failed: Cell<Option<i32>>,
     wake: Box<dyn Fn()>,
 }
 
@@ -110,6 +112,7 @@ impl Events {
             storage: RefCell::new(storage),
             accepting: Cell::new(true),
             callback_depth: Cell::new(0),
+            process_failed: Cell::new(None),
             wake: Box::new(wake),
         }))
     }
@@ -142,6 +145,10 @@ impl Events {
 
     /// Copy only after a native getter has returned and its ownership guard is installed.
     /// Overflow and malformed UTF-16 close observation admission permanently.
+    /// Preserve native process failure independently of earlier context teardown callbacks.
+    pub(crate) fn process_failed(&self) -> Option<i32> {
+        self.process_failed.get()
+    }
     pub(crate) fn record(
         &self,
         kind: Kind,
@@ -165,6 +172,9 @@ impl Events {
     ) {
         if !self.accepting.get() {
             return;
+        }
+        if let Kind::ProcessFailed { kind } = kind {
+            self.process_failed.set(Some(kind));
         }
         let result = (|| {
             let mut storage = self.storage.borrow_mut();

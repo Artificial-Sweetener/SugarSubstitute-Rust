@@ -17,6 +17,7 @@ enum Effect {
     Incomplete(super::probe_diagnostics::Blocked),
     Barrier(Box<ProbeTarget>),
     Receipt(ReadinessReceipt),
+    Reload(crate::MainReloadReason),
 }
 
 impl MainActor {
@@ -33,6 +34,19 @@ impl MainActor {
                 Some(Command::Probe(target)) => Some(target),
                 _ => None,
             };
+            let reload = match observation.kind {
+                Kind::ReloadRequested => Some(crate::MainReloadReason::Navigation),
+                Kind::ProcessFailed { .. } => Some(crate::MainReloadReason::ProcessFailed),
+                _ => None,
+            };
+            if self.revealed
+                && let Some(reason) = reload
+            {
+                if let Some(reason) = self.reload.request(self.revealed, reason) {
+                    effect = Effect::Reload(reason);
+                }
+                return Ok(());
+            }
             match decode_observation(self.readiness()?, observation, std::time::Instant::now()) {
                 Ok(decoded) => effect = decoded,
                 Err((cause, kind)) => {
@@ -51,6 +65,10 @@ impl MainActor {
         }
         let result = match effect {
             Effect::None => None,
+            Effect::Reload(reason) => Some(DesktopStartupObservation::MainReloadRequested {
+                identity: self.identity(),
+                reason,
+            }),
             Effect::Incomplete(blocked) => {
                 if let Some(target) = completed_probe {
                     self.probe_diagnostics.completed(
@@ -129,6 +147,7 @@ fn observation_kind(kind: Kind, command: Option<Command>) -> &'static str {
         Kind::ContextsCleared => "ContextsCleared",
         Kind::Console => "Console",
         Kind::NavigationStarting => "NavigationStarting",
+        Kind::ReloadRequested => "NavigationStarting",
         Kind::Navigation { .. } => "Navigation",
         Kind::ProcessFailed { .. } => "ProcessFailed",
         Kind::Command => match command {

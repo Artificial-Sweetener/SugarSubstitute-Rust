@@ -201,20 +201,13 @@ impl ParentLifecycle {
             }
             DecodedPayload::Reload { lease: reference, identity } => {
                 let policy = self.recovery;
-                if policy
-                    .reload(self.lease, reference, |lease| {
-                        self.hold_backend_command(
-                            index,
-                            super::history::HeldBackendCommand::Reload { identity, lease },
-                        )?;
-                        self.advance_backend_commands(resources)
-                    })?
-                    .is_none()
-                {
-                    self.requests.get_mut(index)?.reply = Some(Reply::Rejected(
-                        sugarsubstitute_contracts::lifecycle::LifecycleRejection::WrongPhase,
-                    ));
-                }
+                policy.reload(reference, |lease| {
+                    self.hold_backend_command(
+                        index,
+                        super::history::HeldBackendCommand::Reload { identity, lease },
+                    )?;
+                    self.advance_backend_commands(resources)
+                })?;
             }
             DecodedPayload::RequestedProfileFolder(fragment) => {
                 let next = self.folders.requested(fragment, resources.requested_profile)?;
@@ -336,13 +329,12 @@ impl ParentLifecycle {
 }
 
 impl ParentLifecycle {
-    /// Preserve the existing same-creation-lease reload transaction behind checked recovery admission.
+    /// Reauthorize a new Main only after actual old retirement, retaining the healthy backend.
     pub(in crate::production::parent_lifecycle) fn native_reload(
         &mut self,
         index: usize,
         identity: sugarsubstitute_contracts::startup::MainIdentity,
         lease: LeaseKey,
-        until: sugarsubstitute_contracts::execution::Moment,
         resources: &mut ParentResources<'_, '_>,
     ) -> Result<()> {
         let binding = self.binding()?;
@@ -351,6 +343,11 @@ impl ParentLifecycle {
         {
             return Err(ParentError::WrongPhase.into());
         }
+        self.acquisition.as_ref().ok_or(ParentError::WrongPhase)?.check_reload(
+            identity,
+            self.lease.ok_or(ParentError::WrongPhase)?,
+            lease,
+        )?;
         self.requests.get_mut(index)?.identity = Some(identity);
         self.backend_request(
             binding,
@@ -362,13 +359,12 @@ impl ParentLifecycle {
             },
             resources,
         )?;
-        let frontend = sugarsubstitute_application::startup::FrontendBudget::new(
-            resources.execution.client.now()?,
+        self.acquisition.as_mut().ok_or(ParentError::WrongPhase)?.reload(
+            identity,
+            self.lease.ok_or(ParentError::WrongPhase)?,
+            lease,
         )?;
-        self.main.begin(identity, lease, until.min(frontend.until()))?;
-        self.acquisition.as_mut().ok_or(ParentError::WrongPhase)?.reload(identity, lease)?;
-        resources.profile.begin_main_attempt(identity)?;
-        self.folders.begin(identity);
+        self.lease = Some(lease);
         Ok(())
     }
 }

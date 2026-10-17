@@ -397,3 +397,38 @@ fn admitted_managed_retry_keeps_exact_header_while_waiting_for_original_producer
     ledger.consumed(h)?;
     Ok(())
 }
+
+#[test]
+fn finite_reload_reply_retirement_preserves_original_cutoff_and_grants_no_ordinary_receipt()
+-> TestResult {
+    let mut owner = requests()?;
+    let header = prepare(&mut owner)?;
+    owner.frontend_reload(header)?;
+    owner.outbound(header, Moment::from_nanos(500), Moment::from_nanos(499))?;
+    owner.admitted(header)?;
+    assert_eq!(owner.received(header, Moment::from_nanos(500)), Err(RequestError::Deadline));
+    owner.retire(header, Purpose::FrontendReload)?;
+    owner.received_or_retiring(header, Moment::from_nanos(900))?;
+    assert_eq!(owner.consumed(header), Err(RequestError::Order));
+    assert_eq!(owner.can_settle(header, Purpose::Acquisition), Err(RequestError::Order));
+    owner.settled(header, Purpose::FrontendReload)?;
+    assert!(owner.retiring(header).is_err());
+    Ok(())
+}
+#[test]
+fn unadmitted_reload_can_be_withdrawn_but_wrong_purpose_and_foreign_header_cannot_retire_it()
+-> TestResult {
+    let mut owner = requests()?;
+    let header = prepare(&mut owner)?;
+    owner.frontend_reload(header)?;
+    assert_eq!(owner.retire(header, Purpose::FrontendReload), Err(RequestError::Order));
+    let foreign = WireHeader {
+        request: Some(RequestId::new(header.request.ok_or("Request absent")?.get() + 1)?),
+        ..header
+    };
+    assert_eq!(owner.retire(foreign, Purpose::FrontendReload), Err(RequestError::Identity));
+    assert_eq!(owner.retire(header, Purpose::BackendRetry), Err(RequestError::Identity));
+    owner.withdraw_prepared(header)?;
+    assert!(owner.prepared(header).is_err());
+    Ok(())
+}

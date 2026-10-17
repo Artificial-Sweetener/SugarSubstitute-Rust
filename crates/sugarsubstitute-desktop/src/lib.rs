@@ -22,6 +22,8 @@ mod main_navigation;
 mod main_readiness;
 mod main_readiness_storage;
 mod main_readiness_types;
+#[cfg(any(target_os = "windows", test))]
+mod main_reload;
 /// Bounded observational development trace records; feature-off builds expose none.
 #[cfg(feature = "k1-native-qualification")]
 pub mod qualification_trace;
@@ -109,9 +111,9 @@ pub use runtime::run;
 
 pub use host_contract::{
     DesktopStartupCommand, DesktopStartupObservation, MainBackendState, MainCaptionLabels,
-    MainIdentity, MainRecoveryLabels, MainRequestError, MainRetirementReason, MainWindowRequest,
-    MainWindowSettings, ServedFrontendVersions, StartupDesktopReceipt, StartupPreparationStep,
-    StartupWindowContent,
+    MainIdentity, MainRecoveryLabels, MainReloadReason, MainRequestError, MainRetirementReason,
+    MainWindowRequest, MainWindowSettings, ServedFrontendVersions, StartupDesktopReceipt,
+    StartupPreparationStep, StartupWindowContent,
 };
 
 pub use main_environment::{MainEnvironmentError, MainEnvironmentFacts};

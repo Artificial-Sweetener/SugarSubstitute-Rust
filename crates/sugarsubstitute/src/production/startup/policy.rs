@@ -130,7 +130,8 @@ impl StartupPolicy {
         if self.closing {
             return Ok(match observation {
                 DesktopStartupObservation::CloseRequested => StartupRoute::Close,
-                DesktopStartupObservation::SplashPresented(_)
+                DesktopStartupObservation::MainReloadRequested { .. }
+                | DesktopStartupObservation::SplashPresented(_)
                 | DesktopStartupObservation::SplashRetired(_)
                 | DesktopStartupObservation::NavigationStarted(_)
                 | DesktopStartupObservation::FrontendReceipt { .. }
@@ -191,7 +192,8 @@ impl StartupPolicy {
             | DesktopStartupObservation::MainRevealed(identity)
             | DesktopStartupObservation::MainRetired(identity)
             | DesktopStartupObservation::MainAbsent(identity)
-            | DesktopStartupObservation::BackendRetryRequested { identity, .. } => {
+            | DesktopStartupObservation::BackendRetryRequested { identity, .. }
+            | DesktopStartupObservation::MainReloadRequested { identity, .. } => {
                 session.is_some_and(|session| *identity == self.identity(session))
             }
             DesktopStartupObservation::Failed { identity, .. } => identity.is_none_or(|identity| {

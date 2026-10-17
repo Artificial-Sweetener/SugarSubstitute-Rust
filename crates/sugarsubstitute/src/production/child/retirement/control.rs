@@ -19,6 +19,7 @@ impl Control {
 }
 impl ProductionChild {
     pub(in super::super) fn advance_control(&mut self) -> Result<()> {
+        self.retire_reload_reply()?;
         if !self.bootstrap.channel_mut().admitted() {
             return Ok(());
         }
@@ -109,6 +110,11 @@ impl ProductionChild {
                 (
                     self.attempt.as_ref().ok_or("Original attempt absent")?.original_deadline(),
                     DeadlineSource::AttemptCleanup,
+                )
+            } else if matches!(control, Control::MainRetired(_)) && self.reload.is_some() {
+                (
+                    self.reload.as_ref().ok_or("Original reload absent")?.until(),
+                    DeadlineSource::ControlInterval,
                 )
             } else {
                 (

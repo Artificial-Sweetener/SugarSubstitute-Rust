@@ -57,6 +57,7 @@ pub(super) struct MainConstruction {
     pub(super) origin: sugarsubstitute_contracts::configuration::LoopbackOrigin,
     pub(super) settings: MainWindowSettings,
     pub(super) original: Moment,
+    pub(super) reloading: bool,
 }
 pub(super) fn submit(
     client: &ExecutionClient,
@@ -78,8 +79,16 @@ pub(super) fn submit(
         },
         input,
         move |construction, context| {
-            let MainConstruction { frame, input, identity, header, origin, settings, original } =
-                construction;
+            let MainConstruction {
+                frame,
+                input,
+                identity,
+                header,
+                origin,
+                settings,
+                original,
+                reloading,
+            } = construction;
             let result = (|| {
                 check(&context, original)?;
                 let control = context
@@ -92,8 +101,10 @@ pub(super) fn submit(
                 if decoded.header != header {
                     return Err(MainError::State);
                 }
-                let DecodedPayload::Reply(ReplyOutcome::Granted(grant)) = decoded.payload else {
-                    return Err(MainError::State);
+                let grant = match decoded.payload {
+                    DecodedPayload::Reply(ReplyOutcome::Granted(context)) if !reloading => context,
+                    DecodedPayload::Reply(ReplyOutcome::Reloaded(context)) if reloading => context,
+                    _ => return Err(MainError::State),
                 };
                 if grant.identity != identity
                     || grant.origin != origin

@@ -418,6 +418,15 @@ fn actual_main_absence_observation_tag_remains_distinct_from_retired_without_ide
         )),
         "MainRetired"
     );
+    assert_eq!(
+        DesktopError::startup_observation_kind(
+            &crate::DesktopStartupObservation::MainReloadRequested {
+                identity,
+                reason: crate::MainReloadReason::Navigation,
+            }
+        ),
+        "MainReloadRequested"
+    );
     Ok(())
 }
 

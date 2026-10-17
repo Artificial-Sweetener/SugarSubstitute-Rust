@@ -13,6 +13,28 @@ impl ChildChannel {
         self.requests.as_mut().ok_or("Original ledger absent")?.backend_retry(header)?;
         Ok(())
     }
+    /// Bind one finite reload without borrowing acquisition or output privileges.
+    pub(in super::super) fn frontend_reload(&mut self, header: WireHeader) -> Result<()> {
+        self.requests.as_mut().ok_or("Original ledger absent")?.frontend_reload(header)?;
+        Ok(())
+    }
+    /// Fence only this reply's ordinary authority. Its already admitted original write
+    /// remains in order before ExitIntent; no veto or no-issue custody is manufactured.
+    pub(in super::super) fn retire_frontend_reload(&mut self, header: WireHeader) -> Result<()> {
+        self.requests
+            .as_mut()
+            .ok_or("Original ledger absent")?
+            .retire(header, Purpose::FrontendReload)?;
+        Ok(())
+    }
+    /// Dispose only this authenticated final reply after its semantic closing owner handled it.
+    pub(in super::super) fn consume_retired_reload(&mut self, header: WireHeader) -> Result<()> {
+        self.requests
+            .as_mut()
+            .ok_or("Original ledger absent")?
+            .settled(header, Purpose::FrontendReload)?;
+        Ok(())
+    }
     /// Read actual queue admission without withdrawing or changing its native custody.
     pub(in super::super) fn request_prepared(&self, header: WireHeader) -> Result<bool> {
         Ok(self.requests.as_ref().ok_or("Original ledger absent")?.prepared(header)?)

@@ -294,7 +294,7 @@ fn same_lease_reload_preserves_original_acquisition_and_rejects_prior_main_ident
     let next =
         MainIdentity { launch: LaunchId::new(2)?, navigation: Generation::new(2)?, ..identity()? };
     parent.main.begin(next, lease()?, moment(250))?;
-    parent.acquisition.as_mut().ok_or("Origin missing")?.reload(next, lease()?)?;
+    parent.acquisition.as_mut().ok_or("Origin missing")?.reload(next, lease()?, lease()?)?;
     parent.main.retire(next)?;
     parent.main.accept(
         binding()?,
@@ -505,3 +505,6 @@ fn held_managed_preparation_timeout_publishes_finite_failure_without_admitting_b
     assert_eq!(parent.requests.get(index)?.header, h);
     Ok(())
 }
+
+#[path = "acquisition_lifetime/reload.rs"]
+mod reload;

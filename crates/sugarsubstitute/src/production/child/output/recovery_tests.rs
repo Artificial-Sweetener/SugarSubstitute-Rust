@@ -235,3 +235,19 @@ fn admitted_retry_waits_beyond_three_minutes_without_renewing_finite_preparation
     assert_eq!(running.retry_request(), None);
     Ok(())
 }
+
+#[test]
+fn frontend_reload_rebinds_only_current_main_and_preserves_exact_backend_interest() -> Result<()> {
+    let (old, binding) = fixture()?;
+    let mut owner = RunningBackendBinding::new(old, binding)?;
+    let next = MainIdentity { launch: LaunchId::new(2)?, navigation: Generation::new(2)?, ..old };
+    owner.reload_main(old, next)?;
+    assert_eq!(owner.reload_lease(next)?, binding.lease);
+    assert_eq!(owner.connection, binding.connection);
+    assert_eq!(owner.key(binding.lease).run, old.run);
+    assert!(owner.reload_main(old, next).is_err());
+    owner.unavailable(binding.lease, true)?;
+    assert!(owner.reload_lease(next).is_err());
+    assert_eq!(owner.current, binding.lease);
+    Ok(())
+}

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Encode bounded, untrusted lifecycle messages independently of native authentication.
 //!
-//! Wire version 6 uses little-endian integers and a fixed 104-byte header. Managed
+//! Wire version 7 uses little-endian integers and a fixed 104-byte header. Managed
 //! Acquire/Retry headers bound admission; accepted requests await the owned backend
 //! until Ready, cancellation or exit. Every native transfer remains finite. Frames
 //! contain at most 65536 bytes including that header. Claimed identities, secrets
@@ -43,6 +43,8 @@
 //! consumed delivery (0 absent). Decoding alone authenticates none of these facts.
 //! Reply tags 1..16 are documented on `ReplyOutcome`. Granted tag3 includes lease,
 //! main identity, u8 loopback host/u16 port and two u8-counted ASCII version labels.
+//! Reloaded tag5 carries the same context after fresh source inspection/HTTP verification.
+//! Version6 lease-only reload replies are rejected by all coordinated native peers.
 //! Labels satisfy the shared readiness grammar and contain at most64 bytes.
 //! OutputDelivery carries lease/u64 delivery/u8 stream/u64 stream sequence/u8 gap
 //! presence (optional u64 dropped bytes/skipped batches)/u8 EOF/u32 raw-byte count.
@@ -104,7 +106,7 @@ pub use target::{BorrowedBackendTarget, DecodedTarget, ManagedTargetRef};
 pub use utf16::{ArgumentRefs, Utf16Text};
 
 /// Exact supported wire version; unknown versions reject without negotiation.
-pub const WIRE_VERSION: u16 = 6;
+pub const WIRE_VERSION: u16 = 7;
 /// Exact header byte count, including the whole claimed run and deadline.
 pub const HEADER_BYTES: usize = 104;
 /// Maximum complete control frame, including header and payload.

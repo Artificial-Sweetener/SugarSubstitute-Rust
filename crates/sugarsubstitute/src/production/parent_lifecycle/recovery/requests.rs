@@ -248,7 +248,9 @@ impl ParentLifecycle {
             return Ok(());
         };
         let header = self.requests.get(index)?.header;
-        let until = self.requests.get(index)?.until.ok_or(ParentError::WrongPhase)?;
+        if self.requests.get(index)?.until.is_none() {
+            return Err(ParentError::WrongPhase.into());
+        }
         match command {
             HeldBackendCommand::Acquire(identity) => {
                 if self.acquisition.as_ref().is_none_or(|acquisition| acquisition.header != header)
@@ -283,7 +285,7 @@ impl ParentLifecycle {
                 resources,
             ),
             HeldBackendCommand::Reload { identity, lease } => {
-                self.native_reload(index, identity, lease, until, resources)
+                self.native_reload(index, identity, lease, resources)
             }
             HeldBackendCommand::Retry { identity, failed } => {
                 if self

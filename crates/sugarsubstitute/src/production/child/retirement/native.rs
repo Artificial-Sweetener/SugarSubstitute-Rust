@@ -13,6 +13,9 @@ impl ProductionChild {
             return self.advance_profile();
         }
         match self.observation.as_ref() {
+            Some(DesktopStartupObservation::MainReloadRequested { identity, .. }) => {
+                self.request_reload(*identity)?;
+            }
             Some(DesktopStartupObservation::BackendRetryRequested { identity, failed }) => {
                 self.backend_retry_requested(*identity, *failed)?;
             }
@@ -48,7 +51,9 @@ impl ProductionChild {
                 self.shutdown.main_retired = true;
             }
             Some(DesktopStartupObservation::NativeRetired(run)) if *run == self.run => {
-                if !self.shutdown.main_retired && self.main.profile().is_some() {
+                if !self.shutdown.main_retired
+                    && (self.main.profile().is_some() || self.grant_header.is_some())
+                {
                     self.shutdown.queue(Control::MainRetired(self.identity))?;
                     self.shutdown.main_retired = true;
                 }

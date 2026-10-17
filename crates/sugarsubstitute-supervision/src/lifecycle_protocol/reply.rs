@@ -21,8 +21,9 @@ pub enum ReplyOutcome<'a> {
     Granted(GrantedContext<'a>),
     /// Tag 4: lease release recorded; family settlement is independent.
     Released,
-    /// Tag 5: matching lease retained through frontend reload.
-    Reloaded(LeaseReference),
+    /// Tag5: the retained lease plus freshly verified source/origin and replacement Main identity.
+    /// Native profile/browser authorization remains independent of this bounded reply.
+    Reloaded(GrantedContext<'a>),
     /// Tag 6: authoritative cancellation outcome; no native clean-stop inference.
     Cancelled,
     /// Tag 7: bounded failure classification; original cause remains locally owned.

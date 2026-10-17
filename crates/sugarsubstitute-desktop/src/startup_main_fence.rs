@@ -35,6 +35,20 @@ impl MainFence {
         }
         Ok(())
     }
+    /// Admit replacement only after original splash and strictly older native Main retirement.
+    pub(super) fn replacement(
+        &self,
+        requested: MainIdentity,
+        current: Option<MainIdentity>,
+        prior: MainCustody,
+        splash_retired: bool,
+    ) -> Result<bool, DesktopError> {
+        self.prepare(requested, current)?;
+        Ok(splash_retired
+            && matches!(prior, MainCustody::CheckedRetired(old)
+            if old.run == requested.run && old.launch.get() < requested.launch.get()
+                && old.navigation.get() < requested.navigation.get()))
+    }
     /// Join actual application construction custody with native actor custody, then
     /// close admission before the caller publishes MainAbsent. This starts no work.
     /// Any current actor, even a checked-retired one, proves creation rather than absence.

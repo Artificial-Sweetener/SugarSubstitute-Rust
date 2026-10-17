@@ -181,3 +181,23 @@ fn completion_metadata_is_immutable_and_cleared_before_slot_reuse() -> Result<()
     assert_eq!(events.remaining(), 0);
     Ok(())
 }
+
+#[test]
+fn native_process_failure_is_observable_before_earlier_context_teardown_without_drain()
+-> Result<(), Box<dyn Error>> {
+    let released = Arc::new(AtomicUsize::new(0));
+    let events = Events::new(&lease(&released), || {})?;
+    events.record(Kind::ContextDestroyed, |_| Ok(()));
+    events.record(Kind::ProcessFailed { kind: 1 }, |_| Ok(()));
+    assert_eq!(events.process_failed(), Some(1));
+    assert_eq!(events.remaining(), 2);
+    assert!(events.consume(|observation| {
+        assert_eq!(observation.kind, Kind::ContextDestroyed);
+        Ok(())
+    })?);
+    assert_eq!(events.process_failed(), Some(1));
+    events.close_admission();
+    events.record(Kind::ProcessFailed { kind: 2 }, |_| Ok(()));
+    assert_eq!(events.process_failed(), Some(1));
+    Ok(())
+}

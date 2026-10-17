@@ -364,13 +364,19 @@ impl Acquisition {
         }
         Ok(self.lease)
     }
-    /// Advance identity only after the existing Main owner began a same-lease reload.
-    pub(super) fn reload(
-        &mut self,
+    /// Advance only after checked old Main retirement and current backend reload admission.
+    /// `previous` is the original acquisition association; the caller authenticates `current`.
+    pub(super) fn check_reload(
+        &self,
         identity: MainIdentity,
+        previous: LeaseKey,
         lease: LeaseKey,
     ) -> Result<(), ParentError> {
-        if self.lease != Some(lease)
+        if self.lease != Some(previous)
+            || lease.run != previous.run
+            || lease.connection != previous.connection
+            || lease.resource.owner != previous.resource.owner
+            || lease.resource.id != previous.resource.id
             || self.disposition != Some(Disposition::Granted)
             || !self.sent
             || identity.run != self.identity.run
@@ -379,7 +385,18 @@ impl Acquisition {
         {
             return Err(ParentError::ForeignPeer);
         }
+        Ok(())
+    }
+    /// Commit the already checked semantic association after actual resource reload admission.
+    pub(super) fn reload(
+        &mut self,
+        identity: MainIdentity,
+        previous: LeaseKey,
+        lease: LeaseKey,
+    ) -> Result<(), ParentError> {
+        self.check_reload(identity, previous, lease)?;
         self.identity = identity;
+        self.lease = Some(lease);
         self.retirement = None;
         Ok(())
     }

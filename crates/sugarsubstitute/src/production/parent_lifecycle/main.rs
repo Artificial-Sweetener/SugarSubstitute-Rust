@@ -184,6 +184,16 @@ impl ParentLifecycle {
         if self.profile_pending.is_some() || resources.profile.snapshot().pending {
             return Ok(());
         }
+        if let Some(refresh) = &mut self.frontend_refresh {
+            refresh.close(sugarsubstitute_contracts::lifecycle::ShutdownBudget::new(
+                resources.execution.client.now()?,
+            )?);
+            refresh.schedule_cleanup(resources)?;
+            if !refresh.retired() {
+                return Ok(());
+            }
+        }
+        self.frontend_refresh = None;
         resources.profile.confirm_main_retired(identity)?;
         self.main.confirm_retired(identity)?;
         self.requests.get_mut(index)?.reply = Some(Reply::Acknowledged);

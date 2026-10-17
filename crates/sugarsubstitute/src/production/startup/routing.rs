@@ -29,6 +29,9 @@ impl ProductionStartup {
         let child = self.child.consume(&batch, self.startup.as_ref());
         self.invalidate(cleanup_failed != self.child.cleanup_failed());
         let frame = super::consume_diagnostic::delivery(render, child)?;
+        if let Some(prepared) = &mut self.startup {
+            self.child.advance_reload(prepared)?;
+        }
         self.deliver_startup_events()?;
         let deadline = self.refresh_deadline();
         observed_consume(ConsumeStage::DeadlineRefresh, deadline)?;
@@ -96,6 +99,9 @@ impl ProductionStartup {
                     startup.release_source();
                 }
                 self.child.observe(observation, self.startup.as_ref())?;
+                if let Some(prepared) = &mut self.startup {
+                    self.child.advance_reload(prepared)?;
+                }
             }
             StartupRoute::Close => self.close_owned()?,
             StartupRoute::None => {}

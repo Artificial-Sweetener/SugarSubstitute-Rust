@@ -27,6 +27,7 @@ const OBSERVATIONS: &[&str] = &[
     "FrontendReceipt",
     "SplashRetired",
     "MainRevealed",
+    "MainReloadRequested",
     #[cfg(feature = "k1-native-qualification")]
     "MainPreviewCaptured",
     #[cfg(feature = "k1-native-qualification")]

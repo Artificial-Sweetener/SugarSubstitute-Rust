@@ -99,6 +99,7 @@ pub(super) fn consume(
             Err(ReadinessFault::SetupFailed)
         }
         Kind::NavigationStarting => Ok(()),
+        Kind::ReloadRequested => Err(ReadinessFault::SetupFailed),
         Kind::Navigation { succeeded } => owner.navigation_completed(succeeded),
         Kind::Command => match observation
             .command

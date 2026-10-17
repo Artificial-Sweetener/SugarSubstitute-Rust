@@ -269,6 +269,8 @@ pub enum MainRetirementReason {
     AttemptCleanup,
     /// The authoritative original frontend cutoff expired before readiness acceptance.
     FrontendTimeout,
+    /// Replace an already revealed frontend while preserving its backend lease.
+    FrontendReload,
 }
 
 /// Execute at most one explicit application command per bounded native drain.
@@ -334,6 +336,15 @@ pub enum DesktopStartupCommand {
     Close,
 }
 
+/// Native cause of a current revealed frontend replacement. This grants no native privilege.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MainReloadReason {
+    /// An actual same-origin top navigation requested replacement, including browser reload keys.
+    Navigation,
+    /// An actual WebView process failure; the platform adapter retains the numeric kind separately.
+    ProcessFailed,
+}
+
 /// Transfer native facts to the authoritative application StartupSession.
 pub enum DesktopStartupObservation {
     /// Actual native eligibility from owned windows and acknowledged native suspension.
@@ -380,6 +391,13 @@ pub enum DesktopStartupObservation {
     SplashRetired(LaunchId),
     /// Main cover retirement and native show/control/focus operations succeeded.
     MainRevealed(MainIdentity),
+    /// A native callback requested replacement of the exact already revealed document.
+    MainReloadRequested {
+        /// Full current run, launch and navigation; stale callbacks cannot select another Main.
+        identity: MainIdentity,
+        /// Native cause, independent of page messages or frontend readiness evidence.
+        reason: MainReloadReason,
+    },
     /// Actual current renderer PNG after its native completion and document/callback checks.
     #[cfg(all(target_os = "windows", feature = "k1-native-qualification"))]
     MainPreviewCaptured(crate::CapturedMainPreview),

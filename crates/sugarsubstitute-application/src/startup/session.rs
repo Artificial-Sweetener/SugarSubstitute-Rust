@@ -29,6 +29,7 @@ pub struct StartupSession {
     origin: Option<LoopbackOrigin>,
     admission_closed: bool,
     failure: Option<SessionFailure>,
+    reloading: bool,
 }
 
 impl StartupSession {
@@ -46,6 +47,7 @@ impl StartupSession {
             origin: None,
             admission_closed: false,
             failure: None,
+            reloading: false,
         }
     }
 
@@ -126,8 +128,13 @@ impl StartupSession {
             StartupObservation::FrontendReceipt(receipt) => {
                 match self.readiness.accept(receipt.clone()) {
                     ReadinessDecision::Accepted(ReadinessOutcome::Ready { .. }) => {
-                        self.phase = StartupPhase::FrontendReady;
-                        Some(StartupEffect::RetireSplash { launch: self.launch() })
+                        if self.reloading {
+                            self.phase = StartupPhase::RevealingMain;
+                            Some(StartupEffect::RevealMain { launch: self.launch() })
+                        } else {
+                            self.phase = StartupPhase::FrontendReady;
+                            Some(StartupEffect::RetireSplash { launch: self.launch() })
+                        }
                     }
                     ReadinessDecision::Accepted(ReadinessOutcome::Failed { failure }) => {
                         self.failure = Some(SessionFailure::Frontend(failure));
@@ -222,9 +229,31 @@ impl StartupSession {
         }
         self.readiness = ReadinessGate::new(launch, navigation);
         self.phase = StartupPhase::SplashFirstFrame;
+        self.reloading = false;
         self.origin = None;
         self.admission_closed = false;
         self.failure = None;
+        Ok(())
+    }
+
+    /// Begin a replacement frontend only after the composer checked old native retirement.
+    /// The connection is retained; its fresh authenticated grant must match the original origin.
+    /// # Errors
+    /// Rejects nonrunning, closed or nonincreasing identities without changing the session.
+    pub fn reload_frontend(
+        &mut self,
+        launch: LaunchId,
+        navigation: Generation,
+    ) -> Result<(), StartupRejection> {
+        if self.phase != StartupPhase::Running || self.admission_closed {
+            return Err(StartupRejection::InvalidOrder);
+        }
+        if launch.get() <= self.launch().get() || navigation.get() <= self.navigation().get() {
+            return Err(StartupRejection::LaunchIdentityNotIncreasing);
+        }
+        self.readiness = ReadinessGate::new(launch, navigation);
+        self.phase = StartupPhase::PreparingConnection;
+        self.reloading = true;
         Ok(())
     }
 
@@ -236,10 +265,11 @@ impl StartupSession {
         let expected = match event.observation() {
             StartupObservation::SplashPresented => StartupPhase::SplashFirstFrame,
             StartupObservation::ConnectionReady(origin) => {
-                let matches = match self.configuration.connection() {
-                    ConnectionConfiguration::Launch(launch) => origin.port() == launch.port(),
-                    ConnectionConfiguration::Attach(configured) => origin == configured,
-                };
+                let matches = self.origin.is_none_or(|previous| previous == *origin)
+                    && match self.configuration.connection() {
+                        ConnectionConfiguration::Launch(launch) => origin.port() == launch.port(),
+                        ConnectionConfiguration::Attach(configured) => origin == configured,
+                    };
                 if !matches {
                     return Err(StartupRejection::WrongOrigin);
                 }

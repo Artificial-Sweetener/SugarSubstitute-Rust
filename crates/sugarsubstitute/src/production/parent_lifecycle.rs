@@ -15,6 +15,8 @@ pub(in crate::production) mod causes;
 mod expiry;
 #[path = "parent_lifecycle/folders.rs"]
 mod folders;
+#[path = "parent_lifecycle/frontend_refresh.rs"]
+mod frontend_refresh;
 #[path = "parent_lifecycle/history.rs"]
 mod history;
 #[path = "parent_lifecycle/main.rs"]
@@ -102,6 +104,7 @@ pub(crate) struct ParentLifecycle {
     activity_revision: u64,
     lease: Option<LeaseKey>,
     recovery: recovery::Recovery,
+    frontend_refresh: Option<frontend_refresh::FrontendRefresh>,
     backend_failed_resource: Option<sugarsubstitute_contracts::lifecycle::ResourceKey>,
     backend_failure_seen: bool,
     _attempt_failure: Option<Cause>,
@@ -150,6 +153,7 @@ impl ParentLifecycle {
     pub(crate) const fn fixed_storage_bytes() -> u64 {
         (std::mem::size_of::<Self>() + history::SLOTS * 32768) as u64
             + causes::BackendCauses::heap_bytes()
+            + crate::production::coordinator_backend::CoordinatorBackend::FRONTEND_RELOAD_TARGET_BYTES
     }
 
     /// Preserve original run/connection/QPC facts after actual pipe preparation.
@@ -191,6 +195,7 @@ impl ParentLifecycle {
             activity_revision: 0,
             lease: None,
             recovery: recovery::Recovery::default(),
+            frontend_refresh: None,
             backend_failed_resource: None,
             backend_failure_seen: false,
             _attempt_failure: None,
@@ -262,6 +267,8 @@ impl ParentLifecycle {
         step: &mut &'static str,
     ) -> Result<()> {
         self.latch_terminal(batch, resources)?;
+        *step = "frontend_refresh";
+        self.progress_frontend_refresh(batch, resources)?;
         *step = "consume_profile";
         self.consume_profile(batch, resources)?;
         *step = "finish_main_retirement";
@@ -352,6 +359,7 @@ impl ParentLifecycle {
     pub(crate) fn settled(&self) -> bool {
         self.native_retired()
             && self.profile_pending.is_none()
+            && self.frontend_refresh.as_ref().is_none_or(|refresh| refresh.retired())
             && self.forwarded.is_none()
             && (!self.registered || self.disconnect_attempted)
     }
@@ -441,6 +449,7 @@ impl ParentLifecycle {
             self.main_deadline(),
             self.requests.next_deadline(),
             self.output_receive_until,
+            self.frontend_refresh.as_ref().and_then(|refresh| refresh.deadline()),
         ]
         .into_iter()
         .flatten()

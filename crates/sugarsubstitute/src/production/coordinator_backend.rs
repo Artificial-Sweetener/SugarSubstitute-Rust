@@ -22,6 +22,8 @@ mod custody_capture_tests;
 mod cutoff_tests;
 #[path = "coordinator_backend/failure.rs"]
 mod failure;
+#[path = "coordinator_backend/frontend_reload.rs"]
+mod frontend_reload;
 use failure::{FailureKind, FailureObservation, OutputTerminalFailure, RootExit, Stopped};
 #[path = "coordinator_backend/output.rs"]
 pub(in crate::production) mod output;

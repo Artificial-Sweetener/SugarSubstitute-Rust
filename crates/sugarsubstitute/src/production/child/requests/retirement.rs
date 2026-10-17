@@ -33,6 +33,18 @@ impl ClientRequests {
         pending.purpose = Purpose::OutputPull;
         Ok(())
     }
+    /// Mark the finite frontend replacement request before any native queue admission.
+    pub(in crate::production::child) fn frontend_reload(
+        &mut self,
+        header: WireHeader,
+    ) -> Result<(), RequestError> {
+        let pending = self.find_mut(header)?;
+        if pending.phase != Phase::Prepared || pending.purpose != Purpose::Other {
+            return Err(RequestError::Order);
+        }
+        pending.purpose = Purpose::FrontendReload;
+        Ok(())
+    }
     /// Designate the same finite output consumer's distinct user retry request.
     pub(in crate::production::child) fn backend_retry(
         &mut self,

@@ -262,20 +262,19 @@ fn held_timeout_at_original_cutoff_never_admits_effect_or_renews_header() -> Tes
 }
 
 #[test]
-fn native_reload_owner_preserves_creation_effects_and_rejects_successor_before_any_effect()
--> TestResult {
+fn native_reload_owner_preserves_current_backend_and_rejects_stale_creation() -> TestResult {
     let (mut owner, a, b) = initial()?;
     let backend = Cell::new(a);
     let main = Cell::new(1_u32);
     let calls = Cell::new(0);
     assert_eq!(
-        owner.reload(Some(a), super::super::replies::reference(a), |lease| {
+        owner.reload(super::super::replies::reference(a), |lease| {
             assert_eq!(lease, a);
             calls.set(calls.get() + 1);
             main.set(2);
             Ok(())
         })?,
-        Some(())
+        ()
     );
     assert_eq!(calls.get(), 1);
     assert_eq!(backend.get(), a);
@@ -285,25 +284,26 @@ fn native_reload_owner_preserves_creation_effects_and_rejects_successor_before_a
     owner.consume_binding(b, None, |_, _| Ok(()))?;
     backend.set(b);
     assert_eq!(
-        owner.reload(Some(a), super::super::replies::reference(b), |_| {
+        owner.reload(super::super::replies::reference(b), |lease| {
+            assert_eq!(lease, b);
             calls.set(calls.get() + 1);
-            backend.set(a);
+            backend.set(b);
             main.set(3);
             Ok(())
         })?,
-        None
+        ()
     );
     assert!(
         owner
-            .reload(Some(a), super::super::replies::reference(a), |_| {
+            .reload(super::super::replies::reference(a), |_| {
                 calls.set(calls.get() + 1);
                 Ok(())
             })
             .is_err()
     );
-    assert_eq!(calls.get(), 1);
+    assert_eq!(calls.get(), 2);
     assert_eq!(backend.get(), b);
-    assert_eq!(main.get(), 2);
+    assert_eq!(main.get(), 3);
     assert_eq!(owner.running.ok_or(ParentError::WrongPhase)?.lease, b);
     Ok(())
 }

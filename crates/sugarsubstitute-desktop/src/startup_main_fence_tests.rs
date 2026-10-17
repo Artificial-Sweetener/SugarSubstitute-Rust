@@ -147,3 +147,19 @@ fn actual_configured_retry_can_reset_navigation_before_absence_of_the_new_launch
     assert!(fence.absent(current, Some(current), false, MainCustody::Absent).is_err());
     Ok(())
 }
+
+#[test]
+fn frontend_replacement_requires_checked_old_custody_and_actual_splash_retirement() -> TestResult {
+    let old = identity(1)?;
+    let mut next = identity(2)?;
+    next.navigation = Generation::new(2)?;
+    let fence = MainFence::new();
+    assert!(fence.replacement(next, Some(next), MainCustody::CheckedRetired(old), true)?);
+    assert!(!fence.replacement(next, Some(next), MainCustody::Outstanding, true)?);
+    assert!(!fence.replacement(next, Some(next), MainCustody::CheckedRetired(old), false)?);
+    assert!(!fence.replacement(next, Some(next), MainCustody::Absent, true)?);
+    assert!(fence.replacement(next, Some(old), MainCustody::CheckedRetired(old), true).is_err());
+    next.navigation = old.navigation;
+    assert!(!fence.replacement(next, Some(next), MainCustody::CheckedRetired(old), true)?);
+    Ok(())
+}

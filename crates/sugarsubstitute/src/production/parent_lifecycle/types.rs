@@ -79,7 +79,10 @@ pub(super) enum Reply {
         identity: MainIdentity,
     },
     Released,
-    Reloaded(LeaseKey),
+    Reloaded {
+        lease: LeaseKey,
+        identity: MainIdentity,
+    },
     Cancelled,
     Failed(LifecycleFailureCode),
     Rejected(sugarsubstitute_contracts::lifecycle::LifecycleRejection),

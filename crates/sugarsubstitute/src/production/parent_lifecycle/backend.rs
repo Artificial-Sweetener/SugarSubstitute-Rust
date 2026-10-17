@@ -271,7 +271,11 @@ impl ParentLifecycle {
                 self.reset_output();
                 Reply::Released
             }
-            RequestOutcome::Reloaded(lease) => Reply::Reloaded(lease),
+            RequestOutcome::Reloaded(lease) => {
+                let identity = record.identity.ok_or(ParentError::WrongPhase)?;
+                let until = record.until.ok_or(ParentError::WrongPhase)?;
+                return self.begin_frontend_refresh(index, identity, lease, until, resources);
+            }
             RequestOutcome::Cancelled => Reply::Cancelled,
             RequestOutcome::Failed => {
                 self.latch_backend_failure(reply.request)?;

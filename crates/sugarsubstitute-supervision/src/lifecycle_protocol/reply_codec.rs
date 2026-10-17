@@ -23,8 +23,8 @@ pub(super) fn write(
             writer.u8(2)?;
             encode::lease(lease, writer)
         }
-        ReplyOutcome::Granted(context) => {
-            writer.u8(3)?;
+        ReplyOutcome::Granted(context) | ReplyOutcome::Reloaded(context) => {
+            writer.u8(if matches!(value, ReplyOutcome::Granted(_)) { 3 } else { 5 })?;
             encode::lease(context.lease, writer)?;
             main_fields::write_identity(context.identity, run, writer)?;
             main_fields::write_origin(context.origin, writer)?;
@@ -32,10 +32,6 @@ pub(super) fn write(
             write_version(context.sugarcubes, writer)
         }
         ReplyOutcome::Released => writer.u8(4),
-        ReplyOutcome::Reloaded(lease) => {
-            writer.u8(5)?;
-            encode::lease(lease, writer)
-        }
         ReplyOutcome::Cancelled => writer.u8(6),
         ReplyOutcome::Failed(code) => {
             writer.u8(7)?;
@@ -103,7 +99,13 @@ pub(super) fn read<'a>(
             sugarcubes: read_version(input)?,
         }),
         4 => ReplyOutcome::Released,
-        5 => ReplyOutcome::Reloaded(decode::lease(input)?),
+        5 => ReplyOutcome::Reloaded(GrantedContext {
+            lease: decode::lease(input)?,
+            identity: main_fields::read_identity(input, run)?,
+            origin: main_fields::read_origin(input)?,
+            frontend: read_version(input)?,
+            sugarcubes: read_version(input)?,
+        }),
         6 => ReplyOutcome::Cancelled,
         7 => ReplyOutcome::Failed(reply::failure(input.u8()?)?),
         8 => ReplyOutcome::Rejected(reply::rejection(input.u8()?)?),

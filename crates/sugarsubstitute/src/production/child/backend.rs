@@ -50,6 +50,29 @@ impl RunningBackendBinding {
             awaiting_positive: None,
         })
     }
+    /// Select the current healthy lease without granting Root or browser authority.
+    pub(super) fn reload_lease(&self, identity: MainIdentity) -> Result<LeaseReference> {
+        if identity != self.identity
+            || self.outage.is_some()
+            || self.retry.is_some()
+            || self.awaiting_positive.is_some()
+        {
+            return Err("Frontend reload has no current healthy backend binding".into());
+        }
+        Ok(self.current)
+    }
+    /// Rebind presentation only; backend lease, connection and output custody are retained.
+    pub(super) fn reload_main(&mut self, previous: MainIdentity, next: MainIdentity) -> Result<()> {
+        self.reload_lease(previous)?;
+        if previous.run != next.run
+            || next.launch.get() <= previous.launch.get()
+            || next.navigation.get() <= previous.navigation.get()
+        {
+            return Err("Frontend reload identity did not advance".into());
+        }
+        self.identity = next;
+        Ok(())
+    }
     pub(super) fn key(&self, reference: LeaseReference) -> LeaseKey {
         LeaseKey {
             resource: ResourceKey {
