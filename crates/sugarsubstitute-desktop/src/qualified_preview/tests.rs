@@ -149,3 +149,41 @@ fn changed_source_diagnostic_never_formats_native_document_or_version_payload() 
     }
     Ok(())
 }
+
+#[test]
+fn qualification_output_fixture_preserves_exact_basename_bytes_and_hash() -> TestResult {
+    let hash = "0123456789abcdef".repeat(4);
+    let fixture = MainDownloadFixture::new("0.png".into(), 107745, &hash)?;
+    assert_eq!(fixture.name(), "0.png");
+    assert_eq!(fixture.bytes(), 107745);
+    assert_eq!(fixture.digest_hex(), hash);
+    assert!(fixture.allocated_bytes() <= 256);
+    Ok(())
+}
+#[test]
+fn qualification_output_fixture_cannot_authorize_native_paths_or_arbitrary_urls() {
+    for value in [
+        "",
+        ".png",
+        "../0.png",
+        "sub/0.png",
+        "sub\\0.png",
+        "C:\\0.png",
+        "http://127.0.0.1/0.png",
+        "0.png:stream",
+        ".hidden.png",
+        "0.png\0",
+        "0.jpg",
+    ] {
+        assert!(MainDownloadFixture::new(value.into(), 1, &"00".repeat(32)).is_err());
+    }
+}
+#[test]
+fn qualification_output_fixture_rejects_bad_hash_length_encoding_and_size() {
+    for hash in ["".into(), "00".repeat(31), "gg".repeat(32), "あ".repeat(32)] {
+        assert!(MainDownloadFixture::new("0.png".into(), 1, &hash).is_err());
+    }
+    for bytes in [0, 2 * 1024 * 1024 + 1] {
+        assert!(MainDownloadFixture::new("0.png".into(), bytes, &"00".repeat(32)).is_err());
+    }
+}

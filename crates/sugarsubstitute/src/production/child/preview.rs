@@ -167,7 +167,8 @@ impl Preview {
             sugarsubstitute_desktop::qualification_trace::Progress::PreviewRequested,
             identity,
         );
-        Ok(Some(DesktopStartupCommand::CaptureMainPreview { identity, source_deadline }))
+        let downloads = self.intent.as_mut().ok_or(PreviewError::State)?.take_downloads();
+        Ok(Some(DesktopStartupCommand::CaptureMainPreview { identity, source_deadline, downloads }))
     }
 
     /// Consume only exact requested preview evidence; other native observations retain their owner.

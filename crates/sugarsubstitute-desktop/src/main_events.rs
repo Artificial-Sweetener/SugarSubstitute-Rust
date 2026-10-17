@@ -21,6 +21,8 @@ pub(crate) enum Command {
     Page,
     Probe(ProbeTarget),
     Barrier(ProbeTarget),
+    #[cfg(feature = "k1-native-qualification")]
+    Downloads,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

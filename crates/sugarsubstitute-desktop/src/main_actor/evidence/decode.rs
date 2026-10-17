@@ -105,6 +105,8 @@ pub(super) fn consume(
             .command
             .ok_or_else(|| readiness_error(ReadinessFault::MalformedObservation))?
         {
+            #[cfg(feature = "k1-native-qualification")]
+            Command::Downloads => Err(ReadinessFault::MalformedObservation),
             Command::Runtime => {
                 let _: serde_json::Value = parse(payload)?;
                 effect = Effect::Hook(true);

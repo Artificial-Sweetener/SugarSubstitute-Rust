@@ -26,10 +26,15 @@ fn ordinary_production_and_legacy_grammar_are_unchanged() -> TestResult {
 #[cfg(not(feature = "k1-native-qualification"))]
 #[test]
 fn ordinary_build_rejects_root_and_desktop_qualification() {
-    for flag in ["--k1-native-fault-once", "--k1-native-preview-once"] {
+    for flag in ["--k1-native-fault-once", "--k1-native-preview-once", "--k1-native-downloads-once"]
+    {
         assert!(QualificationIntent::root(&mut arguments(&[flag, "--production"])).is_err());
     }
-    for flag in ["--internal-k1-native-fault", "--internal-k1-native-preview"] {
+    for flag in [
+        "--internal-k1-native-fault",
+        "--internal-k1-native-preview",
+        "--internal-k1-native-downloads-v1",
+    ] {
         assert!(QualificationIntent::child(&mut [OsString::from(flag)].into_iter()).is_err());
     }
 }
@@ -144,4 +149,77 @@ fn preview_rejects_short_destination_with_excess_retained_capacity() {
         OsString::from("--production"),
     ];
     assert!(QualificationIntent::root(&mut values.into_iter().peekable()).is_err());
+}
+
+#[cfg(feature = "k1-native-qualification")]
+#[test]
+fn versioned_download_intent_round_trips_original_preview_envelope_without_new_native_authority()
+-> TestResult {
+    let hash = "00".repeat(32);
+    let mut root = arguments(&[
+        "--k1-native-downloads-once",
+        "--preview-until-qpc",
+        "9000",
+        "--preview-qpc-frequency",
+        "1000",
+        "--preview-destination",
+        "D:\\captures\\proof.png",
+        "--download-output-png",
+        "0.png",
+        "--download-output-bytes",
+        "107745",
+        "--download-output-sha256",
+        &hash,
+        "--production",
+    ]);
+    let intent = QualificationIntent::root(&mut root)?;
+    assert_eq!(root.peek(), Some(&OsString::from("--production")));
+    let mut encoded = Vec::new();
+    intent.append(&mut encoded).map_err(|cause| cause as Box<dyn Error>)?;
+    let mut decoded = encoded
+        .iter()
+        .map(|value| String::from_utf16(value).map(OsString::from))
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter();
+    let mut inherited = QualificationIntent::child(&mut decoded)?;
+    let mut preview = inherited.take_preview().ok_or("Preview envelope missing")?;
+    assert_eq!(preview.deadline().ticks(), 9000);
+    assert_eq!(preview.deadline().frequency(), 1000);
+    let fixture = preview.take_downloads().ok_or("Download fixture missing")?;
+    assert_eq!(fixture.name(), "0.png");
+    assert_eq!(fixture.bytes(), 107745);
+    assert_eq!(fixture.digest_hex(), hash);
+    assert!(preview.take_downloads().is_none());
+    Ok(())
+}
+#[cfg(feature = "k1-native-qualification")]
+#[test]
+fn download_intent_rejects_truncated_mixed_old_and_unknown_versioned_layouts() {
+    let base = [
+        "--preview-until-qpc",
+        "9000",
+        "--preview-qpc-frequency",
+        "1000",
+        "--preview-destination",
+        "D:\\captures\\proof.png",
+    ];
+    for flag in ["--internal-k1-native-downloads-v1", "--internal-k1-native-downloads-v2"] {
+        let mut values = vec![OsString::from(flag)];
+        values.extend(base.map(OsString::from));
+        assert!(QualificationIntent::child(&mut values.into_iter()).is_err());
+    }
+    let mut values = vec![OsString::from("--internal-k1-native-preview")];
+    values.extend(base.map(OsString::from));
+    values.extend(
+        [
+            "--download-output-png",
+            "0.png",
+            "--download-output-bytes",
+            "1",
+            "--download-output-sha256",
+            &"00".repeat(32),
+        ]
+        .map(OsString::from),
+    );
+    assert!(QualificationIntent::child(&mut values.into_iter()).is_err());
 }

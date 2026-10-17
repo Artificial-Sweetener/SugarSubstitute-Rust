@@ -25,6 +25,7 @@ enum Mode {
 pub(in crate::production) struct PreviewIntent {
     destination: std::path::PathBuf,
     deadline: sugarsubstitute_contracts::execution::CounterDeadline,
+    downloads: Option<sugarsubstitute_desktop::MainDownloadFixture>,
 }
 #[cfg(feature = "k1-native-qualification")]
 impl PreviewIntent {
@@ -36,6 +37,13 @@ impl PreviewIntent {
     /// Account the retained destination allocation inside the original qualification job.
     pub(in crate::production) fn allocated_bytes(&self) -> usize {
         self.destination.capacity()
+            + self.downloads.as_ref().map_or(0, |value| value.allocated_bytes())
+    }
+    /// Transfer one inert optional download fixture into the actual current Main command.
+    pub(in crate::production) fn take_downloads(
+        &mut self,
+    ) -> Option<sugarsubstitute_desktop::MainDownloadFixture> {
+        self.downloads.take()
     }
     /// Move the existing bounded destination allocation into the genuine preview worker input.
     pub(in crate::production) fn into_destination(self) -> std::path::PathBuf {
@@ -58,18 +66,24 @@ impl QualificationIntent {
         let Some(value) = arguments.peek() else {
             return Ok(Self::default());
         };
-        if value != "--k1-native-fault-once" && value != "--k1-native-preview-once" {
+        if value != "--k1-native-fault-once"
+            && value != "--k1-native-preview-once"
+            && value != "--k1-native-downloads-once"
+        {
             return Ok(Self::default());
         }
         #[cfg(not(feature = "k1-native-qualification"))]
         return Err("Native qualification requires the dedicated development build".into());
         #[cfg(feature = "k1-native-qualification")]
         {
-            let mode = if arguments.next().as_deref() == Some(OsStr::new("--k1-native-fault-once"))
-            {
+            let flag = arguments.next();
+            let mode = if flag.as_deref() == Some(OsStr::new("--k1-native-fault-once")) {
                 Mode::Fault
             } else {
-                Mode::Preview(preview(arguments)?)
+                Mode::Preview(preview(
+                    arguments,
+                    flag.as_deref() == Some(OsStr::new("--k1-native-downloads-once")),
+                )?)
             };
             if arguments.peek().is_none_or(|next| next != "--production") {
                 return Err(
@@ -97,8 +111,10 @@ impl QualificationIntent {
         {
             let mode = if flag == "--internal-k1-native-fault" {
                 Mode::Fault
-            } else if flag == "--internal-k1-native-preview" {
-                Mode::Preview(preview(arguments)?)
+            } else if flag == "--internal-k1-native-preview"
+                || flag == "--internal-k1-native-downloads-v1"
+            {
+                Mode::Preview(preview(arguments, flag == "--internal-k1-native-downloads-v1")?)
             } else {
                 return Err("Unexpected desktop qualification argument".into());
             };
@@ -120,15 +136,34 @@ impl QualificationIntent {
             let values: Vec<OsString> = match &self.mode {
                 None => return Ok(()),
                 Some(Mode::Fault) => vec!["--internal-k1-native-fault".into()],
-                Some(Mode::Preview(intent)) => vec![
-                    "--internal-k1-native-preview".into(),
-                    "--preview-until-qpc".into(),
-                    intent.deadline.ticks().to_string().into(),
-                    "--preview-qpc-frequency".into(),
-                    intent.deadline.frequency().to_string().into(),
-                    "--preview-destination".into(),
-                    intent.destination.as_os_str().to_owned(),
-                ],
+                Some(Mode::Preview(intent)) => {
+                    let mut values = vec![
+                        if intent.downloads.is_some() {
+                            "--internal-k1-native-downloads-v1"
+                        } else {
+                            "--internal-k1-native-preview"
+                        }
+                        .into(),
+                        "--preview-until-qpc".into(),
+                        intent.deadline.ticks().to_string().into(),
+                        "--preview-qpc-frequency".into(),
+                        intent.deadline.frequency().to_string().into(),
+                        "--preview-destination".into(),
+                        intent.destination.as_os_str().to_owned(),
+                    ];
+                    if let Some(fixture) = &intent.downloads {
+                        values.try_reserve_exact(6)?;
+                        values.extend([
+                            "--download-output-png".into(),
+                            fixture.name().into(),
+                            "--download-output-bytes".into(),
+                            fixture.bytes().to_string().into(),
+                            "--download-output-sha256".into(),
+                            fixture.digest_hex().into(),
+                        ]);
+                    }
+                    values
+                }
             };
             arguments.try_reserve_exact(values.len())?;
             use std::os::windows::ffi::OsStrExt;
@@ -171,6 +206,7 @@ impl QualificationIntent {
 #[cfg(feature = "k1-native-qualification")]
 fn preview(
     arguments: &mut impl Iterator<Item = OsString>,
+    downloads: bool,
 ) -> Result<PreviewIntent, Box<dyn Error>> {
     use std::os::windows::ffi::OsStrExt;
     use sugarsubstitute_contracts::execution::CounterDeadline;
@@ -203,7 +239,22 @@ fn preview(
         return Err("Preview destination must be a bounded absolute D path".into());
     }
     sugarsubstitute_contracts::configuration::LaunchConfiguration::validate_path(&destination)?;
-    Ok(PreviewIntent { destination, deadline })
+    let downloads = if downloads {
+        let name = field(arguments, "--download-output-png")?
+            .into_string()
+            .map_err(|_| "PNG name encoding")?;
+        let bytes = field(arguments, "--download-output-bytes")?
+            .into_string()
+            .map_err(|_| "PNG size encoding")?
+            .parse()?;
+        let digest = field(arguments, "--download-output-sha256")?
+            .into_string()
+            .map_err(|_| "PNG hash encoding")?;
+        Some(sugarsubstitute_desktop::MainDownloadFixture::new(name, bytes, &digest)?)
+    } else {
+        None
+    };
+    Ok(PreviewIntent { destination, deadline, downloads })
 }
 #[cfg(feature = "k1-native-qualification")]
 fn field(

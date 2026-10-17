@@ -37,6 +37,8 @@ pub(super) fn relay(run: RunKey, current: Option<MainIdentity>, observed: Qualif
                 Progress::FrontendReady | Progress::FrontendFailed => "main_frontend_receipt",
                 Progress::MainRevealed => "main_revealed",
                 Progress::PreviewRequested => "main_preview_requested",
+                Progress::DownloadsPrepared => "main_downloads_prepared",
+                Progress::DownloadsCompleted => "main_downloads_completed",
             };
             tracing::info!(operation, run=?run, identity=?identity, stage=?stage,
                 "Observed closed owned Desktop transition");

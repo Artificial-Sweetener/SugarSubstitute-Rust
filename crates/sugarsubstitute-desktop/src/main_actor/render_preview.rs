@@ -12,4 +12,6 @@ mod actor;
 #[cfg(feature = "k1-native-qualification")]
 mod capture;
 #[cfg(feature = "k1-native-qualification")]
+mod downloads;
+#[cfg(feature = "k1-native-qualification")]
 pub(super) use capture::Capture;

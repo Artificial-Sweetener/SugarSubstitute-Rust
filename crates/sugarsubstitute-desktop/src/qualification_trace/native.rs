@@ -83,6 +83,9 @@ pub fn native_operation(token: &str) -> Option<&'static str> {
         "observe_main_visibility" => Some("observe_main_visibility"),
         "query_performance_frequency" => Some("query_performance_frequency"),
         "query_performance_counter" => Some("query_performance_counter"),
+        "qualify_downloads" => Some("qualify_downloads"),
+        "qualify_download_fixture" => Some("qualify_download_fixture"),
+        "observe_download_qualification" => Some("observe_download_qualification"),
         "Other" => Some("Other"),
         _ => None,
     }

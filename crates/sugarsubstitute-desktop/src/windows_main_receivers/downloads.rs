@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Preserve WebView2 download UI while retaining admitted operations through checked teardown.
 
+#[cfg(feature = "k1-native-qualification")]
+pub(super) mod qualification;
 use super::*;
 use crate::main_downloads::{DownloadOperation, DownloadState, Downloads, admits_download};
 use std::cell::RefCell;
@@ -80,6 +82,8 @@ pub(super) struct Owner {
     origin: LoopbackOrigin,
     operations: Downloads<NativeDownload>,
     urls: RefCell<[String; 2]>,
+    #[cfg(feature = "k1-native-qualification")]
+    witness: RefCell<Option<Rc<qualification::DownloadWitness>>>,
 }
 
 impl Owner {
@@ -97,7 +101,24 @@ impl Owner {
                 ));
             }
         }
-        Ok(Rc::new(Self { origin, operations: Downloads::new(), urls: RefCell::new(urls) }))
+        Ok(Rc::new(Self {
+            origin,
+            operations: Downloads::new(),
+            urls: RefCell::new(urls),
+            #[cfg(feature = "k1-native-qualification")]
+            witness: RefCell::new(None),
+        }))
+    }
+
+    /// Bind one fixed observer before any qualification download; no observer owns cancellation.
+    #[cfg(feature = "k1-native-qualification")]
+    pub(super) fn witness(&self) -> Result<Rc<qualification::DownloadWitness>, DesktopError> {
+        if self.witness.borrow().is_some() {
+            return Err(DesktopError::message("qualify_downloads", "observer already attached"));
+        }
+        let witness = qualification::DownloadWitness::new()?;
+        *self.witness.borrow_mut() = Some(witness.clone());
+        Ok(witness)
     }
 
     /// Cancel by default, then admit only actual displayed-origin HTTP/blob downloads.
@@ -170,6 +191,8 @@ impl Owner {
             );
             return Ok(());
         }
+        #[cfg(feature = "k1-native-qualification")]
+        let observed = operation.0.clone();
         if !self.operations.retain(operation)? {
             tracing::warn!(
                 operation = "reject_browser_download",
@@ -183,6 +206,10 @@ impl Owner {
             // Leave Handled and ResultFilePath untouched for the browser's normal download UI.
             unsafe { args.SetCancel(false) }
                 .map_err(|cause| DesktopError::new("admit_browser_download", cause))?;
+            #[cfg(feature = "k1-native-qualification")]
+            if let Some(witness) = self.witness.borrow().as_ref() {
+                witness.admitted(observed);
+            }
             tracing::debug!(operation = "admit_browser_download", "Frontend download admitted");
         }
         Ok(())

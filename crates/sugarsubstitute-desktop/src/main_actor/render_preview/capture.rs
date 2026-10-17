@@ -66,6 +66,7 @@ pub(in crate::main_actor) struct Capture {
     issued: bool,
     published: bool,
     closing: bool,
+    downloads: Option<super::downloads::Qualification>,
 }
 
 /// Pinned Rust Arc header plus fixed immutable evidence, funded in original preview metadata.
@@ -91,7 +92,8 @@ impl Capture {
             + size_of::<CapturedMainPreview>()
             + size_of::<Shared>()
             + size_of::<SnapshotControlLayout>()
-            + 1024;
+            + 1024
+            + super::downloads::STORAGE_BYTES;
         if known_metadata as u64 > stream::METADATA_BYTES {
             return Err(DesktopError::message(
                 "claim_preview_callback",
@@ -119,11 +121,38 @@ impl Capture {
             issued: false,
             published: false,
             closing: false,
+            downloads: None,
         })
     }
 
+    /// Retain bounded inert download fixture data before any optional native download effect.
+    pub(super) fn prepare_downloads(
+        &mut self,
+        profile: &std::path::Path,
+        fixture: crate::MainDownloadFixture,
+        witness: Rc<crate::windows_main_receivers::DownloadWitness>,
+    ) -> Result<(), DesktopError> {
+        if self.issued || self.downloads.is_some() {
+            return Err(DesktopError::message("qualify_downloads", "campaign already attached"));
+        }
+        self.downloads = Some(super::downloads::Qualification::new(profile, fixture, witness)?);
+        Ok(())
+    }
+    /// Consume only this retained owner's bounded fixed-script completion, without native effects.
+    pub(in crate::main_actor) fn accept_downloads(
+        &mut self,
+        payload: &str,
+    ) -> Result<(), DesktopError> {
+        self.downloads
+            .as_mut()
+            .ok_or_else(|| DesktopError::message("qualify_downloads", "campaign absent"))?
+            .accept(payload)
+    }
     /// Issue once after adoption by MainActor. Failed submissions retain their callback obligation.
-    pub(super) fn issue(&mut self) -> Result<(), DesktopError> {
+    pub(super) fn issue(
+        &mut self,
+        receivers: &crate::windows_main_receivers::Receivers,
+    ) -> Result<(), DesktopError> {
         if self.issued || self.closing || self.published {
             return Err(DesktopError::message("capture_main_preview", "capture admission closed"));
         }
@@ -132,6 +161,9 @@ impl Capture {
             return Err(DesktopError::message("capture_main_preview", "inactive desktop missing"));
         }
         current_ticks(self.snapshot.source_deadline)?;
+        if let Some(downloads) = &mut self.downloads {
+            downloads.issue(*self.snapshot, &self.core, receivers, &self.completion.events)?;
+        }
         self.issued = true;
         self.completion.pending.set(true);
         // SAFETY: MainActor has adopted this owner before a possibly synchronous callback;
@@ -186,8 +218,16 @@ impl Capture {
             return Ok(None);
         }
         current_ticks(self.snapshot.source_deadline)?;
+        if let Some(downloads) = &mut self.downloads
+            && !downloads.completed(self.snapshot.origin())?
+        {
+            return Ok(None);
+        }
         self.private.recheck()?;
         current_ticks(self.snapshot.source_deadline)?;
+        if !self.completion.events.preview_quiescent() {
+            return Ok(None);
+        }
         self.completion
             .status
             .get()
@@ -205,6 +245,12 @@ impl Capture {
             DesktopError::new("take_main_preview", windows::core::Error::from(cause))
         })?;
         self.published = true;
+        if self.downloads.is_some() {
+            crate::qualification_trace::progress(
+                crate::qualification_trace::Progress::DownloadsCompleted,
+                self.snapshot.identity(),
+            );
+        }
         Ok(Some(CapturedMainPreview {
             snapshot: self.snapshot.clone(),
             bytes: image.bytes,

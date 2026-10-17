@@ -136,7 +136,7 @@ fn running_preview_keeps_original_campaign_after_completed_frontend_setup() -> T
         )?
         .ok_or("Native preview command absent")?;
     assert!(matches!(command, DesktopStartupCommand::CaptureMainPreview {
-        identity: current, source_deadline,
+        identity: current, source_deadline, downloads: None,
     } if current == identity && source_deadline == CounterDeadline::new(100, 10)?));
     assert!(matches!(
         owner.after_main_revealed(

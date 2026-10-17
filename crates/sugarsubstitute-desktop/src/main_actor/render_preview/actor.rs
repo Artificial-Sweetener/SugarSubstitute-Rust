@@ -35,6 +35,7 @@ impl MainActor {
         &mut self,
         identity: MainIdentity,
         source: CounterDeadline,
+        downloads: Option<crate::MainDownloadFixture>,
     ) -> Option<DesktopStartupObservation> {
         if self.preview_requested {
             return Some(self.preview_failure(
@@ -50,17 +51,34 @@ impl MainActor {
             Ok(seal) => seal,
             Err(cause) => return Some(self.preview_failure(NativePhase::Seal, cause)),
         };
-        let created =
-            (|| Capture::new(seal, self.request()?.storage_lease(), self.events()?.clone()))();
+        let created = (|| {
+            let mut owner =
+                Capture::new(seal, self.request()?.storage_lease(), self.events()?.clone())?;
+            if let Some(fixture) = downloads {
+                owner.prepare_downloads(
+                    self.request()?.profile_directory(),
+                    fixture,
+                    self.receivers()?.download_witness()?,
+                )?;
+            }
+            Ok(owner)
+        })();
         match created {
             Ok(owner) => self.preview = Some(owner),
             Err(cause) => return Some(self.preview_failure(NativePhase::Storage, cause)),
         }
-        let issued = self
-            .preview
-            .as_mut()
-            .ok_or_else(|| DesktopError::message("capture_main_preview", "adopted owner missing"))
-            .and_then(Capture::issue);
+        let issued = (|| {
+            let receivers = self
+                .receivers
+                .as_ref()
+                .ok_or_else(|| DesktopError::message("main_receivers", "receiver owner absent"))?;
+            self.preview
+                .as_mut()
+                .ok_or_else(|| {
+                    DesktopError::message("capture_main_preview", "adopted owner missing")
+                })?
+                .issue(receivers)
+        })();
         match issued {
             Ok(()) => None,
             Err(cause) => Some(self.preview_failure(NativePhase::Issue, cause)),

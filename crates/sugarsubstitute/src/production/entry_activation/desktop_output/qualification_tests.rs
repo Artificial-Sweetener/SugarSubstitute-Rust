@@ -95,6 +95,8 @@ fn every_actual_stage_and_first_cause_has_closed_end_to_end_relay() -> Result {
         Progress::MainRevealed,
         Progress::PreviewRequested,
         Progress::PreviewDispatched,
+        Progress::DownloadsPrepared,
+        Progress::DownloadsCompleted,
     ];
     let bytes = formatted(|| {
         for stage in stages {
@@ -106,13 +108,13 @@ fn every_actual_stage_and_first_cause_has_closed_end_to_end_relay() -> Result {
     })?;
     assert!(bytes.split(|byte| *byte == b'\n').all(|line| line.len() <= 512));
     let records = parsed(&bytes);
-    assert_eq!(records.len(), 14);
+    assert_eq!(records.len(), stages.len() + 3);
     for (record, stage) in records.iter().zip(stages) {
         assert_eq!(record.detail, Detail::Progress(stage));
     }
-    assert_eq!(records[11].detail, Detail::Failed(Cause::Deadline));
-    assert_eq!(records[12].detail, Detail::Failed(Cause::Arming));
-    assert_eq!(records[13].detail, Detail::Finished);
+    assert_eq!(records[stages.len()].detail, Detail::Failed(Cause::Deadline));
+    assert_eq!(records[stages.len() + 1].detail, Detail::Failed(Cause::Arming));
+    assert_eq!(records[stages.len() + 2].detail, Detail::Finished);
     let relay_output = formatted(|| {
         for record in records {
             assert!(relay(main.run, Some(main), record));

@@ -13,6 +13,8 @@ use crate::{
     DesktopError,
     main_events::{Command, Events, Kind},
 };
+#[cfg(feature = "k1-native-qualification")]
+pub(crate) use downloads::qualification::DownloadWitness;
 use std::rc::Rc;
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease};
 use webview2_com::{DevToolsProtocolEventReceivedEventHandler, Microsoft::Web::WebView2::Win32::*};
@@ -163,6 +165,13 @@ impl Receivers {
         }
         installed.map_err(|cause| DesktopError::new("install_main_receiver", cause))?;
         Ok(false)
+    }
+
+    /// Attach one bounded observer to production-admitted downloads for a fixed qualification.
+    #[cfg(feature = "k1-native-qualification")]
+    pub(crate) fn download_witness(&self) -> Result<Rc<DownloadWitness>, DesktopError> {
+        self.require_outer_call()?;
+        self.downloads.witness()
     }
 
     /// Submit at most four retained same-session CDP operations; callbacks alone retire them.

@@ -299,6 +299,8 @@ pub enum DesktopStartupCommand {
         identity: MainIdentity,
         /// Original finite campaign cutoff in absolute QPC ticks and ticks per second.
         source_deadline: sugarsubstitute_contracts::execution::CounterDeadline,
+        /// Optional fixed test-only download campaign using an independently inspected PNG output.
+        downloads: Option<crate::MainDownloadFixture>,
     },
     /// Present one current Main's failed backend lease as inert recovery data.
     /// Recovered clears only that exact retained outage; Parent validates actual replacement authority.

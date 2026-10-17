@@ -29,6 +29,16 @@ impl MainActor {
         let mut completed_probe = None;
         // The pure decoder/readiness owner performs no native calls while queue storage is borrowed.
         let consumed = events.consume(|observation| {
+            #[cfg(feature = "k1-native-qualification")]
+            if observation.command == Some(Command::Downloads) {
+                self.preview
+                    .as_mut()
+                    .ok_or_else(|| {
+                        DesktopError::message("qualify_downloads", "qualification owner absent")
+                    })?
+                    .accept_downloads(observation.payload)?;
+                return Ok(());
+            }
             let command = observation.command;
             completed_probe = match command {
                 Some(Command::Probe(target)) => Some(target),
@@ -155,6 +165,8 @@ fn observation_kind(kind: Kind, command: Option<Command>) -> &'static str {
             Some(Command::Page) => "Page",
             Some(Command::Probe(_)) => "Probe",
             Some(Command::Barrier(_)) => "Barrier",
+            #[cfg(feature = "k1-native-qualification")]
+            Some(Command::Downloads) => "Downloads",
             None => "Command",
         },
     }

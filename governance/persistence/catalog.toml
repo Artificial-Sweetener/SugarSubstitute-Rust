@@ -418,11 +418,13 @@ compatibility = "reject"
 migrations = []
 
 # Closed observational child stderr records share the original 512-byte decoder.
+# Additive stage/operation tokens preserve schema-one fields and existing meanings.
+# Unknown observations are ignored; no record grants lifecycle or native authority.
 [[formats]]
 id = "child-native-qualification-diagnostic"
 owner = "sugarsubstitute-desktop"
 sources = ["crates/sugarsubstitute-desktop/src/qualification_trace.rs", "crates/sugarsubstitute-desktop/src/qualification_trace/native.rs"]
-source_sha256 = "sha256:2631a9a67872959d07e8ea214afbf3af40a3490f8c8fb8c3681be0d1f2db1d41"
+source_sha256 = "sha256:4ff678bfa3610cc02e20d99c073427312a74447faf0795910105c23321f9fda2"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1

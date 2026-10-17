@@ -15,6 +15,70 @@ use sugarsubstitute_contracts::{
 #[path = "qualified_preview/tests.rs"]
 mod tests;
 
+/// One pre-inspected existing ComfyUI output for an explicit native download qualification.
+/// This value identifies a server output basename; it grants no native path or URL authority.
+pub struct MainDownloadFixture {
+    name: String,
+    bytes: u64,
+    digest: [u8; 32],
+}
+impl MainDownloadFixture {
+    /// Validate a bounded PNG basename and its independently observed original size/digest.
+    /// # Errors
+    /// Rejects path/URL syntax, unsupported spelling, empty/oversized PNGs and invalid SHA-256.
+    pub fn new(name: String, bytes: u64, digest: &str) -> Result<Self, crate::DesktopError> {
+        if name.len() > 128
+            || name.capacity() > 256
+            || !name.ends_with(".png")
+            || name.len() <= 4
+            || name.starts_with('.')
+            || !name.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
+            || bytes == 0
+            || bytes > 2 * 1024 * 1024
+            || digest.len() != 64
+        {
+            return Err(crate::DesktopError::message(
+                "qualify_download_fixture",
+                "invalid PNG fixture",
+            ));
+        }
+        let mut decoded = [0; 32];
+        for (target, pair) in decoded.iter_mut().zip(digest.as_bytes().chunks_exact(2)) {
+            let pair = std::str::from_utf8(pair)
+                .map_err(|cause| crate::DesktopError::new("qualify_download_fixture", cause))?;
+            *target = u8::from_str_radix(pair, 16)
+                .map_err(|cause| crate::DesktopError::new("qualify_download_fixture", cause))?;
+        }
+        Ok(Self { name, bytes, digest: decoded })
+    }
+    /// Borrow the validated server output basename, never a filesystem path.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    /// Return the original independently observed byte length.
+    pub const fn bytes(&self) -> u64 {
+        self.bytes
+    }
+    /// Borrow the original independently observed SHA-256 bytes.
+    pub const fn digest(&self) -> &[u8; 32] {
+        &self.digest
+    }
+    /// Account the retained name allocation within the original qualification budget.
+    pub fn allocated_bytes(&self) -> usize {
+        self.name.capacity()
+    }
+    /// Encode bounded existing facts for the inherited qualification argument projection.
+    pub fn digest_hex(&self) -> String {
+        let mut encoded = String::with_capacity(64);
+        for byte in self.digest {
+            const HEX: &[u8; 16] = b"0123456789abcdef";
+            encoded.push(char::from(HEX[usize::from(byte >> 4)]));
+            encoded.push(char::from(HEX[usize::from(byte & 15)]));
+        }
+        encoded
+    }
+}
+
 /// The actual current controller rectangle in physical pixels relative to its parent client.
 /// PNG dimensions are the renderer viewport width and height, excluding native window chrome.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

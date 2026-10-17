@@ -219,3 +219,20 @@ fn actual_receipt_still_requires_the_matching_native_barrier_after_diagnostics()
     assert!(owner.ready());
     Ok(())
 }
+
+#[cfg(feature = "k1-native-qualification")]
+#[test]
+fn download_qualification_completion_cannot_manufacture_frontend_readiness()
+-> Result<(), Box<dyn Error>> {
+    let mut owner = loaded()?;
+    malformed(
+        completion(
+            &mut owner,
+            Command::Downloads,
+            r#"{"result":{"type":"string","value":"{\"schema\":1,\"requests\":3}"}}"#,
+        ),
+        "Downloads",
+    )?;
+    assert!(!owner.ready());
+    Ok(())
+}

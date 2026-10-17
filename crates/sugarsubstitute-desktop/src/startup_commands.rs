@@ -150,7 +150,7 @@ pub(super) fn drain(
                 main_operation(session, content, |owner| owner.reveal(identity).map(Some))?;
             }
             #[cfg(feature = "k1-native-qualification")]
-            DesktopStartupCommand::CaptureMainPreview { identity, source_deadline } => {
+            DesktopStartupCommand::CaptureMainPreview { identity, source_deadline, downloads } => {
                 tracing::info!(operation="main_command_dispatched", command="CaptureMainPreview", identity=?identity,
                     "Actual creating-thread Main command dispatch; native acceptance remains separate");
                 #[cfg(feature = "k1-native-qualification")]
@@ -159,7 +159,7 @@ pub(super) fn drain(
                     identity,
                 );
                 main_operation(session, content, |owner| {
-                    Ok(owner.capture_preview(identity, source_deadline))
+                    Ok(owner.capture_preview(identity, source_deadline, downloads))
                 })?;
             }
             DesktopStartupCommand::Close => session.close(content),

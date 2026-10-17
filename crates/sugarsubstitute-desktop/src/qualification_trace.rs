@@ -32,6 +32,10 @@ pub enum Progress {
     PreviewRequested,
     /// The creating thread dispatched the native capture request.
     PreviewDispatched,
+    /// The native profile destination preceded the one fixed download script submission.
+    DownloadsPrepared,
+    /// Three production-admitted JSON/PNG downloads actually completed in the sealed Main.
+    DownloadsCompleted,
 }
 impl Progress {
     /// Decode only a known closed schema-one stage.
@@ -48,6 +52,8 @@ impl Progress {
             "MainRevealed" => Some(Self::MainRevealed),
             "PreviewRequested" => Some(Self::PreviewRequested),
             "PreviewDispatched" => Some(Self::PreviewDispatched),
+            "DownloadsPrepared" => Some(Self::DownloadsPrepared),
+            "DownloadsCompleted" => Some(Self::DownloadsCompleted),
             _ => None,
         }
     }

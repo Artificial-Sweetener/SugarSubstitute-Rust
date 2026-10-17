@@ -64,11 +64,11 @@ fn passive_rejected_kind_has_one_slot_explicit_excess_disposal_and_observed_clos
 fn full_qualifier_layout_includes_fault_hook_and_preview_before_path_declaration() {
     assert!(size_of::<ChildQualification>() >= Preview::storage_bytes());
     let (internal, original) = sugarsubstitute_execution::desktop_capture_control_storage_bytes();
-    let declared = size_of::<ChildQualification>() + 4096;
+    let declared = size_of::<ChildQualification>() + 4096 + 256;
     assert!(internal + declared <= original);
     assert_eq!(original, 16_384);
     println!(
-        "preview_original_control_internal={internal} qualifier={} max_path=4096 total={} original={original}",
+        "preview_original_control_internal={internal} qualifier={} max_path=4096 max_download_name=256 total={} original={original}",
         size_of::<ChildQualification>(),
         internal + declared
     );
