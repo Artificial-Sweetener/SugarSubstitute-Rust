@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Prove every shared modal receives one Fluent presentation without changing form ownership. */
+/** Prove shared modal providers preserve form identity, validation, and native value ownership. */
 import { afterEach, expect, test } from '@jest/globals';
 import { ModalShell } from '../../../frontend/comfyui/ui/dialogs/ModalShell.js';
 import { InputModal } from '../../../frontend/comfyui/ui/dialogs/InputModal.js';
@@ -21,6 +21,7 @@ import { FormModal } from '../../../frontend/comfyui/ui/dialogs/FormModal.js';
 import { SaveNodePresetDialog } from '../../../frontend/comfyui/ui/editor_actions/presentation/SaveNodePresetDialog.js';
 import { GLOBAL_ASSOCIATION } from '../../../frontend/comfyui/ui/editor_actions/domain/UserPreset.js';
 import { AppearanceState } from '../../../frontend/comfyui/ui/surface/appearance/AppearanceState.js';
+import { publishVisualStyle } from '../../../frontend/comfyui/ui/surface/appearance/VisualStyleBoundary.js';
 
 const adapter = { getDocument: () => document, getWindow: () => window };
 
@@ -53,6 +54,43 @@ afterEach(() => {
   document.body.replaceChildren();
   document.head.replaceChildren();
   document.documentElement.style.removeProperty('color-scheme');
+  document.documentElement.removeAttribute('data-sc-visual-style');
+});
+
+test('Spectrum form styling preserves focused text, validation, literal labels and submission across style changes', async () => {
+  publishVisualStyle(document, 'spectrum');
+  const modal = new InputModal({ adapter });
+  const result = modal.open({
+    title: '<img src=x> Name',
+    initialValue: 'bad',
+    validate: (value) => (value === 'bad' ? '<b>Use another name</b>' : ''),
+  });
+  const input = modal.elements.input;
+  const overlay = document.querySelector<HTMLElement>('.sugarcubes-input-overlay');
+  const confirm = overlay?.querySelector<HTMLButtonElement>('.p-dialog-footer .p-button-primary');
+  if (!input || !overlay || !confirm) throw new Error('Missing input modal controls');
+  input.focus();
+  input.setSelectionRange(1, 2);
+  expect(overlay.dataset.scModalAppearance).toBe('spectrum');
+  expect(getComputedStyle(overlay).getPropertyValue('--sc-field-focus-shadow')).toBe('none');
+  confirm.click();
+  expect(overlay.querySelector('.sugarcubes-modal__error')?.textContent).toBe(
+    '<b>Use another name</b>',
+  );
+  expect(overlay.querySelector('b, img')).toBeNull();
+  publishVisualStyle(document, 'fluent');
+  expect(overlay.dataset.scModalAppearance).toBe('fluent');
+  expect(overlay.style.getPropertyValue('--sc-field-focus-shadow')).toContain('inset 0 -1px');
+  expect(document.activeElement).toBe(input);
+  expect(input.selectionStart).toBe(1);
+  expect(input.selectionEnd).toBe(2);
+  publishVisualStyle(document, 'spectrum');
+  expect(overlay.querySelector('input')).toBe(input);
+  input.value = '<literal name>';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  confirm.click();
+  await expect(result).resolves.toBe('<literal name>');
+  expect(overlay.dataset.scModalAppearance).toBeUndefined();
 });
 
 test('themes existing and purpose-built forms through the shared shell and retains native values', async () => {

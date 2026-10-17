@@ -110,10 +110,11 @@ export const settingsWorkspaceCss = `
   color:var(--sc-text);
 }
 .sc-settings-search-bar > div > div > div:first-child {
-  background:var(--sc-surface); border:1px solid var(--sc-border);
-  border-bottom:1px solid var(--sc-border-accessible); border-radius:4px;
+  background:var(--sc-field-fill); border:var(--sc-field-border-width) solid var(--sc-field-stroke);
+  border-bottom-color:var(--sc-field-bottom-stroke); border-radius:var(--sc-field-radius);
 }
-.sc-settings-search-bar > div:focus-within > div > div:first-child { border-bottom:2px solid var(--sc-accent-indicator); }
+.sc-settings-search-bar > div:focus-within > div > div:first-child { border-color:var(--sc-field-focus-stroke); border-bottom:2px solid var(--sc-field-focus-bottom-stroke); }
+.sc-settings-search-bar > div:has(:focus-visible) > div > div:first-child { outline:var(--sc-field-focus-outline); outline-offset:var(--sc-field-focus-outline-offset); }
 .sc-settings-search-bar > button { margin-left:auto; width:32px; height:32px; padding:6px; border-radius:4px; }
 [data-sc-settings-themed] [data-nav-id] {
   position:relative; border-radius:5px; padding:10px 14px; min-height:40px;
@@ -149,11 +150,14 @@ export const settingsWorkspaceCss = `
 [data-sc-settings-popup] .p-select-option:not([aria-selected="true"]):hover { background:var(--sc-subtle-hover); }
 [data-sc-settings-popup] .p-select-option[aria-selected="true"] { background:var(--sc-subtle-selected); color:var(--sc-accent-indicator); }
 [data-sc-settings-themed] [data-sc-setting-kind] :is(.p-inputtext,.p-select,select,input[type="text"],input[type="number"]) {
-  background:var(--sc-surface); color:var(--sc-text);
-  border:1px solid var(--sc-border); border-bottom-color:var(--sc-border-accessible);
-  border-radius:4px; font:14px var(--sc-font-family); min-height:32px;
+  background:var(--sc-field-fill); color:var(--sc-text);
+  border:var(--sc-field-border-width) solid var(--sc-field-stroke); border-bottom-color:var(--sc-field-bottom-stroke);
+  border-radius:var(--sc-field-radius); font:14px var(--sc-font-family); min-height:32px;
 }
-[data-sc-settings-themed] [data-sc-setting-kind] :is(select,input[type="text"],input[type="number"]) { padding:5px 10px; }
+[data-sc-settings-themed][data-sc-theme="spectrum"] [data-sc-setting-kind] :is(.p-inputtext,.p-select,select,input[type="text"],input[type="number"]):hover { border-color:var(--sc-field-hover-stroke); }
+[data-sc-settings-themed][data-sc-theme="spectrum"] [data-sc-setting-kind] :is(.p-inputtext,.p-select,select,input[type="text"],input[type="number"]):focus-within { border-color:var(--sc-field-focus-stroke); box-shadow:var(--sc-field-focus-shadow); }
+[data-sc-settings-themed][data-sc-theme="spectrum"] [data-sc-setting-kind] :is(.p-inputtext,.p-select,select,input[type="text"],input[type="number"]):is(:focus-visible,:has(:focus-visible)) { outline:var(--sc-field-focus-outline); outline-offset:var(--sc-field-focus-outline-offset); }
+[data-sc-settings-themed] [data-sc-setting-kind] :is(select,input[type="text"],input[type="number"]) { padding:calc(6px - var(--sc-field-border-width)) 10px; }
 [data-sc-settings-themed] [data-sc-setting-kind] .p-select-label { padding:6px 12px; }
 [data-sc-settings-themed] [data-sc-setting-kind] :is(input,select,button):focus-visible { outline:2px solid var(--sc-accent-indicator); outline-offset:2px; }
 [data-sc-settings-themed] [data-sc-setting-kind] .p-toggleswitch { width:40px; height:20px; }
@@ -163,11 +167,11 @@ export const settingsWorkspaceCss = `
 [data-sc-settings-themed] [data-sc-setting-kind] .p-toggleswitch-checked .p-toggleswitch-slider { background:var(--sc-accent-indicator); border-color:transparent; }
 [data-sc-settings-themed] [data-sc-setting-kind] .p-toggleswitch-checked .p-toggleswitch-handle { left:24px; background:var(--sc-accent-foreground); }
 [data-sc-settings-themed] [data-sc-setting-kind] button {
-  background:var(--sc-surface); color:var(--sc-text);
-  border:1px solid var(--sc-border); border-radius:4px; min-height:32px;
-  font:14px var(--sc-font-family); padding:5px 12px;
+  background:var(--sc-button-fill); color:var(--sc-text);
+  border:var(--sc-button-border-width) solid var(--sc-border); border-radius:var(--sc-button-radius); min-height:32px;
+  font:14px var(--sc-font-family); padding:calc(6px - var(--sc-button-border-width)) 12px;
 }
-[data-sc-settings-themed] [data-sc-setting-kind] button:hover { background:var(--sc-surface-hover); }
+[data-sc-settings-themed] [data-sc-setting-kind] button:hover { background:var(--sc-button-hover-fill); }
 [data-sc-settings-themed] [data-sc-setting-kind] :disabled { opacity:.5; cursor:default; }
 [data-sc-settings-themed] [data-sc-setting-kind] input[type="checkbox"] { accent-color:var(--sc-accent-indicator); }
 [data-sc-settings-themed] .sc-settings-about__card:has(.sc-settings-about__actions) { display:block; }

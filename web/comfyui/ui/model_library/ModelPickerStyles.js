@@ -23,14 +23,22 @@ import { modelKeyRequiredBadgeCss } from './vue/ModelKeyRequiredBadge.js';
 export const modelPickerCss = modelRecommendationPreviewCss +
     modelKeyRequiredBadgeCss +
     `
-.sc-model-find { display:inline-flex; align-items:center; justify-content:center; gap:8px; width:100%; height:32px; padding:0 12px; border:1px solid transparent; border-radius:4px; background:var(--sc-brand-fill,#0078d4); color:var(--sc-text-on-accent,#fff); font:12px 'Segoe UI Variable','Segoe UI',sans-serif; cursor:pointer; }
+.sc-model-find { display:inline-flex; align-items:center; justify-content:center; gap:8px; width:100%; height:32px; padding:0 12px; border:1px solid transparent; border-radius:4px; background:var(--sc-brand-fill,#0078d4); color:var(--sc-text-on-accent,#fff); font:12px var(--sc-font-family,"Segoe UI Variable","Segoe UI",sans-serif); cursor:pointer; }
 .sc-model-find:hover { background:var(--sc-brand-fill-hover,#106ebe); }
 .sc-model-find-icon { width:16px; height:16px; background:currentColor; mask:url("${findIcon}") center/contain no-repeat; }
-.sc-model-field { position:relative; display:flex; align-items:center; box-sizing:border-box; width:100%; max-width:100%; min-width:0; height:32px; overflow:hidden; border:1px solid var(--sc-border,#595959); border-bottom-color:var(--sc-border-accessible,#929292); border-radius:5px; background:var(--sc-surface,#383838); color:var(--sc-text,#eee); font:12px 'Segoe UI Variable','Segoe UI',sans-serif; }
+.sc-model-field { position:relative; display:flex; align-items:center; box-sizing:border-box; width:100%; max-width:100%; min-width:0; height:32px; overflow:hidden; border:1px solid var(--sc-border,#595959); border-bottom-color:var(--sc-border-accessible,#929292); border-radius:5px; background:var(--sc-surface,#383838); color:var(--sc-text,#eee); font:12px var(--sc-font-family,"Segoe UI Variable","Segoe UI",sans-serif); }
 [data-sc-model-appearance]:not([data-sc-model-appearance="native"]) .sc-model-field:has(.sc-model-banner) { color:#fff; }
 [data-sc-model-appearance]:not([data-sc-model-appearance="native"]) .sc-model-field:has(.sc-model-banner) .sc-model-completion { color:#ffffffaf; }
-.sc-model-field::after { content:''; position:absolute; inset:auto 0 0; height:2px; background:var(--sc-brand-border,#4ca6f9); transform:scaleX(0); transform-origin:center; transition:transform var(--sc-motion-duration,200ms) var(--sc-motion-decelerate,cubic-bezier(.1,.9,.2,1)); pointer-events:none; }
+.sc-model-field::after { content:''; display:var(--sc-field-underline-display,block); position:absolute; inset:auto 0 0; height:2px; background:var(--sc-brand-border,#4ca6f9); transform:scaleX(0); transform-origin:center; transition:transform var(--sc-motion-duration,200ms) var(--sc-motion-decelerate,cubic-bezier(.1,.9,.2,1)); pointer-events:none; }
 .sc-model-field-open::after,.sc-model-field:focus-within::after { transform:scaleX(1); }
+[data-sc-model-appearance="spectrum"] .sc-model-field {
+  border:var(--sc-field-border-width) solid var(--sc-field-stroke);
+  border-radius:var(--sc-field-radius); background:var(--sc-field-fill);
+}
+[data-sc-model-appearance="spectrum"] .sc-model-field:hover { border-color:var(--sc-field-hover-stroke); }
+[data-sc-model-appearance="spectrum"] .sc-model-field:is(:focus-within,.sc-model-field-open) { border-color:var(--sc-field-focus-stroke); box-shadow:var(--sc-field-focus-shadow); }
+[data-sc-model-appearance="spectrum"] .sc-model-field:has(:focus-visible) { outline:var(--sc-field-focus-outline); outline-offset:var(--sc-field-focus-outline-offset); }
+.sc-model-popup[data-sc-model-appearance="spectrum"] { border-radius:var(--sc-control-radius); box-shadow:var(--sc-shadow-medium); }
 .sc-model-field input { position:relative; flex:1; width:0; min-width:0; height:100%; padding:0 11px; color:inherit; background:transparent; border:0; outline:0; font:inherit; text-overflow:ellipsis; cursor:pointer; }
 .sc-model-field-open input { cursor:text; }
 .sc-model-field-transferring { overflow:hidden; }
@@ -62,7 +70,7 @@ export const modelPickerCss = modelRecommendationPreviewCss +
 [data-sc-model-appearance] .sc-model-field-transferring .sc-model-field-arrow { color:#fff; }
 .sc-model-popup[data-sc-model-appearance="native"] { background:var(--p-popover-background); color:var(--p-popover-color); border-color:var(--p-popover-border-color); border-radius:var(--p-popover-border-radius); box-shadow:var(--p-popover-shadow); font:12px/16px var(--font-sans,Inter,Arial,sans-serif); --sc-brand-fill:var(--primary-background); --sc-text-secondary:var(--component-node-foreground-secondary); --sc-surface-hover:var(--component-node-widget-background-hovered); }
 .sc-model-chevron { width:7px; height:7px; border-right:1.5px solid currentColor; border-bottom:1.5px solid currentColor; transform:translateY(-2px) rotate(45deg); }
-.sc-model-popup { position:fixed; z-index:12000; display:flex; flex-direction:column; box-sizing:border-box; padding:10px; overflow:hidden; border:1px solid var(--sc-border,#404040); border-radius:5px; background:var(--sc-surface,#282828); color:var(--sc-text,#eee); box-shadow:0 8px 24px #0006; font:12px 'Segoe UI Variable','Segoe UI',sans-serif; }
+.sc-model-popup { position:fixed; z-index:12000; display:flex; flex-direction:column; box-sizing:border-box; padding:10px; overflow:hidden; border:1px solid var(--sc-border,#404040); border-radius:5px; background:var(--sc-surface,#282828); color:var(--sc-text,#eee); box-shadow:0 8px 24px #0006; font:12px var(--sc-font-family,"Segoe UI Variable","Segoe UI",sans-serif); }
 .sc-model-routes { display:flex; flex-direction:column; gap:4px; flex:none; min-width:0; padding-bottom:4px; }
 .sc-model-breadcrumbs,.sc-model-folder-strip { display:flex; align-items:center; gap:4px; min-width:0; min-height:24px; box-sizing:border-box; padding-bottom:0; overflow-x:auto; overscroll-behavior:contain; }
 /* Keep floating horizontal scrollbar hit targets below buttons in overflowing rows. */

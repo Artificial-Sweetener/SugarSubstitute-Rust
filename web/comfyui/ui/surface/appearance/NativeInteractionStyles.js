@@ -95,7 +95,7 @@ export function nativeInteractionCss() {
     [data-sc-disclosure-target="expanded"] [data-testid="node-collapse-button"] i { transform:rotate(180deg); }
     [data-sc-style-edit-frame] { position:relative; }
     [data-sc-style-edit-frame]::after {
-      content:''; position:absolute; left:0; right:0; bottom:0;
+      content:''; display:var(--sc-field-underline-display,block); position:absolute; left:0; right:0; bottom:0;
       height:2px; border-radius:0 0 4px 4px; pointer-events:none;
       background:var(--sc-brand-border); transform:scaleX(0); transform-origin:center;
       transition:transform var(--sc-motion-duration) var(--sc-motion-decelerate);

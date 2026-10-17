@@ -14,6 +14,8 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Render owned activation switches independently of Comfy's lazy component styles. */
+import { activationSwitchGeometry } from './appearance/ActivationSwitchGeometry.js';
+/** Install the owned switch skin while sharing geometry with every visual-style provider. */
 export function ensureCubeFaceActivationStyles(documentRef) {
     const styleId = 'sugarcubes-cube-activation-styles';
     if (documentRef.getElementById(styleId))
@@ -23,7 +25,7 @@ export function ensureCubeFaceActivationStyles(documentRef) {
     style.textContent = `
     [data-cube-card-activation] .p-toggleswitch {
       position:relative; display:inline-block; flex:0 0 auto;
-      box-sizing:border-box; width:40px; height:20px; padding:0; margin:0; border:0;
+      box-sizing:border-box; width:${activationSwitchGeometry.width}px; height:${activationSwitchGeometry.height}px; padding:0; margin:0; border:0;
       vertical-align:middle;
     }
     [data-cube-card-activation] .p-toggleswitch-input {

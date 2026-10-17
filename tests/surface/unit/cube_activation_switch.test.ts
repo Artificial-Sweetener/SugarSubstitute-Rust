@@ -127,6 +127,9 @@ test('Spectrum activation uses Adobe switch behavior and delegates exactly one e
   const control = view.root.querySelector('[data-sc-activation-switch]');
   if (!(control instanceof Switch)) throw new Error('Expected the actual Adobe switch');
   await control.updateComplete;
+  expect(control.style.getPropertyValue('--mod-switch-control-width')).toBe('40px');
+  expect(control.style.getPropertyValue('--mod-switch-control-height')).toBe('20px');
+  expect(control.style.getPropertyValue('--mod-switch-height')).toBe('20px');
   const input = control.shadowRoot?.querySelector('input');
   if (!input) throw new Error('Missing Spectrum switch input');
   expect(view.root.querySelector('.p-toggleswitch')).toBeNull();
@@ -179,6 +182,8 @@ test('provider changes retain the accessory, current state and focus without gra
   const spectrum = root.querySelector('[data-sc-activation-switch]');
   if (!(spectrum instanceof Switch)) throw new Error('Expected Adobe switch');
   await spectrum.updateComplete;
+  expect(spectrum.style.getPropertyValue('--mod-switch-control-width')).toBe('40px');
+  expect(spectrum.style.getPropertyValue('--mod-switch-control-height')).toBe('20px');
   expect(spectrum.checked).toBe(true);
   expect(document.activeElement).toBe(spectrum);
   spectrum.click();

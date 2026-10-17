@@ -19,8 +19,8 @@ export function nativeNumericCss() {
     return `
     [data-sc-number-spinner] {
       position:relative; display:flex; box-sizing:border-box; padding-right:20px;
-      height:33px; border:1px solid var(--sc-control-stroke); border-bottom-color:var(--sc-control-bottom-stroke);
-      border-radius:4px; background:var(--sc-control-fill); overflow:hidden;
+      height:33px; border:var(--sc-field-border-width) solid var(--sc-control-stroke); border-bottom-color:var(--sc-control-bottom-stroke);
+      border-radius:var(--sc-field-radius); background:var(--sc-control-fill); overflow:hidden;
     }
     [data-sc-number-spinner] > div:has(> [data-sc-number-input]) { margin:0; padding:0; height:100%; min-width:0; }
     [data-sc-number-input] { box-sizing:border-box; min-width:0; width:100%; border:0; margin:0; height:100%; text-align:center; padding:0 8px; }
