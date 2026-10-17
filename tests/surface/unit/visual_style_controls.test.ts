@@ -23,9 +23,25 @@ import {
 import { publishVisualStyle } from '../../../frontend/comfyui/ui/surface/appearance/VisualStyleBoundary.js';
 import { spectrumRootTokens } from '../../../frontend/comfyui/ui/surface/appearance/SpectrumThemeTokens.js';
 import { MenuItem } from '@spectrum-web-components/menu/src/MenuItem.js';
+import { applyOwnedTheme } from '../../../frontend/comfyui/ui/surface/appearance/ThemeService.js';
 
 afterEach(() => document.documentElement.removeAttribute('data-sc-visual-style'));
 afterEach(() => document.body.replaceChildren());
+
+test.each([true, false])(
+  'replaces browser popover borders on Spectrum menus for dark=%s',
+  (dark) => {
+    const menu = document.createElement('sp-menu');
+    menu.className = 'sc-context-menu';
+    menu.setAttribute('popover', 'manual');
+    document.body.append(menu);
+    applyOwnedTheme(menu, dark, 'spectrum');
+    expect(getComputedStyle(menu).borderTopWidth).toBe('1px');
+    expect(getComputedStyle(menu).borderTopStyle).toBe('solid');
+    expect(menu.dataset.scColorScheme).toBe(dark ? 'dark' : 'light');
+    applyOwnedTheme(menu, null);
+  },
+);
 
 test('retains shared menu focus and radio semantics through the first Adobe render', async () => {
   const row = document.createElement('sc-spectrum-menu-item');
