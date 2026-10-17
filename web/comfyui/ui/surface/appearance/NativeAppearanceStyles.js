@@ -25,6 +25,7 @@ export function nativeAppearanceCss(palette, dark) {
     ${nativeInteractionCss()}
     [data-sc-style-theme-root] {
       ${palette.tokens}
+      --sc-node-card-radius:${palette.radius};
       --sugarcubes-masonry-surface:${palette.canvas};
     }
     :where([data-sc-style-node], [data-sc-style-surface], [data-sc-style-popup]) {
@@ -32,7 +33,7 @@ export function nativeAppearanceCss(palette, dark) {
       --sc-node-card-radius:${palette.radius};
       --sc-control-fill:${palette.controlFill};
       --sc-card-stroke:${palette.cardStroke};
-      --sc-row-stroke:var(--sc-card-stroke);
+      --sc-row-stroke:${palette.rowStroke};
       --sc-control-stroke:${palette.controlStroke};
       --sc-control-bottom-stroke:${palette.controlBottomStroke};
       --node-component-surface:var(--sc-card-fill);
@@ -204,7 +205,7 @@ export function nativeAppearanceCss(palette, dark) {
     }
     [data-sc-style-surface] { font-family:var(--sc-font-family); }
     .sugarcubes-cube-face__node-card:has([data-sc-style-node]) {
-      border-radius:4px; border:0; background:transparent;
+      border-radius:var(--sc-node-card-radius); border:0; background:transparent;
     }
     [data-sc-style-surface] .sugarcubes-workflow-masonry__section {
       border:0; color:var(--sc-text);

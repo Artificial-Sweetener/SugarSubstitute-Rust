@@ -16,19 +16,20 @@
 /** Present native Comfy fields with Spectrum 2 foundations while retaining host interaction owners. */
 import { nativeAppearanceCss } from './NativeAppearanceStyles.js';
 import { spectrumTokenDeclarations } from './SpectrumThemeRuntime.js';
-/** Apply Adobe's field boundaries and focus treatment to the shared native geometry. */
+/** Apply Adobe surface layers, proportional corners and quiet rows without changing native geometry. */
 export function spectrumAppearanceCss(dark) {
     const field = ':is([data-sc-number-spinner], [data-sc-style-combo-frame], [data-sc-style-edit-frame]:not(:has(textarea)), textarea, .sc-model-field)';
     const scope = ':is([data-sc-style-node], [data-sc-style-surface])';
     return (nativeAppearanceCss({
         tokens: spectrumTokenDeclarations(dark),
-        canvas: 'var(--spectrum-gray-50)',
-        cardFill: 'var(--spectrum-gray-100)',
-        cardStroke: 'var(--spectrum-gray-300)',
+        canvas: 'var(--spectrum-background-layer-1-color)',
+        cardFill: 'var(--spectrum-background-layer-2-color)',
+        cardStroke: 'var(--system-card-border-color)',
+        rowStroke: 'transparent',
         controlFill: 'var(--sc-field-fill)',
         controlStroke: 'var(--sc-field-stroke)',
         controlBottomStroke: 'var(--sc-field-bottom-stroke)',
-        radius: '12px',
+        radius: 'var(--spectrum-corner-radius-large-default)',
     }, dark) +
         `
     [data-sc-style-node] [data-testid="node-title"] { font-weight:600; }

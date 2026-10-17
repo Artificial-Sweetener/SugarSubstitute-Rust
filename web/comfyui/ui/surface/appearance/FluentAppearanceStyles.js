@@ -25,6 +25,7 @@ export function fluentAppearanceCss(dark) {
             canvas: dark ? '#202020' : '#f3f3f3',
             cardFill: dark ? '#2b2b2b' : '#fbfbfb',
             cardStroke: dark ? 'rgba(0,0,0,.10)' : 'rgba(0,0,0,.06)',
+            rowStroke: 'var(--sc-card-stroke)',
             controlFill: dark ? '#373737' : '#ffffff',
             controlStroke: dark ? 'rgba(255,255,255,.07)' : 'rgba(0,0,0,.07)',
             controlBottomStroke: dark ? 'rgba(255,255,255,.45)' : 'rgba(0,0,0,.45)',

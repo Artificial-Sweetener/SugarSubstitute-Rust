@@ -110,7 +110,7 @@ test('switches both providers reversibly and preserves Spectrum preference acros
   prepareNativePresentation(f.root);
   expect(f.host.state.appearance.style).toBe('spectrum');
   expect(document.getElementById('sugarcubes-native-appearance')?.textContent).toContain(
-    '--sc-node-card-radius:12px',
+    '--sc-node-card-radius:var(--spectrum-corner-radius-large-default)',
   );
   f.host.dispose();
   expect(f.errors).not.toHaveBeenCalled();
