@@ -16,14 +16,14 @@
 /** Present native Comfy fields with Spectrum 2 foundations while retaining host interaction owners. */
 import { nativeAppearanceCss } from './NativeAppearanceStyles.js';
 import { spectrumTokenDeclarations } from './SpectrumThemeRuntime.js';
-/** Apply Adobe surface layers, proportional corners and quiet rows without changing native geometry. */
+/** Apply Photoshop panel colors, Spectrum corners and quiet rows without changing native geometry. */
 export function spectrumAppearanceCss(dark) {
     const field = ':is([data-sc-number-spinner], [data-sc-style-combo-frame], [data-sc-style-edit-frame]:not(:has(textarea)), textarea, .sc-model-field)';
     const scope = ':is([data-sc-style-node], [data-sc-style-surface])';
     return (nativeAppearanceCss({
         tokens: spectrumTokenDeclarations(dark),
-        canvas: 'var(--spectrum-background-layer-1-color)',
-        cardFill: 'var(--spectrum-background-layer-2-color)',
+        canvas: 'var(--sc-photoshop-canvas)',
+        cardFill: 'var(--sc-photoshop-panel)',
         cardStroke: 'var(--system-card-border-color)',
         rowStroke: 'transparent',
         controlFill: 'var(--sc-field-fill)',

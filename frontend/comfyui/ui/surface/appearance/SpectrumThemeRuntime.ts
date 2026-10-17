@@ -32,6 +32,7 @@ import scale from '@spectrum-web-components/theme/src/spectrum-two/scale-medium.
 import dark from '@spectrum-web-components/theme/src/spectrum-two/theme-dark.css.js';
 import light from '@spectrum-web-components/theme/src/spectrum-two/theme-light.css.js';
 import { spectrumRootTokens, spectrumSemanticTokens } from './SpectrumThemeTokens.js';
+import { photoshopColorDeclarations } from './PhotoshopThemeColors.js';
 import type { NumericSliderControl } from './NativeNumericControls.js';
 import type { BooleanCheckboxControl } from './NativeToggleRows.js';
 import type { BooleanSegmentsControls } from './NativeBooleanSegments.js';
@@ -198,9 +199,16 @@ const palettes = {
   light: spectrumRootTokens(light.cssText),
 };
 
-/** Serialize only scoped official design tokens and the complete semantic role contract. */
+/** Combine Spectrum foundations with Photoshop neutrals for every owned and native surface. */
 export function spectrumTokenDeclarations(isDark: boolean): string {
-  return base + ';' + (isDark ? palettes.dark : palettes.light) + ';' + spectrumSemanticTokens();
+  return (
+    base +
+    ';' +
+    (isDark ? palettes.dark : palettes.light) +
+    ';' +
+    photoshopColorDeclarations(isDark) +
+    spectrumSemanticTokens()
+  );
 }
 
 /** Create a quiet official Adobe action button for product toolbar commands. */

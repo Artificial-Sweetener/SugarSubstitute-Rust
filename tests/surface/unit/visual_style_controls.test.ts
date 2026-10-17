@@ -29,6 +29,39 @@ afterEach(() => document.documentElement.removeAttribute('data-sc-visual-style')
 afterEach(() => document.body.replaceChildren());
 
 test.each([true, false])(
+  'shares Photoshop neutrals with owned controls and removes them when switching to Fluent, dark=%s',
+  (dark) => {
+    const surface = document.createElement('div');
+    const input = document.createElement('input');
+    input.value = '<retained search>';
+    surface.append(input);
+    document.body.append(surface);
+    input.focus();
+    applyOwnedTheme(surface, dark, 'spectrum');
+    const colors = getComputedStyle(surface);
+    expect(colors.getPropertyValue('--sc-photoshop-panel')).toBe(
+      `var(--uxp-host-background-color,${dark ? '#323232' : '#f0f0f0'})`,
+    );
+    expect(colors.getPropertyValue('--sc-photoshop-field')).toBe(dark ? '#2a2a2a' : '#fcfcfc');
+    expect(colors.getPropertyValue('--system-textfield-background-color')).toBe(
+      'var(--sc-photoshop-field)',
+    );
+    expect(colors.getPropertyValue('--system-textfield-border-color')).toBe(
+      'var(--sc-photoshop-stroke)',
+    );
+    expect(colors.getPropertyValue('--spectrum-gray-200')).toBe('var(--sc-photoshop-hover)');
+    applyOwnedTheme(surface, dark, 'fluent');
+    expect(getComputedStyle(surface).getPropertyValue('--sc-photoshop-panel')).toBe('');
+    expect(surface.dataset.scTheme).toBe('fluent');
+    expect(surface.firstChild).toBe(input);
+    expect(document.activeElement).toBe(input);
+    expect(input.value).toBe('<retained search>');
+    expect(surface.querySelector('retained')).toBeNull();
+    applyOwnedTheme(surface, null);
+  },
+);
+
+test.each([true, false])(
   'replaces browser popover borders on Spectrum menus for dark=%s',
   (dark) => {
     const menu = document.createElement('sp-menu');

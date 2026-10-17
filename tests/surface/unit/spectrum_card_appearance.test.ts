@@ -58,19 +58,22 @@ function cardFixture(css: string) {
 }
 
 test.each([true, false])(
-  'uses Adobe surface layers and proportional card corners, dark=%s',
+  'uses Photoshop panel colors and proportional card corners, dark=%s',
   (dark) => {
     const css = spectrumAppearanceCss(dark);
     const { card, outer } = cardFixture(css);
     const palette = getComputedStyle(card);
-    expect(palette.getPropertyValue('--sc-card-fill')).toBe(
-      'var(--spectrum-background-layer-2-color)',
-    );
+    expect(palette.getPropertyValue('--sc-card-fill')).toBe('var(--sc-photoshop-panel)');
     expect(palette.getPropertyValue('--sc-card-stroke')).toBe('var(--system-card-border-color)');
     expect(palette.getPropertyValue('--sc-node-card-radius')).toBe(
       'var(--spectrum-corner-radius-large-default)',
     );
     expect(palette.getPropertyValue('--sc-row-stroke')).toBe('transparent');
+    expect(css).toContain(
+      `--sc-photoshop-panel:var(--uxp-host-background-color,${dark ? '#323232' : '#f0f0f0'})`,
+    );
+    expect(css).toContain(`--sc-photoshop-field:${dark ? '#2a2a2a' : '#fcfcfc'}`);
+    expect(css).toContain('--system-textfield-background-color:var(--sc-photoshop-field)');
     expect(getComputedStyle(outer).borderRadius).toBe('var(--sc-node-card-radius)');
     expect(css).toContain(
       `--spectrum-background-layer-2-color:var(--spectrum-gray-${dark ? '75' : '25'})`,
