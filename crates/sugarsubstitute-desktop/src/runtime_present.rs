@@ -55,11 +55,28 @@ impl Presentations {
             let began = Instant::now();
             let result = (|| {
                 let before = observe_move(window, self.audit.is_some())?;
+                #[cfg(target_os = "windows")]
+                let console = content.console();
+                #[cfg(target_os = "windows")]
+                {
+                    let excluded = console
+                        .as_ref()
+                        .filter(|view| view.visible)
+                        .map(|view| {
+                            crate::control_geometry::physical_bounds(
+                                &view.native_control(),
+                                window.scale_factor(),
+                            )
+                        })
+                        .transpose()?;
+                    presenter.present(frame, excluded)?;
+                }
+                #[cfg(not(target_os = "windows"))]
                 presenter.present(frame)?;
                 #[cfg(target_os = "windows")]
                 {
                     controls.update(content.accessible_controls())?;
-                    controls.present_console(frame, content.console())?;
+                    controls.present_console(frame, console)?;
                     controls.draw_focus()?;
                 }
                 #[cfg(not(target_os = "windows"))]

@@ -269,16 +269,7 @@ pub(super) fn present(
     callback: &callback::Callback,
     view: &ConsoleView<'_>,
 ) -> Result<(), DesktopError> {
-    let rect = physical_bounds(
-        &AccessibleControl {
-            id: 4,
-            label: view.label,
-            bounds: view.bounds,
-            close: false,
-            visible: view.visible,
-        },
-        window.scale_factor(),
-    )?;
+    let rect = physical_bounds(&view.native_control(), window.scale_factor())?;
     callback.active.set(false);
     // SAFETY: Parent and original readonly child stay on their creating UI thread.
     unsafe {
@@ -311,8 +302,7 @@ pub(super) fn present(
     Ok(())
 }
 
-/// Parent CPU blits do not clip transparent button peers. Repaint only this owned
-/// visible child afterward so text, caret and selection remain native and current.
+/// Repaint a completed native document or layout change after parent-frame exclusion.
 pub(super) fn repaint(hwnd: HWND, visible: bool) -> Result<(), DesktopError> {
     if visible {
         // SAFETY: Exact retained child is painted on its creating UI thread; no other
@@ -323,7 +313,7 @@ pub(super) fn repaint(hwnd: HWND, visible: bool) -> Result<(), DesktopError> {
                 None,
                 None,
                 windows::Win32::Graphics::Gdi::RDW_INVALIDATE
-                    | windows::Win32::Graphics::Gdi::RDW_ERASE
+                    | windows::Win32::Graphics::Gdi::RDW_FRAME
                     | windows::Win32::Graphics::Gdi::RDW_UPDATENOW,
             )
         }
@@ -336,15 +326,6 @@ pub(super) fn repaint(hwnd: HWND, visible: bool) -> Result<(), DesktopError> {
 /// Validate localized identity and native geometry before first module/child effects.
 pub(super) fn validate(view: &ConsoleView<'_>, scale: f64) -> Result<(), DesktopError> {
     label(view.label)?;
-    physical_bounds(
-        &AccessibleControl {
-            id: 4,
-            label: view.label,
-            bounds: view.bounds,
-            close: false,
-            visible: view.visible,
-        },
-        scale,
-    )?;
+    physical_bounds(&view.native_control(), scale)?;
     Ok(())
 }

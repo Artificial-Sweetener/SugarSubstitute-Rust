@@ -10,6 +10,8 @@ use windows::Win32::UI::WindowsAndMessaging::ES_READONLY;
 #[path = "native_fixture.rs"]
 mod native_fixture;
 use native_fixture::{Hidden, MtaUsage, apartment_fact};
+#[path = "publication_tests.rs"]
+mod publication_tests;
 
 /// One actual UI lifetime covers implicit-MTA admission and every original native text scenario.
 /// Any scenario error or panic retains both outer native obligations instead of claiming teardown.
@@ -43,6 +45,7 @@ fn actual_implicit_mta_sta_lifetime_preserves_native_console_text_scroll_and_cla
     )?;
     actual_hidden_native_console_accepts_absent_scrollbar_and_retains_real_positions(&apartment)?;
     actual_native_selection_clamping_reports_requested_and_observed_ranges(&apartment)?;
+    publication_tests::publication_never_paints_intermediate_text_or_selection(&apartment)?;
 
     // SAFETY: Every scenario returned only after exact child, parent and module checked retirement.
     unsafe { apartment.release_after_teardown() }?;

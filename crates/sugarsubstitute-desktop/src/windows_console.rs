@@ -111,15 +111,19 @@ impl Console {
             .ok_or_else(|| DesktopError::message("console_present", "retained peer absent"))?;
         let result = (|| {
             peer.value.live()?;
+            let document_changed = documents.pending();
             text::publish(peer.value.hwnd, documents, view.dark)?;
             let bounds = (view.bounds, window.scale_factor());
+            let layout_changed = self.bounds != Some(bounds) || self.visible != view.visible;
             let reflow = if self.bounds != Some(bounds) {
                 Some(text::observe(peer.value.hwnd, view.dark)?)
             } else {
                 None
             };
             peer.value.live()?;
-            native::present(window, peer.value.hwnd, &self.callback, view)?;
+            if layout_changed {
+                native::present(window, peer.value.hwnd, &self.callback, view)?;
+            }
             peer.value.live()?;
             if let Some(observation) = reflow
                 && let Some(document) = documents.current()
@@ -127,7 +131,9 @@ impl Console {
                 text::reflow(peer.value.hwnd, document, observation, view.dark)?;
             }
             peer.value.live()?;
-            native::repaint(peer.value.hwnd, view.visible)?;
+            if document_changed || layout_changed {
+                native::repaint(peer.value.hwnd, view.visible)?;
+            }
             peer.value.live()?;
             self.bounds = Some(bounds);
             self.visible = view.visible;

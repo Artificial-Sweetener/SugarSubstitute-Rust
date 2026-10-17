@@ -9,6 +9,8 @@ use crate::{
     },
 };
 use sugarsubstitute_contracts::{configuration::Theme, presentation::console_color};
+#[path = "text/redraw.rs"]
+mod redraw;
 use windows::Win32::{
     Foundation::{COLORREF, ERROR_NO_SCROLLBARS, HWND},
     Graphics::Gdi::{COLOR_WINDOW, COLOR_WINDOWTEXT, GetSysColor},
@@ -27,6 +29,10 @@ pub(super) fn publish(
     documents: &mut update::Documents,
     dark: bool,
 ) -> Result<(), DesktopError> {
+    if !documents.pending() {
+        return Ok(());
+    }
+    let _redraw = redraw::Suspension::new(hwnd)?;
     let mut port = NativeText { hwnd, dark };
     documents.publish(&mut port)
 }
@@ -41,6 +47,7 @@ pub(super) fn reflow(
     observation: Observation,
     dark: bool,
 ) -> Result<(), DesktopError> {
+    let _redraw = redraw::Suspension::new(hwnd)?;
     let follow = observation.at_bottom && observation.start == observation.end;
     let (start, end) = if follow {
         (document.units as i32, document.units as i32)

@@ -4,6 +4,8 @@
 use super::*;
 use sugarsubstitute_application::supervision::DesktopExitTransaction;
 use sugarsubstitute_contracts::{configuration::ProfileId, lifecycle::*};
+#[path = "normal_close/late_reply.rs"]
+mod late_reply;
 
 fn actor() -> Result<ParentLifecycle> {
     actor_for(1)

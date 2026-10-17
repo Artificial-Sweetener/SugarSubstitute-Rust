@@ -44,3 +44,17 @@ pub struct ConsoleView<'a> {
     /// until a newly funded frame is available, while retained exposures reuse its document.
     pub text: Option<&'a dyn ConsoleText>,
 }
+
+#[cfg(target_os = "windows")]
+impl ConsoleView<'_> {
+    /// Use the same peer geometry for native layout and parent-frame exclusion.
+    pub(crate) fn native_control(&self) -> crate::AccessibleControl {
+        crate::AccessibleControl {
+            id: 4,
+            label: self.label,
+            bounds: self.bounds,
+            close: false,
+            visible: self.visible,
+        }
+    }
+}

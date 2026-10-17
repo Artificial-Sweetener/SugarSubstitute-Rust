@@ -21,6 +21,8 @@ use windows::Win32::{
     },
     UI::{Controls::MARGINS, WindowsAndMessaging::GetCursorPos},
 };
+#[path = "windows_frame_clip.rs"]
+mod frame_clip;
 
 /// Keep the Tao window alive until every borrowed native resource has been released.
 pub(crate) struct Presenter {
@@ -86,7 +88,11 @@ impl Presenter {
     }
 
     /// Copy CPU BGRA bytes without replacing transparent pixels with an opaque fill.
-    pub(crate) fn present(&mut self, frame: &PreparedFrame) -> Result<(), DesktopError> {
+    pub(crate) fn present(
+        &mut self,
+        frame: &PreparedFrame,
+        excluded: Option<RECT>,
+    ) -> Result<(), DesktopError> {
         let dib = Dib::for_frame(&mut self.dib, frame)?;
         let destination = dib.pixels_mut()?;
         for (source, target) in frame.pixels().chunks_exact(4).zip(destination.chunks_exact_mut(4))
@@ -112,19 +118,22 @@ impl Presenter {
             if target.is_invalid() {
                 return Err(DesktopError::message("get_window_dc", "GetDC failed"));
             }
-            let result = BitBlt(
-                target,
-                0,
-                0,
-                dib.width() as i32,
-                dib.height() as i32,
-                Some(dib.dc()),
-                0,
-                0,
-                SRCCOPY,
-            );
+            let result = frame_clip::submit(target, excluded, || {
+                BitBlt(
+                    target,
+                    0,
+                    0,
+                    dib.width() as i32,
+                    dib.height() as i32,
+                    Some(dib.dc()),
+                    0,
+                    0,
+                    SRCCOPY,
+                )
+                .map_err(|error| DesktopError::new("present_cpu_frame", error))
+            });
             let released = ReleaseDC(Some(hwnd), target);
-            result.map_err(|error| DesktopError::new("present_cpu_frame", error))?;
+            result?;
             if released == 0 {
                 return Err(DesktopError::message("release_window_dc", "ReleaseDC failed"));
             }

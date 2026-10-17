@@ -47,12 +47,7 @@ impl ParentLifecycle {
         if self.normal_close_pending() {
             return false;
         }
-        request.exited()
-            || (self.closed
-                && self.write.is_none()
-                && self
-                    .close_after_reply
-                    .is_some_and(|index| self.requests.get(index).is_ok_and(|record| record.sent)))
+        request.exited() || self.final_close_reply_written()
     }
     /// Borrow only this registered role's authenticated whole-content exit transaction.
     /// Historical attempt failures do not cancel an actual later close request; normal-idle
@@ -86,7 +81,17 @@ impl ParentLifecycle {
             || self.acquisition_receive.is_some()
             || self.rejected_frame.is_some()
             || self.write.is_some()
-            || self.requests.next_reply().is_some()
+            || self.requests.next_reply().is_some() && !self.final_close_reply_written()
+    }
+    /// After the actual final ACK, retained older replies have no receiving desktop.
+    /// Keep their original outcomes and unsent status; they cannot veto physical cleanup.
+    /// Queued/in-flight ACKs and other closure paths supply no such delivery proof.
+    fn final_close_reply_written(&self) -> bool {
+        self.closed
+            && self.write.is_none()
+            && self
+                .close_after_reply
+                .is_some_and(|index| self.requests.get(index).is_ok_and(|record| record.sent))
     }
     /// Return only this registered actor's accepted deliberate exit transaction.
     /// The exact process and original budget remain inert facts. Native, backend,
