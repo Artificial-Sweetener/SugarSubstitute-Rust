@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Serve bounded authenticated custody commands on the existing native worker.
+#[path = "driver_failure.rs"]
+mod failure;
 use super::source::BackendCustodySource;
 use crate::ClaimError;
 use std::num::NonZeroUsize;
@@ -54,6 +56,19 @@ impl BackendCustodySource {
     }
 }
 impl Driver {
+    /// Latch an otherwise unrecorded callback error before the worker observes it.
+    fn retained<T>(
+        &self,
+        result: Result<T, NativeObservationError>,
+    ) -> Result<T, NativeObservationError> {
+        if result.is_err()
+            && let Ok(mut access) = self.source.access()
+            && let Ok(state) = access.state()
+        {
+            return failure::retain(result, &mut state.first, &mut state.failed);
+        }
+        result
+    }
     /// Preserve the genuine first cause in durable source state before propagation.
     fn native(&mut self, stage: &'static str, cause: ClaimError) -> NativeObservationError {
         if let Ok(mut access) = self.source.access()
@@ -272,64 +287,69 @@ impl BackendCustodyDriver for Driver {
         metadata: &BackendCustodyMemory,
         wake: BackendCustodyWake,
     ) -> Result<(), NativeObservationError> {
-        if !metadata.same_allocation(self.source.memory()) {
-            return Err(self.native(
-                "custody_driver_original",
-                ClaimError::invalid("custody_driver_original"),
-            ));
-        }
-        self.wake = Some(wake);
-        let result = {
-            let mut access = self
-                .source
-                .access()
-                .map_err(|cause| NativeObservationError::new("custody_source_access", cause))?;
-            access.state().and_then(|state| state.initialize(metadata))
-        };
-        result.map_err(|cause| self.native("custody_initialize", cause))?;
-        self.exchange(
-            metadata
-                .check_registration()
-                .map_err(|cause| NativeObservationError::new("custody_initialize_clock", cause))?,
-        )
+        let initialize =
+            || {
+                if !metadata.same_allocation(self.source.memory()) {
+                    return Err(self.native(
+                        "custody_driver_original",
+                        ClaimError::invalid("custody_driver_original"),
+                    ));
+                }
+                self.wake = Some(wake);
+                let result = {
+                    let mut access = self.source.access().map_err(|cause| {
+                        NativeObservationError::new("custody_source_access", cause)
+                    })?;
+                    access.state().and_then(|state| state.initialize(metadata))
+                };
+                result.map_err(|cause| self.native("custody_initialize", cause))?;
+                self.exchange(metadata.check_registration().map_err(|cause| {
+                    NativeObservationError::new("custody_initialize_clock", cause)
+                })?)
+            };
+        let result = initialize();
+        self.retained(result)
     }
     fn progress(
         &mut self,
         context: &JobContext,
         now: Moment,
     ) -> Result<BackendCustodyProgress, NativeObservationError> {
-        self.observe(context)?;
-        let result = {
-            let wake = self.wake.as_ref().ok_or_else(|| {
-                NativeObservationError::new(
-                    "custody_driver_wake",
-                    std::io::Error::other("Custody driver wake missing"),
-                )
-            })?;
-            let mut access = self
-                .source
-                .access()
-                .map_err(|cause| NativeObservationError::new("custody_source_access", cause))?;
-            access.state().and_then(|state| state.progress(context, self.source.memory(), wake))
-        };
-        let settled = result.map_err(|cause| self.native("custody_progress", cause))?;
-        self.exchange(now)?;
-        if settled {
-            let mut access = self
-                .source
-                .access()
-                .map_err(|cause| NativeObservationError::new("custody_completion_owner", cause))?;
-            let state = access
-                .state()
-                .map_err(|cause| NativeObservationError::new("custody_completion_owner", cause))?;
-            if !state.latest.is_some_and(|frame| {
-                matches!(frame.command, BackendCustodyCommand::Finish { .. })
-                    && self.sent != Some(frame.nonce)
-            }) {
-                return Ok(BackendCustodyProgress::Settled);
+        let mut progress = || {
+            self.observe(context)?;
+            let result = {
+                let wake = self.wake.as_ref().ok_or_else(|| {
+                    NativeObservationError::new(
+                        "custody_driver_wake",
+                        std::io::Error::other("Custody driver wake missing"),
+                    )
+                })?;
+                let mut access = self
+                    .source
+                    .access()
+                    .map_err(|cause| NativeObservationError::new("custody_source_access", cause))?;
+                access.state().and_then(|state| state.progress(context, self.source.memory(), wake))
+            };
+            let settled = result.map_err(|cause| self.native("custody_progress", cause))?;
+            self.exchange(now)?;
+            if settled {
+                let mut access = self.source.access().map_err(|cause| {
+                    NativeObservationError::new("custody_completion_owner", cause)
+                })?;
+                let state = access.state().map_err(|cause| {
+                    NativeObservationError::new("custody_completion_owner", cause)
+                })?;
+                if !state.latest.is_some_and(|frame| {
+                    matches!(frame.command, BackendCustodyCommand::Finish { .. })
+                        && self.sent != Some(frame.nonce)
+                }) {
+                    return Ok(BackendCustodyProgress::Settled);
+                }
             }
-        }
-        Ok(BackendCustodyProgress::Pending)
+            Ok(BackendCustodyProgress::Pending)
+        };
+        let result = progress();
+        self.retained(result)
     }
     fn retire(
         &mut self,

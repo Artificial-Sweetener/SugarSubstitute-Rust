@@ -58,6 +58,8 @@ impl CoordinatorBackend {
         if record.shutdown.is_some() {
             return Ok(ResourceTransition::default());
         }
+        tracing::warn!(operation="managed_backend_root_exited",resource=?key,process=?observed,status,
+            "Actual retained managed backend root exit observed; independent cleanup remains required");
         let failure = LifecycleFailure::new(
             LifecycleFailureCode::UnexpectedExit,
             Box::new(RootExit { process: observed, status }),

@@ -94,7 +94,8 @@ pub use environment::{EnvironmentOverride, LaunchEnvironment, LaunchEnvironmentE
 pub use managed_output::RejectedManagedOutputLaunch;
 #[cfg(windows)]
 pub use native_claims::backend_custody::{
-    BackendCustodyDriverInputError, BackendCustodyFailure, BackendCustodySource,
+    BackendCustodyDriverInputError, BackendCustodyExitDiagnostic, BackendCustodyFailure,
+    BackendCustodySource,
 };
 #[cfg(windows)]
 pub use registry::{SettledRegistryFailure, WindowsProcessRegistry};

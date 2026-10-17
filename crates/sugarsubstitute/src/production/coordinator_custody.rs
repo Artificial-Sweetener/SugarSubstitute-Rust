@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compose one actual independent headless witness for managed backends.
 mod attachment;
-mod diagnostics;
+pub(super) mod diagnostics;
 mod invocation;
 /// Original fixed witness invocation/control metadata role; no new reservation.
 pub(crate) const WITNESS_STORAGE_BYTES: u64 = 1_048_576;
@@ -35,6 +35,7 @@ pub(crate) struct CoordinatorCustody {
     ready: bool,
     retirement: retirement::Retirement,
     observed_progress: Option<(bool, bool, bool, bool, bool)>,
+    observed_exit: Option<u32>,
 }
 impl CoordinatorCustody {
     /// Borrow the genuine established parent for early profile Job preparation.
@@ -65,6 +66,7 @@ impl CoordinatorCustody {
             ready: false,
             retirement: retirement::Retirement::default(),
             observed_progress: None,
+            observed_exit: None,
         })
     }
     /// Advance actual bootstrap, contained helper, authenticated establishment and claims binding.
@@ -78,13 +80,33 @@ impl CoordinatorCustody {
         let Some(parent) = self.parent.clone() else {
             return Ok(false);
         };
-        self.retirement.observe_terminal(&parent)?;
-        if let Some(ticket) = self.ticket {
-            resources
-                .authority
-                .registry()
-                .ok_or("Custody registry absent")?
-                .backend_custody_launch_pending(ticket.process(), parent.key())?;
+        let terminal = self.retirement.observe_terminal(&parent);
+        // Cached original process facts remain observable after transport failure.
+        let launch = (|| -> Result<()> {
+            if let Some(ticket) = self.ticket {
+                let registry = resources.authority.registry().ok_or("Custody registry absent")?;
+                if let Some(status) = registry.snapshot(ticket.process())?.root_exit
+                    && self.observed_exit != Some(status)
+                {
+                    self.observed_exit = Some(status);
+                    let diagnostic =
+                        sugarsubstitute_supervision::BackendCustodyExitDiagnostic::from_exit_code(
+                            status,
+                        );
+                    tracing::warn!(operation="backend_custody_root_exited",key=?parent.key(),process=?ticket.process(),status,
+                    first_operation=diagnostic.map(sugarsubstitute_supervision::BackendCustodyExitDiagnostic::operation),
+                    "Actual authenticated helper root exited; original custody and causes remain retained");
+                }
+                registry.backend_custody_launch_pending(ticket.process(), parent.key())?;
+            }
+            Ok(())
+        })();
+        match (terminal, launch) {
+            (Err(first), Err(later)) => {
+                return Err(diagnostics::preserve_cleanup(Some(first), later));
+            }
+            (Err(cause), Ok(())) | (Ok(()), Err(cause)) => return Err(cause),
+            (Ok(()), Ok(())) => {}
         }
         if self.ready {
             parent

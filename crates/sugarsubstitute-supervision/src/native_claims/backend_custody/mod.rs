@@ -6,6 +6,8 @@ pub(crate) mod control;
 mod driver;
 mod entry;
 mod exit;
+mod exit_diagnostic;
+pub use exit_diagnostic::BackendCustodyExitDiagnostic;
 pub(crate) mod pool;
 mod profile_commands;
 mod profile_registration;

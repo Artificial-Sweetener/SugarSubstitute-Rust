@@ -63,7 +63,11 @@ impl Boundary for Native<'_, '_> {
                 && !registry.custody_retirement_pending(ticket.process())?
             {
                 let actual = registry.snapshot(ticket.process())?;
+                let diagnostic = actual.root_exit.and_then(
+                    sugarsubstitute_supervision::BackendCustodyExitDiagnostic::from_exit_code,
+                );
                 tracing::info!(operation="backend_custody_family_retired", key=?self.parent.key(), process=?ticket.process(),
+                    first_operation=diagnostic.map(sugarsubstitute_supervision::BackendCustodyExitDiagnostic::operation),
                     forced=actual.forced, root_exit=?actual.root_exit, graceful_until=?original.graceful_until,
                     settle_until=?original.settle_until, "Original helper family retirement facts consumed");
                 while registry.take_observation(ticket.process())?.is_some() {}

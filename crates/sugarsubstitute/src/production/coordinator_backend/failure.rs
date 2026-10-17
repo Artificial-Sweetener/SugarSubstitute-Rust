@@ -23,6 +23,7 @@ pub(super) enum FailureKind {
     Registry,
     Native,
     Claims,
+    Custody,
     Admission,
     Lifecycle,
     Other,
@@ -74,6 +75,13 @@ impl FailureObservation {
         let Some(cause) = failure.source() else {
             return Self::classified(FailureKind::Other, "unclassified");
         };
+        if let Some(custody) = super::super::coordinator_custody::diagnostics::observation(cause) {
+            return Self {
+                native_operation: custody.native_operation,
+                native_code: custody.native_code,
+                ..Self::classified(FailureKind::Custody, custody.transition)
+            };
+        }
         if let Some(source) = cause.downcast_ref::<FrontendSourceError>() {
             return Self {
                 terminal: source.terminal_kind(),

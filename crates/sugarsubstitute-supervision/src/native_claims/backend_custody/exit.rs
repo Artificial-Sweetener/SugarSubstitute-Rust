@@ -33,12 +33,16 @@ impl BackendCustodySource {
         if !member.as_bool() {
             return Err(ClaimError::invalid("custody_helper_exit_foreign"));
         }
+        let diagnostic =
+            super::exit_diagnostic::BackendCustodyExitDiagnostic::first(state.first.as_ref());
         tracing::error!(
             operation = "backend_custody_unresolved_exit",
+            first_operation = diagnostic.operation(),
+            exit_code = diagnostic.exit_code(),
             "Authenticated helper exits with original unresolved custody preserved"
         );
         // SAFETY: Only this current authenticated helper is terminated. No foreign
         // process, persisted record or output is declared retired by this exit.
-        unsafe { ExitProcess(1) }
+        unsafe { ExitProcess(diagnostic.exit_code()) }
     }
 }
