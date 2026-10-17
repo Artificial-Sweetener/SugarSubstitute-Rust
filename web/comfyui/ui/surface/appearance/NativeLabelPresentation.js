@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own projected-card display text without changing native Vue models or custom controls. */
-import { formatFluentDisplayLabel } from './FluentDisplayLabels.js';
+import { formatDisplayLabel } from './DisplayLabels.js';
 /** Follow native text replacement and restore only text still owned by the theme. */
 export class NativeLabelPresentation {
     #cards = new Map();
@@ -52,7 +52,7 @@ export class NativeLabelPresentation {
         for (const node of current) {
             const previous = labels.get(node);
             const source = previous && node.data === previous.displayed ? previous.source : node.data;
-            const displayed = formatFluentDisplayLabel(source);
+            const displayed = formatDisplayLabel(source);
             labels.set(node, { source, displayed });
             if (node.data !== displayed)
                 node.data = displayed;

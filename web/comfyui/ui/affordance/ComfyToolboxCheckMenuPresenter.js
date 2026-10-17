@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Adapt feature-owned checked choices to the universal Fluent menu. */
+/** Adapt feature-owned checked choices to the shared themed menu. */
 import { ContextMenu } from '../menus/ContextMenu.js';
 /** Preserve feature selectors and selection policy while delegating every popup concern. */
 export class ComfyToolboxCheckMenuPresenter {

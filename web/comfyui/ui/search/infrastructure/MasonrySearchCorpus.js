@@ -1,6 +1,6 @@
 import { cubeFacePresentedWidgets } from '../../surface/CubeFaceWidgetPolicy.js';
 import { nativeNodeFieldRows } from '../../surface/NativeNodeFieldRows.js';
-import { formatFluentDisplayLabel } from '../../surface/appearance/FluentDisplayLabels.js';
+import { formatDisplayLabel } from '../../surface/appearance/DisplayLabels.js';
 /** Retain native references only while mounted; query and navigation never rediscover the graph. */
 export class MasonrySearchCorpus {
     fields = new Map();
@@ -50,7 +50,7 @@ export class MasonrySearchCorpus {
                     ?.textContent?.trim() ||
                     (typeof widget.options?.label === 'string'
                         ? widget.options.label
-                        : formatFluentDisplayLabel(key));
+                        : formatDisplayLabel(key));
                 fields.push({ description: { id: fieldId, key, label }, widget });
                 this.fields.set(fieldId, {
                     id: fieldId,

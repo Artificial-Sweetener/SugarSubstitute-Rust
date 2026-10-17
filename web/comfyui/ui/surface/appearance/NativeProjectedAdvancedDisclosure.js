@@ -23,7 +23,7 @@ export class NativeProjectedAdvancedDisclosure {
         }, mount.control), () => this.#release(mount.target));
         this.#bindings.set(mount.target, { motion, unsubscribe });
     }
-    /** Commit the latest request and detach every projected presentation when Fluent ends. */
+    /** Commit the latest request and detach every projected presentation when themed ends. */
     clear() {
         for (const target of [...this.#bindings.keys()])
             this.#release(target);

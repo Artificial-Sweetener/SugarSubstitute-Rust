@@ -11825,6 +11825,10 @@ var SpectrumTabGroup = class extends Tabs {
   }
 };
 var SpectrumFinderInput = class extends Textfield {
+  /** Accept native and declarative focus requests before the first connected render. */
+  focus() {
+    this.focusInput(false);
+  }
   /** Wait for Adobe's connected render before focusing its real input. */
   focusInput(selectAll) {
     void this.updateComplete.then(() => {

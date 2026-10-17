@@ -131,7 +131,7 @@ function synchronizeNumericAnnotations(field, annotations) {
         }
     }
 }
-/** Keep primary gesture starts away from Comfy's node drag owner; Fluent retains window move/up. */
+/** Keep primary gesture starts away from Comfy's node drag owner; themed retains window move/up. */
 function retainNumericGesture(event) {
     if (event instanceof MouseEvent && event.button === 0)
         event.stopPropagation();

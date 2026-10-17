@@ -140,7 +140,7 @@ export class MasonrySearchPresenter {
             close: (focus) => this.close(focus),
         });
     }
-    /** Coalesce rapid typing while keeping Fluent's native input response immediate. */
+    /** Coalesce rapid typing while keeping themed's native input response immediate. */
     #queue(mode, text) {
         this.#pending = { mode, text };
         if (this.#frame !== null)

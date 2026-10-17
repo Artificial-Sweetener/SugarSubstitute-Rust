@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove Substitute label conventions and reversible native text ownership. */
 import { afterEach, expect, test } from '@jest/globals';
-import { formatFluentDisplayLabel } from '../../../frontend/comfyui/ui/surface/appearance/FluentDisplayLabels.js';
+import { formatDisplayLabel } from '../../../frontend/comfyui/ui/surface/appearance/DisplayLabels.js';
 import { NativeLabelPresentation } from '../../../frontend/comfyui/ui/surface/appearance/NativeLabelPresentation.js';
 
 afterEach(() => document.body.replaceChildren());
@@ -55,7 +55,7 @@ test.each([
   ['constructor', 'Constructor'],
   ['__proto__', 'Proto'],
 ])('formats %j as %j with Substitute conventions', (source, expected) => {
-  expect(formatFluentDisplayLabel(source)).toBe(expected);
+  expect(formatDisplayLabel(source)).toBe(expected);
 });
 
 /** Mount literal text without parsing dynamic labels as markup. */

@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Measure Fluent advanced destinations without changing native values or persisted disclosure state. */
+/** Measure themed advanced destinations without changing native values or persisted disclosure state. */
 
 /** Measure basic or expanded native fields while retaining their current animation constraints. */
 export function measureNativeFields(fields: HTMLElement, closed: boolean): number {

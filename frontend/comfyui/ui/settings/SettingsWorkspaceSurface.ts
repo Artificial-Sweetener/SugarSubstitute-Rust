@@ -32,16 +32,16 @@ export class SettingsWorkspaceSurface {
   ) {}
 
   /** Apply Microsoft's official tokens to standard host settings and opt-in SugarCubes content. */
-  update(fluent: boolean, dark: boolean): void {
+  update(styled: boolean, dark: boolean): void {
     this.root.setAttribute('data-sc-settings', '');
-    if (fluent) {
-      this.root.setAttribute('data-sc-settings-fluent', '');
+    if (styled) {
+      this.root.setAttribute('data-sc-settings-themed', '');
       applyOwnedTheme(this.root, dark);
       this.#placement ??= new SettingsSearchPlacement(this.root);
       this.#position ??= new SettingsPagePosition(this.root);
       if (!this.#placement.reconcile()) this.#position.reconcile();
     } else {
-      this.root.removeAttribute('data-sc-settings-fluent');
+      this.root.removeAttribute('data-sc-settings-themed');
       applyOwnedTheme(this.root, null);
       this.#placement?.dispose();
       this.#placement = null;
@@ -60,7 +60,7 @@ export class SettingsWorkspaceSurface {
       if (descriptor.kind === 'custom' && !id.startsWith('SugarCubes.')) continue;
       this.#rows.add(row);
       row.dataset.scSettingKind = descriptor.kind === 'standard' ? 'standard' : 'owned';
-      if (!fluent || !descriptor.description) {
+      if (!styled || !descriptor.description) {
         row.querySelector('.sc-setting-description')?.remove();
         continue;
       }
@@ -83,7 +83,7 @@ export class SettingsWorkspaceSurface {
     this.#rows.clear();
     applyOwnedTheme(this.root, null);
     this.root.removeAttribute('data-sc-settings');
-    this.root.removeAttribute('data-sc-settings-fluent');
+    this.root.removeAttribute('data-sc-settings-themed');
   }
 
   /** Remove only presentation owned by this adapter. */

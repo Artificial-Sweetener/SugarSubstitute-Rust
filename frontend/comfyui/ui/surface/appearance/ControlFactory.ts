@@ -35,6 +35,7 @@ import type { NumericSliderControl } from './NativeNumericControls.js';
 import type { BooleanCheckboxControl } from './NativeToggleRows.js';
 import type { BooleanSegmentsControls } from './NativeBooleanSegments.js';
 import type { FinderInputControl } from './FinderControls.js';
+import type { VisualStyle } from './VisualStyle.js';
 
 /** Create an owned command button with the selected system's real interaction implementation. */
 export function createButton(document: Document): HTMLElement {
@@ -100,6 +101,15 @@ export function workflowTabAccessorySlot(document: Document, position: 'start' |
 }
 
 /** Name the already registered provider element for declarative Vue rendering. */
-export function buttonTag(style: import('./VisualStyle.js').VisualStyle): string {
+export function buttonTag(style: VisualStyle): string {
   return style === 'comfy' ? 'button' : style === 'spectrum' ? 'sp-action-button' : 'fluent-button';
+}
+
+/** Select a registered text-field adapter for declarative search views. */
+export function searchInputTag(style: VisualStyle): string {
+  return style === 'comfy'
+    ? 'input'
+    : style === 'spectrum'
+      ? 'sc-spectrum-search'
+      : 'fluent-text-input';
 }

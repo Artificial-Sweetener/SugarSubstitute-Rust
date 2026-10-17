@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Own the shared modal's Fluent palette lifecycle without changing form state. */
+/** Own the shared modal's themed palette lifecycle without changing form state. */
 import { readOwnedVisualStyle } from '../surface/appearance/VisualStyleBoundary.js';
 import { subscribeVisualStyle } from '../surface/appearance/VisualStyleBoundary.js';
 import { applyOwnedTheme } from '../surface/appearance/ThemeService.js';
@@ -37,7 +37,6 @@ export class ModalAppearance {
         const document = overlay.ownerDocument;
         injectModalAppearanceStyles(document);
         this.#overlay = overlay;
-        overlay.dataset.scModalAppearance = 'fluent';
         this.#refresh();
         if (this.#source) {
             this.#release = this.#source.subscribeAppearance(() => this.#refresh());

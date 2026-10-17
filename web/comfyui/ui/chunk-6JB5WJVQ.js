@@ -13,6 +13,7 @@ import {
 } from "./chunk-6PAJ5Y37.js";
 
 // frontend/comfyui/ui/picker/vue/CubeStackCart.ts
+import { searchInputTag } from "./surface/appearance/ControlFactory.js";
 var CubeStackCart = defineComponent({
   name: "SugarCubesStackCart",
   props: {
@@ -149,11 +150,12 @@ var CubeStackCart = defineComponent({
       [
         h("div", { class: "sc-cube-stack-cart__header" }, [
           h("p", { class: "sc-cube-stack-cart__library-label" }, "Cube library"),
-          h(props.state.appearance === "fluent" ? "fluent-text-input" : "input", {
+          h(searchInputTag(props.state.appearance), {
             class: "sc-cube-stack-cart__search",
             type: "search",
             placeholder: "Search cubes",
             "aria-label": "Search cubes",
+            label: "Search cubes",
             value: query.value,
             onInput: (event) => {
               const target = event.currentTarget;

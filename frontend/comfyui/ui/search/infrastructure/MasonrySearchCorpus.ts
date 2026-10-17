@@ -21,7 +21,7 @@ import type {
 } from '../../surface/masonry/WorkflowMasonryProjection.js';
 import { cubeFacePresentedWidgets } from '../../surface/CubeFaceWidgetPolicy.js';
 import { nativeNodeFieldRows } from '../../surface/NativeNodeFieldRows.js';
-import { formatFluentDisplayLabel } from '../../surface/appearance/FluentDisplayLabels.js';
+import { formatDisplayLabel } from '../../surface/appearance/DisplayLabels.js';
 import type { SearchField, SearchNode } from '../domain/SearchMatching.js';
 import type {
   SearchFieldSurface,
@@ -90,7 +90,7 @@ export class MasonrySearchCorpus implements SearchSurface {
             ?.textContent?.trim() ||
           (typeof widget.options?.label === 'string'
             ? widget.options.label
-            : formatFluentDisplayLabel(key));
+            : formatDisplayLabel(key));
         fields.push({ description: { id: fieldId, key, label }, widget });
         this.fields.set(fieldId, {
           id: fieldId,

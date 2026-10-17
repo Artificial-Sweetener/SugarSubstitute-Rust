@@ -43,7 +43,7 @@ import { mountedModelContextContributions } from './ModelMountedContextContribut
 import { resolveCubeInstalledModel } from './CubeInstalledModelResolution.js';
 import { registerNativeFieldEnhancement } from '../surface/NativeFieldPresentation.js';
 
-/** Persist model-picker presentation separately from Fluent styling. */
+/** Persist model-picker presentation separately from visual style. */
 export const MODEL_PICKER_SETTING = 'SugarCubes.Models.EnhancedPicker';
 
 export interface ModelPickerHostOptions {

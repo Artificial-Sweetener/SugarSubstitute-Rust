@@ -16,7 +16,7 @@
 /** Theme only native dropdown portals linked to identified standard settings controls. */
 import { applyOwnedTheme } from '../surface/appearance/ThemeService.js';
 
-/** Preserve native popup identity and isolate bespoke plugin menus from Fluent control styling. */
+/** Preserve native popup identity and isolate bespoke plugin menus from themed control styling. */
 export class SettingsPopupTheme {
   readonly #owned = new Set<HTMLElement>();
   readonly #linked = new Set<HTMLElement>();
@@ -25,7 +25,7 @@ export class SettingsPopupTheme {
   reconcile(
     overlay: HTMLElement,
     roots: Iterable<HTMLElement>,
-    fluent: boolean,
+    styled: boolean,
     dark: boolean,
   ): void {
     const list = overlay.querySelector<HTMLElement>('[role="listbox"]');
@@ -42,7 +42,7 @@ export class SettingsPopupTheme {
       return;
     }
     this.#linked.add(overlay);
-    if (!fluent) {
+    if (!styled) {
       this.#release(overlay);
       return;
     }
@@ -52,8 +52,8 @@ export class SettingsPopupTheme {
   }
 
   /** Reconcile retained portals when settings mode, palette or dialog lifetime changes. */
-  refresh(roots: Iterable<HTMLElement>, fluent: boolean, dark: boolean): void {
-    for (const overlay of this.#linked) this.reconcile(overlay, roots, fluent, dark);
+  refresh(roots: Iterable<HTMLElement>, styled: boolean, dark: boolean): void {
+    for (const overlay of this.#linked) this.reconcile(overlay, roots, styled, dark);
   }
 
   /** Restore host inheritance when the settings presentation retires. */

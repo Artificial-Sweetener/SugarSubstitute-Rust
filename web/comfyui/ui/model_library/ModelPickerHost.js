@@ -29,7 +29,7 @@ import { comfyModelCompatibilityContext } from './ComfyModelCompatibilityContext
 import { mountedModelContextContributions } from './ModelMountedContextContributions.js';
 import { resolveCubeInstalledModel } from './CubeInstalledModelResolution.js';
 import { registerNativeFieldEnhancement } from '../surface/NativeFieldPresentation.js';
-/** Persist model-picker presentation separately from Fluent styling. */
+/** Persist model-picker presentation separately from visual style. */
 export const MODEL_PICKER_SETTING = 'SugarCubes.Models.EnhancedPicker';
 /** Follow node and renderer lifetimes while keeping Comfy authoritative for field values. */
 export class ModelPickerHost {

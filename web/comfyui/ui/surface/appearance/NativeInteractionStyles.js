@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Define titlebar feedback and native field accent motion through Microsoft's Fluent tokens. */
+/** Define titlebar feedback and native field accent motion through scoped design-system tokens. */
 /** Keep interaction styling scoped to positively identified native presentation boundaries. */
 export function nativeInteractionCss() {
     return `

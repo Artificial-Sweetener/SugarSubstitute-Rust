@@ -36,7 +36,7 @@ const minorWords = new Set(
 );
 
 /** Format visible labels while preserving authored slash prefixes and uppercase words. */
-export function formatFluentDisplayLabel(label: string): string {
+export function formatDisplayLabel(label: string): string {
   const overrideKey = label.toLowerCase().replaceAll(' ', '_');
   const override = Object.hasOwn(labelOverrides, overrideKey)
     ? labelOverrides[overrideKey]

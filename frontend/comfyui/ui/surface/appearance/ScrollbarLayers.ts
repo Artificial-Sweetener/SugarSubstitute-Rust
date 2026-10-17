@@ -103,7 +103,7 @@ export class ScrollbarLayers {
     }
   }
 
-  /** Remove only owned layers when Fluent appearance is disabled. */
+  /** Remove only owned layers when themed appearance is disabled. */
   clear(): void {
     for (const layer of this.#layers.values()) layer.element.remove();
     this.#layers.clear();
