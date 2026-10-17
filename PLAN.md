@@ -57,10 +57,10 @@ The maintainer selected a busy-system timing margin for Windows development qual
 | Order | Work ID | Implementation | Verification | Next work and prerequisite |
 | --- | --- | --- | --- | --- |
 | 1 | S0 | Complete on the Windows development setup: controls, raster parity, clipping and bounded source audit | Windows 11 at 96 DPI accepted: 429 frames, five startup runs, native controls/drag/load/idle matrix pass; other platforms and mixed DPI pending | Proceed to M0; retain separately pending native platform/DPI qualification. |
-| 2 | M0 | Complete development foundation: execution, acknowledged startup/retry policy, configuration/readiness, governed raster preparation, immutable publication and nonblocking native delivery implemented | Windows development foundation accepted with the explicit busy timing profile: release-14 complete normal/load campaigns and five startup runs pass; strict input failures remain recorded. Canonical owner checks pass 306 Rust and 353 Python tests. Final-artifact and other-platform qualification remain pending. | Proceed to M1. Production startup composition and exact K1 native qualification remain later obligations. |
-| 3 | M1 | Scoped resources, backend leases, authenticated lifecycle sessions, contained process creation and retained terminal/capture ownership are integrated; final Windows lifecycle qualification continues | Source119 qualifies two actual Main windows with distinct profiles sharing one managed backend, first-client close preserving the second client/backend, and last-client close retiring Root/backend with checked physical custody. Source110 Root-loss and Source106 backend-loss/Retry proofs retain their original scopes. | Fix recovered-family shutdown; retain the passing shared-client proof. |
-| 4 | L1–L5 | Bounded console, real Comfy launch/readiness, staged browser, committed incident storage, native capture, authenticated symbols, report/export and fresh-family recovery are integrated | Source119 handler repeat captures, symbolizes, exports, acknowledges Restart and reaches actual generation-two Main. Independent ordinary close retires that Main, then Root retains a lifecycle broken-pipe failure and remains alive. Source119 normal first-generation close passes. | Correct and qualify recovery-specific Root retirement. |
-| 5 | K1 | Source editability delivered; startup and reporter-retirement corrections built and verified | Source119 passes all 3,490 Rust tests and nine readiness-script tests. Its normal production host reaches real FrontendReady/MainRevealed with a physical 1280×800 Mica Main; all six selected source files allow write access after Main opens. Normal close and shared-backend first/last close pass. | Fix recovered-family close, qualify the remaining Windows native interaction/performance gaps, and leave the qualified normal host running. |
+| 2 | M0 | Complete Windows development foundation, integrated into production startup: execution, acknowledged startup/retry policy, configuration/readiness, governed raster preparation, immutable publication and nonblocking native delivery | Windows development foundation accepted with the explicit busy timing profile: release-14 normal/load campaigns and five startup runs pass; strict input failures remain recorded. Source133 verifies the integrated owners and real frontend startup. Final-artifact performance and other-platform qualification remain pending. | Retain the accepted development foundation; qualify final K1 performance separately. |
+| 3 | M1 | Windows supervisor, Desktop, custody and Reporter composition, scoped resources, leases, authenticated lifecycle, containment, exit observation and bounded shutdown are integrated. POSIX guardian implementation remains pending. | Source133 ordinary startup/close physically retires all six watched originals. Source119 shared-client and Source110/106 fault proofs retain their original scopes. Source133 recovery reaches replacement Desktop creation but fails bootstrap bounds; Source134 correction passes focused tests. | Verify Source134 fully, then qualify native recovery and remaining lifecycle/fault cases. |
+| 4 | L1–L5 | Windows browser, bounded native console, trusted launch/attach/readiness, independent observers, committed incident storage, capture, authenticated symbols and report/export are integrated | Source133 loads real ComfyUI/SugarCubes, reveals Main and passes ordinary shutdown. Recovery captures, symbolizes and exports the fault, then fails replacement bootstrap. Console fault qualification remains pending because two fixtures rejected their preconditions before fault injection. | Qualify rebuilt recovery, corrected console fixture and remaining browser/native cases. |
+| 5 | K1 | Windows owners integrated; source editability delivered. Recovery bootstrap correction awaits full verification and native qualification. | Source133 passes 3,587 Rust, 13 readiness-script and 10 download-script tests. Its signed development bundle passes real frontend startup and ordinary shutdown. Source134 focused recovery tests pass; full verification failed on an unchanged native RichEdit selection test, which is under investigation. Complete K1 acceptance remains open. | Finish current-image recovery and remaining Windows native interaction/performance qualification, then deliver the qualified host. |
 | 6 | C0 | Not started | Pending | Implement desktop wire/provenance/layout contracts from the working K1 host. |
 | 7 | P1–P6 | Not started | Pending | Build native composition, negotiation, SugarCubes desktop UI, outputs, static mock and harness in parallel after C0. |
 | 8 | I1 | Not started | Pending | Integrate empty native canvas after P1 feasibility and P2/P3/P5/P6 readiness. Output imports are not prerequisites. |
@@ -86,13 +86,13 @@ Record acceptance beside the relevant work item: implementation status; verifica
 
 **Existing implementation:** Renderer, animation, progress/activity, packaged assets, disclosure controls, native presentation and comparison/export tools are present.
 
-**Remaining work:** Resolve full-frame reference differences, add a passing/failing parity decision, complete control/accessibility/platform qualification, reduce unnecessary redraw work and measure visible/interactive startup.
+**Remaining work:** Qualify mixed DPI, remaining accessibility behavior and other platforms; qualify final K1 timing against its actual artifact. The Windows development setup has accepted parity, redraw, controls and startup receipts.
 
 ### 1.1 S0.1 — Preserve the existing demonstration boundary and verify reference behavior
 
-**Implementation:** Complete for the existing demonstration (B4–B8). **Verification:** Pending.
+**Implementation:** Complete for the existing demonstration (B4–B8). **Verification:** Accepted on Windows 11 at 96 DPI; other platforms and mixed DPI remain pending.
 
-- [ ] Verify the existing demonstration against the production reference; preserve assets, behavior and the presentation boundary.
+- [x] Verify the Windows development demonstration against the production reference; preserve assets, behavior and the presentation boundary.
 
 Continue from the implemented sugarsubstitute-splash and sugarsubstitute-desktop owners. Keep the scripted clock/progress source in the demonstration/qualification driver; it is not application startup. S0 neither launches ComfyUI nor creates Wry, desktop IPC or canvas contracts. Preserve the replaceable content/prepared-frame/presenter boundary and one native event loop.
 
@@ -104,9 +104,10 @@ Keep tiny-skia/cosmic-text local to presentation. They provide graphics/text pri
 
 ### 1.2 S0.2 — Finish outstanding presentation and proof work in parallel
 
-**Implementation:** Partial; implementation/proof tools exist, remaining lane checks pending. **Verification:** Pending.
+**Implementation:** Complete for Windows development presentation and proof tools. **Verification:** Accepted for the recorded 96 DPI graphics/native-control matrix; remaining accessibility, mixed-DPI and other-platform checks remain pending.
 
-- [ ] Complete the outstanding graphics/native-control/accessibility checks and fix their failures through the assigned owners.
+- [x] Complete the recorded Windows development graphics/native-control checks and their owner fixes.
+- [ ] Complete remaining accessibility, mixed-DPI and other-platform qualification.
 
 | Parallel assignment | Exclusive ownership | Required output |
 | --- | --- | --- |
@@ -119,9 +120,9 @@ S0 keeps the console blank as requested. Production transcript parsing, selectio
 
 ### 1.3 S0.3 — Close parity, redraw and startup qualification gaps
 
-**Implementation:** Partial; enforceable parity, native controls and redraw fixes implemented. **Verification:** Graphics-owner parity passes; combined current-artifact native/source-audit/timing receipts pending.
+**Implementation:** Complete: enforceable parity, native controls and redraw fixes. **Verification:** Windows 11 at 96 DPI accepts 429 frames, five startup runs and the recorded controls/drag/load/idle matrix; final K1 and other-platform receipts remain pending.
 
-- [ ] Add enforceable parity decisions, correct redundant redraws and qualify displayed startup, interaction and dragging.
+- [x] Add enforceable parity decisions, correct redundant redraws and qualify Windows development startup, interaction and dragging.
 
 **In-progress receipt (2026-10-11, integration lead):** Baseline `6d9222a` is committed after the B1–B8 Windows gate receipt above. S0-G, S0-N and S0-Q use exclusive worktrees under `E:\devprojects\`; lead owns composition, manifests and this ledger. Initial graphics changes add same-owner bootstrap rendering, monotonic frame timestamps and mascot widget clipping. `cargo test --locked -p sugarsubstitute-splash` selected 29 tests, all passed on Windows; focused strict Clippy passed in the graphics worktree. The lead's `cargo test --locked -p sugarsubstitute capture::tests` selected one passing test for explicit locale/control-state qualification inputs; `cargo build --locked -p sugarsubstitute` passed. These are development receipts, not S0 acceptance.
 
@@ -165,7 +166,7 @@ Use dirty-state/hover-change invalidation and coalesced redraw requests. Pointer
 
 ### 2.1 M0.1 — Introduce the actual layered owners
 
-**Implementation:** Complete for first implemented concerns: contracts, application, execution and Comfy configuration owners are registered. **Verification:** Windows workspace verification passes; native application integration pending.
+**Implementation:** Complete: contracts, application, execution and Comfy configuration owners are registered and composed in production. **Verification:** Windows workspace verification and Source133 real frontend startup/ordinary shutdown pass; remaining K1 qualification stays explicit.
 
 - [x] Implement the real application/contracts/execution/Comfy owners as their first behavior lands; register each implemented crate.
 
@@ -175,7 +176,7 @@ The host injects typed execution ports into application services and owns the ex
 
 ### 2.2 M0.2 — Fix a bounded runtime policy
 
-**Implementation:** Complete for bounded execution admission, supervised job lifetimes, capacity retry hints and owned worker shutdown. **Verification:** 52 execution tests pass, including late memory release and native wake shutdown races; receiving native performance and process/network integration remain pending.
+**Implementation:** Complete for bounded execution admission, supervised job lifetimes, capacity retry hints and owned worker shutdown, with production process/network consumers. **Verification:** Source133 workspace verification passes; Windows development performance is accepted under the busy profile. Final K1 performance and recovery qualification remain pending.
 
 - [x] Implement bounded runtime/worker admission, job lifetimes, cancellation and completion delivery.
 
@@ -199,7 +200,7 @@ Independent source review accepted all twenty-seven worker-owned files against `
 
 ### 2.3 M0.3 — Prepare production rendering and observability
 
-**Implementation:** Governed raster preparation, immutable validation/publication, retained native storage, nonblocking delivery and bounded native instrumentation are implemented. **Verification:** Windows contracts 38, application 11, host 18, splash 65 and desktop 56 owner tests pass; native M0 performance is not established.
+**Implementation:** Complete: governed raster preparation, immutable validation/publication, retained native storage, nonblocking delivery and bounded native instrumentation. **Verification:** Windows development performance is accepted under the recorded busy profile; Source133 verifies integrated owners. Final K1 performance remains pending.
 
 - [x] Integrate governed render preparation, retained frames, bounded diagnostics and latency/resource instrumentation.
 
@@ -235,7 +236,7 @@ Exact canonical provenance and gates are recorded in `m0/dxgi-pointer-canonical-
 
 **Retained-copy boundary receipt (2026-10-11):** Prepared frames now grant a distinct non-cloneable storage claim from their original admitted reservation before a presenter allocates a copy. Claims share the existing atomic allocation limit and retain their reservation after source-frame replacement and final source-clone drop; releasing one copy makes only its own capacity reusable. Two new regression tests and independent source review verify this ownership boundary. The first fixture incorrectly requested a one-pixel validation step for a four-pixel frame; correcting the fixture to request four pixels preserved the validation contract. Exact-current `cargo xtask verify` passed all 213 Rust tests and the full Windows gate. Applying these claims to actual DIB/Cairo allocation and teardown is part of the pending native presentation integration; opaque native/backend allocations require separate measurement.
 
-**Implementation:** Scheduler registration, owner-export AST checks and rejection fixtures are implemented and independently reviewed. **Verification:** All 37 tooling tests, 52 execution tests and governance pass on Windows; receiving native qualification pending.
+**Implementation:** Complete: scheduler registration, owner-export AST checks and rejection fixtures are independently reviewed. **Verification:** Source133 Windows governance and workspace verification pass; native qualification remains scoped to each recorded artifact.
 
 - [x] Register the implemented scheduler and extend the existing execution gate; prove runtime behavior and rejection cases.
 
@@ -245,7 +246,7 @@ Required tests cover admission saturation/byte reservations, fairness between cl
 
 ### 2.5 M0.5 — Freeze only first-checkpoint contracts
 
-**Implementation:** Shared localization, bounded readiness admission, validated local startup configuration and acknowledged startup/retry application policy are implemented. Typed effects describe connection preparation, frontend loading, splash retirement, main reveal and mode-specific cleanup. Process/readiness transport and actual startup composition remain pending. **Verification:** Seven readiness protocol tests, five readiness admission tests, thirteen configuration tests and eight startup lifecycle tests pass on Windows; actual frontend probing remains L1/L3 integration.
+**Implementation:** Complete: shared localization, bounded readiness admission, validated local startup configuration, acknowledged startup/retry policy and production process/readiness transport. Typed effects coordinate frontend loading, splash retirement, Main reveal and mode-specific cleanup. **Verification:** Source133 passes workspace verification and actual ComfyUI/SugarCubes readiness, Main reveal and ordinary shutdown. Remaining attach/retry/fault qualification stays with M1/L3/K1.
 
 - [x] Implement and freeze minimal startup/readiness/configuration/localization ports for the first host.
 
@@ -285,9 +286,10 @@ Desktop exit classification requires matching current authenticated intent/compl
 
 ### 3.1 M1.1 — Establish the process arrangement and lifetime authority
 
-**Implementation:** Partial: isolated same-executable/headless qualification roles and supervised execution are implemented; production supervisor/desktop composition remains pending. **Verification:** Windows fixture receipts pass; production roles and other platforms remain pending.
+**Implementation:** Complete for Windows supervisor, Desktop, custody and Reporter roles and explicit lifetime authority. POSIX guardian implementation remains pending. **Verification:** Source133 real production startup and ordinary shutdown pass; recovery and remaining owner-loss qualification remain open.
 
-- [ ] Implement executable supervisor/desktop/guardian modes and their explicit lifetime authorities.
+- [x] Implement Windows executable supervisor/Desktop/custody/Reporter modes and their explicit lifetime authorities.
+- [ ] Implement the remaining POSIX guardian authority.
 
 Use the SugarSubstitute executable in explicit internal supervisor, desktop and POSIX-guardian modes. A launch elects or connects to the relevant resource coordinator; each requested independent desktop receives a distinct instance/run identity and supervised lifetime. One supervisor coordinates multiple desktops and managed backend resources within its scoped namespace. Separate namespaces can coexist. It exits after its clients/resources settle; this milestone installs no background service.
 
@@ -299,9 +301,9 @@ The splash receives immutable startup events and emits typed intents. A desktop 
 
 ### 3.2 M1.2 — Freeze identities, leases, locks and authenticated lifecycle messages
 
-**Implementation:** Partial: scoped identities/lease policy, Windows claims, versioned codec, authenticated transport and suspended enrollment are implemented. **Verification:** Windows claim and valid/wrong-capability/stale-generation transport campaigns pass; connection-bound production lease/completion effects and the remaining security/reconciliation matrix are pending.
+**Implementation:** Complete for Windows scoped identities, multi-client leases, claims, authenticated lifecycle transport, suspended enrollment and production lease/completion effects. **Verification:** Selected claim/security campaigns and Source119 shared-backend first/last-client close pass; the remaining security/reconciliation matrix is pending.
 
-- [ ] Implement scoped resource identities, multi-client leases, claims, authenticated lifecycle IPC and atomic records.
+- [x] Implement scoped resource identities, multi-client leases, claims, authenticated lifecycle IPC and atomic records.
 
 Distinguish installation/account coordination identity, desktop instance ID, run generation, backend resource/generation, workspace/profile identity and native process identity. Use canonical resolved resource paths and explicit validated launch configuration for resource matching; a URL, saved PID or executable name alone never grants termination rights. Retain kernel process handles/identity where available and reject reused or unverifiable identities. Existing Python installation/account election and GUI-reload lease describe useful scoped contracts, not a global singleton or a distributed client count.
 
@@ -315,9 +317,10 @@ Publish runtime records atomically with schema and complete ownership generation
 
 ### 3.3 M1.3 — Implement containment and explicit terminal outcomes
 
-**Implementation:** Partial: Windows creation-time containment, retained native family registry, exact exit/watch/settlement facts and typed owner outcomes are implemented. **Verification:** Immediate-exit, held64 and surviving-descendant Windows campaigns pass; owner-loss/fault integration and other-platform adapters remain pending.
+**Implementation:** Complete for Windows creation-time containment, retained native family registry, exact exit/watch/settlement facts and typed owner outcomes. Other-platform adapters remain pending. **Verification:** Immediate-exit, held64 and surviving-descendant campaigns and Source133 ordinary six-process retirement pass; recovery and the remaining fault matrix are pending.
 
-- [ ] Implement qualified native containment and typed terminal outcomes.
+- [x] Implement Windows native containment and typed terminal outcomes, with the recorded native qualification.
+- [ ] Implement other-platform containment and finish the remaining qualification matrix.
 
 Windows assigns owned desktop/backend families to kill-on-close Job Objects at process creation, with an explicit inherited-handle allowlist and tested nested-job constraints. Owner handles are noninheritable; intentional independent handoffs require narrowly reviewed authorization. Avoid an unprotected create-then-assign interval. Crash capture must remain available through fault capture, with its registration/lifetime arrangement independently tested rather than inferred from breakaway flags.
 
@@ -329,9 +332,9 @@ Model normal completion, explicit cancellation, startup failure, unexpected term
 
 ### 3.4 M1.4 — Establish external crash observation, startup and shutdown transactions
 
-**Implementation:** Partial: acknowledged startup/retry, desktop-exit and UI-watchdog policy plus original-budget native shutdown are implemented. **Verification:** Deterministic policy and selected Windows shutdown/worker fixtures pass; production UI challenge, authenticated completion, crash and joint startup/shutdown integration remain pending.
+**Implementation:** Complete for Windows external exit observation, production UI challenge, authenticated completion, startup/retry and bounded shutdown transactions. **Verification:** Source133 joint startup/ordinary shutdown passes; selected earlier owner-loss proofs retain their scopes. Complete watchdog, crash and recovery qualification remains pending.
 
-- [ ] Implement external exit observation, UI watchdog and bounded startup/shutdown transactions.
+- [x] Implement external exit observation, UI watchdog and bounded startup/shutdown transactions.
 
 Prepare a fresh authenticated run context and early bounded diagnostics before starting the desktop. Establish supervision immediately; L5 registers native capture before fallible production initialization. The supervisor observes the real process exit outside its UI/event loop. Accept normal completion only with matching current-run intent/completion evidence and the expected exit status. A zero exit without valid completion remains unexpected termination; explicit startup cancellation and known readiness failure retain their distinct attribution. Failed incident publication/reporting stays observable and retryable.
 
@@ -369,13 +372,14 @@ Independent source/hash review accepts five exact owner/test sources and five fo
 
 ### 3.5 M1.5 — Parallel foundation work and acceptance
 
-**Implementation:** In progress for the first application authority slice. **Verification:** Pending.
+**Implementation:** Windows supervision components and independent multi-instance/owner-loss/failure fixtures are integrated. **Verification:** Selected real fixtures pass, including Source119 shared-backend release and Source133 ordinary startup/close. Complete milestone acceptance remains pending.
 
 **Windows M1 entry:** Commit `a5ce575` delivers the explicit busy timing profile and the scoped M0 development acceptance above. Exact canonical `cargo xtask verify` passes 306 Rust tests, governance, formatting, strict Clippy and warning-free Rustdoc; the canonical qualification suite passes 353 Python tests. `m0/timing-canonical-acceptance-01.json`, SHA-256 `1adc1afc0da1e7e4738871dd10cfce8e6fe1030ed67505850dce8121c44c066f`, freezes those source, gate and offline evidence identities. The first M1 authority checkout is `E:\devprojects\SugarSubstitute-Rust-m1-authority` at that baseline. New lifecycle contracts and concrete application resource/exit owners preserve `StartupSession` as the acknowledged startup owner. Native handles remain with the future adapter registry through cancelled or discarded execution results; request/kill completion is not family settlement. Independent review checks that lost connections cannot prematurely release browser profile claims while descendants remain.
 
 Native wait preparation found two supported scheduling entry points missing from the execution checker: `RegisterWaitForSingleObject` and `SetThreadpoolWaitEx`. Both now reject outside the sole execution owner, including aliases, macro tokens, linked symbols and test/platform sources; owner reexports also reject. The focused `cargo test --locked -p sugarsubstitute-xtask execution_` selects 16 passing tests. This is source-governance coverage, not an implemented process wait or native containment receipt.
 
-- [ ] Integrate the parallel supervision components and run real multi-instance/owner-loss/failure fixtures.
+- [x] Integrate the Windows supervision components and run selected real multi-instance/owner-loss/failure fixtures.
+- [ ] Complete remaining supervision acceptance cases.
 
 | Parallel M1 assignment | Exclusive ownership | Required output |
 | --- | --- | --- |
@@ -397,9 +401,9 @@ Prove concurrent independent instances and distinct profiles; concurrent leases 
 
 ### 4.1 L1: Native main window, webview and browser services
 
-**Implementation:** The canonical desktop adapter composes staged Wry construction, one UI-affine STA lifetime, exact main identities, navigation admission, bounded native readiness observations and checked native retirement. Startup retains the native loop until splash, main and execution owners actually settle. **Verification:** Independent source review and canonical owner tests pass. Production supervisor/desktop composition compiles and passes executable-owned tests. Actual main-window/browser qualification remains pending.
+**Implementation:** Complete for Windows Main, staged Wry construction, one UI-affine STA lifetime, runtime/profile/navigation admission, bounded readiness and browser-service owners. Startup retains the native loop until splash, Main and execution owners settle. **Verification:** Source133 reaches real frontend readiness and Main reveal and passes ordinary retirement. Remaining browser actions, input, IME, focus and OS-service qualification are pending.
 
-- [ ] Extend existing native adapters into a production main window with Wry, runtime/profile admission and browser services.
+- [x] Extend existing native adapters into a production main window with Wry, runtime/profile admission and browser services.
 
 L1 owns native event loop, frame/hit-test/window commands, Wry lifecycle, profile, navigation admission, bootstrap readiness probe and browser failure hooks. Tao 0.37.0, Wry 0.57.0, WebView2 COM 0.39.0 and raw-window-handle 0.6 compile together on the pinned Windows toolchain. The reviewed Wry derivative retains partial native outputs and implements staged construction and checked retirement. [Tao metadata](https://crates.io/api/v1/crates/tao/0.37.0), [Wry metadata](https://crates.io/api/v1/crates/wry/0.57.0).
 
@@ -441,9 +445,9 @@ Development tools are explicit dev configuration; production has no remote inspe
 
 ### 4.2 L2: Production native splash and bounded transcript
 
-**Implementation:** Bounded transcript contracts/parser/store/snapshots, execution-owned stdout/stderr transport and contained launch inheritance are integrated. Production startup presents retained output in the native splash, drains the original output lease during pending acquisition and adopts it on final Grant. The four-case qualification consumer retains output, lifecycle and family observations independently. **Verification:** Windows actual three/four-handle inheritance, corpus drainage, held-loan overflow, pending-read cancellation and descendant-held writer retirement pass against the recorded release artifact. Source55 full verification passes 2,656 tests; Native49 directly observes the native console toggle and retained backend text on an inactive desktop. Complete splash interaction/parity, pre-Grant pixel timing and the K1 matrix remain pending.
+**Implementation:** Complete for bounded transcript transport, retained parser/store/snapshots, selectable read-only native RichEdit presentation and production startup events. Output remains owned through pending acquisition and final Grant. **Verification:** Recorded native inheritance, overflow, cancellation, drainage and retirement cases pass. Source133 console fault campaigns both reject fixture preconditions before fault injection; corrected-fixture execution, selection/focus/accessibility and complete splash qualification remain pending.
 
-- [ ] Extend the existing splash with bounded live transcript, native accessibility and production startup events.
+- [x] Extend the existing splash with bounded live transcript, native accessibility surfaces and production startup events.
 
 L2 reuses the accepted S0 renderer and frame authority. Add the production styled read-only console as its own component: text shaping/font fallback, selection, scrolling, copy, keyboard navigation/focus and native accessibility semantics. Keep transcript retention/parsing separate from painting; it is not a terminal emulator. Preserve supported ANSI color/bold spans, split UTF-8/escape sequences, carriage-return updates and independently animated wait status.
 
@@ -457,9 +461,9 @@ L2 tests scripted events against the real view and startup events against an in-
 
 ### 4.3 L3: Trusted launch/attach, readiness and cleanup
 
-**Implementation:** Comfy launch/response adapters, retained installed frontend/Cube files, connected listener identity and bounded WinHTTP readiness are integrated. Managed listener checks require the exact live contained family; attachment has read-only peer observations. The parent and child coordinate pending output, native Main admission/absence and actual backend release through lifecycle protocol version 4. **Verification:** Source55 full verification passes 2,656 tests. Native49 launches the trusted existing ComfyUI environment, observes actual readiness and the guarded Main window, then confirms Main retirement, parent backend release and physical desktop/backend retirement. Frontend pixels, complete coordinator/helper shutdown, explicit attachment and the cancellation/retry/shared-instance matrix remain pending.
+**Implementation:** Complete for trusted launch/attach, connected listener identity, bounded readiness probes and acknowledged retry/cleanup through M1 leases and containment. Managed readiness waits while its actual process is alive until readiness, cancellation or exit. Source identity snapshots close after validation. **Verification:** Source133 launches the existing ComfyUI/SugarCubes installation, confirms actual frontend readiness/Main reveal and completes ordinary shutdown with all six watched originals retired. Source119 shared-client proof retains its scope. Current-image explicit attach, cancellation/retry, external preservation and remaining shared-instance qualification are pending.
 
-- [ ] Implement trusted Comfy launch/attach/readiness/retry through M1 leases and containment.
+- [x] Implement trusted Comfy launch/attach/readiness/retry through M1 leases and containment.
 
 L3 owns Comfy-specific startup orchestration, explicit connection mode/configuration, launch arguments, diagnostics/readiness and cancellation/retry integration. It acquires backend leases and requests launch/stop through M1's authority and containment ports. It does not create a second process-lifecycle owner or implement competing shutdown bookkeeping. State sequence is SplashFirstFrame → PreparingConnection → ServerReady → WebviewLoading → FrontendReady → Running, with Failed/Cancelling/Stopped transitions. First native splash frame precedes Comfy launch/network work and webview construction.
 
@@ -475,9 +479,9 @@ M1's application lifetime owner coordinates desktop/backend leases and terminal 
 
 ### 4.4 L4: Prepare independent qualification in parallel
 
-**Implementation:** Partial: independent bounded native observers and controlled ownership/claim/descendant/IPC fixtures extend B8. **Verification:** Selected Windows fixtures pass with exact artifact receipts; the complete browser/output/Comfy/crash K1 matrix remains pending.
+**Implementation:** Complete for independent bounded native startup/process/fault observers and controlled ownership/claim/descendant/IPC fixtures. **Verification:** Selected Windows fixtures pass with exact artifact receipts; complete browser/Comfy/crash K1 coverage remains pending.
 
-- [ ] Extend existing parity/native observation tools with independent startup, process and fault qualification.
+- [x] Extend existing parity/native observation tools with independent startup, process and fault qualification.
 
 L4 owns fixture process/server scenarios, platform observation/control and rendering parity receipts. Use public behavior, bounded observable waits, controlled clocks and fault injection. Fake only external boundaries; final hosting is actual Comfy frontend with installed SugarCubes.
 
@@ -485,9 +489,9 @@ Cover occupied port, invalid interpreter/root/runtime, slow/no HTTP, server earl
 
 ### 4.5 L5: Native crash capture and independent incident reporting
 
-**Implementation:** Pinned source acquisition, CPU build preparation, retained native capture owners and a bounded registration fixture are integrated. Registration authenticates the creator-owned endpoint before explicit inherited handoff and retains actual child identity through confirmation. Incident contracts, storage, symbols and reporting are in progress. **Verification:** The exact rebuilt Windows bundle passes healthy registration, actual handler exit/retirement and worker settlement. Earlier OS 5 failures remain recorded. Desktop attachment, fault capture, symbols, incident storage and reporting qualification remain pending.
+**Implementation:** Complete for Windows capture registration, committed incident storage, authenticated matching symbols, independent Reporter and acknowledged export/recovery transactions. **Verification:** Source133 recovery observes actual native capture, resolved symbolization, original-dump export, handler loss and Restart. Replacement Desktop then fails bootstrap bounds; Source134 corrects the decoder with 11 passing focused tests; full verification failed on an unchanged native RichEdit selection test. Current-image native recovery and the remaining incident/fault matrix are pending.
 
-- [ ] Implement native crash capture, bounded incident persistence, symbolization and independent reporting.
+- [x] Implement native crash capture, bounded incident persistence, symbolization and independent reporting.
 
 Use Crashpad through a narrow reviewed Rust/native bridge as the first-checkpoint capture implementation, retaining the existing small C ABI design without Python or Qt runtime dependencies. Pin the packaged source/build provenance and architecture requirements; register runtime files/licenses/FFI owners before release. L5 owns capture registration, incident storage/reporting and release-symbol association; M1 alone owns external exit classification and restart authorization. [Existing bridge reference](../SugarSubstitute/native/crashpad/crashpad_client_bridge.cc), [Crashpad design](https://github.com/chromium/crashpad/blob/main/doc/overview_design.md).
 
@@ -507,7 +511,7 @@ Tests cover authenticated completion, startup cancellation/failure, panic/abort/
 
 **Entry:** M0/M1 accepted and L1-L5 owner-tested components/individual native proofs ready for the receiving platform; this stage establishes their joint application acceptance. All required platform receipts are tracked separately. **Owner:** Integration lead and independent qualification reviewer.
 
-**Implementation:** Integrated; the coordinator composes captured children, backend leases, bounded output and native windows. Managed-backend replacement, pending-report replay, fresh capture-supervisor recovery and historical CaptureOnly Summary3 migration/replay are implemented. **Verification:** Source133 full918 passes all required Windows x64 gates, 3,587 Rust tests, 13 readiness-script tests and 10 download-script tests. Development-signed release919/bundle920 loads real ComfyUI/SugarCubes, confirms Main reveal, and passes ordinary startup/close with Root/Desktop exit0, six watched original processes physically retired, checked handles closed and owned HTTP port closed. The current recovery observer stopped before UI actions on a stale capture-log grammar; its failed result and separate forced cleanup remain explicit. Prior actual capture, symbolization, export, acknowledgment, cancellation and restoration proofs remain recorded below; the current-image recovery campaign and broader K1 native matrix remain pending. External8189 preservation remains unqualified. Earlier failed campaigns retain their failed results.
+**Implementation:** Integrated; the coordinator composes captured children, backend leases, bounded output and native windows. Managed-backend replacement, pending-report replay, fresh capture-supervisor recovery and historical CaptureOnly Summary3 migration/replay are implemented. Source134 corrects recovery bootstrap deadline validation and passes11 focused tests; full verification failed on an unchanged native RichEdit selection test. **Verification:** Source133 full918 passes all required Windows x64 gates, 3,587 Rust tests, 13 readiness-script tests and 10 download-script tests. Development-signed release919/bundle920 loads real ComfyUI/SugarCubes, confirms Main reveal, and passes ordinary startup/close with Root/Desktop exit0, six watched original processes physically retired, checked handles closed and owned HTTP port closed. Its fresh recovery attempt captures and symbolizes the native fault, exports the dump, observes handler loss and accepts Restart, then fails the replacement Desktop's bootstrap bounds. Failed attempts and separate cleanup remain explicit. Prior acknowledgment, cancellation and restoration proofs remain recorded below; current-image recovery and the broader K1 native matrix remain pending. External8189 preservation remains unqualified.
 
 - [ ] Integrate the real supervised Comfy/SugarCubes host and demonstrate the complete K1 acceptance matrix.
 
@@ -2782,3 +2786,11 @@ Root runs the exact emitted `source133-normal-sustained01/commands133.json` ordi
 **Source133 recovery observer correction (2026-10-17):** Original observer72712 stops before any UI action with `Same-run actual registered capture required`. The actual same-run registered capture record includes `channel_terminal=None`, absent from the observer's old exact grammar. The failed observation SHA256 is `2182fc2edfc643dd580a87ebaeb8e6048f9f0d970f3db972f2a19e5b55a545b3`. Separate cleanup verifies original Root50116/birth134366847745853126, its exact image/arguments and three direct owned helpers, stops only Root with99, and observes all four held originals physically terminal with checked closes. Cleanup SHA256 is `f5ac2087818e5f1a914d914f625efda31ed6e05d1781cc6140f35b3a9a5dbd28`; no recovery acceptance follows. The finite independent stdlib HTTP preservation control remains owned by its original41208 process for the fresh recovery attempt; it is not a Comfy server. Correct the fixture grammar before a fresh bound attempt. No product source rebuild is required for that tooling correction.
 
 A separate fixed-document WebView2 component observes modules/microtasks while the controller is hidden; RAF first completes after controller visibility is enabled with its parent still hidden. The experiment and browser exit normally, with zero remaining Job members and Default unchanged. Result SHA256 is `fadad8f48eb8e75dc28c7f55d7939b753dada845e9c4d33a3c50c822d6bf56ba`. Its five-second phase samples do not establish the cause of Source132's frontend timeout, and production visibility policy remains unchanged. Read-only SugarCubes import inspection likewise establishes no import-time graph/visibility/hydration cycle. Only the main Rust checkout remains registered; Python worktrees are untouched.
+
+**Source133 recovery and Source134 deadline correction (2026-10-17):** Fresh `source133-handler167-repeat02` composes the exact current capture-log parser before generating its90-row inventory. Actual observer43492 captures the registered native fault, verifies symbolization, exports the original653328-byte dump, observes the deliberately stopped original handler and clicks Restart107. Generation2 fails before UI at `native_stage=pipe_bootstrap_bounds`, with authenticated preparation still Admitted and terminal Failure; a second Reporter appears. Observation SHA256 `b95f83c7b88c68462f4ef5a7587a2dcf8cf312cd0270f4fb7b107579d113fcff` preserves failed acceptance. The original dump SHA256 is `5bd3f8b2514a2ec18e25e1fd56fd6ed16fa5ffeeeeea878f7c976b39d41f4e65`. Separate verified Root59612-only cancellation uses99; the original observer then physically observes all six held originals terminal, closes its handles and exits1 with Default unchanged. This cleanup does not qualify recovery.
+
+The paired recovery owner preserves Root's immutable bootstrap bytes while deriving a shorter enrollment counter. SSCG2 encoding retains Root's original deadline; its decoder incorrectly required that deadline to equal the shortened child argument. Source134's six-file packet, receipt SHA256 `feae5f53641960da79d8667df983c5b7d0938039fcc4f9b3ad96b92582c9af39`, validates Root bytes with the existing strict parser, then enforces same-frequency `capture source <= admitted child deadline <= Root deadline`. The returned enrollment retains the shorter child deadline. Native authentication, capabilities, original effect/attach budgets and ordinary/SSCG1 deadline equality remain intact. Six regressions cover the roundtrip, interval rejection, authority validation, legacy equality and original handshake expiry. The principal regression runs once against the old implementation and fails at the actual native failure stage `pipe_bootstrap_bounds`; no native generation2 argv was retained, so exact attribution remains source/regression evidence until a successful native retry. The correction is received for focused/full verification; no recovery success is inferred.
+
+**Native console verification failure (2026-10-17):** Source134 original full verifier79968 passes governance, formatting and strict workspace Clippy, then fails the unchanged hidden-native Unicode selection test:404 desktop tests pass and one returns `console_selection_restore`. The original full result remains failed. Unchanged focused characterization passes both native console tests; a separate run of the exact original desktop binary passes all405 tests. These runs establish no cause for the earlier failure. A bounded numeric diagnostic and one actual native clamping regression are added without changing selection acceptance. Source135 focused execution62784 passes Unicode and clamping but fails the existing empty-control `at_bottom` assertion; no Source135 full verification or release is accepted. The hidden fixture's top-level styles and lifetime differ from production child controls; correction and verification are in progress. Failed logs and private-desktop records remain preserved on D:, and Default remains unchanged.
+
+The two separate Source133 retained-console attempts both stop before fault injection and preserve failed acceptance. Console01 rejects67 historical claim records against its global64-record fixture limit. Console02 streams current publications with the same64-candidate bound, then rejects the real claim as not Owned. Both close the actual fixed Splash and retire all six watched originals with Root/Desktop0, checked closes and Default unchanged. Source inspection shows the implemented managed-custody path publishes LaunchPending/process0 and proves actual Root adoption through its authenticated receipt before emitting LaunchStarted; it does not publish the fixture's assumed Owned state. Qualification must join that implemented contract with actual held process identity rather than wait for a nonexistent publication or invent ownership authority. No product/global claim records are modified to satisfy the fixture. The prepared Source133 download case remains unlaunched; the per-action gesture successor remains a separate reviewed packet awaiting compilation/native qualification.
