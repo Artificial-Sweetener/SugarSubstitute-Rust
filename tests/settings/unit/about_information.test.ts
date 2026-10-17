@@ -55,7 +55,15 @@ test('read installed versions and load the license without routing static assets
     '9.8.7',
     '0.29.0',
     '3.1.3',
+    '1.12.5',
   ]);
+  expect(info.components.find((component) => component.name === 'Adobe Spectrum')).toEqual({
+    name: 'Adobe Spectrum',
+    description: 'Spectrum Web Components with Spectrum 2 foundations',
+    author: 'Adobe and contributors',
+    version: '1.12.5',
+    url: 'https://github.com/adobe/spectrum-web-components',
+  });
   expect(info.warnings).toEqual([]);
   expect(await source.license()).toBe('AGPL license text');
   expect(resource.mock.calls[0]?.[0]).toMatch(/\/legal\/AGPL-3\.0\.txt$/);

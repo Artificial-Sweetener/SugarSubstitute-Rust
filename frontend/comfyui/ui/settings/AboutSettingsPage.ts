@@ -121,7 +121,7 @@ export class AboutSettingsPage {
       ),
       this.#card(
         'Special thanks',
-        'Comfy Org, Microsoft Fluent UI, and zhiyiYo’s Fluent Widgets for the foundations and design references used in this workspace.',
+        'Comfy Org, Adobe Spectrum, Microsoft Fluent UI, and zhiyiYo’s Fluent Widgets for the foundations and design references used in this workspace.',
       ),
     );
   }

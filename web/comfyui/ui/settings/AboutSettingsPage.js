@@ -105,7 +105,7 @@ export class AboutSettingsPage {
         licenseActions.append(viewLicense, this.#link('Third-party notices', this.source.noticesUrl));
         license.append(licenseActions);
         this.#group('License', license);
-        this.#group('Acknowledgements', this.#card('Contributors and community', 'Thank you to SugarCubes contributors, ComfyUI custom-node authors, and the people testing and supporting the project.'), this.#card('Special thanks', 'Comfy Org, Microsoft Fluent UI, and zhiyiYo’s Fluent Widgets for the foundations and design references used in this workspace.'));
+        this.#group('Acknowledgements', this.#card('Contributors and community', 'Thank you to SugarCubes contributors, ComfyUI custom-node authors, and the people testing and supporting the project.'), this.#card('Special thanks', 'Comfy Org, Adobe Spectrum, Microsoft Fluent UI, and zhiyiYo’s Fluent Widgets for the foundations and design references used in this workspace.'));
     }
     /** Load lazily once per page lifetime and support explicit retry without rebuilding controls. */
     refresh(force = false) {

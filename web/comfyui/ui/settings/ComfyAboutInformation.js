@@ -27,7 +27,7 @@ export class ComfyAboutInformation {
         this.request = request;
         this.resource = resource;
     }
-    /** Read version sources concurrently and expose partial availability honestly. */
+    /** Combine live product versions with pinned presentation libraries and expose partial availability honestly. */
     async load() {
         const results = await Promise.allSettled([
             this.#json('/sugarcubes/status'),
@@ -54,6 +54,13 @@ export class ComfyAboutInformation {
                     author: 'Microsoft and contributors',
                     version: '3.1.3',
                     url: 'https://github.com/microsoft/fluentui',
+                },
+                {
+                    name: 'Adobe Spectrum',
+                    description: 'Spectrum Web Components with Spectrum 2 foundations',
+                    author: 'Adobe and contributors',
+                    version: '1.12.5',
+                    url: 'https://github.com/adobe/spectrum-web-components',
                 },
             ],
             warnings: results.flatMap((result, index) => result.status === 'rejected'

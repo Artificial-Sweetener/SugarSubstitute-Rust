@@ -13,11 +13,14 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Verify Fluent editor navigation delegates ancestry to Comfy and leaves overrides unchanged. */
+/** Verify provider-owned editor navigation delegates ancestry to Comfy and leaves overrides unchanged. */
 import { jest, beforeAll, afterAll, afterEach, test, expect } from '@jest/globals';
 import { Updates } from '@microsoft/fast-element';
 import { WorkflowEditorNavigationHost } from '../../../frontend/comfyui/ui/surface/WorkflowEditorNavigationHost.js';
 import { AppearanceState } from '../../../frontend/comfyui/ui/surface/appearance/AppearanceState.js';
+import { publishVisualStyle } from '../../../frontend/comfyui/ui/surface/appearance/VisualStyleBoundary.js';
+import type { StyledVisualStyle } from '../../../frontend/comfyui/ui/surface/appearance/VisualStyle.js';
+import { createButton } from '../../../frontend/comfyui/ui/surface/appearance/ControlFactory.js';
 
 const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'attachInternals');
 beforeAll(() => {
@@ -40,6 +43,7 @@ afterAll(() => {
 afterEach(() => {
   document.body.replaceChildren();
   document.head.replaceChildren();
+  document.documentElement.removeAttribute('data-sc-visual-style');
   jest.restoreAllMocks();
 });
 
@@ -52,7 +56,8 @@ async function settle(): Promise<void> {
 }
 
 /** Model the native breadcrumb command boundary without replacing navigation policy in the product. */
-function fixture() {
+function fixture(style: StyledVisualStyle = 'fluent') {
+  publishVisualStyle(document, style);
   const graphs = [{ id: 'root' }, { id: 'cube' }, { id: 'nested' }];
   const app = { graph: graphs[0], canvas: { graph: graphs[0] } };
   const native = document.createElement('div');
@@ -61,7 +66,7 @@ function fixture() {
   bar.className = 'actionbar-container';
   const cluster = document.createElement('div');
   cluster.className = 'sc-orb-actions';
-  const pin = document.createElement('fluent-button');
+  const pin = createButton(document);
   pin.setAttribute('aria-label', 'Set Global Override');
   cluster.append(pin);
   document.body.append(native, bar, cluster);
@@ -120,60 +125,98 @@ function fixture() {
   };
 }
 
-test('shows Fluent back and literal breadcrumbs in place of overrides, then restores the root', async () => {
+test.each(['fluent', 'spectrum'] as const)(
+  'shows %s back and literal breadcrumbs in place of overrides, then restores the root',
+  async (style) => {
+    const f = fixture(style);
+    f.render(2);
+    await settle();
+    const nav = f.bar.querySelector('nav')!;
+    expect(nav.getAttribute('aria-label')).toBe('Workflow editor navigation');
+    expect(
+      nav.querySelectorAll(style === 'spectrum' ? 'sp-action-button' : 'fluent-button'),
+    ).toHaveLength(3);
+    expect(
+      nav.querySelectorAll(style === 'spectrum' ? 'fluent-button' : 'sp-action-button'),
+    ).toHaveLength(0);
+    expect(nav.querySelector('[aria-current="page"]')?.textContent).toBe('Nested');
+    expect(nav.querySelector('img')).toBeNull();
+    expect(nav.textContent).toContain('<img src=x onerror=evil()>');
+    expect(f.pin.hasAttribute('data-sc-editor-native')).toBe(false);
+    expect(f.pin.hasAttribute('disabled')).toBe(true);
+    expect(f.cluster.children).toHaveLength(1);
+    expect(f.suspendOverrides).toHaveBeenLastCalledWith(true);
+    const back = f.bar.querySelector<HTMLElement>('.sc-editor-bar-back')!;
+    back.click();
+    await settle();
+    expect(f.commands).toHaveBeenLastCalledWith(1);
+    expect(nav.querySelector('[aria-current="page"]')?.textContent).toBe(
+      '<img src=x onerror=evil()>',
+    );
+    back.click();
+    await settle();
+    expect(f.commands).toHaveBeenLastCalledWith(0);
+    expect(f.bar.querySelector('nav')).toBeNull();
+    expect(f.pin.hasAttribute('data-sc-editor-native')).toBe(false);
+    expect(f.pin.hasAttribute('disabled')).toBe(false);
+    expect(f.suspendOverrides).toHaveBeenLastCalledWith(false);
+    expect(f.report).not.toHaveBeenCalled();
+    f.host.dispose();
+  },
+);
+
+test.each(['fluent', 'spectrum'] as const)(
+  'ancestor actions in %s delegate to the current native path and disposal restores borrowed controls',
+  async (style) => {
+    const f = fixture(style);
+    f.render(2);
+    await settle();
+    const intermediate = f.bar.querySelectorAll<HTMLElement>('ol [data-sc-button]')[1]!;
+    intermediate.click();
+    await settle();
+    expect(f.commands).toHaveBeenLastCalledWith(1);
+    const root = f.bar.querySelectorAll<HTMLElement>('ol [data-sc-button]')[0]!;
+    const nativeTrail = f.native.querySelector('nav')!;
+    expect(nativeTrail.hasAttribute('data-sc-editor-native')).toBe(true);
+    root.click();
+    await settle();
+    expect(f.commands).toHaveBeenLastCalledWith(0);
+    f.render(2);
+    await settle();
+    const replacement = f.native.querySelector('nav')!;
+    f.host.dispose();
+    expect(replacement.hasAttribute('data-sc-editor-native')).toBe(false);
+    expect(f.cluster.children).toHaveLength(1);
+    expect(f.pin.hasAttribute('disabled')).toBe(false);
+    expect(f.pin.hasAttribute('data-sc-editor-native')).toBe(false);
+  },
+);
+
+test('changes the active provider without changing the native ancestry or sending navigation commands', async () => {
   const f = fixture();
   f.render(2);
   await settle();
-  const nav = f.bar.querySelector('nav')!;
-  expect(nav.getAttribute('aria-label')).toBe('Workflow editor navigation');
-  expect(nav.querySelectorAll('fluent-button')).toHaveLength(3);
-  expect(nav.querySelector('[aria-current="page"]')?.textContent).toBe('Nested');
-  expect(nav.querySelector('img')).toBeNull();
-  expect(nav.textContent).toContain('<img src=x onerror=evil()>');
-  expect(f.pin.hasAttribute('data-sc-editor-native')).toBe(false);
-  expect(f.pin.hasAttribute('disabled')).toBe(true);
-  expect(f.cluster.children).toHaveLength(1);
-  expect(f.suspendOverrides).toHaveBeenLastCalledWith(true);
-  const back = f.bar.querySelector<HTMLElement>('.sc-editor-bar-back')!;
-  back.click();
+  const nav = f.bar.querySelector('nav');
+  const nativeTrail = f.native.querySelector('nav');
+  for (const style of ['spectrum', 'fluent', 'spectrum'] as const) {
+    publishVisualStyle(document, style);
+    await settle();
+    expect(f.bar.querySelector('nav')).toBe(nav);
+    expect(f.native.querySelector('nav')).toBe(nativeTrail);
+    expect(
+      f.bar.querySelectorAll(style === 'spectrum' ? 'sp-action-button' : 'fluent-button'),
+    ).toHaveLength(3);
+    expect(nav?.querySelector('[aria-current="page"]')?.textContent).toBe('Nested');
+    expect(nav?.querySelector('img')).toBeNull();
+    expect(f.commands).not.toHaveBeenCalled();
+    expect(f.suspendOverrides).toHaveBeenLastCalledWith(true);
+  }
+  f.bar.querySelector<HTMLElement>('.sc-editor-bar-back')?.click();
   await settle();
+  expect(f.commands).toHaveBeenCalledTimes(1);
   expect(f.commands).toHaveBeenLastCalledWith(1);
-  expect(nav.querySelector('[aria-current="page"]')?.textContent).toBe(
-    '<img src=x onerror=evil()>',
-  );
-  back.click();
-  await settle();
-  expect(f.commands).toHaveBeenLastCalledWith(0);
-  expect(f.bar.querySelector('nav')).toBeNull();
-  expect(f.pin.hasAttribute('data-sc-editor-native')).toBe(false);
-  expect(f.pin.hasAttribute('disabled')).toBe(false);
-  expect(f.suspendOverrides).toHaveBeenLastCalledWith(false);
   expect(f.report).not.toHaveBeenCalled();
   f.host.dispose();
-});
-
-test('ancestor actions delegate to the current native path and disposal restores borrowed controls', async () => {
-  const f = fixture();
-  f.render(2);
-  await settle();
-  const intermediate = f.bar.querySelectorAll<HTMLElement>('ol fluent-button')[1]!;
-  intermediate.click();
-  await settle();
-  expect(f.commands).toHaveBeenLastCalledWith(1);
-  const root = f.bar.querySelectorAll<HTMLElement>('ol fluent-button')[0]!;
-  const nativeTrail = f.native.querySelector('nav')!;
-  expect(nativeTrail.hasAttribute('data-sc-editor-native')).toBe(true);
-  root.click();
-  await settle();
-  expect(f.commands).toHaveBeenLastCalledWith(0);
-  f.render(2);
-  await settle();
-  const replacement = f.native.querySelector('nav')!;
-  f.host.dispose();
-  expect(replacement.hasAttribute('data-sc-editor-native')).toBe(false);
-  expect(f.cluster.children).toHaveLength(1);
-  expect(f.pin.hasAttribute('disabled')).toBe(false);
-  expect(f.pin.hasAttribute('data-sc-editor-native')).toBe(false);
 });
 
 test('unrelated popup activity does not refresh navigation or touch override presentation', async () => {
