@@ -73,6 +73,7 @@ test('load lazily once, keep controls stable, and render runtime metadata litera
   expect(f.source.load).toHaveBeenCalledTimes(1);
   expect(f.page.element.textContent).toContain('<b>SugarCubes</b>');
   expect(f.page.element.querySelector('img,b')).toBeNull();
+  expect(f.page.element.textContent).toContain('Adobe Spectrum');
   const refresh = f.page.element.querySelector('button');
   refresh?.click();
   await settle();

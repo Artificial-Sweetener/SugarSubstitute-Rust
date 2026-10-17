@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Present editor ancestry with Microsoft Fluent actions and literal host labels. */
+/** Present editor ancestry through the selected control provider and literal host labels. */
 import { createButton } from './appearance/ControlFactory.js';
 import { subscribeVisualStyle } from './appearance/VisualStyleBoundary.js';
 import { applyOwnedTheme } from './appearance/ThemeService.js';
@@ -26,7 +26,7 @@ export class WorkflowEditorNavigationView {
     #items = [];
     #dark = null;
     #stopStyle;
-    /** Bind Fluent actions to the host's existing navigation commands. */
+    /** Bind provider-owned actions to the host's existing navigation commands. */
     constructor(document, back) {
         this.document = document;
         this.element = document.createElement('nav');
@@ -75,12 +75,12 @@ export class WorkflowEditorNavigationView {
             return entry;
         }));
     }
-    /** Release owned Fluent controls without touching native navigation state. */
+    /** Release owned controls without touching native navigation state. */
     dispose() {
         this.#stopStyle();
         this.element.remove();
     }
-    /** Keep the parent action alongside the breadcrumb trail with Fluent keyboard and focus behavior. */
+    /** Keep the parent action alongside the breadcrumb trail with provider-owned keyboard and focus behavior. */
     #back(action) {
         const button = createButton(this.document);
         button.setAttribute('appearance', 'subtle');
