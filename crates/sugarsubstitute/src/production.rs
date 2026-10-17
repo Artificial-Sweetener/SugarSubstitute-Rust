@@ -5,6 +5,7 @@
 mod backend_custody;
 #[path = "production/child.rs"]
 mod child;
+mod child_transport_diagnostic;
 #[path = "production/close_diagnostic.rs"]
 mod close_diagnostic;
 #[path = "production/configuration.rs"]

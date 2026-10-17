@@ -35,6 +35,13 @@ impl ChildChannel {
             HandshakePhase::Admitted
         }
     }
+    /// Borrow only the original scope/job-matched terminal metadata, even before result transfer.
+    /// Explicit closure alone leaves this absent; no metadata grants native retirement authority.
+    pub(in crate::production::child) const fn terminal_kind(
+        &self,
+    ) -> Option<sugarsubstitute_contracts::execution::TerminalKind> {
+        self.admission.terminal()
+    }
     /// Borrow the last actual captured-pair polling outcome; this does not inspect native state.
     pub(in crate::production::child) const fn capture_input(&self) -> CaptureInput {
         self.capture_input
@@ -56,5 +63,53 @@ impl ChildChannel {
         self.capture_input =
             if input.is_some() { CaptureInput::Transferred } else { CaptureInput::Absent };
         input
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sugarsubstitute_contracts::{
+        execution::TerminalKind,
+        lifecycle::{CoordinatorEpoch, CoordinatorKey, InstanceId, NamespaceId, RunGeneration},
+    };
+
+    #[test]
+    fn retained_terminal_metadata_remains_visible_without_typed_completion() -> Result<()> {
+        let run = RunKey {
+            owner: CoordinatorKey {
+                namespace: NamespaceId::new([1; 32]),
+                epoch: CoordinatorEpoch::new([2; 16])?,
+            },
+            instance: InstanceId::new(1)?,
+            generation: RunGeneration::new(1)?,
+        };
+        for kind in [
+            TerminalKind::Success,
+            TerminalKind::Failure,
+            TerminalKind::Panicked,
+            TerminalKind::Cancelled,
+            TerminalKind::TimedOut,
+            TerminalKind::Coalesced,
+        ] {
+            let mut channel = ChildChannel::new(
+                InheritedLifecycleBootstrap::new(1)?,
+                LifecyclePipeDeadline::new(100, 100)?,
+                run,
+            );
+            assert_eq!(channel.terminal_kind(), None);
+            channel.request_close();
+            assert_eq!(channel.terminal_kind(), None);
+            // Exercise only retained metadata; no transport, peer or typed result is fabricated.
+            channel.admission.observe_terminal(kind)?;
+            assert_eq!(channel.terminal_kind(), Some(kind));
+            assert!(channel.terminal().is_none());
+            assert!(channel.take_captured_startup().is_none());
+            assert_eq!(channel.capture_input(), CaptureInput::Closed);
+            assert_eq!(channel.terminal_kind(), Some(kind));
+            channel.admission.observe_terminal(kind)?;
+            assert_eq!(channel.terminal_kind(), Some(kind));
+        }
+        Ok(())
     }
 }

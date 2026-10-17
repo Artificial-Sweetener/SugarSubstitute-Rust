@@ -114,7 +114,7 @@ fn main_and_generic_failures_both_survive_saturated_progress_in_either_order() {
         let mut seen = Vec::new();
         for sequence in 1..=80 {
             let line = format!(
-                "operation=\"child_preparation_transition\" channel_phase=Authenticated capture_input=Transferred capture_admitted=true capture=false registered=false configuration=false original_failure=None capture_failure=None failure_retained={}\n",
+                "operation=\"child_preparation_transition\" channel_phase=Authenticated channel_terminal=None capture_input=Transferred capture_admitted=true capture=false registered=false configuration=false original_failure=None capture_failure=None failure_retained={}\n",
                 sequence % 2 == 0
             );
             owner.feed(OutputStream::Stderr, sequence, false, false, line.as_bytes(), |value| {

@@ -201,9 +201,14 @@ impl DesktopOutput {
                     diagnostic::Observation::Close(close) => {
                         diagnostic::close::relay(self.run, close);
                     }
+                    diagnostic::Observation::Transport(failure) => {
+                        tracing::warn!(operation="desktop_child_transport_failure",run=?self.run,
+                            native_stage=%failure.stage,native_win32=?failure.win32,
+                            "Observed original pre-UI lifecycle transport failure");
+                    }
                     diagnostic::Observation::Preparation(phase) => {
                         tracing::info!(operation="desktop_child_preparation",run=?self.run,
-                            channel_phase=%phase.channel_phase,capture_input=%phase.capture_input,
+                            channel_phase=%phase.channel_phase,channel_terminal=?phase.channel_terminal,capture_input=%phase.capture_input,
                             capture_admitted=phase.capture_admitted,capture=phase.capture,registered=phase.registered,
                             configuration=phase.configuration,original_failure=?phase.original_failure,
                             capture_failure=%phase.capture_failure,failure_retained=phase.failure_retained,

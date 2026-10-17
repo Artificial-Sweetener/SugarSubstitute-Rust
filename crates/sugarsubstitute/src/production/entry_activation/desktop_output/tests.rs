@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Fake only byte chunks and logger writer/time boundaries; parsed facts grant no authority.
 use super::*;
-const LINE: &str = "operation=\"child_preparation_transition\" channel_phase=Authenticated capture_input=Transferred capture_admitted=true capture=false registered=false configuration=false original_failure=None capture_failure=None failure_retained=false";
+const LINE: &str = "operation=\"child_preparation_transition\" channel_phase=Authenticated channel_terminal=None capture_input=Transferred capture_admitted=true capture=false registered=false configuration=false original_failure=None capture_failure=None failure_retained=false";
 #[cfg(not(feature = "k1-native-qualification"))]
 #[test]
 fn default_build_discards_compact_qualification_records() {
@@ -232,7 +232,7 @@ pub(in super::super) fn formatted_owner_diagnostics(
 fn actual_production_text_formatter_with_writer_and_time_boundaries_preserves_closed_fields()
 -> Result<(), Box<dyn std::error::Error>> {
     let bytes = formatted_owner_diagnostics(|| {
-        tracing::info!(operation="child_preparation_transition",channel_phase=%"Authenticated",capture_input=%"Transferred",capture_admitted=true,capture=false,
+        tracing::info!(operation="child_preparation_transition",channel_phase=%"Authenticated",channel_terminal=?None::<TerminalKind>,capture_input=%"Transferred",capture_admitted=true,capture=false,
             registered=false,configuration=false,original_failure=?None::<u8>,capture_failure=%"None",failure_retained=false,
             "Child pre-UI preparation conditions changed");
         for stage in [Connection::Queued, Connection::Admitted, Connection::ReplyReceived] {
@@ -443,3 +443,51 @@ fn terminal_acquisition_metadata_requires_complete_order_and_rejects_extra_raw_f
 
 #[path = "diagnostic/probe_tests.rs"]
 mod probe;
+
+#[test]
+fn all_terminal_metadata_kinds_roundtrip_and_reject_unknown_duplicate_or_missing_fields()
+-> Result<(), Box<dyn std::error::Error>> {
+    for kind in [
+        None,
+        Some(TerminalKind::Success),
+        Some(TerminalKind::Failure),
+        Some(TerminalKind::Panicked),
+        Some(TerminalKind::Cancelled),
+        Some(TerminalKind::TimedOut),
+        Some(TerminalKind::Coalesced),
+    ] {
+        let bytes = formatted_owner_diagnostics(|| {
+            tracing::info!(operation="child_preparation_transition",channel_phase=%"Authenticated",
+                channel_terminal=?kind,capture_input=%"Transferred",capture_admitted=true,capture=false,
+                registered=false,configuration=false,original_failure=?None::<u8>,capture_failure=%"None",failure_retained=false,
+                "Child pre-UI preparation conditions changed");
+        })?;
+        assert!(bytes.len() <= 512);
+        let mut owner = Diagnostic::new();
+        let mut seen = Vec::new();
+        owner.feed(OutputStream::Stderr, 1, false, false, &bytes, |value| seen.push(value));
+        assert!(
+            matches!(seen.as_slice(), [Observation::Preparation(phase)] if phase.channel_terminal == kind)
+        );
+    }
+    for value in ["Unknown", "Some(Unknown)", "Some(Failure(secret))", "Some(0)"] {
+        assert!(
+            parse(
+                LINE.replace("channel_terminal=None", &format!("channel_terminal={value}"))
+                    .as_bytes()
+            )
+            .is_none()
+        );
+    }
+    for bad in [
+        LINE.replace("channel_terminal=None ", ""),
+        LINE.replace(
+            "channel_terminal=None",
+            "channel_terminal=None channel_terminal=Some(Failure)",
+        ),
+        format!("{LINE} channel_terminal=Some(Failure)"),
+    ] {
+        assert!(parse(bad.as_bytes()).is_none());
+    }
+    Ok(())
+}

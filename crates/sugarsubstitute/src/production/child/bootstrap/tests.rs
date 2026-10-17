@@ -44,7 +44,7 @@ impl Clock for ControlledClock {
 fn runtime() -> Result<ExecutionOwner, Box<dyn Error>> {
     Ok(ExecutionOwner::new(Arc::new(FrozenClock), Arc::new(Wake))?)
 }
-fn bootstrap(
+pub(super) fn bootstrap(
     calls: &Arc<AtomicUsize>,
     deadline: Option<Moment>,
 ) -> Result<ChildBootstrap, Box<dyn Error>> {
@@ -190,6 +190,7 @@ fn preparation_diagnostics_suppress_repeats_and_retain_redacted_original_failure
     let mut child = bootstrap(&calls, None)?;
     let initial = child.changed_preparation().ok_or("Initial observation missing")?;
     assert_eq!(initial.channel_phase, HandshakePhase::Unadmitted);
+    assert_eq!(initial.channel_terminal, None);
     assert_eq!(initial.capture_input, CaptureInput::Unchecked);
     assert!(!initial.capture_admitted);
     assert!(!initial.capture && !initial.registered && !initial.configuration);

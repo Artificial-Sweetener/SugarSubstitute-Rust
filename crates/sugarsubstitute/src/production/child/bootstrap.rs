@@ -30,6 +30,9 @@ use sugarsubstitute_execution::{
 #[path = "bootstrap/qualification.rs"]
 mod qualification;
 
+#[path = "bootstrap/transport.rs"]
+mod transport;
+
 type ProjectionJob = OwnedJob<PreparedChildConfiguration, ChildConfigurationFailure>;
 type ProjectionCompletion = JobCompletion<PreparedChildConfiguration, ChildConfigurationFailure>;
 
@@ -54,6 +57,7 @@ pub(super) enum ChildBootstrapIssue {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct PreparationObservation {
     channel_phase: HandshakePhase,
+    channel_terminal: Option<TerminalKind>,
     capture_input: CaptureInput,
     capture_admitted: bool,
     capture: bool,
@@ -211,6 +215,9 @@ impl ChildBootstrap {
         let mut issue = None;
         if let Err(cause) = channel {
             issue = Some(self.record(ChildBootstrapIssue::Transport, cause));
+        }
+        if let Some(transport_issue) = self.capture_transport_failure() {
+            issue.get_or_insert(transport_issue);
         }
         if let Err(cause) = capture {
             let capture_issue = self.record(ChildBootstrapIssue::Capture, Box::new(cause));
@@ -395,7 +402,7 @@ impl ChildBootstrap {
         if let Some(observation) = self.changed_preparation() {
             tracing::info!(
                 operation = "child_preparation_transition",
-                channel_phase = ?observation.channel_phase,
+                channel_phase = ?observation.channel_phase, channel_terminal = ?observation.channel_terminal,
                 capture_input = ?observation.capture_input,
                 capture_admitted = observation.capture_admitted,
                 capture = observation.capture,
@@ -421,6 +428,7 @@ impl ChildBootstrap {
     pub(super) fn preparation_observation(&self) -> PreparationObservation {
         PreparationObservation {
             channel_phase: self.channel.handshake_phase(),
+            channel_terminal: self.channel.terminal_kind(),
             capture_input: self.channel.capture_input(),
             capture_admitted: self.capture.admitted(),
             capture: self.capture.ready(),

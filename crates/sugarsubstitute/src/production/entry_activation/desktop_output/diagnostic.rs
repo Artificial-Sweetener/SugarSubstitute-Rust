@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Decode only complete closed preparation fields, discarding every other raw line.
-use sugarsubstitute_contracts::transcript::OutputStream;
+use sugarsubstitute_contracts::{execution::TerminalKind, transcript::OutputStream};
 #[path = "diagnostic/close.rs"]
 pub(super) mod close;
 #[path = "diagnostic/consume.rs"]
@@ -17,6 +17,7 @@ pub(super) mod qualification;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct Phase {
     pub(super) channel_phase: &'static str,
+    pub(super) channel_terminal: Option<TerminalKind>,
     pub(super) capture_input: &'static str,
     pub(super) capture_admitted: bool,
     pub(super) capture: bool,
@@ -58,6 +59,7 @@ pub(super) enum Observation {
     Connection(Connection),
     Close(crate::production::close_diagnostic::CloseTrace),
     MainFailure(MainFailure),
+    Transport(crate::production::child_transport_diagnostic::Record),
     Probe(sugarsubstitute_desktop::frontend_probe_diagnostic::Record),
     #[cfg(feature = "k1-native-qualification")]
     Qualification(qualification::Qualification),
@@ -154,6 +156,18 @@ impl Diagnostic {
                             self.emitted += 1;
                             emit(Observation::MainFailure(failure));
                         }
+                    } else if let Some(failure) =
+                        crate::production::child_transport_diagnostic::parse(
+                            &self.bytes[..self.length],
+                        )
+                    {
+                        if !self.failure_seen {
+                            self.failure_seen = true;
+                            if self.emitted < 32 && (self.main_failure_seen || self.emitted < 31) {
+                                self.emitted += 1;
+                                emit(Observation::Transport(failure));
+                            }
+                        }
                     } else if let Some(failure) = parse_failure(&self.bytes[..self.length]) {
                         if !self.failure_seen {
                             self.failure_seen = true;
@@ -247,6 +261,16 @@ fn parse(bytes: &[u8]) -> Option<Phase> {
         "Authenticated" => "Authenticated",
         _ => return None,
     };
+    let channel_terminal = match fields.next()?.strip_prefix("channel_terminal=")? {
+        "None" => None,
+        "Some(Success)" => Some(TerminalKind::Success),
+        "Some(Failure)" => Some(TerminalKind::Failure),
+        "Some(Panicked)" => Some(TerminalKind::Panicked),
+        "Some(Cancelled)" => Some(TerminalKind::Cancelled),
+        "Some(TimedOut)" => Some(TerminalKind::TimedOut),
+        "Some(Coalesced)" => Some(TerminalKind::Coalesced),
+        _ => return None,
+    };
     let capture_input = match fields.next()?.strip_prefix("capture_input=")? {
         "Unchecked" => "Unchecked",
         "NoPeer" => "NoPeer",
@@ -289,6 +313,7 @@ fn parse(bytes: &[u8]) -> Option<Phase> {
     }
     Some(Phase {
         channel_phase,
+        channel_terminal,
         capture_input,
         capture_admitted,
         capture,
