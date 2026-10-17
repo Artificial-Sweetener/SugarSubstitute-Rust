@@ -28,7 +28,8 @@ async function inspect({ splash = false, extra = [], graphReady = true, setupDon
   vueReady = true, position = true, api = true, extensions = true, named = true,
   registered = true, graphSame = true, connected = true, width = 640,
   complete = true, configuring = false, library = true, apiAfterImport = true,
-  earlyExtensionGetter = false, forbidImport = false } = {}) {
+  earlyExtensionGetter = false, forbidImport = false, appPresent = true,
+  apiBucketPresent = true, forbidDerived = false } = {}) {
   const extension = { name: named ? 'SugarCubes.UI' : 'Other' };
   const graph = {};
   const elements = [...extra];
@@ -46,7 +47,7 @@ async function inspect({ splash = false, extra = [], graphReady = true, setupDon
     configuringGraph: configuring,
   };
   const context = createContext({
-    window: { comfyAPI: { app: { app } }, SugarCubes: api ? { openLibrary: library ? () => {} : null } : null },
+    window: { comfyAPI: apiBucketPresent ? { app: { app: appPresent ? app : undefined } } : undefined, SugarCubes: api ? { openLibrary: library ? () => {} : null } : null },
     document: {
       readyState: complete ? 'complete' : 'loading',
       getElementById: (id) => elements.find((item) => item.id === id) ?? null,
@@ -61,12 +62,23 @@ async function inspect({ splash = false, extra = [], graphReady = true, setupDon
   });
   if (earlyExtensionGetter) Object.defineProperty(app, 'extensions', {
     get() {
-      if (!graphReady || !vueReady || !position || !api) {
-        throw new TypeError('Extension store accessed before its earlier initialization gates');
+      if (!vueReady) {
+        throw new TypeError('Pinia-backed extension store accessed before Vue mount');
       }
       return extensions ? [extension] : null;
     },
   });
+  if (forbidDerived) {
+    for (const key of ['positionConversion', 'graph', 'canvas', 'configuringGraph']) {
+      Object.defineProperty(app, key, {
+        get() { assert.fail(`Pre-graph sample must not read derived app.${key}`); },
+      });
+    }
+    Object.defineProperty(context.window, 'SugarCubes', {
+      get() { assert.fail('Pre-graph sample must not inspect the SugarCubes public API'); },
+    });
+    context.document.getElementById = () => assert.fail('Pre-graph sample must not inspect loader DOM');
+  }
   const owner = new SyntheticModule(['sugarCubesExtension', 'sugarCubesUI'], function () {
     this.setExport('sugarCubesExtension', registered ? extension : { name: 'SugarCubes.UI' });
     this.setExport('sugarCubesUI', { _setupDone: setupDone });
@@ -142,10 +154,35 @@ test('actual sample preserves simultaneous failed checks after the same owner im
 });
 
 
-test('earlier initialization gates keep the Pinia-backed extension getter unread and owner unimported', async () => {
+test('pre-Vue gate keeps the Pinia getter unread and earlier initialization gates keep owner unimported', async () => {
   for (const [options, incomplete] of [
     [{ graphReady: false }, 1], [{ vueReady: false }, 2],
     [{ position: false }, 4], [{ api: false }, 8],
   ]) assert.deepEqual(await inspect({ ...options, earlyExtensionGetter: true, forbidImport: true }),
     { incomplete });
+});
+
+// Pre-Vue masks leave extension-array bit16 unknown; no Pinia-backed getter is invoked.
+test('absent app or API bucket reports truthful graph and Vue absence without derived reads', async () => {
+  for (const options of [{ appPresent: false }, { apiBucketPresent: false }]) {
+    assert.deepEqual(await inspect({ ...options, forbidDerived: true, forbidImport: true }),
+      { incomplete: 1 | 2 });
+  }
+});
+
+test('existing app before Vue mount reports both missing stages without touching Pinia or derived getters', async () => {
+  assert.deepEqual(await inspect({ graphReady: false, vueReady: false,
+    earlyExtensionGetter: true, forbidDerived: true, forbidImport: true }),
+    { incomplete: 1 | 2 });
+});
+
+test('Vue mounted while graph is absent samples the graph-independent extension array safely', async () => {
+  assert.deepEqual(await inspect({ graphReady: false, vueReady: true,
+    earlyExtensionGetter: true, forbidDerived: true, forbidImport: true }), { incomplete: 1 });
+});
+
+test('Vue mounted graph wait co-reports an actually absent extension array without importing or reading graph state', async () => {
+  assert.deepEqual(await inspect({ graphReady: false, vueReady: true, extensions: false,
+    earlyExtensionGetter: true, forbidDerived: true, forbidImport: true }),
+    { incomplete: 1 | 16 });
 });

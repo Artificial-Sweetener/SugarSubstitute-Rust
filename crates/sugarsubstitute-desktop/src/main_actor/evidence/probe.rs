@@ -10,13 +10,16 @@ const SAMPLE: &str = r#"(async()=>{
 const app=window.comfyAPI?.app?.app;
 let missing=0;
 const check=(condition,bit)=>{if(!condition)missing|=bit;return !!condition;};
-if(!check(app?.isGraphReady,1))return JSON.stringify({incomplete:missing});
-if(!check(app.vueAppReady===true,2))return JSON.stringify({incomplete:missing});
+const graphReady=check(app?.isGraphReady,1);
+const vueReady=check(app?.vueAppReady===true,2);
+let extensions;
+// The public extension getter uses Pinia, installed before GraphCanvas mounts.
+if(vueReady){extensions=app.extensions;check(Array.isArray(extensions),16);}
+if(!graphReady||!vueReady)return JSON.stringify({incomplete:missing});
 if(!check(app.positionConversion,4))return JSON.stringify({incomplete:missing});
 const publicApi=window.SugarCubes;
 if(!check(publicApi,8))return JSON.stringify({incomplete:missing});
-const extensions=app.extensions;
-if(!check(Array.isArray(extensions),16))return JSON.stringify({incomplete:missing});
+if(!Array.isArray(extensions))return JSON.stringify({incomplete:missing});
 if(!check(extensions.some(extension=>extension.name==='SugarCubes.UI'),32))return JSON.stringify({incomplete:missing});
 const cubes=await import('/extensions/SugarCubes/comfyui/ui.js');
 const canvas=app?.canvas?.canvas;
