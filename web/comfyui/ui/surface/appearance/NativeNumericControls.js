@@ -52,7 +52,7 @@ export class NativeNumericControls {
             ? this.#createSlider(field.row.ownerDocument)
             : null;
         const annotations = new Map();
-        const gestureTargets = slider ? [field.spinner, slider] : [field.spinner];
+        const gestureTargets = slider ? [field.spinner, slider.root] : [field.spinner];
         for (const target of gestureTargets)
             target.addEventListener('pointerdown', retainNumericGesture);
         let synchronizing = false;
@@ -60,7 +60,7 @@ export class NativeNumericControls {
         const change = () => {
             if (synchronizing || !slider || binding.field.disabled())
                 return;
-            const value = Number(slider.value);
+            const value = slider.readValue();
             if (Number.isFinite(value) && value !== binding.field.readValue())
                 binding.field.writeValue(value);
         };
@@ -73,13 +73,7 @@ export class NativeNumericControls {
                     return;
                 synchronizing = true;
                 try {
-                    slider.min = String(binding.field.minimum);
-                    slider.max = String(binding.field.maximum);
-                    slider.step = String(binding.field.step);
-                    slider.disabled = binding.field.disabled();
-                    const value = binding.field.readValue();
-                    if (value !== null)
-                        slider.value = String(value);
+                    slider.synchronize(binding.field.minimum, binding.field.maximum, binding.field.step, binding.field.disabled(), binding.field.readValue());
                 }
                 finally {
                     synchronizing = false;
@@ -93,16 +87,16 @@ export class NativeNumericControls {
                     element.removeAttribute(attribute);
                 annotations.clear();
                 field.container.removeAttribute('data-sc-number-pair');
-                slider?.removeEventListener('change', change);
-                slider?.remove();
+                slider?.root.removeEventListener('change', change);
+                slider?.root.remove();
             },
         };
         if (slider) {
-            slider.setAttribute('aria-label', `${field.label} slider`);
-            slider.dataset.scNumberSlider = '';
+            slider.root.setAttribute('aria-label', `${field.label} slider`);
+            slider.root.dataset.scNumberSlider = '';
             field.container.setAttribute('data-sc-number-pair', '');
-            slider.addEventListener('change', change);
-            field.container.append(slider);
+            slider.root.addEventListener('change', change);
+            field.container.append(slider.root);
         }
         try {
             binding.synchronize();

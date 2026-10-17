@@ -17,7 +17,7 @@
 /** Publish coherent presentation facts only when their accepted values change. */
 export class AppearanceState {
     #listeners = new Set();
-    #appearance = Object.freeze({ fluent: false, dark: true });
+    #appearance = Object.freeze({ style: 'comfy', dark: true });
     /** Expose an immutable accepted snapshot to isolated owned surfaces. */
     get appearance() {
         return this.#appearance;
@@ -28,10 +28,10 @@ export class AppearanceState {
         return () => this.#listeners.delete(listener);
     }
     /** Publish only facts supplied by the existing appearance owner. */
-    update(fluent, dark) {
-        if (fluent === this.#appearance.fluent && dark === this.#appearance.dark)
+    update(style, dark) {
+        if (style === this.#appearance.style && dark === this.#appearance.dark)
             return;
-        this.#appearance = Object.freeze({ fluent, dark });
+        this.#appearance = Object.freeze({ style, dark });
         for (const listener of this.#listeners)
             listener();
     }

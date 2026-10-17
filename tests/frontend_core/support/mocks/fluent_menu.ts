@@ -16,11 +16,22 @@
 /** Isolate FAST custom-element rendering at the JSDOM boundary; browser proofs use Microsoft's implementation. */
 
 /** Supply a menu container while preserving the shared owner's real DOM and geometry policy. */
-export function createFluentMenuList(document: Document): HTMLElement {
+export function createMenuList(document: Document): HTMLElement {
   return document.createElement('div');
 }
 
 /** Supply a focusable row while shared interaction tests exercise real events and feature callbacks. */
-export function createFluentMenuItem(document: Document): HTMLElement {
+export function createMenuItem(document: Document): HTMLElement {
   return document.createElement('button');
+}
+
+/** Reflect checked presentation at the mocked third-party component boundary. */
+export function setMenuItemChecked(row: HTMLElement, checked: boolean): void {
+  row.setAttribute('aria-checked', String(checked));
+  if (checked) row.setAttribute('checked', '');
+}
+
+/** Preserve the known slots while testing the real shared menu owner. */
+export function menuItemSlot(_document: Document, position: 'start' | 'end'): string {
+  return position;
 }

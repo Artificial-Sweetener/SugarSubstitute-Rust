@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Animate native card disclosure with clipped height, retaining content until closing completes. */
-import { fluentMotion } from '../appearance/FluentThemeRuntime.js';
+import { surfaceMotion } from '../appearance/SurfaceMotionTokens.js';
 import { publishDisclosureHeight } from './DisclosureLayout.js';
 
 export interface DisclosureGeometry {
@@ -199,8 +199,8 @@ export class CardDisclosureMotion {
     const animation = this.#target.animate(
       [{ height: `${String(from)}px` }, { height: `${String(to)}px` }],
       {
-        duration: fluentMotion.duration,
-        easing: fluentMotion.easing,
+        duration: surfaceMotion.duration,
+        easing: surfaceMotion.easing,
         fill: 'both',
       },
     );

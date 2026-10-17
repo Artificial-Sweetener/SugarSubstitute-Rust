@@ -16,7 +16,7 @@
 /** Prove bounded drawer travel, exact timeline reversal, and deterministic presentation teardown. */
 import { afterEach, expect, jest, test } from '@jest/globals';
 import { CubeStackDrawerMotion } from '../../../frontend/comfyui/ui/surface/stack/CubeStackDrawerMotion.js';
-import { fluentMotion } from '../../../frontend/comfyui/ui/surface/appearance/FluentThemeRuntime.js';
+import { surfaceMotion } from '../../../frontend/comfyui/ui/surface/appearance/SurfaceMotionTokens.js';
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -30,15 +30,15 @@ test('cascades cubes upward without overshoot and finishes every effect with mas
   expect(f.effects).toHaveLength(14);
   expect(f.element.inert).toBe(true);
   expect(f.element.dataset.stackMotion).toBe('enter');
-  for (const effect of f.effects) expect(effect.options.duration).toBe(fluentMotion.duration);
-  expect(f.effects[0]?.options.easing).toBe(fluentMotion.easing);
+  for (const effect of f.effects) expect(effect.options.duration).toBe(surfaceMotion.duration);
+  expect(f.effects[0]?.options.easing).toBe(surfaceMotion.easing);
   for (const effect of f.effects.slice(1)) {
     expect(effect.frames[0]?.translate).toBe('0 32px');
     expect(effect.frames.at(-1)?.translate).toBe('0 0');
     expect(effect.frames.at(-1)?.offset).toBe(1);
     expect(effect.frames.some((frame) => String(frame.translate).includes('-'))).toBe(false);
     expect(effect.frames.at(-2)?.offset).toBeLessThanOrEqual(0.25);
-    expect(effect.frames.at(-2)?.easing).toBe(fluentMotion.easing);
+    expect(effect.frames.at(-2)?.easing).toBe(surfaceMotion.easing);
   }
   expect(f.effects[2]?.frames.at(-2)?.offset).toBeGreaterThan(0);
   f.finish();
@@ -84,7 +84,7 @@ test('plays the same complete cascade backward when hiding a settled stack', asy
   const outgoing = f.effects.slice(4);
   expect(outgoing.map((effect) => effect.frames)).toEqual(oldFrames);
   for (const effect of outgoing) {
-    expect(effect.currentTime).toBe(fluentMotion.duration);
+    expect(effect.currentTime).toBe(surfaceMotion.duration);
     expect(effect.updatePlaybackRate).toHaveBeenLastCalledWith(-1);
   }
   f.finish();
@@ -150,10 +150,10 @@ test.each(['button', 'fluent-button'] as const)(
       const entering = motion.setVisible(true);
       expect(f.addButton.animate).toHaveBeenCalledTimes(1);
       const effect = f.effects.at(-1);
-      expect(effect?.options.duration).toBe(fluentMotion.duration);
+      expect(effect?.options.duration).toBe(surfaceMotion.duration);
       expect(effect?.frames.at(-2)?.offset).toBe(Math.min(0.25, count * 0.055));
       expect(effect?.frames.at(-2)?.translate).toBe('0 32px');
-      expect(effect?.frames.at(-2)?.easing).toBe(fluentMotion.easing);
+      expect(effect?.frames.at(-2)?.easing).toBe(surfaceMotion.easing);
       expect(effect?.frames.at(-1)?.translate).toBe('0 0');
       for (const animation of f.effects) animation.currentTime = 73;
       const leaving = motion.setVisible(false);

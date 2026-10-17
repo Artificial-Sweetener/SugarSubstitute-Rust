@@ -14,7 +14,12 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Present stable Microsoft Fluent workflow tabs while Comfy retains workflow actions. */
-import { createWorkflowTab, createWorkflowTablist } from '../appearance/FluentThemeRuntime.js';
+import {
+  createWorkflowTab,
+  createWorkflowTablist,
+  createButton,
+  workflowTabAccessorySlot,
+} from '../appearance/ControlFactory.js';
 import { ContextMenu, type ContextMenuEntry } from '../../menus/ContextMenu.js';
 import { WORKFLOW_TAB_WIDTH } from './WorkflowTabStyles.js';
 import { scrollWheelDistance } from '../ScrollWheelDistance.js';
@@ -39,7 +44,7 @@ interface TabView {
 
 /** Retain keyed controls, literal titles, native keyboard navigation and one-shot activity animation. */
 export class WorkflowTabsView {
-  readonly element = createWorkflowTablist();
+  readonly element: HTMLElement & { activeid: string };
   readonly #tabs = new Map<WorkflowSessionId, TabView>();
   readonly #menu: ContextMenu;
   #order: readonly FrameWorkflowTab[] = [];
@@ -56,6 +61,7 @@ export class WorkflowTabsView {
     private readonly actions: WorkflowTabsActions,
     private readonly viewport: HTMLElement,
   ) {
+    this.element = createWorkflowTablist(document);
     this.#menu = new ContextMenu(document);
     this.#drag = new WorkflowTabPointerDrag(
       viewport,
@@ -197,16 +203,17 @@ export class WorkflowTabsView {
   #create(id: WorkflowSessionId): TabView {
     const element = createWorkflowTab(this.document);
     element.id = `sc-workflow-${id}`;
+    element.setAttribute('value', element.id);
     element.draggable = false;
     const title = this.document.createElement('span');
     title.className = 'sc-workflow-title';
     const shimmer = this.document.createElement('span');
     shimmer.className = 'sc-workflow-shimmer';
-    shimmer.slot = 'start';
+    shimmer.slot = workflowTabAccessorySlot(this.document, 'start');
     shimmer.setAttribute('aria-hidden', 'true');
-    const close = this.document.createElement('fluent-button');
+    const close = createButton(this.document);
     close.className = 'sc-workflow-close';
-    close.slot = 'end';
+    close.slot = workflowTabAccessorySlot(this.document, 'end');
     close.textContent = '×';
     close.setAttribute('appearance', 'subtle');
     close.setAttribute('aria-label', 'Close workflow');

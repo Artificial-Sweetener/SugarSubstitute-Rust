@@ -15,9 +15,9 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove overlay scrolling, dynamic discovery, and reversible ownership without layout wrappers. */
 import { afterEach, expect, jest, test } from '@jest/globals';
-import { FluentOverlayScrollbarHost } from '../../../frontend/comfyui/ui/surface/appearance/FluentOverlayScrollbarHost.js';
+import { OverlayScrollbarHost } from '../../../frontend/comfyui/ui/surface/appearance/OverlayScrollbarHost.js';
 import { setSurfaceGeometryMoving } from '../../../frontend/comfyui/ui/surface/motion/SurfaceGeometryMotion.js';
-import { fluentScrollbarPresentationCss } from '../../../frontend/comfyui/ui/surface/appearance/FluentScrollbarStyles.js';
+import { scrollbarPresentationCss } from '../../../frontend/comfyui/ui/surface/appearance/ScrollbarStyles.js';
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -62,18 +62,18 @@ test('keeps the same viewport thumb visible when its positioned scroll owner mov
   area.style.position = 'relative';
   document.body.append(area);
   const style = document.createElement('style');
-  style.textContent = fluentScrollbarPresentationCss();
+  style.textContent = scrollbarPresentationCss();
   document.head.append(style);
   const frames: FrameRequestCallback[] = [];
   jest.spyOn(window, 'requestAnimationFrame').mockImplementation((frame) => {
     frames.push(frame);
     return frames.length;
   });
-  const host = new FluentOverlayScrollbarHost(document, jest.fn());
+  const host = new OverlayScrollbarHost(document, jest.fn());
   try {
     host.enable();
     await flush(frames);
-    const layer = area.querySelector<HTMLElement>('.sc-fluent-scrollbar-layer')!;
+    const layer = area.querySelector<HTMLElement>('.sc-style-scrollbar-layer')!;
     const thumb = layer.querySelector<HTMLElement>('[aria-orientation="vertical"]')!;
     jest.spyOn(layer, 'getBoundingClientRect').mockImplementation(() => ({
       x: 20,
@@ -116,14 +116,14 @@ test('reads new overflow candidates before mounting any tracks', async () => {
   let tracksWhenSecondRead: number | null = null;
   jest.spyOn(window, 'getComputedStyle').mockImplementation((element, pseudo) => {
     if (element === second && tracksWhenSecondRead === null)
-      tracksWhenSecondRead = document.querySelectorAll('.sc-fluent-scrollbar').length;
+      tracksWhenSecondRead = document.querySelectorAll('.sc-style-scrollbar').length;
     return styles(element, pseudo);
   });
-  const host = new FluentOverlayScrollbarHost(document, jest.fn());
+  const host = new OverlayScrollbarHost(document, jest.fn());
   host.enable();
   await flush(frames);
   expect(tracksWhenSecondRead).toBe(0);
-  expect(document.querySelectorAll('.sc-fluent-scrollbar')).toHaveLength(4);
+  expect(document.querySelectorAll('.sc-style-scrollbar')).toHaveLength(4);
   host.clear();
 });
 
@@ -151,7 +151,7 @@ test('places an opted-in horizontal handle below content without changing layout
     frames.push(frame);
     return frames.length;
   });
-  const host = new FluentOverlayScrollbarHost(document, jest.fn());
+  const host = new OverlayScrollbarHost(document, jest.fn());
   host.enable();
   await flush(frames);
   const horizontal = surface.querySelector<HTMLElement>('[aria-orientation="horizontal"]');
@@ -163,11 +163,11 @@ test('places an opted-in horizontal handle below content without changing layout
   expect(area.clientWidth).toBe(300);
   expect(area.clientHeight).toBe(200);
   expect(area.style.padding).toBe('');
-  expect(surface.querySelector<HTMLElement>('.sc-fluent-scrollbar-layer')?.style.bottom).toBe(
+  expect(surface.querySelector<HTMLElement>('.sc-style-scrollbar-layer')?.style.bottom).toBe(
     '-4px',
   );
   host.clear();
-  expect(surface.querySelector('.sc-fluent-scrollbar-layer')).toBeNull();
+  expect(surface.querySelector('.sc-style-scrollbar-layer')).toBeNull();
 });
 
 test('honors textarea overflow policy and removes handles when text fits', async () => {
@@ -199,7 +199,7 @@ test('honors textarea overflow policy and removes handles when text fits', async
     frames.push(frame);
     return frames.length;
   });
-  const host = new FluentOverlayScrollbarHost(document, jest.fn());
+  const host = new OverlayScrollbarHost(document, jest.fn());
   host.enable();
   await flush(frames);
   const thumb = document.querySelector<HTMLElement>('[aria-orientation="vertical"]');
@@ -227,7 +227,7 @@ test('portal mounts and local input do not rediscover or measure an unrelated sc
     frames.push(frame);
     return frames.length;
   });
-  const host = new FluentOverlayScrollbarHost(document, jest.fn());
+  const host = new OverlayScrollbarHost(document, jest.fn());
   host.enable();
   await flush(frames);
   await flush(frames);
@@ -258,21 +258,21 @@ test('keeps tracks inside positioned owners and reparents them when the owning s
     frames.push(frame);
     return frames.length;
   });
-  const host = new FluentOverlayScrollbarHost(document, jest.fn());
+  const host = new OverlayScrollbarHost(document, jest.fn());
   host.enable();
   await flush(frames);
   const thumb = document.querySelector<HTMLElement>('[aria-orientation="vertical"]');
-  expect(thumb?.closest('.sc-fluent-scrollbar-layer')?.parentElement).toBe(surface);
+  expect(thumb?.closest('.sc-style-scrollbar-layer')?.parentElement).toBe(surface);
   const replacement = document.createElement('div');
   replacement.style.position = 'relative';
   document.body.append(replacement);
   replacement.append(area);
   await flush(frames);
-  expect(thumb?.closest('.sc-fluent-scrollbar-layer')?.parentElement).toBe(replacement);
-  expect(surface.querySelector('.sc-fluent-scrollbar-layer')).toBeNull();
+  expect(thumb?.closest('.sc-style-scrollbar-layer')?.parentElement).toBe(replacement);
+  expect(surface.querySelector('.sc-style-scrollbar-layer')).toBeNull();
   expect(document.querySelector('[aria-orientation="vertical"]')).toBe(thumb);
   host.clear();
-  expect(replacement.querySelector('.sc-fluent-scrollbar-layer')).toBeNull();
+  expect(replacement.querySelector('.sc-style-scrollbar-layer')).toBeNull();
 });
 
 test('defers moving-region geometry until settlement while unrelated native scrolling remains responsive', async () => {
@@ -284,7 +284,7 @@ test('defers moving-region geometry until settlement while unrelated native scro
     frames.push(frame);
     return frames.length;
   });
-  const host = new FluentOverlayScrollbarHost(document, jest.fn());
+  const host = new OverlayScrollbarHost(document, jest.fn());
   host.enable();
   await flush(frames);
   await flush(frames);
@@ -320,14 +320,14 @@ test('handles both axes through native state and restores untouched content on d
     return frames.length;
   });
   const errors = jest.fn();
-  const host = new FluentOverlayScrollbarHost(document, errors);
+  const host = new OverlayScrollbarHost(document, errors);
   host.enable();
   await flush(frames);
   const vertical = document.querySelector<HTMLElement>(
-    '.sc-fluent-scrollbar[aria-orientation="vertical"]',
+    '.sc-style-scrollbar[aria-orientation="vertical"]',
   );
   const horizontal = document.querySelector<HTMLElement>(
-    '.sc-fluent-scrollbar[aria-orientation="horizontal"]',
+    '.sc-style-scrollbar[aria-orientation="horizontal"]',
   );
   expect(vertical?.hidden).toBe(false);
   expect(horizontal?.hidden).toBe(false);
@@ -351,7 +351,7 @@ test('handles both axes through native state and restores untouched content on d
   await flush(frames);
   expect(vertical?.hidden).toBe(true);
   host.clear();
-  expect(document.querySelector('.sc-fluent-scrollbar-layer')).toBeNull();
+  expect(document.querySelector('.sc-style-scrollbar-layer')).toBeNull();
   expect(area.id).toBe('');
   expect(area.scrollTop).toBe(800);
   expect(content.value).toBe('<img src=x>');
@@ -375,12 +375,12 @@ test('keeps horizontal handles outside content flow without changing owner or wi
     frames.push(frame);
     return frames.length;
   });
-  const host = new FluentOverlayScrollbarHost(document, jest.fn());
+  const host = new OverlayScrollbarHost(document, jest.fn());
   host.enable();
   await flush(frames);
   const thumb = surface.querySelector<HTMLElement>('[aria-orientation="horizontal"]');
   expect(thumb?.hidden).toBe(false);
-  expect(thumb?.closest('.sc-fluent-scrollbar-layer')?.parentElement).toBe(surface);
+  expect(thumb?.closest('.sc-style-scrollbar-layer')?.parentElement).toBe(surface);
   expect(area.children).toHaveLength(1);
   expect(area.firstElementChild).toBe(widget);
   expect(area.getAttribute('style')).toBe(style);
@@ -399,7 +399,7 @@ test('discovers asynchronous shadow content and removes only policy-owned shadow
     return frames.length;
   });
   const errors = jest.fn();
-  const host = new FluentOverlayScrollbarHost(document, errors);
+  const host = new OverlayScrollbarHost(document, errors);
   host.enable();
   await flush(frames);
   const custom = document.createElement('div');
@@ -438,11 +438,11 @@ test.each([false, true])(
     const root = shadowMode ? surface.attachShadow({ mode: 'open' }) : surface;
     root.append(area);
     document.body.append(surface);
-    const host = new FluentOverlayScrollbarHost(document, jest.fn());
+    const host = new OverlayScrollbarHost(document, jest.fn());
     host.enable();
     await flush(frames);
     const thumb = (shadowMode ? root : document).querySelector<HTMLElement>(
-      '.sc-fluent-scrollbar[aria-orientation="vertical"]',
+      '.sc-style-scrollbar[aria-orientation="vertical"]',
     );
     if (!thumb) throw new Error('Missing vertical thumb');
     Object.assign(thumb, {
@@ -494,7 +494,7 @@ test('workflow tab navigation remains handle-free through appearance and rendere
     frames.push(callback);
     return frames.length;
   });
-  const global = new FluentOverlayScrollbarHost(document, jest.fn());
+  const global = new OverlayScrollbarHost(document, jest.fn());
   global.enable();
   await flush(frames);
   expect(document.querySelectorAll(`[aria-controls="${area.id}"]`)).toHaveLength(0);

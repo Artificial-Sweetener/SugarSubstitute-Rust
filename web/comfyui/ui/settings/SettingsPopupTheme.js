@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Theme only native dropdown portals linked to identified standard settings controls. */
-import { applyOwnedFluentTheme } from '../surface/appearance/FluentThemeRuntime.js';
+import { applyOwnedTheme } from '../surface/appearance/ThemeService.js';
 /** Preserve native popup identity and isolate bespoke plugin menus from Fluent control styling. */
 export class SettingsPopupTheme {
     #owned = new Set();
@@ -36,7 +36,7 @@ export class SettingsPopupTheme {
         }
         this.#owned.add(overlay);
         overlay.setAttribute('data-sc-settings-popup', '');
-        applyOwnedFluentTheme(overlay, dark);
+        applyOwnedTheme(overlay, dark);
     }
     /** Reconcile retained portals when settings mode, palette or dialog lifetime changes. */
     refresh(roots, fluent, dark) {
@@ -54,6 +54,6 @@ export class SettingsPopupTheme {
         if (!this.#owned.delete(overlay))
             return;
         overlay.removeAttribute('data-sc-settings-popup');
-        applyOwnedFluentTheme(overlay, null);
+        applyOwnedTheme(overlay, null);
     }
 }

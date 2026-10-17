@@ -16,6 +16,7 @@
 import { describe, expect, test, beforeEach, jest } from '@jest/globals';
 import { app } from '../../frontend_core/support/mocks/app.js';
 import { api } from '../../frontend_core/support/mocks/api.js';
+import { preserveAppearanceRuntime } from '../../frontend_core/support/appearance_runtime.js';
 import { ProximityOverlay } from '../../../frontend/comfyui/ui/overlays/ProximityOverlay.js';
 import type { ProximityMatch } from '../../../frontend/comfyui/ui/overlays/ProximityOverlay.js';
 import type { OverlayManagerOptions } from '../../../frontend/comfyui/ui/overlays/OverlayManager.js';
@@ -100,6 +101,7 @@ function chromeCanvas<T extends object>(value: T): T & ChromeCanvasFixture {
 }
 
 async function loadUi() {
+  preserveAppearanceRuntime();
   const cacheBust = `?v=${Math.random().toString(36).slice(2)}`;
   return import(`../../../web/comfyui/ui.js${cacheBust}`);
 }

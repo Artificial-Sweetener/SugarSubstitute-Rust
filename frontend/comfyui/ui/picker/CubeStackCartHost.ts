@@ -164,7 +164,7 @@ export class CubeStackCartHost {
       library: capture.library,
       rows,
       pending: capture.session.pending || this.#refreshing,
-      appearance: this.#options.appearance.appearance.fluent ? 'fluent' : 'comfy',
+      appearance: this.#options.appearance.appearance.style,
     };
   }
 

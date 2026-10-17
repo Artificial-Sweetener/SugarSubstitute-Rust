@@ -15,10 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Characterize saved appearance preferences without modifying native values or workflow data. */
 import { afterEach, expect, jest, test } from '@jest/globals';
-import {
-  AppearanceHost,
-  FLUENT_APPEARANCE_SETTING,
-} from '../../../frontend/comfyui/ui/surface/appearance/AppearanceHost.js';
+import { AppearanceHost } from '../../../frontend/comfyui/ui/surface/appearance/AppearanceHost.js';
 import { prepareNativePresentation } from '../../../frontend/comfyui/ui/surface/NativePresentationReady.js';
 
 afterEach(() => {
@@ -34,7 +31,7 @@ test.each([false, true])(
     jest.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
     const values = new Map<string, unknown>([
       ['Comfy.VueNodes.Enabled', true],
-      [FLUENT_APPEARANCE_SETTING, enabled],
+      ['SugarCubes.Appearance.Fluent', enabled],
     ]);
     const settings = {
       addSetting: jest.fn(),
@@ -52,7 +49,7 @@ test.each([false, true])(
     host.setup();
     prepareNativePresentation(card);
     expect(card.hasAttribute('data-sc-style-node')).toBe(enabled);
-    expect(host.state.appearance).toEqual({ fluent: enabled, dark: true });
+    expect(host.state.appearance).toEqual({ style: enabled ? 'fluent' : 'comfy', dark: true });
     expect(card.querySelector('input')).toBe(input);
     expect(input.value).toBe('native value <literal>');
     expect(settings.setSettingValue).not.toHaveBeenCalled();

@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Bind unified settings presentation to named Comfy mounts and existing visual-mode authorities. */
+import { readOwnedVisualStyle, subscribeVisualStyle, } from '../surface/appearance/VisualStyleBoundary.js';
 import { HostSurfaceObserver } from '../core/HostSurfaceObserver.js';
 import { ComfySettingsCatalog } from './ComfySettingsCatalog.js';
 import { SettingsWorkspaceSurface } from './SettingsWorkspaceSurface.js';
@@ -65,7 +66,7 @@ export class SettingsWorkspaceHost {
             },
         });
         this.options.document.head.append(this.#style);
-        this.#stops.push(this.options.mode.subscribe(this.#queue), this.options.palette.subscribe(this.#queue));
+        this.#stops.push(this.options.mode.subscribe(this.#queue), this.options.palette.subscribe(this.#queue), subscribeVisualStyle(this.options.document, this.#queue));
         this.#observer = new HostSurfaceObserver(this.options.document.body, '[data-testid="settings-dialog"], .p-select-overlay', (changes) => {
             for (const { element } of changes) {
                 if (element.matches('.p-select-overlay'))
@@ -111,7 +112,7 @@ export class SettingsWorkspaceHost {
     #reconcile() {
         if (this.#disposed)
             return;
-        this.#appearance.update(this.options.mode.enabled, this.options.palette.theme.dark);
+        this.#appearance.update(this.options.mode.enabled ? readOwnedVisualStyle(this.options.document) : 'comfy', this.options.palette.theme.dark);
         for (const [root, surface] of this.#surfaces) {
             if (root.isConnected)
                 continue;

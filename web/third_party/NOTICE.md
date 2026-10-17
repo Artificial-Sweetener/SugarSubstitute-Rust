@@ -4,6 +4,23 @@ Vendored runtime assets are recorded in `manifest.toml`, with licenses under
 `licenses/`. The browser deployment includes this notice, the manifest, and
 the applicable license texts.
 
+## Adobe Spectrum 2
+
+Copyright 2026 Adobe. All rights reserved.
+
+Spectrum Web Components 1.12.5 supplies the Spectrum 2 visual style, with
+official controls and scoped Spectrum 2 foundations. Upstream component sources
+are unchanged; SugarCubes adapters translate their APIs to shared presentation
+contracts. The pinned repository and source paths are recorded in the manifest.
+The Apache-2.0 repository license and ISC theme-package license are included as
+`licenses/spectrum-web-components.LICENSE.txt` and `licenses/spectrum-theme.ISC.txt`.
+
+Bundled dependencies include Lit, Lit Element, Lit HTML, Lit Reactive Element,
+and Lit observers (BSD-3-Clause); Floating UI, focus-trap, and tabbable (MIT);
+Internationalized Number (Apache-2.0); and focus-visible (W3C Software and Document
+License). Their exact package versions, source paths, and complete license files
+are recorded in the manifest. Package integrity is pinned in `package-lock.json`.
+
 ## Microsoft Fluent UI System Icons
 
 Copyright (c) 2020 Microsoft Corporation.

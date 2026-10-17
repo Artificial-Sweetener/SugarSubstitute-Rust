@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Define the Vue rail's presentation state without giving it graph or persistence ownership. */
+import type { VisualStyle } from '../appearance/VisualStyle.js';
 import type { CubeIconModel } from '../../core/CubeIconResolver.js';
 
 /** Share one literal-text row model between live stack navigation and temporary picker drafts. */
@@ -39,7 +40,7 @@ export interface CubeStackViewState {
   readonly rows: readonly CubeStackNavigationRow[];
   readonly compact: boolean;
   readonly pending: boolean;
-  readonly appearance: 'fluent' | 'comfy';
+  readonly appearance: VisualStyle;
 }
 
 /** Route all user intent to the existing workflow, feedback and preference owners. */

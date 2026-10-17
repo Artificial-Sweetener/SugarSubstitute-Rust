@@ -35,8 +35,22 @@ export function accentThemeCss(color: string, dark: boolean): string {
     --sc-accent-hover:${hover};
     --sc-accent-pressed:${pressed};
   }
-  ${scopes}, ${scopes} [data-fluent-theme] {
+  ${scopes}, ${scopes} [data-fluent-theme], [data-sc-theme] {
     ${declarations}
+    --sc-brand-fill:var(--sc-accent-color) !important;
+    --sc-brand-fill-hover:var(--sc-accent-hover) !important;
+    --sc-brand-fill-pressed:var(--sc-accent-pressed) !important;
+    --sc-brand-text:var(--sc-accent-indicator) !important;
+    --sc-brand-border:var(--sc-accent-indicator) !important;
+    --sc-brand-indicator:var(--sc-accent-indicator) !important;
+    --sc-brand-indicator-hover:var(--sc-accent-hover) !important;
+    --sc-focus-ring:var(--sc-accent-indicator) !important;
+    --sc-text-on-accent:var(--sc-accent-foreground) !important;
+    --spectrum-accent-color-700:var(--sc-accent-indicator) !important;
+    --spectrum-accent-color-800:var(--sc-accent-indicator) !important;
+    --spectrum-accent-color-900:var(--sc-accent-color) !important;
+    --spectrum-accent-color-1000:var(--sc-accent-hover) !important;
+    --spectrum-accent-color-1100:var(--sc-accent-pressed) !important;
     --primary-color:var(--sc-accent-color) !important;
     --p-primary-color:var(--sc-accent-color) !important;
     --p-primary-hover-color:var(--sc-accent-hover) !important;

@@ -14,11 +14,9 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove reversible preference, renderer suspension, and native control preservation. */
+import { VISUAL_STYLE_SETTING } from '../../../frontend/comfyui/ui/surface/appearance/VisualStylePreference.js';
 import { afterEach, expect, jest, test } from '@jest/globals';
-import {
-  AppearanceHost,
-  FLUENT_APPEARANCE_SETTING,
-} from '../../../frontend/comfyui/ui/surface/appearance/AppearanceHost.js';
+import { AppearanceHost } from '../../../frontend/comfyui/ui/surface/appearance/AppearanceHost.js';
 import { isRecord } from '../../../frontend/comfyui/ui/types/common.js';
 import type { UnknownRecord } from '../../../frontend/comfyui/ui/types/common.js';
 import { NativeCardAdapter } from '../../../frontend/comfyui/ui/surface/appearance/NativeCardAdapter.js';
@@ -47,7 +45,7 @@ test('finishes requested native presentation before its first animation frame wi
   };
   const host = new AppearanceHost({ document, app, reportError: jest.fn() });
   host.setup();
-  host.setEnabled(true);
+  host.setStyle('fluent');
   const surface = document.createElement('section');
   surface.className = 'sugarcubes-workflow-masonry';
   const card = document.createElement('div');
@@ -83,7 +81,7 @@ test('prepares a replacement native card synchronously without refreshing unrela
     reportError: jest.fn(),
   });
   host.setup();
-  host.setEnabled(true);
+  host.setStyle('fluent');
   const surface = document.createElement('section');
   surface.className = 'sugarcubes-workflow-masonry';
   const unrelated = document.createElement('div');
@@ -128,7 +126,7 @@ test('initial styling synchronizes native sockets while popup activity leaves ca
     getSlotLayoutSync: async () => synchronize,
   });
   host.setup();
-  host.setEnabled(true);
+  host.setStyle('fluent');
   for (let index = 0; index < 3; index++) {
     await Promise.resolve();
     frames.splice(0).forEach((frame) => frame(0));
@@ -152,7 +150,7 @@ test('initial styling synchronizes native sockets while popup activity leaves ca
   }
   expect(annotate).not.toHaveBeenCalled();
   expect(synchronize).toHaveBeenCalledTimes(1);
-  host.setEnabled(false);
+  host.setStyle('comfy');
   frames.splice(0).forEach((frame) => frame(0));
   await Promise.resolve();
   expect(synchronize).toHaveBeenCalledTimes(2);
@@ -192,13 +190,13 @@ test('keeps controls and explicit custom styling intact while restoring the curr
   const errors = jest.fn();
   const host = new AppearanceHost({ document, app, reportError: errors });
   host.setup();
-  expect(isRecord(registration) && registration.id).toBe(FLUENT_APPEARANCE_SETTING);
+  expect(isRecord(registration) && registration.id).toBe(VISUAL_STYLE_SETTING);
   expect(root.hasAttribute('data-sc-style-node')).toBe(false);
   custom.focus();
-  host.setEnabled(true);
-  expect(document.querySelector('.sc-fluent-scrollbar-layer')).toBeNull();
+  host.setStyle('fluent');
+  expect(document.querySelector('.sc-style-scrollbar-layer')).toBeNull();
   frames.splice(0).forEach((frame) => frame(0));
-  expect(root.querySelector('.sc-fluent-scrollbar-layer')).not.toBeNull();
+  expect(root.querySelector('.sc-style-scrollbar-layer')).not.toBeNull();
   expect(document.activeElement).toBe(custom);
   expect(custom.style.backgroundColor).toBe('rgb(12, 34, 56)');
   expect(root.hasAttribute('data-sc-style-node')).toBe(true);
@@ -206,28 +204,28 @@ test('keeps controls and explicit custom styling intact while restoring the curr
   document.documentElement.style.colorScheme = 'light';
   events.dispatchEvent(new Event('Comfy.ColorPalette.change'));
   await Promise.resolve();
-  expect(document.getElementById('sugarcubes-fluent-appearance')?.textContent).toContain(
+  expect(document.getElementById('sugarcubes-native-appearance')?.textContent).toContain(
     '--sc-card-fill:#fbfbfb',
   );
   document.documentElement.style.colorScheme = 'dark';
   events.dispatchEvent(new Event('Comfy.ColorPalette.change'));
   await Promise.resolve();
-  expect(document.getElementById('sugarcubes-fluent-appearance')?.textContent).toContain(
+  expect(document.getElementById('sugarcubes-native-appearance')?.textContent).toContain(
     '--sc-card-fill:#2b2b2b',
   );
   root.style.setProperty('--node-component-surface', '#fedcba');
   values.set('Comfy.VueNodes.Enabled', false);
   events.dispatchEvent(new Event('Comfy.VueNodes.Enabled.change'));
   await Promise.resolve();
-  expect(document.querySelector('.sc-fluent-scrollbar-layer')).toBeNull();
+  expect(document.querySelector('.sc-style-scrollbar-layer')).toBeNull();
   expect(root.hasAttribute('data-sc-style-node')).toBe(false);
   values.set('Comfy.VueNodes.Enabled', true);
   events.dispatchEvent(new Event('Comfy.VueNodes.Enabled.change'));
   await Promise.resolve();
   frames.splice(0).forEach((frame) => frame(0));
   expect(root.hasAttribute('data-sc-style-node')).toBe(true);
-  host.setEnabled(false);
-  expect(document.querySelector('.sc-fluent-scrollbar-layer')).toBeNull();
+  host.setStyle('comfy');
+  expect(document.querySelector('.sc-style-scrollbar-layer')).toBeNull();
   expect(root.style.getPropertyValue('--node-component-surface')).toBe('#fedcba');
   expect(custom.value).toBe('<img src=x>');
   expect(root.querySelector('img')).toBeNull();
@@ -314,7 +312,7 @@ test('formats projected card labels and restores source text across presentation
   const errors = jest.fn();
   const host = new AppearanceHost({ document, app, reportError: errors });
   host.setup();
-  host.setEnabled(true);
+  host.setStyle('fluent');
   frames.splice(0).forEach((frame) => frame(0));
   expect(text.textContent).toBe('Mahiro CFG');
   expect(label.textContent).toBe('Sampler');
@@ -359,7 +357,7 @@ test('formats projected card labels and restores source text across presentation
   await Promise.resolve();
   frames.splice(0).forEach((frame) => frame(0));
   expect(label.textContent).toBe('Strength Model');
-  host.setEnabled(false);
+  host.setStyle('comfy');
   expect(label.textContent).toBe('strength_model');
   expect(errors).not.toHaveBeenCalled();
   host.dispose();
@@ -381,7 +379,7 @@ test('retains styled borrowed controls while still reconciling actual native con
   };
   const host = new AppearanceHost({ document, app, reportError: jest.fn() });
   host.setup();
-  host.setEnabled(true);
+  host.setStyle('fluent');
   const source = document.createElement('section');
   source.className = 'sugarcubes-workflow-masonry';
   const cell = document.createElement('div');
@@ -431,7 +429,7 @@ test('styles newly mounted relation controls during their native card reconcilia
   const errors = jest.fn();
   const host = new AppearanceHost({ document, app, reportError: errors });
   host.setup();
-  host.setEnabled(true);
+  host.setStyle('fluent');
   const surface = document.createElement('section');
   surface.className = 'sugarcubes-workflow-masonry';
   const card = document.createElement('div');
@@ -482,17 +480,17 @@ test('owns one stable graph token scope across native card and masonry presentat
   };
   const host = new AppearanceHost({ document, app, reportError: jest.fn() });
   host.setup();
-  host.setEnabled(true);
+  host.setStyle('fluent');
   prepareNativePresentation(masonry);
   expect([...document.querySelectorAll('[data-sc-style-theme-root]')]).toEqual([graph]);
-  expect(document.getElementById('sugarcubes-fluent-appearance')?.textContent).toContain(
+  expect(document.getElementById('sugarcubes-native-appearance')?.textContent).toContain(
     '[data-sc-style-theme-root]',
   );
   expect(card.hasAttribute('data-sc-style-node')).toBe(true);
   masonry.append(card);
   prepareNativePresentation(masonry);
   expect([...document.querySelectorAll('[data-sc-style-theme-root]')]).toEqual([graph]);
-  host.setEnabled(false);
+  host.setStyle('comfy');
   expect(document.querySelector('[data-sc-style-theme-root]')).toBeNull();
   host.dispose();
 });

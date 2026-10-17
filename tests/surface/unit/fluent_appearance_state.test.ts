@@ -23,20 +23,20 @@ test('publishes coherent appearance changes and releases surface subscriptions',
   const unsubscribe = state.subscribeAppearance(() => {
     snapshots.push(state.appearance);
   });
-  state.update(true, false);
-  state.update(true, false);
-  state.update(false, false);
+  state.update('fluent', false);
+  state.update('fluent', false);
+  state.update('comfy', false);
   expect(snapshots).toEqual([
-    { fluent: true, dark: false },
-    { fluent: false, dark: false },
+    { style: 'fluent', dark: false },
+    { style: 'comfy', dark: false },
   ]);
   expect(snapshots.every(Object.isFrozen)).toBe(true);
   unsubscribe();
-  state.update(true, true);
+  state.update('fluent', true);
   expect(snapshots).toHaveLength(2);
   const late = jest.fn();
   state.subscribeAppearance(late);
   state.dispose();
-  state.update(false, true);
+  state.update('comfy', true);
   expect(late).not.toHaveBeenCalled();
 });

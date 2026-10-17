@@ -43,19 +43,19 @@ test.each([
   icon.append(image, variant);
   document.body.append(icon);
   for (const fluent of [false, true]) {
-    source.update(fluent, false);
+    source.update(fluent ? 'fluent' : 'comfy', false);
     expect(getComputedStyle(image).display).toBe('none');
     expect(getComputedStyle(variant).display).toBe('block');
-    source.update(fluent, true);
+    source.update(fluent ? 'fluent' : 'comfy', true);
     expect(getComputedStyle(image).display).not.toBe('none');
     expect(getComputedStyle(variant).display).toBe('none');
     icon.dataset.iconTone = 'dark';
-    source.update(fluent, false);
+    source.update(fluent ? 'fluent' : 'comfy', false);
     expect(getComputedStyle(image).display).not.toBe('none');
-    source.update(fluent, true);
+    source.update(fluent ? 'fluent' : 'comfy', true);
     expect(getComputedStyle(image).display).toBe('none');
     icon.dataset.iconTone = 'original';
-    source.update(fluent, false);
+    source.update(fluent ? 'fluent' : 'comfy', false);
     expect(getComputedStyle(image).display).not.toBe('none');
     expect(getComputedStyle(variant).display).toBe('none');
     expect(icon.firstChild).toBe(image);
@@ -63,7 +63,7 @@ test.each([
   }
   host.dispose();
   expect(document.getElementById('sugarcubes-cube-icon-appearance')).toBeNull();
-  source.update(false, false);
+  source.update('comfy', false);
   expect(document.getElementById('sugarcubes-cube-icon-appearance')).toBeNull();
 });
 
@@ -73,9 +73,9 @@ test('keeps fallback initials readable on light surfaces and restores their orig
   const canvas = document.createElement('canvas');
   canvas.className = 'sugarcubes-cube-icon__fallback';
   document.body.append(canvas);
-  source.update(false, false);
+  source.update('comfy', false);
   expect(getComputedStyle(canvas).filter).toBe('brightness(0)');
-  source.update(false, true);
+  source.update('comfy', true);
   expect(getComputedStyle(canvas).filter).toBe('none');
   host.dispose();
 });

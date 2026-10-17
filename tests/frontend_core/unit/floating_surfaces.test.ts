@@ -38,7 +38,7 @@ test('portals are fixed without feature styles and never become dialog descendan
   expect(popup.style.left).toBe('100px');
   expect(popup.style.top).toBe('50px');
   expect(popup.getAttribute('popover')).toBe('manual');
-  expect(popup.style.getPropertyValue('--colorNeutralBackground1')).not.toBe('');
+  expect(popup.style.getPropertyValue('--sc-surface')).not.toBe('');
   surface.close();
   expect(popup.isConnected).toBe(false);
   dialog.remove();

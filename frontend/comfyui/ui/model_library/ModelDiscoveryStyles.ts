@@ -37,10 +37,10 @@ export const modelDiscoveryCss =
 .sc-model-discovery-portrait { position:absolute; inset:10px; display:block; width:184px; height:200px; padding:0; border:0; border-radius:14px; overflow:hidden; background:${MODEL_PREVIEW_BACKDROP}; color:#fff; cursor:pointer; text-align:left; }
 .sc-model-discovery-portrait::before { content:''; position:absolute; inset:0; z-index:1; background:linear-gradient(to bottom,rgba(6,9,14,0) 42%,rgba(6,9,14,.133) 74.48%,rgba(6,9,14,.518) 87.24%,rgba(6,9,14,.91)); pointer-events:none; }
 .sc-model-discovery-portrait:hover::before { background:linear-gradient(to bottom,rgba(6,9,14,0) 42%,rgba(6,9,14,.227) 74.48%,rgba(6,9,14,.651) 87.24%,rgba(6,9,14,.91)); }
-.sc-model-discovery-portrait:focus-visible { outline:2px solid var(--colorBrandStroke1,#4ca6f9); outline-offset:2px; }
+.sc-model-discovery-portrait:focus-visible { outline:2px solid var(--sc-brand-border,#4ca6f9); outline-offset:2px; }
 .sc-model-discovery-caption { position:absolute; inset:auto 0 0; z-index:2; padding:16px 16px 15px; font:700 17.333px/1.35 'Segoe UI',sans-serif; overflow-wrap:anywhere; pointer-events:none; }
 .sc-model-discovery-check { position:absolute; right:20px; top:16px; z-index:2; display:grid; place-items:center; width:20px; height:20px; border:1px solid #ffffff70; border-radius:4px; font:14px 'Segoe UI',sans-serif; background:#ffffff08; }
-.sc-model-discovery-portrait.is-selected .sc-model-discovery-check { background:var(--colorBrandBackground,#0078d4); border-color:transparent; }
+.sc-model-discovery-portrait.is-selected .sc-model-discovery-check { background:var(--sc-brand-fill,#0078d4); border-color:transparent; }
 .sc-model-discovery-provider { position:absolute; left:20px; top:20px; width:28px; height:28px; display:grid; place-items:center; padding:0; border:0; border-radius:50%; background:transparent; cursor:pointer; }
 .sc-model-discovery-provider img { width:20px; height:20px; object-fit:contain; }
 .sc-model-discovery-card .sc-model-key-required { left:50px; top:22px; }
@@ -58,7 +58,7 @@ export const modelDiscoveryCss =
 .sc-model-credential-input button { flex:none; display:grid; place-items:center; width:32px; padding:0; border:0; background:transparent; color:inherit; cursor:pointer; }
 .sc-model-credential-eye { width:16px; height:16px; background:currentColor; mask:url("${eyeIcon}") center/contain no-repeat; }
 .sc-model-credential-actions { display:flex; justify-content:flex-end; gap:8px; padding-top:10px; }
-.sc-model-credential-error { color:var(--colorPaletteRedForeground1,#f98989); }
+.sc-model-credential-error { color:var(--sc-danger-text,#f98989); }
 @media(max-width:930px) { .sc-model-discovery-grid { grid-template-columns:repeat(3,204px); grid-template-rows:none; grid-auto-rows:220px; align-content:start; } }
 @media(max-width:710px) { .sc-model-discovery-grid { grid-template-columns:repeat(2,204px); } .sc-model-credential-actions { flex-wrap:wrap; } }
 @media(max-width:460px) { .sc-model-discovery-grid { grid-template-columns:204px; } }

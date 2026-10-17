@@ -14,6 +14,10 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Bind unified settings presentation to named Comfy mounts and existing visual-mode authorities. */
+import {
+  readOwnedVisualStyle,
+  subscribeVisualStyle,
+} from '../surface/appearance/VisualStyleBoundary.js';
 import { HostSurfaceObserver } from '../core/HostSurfaceObserver.js';
 import type { AccentThemeHost } from '../surface/appearance/AccentThemeHost.js';
 import type { SubstituteFrameMode } from '../surface/frame/SubstituteFrameMode.js';
@@ -84,6 +88,7 @@ export class SettingsWorkspaceHost {
     this.#stops.push(
       this.options.mode.subscribe(this.#queue),
       this.options.palette.subscribe(this.#queue),
+      subscribeVisualStyle(this.options.document, this.#queue),
     );
     this.#observer = new HostSurfaceObserver(
       this.options.document.body,
@@ -137,7 +142,10 @@ export class SettingsWorkspaceHost {
   /** Annotate only actual settings surfaces, keeping third-party custom renderers untouched. */
   #reconcile(): void {
     if (this.#disposed) return;
-    this.#appearance.update(this.options.mode.enabled, this.options.palette.theme.dark);
+    this.#appearance.update(
+      this.options.mode.enabled ? readOwnedVisualStyle(this.options.document) : 'comfy',
+      this.options.palette.theme.dark,
+    );
     for (const [root, surface] of this.#surfaces) {
       if (root.isConnected) continue;
       surface.dispose();

@@ -9524,16 +9524,16 @@ function createFluentSliderThumb(documentRef) {
 var WORKFLOW_TAB_ORB_CUTOUT_RADIUS = 26;
 var workflowTabCss = `
   :host { height:30px; width:var(--sc-workflow-tab-width,180px); min-width:var(--sc-workflow-tab-width,180px); max-width:var(--sc-workflow-tab-width,180px); flex:0 0 var(--sc-workflow-tab-width,180px); padding:0 8px 0 20px;
-    border-radius:8px 8px 0 0; gap:6px; font:13px/20px var(--fontFamilyBase); overflow:hidden;
+    border-radius:8px 8px 0 0; gap:6px; font:13px/20px var(--sc-font-family); overflow:hidden;
     color:var(--sc-frame-muted); background:transparent; box-shadow:none; }
   :host .tab-content { min-width:0; flex:1; overflow:hidden; padding:0; }
   :host .tab-content::after { display:none; }
-  :host([aria-selected='true']) { background:var(--comfy-menu-bg,#202020); color:var(--colorNeutralForeground1); font-weight:600; }
+  :host([aria-selected='true']) { background:var(--comfy-menu-bg,#202020); color:var(--sc-text); font-weight:600; }
   :host(:not([aria-selected='true']):hover) { background:var(--sc-frame-hover); }
   :host(:not([aria-selected='true'])) { clip-path:inset(1px 1px 0 round 7px 7px 0 0); }
   :host(:not([aria-selected='true']):active) { background:var(--sc-frame-pressed); }
   :host([data-unread]:not([aria-selected='true'])) { background:var(--sc-frame-unread); }
-  :host([data-sc-held]:not([aria-selected='true'])) { background:linear-gradient(var(--sc-frame-hover),var(--sc-frame-hover)),var(--sc-tab-drag-backdrop,var(--colorNeutralBackground1)); }
+  :host([data-sc-held]:not([aria-selected='true'])) { background:linear-gradient(var(--sc-frame-hover),var(--sc-frame-hover)),var(--sc-tab-drag-backdrop,var(--sc-surface)); }
   :host::after { content:''; position:absolute; inset:0 0 auto; height:2px; width:auto; border-radius:0;
     background:transparent; transform:none; transition:none; }
   :host([aria-selected='true'])::after { background:var(--sc-accent-indicator); }
@@ -9549,12 +9549,81 @@ var workflowTablistCss = `
   :host ::slotted([slot='tab'])::after { inset:0 0 auto; height:2px; width:auto; transform:none; border-radius:0; }
 `;
 
+// frontend/comfyui/ui/surface/appearance/FluentThemeTokens.ts
+function fluentThemeTokens(theme) {
+  return {
+    text: String(theme.colorNeutralForeground1 ?? ""),
+    "text-secondary": String(theme.colorNeutralForeground2 ?? ""),
+    "text-muted": String(theme.colorNeutralForeground3 ?? ""),
+    "text-subtle": String(theme.colorNeutralForeground4 ?? ""),
+    "text-disabled": String(theme.colorNeutralForegroundDisabled ?? ""),
+    "text-on-accent": String(theme.colorNeutralForegroundOnBrand ?? ""),
+    surface: String(theme.colorNeutralBackground1 ?? ""),
+    "surface-hover": String(theme.colorNeutralBackground1Hover ?? ""),
+    "surface-pressed": String(theme.colorNeutralBackground1Pressed ?? ""),
+    "surface-secondary": String(theme.colorNeutralBackground2 ?? ""),
+    "surface-tertiary": String(theme.colorNeutralBackground3 ?? ""),
+    "surface-disabled": String(theme.colorNeutralBackgroundDisabled ?? ""),
+    border: String(theme.colorNeutralStroke1 ?? ""),
+    "border-hover": String(theme.colorNeutralStroke1Hover ?? ""),
+    "border-subtle": String(theme.colorNeutralStroke2 ?? ""),
+    "border-accessible": String(theme.colorNeutralStrokeAccessible ?? ""),
+    "border-accessible-hover": String(theme.colorNeutralStrokeAccessibleHover ?? ""),
+    "border-disabled": String(theme.colorNeutralStrokeDisabled ?? ""),
+    "brand-fill": String(theme.colorBrandBackground ?? ""),
+    "brand-fill-hover": String(theme.colorBrandBackgroundHover ?? ""),
+    "brand-fill-pressed": String(theme.colorBrandBackgroundPressed ?? ""),
+    "brand-text": String(theme.colorBrandForeground1 ?? ""),
+    "brand-border": String(theme.colorBrandStroke1 ?? ""),
+    "brand-indicator": String(theme.colorCompoundBrandBackground ?? ""),
+    "brand-indicator-hover": String(theme.colorCompoundBrandBackgroundHover ?? ""),
+    "danger-text": String(theme.colorPaletteRedForeground1 ?? ""),
+    "focus-ring": String(theme.colorStrokeFocus2 ?? ""),
+    "subtle-hover": String(theme.colorSubtleBackgroundHover ?? ""),
+    "subtle-selected": String(theme.colorSubtleBackgroundSelected ?? ""),
+    "font-family": String(theme.fontFamilyBase ?? ""),
+    "font-size": String(theme.fontSizeBase300 ?? ""),
+    "font-weight": String(theme.fontWeightRegular ?? ""),
+    "font-weight-strong": String(theme.fontWeightSemibold ?? ""),
+    "control-radius": String(theme.borderRadiusMedium ?? ""),
+    "shadow-small": String(theme.shadow4 ?? ""),
+    "shadow-medium": String(theme.shadow16 ?? ""),
+    "shadow-large": String(theme.shadow64 ?? ""),
+    "motion-faster": String(theme.durationFaster ?? ""),
+    "motion-fast": String(theme.durationFast ?? ""),
+    "motion-duration": String(theme.durationNormal ?? ""),
+    "motion-ease": String(theme.curveEasyEase ?? ""),
+    "motion-decelerate": String(theme.curveDecelerateMid ?? "")
+  };
+}
+
+// frontend/comfyui/ui/surface/appearance/ThemeTokens.ts
+function themeTokenDeclarations(tokens) {
+  return Object.entries(tokens).map(([role, value]) => `--sc-${role}:${value};`).join("");
+}
+
 // frontend/comfyui/ui/surface/appearance/FluentThemeRuntime.ts
 var WorkflowTab = class extends Tab {
 };
 var WorkflowTablist = class extends Tablist {
 };
 var PresentationSlider = class extends Slider {
+  /** Expose the official component through the shared numeric-control boundary. */
+  get root() {
+    return this;
+  }
+  /** Normalize Microsoft's string value before it reaches native widget bindings. */
+  readValue() {
+    return Number(this.value);
+  }
+  /** Translate native numeric values into Microsoft's string-based properties. */
+  synchronize(minimum, maximum, step, disabled, value) {
+    this.min = String(minimum);
+    this.max = String(maximum);
+    this.step = String(step);
+    this.disabled = disabled;
+    if (value !== null) this.value = String(value);
+  }
   /** Preserve mounted state while native layout observes the new parent width. */
   connectedMoveCallback() {
   }
@@ -9586,12 +9655,21 @@ var PresentationCheckbox = class extends Checkbox {
   connectedMoveCallback() {
   }
 };
+var PresentationTextInput = class extends TextInput {
+  /** Apply the shared accessible name before focusing the real input. */
+  focusInput(selectAll) {
+    this.control.setAttribute("aria-label", this.getAttribute("aria-label") ?? "Search masonry");
+    this.control.focus();
+    if (selectAll) this.select();
+  }
+};
 if (!customElements.get("fluent-slider")) await PresentationSlider.define(definition);
 if (!customElements.get("fluent-button")) await PresentationButton.define(definition2);
 if (!customElements.get("fluent-tab")) await PresentationTab.define(definition3);
 if (!customElements.get("fluent-tablist")) await PresentationTablist.define(definition4);
 if (!customElements.get("fluent-checkbox")) await PresentationCheckbox.define(definition5);
-if (!customElements.get("fluent-text-input")) await TextInput.define(definition6);
+if (!customElements.get("fluent-text-input"))
+  await PresentationTextInput.define(definition6);
 var workflowTabDefinition = {
   ...definition3,
   name: "sc-workflow-tab",
@@ -9623,7 +9701,7 @@ function createWorkflowTab(documentRef) {
 }
 function createFinderInputControl(documentRef) {
   const input = documentRef.createElement("fluent-text-input");
-  if (!(input instanceof TextInput))
+  if (!(input instanceof PresentationTextInput))
     throw new TypeError("The registered Fluent input is incompatible.");
   return input;
 }
@@ -9638,28 +9716,26 @@ function createBooleanSegmentControls(documentRef) {
   const GroupConstructor = documentRef.defaultView?.customElements.get("fluent-tablist");
   if (!GroupConstructor) throw new TypeError("The Fluent tablist is not registered.");
   const group = new GroupConstructor();
+  group.setAttribute("size", "small");
+  group.setAttribute("appearance", "subtle");
   const off = documentRef.createElement("fluent-tab");
   const on = documentRef.createElement("fluent-tab");
   if (!(group instanceof PresentationTablist) || !(off instanceof Tab) || !(on instanceof Tab))
     throw new TypeError("The registered Fluent tab controls have incompatible implementations.");
   off.id = `sc-boolean-${++nextBooleanSegmentId}`;
   on.id = `sc-boolean-${++nextBooleanSegmentId}`;
+  off.slot = "tab";
+  on.slot = "tab";
   return { group, segments: [off, on], release: () => group.releasePresentation() };
 }
-function createNumericSliderControl(documentRef) {
+function createFluentNumericSlider(documentRef) {
   const slider = documentRef.createElement("fluent-slider");
-  if (!(slider instanceof Slider))
+  if (!(slider instanceof PresentationSlider))
     throw new TypeError("The registered Fluent slider has an incompatible implementation.");
   adaptFluentSliderGeometry(slider);
   slider.append(createFluentSliderThumb(documentRef));
   return slider;
 }
-var fluentMotion = {
-  fasterDuration: Number.parseFloat(webDarkTheme.durationFaster),
-  duration: Number.parseFloat(webDarkTheme.durationNormal),
-  exitDuration: Number.parseFloat(webDarkTheme.durationFast),
-  easing: webDarkTheme.curveDecelerateMid
-};
 var fontFamilyBase2 = '"Segoe UI Variable", "Segoe UI", sans-serif';
 var themes = {
   dark: { ...webDarkTheme, fontFamilyBase: fontFamilyBase2 },
@@ -9667,7 +9743,8 @@ var themes = {
 };
 var appliedThemes = /* @__PURE__ */ new WeakMap();
 function fluentTokenDeclarations(dark) {
-  return Object.entries(dark ? themes.dark : themes.light).map(([name, value]) => `--${name}:${value};`).join("");
+  const theme = dark ? themes.dark : themes.light;
+  return Object.entries(theme).map(([name, value]) => `--${name}:${value};`).join("") + themeTokenDeclarations(fluentThemeTokens(theme));
 }
 function applyOwnedFluentTheme(element, dark) {
   if (element !== element.ownerDocument.documentElement && !element.closest("body")) {
@@ -9676,6 +9753,12 @@ function applyOwnedFluentTheme(element, dark) {
   }
   if (appliedThemes.has(element) && appliedThemes.get(element) === dark) return;
   setTheme(dark === null ? null : dark ? themes.dark : themes.light, element);
+  for (const [role, value] of Object.entries(
+    fluentThemeTokens(dark ? themes.dark : themes.light)
+  )) {
+    if (dark === null) element.style.removeProperty(`--sc-${role}`);
+    else element.style.setProperty(`--sc-${role}`, value);
+  }
   appliedThemes.set(element, dark);
 }
 function fluentAccentColorTokens(color, dark) {
@@ -9708,10 +9791,9 @@ export {
   createBooleanCheckboxControl,
   createBooleanSegmentControls,
   createFinderInputControl,
-  createNumericSliderControl,
+  createFluentNumericSlider,
   createWorkflowTab,
   createWorkflowTablist,
   fluentAccentColorTokens,
-  fluentMotion,
   fluentTokenDeclarations
 };

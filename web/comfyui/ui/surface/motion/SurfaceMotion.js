@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own interruptible presentation motion without changing graph geometry or native controls. */
-import { fluentMotion } from '../appearance/FluentThemeRuntime.js';
+import { surfaceMotion } from '../appearance/SurfaceMotionTokens.js';
 /** Animate stable surface items with one lifecycle for entry, placement, resize, and retirement. */
 export class SurfaceMotion {
     #placements = new Map();
@@ -64,7 +64,7 @@ export class SurfaceMotion {
         this.#run(element, [
             { transform: from, opacity: previous ? 1 : 0 },
             { transform: target, opacity: 1 },
-        ], fluentMotion.duration);
+        ], surfaceMotion.duration);
         if (this.#animations.has(element)) {
             this.#moving.add(element);
             element.dataset.scSurfaceMoving = '';
@@ -83,13 +83,13 @@ export class SurfaceMotion {
         element.style.height = `${String(height)}px`;
         if (!this.#ready || previous === undefined || Math.abs(from - height) < 0.5)
             return;
-        this.#run(element, [{ height: `${String(from)}px` }, { height: `${String(height)}px` }], fluentMotion.duration);
+        this.#run(element, [{ height: `${String(from)}px` }, { height: `${String(height)}px` }], surfaceMotion.duration);
     }
     /** Keep retiring controls mounted until their exit finishes, allowing immediate resurrection. */
     retire(element, release) {
         const opacity = element.ownerDocument.defaultView?.getComputedStyle(element).opacity || '1';
         this.cancel(element);
-        this.#run(element, [{ opacity }, { opacity: 0 }], fluentMotion.exitDuration, () => {
+        this.#run(element, [{ opacity }, { opacity: 0 }], surfaceMotion.exitDuration, () => {
             this.forget(element);
             release();
         });
@@ -98,7 +98,7 @@ export class SurfaceMotion {
     revive(element) {
         const opacity = element.ownerDocument.defaultView?.getComputedStyle(element).opacity || '1';
         this.cancel(element);
-        this.#run(element, [{ opacity }, { opacity: 1 }], fluentMotion.duration);
+        this.#run(element, [{ opacity }, { opacity: 1 }], surfaceMotion.duration);
     }
     /** Cancel one effect while preserving the committed destination geometry. */
     cancel(element) {
@@ -130,7 +130,7 @@ export class SurfaceMotion {
         }
         const animation = element.animate(frames, {
             duration,
-            easing: fluentMotion.easing,
+            easing: surfaceMotion.easing,
             fill: 'both',
         });
         this.#animations.set(element, animation);

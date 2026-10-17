@@ -147,7 +147,7 @@ test('context selector provides a Fluent stroke divider without intercepting sea
   expect(getComputedStyle(trigger).borderRightWidth).toBe('1px');
   expect(getComputedStyle(trigger).borderRightStyle).toBe('solid');
   expect(document.getElementById('sc-masonry-finder-styles')?.textContent).toContain(
-    'border-right-color:var(--colorNeutralStroke2)',
+    'border-right-color:var(--sc-border-subtle)',
   );
   f.search('512');
   expect(f.presenter.state.active?.field).toBe('width');
@@ -170,8 +170,8 @@ test('finder icon actions use official subtle rounded buttons over textured acry
   const styles = document.getElementById('sc-masonry-finder-styles')?.textContent;
   expect(styles).toContain('backdrop-filter:blur(30px) saturate(125%)');
   expect(styles).toContain('acrylic-grain.svg');
-  expect(styles).toContain('var(--colorNeutralBackground2) 78%');
-  expect(styles).toContain('gap:0; background:transparent');
+  expect(styles).toContain('var(--sc-surface-secondary) 78%');
+  expect(styles).toContain('gap:0; border:0; background:transparent');
   expect(styles).toContain('prefers-reduced-transparency:reduce');
 });
 

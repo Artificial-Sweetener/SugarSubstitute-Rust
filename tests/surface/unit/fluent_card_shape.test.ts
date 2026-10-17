@@ -38,7 +38,7 @@ test('owns Fluent control foregrounds while image-backed picker inputs keep thei
       entry instanceof CSSStyleRule && entry.selectorText.includes(':not(.sc-model-field input)'),
   );
   if (!(rule instanceof CSSStyleRule)) throw new Error('Missing owned foreground rule');
-  expect(rule.style.color).toBe('var(--colorNeutralForeground1,var(--fg-color,#eee))');
+  expect(rule.style.color).toBe('var(--sc-text,var(--fg-color,#eee))');
   expect(input.matches(rule.selectorText)).toBe(true);
   expect(combo.matches(rule.selectorText)).toBe(true);
   expect(imageInput.matches(rule.selectorText)).toBe(false);

@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Style shared SugarCubes dialog chrome and native form controls with Fluent tokens. */
 const STYLE_ID = 'sugarcubes-modal-appearance';
-const scope = '[data-sc-modal-appearance="fluent"]';
+const scope = '[data-sc-modal-appearance]:not([data-sc-modal-appearance="comfy"])';
 const comfy = '[data-sc-modal-appearance="comfy"]';
 const styles = `
 ${comfy} .sugarcubes-modal {
@@ -41,9 +41,9 @@ ${comfy} .sugarcubes-modal__close { flex:none; position:relative; width:32px; he
 ${comfy} .sugarcubes-modal__close::before,${comfy} .sugarcubes-modal__close::after { content:''; position:absolute; width:14px; height:1px; background:currentColor; transform:rotate(45deg); }
 ${comfy} .sugarcubes-modal__close::after { transform:rotate(-45deg); }
 ${scope} :is(.sugarcubes-modal,.sugarcubes-modal__panel) {
-  box-sizing:border-box; min-width:0; padding:0; border:1px solid var(--colorNeutralStroke1);
-  border-radius:8px; background:var(--colorNeutralBackground2); color:var(--colorNeutralForeground1);
-  box-shadow:var(--shadow64); font-family:var(--fontFamilyBase); font-size:14px; line-height:1.4; overflow-wrap:anywhere;
+  box-sizing:border-box; min-width:0; padding:0; border:1px solid var(--sc-border);
+  border-radius:8px; background:var(--sc-surface-secondary); color:var(--sc-text);
+  box-shadow:var(--sc-shadow-large); font-family:var(--sc-font-family); font-size:14px; line-height:1.4; overflow-wrap:anywhere;
 }
 ${scope} :is(.p-dialog-header,.sugarcubes-modal__panel-header) { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
 ${scope} .p-dialog-header { padding:24px 24px 16px; border:0; border-radius:8px 8px 0 0; background:transparent; color:inherit; }
@@ -57,43 +57,43 @@ ${scope} .sugarcubes-modal__form { gap:16px; }
 ${scope} :is(.sugarcubes-modal__field-label,.sugarcubes-modal__checkbox-label) { font-size:14px; font-weight:400; }
 ${scope} :is(.sugarcubes-modal__text-input,.sugarcubes-modal__input-group) {
   box-sizing:border-box; min-width:0; max-width:100%; min-height:32px; margin:0; padding:5px 10px;
-  border:1px solid var(--colorNeutralStroke1); border-bottom-color:var(--colorNeutralStrokeAccessible);
-  border-radius:4px; background:var(--colorNeutralBackground1); color:var(--colorNeutralForeground1);
-  font-family:var(--fontFamilyBase); font-size:14px; line-height:20px; outline:0;
+  border:1px solid var(--sc-border); border-bottom-color:var(--sc-border-accessible);
+  border-radius:4px; background:var(--sc-surface); color:var(--sc-text);
+  font-family:var(--sc-font-family); font-size:14px; line-height:20px; outline:0;
 }
-${scope} .sugarcubes-modal__text-input:hover { border-color:var(--colorNeutralStroke1Hover); border-bottom-color:var(--colorNeutralStrokeAccessibleHover); }
-${scope} .sugarcubes-modal__text-input:focus { border-bottom-color:var(--colorBrandStroke1); box-shadow:inset 0 -1px var(--colorBrandStroke1); }
+${scope} .sugarcubes-modal__text-input:hover { border-color:var(--sc-border-hover); border-bottom-color:var(--sc-border-accessible-hover); }
+${scope} .sugarcubes-modal__text-input:focus { border-bottom-color:var(--sc-brand-border); box-shadow:inset 0 -1px var(--sc-brand-border); }
 ${scope} .sugarcubes-modal__input-group { padding:0; }
-${scope} .sugarcubes-modal__input-group:focus-within { border-bottom-color:var(--colorBrandStroke1); box-shadow:inset 0 -1px var(--colorBrandStroke1); }
-${scope} .sugarcubes-modal__text-input:disabled { background:var(--colorNeutralBackgroundDisabled); color:var(--colorNeutralForegroundDisabled); border-color:var(--colorNeutralStrokeDisabled); }
-${scope} .sugarcubes-modal__text-input::placeholder { color:var(--colorNeutralForeground4); }
+${scope} .sugarcubes-modal__input-group:focus-within { border-bottom-color:var(--sc-brand-border); box-shadow:inset 0 -1px var(--sc-brand-border); }
+${scope} .sugarcubes-modal__text-input:disabled { background:var(--sc-surface-disabled); color:var(--sc-text-disabled); border-color:var(--sc-border-disabled); }
+${scope} .sugarcubes-modal__text-input::placeholder { color:var(--sc-text-subtle); }
 ${scope} textarea.sugarcubes-modal__text-input { resize:vertical; }
 ${scope} select.sugarcubes-modal__text-input { cursor:pointer; }
-${scope} :is(input[type="checkbox"],input[type="radio"]) { width:20px; height:20px; margin:0; accent-color:var(--colorBrandBackground); flex:none; }
+${scope} :is(input[type="checkbox"],input[type="radio"]) { width:20px; height:20px; margin:0; accent-color:var(--sc-brand-fill); flex:none; }
 ${scope} .p-button {
   display:inline-flex; box-sizing:border-box; align-items:center; justify-content:center; gap:8px;
-  min-width:0; min-height:32px; margin:0; padding:5px 12px; border:1px solid var(--colorNeutralStroke1);
-  border-bottom-color:var(--colorNeutralStrokeAccessible); border-radius:4px;
-  background:var(--colorNeutralBackground1); color:var(--colorNeutralForeground1);
-  font-family:var(--fontFamilyBase); font-size:14px; line-height:20px; cursor:pointer; text-decoration:none; white-space:nowrap;
+  min-width:0; min-height:32px; margin:0; padding:5px 12px; border:1px solid var(--sc-border);
+  border-bottom-color:var(--sc-border-accessible); border-radius:4px;
+  background:var(--sc-surface); color:var(--sc-text);
+  font-family:var(--sc-font-family); font-size:14px; line-height:20px; cursor:pointer; text-decoration:none; white-space:nowrap;
 }
 ${scope} .p-button[hidden] { display:none; }
-${scope} .p-button:hover { background:var(--colorNeutralBackground1Hover); }
-${scope} .p-button:active { background:var(--colorNeutralBackground1Pressed); }
-${scope} .p-button:focus-visible { outline:2px solid var(--colorStrokeFocus2); outline-offset:2px; }
+${scope} .p-button:hover { background:var(--sc-surface-hover); }
+${scope} .p-button:active { background:var(--sc-surface-pressed); }
+${scope} .p-button:focus-visible { outline:2px solid var(--sc-focus-ring); outline-offset:2px; }
 ${scope} :is(.sugarcubes-modal__footer-actions .p-button:not(.p-button-secondary),.p-button-primary):not(:disabled) {
-  background:var(--colorBrandBackground); color:var(--colorNeutralForegroundOnBrand); border-color:transparent;
+  background:var(--sc-brand-fill); color:var(--sc-text-on-accent); border-color:transparent;
 }
-${scope} :is(.sugarcubes-modal__footer-actions .p-button:not(.p-button-secondary),.p-button-primary):not(:disabled):hover { background:var(--colorBrandBackgroundHover); }
-${scope} :is(.sugarcubes-modal__footer-actions .p-button:not(.p-button-secondary),.p-button-primary):not(:disabled):active { background:var(--colorBrandBackgroundPressed); }
-${scope} .p-button:disabled { color:var(--colorNeutralForegroundDisabled); background:var(--colorNeutralBackgroundDisabled); border-color:var(--colorNeutralStrokeDisabled); cursor:default; opacity:1; }
+${scope} :is(.sugarcubes-modal__footer-actions .p-button:not(.p-button-secondary),.p-button-primary):not(:disabled):hover { background:var(--sc-brand-fill-hover); }
+${scope} :is(.sugarcubes-modal__footer-actions .p-button:not(.p-button-secondary),.p-button-primary):not(:disabled):active { background:var(--sc-brand-fill-pressed); }
+${scope} .p-button:disabled { color:var(--sc-text-disabled); background:var(--sc-surface-disabled); border-color:var(--sc-border-disabled); cursor:default; opacity:1; }
 ${scope} .sugarcubes-modal__close { position:relative; flex:none; width:32px; height:32px; padding:0; border-color:transparent; background:transparent; }
 ${scope} .sugarcubes-modal__close::before,${scope} .sugarcubes-modal__close::after { content:''; position:absolute; width:14px; height:1px; background:currentColor; transform:rotate(45deg); }
 ${scope} .sugarcubes-modal__close::after { transform:rotate(-45deg); }
-${scope} .sugarcubes-modal__close:hover:not(:disabled) { border-color:var(--colorNeutralStroke1Hover); background:var(--colorNeutralBackground1Hover); }
-${scope} :is(.sugarcubes-modal__error,.sugarcubes-modal__field-error) { color:var(--colorPaletteRedForeground1); }
-${scope} :is(.sugarcubes-modal__field-help,.sugarcubes-modal__description) { color:var(--colorNeutralForeground2); }
-${scope} :is(.sugarcubes-selection-dialog__option,.sugarcubes-default-review__choice,.sugarcubes-create-cube__preview) { background:var(--colorNeutralBackground3); border-color:var(--colorNeutralStroke1); }
+${scope} .sugarcubes-modal__close:hover:not(:disabled) { border-color:var(--sc-border-hover); background:var(--sc-surface-hover); }
+${scope} :is(.sugarcubes-modal__error,.sugarcubes-modal__field-error) { color:var(--sc-danger-text); }
+${scope} :is(.sugarcubes-modal__field-help,.sugarcubes-modal__description) { color:var(--sc-text-secondary); }
+${scope} :is(.sugarcubes-selection-dialog__option,.sugarcubes-default-review__choice,.sugarcubes-create-cube__preview) { background:var(--sc-surface-tertiary); border-color:var(--sc-border); }
 `;
 /** Inject one document-level stylesheet for every shared modal consumer. */
 export function injectModalAppearanceStyles(document) {

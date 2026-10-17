@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Animate the content's inset on the compositor after committing one settled layout destination. */
-import { fluentMotion } from '../appearance/FluentThemeRuntime.js';
+import { surfaceMotion } from '../appearance/SurfaceMotionTokens.js';
 
 /** Retain and interrupt one horizontal rail-reservation effect without frame-by-frame packing. */
 export class MasonryStackInsetMotion {
@@ -40,7 +40,7 @@ export class MasonryStackInsetMotion {
     if (Math.abs(delta) < 0.5) return;
     const animation = content.animate(
       [{ transform: `translateX(${String(delta)}px)` }, { transform: 'translateX(0px)' }],
-      { duration: fluentMotion.duration, easing: fluentMotion.easing },
+      { duration: surfaceMotion.duration, easing: surfaceMotion.easing },
     );
     this.#animation = animation;
     void Promise.allSettled([animation.finished]).then(() => {

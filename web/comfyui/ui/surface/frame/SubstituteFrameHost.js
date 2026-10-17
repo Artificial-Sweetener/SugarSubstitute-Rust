@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Bind reversible host frame mounts to the existing workflow, mode and palette authorities. */
 import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
+import { subscribeVisualStyle } from '../appearance/VisualStyleBoundary.js';
 import { SubstituteFrameMode } from './SubstituteFrameMode.js';
 import { ComfyFrameWorkflowAdapter } from './ComfyFrameWorkflowAdapter.js';
 import { SubstituteFrameView } from './SubstituteFrameView.js';
@@ -46,7 +47,10 @@ export class SubstituteFrameHost {
     }
     /** Subscribe to named host mounts and existing workflow and appearance owners only. */
     setup() {
-        this.#stops.push(this.mode.subscribe(() => this.#reconcile()), this.options.palette.subscribe(() => this.#palette()), this.options.sessions.subscribe(() => this.#queue()), this.options.activity.subscribe(() => this.#queue()));
+        this.#stops.push(this.mode.subscribe(() => this.#reconcile()), this.options.palette.subscribe(() => this.#palette()), this.options.sessions.subscribe(() => this.#queue()), this.options.activity.subscribe(() => this.#queue()), subscribeVisualStyle(this.options.document, () => {
+            this.#unmount();
+            this.#reconcile();
+        }));
         this.#presence = new HostSurfaceObserver(this.options.document.body, '.workflow-tabs-container', () => this.#queue(), { content: true, exclude: '.sc-substitute-frame' });
         this.mode.setup(this.options.app);
         this.#reconcile();

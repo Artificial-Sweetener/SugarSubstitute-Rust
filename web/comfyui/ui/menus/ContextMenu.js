@@ -14,9 +14,10 @@ var _a;
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Own every SugarCubes menu's Fluent rows, nested interaction and floating presentation. */
+/** Own every SugarCubes menu's themed rows, nested interaction and floating presentation. */
 import { FloatingSurface } from './FloatingSurface.js';
-import { createFluentMenuList, createFluentMenuItem } from './FluentMenuRuntime.js';
+import { createMenuList, createMenuItem, setMenuItemChecked, menuItemSlot, } from './MenuControlRuntime.js';
+import { subscribeVisualStyle } from '../surface/appearance/VisualStyleBoundary.js';
 /** Own a complete transient menu tree; features supply values, icons and actions only. */
 export class ContextMenu {
     static #active = new WeakMap();
@@ -24,6 +25,7 @@ export class ContextMenu {
     #options = null;
     #levels = [];
     #previous = null;
+    #stopStyle = null;
     /** Bind menu interaction to one explicit browser document. */
     constructor(document) {
         this.#document = document;
@@ -34,6 +36,7 @@ export class ContextMenu {
         this.close();
         _a.#active.set(this.#document, this);
         this.#options = options;
+        this.#stopStyle = subscribeVisualStyle(this.#document, this.close);
         this.#previous =
             options.focusReturn !== undefined
                 ? options.focusReturn
@@ -60,6 +63,8 @@ export class ContextMenu {
             _a.#active.delete(this.#document);
         const options = this.#options;
         this.#options = null;
+        this.#stopStyle?.();
+        this.#stopStyle = null;
         this.#trim(0);
         this.#document.removeEventListener('keydown', this.#key, true);
         const previous = this.#previous;
@@ -68,16 +73,16 @@ export class ContextMenu {
             previous.focus();
         options?.closed?.();
     }
-    /** Render official Fluent controls with literal text and feature-owned icon slots. */
+    /** Render official controls with literal text and feature-owned icon slots. */
     #openLevel(entries, anchor, trigger, depth) {
         this.#trim(depth);
-        const menu = createFluentMenuList(this.#document);
+        const menu = createMenuList(this.#document);
         menu.className = 'sc-context-menu';
         menu.setAttribute('role', 'menu');
         menu.setAttribute('tabindex', '-1');
         menu.setAttribute('aria-label', this.#options?.label ?? 'Actions');
         menu.style.setProperty('width', 'max-content');
-        menu.style.setProperty('font-family', 'var(--fontFamilyBase)');
+        menu.style.setProperty('font-family', 'var(--sc-font-family)');
         menu.style.setProperty('max-inline-size', 'calc(100vw - 8px)');
         menu.style.setProperty('overflow', 'auto');
         menu.style.setProperty('scrollbar-width', 'none');
@@ -117,20 +122,18 @@ export class ContextMenu {
                 heading.dataset.scMenuSection = '';
                 heading.setAttribute('role', 'presentation');
                 heading.textContent = entry.label;
-                heading.style.cssText =
-                    'padding:6px 12px;font-size:12px;color:var(--colorNeutralForeground3);';
+                heading.style.cssText = 'padding:6px 12px;font-size:12px;color:var(--sc-text-muted);';
                 menu.append(heading);
                 continue;
             }
             if (entry.separator) {
                 const separator = this.#document.createElement('div');
                 separator.setAttribute('role', 'separator');
-                separator.style.cssText =
-                    'height:1px;margin:4px 8px;background:var(--colorNeutralStroke2);';
+                separator.style.cssText = 'height:1px;margin:4px 8px;background:var(--sc-border-subtle);';
                 menu.append(separator);
                 continue;
             }
-            const row = createFluentMenuItem(this.#document);
+            const row = createMenuItem(this.#document);
             row.setAttribute('role', entry.checked === undefined
                 ? 'menuitem'
                 : entry.selection === 'multiple'
@@ -141,15 +144,13 @@ export class ContextMenu {
             if (entry.disabled)
                 row.setAttribute('disabled', '');
             if (entry.checked !== undefined) {
-                row.setAttribute('aria-checked', String(entry.checked));
-                if (entry.checked)
-                    row.setAttribute('checked', '');
+                setMenuItemChecked(row, entry.checked);
             }
             for (const [name, value] of Object.entries(entry.attributes ?? {}))
                 row.setAttribute(name, value);
             if (entry.icon) {
                 const icon = entry.icon(this.#document);
-                icon.slot = 'start';
+                icon.slot = menuItemSlot(this.#document, 'start');
                 icon.setAttribute('aria-hidden', 'true');
                 icon.style.width = '16px';
                 icon.style.height = '16px';
@@ -164,7 +165,7 @@ export class ContextMenu {
                 row.setAttribute('aria-haspopup', 'menu');
                 row.setAttribute('aria-expanded', 'false');
                 const arrow = this.#document.createElement('span');
-                arrow.slot = 'end';
+                arrow.slot = menuItemSlot(this.#document, 'end');
                 arrow.setAttribute('aria-hidden', 'true');
                 arrow.style.cssText =
                     'width:6px;height:6px;border:solid currentColor;border-width:1px 1px 0 0;transform:rotate(45deg);';

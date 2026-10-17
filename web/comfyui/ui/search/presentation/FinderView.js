@@ -1,8 +1,9 @@
-import { applyOwnedFluentTheme, createFinderInputControl, } from '../../surface/appearance/FluentThemeRuntime.js';
+import { applyOwnedTheme } from '../../surface/appearance/ThemeService.js';
+import { createFinderInput, createButton } from '../../surface/appearance/ControlFactory.js';
 import { readComfyDarkTheme } from '../../surface/appearance/ComfyColorScheme.js';
 import { ensureFinderStyles } from './FinderStyles.js';
 import { ContextMenu } from '../../menus/ContextMenu.js';
-/** Retain native Fluent controls while finder state and results change. */
+/** Retain selected provider controls while finder state and results change. */
 export class FinderView {
     element;
     #input;
@@ -26,14 +27,14 @@ export class FinderView {
         this.element.setAttribute('aria-label', 'Find in masonry');
         this.element.setAttribute('data-capture-wheel', 'true');
         this.element.hidden = true;
-        applyOwnedFluentTheme(this.element, readComfyDarkTheme(documentRef));
-        this.#input = createFinderInputControl(documentRef);
+        applyOwnedTheme(this.element, readComfyDarkTheme(documentRef));
+        this.#input = createFinderInput(documentRef);
         this.#input.className = 'sc-masonry-finder__input';
         this.#input.setAttribute('aria-label', 'Search masonry');
         this.#input.setAttribute('placeholder', 'Search…');
         this.#input.setAttribute('control-size', 'medium');
         this.#menu = new ContextMenu(documentRef);
-        this.#mode = documentRef.createElement('fluent-button');
+        this.#mode = createButton(documentRef);
         this.#mode.className = 'sc-masonry-finder__mode';
         this.#mode.setAttribute('role', 'button');
         this.#mode.setAttribute('slot', 'start');
@@ -42,22 +43,27 @@ export class FinderView {
         this.#mode.setAttribute('aria-haspopup', 'menu');
         this.#mode.setAttribute('aria-expanded', 'false');
         this.#modeLabel = documentRef.createElement('span');
+        const modeContent = documentRef.createElement('span');
+        modeContent.className = 'sc-masonry-finder__mode-content';
         const chevron = documentRef.createElement('span');
         chevron.className = 'sc-masonry-finder__chevron';
         chevron.setAttribute('aria-hidden', 'true');
-        this.#mode.append(this.#modeLabel, chevron);
+        modeContent.append(this.#modeLabel, chevron);
+        this.#mode.append(modeContent);
         this.#mode.addEventListener('click', this.#toggleContext);
         this.#clear = this.#button('Clear search', 'dismiss', () => {
             this.#input.value = '';
             this.#change();
-            this.#input.control.focus();
+            this.#input.focusInput(false);
         });
         const search = this.#button('Search', 'search', () => this.#change());
         const end = documentRef.createElement('span');
         end.className = 'sc-masonry-finder__input-actions';
         end.slot = 'end';
         end.append(this.#clear, search);
-        this.#input.append(this.#mode, end);
+        const group = documentRef.createElement('div');
+        group.className = 'sc-masonry-finder__group';
+        group.append(this.#mode, this.#input, end);
         this.#next = this.#button('Next match (Enter)', 'arrow-down', () => actions.cycle(1));
         this.#previous = this.#button('Previous match (Shift+Enter)', 'arrow-up', () => actions.cycle(-1));
         const close = this.#button('Close search (Esc)', 'dismiss', () => actions.close(false));
@@ -65,7 +71,7 @@ export class FinderView {
         this.#status.className = 'sc-masonry-finder__status';
         this.#status.setAttribute('role', 'status');
         this.#status.setAttribute('aria-live', 'polite');
-        this.element.append(this.#input, this.#next, this.#previous, close, this.#status);
+        this.element.append(group, this.#next, this.#previous, close, this.#status);
         this.#input.addEventListener('input', this.#change);
         this.element.addEventListener('keydown', this.#key);
         this.element.addEventListener('pointerdown', this.#stop);
@@ -90,11 +96,9 @@ export class FinderView {
         if (this.element.parentElement !== container)
             container.append(this.element);
         this.element.hidden = false;
-        this.#input.control.setAttribute('aria-label', 'Search masonry');
-        applyOwnedFluentTheme(this.element, readComfyDarkTheme(this.element.ownerDocument));
+        applyOwnedTheme(this.element, readComfyDarkTheme(this.element.ownerDocument));
         if (focus) {
-            this.#input.control.focus();
-            this.#input.select();
+            this.#input.focusInput(true);
         }
     }
     /** Retain the query controls while removing the visible overlay. */
@@ -105,10 +109,10 @@ export class FinderView {
     /** Remove the owned overlay and scoped theme on surface release. */
     dispose() {
         this.#menu.close();
-        applyOwnedFluentTheme(this.element, null);
+        applyOwnedTheme(this.element, null);
         this.element.remove();
     }
-    /** Emit only validated context values from official Fluent controls. */
+    /** Emit only validated context values from selected provider controls. */
     #change = () => {
         if (this.#syncing)
             return;
@@ -134,7 +138,7 @@ export class FinderView {
                 selection: 'single',
                 select: () => {
                     this.#actions.input(mode, this.#input.value);
-                    this.#input.control.focus();
+                    this.#input.focusInput(false);
                 },
             })),
         });
@@ -155,14 +159,13 @@ export class FinderView {
     };
     /** Keep finder pointer and wheel input out of graph event handlers. */
     #stop = (event) => event.stopPropagation();
-    /** Use official Fluent buttons with licensed Microsoft system icons. */
+    /** Use selected provider buttons with licensed Microsoft system icons. */
     #button(label, icon, action) {
         const documentRef = this.element.ownerDocument;
-        const button = documentRef.createElement('fluent-button');
+        const button = createButton(documentRef);
         button.setAttribute('role', 'button');
         button.setAttribute('appearance', 'subtle');
         button.setAttribute('shape', 'rounded');
-        button.setAttribute('size', 'small');
         button.setAttribute('icon-only', '');
         button.setAttribute('aria-label', label);
         button.title = label;

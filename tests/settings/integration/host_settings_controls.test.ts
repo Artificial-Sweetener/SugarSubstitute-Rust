@@ -19,6 +19,7 @@ import { api as hostApi } from '/scripts/api.js';
 import type { MockSettingDefinition } from '../../frontend_core/support/mocks/app.js';
 import type { UnknownRecord } from '../../../frontend/comfyui/ui/types/common.js';
 import type { SugarCubesUI } from '../../../frontend/comfyui/ui/SugarCubesUI.js';
+import { preserveAppearanceRuntime } from '../../frontend_core/support/appearance_runtime.js';
 
 let app = hostApp as unknown as (typeof import('../../frontend_core/support/mocks/app.js'))['app'];
 let api = hostApi as unknown as (typeof import('../../frontend_core/support/mocks/api.js'))['api'];
@@ -80,6 +81,7 @@ function setupBaseApp() {
 }
 
 async function loadUi() {
+  preserveAppearanceRuntime();
   const loaded: { value?: typeof import('../../../frontend/comfyui/ui.js') } = {};
   await jest.isolateModulesAsync(async () => {
     loaded.value = await import('../../../frontend/comfyui/ui.js');

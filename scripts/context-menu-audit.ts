@@ -21,7 +21,7 @@ import type { InvalidationDiagnostic } from './invalidation-audit.js';
 export interface MenuOwnership {
   readonly context_menu: string;
   readonly floating_surface: string;
-  readonly fluent_runtime: string;
+  readonly control_runtime: string;
   readonly search_dialogs: readonly string[];
   readonly choice_controls: readonly string[];
 }
@@ -35,8 +35,8 @@ export function isMenuOwnership(value: unknown): value is MenuOwnership {
     typeof value.context_menu === 'string' &&
     'floating_surface' in value &&
     typeof value.floating_surface === 'string' &&
-    'fluent_runtime' in value &&
-    typeof value.fluent_runtime === 'string' &&
+    'control_runtime' in value &&
+    typeof value.control_runtime === 'string' &&
     'search_dialogs' in value &&
     Array.isArray(value.search_dialogs) &&
     value.search_dialogs.every((owner: unknown) => typeof owner === 'string') &&
@@ -145,10 +145,10 @@ export function auditContextMenus(
         if (
           signature &&
           ts.isFunctionDeclaration(signature) &&
-          ['createFluentMenuList', 'createFluentMenuItem'].includes(signature.name?.text ?? '') &&
-          relativePath(root, signature.getSourceFile().fileName) === policy.fluent_runtime &&
+          ['createMenuList', 'createMenuItem'].includes(signature.name?.text ?? '') &&
+          relativePath(root, signature.getSourceFile().fileName) === policy.control_runtime &&
           !rowOwners.has(relative) &&
-          relative !== policy.fluent_runtime
+          relative !== policy.control_runtime
         )
           fail(
             node,
@@ -188,7 +188,7 @@ export function auditContextMenus(
           strings(node.arguments[0], checker).some((tag) =>
             ['menu', 'fluent-menu-list', 'fluent-menu-item'].includes(tag),
           ) &&
-          relative !== policy.fluent_runtime &&
+          relative !== policy.control_runtime &&
           !rowOwners.has(relative)
         )
           fail(

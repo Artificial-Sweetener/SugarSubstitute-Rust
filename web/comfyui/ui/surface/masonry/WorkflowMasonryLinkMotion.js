@@ -1,4 +1,4 @@
-import { fluentMotion } from '../appearance/FluentThemeRuntime.js';
+import { surfaceMotion } from '../appearance/SurfaceMotionTokens.js';
 /** Own temporary strokes while keeping reroute segments continuous along each complete noodle. */
 export class WorkflowMasonryLinkMotion {
     #snapshot;
@@ -128,8 +128,8 @@ export class WorkflowMasonryLinkMotion {
                     if (typeof request.element.animate !== 'function')
                         continue;
                     const effect = request.element.animate(request.frames, {
-                        duration: fluentMotion.fasterDuration,
-                        easing: fluentMotion.easing,
+                        duration: surfaceMotion.fasterDuration,
+                        easing: surfaceMotion.easing,
                         fill: 'both',
                     });
                     this.#effects.set(request.element, effect);

@@ -111,7 +111,7 @@ test('Reset restores the captured draft and appearance changes retain search and
   const input = document.querySelector<HTMLInputElement>('input.sc-cube-stack-cart__search')!;
   input.value = 'cube';
   input.dispatchEvent(new Event('input', { bubbles: true }));
-  f.appearance.update(false, false);
+  f.appearance.update('comfy', false);
   await settle();
   expect(document.querySelector('[aria-label="Cube cart"] button')).toBe(row);
   expect(input.value).toBe('cube');

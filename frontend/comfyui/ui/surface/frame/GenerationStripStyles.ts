@@ -21,11 +21,11 @@ export const generationStripCss = `
   .sc-substitute-frame[data-generation-strip] { padding-right:calc(${GENERATION_STRIP_WIDTH}px + var(--sc-native-caption-width,0px)); }
   :root[data-sc-substitute-frame] [data-sc-generation-native] { display:none !important; }
   .sc-generation-strip { position:absolute; top:0; right:var(--sc-native-caption-width,0px); width:${GENERATION_STRIP_WIDTH}px; height:32px;
-    display:flex; align-items:flex-start; -webkit-app-region:no-drag; font-family:var(--fontFamilyBase); }
+    display:flex; align-items:flex-start; -webkit-app-region:no-drag; font-family:var(--sc-font-family); }
   .sc-generation-batch { position:relative; width:72px; height:30px; flex:0 0 72px;
     background:rgba(32,32,32,.588); border-radius:0 0 0 6px; color:white; }
   .sc-generation-batch input { position:absolute; left:4px; top:2px; width:38px; height:26px; box-sizing:border-box;
-    background:transparent; color:inherit; border:0; padding:0; text-align:center; font:600 13px var(--fontFamilyBase);
+    background:transparent; color:inherit; border:0; padding:0; text-align:center; font:600 13px var(--sc-font-family);
     appearance:textfield; outline:none; }
   .sc-generation-batch input:focus-visible { outline:1px solid var(--sc-accent-color); border-radius:3px; }
   .sc-generation-batch input::-webkit-inner-spin-button { appearance:none; }
@@ -63,7 +63,7 @@ export const generationStripCss = `
   :root[data-sc-substitute-frame] button[data-sc-generation-queue]:active { background:color-mix(in srgb,var(--sc-accent-color),black 12.5%)!important; }
   .sc-generation-queue-glyph { display:block; width:16px; height:16px; background:currentColor; mask:var(--sc-queue-glyph) center/contain no-repeat; pointer-events:none; }
   .sc-generation-queue-badge { position:absolute; right:3px; bottom:2px; min-width:12px; height:12px; padding:0 3px; border-radius:6px;
-    background:black; color:var(--sc-accent-color); font:700 8px/12px var(--fontFamilyBase); pointer-events:none; }
+    background:black; color:var(--sc-accent-color); font:700 8px/12px var(--sc-font-family); pointer-events:none; }
   button[data-sc-queue-theme='light'] .sc-generation-queue-badge { background:white; }
   .sc-generation-queue-badge[hidden] { display:none!important; }
   .sc-substitute-frame[data-color-scheme='light'] .sc-generation-batch { background:rgba(251,251,251,.737); color:black; }

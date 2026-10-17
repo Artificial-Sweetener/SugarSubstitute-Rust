@@ -16,7 +16,7 @@
 /** Prove titlebar action priority, native control delegation, and reversible ownership. */
 import { afterEach, expect, jest, test } from '@jest/globals';
 import { NativeCardTitlebar } from '../../../frontend/comfyui/ui/surface/appearance/NativeCardTitlebar.js';
-import { fluentInteractionCss } from '../../../frontend/comfyui/ui/surface/appearance/FluentInteractionStyles.js';
+import { nativeInteractionCss } from '../../../frontend/comfyui/ui/surface/appearance/NativeInteractionStyles.js';
 
 afterEach(() => document.body.replaceChildren());
 
@@ -31,7 +31,7 @@ test('titlebar reserves trailing space for a visible chevron and retains Substit
   expect(header.matches(chevronHeader)).toBe(false);
   collapse.remove();
   expect(header.matches(chevronHeader)).toBe(false);
-  const css = fluentInteractionCss();
+  const css = nativeInteractionCss();
   expect(css).toContain('[data-sc-titlebar-controls] > :first-child { padding-right:0; }');
   expect(css).toContain(`${chevronHeader} > :first-child {\n      padding-right:20px;`);
   expect(css).toContain(

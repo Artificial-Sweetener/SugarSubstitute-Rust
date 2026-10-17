@@ -70,7 +70,7 @@ class MenuPolicy:
 
     context_menu: str = "frontend/comfyui/ui/menus/ContextMenu.ts"
     floating_surface: str = "frontend/comfyui/ui/menus/FloatingSurface.ts"
-    fluent_runtime: str = "frontend/comfyui/ui/menus/FluentMenuRuntime.ts"
+    control_runtime: str = "frontend/comfyui/ui/menus/MenuControlRuntime.ts"
     search_dialogs: tuple[str, ...] = ()
     choice_controls: tuple[str, ...] = ()
 

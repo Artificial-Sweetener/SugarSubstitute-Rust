@@ -337,7 +337,7 @@ test('contributes one Cube scope menu for paired checkpoint and VAE fields', asy
   ).toHaveLength(1);
 });
 
-test('follows Fluent preference without remounting, closing search, or writing a widget value', async () => {
+test('follows visual style without remounting, closing search, or writing a widget value', async () => {
   const proof = fixture();
   proof.load.mockResolvedValue(proof.native.snapshot);
   proof.host.setup();
@@ -356,15 +356,20 @@ test('follows Fluent preference without remounting, closing search, or writing a
   await jest.advanceTimersByTimeAsync(0);
   const popup = document.querySelector<HTMLElement>('.sc-model-popup');
   expect(popup?.dataset.scModelAppearance).toBe('native');
-  proof.events.dispatchEvent(new Event('SugarCubes.Appearance.Fluent.change'));
-  proof.values.set('SugarCubes.Appearance.Fluent', true);
+  proof.events.dispatchEvent(new Event('SugarCubes.Appearance.VisualStyle.change'));
+  proof.values.set('SugarCubes.Appearance.VisualStyle', 'fluent');
   await jest.advanceTimersByTimeAsync(20);
   expect(mount?.dataset.scModelAppearance).toBe('fluent');
   expect(popup?.dataset.scModelAppearance).toBe('fluent');
   expect(getComputedStyle(field).height).toBe('32px');
   expect(getComputedStyle(arrow).width).toBe('30px');
-  proof.events.dispatchEvent(new Event('SugarCubes.Appearance.Fluent.change'));
-  proof.values.set('SugarCubes.Appearance.Fluent', false);
+  proof.events.dispatchEvent(new Event('SugarCubes.Appearance.VisualStyle.change'));
+  proof.values.set('SugarCubes.Appearance.VisualStyle', 'spectrum');
+  await jest.advanceTimersByTimeAsync(20);
+  expect(mount?.dataset.scModelAppearance).toBe('spectrum');
+  expect(popup?.dataset.scModelAppearance).toBe('spectrum');
+  proof.events.dispatchEvent(new Event('SugarCubes.Appearance.VisualStyle.change'));
+  proof.values.set('SugarCubes.Appearance.VisualStyle', 'comfy');
   await jest.advanceTimersByTimeAsync(20);
   expect(mount?.dataset.scModelAppearance).toBe('native');
   expect(proof.native.card.querySelector('input')).toBe(input);

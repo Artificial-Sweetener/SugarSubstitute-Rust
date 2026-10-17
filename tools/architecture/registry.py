@@ -237,14 +237,14 @@ def _menu_policy(value: object) -> MenuPolicy:
         table,
         context="menus",
         required=frozenset(
-            {"context_menu", "floating_surface", "fluent_runtime", "search_dialogs"}
+            {"context_menu", "floating_surface", "control_runtime", "search_dialogs"}
         ),
         optional=frozenset({"choice_controls"}),
     )
     return MenuPolicy(
         context_menu=_string(table["context_menu"], "menus.context_menu"),
         floating_surface=_string(table["floating_surface"], "menus.floating_surface"),
-        fluent_runtime=_string(table["fluent_runtime"], "menus.fluent_runtime"),
+        control_runtime=_string(table["control_runtime"], "menus.control_runtime"),
         search_dialogs=_menu_owners(table["search_dialogs"], "menus.search_dialogs"),
         choice_controls=_menu_owners(
             table.get("choice_controls", []), "menus.choice_controls"

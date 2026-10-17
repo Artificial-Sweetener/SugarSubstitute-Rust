@@ -15,9 +15,11 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Share accepted appearance facts without introducing another settings or palette owner. */
 
+import type { VisualStyle } from './VisualStyle.js';
+
 /** Describe the appearance accepted by the native presentation owner. */
 export interface AppearanceSnapshot {
-  readonly fluent: boolean;
+  readonly style: VisualStyle;
   readonly dark: boolean;
 }
 
@@ -30,7 +32,7 @@ export interface AppearanceSource {
 /** Publish coherent presentation facts only when their accepted values change. */
 export class AppearanceState implements AppearanceSource {
   readonly #listeners = new Set<() => void>();
-  #appearance: AppearanceSnapshot = Object.freeze({ fluent: false, dark: true });
+  #appearance: AppearanceSnapshot = Object.freeze({ style: 'comfy', dark: true });
 
   /** Expose an immutable accepted snapshot to isolated owned surfaces. */
   get appearance(): AppearanceSnapshot {
@@ -44,9 +46,9 @@ export class AppearanceState implements AppearanceSource {
   }
 
   /** Publish only facts supplied by the existing appearance owner. */
-  update(fluent: boolean, dark: boolean): void {
-    if (fluent === this.#appearance.fluent && dark === this.#appearance.dark) return;
-    this.#appearance = Object.freeze({ fluent, dark });
+  update(style: VisualStyle, dark: boolean): void {
+    if (style === this.#appearance.style && dark === this.#appearance.dark) return;
+    this.#appearance = Object.freeze({ style, dark });
     for (const listener of this.#listeners) listener();
   }
 

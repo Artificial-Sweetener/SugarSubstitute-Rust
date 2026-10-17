@@ -40,7 +40,7 @@ export function ensureBrowserCanvasWorkspaceStyles(document) {
     .sc-output-workspace-pane { position:absolute; right:0; top:0; bottom:0; z-index:${MASONRY_STACK_Z_INDEX + 2};
       display:flex; flex-direction:column; box-sizing:border-box; pointer-events:auto;
       color:var(--fg-color,#ddd); background:var(--comfy-menu-bg,#202020);
-      font:13px var(--fontFamilyBase,"Segoe UI",system-ui,sans-serif); }
+      font:13px var(--sc-font-family,"Segoe UI",system-ui,sans-serif); }
     .sc-output-workspace-pane[hidden],.sc-output-workspace-backdrop[hidden] { display:none; }
     .sc-output-workspace-view { position:relative; flex:1; min-height:0; margin-left:2px; overflow:hidden; }
     .sc-output-workspace-divider { position:absolute; top:0; bottom:0; left:0; width:2px; cursor:ew-resize;

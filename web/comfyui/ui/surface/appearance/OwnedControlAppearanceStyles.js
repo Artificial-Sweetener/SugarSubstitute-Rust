@@ -22,7 +22,7 @@ export function ensureOwnedControlAppearanceStyles(document) {
     style.textContent = `
     :is(.sugarcubes-native-node-card, .sugarcubes-native-widget, .sc-field-relation, [data-sc-style-node], [data-sc-style-surface])
       :is(input, textarea, [role="combobox"]):not(.sc-model-field input) {
-      color:var(--colorNeutralForeground1,var(--fg-color,#eee));
+      color:var(--sc-text,var(--fg-color,#eee));
     }
   `;
     document.head.append(style);

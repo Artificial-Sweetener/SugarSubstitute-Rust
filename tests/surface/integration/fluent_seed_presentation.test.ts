@@ -132,7 +132,7 @@ test.each(['native', 'cube', 'masonry'])(
     const errors = jest.fn();
     const host = new AppearanceHost({ document, app, reportError: errors });
     host.setup();
-    host.setEnabled(true);
+    host.setStyle('fluent');
     frames.splice(0).forEach((frame) => frame(0));
     const toggle = root.querySelector<HTMLButtonElement>('[data-sc-seed-toggle]');
     const arrow = root.querySelector<HTMLButtonElement>('[data-sc-seed-menu]');
@@ -171,7 +171,7 @@ test.each(['native', 'cube', 'masonry'])(
     expect(root.querySelector('[data-sc-seed-toggle]')?.getAttribute('data-sc-seed-mode')).toBe(
       'decrement',
     );
-    host.setEnabled(false);
+    host.setStyle('comfy');
     expect(root.querySelector('[data-sc-seed-split]')).toBeNull();
     expect(input.isConnected).toBe(true);
     expect(control.value).toBe('decrement');

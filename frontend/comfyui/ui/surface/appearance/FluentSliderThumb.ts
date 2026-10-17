@@ -48,13 +48,13 @@ export function fluentSliderThumbCss(): string {
       width:var(--thumb-size); height:var(--thumb-size);
     }
     [data-sc-slider-thumb] > svg { display:block; width:100%; height:100%; }
-    [data-sc-slider-ring] { fill:var(--colorNeutralBackground1); stroke:var(--colorNeutralStroke1); stroke-width:1px; }
-    [data-sc-slider-dot] { fill:var(--rail-color); r:5px; transition:r var(--durationFaster,100ms) var(--curveEasyEase); }
+    [data-sc-slider-ring] { fill:var(--sc-surface); stroke:var(--sc-border); stroke-width:1px; }
+    [data-sc-slider-dot] { fill:var(--rail-color); r:5px; transition:r var(--sc-motion-faster,100ms) var(--sc-motion-ease); }
     [data-sc-number-slider]:not([disabled]) [data-sc-slider-thumb]:hover [data-sc-slider-dot] { r:6px; }
     [data-sc-number-slider]:not([disabled]):active [data-sc-slider-thumb] [data-sc-slider-dot] { r:4px; }
     @media (prefers-reduced-motion:reduce) { [data-sc-slider-dot] { transition:none; } }
     @media (forced-colors:active) {
-      [data-sc-slider-thumb] { --colorNeutralBackground1:Canvas; --colorNeutralStroke1:ButtonText; --rail-color:Highlight; forced-color-adjust:none; }
+      [data-sc-slider-thumb] { --sc-surface:Canvas; --sc-border:ButtonText; --rail-color:Highlight; forced-color-adjust:none; }
       [data-sc-number-slider][disabled] [data-sc-slider-thumb] { --rail-color:GrayText; }
     }
   `;

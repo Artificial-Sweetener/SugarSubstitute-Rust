@@ -38,7 +38,7 @@ dependency = []
 [menus]
 context_menu = "frontend/approved.ts"
 floating_surface = "frontend/floating.ts"
-fluent_runtime = "frontend/fluent.ts"
+control_runtime = "frontend/fluent.ts"
 search_dialogs = []
 [structure]
 source_roots = ["frontend"]

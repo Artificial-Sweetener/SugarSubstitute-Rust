@@ -21,6 +21,7 @@ import type { SearchSurface } from './SearchSurface.js';
 import { FinderView } from './FinderView.js';
 import { SearchHighlights } from './SearchHighlights.js';
 import { SearchVisibility } from './SearchVisibility.js';
+import { subscribeVisualStyle } from '../../surface/appearance/VisualStyleBoundary.js';
 
 export interface SearchPresenterOptions {
   readonly root: HTMLElement;
@@ -33,7 +34,8 @@ export interface SearchPresenterOptions {
 export class MasonrySearchPresenter {
   readonly #options: SearchPresenterOptions;
   readonly #session: SearchSession;
-  readonly #finder: FinderView;
+  #finder: FinderView;
+  readonly #stopStyle: () => void;
   readonly #highlights: SearchHighlights;
   #visibility: SearchVisibility;
   #surface: SearchSurface;
@@ -48,10 +50,13 @@ export class MasonrySearchPresenter {
     this.#session = new SearchSession(options.state);
     this.#visibility = new SearchVisibility(options.surface.fields, options.setCards);
     this.#highlights = new SearchHighlights(options.root.ownerDocument);
-    this.#finder = new FinderView(options.root.ownerDocument, {
-      input: (mode, text) => this.#queue(mode, text),
-      cycle: (direction) => this.cycle(direction),
-      close: (focus) => this.close(focus),
+    this.#finder = this.#createFinder();
+    this.#stopStyle = subscribeVisualStyle(options.root.ownerDocument, () => {
+      this.#flush();
+      this.#finder.dispose();
+      this.#finder = this.#createFinder();
+      this.#sync();
+      if (this.#session.state.open) this.#finder.show(options.container, false);
     });
     this.#refresh();
     this.#sync();
@@ -125,9 +130,18 @@ export class MasonrySearchPresenter {
     if (this.#disposed) return;
     this.#flush();
     this.#disposed = true;
+    this.#stopStyle();
     this.#visibility.dispose();
     this.#highlights.dispose();
     this.#finder.dispose();
+  }
+  /** Recreate provider controls while retaining the query, results, filters, and native field corpus. */
+  #createFinder(): FinderView {
+    return new FinderView(this.#options.root.ownerDocument, {
+      input: (mode, text) => this.#queue(mode, text),
+      cycle: (direction) => this.cycle(direction),
+      close: (focus) => this.close(focus),
+    });
   }
   /** Coalesce rapid typing while keeping Fluent's native input response immediate. */
   #queue(mode: SearchMode, text: string): void {

@@ -16,7 +16,7 @@
 /** Prove independent background fades, reversal continuity, and cancellation ownership. */
 import { afterEach, expect, jest, test } from '@jest/globals';
 import { WorkflowMasonryTransition } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryTransition.js';
-import { fluentMotion } from '../../../frontend/comfyui/ui/surface/appearance/FluentThemeRuntime.js';
+import { surfaceMotion } from '../../../frontend/comfyui/ui/surface/appearance/SurfaceMotionTokens.js';
 import { WorkflowMasonryGraphReveal } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryGraphReveal.js';
 
 afterEach(() => {
@@ -32,8 +32,8 @@ test('fades the background in both directions without replacing native card layo
   expect(setup.view.measureGraph).toHaveBeenCalledTimes(1);
   expect(setup.frames).toEqual([[{ opacity: 0 }, { opacity: 1 }]]);
   expect(setup.options[0]).toMatchObject({
-    duration: fluentMotion.duration,
-    easing: fluentMotion.easing,
+    duration: surfaceMotion.duration,
+    easing: surfaceMotion.easing,
     fill: 'both',
   });
   expect(setup.surface.style.opacity).toBe('1');
@@ -88,8 +88,8 @@ test('runs graph navigation fades on the masonry timeline and retains suppressio
     [{ opacity: '1' }, { opacity: '0' }],
     [{ opacity: 0 }, { opacity: 1 }],
   ]);
-  expect(setup.options.every((option) => option.duration === fluentMotion.duration)).toBe(true);
-  expect(setup.options.every((option) => option.easing === fluentMotion.easing)).toBe(true);
+  expect(setup.options.every((option) => option.duration === surfaceMotion.duration)).toBe(true);
+  expect(setup.options.every((option) => option.easing === surfaceMotion.easing)).toBe(true);
   expect(setup.toolbar.inert).toBe(true);
   expect(setup.minimap.inert).toBe(true);
   setup.effects.forEach((effect) => effect.finish());

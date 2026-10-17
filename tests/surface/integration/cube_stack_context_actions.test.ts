@@ -50,7 +50,7 @@ test('matches Substitute action order, includes eligible capture, and adds order
   f.node.mode = 4;
   f.node.properties.sugarcubes_save_outputs = false;
   f.setCapture(false);
-  f.appearance.update(true, true);
+  f.appearance.update('fluent', true);
   f.open();
   expect(labels()).toEqual([
     'Save outputs',

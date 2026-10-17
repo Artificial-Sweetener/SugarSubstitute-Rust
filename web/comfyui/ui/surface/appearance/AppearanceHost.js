@@ -14,14 +14,13 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own the reversible appearance setting and native presentation lifetime. */
-import { sugarCubesSettingsSection } from '../../settings/SugarCubesSettingsSections.js';
 import { isRecord } from '../../types/common.js';
 import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
 import { createComfyRendererModeChangeSource, resolveComfyRendererMode, } from '../../core/ComfyRendererMode.js';
 import { NativeThemeScopes } from './NativeThemeScopes.js';
 import { NativeCardAdapter } from './NativeCardAdapter.js';
-import { fluentAppearanceCss } from './FluentAppearanceStyles.js';
-import { createNumericSliderControl, createBooleanCheckboxControl, createBooleanSegmentControls, } from './FluentThemeRuntime.js';
+import { nativeVisualStyleCss } from './ThemeService.js';
+import { createNumericSlider, createBooleanCheckbox, createBooleanSegments, } from './ControlFactory.js';
 import { NativeInlineComboSearch } from './NativeInlineComboSearch.js';
 import { NativeCardTitlebar } from './NativeCardTitlebar.js';
 import { NativeToggleRows } from './NativeToggleRows.js';
@@ -31,7 +30,7 @@ import { NativeNumericControls } from './NativeNumericControls.js';
 import { NativeLabelPresentation } from './NativeLabelPresentation.js';
 import { NativeSeedControls } from './NativeSeedControls.js';
 import { readComfyDarkTheme } from './ComfyColorScheme.js';
-import { FluentOverlayScrollbarHost } from './FluentOverlayScrollbarHost.js';
+import { OverlayScrollbarHost } from './OverlayScrollbarHost.js';
 import { isBorrowedNativeCardPresentation } from '../NativeCardPresentationOwner.js';
 import { NATIVE_PRESENTATION_READY_EVENT } from '../NativePresentationReady.js';
 import { NativeCardGraphGeometry } from './NativeCardGraphGeometry.js';
@@ -40,8 +39,8 @@ import { AccentThemeHost } from './AccentThemeHost.js';
 import { CubeIconAppearanceHost } from './CubeIconAppearanceHost.js';
 import { ensureOwnedControlAppearanceStyles } from './OwnedControlAppearanceStyles.js';
 import { refreshCubeTitleOpticalAlignment } from '../CubeTitleOpticalDomAlignment.js';
-/** Persist the user's appearance preference independently of workflow documents. */
-export const FLUENT_APPEARANCE_SETTING = 'SugarCubes.Appearance.Fluent';
+import { registerVisualStylePreference } from './VisualStylePreference.js';
+import { publishVisualStyle, releaseVisualStyle } from './VisualStyleBoundary.js';
 const surfaceSelector = '.sugarcubes-workflow-masonry, .sugarcubes-masonry-toggle, .sc-overrides-toolbar, .sugarcubes-native-widget';
 /** Keep appearance separate from graph, Cube policy, and masonry layout state. */
 export class AppearanceHost {
@@ -52,10 +51,10 @@ export class AppearanceHost {
     #themes = new NativeThemeScopes();
     #titlebars = new NativeCardTitlebar();
     #labels = new NativeLabelPresentation();
-    #toggleRows = new NativeToggleRows(createBooleanCheckboxControl);
-    #booleanSegments = new NativeBooleanSegments(createBooleanSegmentControls);
+    #toggleRows = new NativeToggleRows(createBooleanCheckbox);
+    #booleanSegments = new NativeBooleanSegments(createBooleanSegments);
     #advanced = new NativeAdvancedDisclosure();
-    #numeric = new NativeNumericControls(createNumericSliderControl);
+    #numeric = new NativeNumericControls(createNumericSlider);
     #seeds = new NativeSeedControls();
     #comboSearch;
     #scrollbars;
@@ -69,7 +68,7 @@ export class AppearanceHost {
     #dirty = new Set();
     #unsubscribe = null;
     #unsubscribePalette = null;
-    #enabled = false;
+    #selectedStyle = 'comfy';
     #active = false;
     #dark = null;
     #frame = null;
@@ -85,7 +84,7 @@ export class AppearanceHost {
         this.#options = options;
         this.#accent = new AccentThemeHost(options.document, options.app, options.reportError);
         this.#iconAppearance = new CubeIconAppearanceHost(options.document, this.state);
-        this.#scrollbars = new FluentOverlayScrollbarHost(options.document, options.reportError);
+        this.#scrollbars = new OverlayScrollbarHost(options.document, options.reportError);
         this.#adapter = new NativeCardAdapter(options.app, options.seedReuse);
         this.#graphGeometry = new NativeCardGraphGeometry({
             document: options.document,
@@ -94,7 +93,7 @@ export class AppearanceHost {
         });
         this.#comboSearch = new NativeInlineComboSearch(options.document);
         this.#style = options.document.createElement('style');
-        this.#style.id = 'sugarcubes-fluent-appearance';
+        this.#style.id = 'sugarcubes-native-appearance';
         this.#palette = new MutationObserver(() => this.#refreshPalette());
     }
     /** Register host persistence and renderer/theme subscriptions through their existing owners. */
@@ -105,19 +104,6 @@ export class AppearanceHost {
         ensureOwnedControlAppearanceStyles(this.#options.document);
         this.#accent.setup();
         const settings = readSettings(this.#options.app);
-        if (typeof settings.addSetting !== 'function') {
-            this.#options.reportError(new Error('Comfy settings registration is unavailable for Fluent appearance.'));
-            return;
-        }
-        settings.addSetting.call(settings, {
-            id: FLUENT_APPEARANCE_SETTING,
-            name: 'Fluent theme',
-            ...sugarCubesSettingsSection('appearance', 'Fluent'),
-            type: 'boolean',
-            defaultValue: false,
-            tooltip: 'Use Windows Fluent styling and SugarSubstitute card presentation in Nodes 2.0.',
-            onChange: (value) => this.setEnabled(value === true),
-        });
         this.#unsubscribe = createComfyRendererModeChangeSource(this.#options.app).subscribe(() => this.#reconcile());
         if (typeof settings.addEventListener === 'function' &&
             typeof settings.removeEventListener === 'function') {
@@ -137,7 +123,7 @@ export class AppearanceHost {
         }, {
             content: true,
             characterData: true,
-            exclude: '.sc-fluent-scrollbar-layer,[data-sc-scrollbar-policy]',
+            exclude: '.sc-style-scrollbar-layer,[data-sc-scrollbar-policy]',
         });
         for (const element of [
             this.#options.document.documentElement,
@@ -151,14 +137,16 @@ export class AppearanceHost {
         this.#options.document.addEventListener('keydown', this.#rememberPopupOrigin, true);
         this.#options.document.addEventListener(NATIVE_PRESENTATION_READY_EVENT, this.#onPresentationReady);
         this.#options.document.defaultView?.addEventListener('pagehide', this.#onPageHide);
-        const value = typeof settings.getSettingValue === 'function'
-            ? settings.getSettingValue.call(settings, FLUENT_APPEARANCE_SETTING)
-            : false;
-        this.setEnabled(value === true);
+        registerVisualStylePreference(this.#options.app, (style) => this.setStyle(style), this.#options.reportError);
     }
     /** Apply preference without persisting presentation into workflow node data. */
-    setEnabled(enabled) {
-        this.#enabled = enabled;
+    setStyle(style) {
+        if (this.#disposed)
+            return;
+        if (style !== this.#selectedStyle && style !== 'comfy')
+            this.#deactivate(false);
+        this.#selectedStyle = style;
+        publishVisualStyle(this.#options.document, style);
         this.#reconcile();
     }
     /** Release owned styles and annotations without restoring stale host values. */
@@ -169,6 +157,7 @@ export class AppearanceHost {
         this.#accent.dispose();
         this.#iconAppearance.dispose();
         this.#deactivate();
+        releaseVisualStyle(this.#options.document, this.#selectedStyle);
         this.state.dispose();
         this.#presence?.disconnect();
         this.#palette.disconnect();
@@ -183,7 +172,7 @@ export class AppearanceHost {
     #reconcile() {
         if (this.#disposed)
             return;
-        const active = this.#enabled &&
+        const active = this.#selectedStyle !== 'comfy' &&
             resolveComfyRendererMode(this.#options.app, null, this.#options.document) === 'vue';
         if (!active) {
             this.#deactivate();
@@ -200,12 +189,13 @@ export class AppearanceHost {
         refreshCubeTitleOpticalAlignment(this.#options.document);
     }
     /** Expose the underlying host theme, which remains live throughout the session. */
-    #deactivate() {
+    #deactivate(publish = true) {
         const synchronizeRestored = this.#active &&
             !this.#disposed &&
             resolveComfyRendererMode(this.#options.app, null, this.#options.document) === 'vue';
         this.#active = false;
-        this.state.update(false, readComfyDarkTheme(this.#options.document));
+        if (publish)
+            this.state.update('comfy', readComfyDarkTheme(this.#options.document));
         this.#style.remove();
         this.#scrollbars.clear();
         this.#adapter.clear();
@@ -240,13 +230,14 @@ export class AppearanceHost {
     /** Follow Comfy's theme selector without replacing its palette owner. */
     #refreshPalette() {
         const dark = readComfyDarkTheme(this.#options.document);
-        this.state.update(this.#active, dark);
+        this.state.update(this.#active ? this.#selectedStyle : 'comfy', dark);
         if (!this.#active)
             return;
         if (dark === this.#dark)
             return;
         this.#dark = dark;
-        this.#style.textContent = fluentAppearanceCss(dark);
+        if (this.#selectedStyle !== 'comfy')
+            this.#style.textContent = nativeVisualStyleCss(this.#selectedStyle, dark);
     }
     /** Discover changed subtrees and their nearest card rather than scanning all cards per keystroke. */
     #queue(element) {

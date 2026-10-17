@@ -85,7 +85,8 @@ test('loads the saved color without rewriting it, then updates through the regis
   input.dispatchEvent(new Event('change'));
   expect(setSettingValue).toHaveBeenCalledWith(ACCENT_COLOR_SETTING, '#071530');
   expect(style.textContent).toContain('--sc-accent-foreground:#ffffff');
-  expect(style.textContent).toContain('--colorBrandBackground:#071530 !important');
+  expect(style.textContent).toContain('--sc-accent-color:#071530');
+  expect(style.textContent).toContain('--sc-brand-fill:var(--sc-accent-color) !important');
   expect(setDirty).toHaveBeenCalledTimes(2);
   host.refresh();
   host.setup();

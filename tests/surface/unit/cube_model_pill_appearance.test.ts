@@ -32,16 +32,16 @@ test('uses active Fluent colors, follows changes and returns to the native accen
     background: '#0078d4',
     foreground: '#202020',
   });
-  canvas.style.setProperty('--colorBrandForeground1', '#479ef5');
-  canvas.style.setProperty('--colorNeutralForegroundOnBrand', '#ffffff');
+  canvas.style.setProperty('--sc-brand-text', '#479ef5');
+  canvas.style.setProperty('--sc-text-on-accent', '#ffffff');
   expect(resolveCubeModelPillColors(canvas)).toEqual({
     background: '#479ef5',
     foreground: '#202020',
   });
-  canvas.style.setProperty('--colorBrandForeground1', '#a4262c');
+  canvas.style.setProperty('--sc-brand-text', '#a4262c');
   expect(resolveCubeModelPillColors(canvas).background).toBe('#a4262c');
-  canvas.style.removeProperty('--colorBrandForeground1');
-  canvas.style.removeProperty('--colorNeutralForegroundOnBrand');
+  canvas.style.removeProperty('--sc-brand-text');
+  canvas.style.removeProperty('--sc-text-on-accent');
   expect(resolveCubeModelPillColors(canvas)).toEqual({
     background: '#0078d4',
     foreground: '#202020',
@@ -65,7 +65,7 @@ test('uses the shared accent and its readable foreground ahead of local Fluent a
   document.body.append(canvas);
   canvas.style.setProperty('--sc-accent-color', '#071530');
   canvas.style.setProperty('--sc-accent-foreground', '#ffffff');
-  canvas.style.setProperty('--colorBrandForeground1', '#479ef5');
+  canvas.style.setProperty('--sc-brand-text', '#479ef5');
   canvas.style.setProperty('--comfy-menu-bg', '#202020');
   expect(resolveCubeModelPillColors(canvas)).toEqual({
     background: '#071530',

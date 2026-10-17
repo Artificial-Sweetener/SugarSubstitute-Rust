@@ -14,11 +14,12 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose the source-matched frame controls independently of host mounts and workflow stores. */
+import { createButton } from '../appearance/ControlFactory.js';
 import { WorkflowTabsView } from './WorkflowTabsView.js';
 import { AppOrbView } from './AppOrbView.js';
 import { WorkflowTabStripLayout } from './WorkflowTabStripLayout.js';
 import { ContextMenu } from '../../menus/ContextMenu.js';
-import { applyOwnedFluentTheme } from '../appearance/FluentThemeRuntime.js';
+import { applyOwnedTheme } from '../appearance/ThemeService.js';
 import { createCubeAddIconElement } from '../CubeAddIcon.js';
 /** Own frame rendering and interaction while collaborators retain all application policies. */
 export class SubstituteFrameView {
@@ -130,7 +131,7 @@ export class SubstituteFrameView {
         if (dark !== this.#dark) {
             this.#dark = dark;
             this.element.dataset.colorScheme = dark ? 'dark' : 'light';
-            applyOwnedFluentTheme(this.element, dark);
+            applyOwnedTheme(this.element, dark);
         }
         void this.#orb.update(color, dark).catch(this.actions.report);
     }
@@ -177,7 +178,7 @@ export class SubstituteFrameView {
     }
     /** Give each official Fluent action a stable accessible name and explicit error boundary. */
     #button(label, text, action) {
-        const button = this.document.createElement('fluent-button');
+        const button = createButton(this.document);
         button.className = 'sc-frame-tool';
         button.setAttribute('appearance', 'subtle');
         button.setAttribute('aria-label', label);

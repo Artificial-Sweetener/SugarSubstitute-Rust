@@ -23,12 +23,12 @@ import {
 export const substituteFrameCss = `
   @property --sc-tab-cutout-radius { syntax:'<length>'; inherits:false; initial-value:0px; }
   @property --sc-tab-cutout-x { syntax:'<length>'; inherits:false; initial-value:-17px; }
-  .sc-substitute-frame sc-workflow-tab { transition:--sc-tab-cutout-radius 160ms cubic-bezier(.645,.045,.355,1); }
-  .sc-substitute-frame sc-workflow-tab { touch-action:none; user-select:none; }
-  .sc-substitute-frame sc-workflow-tab[data-sc-held] { z-index:3; cursor:grabbing; }
+  .sc-substitute-frame [data-sc-workflow-tab] { transition:--sc-tab-cutout-radius 160ms cubic-bezier(.645,.045,.355,1); }
+  .sc-substitute-frame [data-sc-workflow-tab] { touch-action:none; user-select:none; }
+  .sc-substitute-frame [data-sc-workflow-tab][data-sc-held] { z-index:3; cursor:grabbing; }
   .sc-substitute-frame [data-sc-tab-dragging] { cursor:grabbing; }
-  @media(prefers-reduced-motion:reduce) { .sc-substitute-frame sc-workflow-tab { transition:none !important; } }
-  @media(prefers-reduced-motion:reduce) { .sc-substitute-frame sc-workflow-tab { transition:none; } }
+  @media(prefers-reduced-motion:reduce) { .sc-substitute-frame [data-sc-workflow-tab] { transition:none !important; } }
+  @media(prefers-reduced-motion:reduce) { .sc-substitute-frame [data-sc-workflow-tab] { transition:none; } }
   :root[data-sc-substitute-frame] { --workflow-tabs-height:34px; }
   :root[data-sc-substitute-frame] [data-sc-frame-native] { display:none !important; }
   :root[data-sc-tab-menu-capture] [role='menu'] { visibility:hidden!important; }
@@ -38,7 +38,7 @@ export const substituteFrameCss = `
   :root[data-sc-substitute-frame] div:has(> .subgraph-breadcrumb) { min-width:190px; }
   .sc-substitute-frame { position:absolute; inset:0; height:34px; display:flex; padding:4px 0 0 ${String(FRAME_TAB_START)}px;
     box-sizing:border-box; align-items:flex-end; z-index:1000; pointer-events:auto;
-    background:var(--sc-native-frame-background,#000); color:var(--colorNeutralForeground1); font-family:var(--fontFamilyBase);
+    background:var(--sc-native-frame-background,#000); color:var(--sc-text); font-family:var(--sc-font-family);
     --sc-frame-muted:var(--sc-native-frame-foreground,rgba(255,255,255,.788));
     --sc-frame-hover:rgba(255,255,255,.059); --sc-frame-pressed:rgba(255,255,255,.047);
     --sc-frame-unread:color-mix(in srgb,var(--sc-accent-color) 17.25%,transparent);
@@ -53,14 +53,14 @@ export const substituteFrameCss = `
   .sc-substitute-frame .sc-workflow-shimmer { position:absolute; top:0; bottom:0; left:-36px; width:clamp(24px,32%,36px);
     background:linear-gradient(90deg,var(--sc-frame-shimmer-edge),var(--sc-frame-shimmer-center),var(--sc-frame-shimmer-edge));
     pointer-events:none; opacity:0; }
-  .sc-substitute-frame sc-workflow-tab[data-shimmer] .sc-workflow-shimmer { animation:sc-frame-result-shimmer 800ms cubic-bezier(.215,.61,.355,1) forwards; }
+  .sc-substitute-frame [data-sc-workflow-tab][data-shimmer] .sc-workflow-shimmer { animation:sc-frame-result-shimmer 800ms cubic-bezier(.215,.61,.355,1) forwards; }
   @keyframes sc-frame-result-shimmer { 0% { left:-36px; opacity:1; } 85% { opacity:1; } 100% { left:100%; opacity:0; } }
-  @media(prefers-reduced-motion:reduce) { .sc-substitute-frame sc-workflow-tab[data-shimmer] .sc-workflow-shimmer { animation:none; } }
+  @media(prefers-reduced-motion:reduce) { .sc-substitute-frame [data-sc-workflow-tab][data-shimmer] .sc-workflow-shimmer { animation:none; } }
   .sc-substitute-frame .sc-workflow-close { display:flex; align-items:center; justify-content:center; flex:0 0 18px;
     width:18px; height:18px; min-width:18px; padding:0; border-radius:4px; visibility:hidden; color:inherit; }
-  .sc-substitute-frame sc-workflow-tab:hover .sc-workflow-close,
-  .sc-substitute-frame sc-workflow-tab:focus-within .sc-workflow-close { visibility:visible; }
-  .sc-substitute-frame sc-workflow-tab[data-modified] .sc-workflow-title::after { content:' •'; }
+  .sc-substitute-frame [data-sc-workflow-tab]:hover .sc-workflow-close,
+  .sc-substitute-frame [data-sc-workflow-tab]:focus-within .sc-workflow-close { visibility:visible; }
+  .sc-substitute-frame [data-sc-workflow-tab][data-modified] .sc-workflow-title::after { content:' •'; }
   .sc-substitute-frame .sc-frame-tool { flex:0 0 30px; width:30px; height:30px; min-width:0; padding:0; border-radius:0; }
   .sc-substitute-frame :is(.sc-workflow-new,.sc-workflow-overflow,.sc-workflow-scroll) { color:var(--sc-native-frame-foreground,#fff); }
   .sc-substitute-frame :is(.sc-workflow-new,.sc-workflow-overflow,.sc-workflow-scroll):hover { background:var(--sc-frame-hover); }
@@ -83,9 +83,9 @@ export const substituteFrameCss = `
     padding:0; border:0; border-radius:50%; background:transparent; overflow:hidden; clip-path:circle(50%); z-index:2; }
   .sc-substitute-frame .sc-app-orb canvas { display:block; width:46px; height:46px; pointer-events:none; }
   .sc-substitute-frame .sc-orb-actions { position:absolute; top:38px; left:8px; display:flex; gap:1px; width:47px; height:36px; }
-  .sc-substitute-frame .sc-orb-actions::after { content:''; position:absolute; left:23px; top:20px; height:10px; width:1px; background:var(--colorNeutralStroke2); }
-  .sc-substitute-frame .sc-orb-actions fluent-button { position:relative; width:23px; height:36px; flex:0 0 23px; min-width:0; padding:0; border-radius:5px; mask-image:radial-gradient(circle 25px at var(--sc-orb-center-x,23px) -9px,transparent 24px,#000 25px); }
-  .sc-substitute-frame .sc-orb-actions fluent-button:last-child { --sc-orb-center-x:-1px; }
+  .sc-substitute-frame .sc-orb-actions::after { content:''; position:absolute; left:23px; top:20px; height:10px; width:1px; background:var(--sc-border-subtle); }
+  .sc-substitute-frame .sc-orb-actions [data-sc-button] { position:relative; width:23px; height:36px; flex:0 0 23px; min-width:0; padding:0; border-radius:5px; mask-image:radial-gradient(circle 25px at var(--sc-orb-center-x,23px) -9px,transparent 24px,#000 25px); }
+  .sc-substitute-frame .sc-orb-actions [data-sc-button]:last-child { --sc-orb-center-x:-1px; }
   .sc-substitute-frame :is(.sc-orb-stack-icon,.sc-orb-pin-icon) { display:block; width:13px; height:13px; background:currentColor; mask:var(--sc-orb-glyph) center/contain no-repeat; }
   .sc-substitute-frame .sc-orb-pin-icon { width:11px; height:11px; }
   .sc-substitute-frame .sc-orb-stack-icon { position:absolute; left:5px; top:18.5px; }

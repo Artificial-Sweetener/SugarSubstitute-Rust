@@ -16,6 +16,7 @@
 /** Bind reversible host frame mounts to the existing workflow, mode and palette authorities. */
 import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
 import type { AccentThemeHost } from '../appearance/AccentThemeHost.js';
+import { subscribeVisualStyle } from '../appearance/VisualStyleBoundary.js';
 import type { WorkflowSessionStore } from '../../execution/application/WorkflowSessionStore.js';
 import type { WorkflowOutputActivity } from '../../execution/application/WorkflowOutputActivity.js';
 import type { CubeStackFrameControls } from '../stack/CubeStackHost.js';
@@ -68,6 +69,10 @@ export class SubstituteFrameHost {
       this.options.palette.subscribe(() => this.#palette()),
       this.options.sessions.subscribe(() => this.#queue()),
       this.options.activity.subscribe(() => this.#queue()),
+      subscribeVisualStyle(this.options.document, () => {
+        this.#unmount();
+        this.#reconcile();
+      }),
     );
     this.#presence = new HostSurfaceObserver(
       this.options.document.body,

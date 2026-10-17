@@ -1,4 +1,21 @@
-import { applyOwnedFluentTheme } from '../appearance/FluentThemeRuntime.js';
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Bind one Vue rail to masonry, accepted appearance, persisted preferences and graph use cases. */
+import { readOwnedVisualStyle, subscribeVisualStyle } from '../appearance/VisualStyleBoundary.js';
+import { applyOwnedTheme } from '../appearance/ThemeService.js';
 import { CubeStackPreferences } from './CubeStackPreferences.js';
 import { projectCubeStackRows } from './CubeStackProjection.js';
 import { ensureCubeStackStyles } from './CubeStackStyles.js';
@@ -72,7 +89,7 @@ export class CubeStackHost {
         this.#preferences.setup();
         this.#started = true;
         ensureCubeStackStyles(this.#options.document);
-        this.#subscriptions.push(this.#preferences.subscribe(() => this.#reconcile()), this.#options.appearance.subscribeAppearance(() => this.#reconcile()));
+        this.#subscriptions.push(this.#preferences.subscribe(() => this.#reconcile()), this.#options.appearance.subscribeAppearance(() => this.#reconcile()), subscribeVisualStyle(this.#options.document, () => this.#reconcile()));
         if (this.#options.frame)
             this.#subscriptions.push(this.#options.frame.subscribe(() => this.#reconcile(false)));
     }
@@ -191,7 +208,7 @@ export class CubeStackHost {
         const appearance = this.#options.appearance.appearance;
         this.#element.dataset.appearance = state.appearance;
         this.#element.dataset.colorScheme = appearance.dark ? 'dark' : 'light';
-        applyOwnedFluentTheme(this.#element, appearance.fluent || this.#options.frame?.enabled ? appearance.dark : null);
+        applyOwnedTheme(this.#element, appearance.style !== 'comfy' || this.#options.frame?.enabled ? appearance.dark : null);
         if (this.#mounted)
             this.#mounted.update(state);
         else {
@@ -239,9 +256,11 @@ export class CubeStackHost {
             rows: projectCubeStackRows(this.#view?.sections ?? [], this.#reorder?.analysis ?? null, this.#selectedId, this.#options.resolveSource, this.#reorder?.available === true),
             compact: this.#preferences.snapshot.compact,
             pending: this.#reorder?.pending === true,
-            appearance: this.#options.appearance.appearance.fluent || this.#options.frame?.enabled
-                ? 'fluent'
-                : 'comfy',
+            appearance: this.#options.appearance.appearance.style !== 'comfy'
+                ? this.#options.appearance.appearance.style
+                : this.#options.frame?.enabled
+                    ? readOwnedVisualStyle(this.#options.document)
+                    : 'comfy',
         };
     }
     /** Restore filtered sections through the search owner before scrolling to stable identity. */

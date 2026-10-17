@@ -17,7 +17,7 @@
 
 const backgroundTokens = [
   '--sc-accent-color',
-  '--colorBrandForeground1',
+  '--sc-brand-text',
   '--p-primary-color',
   '--primary-color',
 ] as const;

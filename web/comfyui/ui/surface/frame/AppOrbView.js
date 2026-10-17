@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Present the original orb through an official Fluent button and shared menu system. */
+import { createButton } from '../appearance/ControlFactory.js';
 import { AppOrbRenderer } from './AppOrbRenderer.js';
 import { ContextMenu } from '../../menus/ContextMenu.js';
 /** Keep circular pointer interaction, keyboard access and menu lifetime with the owning button. */
@@ -23,7 +24,7 @@ export class AppOrbView {
     #menu;
     /** Reuse existing application commands; artwork remains separate from menu policy. */
     constructor(document, entries, report) {
-        this.element = document.createElement('fluent-button');
+        this.element = createButton(document);
         this.element.className = 'sc-app-orb';
         this.element.setAttribute('appearance', 'transparent');
         this.element.setAttribute('aria-label', 'Application menu');

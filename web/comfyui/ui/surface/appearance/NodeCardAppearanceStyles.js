@@ -24,7 +24,7 @@ export function ensureNodeCardAppearanceStyles(documentRef) {
     style.id = 'sugarcubes-node-card-appearance';
     style.textContent = `
     .sugarcubes-cube-face, .sugarcubes-cube-face__header, [data-sugarcube-cube-body] {
-      color:var(--colorNeutralForeground1,var(--fg-color,#eee));
+      color:var(--sc-text,var(--fg-color,#eee));
     }
     .sugarcubes-cube-face__node-card { box-sizing:border-box; border:1px solid var(--interface-stroke,#454545); border-radius:12px; background:var(--sugarcubes-masonry-card-surface,var(--comfy-input-bg,#222)); }
     .sugarcubes-cube-face__node-card .lg-node { cursor:default; }

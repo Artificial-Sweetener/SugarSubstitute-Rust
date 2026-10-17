@@ -76,7 +76,7 @@ async function fixture(fluent: boolean) {
   const app = createApp({ render: () => h('main') });
   app.mount(appRoot);
   const appearance = new AppearanceState();
-  appearance.update(fluent, true);
+  appearance.update(fluent ? 'fluent' : 'comfy', true);
   const domain = { kind: 'number' as const, minimum: 0, maximum: 1000, step: 1, integer: true };
   let group: OverrideGroup = {
     key: 'seed',
@@ -153,7 +153,7 @@ test('keeps Fluent field identity during mode edits and synchronizes cached nati
   readNativeWidgetMount(f.root)?.seed?.writeMode('randomize');
   await nextTick();
   expect(f.root.querySelector('input')).toBe(originalInput);
-  f.appearance.update(false, true);
+  f.appearance.update('comfy', true);
   await nextTick();
   expect(f.root.querySelector<HTMLButtonElement>('button')?.dataset.mode).toBe('randomize');
   expect(f.root.querySelector<HTMLInputElement>('input')?.value).toBe('42');
