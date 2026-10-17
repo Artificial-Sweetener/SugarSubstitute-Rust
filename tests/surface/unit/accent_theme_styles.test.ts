@@ -37,6 +37,10 @@ test.each([true, false])('bridges local themes and native controls for dark=%s',
   expect(scope.style.getPropertyValue('--spectrum-accent-color-900')).toBe(
     'var(--sc-accent-color)',
   );
+  expect(scope.style.getPropertyValue('--spectrum-focus-indicator-color')).toBe(
+    'var(--sc-accent-indicator)',
+  );
+  expect(scope.style.getPropertyPriority('--spectrum-focus-indicator-color')).toBe('important');
   for (const token of [
     '--p-toggleswitch-checked-background',
     '--p-checkbox-checked-background',
