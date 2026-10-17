@@ -18,8 +18,6 @@ mod consume_diagnostic;
 mod delivery;
 #[path = "startup/execution.rs"]
 mod execution;
-#[path = "startup/frontend_deadline.rs"]
-mod frontend_deadline;
 #[path = "startup/lifetime.rs"]
 mod lifetime;
 #[path = "startup/policy.rs"]
@@ -287,11 +285,6 @@ impl StartupWindowContent for ProductionStartup {
             DesktopStartupObservation::MainRevealed(identity) => Some(*identity),
             _ => None,
         };
-        if self.reject_expired_frontend_receipt(&observation)? {
-            self.deliver_startup_events()?;
-            self.invalidate(true);
-            return self.refresh_deadline();
-        }
         let session = self.startup.as_mut().map(PreparedChildStartup::session_mut);
         let route = self.policy.native(observation, session)?;
         self.route(route)?;

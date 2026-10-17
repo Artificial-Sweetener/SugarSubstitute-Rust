@@ -27,6 +27,13 @@ impl FrontendReload {
     pub(super) const fn until(&self) -> Moment {
         self.until
     }
+    /// Retain finite retirement/write admission; an admitted readiness reply waits for lifecycle.
+    pub(super) fn deadline(&self) -> Option<Moment> {
+        match self.stage {
+            Stage::Retiring | Stage::Request { admitted: false, .. } => Some(self.until),
+            Stage::Request { admitted: true, .. } | Stage::Granted => None,
+        }
+    }
     pub(super) const fn granted(&self) -> bool {
         matches!(self.stage, Stage::Granted)
     }
@@ -146,7 +153,8 @@ impl ProductionChild {
         let Some(reload) = &self.reload else {
             return Ok(());
         };
-        if self.client()?.now()? >= reload.until {
+        let now = self.client()?.now()?;
+        if reload.deadline().is_some_and(|until| now >= until) {
             return Err("Original frontend reload operation expired".into());
         }
         if matches!(reload.stage, Stage::Granted) {
@@ -171,9 +179,7 @@ impl ProductionChild {
             self.phase = Some(prepared.session().phase());
             self.lease = Some(self.reload.as_ref().ok_or("Reload absent")?.lease);
             self.main = main::MainPreparation::new(self.main.settings);
-            self.frontend_budget = None;
             self.grant_header = None;
-            self.frontend_timed_out = false;
             self.shutdown.main_retired = false;
             self.shutdown.main_retirement_ack = false;
             self.shutdown.main_absence_pending = false;

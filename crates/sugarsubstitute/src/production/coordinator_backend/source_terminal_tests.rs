@@ -234,7 +234,7 @@ fn exercise_source_stop(
     let budget = backend.record(key)?.budget;
     let shutdown = backend.record(key)?.shutdown;
     let record = backend.records[0].as_mut().ok_or("Original source record absent")?;
-    let result = consume_source(record);
+    let result = consume_source(record, Moment::from_nanos(0));
     assert!(!record.source_job);
     assert!(!record.source_closed);
     assert!(record.source_lease.is_none());
@@ -354,7 +354,10 @@ fn exercise_source_stop(
             Some(pointer),
         );
     } else {
-        consume_source(backend.records[0].as_mut().ok_or("Original source record absent")?)?;
+        consume_source(
+            backend.records[0].as_mut().ok_or("Original source record absent")?,
+            Moment::from_nanos(0),
+        )?;
     }
     assert!(backend.record(key)?.source_closed);
     assert!(matches!(

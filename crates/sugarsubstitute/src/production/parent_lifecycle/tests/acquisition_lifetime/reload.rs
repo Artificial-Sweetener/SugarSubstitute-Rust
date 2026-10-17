@@ -26,3 +26,36 @@ fn reload_preflight_keeps_original_acquisition_and_rejects_stale_or_foreign_gene
     assert_eq!(acquisition.header, acquisition_header()?);
     Ok(())
 }
+
+#[test]
+fn admitted_reload_reply_keeps_original_header_and_one_finite_final_transfer() -> Result<()> {
+    let mut parent = actor()?;
+    let h = acquisition_header()?;
+    let (index, _) = parent.requests.admit(h, b"actual original reload request")?;
+    parent.requests.get_mut(index)?.until = Some(moment(180));
+    parent.requests.wait_for_readiness(index)?;
+    assert_eq!(parent.requests.next_deadline(), None);
+    parent.requests.get_mut(index)?.reply =
+        Some(Reply::Reloaded { lease: lease()?, identity: identity()? });
+    assert_eq!(
+        parent.requests.reply_deadline(index, moment(360)).map_err(|e| e as Box<dyn Error>)?,
+        moment(390)
+    );
+    assert_eq!(
+        parent.requests.reply_deadline(index, moment(389)).map_err(|e| e as Box<dyn Error>)?,
+        moment(390)
+    );
+    assert_eq!(parent.requests.get(index)?.header, h);
+    assert_eq!(parent.requests.get(index)?.until, Some(moment(180)));
+    assert_eq!(parent.requests.next_deadline(), Some(moment(390)));
+    assert!(
+        parent
+            .requests
+            .admit(
+                WireHeader { deadline_qpc: h.deadline_qpc + 1, ..h },
+                b"actual original reload request"
+            )
+            .is_err()
+    );
+    Ok(())
+}

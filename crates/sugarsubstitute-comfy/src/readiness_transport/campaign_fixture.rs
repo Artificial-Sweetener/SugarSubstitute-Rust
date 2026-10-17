@@ -27,6 +27,8 @@ pub(crate) enum Behavior {
     WrongAsset,
     Panicked,
     CleanupPanicked,
+    NativeTimeout,
+    SubmillisecondBudget,
 }
 /// Fixed external boundary with causal acquisition/closure gates.
 pub(crate) struct FixtureHttp {
@@ -139,6 +141,10 @@ impl HttpPort for FixtureHttp {
         state.connect = 2;
         state.request = 3;
         self.phase("begin", context);
+        if matches!(self.behavior, Behavior::SubmillisecondBudget) {
+            super::native::timeout_milliseconds(context.deadline(), context.now())?;
+            return Err(ReadinessTransportError::invalid("fixture_expected_submillisecond_budget"));
+        }
         if matches!(self.behavior, Behavior::Panicked) {
             std::panic::resume_unwind(Box::new("original-campaign-panic"));
         }
@@ -163,6 +169,18 @@ impl HttpPort for FixtureHttp {
         state.peer = Some(
             sugarsubstitute_supervision::backend_listener::boundary_fixture::fixed_http_peer(),
         );
+        if matches!(self.behavior, Behavior::NativeTimeout) {
+            let result = super::native::retry::complete(
+                Err(windows::core::HRESULT::from_win32(12002).into()),
+                "http_body_read",
+                state.peer.is_some(),
+                context,
+            );
+            if let Err(cause) = &result {
+                self.phase(cause.stage(), context);
+            }
+            return result;
+        }
         let body: &[u8] = match endpoint.path() {
             "/system_stats" if matches!(self.behavior, Behavior::Malformed) => b"{broken",
             "/system_stats" if self.stale_metadata.load(Ordering::Acquire) => b"{broken",

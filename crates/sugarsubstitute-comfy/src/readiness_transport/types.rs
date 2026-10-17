@@ -155,8 +155,8 @@ impl VerifiedReadiness {
 pub enum ProbeRetryDisposition {
     /// A native request failed to establish or retain its first unverified connection.
     TransientConnectionUnavailable,
-    /// The execution owner delivered a genuine finite probe timeout, with original custody retained.
-    /// Only an admitted managed-live campaign may retry after actual cleanup.
+    /// A finite execution probe or native HTTP phase timed out, with original custody retained.
+    /// Only a campaign admitted to readiness waiting may retry after actual cleanup.
     ProbeIntervalElapsed,
     /// Trust, shape, identity, other deadlines, cancellation, admission or cleanup failed.
     Terminal,

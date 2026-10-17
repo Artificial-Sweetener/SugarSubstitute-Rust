@@ -115,7 +115,6 @@ fn checked_retired_predecessor_is_scoped_to_older_same_run_launch() -> Result<()
         next,
         current,
         Moment::from_nanos(180_000_000_000),
-        sugarsubstitute_application::startup::ConnectionBudgetKind::Attached,
     )?;
     acquisition.observe_backend(next, RequestOutcome::Pending(lease))?;
     acquisition.progress_queued(next)?;

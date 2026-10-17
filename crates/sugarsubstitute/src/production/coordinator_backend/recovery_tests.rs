@@ -111,13 +111,13 @@ impl Fixture {
             _executor: executor,
         })
     }
-    /// Install an actual unopened source/finite scope for a genuinely App-admitted
+    /// Install an actual unopened source/cancellable scope for a genuinely App-admitted
     /// successor. This supplies no launch ticket, watch or VerifiedReadiness.
     pub(super) fn install_inert_successor(&mut self, key: ResourceKey) -> Result<()> {
         let target = self.held.backend.record(self.leases[0].resource)?.target.clone();
         let budget = ConnectionBudget::new(ConnectionBudgetKind::Managed, Moment::from_nanos(0))?;
         let scope = self.client.create_scope(
-            ScopeSpec { id: self.scopes.allocate()?, deadline: Some(budget.until()) },
+            ScopeSpec { id: self.scopes.allocate()?, deadline: None },
             Some(&self.native),
         )?;
         self.held.backend.records[1] = Some(cutoff_tests::creator(key, target, budget, scope)?);

@@ -18,7 +18,7 @@ pub(super) use write_state::WriteObservation;
 pub(super) struct Acquisition {
     pub(super) header: WireHeader,
     pub(super) original: Moment,
-    kind: sugarsubstitute_application::startup::ConnectionBudgetKind,
+    readiness_waiting: bool,
     progress_until: Option<Moment>,
     original_identity: MainIdentity,
     identity: MainIdentity,
@@ -46,9 +46,14 @@ enum Disposition {
     Cancelled,
 }
 impl Acquisition {
-    /// Clamp only attached provisional pulls to their aggregate connection deadline.
+    /// Admit the authenticated acquisition's lifecycle wait without process authority.
+    /// Finite held-command admission and each actual write keep their own owners.
+    pub(super) fn wait_for_readiness(&mut self) {
+        self.readiness_waiting = true;
+    }
+    /// Keep pre-admission pulls finite; admitted readiness owns no aggregate cutoff.
     pub(super) fn output_until(&self, supplied: Moment) -> Moment {
-        if self.kind.waits_for_owned_process() { supplied } else { supplied.min(self.original) }
+        if self.readiness_waiting { supplied } else { supplied.min(self.original) }
     }
     /// Freeze one finite progress transfer when genuine data first becomes available.
     pub(super) fn progress_deadline(
@@ -68,7 +73,6 @@ impl Acquisition {
         header: WireHeader,
         identity: MainIdentity,
         original: Moment,
-        kind: sugarsubstitute_application::startup::ConnectionBudgetKind,
     ) -> Result<Self, ParentError> {
         if header.run != binding.run
             || header.connection != Some(binding.connection)
@@ -80,7 +84,7 @@ impl Acquisition {
         Ok(Self {
             header,
             original,
-            kind,
+            readiness_waiting: false,
             progress_until: None,
             original_identity: identity,
             identity,
@@ -240,7 +244,7 @@ impl Acquisition {
     /// Fence only an unfinished original acquisition at its unchanged cutoff.
     /// A timely written Grant owns the running lease beyond acquisition expiry.
     pub(super) fn expire(&mut self, now: Moment) -> bool {
-        if self.kind.waits_for_owned_process()
+        if self.readiness_waiting
             || now < self.original
             || (!self.retiring && self.disposition == Some(Disposition::Granted) && self.sent)
         {

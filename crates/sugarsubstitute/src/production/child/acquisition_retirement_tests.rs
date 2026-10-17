@@ -74,7 +74,6 @@ fn local_acquisition_retirement_event_capacity_retains_absence_without_fake_sett
 
 fn queued(c: &ProductionChild, original: Moment) -> Result<PendingAcquire> {
     Ok(PendingAcquire {
-        kind: sugarsubstitute_application::startup::ConnectionBudgetKind::Attached,
         header: WireHeader {
             run: c.run,
             connection: Some(ConnectionId::new(1)?),
@@ -109,7 +108,7 @@ fn acquisition_timeout_routes_actual_original_cutoff_once_and_preserves_error() 
     assert!(c.acquire.ok_or("Original acquisition lost")?.retiring);
     assert!(c.expire_acquisition()?);
     assert!(c.take_startup_event()?.is_none());
-    assert!(c.attempt.is_none() && c.frontend_budget.is_some());
+    assert!(c.attempt.is_none() && !c.main.pending());
     Ok(())
 }
 #[test]
@@ -148,14 +147,8 @@ fn acquisition_correlated_boundary_expiry_routes_only_exact_current_owner_and_pr
     let mut ledger = requests::tests::requests_for_run(c.run)?;
     let original = Moment::from_nanos(100);
     let h = ledger.prepare(original, CounterDeadline::new(100, 100)?)?;
-    ledger.acquisition(h, sugarsubstitute_application::startup::ConnectionBudgetKind::Attached)?;
-    let pending = PendingAcquire {
-        kind: sugarsubstitute_application::startup::ConnectionBudgetKind::Attached,
-        header: h,
-        original,
-        admitted: false,
-        retiring: false,
-    };
+    ledger.acquisition(h)?;
+    let pending = PendingAcquire { header: h, original, admitted: false, retiring: false };
     c.acquire = Some(pending);
     c.acquisition_header = Some(h);
     let rejected = ledger
@@ -181,19 +174,10 @@ fn acquisition_correlated_foreign_or_earlier_output_expiry_keeps_original_reject
     let mut ledger = requests::tests::requests_for_run(c.run)?;
     let original = Moment::from_nanos(100);
     let h = ledger.prepare(original, CounterDeadline::new(100, 100)?)?;
-    ledger.acquisition(h, sugarsubstitute_application::startup::ConnectionBudgetKind::Attached)?;
-    c.acquire = Some(PendingAcquire {
-        kind: sugarsubstitute_application::startup::ConnectionBudgetKind::Attached,
-        header: h,
-        original,
-        admitted: false,
-        retiring: false,
-    });
+    ledger.acquisition(h)?;
+    c.acquire = Some(PendingAcquire { header: h, original, admitted: false, retiring: false });
     let foreign = ledger.prepare(original, CounterDeadline::new(100, 100)?)?;
-    ledger.acquisition(
-        foreign,
-        sugarsubstitute_application::startup::ConnectionBudgetKind::Attached,
-    )?;
+    ledger.acquisition(foreign)?;
     let cause = ledger.expiry(foreign, RequestError::Deadline)?;
     assert!(c.recover_acquisition_expiry(Box::new(cause)).is_err());
     let earlier = Moment::from_nanos(90);

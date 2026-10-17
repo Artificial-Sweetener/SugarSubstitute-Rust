@@ -12,7 +12,6 @@ pub(super) struct PendingAcquire {
     pub(super) header: WireHeader,
     pub(super) original: Moment,
     pub(super) admitted: bool,
-    pub(super) kind: ConnectionBudgetKind,
     pub(super) retiring: bool,
 }
 /// The original acquire owner retains one reply through cancellation; matching metadata
@@ -31,30 +30,16 @@ pub(super) enum ActivityRoute {
     Startup,
 }
 impl ActivityRoute {
-    /// An existing cleanup owns its original budget; an expired startup budget must
-    /// not prevent actual control/attempt retirement after the initiating failure.
-    pub(super) fn select(
-        closing: bool,
-        attempt: Option<&attempt::AttemptCleanup>,
-        phase: Option<sugarsubstitute_application::startup::StartupPhase>,
-        frontend: Option<FrontendBudget>,
-        now: Moment,
-    ) -> std::io::Result<Self> {
+    /// Whole shutdown takes precedence over the retained attempt-cleanup owner.
+    /// Loading progresses until actual readiness, cancellation or a terminal failure.
+    pub(super) fn select(closing: bool, attempt: Option<&attempt::AttemptCleanup>) -> Self {
         if closing {
-            return Ok(Self::Shutdown);
+            Self::Shutdown
+        } else if attempt.is_some() {
+            Self::AttemptCleanup
+        } else {
+            Self::Startup
         }
-        if attempt.is_some() {
-            return Ok(Self::AttemptCleanup);
-        }
-        if phase == Some(sugarsubstitute_application::startup::StartupPhase::WebviewLoading)
-            && frontend.is_some_and(|budget| now >= budget.until())
-        {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::TimedOut,
-                "Original frontend loading budget expired",
-            ));
-        }
-        Ok(Self::Startup)
     }
 }
 /// Closed progress facts describe wire ownership, never backend or grant authority.
@@ -83,9 +68,9 @@ impl ConnectionStage {
     }
 }
 impl PendingAcquire {
-    /// Finite preparation ends at actual native admission; managed readiness has no aggregate cap.
+    /// Finite write admission precedes cancellable readiness without an aggregate cap.
     pub(super) fn deadline(self) -> Option<Moment> {
-        (!self.admitted || !self.kind.waits_for_owned_process()).then_some(self.original)
+        (!self.admitted).then_some(self.original)
     }
     /// Retain the original reply in its existing acquisition slot. Cancellation does not
     /// move it through a different owner's failure slot or replace an already retained loan.
@@ -146,11 +131,10 @@ impl ProductionChild {
         let budget = ConnectionBudget::new(kind, self.client()?.now()?)?;
         self.connection_budget = Some(budget);
         let header = self.bootstrap.channel_mut().prepare_request(budget.until())?;
-        self.bootstrap.channel_mut().acquisition(header, kind)?;
+        self.bootstrap.channel_mut().acquisition(header)?;
         self.acquire = Some(PendingAcquire {
             header,
             original: budget.until(),
-            kind,
             admitted: false,
             retiring: false,
         });
@@ -352,20 +336,7 @@ impl ProductionChild {
         if self.output.closing() {
             self.advance_output()?;
         }
-        let route = ActivityRoute::select(
-            self.shutdown.closing(),
-            self.attempt.as_ref(),
-            self.phase,
-            self.frontend_budget,
-            self.client()?.now()?,
-        );
-        let route = match route {
-            Ok(route) => route,
-            Err(cause) => {
-                self.publish_frontend_timeout(cause)?;
-                return Ok(());
-            }
-        };
+        let route = ActivityRoute::select(self.shutdown.closing(), self.attempt.as_ref());
         match route {
             ActivityRoute::Shutdown => {
                 self.retire_acquire()?;

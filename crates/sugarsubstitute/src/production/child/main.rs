@@ -4,6 +4,7 @@
 use super::*;
 use configuration::PreparedMainInput;
 use profile_transaction::ProfileTransaction;
+use sugarsubstitute_application::startup::FrontendBudget;
 use sugarsubstitute_contracts::configuration::LoopbackOrigin;
 #[path = "main/worker.rs"]
 mod worker;
@@ -154,14 +155,10 @@ impl ProductionChild {
         prepared: &mut PreparedChildStartup,
         origin: LoopbackOrigin,
     ) -> Result<()> {
-        if (self.frontend_budget.is_some() && !self.reload.as_ref().is_some_and(|r| r.granted()))
-            || self.main.pending()
-            || self.main.terminal.is_some()
-        {
+        if self.main.request_consumed || self.main.pending() || self.main.terminal.is_some() {
             return Err("Main construction duplicated".into());
         }
         let budget = FrontendBudget::new(self.client()?.now()?)?;
-        self.frontend_budget = Some(budget);
         let header = self.grant_header.ok_or("Original grant request absent")?;
         let client = self.client()?.clone();
         let id = self.next_job()?;

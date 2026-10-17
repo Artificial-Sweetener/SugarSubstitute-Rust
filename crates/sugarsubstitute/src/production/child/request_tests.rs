@@ -284,8 +284,7 @@ fn nonfinal_acquisition_keeps_original_slot_deadline_and_capacity_until_final() 
     let mut requests = requests()?;
     let until = Moment::from_nanos(1000);
     let h = requests.prepare(until, CounterDeadline::new(2000, 100)?)?;
-    requests
-        .acquisition(h, sugarsubstitute_application::startup::ConnectionBudgetKind::Attached)?;
+    requests.acquisition(h)?;
     requests.admitted(h)?;
     requests.received(h, Moment::from_nanos(20))?;
     requests.progress(h, Moment::from_nanos(21))?;
@@ -307,7 +306,7 @@ fn nonfinal_acquisition_keeps_original_slot_deadline_and_capacity_until_final() 
     Ok(())
 }
 #[test]
-fn progress_cannot_resume_foreign_nonacquire_expired_or_consumed_requests() -> TestResult {
+fn progress_cannot_resume_foreign_nonacquire_or_consumed_requests() -> TestResult {
     let mut requests = requests()?;
     let until = Moment::from_nanos(100);
     let control = requests.prepare(until, CounterDeadline::new(2000, 100)?)?;
@@ -316,13 +315,8 @@ fn progress_cannot_resume_foreign_nonacquire_expired_or_consumed_requests() -> T
     assert_eq!(requests.progress(control, Moment::from_nanos(21)), Err(RequestError::Order));
     requests.consumed(control)?;
     let h = requests.prepare(until, CounterDeadline::new(2000, 100)?)?;
-    requests
-        .acquisition(h, sugarsubstitute_application::startup::ConnectionBudgetKind::Attached)?;
-    assert!(
-        requests
-            .acquisition(h, sugarsubstitute_application::startup::ConnectionBudgetKind::Attached)
-            .is_err()
-    );
+    requests.acquisition(h)?;
+    assert!(requests.acquisition(h).is_err());
     requests.admitted(h)?;
     requests.received(h, Moment::from_nanos(20))?;
     assert_eq!(
@@ -330,7 +324,8 @@ fn progress_cannot_resume_foreign_nonacquire_expired_or_consumed_requests() -> T
             .progress(WireHeader { deadline_qpc: h.deadline_qpc + 1, ..h }, Moment::from_nanos(21)),
         Err(RequestError::Identity)
     );
-    assert_eq!(requests.progress(h, until), Err(RequestError::Deadline));
+    requests.progress(h, until)?;
+    requests.received(h, until)?;
     requests.consumed(h)?;
     assert_eq!(requests.progress(h, Moment::from_nanos(21)), Err(RequestError::Identity));
     Ok(())
@@ -342,11 +337,10 @@ mod retirement_tests;
 #[test]
 fn managed_admitted_acquisition_waits_beyond_three_minutes_with_finite_output_requests()
 -> TestResult {
-    use sugarsubstitute_application::startup::ConnectionBudgetKind;
     let mut ledger = requests()?;
     let until = Moment::from_nanos(180_000_000_000);
     let h = ledger.prepare(until, CounterDeadline::new(18000, 100)?)?;
-    ledger.acquisition(h, ConnectionBudgetKind::Managed)?;
+    ledger.acquisition(h)?;
     assert_eq!(ledger.outbound(h, until, until), Err(RequestError::Deadline));
     assert_eq!(ledger.received(h, Moment::from_nanos(360_000_000_000)), Err(RequestError::Order));
     ledger.outbound(h, until, Moment::from_nanos(1))?;
@@ -370,15 +364,14 @@ fn managed_admitted_acquisition_waits_beyond_three_minutes_with_finite_output_re
     Ok(())
 }
 #[test]
-fn attached_acquisition_and_unadmitted_managed_requests_keep_original_cutoff() -> TestResult {
-    use sugarsubstitute_application::startup::ConnectionBudgetKind;
+fn admitted_acquisition_waits_but_unadmitted_requests_keep_original_cutoff() -> TestResult {
     let mut ledger = requests()?;
     let h = prepare(&mut ledger)?;
-    ledger.acquisition(h, ConnectionBudgetKind::Attached)?;
+    ledger.acquisition(h)?;
     ledger.admitted(h)?;
-    assert_eq!(ledger.received(h, Moment::from_nanos(500)), Err(RequestError::Deadline));
+    ledger.received(h, Moment::from_nanos(500))?;
     let managed = prepare(&mut ledger)?;
-    ledger.acquisition(managed, ConnectionBudgetKind::Managed)?;
+    ledger.acquisition(managed)?;
     assert_eq!(
         ledger.outbound(managed, Moment::from_nanos(500), Moment::from_nanos(500)),
         Err(RequestError::Deadline)
@@ -399,15 +392,14 @@ fn admitted_managed_retry_keeps_exact_header_while_waiting_for_original_producer
 }
 
 #[test]
-fn finite_reload_reply_retirement_preserves_original_cutoff_and_grants_no_ordinary_receipt()
--> TestResult {
+fn admitted_reload_can_retire_without_reopening_ordinary_receipt() -> TestResult {
     let mut owner = requests()?;
     let header = prepare(&mut owner)?;
     owner.frontend_reload(header)?;
     owner.outbound(header, Moment::from_nanos(500), Moment::from_nanos(499))?;
     owner.admitted(header)?;
-    assert_eq!(owner.received(header, Moment::from_nanos(500)), Err(RequestError::Deadline));
     owner.retire(header, Purpose::FrontendReload)?;
+    assert_eq!(owner.received(header, Moment::from_nanos(500)), Err(RequestError::Order));
     owner.received_or_retiring(header, Moment::from_nanos(900))?;
     assert_eq!(owner.consumed(header), Err(RequestError::Order));
     assert_eq!(owner.can_settle(header, Purpose::Acquisition), Err(RequestError::Order));
@@ -430,5 +422,27 @@ fn unadmitted_reload_can_be_withdrawn_but_wrong_purpose_and_foreign_header_canno
     assert_eq!(owner.retire(header, Purpose::BackendRetry), Err(RequestError::Identity));
     owner.withdraw_prepared(header)?;
     assert!(owner.prepared(header).is_err());
+    Ok(())
+}
+
+#[test]
+fn admitted_reload_waits_for_exact_late_reply_with_immutable_header() -> TestResult {
+    let mut owner = requests()?;
+    let header = prepare(&mut owner)?;
+    owner.frontend_reload(header)?;
+    assert_eq!(
+        owner.outbound(header, Moment::from_nanos(500), Moment::from_nanos(500)),
+        Err(RequestError::Deadline)
+    );
+    assert_eq!(owner.received(header, Moment::from_nanos(900)), Err(RequestError::Order));
+    owner.outbound(header, Moment::from_nanos(500), Moment::from_nanos(499))?;
+    owner.admitted(header)?;
+    let foreign = WireHeader { deadline_qpc: header.deadline_qpc + 1, ..header };
+    assert_eq!(owner.received(foreign, Moment::from_nanos(900)), Err(RequestError::Identity));
+    owner.received(header, Moment::from_nanos(900))?;
+    assert_eq!(owner.find(header)?.original, Moment::from_nanos(500));
+    assert_eq!(owner.find(header)?.header, header);
+    assert_eq!(owner.progress(header, Moment::from_nanos(900)), Err(RequestError::Order));
+    owner.consumed(header)?;
     Ok(())
 }

@@ -66,7 +66,6 @@ fn activity_ack_before_acquire_grant_keeps_original_owner_and_cutoffs()
     requests.outbound(acquire, acquire_until, Moment::from_nanos(10))?;
     requests.admitted(acquire)?;
     let pending = PendingAcquire {
-        kind: sugarsubstitute_application::startup::ConnectionBudgetKind::Attached,
         header: acquire,
         original: acquire_until,
         admitted: true,
@@ -169,7 +168,7 @@ impl sugarsubstitute_contracts::execution::CompletionWake for AcquireWake {
 
 /// The real admitted ledger remains intact when a quiet request reaches its original cutoff.
 #[test]
-fn quiet_admitted_acquire_expires_without_transferring_or_replacing_original_request()
+fn quiet_admitted_acquire_waits_without_transferring_or_replacing_original_request()
 -> std::result::Result<(), Box<dyn Error>> {
     use std::sync::{
         Arc,
@@ -184,13 +183,7 @@ fn quiet_admitted_acquire_expires_without_transferring_or_replacing_original_req
     let header = requests.prepare(until, CounterDeadline::new(2000, 100)?)?;
     requests.outbound(header, until, client.now()?)?;
     requests.admitted(header)?;
-    let pending = PendingAcquire {
-        kind: sugarsubstitute_application::startup::ConnectionBudgetKind::Attached,
-        header,
-        original: until,
-        admitted: true,
-        retiring: false,
-    };
+    let pending = PendingAcquire { header, original: until, admitted: true, retiring: false };
     let mut effects = 0;
     assert!(
         pending
@@ -201,14 +194,14 @@ fn quiet_admitted_acquire_expires_without_transferring_or_replacing_original_req
             .is_none()
     );
     clock.0.store(1000, Ordering::Release);
-    let cause = pending
-        .take_matching(client.now()?, None, || {
-            effects += 1;
-            Some(())
-        })
-        .err()
-        .ok_or("Quiet Acquire renewed its cutoff")?;
-    assert_eq!(cause.kind(), std::io::ErrorKind::TimedOut);
+    assert!(
+        pending
+            .take_matching(client.now()?, None, || {
+                effects += 1;
+                Some(())
+            })?
+            .is_none()
+    );
     assert_eq!(effects, 0);
     assert_eq!(pending.header, header);
     assert_eq!(pending.original, until);
@@ -219,9 +212,9 @@ fn quiet_admitted_acquire_expires_without_transferring_or_replacing_original_req
     Ok(())
 }
 
-/// Matching and foreign late inert replies keep their exact byte owner untouched.
+/// Only an exact admitted reply can transfer its existing late byte owner.
 #[test]
-fn late_acquire_reply_cannot_transfer_matching_or_foreign_frame_at_or_after_cutoff()
+fn admitted_late_acquire_transfers_only_exact_frame_without_changing_header()
 -> std::result::Result<(), Box<dyn Error>> {
     use std::sync::{
         Arc,
@@ -236,13 +229,7 @@ fn late_acquire_reply_cannot_transfer_matching_or_foreign_frame_at_or_after_cuto
     let header = requests.prepare(until, CounterDeadline::new(2000, 100)?)?;
     requests.outbound(header, until, client.now()?)?;
     requests.admitted(header)?;
-    let pending = PendingAcquire {
-        kind: sugarsubstitute_application::startup::ConnectionBudgetKind::Attached,
-        header,
-        original: until,
-        admitted: true,
-        retiring: false,
-    };
+    let pending = PendingAcquire { header, original: until, admitted: true, retiring: false };
     // Receive the original wire metadata before expiry; the semantic owner has not taken bytes.
     requests.received(header, client.now()?)?;
     let mut bytes = [0; 512];
@@ -259,12 +246,15 @@ fn late_acquire_reply_cannot_transfer_matching_or_foreign_frame_at_or_after_cuto
         let decoded = FrameCodec::decode(&bytes[..count])?;
         let mut retained = Some(&bytes[..count]);
         clock.0.store(sample, Ordering::Release);
-        let cause = pending
-            .take_matching(client.now()?, Some(decoded.header), || retained.take())
-            .err()
-            .ok_or("Late reply transferred its retained input")?;
-        assert_eq!(cause.kind(), std::io::ErrorKind::TimedOut);
-        assert_eq!(retained, Some(&bytes[..count]));
+        let transferred =
+            pending.take_matching(client.now()?, Some(decoded.header), || retained.take())?;
+        if decoded.header == header {
+            assert_eq!(transferred, Some(&bytes[..count]));
+            assert!(retained.is_none());
+        } else {
+            assert!(transferred.is_none());
+            assert_eq!(retained, Some(&bytes[..count]));
+        }
         assert_eq!(pending.header, header);
         assert_eq!(pending.original, until);
     }
@@ -281,19 +271,10 @@ fn retiring_acquire_retains_exact_original_loan_without_readmission_or_renewal()
     let mut ledger = requests()?;
     let original = Moment::from_nanos(1000);
     let header = ledger.prepare(original, CounterDeadline::new(2000, 100)?)?;
-    ledger.acquisition(
-        header,
-        sugarsubstitute_application::startup::ConnectionBudgetKind::Attached,
-    )?;
+    ledger.acquisition(header)?;
     ledger.outbound(header, original, Moment::from_nanos(10))?;
     ledger.admitted(header)?;
-    let pending = PendingAcquire {
-        kind: sugarsubstitute_application::startup::ConnectionBudgetKind::Attached,
-        header,
-        original,
-        admitted: true,
-        retiring: false,
-    };
+    let pending = PendingAcquire { header, original, admitted: true, retiring: false };
     let mut grant = None;
     let mut takes = 0;
     let foreign = WireHeader { deadline_qpc: header.deadline_qpc + 1, ..header };
@@ -344,18 +325,12 @@ fn retiring_acquire_retains_exact_original_loan_without_readmission_or_renewal()
 }
 
 #[test]
-fn managed_pending_owner_has_no_elapsed_wake_after_admission_and_retains_cancel_identity()
+fn pending_readiness_owner_has_no_elapsed_wake_after_admission_and_retains_cancel_identity()
 -> std::result::Result<(), Box<dyn Error>> {
     let mut ledger = requests()?;
     let original = Moment::from_nanos(180_000_000_000);
     let h = ledger.prepare(original, CounterDeadline::new(18000, 100)?)?;
-    let mut pending = PendingAcquire {
-        header: h,
-        original,
-        admitted: false,
-        retiring: false,
-        kind: ConnectionBudgetKind::Managed,
-    };
+    let mut pending = PendingAcquire { header: h, original, admitted: false, retiring: false };
     assert_eq!(pending.deadline(), Some(original));
     assert!(pending.check_current(original).is_err());
     pending.admitted = true;

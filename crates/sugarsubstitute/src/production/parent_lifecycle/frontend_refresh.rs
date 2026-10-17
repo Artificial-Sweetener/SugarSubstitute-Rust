@@ -54,7 +54,7 @@ impl FrontendRefresh {
         } else if self.inspecting {
             Some(self.until)
         } else {
-            Some(self.campaign.next_deadline().unwrap_or(self.until).min(self.until))
+            self.campaign.next_deadline()
         }
     }
     pub(super) fn close(&mut self, shutdown: ShutdownBudget) {
@@ -132,6 +132,15 @@ impl FrontendRefresh {
         if self.inspecting {
             match self.source.take_inspection() {
                 Ok(Some(source)) => {
+                    if self.shutdown.is_none() {
+                        // Revalidate the retained backend/source/listener before lifting preparation expiry.
+                        let _input = resources.backend.frontend_reload_probe(
+                            self.lease.resource,
+                            source.clone(),
+                            resources.execution,
+                        )?;
+                        self.campaign.admit_readiness_wait(resources.finite, now)?;
+                    }
                     self.source_lease = Some(source);
                     self.inspecting = false;
                 }
@@ -174,7 +183,7 @@ impl FrontendRefresh {
         if self.published {
             return Ok(false);
         }
-        if now >= self.until {
+        if self.inspecting && now >= self.until {
             return Err(ParentError::WrongPhase.into());
         }
         if step == CampaignStep::Ready {
@@ -253,6 +262,7 @@ impl ParentLifecycle {
         let spec = FrontendRefresh::spec(resources.execution, FRONTEND_SOURCE_BYTES, until)?;
         let mut source = source;
         source.submit_inspection(resources.execution.client, resources.finite, spec)?;
+        self.requests.wait_for_readiness(index)?;
         self.frontend_refresh = Some(FrontendRefresh {
             index,
             identity,

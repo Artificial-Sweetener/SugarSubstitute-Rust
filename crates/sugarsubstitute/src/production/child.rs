@@ -19,8 +19,6 @@ mod configuration;
 mod connection;
 #[path = "child/diagnostics.rs"]
 mod diagnostics;
-#[path = "child/frontend_deadline.rs"]
-mod frontend_deadline;
 #[path = "child/handshake.rs"]
 mod handshake;
 #[path = "child/main.rs"]
@@ -52,7 +50,7 @@ use crate::{
 use bootstrap::ChildBootstrap;
 pub(in crate::production) use configuration::PreparedChildStartup;
 use std::{error::Error, num::NonZeroUsize};
-use sugarsubstitute_application::startup::{ConnectionBudget, FrontendBudget};
+use sugarsubstitute_application::startup::ConnectionBudget;
 use sugarsubstitute_contracts::{execution::*, lifecycle::*, startup::*};
 use sugarsubstitute_desktop::{
     DesktopStartupCommand, DesktopStartupObservation, MainWindowSettings, StartupPreparationStep,
@@ -88,8 +86,6 @@ pub(in crate::production) struct ProductionChild {
     connection_budget: Option<ConnectionBudget>,
     acquisition_header: Option<WireHeader>,
     attempt: Option<attempt::AttemptCleanup>,
-    frontend_budget: Option<FrontendBudget>,
-    frontend_timed_out: bool,
     reload: Option<reload::FrontendReload>,
     acquire: Option<connection::PendingAcquire>,
     lease: Option<LeaseReference>,
@@ -155,8 +151,6 @@ impl ProductionChild {
             connection_budget: None,
             acquisition_header: None,
             attempt: None,
-            frontend_budget: None,
-            frontend_timed_out: false,
             reload: None,
             acquire: None,
             lease: None,
@@ -389,15 +383,11 @@ impl ProductionChild {
                 .and_then(backend::RunningBackendBinding::retry_deadline)
                 .filter(|_| !self.shutdown.closing() && !self.output.replacement_stopped()),
             self.shutdown.deadline(),
-            self.reload.as_ref().filter(|_| !self.shutdown.closing()).map(|reload| reload.until()),
+            self.reload
+                .as_ref()
+                .filter(|_| !self.shutdown.closing())
+                .and_then(|reload| reload.deadline()),
             self.attempt.as_ref().and_then(attempt::AttemptCleanup::deadline),
-            self.frontend_budget
-                .filter(|_| self.attempt.is_none() && !self.frontend_timed_out)
-                .filter(|_| {
-                    self.phase
-                        == Some(sugarsubstitute_application::startup::StartupPhase::WebviewLoading)
-                })
-                .map(|budget| budget.until()),
         ]
         .into_iter()
         .flatten()
@@ -469,3 +459,7 @@ fn take_first<T, const N: usize>(slots: &mut [Option<T>; N]) -> Option<T> {
 #[cfg(test)]
 #[path = "child/tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "child/frontend_lifetime_tests.rs"]
+mod frontend_lifetime_tests;

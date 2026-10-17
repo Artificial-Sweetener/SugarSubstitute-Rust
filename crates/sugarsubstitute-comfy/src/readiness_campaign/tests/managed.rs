@@ -15,60 +15,89 @@ pub(super) fn managed_campaign() -> TestResult<ReadinessCampaign> {
 }
 
 #[test]
-fn managed_live_admission_requires_current_preparation_and_preserves_attached_timeout() -> TestResult
-{
-    let mut attached = ReadinessCampaign::new(
-        attached_target(8188)?,
-        ConnectionBudget::new(ConnectionBudgetKind::Attached, Moment::from_nanos(0))?,
-    )?;
+fn readiness_admission_requires_current_live_scope_and_preserves_preparation() -> TestResult {
+    let mut h = Harness::new()?;
+    let original = h.campaign.budget;
+    let expired = original.until();
     assert!(matches!(
-        attached.admit_managed_live(Moment::from_nanos(0)),
-        Err(CampaignError::Rejected(CampaignRejection::WrongTarget))
-    ));
-    assert_eq!(attached.campaign_until(), Some(Moment::from_nanos(30_000_000_000)));
-    assert_eq!(
-        attached.consume(&empty_batch(), Moment::from_nanos(30_000_000_000))?,
-        CampaignStep::Failed
-    );
-    let mut expired = managed_campaign()?;
-    assert!(matches!(
-        expired.admit_managed_live(Moment::from_nanos(180_000_000_000)),
+        h.campaign.admit_readiness_wait(&h.attempt, expired),
         Err(CampaignError::Budget(ProbeBudgetError::Expired))
     ));
-    assert_eq!(expired.campaign_until(), Some(Moment::from_nanos(180_000_000_000)));
-    let mut live = managed_campaign()?;
-    let original = live.budget;
-    live.admit_managed_live(Moment::from_nanos(179_000_000_000))?;
-    assert_eq!(
-        live.consume(&empty_batch(), Moment::from_nanos(600_000_000_000))?,
-        CampaignStep::NeedsInput
-    );
-    assert_eq!(
-        live.probe_until(Moment::from_nanos(600_000_000_000))?,
-        Moment::from_nanos(602_000_000_000)
-    );
-    live.admit_managed_live(Moment::from_nanos(600_000_000_000))?;
-    assert_eq!(live.budget, original);
-    assert_eq!(live.campaign_until(), None);
+    assert_eq!(h.campaign.campaign_until(), Some(expired));
+    h.campaign.admit_readiness_wait(&h.attempt, h.now())?;
+    h.set_time(600_000_000_000);
+    assert_eq!(h.campaign.consume(&empty_batch(), h.now())?, CampaignStep::NeedsInput);
+    assert_eq!(h.campaign.probe_until(h.now())?, Moment::from_nanos(602_000_000_000));
+    h.campaign.admit_readiness_wait(&h.attempt, h.now())?;
+    assert_eq!(h.campaign.budget, original);
+    assert_eq!(h.campaign.campaign_until(), None);
     assert!(matches!(
-        live.probe_until(Moment::from_nanos(599_999_999_999)),
+        h.campaign.admit_readiness_wait(&h.cleanup, h.now()),
+        Err(CampaignError::Rejected(CampaignRejection::InvalidSpecification))
+    ));
+    assert!(matches!(
+        h.campaign.probe_until(Moment::from_nanos(599_999_999_999)),
         Err(CampaignError::Rejected(CampaignRejection::ClockRegression))
     ));
-    let shutdown = ShutdownBudget::new(Moment::from_nanos(600_000_000_000))?;
-    live.cancel(shutdown);
+    let shutdown = ShutdownBudget::new(h.now())?;
+    h.campaign.cancel(shutdown);
     assert!(matches!(
-        live.admit_managed_live(Moment::from_nanos(600_000_000_000)),
+        h.campaign.admit_readiness_wait(&h.attempt, h.now()),
         Err(CampaignError::Rejected(CampaignRejection::WrongPhase))
     ));
-    assert!(live.settled());
-    Ok(())
+    h.finish()
+}
+
+#[test]
+fn readiness_admission_rejects_finite_cancelled_and_foreign_execution_scopes() -> TestResult {
+    let h = Harness::new()?;
+    let finite = h.client.create_scope(
+        sugarsubstitute_contracts::execution::ScopeSpec {
+            id: ScopeId::new(10)?,
+            deadline: Some(Moment::from_nanos(1_000_000_000)),
+        },
+        None,
+    )?;
+    let mut campaign = managed_campaign()?;
+    assert!(matches!(
+        campaign.admit_readiness_wait(&finite, h.now()),
+        Err(CampaignError::Rejected(CampaignRejection::InvalidSpecification))
+    ));
+    campaign.admit_readiness_wait(&h.attempt, h.now())?;
+    let other = Harness::new()?;
+    assert!(matches!(
+        campaign.admit_readiness_wait(&other.attempt, h.now()),
+        Err(CampaignError::Rejected(CampaignRejection::ForeignExecution))
+    ));
+    h.attempt.cancel();
+    assert!(matches!(
+        campaign.admit_readiness_wait(&h.attempt, h.now()),
+        Err(CampaignError::Rejected(CampaignRejection::ClosedScope))
+    ));
+    other.finish()?;
+    h.finish()
+}
+
+#[test]
+fn attached_admitted_readiness_accepts_late_http_proof_and_cancels_without_process_authority()
+-> TestResult {
+    let mut h = Harness::new()?;
+    h.campaign.admit_readiness_wait(&h.attempt, h.now())?;
+    h.set_time(600_000_000_000);
+    h.submit(Behavior::Success, None, false, None)?;
+    assert_eq!(h.completion()?, CampaignStep::Ready);
+    let proof = h.campaign.take_readiness().ok_or("Actual attached readiness absent")?;
+    assert_eq!(proof.managed_resource(), None);
+    proof.validate_current()?;
+    drop(proof);
+    h.finish()
 }
 
 #[test]
 fn managed_live_retry_closes_actual_outputs_on_first_fifteen_second_cutoff() -> TestResult {
     let mut h = Harness::new()?;
     h.campaign = managed_campaign()?;
-    h.campaign.admit_managed_live(h.now())?;
+    h.campaign.admit_readiness_wait(&h.attempt, h.now())?;
     h.set_time(200_000_000_000);
     h.submit(Behavior::Unavailable, None, false, None)?;
     assert_eq!(h.completion()?, CampaignStep::Progressed);
@@ -98,7 +127,7 @@ fn managed_live_timing_accepts_late_real_http_result_without_granting_managed_au
 -> TestResult {
     let mut h = Harness::new()?;
     h.campaign = managed_campaign()?;
-    h.campaign.admit_managed_live(h.now())?;
+    h.campaign.admit_readiness_wait(&h.attempt, h.now())?;
     h.set_time(600_000_000_000);
     let input = ReadinessProbeInput::attached(h.lease.clone(), 8188)?;
     let spec = h.spec(Moment::from_nanos(602_000_000_000))?;
@@ -123,7 +152,7 @@ fn managed_live_timing_accepts_late_real_http_result_without_granting_managed_au
 fn managed_live_cancel_retains_actual_job_and_original_shutdown_cleanup() -> TestResult {
     let mut h = Harness::new()?;
     h.campaign = managed_campaign()?;
-    h.campaign.admit_managed_live(h.now())?;
+    h.campaign.admit_readiness_wait(&h.attempt, h.now())?;
     h.set_time(200_000_000_000);
     let fixture = h.submit(Behavior::Success, Some("begin"), false, None)?;
     fixture.entered()?;

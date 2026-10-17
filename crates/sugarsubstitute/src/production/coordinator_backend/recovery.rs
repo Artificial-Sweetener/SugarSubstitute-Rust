@@ -32,7 +32,7 @@ impl CoordinatorBackend {
             return Err(Box::new(LifecycleRejection::WrongPhase));
         }
         if record.shutdown.is_none() {
-            record.campaign.admit_managed_live(now)?;
+            record.campaign.admit_readiness_wait(&record.scope, now)?;
         }
         record.started = true;
         self.observe(ResourceObservation::OwnedStarted { resource: key, process: observed })

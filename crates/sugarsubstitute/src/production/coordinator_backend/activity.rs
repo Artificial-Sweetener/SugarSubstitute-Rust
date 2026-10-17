@@ -295,7 +295,7 @@ impl CoordinatorBackend {
             Err(cause) => (false, Some(cause)),
         };
         let record = self.records[at].as_mut().ok_or(LifecycleRejection::StaleIdentity)?;
-        if let Err(cause) = consume_source(record) {
+        if let Err(cause) = consume_source(record, resources.client.now()?) {
             if failure.is_none() {
                 failure = Some(cause);
             } else {
@@ -382,11 +382,15 @@ impl CoordinatorBackend {
 }
 
 /// Consume only this generation's actual source jobs; terminal metadata never proves file closure.
-fn consume_source(record: &mut Backend) -> Result<()> {
+fn consume_source(record: &mut Backend, now: Moment) -> Result<()> {
     if record.source_job {
         match record.source.take_inspection() {
             Ok(Some(source)) => {
                 record.source_job = false;
+                if record.shutdown.is_none() && matches!(record.target, BackendTarget::Attached(_))
+                {
+                    record.campaign.admit_readiness_wait(&record.scope, now)?;
+                }
                 record.source_lease = Some(source);
                 tracing::info!(operation="backend_preparation_transition",resource=?record.key,stage="SourceTerminal",outcome="Success",
                     "Original backend preparation advanced");

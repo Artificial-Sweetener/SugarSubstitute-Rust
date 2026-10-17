@@ -123,10 +123,7 @@ impl CoordinatorBackend {
         }
         let campaign = ReadinessCampaign::new(target.clone(), budget)?;
         let scope = resources.client.create_scope(
-            ScopeSpec {
-                id: resources.scopes.allocate()?,
-                deadline: (!kind.waits_for_owned_process()).then_some(budget.until()),
-            },
+            ScopeSpec { id: resources.scopes.allocate()?, deadline: None },
             Some(resources.native),
         )?;
         let original = input.as_ref().ok_or(LifecycleRejection::WrongPhase)?;

@@ -86,15 +86,8 @@ impl ChildChannel {
     }
 
     /// Mark the exact prepared Acquire before native admission; no payload authority is granted.
-    pub(in super::super) fn acquisition(
-        &mut self,
-        header: WireHeader,
-        kind: sugarsubstitute_application::startup::ConnectionBudgetKind,
-    ) -> Result<()> {
-        self.requests
-            .as_mut()
-            .ok_or("Original request ledger missing")?
-            .acquisition(header, kind)?;
+    pub(in super::super) fn acquisition(&mut self, header: WireHeader) -> Result<()> {
+        self.requests.as_mut().ok_or("Original request ledger missing")?.acquisition(header)?;
         Ok(())
     }
     /// Consume only validated nonfinal Acquire progress while preserving its original slot.

@@ -35,6 +35,9 @@ impl ReadinessCampaign {
             CampaignError::Clock(cause)
         })?;
         self.observe_now(now)?;
+        if self.readiness_scope.is_some_and(|id| id != scope.id()) {
+            return Err(CampaignError::Rejected(CampaignRejection::InvalidSpecification));
+        }
         if !self.needs_continuation(now)? {
             return Err(CampaignError::Rejected(CampaignRejection::WrongPhase));
         }

@@ -105,13 +105,8 @@ mod tests {
             )?,
             &mut Some(BackendCauses::new(storage)?),
         )?;
-        let mut acquisition = Acquisition::new(
-            binding,
-            original,
-            identity,
-            Moment::from_nanos(100),
-            sugarsubstitute_application::startup::ConnectionBudgetKind::Attached,
-        )?;
+        let mut acquisition =
+            Acquisition::new(binding, original, identity, Moment::from_nanos(100))?;
         acquisition.observe_retirement(binding, identity, retirement)?;
         actor.acquisition = Some(acquisition);
         Ok((actor, retirement))

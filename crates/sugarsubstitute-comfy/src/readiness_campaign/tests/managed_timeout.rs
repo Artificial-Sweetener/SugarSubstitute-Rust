@@ -9,7 +9,7 @@ use std::{sync::Arc, time::Duration};
 fn live() -> TestResult<Harness> {
     let mut h = Harness::new()?;
     h.campaign = managed_campaign()?;
-    h.campaign.admit_managed_live(h.now())?;
+    h.campaign.admit_readiness_wait(&h.attempt, h.now())?;
     h.set_time(600_000_000_000);
     Ok(h)
 }
@@ -160,4 +160,165 @@ fn cancellation_after_actual_managed_probe_timeout_prevents_fresh_admission() ->
     assert_eq!(h.campaign.next_deadline(), None);
     assert!(h.submit(Behavior::Success, None, false, None).is_err());
     h.finish()
+}
+
+#[test]
+fn native_body_timeout_after_peer_waits_for_checked_cleanup_before_managed_retry() -> TestResult {
+    let mut h = live()?;
+    let fixture = h.submit(Behavior::NativeTimeout, Some("close"), false, None)?;
+    assert_eq!(h.completion()?, CampaignStep::Progressed);
+    let Some(CampaignError::Transport(cause)) = h.campaign.failure() else {
+        return Err("Native timeout absent".into());
+    };
+    assert_eq!(cause.stage(), "http_body_read");
+    assert_eq!(cause.retry_disposition(), ProbeRetryDisposition::ProbeIntervalElapsed);
+    assert_eq!(
+        cause
+            .source()
+            .and_then(|cause| cause.downcast_ref::<windows::core::Error>())
+            .map(windows::core::Error::code),
+        Some(windows::core::HRESULT::from_win32(12002))
+    );
+    assert!(h.campaign.take_readiness().is_none());
+    assert!(h.retained_bytes() > 0);
+    let until = h.campaign.cleanup_deadline(h.now())?;
+    h.submit_close(until)?;
+    fixture.entered()?;
+    assert!(!h.campaign.settled());
+    assert!(!h.campaign.needs_input(h.now())?);
+    fixture.release();
+    assert_eq!(h.completion()?, CampaignStep::Progressed);
+    assert_eq!(
+        *fixture.closed.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
+        [3, 2, 1]
+    );
+    assert!(h.campaign.settled());
+    let next = h.now().checked_add(Duration::from_millis(50))?;
+    assert_eq!(h.campaign.next_deadline(), Some(next));
+    h.set_time(next.as_nanos());
+    h.submit(Behavior::Success, None, false, None)?;
+    assert_eq!(h.completion()?, CampaignStep::Ready);
+    h.finish()
+}
+#[test]
+fn native_timeout_preserves_attached_budget_and_failed_cleanup_blocks_managed_retry() -> TestResult
+{
+    let mut attached = Harness::new()?;
+    let original = attached.campaign.campaign_until();
+    attached.submit(Behavior::NativeTimeout, None, false, None)?;
+    assert_eq!(attached.completion()?, CampaignStep::Failed);
+    assert_eq!(attached.campaign.campaign_until(), original);
+    assert!(!attached.campaign.needs_input(attached.now())?);
+    attached.finish()?;
+    let mut h = live()?;
+    h.submit(Behavior::NativeTimeout, None, true, None)?;
+    assert_eq!(h.completion()?, CampaignStep::Progressed);
+    let until = h.campaign.cleanup_deadline(h.now())?;
+    h.submit_close(until)?;
+    let cause = h.completion().err().ok_or("Native timeout hid failed cleanup")?;
+    assert!(cause.source().is_some());
+    assert!(!h.campaign.needs_input(h.now())?);
+    assert!(h.campaign.take_readiness().is_none());
+    drop(cause);
+    h.finish()
+}
+#[test]
+fn cancellation_before_native_timeout_return_is_terminal_and_retains_cleanup() -> TestResult {
+    let mut h = live()?;
+    let fixture = h.submit(Behavior::NativeTimeout, Some("get"), false, None)?;
+    fixture.entered()?;
+    let shutdown = ShutdownBudget::new(h.now())?;
+    h.campaign.cancel(shutdown);
+    fixture.release();
+    assert_eq!(h.completion()?, CampaignStep::Failed);
+    let Some(CampaignError::Transport(cause)) = h.campaign.failure() else {
+        return Err("Actual cancellation absent".into());
+    };
+    assert_eq!(cause.stage(), "attempt_cancelled");
+    assert_eq!(cause.retry_disposition(), ProbeRetryDisposition::Terminal);
+    assert!(
+        fixture
+            .phases
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .any(|(stage, _)| *stage == "attempt_cancelled")
+    );
+    assert!(!h.campaign.settled());
+    assert!(!h.campaign.needs_input(h.now())?);
+    assert!(h.campaign.take_readiness().is_none());
+    assert_eq!(h.campaign.cleanup_deadline(h.now())?, shutdown.settle_until);
+    h.finish()
+}
+
+#[test]
+fn original_deadline_precedes_returned_native_timeout_classification() -> TestResult {
+    let mut h = live()?;
+    let until = h.campaign.probe_until(h.now())?;
+    let fixture = h.submit(Behavior::NativeTimeout, Some("get"), false, None)?;
+    fixture.entered()?;
+    h.set_time(until.as_nanos());
+    fixture.release();
+    assert_eq!(h.completion()?, CampaignStep::Progressed);
+    assert!(
+        fixture
+            .phases
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .any(|(stage, _)| *stage == "attempt_deadline")
+    );
+    let Some(CampaignError::Transport(cause)) = h.campaign.failure() else {
+        return Err("Execution expiry absent".into());
+    };
+    assert_eq!(cause.stage(), "attempt_timed_out");
+    assert!(h.campaign.take_readiness().is_none());
+    assert!(!h.campaign.needs_input(h.now())?);
+    assert!(!h.campaign.settled());
+    h.finish()
+}
+
+#[test]
+fn submillisecond_native_budget_retires_managed_probe_but_preserves_attached_cutoff() -> TestResult
+{
+    for managed_live in [true, false] {
+        let mut h = if managed_live { live()? } else { Harness::new()? };
+        let original = h.campaign.campaign_until();
+        let until = h.campaign.probe_until(h.now())?;
+        let fixture = h.submit(Behavior::SubmillisecondBudget, Some("begin"), false, None)?;
+        fixture.entered()?;
+        h.set_time(until.as_nanos().checked_sub(1).ok_or("Original probe deadline underflow")?);
+        fixture.release();
+        assert_eq!(
+            h.completion()?,
+            if managed_live { CampaignStep::Progressed } else { CampaignStep::Failed }
+        );
+        let Some(CampaignError::Transport(cause)) = h.campaign.failure() else {
+            return Err("Actual submillisecond budget outcome absent".into());
+        };
+        assert_eq!(cause.stage(), "http_submillisecond_deadline");
+        assert_eq!(cause.retry_disposition(), ProbeRetryDisposition::ProbeIntervalElapsed);
+        assert_eq!(
+            cause
+                .source()
+                .and_then(|cause| cause.downcast_ref::<std::io::Error>())
+                .map(std::io::Error::kind),
+            Some(std::io::ErrorKind::TimedOut)
+        );
+        assert_eq!(h.campaign.campaign_until(), original);
+        assert!(h.campaign.take_readiness().is_none());
+        assert!(!h.campaign.needs_input(h.now())?);
+        assert!(!h.campaign.settled());
+        assert!(h.retained_bytes() > 0);
+        assert!(
+            fixture.closed.lock().unwrap_or_else(std::sync::PoisonError::into_inner).is_empty()
+        );
+        if managed_live {
+            cleanup_retry(&mut h, &fixture, Duration::from_millis(50))?;
+            h.submit(Behavior::Success, None, false, None)?;
+            assert_eq!(h.completion()?, CampaignStep::Ready);
+        }
+        h.finish()?;
+    }
+    Ok(())
 }

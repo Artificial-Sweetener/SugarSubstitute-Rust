@@ -58,3 +58,43 @@ fn duplicate_native_reload_preserves_first_retirement_cutoff_and_foreign_identit
     drop((child, owner));
     Ok(())
 }
+
+#[test]
+fn reload_wait_lifts_only_after_admission_and_never_renews_retirement_or_wire_cutoff() -> Result<()>
+{
+    let (child, owner, _) = super::super::test_support::child()?;
+    let identity = child.identity;
+    let lease = LeaseReference {
+        resource: ResourceId::new(1)?,
+        generation: ResourceGeneration::new(1)?,
+        lease: LeaseId::new(1)?,
+    };
+    let until = Moment::from_nanos(30_000_000_000);
+    let header = WireHeader {
+        run: identity.run,
+        connection: Some(ConnectionId::new(1)?),
+        request: Some(RequestId::new(1)?),
+        deadline_qpc: 300,
+    };
+    let mut reload = FrontendReload {
+        previous: identity,
+        next: identity,
+        lease,
+        until,
+        origin: None,
+        stage: Stage::Retiring,
+    };
+    assert_eq!(reload.deadline(), Some(until));
+    reload.stage = Stage::Request { header, admitted: false };
+    assert_eq!(reload.deadline(), Some(until));
+    reload.stage = Stage::Request { header, admitted: true };
+    assert_eq!(reload.deadline(), None);
+    assert_eq!(reload.until(), until);
+    assert!(
+        matches!(reload.stage, Stage::Request { header: original, admitted: true } if original == header)
+    );
+    reload.stage = Stage::Granted;
+    assert_eq!(reload.deadline(), None);
+    drop((child, owner));
+    Ok(())
+}

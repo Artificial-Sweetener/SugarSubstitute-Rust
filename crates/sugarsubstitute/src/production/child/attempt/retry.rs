@@ -41,8 +41,6 @@ impl ProductionChild {
         self.failed = false;
         self.identity = identity;
         self.connection_budget = None;
-        self.frontend_budget = None;
-        self.frontend_timed_out = false;
         self.acquire = None;
         self.acquisition_header = None;
         self.attempt = None;

@@ -64,11 +64,12 @@ impl ReadinessCampaign {
                 Ok(Some(_)) => self.attempt = None,
                 Err(cause) => {
                     self.attempt = None;
-                    self.retry = !self.terminal && retryable_attempt(&cause, self.managed_live);
+                    self.retry =
+                        !self.terminal && retryable_attempt(&cause, self.readiness_scope.is_some());
                     if !self.retry {
                         self.terminal = true;
                     }
-                    let prior_retryable = matches!(&self.failure, Some(CampaignError::Transport(previous)) if retryable_attempt(previous, self.managed_live));
+                    let prior_retryable = matches!(&self.failure, Some(CampaignError::Transport(previous)) if retryable_attempt(previous, self.readiness_scope.is_some()));
                     if self.failure.is_none() || prior_retryable {
                         self.failure = Some(CampaignError::Transport(cause));
                     } else {
@@ -149,10 +150,10 @@ impl ReadinessCampaign {
 }
 
 /// Interpret only the transport owner's closed typed outcome under actual campaign admission.
-fn retryable_attempt(cause: &ReadinessTransportError, managed_live: bool) -> bool {
+fn retryable_attempt(cause: &ReadinessTransportError, readiness_wait: bool) -> bool {
     match cause.retry_disposition() {
         ProbeRetryDisposition::TransientConnectionUnavailable => true,
-        ProbeRetryDisposition::ProbeIntervalElapsed => managed_live,
+        ProbeRetryDisposition::ProbeIntervalElapsed => readiness_wait,
         ProbeRetryDisposition::Terminal => false,
     }
 }

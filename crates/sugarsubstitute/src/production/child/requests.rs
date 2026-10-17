@@ -74,7 +74,7 @@ struct Pending {
     original: Moment,
     phase: Phase,
     purpose: Purpose,
-    waits_for_owned_process: bool,
+    waits_for_readiness: bool,
 }
 
 /// Retain immutable matching facts separately from native transport/frame custody.
@@ -131,7 +131,7 @@ impl ClientRequests {
             original,
             phase: Phase::Prepared,
             purpose: Purpose::Other,
-            waits_for_owned_process: false,
+            waits_for_readiness: false,
         });
         self.latest = latest;
         Ok(header)
@@ -182,7 +182,7 @@ impl ClientRequests {
         if pending.phase != Phase::Admitted {
             return Err(RequestError::Order);
         }
-        if now >= pending.original && !pending.waits_for_owned_process {
+        if now >= pending.original && !pending.waits_for_readiness {
             return Err(RequestError::Deadline);
         }
         pending.phase = Phase::Received;
@@ -203,17 +203,13 @@ impl ClientRequests {
         }
     }
     /// Bind the configured target policy before finite native admission; no readiness is inferred.
-    pub(super) fn acquisition(
-        &mut self,
-        header: WireHeader,
-        kind: sugarsubstitute_application::startup::ConnectionBudgetKind,
-    ) -> Result<(), RequestError> {
+    pub(super) fn acquisition(&mut self, header: WireHeader) -> Result<(), RequestError> {
         let pending = self.find_mut(header)?;
         if pending.phase != Phase::Prepared || pending.purpose != Purpose::Other {
             return Err(RequestError::Order);
         }
         pending.purpose = Purpose::Acquisition;
-        pending.waits_for_owned_process = kind.waits_for_owned_process();
+        pending.waits_for_readiness = true;
         Ok(())
     }
     /// Consume one validated nonfinal frame, retaining its original slot and cutoff.
@@ -223,7 +219,7 @@ impl ClientRequests {
         if pending.purpose != Purpose::Acquisition || pending.phase != Phase::Received {
             return Err(RequestError::Order);
         }
-        if now >= pending.original && !pending.waits_for_owned_process {
+        if now >= pending.original && !pending.waits_for_readiness {
             return Err(RequestError::Deadline);
         }
         pending.phase = Phase::Admitted;

@@ -6,7 +6,6 @@ use std::sync::{
     Arc,
     atomic::{AtomicU64, AtomicUsize, Ordering},
 };
-use sugarsubstitute_application::startup::FrontendBudget;
 use sugarsubstitute_contracts::{
     execution::{
         Clock, CompletionWake, ExecutionError, Generation, Moment, ScopeId, ScopeSpec, WaitFuture,
@@ -138,6 +137,5 @@ pub(in crate::production) fn child()
         crate::diagnostics::DiagnosticHealth::fixture(),
     );
     child.client = Some(owner.client());
-    child.frontend_budget = Some(FrontendBudget::new(Moment::from_nanos(0))?);
     Ok((child, owner, clock))
 }

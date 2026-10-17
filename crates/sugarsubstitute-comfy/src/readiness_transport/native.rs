@@ -17,7 +17,10 @@ use windows::{
     core::{PCWSTR, w},
 };
 pub(super) struct SystemPort;
-mod retry;
+pub(super) mod retry;
+#[cfg(test)]
+#[path = "native/timeout_tests.rs"]
+mod timeout_tests;
 impl HttpPort for SystemPort {
     fn begin(
         &self,
@@ -117,14 +120,12 @@ impl HttpPort for SystemPort {
         option(state.request, WINHTTP_OPTION_DECOMPRESSION, 0, context)?;
         timeout(state.request, context)?;
         // SAFETY: Retained synchronous request; GET sends no body, extra headers, credentials or callback context.
-        unsafe { WinHttpSendRequest(raw(state.request), None, None, 0, 0, 0) }
-            .map_err(|e| retry::request_failure("http_send", e, state.peer.is_some()))?;
-        checkpoint(context)?;
+        let sent = unsafe { WinHttpSendRequest(raw(state.request), None, None, 0, 0, 0) };
+        retry::complete(sent, "http_send", state.peer.is_some(), context)?;
         timeout(state.request, context)?;
         // SAFETY: Synchronous owned request has no asynchronous reserved context.
-        unsafe { WinHttpReceiveResponse(raw(state.request), std::ptr::null_mut()) }
-            .map_err(|e| retry::request_failure("http_receive", e, state.peer.is_some()))?;
-        checkpoint(context)?;
+        let received = unsafe { WinHttpReceiveResponse(raw(state.request), std::ptr::null_mut()) };
+        retry::complete(received, "http_receive", state.peer.is_some(), context)?;
         let before = connection(state.request, input.port(), context)?;
         qualify(state, input, before, context)?;
         let declared = headers(state.request, endpoint, context)?;
@@ -134,16 +135,15 @@ impl HttpPort for SystemPort {
             timeout(state.request, context)?;
             let mut read = 0;
             // SAFETY: Complete fixed scratch slice and initialized count live until this synchronous read returns.
-            unsafe {
+            let received = unsafe {
                 WinHttpReadData(
                     raw(state.request),
                     scratch.as_mut_ptr().cast(),
                     scratch.len() as u32,
                     &mut read,
                 )
-            }
-            .map_err(|e| ReadinessTransportError::new("http_body_read", e))?;
-            checkpoint(context)?;
+            };
+            retry::complete(received, "http_body_read", state.peer.is_some(), context)?;
             if read as usize > scratch.len() {
                 return Err(ReadinessTransportError::invalid("http_read_count"));
             }
@@ -203,23 +203,34 @@ fn option(
 }
 fn timeout(handle: usize, context: &JobContext) -> Result<(), ReadinessTransportError> {
     checkpoint(context)?;
-    let remaining = context
-        .deadline()
-        .ok_or_else(|| ReadinessTransportError::invalid("http_deadline"))?
-        .as_nanos()
-        .checked_sub(context.now().as_nanos())
-        .ok_or_else(|| ReadinessTransportError::invalid("http_deadline"))?
-        / 1_000_000;
-    if remaining == 0 {
-        return Err(ReadinessTransportError::invalid("http_submillisecond_deadline"));
-    }
-    let milliseconds = remaining.min(100) as i32;
+    let milliseconds = timeout_milliseconds(context.deadline(), context.now())?;
     // SAFETY: Retained synchronous handle; positive timeout bounds each later native I/O phase.
     unsafe {
         WinHttpSetTimeouts(raw(handle), milliseconds, milliseconds, milliseconds, milliseconds)
     }
     .map_err(|e| ReadinessTransportError::new("http_timeouts", e))?;
     checkpoint(context)
+}
+/// Floor the remaining original job budget to positive finite WinHTTP milliseconds.
+/// Consume a valid submillisecond remainder as elapsed rather than rounding beyond
+/// the deadline or passing WinHTTP's infinite zero. Missing/past deadlines reject.
+pub(super) fn timeout_milliseconds(
+    deadline: Option<sugarsubstitute_contracts::execution::Moment>,
+    now: sugarsubstitute_contracts::execution::Moment,
+) -> Result<i32, ReadinessTransportError> {
+    let remaining = deadline
+        .ok_or_else(|| ReadinessTransportError::invalid("http_deadline"))?
+        .as_nanos()
+        .checked_sub(now.as_nanos())
+        .ok_or_else(|| ReadinessTransportError::invalid("http_deadline"))?
+        / 1_000_000;
+    if remaining == 0 {
+        return Err(ReadinessTransportError::elapsed(
+            "http_submillisecond_deadline",
+            std::io::Error::from(std::io::ErrorKind::TimedOut),
+        ));
+    }
+    Ok(remaining.min(i32::MAX as u64) as i32)
 }
 fn close_slot(slot: &mut usize, context: &JobContext) -> Result<(), ReadinessTransportError> {
     if *slot != 0 {

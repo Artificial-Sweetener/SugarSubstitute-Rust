@@ -147,22 +147,12 @@ impl ParentLifecycle {
                 if identity.run != self.run || target.to_domain()? != *resources.target {
                     return Err(ParentError::ForeignPeer.into());
                 }
-                let kind = match resources.target {
-                    BackendTarget::Managed(_) => {
-                        sugarsubstitute_application::startup::ConnectionBudgetKind::Managed
-                    }
-                    BackendTarget::Attached(_) => {
-                        sugarsubstitute_application::startup::ConnectionBudgetKind::Attached
-                    }
-                };
                 self.requests.get_mut(index)?.identity = Some(identity);
                 self.requests.acquisition(index, request)?;
-                self.acquisition = Some(super::acquisition::Acquisition::new(
-                    binding, header, identity, until, kind,
-                )?);
-                if kind.waits_for_owned_process() {
-                    self.requests.wait_for_owned_process(index)?;
-                }
+                self.acquisition =
+                    Some(super::acquisition::Acquisition::new(binding, header, identity, until)?);
+                self.acquisition.as_mut().ok_or(ParentError::WrongPhase)?.wait_for_readiness();
+                self.requests.wait_for_readiness(index)?;
                 self.hold_backend_command(
                     index,
                     super::history::HeldBackendCommand::Acquire(identity),
@@ -181,7 +171,7 @@ impl ParentLifecycle {
                 if !matches!(resources.target, BackendTarget::Managed(_)) {
                     return Err(ParentError::WrongPhase.into());
                 }
-                self.requests.wait_for_owned_process(index)?;
+                self.requests.wait_for_readiness(index)?;
                 self.hold_backend_command(
                     index,
                     super::history::HeldBackendCommand::Retry { identity, failed },

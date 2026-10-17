@@ -48,11 +48,11 @@ struct Attempt {
     scope: ScopeId,
     until: Moment,
 }
-/// Own one real probe and cleanup job across finite preparation or admitted managed-live readiness.
+/// Own one real probe and cleanup job across finite preparation or admitted lifecycle readiness.
 pub struct ReadinessCampaign {
     target: BackendTarget,
     budget: ConnectionBudget,
-    managed_live: bool,
+    readiness_scope: Option<ScopeId>,
     owner: Option<ReadinessProbeOwner>,
     attempt: Option<Attempt>,
     cleanup: Option<OwnedJob<(), ReadinessTransportError>>,
@@ -86,7 +86,7 @@ impl ReadinessCampaign {
         Ok(Self {
             target,
             budget,
-            managed_live: false,
+            readiness_scope: None,
             owner: None,
             attempt: None,
             cleanup: None,
@@ -130,6 +130,9 @@ impl ReadinessCampaign {
             CampaignError::Clock(cause)
         })?;
         self.observe_now(now)?;
+        if self.readiness_scope.is_some_and(|id| id != scope.id()) {
+            return Err(CampaignError::Rejected(CampaignRejection::InvalidSpecification));
+        }
         if !self.needs_input(now)? {
             return Err(CampaignError::Rejected(CampaignRejection::WrongPhase));
         }
@@ -221,7 +224,7 @@ impl ReadinessCampaign {
     /// Return the next absolute original deadline or backoff wake in the same clock epoch.
     /// Retained terminal custody and actual cleanup keep their first deadline visible
     /// after readiness; live readiness has no remaining startup wake. An asset
-    /// continuation retains its finite phase interval; attached readiness retains the original cutoff.
+    /// continuation retains its finite phase interval; unadmitted preparation retains its cutoff.
     pub fn next_deadline(&self) -> Option<Moment> {
         if let Some(attempt) = &self.attempt {
             Some(self.campaign_until().map_or(attempt.until, |until| attempt.until.min(until)))

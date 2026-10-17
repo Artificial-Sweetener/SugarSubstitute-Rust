@@ -9,21 +9,13 @@
 use std::{error::Error, fmt, time::Duration};
 use sugarsubstitute_contracts::execution::{Moment, TimeError};
 
-/// Select the original campaign duration for the configured connection ownership.
+/// Select the original preparation duration for the configured connection ownership.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ConnectionBudgetKind {
-    /// Observe an attached backend within thirty seconds without process control.
+    /// Prepare an attached connection within thirty seconds without process control.
     Attached,
     /// Prepare a managed backend within one hundred eighty seconds.
     Managed,
-}
-
-impl ConnectionBudgetKind {
-    /// Observe managed process exit/cancellation while readiness remains pending.
-    /// Attached connections retain their finite observation interval and grant no process control.
-    pub const fn waits_for_owned_process(self) -> bool {
-        matches!(self, Self::Managed)
-    }
 }
 
 /// Reject a probe start without changing the original campaign budget.
@@ -35,8 +27,6 @@ pub enum ProbeBudgetError {
     Expired,
     /// Supplied remaining interval exceeds the configured original role bound.
     IntervalTooLong,
-    /// A managed-live probe was requested for an attached connection.
-    WrongOwnership,
 }
 
 impl fmt::Display for ProbeBudgetError {
@@ -44,9 +34,6 @@ impl fmt::Display for ProbeBudgetError {
         match self {
             Self::Clock(cause) => cause.fmt(formatter),
             Self::Expired => formatter.write_str("Original connection campaign deadline elapsed"),
-            Self::WrongOwnership => {
-                formatter.write_str("Managed-live timing requires managed ownership")
-            }
             Self::IntervalTooLong => {
                 formatter.write_str("Connection interval exceeds its role bound")
             }
@@ -58,12 +45,12 @@ impl Error for ProbeBudgetError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Clock(cause) => Some(cause),
-            Self::Expired | Self::IntervalTooLong | Self::WrongOwnership => None,
+            Self::Expired | Self::IntervalTooLong => None,
         }
     }
 }
 
-/// Retain one original connection campaign deadline across every probe attempt.
+/// Retain one original connection preparation deadline across every probe attempt.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ConnectionBudget {
     kind: ConnectionBudgetKind,
@@ -72,10 +59,10 @@ pub struct ConnectionBudget {
 }
 
 impl ConnectionBudget {
-    /// Freeze the attached thirty-second or managed one-hundred-eighty-second budget.
+    /// Freeze the attached thirty-second or managed one-hundred-eighty-second preparation budget.
     ///
     /// `started` uses the composing owner's monotonic nanosecond epoch. Construct
-    /// this value before the first campaign operation and retain it across retries.
+    /// this value before the first preparation operation and retain it across retries.
     ///
     /// # Errors
     /// Returns `TimeError::Overflow` if the original deadline is unrepresentable.
@@ -129,19 +116,19 @@ impl ConnectionBudget {
         self.until
     }
 
-    /// Bound one managed-live probe by two seconds without an aggregate startup cutoff.
+    /// Bound one admitted readiness probe by two seconds without an aggregate startup cutoff.
     ///
-    /// This arithmetic grants no process authority. The composing host must first
-    /// observe its actual owned managed child live and retain that child's exit
-    /// watch and explicit cancellation. The finite preparation budget is unchanged.
+    /// This arithmetic grants no ownership or wait admission. The campaign first
+    /// binds an actual cancellable scope after finite preparation; managed callers
+    /// additionally retain their actual process exit watch. The original budget is unchanged.
     ///
     /// # Errors
-    /// Rejects attached ownership, regression before the original start and checked
+    /// Rejects regression before the original start and checked
     /// addition overflow. Elapsed preparation time alone does not reject a live probe.
-    pub fn managed_probe_until(&self, attempt_started: Moment) -> Result<Moment, ProbeBudgetError> {
-        if self.kind != ConnectionBudgetKind::Managed {
-            return Err(ProbeBudgetError::WrongOwnership);
-        }
+    pub fn readiness_probe_until(
+        &self,
+        attempt_started: Moment,
+    ) -> Result<Moment, ProbeBudgetError> {
         if attempt_started < self.started {
             return Err(ProbeBudgetError::Clock(TimeError::Regression));
         }
@@ -173,10 +160,11 @@ impl ConnectionBudget {
     }
 }
 
-/// Retain the original thirty-second frontend authorization/navigation deadline.
+/// Retain the original thirty-second native Main preparation deadline.
 ///
-/// The host freezes this budget before constructing the first grant. Folder,
-/// environment, browser and frontend work share it; repeated grants retain it.
+/// The host freezes this local budget before constructing the Main request. Folder,
+/// environment and browser authorization retain its cutoff until native authorization.
+/// Frontend readiness follows its actual loading lifecycle independently of this budget.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct FrontendBudget {
     started: Moment,
@@ -184,7 +172,7 @@ pub struct FrontendBudget {
 }
 
 impl FrontendBudget {
-    /// Freeze one thirty-second deadline in the composing execution clock's epoch.
+    /// Freeze one native Main preparation deadline in the composing clock's epoch.
     ///
     /// # Errors
     /// Returns `TimeError::Overflow` if the original deadline is unrepresentable.

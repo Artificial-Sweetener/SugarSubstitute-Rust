@@ -69,13 +69,7 @@ pub(super) fn pending_for(
     parent.requests.acquisition(index, h.request.ok_or("Origin absent")?)?;
     parent.requests.get_mut(index)?.until = Some(Moment::from_nanos(180_000_000_000));
     parent.requests.observe_backend(index, reply.outcome)?;
-    let mut acquisition = Acquisition::new(
-        binding,
-        h,
-        id,
-        Moment::from_nanos(180_000_000_000),
-        sugarsubstitute_application::startup::ConnectionBudgetKind::Attached,
-    )?;
+    let mut acquisition = Acquisition::new(binding, h, id, Moment::from_nanos(180_000_000_000))?;
     acquisition.observe_backend(h, reply.outcome)?;
     parent.acquisition = Some(acquisition);
     Ok((parent, h, lease, coordinator))
@@ -181,7 +175,6 @@ fn provisional_source_rejects_foreign_changed_unwritten_and_successor_correlatio
         WireHeader { request: Some(RequestId::new(4001)?), ..h },
         identity()?,
         acq.original,
-        sugarsubstitute_application::startup::ConnectionBudgetKind::Attached,
     )?;
     assert!(next.output_lease(copied_binding(lease), reference).is_err());
     Ok(())
