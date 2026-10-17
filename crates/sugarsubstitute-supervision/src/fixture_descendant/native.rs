@@ -149,7 +149,10 @@ impl Lease for NativeLease {
                 None,
                 None,
                 true,
-                EXTENDED_STARTUPINFO_PRESENT | CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT,
+                EXTENDED_STARTUPINFO_PRESENT
+                    | CREATE_SUSPENDED
+                    | CREATE_UNICODE_ENVIRONMENT
+                    | CREATE_NO_WINDOW,
                 Some(environment.as_ptr().cast()),
                 PCWSTR(input.command.working_directory.as_ptr()),
                 &startup.StartupInfo,

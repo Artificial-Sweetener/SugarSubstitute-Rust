@@ -112,11 +112,6 @@ impl WindowsPort {
         family.configure_stdio(&mut startup.StartupInfo);
         let mut process = PROCESS_INFORMATION::default();
         family.check_native()?;
-        let independent = if family.backend_custody.is_some() {
-            CREATE_BREAKAWAY_FROM_JOB
-        } else {
-            PROCESS_CREATION_FLAGS(0)
-        };
         // SAFETY: Validated explicit argv, cwd and environment live through the call.
         // The exact HANDLE_LIST pins remain live through attribute deletion.
         let created = unsafe {
@@ -126,10 +121,7 @@ impl WindowsPort {
                 None,
                 None,
                 inherited,
-                EXTENDED_STARTUPINFO_PRESENT
-                    | CREATE_SUSPENDED
-                    | CREATE_UNICODE_ENVIRONMENT
-                    | independent,
+                creation_flags(family.backend_custody.is_some()),
                 Some(input.environment.as_utf16().as_ptr().cast()),
                 PCWSTR(input.command.working_directory.as_ptr()),
                 &startup.StartupInfo,
@@ -231,5 +223,42 @@ impl WindowsPort {
         // Deletion has returned, or initialization never committed. Only now can
         // the execution worker retire the pinned duplicated inheritance handles.
         family.release_inheritance()
+    }
+}
+
+/// Console children start without a console window; Windows ignores this flag
+/// for GUI images, preserving the desktop child's normal splash/Main visibility.
+/// Custody alone retains the existing independent Job creation contract.
+fn creation_flags(independent_custody: bool) -> PROCESS_CREATION_FLAGS {
+    let flags = EXTENDED_STARTUPINFO_PRESENT
+        | CREATE_SUSPENDED
+        | CREATE_UNICODE_ENVIRONMENT
+        | CREATE_NO_WINDOW;
+    if independent_custody { flags | CREATE_BREAKAWAY_FROM_JOB } else { flags }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ordinary_native_launch_suppresses_console_creation_without_detaching_ownership() {
+        let flags = creation_flags(false);
+        assert!(flags.contains(CREATE_NO_WINDOW));
+        assert!(flags.contains(CREATE_SUSPENDED | EXTENDED_STARTUPINFO_PRESENT));
+        assert!(flags.contains(CREATE_UNICODE_ENVIRONMENT));
+        assert_eq!(
+            flags.0 & (CREATE_NEW_CONSOLE | DETACHED_PROCESS | CREATE_BREAKAWAY_FROM_JOB).0,
+            0
+        );
+    }
+
+    #[test]
+    fn independent_custody_keeps_console_suppression_and_explicit_job_breakaway() {
+        let flags = creation_flags(true);
+        assert!(flags.contains(CREATE_NO_WINDOW | CREATE_BREAKAWAY_FROM_JOB));
+        assert!(flags.contains(CREATE_SUSPENDED | EXTENDED_STARTUPINFO_PRESENT));
+        assert!(flags.contains(CREATE_UNICODE_ENVIRONMENT));
+        assert_eq!(flags.0 & (CREATE_NEW_CONSOLE | DETACHED_PROCESS).0, 0);
     }
 }
