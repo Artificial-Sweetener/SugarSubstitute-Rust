@@ -20,7 +20,7 @@ interface ToggleRowBinding {
   release(): void;
 }
 
-export interface FluentBooleanCheckbox extends HTMLElement {
+export interface BooleanCheckboxControl extends HTMLElement {
   checked: boolean;
   disabled?: boolean;
 }
@@ -28,10 +28,10 @@ export interface FluentBooleanCheckbox extends HTMLElement {
 /** Delegate row gestures to native switches without replacing their value ownership. */
 export class NativeToggleRows {
   readonly #bindings = new Map<HTMLElement, ToggleRowBinding>();
-  readonly #createCheckbox: (documentRef: Document) => FluentBooleanCheckbox;
+  readonly #createCheckbox: (documentRef: Document) => BooleanCheckboxControl;
 
   /** Bind the official checkbox independently of the native boolean adapter. */
-  constructor(createCheckbox: (documentRef: Document) => FluentBooleanCheckbox) {
+  constructor(createCheckbox: (documentRef: Document) => BooleanCheckboxControl) {
     this.#createCheckbox = createCheckbox;
   }
 
@@ -40,14 +40,14 @@ export class NativeToggleRows {
     for (const [row, binding] of this.#bindings) {
       if (
         !row.isConnected ||
-        (root.contains(row) && !row.matches('[data-sc-fluent-widget="WidgetToggleSwitch"]'))
+        (root.contains(row) && !row.matches('[data-sc-style-widget="WidgetToggleSwitch"]'))
       ) {
         binding.release();
         this.#bindings.delete(row);
       }
     }
     for (const row of root.querySelectorAll<HTMLElement>(
-      '[data-sc-fluent-row][data-sc-fluent-widget="WidgetToggleSwitch"]',
+      '[data-sc-style-row][data-sc-style-widget="WidgetToggleSwitch"]',
     )) {
       const existing = this.#bindings.get(row);
       if (existing) {

@@ -43,7 +43,7 @@ export function readNativeNumericField(row, widgetVNode) {
         typeof watch !== 'function')
         return null;
     const input = spinner.querySelector('input[role="spinbutton"]');
-    const layout = row.querySelector('[data-sc-fluent-layout]');
+    const layout = row.querySelector('[data-sc-style-layout]');
     const container = layout?.lastElementChild;
     if (!input || !(container instanceof HTMLElement) || !container.contains(spinner))
         return null;

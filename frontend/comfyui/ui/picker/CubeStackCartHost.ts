@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Present the complete Cube cart through the shared SugarCubes modal and captured application session. */
 import { ModalShell } from '../dialogs/ModalShell.js';
-import type { FluentAppearanceSource } from '../surface/appearance/FluentAppearanceState.js';
+import type { AppearanceSource } from '../surface/appearance/AppearanceState.js';
 import type { CubeStackRowModel } from '../surface/stack/CubeStackView.js';
 import type {
   CubeStackCartFactory,
@@ -27,7 +27,7 @@ import { ensureCubeStackCartStyles } from './CubeStackCartStyles.js';
 
 interface CartHostOptions {
   readonly document: Document;
-  readonly appearance: FluentAppearanceSource;
+  readonly appearance: AppearanceSource;
   readonly factory: Pick<CubeStackCartFactory, 'open'>;
   reportError(error: unknown): void;
   onApplied(): Promise<void>;

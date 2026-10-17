@@ -34,7 +34,7 @@ export class NativeBooleanSegments {
                 this.#bindings.delete(row);
             }
         }
-        for (const row of root.querySelectorAll('[data-sc-fluent-row][data-sc-fluent-widget="WidgetToggleSwitch"]')) {
+        for (const row of root.querySelectorAll('[data-sc-style-row][data-sc-style-widget="WidgetToggleSwitch"]')) {
             const existing = this.#bindings.get(row);
             if (existing) {
                 existing.refresh();
@@ -167,7 +167,7 @@ export class NativeBooleanSegments {
 }
 /** Accept only the host's off/on button pair on a positively identified boolean widget. */
 function readNativeChoices(row) {
-    if (!row.matches('[data-sc-fluent-row][data-sc-fluent-widget="WidgetToggleSwitch"]'))
+    if (!row.matches('[data-sc-style-row][data-sc-style-widget="WidgetToggleSwitch"]'))
         return null;
     for (const group of row.querySelectorAll('[role="group"]')) {
         const buttons = Array.from(group.querySelectorAll(':scope > button'));

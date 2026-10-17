@@ -16,7 +16,7 @@
 /** Reconcile native socket caches after a graph card first receives Fluent layout styling. */
 import { loadComfyNativeSlotLayoutSync } from '../ComfyRuntimeModuleLoader.js';
 /** Coalesce initial graph styling without rebuilding inventory or responding to popup activity. */
-export class NativeFluentGraphGeometry {
+export class NativeCardGraphGeometry {
     #options;
     #getSynchronizer;
     #synchronizer = null;

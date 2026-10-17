@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove shared token boundaries release without retaining retired native surfaces. */
 import { afterEach, expect, test } from '@jest/globals';
-import { NativeFluentThemeScopes } from '../../../frontend/comfyui/ui/surface/appearance/NativeFluentThemeScopes.js';
+import { NativeThemeScopes } from '../../../frontend/comfyui/ui/surface/appearance/NativeThemeScopes.js';
 import { fluentAppearanceCss } from '../../../frontend/comfyui/ui/surface/appearance/FluentAppearanceStyles.js';
 import { ensureWorkflowMasonryStyles } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryStyles.js';
 
@@ -25,7 +25,7 @@ afterEach(() => {
 });
 
 test('shares graph tokens and keeps independent toolbar and popup scopes isolated', () => {
-  const scopes = new NativeFluentThemeScopes();
+  const scopes = new NativeThemeScopes();
   const graph = document.createElement('div');
   graph.id = 'graph-canvas-container';
   const cards = [document.createElement('div'), document.createElement('div')];
@@ -39,18 +39,18 @@ test('shares graph tokens and keeps independent toolbar and popup scopes isolate
   cards.forEach((card) => scopes.retain(card));
   scopes.retain(field);
   scopes.retain(popup);
-  expect([...document.querySelectorAll('[data-sc-fluent-theme-root]')]).toEqual([
+  expect([...document.querySelectorAll('[data-sc-style-theme-root]')]).toEqual([
     graph,
     toolbar,
     popup,
   ]);
   popup.remove();
   scopes.prune();
-  expect(popup.hasAttribute('data-sc-fluent-theme-root')).toBe(false);
-  toolbar.setAttribute('data-sc-fluent-theme-root', 'host-owned');
+  expect(popup.hasAttribute('data-sc-style-theme-root')).toBe(false);
+  toolbar.setAttribute('data-sc-style-theme-root', 'host-owned');
   scopes.clear();
-  expect(graph.hasAttribute('data-sc-fluent-theme-root')).toBe(false);
-  expect(toolbar.getAttribute('data-sc-fluent-theme-root')).toBe('host-owned');
+  expect(graph.hasAttribute('data-sc-style-theme-root')).toBe(false);
+  expect(toolbar.getAttribute('data-sc-style-theme-root')).toBe('host-owned');
 });
 
 test.each([
@@ -63,7 +63,7 @@ test.each([
   const themeRules = Array.from(theme.sheet!.cssRules).filter(
     (rule): rule is CSSStyleRule => rule instanceof CSSStyleRule,
   );
-  const root = themeRules.find((rule) => rule.selectorText === '[data-sc-fluent-theme-root]');
+  const root = themeRules.find((rule) => rule.selectorText === '[data-sc-style-theme-root]');
   expect(root?.style.getPropertyValue('--sugarcubes-masonry-surface')).toBe(color);
   expect(
     themeRules.filter((rule) => rule.style.getPropertyValue('--sugarcubes-masonry-surface')),

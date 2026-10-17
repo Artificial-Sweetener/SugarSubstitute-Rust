@@ -103,11 +103,11 @@ describe('ensureCubeSurfaceStyles', () => {
       document.getElementById('sugarcubes-node-card-appearance')?.textContent ?? '';
     const cardHeaderRule =
       appearance.match(
-        /\.lg-node:not\(\[data-sc-fluent-node\]\)\s+\[data-testid="node-inner-wrapper"\]\s*\{([^}]*)\}/s,
+        /\.lg-node:not\(\[data-sc-style-node\]\)\s+\[data-testid="node-inner-wrapper"\]\s*\{([^}]*)\}/s,
       )?.[1] ?? '';
     const cardBodyRule =
       appearance.match(
-        /\.lg-node:not\(\[data-sc-fluent-node\]\)\s+\[data-testid\^="node-body-"\]\s*\{([^}]*)\}/s,
+        /\.lg-node:not\(\[data-sc-style-node\]\)\s+\[data-testid\^="node-body-"\]\s*\{([^}]*)\}/s,
       )?.[1] ?? '';
 
     expect(cubeBodyRule).toMatch(

@@ -16,7 +16,7 @@
 /** Prove palette changes select neutral icon variants across all owned surfaces without replacing artwork. */
 import { afterEach, expect, test } from '@jest/globals';
 import { CubeIconAppearanceHost } from '../../../frontend/comfyui/ui/surface/appearance/CubeIconAppearanceHost.js';
-import { FluentAppearanceState } from '../../../frontend/comfyui/ui/surface/appearance/FluentAppearanceState.js';
+import { AppearanceState } from '../../../frontend/comfyui/ui/surface/appearance/AppearanceState.js';
 
 afterEach(() => {
   document.head.replaceChildren();
@@ -29,7 +29,7 @@ test.each([
   'sc-cube-stack-row__icon',
   'sugarcubes-cube-icon',
 ])('adapts %s in either appearance mode while retaining image and canvas identity', (className) => {
-  const source = new FluentAppearanceState();
+  const source = new AppearanceState();
   const host = new CubeIconAppearanceHost(document, source);
   const layout = document.createElement('style');
   layout.textContent = `.${className} img, .${className} canvas { display:block; }`;
@@ -68,7 +68,7 @@ test.each([
 });
 
 test('keeps fallback initials readable on light surfaces and restores their original dark treatment', () => {
-  const source = new FluentAppearanceState();
+  const source = new AppearanceState();
   const host = new CubeIconAppearanceHost(document, source);
   const canvas = document.createElement('canvas');
   canvas.className = 'sugarcubes-cube-icon__fallback';

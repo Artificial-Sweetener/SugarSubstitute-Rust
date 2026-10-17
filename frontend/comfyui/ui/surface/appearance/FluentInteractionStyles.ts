@@ -18,14 +18,14 @@
 /** Keep interaction styling scoped to positively identified native presentation boundaries. */
 export function fluentInteractionCss(): string {
   return `
-    [data-sc-disclosure-layout="fill"][data-sc-disclosing] > .lg-node[data-sc-fluent-node] {
+    [data-sc-disclosure-layout="fill"][data-sc-disclosing] > .lg-node[data-sc-style-node] {
       height:100% !important; min-height:0 !important;
     }
     [data-sc-disclosure-layout="fill"][data-sc-disclosing] [data-testid="node-inner-wrapper"],
     [data-sc-disclosure-layout="fill"][data-sc-disclosing] [data-testid^="node-body-"] {
       min-height:0;
     }
-    [data-sc-disclosure-layout="fill"][data-sc-disclosing] [data-sc-fluent-fields] {
+    [data-sc-disclosure-layout="fill"][data-sc-disclosing] [data-sc-style-fields] {
       min-height:0; flex:1; overflow:clip;
     }
     [data-sc-disclosure-layout="fill"][data-sc-disclosing] [data-testid^="node-header-"],
@@ -54,16 +54,16 @@ export function fluentInteractionCss(): string {
     [data-sc-boolean-control]:has([data-sc-boolean-checkbox][disabled]) {
       cursor:default; color:var(--colorNeutralForegroundDisabled);
     }
-    [data-sc-fluent-node] [data-testid="node-collapse-button"][hidden] { display:none !important; }
-    [data-sc-toggle-row], [data-sc-fluent-node] [data-testid="advanced-inputs-button"] {
+    [data-sc-style-node] [data-testid="node-collapse-button"][hidden] { display:none !important; }
+    [data-sc-toggle-row], [data-sc-style-node] [data-testid="advanced-inputs-button"] {
       cursor:pointer; transition:background-color var(--durationFast) var(--curveEasyEase);
     }
     [data-sc-toggle-row]:hover,
-    [data-sc-fluent-node] [data-testid="advanced-inputs-button"]:hover,
-    [data-sc-fluent-node] [data-testid="advanced-inputs-button"]:focus-visible {
+    [data-sc-style-node] [data-testid="advanced-inputs-button"]:hover,
+    [data-sc-style-node] [data-testid="advanced-inputs-button"]:focus-visible {
       background:var(--colorNeutralBackground1Hover);
     }
-    [data-sc-toggle-row]:active, [data-sc-fluent-node] [data-testid="advanced-inputs-button"]:active {
+    [data-sc-toggle-row]:active, [data-sc-style-node] [data-testid="advanced-inputs-button"]:active {
       background:var(--colorNeutralBackground1Pressed);
     }
     [data-sc-toggle-row]:focus-visible { outline:2px solid var(--colorBrandStroke1); outline-offset:-2px; }
@@ -94,34 +94,34 @@ export function fluentInteractionCss(): string {
     [data-sc-titlebar-collapsed="true"] [data-testid="node-collapse-button"] i { transform:rotate(0deg); }
     [data-sc-disclosure-target="collapsed"] [data-testid="node-collapse-button"] i { transform:rotate(0deg); }
     [data-sc-disclosure-target="expanded"] [data-testid="node-collapse-button"] i { transform:rotate(180deg); }
-    [data-sc-fluent-edit-frame] { position:relative; }
-    [data-sc-fluent-edit-frame]::after {
+    [data-sc-style-edit-frame] { position:relative; }
+    [data-sc-style-edit-frame]::after {
       content:''; position:absolute; left:0; right:0; bottom:0;
       height:2px; border-radius:0 0 4px 4px; pointer-events:none;
       background:var(--colorBrandStroke1); transform:scaleX(0); transform-origin:center;
       transition:transform var(--durationNormal) var(--curveDecelerateMid);
     }
-    [data-sc-fluent-edit-frame]:has(input:focus,textarea:focus,[role="combobox"]:focus-visible,[role="combobox"][aria-expanded="true"])::after { transform:scaleX(1); }
-    [data-sc-fluent-edit-frame]:has(input:focus,textarea:focus) {
+    [data-sc-style-edit-frame]:has(input:focus,textarea:focus,[role="combobox"]:focus-visible,[role="combobox"][aria-expanded="true"])::after { transform:scaleX(1); }
+    [data-sc-style-edit-frame]:has(input:focus,textarea:focus) {
       background-color:var(--colorNeutralBackground1);
     }
-    [data-sc-fluent-edit-frame] input, [data-sc-fluent-edit-frame] textarea {
+    [data-sc-style-edit-frame] input, [data-sc-style-edit-frame] textarea {
       caret-color:var(--colorBrandStroke1);
       transition:background-color var(--durationFast) var(--curveEasyEase), border-color var(--durationFast) var(--curveEasyEase);
     }
-    [data-sc-fluent-edit-frame] textarea:focus {
+    [data-sc-style-edit-frame] textarea:focus {
       background:var(--colorNeutralBackground1); outline:none;
     }
-    [data-sc-fluent-row][data-sc-fluent-widget^="WidgetInputNumber"] [data-sc-fluent-layout] > :last-child > :first-child,
-    [data-sc-fluent-row][data-sc-fluent-widget="WidgetSelect"] [data-sc-fluent-layout] > :last-child > :first-child,
-    [data-sc-fluent-layout] > :last-child > :first-child:has(> [data-sc-boolean-segments]) {
+    [data-sc-style-row][data-sc-style-widget^="WidgetInputNumber"] [data-sc-style-layout] > :last-child > :first-child,
+    [data-sc-style-row][data-sc-style-widget="WidgetSelect"] [data-sc-style-layout] > :last-child > :first-child,
+    [data-sc-style-layout] > :last-child > :first-child:has(> [data-sc-boolean-segments]) {
       --tw-ring-shadow:0 0 transparent; --tw-ring-color:transparent;
     }
     @media (prefers-reduced-motion:reduce) {
       [data-sc-boolean-segments]::after,
-      [data-sc-toggle-row], [data-sc-fluent-node] [data-testid="advanced-inputs-button"],
+      [data-sc-toggle-row], [data-sc-style-node] [data-testid="advanced-inputs-button"],
       [data-sc-titlebar-action], [data-sc-titlebar-action] [data-testid="node-collapse-button"] i,
-      [data-sc-fluent-edit-frame]::after, [data-sc-fluent-edit-frame] input, [data-sc-fluent-edit-frame] textarea {
+      [data-sc-style-edit-frame]::after, [data-sc-style-edit-frame] input, [data-sc-style-edit-frame] textarea {
         transition:none;
       }
     }

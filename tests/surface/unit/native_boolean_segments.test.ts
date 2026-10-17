@@ -17,8 +17,8 @@
 import { afterEach, expect, jest, test } from '@jest/globals';
 import {
   NativeBooleanSegments,
-  type FluentBooleanSegment,
-  type FluentBooleanSegmentsControls,
+  type BooleanSegmentControl,
+  type BooleanSegmentsControls,
 } from '../../../frontend/comfyui/ui/surface/appearance/NativeBooleanSegments.js';
 import { NativeToggleRows } from '../../../frontend/comfyui/ui/surface/appearance/NativeToggleRows.js';
 import { fluentInteractionCss } from '../../../frontend/comfyui/ui/surface/appearance/FluentInteractionStyles.js';
@@ -57,7 +57,7 @@ test('shared indicator eases across the selection and remains immediate for redu
 });
 
 /** Model only the external Fluent property boundary, leaving native buttons and events real. */
-function createControls(documentRef: Document): FluentBooleanSegmentsControls {
+function createControls(documentRef: Document): BooleanSegmentsControls {
   const group = Object.assign(documentRef.createElement('div'), { activeid: '' });
   const off = documentRef.createElement('button');
   const on = documentRef.createElement('button');
@@ -85,8 +85,8 @@ function createControls(documentRef: Document): FluentBooleanSegmentsControls {
 function fixture() {
   const root = document.createElement('div');
   const row = document.createElement('div');
-  row.dataset.scFluentRow = '';
-  row.dataset.scFluentWidget = 'WidgetToggleSwitch';
+  row.dataset.scStyleRow = '';
+  row.dataset.scStyleWidget = 'WidgetToggleSwitch';
   const label = document.createElement('div');
   label.dataset.testid = 'widget-layout-field-label';
   label.textContent = '<literal> Combine Segs';
@@ -114,7 +114,7 @@ function fixture() {
   adapters.add(adapter);
   adapter.reconcile(root);
   const segments = Array.from(
-    row.querySelectorAll<FluentBooleanSegment>('[data-sc-boolean-segment]'),
+    row.querySelectorAll<BooleanSegmentControl>('[data-sc-boolean-segment]'),
   );
   const [separate, combined] = segments;
   if (!separate || !combined) throw new Error('Missing named segments');
@@ -215,11 +215,11 @@ test('observes host updates and keeps control identity through repeated reconcil
 
 test('restores native groups when their widget changes or disappears and ignores custom button groups', () => {
   const { root, row, native, adapter, separate } = fixture();
-  row.dataset.scFluentWidget = 'WidgetDOM';
+  row.dataset.scStyleWidget = 'WidgetDOM';
   adapter.reconcile(root);
   expect(native.hasAttribute('data-sc-boolean-native')).toBe(false);
   expect(separate.isConnected).toBe(false);
-  row.dataset.scFluentWidget = 'WidgetToggleSwitch';
+  row.dataset.scStyleWidget = 'WidgetToggleSwitch';
   adapter.reconcile(root);
   expect(native.hasAttribute('data-sc-boolean-native')).toBe(true);
   native.remove();
@@ -265,7 +265,7 @@ test('reflects a deferred host edit and ignores pending refreshes after release'
   );
   off.replaceWith(replacement);
   adapter.reconcile(root);
-  const current = row.querySelector<FluentBooleanSegment>('[data-sc-boolean-segment]');
+  const current = row.querySelector<BooleanSegmentControl>('[data-sc-boolean-segment]');
   current?.click();
   await Promise.resolve();
   expect(current?.getAttribute('aria-selected')).toBe('true');

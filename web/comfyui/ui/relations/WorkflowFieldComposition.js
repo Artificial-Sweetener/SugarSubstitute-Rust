@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose native field appearance and relation policy around one submitted seed history. */
 import { RelationHostLifecycle } from './RelationHostLifecycle.js';
-import { FluentAppearanceHost } from '../surface/appearance/FluentAppearanceHost.js';
+import { AppearanceHost } from '../surface/appearance/AppearanceHost.js';
 import { WorkflowEditorNavigationHost } from '../surface/WorkflowEditorNavigationHost.js';
 import { SubstituteFrameHost } from '../surface/frame/SubstituteFrameHost.js';
 import { SettingsWorkspaceHost } from '../settings/SettingsWorkspaceHost.js';
@@ -26,7 +26,7 @@ export function createWorkflowFieldHost(options) {
         reportError: options.reportRelationError,
         appearance: () => appearance.state,
     });
-    const appearance = new FluentAppearanceHost({
+    const appearance = new AppearanceHost({
         app: options.app,
         document: options.document,
         seedReuse: (node, name) => relations.seedReuse.field(node, name),

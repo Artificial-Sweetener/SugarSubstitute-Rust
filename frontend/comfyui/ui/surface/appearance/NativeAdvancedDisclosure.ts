@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose Fluent advanced disclosure for native graph and stable projected mounts. */
-import type { FluentCardBoundary } from './NativeFluentCardAdapter.js';
+import type { NativeCardBoundary } from './NativeCardAdapter.js';
 import { NativeGraphAdvancedDisclosure } from './NativeGraphAdvancedDisclosure.js';
 import { NativeProjectedAdvancedDisclosure } from './NativeProjectedAdvancedDisclosure.js';
 import { readProjectedAdvancedInputMount } from '../NativeProjectedAdvancedInputs.js';
@@ -25,7 +25,7 @@ export class NativeAdvancedDisclosure {
   readonly #projected = new NativeProjectedAdvancedDisclosure();
 
   /** Reconcile each recognized card through its renderer's disclosure lifetime. */
-  reconcile(card: FluentCardBoundary): void {
+  reconcile(card: NativeCardBoundary): void {
     const projection = readProjectedAdvancedInputMount(card.root);
     if (projection) this.#projected.reconcile(projection, card);
     else this.#graph.reconcile(card);

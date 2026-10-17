@@ -16,7 +16,7 @@
 /** Present SugarCubes identity, component versions, licensing and acknowledgements in Comfy settings. */
 import { sugarCubesProject, type AboutInformationSource } from './AboutInformation.js';
 import { ModalShell, type ModalAdapter } from '../dialogs/ModalShell.js';
-import type { FluentAppearanceSource } from '../surface/appearance/FluentAppearanceState.js';
+import type { AppearanceSource } from '../surface/appearance/AppearanceState.js';
 
 /** Keep one stable page while version and license requests complete asynchronously. */
 export class AboutSettingsPage {
@@ -35,7 +35,7 @@ export class AboutSettingsPage {
     private readonly source: AboutInformationSource,
     adapter: ModalAdapter,
     private readonly report: (error: unknown) => void,
-    appearance?: FluentAppearanceSource,
+    appearance?: AppearanceSource,
   ) {
     this.element = document.createElement('section');
     this.element.className = 'sc-settings-about';

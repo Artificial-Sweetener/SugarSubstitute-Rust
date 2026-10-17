@@ -121,7 +121,7 @@ export class CardDisclosureMotion {
     }
     /** Apply the same appearance and accessibility motion policy to every disclosure trigger. */
     #canAnimate(root, contentChange = false) {
-        return ((contentChange || root.hasAttribute('data-sc-fluent-node')) &&
+        return ((contentChange || root.hasAttribute('data-sc-style-node')) &&
             !this.#target.ownerDocument.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)')
                 .matches &&
             typeof this.#target.animate === 'function');

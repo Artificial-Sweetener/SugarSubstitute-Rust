@@ -21,7 +21,7 @@ import { settingsWorkspaceCss } from './SettingsWorkspaceStyles.js';
 import { AboutSettingsPage } from './AboutSettingsPage.js';
 import { ComfyAboutInformation } from './ComfyAboutInformation.js';
 import { SettingsPopupTheme } from './SettingsPopupTheme.js';
-import { FluentAppearanceState } from '../surface/appearance/FluentAppearanceState.js';
+import { AppearanceState } from '../surface/appearance/AppearanceState.js';
 /** Preserve Comfy's page lifecycle and settings commands across both browser presentation modes. */
 export class SettingsWorkspaceHost {
     options;
@@ -30,7 +30,7 @@ export class SettingsWorkspaceHost {
     #stops = [];
     #style;
     #popups = new SettingsPopupTheme();
-    #appearance = new FluentAppearanceState();
+    #appearance = new AppearanceState();
     #observer = null;
     #about = null;
     #queued = false;

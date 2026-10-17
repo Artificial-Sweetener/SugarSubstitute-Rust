@@ -33,14 +33,14 @@ import { CubePickerInsertAfterService } from './CubePickerInsertAfterService.js'
 import { ComfyCubeAddMenuPresenter } from './ComfyCubeAddMenuPresenter.js';
 import { CubeAddMenuController } from './CubeAddMenuController.js';
 import { createComfyRendererModeChangeSource } from '../core/ComfyRendererMode.js';
-import type { FluentAppearanceSource } from '../surface/appearance/FluentAppearanceState.js';
+import type { AppearanceSource } from '../surface/appearance/AppearanceState.js';
 import { CubeGraphApi } from '../workflow/infrastructure/CubeGraphApi.js';
 import { CubeStackCartFactory } from './infrastructure/CubeStackCartFactory.js';
 import { CubeStackCartHost } from './CubeStackCartHost.js';
 
 export interface ComfyCubePickerCompositionOptions {
   api: CubeLibraryApi;
-  appearance: FluentAppearanceSource;
+  appearance: AppearanceSource;
   onStackApplied(): Promise<void>;
   app: unknown;
   document: Document;

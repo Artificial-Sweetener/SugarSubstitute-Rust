@@ -150,7 +150,7 @@ function promptDisclosureFixture() {
   target.style.height = '50px';
   const root = document.createElement('div');
   root.className = 'lg-node';
-  root.dataset.scFluentNode = '';
+  root.dataset.scStyleNode = '';
   root.style.height = '50px';
   const header = document.createElement('div');
   header.dataset.testid = 'node-header-prompt';
@@ -162,7 +162,7 @@ function promptDisclosureFixture() {
   target.append(root);
   const cubeRoot = document.createElement('div');
   cubeRoot.className = 'lg-node';
-  cubeRoot.dataset.scFluentNode = '';
+  cubeRoot.dataset.scStyleNode = '';
   cubeRoot.style.height = '1000px';
   cubeRoot.append(target);
   document.body.append(cubeRoot);

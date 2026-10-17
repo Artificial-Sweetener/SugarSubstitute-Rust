@@ -27,7 +27,7 @@ import {
   CUBE_STACK_VISIBLE_SETTING,
   CUBE_STACK_COMPACT_SETTING,
 } from '../../../frontend/comfyui/ui/surface/stack/CubeStackPreferences.js';
-import { FluentAppearanceState } from '../../../frontend/comfyui/ui/surface/appearance/FluentAppearanceState.js';
+import { AppearanceState } from '../../../frontend/comfyui/ui/surface/appearance/AppearanceState.js';
 import { projectCubeStackRows } from '../../../frontend/comfyui/ui/surface/stack/CubeStackProjection.js';
 import type { CubeNode } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 import type { CubeGraphAnalysis } from '../../../frontend/comfyui/ui/workflow/domain/CubeGraphModels.js';
@@ -363,7 +363,7 @@ test.each([true, false])(
 /** Provide existing mounted topology with native-shaped Cube identity and isolated host ports. */
 function setup(analysisAvailable = true, available = true, frame?: SubstituteFrameMode) {
   const settings = new Map<string, { onChange(value: unknown): void }>();
-  const appearance = new FluentAppearanceState();
+  const appearance = new AppearanceState();
   const container = document.createElement('div');
   const element = document.createElement('section');
   container.append(element);

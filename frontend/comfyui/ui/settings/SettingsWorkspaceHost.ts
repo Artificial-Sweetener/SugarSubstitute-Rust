@@ -23,7 +23,7 @@ import { settingsWorkspaceCss } from './SettingsWorkspaceStyles.js';
 import { AboutSettingsPage } from './AboutSettingsPage.js';
 import { ComfyAboutInformation } from './ComfyAboutInformation.js';
 import { SettingsPopupTheme } from './SettingsPopupTheme.js';
-import { FluentAppearanceState } from '../surface/appearance/FluentAppearanceState.js';
+import { AppearanceState } from '../surface/appearance/AppearanceState.js';
 
 export interface SettingsWorkspaceOptions {
   readonly document: Document;
@@ -40,7 +40,7 @@ export class SettingsWorkspaceHost {
   readonly #stops: (() => void)[] = [];
   readonly #style: HTMLStyleElement;
   readonly #popups = new SettingsPopupTheme();
-  readonly #appearance = new FluentAppearanceState();
+  readonly #appearance = new AppearanceState();
   #observer: HostSurfaceObserver | null = null;
   #about: AboutSettingsPage | null = null;
   #queued = false;

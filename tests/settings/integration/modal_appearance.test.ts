@@ -20,12 +20,12 @@ import { InputModal } from '../../../frontend/comfyui/ui/dialogs/InputModal.js';
 import { FormModal } from '../../../frontend/comfyui/ui/dialogs/FormModal.js';
 import { SaveNodePresetDialog } from '../../../frontend/comfyui/ui/editor_actions/presentation/SaveNodePresetDialog.js';
 import { GLOBAL_ASSOCIATION } from '../../../frontend/comfyui/ui/editor_actions/domain/UserPreset.js';
-import { FluentAppearanceState } from '../../../frontend/comfyui/ui/surface/appearance/FluentAppearanceState.js';
+import { AppearanceState } from '../../../frontend/comfyui/ui/surface/appearance/AppearanceState.js';
 
 const adapter = { getDocument: () => document, getWindow: () => window };
 
 test('follows an accepted dual-style appearance source without replacing controls or retaining subscriptions after close', async () => {
-  const source = new FluentAppearanceState();
+  const source = new AppearanceState();
   source.update(true, true);
   const shell = new ModalShell({ adapter, appearanceSource: source });
   const input = document.createElement('input');

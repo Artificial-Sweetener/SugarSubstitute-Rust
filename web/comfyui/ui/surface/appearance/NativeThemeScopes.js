@@ -14,10 +14,10 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Share complete Fluent tokens at stable ancestors across native presentation moves. */
-const THEME_ATTRIBUTE = 'data-sc-fluent-theme-root';
+const THEME_ATTRIBUTE = 'data-sc-style-theme-root';
 const OWNED_SCOPE_SELECTOR = '.sc-overrides-toolbar, .sugarcubes-workflow-masonry, .sugarcubes-cube-face';
 /** Own token scope markers while card-specific styling remains with native annotations. */
-export class NativeFluentThemeScopes {
+export class NativeThemeScopes {
     #roots = new Set();
     /** Keep graph and masonry under one token owner, with standalone owned surfaces as fallbacks. */
     retain(element) {

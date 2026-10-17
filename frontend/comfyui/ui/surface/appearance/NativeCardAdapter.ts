@@ -34,12 +34,9 @@ import { ComfyNativeSeedControlAdapter } from './ComfyNativeSeedControl.js';
 import type { NativeSeedReuseResolver } from './ComfyNativeSeedControl.js';
 import type { NativeSeedField } from './NativeSeedControls.js';
 import { readNativeWidgetMount } from '../NativeWidgetMountBoundary.js';
-import {
-  NativeFluentAnnotations,
-  type NativeFluentAnnotationPlan,
-} from './NativeFluentAnnotations.js';
+import { NativeCardAnnotations, type NativeCardAnnotationPlan } from './NativeCardAnnotations.js';
 
-export interface FluentCardBoundary {
+export interface NativeCardBoundary {
   root: HTMLElement;
   body: HTMLElement | null;
   fields: readonly NativeFieldDescriptor[];
@@ -53,8 +50,8 @@ export interface FluentCardBoundary {
 }
 
 /** Own removable annotations on recognized Comfy component roots only. */
-export class NativeFluentCardAdapter {
-  readonly #annotations = new NativeFluentAnnotations();
+export class NativeCardAdapter {
+  readonly #annotations = new NativeCardAnnotations();
   readonly #vnodes = new WeakMap<HTMLElement, UnknownRecord>();
   readonly #graphNodes = new Map<HTMLElement, UnknownRecord>();
   readonly #seeds: ComfyNativeSeedControlAdapter;
@@ -90,7 +87,7 @@ export class NativeFluentCardAdapter {
   }
 
   /** Annotate toolbar widgets through the same component and numeric boundaries as node fields. */
-  annotateWidget(root: HTMLElement): FluentCardBoundary {
+  annotateWidget(root: HTMLElement): NativeCardBoundary {
     const annotated = this.#annotations.begin(root);
     mark(root, 'node', annotated);
     const boundary = readNativeWidgetMount(root);
@@ -108,7 +105,7 @@ export class NativeFluentCardAdapter {
     );
     if (descriptor) {
       if (!root.hasAttribute('data-sc-choice-inline')) mark(root, 'row', annotated);
-      annotated.attribute(root, 'data-sc-fluent-widget', descriptor.component);
+      annotated.attribute(root, 'data-sc-style-widget', descriptor.component);
     }
     if (boundary?.seed && numericFields[0])
       seedFields.push({ numeric: numericFields[0], control: boundary.seed });
@@ -128,7 +125,7 @@ export class NativeFluentCardAdapter {
   }
 
   /** Mark one live card and its positively identified native field rows. */
-  annotate(root: HTMLElement): FluentCardBoundary {
+  annotate(root: HTMLElement): NativeCardBoundary {
     const annotated = this.#annotations.begin(root);
     mark(root, 'node', annotated);
     const vnode = this.#vnodes.get(root) ?? this.#graphNodes.get(root) ?? findNativeNodeVNode(root);
@@ -176,12 +173,12 @@ export class NativeFluentCardAdapter {
         const row = rows.get(placement.name);
         if (!row) continue;
         mark(row, 'row', annotated);
-        annotated.attribute(row, 'data-sc-fluent-kind', placement.kind);
-        annotated.attribute(row, 'data-sc-fluent-span', String(placement.span));
-        annotated.attribute(row, 'data-sc-fluent-column', String(placement.column));
+        annotated.attribute(row, 'data-sc-style-kind', placement.kind);
+        annotated.attribute(row, 'data-sc-style-span', String(placement.span));
+        annotated.attribute(row, 'data-sc-style-column', String(placement.column));
         annotated.attribute(
           row,
-          'data-sc-fluent-widget',
+          'data-sc-style-widget',
           containerFields.find((field) => field.name === placement.name)?.component ?? '',
         );
         annotated.style(row, '--sc-field-row', String(placement.row));
@@ -208,7 +205,7 @@ export class NativeFluentCardAdapter {
         (element) => element.closest('.lg-node') === root,
       ) ?? null;
     const fields =
-      [...root.querySelectorAll<HTMLElement>('[data-sc-fluent-fields]')].find(
+      [...root.querySelectorAll<HTMLElement>('[data-sc-style-fields]')].find(
         (element) => element.closest('.lg-node') === root,
       ) ?? null;
     const visibleFields = Array.from(fields?.children ?? []).some(
@@ -258,15 +255,15 @@ function hasNativeWidgets(widgets: unknown): boolean {
 }
 
 /** Track annotations so turning the theme off restores host ownership exactly. */
-function mark(element: HTMLElement, name: string, annotated: NativeFluentAnnotationPlan): void {
-  annotated.attribute(element, `data-sc-fluent-${name}`);
+function mark(element: HTMLElement, name: string, annotated: NativeCardAnnotationPlan): void {
+  annotated.attribute(element, `data-sc-style-${name}`);
 }
 
 /** Read a core widget's identity and annotate its native layout, excluding DOM/custom bridges. */
 function resolveFieldDescriptor(
   row: HTMLElement,
   candidates: readonly FieldComponent[],
-  annotated: NativeFluentAnnotationPlan,
+  annotated: NativeCardAnnotationPlan,
   numericFields: NativeNumericField[],
   labelElements: HTMLElement[],
   seedFields: NativeSeedField[],

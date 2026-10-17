@@ -17,7 +17,7 @@
 import { afterEach, beforeEach, expect, jest, test } from '@jest/globals';
 import { NativeAdvancedDisclosure } from '../../../frontend/comfyui/ui/surface/appearance/NativeAdvancedDisclosure.js';
 import { NATIVE_NODE_CARD_DISPOSE_EVENT } from '../../../frontend/comfyui/ui/surface/NativeNodeCardRenderer.js';
-import type { FluentCardBoundary } from '../../../frontend/comfyui/ui/surface/appearance/NativeFluentCardAdapter.js';
+import type { NativeCardBoundary } from '../../../frontend/comfyui/ui/surface/appearance/NativeCardAdapter.js';
 
 beforeEach(() => {
   jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
@@ -31,10 +31,10 @@ afterEach(() => {
 function fixture() {
   const root = document.createElement('div');
   root.className = 'lg-node';
-  root.dataset.scFluentNode = '';
+  root.dataset.scStyleNode = '';
   const fields = document.createElement('div');
   const advanced = document.createElement('div');
-  advanced.dataset.scFluentAdvancedRow = '';
+  advanced.dataset.scStyleAdvancedRow = '';
   const button = document.createElement('button');
   button.dataset.testid = 'advanced-inputs-button';
   root.append(fields, button);
@@ -72,7 +72,7 @@ function fixture() {
       return animation;
     },
   });
-  const card: FluentCardBoundary = {
+  const card: NativeCardBoundary = {
     root,
     body: null,
     header: null,
@@ -133,7 +133,7 @@ test('reverses without committing a stale close and retains the latest choice on
 
 test('theme-free native disclosure skips motion and teardown releases the listener', async () => {
   const { root, button, callback, effects, adapter } = fixture();
-  root.removeAttribute('data-sc-fluent-node');
+  root.removeAttribute('data-sc-style-node');
   button.click();
   await Promise.resolve();
   expect(callback).toHaveBeenCalledTimes(1);

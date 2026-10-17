@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Follow the host's Fluent preference and theme without replacing live picker state. */
 import { isRecord } from '../types/common.js';
-import { FLUENT_APPEARANCE_SETTING } from '../surface/appearance/FluentAppearanceHost.js';
+import { FLUENT_APPEARANCE_SETTING } from '../surface/appearance/AppearanceHost.js';
 import { readComfyDarkTheme } from '../surface/appearance/ComfyColorScheme.js';
 import {
   applyOwnedFluentTheme,

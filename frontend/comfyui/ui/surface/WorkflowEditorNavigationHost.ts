@@ -17,7 +17,7 @@
 import type { ComfyApplication } from '../types/graph.js';
 import { workflowEditorNavigationCss } from './WorkflowEditorNavigationStyles.js';
 import { HostSurfaceObserver } from '../core/HostSurfaceObserver.js';
-import type { FluentAppearanceSource } from './appearance/FluentAppearanceState.js';
+import type { AppearanceSource } from './appearance/AppearanceState.js';
 import {
   WorkflowEditorNavigationView,
   type EditorBreadcrumb,
@@ -26,7 +26,7 @@ import {
 interface EditorNavigationOptions {
   readonly document: Document;
   readonly app: ComfyApplication | null;
-  readonly appearance: FluentAppearanceSource;
+  readonly appearance: AppearanceSource;
   suspendOverrides(suspended: boolean): void;
   report(error: unknown): void;
 }

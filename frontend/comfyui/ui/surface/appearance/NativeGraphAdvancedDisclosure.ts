@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Adapt native advanced-field disclosure to the shared Fluent accordion motion. */
 import { CardDisclosureMotion } from '../motion/CardDisclosureMotion.js';
-import type { FluentCardBoundary } from './NativeFluentCardAdapter.js';
+import type { NativeCardBoundary } from './NativeCardAdapter.js';
 import { NATIVE_NODE_CARD_DISPOSE_EVENT } from '../NativeNodeCardRenderer.js';
 import { settleNativeDisclosure } from '../NativeDisclosureSettlement.js';
 import { measureNativeFields } from './NativeAdvancedDisclosureGeometry.js';
@@ -33,7 +33,7 @@ export class NativeGraphAdvancedDisclosure {
   readonly #bindings = new Map<HTMLElement, AdvancedBinding>();
 
   /** Follow native component replacement and the current advanced state. */
-  reconcile(card: FluentCardBoundary): void {
+  reconcile(card: NativeCardBoundary): void {
     for (const [root, binding] of this.#bindings) {
       if (!root.isConnected || (root === card.root && binding.fields !== card.advanced?.fields)) {
         binding.release();

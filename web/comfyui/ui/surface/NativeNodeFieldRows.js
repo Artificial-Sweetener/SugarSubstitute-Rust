@@ -55,7 +55,7 @@ export function nativeNodeFieldRows(root) {
             }
         }
     if (card)
-        for (const row of card.querySelectorAll('[data-sc-fluent-row]')) {
+        for (const row of card.querySelectorAll('[data-sc-style-row]')) {
             if (row.closest('.lg-node') !== card)
                 continue;
             const label = row

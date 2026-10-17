@@ -23,7 +23,7 @@ import type {
   ComfyNode,
   ComfyWidget,
 } from '../../../frontend/comfyui/ui/types/graph.js';
-import type { FluentFinderInput } from '../../../frontend/comfyui/ui/surface/appearance/FluentFinderControls.js';
+import type { FinderInputControl } from '../../../frontend/comfyui/ui/surface/appearance/FinderControls.js';
 
 import { MasonrySearchHost } from '../../../frontend/comfyui/ui/search/infrastructure/MasonrySearchHost.js';
 afterEach(() => {
@@ -54,7 +54,7 @@ function fixture() {
   card.className = 'lg-node';
   for (const widget of node.widgets ?? []) {
     const row = document.createElement('div');
-    row.dataset.scFluentRow = '';
+    row.dataset.scStyleRow = '';
     row.dataset.testid = 'node-widget';
     const input = document.createElement('input');
     input.setAttribute('aria-label', widget.name);
@@ -134,7 +134,7 @@ test('Ctrl+F ownership, popup isolation and workflow-scoped restoration release 
   });
   window.dispatchEvent(shortcut);
   expect(shortcut.defaultPrevented).toBe(true);
-  const input = f.container.querySelector<FluentFinderInput>('.sc-masonry-finder__input');
+  const input = f.container.querySelector<FinderInputControl>('.sc-masonry-finder__input');
   if (!input) throw new Error('Finder missing');
   input.value = '@node sampler "512"';
   input.control.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
@@ -148,7 +148,7 @@ test('Ctrl+F ownership, popup isolation and workflow-scoped restoration release 
   expect(f.container.querySelector('.sc-masonry-finder')).toBeNull();
   expect(f.container.querySelector('.sc-search-highlight')).toBeNull();
   host.ready(f.view);
-  const restored = f.container.querySelector<FluentFinderInput>('.sc-masonry-finder__input');
+  const restored = f.container.querySelector<FinderInputControl>('.sc-masonry-finder__input');
   expect(restored?.value).toBe('sampler "512"');
   expect(restored?.parentElement?.hidden).toBe(false);
   expect(reportError).not.toHaveBeenCalled();

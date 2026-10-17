@@ -29,7 +29,7 @@ export class WorkflowEditorNavigationView {
         this.element = document.createElement('nav');
         this.element.className = 'sc-editor-navigation';
         this.element.setAttribute('aria-label', 'Workflow editor navigation');
-        this.element.setAttribute('data-sc-fluent-theme-root', '');
+        this.element.setAttribute('data-sc-style-theme-root', '');
         const backButton = this.#back(back);
         backButton.classList.add('sc-editor-bar-back');
         this.#trail = document.createElement('ol');

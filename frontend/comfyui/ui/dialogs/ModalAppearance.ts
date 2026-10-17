@@ -17,7 +17,7 @@
 import { applyOwnedFluentTheme } from '../surface/appearance/FluentThemeRuntime.js';
 import { readComfyDarkTheme } from '../surface/appearance/ComfyColorScheme.js';
 import { injectModalAppearanceStyles } from './ModalAppearanceStyles.js';
-import type { FluentAppearanceSource } from '../surface/appearance/FluentAppearanceState.js';
+import type { AppearanceSource } from '../surface/appearance/AppearanceState.js';
 
 /** Keep every open SugarCubes dialog synchronized with Comfy's active palette. */
 export class ModalAppearance {
@@ -26,10 +26,10 @@ export class ModalAppearance {
   #dark: boolean | null = null;
   #fluent: boolean | null = null;
   #release: (() => void) | null = null;
-  readonly #source: FluentAppearanceSource | undefined;
+  readonly #source: AppearanceSource | undefined;
 
   /** Use an accepted product appearance source when the surface supports both styles. */
-  constructor(source?: FluentAppearanceSource) {
+  constructor(source?: AppearanceSource) {
     this.#source = source;
   }
 

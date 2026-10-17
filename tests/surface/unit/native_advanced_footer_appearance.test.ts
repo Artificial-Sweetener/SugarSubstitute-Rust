@@ -28,7 +28,7 @@ function footer(projected: boolean, fluent: boolean): HTMLButtonElement {
   if (projected) card.className = 'sugarcubes-cube-face__node-card';
   const root = document.createElement('div');
   root.className = 'lg-node';
-  if (fluent) root.dataset.scFluentNode = '';
+  if (fluent) root.dataset.scStyleNode = '';
   const button = document.createElement('button');
   button.dataset.testid = 'advanced-inputs-button';
   button.className = 'bg-node-component-header-surface hover:bg-secondary-background-hover';

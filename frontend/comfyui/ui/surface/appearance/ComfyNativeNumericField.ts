@@ -65,7 +65,7 @@ export function readNativeNumericField(
   )
     return null;
   const input = spinner.querySelector<HTMLInputElement>('input[role="spinbutton"]');
-  const layout = row.querySelector<HTMLElement>('[data-sc-fluent-layout]');
+  const layout = row.querySelector<HTMLElement>('[data-sc-style-layout]');
   const container = layout?.lastElementChild;
   if (!input || !(container instanceof HTMLElement) || !container.contains(spinner)) return null;
   const options = isRecord(widget.options) ? widget.options : {};

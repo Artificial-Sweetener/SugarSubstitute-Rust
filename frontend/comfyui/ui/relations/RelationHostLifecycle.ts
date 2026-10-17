@@ -27,7 +27,7 @@ import { NativeRelationViews } from './infrastructure/NativeRelationViews.js';
 import { NativeSharedSeedModes } from './infrastructure/NativeSharedSeedModes.js';
 import { NativeWorkflowSeedReuse } from './infrastructure/NativeWorkflowSeedReuse.js';
 import { NativeSeedMenuHost } from '../surface/appearance/NativeSeedMenuHost.js';
-import type { FluentAppearanceSource } from '../surface/appearance/FluentAppearanceState.js';
+import type { AppearanceSource } from '../surface/appearance/AppearanceState.js';
 import type { WorkflowSeedHistory } from '../execution/application/WorkflowSeedHistory.js';
 import type { WorkflowSessionStore } from '../execution/application/WorkflowSessionStore.js';
 import { NativeRelationWidgetRenderer } from './infrastructure/NativeRelationWidgetRenderer.js';
@@ -46,7 +46,7 @@ export interface RelationHostOptions {
   logger: Pick<Console, 'warn'>;
   seeds: WorkflowSeedHistory;
   sessions: WorkflowSessionStore;
-  appearance?(): FluentAppearanceSource;
+  appearance?(): AppearanceSource;
   reportError(error: unknown): void;
   getCardState(): CubeFaceCardStateService | null;
   getConnections?(graph: ComfyGraph): readonly WorkflowNodeConnection[];

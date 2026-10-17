@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove initial native socket reconciliation is coalesced, scoped, cancellable, and observable. */
 import { afterEach, expect, jest, test } from '@jest/globals';
-import { NativeFluentGraphGeometry } from '../../../frontend/comfyui/ui/surface/appearance/NativeFluentGraphGeometry.js';
+import { NativeCardGraphGeometry } from '../../../frontend/comfyui/ui/surface/appearance/NativeCardGraphGeometry.js';
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -33,7 +33,7 @@ function fixture() {
   const synchronize = jest.fn<() => void>();
   const getSynchronizer = jest.fn<() => Promise<() => void>>().mockResolvedValue(synchronize);
   const reportError = jest.fn();
-  const owner = new NativeFluentGraphGeometry({ document, getSynchronizer, reportError });
+  const owner = new NativeCardGraphGeometry({ document, getSynchronizer, reportError });
   return { frames, cancel, synchronize, getSynchronizer, reportError, owner };
 }
 

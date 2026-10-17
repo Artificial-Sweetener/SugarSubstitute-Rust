@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove shared seed and numeric presentation through real appearance discovery and lifecycle. */
 import { afterEach, expect, jest, test } from '@jest/globals';
-import { FluentAppearanceHost } from '../../../frontend/comfyui/ui/surface/appearance/FluentAppearanceHost.js';
+import { AppearanceHost } from '../../../frontend/comfyui/ui/surface/appearance/AppearanceHost.js';
 import type { UnknownRecord } from '../../../frontend/comfyui/ui/types/common.js';
 
 afterEach(() => {
@@ -130,7 +130,7 @@ test.each(['native', 'cube', 'masonry'])(
       },
     };
     const errors = jest.fn();
-    const host = new FluentAppearanceHost({ document, app, reportError: errors });
+    const host = new AppearanceHost({ document, app, reportError: errors });
     host.setup();
     host.setEnabled(true);
     frames.splice(0).forEach((frame) => frame(0));

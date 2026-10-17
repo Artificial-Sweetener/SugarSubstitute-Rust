@@ -196,7 +196,7 @@ export class CubeRelationPresenter {
       field.name,
     );
     const control = row
-      ? (row.querySelector<HTMLElement>('[data-sc-fluent-combo-frame]') ??
+      ? (row.querySelector<HTMLElement>('[data-sc-style-combo-frame]') ??
         row
           .querySelector<HTMLElement>('[data-testid="widget-select-default-trigger"]')
           ?.closest<HTMLElement>('[data-capture-wheel]') ??

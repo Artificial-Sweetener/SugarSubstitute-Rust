@@ -15,10 +15,10 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove owned surfaces receive immutable, deduplicated accepted appearance facts. */
 import { expect, jest, test } from '@jest/globals';
-import { FluentAppearanceState } from '../../../frontend/comfyui/ui/surface/appearance/FluentAppearanceState.js';
+import { AppearanceState } from '../../../frontend/comfyui/ui/surface/appearance/AppearanceState.js';
 
 test('publishes coherent appearance changes and releases surface subscriptions', () => {
-  const state = new FluentAppearanceState();
+  const state = new AppearanceState();
   const snapshots: object[] = [];
   const unsubscribe = state.subscribeAppearance(() => {
     snapshots.push(state.appearance);

@@ -22,13 +22,13 @@ import {
   createComfyRendererModeChangeSource,
   resolveComfyRendererMode,
 } from '../../core/ComfyRendererMode.js';
-import { NativeFluentThemeScopes } from './NativeFluentThemeScopes.js';
-import { NativeFluentCardAdapter } from './NativeFluentCardAdapter.js';
+import { NativeThemeScopes } from './NativeThemeScopes.js';
+import { NativeCardAdapter } from './NativeCardAdapter.js';
 import { fluentAppearanceCss } from './FluentAppearanceStyles.js';
 import {
-  createFluentNumericSlider,
-  createFluentBooleanCheckbox,
-  createFluentBooleanSegments,
+  createNumericSliderControl,
+  createBooleanCheckboxControl,
+  createBooleanSegmentControls,
 } from './FluentThemeRuntime.js';
 import { NativeInlineComboSearch } from './NativeInlineComboSearch.js';
 import { NativeCardTitlebar } from './NativeCardTitlebar.js';
@@ -43,8 +43,8 @@ import { readComfyDarkTheme } from './ComfyColorScheme.js';
 import { FluentOverlayScrollbarHost } from './FluentOverlayScrollbarHost.js';
 import { isBorrowedNativeCardPresentation } from '../NativeCardPresentationOwner.js';
 import { NATIVE_PRESENTATION_READY_EVENT } from '../NativePresentationReady.js';
-import { NativeFluentGraphGeometry } from './NativeFluentGraphGeometry.js';
-import { FluentAppearanceState } from './FluentAppearanceState.js';
+import { NativeCardGraphGeometry } from './NativeCardGraphGeometry.js';
+import { AppearanceState } from './AppearanceState.js';
 import { AccentThemeHost } from './AccentThemeHost.js';
 import { CubeIconAppearanceHost } from './CubeIconAppearanceHost.js';
 import { ensureOwnedControlAppearanceStyles } from './OwnedControlAppearanceStyles.js';
@@ -55,7 +55,7 @@ export const FLUENT_APPEARANCE_SETTING = 'SugarCubes.Appearance.Fluent';
 const surfaceSelector =
   '.sugarcubes-workflow-masonry, .sugarcubes-masonry-toggle, .sc-overrides-toolbar, .sugarcubes-native-widget';
 
-export interface FluentAppearanceHostOptions {
+export interface AppearanceHostOptions {
   document: Document;
   app: unknown;
   seedReuse?: NativeSeedReuseResolver;
@@ -64,18 +64,18 @@ export interface FluentAppearanceHostOptions {
 }
 
 /** Keep appearance separate from graph, Cube policy, and masonry layout state. */
-export class FluentAppearanceHost {
-  readonly state = new FluentAppearanceState();
-  readonly #options: FluentAppearanceHostOptions;
-  readonly #adapter: NativeFluentCardAdapter;
-  readonly #graphGeometry: NativeFluentGraphGeometry;
-  readonly #themes = new NativeFluentThemeScopes();
+export class AppearanceHost {
+  readonly state = new AppearanceState();
+  readonly #options: AppearanceHostOptions;
+  readonly #adapter: NativeCardAdapter;
+  readonly #graphGeometry: NativeCardGraphGeometry;
+  readonly #themes = new NativeThemeScopes();
   readonly #titlebars = new NativeCardTitlebar();
   readonly #labels = new NativeLabelPresentation();
-  readonly #toggleRows = new NativeToggleRows(createFluentBooleanCheckbox);
-  readonly #booleanSegments = new NativeBooleanSegments(createFluentBooleanSegments);
+  readonly #toggleRows = new NativeToggleRows(createBooleanCheckboxControl);
+  readonly #booleanSegments = new NativeBooleanSegments(createBooleanSegmentControls);
   readonly #advanced = new NativeAdvancedDisclosure();
-  readonly #numeric = new NativeNumericControls(createFluentNumericSlider);
+  readonly #numeric = new NativeNumericControls(createNumericSliderControl);
   readonly #seeds = new NativeSeedControls();
   readonly #comboSearch: NativeInlineComboSearch;
   readonly #scrollbars: FluentOverlayScrollbarHost;
@@ -103,13 +103,13 @@ export class FluentAppearanceHost {
   }
 
   /** Prepare observers without altering styles until the user opts in. */
-  constructor(options: FluentAppearanceHostOptions) {
+  constructor(options: AppearanceHostOptions) {
     this.#options = options;
     this.#accent = new AccentThemeHost(options.document, options.app, options.reportError);
     this.#iconAppearance = new CubeIconAppearanceHost(options.document, this.state);
     this.#scrollbars = new FluentOverlayScrollbarHost(options.document, options.reportError);
-    this.#adapter = new NativeFluentCardAdapter(options.app, options.seedReuse);
-    this.#graphGeometry = new NativeFluentGraphGeometry({
+    this.#adapter = new NativeCardAdapter(options.app, options.seedReuse);
+    this.#graphGeometry = new NativeCardGraphGeometry({
       document: options.document,
       ...(options.getSlotLayoutSync ? { getSynchronizer: options.getSlotLayoutSync } : {}),
       reportError: options.reportError,
@@ -266,11 +266,11 @@ export class FluentAppearanceHost {
     else this.#graphGeometry.clear();
     this.#comboSearch.clear();
     for (const surface of this.#surfaces) {
-      surface.removeAttribute('data-sc-fluent-surface');
-      surface.removeAttribute('data-sc-fluent-popup');
+      surface.removeAttribute('data-sc-style-surface');
+      surface.removeAttribute('data-sc-style-popup');
     }
     this.#surfaces.clear();
-    for (const popup of this.#popups) popup.removeAttribute('data-sc-fluent-popup');
+    for (const popup of this.#popups) popup.removeAttribute('data-sc-style-popup');
     this.#popups.clear();
     this.#popupOrigin = null;
     this.#dirty.clear();
@@ -300,7 +300,7 @@ export class FluentAppearanceHost {
 
   /** Retain already styled controls only while their exact source renderer owns the loan. */
   #retainedCard(element: HTMLElement): boolean {
-    return element.hasAttribute('data-sc-fluent-node') && isBorrowedNativeCardPresentation(element);
+    return element.hasAttribute('data-sc-style-node') && isBorrowedNativeCardPresentation(element);
   }
 
   /** Coalesce native discovery and report unsupported host failures through SugarCubes feedback. */
@@ -354,8 +354,8 @@ export class FluentAppearanceHost {
           this.#seeds.reconcile(element, card.seedFields);
           if (!standalone) this.#graphGeometry.request(element);
         } else {
-          if (!element.hasAttribute('data-sc-fluent-surface'))
-            element.setAttribute('data-sc-fluent-surface', '');
+          if (!element.hasAttribute('data-sc-style-surface'))
+            element.setAttribute('data-sc-style-surface', '');
           this.#surfaces.add(element);
         }
       }
@@ -391,11 +391,11 @@ export class FluentAppearanceHost {
 
   /** Associate portalled menus with their native source field rather than all host popups. */
   readonly #rememberPopupOrigin = (event: Event): void => {
-    if (event.target instanceof HTMLElement && event.target.closest('[data-sc-fluent-popup]'))
+    if (event.target instanceof HTMLElement && event.target.closest('[data-sc-style-popup]'))
       return;
     this.#popupOrigin =
       event.target instanceof HTMLElement
-        ? event.target.closest<HTMLElement>('[data-sc-fluent-row]')
+        ? event.target.closest<HTMLElement>('[data-sc-style-row]')
         : null;
   };
 
@@ -406,7 +406,7 @@ export class FluentAppearanceHost {
       const id = trigger.getAttribute('aria-controls');
       const popup = id ? this.#options.document.getElementById(id) : null;
       if (!popup || popup.getAttribute('role') !== 'listbox') continue;
-      popup.setAttribute('data-sc-fluent-popup', '');
+      popup.setAttribute('data-sc-style-popup', '');
       this.#themes.retain(popup);
       this.#popups.add(popup);
       if (trigger instanceof HTMLElement) this.#comboSearch.present(trigger, popup);

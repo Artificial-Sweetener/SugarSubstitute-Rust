@@ -20,7 +20,7 @@ import type {
   SearchFieldSurface,
   SearchSurface,
 } from '../../../frontend/comfyui/ui/search/presentation/SearchSurface.js';
-import type { FluentFinderInput } from '../../../frontend/comfyui/ui/surface/appearance/FluentFinderControls.js';
+import type { FinderInputControl } from '../../../frontend/comfyui/ui/surface/appearance/FinderControls.js';
 import { SearchVisibility } from '../../../frontend/comfyui/ui/search/presentation/SearchVisibility.js';
 import { matchSearch } from '../../../frontend/comfyui/ui/search/domain/SearchMatching.js';
 import { buildSearchQuery } from '../../../frontend/comfyui/ui/search/domain/SearchQuery.js';
@@ -68,7 +68,7 @@ function fixture() {
   const presenter = new MasonrySearchPresenter({ root, container, surface, setCards });
   presenters.push(presenter);
   presenter.open();
-  const input = container.querySelector<FluentFinderInput>('.sc-masonry-finder__input');
+  const input = container.querySelector<FinderInputControl>('.sc-masonry-finder__input');
   if (!input) throw new Error('Finder input missing');
   /** Send actual composed native input events and flush the pending animation-frame query. */
   const search = (text: string): void => {

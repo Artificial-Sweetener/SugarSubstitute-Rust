@@ -16,7 +16,7 @@
 /** Prove native numeric ownership, Substitute slider selection, and reversible presentation. */
 import { afterEach, expect, jest, test } from '@jest/globals';
 import { NativeNumericControls } from '../../../frontend/comfyui/ui/surface/appearance/NativeNumericControls.js';
-import type { FluentNumericSlider } from '../../../frontend/comfyui/ui/surface/appearance/NativeNumericControls.js';
+import type { NumericSliderControl } from '../../../frontend/comfyui/ui/surface/appearance/NativeNumericControls.js';
 import type { NativeNumericField } from '../../../frontend/comfyui/ui/surface/appearance/ComfyNativeNumericField.js';
 import { readNativeNumericField } from '../../../frontend/comfyui/ui/surface/appearance/ComfyNativeNumericField.js';
 import { usesSubstituteSlider } from '../../../frontend/comfyui/ui/surface/appearance/NumericSliderPresentation.js';
@@ -27,7 +27,7 @@ import '../../../frontend/comfyui/ui/surface/appearance/FluentThemeRuntime.js';
 afterEach(() => document.body.replaceChildren());
 
 /** Model the official slider's synchronous change notification on value assignment. */
-class SliderFixture extends HTMLElement implements FluentNumericSlider {
+class SliderFixture extends HTMLElement implements NumericSliderControl {
   min = '';
   max = '';
   step = '';
@@ -287,7 +287,7 @@ test('renders markup-like labels literally and retains native sliders without du
 test('adapts the live numeric component model and watcher while rejecting unknown component markup', () => {
   const { field } = fixture();
   const layout = document.createElement('div');
-  layout.dataset.scFluentLayout = '';
+  layout.dataset.scStyleLayout = '';
   layout.append(document.createElement('span'), field.container);
   field.row.append(layout);
   field.input.setAttribute('role', 'spinbutton');

@@ -19,7 +19,7 @@ import {
   createCubeStackCommands,
   type CubeStackCommandRuntime,
 } from '../../../frontend/comfyui/ui/surface/stack/CubeStackCommands.js';
-import { FluentAppearanceState } from '../../../frontend/comfyui/ui/surface/appearance/FluentAppearanceState.js';
+import { AppearanceState } from '../../../frontend/comfyui/ui/surface/appearance/AppearanceState.js';
 import type { CubeNode } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 import type { NativeCubeSubgraph } from '../../../frontend/comfyui/ui/cube/ComfyCubeGraphBuilder.js';
 
@@ -218,7 +218,7 @@ function fixture() {
   const runtime = { nodes: { get: () => node }, instanceActions: actions, reorder };
   let current: CubeStackCommandRuntime | null = runtime;
   let eligible = true;
-  const appearance = new FluentAppearanceState();
+  const appearance = new AppearanceState();
   const prompt = jest.fn<() => Promise<string | null>>().mockResolvedValue(null);
   const capture = jest.fn<(id: string) => Promise<void>>().mockResolvedValue(undefined);
   const cart = jest.fn();

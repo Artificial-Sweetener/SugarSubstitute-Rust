@@ -30,7 +30,7 @@ function fixture() {
   target.style.overflow = 'visible';
   const root = document.createElement('div');
   root.className = 'lg-node';
-  root.dataset.scFluentNode = '';
+  root.dataset.scStyleNode = '';
   root.style.height = '200px';
   const wrapper = document.createElement('div');
   wrapper.dataset.testid = 'node-inner-wrapper';
@@ -98,11 +98,11 @@ test('reverses mid-close and ignores stale completions and disposal', async () =
 test('skips animation under reduced motion or when the appearance is disabled', () => {
   const { target, root, effects, motion } = fixture();
   const apply = jest.fn();
-  root.removeAttribute('data-sc-fluent-node');
+  root.removeAttribute('data-sc-style-node');
   motion.toggle(false, apply);
   expect(apply).toHaveBeenCalledWith(true);
   expect(effects).toHaveLength(0);
-  root.dataset.scFluentNode = '';
+  root.dataset.scStyleNode = '';
   const original = Object.getOwnPropertyDescriptor(window, 'matchMedia');
   Object.defineProperty(window, 'matchMedia', {
     configurable: true,
@@ -176,7 +176,7 @@ test('animates a native content resize to its settled destination and restores i
 
 test('animates reordered prompt membership in the normal Comfy appearance', () => {
   const { target, root, effects, motion } = fixture();
-  root.removeAttribute('data-sc-fluent-node');
+  root.removeAttribute('data-sc-style-node');
   motion.resize(() => {
     root.style.height = '80px';
   });

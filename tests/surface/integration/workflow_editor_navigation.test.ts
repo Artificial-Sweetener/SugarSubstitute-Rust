@@ -17,7 +17,7 @@
 import { jest, beforeAll, afterAll, afterEach, test, expect } from '@jest/globals';
 import { Updates } from '@microsoft/fast-element';
 import { WorkflowEditorNavigationHost } from '../../../frontend/comfyui/ui/surface/WorkflowEditorNavigationHost.js';
-import { FluentAppearanceState } from '../../../frontend/comfyui/ui/surface/appearance/FluentAppearanceState.js';
+import { AppearanceState } from '../../../frontend/comfyui/ui/surface/appearance/AppearanceState.js';
 
 const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'attachInternals');
 beforeAll(() => {
@@ -96,7 +96,7 @@ function fixture() {
   render(0);
   const suspendOverrides = jest.fn<(suspended: boolean) => void>();
   const report = jest.fn<(error: unknown) => void>();
-  const appearance = new FluentAppearanceState();
+  const appearance = new AppearanceState();
   const host = new WorkflowEditorNavigationHost({
     document,
     app,

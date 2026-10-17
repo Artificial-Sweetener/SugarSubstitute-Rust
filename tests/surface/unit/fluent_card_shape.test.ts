@@ -23,7 +23,7 @@ test('owns Fluent control foregrounds while image-backed picker inputs keep thei
   const style = document.getElementById('sugarcubes-owned-control-appearance');
   if (!(style instanceof HTMLStyleElement)) throw new Error('Missing control appearance');
   const root = document.createElement('section');
-  root.setAttribute('data-sc-fluent-node', '');
+  root.setAttribute('data-sc-style-node', '');
   const input = document.createElement('input');
   const combo = document.createElement('button');
   combo.setAttribute('role', 'combobox');
@@ -59,7 +59,7 @@ test.each([false, true])(
     const surface = document.createElement('div');
     if (masonry) surface.className = 'sugarcubes-workflow-masonry';
     const card = document.createElement('div');
-    card.dataset.scFluentNode = '';
+    card.dataset.scStyleNode = '';
     const wrapper = document.createElement('div');
     wrapper.dataset.testid = 'node-inner-wrapper';
     const header = document.createElement('div');
@@ -82,7 +82,7 @@ test.each([false, true])(
     const overlayRule = Array.from(style.sheet?.cssRules ?? []).find(
       (rule) =>
         rule instanceof CSSStyleRule &&
-        rule.selectorText === '[data-sc-fluent-node] > [data-testid="node-inner-wrapper"]::before',
+        rule.selectorText === '[data-sc-style-node] > [data-testid="node-inner-wrapper"]::before',
     );
     if (!(overlayRule instanceof CSSStyleRule)) throw new Error('Missing state-overlay rule');
     expect(overlayRule.style.getPropertyValue('border-radius')).toBe('inherit');
