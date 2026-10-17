@@ -20,10 +20,10 @@ import { classifyNativeField, planNativeFields, NATIVE_FIELD_COMPONENTS, } from 
 import { readNativeNumericField } from './ComfyNativeNumericField.js';
 import { ComfyNativeSeedControlAdapter } from './ComfyNativeSeedControl.js';
 import { readNativeWidgetMount } from '../NativeWidgetMountBoundary.js';
-import { NativeFluentAnnotations, } from './NativeFluentAnnotations.js';
+import { NativeCardAnnotations } from './NativeCardAnnotations.js';
 /** Own removable annotations on recognized Comfy component roots only. */
-export class NativeFluentCardAdapter {
-    #annotations = new NativeFluentAnnotations();
+export class NativeCardAdapter {
+    #annotations = new NativeCardAnnotations();
     #vnodes = new WeakMap();
     #graphNodes = new Map();
     #seeds;
@@ -70,7 +70,7 @@ export class NativeFluentCardAdapter {
         if (descriptor) {
             if (!root.hasAttribute('data-sc-choice-inline'))
                 mark(root, 'row', annotated);
-            annotated.attribute(root, 'data-sc-fluent-widget', descriptor.component);
+            annotated.attribute(root, 'data-sc-style-widget', descriptor.component);
         }
         if (boundary?.seed && numericFields[0])
             seedFields.push({ numeric: numericFields[0], control: boundary.seed });
@@ -135,10 +135,10 @@ export class NativeFluentCardAdapter {
                 if (!row)
                     continue;
                 mark(row, 'row', annotated);
-                annotated.attribute(row, 'data-sc-fluent-kind', placement.kind);
-                annotated.attribute(row, 'data-sc-fluent-span', String(placement.span));
-                annotated.attribute(row, 'data-sc-fluent-column', String(placement.column));
-                annotated.attribute(row, 'data-sc-fluent-widget', containerFields.find((field) => field.name === placement.name)?.component ?? '');
+                annotated.attribute(row, 'data-sc-style-kind', placement.kind);
+                annotated.attribute(row, 'data-sc-style-span', String(placement.span));
+                annotated.attribute(row, 'data-sc-style-column', String(placement.column));
+                annotated.attribute(row, 'data-sc-style-widget', containerFields.find((field) => field.name === placement.name)?.component ?? '');
                 annotated.style(row, '--sc-field-row', String(placement.row));
                 annotated.style(row, '--sc-field-column', String(placement.column));
                 annotated.style(row, '--sc-field-span', String(placement.span));
@@ -158,7 +158,7 @@ export class NativeFluentCardAdapter {
         const footerComponent = isRecord(footer?.component) ? footer.component : {};
         const footerProps = isRecord(footerComponent.props) ? footerComponent.props : {};
         const button = [...root.querySelectorAll('[data-testid="advanced-inputs-button"]')].find((element) => element.closest('.lg-node') === root) ?? null;
-        const fields = [...root.querySelectorAll('[data-sc-fluent-fields]')].find((element) => element.closest('.lg-node') === root) ?? null;
+        const fields = [...root.querySelectorAll('[data-sc-style-fields]')].find((element) => element.closest('.lg-node') === root) ?? null;
         const visibleFields = Array.from(fields?.children ?? []).some((child) => child instanceof HTMLElement && !child.hidden && child.style.display !== 'none');
         if (visibleFields && !root.closest('.sugarcubes-cube-face__node-card')) {
             for (const slots of findVueComponents(vnode, 'NodeSlots')) {
@@ -200,7 +200,7 @@ function hasNativeWidgets(widgets) {
 }
 /** Track annotations so turning the theme off restores host ownership exactly. */
 function mark(element, name, annotated) {
-    annotated.attribute(element, `data-sc-fluent-${name}`);
+    annotated.attribute(element, `data-sc-style-${name}`);
 }
 /** Read a core widget's identity and annotate its native layout, excluding DOM/custom bridges. */
 function resolveFieldDescriptor(row, candidates, annotated, numericFields, labelElements, seedFields, seeds) {

@@ -68,8 +68,8 @@ export function ensureRelationStyles(document: Document): void {
   [data-sc-choice-inline] [data-testid="widget-layout-field-label"] { display:none; }
   [data-sc-choice-inline] :has(> [data-testid="widget-layout-field-label"]) { display:block; width:100%; min-width:0; }
   [data-sc-choice-inline] :has(> [data-testid="widget-layout-field-label"]) > :last-child { width:100%; max-width:none; min-width:0; flex:1; }
-  .sugarcubes-native-widget[data-sc-choice-inline] > [data-sc-fluent-control] { width:100%; min-width:0; grid-column:auto; }
-  .sugarcubes-native-widget[data-sc-choice-inline] [data-sc-fluent-layout] { display:block; width:100%; min-height:0; grid-column:auto; }
+  .sugarcubes-native-widget[data-sc-choice-inline] > [data-sc-style-control] { width:100%; min-width:0; grid-column:auto; }
+  .sugarcubes-native-widget[data-sc-choice-inline] [data-sc-style-layout] { display:block; width:100%; min-height:0; grid-column:auto; }
   .sc-overrides-menu { flex:none; display:flex; flex-direction:row; align-items:center; justify-content:center; gap:4px; height:32px; width:40px; padding:6px; border:0; border-radius:var(--radius-md); color:var(--fg-color); background:transparent; cursor:pointer; }
   .sc-overrides-menu:hover, .sc-overrides-menu[aria-expanded="true"] { background:var(--comfy-input-bg); }
   .sc-overrides-menu:focus-visible { outline:2px solid var(--component-node-widget-background-highlighted); outline-offset:-2px; }

@@ -26,12 +26,12 @@ export class NativeToggleRows {
     reconcile(root) {
         for (const [row, binding] of this.#bindings) {
             if (!row.isConnected ||
-                (root.contains(row) && !row.matches('[data-sc-fluent-widget="WidgetToggleSwitch"]'))) {
+                (root.contains(row) && !row.matches('[data-sc-style-widget="WidgetToggleSwitch"]'))) {
                 binding.release();
                 this.#bindings.delete(row);
             }
         }
-        for (const row of root.querySelectorAll('[data-sc-fluent-row][data-sc-fluent-widget="WidgetToggleSwitch"]')) {
+        for (const row of root.querySelectorAll('[data-sc-style-row][data-sc-style-widget="WidgetToggleSwitch"]')) {
             const existing = this.#bindings.get(row);
             if (existing) {
                 existing.refresh();

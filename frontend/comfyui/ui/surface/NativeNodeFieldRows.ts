@@ -58,7 +58,7 @@ export function nativeNodeFieldRows(root: HTMLElement): ReadonlyMap<string, HTML
       }
     }
   if (card)
-    for (const row of card.querySelectorAll<HTMLElement>('[data-sc-fluent-row]')) {
+    for (const row of card.querySelectorAll<HTMLElement>('[data-sc-style-row]')) {
       if (row.closest('.lg-node') !== card) continue;
       const label = row
         .querySelector<HTMLElement>('[data-testid="widget-layout-field-label"]')

@@ -8,7 +8,7 @@ export class NativeProjectedAdvancedDisclosure {
     reconcile(mount, card) {
         if (this.#releasing.has(mount.target))
             return;
-        if (!card.advanced || !card.root.hasAttribute('data-sc-fluent-node')) {
+        if (!card.advanced || !card.root.hasAttribute('data-sc-style-node')) {
             this.#release(mount.target);
             return;
         }

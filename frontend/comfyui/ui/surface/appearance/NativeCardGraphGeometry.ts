@@ -16,15 +16,15 @@
 /** Reconcile native socket caches after a graph card first receives Fluent layout styling. */
 import { loadComfyNativeSlotLayoutSync } from '../ComfyRuntimeModuleLoader.js';
 
-export interface NativeFluentGraphGeometryOptions {
+export interface NativeCardGraphGeometryOptions {
   document: Document;
   getSynchronizer?(): Promise<() => void>;
   reportError(error: unknown): void;
 }
 
 /** Coalesce initial graph styling without rebuilding inventory or responding to popup activity. */
-export class NativeFluentGraphGeometry {
-  readonly #options: NativeFluentGraphGeometryOptions;
+export class NativeCardGraphGeometry {
+  readonly #options: NativeCardGraphGeometryOptions;
   readonly #getSynchronizer: () => Promise<() => void>;
   #synchronizer: Promise<() => void> | null = null;
   #styled = new WeakSet<HTMLElement>();
@@ -34,7 +34,7 @@ export class NativeFluentGraphGeometry {
   #hasStyles = false;
 
   /** Resolve the native layout capability without loading another node renderer. */
-  constructor(options: NativeFluentGraphGeometryOptions) {
+  constructor(options: NativeCardGraphGeometryOptions) {
     this.#options = options;
     this.#getSynchronizer =
       options.getSynchronizer ?? (() => loadComfyNativeSlotLayoutSync(options.document));

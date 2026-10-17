@@ -41,7 +41,7 @@ describe('ComfyVueNodeCardRenderer', () => {
       const target = document.createElement('div');
       const root = document.createElement('div');
       root.className = 'lg-node';
-      root.dataset.scFluentNode = '';
+      root.dataset.scStyleNode = '';
       root.style.height = '200px';
       document.body.append(target);
       Object.defineProperty(target, 'offsetHeight', {

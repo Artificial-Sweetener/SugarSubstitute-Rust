@@ -61,7 +61,7 @@ test('announces the same combo after native layout replaces its original parent'
   const row = document.createElement('div');
   let parent = document.createElement('div');
   const native = document.createElement('div');
-  native.dataset.scFluentComboFrame = '';
+  native.dataset.scStyleComboFrame = '';
   parent.append(native);
   row.append(parent);
   root.append(row);

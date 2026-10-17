@@ -16,7 +16,7 @@
 /** Own Fluent advanced motion across projected native component replacements. */
 import type { CardDisclosureMotion } from '../motion/CardDisclosureMotion.js';
 import type { NativeProjectedAdvancedInputMount } from '../NativeProjectedAdvancedInputs.js';
-import type { FluentCardBoundary } from './NativeFluentCardAdapter.js';
+import type { NativeCardBoundary } from './NativeCardAdapter.js';
 import { settleNativeDisclosure } from '../NativeDisclosureSettlement.js';
 import { measureProjectedAdvancedHeight } from './NativeAdvancedDisclosureGeometry.js';
 
@@ -31,9 +31,9 @@ export class NativeProjectedAdvancedDisclosure {
   readonly #releasing = new Set<HTMLElement>();
 
   /** Preserve in-flight presentation when the native root and its widgets are replaced. */
-  reconcile(mount: NativeProjectedAdvancedInputMount, card: FluentCardBoundary): void {
+  reconcile(mount: NativeProjectedAdvancedInputMount, card: NativeCardBoundary): void {
     if (this.#releasing.has(mount.target)) return;
-    if (!card.advanced || !card.root.hasAttribute('data-sc-fluent-node')) {
+    if (!card.advanced || !card.root.hasAttribute('data-sc-style-node')) {
       this.#release(mount.target);
       return;
     }

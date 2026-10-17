@@ -19,7 +19,7 @@ import type { ComfyCubeRuntime } from '../../cube/ComfyCubeRuntime.js';
 import type { CubeIdentitySource } from '../../cube/CubeIdentityPresentation.js';
 import type { UnknownRecord } from '../../types/common.js';
 import type { CubePickerHostIntegration } from '../../picker/CubePickerHostIntegration.js';
-import type { FluentAppearanceSource } from '../appearance/FluentAppearanceState.js';
+import type { AppearanceSource } from '../appearance/AppearanceState.js';
 import type { CubeStackHostOptions } from './CubeStackHost.js';
 import type { CubeWorkflowLibraryActions } from '../../workflow/CubeWorkflowLibraryActions.js';
 import type { ModalService } from '../../dialogs/ModalService.js';
@@ -40,7 +40,7 @@ export interface CubeStackCommandRuntime {
 /** Keep focused presentation commands separate from host registration and native graph mutation. */
 export function createCubeStackCommands(options: {
   document: Document;
-  appearance: FluentAppearanceSource;
+  appearance: AppearanceSource;
   frame?: CubeStackHostOptions['frame'];
   picker: Pick<CubePickerHostIntegration, 'openCart'>;
   library: Pick<CubeWorkflowLibraryActions, 'classification' | 'capture'>;

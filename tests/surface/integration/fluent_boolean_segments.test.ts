@@ -18,14 +18,14 @@ import { afterAll, afterEach, beforeAll, expect, test } from '@jest/globals';
 import { Updates } from '@microsoft/fast-element';
 import { Tab } from '@fluentui/web-components/tab/class.js';
 import { Tablist } from '@fluentui/web-components/tablist/class.js';
-import { createFluentBooleanSegments } from '../../../frontend/comfyui/ui/surface/appearance/FluentThemeRuntime.js';
+import { createBooleanSegmentControls } from '../../../frontend/comfyui/ui/surface/appearance/FluentThemeRuntime.js';
 import { NativeBooleanSegments } from '../../../frontend/comfyui/ui/surface/appearance/NativeBooleanSegments.js';
 
 const internalsDescriptor = Object.getOwnPropertyDescriptor(
   HTMLElement.prototype,
   'attachInternals',
 );
-const adapter = new NativeBooleanSegments(createFluentBooleanSegments);
+const adapter = new NativeBooleanSegments(createBooleanSegmentControls);
 
 beforeAll(() => {
   // JSDOM lacks custom element internals; keep Microsoft's actual component and event bindings.
@@ -59,8 +59,8 @@ afterAll(() => {
 
 test('uses the official sliding Tablist for mouse and keyboard without allowing an empty selection', async () => {
   const row = document.createElement('div');
-  row.dataset.scFluentRow = '';
-  row.dataset.scFluentWidget = 'WidgetToggleSwitch';
+  row.dataset.scStyleRow = '';
+  row.dataset.scStyleWidget = 'WidgetToggleSwitch';
   const native = document.createElement('div');
   native.setAttribute('role', 'group');
   const off = document.createElement('button');

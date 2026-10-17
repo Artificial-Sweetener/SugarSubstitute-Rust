@@ -15,17 +15,17 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Present named native boolean choices with Microsoft's sliding Tablist and host-owned values. */
 
-export interface FluentBooleanSegment extends HTMLElement {
+export interface BooleanSegmentControl extends HTMLElement {
   disabled: boolean;
 }
 
-export interface FluentBooleanSegmentGroup extends HTMLElement {
+export interface BooleanSegmentGroup extends HTMLElement {
   activeid: string;
 }
 
-export interface FluentBooleanSegmentsControls {
-  group: FluentBooleanSegmentGroup;
-  segments: readonly [FluentBooleanSegment, FluentBooleanSegment];
+export interface BooleanSegmentsControls {
+  group: BooleanSegmentGroup;
+  segments: readonly [BooleanSegmentControl, BooleanSegmentControl];
   release(): void;
 }
 
@@ -43,10 +43,10 @@ interface SegmentBinding {
 /** Own reversible segmented presentation without making the surrounding field interactive. */
 export class NativeBooleanSegments {
   readonly #bindings = new Map<HTMLElement, SegmentBinding>();
-  readonly #createControls: (documentRef: Document) => FluentBooleanSegmentsControls;
+  readonly #createControls: (documentRef: Document) => BooleanSegmentsControls;
 
   /** Receive the official Fluent control at the third-party boundary. */
-  constructor(createControls: (documentRef: Document) => FluentBooleanSegmentsControls) {
+  constructor(createControls: (documentRef: Document) => BooleanSegmentsControls) {
     this.#createControls = createControls;
   }
 
@@ -65,7 +65,7 @@ export class NativeBooleanSegments {
       }
     }
     for (const row of root.querySelectorAll<HTMLElement>(
-      '[data-sc-fluent-row][data-sc-fluent-widget="WidgetToggleSwitch"]',
+      '[data-sc-style-row][data-sc-style-widget="WidgetToggleSwitch"]',
     )) {
       const existing = this.#bindings.get(row);
       if (existing) {
@@ -190,7 +190,7 @@ export class NativeBooleanSegments {
 
 /** Accept only the host's off/on button pair on a positively identified boolean widget. */
 function readNativeChoices(row: HTMLElement): NativeBooleanChoices | null {
-  if (!row.matches('[data-sc-fluent-row][data-sc-fluent-widget="WidgetToggleSwitch"]')) return null;
+  if (!row.matches('[data-sc-style-row][data-sc-style-widget="WidgetToggleSwitch"]')) return null;
   for (const group of row.querySelectorAll<HTMLElement>('[role="group"]')) {
     const buttons = Array.from(group.querySelectorAll<HTMLButtonElement>(':scope > button'));
     const [off, on] = buttons;

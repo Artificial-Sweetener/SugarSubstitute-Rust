@@ -16,12 +16,12 @@
 /** Prove reversible preference, renderer suspension, and native control preservation. */
 import { afterEach, expect, jest, test } from '@jest/globals';
 import {
-  FluentAppearanceHost,
+  AppearanceHost,
   FLUENT_APPEARANCE_SETTING,
-} from '../../../frontend/comfyui/ui/surface/appearance/FluentAppearanceHost.js';
+} from '../../../frontend/comfyui/ui/surface/appearance/AppearanceHost.js';
 import { isRecord } from '../../../frontend/comfyui/ui/types/common.js';
 import type { UnknownRecord } from '../../../frontend/comfyui/ui/types/common.js';
-import { NativeFluentCardAdapter } from '../../../frontend/comfyui/ui/surface/appearance/NativeFluentCardAdapter.js';
+import { NativeCardAdapter } from '../../../frontend/comfyui/ui/surface/appearance/NativeCardAdapter.js';
 import {
   NativeCardPresentationOwner,
   prepareNativeCardPresentation,
@@ -45,7 +45,7 @@ test('finishes requested native presentation before its first animation frame wi
       },
     },
   };
-  const host = new FluentAppearanceHost({ document, app, reportError: jest.fn() });
+  const host = new AppearanceHost({ document, app, reportError: jest.fn() });
   host.setup();
   host.setEnabled(true);
   const surface = document.createElement('section');
@@ -56,21 +56,21 @@ test('finishes requested native presentation before its first animation frame wi
   card.append(input);
   surface.append(card);
   document.body.append(surface);
-  expect(card.hasAttribute('data-sc-fluent-node')).toBe(false);
+  expect(card.hasAttribute('data-sc-style-node')).toBe(false);
   prepareNativePresentation(surface);
-  expect(card.hasAttribute('data-sc-fluent-node')).toBe(true);
-  expect(surface.hasAttribute('data-sc-fluent-surface')).toBe(true);
+  expect(card.hasAttribute('data-sc-style-node')).toBe(true);
+  expect(surface.hasAttribute('data-sc-style-surface')).toBe(true);
   expect(surface.hasAttribute('data-fluent-theme')).toBe(false);
   expect(card.querySelector('input')).toBe(input);
   host.dispose();
   prepareNativePresentation(surface);
-  expect(card.hasAttribute('data-sc-fluent-node')).toBe(false);
+  expect(card.hasAttribute('data-sc-style-node')).toBe(false);
 });
 
 test('prepares a replacement native card synchronously without refreshing unrelated cards', () => {
   jest.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 1);
   jest.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
-  const host = new FluentAppearanceHost({
+  const host = new AppearanceHost({
     document,
     app: {
       ui: {
@@ -94,9 +94,9 @@ test('prepares a replacement native card synchronously without refreshing unrela
   const replacement = document.createElement('div');
   replacement.className = 'lg-node';
   surface.append(replacement);
-  const annotate = jest.spyOn(NativeFluentCardAdapter.prototype, 'annotate');
+  const annotate = jest.spyOn(NativeCardAdapter.prototype, 'annotate');
   prepareNativePresentation(replacement);
-  expect(replacement.hasAttribute('data-sc-fluent-node')).toBe(true);
+  expect(replacement.hasAttribute('data-sc-style-node')).toBe(true);
   expect(annotate).toHaveBeenCalledTimes(1);
   expect(annotate).toHaveBeenCalledWith(replacement);
   host.dispose();
@@ -121,7 +121,7 @@ test('initial styling synchronizes native sockets while popup activity leaves ca
     return frames.length;
   });
   const synchronize = jest.fn<() => void>();
-  const host = new FluentAppearanceHost({
+  const host = new AppearanceHost({
     document,
     app,
     reportError: jest.fn(),
@@ -133,7 +133,7 @@ test('initial styling synchronizes native sockets while popup activity leaves ca
     await Promise.resolve();
     frames.splice(0).forEach((frame) => frame(0));
   }
-  const annotate = jest.spyOn(NativeFluentCardAdapter.prototype, 'annotate');
+  const annotate = jest.spyOn(NativeCardAdapter.prototype, 'annotate');
   expect(synchronize).toHaveBeenCalledTimes(1);
   const popup = document.createElement('div');
   popup.setAttribute('role', 'listbox');
@@ -190,10 +190,10 @@ test('keeps controls and explicit custom styling intact while restoring the curr
     return frames.length;
   });
   const errors = jest.fn();
-  const host = new FluentAppearanceHost({ document, app, reportError: errors });
+  const host = new AppearanceHost({ document, app, reportError: errors });
   host.setup();
   expect(isRecord(registration) && registration.id).toBe(FLUENT_APPEARANCE_SETTING);
-  expect(root.hasAttribute('data-sc-fluent-node')).toBe(false);
+  expect(root.hasAttribute('data-sc-style-node')).toBe(false);
   custom.focus();
   host.setEnabled(true);
   expect(document.querySelector('.sc-fluent-scrollbar-layer')).toBeNull();
@@ -201,8 +201,8 @@ test('keeps controls and explicit custom styling intact while restoring the curr
   expect(root.querySelector('.sc-fluent-scrollbar-layer')).not.toBeNull();
   expect(document.activeElement).toBe(custom);
   expect(custom.style.backgroundColor).toBe('rgb(12, 34, 56)');
-  expect(root.hasAttribute('data-sc-fluent-node')).toBe(true);
-  expect(custom.hasAttribute('data-sc-fluent-control')).toBe(false);
+  expect(root.hasAttribute('data-sc-style-node')).toBe(true);
+  expect(custom.hasAttribute('data-sc-style-control')).toBe(false);
   document.documentElement.style.colorScheme = 'light';
   events.dispatchEvent(new Event('Comfy.ColorPalette.change'));
   await Promise.resolve();
@@ -220,12 +220,12 @@ test('keeps controls and explicit custom styling intact while restoring the curr
   events.dispatchEvent(new Event('Comfy.VueNodes.Enabled.change'));
   await Promise.resolve();
   expect(document.querySelector('.sc-fluent-scrollbar-layer')).toBeNull();
-  expect(root.hasAttribute('data-sc-fluent-node')).toBe(false);
+  expect(root.hasAttribute('data-sc-style-node')).toBe(false);
   values.set('Comfy.VueNodes.Enabled', true);
   events.dispatchEvent(new Event('Comfy.VueNodes.Enabled.change'));
   await Promise.resolve();
   frames.splice(0).forEach((frame) => frame(0));
-  expect(root.hasAttribute('data-sc-fluent-node')).toBe(true);
+  expect(root.hasAttribute('data-sc-style-node')).toBe(true);
   host.setEnabled(false);
   expect(document.querySelector('.sc-fluent-scrollbar-layer')).toBeNull();
   expect(root.style.getPropertyValue('--node-component-surface')).toBe('#fedcba');
@@ -312,7 +312,7 @@ test('formats projected card labels and restores source text across presentation
     return frames.length;
   });
   const errors = jest.fn();
-  const host = new FluentAppearanceHost({ document, app, reportError: errors });
+  const host = new AppearanceHost({ document, app, reportError: errors });
   host.setup();
   host.setEnabled(true);
   frames.splice(0).forEach((frame) => frame(0));
@@ -379,7 +379,7 @@ test('retains styled borrowed controls while still reconciling actual native con
       },
     },
   };
-  const host = new FluentAppearanceHost({ document, app, reportError: jest.fn() });
+  const host = new AppearanceHost({ document, app, reportError: jest.fn() });
   host.setup();
   host.setEnabled(true);
   const source = document.createElement('section');
@@ -393,7 +393,7 @@ test('retains styled borrowed controls while still reconciling actual native con
   source.append(cell);
   document.body.append(source);
   prepareNativePresentation(source);
-  const annotate = jest.spyOn(NativeFluentCardAdapter.prototype, 'annotate');
+  const annotate = jest.spyOn(NativeCardAdapter.prototype, 'annotate');
   const owner = new NativeCardPresentationOwner(() => undefined);
   owner.reset([cell]);
   const transfer = prepareNativeCardPresentation(cell, () => undefined)!;
@@ -429,7 +429,7 @@ test('styles newly mounted relation controls during their native card reconcilia
     },
   };
   const errors = jest.fn();
-  const host = new FluentAppearanceHost({ document, app, reportError: errors });
+  const host = new AppearanceHost({ document, app, reportError: errors });
   host.setup();
   host.setEnabled(true);
   const surface = document.createElement('section');
@@ -442,15 +442,15 @@ test('styles newly mounted relation controls during their native card reconcilia
   widget.className = 'sugarcubes-native-widget';
   const trigger = document.createElement('button');
   widget.append(trigger);
-  const original = NativeFluentCardAdapter.prototype.annotate;
-  const annotate = jest.spyOn(NativeFluentCardAdapter.prototype, 'annotate');
-  annotate.mockImplementation(function (this: NativeFluentCardAdapter, root: HTMLElement) {
+  const original = NativeCardAdapter.prototype.annotate;
+  const annotate = jest.spyOn(NativeCardAdapter.prototype, 'annotate');
+  annotate.mockImplementation(function (this: NativeCardAdapter, root: HTMLElement) {
     const result = original.call(this, root);
     if (root === card && !widget.isConnected) card.append(widget);
     return result;
   });
   prepareNativePresentation(surface);
-  expect(widget.hasAttribute('data-sc-fluent-node')).toBe(true);
+  expect(widget.hasAttribute('data-sc-style-node')).toBe(true);
   expect(widget.querySelector('button')).toBe(trigger);
   annotate.mockClear();
   prepareNativePresentation(widget);
@@ -480,19 +480,19 @@ test('owns one stable graph token scope across native card and masonry presentat
       },
     },
   };
-  const host = new FluentAppearanceHost({ document, app, reportError: jest.fn() });
+  const host = new AppearanceHost({ document, app, reportError: jest.fn() });
   host.setup();
   host.setEnabled(true);
   prepareNativePresentation(masonry);
-  expect([...document.querySelectorAll('[data-sc-fluent-theme-root]')]).toEqual([graph]);
+  expect([...document.querySelectorAll('[data-sc-style-theme-root]')]).toEqual([graph]);
   expect(document.getElementById('sugarcubes-fluent-appearance')?.textContent).toContain(
-    '[data-sc-fluent-theme-root]',
+    '[data-sc-style-theme-root]',
   );
-  expect(card.hasAttribute('data-sc-fluent-node')).toBe(true);
+  expect(card.hasAttribute('data-sc-style-node')).toBe(true);
   masonry.append(card);
   prepareNativePresentation(masonry);
-  expect([...document.querySelectorAll('[data-sc-fluent-theme-root]')]).toEqual([graph]);
+  expect([...document.querySelectorAll('[data-sc-style-theme-root]')]).toEqual([graph]);
   host.setEnabled(false);
-  expect(document.querySelector('[data-sc-fluent-theme-root]')).toBeNull();
+  expect(document.querySelector('[data-sc-style-theme-root]')).toBeNull();
   host.dispose();
 });

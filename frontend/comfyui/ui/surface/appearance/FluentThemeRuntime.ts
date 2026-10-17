@@ -36,10 +36,10 @@ import { Checkbox } from '@fluentui/web-components/checkbox/class.js';
 import { definition as CheckboxDefinition } from '@fluentui/web-components/checkbox/definition.js';
 import { TextInput } from '@fluentui/web-components/text-input/class.js';
 import { definition as TextInputDefinition } from '@fluentui/web-components/text-input/definition.js';
-import type { FluentFinderInput } from './FluentFinderControls.js';
-import type { FluentNumericSlider } from './NativeNumericControls.js';
-import type { FluentBooleanCheckbox } from './NativeToggleRows.js';
-import type { FluentBooleanSegmentsControls } from './NativeBooleanSegments.js';
+import type { FinderInputControl } from './FinderControls.js';
+import type { NumericSliderControl } from './NativeNumericControls.js';
+import type { BooleanCheckboxControl } from './NativeToggleRows.js';
+import type { BooleanSegmentsControls } from './NativeBooleanSegments.js';
 import { adaptFluentSliderGeometry } from './FluentSliderGeometry.js';
 import { createFluentSliderThumb } from './FluentSliderThumb.js';
 import { css } from '@microsoft/fast-element';
@@ -130,7 +130,7 @@ export function createWorkflowTab(documentRef: Document): HTMLElement {
 }
 
 /** Instantiate Microsoft's native text input through the narrow finder control boundary. */
-export function createFluentFinderInput(documentRef: Document): FluentFinderInput {
+export function createFinderInputControl(documentRef: Document): FinderInputControl {
   const input = documentRef.createElement('fluent-text-input');
   if (!(input instanceof TextInput))
     throw new TypeError('The registered Fluent input is incompatible.');
@@ -138,7 +138,7 @@ export function createFluentFinderInput(documentRef: Document): FluentFinderInpu
 }
 
 /** Instantiate Microsoft's checkbox while Comfy retains the boolean value owner. */
-export function createFluentBooleanCheckbox(documentRef: Document): FluentBooleanCheckbox {
+export function createBooleanCheckboxControl(documentRef: Document): BooleanCheckboxControl {
   const checkbox = documentRef.createElement('fluent-checkbox');
   if (!(checkbox instanceof Checkbox))
     throw new TypeError('The registered Fluent checkbox has an incompatible implementation.');
@@ -148,7 +148,7 @@ export function createFluentBooleanCheckbox(documentRef: Document): FluentBoolea
 let nextBooleanSegmentId = 0;
 
 /** Instantiate Microsoft's mutually exclusive tabs with their shared sliding accent indicator. */
-export function createFluentBooleanSegments(documentRef: Document): FluentBooleanSegmentsControls {
+export function createBooleanSegmentControls(documentRef: Document): BooleanSegmentsControls {
   const GroupConstructor = documentRef.defaultView?.customElements.get('fluent-tablist');
   if (!GroupConstructor) throw new TypeError('The Fluent tablist is not registered.');
   // Microsoft's focus-group constructor initializes host attributes before connection.
@@ -163,7 +163,7 @@ export function createFluentBooleanSegments(documentRef: Document): FluentBoolea
 }
 
 /** Instantiate Microsoft's official slider without replacing Comfy's numeric value owner. */
-export function createFluentNumericSlider(documentRef: Document): FluentNumericSlider {
+export function createNumericSliderControl(documentRef: Document): NumericSliderControl {
   const slider = documentRef.createElement('fluent-slider');
   if (!(slider instanceof Slider))
     throw new TypeError('The registered Fluent slider has an incompatible implementation.');

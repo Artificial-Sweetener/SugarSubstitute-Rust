@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Describe the narrow official Fluent finder-control boundary. */
-export interface FluentFinderInput extends HTMLElement {
+export interface FinderInputControl extends HTMLElement {
   value: string;
   readonly control: HTMLInputElement;
   select(): void;

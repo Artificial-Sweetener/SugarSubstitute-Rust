@@ -16,24 +16,24 @@
 /** Share accepted appearance facts without introducing another settings or palette owner. */
 
 /** Describe the appearance accepted by the native presentation owner. */
-export interface FluentAppearanceSnapshot {
+export interface AppearanceSnapshot {
   readonly fluent: boolean;
   readonly dark: boolean;
 }
 
 /** Subscribe owned surfaces to the authoritative appearance lifecycle. */
-export interface FluentAppearanceSource {
-  readonly appearance: FluentAppearanceSnapshot;
+export interface AppearanceSource {
+  readonly appearance: AppearanceSnapshot;
   subscribeAppearance(listener: () => void): () => void;
 }
 
 /** Publish coherent presentation facts only when their accepted values change. */
-export class FluentAppearanceState implements FluentAppearanceSource {
+export class AppearanceState implements AppearanceSource {
   readonly #listeners = new Set<() => void>();
-  #appearance: FluentAppearanceSnapshot = Object.freeze({ fluent: false, dark: true });
+  #appearance: AppearanceSnapshot = Object.freeze({ fluent: false, dark: true });
 
   /** Expose an immutable accepted snapshot to isolated owned surfaces. */
-  get appearance(): FluentAppearanceSnapshot {
+  get appearance(): AppearanceSnapshot {
     return this.#appearance;
   }
 

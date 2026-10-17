@@ -24,7 +24,7 @@ export function measureNativeFields(fields: HTMLElement, closed: boolean): numbe
 export function measureProjectedAdvancedHeight(target: HTMLElement, closed: boolean): number {
   const root = target.querySelector<HTMLElement>('.lg-node');
   if (!root) return intrinsicHeight(target);
-  const fields = [...root.querySelectorAll<HTMLElement>('[data-sc-fluent-fields]')].find(
+  const fields = [...root.querySelectorAll<HTMLElement>('[data-sc-style-fields]')].find(
     (element) => element.closest('.lg-node') === root,
   );
   const height = root.style.getPropertyValue('height');
@@ -42,7 +42,7 @@ export function measureProjectedAdvancedHeight(target: HTMLElement, closed: bool
 /** Temporarily exclude advanced rows while preserving custom display styles and animation height. */
 function withNativeFields(fields: HTMLElement, closed: boolean, measure: () => number): number {
   const rows = closed
-    ? [...fields.querySelectorAll<HTMLElement>(':scope > [data-sc-fluent-advanced-row]')]
+    ? [...fields.querySelectorAll<HTMLElement>(':scope > [data-sc-style-advanced-row]')]
     : [];
   const styles = rows.map((row) => ({
     value: row.style.getPropertyValue('display'),

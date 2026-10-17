@@ -20,7 +20,7 @@ export function ensureOwnedControlAppearanceStyles(document) {
     const style = document.createElement('style');
     style.id = 'sugarcubes-owned-control-appearance';
     style.textContent = `
-    :is(.sugarcubes-native-node-card, .sugarcubes-native-widget, .sc-field-relation, [data-sc-fluent-node], [data-sc-fluent-surface])
+    :is(.sugarcubes-native-node-card, .sugarcubes-native-widget, .sc-field-relation, [data-sc-style-node], [data-sc-style-surface])
       :is(input, textarea, [role="combobox"]):not(.sc-model-field input) {
       color:var(--colorNeutralForeground1,var(--fg-color,#eee));
     }

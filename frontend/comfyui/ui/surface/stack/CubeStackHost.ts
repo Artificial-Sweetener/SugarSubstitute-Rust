@@ -18,7 +18,7 @@ import type { CubeGraphReorderService } from '../../workflow/application/CubeGra
 import type { UnknownRecord } from '../../types/common.js';
 import type { CubeIdentitySource } from '../../cube/CubeIdentityPresentation.js';
 import type { WorkflowMasonrySection } from '../masonry/WorkflowMasonryProjection.js';
-import type { FluentAppearanceSource } from '../appearance/FluentAppearanceState.js';
+import type { AppearanceSource } from '../appearance/AppearanceState.js';
 import { applyOwnedFluentTheme } from '../appearance/FluentThemeRuntime.js';
 import { CubeStackPreferences } from './CubeStackPreferences.js';
 import type { ContextMenuEntry } from '../../menus/ContextMenu.js';
@@ -62,7 +62,7 @@ export interface CubeStackHostOptions {
   readonly frame?: { readonly enabled: boolean; subscribe(listener: () => void): () => void };
   readonly document: Document;
   readonly app: unknown;
-  readonly appearance: FluentAppearanceSource;
+  readonly appearance: AppearanceSource;
   getReorder(): StackReorder | null;
   resolveSource(metadata: UnknownRecord): CubeIdentitySource | null;
   refreshSurface(): Promise<void>;

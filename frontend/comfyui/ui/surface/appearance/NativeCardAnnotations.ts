@@ -19,13 +19,13 @@ import { readNativeWidgetMount } from '../NativeWidgetMountBoundary.js';
 type ElementAnnotations = Map<HTMLElement, Map<string, string>>;
 
 /** Own removable appearance properties independently of native component discovery. */
-export class NativeFluentAnnotations {
+export class NativeCardAnnotations {
   readonly #roots = new Map<HTMLElement, ElementAnnotations>();
 
   /** Begin scoped reconciliation without retiring other controls during native reparenting. */
-  begin(root: HTMLElement): NativeFluentAnnotationPlan {
+  begin(root: HTMLElement): NativeCardAnnotationPlan {
     const previous = this.#roots.get(root) ?? new Map();
-    return new NativeFluentAnnotationPlan(previous, (next) => this.#roots.set(root, next));
+    return new NativeCardAnnotationPlan(previous, (next) => this.#roots.set(root, next));
   }
 
   /** Release retired roots while a live native widget mount retains its presentation through moves. */
@@ -45,7 +45,7 @@ export class NativeFluentAnnotations {
 }
 
 /** Collect one native boundary's ownership and write only materially changed attributes or styles. */
-export class NativeFluentAnnotationPlan {
+export class NativeCardAnnotationPlan {
   readonly #next: ElementAnnotations = new Map();
   readonly #previous: ElementAnnotations;
   readonly #commit: (next: ElementAnnotations) => void;

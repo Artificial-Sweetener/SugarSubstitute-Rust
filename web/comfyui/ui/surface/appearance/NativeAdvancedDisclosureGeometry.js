@@ -23,7 +23,7 @@ export function measureProjectedAdvancedHeight(target, closed) {
     const root = target.querySelector('.lg-node');
     if (!root)
         return intrinsicHeight(target);
-    const fields = [...root.querySelectorAll('[data-sc-fluent-fields]')].find((element) => element.closest('.lg-node') === root);
+    const fields = [...root.querySelectorAll('[data-sc-style-fields]')].find((element) => element.closest('.lg-node') === root);
     const height = root.style.getPropertyValue('height');
     const priority = root.style.getPropertyPriority('height');
     try {
@@ -39,7 +39,7 @@ export function measureProjectedAdvancedHeight(target, closed) {
 /** Temporarily exclude advanced rows while preserving custom display styles and animation height. */
 function withNativeFields(fields, closed, measure) {
     const rows = closed
-        ? [...fields.querySelectorAll(':scope > [data-sc-fluent-advanced-row]')]
+        ? [...fields.querySelectorAll(':scope > [data-sc-style-advanced-row]')]
         : [];
     const styles = rows.map((row) => ({
         value: row.style.getPropertyValue('display'),

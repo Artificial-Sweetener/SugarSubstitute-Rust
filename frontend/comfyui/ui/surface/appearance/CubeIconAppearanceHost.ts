@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Project accepted palette polarity onto shared Cube icon variants without observing the document. */
-import type { FluentAppearanceSource } from './FluentAppearanceState.js';
+import type { AppearanceSource } from './AppearanceState.js';
 
 /** Own contrast selection for DOM icons across graph, masonry, stack, and dialogs. */
 export class CubeIconAppearanceHost {
@@ -22,7 +22,7 @@ export class CubeIconAppearanceHost {
   readonly #unsubscribe: () => void;
 
   /** Follow the existing appearance authority while retaining every resolved icon element. */
-  constructor(document: Document, source: FluentAppearanceSource) {
+  constructor(document: Document, source: AppearanceSource) {
     this.#style = document.createElement('style');
     this.#style.id = 'sugarcubes-cube-icon-appearance';
     document.head.append(this.#style);

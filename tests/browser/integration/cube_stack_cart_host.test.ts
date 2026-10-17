@@ -18,7 +18,7 @@ import { afterEach, beforeEach, expect, jest, test } from '@jest/globals';
 import { nextTick } from 'vue';
 import { CubeStackCartHost } from '../../../frontend/comfyui/ui/picker/CubeStackCartHost.js';
 import { CubeStackCartSession } from '../../../frontend/comfyui/ui/picker/application/CubeStackCartSession.js';
-import { FluentAppearanceState } from '../../../frontend/comfyui/ui/surface/appearance/FluentAppearanceState.js';
+import { AppearanceState } from '../../../frontend/comfyui/ui/surface/appearance/AppearanceState.js';
 import { createFallbackIconModel } from '../../../frontend/comfyui/ui/core/CubeFallbackIconRenderer.js';
 import type { CapturedCubeStackCart } from '../../../frontend/comfyui/ui/picker/infrastructure/CubeStackCartFactory.js';
 import type { CubeGraphStackEntry } from '../../../frontend/comfyui/ui/workflow/domain/CubeGraphStackModels.js';
@@ -211,7 +211,7 @@ function fixture() {
     async (_snapshot: typeof snapshot, entries: readonly CubeGraphStackEntry[]) =>
       analysis(entries.map((entry) => entry.instanceId)),
   );
-  const appearance = new FluentAppearanceState();
+  const appearance = new AppearanceState();
   const artifactRows = new Map<string, CubeStackLibraryRow>();
   const capture: CapturedCubeStackCart = {
     session: new CubeStackCartSession({

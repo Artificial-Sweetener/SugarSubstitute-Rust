@@ -17,7 +17,7 @@
 import { isRecord } from '../../types/common.js';
 import { NativeLinkLabelLayout } from './NativeLinkLabelLayout.js';
 import { NativeSeedWidgetMode } from './NativeSeedWidgetMode.js';
-import type { FluentAppearanceSource } from '../../surface/appearance/FluentAppearanceState.js';
+import type { AppearanceSource } from '../../surface/appearance/AppearanceState.js';
 import { NativeLinkChoiceLabels } from './NativeLinkChoiceLabels.js';
 import type { UnknownRecord } from '../../types/common.js';
 import { scopeNativeVueMountContext } from '../../surface/NativeVueMountContext.js';
@@ -59,7 +59,7 @@ export class NativeRelationWidgetRenderer implements RelationWidgetRenderer {
     private readonly document: Document,
     private readonly reportError: (error: unknown) => void,
     private readonly reuse?: (key: string) => SeedReuseControl,
-    private readonly appearance?: () => FluentAppearanceSource,
+    private readonly appearance?: () => AppearanceSource,
   ) {
     this.#labelLayout = new NativeLinkLabelLayout(document, reportError);
   }

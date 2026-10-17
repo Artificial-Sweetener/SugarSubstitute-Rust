@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose native field appearance and relation policy around one submitted seed history. */
 import { RelationHostLifecycle, type RelationHostOptions } from './RelationHostLifecycle.js';
-import { FluentAppearanceHost } from '../surface/appearance/FluentAppearanceHost.js';
+import { AppearanceHost } from '../surface/appearance/AppearanceHost.js';
 import { WorkflowEditorNavigationHost } from '../surface/WorkflowEditorNavigationHost.js';
 import { SubstituteFrameHost } from '../surface/frame/SubstituteFrameHost.js';
 import type { WorkflowOutputActivity } from '../execution/application/WorkflowOutputActivity.js';
@@ -32,7 +32,7 @@ export interface WorkflowFieldHostOptions
 
 /** Share seed reuse across actual native field mounts and the override toolbar. */
 export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
-  appearance: FluentAppearanceHost;
+  appearance: AppearanceHost;
   relations: RelationHostLifecycle;
   frame: SubstituteFrameHost;
   setupPresentation(): void;
@@ -42,7 +42,7 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
     reportError: options.reportRelationError,
     appearance: () => appearance.state,
   });
-  const appearance: FluentAppearanceHost = new FluentAppearanceHost({
+  const appearance: AppearanceHost = new AppearanceHost({
     app: options.app,
     document: options.document,
     seedReuse: (node, name) => relations.seedReuse.field(node, name),

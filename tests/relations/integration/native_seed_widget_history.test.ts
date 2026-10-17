@@ -19,7 +19,7 @@ import { createApp, defineComponent, h, nextTick, ref, render, watch } from 'vue
 import { isRecord } from '../../../frontend/comfyui/ui/types/common.js';
 import type { OverrideGroup } from '../../../frontend/comfyui/ui/relations/domain/RelationContracts.js';
 import type { RelationSeedMode } from '../../../frontend/comfyui/ui/relations/domain/RelationContracts.js';
-import { FluentAppearanceState } from '../../../frontend/comfyui/ui/surface/appearance/FluentAppearanceState.js';
+import { AppearanceState } from '../../../frontend/comfyui/ui/surface/appearance/AppearanceState.js';
 import { readNativeWidgetMount } from '../../../frontend/comfyui/ui/surface/NativeWidgetMountBoundary.js';
 
 /** Model the installed WidgetWithControl contract: initialize a private ref once and publish native changes. */
@@ -75,7 +75,7 @@ async function fixture(fluent: boolean) {
   document.body.append(appRoot, root);
   const app = createApp({ render: () => h('main') });
   app.mount(appRoot);
-  const appearance = new FluentAppearanceState();
+  const appearance = new AppearanceState();
   appearance.update(fluent, true);
   const domain = { kind: 'number' as const, minimum: 0, maximum: 1000, step: 1, integer: true };
   let group: OverrideGroup = {

@@ -17,7 +17,7 @@
 import type { NativeNumericField } from './ComfyNativeNumericField.js';
 import { usesSubstituteSlider } from './NumericSliderPresentation.js';
 
-export interface FluentNumericSlider extends HTMLElement {
+export interface NumericSliderControl extends HTMLElement {
   value: string;
   min: string;
   max: string;
@@ -27,7 +27,7 @@ export interface FluentNumericSlider extends HTMLElement {
 
 interface NumericBinding {
   field: NativeNumericField;
-  slider: FluentNumericSlider | null;
+  slider: NumericSliderControl | null;
   synchronize(): void;
   release(): void;
 }
@@ -35,10 +35,10 @@ interface NumericBinding {
 /** Attach Microsoft's slider beside the existing spinbox only at recognized native boundaries. */
 export class NativeNumericControls {
   readonly #cards = new Map<HTMLElement, Map<HTMLInputElement, NumericBinding>>();
-  readonly #createSlider: (documentRef: Document) => FluentNumericSlider;
+  readonly #createSlider: (documentRef: Document) => NumericSliderControl;
 
   /** Bind the official component factory independently of native widget adaptation. */
-  constructor(createSlider: (documentRef: Document) => FluentNumericSlider) {
+  constructor(createSlider: (documentRef: Document) => NumericSliderControl) {
     this.#createSlider = createSlider;
   }
 

@@ -17,10 +17,10 @@
 import type { SearchMode } from '../domain/SearchQuery.js';
 import {
   applyOwnedFluentTheme,
-  createFluentFinderInput,
+  createFinderInputControl,
 } from '../../surface/appearance/FluentThemeRuntime.js';
 import { readComfyDarkTheme } from '../../surface/appearance/ComfyColorScheme.js';
-import type { FluentFinderInput } from '../../surface/appearance/FluentFinderControls.js';
+import type { FinderInputControl } from '../../surface/appearance/FinderControls.js';
 import { ensureFinderStyles } from './FinderStyles.js';
 import { ContextMenu } from '../../menus/ContextMenu.js';
 
@@ -32,7 +32,7 @@ export interface FinderActions {
 /** Retain native Fluent controls while finder state and results change. */
 export class FinderView {
   readonly element: HTMLElement;
-  readonly #input: FluentFinderInput;
+  readonly #input: FinderInputControl;
   readonly #mode: HTMLElement;
   readonly #modeLabel: HTMLElement;
   readonly #menu: ContextMenu;
@@ -55,7 +55,7 @@ export class FinderView {
     this.element.setAttribute('data-capture-wheel', 'true');
     this.element.hidden = true;
     applyOwnedFluentTheme(this.element, readComfyDarkTheme(documentRef));
-    this.#input = createFluentFinderInput(documentRef);
+    this.#input = createFinderInputControl(documentRef);
     this.#input.className = 'sc-masonry-finder__input';
     this.#input.setAttribute('aria-label', 'Search masonry');
     this.#input.setAttribute('placeholder', 'Search…');

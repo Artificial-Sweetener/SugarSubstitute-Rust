@@ -141,7 +141,7 @@ export class CubeRelationPresenter {
             }
         }, field.name);
         const control = row
-            ? (row.querySelector('[data-sc-fluent-combo-frame]') ??
+            ? (row.querySelector('[data-sc-style-combo-frame]') ??
                 row
                     .querySelector('[data-testid="widget-select-default-trigger"]')
                     ?.closest('[data-capture-wheel]') ??

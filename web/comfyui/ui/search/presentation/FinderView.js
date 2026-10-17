@@ -1,4 +1,4 @@
-import { applyOwnedFluentTheme, createFluentFinderInput, } from '../../surface/appearance/FluentThemeRuntime.js';
+import { applyOwnedFluentTheme, createFinderInputControl, } from '../../surface/appearance/FluentThemeRuntime.js';
 import { readComfyDarkTheme } from '../../surface/appearance/ComfyColorScheme.js';
 import { ensureFinderStyles } from './FinderStyles.js';
 import { ContextMenu } from '../../menus/ContextMenu.js';
@@ -27,7 +27,7 @@ export class FinderView {
         this.element.setAttribute('data-capture-wheel', 'true');
         this.element.hidden = true;
         applyOwnedFluentTheme(this.element, readComfyDarkTheme(documentRef));
-        this.#input = createFluentFinderInput(documentRef);
+        this.#input = createFinderInputControl(documentRef);
         this.#input.className = 'sc-masonry-finder__input';
         this.#input.setAttribute('aria-label', 'Search masonry');
         this.#input.setAttribute('placeholder', 'Search…');

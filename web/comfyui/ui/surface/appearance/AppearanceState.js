@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Share accepted appearance facts without introducing another settings or palette owner. */
 /** Publish coherent presentation facts only when their accepted values change. */
-export class FluentAppearanceState {
+export class AppearanceState {
     #listeners = new Set();
     #appearance = Object.freeze({ fluent: false, dark: true });
     /** Expose an immutable accepted snapshot to isolated owned surfaces. */

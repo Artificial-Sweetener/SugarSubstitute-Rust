@@ -80,16 +80,16 @@ test.each([true, false])(
     const card = document.createElement('div');
     card.className = 'sugarcubes-cube-face__node-card';
     const row = document.createElement('div');
-    row.dataset.scFluentRow = '';
+    row.dataset.scStyleRow = '';
     const outerLayout = document.createElement('div');
-    outerLayout.dataset.scFluentLayout = '';
+    outerLayout.dataset.scStyleLayout = '';
     const outerLabel = document.createElement('label');
     const slot = document.createElement('div');
     const relation = document.createElement('div');
     relation.className = 'sugarcubes-native-widget';
     relation.dataset.scChoiceInline = '';
     const layout = document.createElement('div');
-    if (fluent) layout.dataset.scFluentLayout = '';
+    if (fluent) layout.dataset.scStyleLayout = '';
     const label = document.createElement('label');
     label.dataset.testid = 'widget-layout-field-label';
     const value = document.createElement('div');
@@ -117,12 +117,12 @@ test.each([true, false])(
   'shares regular Fluent combo styling in dark=%s through thumbnail changes',
   async (dark) => {
     const field = fixture();
-    field.container.dataset.scFluentSurface = '';
+    field.container.dataset.scStyleSurface = '';
     const style = document.createElement('style');
     style.textContent = modelPickerCss + fluentAppearanceCss(dark);
     field.container.append(style);
     const regular = document.createElement('div');
-    regular.dataset.scFluentComboFrame = '';
+    regular.dataset.scStyleComboFrame = '';
     field.container.append(regular);
     const model = field.container.querySelector('.sc-model-field');
     if (!(model instanceof HTMLElement)) throw new Error('No plain model field mounted.');

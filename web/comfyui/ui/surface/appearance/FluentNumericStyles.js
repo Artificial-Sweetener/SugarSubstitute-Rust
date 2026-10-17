@@ -44,7 +44,7 @@ export function fluentNumericCss() {
     [data-sc-number-slider]::after { content:none; }
     [data-sc-number-slider]::part(track-container) { border-radius:var(--border-radius); }
     [data-sc-number-slider]::part(track-container)::after { background-image:none; }
-    .sugarcubes-cube-face__node-card [data-sc-fluent-row][data-sc-fluent-widget^="WidgetInputNumber"] [data-sc-fluent-layout] > [data-sc-number-pair] {
+    .sugarcubes-cube-face__node-card [data-sc-style-row][data-sc-style-widget^="WidgetInputNumber"] [data-sc-style-layout] > [data-sc-number-pair] {
       flex:0 0 206px; max-width:206px;
     }
   `;

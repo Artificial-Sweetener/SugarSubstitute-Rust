@@ -37,12 +37,12 @@ function fixture(masonry: boolean, fields: boolean, dark = true) {
   const surface = document.createElement('div');
   if (masonry) surface.className = 'sugarcubes-workflow-masonry sugarcubes-cube-face__node-card';
   const card = document.createElement('div');
-  card.dataset.scFluentNode = '';
+  card.dataset.scStyleNode = '';
   const body = document.createElement('div');
   body.className = 'native-body';
   body.dataset.testid = 'node-body-test';
   const widgets = document.createElement('div');
-  if (fields) widgets.dataset.scFluentFields = '';
+  if (fields) widgets.dataset.scStyleFields = '';
   const control = document.createElement('input');
   control.value = 'custom value';
   widgets.append(control);
@@ -84,7 +84,7 @@ test.each([false, true])(
     footer.dataset.testid = 'advanced-inputs-button';
     card.append(footer);
     const advanced = document.createElement('div');
-    advanced.dataset.scFluentRow = '';
+    advanced.dataset.scStyleRow = '';
     widgets.append(advanced);
     for (const expanded of [false, true]) {
       advanced.hidden = !expanded;
@@ -109,7 +109,7 @@ test('retains native body spacing for custom cards with an advanced footer', () 
 test('segments native graph ports from visible fields with a single reversible row seam', () => {
   const { body, widgets, themeStyle } = fixture(false, true);
   const ports = document.createElement('div');
-  ports.dataset.scFluentPorts = '';
+  ports.dataset.scStylePorts = '';
   const port = document.createElement('div');
   port.className = 'lg-slot';
   ports.append(port);
@@ -126,15 +126,15 @@ test('segments native graph ports from visible fields with a single reversible r
   const field = widgets.firstElementChild;
   if (!(field instanceof HTMLElement)) throw new Error('Missing field fixture');
   field.hidden = true;
-  ports.removeAttribute('data-sc-fluent-ports');
+  ports.removeAttribute('data-sc-style-ports');
   expect(getComputedStyle(ports).borderBottomWidth).toBe('');
   field.hidden = false;
-  ports.dataset.scFluentPorts = '';
+  ports.dataset.scStylePorts = '';
   ports.hidden = true;
   expect(getComputedStyle(body).gap).toBe('4px');
   ports.hidden = false;
   port.remove();
-  ports.removeAttribute('data-sc-fluent-ports');
+  ports.removeAttribute('data-sc-style-ports');
   expect(getComputedStyle(ports).borderBottomWidth).toBe('');
   expect(getComputedStyle(body).gap).toBe('4px');
   ports.append(port);
@@ -150,11 +150,11 @@ test.each([false, true])(
     const wrappers: HTMLElement[] = [];
     for (const widget of ['WidgetSelect', 'WidgetDOM']) {
       const row = document.createElement('div');
-      row.dataset.scFluentRow = '';
-      row.dataset.scFluentWidget = widget;
-      row.dataset.scFluentAdvancedRow = '';
+      row.dataset.scStyleRow = '';
+      row.dataset.scStyleWidget = widget;
+      row.dataset.scStyleAdvancedRow = '';
       const layout = document.createElement('div');
-      layout.dataset.scFluentLayout = '';
+      layout.dataset.scStyleLayout = '';
       const label = document.createElement('span');
       label.textContent = 'Model';
       const control = document.createElement('div');
@@ -189,8 +189,8 @@ test.each([false, true])(
     const { body, themeStyle } = fixture(masonry, true);
     const combo = document.createElement('div');
     combo.className = 'native-combo';
-    combo.dataset.scFluentComboFrame = '';
-    combo.dataset.scFluentEditFrame = '';
+    combo.dataset.scStyleComboFrame = '';
+    combo.dataset.scStyleEditFrame = '';
     const trigger = document.createElement('button');
     trigger.dataset.testid = 'widget-select-default-trigger';
     trigger.setAttribute('role', 'combobox');
@@ -211,7 +211,7 @@ test.each([false, true])(
     expect(getComputedStyle(trigger).height).toBe('100%');
     // JSDOM does not compute pseudo-elements; prove the actual open-state selector owns the shared accent.
     const accentSelector =
-      '[data-sc-fluent-edit-frame]:has(input:focus,textarea:focus,[role="combobox"]:focus-visible,[role="combobox"][aria-expanded="true"])';
+      '[data-sc-style-edit-frame]:has(input:focus,textarea:focus,[role="combobox"]:focus-visible,[role="combobox"][aria-expanded="true"])';
     expect(combo.matches(accentSelector)).toBe(false);
     trigger.setAttribute('aria-expanded', 'true');
     expect(combo.matches(accentSelector)).toBe(true);
@@ -231,9 +231,9 @@ function segmentedFixture(masonry: boolean, dark = true) {
   const rows = [1, 2, 1].map((column, index) => {
     const row = document.createElement('div');
     row.className = 'native-field-row';
-    row.dataset.scFluentRow = '';
-    row.dataset.scFluentColumn = String(column);
-    row.dataset.scFluentSpan = index === 2 ? '2' : '1';
+    row.dataset.scStyleRow = '';
+    row.dataset.scStyleColumn = String(column);
+    row.dataset.scStyleSpan = index === 2 ? '2' : '1';
     mounted.widgets.append(row);
     return row;
   });
@@ -266,7 +266,7 @@ test.each([false, true])(
     expect(getComputedStyle(second).paddingRight).toBe(masonry ? '30px' : '12px');
     expect(getComputedStyle(third).paddingRight).toBe(masonry ? '30px' : '12px');
     expect(getComputedStyle(third).paddingLeft).toBe(masonry ? '10px' : '0px');
-    third.dataset.scFluentKind = 'multiline';
+    third.dataset.scStyleKind = 'multiline';
     expect(getComputedStyle(third).paddingRight).toBe(masonry ? '10px' : '12px');
     const custom = document.createElement('div');
     second.after(custom);
@@ -355,7 +355,7 @@ test('omits separators for hidden leading fields and collapsed or widgetless hea
   header.dataset.scTitlebarCollapsed = 'true';
   expect(getComputedStyle(header).borderBottomWidth).toBe('0px');
   delete header.dataset.scTitlebarCollapsed;
-  for (const row of [first, second, third]) row.removeAttribute('data-sc-fluent-row');
+  for (const row of [first, second, third]) row.removeAttribute('data-sc-style-row');
   expect(getComputedStyle(header).borderBottomWidth).toBe('0px');
 });
 
@@ -366,11 +366,11 @@ test('shares card stroke tint in both palettes and reserves short vertical divid
   expect(css).toContain('--sc-row-stroke:var(--sc-card-stroke)');
   // Match the graph rule's capability predicates so masonry's single row seam wins the browser cascade.
   expect(css).toContain(
-    '.sugarcubes-cube-face__node-card [data-sc-fluent-node]:has([data-sc-fluent-row]) [data-testid^="node-header-"]:not([data-sc-titlebar-collapsed="true"]) { border-bottom:0; }',
+    '.sugarcubes-cube-face__node-card [data-sc-style-node]:has([data-sc-style-row]) [data-testid^="node-header-"]:not([data-sc-titlebar-collapsed="true"]) { border-bottom:0; }',
   );
   // JSDOM omits pseudo-element geometry; browser verification covers the painted paired-field divider.
   expect(css).toContain(
-    '.sugarcubes-cube-face__node-card [data-sc-fluent-row][data-sc-fluent-column="2"]::before',
+    '.sugarcubes-cube-face__node-card [data-sc-style-row][data-sc-style-column="2"]::before',
   );
   expect(css).toContain(
     'width:1px; height:33px; background:var(--sc-row-stroke); pointer-events:none;',

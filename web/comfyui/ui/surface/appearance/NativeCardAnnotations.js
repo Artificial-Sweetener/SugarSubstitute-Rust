@@ -16,12 +16,12 @@
 /** Reconcile exact native appearance annotations without tearing down unchanged styles. */
 import { readNativeWidgetMount } from '../NativeWidgetMountBoundary.js';
 /** Own removable appearance properties independently of native component discovery. */
-export class NativeFluentAnnotations {
+export class NativeCardAnnotations {
     #roots = new Map();
     /** Begin scoped reconciliation without retiring other controls during native reparenting. */
     begin(root) {
         const previous = this.#roots.get(root) ?? new Map();
-        return new NativeFluentAnnotationPlan(previous, (next) => this.#roots.set(root, next));
+        return new NativeCardAnnotationPlan(previous, (next) => this.#roots.set(root, next));
     }
     /** Release retired roots while a live native widget mount retains its presentation through moves. */
     prune() {
@@ -39,7 +39,7 @@ export class NativeFluentAnnotations {
     }
 }
 /** Collect one native boundary's ownership and write only materially changed attributes or styles. */
-export class NativeFluentAnnotationPlan {
+export class NativeCardAnnotationPlan {
     #next = new Map();
     #previous;
     #commit;

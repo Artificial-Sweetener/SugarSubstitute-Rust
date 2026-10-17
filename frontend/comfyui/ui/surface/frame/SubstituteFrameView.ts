@@ -55,7 +55,7 @@ export class SubstituteFrameView {
   ) {
     this.element = document.createElement('header');
     this.element.className = 'sc-substitute-frame';
-    this.element.setAttribute('data-sc-fluent-theme-root', '');
+    this.element.setAttribute('data-sc-style-theme-root', '');
     this.#menu = new ContextMenu(document);
     this.#overflowMenu = new ContextMenu(document);
     const viewport = document.createElement('div');

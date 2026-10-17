@@ -22,7 +22,7 @@ import { injectDialogStyles } from './DialogStyles.js';
 import { ModalAppearance } from './ModalAppearance.js';
 import { ModalDismissal } from './ModalDismissal.js';
 import { mountModalLayer } from './ModalLayer.js';
-import type { FluentAppearanceSource } from '../surface/appearance/FluentAppearanceState.js';
+import type { AppearanceSource } from '../surface/appearance/AppearanceState.js';
 
 export interface ModalAdapter {
   getDocument?(): Document | null;
@@ -70,7 +70,7 @@ interface ActiveModalOptions {
 }
 
 interface ModalShellOptions {
-  appearanceSource?: FluentAppearanceSource;
+  appearanceSource?: AppearanceSource;
   adapter?: ModalAdapter | null;
   variantClassName?: string;
   dialogClassName?: string;

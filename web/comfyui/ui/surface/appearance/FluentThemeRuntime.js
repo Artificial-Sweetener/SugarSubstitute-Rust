@@ -9621,20 +9621,20 @@ function createWorkflowTablist() {
 function createWorkflowTab(documentRef) {
   return documentRef.createElement("sc-workflow-tab");
 }
-function createFluentFinderInput(documentRef) {
+function createFinderInputControl(documentRef) {
   const input = documentRef.createElement("fluent-text-input");
   if (!(input instanceof TextInput))
     throw new TypeError("The registered Fluent input is incompatible.");
   return input;
 }
-function createFluentBooleanCheckbox(documentRef) {
+function createBooleanCheckboxControl(documentRef) {
   const checkbox = documentRef.createElement("fluent-checkbox");
   if (!(checkbox instanceof Checkbox))
     throw new TypeError("The registered Fluent checkbox has an incompatible implementation.");
   return checkbox;
 }
 var nextBooleanSegmentId = 0;
-function createFluentBooleanSegments(documentRef) {
+function createBooleanSegmentControls(documentRef) {
   const GroupConstructor = documentRef.defaultView?.customElements.get("fluent-tablist");
   if (!GroupConstructor) throw new TypeError("The Fluent tablist is not registered.");
   const group = new GroupConstructor();
@@ -9646,7 +9646,7 @@ function createFluentBooleanSegments(documentRef) {
   on.id = `sc-boolean-${++nextBooleanSegmentId}`;
   return { group, segments: [off, on], release: () => group.releasePresentation() };
 }
-function createFluentNumericSlider(documentRef) {
+function createNumericSliderControl(documentRef) {
   const slider = documentRef.createElement("fluent-slider");
   if (!(slider instanceof Slider))
     throw new TypeError("The registered Fluent slider has an incompatible implementation.");
@@ -9705,10 +9705,10 @@ function fluentAccentColorTokens(color, dark) {
 }
 export {
   applyOwnedFluentTheme,
-  createFluentBooleanCheckbox,
-  createFluentBooleanSegments,
-  createFluentFinderInput,
-  createFluentNumericSlider,
+  createBooleanCheckboxControl,
+  createBooleanSegmentControls,
+  createFinderInputControl,
+  createNumericSliderControl,
   createWorkflowTab,
   createWorkflowTablist,
   fluentAccentColorTokens,

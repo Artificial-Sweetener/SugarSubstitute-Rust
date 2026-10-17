@@ -23,8 +23,8 @@ afterEach(() => document.body.replaceChildren());
 test('named boolean choices never claim checkbox row gestures or focus', () => {
   const root = document.createElement('div');
   const row = document.createElement('div');
-  row.dataset.scFluentRow = '';
-  row.dataset.scFluentWidget = 'WidgetToggleSwitch';
+  row.dataset.scStyleRow = '';
+  row.dataset.scStyleWidget = 'WidgetToggleSwitch';
   const group = document.createElement('div');
   group.setAttribute('role', 'group');
   const buttons = ['separate', 'combined'].map((label) => {
@@ -68,8 +68,8 @@ function createCheckbox(documentRef: Document): HTMLInputElement {
 test('body checkbox delegates one native edit, keeps headers and disabled fields intact, and restores switches', () => {
   const root = document.createElement('div');
   const row = document.createElement('div');
-  row.dataset.scFluentRow = '';
-  row.dataset.scFluentWidget = 'WidgetToggleSwitch';
+  row.dataset.scStyleRow = '';
+  row.dataset.scStyleWidget = 'WidgetToggleSwitch';
   const native = document.createElement('input');
   native.type = 'checkbox';
   native.setAttribute('aria-label', '<literal> use_tiling');
@@ -113,8 +113,8 @@ test('body checkbox delegates one native edit, keeps headers and disabled fields
 test('clicking a toggle row delegates once and preserves direct switch and custom controls', () => {
   const root = document.createElement('div');
   const row = document.createElement('div');
-  row.dataset.scFluentRow = '';
-  row.dataset.scFluentWidget = 'WidgetToggleSwitch';
+  row.dataset.scStyleRow = '';
+  row.dataset.scStyleWidget = 'WidgetToggleSwitch';
   const text = document.createElement('span');
   text.textContent = '<img src=x> use_tiling';
   const input = document.createElement('input');
@@ -157,8 +157,8 @@ test('clicking a toggle row delegates once and preserves direct switch and custo
 test('keeps the right-side caption beside one Fluent checkbox through native state and component replacement', async () => {
   const root = document.createElement('div');
   const row = document.createElement('div');
-  row.dataset.scFluentRow = '';
-  row.dataset.scFluentWidget = 'WidgetToggleSwitch';
+  row.dataset.scStyleRow = '';
+  row.dataset.scStyleWidget = 'WidgetToggleSwitch';
   const group = document.createElement('div');
   const switchRoot = document.createElement('div');
   switchRoot.dataset.pcName = 'toggleswitch';
@@ -200,7 +200,7 @@ test('keeps the right-side caption beside one Fluent checkbox through native sta
   adapter.reconcile(root);
   expect(state?.isConnected).toBe(true);
   expect(group.querySelectorAll('[data-sc-boolean-caption]')).toHaveLength(1);
-  row.dataset.scFluentWidget = 'WidgetDOM';
+  row.dataset.scStyleWidget = 'WidgetDOM';
   adapter.reconcile(root);
   expect(row.querySelector('[data-sc-boolean-caption]')).toBeNull();
   adapter.clear();
@@ -214,7 +214,7 @@ test('keeps the right-side caption beside one Fluent checkbox through native sta
 test('leaves custom boolean controls and their captions unchanged', () => {
   const root = document.createElement('div');
   const row = document.createElement('div');
-  row.dataset.scFluentWidget = 'WidgetDOM';
+  row.dataset.scStyleWidget = 'WidgetDOM';
   const input = document.createElement('input');
   input.type = 'checkbox';
   const caption = document.createElement('span');

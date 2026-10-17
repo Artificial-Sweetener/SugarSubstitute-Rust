@@ -16,7 +16,7 @@
 /** Bridge one accepted accent palette into every SugarCubes-owned rendering surface. */
 import { accentForeground, accentIndicatorColor, mixAccentColor } from './AccentPalette.js';
 import { fluentAccentColorTokens } from './FluentThemeRuntime.js';
-const scopes = ':is(#graph-canvas-container, [data-sc-fluent-theme-root], [data-sc-fluent-surface], [data-sc-fluent-popup], [data-sc-floating-surface], [data-sc-modal-appearance], [data-sc-model-appearance], [id^="SugarCubes."], .sugarcubes-cube-face, .sugarcubes-workflow-masonry, .sc-cube-stack-host, .sc-overrides-toolbar, .sugarcubes-settings-row)';
+const scopes = ':is(#graph-canvas-container, [data-sc-style-theme-root], [data-sc-style-surface], [data-sc-style-popup], [data-sc-floating-surface], [data-sc-modal-appearance], [data-sc-model-appearance], [id^="SugarCubes."], .sugarcubes-cube-face, .sugarcubes-workflow-masonry, .sc-cube-stack-host, .sc-overrides-toolbar, .sugarcubes-settings-row)';
 /** Override local Microsoft themes without overwriting host tokens outside owned roots. */
 export function accentThemeCss(color, dark) {
     const tokens = fluentAccentColorTokens(color, dark);
