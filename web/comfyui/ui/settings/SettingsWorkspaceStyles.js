@@ -64,24 +64,24 @@ export const settingsWorkspaceCss = `
 .sc-settings-about__status { color:var(--sc-settings-muted); }
 .sc-settings-about button { font:inherit; }
 [data-sc-settings-fluent] {
-  --sc-settings-text:var(--colorNeutralForeground1);
-  --sc-settings-muted:var(--colorNeutralForeground2);
-  --sc-settings-card:var(--colorNeutralBackground1);
-  --sc-settings-border:var(--colorNeutralStroke2);
+  --sc-settings-text:var(--sc-text);
+  --sc-settings-muted:var(--sc-text-secondary);
+  --sc-settings-card:var(--sc-surface);
+  --sc-settings-border:var(--sc-border-subtle);
   --p-primary-color:var(--sc-accent-indicator);
-  --p-inputtext-background:var(--colorNeutralBackground1);
-  --p-inputtext-color:var(--colorNeutralForeground1);
-  --p-inputtext-border-color:var(--colorNeutralStroke1);
+  --p-inputtext-background:var(--sc-surface);
+  --p-inputtext-color:var(--sc-text);
+  --p-inputtext-border-color:var(--sc-border);
   --p-inputtext-focus-border-color:var(--sc-accent-indicator);
-  --p-select-background:var(--colorNeutralBackground1);
-  --p-select-color:var(--colorNeutralForeground1);
-  --p-select-border-color:var(--colorNeutralStroke1);
+  --p-select-background:var(--sc-surface);
+  --p-select-color:var(--sc-text);
+  --p-select-border-color:var(--sc-border);
   --p-select-focus-border-color:var(--sc-accent-indicator);
   --p-slider-range-background:var(--sc-accent-indicator);
   --p-toggleswitch-checked-background:var(--sc-accent-indicator);
   --p-toggleswitch-checked-hover-background:var(--sc-accent-hover);
-  font-family:var(--fontFamilyBase); color:var(--colorNeutralForeground1);
-  border-radius:8px !important; background:var(--colorNeutralBackground2);
+  font-family:var(--sc-font-family); color:var(--sc-text);
+  border-radius:8px !important; background:var(--sc-surface-secondary);
 }
 [role="dialog"]:has(> [data-sc-settings-fluent]) {
   border-radius:8px; background:var(--sc-settings-card);
@@ -91,82 +91,82 @@ export const settingsWorkspaceCss = `
   height:calc(100% - 64px); grid-template-columns:260px minmax(0,1fr) !important;
 }
 [data-sc-settings-fluent] > div > nav {
-  background:var(--colorNeutralBackground2); padding-top:8px;
+  background:var(--sc-surface-secondary); padding-top:8px;
 }
 [data-sc-settings-fluent] > div > nav > header,
 [data-sc-settings-fluent] > div > div > header { display:none; }
-[data-sc-settings-fluent] > div > div { background:var(--colorNeutralBackground2); min-width:0; }
+[data-sc-settings-fluent] > div > div { background:var(--sc-surface-secondary); min-width:0; }
 [data-sc-settings-fluent] main > div { padding:24px; }
 [data-sc-settings-fluent] main > div > div { max-width:1000px; margin-inline:auto; width:100%; }
 .sc-settings-search-bar {
   display:flex; align-items:center; gap:16px; height:64px;
-  padding:0 20px 0 24px; background:var(--colorNeutralBackground2);
-  border-bottom:1px solid var(--colorNeutralStroke2);
+  padding:0 20px 0 24px; background:var(--sc-surface-secondary);
+  border-bottom:1px solid var(--sc-border-subtle);
 }
 .sc-settings-search-bar h2 { font-size:20px; font-weight:600; margin:0; flex:0 0 220px; }
 .sc-settings-search-bar > div { flex:1; max-width:720px; padding:0; }
 .sc-settings-search-bar input {
   font:inherit; font-size:14px; min-height:32px;
-  color:var(--colorNeutralForeground1);
+  color:var(--sc-text);
 }
 .sc-settings-search-bar > div > div > div:first-child {
-  background:var(--colorNeutralBackground1); border:1px solid var(--colorNeutralStroke1);
-  border-bottom:1px solid var(--colorNeutralStrokeAccessible); border-radius:4px;
+  background:var(--sc-surface); border:1px solid var(--sc-border);
+  border-bottom:1px solid var(--sc-border-accessible); border-radius:4px;
 }
 .sc-settings-search-bar > div:focus-within > div > div:first-child { border-bottom:2px solid var(--sc-accent-indicator); }
 .sc-settings-search-bar > button { margin-left:auto; width:32px; height:32px; padding:6px; border-radius:4px; }
 [data-sc-settings-fluent] [data-nav-id] {
   position:relative; border-radius:5px; padding:10px 14px; min-height:40px;
-  font:14px var(--fontFamilyBase); color:var(--colorNeutralForeground1); gap:14px;
+  font:14px var(--sc-font-family); color:var(--sc-text); gap:14px;
 }
-[data-sc-settings-fluent] [data-nav-id]:hover { background:var(--colorSubtleBackgroundHover); }
-[data-sc-settings-fluent] [data-nav-id][class*="surface-selected"] { background:var(--colorSubtleBackgroundSelected); }
+[data-sc-settings-fluent] [data-nav-id]:hover { background:var(--sc-subtle-hover); }
+[data-sc-settings-fluent] [data-nav-id][class*="surface-selected"] { background:var(--sc-subtle-selected); }
 [data-sc-settings-fluent] [data-nav-id][class*="surface-selected"]::before {
   content:""; position:absolute; left:0; top:calc(50% - 8px); width:3px;
   height:16px; border-radius:2px; background:var(--sc-accent-indicator);
 }
 [data-sc-settings-fluent] nav nav { padding:4px 12px 16px; gap:4px; }
-[data-sc-settings-fluent] nav h3 { font-size:12px; font-weight:600; text-transform:none; color:var(--colorNeutralForeground2); }
+[data-sc-settings-fluent] nav h3 { font-size:12px; font-weight:600; text-transform:none; color:var(--sc-text-secondary); }
 [data-sc-settings-fluent] .setting-group { margin:0 0 24px; }
 [data-sc-settings-fluent] .setting-group > h3 { font-size:18px; font-weight:600; margin:0 0 12px; }
 [data-sc-settings-fluent] .setting-group > div:first-child:not([data-setting-id]) { display:none; }
 [data-sc-settings-fluent] [data-sc-setting-kind] {
   min-height:68px; padding:16px; margin:0 0 4px; border-radius:6px;
-  background:var(--colorNeutralBackground1); border:1px solid var(--colorNeutralStroke2);
+  background:var(--sc-surface); border:1px solid var(--sc-border-subtle);
 }
 [data-sc-settings-fluent] [data-sc-setting-kind] .form-label { flex-direction:column; align-items:flex-start; justify-content:center; gap:4px; min-width:0; }
-[data-sc-settings-fluent] [data-sc-setting-kind] .form-label > span { color:var(--colorNeutralForeground1); font:14px var(--fontFamilyBase); }
+[data-sc-settings-fluent] [data-sc-setting-kind] .form-label > span { color:var(--sc-text); font:14px var(--sc-font-family); }
 [data-sc-settings-fluent] [data-sc-setting-kind] > div { gap:24px; }
 [data-sc-settings-fluent] [data-sc-setting-kind="standard"] .form-input { flex-shrink:0; max-width:48%; }
-.sc-setting-description { color:var(--colorNeutralForeground2); font-size:12px; line-height:1.5; white-space:pre-wrap; }
+.sc-setting-description { color:var(--sc-text-secondary); font-size:12px; line-height:1.5; white-space:pre-wrap; }
 [data-sc-settings-popup] {
-  background:var(--colorNeutralBackground1); color:var(--colorNeutralForeground1);
-  border:1px solid var(--colorNeutralStroke1); border-radius:6px;
-  box-shadow:var(--shadow16); font:14px var(--fontFamilyBase);
+  background:var(--sc-surface); color:var(--sc-text);
+  border:1px solid var(--sc-border); border-radius:6px;
+  box-shadow:var(--sc-shadow-medium); font:14px var(--sc-font-family);
 }
 [data-sc-settings-popup] .p-select-list { padding:4px; }
 [data-sc-settings-popup] .p-select-option { padding:8px 12px; border-radius:4px; min-height:32px; color:inherit; }
-[data-sc-settings-popup] .p-select-option:not([aria-selected="true"]):hover { background:var(--colorSubtleBackgroundHover); }
-[data-sc-settings-popup] .p-select-option[aria-selected="true"] { background:var(--colorSubtleBackgroundSelected); color:var(--sc-accent-indicator); }
+[data-sc-settings-popup] .p-select-option:not([aria-selected="true"]):hover { background:var(--sc-subtle-hover); }
+[data-sc-settings-popup] .p-select-option[aria-selected="true"] { background:var(--sc-subtle-selected); color:var(--sc-accent-indicator); }
 [data-sc-settings-fluent] [data-sc-setting-kind] :is(.p-inputtext,.p-select,select,input[type="text"],input[type="number"]) {
-  background:var(--colorNeutralBackground1); color:var(--colorNeutralForeground1);
-  border:1px solid var(--colorNeutralStroke1); border-bottom-color:var(--colorNeutralStrokeAccessible);
-  border-radius:4px; font:14px var(--fontFamilyBase); min-height:32px;
+  background:var(--sc-surface); color:var(--sc-text);
+  border:1px solid var(--sc-border); border-bottom-color:var(--sc-border-accessible);
+  border-radius:4px; font:14px var(--sc-font-family); min-height:32px;
 }
 [data-sc-settings-fluent] [data-sc-setting-kind] :is(select,input[type="text"],input[type="number"]) { padding:5px 10px; }
 [data-sc-settings-fluent] [data-sc-setting-kind] .p-select-label { padding:6px 12px; }
 [data-sc-settings-fluent] [data-sc-setting-kind] :is(input,select,button):focus-visible { outline:2px solid var(--sc-accent-indicator); outline-offset:2px; }
 [data-sc-settings-fluent] [data-sc-setting-kind] .p-toggleswitch { width:40px; height:20px; }
-[data-sc-settings-fluent] [data-sc-setting-kind] .p-toggleswitch-slider { border:1px solid var(--colorNeutralStrokeAccessible); border-radius:10px; background:transparent; }
-[data-sc-settings-fluent] [data-sc-setting-kind] .p-toggleswitch-handle { width:12px; height:12px; margin-top:-6px; left:4px; background:var(--colorNeutralForeground2); }
+[data-sc-settings-fluent] [data-sc-setting-kind] .p-toggleswitch-slider { border:1px solid var(--sc-border-accessible); border-radius:10px; background:transparent; }
+[data-sc-settings-fluent] [data-sc-setting-kind] .p-toggleswitch-handle { width:12px; height:12px; margin-top:-6px; left:4px; background:var(--sc-text-secondary); }
 [data-sc-settings-fluent] [data-sc-setting-kind] .p-toggleswitch-checked .p-toggleswitch-slider { background:var(--sc-accent-indicator); border-color:transparent; }
 [data-sc-settings-fluent] [data-sc-setting-kind] .p-toggleswitch-checked .p-toggleswitch-handle { left:24px; background:var(--sc-accent-foreground); }
 [data-sc-settings-fluent] [data-sc-setting-kind] button {
-  background:var(--colorNeutralBackground1); color:var(--colorNeutralForeground1);
-  border:1px solid var(--colorNeutralStroke1); border-radius:4px; min-height:32px;
-  font:14px var(--fontFamilyBase); padding:5px 12px;
+  background:var(--sc-surface); color:var(--sc-text);
+  border:1px solid var(--sc-border); border-radius:4px; min-height:32px;
+  font:14px var(--sc-font-family); padding:5px 12px;
 }
-[data-sc-settings-fluent] [data-sc-setting-kind] button:hover { background:var(--colorNeutralBackground1Hover); }
+[data-sc-settings-fluent] [data-sc-setting-kind] button:hover { background:var(--sc-surface-hover); }
 [data-sc-settings-fluent] [data-sc-setting-kind] :disabled { opacity:.5; cursor:default; }
 [data-sc-settings-fluent] [data-sc-setting-kind] input[type="checkbox"] { accent-color:var(--sc-accent-indicator); }
 [data-sc-settings-fluent] .sc-settings-about__card:has(.sc-settings-about__actions) { display:block; }

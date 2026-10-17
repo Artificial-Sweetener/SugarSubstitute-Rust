@@ -47,12 +47,12 @@ test('keeps compact pill geometry in the shared theme-token stylesheet', () => {
   expect(styles).toContain('font-size: 0.78em');
   expect(styles).toContain('padding: 0.08em 0.38em');
   expect(styles).toContain('background: var(--sc-accent-color');
-  expect(styles).toContain('--colorBrandForeground1');
+  expect(styles).toContain('--sc-brand-text');
   expect(styles).toContain('color: var(--sc-accent-foreground');
   expect(styles).toContain('--p-primary-color');
   expect(styles).toContain('--sugarcubes-model-pill-punchout');
   expect(styles).toContain('--comfy-menu-bg');
-  expect(styles).not.toContain('--colorNeutralForegroundOnBrand');
+  expect(styles).not.toContain('--sc-text-on-accent');
   expect(styles).not.toContain('background: currentColor');
 });
 

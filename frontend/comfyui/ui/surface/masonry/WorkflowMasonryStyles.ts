@@ -78,10 +78,10 @@ export function ensureWorkflowMasonryStyles(documentRef: Document): void {
       width:28px; height:28px; padding:0; border-radius:4px;
     }
     .sugarcubes-workflow-masonry__section .sugarcubes-workflow-masonry__icon-action:hover {
-      background:var(--colorNeutralBackground1Hover,var(--interface-button-hover-surface,#393939));
+      background:var(--sc-surface-hover,var(--interface-button-hover-surface,#393939));
     }
     .sugarcubes-workflow-masonry__icon-action:focus-visible {
-      outline:2px solid var(--colorBrandStroke1,var(--primary-color,#479ef5)); outline-offset:2px;
+      outline:2px solid var(--sc-brand-border,var(--primary-color,#479ef5)); outline-offset:2px;
     }
     .sugarcubes-workflow-masonry__content > .sugarcubes-workflow-masonry__card {
       position:absolute; left:0; top:0; box-sizing:border-box;

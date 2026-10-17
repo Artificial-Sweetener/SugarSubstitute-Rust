@@ -56,11 +56,8 @@ export class NativeBooleanSegments {
         const controls = this.#createControls(row.ownerDocument);
         const { group, segments } = controls;
         group.dataset.scBooleanSegments = '';
-        group.setAttribute('size', 'small');
-        group.setAttribute('appearance', 'subtle');
         segments.forEach((segment) => {
             segment.dataset.scBooleanSegment = '';
-            segment.slot = 'tab';
             group.append(segment);
         });
         let reflecting = false;

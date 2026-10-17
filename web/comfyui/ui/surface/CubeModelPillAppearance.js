@@ -16,7 +16,7 @@
 /** Share accent capsules and readable foregrounds across DOM and canvas renderers. */
 const backgroundTokens = [
     '--sc-accent-color',
-    '--colorBrandForeground1',
+    '--sc-brand-text',
     '--p-primary-color',
     '--primary-color',
 ];

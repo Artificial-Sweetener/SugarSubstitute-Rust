@@ -19,6 +19,7 @@ import { api as hostApi } from '/scripts/api.js';
 import type { SugarCubesUI } from '../../../frontend/comfyui/ui/SugarCubesUI.js';
 import type { UnknownRecord } from '../../../frontend/comfyui/ui/types/common.js';
 import type { ComfyGroup, ComfyNode } from '../../../frontend/comfyui/ui/types/graph.js';
+import { preserveAppearanceRuntime } from '../../frontend_core/support/appearance_runtime.js';
 
 let app = hostApp as unknown as (typeof import('../../frontend_core/support/mocks/app.js'))['app'];
 let api = hostApi as unknown as (typeof import('../../frontend_core/support/mocks/api.js'))['api'];
@@ -153,6 +154,7 @@ function setupBaseApp() {
 }
 
 async function loadUi() {
+  preserveAppearanceRuntime();
   const configuredFetch = api.fetchApi;
   api.fetchApi = async (url, options = {}) => {
     if (url === '/sugarcubes/picker_catalog') {

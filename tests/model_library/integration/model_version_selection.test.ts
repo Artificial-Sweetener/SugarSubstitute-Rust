@@ -169,20 +169,14 @@ test('keeps exactly one initial choice, permits returning to the current version
     if (!(selectionRule instanceof CSSStyleRule) || !(checkRule instanceof CSSStyleRule))
       throw new Error('Missing accent styling.');
     expect(selectionRule.style.getPropertyValue('border-color')).toBe(
-      'var(--colorBrandBackground,#0078d4)',
+      'var(--sc-brand-fill,#0078d4)',
     );
     expect(selectionRule.style.getPropertyValue('box-shadow')).toContain(
-      'var(--colorBrandBackground,#0078d4)',
+      'var(--sc-brand-fill,#0078d4)',
     );
-    expect(checkRule.style.getPropertyValue('background')).toBe(
-      'var(--colorBrandBackground,#0078d4)',
-    );
-    expect(checkRule.style.getPropertyValue('border-color')).toBe(
-      'var(--colorBrandBackground,#0078d4)',
-    );
-    expect(checkRule.style.getPropertyValue('color')).toBe(
-      'var(--colorNeutralForegroundOnBrand,#fff)',
-    );
+    expect(checkRule.style.getPropertyValue('background')).toBe('var(--sc-brand-fill,#0078d4)');
+    expect(checkRule.style.getPropertyValue('border-color')).toBe('var(--sc-brand-fill,#0078d4)');
+    expect(checkRule.style.getPropertyValue('color')).toBe('var(--sc-text-on-accent,#fff)');
     accept.click();
     await closed;
     expect(select).toHaveBeenCalledWith(item.value);

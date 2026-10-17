@@ -44,6 +44,8 @@ import { adaptFluentSliderGeometry } from './FluentSliderGeometry.js';
 import { createFluentSliderThumb } from './FluentSliderThumb.js';
 import { css } from '@microsoft/fast-element';
 import { workflowTabCss, workflowTablistCss } from '../frame/WorkflowTabStyles.js';
+import { fluentThemeTokens } from './FluentThemeTokens.js';
+import { themeTokenDeclarations } from './ThemeTokens.js';
 
 /** Scope Substitute geometry to workflow tabs without changing output or boolean segments. */
 class WorkflowTab extends Tab {}
@@ -51,7 +53,29 @@ class WorkflowTab extends Tab {}
 class WorkflowTablist extends Tablist {}
 
 /** Retain the official slider's bindings and stylesheet during connected presentation moves. */
-class PresentationSlider extends Slider {
+class PresentationSlider extends Slider implements NumericSliderControl {
+  /** Expose the official component through the shared numeric-control boundary. */
+  get root(): HTMLElement {
+    return this;
+  }
+  /** Normalize Microsoft's string value before it reaches native widget bindings. */
+  readValue(): number {
+    return Number(this.value);
+  }
+  /** Translate native numeric values into Microsoft's string-based properties. */
+  synchronize(
+    minimum: number,
+    maximum: number,
+    step: number,
+    disabled: boolean,
+    value: number | null,
+  ): void {
+    this.min = String(minimum);
+    this.max = String(maximum);
+    this.step = String(step);
+    this.disabled = disabled;
+    if (value !== null) this.value = String(value);
+  }
   /** Preserve mounted state while native layout observes the new parent width. */
   connectedMoveCallback(): void {}
 }
@@ -88,13 +112,24 @@ class PresentationCheckbox extends Checkbox {
   connectedMoveCallback(): void {}
 }
 
+/** Keep finder focus synchronous after FAST mounts its input. */
+class PresentationTextInput extends TextInput implements FinderInputControl {
+  /** Apply the shared accessible name before focusing the real input. */
+  focusInput(selectAll: boolean): void {
+    this.control.setAttribute('aria-label', this.getAttribute('aria-label') ?? 'Search masonry');
+    this.control.focus();
+    if (selectAll) this.select();
+  }
+}
+
 // FAST completes component registration asynchronously, before consumers can create controls.
 if (!customElements.get('fluent-slider')) await PresentationSlider.define(SliderDefinition);
 if (!customElements.get('fluent-button')) await PresentationButton.define(ButtonDefinition);
 if (!customElements.get('fluent-tab')) await PresentationTab.define(TabDefinition);
 if (!customElements.get('fluent-tablist')) await PresentationTablist.define(TablistDefinition);
 if (!customElements.get('fluent-checkbox')) await PresentationCheckbox.define(CheckboxDefinition);
-if (!customElements.get('fluent-text-input')) await TextInput.define(TextInputDefinition);
+if (!customElements.get('fluent-text-input'))
+  await PresentationTextInput.define(TextInputDefinition);
 const workflowTabDefinition: typeof TabDefinition = {
   ...TabDefinition,
   name: 'sc-workflow-tab',
@@ -132,7 +167,7 @@ export function createWorkflowTab(documentRef: Document): HTMLElement {
 /** Instantiate Microsoft's native text input through the narrow finder control boundary. */
 export function createFinderInputControl(documentRef: Document): FinderInputControl {
   const input = documentRef.createElement('fluent-text-input');
-  if (!(input instanceof TextInput))
+  if (!(input instanceof PresentationTextInput))
     throw new TypeError('The registered Fluent input is incompatible.');
   return input;
 }
@@ -153,32 +188,28 @@ export function createBooleanSegmentControls(documentRef: Document): BooleanSegm
   if (!GroupConstructor) throw new TypeError('The Fluent tablist is not registered.');
   // Microsoft's focus-group constructor initializes host attributes before connection.
   const group = new GroupConstructor();
+  group.setAttribute('size', 'small');
+  group.setAttribute('appearance', 'subtle');
   const off = documentRef.createElement('fluent-tab');
   const on = documentRef.createElement('fluent-tab');
   if (!(group instanceof PresentationTablist) || !(off instanceof Tab) || !(on instanceof Tab))
     throw new TypeError('The registered Fluent tab controls have incompatible implementations.');
   off.id = `sc-boolean-${++nextBooleanSegmentId}`;
   on.id = `sc-boolean-${++nextBooleanSegmentId}`;
+  off.slot = 'tab';
+  on.slot = 'tab';
   return { group, segments: [off, on], release: () => group.releasePresentation() };
 }
 
 /** Instantiate Microsoft's official slider without replacing Comfy's numeric value owner. */
-export function createNumericSliderControl(documentRef: Document): NumericSliderControl {
+export function createFluentNumericSlider(documentRef: Document): Slider & NumericSliderControl {
   const slider = documentRef.createElement('fluent-slider');
-  if (!(slider instanceof Slider))
+  if (!(slider instanceof PresentationSlider))
     throw new TypeError('The registered Fluent slider has an incompatible implementation.');
   adaptFluentSliderGeometry(slider);
   slider.append(createFluentSliderThumb(documentRef));
   return slider;
 }
-
-/** Share Microsoft's motion timings across presentation lifecycles and themes. */
-export const fluentMotion = {
-  fasterDuration: Number.parseFloat(webDarkTheme.durationFaster),
-  duration: Number.parseFloat(webDarkTheme.durationNormal),
-  exitDuration: Number.parseFloat(webDarkTheme.durationFast),
-  easing: webDarkTheme.curveDecelerateMid,
-};
 
 const fontFamilyBase = '"Segoe UI Variable", "Segoe UI", sans-serif';
 const themes = {
@@ -189,9 +220,12 @@ const appliedThemes = new WeakMap<HTMLElement, boolean | null>();
 
 /** Serialize trusted Microsoft tokens for scoped native-node inheritance. */
 export function fluentTokenDeclarations(dark: boolean): string {
-  return Object.entries(dark ? themes.dark : themes.light)
-    .map(([name, value]) => `--${name}:${value};`)
-    .join('');
+  const theme = dark ? themes.dark : themes.light;
+  return (
+    Object.entries(theme)
+      .map(([name, value]) => `--${name}:${value};`)
+      .join('') + themeTokenDeclarations(fluentThemeTokens(theme))
+  );
 }
 
 /** Apply accepted palette changes once while respecting the native API's connection boundary. */
@@ -202,6 +236,12 @@ export function applyOwnedFluentTheme(element: HTMLElement, dark: boolean | null
   }
   if (appliedThemes.has(element) && appliedThemes.get(element) === dark) return;
   setTheme(dark === null ? null : dark ? themes.dark : themes.light, element);
+  for (const [role, value] of Object.entries(
+    fluentThemeTokens(dark ? themes.dark : themes.light),
+  )) {
+    if (dark === null) element.style.removeProperty(`--sc-${role}`);
+    else element.style.setProperty(`--sc-${role}`, value);
+  }
   appliedThemes.set(element, dark);
 }
 

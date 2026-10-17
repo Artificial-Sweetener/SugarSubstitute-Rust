@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Reveal and retract exact native noodle trajectories with bounded, temporary vector effects. */
 import type { NativeLinkPathSnapshot } from './NativeLinkPathRecording.js';
-import { fluentMotion } from '../appearance/FluentThemeRuntime.js';
+import { surfaceMotion } from '../appearance/SurfaceMotionTokens.js';
 
 interface LinkSegment {
   elements: SVGPathElement[];
@@ -168,8 +168,8 @@ export class WorkflowMasonryLinkMotion {
         for (const request of requests) {
           if (typeof request.element.animate !== 'function') continue;
           const effect = request.element.animate(request.frames, {
-            duration: fluentMotion.fasterDuration,
-            easing: fluentMotion.easing,
+            duration: surfaceMotion.fasterDuration,
+            easing: surfaceMotion.easing,
             fill: 'both',
           });
           this.#effects.set(request.element, effect);

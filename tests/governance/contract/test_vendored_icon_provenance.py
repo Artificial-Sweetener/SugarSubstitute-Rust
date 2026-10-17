@@ -74,6 +74,8 @@ def test_every_vendored_icon_has_exact_provenance_and_deployment_bytes() -> None
     recorded: set[str] = set()
     for component in components:
         assert isinstance(component, dict)
+        if "asset" not in component:
+            continue
         source = component["source"]
         if source in {
             "https://github.com/Artificial-Sweetener/SugarSubstitute",
@@ -361,7 +363,7 @@ def test_official_fluent_menu_runtime_has_pinned_licensed_deployment() -> None:
     assert (ROOT / "web" / license_path).read_bytes() == (
         ROOT / license_path
     ).read_bytes()
-    assert component["runtime_files"] == ["web/comfyui/ui/menus/FluentMenuRuntime.js"]
+    assert component["runtime_files"] == ["web/comfyui/ui/menus/MenuControlRuntime.js"]
     assert (
         hashlib.sha256((ROOT / component["runtime_files"][0]).read_bytes()).hexdigest()
         == component["runtime_sha256"]

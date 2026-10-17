@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Coordinate reversible native-card layout assembly and graph chrome fades. */
-import { fluentMotion } from '../appearance/FluentThemeRuntime.js';
+import { surfaceMotion } from '../appearance/SurfaceMotionTokens.js';
 import { NativeGraphCardAssembly } from './NativeGraphCardAssembly.js';
 import { setSurfaceGeometryMoving } from '../motion/SurfaceGeometryMotion.js';
 import type { WorkflowMasonryGraphReveal } from './WorkflowMasonryGraphReveal.js';
@@ -181,8 +181,8 @@ export class WorkflowMasonryTransition {
       for (const request of requests) {
         if (typeof request.element.animate !== 'function') continue;
         const effect = request.element.animate(request.frames, {
-          duration: fluentMotion.duration,
-          easing: fluentMotion.easing,
+          duration: surfaceMotion.duration,
+          easing: surfaceMotion.easing,
           fill: 'both',
         });
         this.#effects.set(request.element, effect);

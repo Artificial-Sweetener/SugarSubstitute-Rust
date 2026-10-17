@@ -17,13 +17,13 @@
 import { expect, test } from '@jest/globals';
 import { fluentAppearanceCss } from '../../../frontend/comfyui/ui/surface/appearance/FluentAppearanceStyles.js';
 import {
-  fluentScrollbarCss,
-  fluentScrollbarPresentationCss,
-} from '../../../frontend/comfyui/ui/surface/appearance/FluentScrollbarStyles.js';
+  scrollbarCss,
+  scrollbarPresentationCss,
+} from '../../../frontend/comfyui/ui/surface/appearance/ScrollbarStyles.js';
 import {
   scrollbarGeometry,
   scrollbarDragPosition,
-} from '../../../frontend/comfyui/ui/surface/appearance/FluentScrollbarGeometry.js';
+} from '../../../frontend/comfyui/ui/surface/appearance/ScrollbarGeometry.js';
 
 test.each([true, false])(
   'enforces floating scrollbars across Fluent mode in palette %s',
@@ -34,13 +34,13 @@ test.each([true, false])(
     expect(css).not.toContain('scrollbar-width:auto!important');
     expect(css).not.toContain('scrollbar-width:thin!important');
     expect(css).not.toContain('data-sc-horizontal-scrollbar');
-    expect(fluentScrollbarCss(dark)).not.toContain('padding-bottom');
-    expect(fluentScrollbarCss(dark)).not.toContain('padding-block-end');
+    expect(scrollbarCss(dark)).not.toContain('padding-bottom');
+    expect(scrollbarCss(dark)).not.toContain('padding-block-end');
     expect(css).toContain('::-webkit-scrollbar');
-    expect(css).toContain('.sc-fluent-scrollbar-layer');
+    expect(css).toContain('.sc-style-scrollbar-layer');
     expect(css).toContain('position:absolute');
     expect(css).toContain('z-index:1');
-    expect(fluentScrollbarPresentationCss()).toContain('overflow:visible');
+    expect(scrollbarPresentationCss()).toContain('overflow:visible');
     expect(css).not.toContain('2147483646');
   },
 );
@@ -63,7 +63,7 @@ test('bounds the thumb and maps native scroll range to pointer travel', () => {
 });
 
 test('keeps horizontal paint thin and flush with the bottom while preserving vertical paint', () => {
-  const css = fluentScrollbarPresentationCss();
+  const css = scrollbarPresentationCss();
   expect(css).toContain('height:calc(2px / var(--sc-scrollbar-scale-y,1))');
   expect(css).toContain('bottom:0;');
   expect(css).toContain('height:calc(4px / var(--sc-scrollbar-scale-y,1))');

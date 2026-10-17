@@ -24,16 +24,16 @@ export const WORKFLOW_TAB_ORB_CUTOUT_RADIUS = 26;
 /** Scope the reference tab body, accent and cutout to workflow-specific Microsoft controls. */
 export const workflowTabCss = `
   :host { height:30px; width:var(--sc-workflow-tab-width,180px); min-width:var(--sc-workflow-tab-width,180px); max-width:var(--sc-workflow-tab-width,180px); flex:0 0 var(--sc-workflow-tab-width,180px); padding:0 8px 0 20px;
-    border-radius:8px 8px 0 0; gap:6px; font:13px/20px var(--fontFamilyBase); overflow:hidden;
+    border-radius:8px 8px 0 0; gap:6px; font:13px/20px var(--sc-font-family); overflow:hidden;
     color:var(--sc-frame-muted); background:transparent; box-shadow:none; }
   :host .tab-content { min-width:0; flex:1; overflow:hidden; padding:0; }
   :host .tab-content::after { display:none; }
-  :host([aria-selected='true']) { background:var(--comfy-menu-bg,#202020); color:var(--colorNeutralForeground1); font-weight:600; }
+  :host([aria-selected='true']) { background:var(--comfy-menu-bg,#202020); color:var(--sc-text); font-weight:600; }
   :host(:not([aria-selected='true']):hover) { background:var(--sc-frame-hover); }
   :host(:not([aria-selected='true'])) { clip-path:inset(1px 1px 0 round 7px 7px 0 0); }
   :host(:not([aria-selected='true']):active) { background:var(--sc-frame-pressed); }
   :host([data-unread]:not([aria-selected='true'])) { background:var(--sc-frame-unread); }
-  :host([data-sc-held]:not([aria-selected='true'])) { background:linear-gradient(var(--sc-frame-hover),var(--sc-frame-hover)),var(--sc-tab-drag-backdrop,var(--colorNeutralBackground1)); }
+  :host([data-sc-held]:not([aria-selected='true'])) { background:linear-gradient(var(--sc-frame-hover),var(--sc-frame-hover)),var(--sc-tab-drag-backdrop,var(--sc-surface)); }
   :host::after { content:''; position:absolute; inset:0 0 auto; height:2px; width:auto; border-radius:0;
     background:transparent; transform:none; transition:none; }
   :host([aria-selected='true'])::after { background:var(--sc-accent-indicator); }

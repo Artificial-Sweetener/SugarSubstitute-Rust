@@ -3,7 +3,7 @@ schema = 1
 [menus]
 context_menu = "frontend/comfyui/ui/menus/ContextMenu.ts"
 floating_surface = "frontend/comfyui/ui/menus/FloatingSurface.ts"
-fluent_runtime = "frontend/comfyui/ui/menus/FluentMenuRuntime.ts"
+control_runtime = "frontend/comfyui/ui/menus/MenuControlRuntime.ts"
 # The Add Cube search dialog presents selectable search results, not context actions.
 search_dialogs = ["frontend/comfyui/ui/picker/ComfyCubeAddMenuPresenter.ts"]
 choice_controls = ["frontend/comfyui/ui/output_canvas/presentation/vue/CanvasAnchoredPicker.ts"]
@@ -12,7 +12,7 @@ choice_controls = ["frontend/comfyui/ui/output_canvas/presentation/vue/CanvasAnc
 document_observer_owners = [
   "frontend/comfyui/ui/core/HostSurfaceObserver.ts",
   "frontend/comfyui/ui/surface/ComfyRendererPresenceObserver.ts",
-  "frontend/comfyui/ui/surface/appearance/FluentOverlayScrollbarHost.ts",
+  "frontend/comfyui/ui/surface/appearance/OverlayScrollbarHost.ts",
 ]
 mutation_observer_owners = [
   "frontend/comfyui/ui/surface/appearance/AccentThemeHost.ts",
@@ -28,7 +28,7 @@ mutation_observer_owners = [
   "frontend/comfyui/ui/surface/NativeChoiceRestrictions.ts",
   "frontend/comfyui/ui/surface/NodeCardIconHost.ts",
   "frontend/comfyui/ui/surface/appearance/AppearanceHost.ts",
-  "frontend/comfyui/ui/surface/appearance/FluentOverlayScrollbarHost.ts",
+  "frontend/comfyui/ui/surface/appearance/OverlayScrollbarHost.ts",
   "frontend/comfyui/ui/surface/appearance/NativeToggleRows.ts",
   "frontend/comfyui/ui/surface/appearance/NativeBooleanSegments.ts",
   "frontend/comfyui/ui/model_library/ModelPickerAppearance.ts",

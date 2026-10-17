@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Slide one workspace pane while retaining outgoing pixels until the compositor settles. */
-import { fluentMotion } from '../../surface/appearance/FluentThemeRuntime.js';
+import { surfaceMotion } from '../../surface/appearance/SurfaceMotionTokens.js';
 
 /** Own reversible pane motion independently of workflow preferences and graph allocation. */
 export class BrowserCanvasWorkspaceMotion {
@@ -69,7 +69,7 @@ export class BrowserCanvasWorkspaceMotion {
     try {
       this.#effect = this.element.animate(
         [{ transform: from }, { transform: visible ? 'translateX(0)' : 'translateX(100%)' }],
-        { duration: fluentMotion.duration, easing: fluentMotion.easing, fill: 'both' },
+        { duration: surfaceMotion.duration, easing: surfaceMotion.easing, fill: 'both' },
       );
       await this.#effect.finished;
     } catch (error: unknown) {

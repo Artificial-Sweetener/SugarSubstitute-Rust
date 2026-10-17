@@ -14,7 +14,10 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own the shared modal's Fluent palette lifecycle without changing form state. */
-import { applyOwnedFluentTheme } from '../surface/appearance/FluentThemeRuntime.js';
+import { readOwnedVisualStyle } from '../surface/appearance/VisualStyleBoundary.js';
+import { subscribeVisualStyle } from '../surface/appearance/VisualStyleBoundary.js';
+import type { VisualStyle } from '../surface/appearance/VisualStyle.js';
+import { applyOwnedTheme } from '../surface/appearance/ThemeService.js';
 import { readComfyDarkTheme } from '../surface/appearance/ComfyColorScheme.js';
 import { injectModalAppearanceStyles } from './ModalAppearanceStyles.js';
 import type { AppearanceSource } from '../surface/appearance/AppearanceState.js';
@@ -24,7 +27,7 @@ export class ModalAppearance {
   #observer: MutationObserver | null = null;
   #overlay: HTMLElement | null = null;
   #dark: boolean | null = null;
-  #fluent: boolean | null = null;
+  #style: VisualStyle | null = null;
   #release: (() => void) | null = null;
   readonly #source: AppearanceSource | undefined;
 
@@ -45,6 +48,7 @@ export class ModalAppearance {
       this.#release = this.#source.subscribeAppearance(() => this.#refresh());
       return;
     }
+    this.#release = subscribeVisualStyle(document, () => this.#refresh());
     const Observer = document.defaultView?.MutationObserver;
     if (!Observer) return;
     this.#observer = new Observer(() => this.#refresh());
@@ -65,13 +69,13 @@ export class ModalAppearance {
     this.#observer?.disconnect();
     this.#observer = null;
     if (this.#overlay) {
-      applyOwnedFluentTheme(this.#overlay, null);
+      applyOwnedTheme(this.#overlay, null);
       delete this.#overlay.dataset.scModalAppearance;
       delete this.#overlay.dataset.scModalColorScheme;
     }
     this.#overlay = null;
     this.#dark = null;
-    this.#fluent = null;
+    this.#style = null;
   }
 
   /** Apply official tokens only when the host changes palette. */
@@ -79,12 +83,16 @@ export class ModalAppearance {
     if (!this.#overlay) return;
     const accepted = this.#source?.appearance;
     const dark = accepted?.dark ?? readComfyDarkTheme(this.#overlay.ownerDocument);
-    const fluent = accepted?.fluent ?? true;
-    if (dark === this.#dark && fluent === this.#fluent) return;
+    const style = accepted?.style ?? readOwnedVisualStyle(this.#overlay.ownerDocument);
+    if (dark === this.#dark && style === this.#style) return;
     this.#dark = dark;
-    this.#fluent = fluent;
-    this.#overlay.dataset.scModalAppearance = fluent ? 'fluent' : 'comfy';
+    this.#style = style;
+    this.#overlay.dataset.scModalAppearance = style;
     this.#overlay.dataset.scModalColorScheme = dark ? 'dark' : 'light';
-    applyOwnedFluentTheme(this.#overlay, fluent ? dark : null);
+    applyOwnedTheme(
+      this.#overlay,
+      style === 'comfy' ? null : dark,
+      style === 'comfy' ? 'fluent' : style,
+    );
   }
 }

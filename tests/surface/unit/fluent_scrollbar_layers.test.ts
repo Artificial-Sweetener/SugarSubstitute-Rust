@@ -16,10 +16,10 @@
 /** Prove native scrollbar layer ownership, zoom coordinates, and reversible resource lifetime. */
 import { afterEach, expect, jest, test } from '@jest/globals';
 import {
-  FluentScrollbarLayers,
+  ScrollbarLayers,
   scrollbarCoordinateSpace,
-} from '../../../frontend/comfyui/ui/surface/appearance/FluentScrollbarLayers.js';
-import { FluentScrollbarView } from '../../../frontend/comfyui/ui/surface/appearance/FluentScrollbarView.js';
+} from '../../../frontend/comfyui/ui/surface/appearance/ScrollbarLayers.js';
+import { ScrollbarView } from '../../../frontend/comfyui/ui/surface/appearance/ScrollbarView.js';
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -35,7 +35,7 @@ test('measures all native layer boundaries before inserting any scrollbar layer'
   document.body.append(surface);
   const read = jest.spyOn(window, 'getComputedStyle');
   const write = jest.spyOn(surface, 'append');
-  const layers = new FluentScrollbarLayers(document);
+  const layers = new ScrollbarLayers(document);
   const mounted = layers.mountMany(
     [first, second].map((owner) => ({
       owner,
@@ -57,7 +57,7 @@ test('shares a positioned native surface until its final scroll owner is release
     second = document.createElement('div');
   surface.append(first, second);
   document.body.append(surface);
-  const layers = new FluentScrollbarLayers(document);
+  const layers = new ScrollbarLayers(document);
   const firstThumb = document.createElement('div'),
     secondThumb = document.createElement('div');
   const layer = layers.mount(first, firstThumb, document.createElement('div'));
@@ -84,7 +84,7 @@ test.each(['position', 'transform', 'contain'] as const)(
     ancestor.append(owner);
     document.body.append(ancestor);
     const before = owner.getAttribute('style');
-    const layers = new FluentScrollbarLayers(document);
+    const layers = new ScrollbarLayers(document);
     expect(
       layers.mount(owner, document.createElement('div'), document.createElement('div'))
         .parentElement,
@@ -102,7 +102,7 @@ test('keeps shadow thumbs in the shadow tree and supplies a body fallback for st
   shadow.append(owner);
   const ordinary = document.createElement('div');
   document.body.append(custom, ordinary);
-  const layers = new FluentScrollbarLayers(document);
+  const layers = new ScrollbarLayers(document);
   expect(
     layers.mount(owner, document.createElement('div'), document.createElement('div')).getRootNode(),
   ).toBe(shadow);
@@ -111,7 +111,7 @@ test('keeps shadow thumbs in the shadow tree and supplies a body fallback for st
       .parentElement,
   ).toBe(document.body);
   layers.clear();
-  expect(shadow.querySelector('.sc-fluent-scrollbar-layer')).toBeNull();
+  expect(shadow.querySelector('.sc-style-scrollbar-layer')).toBeNull();
 });
 
 test.each(['flex', 'inline-flex', 'grid', 'inline-grid'])(
@@ -126,7 +126,7 @@ test.each(['flex', 'inline-flex', 'grid', 'inline-grid'])(
     bar.append(toolbar);
     document.body.append(bar);
     const before = toolbar.getAttribute('style');
-    const layers = new FluentScrollbarLayers(document);
+    const layers = new ScrollbarLayers(document);
     const layer = layers.mount(owner, document.createElement('div'), document.createElement('div'));
     expect(layer.parentElement).toBe(toolbar);
     expect(toolbar.getAttribute('style')).toBe(before);
@@ -159,7 +159,7 @@ test('maps viewport geometry through a zoomed and scrolled native layer while pr
     scrollWidth: { value: 300 },
     scrollHeight: { value: 1000 },
   });
-  const view = new FluentScrollbarView(owner, 'vertical', 'owner', jest.fn());
+  const view = new ScrollbarView(owner, 'vertical', 'owner', jest.fn());
   const commit = view.prepare(
     { left: 110, top: 20, width: 150, height: 100, horizontalBottom: 120, rtl: false },
     space,

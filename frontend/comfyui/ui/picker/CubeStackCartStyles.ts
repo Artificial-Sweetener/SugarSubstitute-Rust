@@ -37,9 +37,9 @@ export function ensureCubeStackCartStyles(document: Document): void {
     .sc-cube-stack-cart__search { box-sizing:border-box; width:100%; max-width:none; min-height:32px; margin:0; flex:0 0 auto; color:var(--sc-stack-text); }
     input.sc-cube-stack-cart__search { border:1px solid var(--sc-stack-border); background:var(--sc-stack-row); border-radius:5px; padding:6px 10px; font:inherit; }
     .sc-cube-stack-cart__scroll { overflow:auto; min-height:0; flex:1; scrollbar-width:thin; }
-    .sc-cube-stack-cart__heading { font:400 14px/20px var(--fontFamilyBase,"Segoe UI",sans-serif); margin:0 6px 4px; min-height:20px; }
-    .sc-cube-stack-cart__model { font:600 14px/28px var(--fontFamilyBase,"Segoe UI",sans-serif); margin:0 6px; }
-    .sc-cube-stack-cart__role { font:400 10px/18px var(--fontFamilyBase,"Segoe UI",sans-serif); color:var(--sc-stack-muted); margin:0 6px 6px; }
+    .sc-cube-stack-cart__heading { font:400 14px/20px var(--sc-font-family,"Segoe UI",sans-serif); margin:0 6px 4px; min-height:20px; }
+    .sc-cube-stack-cart__model { font:600 14px/28px var(--sc-font-family,"Segoe UI",sans-serif); margin:0 6px; }
+    .sc-cube-stack-cart__role { font:400 10px/18px var(--sc-font-family,"Segoe UI",sans-serif); color:var(--sc-stack-muted); margin:0 6px 6px; }
     .sc-cube-stack-cart__scroll section + section { margin-top:6px; }
     .sc-cube-stack-cart__empty { min-height:64px; display:flex; align-items:center; justify-content:center; text-align:center; color:var(--sc-stack-muted); font-size:12px; margin:8px 6px; }
     .sc-cube-stack-cart [aria-label="Cube cart"] .sc-cube-stack-row__remove { opacity:1; }

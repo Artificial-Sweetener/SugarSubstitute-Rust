@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Present a stable Vue navigation rail with canonical drag constraints and keyboard equivalents. */
 import { defineComponent, h, ref, computed, watch, type PropType } from 'vue';
+import { buttonTag } from '../../appearance/ControlFactory.js';
 import { CUBE_STACK_ROW_GAP, CUBE_STACK_ROW_STRIDE } from '../CubeStackMetrics.js';
 import type {
   CubeStackNavigationRow,
@@ -122,12 +123,14 @@ export const CubeStackRail = defineComponent({
     };
     const tool = (icon: string, label: string, action: () => void) =>
       h(
-        props.state.appearance === 'fluent' ? 'fluent-button' : 'button',
+        buttonTag(props.state.appearance),
         {
           class: 'sc-cube-stack__tool',
           type: 'button',
           appearance: 'subtle',
-          size: 'small',
+          'data-sc-button': '',
+          quiet: '',
+          size: props.state.appearance === 'spectrum' ? 's' : 'small',
           'icon-only': '',
           title: label,
           'aria-label': label,
@@ -237,11 +240,13 @@ export const CubeStackRail = defineComponent({
               )
             : null,
           h(
-            props.state.appearance === 'fluent' ? 'fluent-button' : 'button',
+            buttonTag(props.state.appearance),
             {
               class: 'sc-cube-stack__add',
               type: 'button',
               appearance: 'subtle',
+              'data-sc-button': '',
+              quiet: '',
               'aria-label': 'Add cubes',
               title: 'Add cubes',
               disabled: props.state.pending || !props.interactive,

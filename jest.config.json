@@ -18,7 +18,7 @@
     ]
   },
   "moduleNameMapper": {
-    "^(?:.*[/\\\\])?FluentMenuRuntime\\.js$": "<rootDir>/tests/frontend_core/support/mocks/fluent_menu.ts",
+    "^(?:.*[/\\\\])?MenuControlRuntime\\.js$": "<rootDir>/tests/frontend_core/support/mocks/fluent_menu.ts",
     "^vue$": "<rootDir>/node_modules/vue/index.mjs",
     "^/scripts/app\\.js$": "<rootDir>/tests/frontend_core/support/mocks/app.ts",
     "^/scripts/api\\.js$": "<rootDir>/tests/frontend_core/support/mocks/api.ts",

@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Animate toolbar disclosure while retaining native controls and their value owners. */
-import { fluentMotion } from '../../surface/appearance/FluentThemeRuntime.js';
+import { surfaceMotion } from '../../surface/appearance/SurfaceMotionTokens.js';
 import { setSurfaceGeometryMoving } from '../../surface/motion/SurfaceGeometryMotion.js';
 
 /** Persist user disclosure intent independently of placement and native widget state. */
@@ -151,8 +151,8 @@ export class OverrideToolbarDisclosure {
     const generation = this.#generation;
     try {
       const timing = {
-        duration: fluentMotion.duration,
-        easing: fluentMotion.easing,
+        duration: surfaceMotion.duration,
+        easing: surfaceMotion.easing,
         fill: 'both' as const,
       };
       this.#effects.push(

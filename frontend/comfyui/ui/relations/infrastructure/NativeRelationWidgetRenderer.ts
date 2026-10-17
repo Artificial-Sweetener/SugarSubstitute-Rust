@@ -252,7 +252,11 @@ export class NativeRelationWidgetRenderer implements RelationWidgetRenderer {
             ? this.document.activeElement
             : null;
           const key = seed
-            ? seedMode.prepare(widget, seed, appearance?.appearance.fluent ?? false)
+            ? seedMode.prepare(
+                widget,
+                seed,
+                appearance !== undefined && appearance.appearance.style !== 'comfy',
+              )
             : null;
           const vnode = runtime.h(runtime.components.get(component), {
             ...(key === null ? {} : { key }),

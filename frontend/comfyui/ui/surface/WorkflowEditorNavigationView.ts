@@ -14,7 +14,9 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Present editor ancestry with Microsoft Fluent actions and literal host labels. */
-import { applyOwnedFluentTheme } from './appearance/FluentThemeRuntime.js';
+import { createButton } from './appearance/ControlFactory.js';
+import { subscribeVisualStyle } from './appearance/VisualStyleBoundary.js';
+import { applyOwnedTheme } from './appearance/ThemeService.js';
 
 export interface EditorBreadcrumb {
   readonly label: string;
@@ -29,6 +31,7 @@ export class WorkflowEditorNavigationView {
   #signature = '';
   #items: readonly EditorBreadcrumb[] = [];
   #dark: boolean | null = null;
+  readonly #stopStyle: () => void;
 
   /** Bind Fluent actions to the host's existing navigation commands. */
   constructor(
@@ -43,6 +46,15 @@ export class WorkflowEditorNavigationView {
     backButton.classList.add('sc-editor-bar-back');
     this.#trail = document.createElement('ol');
     this.element.append(backButton, this.#trail);
+    this.#stopStyle = subscribeVisualStyle(document, () => {
+      const replacement = this.#back(back);
+      replacement.classList.add('sc-editor-bar-back');
+      this.element.querySelector('.sc-editor-bar-back')?.replaceWith(replacement);
+      this.#signature = '';
+      const dark = this.#dark ?? true;
+      this.#dark = null;
+      this.update(this.#items, dark);
+    });
   }
 
   /** Reconcile only changed labels and delegate selection through the latest native path. */
@@ -50,7 +62,7 @@ export class WorkflowEditorNavigationView {
     this.#items = items;
     if (this.#dark !== dark) {
       this.#dark = dark;
-      applyOwnedFluentTheme(this.element, dark);
+      applyOwnedTheme(this.element, dark);
     }
     const signature = JSON.stringify(items.map(({ label, current }) => [label, current]));
     if (signature === this.#signature) return;
@@ -58,7 +70,9 @@ export class WorkflowEditorNavigationView {
     this.#trail.replaceChildren(
       ...items.map((item, index) => {
         const entry = this.document.createElement('li');
-        const control = this.document.createElement(item.current ? 'span' : 'fluent-button');
+        const control = item.current
+          ? this.document.createElement('span')
+          : createButton(this.document);
         control.textContent = item.label;
         control.title = item.label;
         if (item.current) control.setAttribute('aria-current', 'page');
@@ -74,12 +88,13 @@ export class WorkflowEditorNavigationView {
 
   /** Release owned Fluent controls without touching native navigation state. */
   dispose(): void {
+    this.#stopStyle();
     this.element.remove();
   }
 
   /** Keep the parent action alongside the breadcrumb trail with Fluent keyboard and focus behavior. */
   #back(action: () => void): HTMLElement {
-    const button = this.document.createElement('fluent-button');
+    const button = createButton(this.document);
     button.setAttribute('appearance', 'subtle');
     button.setAttribute('aria-label', 'Back to parent graph');
     button.title = 'Back to parent graph';

@@ -61,7 +61,7 @@ test('shares palette foregrounds with legacy relation selectors and override inp
     document.body.append(root);
     expect(combo.matches(rule.selectorText)).toBe(true);
   }
-  expect(rule.style.color).toBe('var(--colorNeutralForeground1,var(--fg-color,#eee))');
+  expect(rule.style.color).toBe('var(--sc-text,var(--fg-color,#eee))');
 });
 
 afterEach(() => {

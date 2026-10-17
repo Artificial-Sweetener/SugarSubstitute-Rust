@@ -27,15 +27,13 @@ test('applies changed themes and releases them without rewriting an accepted pal
   const element = document.createElement('section');
   document.body.append(element);
   applyOwnedFluentTheme(element, true);
-  expect(element.style.getPropertyValue('--colorNeutralBackground1')).toBe(
-    webDarkTheme.colorNeutralBackground1,
-  );
+  expect(element.style.getPropertyValue('--sc-surface')).toBe(webDarkTheme.colorNeutralBackground1);
   const writes = jest.spyOn(CSSStyleDeclaration.prototype, 'setProperty');
   for (let index = 0; index < 10; index++) applyOwnedFluentTheme(element, true);
   expect(writes).not.toHaveBeenCalled();
   applyOwnedFluentTheme(element, false);
   expect(writes).toHaveBeenCalled();
-  expect(element.style.getPropertyValue('--colorNeutralBackground1')).toBe(
+  expect(element.style.getPropertyValue('--sc-surface')).toBe(
     webLightTheme.colorNeutralBackground1,
   );
   const removals = jest.spyOn(CSSStyleDeclaration.prototype, 'removeProperty');
@@ -49,17 +47,15 @@ test('applies changed themes and releases them without rewriting an accepted pal
 test('does not remember a theme that the native API could not apply before connection', () => {
   const element = document.createElement('section');
   applyOwnedFluentTheme(element, true);
-  expect(element.style.getPropertyValue('--colorNeutralBackground1')).toBe('');
+  expect(element.style.getPropertyValue('--sc-surface')).toBe('');
   document.body.append(element);
   applyOwnedFluentTheme(element, true);
-  expect(element.style.getPropertyValue('--colorNeutralBackground1')).toBe(
-    webDarkTheme.colorNeutralBackground1,
-  );
+  expect(element.style.getPropertyValue('--sc-surface')).toBe(webDarkTheme.colorNeutralBackground1);
   element.remove();
   applyOwnedFluentTheme(element, null);
   document.body.append(element);
   applyOwnedFluentTheme(element, false);
-  expect(element.style.getPropertyValue('--colorNeutralBackground1')).toBe(
+  expect(element.style.getPropertyValue('--sc-surface')).toBe(
     webLightTheme.colorNeutralBackground1,
   );
 });

@@ -29,9 +29,14 @@ test.each([true, false])('bridges local themes and native controls for dark=%s',
   const scope = rules.find((rule) => rule.selectorText?.includes('[data-sc-model-appearance]'))!;
   expect(scope.selectorText).toContain('[data-sc-modal-appearance]');
   expect(scope.selectorText).toContain('[id^="SugarCubes."]');
-  expect(scope.style.getPropertyValue('--colorBrandBackground')).toBe('#ffe066');
-  expect(scope.style.getPropertyPriority('--colorBrandBackground')).toBe('important');
-  expect(scope.style.getPropertyValue('--colorNeutralForegroundOnBrand')).toBe('#000000');
+  expect(rules[0]?.style.getPropertyValue('--sc-accent-color')).toBe('#ffe066');
+  expect(scope.style.getPropertyValue('--sc-brand-fill')).toBe('var(--sc-accent-color)');
+  expect(scope.style.getPropertyPriority('--sc-brand-fill')).toBe('important');
+  expect(rules[0]?.style.getPropertyValue('--sc-accent-foreground')).toBe('#000000');
+  expect(scope.style.getPropertyValue('--sc-text-on-accent')).toBe('var(--sc-accent-foreground)');
+  expect(scope.style.getPropertyValue('--spectrum-accent-color-900')).toBe(
+    'var(--sc-accent-color)',
+  );
   for (const token of [
     '--p-toggleswitch-checked-background',
     '--p-checkbox-checked-background',

@@ -20,7 +20,7 @@ import type { NumericSliderControl } from '../../../frontend/comfyui/ui/surface/
 import type { NativeNumericField } from '../../../frontend/comfyui/ui/surface/appearance/ComfyNativeNumericField.js';
 import { readNativeNumericField } from '../../../frontend/comfyui/ui/surface/appearance/ComfyNativeNumericField.js';
 import { usesSubstituteSlider } from '../../../frontend/comfyui/ui/surface/appearance/NumericSliderPresentation.js';
-import { fluentNumericCss } from '../../../frontend/comfyui/ui/surface/appearance/FluentNumericStyles.js';
+import { nativeNumericCss } from '../../../frontend/comfyui/ui/surface/appearance/NativeNumericStyles.js';
 import { Slider } from '@fluentui/web-components/slider/class.js';
 import '../../../frontend/comfyui/ui/surface/appearance/FluentThemeRuntime.js';
 
@@ -28,6 +28,28 @@ afterEach(() => document.body.replaceChildren());
 
 /** Model the official slider's synchronous change notification on value assignment. */
 class SliderFixture extends HTMLElement implements NumericSliderControl {
+  /** Expose the fixture element through the same boundary as official components. */
+  get root(): HTMLElement {
+    return this;
+  }
+  /** Normalize the simulated vendor's string values. */
+  readValue(): number {
+    return Number(this.value);
+  }
+  /** Reflect numeric state using the fixture's synchronous vendor change notification. */
+  synchronize(
+    minimum: number,
+    maximum: number,
+    step: number,
+    disabled: boolean,
+    value: number | null,
+  ): void {
+    this.min = String(minimum);
+    this.max = String(maximum);
+    this.step = String(step);
+    this.disabled = disabled;
+    if (value !== null) this.value = String(value);
+  }
   min = '';
   max = '';
   step = '';
@@ -232,14 +254,14 @@ test('stacks integer controls without adding sliders and releases stale controls
   expect(root.querySelector('numeric-slider-fixture')).toBeNull();
   controls.reconcile(root, []);
   expect(field.input.hasAttribute('data-sc-number-input')).toBe(false);
-  expect(fluentNumericCss()).toContain('[data-sc-number-increment] { top:0; }');
-  expect(fluentNumericCss()).toContain('[data-sc-number-decrement] { bottom:0; }');
+  expect(nativeNumericCss()).toContain('[data-sc-number-increment] { top:0; }');
+  expect(nativeNumericCss()).toContain('[data-sc-number-decrement] { bottom:0; }');
   controls.clear();
 });
 
 test('centers recognized numeric editors and uses the desktop slider cursor only while themed', () => {
   const style = document.createElement('style');
-  style.textContent = fluentNumericCss();
+  style.textContent = nativeNumericCss();
   const { root, field, controls } = fixture();
   root.append(style);
   const custom = document.createElement('input');
@@ -358,7 +380,7 @@ test('styles late-mounted and replaced native buttons without replacing the inpu
 test('suppresses only the recognized native range fill while Fluent presentation owns the field', () => {
   const { root, field, controls } = fixture();
   const style = document.createElement('style');
-  style.textContent = fluentNumericCss();
+  style.textContent = nativeNumericCss();
   root.append(style);
   const fill = document.createElement('div');
   const custom = document.createElement('div');

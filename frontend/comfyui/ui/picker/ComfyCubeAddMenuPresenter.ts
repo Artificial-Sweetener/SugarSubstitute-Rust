@@ -21,7 +21,7 @@ import { createCubeModelTitleElement } from '../surface/CubeModelPillDomRenderer
 import type { CubeFaceActionAnchor } from '../surface/CubeFaceChromeActions.js';
 import type { CubeAddCandidate, CubeAddCandidateGroups } from './CubeAddCandidateCatalog.js';
 import { FloatingSurface } from '../menus/FloatingSurface.js';
-import { createFluentMenuItem, createFluentMenuList } from '../menus/FluentMenuRuntime.js';
+import { createMenuItem, createMenuList } from '../menus/MenuControlRuntime.js';
 
 const MENU_ATTRIBUTE = 'data-sugarcubes-add-cube-menu';
 const RESULT_ATTRIBUTE = 'data-sugarcubes-add-cube-result';
@@ -65,7 +65,7 @@ export class ComfyCubeAddMenuPresenter {
     search.placeholder = 'Search Cubes';
     search.setAttribute('aria-label', 'Search Cubes');
     search.addEventListener('input', () => this.#renderResults(search.value));
-    const results = createFluentMenuList(this.#document);
+    const results = createMenuList(this.#document);
     results.className = 'sugarcubes-add-cube-menu__results';
     results.setAttribute('role', 'menu');
     menu.append(search, results);
@@ -119,7 +119,7 @@ export class ComfyCubeAddMenuPresenter {
 
   /** Build one literal-safe candidate row. */
   #createCandidateRow(candidate: CubeAddCandidate): HTMLElement {
-    const row = createFluentMenuItem(this.#document);
+    const row = createMenuItem(this.#document);
     row.setAttribute(RESULT_ATTRIBUTE, candidate.type);
     row.setAttribute('role', 'menuitem');
     const icon = createCubeAddIconElement(this.#document);
@@ -146,7 +146,7 @@ export class ComfyCubeAddMenuPresenter {
 
   /** Build the bottom-level navigation into boundary-compatible other models. */
   #createOtherModelsRow(count: number): HTMLElement {
-    const row = createFluentMenuItem(this.#document);
+    const row = createMenuItem(this.#document);
     row.setAttribute(OTHER_ATTRIBUTE, '');
     row.setAttribute('role', 'menuitem');
     const icon = this.#document.createElement('i');
@@ -188,13 +188,13 @@ export class ComfyCubeAddMenuPresenter {
       [${MENU_ATTRIBUTE}] {
         display: flex; flex-direction: column; width: min(24rem, calc(100vw - 0.5rem));
         max-height: min(32rem, calc(100vh - 0.5rem)); padding: 0.5rem; gap: 0.375rem;
-        border: 1px solid var(--colorNeutralStroke2); border-radius: var(--borderRadiusMedium);
-        color: var(--colorNeutralForeground1); background: var(--colorNeutralBackground1);
-        box-shadow: var(--shadow16); font:var(--fontWeightRegular) var(--fontSizeBase300)/var(--lineHeightBase300) var(--fontFamilyBase); }
+        border: 1px solid var(--sc-border-subtle); border-radius: var(--sc-control-radius);
+        color: var(--sc-text); background: var(--sc-surface);
+        box-shadow: var(--sc-shadow-medium); font:var(--sc-font-weight) var(--sc-font-size)/var(--lineHeightBase300) var(--sc-font-family); }
       [${MENU_ATTRIBUTE}] input { box-sizing: border-box; width: 100%; flex: 0 0 auto;
-        padding: 0.55rem 0.65rem; border: 1px solid var(--colorNeutralStroke1); border-bottom:2px solid var(--colorNeutralStrokeAccessible);
-        border-radius: var(--borderRadiusMedium); color: inherit; background: var(--colorNeutralBackground1); font:inherit; }
-      [${MENU_ATTRIBUTE}] input:focus { outline:0; border-bottom-color:var(--colorBrandStroke1); }
+        padding: 0.55rem 0.65rem; border: 1px solid var(--sc-border); border-bottom:2px solid var(--sc-border-accessible);
+        border-radius: var(--sc-control-radius); color: inherit; background: var(--sc-surface); font:inherit; }
+      [${MENU_ATTRIBUTE}] input:focus { outline:0; border-bottom-color:var(--sc-brand-border); }
       .sugarcubes-add-cube-menu__results { min-height: 0; max-inline-size:none; box-shadow:none; border:0; padding:0; overflow-y:auto; overscroll-behavior:contain; }
       [${RESULT_ATTRIBUTE}] { content-visibility:auto; contain-intrinsic-size:auto 2.75rem; }
       .sugarcubes-add-cube-menu__result-title { min-width: 0; font-weight: 600; }

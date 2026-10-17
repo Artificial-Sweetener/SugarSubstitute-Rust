@@ -26,7 +26,7 @@ afterEach(() => {
 
 test('keeps thumbnail-wash captions white while ordinary native fields inherit the host foreground', () => {
   expect(modelPickerCss).toMatch(
-    /\[data-sc-model-appearance="fluent"\] \.sc-model-field:has\(\.sc-model-banner\)[^{]*\{[^}]*color:\s*#fff;/,
+    /\[data-sc-model-appearance\]:not\(\[data-sc-model-appearance="native"\]\) \.sc-model-field:has\(\.sc-model-banner\)[^{]*\{[^}]*color:\s*#fff;/,
   );
   expect(modelPickerCss).toMatch(/\.sc-model-transfer-caption\s*\{[^}]*color:\s*#fff;/);
   expect(modelPickerCss).toMatch(

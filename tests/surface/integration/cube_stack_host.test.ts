@@ -209,7 +209,7 @@ test('retains one mounted rail, follows official appearance and recovers a hidde
   expect(button?.querySelector('.sc-cube-stack-row__model')?.textContent).toBe('SDXL');
   expect(document.querySelector('.sc-cube-stack-row__secondary')?.textContent).toContain('v1.0.0');
   fixture.host.ready(fixture.surface);
-  fixture.appearance.update(true, false);
+  fixture.appearance.update('fluent', false);
   await nextTick();
   expect(document.querySelector('.sc-cube-stack')).toBe(rail);
   expect(document.querySelector('.sc-cube-stack-row__activate')).toBe(button);
@@ -291,7 +291,7 @@ test('does no graph discovery for unrelated popup activity and releases the old 
   fixture.host.release();
   expect(fixture.listeners.size).toBe(0);
   expect(document.querySelector('.sc-cube-stack-host')).toBeNull();
-  fixture.appearance.update(true, true);
+  fixture.appearance.update('fluent', true);
   fixture.settings.get(CUBE_STACK_VISIBLE_SETTING)?.onChange(false);
   expect(document.querySelector('.sc-cube-stack-host')).toBeNull();
   fixture.host.ready(fixture.surface);

@@ -1,26 +1,11 @@
-//    SugarCubes - composable workflow units for ComfyUI
-//    Copyright (C) 2026  Artificial Sweetener and contributors
-//
-//    This program is free software: you can redistribute it and/or modify
-//    it under the terms of the GNU Affero General Public License as published by
-//    the Free Software Foundation, either version 3 of the License, or
-//    (at your option) any later version.
-//
-//    This program is distributed in the hope that it will be useful,
-//    but WITHOUT ANY WARRANTY; without even the implied warranty of
-//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//    GNU Affero General Public License for more details.
-//
-//    You should have received a copy of the GNU Affero General Public License
-//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Follow the host's Fluent preference and theme without replacing live picker state. */
 import { isRecord } from '../types/common.js';
-import { FLUENT_APPEARANCE_SETTING } from '../surface/appearance/AppearanceHost.js';
+import { VISUAL_STYLE_SETTING, readVisualStylePreference, } from '../surface/appearance/VisualStylePreference.js';
 import { readComfyDarkTheme } from '../surface/appearance/ComfyColorScheme.js';
-import { applyOwnedFluentTheme, fluentTokenDeclarations, } from '../surface/appearance/FluentThemeRuntime.js';
+import { applyOwnedTheme, visualStyleTokens } from '../surface/appearance/ThemeService.js';
 import { modelPickerCss } from './ModelPickerStyles.js';
 /** Own scoped theme annotations, styles and subscriptions for mounted picker surfaces. */
 export class ModelPickerAppearance {
+    app;
     #document;
     #settings;
     #style;
@@ -30,6 +15,7 @@ export class ModelPickerAppearance {
     #dark = true;
     /** Bind appearance to the same persisted preference as native Fluent cards. */
     constructor(documentRef, app) {
+        this.app = app;
         this.#document = documentRef;
         const ui = isRecord(app) && isRecord(app.ui) ? app.ui : {};
         this.#settings = isRecord(ui.settings) ? ui.settings : {};
@@ -39,7 +25,7 @@ export class ModelPickerAppearance {
         for (const root of [documentRef.documentElement, documentRef.body])
             this.#observer.observe(root, { attributes: true, attributeFilter: ['class', 'style'] });
         if (typeof this.#settings.addEventListener === 'function')
-            this.#settings.addEventListener.call(this.#settings, `${FLUENT_APPEARANCE_SETTING}.change`, this.#onPreferenceChange);
+            this.#settings.addEventListener.call(this.#settings, `${VISUAL_STYLE_SETTING}.change`, this.#onPreferenceChange);
     }
     /** Enable styling for the supported renderer lifetime. */
     activate() {
@@ -55,7 +41,7 @@ export class ModelPickerAppearance {
     /** Release scoped tokens before removing an owned surface. */
     release(surface) {
         this.#surfaces.delete(surface);
-        applyOwnedFluentTheme(surface, null);
+        applyOwnedTheme(surface, null);
         delete surface.dataset.scModelAppearance;
     }
     /** Restore host appearance when the supported renderer lifetime ends. */
@@ -70,12 +56,11 @@ export class ModelPickerAppearance {
         this.deactivate();
         this.#observer.disconnect();
         if (typeof this.#settings.removeEventListener === 'function')
-            this.#settings.removeEventListener.call(this.#settings, `${FLUENT_APPEARANCE_SETTING}.change`, this.#onPreferenceChange);
+            this.#settings.removeEventListener.call(this.#settings, `${VISUAL_STYLE_SETTING}.change`, this.#onPreferenceChange);
     }
     /** Read only the authoritative host preference, leaving control enablement independent. */
-    #fluent() {
-        return (typeof this.#settings.getSettingValue === 'function' &&
-            this.#settings.getSettingValue.call(this.#settings, FLUENT_APPEARANCE_SETTING) === true);
+    #visualStyle() {
+        return readVisualStylePreference(this.app);
     }
     /** Read after Comfy commits the value following its synchronous change dispatch. */
     #onPreferenceChange = () => {
@@ -86,14 +71,15 @@ export class ModelPickerAppearance {
         if (!this.#active)
             return;
         this.#dark = readComfyDarkTheme(this.#document);
-        this.#style.textContent = `${modelPickerCss}\n[data-sc-model-appearance="fluent"]{${fluentTokenDeclarations(this.#dark)}}\n[data-sc-model-native]{display:none!important}.sc-model-mount{width:100%;min-width:0}`;
+        const style = this.#visualStyle();
+        this.#style.textContent = `${modelPickerCss}\n[data-sc-model-appearance="${style}"]{${style === 'comfy' ? '' : visualStyleTokens(style, this.#dark)}}\n[data-sc-model-native]{display:none!important}.sc-model-mount{width:100%;min-width:0}`;
         for (const surface of this.#surfaces)
             this.#apply(surface);
     };
     /** Apply Microsoft tokens only to Fluent surfaces; native controls inherit Comfy tokens. */
     #apply(surface) {
-        const fluent = this.#fluent();
-        surface.dataset.scModelAppearance = fluent ? 'fluent' : 'native';
-        applyOwnedFluentTheme(surface, fluent ? this.#dark : null);
+        const style = this.#visualStyle();
+        surface.dataset.scModelAppearance = style === 'comfy' ? 'native' : style;
+        applyOwnedTheme(surface, style === 'comfy' ? null : this.#dark, style === 'comfy' ? 'fluent' : style);
     }
 }

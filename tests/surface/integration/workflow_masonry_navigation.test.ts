@@ -438,7 +438,7 @@ function fixture(rootCount = 1) {
     },
     stack: {
       appearance: {
-        appearance: { fluent: false, dark: true },
+        appearance: { style: 'comfy', dark: true },
         subscribeAppearance: () => () => undefined,
       },
       getReorder: () => null,

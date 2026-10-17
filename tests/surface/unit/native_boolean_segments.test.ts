@@ -21,7 +21,7 @@ import {
   type BooleanSegmentsControls,
 } from '../../../frontend/comfyui/ui/surface/appearance/NativeBooleanSegments.js';
 import { NativeToggleRows } from '../../../frontend/comfyui/ui/surface/appearance/NativeToggleRows.js';
-import { fluentInteractionCss } from '../../../frontend/comfyui/ui/surface/appearance/FluentInteractionStyles.js';
+import { nativeInteractionCss } from '../../../frontend/comfyui/ui/surface/appearance/NativeInteractionStyles.js';
 
 const adapters = new Set<NativeBooleanSegments>();
 
@@ -33,16 +33,18 @@ afterEach(() => {
 
 test('shared indicator eases across the selection and remains immediate for reduced motion', () => {
   const stylesheet = document.createElement('style');
-  stylesheet.textContent = fluentInteractionCss();
+  stylesheet.textContent = nativeInteractionCss();
   document.body.append(stylesheet);
   const rules = Array.from(stylesheet.sheet?.cssRules ?? []);
   const indicator = rules.find(
     (rule): rule is CSSStyleRule =>
       rule instanceof CSSStyleRule && rule.selectorText === '[data-sc-boolean-segments]::after',
   );
-  expect(indicator?.style.getPropertyValue('transition-duration')).toBe('var(--durationNormal)');
+  expect(indicator?.style.getPropertyValue('transition-duration')).toBe(
+    'var(--sc-motion-duration)',
+  );
   expect(indicator?.style.getPropertyValue('transition-timing-function')).toBe(
-    'var(--curveEasyEase)',
+    'var(--sc-motion-ease)',
   );
   const reducedMotion = rules.find(
     (rule): rule is CSSMediaRule =>

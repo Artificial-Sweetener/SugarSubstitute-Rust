@@ -191,7 +191,7 @@ test('unrelated popup activity does not refresh navigation or touch override pre
   expect(f.suspendOverrides).not.toHaveBeenCalled();
   expect(f.bar.querySelector('nav')).toBe(nav);
   expect([...f.bar.querySelectorAll('fluent-button')]).toEqual(buttons);
-  f.appearance.update(true, false);
+  f.appearance.update('fluent', false);
   await settle();
   expect([...f.bar.querySelectorAll('fluent-button')]).toEqual(buttons);
   f.host.dispose();

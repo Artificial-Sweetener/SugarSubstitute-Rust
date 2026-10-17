@@ -18,7 +18,7 @@ import { afterEach, expect, jest, test } from '@jest/globals';
 import { NativeSeedControls } from '../../../frontend/comfyui/ui/surface/appearance/NativeSeedControls.js';
 import type { NativeSeedField } from '../../../frontend/comfyui/ui/surface/appearance/NativeSeedControls.js';
 import type { SeedMode } from '../../../frontend/comfyui/ui/graph/ComfySeedMode.js';
-import { fluentSeedCss } from '../../../frontend/comfyui/ui/surface/appearance/FluentSeedStyles.js';
+import { nativeSeedCss } from '../../../frontend/comfyui/ui/surface/appearance/NativeSeedStyles.js';
 
 afterEach(() => document.body.replaceChildren());
 
@@ -144,10 +144,10 @@ test('follows disabled input and removes accessories, subscriptions and markers 
   expect(f.root.querySelector('[data-sc-seed-split]')).toBeNull();
   expect(f.field.numeric.spinner.hasAttribute('data-sc-seed-box')).toBe(false);
   expect(f.field.numeric.input.value).toBe('123456789');
-  expect(fluentSeedCss()).toContain('padding-right:46px');
-  expect(fluentSeedCss()).toContain('flex:0 1 192px');
-  expect(fluentSeedCss()).toContain('min-width:60px');
-  expect(fluentSeedCss()).toContain('font-variant-numeric:tabular-nums');
+  expect(nativeSeedCss()).toContain('padding-right:46px');
+  expect(nativeSeedCss()).toContain('flex:0 1 192px');
+  expect(nativeSeedCss()).toContain('min-width:60px');
+  expect(nativeSeedCss()).toContain('font-variant-numeric:tabular-nums');
   f.controls.clear();
 });
 

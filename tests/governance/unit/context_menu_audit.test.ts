@@ -29,7 +29,7 @@ const roots: string[] = [];
 const policy: MenuOwnership = {
   context_menu: 'frontend/menus/ContextMenu.ts',
   floating_surface: 'frontend/menus/FloatingSurface.ts',
-  fluent_runtime: 'frontend/menus/FluentMenuRuntime.ts',
+  control_runtime: 'frontend/menus/MenuControlRuntime.ts',
   search_dialogs: ['frontend/SearchDialog.ts'],
   choice_controls: ['frontend/Choice.ts'],
 };
@@ -45,8 +45,8 @@ function audit(source: string, file = 'frontend/feature.ts') {
     [policy.context_menu]: 'export class ContextMenu { open(value:unknown):void {} }',
     [policy.floating_surface]:
       'export class FloatingSurface { constructor(element:HTMLElement) {} }',
-    [policy.fluent_runtime]:
-      'export function createFluentMenuList(doc:Document):HTMLElement {return doc.createElement("fluent-menu-list");}',
+    [policy.control_runtime]:
+      'export function createMenuList(doc:Document):HTMLElement {return doc.createElement("fluent-menu-list");}',
     [file]: source,
   };
   for (const [relative, content] of Object.entries(files)) {
@@ -87,7 +87,7 @@ test.each([
   'const assign=document.body.setAttribute.bind(document.body);assign("role","menu");',
   'declare function render(tag:string,props:object):void;render("div",{role:"menu"});',
   'document.createElement("fluent-menu-item");',
-  'import {createFluentMenuList as list} from "./menus/FluentMenuRuntime";const build=list;build(document);',
+  'import {createMenuList as list} from "./menus/MenuControlRuntime";const build=list;build(document);',
 ])(
   'rejects feature-owned context rendering through DOM, Vue props or factory aliases: %s',
   (source) => {

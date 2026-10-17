@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own a reversible drawer timeline independently of row reorder transforms and Vue lifetimes. */
-import { fluentMotion } from '../appearance/FluentThemeRuntime.js';
+import { surfaceMotion } from '../appearance/SurfaceMotionTokens.js';
 /** Slide the rail and cascade its cubes and Add control without exceeding settled positions. */
 export class CubeStackDrawerMotion {
     #element;
@@ -39,7 +39,7 @@ export class CubeStackDrawerMotion {
     }
     /** Keep settled interactions independent of ordinary row, selection, and appearance refreshes. */
     get settledVisible() {
-        return this.#position === fluentMotion.duration && this.#effects.length === 0;
+        return this.#position === surfaceMotion.duration && this.#effects.length === 0;
     }
     /** Restore a workflow's selected endpoint without creating compositor effects. */
     restore(visible) {
@@ -61,7 +61,7 @@ export class CubeStackDrawerMotion {
         if (typeof time === 'number')
             this.#position = time;
         if (!this.canAnimate ||
-            (visible ? this.#position >= fluentMotion.duration : this.#position <= 0)) {
+            (visible ? this.#position >= surfaceMotion.duration : this.#position <= 0)) {
             this.#complete(visible);
             return Promise.resolve(true);
         }
@@ -99,7 +99,7 @@ export class CubeStackDrawerMotion {
     #createEffects() {
         const add = (element, frames, easing) => {
             const effect = element.animate(frames, {
-                duration: fluentMotion.duration,
+                duration: surfaceMotion.duration,
                 easing,
                 fill: 'both',
             });
@@ -110,7 +110,7 @@ export class CubeStackDrawerMotion {
         add(this.#element, [
             { translate: '-16px 0', opacity: 0 },
             { translate: '0 0', opacity: 1 },
-        ], fluentMotion.easing);
+        ], surfaceMotion.easing);
         const cascadeItems = [
             ...this.#element.querySelectorAll('.sc-cube-stack__rows > .sc-cube-stack-row'),
         ];
@@ -122,14 +122,14 @@ export class CubeStackDrawerMotion {
             const start = { translate: '0 32px', opacity: 0, offset: 0 };
             add(item, [
                 ...(delay ? [start] : []),
-                { ...start, offset: delay, easing: fluentMotion.easing },
+                { ...start, offset: delay, easing: surfaceMotion.easing },
                 { translate: '0 0', opacity: 1, offset: 1 },
             ], 'linear');
         });
     }
     /** Commit the exact endpoint before clearing effects that could interfere with row removal. */
     #complete(visible) {
-        this.#position = visible ? fluentMotion.duration : 0;
+        this.#position = visible ? surfaceMotion.duration : 0;
         this.#pending = null;
         this.#paint(visible);
         this.#cancelEffects();

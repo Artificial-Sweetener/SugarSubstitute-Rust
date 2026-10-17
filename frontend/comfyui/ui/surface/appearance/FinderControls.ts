@@ -18,4 +18,5 @@ export interface FinderInputControl extends HTMLElement {
   value: string;
   readonly control: HTMLInputElement;
   select(): void;
+  focusInput(selectAll: boolean): void;
 }

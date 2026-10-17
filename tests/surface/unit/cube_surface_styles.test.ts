@@ -41,14 +41,14 @@ describe('ensureCubeSurfaceStyles', () => {
     expect(input.matches(rule.selectorText)).toBe(true);
     expect(combo.matches(rule.selectorText)).toBe(true);
     expect(caption.matches(rule.selectorText)).toBe(false);
-    expect(rule.style.color).toBe('var(--colorNeutralForeground1,var(--fg-color,#eee))');
+    expect(rule.style.color).toBe('var(--sc-text,var(--fg-color,#eee))');
     card.remove();
   });
   test('uses the accepted palette foreground on owned Cube shells, headers, and output rails', () => {
     ensureCubeSurfaceStyles(document);
     const css = document.getElementById('sugarcubes-node-card-appearance')?.textContent ?? '';
     expect(css).toMatch(
-      /\.sugarcubes-cube-face,\s*\.sugarcubes-cube-face__header,\s*\[data-sugarcube-cube-body\]\s*\{[^}]*color:var\(--colorNeutralForeground1,var\(--fg-color,#eee\)\);/,
+      /\.sugarcubes-cube-face,\s*\.sugarcubes-cube-face__header,\s*\[data-sugarcube-cube-body\]\s*\{[^}]*color:var\(--sc-text,var\(--fg-color,#eee\)\);/,
     );
   });
   test('suppresses native ports and subgraph footers while preserving advanced inputs', () => {

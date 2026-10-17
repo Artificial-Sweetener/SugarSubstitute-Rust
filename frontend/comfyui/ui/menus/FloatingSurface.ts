@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own detached, bounded popup geometry and lifecycle without participating in application layout. */
-import { applyOwnedFluentTheme } from '../surface/appearance/FluentThemeRuntime.js';
+import { applyOwnedTheme } from '../surface/appearance/ThemeService.js';
 import { readComfyDarkTheme } from '../surface/appearance/ComfyColorScheme.js';
 
 export type FloatingAnchor =
@@ -87,7 +87,7 @@ export class FloatingSurface {
     this.close();
     this.#options = options;
     this.#document.body.append(this.element);
-    applyOwnedFluentTheme(this.element, readComfyDarkTheme(this.#document));
+    applyOwnedTheme(this.element, readComfyDarkTheme(this.#document));
     if (typeof this.element.showPopover === 'function') this.element.showPopover();
     this.reposition();
     const windowRef = this.#document.defaultView;
@@ -132,7 +132,7 @@ export class FloatingSurface {
     this.#observer = null;
     if (this.element.isConnected && typeof this.element.hidePopover === 'function')
       this.element.hidePopover();
-    applyOwnedFluentTheme(this.element, null);
+    applyOwnedTheme(this.element, null);
     this.element.remove();
     this.#document.removeEventListener('pointerdown', this.#outside, true);
     this.#document.removeEventListener('scroll', this.#scroll, true);

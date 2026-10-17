@@ -35,23 +35,23 @@ export function ensureCubeStackStyles(documentRef) {
       --sc-stack-accent:var(--sc-accent-indicator,var(--primary-color,#60cdff));
       --sc-stack-curve:cubic-bezier(.16,1,.3,1);
       box-sizing:border-box; width:224px; color:var(--sc-stack-text);
-      font:14px/1.25 var(--fontFamilyBase,"Segoe UI Variable","Segoe UI",sans-serif);
+      font:14px/1.25 var(--sc-font-family,"Segoe UI Variable","Segoe UI",sans-serif);
     }
-    .sc-cube-stack[data-appearance="fluent"] {
-      --sc-stack-bg:var(--colorNeutralBackground2,#202020);
-      --sc-stack-row:var(--colorNeutralBackground1,#303030);
-      --sc-stack-hover:var(--colorNeutralBackground1Hover,#393939);
-      --sc-stack-text:var(--colorNeutralForeground1,#eee);
-      --sc-stack-muted:var(--colorNeutralForeground3,#aaa);
-      --sc-stack-border:var(--colorNeutralStroke2,rgba(128,128,128,.2));
-      --sc-stack-accent:var(--sc-accent-indicator,var(--colorBrandBackground,#60cdff));
-      --sc-stack-curve:var(--curveDecelerateMid,cubic-bezier(.16,1,.3,1));
+    .sc-cube-stack[data-appearance]:not([data-appearance="comfy"]) {
+      --sc-stack-bg:var(--sc-surface-secondary,#202020);
+      --sc-stack-row:var(--sc-surface,#303030);
+      --sc-stack-hover:var(--sc-surface-hover,#393939);
+      --sc-stack-text:var(--sc-text,#eee);
+      --sc-stack-muted:var(--sc-text-muted,#aaa);
+      --sc-stack-border:var(--sc-border-subtle,rgba(128,128,128,.2));
+      --sc-stack-accent:var(--sc-accent-indicator,var(--sc-brand-fill,#60cdff));
+      --sc-stack-curve:var(--sc-motion-decelerate,cubic-bezier(.16,1,.3,1));
     }
     .sc-context-menu[data-sc-cube-stack-menu][data-appearance="comfy"] {
-      --colorNeutralBackground1:var(--comfy-menu-bg,#202020) !important;
-      --colorNeutralBackground1Hover:var(--secondary-background,#303030) !important;
-      --colorNeutralForeground1:var(--fg-color,#eee) !important;
-      --colorNeutralStroke1:var(--interface-stroke,#555) !important;
+      --sc-surface:var(--comfy-menu-bg,#202020) !important;
+      --sc-surface-hover:var(--secondary-background,#303030) !important;
+      --sc-text:var(--fg-color,#eee) !important;
+      --sc-border:var(--interface-stroke,#555) !important;
     }
     .sc-cube-stack[data-compact] { width:58px; }
     .sc-cube-stack[data-kind="rail"] { transition:width 220ms var(--sc-stack-curve); }
@@ -95,7 +95,7 @@ export function ensureCubeStackStyles(documentRef) {
       position:absolute; right:-3px; bottom:-2px; box-sizing:border-box; height:10px;
       min-width:10px; padding:0 2px; border-radius:5px; white-space:nowrap; pointer-events:none;
       display:flex; align-items:center; justify-content:center; background:${CUBE_MODEL_PILL_BACKGROUND};
-      color:${CUBE_MODEL_PILL_FOREGROUND}; font:600 8px/10px var(--fontFamilyBase,"Segoe UI Variable","Segoe UI",sans-serif);
+      color:${CUBE_MODEL_PILL_FOREGROUND}; font:600 8px/10px var(--sc-font-family,"Segoe UI Variable","Segoe UI",sans-serif);
     }
     .sc-cube-stack-row[data-bypassed] .sc-cube-stack-row__asset { opacity:.42; }
     .sc-cube-stack-row__text { display:flex; flex-direction:column; gap:2px; min-width:0; flex:1; padding-right:30px; overflow:hidden;
@@ -132,7 +132,7 @@ export function ensureCubeStackStyles(documentRef) {
     .sc-cube-stack__add:hover { background:var(--sc-stack-hover); color:var(--sc-stack-text); }
     .sc-cube-stack__status { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
     .sc-cube-stack-host { position:absolute; z-index:${MASONRY_STACK_Z_INDEX}; pointer-events:auto; left:12px; top:${WORKFLOW_MASONRY_TOP_INSET}px; bottom:12px; overflow-y:auto; overflow-x:hidden; padding:6px 0; border-radius:8px; background:var(--comfy-menu-bg,#202020); }
-    .sc-cube-stack-host[data-appearance="fluent"] { background:var(--colorNeutralBackground2,#202020); border:1px solid var(--colorNeutralStroke2,transparent); box-shadow:var(--shadow4,0 2px 4px #0002); }
+    .sc-cube-stack-host[data-appearance]:not([data-appearance="comfy"]) { background:var(--sc-surface-secondary,#202020); border:1px solid var(--sc-border-subtle,transparent); box-shadow:var(--sc-shadow-small,0 2px 4px #0002); }
     @media (hover:none) { .sc-cube-stack-row__remove { opacity:1; } }
     @media (prefers-reduced-motion:reduce) {
       .sc-cube-stack-move,.sc-cube-stack-enter-active,.sc-cube-stack-leave-active,

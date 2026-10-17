@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Share the reference 80ms, 24-degree indeterminate motion in every model busy arc. */
 export const modelBusyRingCss = `
-.sc-model-busy-ring { display:inline-block; flex:none; color:var(--colorBrandStroke1,#4ca6f9); animation:sc-model-busy-spin 1.2s steps(15,end) infinite; }
+.sc-model-busy-ring { display:inline-block; flex:none; color:var(--sc-brand-border,#4ca6f9); animation:sc-model-busy-spin 1.2s steps(15,end) infinite; }
 @keyframes sc-model-busy-spin { to { transform:rotate(360deg); } }
 @media(prefers-reduced-motion:reduce) { .sc-model-busy-ring { animation:none; } }
 `;

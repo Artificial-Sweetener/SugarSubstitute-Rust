@@ -16,7 +16,7 @@
 /** Decorate only identified settings rows while retaining all native page and control owners. */
 import type { SettingsCatalog } from './SettingsCatalog.js';
 import { SettingsSearchPlacement } from './SettingsSearchPlacement.js';
-import { applyOwnedFluentTheme } from '../surface/appearance/FluentThemeRuntime.js';
+import { applyOwnedTheme } from '../surface/appearance/ThemeService.js';
 import { SettingsPagePosition } from './SettingsPagePosition.js';
 
 /** Own reversible settings annotations, descriptions and top-search placement for one dialog. */
@@ -36,13 +36,13 @@ export class SettingsWorkspaceSurface {
     this.root.setAttribute('data-sc-settings', '');
     if (fluent) {
       this.root.setAttribute('data-sc-settings-fluent', '');
-      applyOwnedFluentTheme(this.root, dark);
+      applyOwnedTheme(this.root, dark);
       this.#placement ??= new SettingsSearchPlacement(this.root);
       this.#position ??= new SettingsPagePosition(this.root);
       if (!this.#placement.reconcile()) this.#position.reconcile();
     } else {
       this.root.removeAttribute('data-sc-settings-fluent');
-      applyOwnedFluentTheme(this.root, null);
+      applyOwnedTheme(this.root, null);
       this.#placement?.dispose();
       this.#placement = null;
       this.#position?.dispose();
@@ -81,7 +81,7 @@ export class SettingsWorkspaceSurface {
     this.#position = null;
     for (const row of this.#rows) this.#clearRow(row);
     this.#rows.clear();
-    applyOwnedFluentTheme(this.root, null);
+    applyOwnedTheme(this.root, null);
     this.root.removeAttribute('data-sc-settings');
     this.root.removeAttribute('data-sc-settings-fluent');
   }

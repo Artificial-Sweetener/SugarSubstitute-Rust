@@ -14,12 +14,13 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Bind one Vue rail to masonry, accepted appearance, persisted preferences and graph use cases. */
+import { readOwnedVisualStyle, subscribeVisualStyle } from '../appearance/VisualStyleBoundary.js';
 import type { CubeGraphReorderService } from '../../workflow/application/CubeGraphReorderService.js';
 import type { UnknownRecord } from '../../types/common.js';
 import type { CubeIdentitySource } from '../../cube/CubeIdentityPresentation.js';
 import type { WorkflowMasonrySection } from '../masonry/WorkflowMasonryProjection.js';
 import type { AppearanceSource } from '../appearance/AppearanceState.js';
-import { applyOwnedFluentTheme } from '../appearance/FluentThemeRuntime.js';
+import { applyOwnedTheme } from '../appearance/ThemeService.js';
 import { CubeStackPreferences } from './CubeStackPreferences.js';
 import type { ContextMenuEntry } from '../../menus/ContextMenu.js';
 import { projectCubeStackRows } from './CubeStackProjection.js';
@@ -144,6 +145,7 @@ export class CubeStackHost {
     this.#subscriptions.push(
       this.#preferences.subscribe(() => this.#reconcile()),
       this.#options.appearance.subscribeAppearance(() => this.#reconcile()),
+      subscribeVisualStyle(this.#options.document, () => this.#reconcile()),
     );
     if (this.#options.frame)
       this.#subscriptions.push(this.#options.frame.subscribe(() => this.#reconcile(false)));
@@ -264,9 +266,9 @@ export class CubeStackHost {
     const appearance = this.#options.appearance.appearance;
     this.#element.dataset.appearance = state.appearance;
     this.#element.dataset.colorScheme = appearance.dark ? 'dark' : 'light';
-    applyOwnedFluentTheme(
+    applyOwnedTheme(
       this.#element,
-      appearance.fluent || this.#options.frame?.enabled ? appearance.dark : null,
+      appearance.style !== 'comfy' || this.#options.frame?.enabled ? appearance.dark : null,
     );
     if (this.#mounted) this.#mounted.update(state);
     else {
@@ -328,9 +330,11 @@ export class CubeStackHost {
       compact: this.#preferences.snapshot.compact,
       pending: this.#reorder?.pending === true,
       appearance:
-        this.#options.appearance.appearance.fluent || this.#options.frame?.enabled
-          ? 'fluent'
-          : 'comfy',
+        this.#options.appearance.appearance.style !== 'comfy'
+          ? this.#options.appearance.appearance.style
+          : this.#options.frame?.enabled
+            ? readOwnedVisualStyle(this.#options.document)
+            : 'comfy',
     };
   }
 

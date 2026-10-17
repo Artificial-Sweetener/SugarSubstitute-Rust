@@ -33,7 +33,7 @@ import type { WorkflowMasonrySection } from '../../../frontend/comfyui/ui/surfac
 import { NativeProjectedNodeCollapse } from '../../../frontend/comfyui/ui/surface/NativeProjectedNodeCollapse.js';
 import { CardDisclosureMotion } from '../../../frontend/comfyui/ui/surface/motion/CardDisclosureMotion.js';
 import { DISCLOSURE_LAYOUT_EVENT } from '../../../frontend/comfyui/ui/surface/motion/DisclosureLayout.js';
-import { fluentInteractionCss } from '../../../frontend/comfyui/ui/surface/appearance/FluentInteractionStyles.js';
+import { nativeInteractionCss } from '../../../frontend/comfyui/ui/surface/appearance/NativeInteractionStyles.js';
 import { NativeProjectedAdvancedInputs } from '../../../frontend/comfyui/ui/surface/NativeProjectedAdvancedInputs.js';
 import { NativeAdvancedDisclosure } from '../../../frontend/comfyui/ui/surface/appearance/NativeAdvancedDisclosure.js';
 
@@ -244,7 +244,7 @@ test('a registered advanced footer never constrains whole-card expansion to its 
     advanced: { fields, button: advancedButton, expanded: false },
   });
   const styles = document.createElement('style');
-  styles.textContent = fluentInteractionCss();
+  styles.textContent = nativeInteractionCss();
   document.body.append(styles);
   button.click();
   const fillRule = [...(styles.sheet?.cssRules ?? [])].find(

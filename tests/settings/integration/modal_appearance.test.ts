@@ -26,7 +26,7 @@ const adapter = { getDocument: () => document, getWindow: () => window };
 
 test('follows an accepted dual-style appearance source without replacing controls or retaining subscriptions after close', async () => {
   const source = new AppearanceState();
-  source.update(true, true);
+  source.update('fluent', true);
   const shell = new ModalShell({ adapter, appearanceSource: source });
   const input = document.createElement('input');
   input.value = 'retained';
@@ -34,19 +34,19 @@ test('follows an accepted dual-style appearance source without replacing control
   input.focus();
   const overlay = shell.elements.overlay!;
   expect(overlay.dataset.scModalAppearance).toBe('fluent');
-  source.update(false, true);
+  source.update('comfy', true);
   expect(overlay.dataset.scModalAppearance).toBe('comfy');
-  expect(overlay.style.getPropertyValue('--colorNeutralBackground1')).toBe('');
+  expect(overlay.style.getPropertyValue('--sc-surface')).toBe('');
   expect(document.activeElement).toBe(input);
   expect(input.value).toBe('retained');
-  source.update(true, false);
+  source.update('fluent', false);
   expect(overlay.dataset.scModalColorScheme).toBe('light');
   expect(overlay.dataset.scModalAppearance).toBe('fluent');
-  expect(overlay.style.getPropertyValue('--colorNeutralBackground1')).toBeTruthy();
+  expect(overlay.style.getPropertyValue('--sc-surface')).toBeTruthy();
   shell.close(null);
   await result;
-  source.update(true, true);
-  expect(overlay.style.getPropertyValue('--colorNeutralBackground1')).toBe('');
+  source.update('fluent', true);
+  expect(overlay.style.getPropertyValue('--sc-surface')).toBe('');
 });
 
 afterEach(() => {
@@ -102,15 +102,15 @@ test('follows palette changes while open and releases the theme observer on clos
   const shell = new ModalShell({ adapter });
   const result = shell.open({ title: 'Shared', cancelResult: null });
   const overlay = shell.elements.overlay;
-  const dark = overlay?.style.getPropertyValue('--colorNeutralBackground1');
+  const dark = overlay?.style.getPropertyValue('--sc-surface');
   expect(dark).toBeTruthy();
   document.documentElement.style.colorScheme = 'light';
   await Promise.resolve();
-  expect(overlay?.style.getPropertyValue('--colorNeutralBackground1')).not.toBe(dark);
+  expect(overlay?.style.getPropertyValue('--sc-surface')).not.toBe(dark);
   shell.close(null);
   await expect(result).resolves.toBeNull();
-  expect(overlay?.style.getPropertyValue('--colorNeutralBackground1')).toBe('');
+  expect(overlay?.style.getPropertyValue('--sc-surface')).toBe('');
   document.documentElement.style.colorScheme = 'dark';
   await Promise.resolve();
-  expect(overlay?.style.getPropertyValue('--colorNeutralBackground1')).toBe('');
+  expect(overlay?.style.getPropertyValue('--sc-surface')).toBe('');
 });

@@ -29,7 +29,7 @@ export interface CubeStackCartViewState {
   readonly library: readonly CubeStackLibraryRow[];
   readonly rows: readonly CubeStackRowModel[];
   readonly pending: boolean;
-  readonly appearance: 'fluent' | 'comfy';
+  readonly appearance: import('../surface/appearance/VisualStyle.js').VisualStyle;
 }
 
 /** Delegate draft intent while the application session remains its sole state owner. */

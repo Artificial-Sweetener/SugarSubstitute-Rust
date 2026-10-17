@@ -66,6 +66,14 @@ async function bundleVueSurface(
   relativeRoots: string | readonly string[],
   sharedModules: readonly string[],
 ): Promise<void> {
+  const sharedOwners = [
+    ...sharedModules,
+    'surface/appearance/ThemeService.js',
+    'surface/appearance/ControlFactory.js',
+    'surface/appearance/VisualStyleBoundary.js',
+    'surface/appearance/FluentThemeRuntime.js',
+    'surface/appearance/SpectrumThemeRuntime.js',
+  ];
   const sourceRoot = path.join(repositoryRoot, 'frontend/comfyui/ui');
   const roots = typeof relativeRoots === 'string' ? [relativeRoots] : relativeRoots;
   const entries = roots
@@ -86,7 +94,7 @@ async function bundleVueSurface(
       bundle: true,
       splitting: true,
       external: ['/scripts/*'],
-      plugins: [browserSharedModulePlugin(sourceRoot, sharedRoot, sharedModules)],
+      plugins: [browserSharedModulePlugin(sourceRoot, sharedRoot, sharedOwners)],
       write: false,
       format: 'esm',
       platform: 'browser',
@@ -99,7 +107,7 @@ async function bundleVueSurface(
         'process.env.NODE_ENV': '"production"',
       },
     });
-    publishBrowserBundle(result.outputFiles, outputRoot, sharedRoot, sharedModules);
+    publishBrowserBundle(result.outputFiles, outputRoot, sharedRoot, sharedOwners);
   }
 }
 
@@ -120,8 +128,23 @@ async function main(): Promise<void> {
     legalComments: 'inline',
   });
   await build({
-    entryPoints: [path.join(repositoryRoot, 'frontend/comfyui/ui/menus/FluentMenuRuntime.ts')],
-    outfile: path.join(generatedRoot, 'comfyui/ui/menus/FluentMenuRuntime.js'),
+    entryPoints: [path.join(repositoryRoot, 'frontend/comfyui/ui/menus/MenuControlRuntime.ts')],
+    outfile: path.join(generatedRoot, 'comfyui/ui/menus/MenuControlRuntime.js'),
+    external: [
+      '../surface/appearance/SpectrumThemeRuntime.js',
+      '../surface/appearance/VisualStyleBoundary.js',
+    ],
+    bundle: true,
+    format: 'esm',
+    platform: 'browser',
+    target: 'es2022',
+    legalComments: 'inline',
+  });
+  await build({
+    entryPoints: [
+      path.join(repositoryRoot, 'frontend/comfyui/ui/surface/appearance/SpectrumThemeRuntime.ts'),
+    ],
+    outfile: path.join(generatedRoot, 'comfyui/ui/surface/appearance/SpectrumThemeRuntime.js'),
     bundle: true,
     format: 'esm',
     platform: 'browser',

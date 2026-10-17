@@ -108,7 +108,7 @@ export function createCubeStackCommands(options: {
         trigger: event.currentTarget instanceof HTMLElement ? event.currentTarget : null,
         attributes: {
           'data-sc-cube-stack-menu': '',
-          'data-appearance': options.appearance.appearance.fluent ? 'fluent' : 'comfy',
+          'data-appearance': options.appearance.appearance.style,
         },
         entries: [
           {

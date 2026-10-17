@@ -15,9 +15,9 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove Fluent's actual value calculation follows screen geometry across graph zoom levels. */
 import { afterAll, beforeAll, expect, jest, test } from '@jest/globals';
-import { createNumericSliderControl } from '../../../frontend/comfyui/ui/surface/appearance/FluentThemeRuntime.js';
+import { createFluentNumericSlider } from '../../../frontend/comfyui/ui/surface/appearance/FluentThemeRuntime.js';
 import { Slider } from '@fluentui/web-components/slider/class.js';
-import { fluentNumericCss } from '../../../frontend/comfyui/ui/surface/appearance/FluentNumericStyles.js';
+import { nativeNumericCss } from '../../../frontend/comfyui/ui/surface/appearance/NativeNumericStyles.js';
 
 const internalsDescriptor = Object.getOwnPropertyDescriptor(
   HTMLElement.prototype,
@@ -55,7 +55,7 @@ function trackRect(width: number): DOMRect {
 }
 
 test.each([0.5, 1, 2, 2.42, 3])('keeps slider values proportional at zoom %s', (zoom) => {
-  const slider = createNumericSliderControl(document);
+  const slider = createFluentNumericSlider(document);
   if (!(slider instanceof Slider)) throw new Error('Official Fluent slider missing');
   expect(slider.querySelector('[slot="thumb"][data-sc-slider-thumb]')).not.toBeNull();
   slider.min = '0';
@@ -75,13 +75,13 @@ test.each([0.5, 1, 2, 2.42, 3])('keeps slider values proportional at zoom %s', (
 });
 
 test('paints only the rounded native track between the endpoint thumb centers', () => {
-  const css = fluentNumericCss();
+  const css = nativeNumericCss();
   expect(css).toMatch(/\[data-sc-number-slider\]::after\s*\{\s*content:none;/);
   expect(css).toMatch(/::part\(track-container\)\s*\{\s*border-radius:var\(--border-radius\);/);
 });
 
 test('uses Fluent calculation safely before a measurable track is laid out', () => {
-  const slider = createNumericSliderControl(document);
+  const slider = createFluentNumericSlider(document);
   if (!(slider instanceof Slider)) throw new Error('Official Fluent slider missing');
   slider.min = '0';
   slider.max = '100';
@@ -97,7 +97,7 @@ test('preserves official Fluent control state across connected presentation move
     if (!constructor) throw new Error('Fluent component registration missing');
     expect(typeof Reflect.get(constructor.prototype, 'connectedMoveCallback')).toBe('function');
   }
-  const slider = createNumericSliderControl(document);
+  const slider = createFluentNumericSlider(document);
   slider.value = '27';
   const callback: unknown = Reflect.get(slider, 'connectedMoveCallback');
   if (typeof callback !== 'function') throw new Error('Connected move callback missing');

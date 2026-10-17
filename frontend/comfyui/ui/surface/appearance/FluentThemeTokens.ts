@@ -1,0 +1,67 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Translate Microsoft's theme vocabulary into SugarCubes semantic presentation roles. */
+import type { ThemeTokens } from './ThemeTokens.js';
+
+/** Require every presentation role to be supplied by Microsoft's trusted theme. */
+export function fluentThemeTokens(
+  theme: Readonly<Record<string, string | number | undefined>>,
+): ThemeTokens {
+  return {
+    text: String(theme.colorNeutralForeground1 ?? ''),
+    'text-secondary': String(theme.colorNeutralForeground2 ?? ''),
+    'text-muted': String(theme.colorNeutralForeground3 ?? ''),
+    'text-subtle': String(theme.colorNeutralForeground4 ?? ''),
+    'text-disabled': String(theme.colorNeutralForegroundDisabled ?? ''),
+    'text-on-accent': String(theme.colorNeutralForegroundOnBrand ?? ''),
+    surface: String(theme.colorNeutralBackground1 ?? ''),
+    'surface-hover': String(theme.colorNeutralBackground1Hover ?? ''),
+    'surface-pressed': String(theme.colorNeutralBackground1Pressed ?? ''),
+    'surface-secondary': String(theme.colorNeutralBackground2 ?? ''),
+    'surface-tertiary': String(theme.colorNeutralBackground3 ?? ''),
+    'surface-disabled': String(theme.colorNeutralBackgroundDisabled ?? ''),
+    border: String(theme.colorNeutralStroke1 ?? ''),
+    'border-hover': String(theme.colorNeutralStroke1Hover ?? ''),
+    'border-subtle': String(theme.colorNeutralStroke2 ?? ''),
+    'border-accessible': String(theme.colorNeutralStrokeAccessible ?? ''),
+    'border-accessible-hover': String(theme.colorNeutralStrokeAccessibleHover ?? ''),
+    'border-disabled': String(theme.colorNeutralStrokeDisabled ?? ''),
+    'brand-fill': String(theme.colorBrandBackground ?? ''),
+    'brand-fill-hover': String(theme.colorBrandBackgroundHover ?? ''),
+    'brand-fill-pressed': String(theme.colorBrandBackgroundPressed ?? ''),
+    'brand-text': String(theme.colorBrandForeground1 ?? ''),
+    'brand-border': String(theme.colorBrandStroke1 ?? ''),
+    'brand-indicator': String(theme.colorCompoundBrandBackground ?? ''),
+    'brand-indicator-hover': String(theme.colorCompoundBrandBackgroundHover ?? ''),
+    'danger-text': String(theme.colorPaletteRedForeground1 ?? ''),
+    'focus-ring': String(theme.colorStrokeFocus2 ?? ''),
+    'subtle-hover': String(theme.colorSubtleBackgroundHover ?? ''),
+    'subtle-selected': String(theme.colorSubtleBackgroundSelected ?? ''),
+    'font-family': String(theme.fontFamilyBase ?? ''),
+    'font-size': String(theme.fontSizeBase300 ?? ''),
+    'font-weight': String(theme.fontWeightRegular ?? ''),
+    'font-weight-strong': String(theme.fontWeightSemibold ?? ''),
+    'control-radius': String(theme.borderRadiusMedium ?? ''),
+    'shadow-small': String(theme.shadow4 ?? ''),
+    'shadow-medium': String(theme.shadow16 ?? ''),
+    'shadow-large': String(theme.shadow64 ?? ''),
+    'motion-faster': String(theme.durationFaster ?? ''),
+    'motion-fast': String(theme.durationFast ?? ''),
+    'motion-duration': String(theme.durationNormal ?? ''),
+    'motion-ease': String(theme.curveEasyEase ?? ''),
+    'motion-decelerate': String(theme.curveDecelerateMid ?? ''),
+  };
+}

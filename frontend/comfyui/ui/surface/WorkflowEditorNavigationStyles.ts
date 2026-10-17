@@ -16,12 +16,12 @@
 /** Style Fluent editor navigation within native and Substitute toolbar allocations. */
 export const workflowEditorNavigationCss = `
       [data-sc-editor-native] { display:none!important; }
-      .sc-editor-navigation { display:flex; align-items:center; flex:1 1 auto; min-width:0; height:36px; pointer-events:auto; color:var(--colorNeutralForeground1); }
+      .sc-editor-navigation { display:flex; align-items:center; flex:1 1 auto; min-width:0; height:36px; pointer-events:auto; color:var(--sc-text); }
       .sc-editor-navigation ol { display:flex; align-items:center; gap:4px; overflow-x:auto; white-space:nowrap; list-style:none; margin:0; padding:0; scrollbar-width:thin; }
       .sc-editor-navigation li { display:flex; align-items:center; gap:4px; flex:none; }
-      .sc-editor-navigation li + li::before { content:'/'; color:var(--colorNeutralForeground3); }
-      .sc-editor-navigation fluent-button { min-width:0; height:32px; }
-      .sc-editor-navigation [aria-current] { padding:0 8px; font-weight:var(--fontWeightSemibold); }
+      .sc-editor-navigation li + li::before { content:'/'; color:var(--sc-text-muted); }
+      .sc-editor-navigation [data-sc-button] { min-width:0; height:32px; }
+      .sc-editor-navigation [aria-current] { padding:0 8px; font-weight:var(--sc-font-weight-strong); }
       .sc-editor-navigation .sc-editor-bar-back { flex:none; width:32px; }
       :root[data-sc-substitute-frame] .sc-overrides-dock-slot:has(> [hidden]) { flex:0 0 0; }
     `;
