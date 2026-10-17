@@ -542,3 +542,30 @@ current_version = 1
 accepted_versions = [1]
 compatibility = "reject"
 migrations = []
+
+# Optional closed console observations preserve legacy fields and confer no authority.
+# Older decoders ignore enriched records; canonical operation/code grammar has one owner.
+
+[[formats]]
+id = "child-console-first-failure-diagnostic"
+owner = "sugarsubstitute-desktop"
+sources = ["crates/sugarsubstitute-desktop/src/console_failure_diagnostic.rs", "crates/sugarsubstitute-desktop/src/desktop_failure_diagnostic/console.rs"]
+source_sha256 = "sha256:7041d8c1a737c2557de411416aaebb2cd649c9a45cd6277cc116510e97d4cd62"
+classification = "protocol"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
+id = "child-console-first-failure-diagnostic-decoder"
+owner = "sugarsubstitute"
+sources = ["crates/sugarsubstitute/src/production/entry_activation/desktop_output/diagnostic.rs", "crates/sugarsubstitute/src/production/entry_activation/desktop_output/diagnostic/console.rs", "crates/sugarsubstitute/src/production/entry_activation/desktop_output/diagnostic/failure.rs"]
+source_sha256 = "sha256:9c94b25a5d60ddbcc2b559521066b38aea30a343afe561ad29268a0a9913413a"
+classification = "protocol"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []

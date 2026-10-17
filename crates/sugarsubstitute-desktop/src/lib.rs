@@ -7,6 +7,8 @@ mod bootstrap;
 mod cadence;
 mod completion_wake;
 mod console;
+/// Closed console failure operation and direct cause codes; these grant no native authority.
+pub mod console_failure_diagnostic;
 mod contract;
 pub use console::{ConsoleText, ConsoleView};
 #[cfg(target_os = "windows")]

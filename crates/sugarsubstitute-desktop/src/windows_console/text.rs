@@ -10,7 +10,7 @@ use crate::{
 };
 use sugarsubstitute_contracts::{configuration::Theme, presentation::console_color};
 use windows::Win32::{
-    Foundation::{COLORREF, HWND},
+    Foundation::{COLORREF, ERROR_NO_SCROLLBARS, HWND},
     Graphics::Gdi::{COLOR_WINDOW, COLOR_WINDOWTEXT, GetSysColor},
     UI::{
         Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW},
@@ -71,23 +71,29 @@ impl TextPort for NativeText {
             fMask: SIF_ALL,
             ..Default::default()
         };
-        // SAFETY: Live retained peer, documented output buffer; never treat an unknown
-        // scroll observation as permission to replace the user's viewport with the tail.
-        unsafe { GetScrollInfo(self.hwnd, SB_VERT, &raw mut scroll) }
-            .map_err(|e| DesktopError::new("console_scroll_observe", e))?;
+        // SAFETY: Query only the retained peer and documented writable buffer.
+        let at_bottom = match unsafe { GetScrollInfo(self.hwnd, SB_VERT, &raw mut scroll) } {
+            Ok(()) => {
+                scroll.nMax == scroll.nMin
+                    || i64::from(scroll.nPos) + i64::from(scroll.nPage)
+                        >= i64::from(scroll.nMax) + 1
+            }
+            // Empty or short RichEdit documents have no scroll bar. Selection and
+            // first-line positions still come from this same native control.
+            Err(cause)
+                if cause.code() == windows::core::HRESULT::from_win32(ERROR_NO_SCROLLBARS.0) =>
+            {
+                true
+            }
+            Err(cause) => return Err(DesktopError::new("console_scroll_observe", cause)),
+        };
         if range.cpMin < 0 || range.cpMax < range.cpMin || first < 0 {
             return Err(DesktopError::message(
                 "console_selection_observe",
                 "invalid native text positions",
             ));
         }
-        Ok(Observation {
-            start: range.cpMin,
-            end: range.cpMax,
-            first,
-            at_bottom: scroll.nMax == scroll.nMin
-                || i64::from(scroll.nPos) + i64::from(scroll.nPage) >= i64::from(scroll.nMax) + 1,
-        })
+        Ok(Observation { start: range.cpMin, end: range.cpMax, first, at_bottom })
     }
     fn write(&mut self, document: &DocumentIndex) -> Result<(), DesktopError> {
         let mut copied = Vec::new();

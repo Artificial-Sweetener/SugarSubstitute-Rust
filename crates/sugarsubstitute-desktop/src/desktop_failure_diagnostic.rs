@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Observe the first retained native failure through closed metadata only.
 use std::{error::Error, io::ErrorKind};
+#[path = "desktop_failure_diagnostic/console.rs"]
+mod console;
 #[path = "desktop_failure_diagnostic/startup.rs"]
 mod startup;
 
@@ -162,7 +164,7 @@ fn classify(operation: &'static str, cause: &(dyn Error + 'static)) -> Diagnosti
 /// Called only after actual DesktopError first-cause adoption. The cause is borrowed;
 /// its formatter/source callbacks are never invoked and no native authority is projected.
 pub(super) fn emit(operation: &'static str, cause: &(dyn Error + 'static)) {
-    if startup::emit(operation, cause) {
+    if startup::emit(operation, cause) || console::emit(operation, cause) {
         return;
     }
     let actual = classify(operation, cause);

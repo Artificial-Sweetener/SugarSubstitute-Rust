@@ -3,4 +3,4 @@
 //! Bind the signed local-K1 manifest to its compiled source inventory.
 
 /// Reproducible development build identity; regenerated before final image creation.
-pub(super) const BUILD: &str = "k1-38247c6ff3f1dd9ae4f8f4096731840c82cbe2e8c21fa741";
+pub(super) const BUILD: &str = "k1-909cf3623efc7a4e762a4a4effaba97783a571c2dd3bd481";

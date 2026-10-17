@@ -167,7 +167,8 @@ fn changing_diagnostics_remain_bounded_for_the_same_output_lifetime() {
             boundary: "PollFrame",
             kind: "Other",
             startup: None,
-            consume: None
+            consume: None,
+            console: None
         }))
     ));
     let main = b"operation=\"main_failure_transition\" failed_operation=\"decode_main_observation\" launch=1 navigation=1 observation=Frame code=JsonData\n";
@@ -265,7 +266,7 @@ fn actual_production_text_formatter_with_writer_and_time_boundaries_preserves_cl
     );
     assert!(matches!(
         seen[4],
-        Observation::Failure(Failure { boundary: "ObserveStartup", kind: "Other", startup: Some(detail), consume: None })
+        Observation::Failure(Failure { boundary: "ObserveStartup", kind: "Other", startup: Some(detail), consume: None, console: None })
             if detail == (startup::StartupFailureDetail {
                 observation: "CloseRequested",
                 stage: sugarsubstitute_desktop::StartupCloseStage::CaptureObservation,
@@ -308,7 +309,7 @@ fn closed_desktop_failure_fields_reject_payloads_unknown_values_and_extra_operat
                 format!("operation=\"desktop_failure_transition\" boundary={boundary} kind={kind}");
             assert_eq!(
                 parse_failure(line.as_bytes()),
-                Some(Failure { boundary, kind, startup: None, consume: None })
+                Some(Failure { boundary, kind, startup: None, consume: None, console: None })
             );
         }
     }

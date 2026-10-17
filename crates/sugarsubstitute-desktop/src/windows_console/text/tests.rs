@@ -9,7 +9,7 @@ use windows::{
         System::LibraryLoader::{LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExW},
         UI::WindowsAndMessaging::{
             CreateWindowExW, DestroyWindow, ES_MULTILINE, ES_READONLY, WINDOW_EX_STYLE,
-            WINDOW_STYLE,
+            WINDOW_STYLE, WS_VSCROLL,
         },
     },
     core::w,
@@ -34,7 +34,7 @@ impl Hidden {
                     WINDOW_EX_STYLE::default(),
                     w!("RICHEDIT50W"),
                     w!(""),
-                    WINDOW_STYLE((ES_MULTILINE | ES_READONLY) as u32),
+                    WINDOW_STYLE((ES_MULTILINE | ES_READONLY) as u32) | WS_VSCROLL,
                     0,
                     0,
                     300,
@@ -97,6 +97,35 @@ fn actual_readonly_native_document_preserves_unicode_nul_styles_and_selected_cha
         )
     };
     assert_ne!(style as u32 & ES_READONLY as u32, 0);
+    owner.close()?;
+    Ok(())
+}
+
+/// A hidden empty control has no scroll bar; populated scrolling keeps native selection.
+#[test]
+fn actual_hidden_native_console_accepts_absent_scrollbar_and_retains_real_positions() -> TestResult
+{
+    let empty_source = source(1, &[])?;
+    let (empty, _first_frame, _first_release) = index(&empty_source)?;
+    let mut owner = Hidden::new(empty)?;
+    let hwnd = owner.hwnd.ok_or("hidden native peer absent")?;
+    let mut port = NativeText { hwnd, dark: true };
+    port.write(owner.document.as_ref().ok_or("original empty document absent")?)?;
+    let empty = port.observe()?;
+    assert_eq!((empty.start, empty.end, empty.first), (0, 0, 0));
+    assert!(empty.at_bottom);
+    let lines: Vec<_> = (1..=100).map(|id| (id, "actual 日本語😀")).collect();
+    let populated_source = source(2, &lines)?;
+    let (populated, _next_frame, _next_release) = index(&populated_source)?;
+    let original = owner.document.replace(populated);
+    port.write(owner.document.as_ref().ok_or("populated document absent")?)?;
+    drop(original);
+    port.selection(2, 7)?;
+    port.control().scroll_lines(8)?;
+    let observed = port.observe()?;
+    assert_eq!((observed.start, observed.end), (2, 7));
+    assert!(observed.first > 0);
+    assert!(!observed.at_bottom);
     owner.close()?;
     Ok(())
 }

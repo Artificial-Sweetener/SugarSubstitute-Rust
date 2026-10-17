@@ -198,6 +198,7 @@ impl Subscriber for Sink {
     fn enabled(&self, meta: &Metadata<'_>) -> bool {
         meta.target().ends_with("contract::failure_diagnostic")
             || meta.target().ends_with("contract::failure_diagnostic::startup")
+            || meta.target().ends_with("contract::failure_diagnostic::console")
     }
     fn new_span(&self, _: &Attributes<'_>) -> Id {
         Id::from_u64(1)
@@ -476,3 +477,6 @@ fn frontend_timeout_actual_formatter_emits_only_bounded_sealed_owner_fields()
     assert!(bytes + 128 < 512);
     Ok(())
 }
+
+#[path = "console_tests.rs"]
+mod console_tests;

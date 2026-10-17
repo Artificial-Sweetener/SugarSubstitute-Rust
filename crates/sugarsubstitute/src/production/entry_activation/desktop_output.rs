@@ -215,22 +215,7 @@ impl DesktopOutput {
                             "Observed owned child's closed preparation diagnostic");
                     }
                     diagnostic::Observation::Failure(failure) => {
-                        if let Some(startup) = failure.startup {
-                            tracing::warn!(operation="desktop_child_failure",run=?self.run,
-                                boundary=%failure.boundary,kind=%failure.kind,
-                                observation=%startup.observation,close_stage=?startup.stage,
-                                capture_snapshot=?startup.capture,code=%startup.code,
-                                "Observed first closed owned desktop failure");
-                        } else if let Some(consume)=failure.consume {
-                            tracing::warn!(operation="desktop_child_failure",run=?self.run,
-                                boundary=%failure.boundary,kind=%failure.kind,
-                                consume_stage=?consume.stage,category=%consume.code,
-                                "Observed first closed owned desktop failure");
-                        } else {
-                            tracing::warn!(operation="desktop_child_failure",run=?self.run,
-                                boundary=%failure.boundary,kind=%failure.kind,
-                                "Observed first closed owned desktop failure");
-                        }
+                        diagnostic::failure::relay(self.run, failure);
                     }
                     diagnostic::Observation::Connection(stage) => {
                         tracing::info!(operation="desktop_child_connection",run=?self.run,stage=?stage,
