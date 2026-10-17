@@ -127,6 +127,11 @@ impl Events {
         self.callback_depth.get() != 0
     }
 
+    /// Observe the same irreversible admission latch used by main retirement and failure.
+    pub(crate) fn accepting(&self) -> bool {
+        self.accepting.get()
+    }
+
     /// Stop evidence admission before removing native subscriptions.
     pub(crate) fn close_admission(&self) {
         self.accepting.set(false);

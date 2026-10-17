@@ -7,6 +7,7 @@
 //! navigation, cleanup or an event loop. Checked removal preserves failed native slots.
 
 mod completion;
+mod downloads;
 mod navigation;
 use crate::{
     DesktopError,
@@ -54,6 +55,7 @@ impl Drop for NativeString {
 pub(crate) struct Receivers {
     subscriptions: Vec<Subscription>,
     navigation: navigation::Navigation,
+    downloads: Rc<downloads::Owner>,
     operations: Rc<completion::Operations>,
     events: Rc<Events>,
     core: ICoreWebView2,
@@ -72,6 +74,7 @@ impl Receivers {
         let mut owner = Self {
             subscriptions: Vec::new(),
             navigation: navigation::Navigation::new(origin),
+            downloads: downloads::Owner::new(origin)?,
             operations: completion::Operations::new(events.clone())?,
             events,
             core,
@@ -94,7 +97,7 @@ impl Receivers {
     pub(crate) fn install_next(&mut self) -> Result<bool, DesktopError> {
         self.require_outer_call()?;
         if self.subscriptions.len() == SOURCES.len() {
-            return self.navigation.install(&self.core, &self.events);
+            return self.navigation.install(&self.core, &self.events, &self.downloads);
         }
         let (name, kind) = SOURCES[self.subscriptions.len()];
         let name = HSTRING::from(name);
@@ -192,6 +195,9 @@ impl Receivers {
     pub(crate) fn retire_step(&mut self) -> Result<bool, DesktopError> {
         self.require_outer_call()?;
         self.events.close_admission();
+        if !self.downloads.retire_step()? {
+            return Ok(false);
+        }
         if self.operations.pending() != 0 {
             return Ok(false);
         }

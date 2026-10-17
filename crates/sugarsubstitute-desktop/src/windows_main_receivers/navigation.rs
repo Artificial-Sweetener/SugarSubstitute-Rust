@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Guard actual top navigation and deny unowned browser device/download effects.
+//! Guard actual top navigation and route browser downloads through their retained owner.
 
 use super::*;
 use std::cell::Cell;
@@ -71,12 +71,14 @@ impl Navigation {
         &mut self,
         core: &ICoreWebView2,
         events: &Rc<Events>,
+        downloads: &Rc<super::downloads::Owner>,
     ) -> Result<bool, DesktopError> {
         if self.installed == self.tokens.len() {
             return Ok(true);
         }
         let captured = events.clone();
         let state = self.state.clone();
+        let downloads = downloads.clone();
         let mut token = 0;
         // SAFETY: Each callback retains only UI-affine metadata/storage; install token is
         // captured before status interpretation, and native getters precede queue borrowing.
@@ -222,14 +224,15 @@ impl Navigation {
                 ),
                 4 => core.cast::<ICoreWebView2_4>().and_then(|core| {
                     core.add_DownloadStarting(
-                        &DownloadStartingEventHandler::create(Box::new(move |_, args| {
+                        &DownloadStartingEventHandler::create(Box::new(move |sender, args| {
                             let _callback = captured.callback();
-                            let result = match args {
-                                Some(args) => args.SetCancel(true),
-                                None => Err(windows::core::Error::from(E_POINTER)),
-                            };
-                            if let Err(cause) = result {
-                                captured.fail(DesktopError::new("deny_unowned_download", cause));
+                            if let Err(cause) = downloads.starting(
+                                sender.as_ref(),
+                                args.as_ref(),
+                                state.revealed.get(),
+                                &captured,
+                            ) {
+                                captured.fail(cause);
                             }
                             Ok(())
                         })),
@@ -307,7 +310,9 @@ impl Navigation {
         if self.uncertain {
             return Ok(false);
         }
-        let Some(index) = self.tokens.iter().rposition(Option::is_some) else { return Ok(true) };
+        let Some(index) = self.tokens.iter().rposition(Option::is_some) else {
+            return Ok(true);
+        };
         let token = self.tokens[index].ok_or_else(|| {
             DesktopError::message("remove_main_browser_events", "missing event token")
         })?;

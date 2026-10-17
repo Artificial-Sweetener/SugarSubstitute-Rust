@@ -17,6 +17,8 @@ mod headless;
 mod host_contract;
 #[cfg(any(target_os = "windows", test))]
 mod main_backend;
+#[cfg(any(target_os = "windows", test))]
+mod main_downloads;
 mod main_environment;
 mod main_navigation;
 mod main_readiness;
