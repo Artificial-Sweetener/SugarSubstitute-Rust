@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Style shared SugarCubes dialog chrome and native form controls with Fluent tokens. */
+/** Style shared dialogs and retained native form controls through the selected provider. */
 const STYLE_ID = 'sugarcubes-modal-appearance';
 const scope = '[data-sc-modal-appearance]:not([data-sc-modal-appearance="comfy"])';
 const comfy = '[data-sc-modal-appearance="comfy"]';
@@ -56,15 +56,16 @@ ${scope} :is(.sugarcubes-modal__field,.sugarcubes-modal__form) { min-width:0; ga
 ${scope} .sugarcubes-modal__form { gap:16px; }
 ${scope} :is(.sugarcubes-modal__field-label,.sugarcubes-modal__checkbox-label) { font-size:14px; font-weight:400; }
 ${scope} :is(.sugarcubes-modal__text-input,.sugarcubes-modal__input-group) {
-  box-sizing:border-box; min-width:0; max-width:100%; min-height:32px; margin:0; padding:5px 10px;
-  border:1px solid var(--sc-border); border-bottom-color:var(--sc-border-accessible);
-  border-radius:4px; background:var(--sc-surface); color:var(--sc-text);
+  box-sizing:border-box; min-width:0; max-width:100%; min-height:32px; margin:0; padding:calc(6px - var(--sc-field-border-width)) 10px;
+  border:var(--sc-field-border-width) solid var(--sc-field-stroke); border-bottom-color:var(--sc-field-bottom-stroke);
+  border-radius:var(--sc-field-radius); background:var(--sc-field-fill); color:var(--sc-text);
   font-family:var(--sc-font-family); font-size:14px; line-height:20px; outline:0;
 }
-${scope} .sugarcubes-modal__text-input:hover { border-color:var(--sc-border-hover); border-bottom-color:var(--sc-border-accessible-hover); }
-${scope} .sugarcubes-modal__text-input:focus { border-bottom-color:var(--sc-brand-border); box-shadow:inset 0 -1px var(--sc-brand-border); }
+${scope} .sugarcubes-modal__text-input:hover { border-color:var(--sc-field-hover-stroke); border-bottom-color:var(--sc-field-hover-bottom-stroke); }
+${scope} .sugarcubes-modal__text-input:focus { border-color:var(--sc-field-focus-stroke); border-bottom-color:var(--sc-field-focus-bottom-stroke); box-shadow:var(--sc-field-focus-shadow); }
 ${scope} .sugarcubes-modal__input-group { padding:0; }
-${scope} .sugarcubes-modal__input-group:focus-within { border-bottom-color:var(--sc-brand-border); box-shadow:inset 0 -1px var(--sc-brand-border); }
+${scope} .sugarcubes-modal__input-group:focus-within { border-color:var(--sc-field-focus-stroke); border-bottom-color:var(--sc-field-focus-bottom-stroke); box-shadow:var(--sc-field-focus-shadow); }
+${scope} :is(.sugarcubes-modal__text-input:focus-visible,.sugarcubes-modal__input-group:has(:focus-visible)) { outline:var(--sc-field-focus-outline); outline-offset:var(--sc-field-focus-outline-offset); }
 ${scope} .sugarcubes-modal__text-input:disabled { background:var(--sc-surface-disabled); color:var(--sc-text-disabled); border-color:var(--sc-border-disabled); }
 ${scope} .sugarcubes-modal__text-input::placeholder { color:var(--sc-text-subtle); }
 ${scope} textarea.sugarcubes-modal__text-input { resize:vertical; }
@@ -72,14 +73,14 @@ ${scope} select.sugarcubes-modal__text-input { cursor:pointer; }
 ${scope} :is(input[type="checkbox"],input[type="radio"]) { width:20px; height:20px; margin:0; accent-color:var(--sc-brand-fill); flex:none; }
 ${scope} .p-button {
   display:inline-flex; box-sizing:border-box; align-items:center; justify-content:center; gap:8px;
-  min-width:0; min-height:32px; margin:0; padding:5px 12px; border:1px solid var(--sc-border);
-  border-bottom-color:var(--sc-border-accessible); border-radius:4px;
-  background:var(--sc-surface); color:var(--sc-text);
+  min-width:0; min-height:32px; margin:0; padding:calc(6px - var(--sc-button-border-width)) 12px; border:var(--sc-button-border-width) solid var(--sc-border);
+  border-bottom-color:var(--sc-button-bottom-stroke); border-radius:var(--sc-button-radius);
+  background:var(--sc-button-fill); color:var(--sc-text);
   font-family:var(--sc-font-family); font-size:14px; line-height:20px; cursor:pointer; text-decoration:none; white-space:nowrap;
 }
 ${scope} .p-button[hidden] { display:none; }
-${scope} .p-button:hover { background:var(--sc-surface-hover); }
-${scope} .p-button:active { background:var(--sc-surface-pressed); }
+${scope} .p-button:hover { background:var(--sc-button-hover-fill); }
+${scope} .p-button:active { background:var(--sc-button-pressed-fill); }
 ${scope} .p-button:focus-visible { outline:2px solid var(--sc-focus-ring); outline-offset:2px; }
 ${scope} :is(.sugarcubes-modal__footer-actions .p-button:not(.p-button-secondary),.p-button-primary):not(:disabled) {
   background:var(--sc-brand-fill); color:var(--sc-text-on-accent); border-color:transparent;

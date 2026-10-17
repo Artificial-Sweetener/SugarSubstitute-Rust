@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Normalize activation chrome while the card-state service owns node enablement. */
 import { ensureCubeFaceActivationStyles } from '../CubeFaceActivationStyles.js';
+import { activationSwitchGeometry } from './ActivationSwitchGeometry.js';
 
 export interface ActivationSwitchControl {
   readonly root: HTMLElement;
@@ -28,7 +29,7 @@ export function createNativeActivationSwitch(document: Document): ActivationSwit
   const root = document.createElement('label');
   root.style.display = 'inline-flex';
   root.style.alignItems = 'center';
-  root.style.gap = '8px';
+  root.style.gap = `${activationSwitchGeometry.labelGap}px`;
   const state = document.createElement('span');
   state.className = 'sugarcubes-cube-face__activation-label';
   const trackRoot = document.createElement('div');

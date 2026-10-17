@@ -17,7 +17,7 @@
 import { applyOwnedFluentTheme, fluentTokenDeclarations } from './FluentThemeRuntime.js';
 import { spectrumTokenDeclarations } from './SpectrumThemeRuntime.js';
 import { fluentAppearanceCss } from './FluentAppearanceStyles.js';
-import { nativeAppearanceCss } from './NativeAppearanceStyles.js';
+import { spectrumAppearanceCss } from './SpectrumAppearanceStyles.js';
 import { readOwnedVisualStyle } from './VisualStyleBoundary.js';
 /** Return the complete token contract for one accepted design system and palette. */
 export function visualStyleTokens(style, dark) {
@@ -42,22 +42,7 @@ export function applyOwnedTheme(element, dark, style = readOwnedVisualStyle(elem
 export function nativeVisualStyleCss(style, dark) {
     if (style === 'fluent')
         return fluentAppearanceCss(dark);
-    return (nativeAppearanceCss({
-        tokens: spectrumTokenDeclarations(dark),
-        canvas: 'var(--spectrum-gray-50)',
-        cardFill: 'var(--spectrum-gray-100)',
-        cardStroke: 'var(--spectrum-gray-300)',
-        controlFill: 'var(--spectrum-gray-75)',
-        controlStroke: 'var(--spectrum-gray-400)',
-        controlBottomStroke: 'var(--spectrum-gray-400)',
-        radius: '12px',
-    }, dark) +
-        `
-    [data-sc-style-node] [data-testid="node-title"] { font-weight:600; }
-    [data-sc-style-node] :is([data-sc-number-spinner], [data-sc-style-combo-frame], textarea) { border-radius:8px; }
-    [data-sc-style-popup], [data-sc-style-popup] [role="option"] { border-radius:8px; }
-    [data-sc-boolean-segments] { border-radius:8px; }
-  `);
+    return spectrumAppearanceCss(dark);
 }
 /** Install static provider scopes once so detached controls receive tokens when they connect. */
 function ensureThemeStyles(document) {

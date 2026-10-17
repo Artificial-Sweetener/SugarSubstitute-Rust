@@ -167,15 +167,15 @@ export function nativeAppearanceCss(palette, dark) {
       flex-basis:360px; max-width:min(65%,360px);
     }
     .sugarcubes-cube-face__node-card [data-sc-style-row][data-sc-style-widget^="WidgetInputNumber"] [data-sc-style-layout] > :last-child > :first-child > :first-child {
-      height:33px; border:1px solid var(--sc-control-stroke);
-      border-bottom-color:var(--sc-control-bottom-stroke); border-radius:4px;
+      height:33px; border:var(--sc-field-border-width) solid var(--sc-control-stroke);
+      border-bottom-color:var(--sc-control-bottom-stroke); border-radius:var(--sc-field-radius);
       background:var(--sc-control-fill);
     }
     [data-sc-style-combo-frame],
     :where([data-sc-style-node], [data-sc-style-surface]) .sc-model-field:not(:has(.sc-model-banner, .sc-model-transfer-thumbnail)) {
       box-sizing:border-box; height:33px; min-height:33px;
-      border:1px solid var(--sc-control-stroke); border-bottom-color:var(--sc-control-bottom-stroke);
-      border-radius:4px; background:var(--sc-control-fill);
+      border:var(--sc-field-border-width) solid var(--sc-control-stroke); border-bottom-color:var(--sc-control-bottom-stroke);
+      border-radius:var(--sc-field-radius); background:var(--sc-control-fill);
     }
     [data-sc-style-combo-frame]:hover,
     :where([data-sc-style-node], [data-sc-style-surface]) .sc-model-field:not(:has(.sc-model-banner, .sc-model-transfer-thumbnail)):hover {
@@ -195,8 +195,8 @@ export function nativeAppearanceCss(palette, dark) {
     }
     .sugarcubes-cube-face__node-card [data-sc-style-row][data-sc-style-kind="multiline"] > :first-child { display:none; }
     .sugarcubes-cube-face__node-card [data-sc-style-row][data-sc-style-kind="multiline"] [data-sc-style-control] textarea {
-      border:1px solid var(--sc-control-stroke); border-bottom-color:var(--sc-control-bottom-stroke);
-      border-radius:4px; background:var(--sc-control-fill);
+      border:var(--sc-field-border-width) solid var(--sc-control-stroke); border-bottom-color:var(--sc-control-bottom-stroke);
+      border-radius:var(--sc-field-radius); background:var(--sc-control-fill);
       min-height:33px; padding:6px 8px; line-height:19px;
     }
     .sugarcubes-cube-face__node-card [data-sc-style-row][data-sc-style-kind="multiline"] [data-sc-style-control] > :first-child {
@@ -230,7 +230,7 @@ export function nativeAppearanceCss(palette, dark) {
       box-sizing:border-box; padding:0 8px;
       font-family:var(--sc-font-family); font-size:var(--sc-search-font);
       background:var(--sc-control-fill); color:var(--sc-text);
-      border:1px solid var(--sc-control-stroke); border-bottom:2px solid var(--sc-brand-border);
+      border:var(--sc-field-border-width) solid var(--sc-control-stroke); border-bottom:2px solid var(--sc-brand-border);
       border-radius:4px; outline:none; z-index:1;
     }
     ${nativeNumericCss()}

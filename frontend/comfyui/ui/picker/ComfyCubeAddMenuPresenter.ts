@@ -190,11 +190,12 @@ export class ComfyCubeAddMenuPresenter {
         max-height: min(32rem, calc(100vh - 0.5rem)); padding: 0.5rem; gap: 0.375rem;
         border: 1px solid var(--sc-border-subtle); border-radius: var(--sc-control-radius);
         color: var(--sc-text); background: var(--sc-surface);
-        box-shadow: var(--sc-shadow-medium); font:var(--sc-font-weight) var(--sc-font-size)/var(--lineHeightBase300) var(--sc-font-family); }
+        box-shadow: var(--sc-shadow-medium); font:var(--sc-font-weight) var(--sc-font-size)/var(--sc-line-height) var(--sc-font-family); }
       [${MENU_ATTRIBUTE}] input { box-sizing: border-box; width: 100%; flex: 0 0 auto;
-        padding: 0.55rem 0.65rem; border: 1px solid var(--sc-border); border-bottom:2px solid var(--sc-border-accessible);
-        border-radius: var(--sc-control-radius); color: inherit; background: var(--sc-surface); font:inherit; }
-      [${MENU_ATTRIBUTE}] input:focus { outline:0; border-bottom-color:var(--sc-brand-border); }
+        padding: 0.55rem 0.65rem; border: var(--sc-field-border-width) solid var(--sc-field-stroke); border-bottom:2px solid var(--sc-field-bottom-stroke);
+        border-radius: var(--sc-field-radius); color: inherit; background: var(--sc-field-fill); font:inherit; }
+      [${MENU_ATTRIBUTE}] input:focus { outline:0; border-color:var(--sc-field-focus-stroke); border-bottom-color:var(--sc-field-focus-bottom-stroke); }
+      [${MENU_ATTRIBUTE}] input:focus-visible { outline:var(--sc-field-focus-outline); outline-offset:var(--sc-field-focus-outline-offset); }
       .sugarcubes-add-cube-menu__results { min-height: 0; max-inline-size:none; box-shadow:none; border:0; padding:0; overflow-y:auto; overscroll-behavior:contain; }
       [${RESULT_ATTRIBUTE}] { content-visibility:auto; contain-intrinsic-size:auto 2.75rem; }
       .sugarcubes-add-cube-menu__result-title { min-width: 0; font-weight: 600; }

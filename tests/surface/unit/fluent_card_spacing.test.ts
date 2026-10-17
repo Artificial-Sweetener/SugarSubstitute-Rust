@@ -30,6 +30,8 @@ function fixture(masonry: boolean, fields: boolean, dark = true) {
   const themeStyle = document.createElement('style');
   // Resolve border tokens at the JSDOM boundary, which cannot compute variable-based shorthands.
   themeStyle.textContent = fluentAppearanceCss(dark)
+    .replaceAll('var(--sc-field-border-width)', '1px')
+    .replaceAll('var(--sc-field-radius)', '4px')
     .replaceAll('var(--sc-control-stroke)', 'rgba(255,255,255,.07)')
     .replaceAll('var(--sc-control-bottom-stroke)', 'rgba(255, 255, 255, 0.45)')
     .replaceAll('var(--sc-row-stroke)', dark ? 'rgba(0, 0, 0, 0.1)' : 'rgba(0, 0, 0, 0.06)');

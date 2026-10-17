@@ -27,7 +27,7 @@ export function ensureFinderStyles(documentRef: Document): void {
       max-width:calc(100% - 16px); border:1px solid var(--sc-border-subtle);
       border-radius:8px; background:color-mix(in srgb,var(--sc-surface-secondary) 78%,transparent); color:var(--sc-text);
       backdrop-filter:blur(30px) saturate(125%); isolation:isolate; box-shadow:var(--sc-shadow-medium);
-      font-family:var(--sc-font-family); font-size:var(--sc-font-size); line-height:var(--lineHeightBase300);
+      font-family:var(--sc-font-family); font-size:var(--sc-font-size); line-height:var(--sc-line-height);
     }
     .sc-masonry-finder::before { content:''; position:absolute; inset:0; z-index:-1; pointer-events:none; border-radius:inherit; background:url("${acrylicGrain}") repeat; opacity:.035; }
     .sc-masonry-finder[hidden], .sc-masonry-finder [hidden],

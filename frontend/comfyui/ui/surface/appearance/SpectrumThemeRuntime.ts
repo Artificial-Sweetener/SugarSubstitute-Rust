@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Adapt official Adobe Spectrum components and Spectrum 2 foundations at the browser boundary. */
 import { ButtonBase } from '@spectrum-web-components/button/src/ButtonBase.js';
+import { css, type CSSResultArray } from '@spectrum-web-components/base';
 import '@spectrum-web-components/action-button/sp-action-button.js';
 import '@spectrum-web-components/menu/sp-menu.js';
 import '@spectrum-web-components/menu/sp-menu-item.js';
@@ -36,9 +37,36 @@ import type { BooleanCheckboxControl } from './NativeToggleRows.js';
 import type { BooleanSegmentsControls } from './NativeBooleanSegments.js';
 import type { FinderInputControl } from './FinderControls.js';
 import type { ActivationSwitchControl } from './ActivationSwitchControl.js';
+import { activationSwitchGeometry } from './ActivationSwitchGeometry.js';
 
 /** Preserve a focused activation control when its provider changes before Lit's first render. */
 class SpectrumActivationSwitch extends Switch {
+  /** Retain the established label-first layout while Adobe owns the actual switch and gestures. */
+  static override get styles(): CSSResultArray {
+    return [
+      ...super.styles,
+      css`
+        :host {
+          display: inline-flex;
+          align-items: center;
+          gap: ${activationSwitchGeometry.labelGap}px;
+          font: inherit;
+        }
+        #label {
+          order: -1;
+          margin: 0;
+          font: inherit;
+        }
+        :host(:empty) #label {
+          display: none;
+        }
+        #switch {
+          margin: 0;
+        }
+      `,
+    ];
+  }
+
   /** Focus Adobe's native input only after it has connected and rendered. */
   override focus(options?: FocusOptions): void {
     void this.updateComplete
@@ -208,7 +236,13 @@ export function createSpectrumActivationSwitch(document: Document): ActivationSw
   const control = document.createElement('sc-spectrum-switch');
   if (!(control instanceof SpectrumActivationSwitch))
     throw new TypeError('Spectrum switch registration is incompatible.');
-  control.setAttribute('size', 's');
+  control.setAttribute('size', 'm');
+  control.style.setProperty('--mod-switch-control-width', `${activationSwitchGeometry.width}px`);
+  control.style.setProperty('--mod-switch-control-height', `${activationSwitchGeometry.height}px`);
+  control.style.setProperty('--mod-switch-height', `${activationSwitchGeometry.height}px`);
+  control.style.setProperty('--mod-switch-spacing-top-to-control', '0px');
+  control.style.setProperty('--mod-switch-spacing-top-to-label', '0px');
+  control.style.setProperty('--mod-switch-control-label-spacing', '0px');
   control.emphasized = true;
   return {
     root: control,

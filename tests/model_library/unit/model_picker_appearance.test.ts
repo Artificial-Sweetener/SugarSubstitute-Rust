@@ -17,6 +17,8 @@
 import { afterEach, expect, jest, test } from '@jest/globals';
 import { ModelPickerAppearance } from '../../../frontend/comfyui/ui/model_library/ModelPickerAppearance.js';
 import { modelPickerCss } from '../../../frontend/comfyui/ui/model_library/ModelPickerStyles.js';
+import { VISUAL_STYLE_SETTING } from '../../../frontend/comfyui/ui/surface/appearance/VisualStylePreference.js';
+import type { VisualStyle } from '../../../frontend/comfyui/ui/surface/appearance/VisualStyle.js';
 
 afterEach(() => {
   jest.restoreAllMocks();
@@ -66,4 +68,47 @@ test('shares the active palette across new fields and refreshes it after a host 
   expect(fields[0]!.dataset.scModelAppearance).toBeUndefined();
   appearance.dispose();
   expect(fields[1]!.dataset.scModelAppearance).toBeUndefined();
+});
+
+test('Spectrum picker skin follows provider changes without replacing the active field or emitting a value edit', async () => {
+  let style: VisualStyle = 'spectrum';
+  const listeners = new Map<string, EventListener>();
+  const appearance = new ModelPickerAppearance(document, {
+    ui: {
+      settings: {
+        getSettingValue: (id: string) => (id === VISUAL_STYLE_SETTING ? style : undefined),
+        addEventListener: (name: string, listener: EventListener) => listeners.set(name, listener),
+        removeEventListener: (name: string) => listeners.delete(name),
+      },
+    },
+  });
+  const mount = document.createElement('div');
+  const field = document.createElement('div');
+  field.className = 'sc-model-field';
+  const input = document.createElement('input');
+  input.value = '<model name>';
+  const edit = jest.fn();
+  input.addEventListener('input', edit);
+  field.append(input);
+  mount.append(field);
+  document.body.append(mount);
+  appearance.activate();
+  appearance.track(mount);
+  input.focus();
+  input.setSelectionRange(2, 5);
+  expect(mount.dataset.scModelAppearance).toBe('spectrum');
+  expect(getComputedStyle(mount).getPropertyValue('--sc-field-underline-display')).toBe('none');
+  style = 'fluent';
+  const eventName = `${VISUAL_STYLE_SETTING}.change`;
+  listeners.get(eventName)?.(new Event(eventName));
+  await Promise.resolve();
+  expect(mount.dataset.scModelAppearance).toBe('fluent');
+  expect(mount.style.getPropertyValue('--sc-field-underline-display')).toBe('block');
+  expect(mount.querySelector('input')).toBe(input);
+  expect(document.activeElement).toBe(input);
+  expect(input.value).toBe('<model name>');
+  expect([input.selectionStart, input.selectionEnd]).toEqual([2, 5]);
+  expect(edit).not.toHaveBeenCalled();
+  appearance.dispose();
+  expect(listeners.size).toBe(0);
 });

@@ -8621,6 +8621,7 @@ var init_sp_number_field = __esm({
 
 // frontend/comfyui/ui/surface/appearance/SpectrumThemeRuntime.ts
 init_ButtonBase();
+init_src();
 
 // node_modules/@spectrum-web-components/action-button/sp-action-button.js
 init_define_element();
@@ -11818,9 +11819,29 @@ function spectrumSemanticTokens() {
     "subtle-selected": "var(--spectrum-gray-300)",
     "font-family": 'var(--spectrum-sans-font-family-stack,"Segoe UI",sans-serif)',
     "font-size": "var(--spectrum-font-size-100,14px)",
+    "line-height": "var(--spectrum-line-height-100)",
     "font-weight": "400",
     "font-weight-strong": "600",
     "control-radius": "var(--spectrum-corner-radius-100,8px)",
+    "field-radius": "var(--system-textfield-corner-radius)",
+    "field-border-width": "var(--system-textfield-border-width)",
+    "field-fill": "var(--system-textfield-background-color)",
+    "field-stroke": "var(--system-textfield-border-color)",
+    "field-bottom-stroke": "var(--system-textfield-border-color)",
+    "field-hover-stroke": "var(--system-textfield-border-color-hover)",
+    "field-hover-bottom-stroke": "var(--system-textfield-border-color-hover)",
+    "field-focus-stroke": "var(--system-textfield-border-color-focus)",
+    "field-focus-bottom-stroke": "var(--system-textfield-border-color-focus)",
+    "field-focus-shadow": "none",
+    "field-focus-outline": "var(--spectrum-focus-indicator-thickness) solid var(--sc-focus-ring)",
+    "field-focus-outline-offset": "var(--spectrum-focus-indicator-gap)",
+    "field-underline-display": "none",
+    "button-radius": "999px",
+    "button-border-width": "var(--spectrum-border-width-200)",
+    "button-bottom-stroke": "var(--sc-border)",
+    "button-fill": "var(--system-button-background-color-default)",
+    "button-hover-fill": "var(--system-button-background-color-hover)",
+    "button-pressed-fill": "var(--system-button-background-color-down)",
     "shadow-small": "0 1px 4px #0002",
     "shadow-medium": "0 4px 16px #0003",
     "shadow-large": "0 8px 32px #0004",
@@ -11833,8 +11854,36 @@ function spectrumSemanticTokens() {
   return themeTokenDeclarations(tokens);
 }
 
+// frontend/comfyui/ui/surface/appearance/ActivationSwitchGeometry.ts
+var activationSwitchGeometry = { width: 40, height: 20, labelGap: 8 };
+
 // frontend/comfyui/ui/surface/appearance/SpectrumThemeRuntime.ts
 var SpectrumActivationSwitch = class extends Switch {
+  /** Retain the established label-first layout while Adobe owns the actual switch and gestures. */
+  static get styles() {
+    return [
+      ...super.styles,
+      i`
+        :host {
+          display: inline-flex;
+          align-items: center;
+          gap: ${activationSwitchGeometry.labelGap}px;
+          font: inherit;
+        }
+        #label {
+          order: -1;
+          margin: 0;
+          font: inherit;
+        }
+        :host(:empty) #label {
+          display: none;
+        }
+        #switch {
+          margin: 0;
+        }
+      `
+    ];
+  }
   /** Focus Adobe's native input only after it has connected and rendered. */
   focus(options) {
     void this.updateComplete.then(() => {
@@ -11974,7 +12023,13 @@ function createSpectrumActivationSwitch(document2) {
   const control = document2.createElement("sc-spectrum-switch");
   if (!(control instanceof SpectrumActivationSwitch))
     throw new TypeError("Spectrum switch registration is incompatible.");
-  control.setAttribute("size", "s");
+  control.setAttribute("size", "m");
+  control.style.setProperty("--mod-switch-control-width", `${activationSwitchGeometry.width}px`);
+  control.style.setProperty("--mod-switch-control-height", `${activationSwitchGeometry.height}px`);
+  control.style.setProperty("--mod-switch-height", `${activationSwitchGeometry.height}px`);
+  control.style.setProperty("--mod-switch-spacing-top-to-control", "0px");
+  control.style.setProperty("--mod-switch-spacing-top-to-label", "0px");
+  control.style.setProperty("--mod-switch-control-label-spacing", "0px");
   control.emphasized = true;
   return {
     root: control,
