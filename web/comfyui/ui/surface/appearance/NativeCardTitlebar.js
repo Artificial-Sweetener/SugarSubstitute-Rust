@@ -33,7 +33,7 @@ export class NativeCardTitlebar {
             this.#bindings.set(root, binding);
         }
         binding.collapse = header.querySelector('[data-testid="node-collapse-button"]');
-        binding.activation = header.querySelector('[data-cube-card-activation] input');
+        binding.activation = header.querySelector('[data-cube-card-activation] [data-sc-activation-switch]');
         const canActivate = binding.activation !== null && !binding.activation.disabled;
         const canCollapse = hasContent && binding.collapse !== null && !binding.collapse.disabled;
         const projected = root.closest('.sugarcubes-cube-face__node-card') !== null;

@@ -63,6 +63,7 @@ function fixture(
     label.dataset.cubeCardActivation = 'prompt';
     enabled = document.createElement('input');
     enabled.type = 'checkbox';
+    enabled.dataset.scActivationSwitch = '';
     enabled.checked = true;
     label.append(enabled);
     header.append(label);

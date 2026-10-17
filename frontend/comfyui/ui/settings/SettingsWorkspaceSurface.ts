@@ -18,20 +18,24 @@ import type { SettingsCatalog } from './SettingsCatalog.js';
 import { SettingsSearchPlacement } from './SettingsSearchPlacement.js';
 import { applyOwnedTheme } from '../surface/appearance/ThemeService.js';
 import { SettingsPagePosition } from './SettingsPagePosition.js';
+import { SettingsSwitchControls } from './SettingsSwitchControls.js';
 
 /** Own reversible settings annotations, descriptions and top-search placement for one dialog. */
 export class SettingsWorkspaceSurface {
   #placement: SettingsSearchPlacement | null = null;
   #position: SettingsPagePosition | null = null;
   readonly #rows = new Set<HTMLElement>();
+  readonly #switches: SettingsSwitchControls;
 
   /** Bind an actual settings mount rather than discovering arbitrary dialogs or plugin DOM. */
   constructor(
     private readonly root: HTMLElement,
     private readonly catalog: SettingsCatalog,
-  ) {}
+  ) {
+    this.#switches = new SettingsSwitchControls(root);
+  }
 
-  /** Apply Microsoft's official tokens to standard host settings and opt-in SugarCubes content. */
+  /** Apply the selected provider to standard host settings and opt-in SugarCubes content. */
   update(styled: boolean, dark: boolean): void {
     this.root.setAttribute('data-sc-settings', '');
     if (styled) {
@@ -71,10 +75,12 @@ export class SettingsWorkspaceSurface {
       description.textContent = descriptor.description;
       label.append(description);
     }
+    this.#switches.reconcile(styled);
   }
 
   /** Leave host markup and custom-page lifetimes exactly where Comfy expects them. */
   dispose(): void {
+    this.#switches.clear();
     this.#placement?.dispose();
     this.#placement = null;
     this.#position?.dispose();

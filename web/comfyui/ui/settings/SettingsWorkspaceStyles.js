@@ -157,6 +157,7 @@ export const settingsWorkspaceCss = `
 [data-sc-settings-themed] [data-sc-setting-kind] .p-select-label { padding:6px 12px; }
 [data-sc-settings-themed] [data-sc-setting-kind] :is(input,select,button):focus-visible { outline:2px solid var(--sc-accent-indicator); outline-offset:2px; }
 [data-sc-settings-themed] [data-sc-setting-kind] .p-toggleswitch { width:40px; height:20px; }
+[data-sc-settings-themed] [data-sc-settings-switch-native] { display:none !important; }
 [data-sc-settings-themed] [data-sc-setting-kind] .p-toggleswitch-slider { border:1px solid var(--sc-border-accessible); border-radius:10px; background:transparent; }
 [data-sc-settings-themed] [data-sc-setting-kind] .p-toggleswitch-handle { width:12px; height:12px; margin-top:-6px; left:4px; background:var(--sc-text-secondary); }
 [data-sc-settings-themed] [data-sc-setting-kind] .p-toggleswitch-checked .p-toggleswitch-slider { background:var(--sc-accent-indicator); border-color:transparent; }

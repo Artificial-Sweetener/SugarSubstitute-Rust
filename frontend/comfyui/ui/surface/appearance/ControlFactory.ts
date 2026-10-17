@@ -29,6 +29,7 @@ import {
   createSpectrumSegments,
   createSpectrumFinderInput,
   createSpectrumTablist,
+  createSpectrumActivationSwitch,
 } from './SpectrumThemeRuntime.js';
 import { readOwnedVisualStyle } from './VisualStyleBoundary.js';
 import type { NumericSliderControl } from './NativeNumericControls.js';
@@ -36,6 +37,20 @@ import type { BooleanCheckboxControl } from './NativeToggleRows.js';
 import type { BooleanSegmentsControls } from './NativeBooleanSegments.js';
 import type { FinderInputControl } from './FinderControls.js';
 import type { VisualStyle } from './VisualStyle.js';
+import {
+  createNativeActivationSwitch,
+  type ActivationSwitchControl,
+} from './ActivationSwitchControl.js';
+
+/** Select activation presentation without taking ownership of node state or history. */
+export function createActivationSwitch(document: Document): ActivationSwitchControl {
+  const result =
+    readOwnedVisualStyle(document) === 'spectrum'
+      ? createSpectrumActivationSwitch(document)
+      : createNativeActivationSwitch(document);
+  result.control.dataset.scActivationSwitch = '';
+  return result;
+}
 
 /** Create an owned command button with the selected system's real interaction implementation. */
 export function createButton(document: Document): HTMLElement {

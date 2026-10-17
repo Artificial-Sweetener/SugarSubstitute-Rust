@@ -15,8 +15,17 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Select official controls at the browser boundary without duplicating native value policies. */
 import { createFluentNumericSlider, createBooleanCheckboxControl, createBooleanSegmentControls, createFinderInputControl, createWorkflowTab as createFluentWorkflowTab, createWorkflowTablist as createFluentWorkflowTablist, } from './FluentThemeRuntime.js';
-import { createSpectrumButton, createSpectrumSlider, createSpectrumCheckbox, createSpectrumSegments, createSpectrumFinderInput, createSpectrumTablist, } from './SpectrumThemeRuntime.js';
+import { createSpectrumButton, createSpectrumSlider, createSpectrumCheckbox, createSpectrumSegments, createSpectrumFinderInput, createSpectrumTablist, createSpectrumActivationSwitch, } from './SpectrumThemeRuntime.js';
 import { readOwnedVisualStyle } from './VisualStyleBoundary.js';
+import { createNativeActivationSwitch, } from './ActivationSwitchControl.js';
+/** Select activation presentation without taking ownership of node state or history. */
+export function createActivationSwitch(document) {
+    const result = readOwnedVisualStyle(document) === 'spectrum'
+        ? createSpectrumActivationSwitch(document)
+        : createNativeActivationSwitch(document);
+    result.control.dataset.scActivationSwitch = '';
+    return result;
+}
 /** Create an owned command button with the selected system's real interaction implementation. */
 export function createButton(document) {
     const button = readOwnedVisualStyle(document) === 'spectrum'
