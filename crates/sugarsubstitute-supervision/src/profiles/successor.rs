@@ -9,7 +9,8 @@ use std::path::Path;
 /// The original exact requested path was resolved into this retained account/folder
 /// FileID and run under protected directory pins. This barrier authorizes no native
 /// effect, treats no path alias as equivalent, and never substitutes for successor
-/// acquisition. Only the original owner's consumed successful native release opens it.
+/// acquisition. Its release observation covers only the original native owner;
+/// the caller must also observe its independent domain profile settlement.
 pub struct ProfileRetirement {
     shared: Arc<Shared>,
     identity: record::Record,
@@ -46,9 +47,12 @@ impl WindowsProfileLease {
     /// The caller separately verifies authenticated retirement intent. The binding comes
     /// from observed successful acquisition, including native account/folder FileID;
     /// spelling changes and aliases remain subject to ordinary native exclusion checks.
+    /// A completed native release retains this historical binding so an entry arriving
+    /// before domain settlement can still correlate both owners. Its release fact grants
+    /// no fresh acquisition: the successor always repeats ordinary native validation.
     /// No worker-owned native storage is locked or read on the caller's native thread.
     pub fn successor_retirement(&self, requested: &Path) -> Option<ProfileRetirement> {
-        if requested != self.path || self.shared.release_observed.load(Ordering::Acquire) {
+        if requested != self.path {
             return None;
         }
         let identity = self.observed_identity?;

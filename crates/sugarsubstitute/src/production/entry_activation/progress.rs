@@ -261,7 +261,7 @@ impl ProductionActivation {
         }
         let capture = self.capture.as_mut().ok_or("Actual capture owner missing")?;
         for at in 0..self.records.len() {
-            let profile_waiting = Self::profile_admission_waiting(&mut self.records, at)?;
+            let profile_waiting = Self::profile_admission_waiting(&mut self.records, at, backend)?;
             let backend_commands_open = !self.closing
                 && failure.is_none()
                 && commands_open(&self.records, delivery, backend);

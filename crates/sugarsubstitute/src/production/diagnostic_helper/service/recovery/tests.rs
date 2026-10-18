@@ -152,6 +152,8 @@ fn exercise(started: bool, cancelled: bool) -> Result<(), TestError> {
     assert!(service.input_identity.is_none());
     assert!(!service.files_retired());
     assert!(service.source.inspect(|_| ()).is_none());
+    // Terminal delivery precedes disposal of the executor's final context aliases.
+    drop(execution);
     let before = scope.snapshot().reserved_bytes;
     drop(retired);
     let released = if started { DIAGNOSTIC_STORAGE_BYTES + 32 * 1024 } else { 32 * 1024 };

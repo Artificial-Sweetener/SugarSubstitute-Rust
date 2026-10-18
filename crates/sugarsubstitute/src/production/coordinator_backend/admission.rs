@@ -5,6 +5,16 @@ use super::*;
 use sugarsubstitute_application::supervision::ResourceStorageInput;
 
 impl CoordinatorBackend {
+    /// Observe domain exclusion for the exact native-bound retiring predecessor.
+    /// This grants no enrollment or native acquisition; their owners revalidate both.
+    pub(crate) fn profile_successor_waiting(
+        &self,
+        profile: &sugarsubstitute_contracts::configuration::ProfileId,
+        predecessor: RunKey,
+    ) -> std::result::Result<bool, LifecycleRejection> {
+        self.policy.profile_successor_waiting(profile, predecessor)
+    }
+
     /// Preflight only fresh effects. An exact App-owned retry replay must return
     /// its original outcome after the resource has advanced to Retrying; it cannot
     /// require a new source/campaign or start a second native effect.

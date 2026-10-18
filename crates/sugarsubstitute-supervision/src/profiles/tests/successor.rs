@@ -37,7 +37,10 @@ fn same_profile_successor_waits_for_consumed_original_native_release() -> TestRe
     let observed = h.lease.consume_release(run()?, &batch)?.ok_or("Original release lost")?;
     assert_eq!((observed.job, observed.kind), (release.id, TerminalKind::Success));
     assert!(barrier.released());
-    assert!(h.lease.successor_retirement(&path).is_none());
+    let after_release =
+        h.lease.successor_retirement(&path).ok_or("Historical native binding absent")?;
+    assert_eq!(after_release.run(), barrier.run());
+    assert!(after_release.released());
     h.finish_workers();
     Ok(())
 }

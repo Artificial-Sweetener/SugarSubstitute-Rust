@@ -3,6 +3,7 @@
 //! Reserve bounded startup identities separately from actual connected peer registration.
 use super::{ResourceCoordinator, resource_state::*};
 use std::collections::BTreeMap;
+use sugarsubstitute_contracts::configuration::ProfileId;
 use sugarsubstitute_contracts::lifecycle::*;
 
 impl ResourceCoordinator {
@@ -33,11 +34,7 @@ impl ResourceCoordinator {
         } else if run.instance.get() <= self.instance_highwater {
             return Err(LifecycleRejection::StaleIdentity);
         }
-        if self
-            .runs
-            .values()
-            .any(|record| !record.settled && record.enrollment.profile == enrollment.profile)
-        {
+        if self.profile_occupant(&enrollment.profile).is_some() {
             return Err(LifecycleRejection::ProfileContention);
         }
         if !self.runs.contains_key(&run.instance) && self.runs.len() >= MAX_RUNS {
@@ -64,6 +61,38 @@ impl ResourceCoordinator {
             },
         );
         Ok(())
+    }
+
+    /// Inspect profile exclusion for an adapter-bound retiring predecessor without mutation.
+    ///
+    /// The adapter separately retains authenticated close intent and actual native profile
+    /// ownership. Only this exact predecessor's unsettled enrollment permits waiting; an
+    /// absent occupant needs no wait. This advisory result grants no enrollment or native
+    /// authority, and `enroll_run` checks exclusion again before admitting its successor.
+    ///
+    /// # Errors
+    /// Rejects a foreign predecessor owner or a different unsettled profile occupant.
+    pub fn profile_successor_waiting(
+        &self,
+        profile: &ProfileId,
+        predecessor: RunKey,
+    ) -> Result<bool, LifecycleRejection> {
+        if predecessor.owner != self.owner {
+            return Err(LifecycleRejection::ForeignOwner);
+        }
+        match self.profile_occupant(profile) {
+            Some(occupant) if occupant == predecessor => Ok(true),
+            Some(_) => Err(LifecycleRejection::ProfileContention),
+            None => Ok(false),
+        }
+    }
+
+    /// Borrow the same exclusive occupancy fact used by advisory and actual enrollment.
+    fn profile_occupant(&self, profile: &ProfileId) -> Option<RunKey> {
+        self.runs
+            .values()
+            .find(|record| !record.settled && &record.enrollment.profile == profile)
+            .map(|record| record.enrollment.run)
     }
 
     /// Record the trusted adapter's native authentication for this exact enrollment.

@@ -7,7 +7,10 @@ use super::support::*;
 fn last_client_retirement_waits_for_actual_backend_settlement_without_releasing_profile()
 -> TestResult {
     let mut policy = ResourceCoordinator::new(owner()?);
+    let profile = ProfileId::new("exclusive".into())?;
+    assert!(!policy.profile_successor_waiting(&profile, run(1)?)?);
     register(&mut policy, 1, "exclusive")?;
+    assert!(policy.profile_successor_waiting(&profile, run(1)?)?);
     let held = lease(&submit(
         &mut policy,
         request(1, 1, ResourceCommand::Acquire(target(8188, true)?))?,
@@ -20,18 +23,54 @@ fn last_client_retirement_waits_for_actual_backend_settlement_without_releasing_
     assert_eq!(policy.run_settlement(run(1)?)?, RunSettlementStatus::PendingBackendCleanup);
     assert_eq!(policy.settle_run(run(1)?), Err(LifecycleRejection::WrongPhase));
     assert_eq!(policy.snapshot().retained_profiles, 1);
+    assert!(policy.profile_successor_waiting(&profile, run(1)?)?);
     assert!(register(&mut policy, 2, "exclusive").is_err());
     // External adapter observation is supplied through the genuine policy transition.
     observe(&mut policy, ResourceObservation::Settled(held.resource))?;
     assert_eq!(policy.run_settlement(run(1)?)?, RunSettlementStatus::Ready);
     assert_eq!(policy.snapshot().retained_profiles, 1);
+    assert!(policy.profile_successor_waiting(&profile, run(1)?)?);
     policy.settle_run(run(1)?)?;
     assert_eq!(policy.snapshot().retained_profiles, 0);
+    assert!(!policy.profile_successor_waiting(&profile, run(1)?)?);
     // An exact repeated close neither removes the retained identity nor creates effects.
     let settled = policy.snapshot();
     policy.settle_run(run(1)?)?;
     assert_eq!(policy.snapshot(), settled);
     register(&mut policy, 2, "exclusive")?;
+    assert_eq!(
+        policy.profile_successor_waiting(&profile, run(1)?),
+        Err(LifecycleRejection::ProfileContention)
+    );
+    Ok(())
+}
+
+/// Advisory exclusion never treats another run or foreign epoch as the bound predecessor.
+#[test]
+fn profile_successor_advisory_correlates_exact_occupant_and_preserves_enrollment() -> TestResult {
+    let mut policy = ResourceCoordinator::new(owner()?);
+    let profile = ProfileId::new("exclusive".into())?;
+    register(&mut policy, 1, "exclusive")?;
+    let before = policy.snapshot();
+    assert!(policy.profile_successor_waiting(&profile, run(1)?)?);
+    assert!(!policy.profile_successor_waiting(&ProfileId::new("distinct".into())?, run(1)?)?);
+    assert_eq!(
+        policy.profile_successor_waiting(&profile, run(2)?),
+        Err(LifecycleRejection::ProfileContention)
+    );
+    let stale = RunKey { generation: RunGeneration::new(2)?, ..run(1)? };
+    assert_eq!(
+        policy.profile_successor_waiting(&profile, stale),
+        Err(LifecycleRejection::ProfileContention)
+    );
+    let mut foreign = run(1)?;
+    foreign.owner.epoch = CoordinatorEpoch::new([3; 16])?;
+    assert_eq!(
+        policy.profile_successor_waiting(&profile, foreign),
+        Err(LifecycleRejection::ForeignOwner)
+    );
+    assert!(register(&mut policy, 2, "exclusive").is_err());
+    assert_eq!(policy.snapshot(), before);
     Ok(())
 }
 
