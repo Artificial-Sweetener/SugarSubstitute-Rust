@@ -58,6 +58,8 @@ mod restart;
 pub(crate) mod retirement;
 #[path = "entry_activation/shutdown.rs"]
 mod shutdown;
+#[path = "entry_activation/splash.rs"]
+mod splash;
 #[cfg(test)]
 #[path = "entry_activation/tests.rs"]
 mod tests;
@@ -249,6 +251,15 @@ impl ProductionActivation {
     }
 }
 impl EntryActivation for ProductionActivation {
+    fn entry_splash(&self) -> super::entry_runner::EntrySplashState {
+        self.entry_splash_state()
+    }
+    fn complete_entry_splash_handoff(
+        &mut self,
+        identity: sugarsubstitute_contracts::startup::MainIdentity,
+    ) -> Result<()> {
+        self.release_entry_splash(identity)
+    }
     fn enter_activation(
         &mut self,
         request: &mut Option<AuthenticatedEntryLaunch>,

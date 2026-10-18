@@ -128,6 +128,10 @@ pub(super) fn consume(
                     .as_ref()
                     .and_then(serde_json::Value::as_str)
                     .ok_or_else(|| readiness_error(ReadinessFault::MalformedObservation))?;
+                if super::super::frame::Needed::decode(text) {
+                    owner.begin_frame_configuration(target).map_err(readiness_error)?;
+                    return Ok(Effect::ConfigureFrame(Box::new(target)));
+                }
                 let blocked = Blocked::decode(text)?;
                 let receipt = if blocked.is_some() {
                     None
@@ -142,6 +146,24 @@ pub(super) fn consume(
                 } else if let Some(blocked) = blocked {
                     effect = Effect::Incomplete(blocked);
                 }
+                Ok(())
+            }
+            Command::FrameConfiguration(target) => {
+                let evaluation: Evaluation = parse(payload)?;
+                if evaluation.exception_details.is_some() || evaluation.result.kind != "string" {
+                    return Err(readiness_error(ReadinessFault::MalformedObservation));
+                }
+                let text = evaluation
+                    .result
+                    .value
+                    .as_ref()
+                    .and_then(serde_json::Value::as_str)
+                    .ok_or_else(|| readiness_error(ReadinessFault::MalformedObservation))?;
+                let receipt = parse(text)?;
+                effect = Effect::FrameConfigured(Box::new(super::super::frame::Completion {
+                    target,
+                    receipt,
+                }));
                 Ok(())
             }
             Command::Barrier(target) => {

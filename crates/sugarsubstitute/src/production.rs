@@ -23,6 +23,8 @@ mod entry;
 mod entry_activation;
 #[path = "production/entry_bootstrap.rs"]
 mod entry_bootstrap;
+#[path = "production/entry_presentation.rs"]
+mod entry_presentation;
 #[path = "production/entry_runner.rs"]
 mod entry_runner;
 #[path = "production/options.rs"]

@@ -177,7 +177,7 @@ pub(super) struct LabelSurface<'a> {
 
 impl LabelSurface<'_> {
     /// Clip font overhang before compositing while preserving premultiplication.
-    fn composite(&mut self, x: i32, y: i32, alpha: u8, color: [u8; 3]) {
+    fn composite(&mut self, x: i32, y: i32, alpha: u8, color: [u8; 4]) {
         if x < self.bounds[0]
             || y < self.bounds[1]
             || x >= self.bounds[2]

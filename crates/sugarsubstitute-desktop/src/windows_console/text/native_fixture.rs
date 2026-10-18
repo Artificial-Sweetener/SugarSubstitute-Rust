@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Own hidden RichEdit resources and the outer qualification's MTA cookie on one STA.
+use crate::windows_controls::console::engine::Engine;
 use crate::{DesktopError, console::index::DocumentIndex, windows_ui_apartment::UiApartment};
+use std::rc::Rc;
 use windows::{
     Win32::{
         Foundation::{FreeLibrary, HMODULE, HWND},
@@ -34,6 +36,7 @@ pub(super) struct Hidden<'a> {
     pub(super) hwnd: Option<HWND>,
     parent: Option<HWND>,
     module: Option<HMODULE>,
+    engine: Option<Rc<Engine>>,
     _apartment: &'a UiApartment,
     pub(super) document: Option<DocumentIndex>,
 }
@@ -47,6 +50,7 @@ impl<'a> Hidden<'a> {
             hwnd: None,
             parent: None,
             module: None,
+            engine: None,
             _apartment: apartment,
             document: Some(document),
         };
@@ -80,7 +84,7 @@ impl<'a> Hidden<'a> {
             unsafe {
                 CreateWindowExW(
                     WINDOW_EX_STYLE::default(),
-                    w!("RICHEDIT50W"),
+                    w!("STATIC"),
                     w!(""),
                     crate::windows_controls::console::native::peer_style(),
                     0,
@@ -95,6 +99,21 @@ impl<'a> Hidden<'a> {
             }
             .map_err(|e| DesktopError::new("console_fixture_window", e))?,
         );
+        let child = owner
+            .hwnd
+            .ok_or_else(|| DesktopError::message("console_fixture_engine", "child absent"))?;
+        let module = owner
+            .module
+            .ok_or_else(|| DesktopError::message("console_fixture_engine", "module absent"))?;
+        owner.engine = Some(Engine::new(child));
+        let engine = owner
+            .engine
+            .as_ref()
+            .ok_or_else(|| DesktopError::message("console_fixture_engine", "owner absent"))?;
+        engine.initialize(module)?;
+        engine.install_input()?;
+        engine.configure_accessibility(module, "Comfy output")?;
+        engine.activate()?;
         // SAFETY: Passive identity/visibility checks inspect only this test's two retained HWNDs.
         unsafe {
             let child = owner
@@ -120,6 +139,10 @@ impl<'a> Hidden<'a> {
     }
     /// Retire the exact child, parent and module before the outer STA may be released.
     pub(super) fn close(&mut self) -> Result<(), DesktopError> {
+        if let Some(engine) = self.engine.as_ref() {
+            engine.close()?;
+            self.engine = None;
+        }
         if let Some(hwnd) = self.hwnd {
             // SAFETY: Exact hidden test-thread owner, retained on failure.
             unsafe { DestroyWindow(hwnd) }
@@ -145,6 +168,7 @@ impl<'a> Hidden<'a> {
 impl Drop for Hidden<'_> {
     fn drop(&mut self) {
         if let Err(cause) = self.close() {
+            std::mem::forget(self.engine.take());
             std::mem::forget(self.document.take());
             tracing::error!(operation="console_fixture_cleanup",cause=%cause,"Hidden console fixture remains retained");
         }

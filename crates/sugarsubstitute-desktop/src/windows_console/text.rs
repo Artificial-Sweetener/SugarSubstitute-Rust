@@ -12,16 +12,8 @@ use sugarsubstitute_contracts::{configuration::Theme, presentation::console_colo
 #[path = "text/redraw.rs"]
 mod redraw;
 use windows::Win32::{
-    Foundation::{COLORREF, ERROR_NO_SCROLLBARS, HWND},
-    Graphics::Gdi::{COLOR_WINDOW, COLOR_WINDOWTEXT, GetSysColor},
-    UI::{
-        Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW},
-        Controls::RichEdit::*,
-        WindowsAndMessaging::{
-            GetScrollInfo, SB_VERT, SCROLLINFO, SIF_ALL, SPI_GETHIGHCONTRAST,
-            SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SystemParametersInfoW,
-        },
-    },
+    Foundation::{COLORREF, HWND},
+    UI::Controls::RichEdit::*,
 };
 /// Publish only a fully copied and formatted retained document.
 pub(super) fn publish(
@@ -73,27 +65,7 @@ impl TextPort for NativeText {
         let range = self.control().selection();
         let first_line = self.control().first_line()?;
         let first = self.control().line_index(first_line)?;
-        let mut scroll = SCROLLINFO {
-            cbSize: size_of::<SCROLLINFO>() as u32,
-            fMask: SIF_ALL,
-            ..Default::default()
-        };
-        // SAFETY: Query only the retained peer and documented writable buffer.
-        let at_bottom = match unsafe { GetScrollInfo(self.hwnd, SB_VERT, &raw mut scroll) } {
-            Ok(()) => {
-                scroll.nMax == scroll.nMin
-                    || i64::from(scroll.nPos) + i64::from(scroll.nPage)
-                        >= i64::from(scroll.nMax) + 1
-            }
-            // Empty or short RichEdit documents have no scroll bar. Selection and
-            // first-line positions still come from this same native control.
-            Err(cause)
-                if cause.code() == windows::core::HRESULT::from_win32(ERROR_NO_SCROLLBARS.0) =>
-            {
-                true
-            }
-            Err(cause) => return Err(DesktopError::new("console_scroll_observe", cause)),
-        };
+        let at_bottom = super::engine::find(self.hwnd)?.at_bottom()?;
         if range.cpMin < 0 || range.cpMax < range.cpMin || first < 0 {
             return Err(DesktopError::message(
                 "console_selection_observe",
@@ -115,6 +87,22 @@ impl TextPort for NativeText {
             ));
         }
         copied.resize(count, 0u16);
+        let theme = if self.dark { Theme::Dark } else { Theme::Light };
+        let foreground =
+            rgb(console_color(Default::default(), theme, false).ok_or_else(formatting)?);
+        let mut default = CHARFORMAT2W::default();
+        default.Base.cbSize = size_of::<CHARFORMAT2W>() as u32;
+        default.Base.dwMask = CFM_FACE | CFM_SIZE | CFM_COLOR | CFM_BACKCOLOR | CFM_BOLD;
+        default.Base.yHeight = 180;
+        default.Base.crTextColor = COLORREF(foreground);
+        default.Base.dwEffects = CFE_AUTOBACKCOLOR;
+        default.crBackColor = COLORREF(0);
+        for (slot, unit) in default.Base.szFaceName.iter_mut().zip("Courier New".encode_utf16()) {
+            *slot = unit;
+        }
+        // Native insertion owns script-specific font binding. Establish its defaults before
+        // streaming, then preserve those font faces when normalizing source size and colors.
+        self.control().format(super::messages::FormatScope::Default, &default)?;
         let mut reader = TextStream::new(document);
         self.control().stream(&mut reader)?;
         if self.control().length() != document.units as isize {
@@ -132,64 +120,25 @@ impl TextPort for NativeText {
             ));
         }
         drop(copied);
-        let mut high =
-            HIGHCONTRASTW { cbSize: size_of::<HIGHCONTRASTW>() as u32, ..Default::default() };
-        // SAFETY: Read the system's current accessibility palette into its documented structure.
-        unsafe {
-            SystemParametersInfoW(
-                SPI_GETHIGHCONTRAST,
-                high.cbSize,
-                Some((&raw mut high).cast()),
-                SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS::default(),
-            )
-        }
-        .map_err(|e| DesktopError::new("console_high_contrast", e))?;
-        let contrast = high.dwFlags.contains(HCF_HIGHCONTRASTON);
-        let theme = if self.dark { Theme::Dark } else { Theme::Light };
-        let background = if contrast {
-            // SAFETY: GetSysColor returns system palette facts without retaining native resources.
-            unsafe { GetSysColor(COLOR_WINDOW) }
-        } else {
-            rgb(if self.dark { [25; 3] } else { [255; 3] })
-        };
-        self.control().background(background);
-        let foreground = if contrast {
-            // SAFETY: Passive system palette query; no borrowed resource escapes.
-            unsafe { GetSysColor(COLOR_WINDOWTEXT) }
-        } else {
-            rgb(console_color(Default::default(), theme, false).ok_or_else(|| {
-                DesktopError::message("console_palette", "default foreground absent")
-            })?)
-        };
-        let mut default = CHARFORMAT2W::default();
-        default.Base.cbSize = size_of::<CHARFORMAT2W>() as u32;
-        default.Base.dwMask = CFM_FACE | CFM_SIZE | CFM_COLOR | CFM_BACKCOLOR | CFM_BOLD;
-        default.Base.yHeight = 180;
-        default.Base.crTextColor = COLORREF(foreground);
-        default.crBackColor = COLORREF(background);
-        for (slot, unit) in default.Base.szFaceName.iter_mut().zip("Consolas".encode_utf16()) {
-            *slot = unit;
-        }
-        self.control().format(false, &default)?;
+        default.Base.dwMask &= !CFM_FACE;
         self.selection(0, document.units as i32)?;
-        self.control().format(true, &default)?;
+        self.control().format(super::messages::FormatScope::Selection, &default)?;
         for extent in document.styles() {
             let mut format = CHARFORMAT2W::default();
             format.Base.cbSize = size_of::<CHARFORMAT2W>() as u32;
             format.Base.dwMask = CFM_COLOR | CFM_BACKCOLOR | CFM_BOLD;
             format.Base.dwEffects = if extent.style.bold { CFE_BOLD } else { Default::default() };
-            format.Base.crTextColor = COLORREF(if contrast {
-                foreground
+            format.Base.crTextColor =
+                COLORREF(rgb(
+                    console_color(extent.style.foreground, theme, false).ok_or_else(formatting)?
+                ));
+            if let Some(color) = console_color(extent.style.background, theme, true) {
+                format.crBackColor = COLORREF(rgb(color));
             } else {
-                rgb(console_color(extent.style.foreground, theme, false).ok_or_else(formatting)?)
-            });
-            format.crBackColor = COLORREF(if contrast {
-                background
-            } else {
-                console_color(extent.style.background, theme, true).map_or(background, rgb)
-            });
+                format.Base.dwEffects |= CFE_AUTOBACKCOLOR;
+            }
             self.selection(extent.start, extent.end)?;
-            self.control().format(true, &format)?;
+            self.control().format(super::messages::FormatScope::Selection, &format)?;
         }
         Ok(())
     }
@@ -220,7 +169,7 @@ impl TextPort for NativeText {
         Ok(())
     }
 }
-fn rgb([r, g, b]: [u8; 3]) -> u32 {
+fn rgb([r, g, b, _]: [u8; 4]) -> u32 {
     u32::from(r) | (u32::from(g) << 8) | (u32::from(b) << 16)
 }
 fn formatting() -> DesktopError {

@@ -49,8 +49,9 @@ pub(super) fn preflight(
     if let EntryConnectionView::Managed { root, interpreter, arguments, .. } = view.connection() {
         // Requested paths/argv coexist with their effective Comfy copies and
         // script-path preparation. The one actual owner remains comfy::launch.
-        bytes = add(bytes, mul(path_peak(root)?, 4)?)?;
-        bytes = add(bytes, mul(path_peak(interpreter)?, 3)?)?;
+        bytes = add(bytes, mul(path_peak(root)?, 6)?)?;
+        bytes = add(bytes, mul(path_peak(interpreter)?, 5)?)?;
+        bytes = add(bytes, 8192)?; // Bounded managed environment names, values and controls.
         let mut argument_bytes = 0;
         for argument in arguments.iter() {
             argument_bytes = add(argument_bytes, count(argument.len())?)?;
@@ -61,9 +62,11 @@ pub(super) fn preflight(
         bytes = add(bytes, 128)?; // Seven fixed Comfy options/port, excluding script.
     }
     let units = count(view.environment().unit_len())?;
-    // Raw snapshot, two output blocks, merge entries and typed controls. Entry is
-    // two slice-shaped fields in the source-pinned environment::entries owner.
-    bytes = add(bytes, mul(units, 6)?)?;
+    // Raw snapshot, desktop/backend output and managed PATH scratch/reallocation.
+    // Entry is two slice-shaped fields in the source-pinned environment::entries owner.
+    let environment_copies =
+        if matches!(view.connection(), EntryConnectionView::Managed { .. }) { 12 } else { 6 };
+    bytes = add(bytes, mul(units, environment_copies)?)?;
     let entry = (size_of::<&[u16]>() + size_of::<Option<&[u16]>>() + align_of::<&[u16]>()) as u64;
     bytes = add(bytes, mul(1024.min(units), entry)?)?;
     bytes = add(bytes, (size_of::<Fields>() + size_of::<ProjectedEntry>()) as u64)?;

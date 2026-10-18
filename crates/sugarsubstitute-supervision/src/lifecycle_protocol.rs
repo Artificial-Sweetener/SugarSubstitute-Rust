@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Encode bounded, untrusted lifecycle messages independently of native authentication.
 //!
-//! Wire version 7 uses little-endian integers and a fixed 104-byte header. Managed
+//! Wire version 8 uses little-endian integers and a fixed 104-byte header. Managed
 //! Acquire/Retry headers bound admission; accepted requests await the owned backend
 //! until Ready, cancellation or exit. Every native transfer remains finite. Frames
 //! contain at most 65536 bytes including that header. Claimed identities, secrets
@@ -54,6 +54,10 @@
 //! Preparation, Cleanup, UnexpectedExit and Deadline. Rejection codes 1..10 mean
 //! ForeignOwner, StaleIdentity, ProfileContention, WrongPhase, ChangedDuplicate,
 //! StaleRequest, Overloaded, IdentityExhausted, InvalidClock and EndpointMismatch.
+//! Kind21 SplashPrepared carries positive u64 launch/navigation for an actually
+//! submitted complete covered child splash. Its exact acknowledged request permits
+//! child presentation only after the parent's real entry surface is hidden. It
+//! establishes no backend, profile, Main or frontend readiness. Version7 peers reject.
 //! Kind19 SettleAttempt carries the original positive u64 launch/navigation and
 //! Acquire request ID. The authenticated parent retains the resource association
 //! and acknowledges only real cleanup settlement. Kind20 RetryBackend carries the
@@ -76,7 +80,7 @@
 //! a stale original lease gains no release or reload authority. Web reload remains with
 //! the frontend owner. These copied wire facts grant no retry, current readiness,
 //! native adoption or teardown proof.
-//! Only schema5 is accepted; parent and captured child deploy together.
+//! Only schema8 is accepted; parent and captured child deploy together.
 //! Unknown tags and trailing bytes reject; no future operation is implied.
 mod binary;
 mod decode;
@@ -106,7 +110,7 @@ pub use target::{BorrowedBackendTarget, DecodedTarget, ManagedTargetRef};
 pub use utf16::{ArgumentRefs, Utf16Text};
 
 /// Exact supported wire version; unknown versions reject without negotiation.
-pub const WIRE_VERSION: u16 = 7;
+pub const WIRE_VERSION: u16 = 8;
 /// Exact header byte count, including the whole claimed run and deadline.
 pub const HEADER_BYTES: usize = 104;
 /// Maximum complete control frame, including header and payload.

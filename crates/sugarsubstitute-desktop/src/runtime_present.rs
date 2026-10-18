@@ -21,6 +21,7 @@ pub(crate) struct Presentations {
     longest: Duration,
     last: Option<Instant>,
     audit: Option<FrameAudit>,
+    visibility: super::visibility::Visibility,
 }
 
 impl Presentations {
@@ -38,6 +39,7 @@ impl Presentations {
             longest: Duration::ZERO,
             last: None,
             audit: audit.then(FrameAudit::default),
+            visibility: super::visibility::Visibility::default(),
         }
     }
 
@@ -48,7 +50,7 @@ impl Presentations {
         presenter: &mut Presenter,
         frame: &PreparedFrame,
         timings: Option<&crate::timing::TimingObserver>,
-        content: &impl WindowContent,
+        content: &mut impl WindowContent,
         #[cfg(target_os = "windows")] controls: &mut crate::windows_controls::Controls,
     ) -> Result<(), DesktopError> {
         crate::timing::observe_submission(timings, frame.identity(), || {
@@ -91,7 +93,34 @@ impl Presentations {
                 Ok(())
             })();
             self.record_submission(result, frame.identity(), began, Instant::now())
+        })?;
+        let timings = timings.filter(|_| !self.visibility.ever_shown());
+        self.visibility.submitted(content, frame.identity(), |visible| {
+            native_visibility(window, visible, timings, presenter)
         })
+    }
+
+    /// Admit initial pixels while the native window remains covered.
+    pub(crate) fn preparing_first(&self) -> bool {
+        self.visibility.preparing_first()
+    }
+
+    /// Report visibility acknowledged by this exact native presentation owner.
+    pub(crate) fn shown(&self) -> bool {
+        self.visibility.shown()
+    }
+
+    /// Apply a presentation-only handoff while preserving the application/execution lifetime.
+    pub(crate) fn reconcile(
+        &mut self,
+        content: &mut impl WindowContent,
+        window: &Window,
+        presenter: &Presenter,
+        timings: Option<&crate::timing::TimingObserver>,
+    ) -> Result<(), DesktopError> {
+        let timings = timings.filter(|_| !self.visibility.ever_shown());
+        self.visibility
+            .reconcile(content, |visible| native_visibility(window, visible, timings, presenter))
     }
 
     /// Count only successful native/control submissions, classifying reuse against actual delivery.
@@ -146,6 +175,34 @@ impl Presentations {
             timings: None,
         })
     }
+}
+
+/// Submit a native visibility transition before releasing its acknowledgment to application code.
+fn native_visibility(
+    window: &Window,
+    visible: bool,
+    timings: Option<&crate::timing::TimingObserver>,
+    presenter: &Presenter,
+) -> Result<(), DesktopError> {
+    window.set_visible(visible);
+    if window.is_visible() != visible {
+        return Err(DesktopError::message(
+            "native_presentation_visibility",
+            "native visibility differs from the requested transition",
+        ));
+    }
+    if visible {
+        #[cfg(target_os = "windows")]
+        presenter.expose_prepared()?;
+        #[cfg(not(target_os = "windows"))]
+        let _ = presenter;
+        window.set_focus();
+        crate::timing::observe_startup(
+            timings,
+            crate::timing::NativeStartupStage::ShowFocusReturned,
+        )?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

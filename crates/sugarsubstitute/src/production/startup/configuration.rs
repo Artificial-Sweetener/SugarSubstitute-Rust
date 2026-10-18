@@ -43,6 +43,7 @@ impl ProductionStartup {
                 scope,
                 self.jobs.clone(),
                 sugarsubstitute_contracts::presentation::ConsolePresentation::Native,
+                crate::preparation::FirstFrameContent::Complete,
             )?;
             self.preparation = Some(render);
             self.preparation

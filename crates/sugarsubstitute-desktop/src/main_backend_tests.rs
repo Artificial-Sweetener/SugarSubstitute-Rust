@@ -173,7 +173,7 @@ fn closing_and_exhausted_revision_never_reset_or_wrap_action_identity() -> TestR
     Ok(())
 }
 #[test]
-fn caption_fourth_peer_keeps_original_close_minimize_maximize_and_resize_geometry() -> TestResult {
+fn native_caption_matches_reference_geometry_without_reserving_a_browser_row() -> TestResult {
     let captions = crate::MainCaptionLabels {
         minimize: "min",
         maximize: "max",
@@ -189,8 +189,10 @@ fn caption_fourth_peer_keeps_original_close_minimize_maximize_and_resize_geometr
         );
         assert_eq!(controls.map(|control| control.id), [1, 2, 3, 4]);
         for (index, control) in controls[..3].iter().enumerate() {
-            assert_eq!(control.bounds.x, width - 144.0 + index as f64 * 48.0);
-            assert_eq!(control.bounds.width, 48.0);
+            assert_eq!(control.bounds.x, width - 138.0 + index as f64 * 46.0);
+            assert_eq!(control.bounds.width, 46.0);
+            assert_eq!(control.bounds.y, 1.0);
+            assert_eq!(control.bounds.height, 32.0);
             assert_eq!(control.close, index == 2);
         }
         assert_eq!(controls[1].label, if maximized { captions.restore } else { captions.maximize });

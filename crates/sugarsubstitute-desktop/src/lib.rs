@@ -70,8 +70,13 @@ mod windows_main_receivers;
 #[cfg(target_os = "windows")]
 pub use startup_runtime::run_startup;
 mod startup_consume_failure;
+#[cfg(any(target_os = "windows", test))]
+#[allow(unsafe_code)]
+mod startup_error_dialog;
 mod startup_failure;
 pub use startup_consume_failure::{StartupConsumeFailure, StartupConsumeStage};
+#[cfg(target_os = "windows")]
+pub use startup_error_dialog::show_startup_failure;
 mod timing;
 pub use startup_failure::{
     StartupBootstrapCause, StartupCaptureState, StartupCauseCode, StartupCloseFailure,

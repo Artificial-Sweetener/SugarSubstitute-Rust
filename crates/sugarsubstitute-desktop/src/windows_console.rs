@@ -13,12 +13,18 @@ use std::rc::Rc;
 use sugarsubstitute_contracts::presentation::PreparedFrame;
 use tao::{event_loop::EventLoopProxy, window::Window};
 use windows::Win32::UI::Input::KeyboardAndMouse::GetFocus;
+#[path = "windows_console/accessibility.rs"]
+mod accessibility;
 #[path = "windows_console/callback.rs"]
 mod callback;
+#[path = "windows_console/engine.rs"]
+mod engine;
 #[path = "windows_console/messages.rs"]
 mod messages;
 #[path = "windows_console/native.rs"]
 mod native;
+#[path = "windows_console/render_proxy.rs"]
+mod render_proxy;
 #[path = "windows_console/text.rs"]
 mod text;
 use native::{Library, Peer, Port};
@@ -62,8 +68,13 @@ impl Console {
         window: &Window,
         view: &ConsoleView<'_>,
     ) -> Result<(), DesktopError> {
-        let mut port =
-            Port { window, callback: &self.callback, label: view.label, bounds: Some(view.bounds) };
+        let mut port = Port {
+            window,
+            callback: &self.callback,
+            label: view.label,
+            bounds: Some(view.bounds),
+            module: self.creation.parent.as_ref().and_then(Library::module),
+        };
         self.creation.initialize(&mut port)?;
         self.bounds = Some((view.bounds, window.scale_factor()));
         Ok(())
@@ -113,6 +124,19 @@ impl Console {
             peer.value.live()?;
             let document_changed = documents.pending();
             text::publish(peer.value.hwnd, documents, view.dark)?;
+            let rect = crate::control_geometry::physical_bounds(
+                &view.native_control(),
+                window.scale_factor(),
+            )?;
+            peer.value.engine.prepare(
+                frame,
+                documents.shared().ok_or_else(|| {
+                    DesktopError::message("console_present", "published source absent")
+                })?,
+                rect,
+                view.dark,
+                window.scale_factor(),
+            )?;
             let bounds = (view.bounds, window.scale_factor());
             let layout_changed = self.bounds != Some(bounds) || self.visible != view.visible;
             let reflow = if self.bounds != Some(bounds) {
@@ -155,7 +179,13 @@ impl Console {
     /// Close actions before native teardown; failed closes keep both document claims.
     pub(super) fn shutdown(&mut self, window: &Window) -> Result<(), DesktopError> {
         self.callback.active.set(false);
-        let mut port = Port { window, callback: &self.callback, label: "", bounds: None };
+        let mut port = Port {
+            window,
+            callback: &self.callback,
+            label: "",
+            bounds: None,
+            module: self.creation.parent.as_ref().and_then(Library::module),
+        };
         self.creation.shutdown(&mut port)?;
         Ok(())
     }
@@ -199,6 +229,9 @@ impl super::Controls {
                 "console_present",
                 "original splash controls unavailable",
             ));
+        }
+        if self.console.is_none() && !view.visible {
+            return Ok(());
         }
         if self.console.is_none() {
             self.console =

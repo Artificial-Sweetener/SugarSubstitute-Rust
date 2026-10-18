@@ -55,6 +55,8 @@ pub fn run(
         })?),
         None => None,
     };
+    #[cfg(target_os = "windows")]
+    let mut apartment = crate::windows_ui_apartment::UiApartment::enter()?;
     let mut event_loop = EventLoopBuilder::<NativeAction>::with_user_event().build();
     observe_startup(timings.as_ref(), StartupStage::EventLoopReady)?;
     let window = Rc::new(
@@ -120,13 +122,6 @@ pub fn run(
     let mut redraw_pending = false;
     #[cfg(target_os = "windows")]
     let mut animation_period = crate::windows_animation_period::WindowsAnimationPeriod::new();
-    if !surface.closing {
-        window.set_visible(true);
-        window.set_focus();
-        if let Err(cause) = observe_startup(timings.as_ref(), StartupStage::ShowFocusReturned) {
-            surface.fail(&mut content, cause);
-        }
-    }
     loop {
         let exit_code = event_loop.run_return(|event, _, control| {
             let began = match timings.as_ref().map(crate::timing::TimingObserver::mark).transpose()
@@ -159,8 +154,9 @@ pub fn run(
                             None
                         }
                     };
-                    let visible =
-                        window.is_visible() && !window.is_minimized() && actual_shape.is_some();
+                    let visible = (window.is_visible() || presentations.preparing_first())
+                        && !window.is_minimized()
+                        && actual_shape.is_some();
                     surface.visibility(&mut content, visible);
                     match event {
                         Event::WindowEvent { window_id, event, .. }
@@ -229,7 +225,7 @@ pub fn run(
                                     &mut presenter,
                                     frame,
                                     timings.as_ref(),
-                                    &content,
+                                    &mut content,
                                     #[cfg(target_os = "windows")]
                                     &mut controls,
                                 )
@@ -238,13 +234,27 @@ pub fn run(
                             }
                         }
                         Event::MainEventsCleared => {
-                            if surface.closing {
-                                surface.poll(
+                            surface.poll(
+                                &mut content,
+                                actual_shape,
+                                drain_budget,
+                                started.elapsed(),
+                            );
+                            if presentations.preparing_first()
+                                && let Some(frame) = surface.exposable(actual_shape)
+                                && let Err(cause) = presentations.submit(
+                                    &window,
+                                    &mut presenter,
+                                    frame,
+                                    timings.as_ref(),
                                     &mut content,
-                                    actual_shape,
-                                    drain_budget,
-                                    started.elapsed(),
-                                );
+                                    #[cfg(target_os = "windows")]
+                                    &mut controls,
+                                )
+                            {
+                                surface.fail(&mut content, cause);
+                            }
+                            if surface.closing {
                                 surface.poll_shutdown(&mut content);
                             } else {
                                 let now = Instant::now();
@@ -258,6 +268,19 @@ pub fn run(
                             }
                         }
                         _ => {}
+                    }
+                    if !surface.closing {
+                        if let Err(cause) = presentations.reconcile(
+                            &mut content,
+                            &window,
+                            &presenter,
+                            timings.as_ref(),
+                        ) {
+                            surface.fail(&mut content, cause);
+                        }
+                        if content.close_requested() {
+                            surface.close(&mut content);
+                        }
                     }
                     #[cfg(target_os = "windows")]
                     if let Err(cause) = animation_period
@@ -284,7 +307,7 @@ pub fn run(
                             surface.visible,
                             false,
                             content.animating().then_some(next_preparation),
-                            shutdown_deadline,
+                            shutdown_deadline.into_iter().chain(content.activity_deadline()).min(),
                         )
                     };
                 });
@@ -359,12 +382,21 @@ pub fn run(
     drop(window);
     drop(event_loop);
     surface.retained = None;
-    crate::shutdown::finish_after_native(
+    crate::shutdown::finish_window_content(
         content,
-        |content| {
-            content.finish_shutdown().map_err(|cause| DesktopError::boxed("finish_shutdown", cause))
+        || {
+            #[cfg(target_os = "windows")]
+            {
+                // SAFETY: Controls, presenter, window and loop have retired above;
+                // finish_window_content released the settled content before this call.
+                #[allow(unsafe_code)]
+                unsafe {
+                    apartment.release_after_teardown()
+                }
+            }
+            #[cfg(not(target_os = "windows"))]
+            Ok(())
         },
-        || Ok(()),
         &mut surface.failure,
     );
     let timing_receipt = match timings.map(crate::timing::TimingObserver::finish).transpose() {

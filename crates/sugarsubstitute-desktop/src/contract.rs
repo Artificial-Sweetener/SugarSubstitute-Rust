@@ -5,7 +5,7 @@
 use std::{error::Error, fmt, num::NonZeroUsize, sync::Arc, time::Duration};
 use sugarsubstitute_contracts::{
     execution::CompletionWake,
-    presentation::{FrameShape, PreparedFrame},
+    presentation::{FrameIdentity, FrameShape, PreparedFrame},
 };
 
 /// Configure the native surface in logical pixels.
@@ -196,9 +196,32 @@ pub trait WindowContent {
     fn poll_frame(&mut self, max: NonZeroUsize) -> Result<Option<PreparedFrame>, Box<dyn Error>>;
     /// Invalidate visibility state before cancellation or subsequent preparation.
     ///
-    /// Hidden/minimized surfaces admit no preparation; already accepted work must
+    /// Initial covered construction admits one complete frame before native show.
+    /// Later hidden/minimized surfaces admit no preparation; already accepted work must
     /// still reach observed terminal disposal. Called on the UI thread.
     fn set_visible(&mut self, visible: bool) -> Result<(), Box<dyn Error>>;
+    /// Observe a complete native pixel/control submission on the creating UI thread.
+    /// Requested presentation is shown before this callback; a deliberately covered
+    /// surface remains hidden. This observation alone grants no lifecycle authority.
+    fn frame_presented(&mut self, _identity: FrameIdentity) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
+    /// Select native visibility independently of initial covered frame preparation.
+    fn presentation_visible(&self) -> bool {
+        true
+    }
+    /// Acknowledge an actual native hide before another presentation owner may show.
+    fn presentation_hidden(&mut self) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
+    /// Observe an application-owned close request without treating hidden state as closure.
+    fn close_requested(&self) -> bool {
+        false
+    }
+    /// Wake the native pump for application work even when its presentation is hidden.
+    fn activity_deadline(&self) -> Option<std::time::Instant> {
+        None
+    }
     /// Close admission and request owned shutdown without waiting; idempotent.
     fn request_shutdown(&mut self) -> Result<(), Box<dyn Error>>;
     /// Poll actual job, terminal, notification and worker settlement without waiting.
@@ -213,6 +236,14 @@ pub trait WindowContent {
     /// Success confirms final joins and disposal. An error leaves final custody uncertain;
     /// the native adapter retains the consumed content owner and any acquired STA reference.
     fn finish_shutdown(&mut self) -> Result<(), Box<dyn Error>>;
+    /// Transfer retained application custody into the original native failure after teardown.
+    ///
+    /// Called at most once, after the final shutdown attempt and before this content is
+    /// dropped or retained. Implementations preserve the supplied cause and may move
+    /// owned lifetimes into its error envelope; no further work may be admitted.
+    fn retain_failure(&mut self, cause: DesktopError) -> Box<dyn Error> {
+        Box::new(cause)
+    }
     /// Classify logical pointer positions for native close and drag behavior.
     fn hit_test(&self, pointer: Pointer) -> HitTarget;
     /// Receive pointer activity; return true only when visible state changed.

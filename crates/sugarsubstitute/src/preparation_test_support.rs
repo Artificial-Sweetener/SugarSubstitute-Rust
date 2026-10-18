@@ -143,6 +143,7 @@ pub(super) fn started() -> Result<(PreparationDriver, Arc<Wake>, ExecutionOwner)
         scope,
         JobSequence::new(),
         sugarsubstitute_contracts::presentation::ConsolePresentation::Raster,
+        crate::preparation::FirstFrameContent::Character,
     )?;
     driver.set_visible(true)?;
     Ok((driver, wake, owner))

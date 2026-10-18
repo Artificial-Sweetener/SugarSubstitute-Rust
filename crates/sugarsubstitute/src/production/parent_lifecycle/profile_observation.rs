@@ -29,4 +29,4 @@ impl ParentLifecycle {
 
 #[cfg(test)]
 #[path = "profile_observation/tests.rs"]
-mod tests;
+pub(super) mod tests;

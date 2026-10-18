@@ -135,6 +135,7 @@ impl ParentLifecycle {
         let binding = self.binding()?;
         let request = header.request.ok_or(ParentError::WrongPhase)?;
         match decoded.payload {
+            DecodedPayload::SplashPrepared(identity) => self.prepare_splash(index, identity)?,
             DecodedPayload::Acquire { identity, target } => {
                 if self.cleanup.is_some()
                     || self.acquisition.is_some()

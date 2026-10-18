@@ -62,8 +62,10 @@ impl MainActor {
                 self.stage = ConstructionStage::Presenter;
             }
             ConstructionStage::Presenter => {
-                self.presenter =
-                    Some(Presenter::new(self.window()?.clone(), self.request()?.settings().dark)?);
+                self.presenter = Some(Presenter::new_main(
+                    self.window()?.clone(),
+                    self.request()?.settings().dark,
+                )?);
                 self.material = self.presenter.as_ref().map(Presenter::material);
                 self.stage = ConstructionStage::Controls;
             }
@@ -110,6 +112,7 @@ impl MainActor {
                     .with_url("about:blank")
                     .with_visible(false)
                     .with_focused(false)
+                    .with_transparent(true)
                     .with_additional_browser_args("")
                     .without_download_handlers()
                     .with_bounds(self.browser_bounds()?)
@@ -189,6 +192,7 @@ impl MainActor {
                                 return Err(DesktopError::new("create_main_controller", cause));
                             }
                         }
+                        self.resize()?;
                         let core = self.view()?.webview();
                         let mut pid = 0;
                         // SAFETY: This UI thread owns the live controller; output is adopted as data.
@@ -233,11 +237,7 @@ impl MainActor {
     pub(super) fn browser_bounds(&self) -> Result<wry::Rect, DesktopError> {
         let window = self.window()?;
         let size = window.inner_size().to_logical::<f64>(window.scale_factor());
-        Ok(wry::Rect {
-            position: wry::dpi::LogicalPosition::new(0.0, 40.0).into(),
-            size: wry::dpi::LogicalSize::new(size.width.max(1.0), (size.height - 40.0).max(1.0))
-                .into(),
-        })
+        Ok(super::frame::browser_bounds(size.width, size.height))
     }
     pub(super) fn caption_controls(&self) -> Result<[AccessibleControl; 4], DesktopError> {
         let window = self.window()?;
@@ -258,6 +258,9 @@ impl MainActor {
         if let Some(view) = &self.view {
             view.set_bounds(self.browser_bounds()?)
                 .map_err(|cause| DesktopError::new("resize_main_view", cause))?;
+        }
+        if let Some(owner) = &self.controls {
+            owner.raise_main()?;
         }
         Ok(())
     }

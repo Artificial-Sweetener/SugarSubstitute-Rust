@@ -5,6 +5,7 @@
 mod admission;
 mod construction;
 mod evidence;
+mod frame;
 mod probe_diagnostics;
 mod recovery;
 #[cfg(any(feature = "k1-native-qualification", test))]
@@ -61,7 +62,6 @@ pub(crate) struct MainActor {
     retired: bool,
     navigations: u64,
     material: Option<NativeMaterial>,
-    pointer: crate::Pointer,
     native_storage: Option<sugarsubstitute_contracts::execution::MemoryClaim>,
     failure_observation: &'static str,
     probe_diagnostics: probe_diagnostics::ProbeDiagnostics,
@@ -115,7 +115,6 @@ impl MainActor {
             retired: false,
             navigations: 0,
             material: None,
-            pointer: crate::Pointer::default(),
             native_storage: Some(native_storage),
             failure_observation: "None",
             probe_diagnostics: probe_diagnostics::ProbeDiagnostics::default(),
@@ -316,7 +315,7 @@ impl MainActor {
         self.window()?.set_focus();
         self.view()?.focus().map_err(|cause| DesktopError::new("focus_main_view", cause))?;
         // Native show/focus can resize the container before Tao delivers its queued resize event.
-        // Restore this actor's caption inset before publishing reveal or sealing a capture.
+        // Restore full-window browser bounds and raise retained caption peers before publication.
         self.resize()?;
         self.confirm_visible()?;
         self.receivers()?.reveal_navigation();
@@ -347,17 +346,6 @@ impl MainActor {
         match event {
             WindowEvent::CloseRequested | WindowEvent::Destroyed => return Ok(true),
             WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => self.resize()?,
-            WindowEvent::CursorMoved { position, .. } => {
-                let scale = self.window()?.scale_factor();
-                self.pointer = crate::Pointer { x: position.x / scale, y: position.y / scale };
-            }
-            WindowEvent::MouseInput {
-                state: tao::event::ElementState::Pressed,
-                button: tao::event::MouseButton::Left,
-                ..
-            } if self.pointer.y < 40.0 => {
-                crate::windows_drag::begin(self.window()?)?;
-            }
             _ => {}
         }
         Ok(false)

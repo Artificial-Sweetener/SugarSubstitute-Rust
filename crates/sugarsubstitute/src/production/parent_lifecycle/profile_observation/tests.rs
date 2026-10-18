@@ -36,22 +36,27 @@ impl CompletionWake for Wake {
         Ok(())
     }
 }
-struct Fixture {
+pub(in crate::production::parent_lifecycle) struct Fixture {
     owner: Option<ExecutionOwner>,
-    client: ExecutionClient,
-    scope: Scope,
+    pub(in crate::production::parent_lifecycle) client: ExecutionClient,
+    pub(in crate::production::parent_lifecycle) scope: Scope,
     wake: Arc<Wake>,
+    pub(in crate::production::parent_lifecycle) memory_bytes: u64,
 }
 impl Fixture {
-    fn new() -> TestResult<Self> {
+    pub(in crate::production::parent_lifecycle) fn new() -> TestResult<Self> {
         let wake = Arc::new(Wake::default());
         let owner = ExecutionOwner::new(Arc::new(ClockBoundary), wake.clone())?;
+        let memory_bytes = owner.limits().memory_bytes;
         let client = owner.client();
         let scope =
             client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
-        Ok(Self { owner: Some(owner), client, scope, wake })
+        Ok(Self { owner: Some(owner), client, scope, wake, memory_bytes })
     }
-    fn terminal(&self, job: JobId) -> TestResult<CompletionBatch> {
+    pub(in crate::production::parent_lifecycle) fn terminal(
+        &self,
+        job: JobId,
+    ) -> TestResult<CompletionBatch> {
         loop {
             let prior = *self.wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             let batch =
@@ -70,7 +75,7 @@ impl Fixture {
             }
         }
     }
-    fn finish(&mut self) -> TestResult {
+    pub(in crate::production::parent_lifecycle) fn finish(&mut self) -> TestResult {
         drop(self.owner.take().ok_or("Original execution owner absent")?);
         Ok(())
     }
@@ -88,6 +93,16 @@ fn spec(id: u64, bytes: u64) -> TestResult<JobSpec> {
 
 #[test]
 fn parent_without_main_proof_drains_original_profile_release() -> TestResult {
+    profile_release_after_cleanup_failure(false)
+}
+
+#[test]
+fn cleanup_admission_failure_retains_original_cause_while_profile_retirement_drains() -> TestResult
+{
+    profile_release_after_cleanup_failure(true)
+}
+
+fn profile_release_after_cleanup_failure(reject_cleanup: bool) -> TestResult {
     let mut fixture = Fixture::new()?;
     let run = super::super::tests::identity().map_err(|cause| cause.to_string())?.run;
     let mut registry_job = WindowsProcessRegistry::submit_new(
@@ -125,8 +140,46 @@ fn parent_without_main_proof_drains_original_profile_release() -> TestResult {
     profile.submit_release(&fixture.client, &fixture.scope, release, registry_value)?;
     let batch = fixture.terminal(release.id)?;
     assert!(profile.snapshot().released && profile.snapshot().pending);
+    let mut original = None;
+    if reject_cleanup {
+        let rejected =
+            fixture.client.submit_blocking(&fixture.scope, spec(3, fixture.memory_bytes)?, |_| {
+                Ok::<_, std::io::Error>(())
+            });
+        let cause = match rejected {
+            Err(
+                cause @ sugarsubstitute_contracts::execution::AdmissionError::MemorySaturated {
+                    ..
+                },
+            ) => cause,
+            _ => return Err("Expected actual finite-memory cleanup rejection".into()),
+        };
+        let cause: super::super::Cause = Box::new(cause);
+        original = Some(std::ptr::from_ref(cause.as_ref()).cast::<()>());
+        assert!(matches!(
+            parent.accept_activity_result(
+                Err(cause),
+                "frontend_refresh",
+                profile.snapshot().pending
+            ),
+            Some(super::super::ParentActivityFailureOrigin::Coordinator)
+        ));
+        assert!(parent.closed);
+    }
     assert!(parent.profile_completion(&batch, &mut profile)?.is_none());
     assert!(profile.snapshot().retirement_ready(), "Parent failed to consume actual release");
+    if let Some(original) = original {
+        assert_eq!(
+            Some(
+                std::ptr::from_ref(parent.failure.as_ref().ok_or("Original cause lost")?.as_ref())
+                    .cast::<()>()
+            ),
+            Some(original)
+        );
+        assert!(parent.closed, "Profile retirement cannot reopen failed admission");
+        assert!(parent.accept_activity_result(Ok(()), "consume_profile", false).is_none());
+        assert!(parent.secondary.iter().all(Option::is_none));
+    }
     drop(profile);
     drop(registry);
     drop(registry_job);

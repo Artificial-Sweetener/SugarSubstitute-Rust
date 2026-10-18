@@ -2,7 +2,10 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain fresh reload source/HTTP custody separately from the unchanged shared backend.
 use super::*;
+#[path = "frontend_refresh/source_close.rs"]
+mod source_close;
 use crate::production::coordinator_backend::BackendResources;
+use source_close::SourceClose;
 use sugarsubstitute_application::startup::{
     ConnectionBudget, ConnectionBudgetKind, FrontendBudget,
 };
@@ -20,6 +23,37 @@ use sugarsubstitute_supervision::installed_frontend::{
     FRONTEND_SOURCE_BYTES, FrontendSourceError, InstalledFrontendLease, InstalledFrontendOwner,
 };
 
+/// Preserve both original cleanup failures when independent retirements reject together.
+#[derive(Debug)]
+struct CleanupFailure {
+    original: Cause,
+    independent: Cause,
+}
+impl std::fmt::Display for CleanupFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "Frontend retirement failed: {}; independent retirement failed: {}",
+            self.original, self.independent
+        )
+    }
+}
+impl Error for CleanupFailure {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(self.original.as_ref())
+    }
+}
+
+fn combine_retirement(original: Result<()>, independent: Result<()>) -> Result<()> {
+    match (original, independent) {
+        (Err(original), Err(independent)) => {
+            Err(Box::new(CleanupFailure { original, independent }))
+        }
+        (Err(cause), _) | (_, Err(cause)) => Err(cause),
+        (Ok(()), Ok(())) => Ok(()),
+    }
+}
+
 pub(super) struct FrontendRefresh {
     index: usize,
     identity: MainIdentity,
@@ -30,10 +64,7 @@ pub(super) struct FrontendRefresh {
     source_failure: Option<FrontendSourceError>,
     cancelled_reply: bool,
     source_lease: Option<InstalledFrontendLease>,
-    source_close: Option<OwnedJob<(), FrontendSourceError>>,
-    source_closed: bool,
-    source_terminal:
-        Option<sugarsubstitute_contracts::execution::JobCompletion<(), FrontendSourceError>>,
+    source_close: SourceClose,
     campaign: ReadinessCampaign,
     proof: Option<VerifiedReadiness>,
     published: bool,
@@ -42,7 +73,7 @@ pub(super) struct FrontendRefresh {
 }
 impl FrontendRefresh {
     pub(super) fn retired(&self) -> bool {
-        self.source_closed && self.campaign.settled()
+        self.source_close.closed() && self.campaign.settled()
     }
     pub(super) fn deadline(&self) -> Option<Moment> {
         if self.retired() {
@@ -91,17 +122,22 @@ impl FrontendRefresh {
         resources: &mut ParentResources<'_, '_>,
     ) -> Result<()> {
         let now = resources.execution.client.now()?;
-        if !self.inspecting && !self.source_closed && self.source_close.is_none() {
+        if !self.inspecting && self.source_close.needs_submission() {
             let spec = Self::spec(
                 resources.execution,
                 FRONTEND_SOURCE_BYTES,
                 self.shutdown.ok_or(ParentError::WrongPhase)?.settle_until,
             )?;
-            self.source_close = Some(self.source.submit_close(
+            self.source_close.submit(
+                &self.source,
                 resources.execution.client,
                 resources.execution.cleanup,
                 spec,
-            )?);
+            )?;
+        }
+        // Return the source close's fixed credit before admitting HTTP retirement.
+        if self.source_close.awaiting_source() {
+            return Ok(());
         }
         if !self.campaign.settled() {
             let spec = Self::spec(
@@ -159,27 +195,17 @@ impl FrontendRefresh {
                 }
             }
         }
-        let step = self.campaign.consume(batch, now)?;
+        let step = self.campaign.consume(batch, now);
         if self.shutdown.is_some() {
-            if let Some(job) = &mut self.source_close
-                && let Some(terminal) = job.try_take_completion()
-            {
-                let matched = terminal.scope_id == job.scope_id() && terminal.spec == job.spec();
-                self.source_terminal = Some(terminal);
-                self.source_close = None;
-                if !matched {
-                    return Err(ParentError::ForeignPeer.into());
-                }
-                let terminal = self.source_terminal.as_ref().ok_or(ParentError::WrongPhase)?;
-                match &terminal.outcome {
-                    JobOutcome::Success(()) => self.source_closed = true,
-                    JobOutcome::Failure(cause) => return Err(cause.clone().into()),
-                    _ => return Err(ParentError::OwnerFailed.into()),
-                }
-            }
-            self.schedule_cleanup(resources)?;
+            let source_result = self.source_close.consume();
+            let cleanup_result = self.schedule_cleanup(resources);
+            combine_retirement(
+                combine_retirement(step.map(|_| ()).map_err(Into::into), source_result),
+                cleanup_result,
+            )?;
             return Ok(false);
         }
+        let step = step?;
         if self.published {
             return Ok(false);
         }
@@ -273,9 +299,7 @@ impl ParentLifecycle {
             source_failure: None,
             cancelled_reply: false,
             source_lease: None,
-            source_close: None,
-            source_closed: false,
-            source_terminal: None,
+            source_close: SourceClose::default(),
             campaign,
             proof: None,
             published: false,

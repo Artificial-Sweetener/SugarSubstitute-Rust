@@ -23,8 +23,8 @@ impl NativeStartupOrder {
                 PresenterReady,
                 ControlsReady,
                 ExecutionReady,
-                ShowFocusReturned,
                 FirstPreparationRequest,
+                ShowFocusReturned,
             ],
             Self::ExecutionFirst => [
                 ExecutionReady,
@@ -32,8 +32,8 @@ impl NativeStartupOrder {
                 WindowCreated,
                 PresenterReady,
                 ControlsReady,
-                ShowFocusReturned,
                 FirstPreparationRequest,
+                ShowFocusReturned,
             ],
         }
     }
@@ -89,7 +89,7 @@ impl TimingAudit {
 
     /// Sample only the first actual visible content request, never later frame work.
     pub(super) fn first_preparation(&mut self) -> Result<(), DesktopError> {
-        if self.receipt.startup_milestones[6].is_some() {
+        if self.receipt.startup_milestones[5].is_some() {
             return Ok(());
         }
         self.startup(NativeStartupStage::FirstPreparationRequest)

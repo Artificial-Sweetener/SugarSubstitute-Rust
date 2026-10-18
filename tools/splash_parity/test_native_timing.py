@@ -37,10 +37,42 @@ def startup_fixture():
 
 
 class StartupTimingTests(unittest.TestCase):
+    def test_complete_frame_order_preserves_covered_submission_before_native_show(self):
+        orders = {
+            "surface_first": ("event_loop_ready", "window_created", "presenter_ready", "controls_ready",
+                              "execution_ready", "first_preparation_request", "show_focus_returned"),
+            "execution_first": ("execution_ready", "event_loop_ready", "window_created", "presenter_ready",
+                                "controls_ready", "first_preparation_request", "show_focus_returned"),
+        }
+        for mode, stages in orders.items():
+            value = fixture()
+            value.update(schema_version=4, startup_order=mode,
+                         startup_milestones=[dict(stage=stage, ticks=120 + index * 10)
+                                             for index, stage in enumerate(stages)])
+            value["startup_milestones"][-1]["ticks"] = 18000
+            preserved = json.dumps(value)
+            self.assertIs(validate(value), value)
+            self.assertEqual(analyse(value)["native_receipt_schema_version"], 4)
+            self.assertEqual(analyse(value)["native_startup_order"], mode)
+            self.assertEqual(json.dumps(value), preserved)
+            covered = copy.deepcopy(value)
+            covered["startup_milestones"] = covered["startup_milestones"][:6]
+            self.assertIs(validate(covered), covered)
+            missing = copy.deepcopy(covered)
+            missing["startup_milestones"] = missing["startup_milestones"][:5]
+            self.assertRaises(ValueError, validate, missing)
+            wrong = copy.deepcopy(value)
+            wrong["startup_milestones"][5]["stage"] = "show_focus_returned"
+            wrong["startup_milestones"][6]["stage"] = "first_preparation_request"
+            self.assertRaises(ValueError, validate, wrong)
+            legacy = copy.deepcopy(value)
+            legacy["schema_version"] = 3
+            self.assertRaises(ValueError, validate, legacy)
+
     def test_explicit_modes_preserve_both_actual_orders_without_mutating_legacy_bytes(self):
         orders = {
             "surface_first": STARTUP_STAGES,
-            "execution_first": ("event_loop_ready", "execution_ready", "window_created", "presenter_ready",
+            "execution_first": ("execution_ready", "event_loop_ready", "window_created", "presenter_ready",
                                 "controls_ready", "show_focus_returned", "first_preparation_request"),
         }
         for mode, stages in orders.items():

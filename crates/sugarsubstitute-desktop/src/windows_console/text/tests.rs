@@ -6,10 +6,12 @@ use crate::{
     console::index::tests::{TestResult, index, source},
     windows_ui_apartment::UiApartment,
 };
-use windows::Win32::UI::WindowsAndMessaging::ES_READONLY;
+use windows::Win32::UI::WindowsAndMessaging::{GetScrollInfo, SB_VERT, SCROLLINFO, SIF_ALL};
 #[path = "native_fixture.rs"]
 mod native_fixture;
 use native_fixture::{Hidden, MtaUsage, apartment_fact};
+#[path = "native_alpha_tests.rs"]
+mod native_alpha_tests;
 #[path = "publication_tests.rs"]
 mod publication_tests;
 
@@ -71,14 +73,25 @@ fn actual_readonly_native_document_preserves_unicode_nul_styles_and_selected_cha
     assert_eq!(selection.cpMax, 3);
     let format = port.control().selected_format();
     assert!(format.Base.dwEffects.contains(CFE_BOLD));
-    // SAFETY: Passive style observation of this exact hidden test-thread control.
-    let style = unsafe {
-        windows::Win32::UI::WindowsAndMessaging::GetWindowLongPtrW(
+    // SAFETY: Deliver actual user character input to the same readonly native engine.
+    unsafe {
+        windows::Win32::UI::WindowsAndMessaging::SendMessageW(
             hwnd,
-            windows::Win32::UI::WindowsAndMessaging::GWL_STYLE,
-        )
-    };
-    assert_ne!(style as u32 & ES_READONLY as u32, 0);
+            windows::Win32::UI::WindowsAndMessaging::WM_CHAR,
+            Some(windows::Win32::Foundation::WPARAM(usize::from(b'X'))),
+            None,
+        );
+    }
+    let expected = owner.document.as_ref().ok_or("original document absent")?.text();
+    let mut actual = vec![0u16; expected.len() + 1];
+    assert_eq!(port.control().read(&mut actual)?, expected.len());
+    assert_eq!(
+        &actual[..expected.len()],
+        expected,
+        "readonly native character input modified original text"
+    );
+    let selection = port.control().selection();
+    assert_eq!((selection.cpMin, selection.cpMax), (1, 3));
     owner.close()?;
     Ok(())
 }

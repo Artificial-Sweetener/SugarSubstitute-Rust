@@ -1,52 +1,37 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Keep streaming and temporary formatting selections inside one native redraw suspension.
+//! Suspend native presentation and provider observation without changing child availability.
 use crate::DesktopError;
 use windows::Win32::{
-    Foundation::{ERROR_SUCCESS, GetLastError, HWND, SetLastError, WPARAM},
-    UI::WindowsAndMessaging::{
-        GWL_STYLE, GetWindowLongPtrW, SendMessageW, WM_SETREDRAW, WS_VISIBLE,
-    },
+    Foundation::{HWND, WPARAM},
+    UI::WindowsAndMessaging::{SendMessageW, WM_SETREDRAW},
 };
 
-/// The containing Console retains this exact affine HWND until publication returns.
+/// The containing Console retains the original affine child through synchronous publication.
 pub(super) struct Suspension {
     hwnd: HWND,
-    suspended: bool,
+    previous: bool,
 }
 impl Suspension {
-    /// Hidden peers remain hidden: enabling redraw can otherwise add WS_VISIBLE.
+    /// The owned input procedure handles redraw directly; hidden peers keep their original style.
     pub(super) fn new(hwnd: HWND) -> Result<Self, DesktopError> {
-        // SAFETY: The original retained peer belongs to this calling UI thread.
-        let (style, code) = unsafe {
-            SetLastError(ERROR_SUCCESS);
-            let style = GetWindowLongPtrW(hwnd, GWL_STYLE) as u32;
-            (style, GetLastError())
-        };
-        if style == 0 && code != ERROR_SUCCESS {
-            return Err(DesktopError::new(
-                "console_redraw_style",
-                windows::core::Error::from(windows::core::HRESULT::from_win32(code.0)),
-            ));
+        let engine = super::super::engine::find(hwnd)?;
+        engine.check()?;
+        let previous = engine.redraw_allowed();
+        // SAFETY: Only the checked original affine child synchronously receives this scalar state.
+        unsafe {
+            SendMessageW(hwnd, WM_SETREDRAW, Some(WPARAM(0)), None);
         }
-        let suspended = style & WS_VISIBLE.0 != 0;
-        if suspended {
-            // SAFETY: Scalar redraw control is synchronous and has no meaningful return value.
-            unsafe {
-                SendMessageW(hwnd, WM_SETREDRAW, Some(WPARAM(0)), None);
-            }
-        }
-        Ok(Self { hwnd, suspended })
+        engine.check()?;
+        Ok(Self { hwnd, previous })
     }
 }
 impl Drop for Suspension {
-    /// Restore on success, native failure or unwinding before the retained peer can retire.
+    /// Restore the previous scope on success, failure or unwinding without adding WS_VISIBLE.
     fn drop(&mut self) {
-        if self.suspended {
-            // SAFETY: The outer publication borrow still retains this original affine HWND.
-            unsafe {
-                SendMessageW(self.hwnd, WM_SETREDRAW, Some(WPARAM(1)), None);
-            }
+        // SAFETY: The outer publication retains this exact native child until scope restoration.
+        unsafe {
+            SendMessageW(self.hwnd, WM_SETREDRAW, Some(WPARAM(usize::from(self.previous))), None);
         }
     }
 }

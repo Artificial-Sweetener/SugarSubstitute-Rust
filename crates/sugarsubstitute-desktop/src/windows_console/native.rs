@@ -12,45 +12,34 @@ use tao::platform::windows::WindowExtWindows;
 use windows::{
     Win32::{
         Foundation::{FreeLibrary, HMODULE, HWND, LPARAM, WPARAM},
-        System::{
-            Com::{CLSCTX_INPROC_SERVER, CoCreateInstance},
-            LibraryLoader::{LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExW},
-        },
-        UI::Controls::{
-            EM_SETREADONLY,
-            RichEdit::{
-                EM_AUTOURLDETECT, EM_EXLIMITTEXT, EM_SETUNDOLIMIT, ES_NOOLEDRAGDROP, ES_SAVESEL,
-            },
-        },
+        System::LibraryLoader::{LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExW},
+        UI::Controls::RichEdit::{EM_AUTOURLDETECT, EM_EXLIMITTEXT, EM_SETUNDOLIMIT},
         UI::{
-            Accessibility::{
-                CAccPropServices, IAccPropServices, Name_Property_GUID, PROPID_ACC_NAME,
-            },
             Input::KeyboardAndMouse::{EnableWindow, GetFocus, IsWindowEnabled},
             WindowsAndMessaging::*,
         },
     },
-    core::{PCWSTR, w},
+    core::w,
 };
-/// Keep creation hidden with one readonly child style for production and native fixtures.
+/// Keep the native input child hidden until presentation enables this focusable surface.
 pub(super) fn peer_style() -> WINDOW_STYLE {
-    WS_CHILD
-        | WS_TABSTOP
-        | WS_VSCROLL
-        | WINDOW_STYLE(
-            (ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | ES_NOHIDESEL) as u32
-                | ES_NOOLEDRAGDROP
-                | ES_SAVESEL,
-        )
+    WS_CHILD | WS_TABSTOP
 }
 /// A loaded system module stays retained before any following COM/child effect.
 pub(super) struct Library {
     module: Cell<Option<HMODULE>>,
 }
+impl Library {
+    /// Borrow the exact system module whose retained owner outlives every text engine.
+    pub(super) fn module(&self) -> Option<HMODULE> {
+        self.module.get()
+    }
+}
 pub(super) struct Peer {
     pub(super) hwnd: HWND,
     registration: Option<Registration<callback::Callback>>,
-    access: IAccPropServices,
+    pub(super) engine: Rc<super::engine::Engine>,
+    module: HMODULE,
     parent: HWND,
 }
 impl Peer {
@@ -82,7 +71,7 @@ impl Peer {
                 "original native child registration or parent changed",
             ));
         }
-        Ok(())
+        self.engine.check()
     }
 }
 pub(super) struct Port<'a> {
@@ -90,6 +79,7 @@ pub(super) struct Port<'a> {
     pub(super) callback: &'a Rc<callback::Callback>,
     pub(super) label: &'static str,
     pub(super) bounds: Option<crate::ControlBounds>,
+    pub(super) module: Option<HMODULE>,
 }
 impl NativePort for Port<'_> {
     type Parent = Library;
@@ -103,6 +93,7 @@ impl NativePort for Port<'_> {
             unsafe { LoadLibraryExW(w!("Msftedit.dll"), None, LOAD_LIBRARY_SEARCH_SYSTEM32) }
                 .map_err(|e| DesktopError::new("console_library_load", e))?;
         parent.module.set(Some(module));
+        self.module = Some(module);
         Ok(())
     }
     fn peer(&mut self, _index: usize) -> Result<Peer, DesktopError> {
@@ -113,15 +104,14 @@ impl NativePort for Port<'_> {
             &AccessibleControl { id: 4, label: self.label, bounds, close: false, visible: false },
             self.window.scale_factor(),
         )?;
-        // SAFETY: The composing startup owns a live STA; creation returns an owned COM interface.
-        let access: IAccPropServices =
-            unsafe { CoCreateInstance(&CAccPropServices, None, CLSCTX_INPROC_SERVER) }
-                .map_err(|e| DesktopError::new("console_accessibility_create", e))?;
+        let module = self.module.ok_or_else(|| {
+            DesktopError::message("console_library_identity", "retained system module absent")
+        })?;
         // SAFETY: Original UI thread owns parent, and loaded class lives in retained Library.
         let hwnd = unsafe {
             CreateWindowExW(
                 WINDOW_EX_STYLE::default(),
-                w!("RICHEDIT50W"),
+                w!("STATIC"),
                 w!(""),
                 peer_style(),
                 rect.left,
@@ -138,7 +128,8 @@ impl NativePort for Port<'_> {
         Ok(Peer {
             hwnd,
             registration: Some(Registration::new(self.callback)),
-            access,
+            engine: super::engine::Engine::new(hwnd),
+            module,
             parent: HWND(self.window.hwnd() as *mut c_void),
         })
     }
@@ -154,70 +145,40 @@ impl NativePort for Port<'_> {
             .registration
             .as_ref()
             .ok_or_else(|| DesktopError::message("console_register", "registration absent"))?;
-        // SAFETY: Adopted peer and exact Callback precede native reentry and configuration.
+        peer.engine.initialize(peer.module)?;
+        peer.engine.install_input()?;
+        // SAFETY: The engine's input subclass is installed first, leaving application shortcuts outermost.
         unsafe { install(peer.hwnd, Some(callback::procedure), registration) }?;
-        let label = label(self.label)?;
-        // SAFETY: Exact retained peer and synchronous bounded label; name never derives from user text.
-        for property in [PROPID_ACC_NAME, Name_Property_GUID] {
-            peer.live()?;
-            // SAFETY: Annotate only this exact retained standard control's name. Its
-            // native readonly/text/selection provider stays authoritative for its patterns.
-            unsafe {
-                peer.access.SetHwndPropStr(
-                    peer.hwnd,
-                    OBJID_CLIENT.0 as u32,
-                    0,
-                    property,
-                    PCWSTR(label.as_ptr()),
-                )
-            }
-            .map_err(|e| DesktopError::new("console_accessibility_name", e))?;
-        }
+        peer.engine.configure_accessibility(peer.module, self.label)?;
         peer.live()?;
-        // SAFETY: Configure only this retained readonly plain-text input surface. Disable undo,
-        // URL activation and OLE drag/drop; streaming accepts Unicode plain text only.
-        unsafe {
-            if SendMessageW(peer.hwnd, EM_SETREADONLY, Some(WPARAM(1)), None).0 == 0 {
-                return Err(DesktopError::message(
-                    "console_readonly",
-                    "native read-only configuration rejected",
-                ));
-            }
-            SendMessageW(peer.hwnd, EM_SETUNDOLIMIT, Some(WPARAM(0)), None);
-            if SendMessageW(peer.hwnd, EM_AUTOURLDETECT, Some(WPARAM(0)), None).0 != 0 {
-                return Err(DesktopError::message(
-                    "console_links_disable",
-                    "native link configuration rejected",
-                ));
-            }
-            SendMessageW(
-                peer.hwnd,
-                EM_EXLIMITTEXT,
-                None,
-                Some(LPARAM(
-                    (sugarsubstitute_contracts::transcript::MAX_SNAPSHOT_BYTES
-                        + sugarsubstitute_contracts::transcript::MAX_SNAPSHOT_RECORDS)
-                        as isize,
-                )),
-            );
+        // TXTBIT_READONLY is supplied by the windowless host; HWND-only EM_SETREADONLY is
+        // unprocessed by this native engine. Configure supported operations directly and check
+        // their HRESULTs instead of losing S_FALSE through the window's LRESULT boundary.
+        peer.engine.message(EM_SETUNDOLIMIT, WPARAM(0), LPARAM(0))?;
+        if peer.engine.message(EM_AUTOURLDETECT, WPARAM(0), LPARAM(0))?.0 != 0 {
+            return Err(DesktopError::message(
+                "console_links_disable",
+                "native link configuration rejected",
+            ));
         }
+        peer.engine.message(
+            EM_EXLIMITTEXT,
+            WPARAM(0),
+            LPARAM(
+                (sugarsubstitute_contracts::transcript::MAX_SNAPSHOT_BYTES
+                    + sugarsubstitute_contracts::transcript::MAX_SNAPSHOT_RECORDS)
+                    as isize,
+            ),
+        )?;
+        peer.engine.activate()?;
         peer.live()
     }
     fn destroyed(&self, peer: &Peer, _parent: Option<&Library>) -> bool {
-        peer.registration.as_ref().is_some_and(Registration::destroyed)
+        peer.engine.retired() && peer.registration.as_ref().is_some_and(Registration::destroyed)
     }
     fn remove_peer(&mut self, peer: &mut Peer) -> Result<(), DesktopError> {
         self.callback.active.set(false);
-        // SAFETY: Exact owned child remains retained; failed annotation cleanup preserves custody.
-        unsafe {
-            peer.access.ClearHwndProps(
-                peer.hwnd,
-                OBJID_CLIENT.0 as u32,
-                0,
-                &[PROPID_ACC_NAME, Name_Property_GUID],
-            )
-        }
-        .map_err(|e| DesktopError::new("console_accessibility_clear", e))?;
+        peer.engine.close()?;
         if let Some(registration) = peer.registration.as_ref()
             && registration.installed()
         {

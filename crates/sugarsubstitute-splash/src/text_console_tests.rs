@@ -13,7 +13,7 @@ fn palette_preserves_source_basics_extended_indices_rgb_and_defaults() {
     for (index, v) in expected.into_iter().enumerate() {
         assert_eq!(
             console_color(AnsiColor::Indexed(index as u8), Theme::Dark, false),
-            Some([(v >> 16) as u8, (v >> 8) as u8, v as u8])
+            Some([(v >> 16) as u8, (v >> 8) as u8, v as u8, 255])
         );
     }
     for index in 0..=255 {
@@ -22,12 +22,35 @@ fn palette_preserves_source_basics_extended_indices_rgb_and_defaults() {
     for (index, rgb) in
         [(16, [0, 0, 0]), (21, [0, 0, 255]), (231, [255, 255, 255]), (232, [8; 3]), (255, [238; 3])]
     {
-        assert_eq!(console_color(AnsiColor::Indexed(index), Theme::Dark, false), Some(rgb));
+        assert_eq!(
+            console_color(AnsiColor::Indexed(index), Theme::Dark, false),
+            Some([rgb[0], rgb[1], rgb[2], 255])
+        );
     }
-    assert_eq!(console_color(AnsiColor::Rgb(12, 34, 56), Theme::Dark, false), Some([12, 34, 56]));
-    assert_eq!(console_color(AnsiColor::Default, Theme::Dark, false), Some([255; 3]));
-    assert_eq!(console_color(AnsiColor::Default, Theme::Light, false), Some([0; 3]));
+    assert_eq!(
+        console_color(AnsiColor::Rgb(12, 34, 56), Theme::Dark, false),
+        Some([12, 34, 56, 255])
+    );
+    assert_eq!(console_color(AnsiColor::Default, Theme::Dark, false), Some([230, 236, 241, 234]));
+    assert_eq!(console_color(AnsiColor::Default, Theme::Light, false), Some([30, 35, 40, 242]));
     assert_eq!(console_color(AnsiColor::Default, Theme::Dark, true), None);
+}
+
+/// Default brush opacity belongs to its source style even when ANSI uses identical RGB.
+#[test]
+fn default_text_alpha_does_not_fade_explicit_ansi_of_the_same_color() {
+    let mut default = [0; 4];
+    let mut explicit = [0; 4];
+    let default_color = console_color(AnsiColor::Default, Theme::Dark, false);
+    let explicit_color = console_color(AnsiColor::Rgb(230, 236, 241), Theme::Dark, false);
+    assert_eq!(default_color, Some([230, 236, 241, 234]));
+    assert_eq!(explicit_color, Some([230, 236, 241, 255]));
+    if let (Some(default_color), Some(explicit_color)) = (default_color, explicit_color) {
+        composite(&mut default, default_color, 255);
+        composite(&mut explicit, explicit_color, 255);
+    }
+    assert_eq!(default, [211, 217, 221, 234]);
+    assert_eq!(explicit, [230, 236, 241, 255]);
 }
 
 #[test]
@@ -40,8 +63,8 @@ fn actual_background_cursor_clips_separated_spans_and_respects_each_pixel_budget
         rows: 10,
     };
     let spans = vec![
-        Background { bounds: [-10.0, 350.0, 34.0, 600.0], color: [255, 0, 0] },
-        Background { bounds: [526.0, 360.0, 700.0, 600.0], color: [0, 255, 0] },
+        Background { bounds: [-10.0, 350.0, 34.0, 600.0], color: [255, 0, 0, 255] },
+        Background { bounds: [526.0, 360.0, 700.0, 600.0], color: [0, 255, 0, 255] },
     ];
     let mut paint = BackgroundPaint::new(spans, spec)?;
     let max = NonZeroUsize::new(7).ok_or("Budget absent")?;
@@ -74,14 +97,14 @@ fn invalid_shaped_geometry_rejects_before_painting_and_blending_stays_premultipl
     };
     assert!(
         BackgroundPaint::new(
-            vec![Background { bounds: [0.0, 0.0, f32::NAN, 3.0], color: [0; 3] }],
+            vec![Background { bounds: [0.0, 0.0, f32::NAN, 3.0], color: [0; 4] }],
             spec
         )
         .is_err()
     );
     let mut p = [0; 4];
-    composite(&mut p, [255, 0, 128], 128);
+    composite(&mut p, [255, 0, 128, 255], 128);
     assert_eq!(p, [128, 0, 64, 128]);
-    composite(&mut p, [0, 255, 0], 64);
+    composite(&mut p, [0, 255, 0, 255], 64);
     assert!(p[..3].iter().all(|v| *v <= p[3]));
 }

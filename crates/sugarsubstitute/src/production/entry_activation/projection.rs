@@ -126,6 +126,7 @@ pub(super) struct ProjectedEntry {
     pub(super) profile_units: Vec<u16>,
     pub(super) profile: ProfileId,
     pub(super) locale: LocaleId,
+    pub(super) presentation: sugarsubstitute_contracts::configuration::Presentation,
     pub(super) target: BackendTarget,
     pub(super) frontend: Option<FrontendInstallationInput>,
     pub(super) backend_environment: Option<LaunchEnvironment>,
@@ -322,6 +323,7 @@ pub(super) fn project(
         profile_units: fields.profile_units,
         profile: fields.profile,
         locale: fields.locale,
+        presentation: fields.presentation,
         target: fields.target,
         frontend: Some(fields.frontend),
         backend_environment: fields.backend_environment,
@@ -336,6 +338,7 @@ struct Fields {
     profile_units: Vec<u16>,
     profile: ProfileId,
     locale: LocaleId,
+    presentation: sugarsubstitute_contracts::configuration::Presentation,
     target: BackendTarget,
     frontend: FrontendInstallationInput,
     backend_environment: Option<LaunchEnvironment>,
@@ -391,10 +394,11 @@ fn fields(
     environment.try_reserve_exact(view.environment().unit_len())?;
     environment.extend(view.environment().units());
     let desktop_environment = LaunchEnvironment::from_snapshot_utf16(&environment, &[])?;
-    let backend_environment = if matches!(target, BackendTarget::Managed(_)) {
-        Some(LaunchEnvironment::from_snapshot_utf16(&environment, &[])?)
-    } else {
-        None
+    let backend_environment = match &target {
+        BackendTarget::Managed(configuration) => {
+            Some(LaunchEnvironment::for_managed_backend(&environment, configuration)?)
+        }
+        BackendTarget::Attached(_) => None,
     };
     let mut fields = Fields {
         allocated_bytes: 0,
@@ -402,6 +406,7 @@ fn fields(
         profile_units,
         profile,
         locale: view.presentation().locale(),
+        presentation: view.presentation(),
         target,
         frontend,
         backend_environment,

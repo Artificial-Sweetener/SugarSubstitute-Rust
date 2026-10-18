@@ -62,7 +62,8 @@ impl<T> SplashRenderRequest<T> {
     /// previous claim is dropped; no pixel copy occurs. Allocation capacity is checked.
     pub fn reservation_bytes(&self) -> u64 {
         let output = self.shape.byte_len() as u64;
-        (2 * output).max(output + self.scratch_bytes()) + self.console_presentation.storage_bytes()
+        (2 * output).max(output + self.scratch_bytes())
+            + self.console_presentation.storage_bytes(self.shape)
     }
     /// Bound stage scratch independently from decoded cache ownership.
     fn scratch_bytes(&self) -> u64 {

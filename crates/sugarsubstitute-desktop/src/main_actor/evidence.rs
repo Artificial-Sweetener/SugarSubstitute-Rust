@@ -15,6 +15,8 @@ enum Effect {
     None,
     Hook(bool),
     Incomplete(super::probe_diagnostics::Blocked),
+    ConfigureFrame(Box<ProbeTarget>),
+    FrameConfigured(Box<super::frame::Completion>),
     Barrier(Box<ProbeTarget>),
     Receipt(ReadinessReceipt),
     Reload(crate::MainReloadReason),
@@ -75,6 +77,14 @@ impl MainActor {
         }
         let result = match effect {
             Effect::None => None,
+            Effect::ConfigureFrame(target) => {
+                self.configure_frame(*target)?;
+                None
+            }
+            Effect::FrameConfigured(completion) => {
+                self.frame_configured(*completion)?;
+                None
+            }
             Effect::Reload(reason) => Some(DesktopStartupObservation::MainReloadRequested {
                 identity: self.identity(),
                 reason,
@@ -164,6 +174,7 @@ fn observation_kind(kind: Kind, command: Option<Command>) -> &'static str {
             Some(Command::Runtime) => "Runtime",
             Some(Command::Page) => "Page",
             Some(Command::Probe(_)) => "Probe",
+            Some(Command::FrameConfiguration(_)) => "FrameConfiguration",
             Some(Command::Barrier(_)) => "Barrier",
             #[cfg(feature = "k1-native-qualification")]
             Some(Command::Downloads) => "Downloads",

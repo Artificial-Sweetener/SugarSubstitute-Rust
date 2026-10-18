@@ -27,7 +27,7 @@ pub(super) struct GlyphRun {
     /// Preserve direction established by the native shaper.
     pub level: u32,
     /// Foreground copied from this layout's retained private drawing effect.
-    pub color: Option<[u8; 3]>,
+    pub color: Option<[u8; 4]>,
 }
 
 /// Receive only synchronous callbacks from this owner's DirectWrite layout.
@@ -38,7 +38,7 @@ pub(super) struct Collector {
     /// Preserve Rust allocator causes that cannot be represented by the COM HRESULT.
     pub failure: RefCell<Option<std::io::Error>>,
     /// Exact effect references installed only by the current console layout owner.
-    pub colors: Vec<(IUnknown, [u8; 3])>,
+    pub colors: Vec<(IUnknown, [u8; 4])>,
 }
 
 impl IDWritePixelSnapping_Impl for Collector_Impl {

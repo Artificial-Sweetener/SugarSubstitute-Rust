@@ -29,7 +29,7 @@ mod scopes;
 #[path = "startup/shutdown.rs"]
 mod shutdown;
 #[path = "startup/view.rs"]
-mod view;
+pub(in crate::production) mod view;
 
 use super::child::{PreparedChildStartup, ProductionChild};
 use crate::{job_sequence::JobSequence, preparation::PreparationDriver};
@@ -148,6 +148,18 @@ impl ProductionStartup {
     }
 }
 impl WindowContent for ProductionStartup {
+    fn frame_presented(
+        &mut self,
+        _identity: sugarsubstitute_contracts::presentation::FrameIdentity,
+    ) -> Result<(), Box<dyn Error>> {
+        if !self.closing {
+            self.child.entry_splash_frame_presented()?;
+        }
+        self.refresh_deadline()
+    }
+    fn presentation_visible(&self) -> bool {
+        !self.closing && self.child.entry_splash_released()
+    }
     fn start(&mut self, wake: Arc<dyn CompletionWake>) -> Result<(), Box<dyn Error>> {
         self.start_owned(wake)
     }

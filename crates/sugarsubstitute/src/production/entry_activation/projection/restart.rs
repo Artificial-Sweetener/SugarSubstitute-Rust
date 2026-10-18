@@ -75,6 +75,7 @@ pub(super) fn project(
     };
     Ok(ProjectedEntry {
         locale: fields.locale,
+        presentation: fields.presentation,
         snapshot: Some(snapshot),
         registered: data.source,
         until: data.original.until(),

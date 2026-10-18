@@ -130,3 +130,17 @@ fn successful_replacement_retires_only_old_copy_and_rejects_stale_revision_befor
     assert_eq!(documents.current().ok_or("new lost")?.revision, 4);
     Ok(())
 }
+
+#[test]
+fn shared_render_index_retains_original_claim_until_final_native_retirement() -> TestResult {
+    let (old, frame, released) = index(&source(1, &[(1, "shared")])?)?;
+    let mut documents = Documents::new(old);
+    documents.publish(&mut Port::new(Observation::default()))?;
+    let shared = documents.shared().ok_or("shared index absent")?;
+    assert!(std::ptr::eq(documents.current().ok_or("current absent")?, shared.as_ref()));
+    drop((documents, frame));
+    assert_eq!(released.load(Ordering::SeqCst), 0);
+    drop(shared);
+    assert_eq!(released.load(Ordering::SeqCst), 1);
+    Ok(())
+}

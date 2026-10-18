@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Retain real entry, authority, child and execution lifetimes through native headless pumping.
+//! Retain real entry, authority, child and execution lifetimes through native pumping.
 #[path = "entry_runner/forward_recovery.rs"]
 mod forward_recovery;
 #[path = "entry_runner/lifecycle.rs"]
 mod lifecycle;
 #[path = "entry_runner/normal_idle.rs"]
 mod normal_idle;
+#[path = "entry_runner/presentation.rs"]
+mod presentation;
 #[path = "entry_runner/routing.rs"]
 mod routing;
 #[path = "entry_runner/scope_sequence.rs"]
@@ -55,11 +57,33 @@ pub(crate) struct EntryResources<'a> {
     pub(crate) authority: &'a mut CoordinatorAuthority,
     pub(crate) intake: &'a mut ProductionEntryIntake,
 }
+
+/// Passive presentation facts supplied by the actual owned Desktop lifecycle.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct EntrySplashState {
+    /// Authenticated startup appearance; absence keeps the canonical initial view.
+    pub(crate) presentation: Option<sugarsubstitute_contracts::configuration::Presentation>,
+    /// Actual covered Desktop frame awaiting the Root's native hide acknowledgment.
+    pub(crate) handoff: Option<sugarsubstitute_contracts::startup::MainIdentity>,
+}
 /// Real parent-child constructor boundary; the executable supplies its actual adapter.
 /// Every method runs on the native thread and returns promptly. Partial child
 /// admissions, authenticated loans and original causes stay in this adapter until
 /// checked retirement. No method may fabricate a Run, readiness or family settlement.
 pub(crate) trait EntryActivation {
+    /// Borrow inert startup view and the actual covered-surface handoff request.
+    fn entry_splash(&self) -> EntrySplashState {
+        EntrySplashState::default()
+    }
+    /// Authorize the matching covered Desktop only after the Root surface is natively hidden.
+    /// # Errors
+    /// Rejects absent or stale handoff; this callback grants no process or profile ownership.
+    fn complete_entry_splash_handoff(
+        &mut self,
+        _identity: sugarsubstitute_contracts::startup::MainIdentity,
+    ) -> Result<(), Box<dyn Error>> {
+        Err("This application role has no entry-splash handoff".into())
+    }
     /// Consume a genuinely authenticated source into the existing child admission.
     /// On failure retain partial admitted custody and its original cause in this owner.
     /// Unexecuted rejection leaves this identical option unchanged. An admitted
@@ -111,8 +135,21 @@ pub(crate) fn run<C: EntryActivation + 'static>(
     let mut lifetime = boxed_lifetime(command, executable, child, diagnostics);
     match run_headless(lifetime.as_mut()) {
         Ok(()) => Ok(()),
-        Err(pump) => Err(retain_failure(pump, lifetime)),
+        Err(pump) => Err(retain_failure(Box::new(pump), lifetime, None)),
     }
+}
+
+/// Present the Root's complete native splash before admitting installed entry work.
+/// # Errors
+/// Retains the actual composing owner through native presentation and checked lifetime shutdown.
+pub(crate) fn run_presented<C: EntryActivation + 'static>(
+    command: ProductionCommand,
+    child: impl FnOnce(&ProductionCommand) -> Result<Box<C>, Box<dyn Error>>,
+    diagnostics: crate::diagnostics::DiagnosticHealth,
+) -> Result<(), Box<dyn Error>> {
+    let executable = std::env::current_exe()?;
+    let child = child(&command)?;
+    super::entry_presentation::run(boxed_lifetime(command, executable, child, diagnostics))
 }
 
 /// Construct the runner from its original heap child without moving that child value onto the pump stack.
@@ -126,26 +163,28 @@ fn boxed_lifetime<C: EntryActivation>(
     Box::new(EntryRunner::new(command, executable, child, diagnostics))
 }
 
-/// Keep exceptional whole-lifetime moves outside the native pump's persistent stack frame.
+/// Keep the original entry and optional presentation custody outside the native pump's stack frame.
 #[cold]
 #[inline(never)]
-fn retain_failure<C: EntryActivation + 'static>(
-    pump: sugarsubstitute_desktop::DesktopError,
+pub(in crate::production) fn retain_failure<C: EntryActivation + 'static>(
+    pump: Box<dyn Error>,
     lifetime: Box<EntryRunner<C>>,
+    preparation: Option<crate::preparation::PreparationDriver>,
 ) -> Box<dyn Error> {
-    let failure = RunFailure { pump, lifetime };
+    let failure = RunFailure { pump, lifetime, preparation };
     tracing::error!(operation="production_entry_failed",failure=?failure,
         "Production entry failed with retained startup and cleanup causes");
     Box::new(failure)
 }
 struct RunFailure<C: EntryActivation> {
-    pump: sugarsubstitute_desktop::DesktopError,
+    pump: Box<dyn Error>,
     lifetime: Box<EntryRunner<C>>,
+    preparation: Option<crate::preparation::PreparationDriver>,
 }
 impl<C: EntryActivation> RunFailure<C> {
     /// Borrow the original application cause, including failure before owner initialization.
     fn primary(&self) -> &(dyn Error + 'static) {
-        self.lifetime.failure_source().unwrap_or(&self.pump)
+        self.lifetime.failure_source().unwrap_or(self.pump.as_ref())
     }
 }
 /// Format at most sixteen borrowed causes, preserving configuration-source redaction.
@@ -193,6 +232,7 @@ impl<C: EntryActivation> fmt::Debug for RunFailure<C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ProductionEntryFailure")
             .field("primary", &FailureDisplay(self.primary()))
+            .field("presentation_retained", &self.preparation.is_some())
             .field(
                 "bootstrap_post_control",
                 &self.lifetime.bootstrap.as_ref().and_then(EntryBootstrap::post_control),
@@ -257,7 +297,7 @@ pub(crate) struct EntryRunner<C: EntryActivation> {
     cleanup: Option<Scope>,
     client: Option<ExecutionClient>,
     execution: Option<ExecutionOwner>,
-    clock: Arc<MonotonicClock>,
+    clock: Arc<dyn sugarsubstitute_contracts::execution::Clock>,
     original: Option<EntrySetupBudget>,
     setup_deadline: Option<Instant>,
     shutdown: Option<ShutdownBudget>,
@@ -397,7 +437,12 @@ impl<C: EntryActivation> EntryRunner<C> {
                 );
             }
         };
-        if let Err(cause) = self.route(&batch) {
+        self.consume_batch(&batch)
+    }
+    fn consume_batch(&mut self, batch: &CompletionBatch) -> Result<HeadlessStep, Box<dyn Error>> {
+        if (self.original.is_some() || self.closing)
+            && let Err(cause) = self.route(batch)
+        {
             self.close_on_failure(cause);
             return Err(
                 "Production completion routing failed with its original retained cause".into()

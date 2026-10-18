@@ -144,7 +144,10 @@ fn readonly_console_geometry_preserves_original_retry_peer_and_locale_owner()
         let before = view.console(None);
         assert_eq!(before.label, messages.output);
         assert!(before.visible);
-        assert_eq!(before.bounds.height, 166.0);
+        assert_eq!(
+            (before.bounds.x, before.bounds.y, before.bounds.width, before.bounds.height),
+            (25.0, 371.0, 508.0, 162.0)
+        );
         view.phase(StartupPhase::Stopped);
         let console = view.console(None);
         assert!(console.bounds.y + console.bounds.height <= view.controls()[2].bounds.y);

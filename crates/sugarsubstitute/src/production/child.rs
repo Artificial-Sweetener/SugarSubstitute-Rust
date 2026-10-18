@@ -39,6 +39,8 @@ mod reload;
 mod requests;
 #[path = "child/retirement.rs"]
 mod retirement;
+#[path = "child/splash.rs"]
+mod splash;
 pub(in crate::production) use retirement::ShutdownInitiation;
 #[cfg(test)]
 #[path = "child/test_support.rs"]
@@ -81,6 +83,7 @@ pub(in crate::production) struct ProductionChild {
     bootstrap: ChildBootstrap,
     run: RunKey,
     identity: MainIdentity,
+    splash: splash::SplashHandoff,
     client: Option<ExecutionClient>,
     jobs: Option<JobSequence>,
     connection_budget: Option<ConnectionBudget>,
@@ -146,6 +149,7 @@ impl ProductionChild {
             bootstrap,
             run,
             identity: MainIdentity { run, launch: identity.0, navigation: identity.1 },
+            splash: splash::SplashHandoff::default(),
             client: None,
             jobs: None,
             connection_budget: None,
@@ -373,6 +377,7 @@ impl ProductionChild {
                 .then(|| self.bootstrap.original_deadline())
                 .flatten(),
             self.bootstrap.ui_deadline(),
+            (!self.shutdown.closing()).then(|| self.splash.deadline()).flatten(),
             #[cfg(feature = "k1-native-qualification")]
             self.bootstrap.preview_deadline(),
             self.acquire.filter(|p| !p.retiring).and_then(connection::PendingAcquire::deadline),

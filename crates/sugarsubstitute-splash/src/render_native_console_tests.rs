@@ -2,7 +2,10 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Verify native text storage admission through the actual central raster execution path.
 use super::*;
-use sugarsubstitute_contracts::presentation::{ConsolePresentation, NATIVE_CONSOLE_STORAGE_BYTES};
+use sugarsubstitute_contracts::presentation::{
+    ConsolePresentation, NATIVE_CONSOLE_ACCESSIBILITY_BYTES, NATIVE_CONSOLE_PAINT_BYTES,
+    NATIVE_CONSOLE_STORAGE_BYTES,
+};
 #[test]
 fn native_console_frame_admits_distinct_copy_and_keeps_full_pin_without_raster_text() -> TestResult
 {
@@ -22,7 +25,14 @@ fn native_console_frame_admits_distinct_copy_and_keeps_full_pin_without_raster_t
         console_presentation: ConsolePresentation::Native,
     };
     let bytes = request.reservation_bytes();
-    assert_eq!(bytes, base.reservation_bytes() + NATIVE_CONSOLE_STORAGE_BYTES);
+    assert_eq!(
+        bytes,
+        base.reservation_bytes()
+            + NATIVE_CONSOLE_STORAGE_BYTES
+            + NATIVE_CONSOLE_PAINT_BYTES
+            + NATIVE_CONSOLE_ACCESSIBILITY_BYTES
+            + 2 * base.shape.byte_len() as u64
+    );
     let mut job = rig.client.submit_cpu(&rig.scope, spec(2, bytes)?, move |context| {
         renderer.prepare(request, context.memory().clone())
     })?;
@@ -51,18 +61,29 @@ fn native_console_frame_admits_distinct_copy_and_keeps_full_pin_without_raster_t
     )?;
     assert_eq!(frame.pixels(), pixels.data());
     let native = frame.claim_storage(NATIVE_CONSOLE_STORAGE_BYTES)?;
+    let paint = frame.claim_storage(NATIVE_CONSOLE_PAINT_BYTES)?;
+    let accessibility = frame.claim_storage(NATIVE_CONSOLE_ACCESSIBILITY_BYTES)?;
     let dib = frame.claim_storage(frame.shape().byte_len() as u64)?;
+    let glyph_bitmap = frame.claim_storage(frame.shape().byte_len() as u64)?;
+    let console_output = frame.claim_storage(frame.shape().byte_len() as u64)?;
     drop((frame, result.renderer, result.console, job));
     assert_eq!(rig.scope.snapshot().reserved_bytes, bytes);
     drop(dib);
     assert_eq!(rig.scope.snapshot().reserved_bytes, bytes);
     drop(native);
+    assert_eq!(rig.scope.snapshot().reserved_bytes, bytes);
+    drop(paint);
+    assert_eq!(rig.scope.snapshot().reserved_bytes, bytes);
+    drop(accessibility);
+    assert_eq!(rig.scope.snapshot().reserved_bytes, bytes);
+    drop(glyph_bitmap);
+    assert_eq!(rig.scope.snapshot().reserved_bytes, bytes);
+    drop(console_output);
     assert_eq!(rig.scope.snapshot().reserved_bytes, 0);
     Ok(())
 }
 #[test]
-fn native_console_allowance_is_separate_from_both_pixel_copies_at_every_supported_scale()
--> TestResult {
+fn native_console_buffers_are_admitted_at_every_supported_scale() -> TestResult {
     for scale in [0.5, 1.0, 1.25, 2.0, 4.0] {
         let base = request(scale, true)?;
         let request = SplashRenderRequest {
@@ -77,11 +98,17 @@ fn native_console_allowance_is_separate_from_both_pixel_copies_at_every_supporte
         };
         assert!(
             request.reservation_bytes()
-                >= 2 * base.shape.byte_len() as u64 + NATIVE_CONSOLE_STORAGE_BYTES
+                >= 4 * base.shape.byte_len() as u64
+                    + NATIVE_CONSOLE_STORAGE_BYTES
+                    + NATIVE_CONSOLE_PAINT_BYTES
+                    + NATIVE_CONSOLE_ACCESSIBILITY_BYTES
         );
         assert_eq!(
             request.reservation_bytes() - base.reservation_bytes(),
             NATIVE_CONSOLE_STORAGE_BYTES
+                + NATIVE_CONSOLE_PAINT_BYTES
+                + NATIVE_CONSOLE_ACCESSIBILITY_BYTES
+                + 2 * base.shape.byte_len() as u64
         );
     }
     Ok(())

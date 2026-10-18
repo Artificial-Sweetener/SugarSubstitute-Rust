@@ -36,6 +36,7 @@ struct RetryProbe {
 struct PendingProbe {
     target: ProbeTarget,
     receipt: Option<ReadinessReceipt>,
+    configuring_frame: bool,
 }
 
 /// Keep bounded native observation state for exactly one admitted main navigation.
@@ -347,7 +348,7 @@ impl MainReadiness {
             loader: root.loader,
         };
         self.next_operation = next;
-        self.pending = Some(PendingProbe { target, receipt: None });
+        self.pending = Some(PendingProbe { target, receipt: None, configuring_frame: false });
         self.retry_probe = None;
         Ok(Some(target))
     }
@@ -362,6 +363,9 @@ impl MainReadiness {
         now: Instant,
     ) -> Result<bool, ReadinessFault> {
         self.check_target(target)?;
+        if self.pending.as_ref().is_some_and(|pending| pending.configuring_frame) {
+            return self.reject(ReadinessFault::MalformedObservation);
+        }
         let Some(receipt) = receipt else {
             let Some(next) = now.checked_add(INCOMPLETE_PROBE_INTERVAL) else {
                 return self.reject(ReadinessFault::ObservationOverflow);
@@ -390,6 +394,40 @@ impl MainReadiness {
         pending.receipt = Some(receipt);
         self.retry_probe = None;
         Ok(true)
+    }
+
+    /// Transfer this exact issued sample to one separate presentation operation.
+    /// A configuration request carries no frontend-ready evidence or native privilege.
+    pub(crate) fn begin_frame_configuration(
+        &mut self,
+        target: ProbeTarget,
+    ) -> Result<(), ReadinessFault> {
+        self.check_target(target)?;
+        let Some(pending) = self.pending.as_mut() else {
+            return Err(ReadinessFault::StaleProbe);
+        };
+        if pending.receipt.is_some() || pending.configuring_frame {
+            return self.reject(ReadinessFault::MalformedObservation);
+        }
+        pending.configuring_frame = true;
+        Ok(())
+    }
+
+    /// Release only the matching completed mutation, then require a fresh read-only DOM sample.
+    pub(crate) fn complete_frame_configuration(
+        &mut self,
+        target: ProbeTarget,
+        now: Instant,
+    ) -> Result<(), ReadinessFault> {
+        self.check_target(target)?;
+        let Some(pending) = self.pending.as_mut() else {
+            return Err(ReadinessFault::StaleProbe);
+        };
+        if !pending.configuring_frame {
+            return self.reject(ReadinessFault::MalformedObservation);
+        }
+        pending.configuring_frame = false;
+        self.dom_result(target, None, now).map(|_| ())
     }
 
     /// Transfer only after prior native notifications have drained and the current target is rechecked.

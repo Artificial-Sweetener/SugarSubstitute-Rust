@@ -145,7 +145,8 @@ impl<C: EntryActivation> EntryRunner<C> {
             return Err("Actual child owner failed with retained original cause".into());
         }
         if !self.initial_completed
-            && self.client()?.now()? >= self.original.ok_or("Original setup missing")?.until()
+            && let Some(original) = self.original
+            && self.client()?.now()? >= original.until()
         {
             return Err("Production entry setup expired before actual admission".into());
         }

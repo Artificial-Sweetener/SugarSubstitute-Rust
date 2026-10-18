@@ -37,6 +37,10 @@ const api=check(readyApi,16384);
 const library=check(!!readyApi&&typeof readyApi.openLibrary==='function',8192);
 const ready=setup&&api&&library;
 if(missing)return JSON.stringify({incomplete:missing});
+if(typeof readyApi.configureDesktopFrame!=='function'||typeof readyApi.readDesktopFrame!=='function')throw new Error('SugarCubes desktop frame protocol 1 is unavailable.');
+const frame=readyApi.readDesktopFrame();
+if(!frame?.mounted)return JSON.stringify({configure_desktop_frame:1});
+if(frame.schemaVersion!==1||frame.captionWidth!==138||frame.titlebarHeight!==34||frame.darkTheme!==NATIVE_DARK)throw new Error('SugarCubes desktop frame presentation differs from the native host.');
 return JSON.stringify({schema_version:1,launch_id:LAUNCH,navigation_generation:NAV,
  outcome:{status:'ready',evidence:{frontend_version:FRONT,sugarcubes_version:CUBES,
  app_graph_ready:graph,canvas_connected:connected,loading_finished:loading,
@@ -56,6 +60,8 @@ pub(in crate::main_actor) fn probe_parameters(
         .replace("NAV", &target.identity.navigation.get().to_string())
         .replace("FRONT", &frontend)
         .replace("CUBES", &cubes);
+    let expression =
+        expression.replace("NATIVE_DARK", if request.settings().dark { "true" } else { "false" });
     let expression = serde_json::to_string(&expression)
         .map_err(|cause| DesktopError::new("encode_main_probe", cause))?;
     let parameters = format!(

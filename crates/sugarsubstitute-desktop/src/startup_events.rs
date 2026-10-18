@@ -4,6 +4,8 @@
 
 #[path = "startup_commands.rs"]
 mod commands;
+#[path = "startup_presentation.rs"]
+mod presentation;
 use super::*;
 use crate::{
     cadence::{advance_deadline, closing_wait, presentation_wait},
@@ -40,12 +42,15 @@ pub(super) fn dispatch(
     activity(session, content)?;
     let shape = session.splash.shape()?;
     if !session.splash.retiring {
-        let visible = session
-            .splash
-            .window
-            .as_ref()
-            .is_some_and(|window| window.is_visible() && !window.is_minimized())
-            && shape.is_some();
+        let visible = session.splash.window.as_ref().is_some_and(|window| {
+            (window.is_visible()
+                || session
+                    .splash
+                    .presentations
+                    .as_ref()
+                    .is_some_and(|owner| owner.preparing_first()))
+                && !window.is_minimized()
+        }) && shape.is_some();
         session.splash.state.visibility(content, visible);
     }
     match event {
@@ -138,44 +143,16 @@ pub(super) fn dispatch(
             if session.splash.window.as_ref().is_some_and(|window| window.id() == id) =>
         {
             session.redraw = false;
-            if !session.splash.retiring
-                && let Some(frame) = session.splash.state.exposable(shape)
-            {
-                let window = session.splash.window.as_ref().ok_or_else(|| {
-                    DesktopError::message("present_startup_splash", "window missing")
-                })?;
-                let presenter = session.splash.presenter.as_mut().ok_or_else(|| {
-                    DesktopError::message("present_startup_splash", "presenter missing")
-                })?;
-                let controls = session.splash.controls.as_mut().ok_or_else(|| {
-                    DesktopError::message("present_startup_splash", "controls missing")
-                })?;
-                session
-                    .splash
-                    .presentations
-                    .as_mut()
-                    .ok_or_else(|| {
-                        DesktopError::message(
-                            "present_startup_splash",
-                            "presentation owner missing",
-                        )
-                    })?
-                    .submit(window, presenter, frame, context.timings, content, controls)?;
-                if !session.splash.presented || session.splash.launch != content.launch_id() {
-                    session.splash.presented = true;
-                    session.splash.launch = content.launch_id();
-                    session.observe(
-                        content,
-                        DesktopStartupObservation::SplashPresented(session.splash.launch),
-                    )?;
-                }
-            }
+            presentation::submit(session, content, shape, context.timings)?;
         }
         Event::MainEventsCleared => {
             if session.splash.state.poll(content, shape, session.drain, session.started.elapsed())
                 && !session.splash.retiring
             {
                 invalidate(session.splash.window()?, &mut session.redraw);
+            }
+            if session.splash.presentations.as_ref().is_some_and(|owner| owner.preparing_first()) {
+                presentation::submit(session, content, shape, context.timings)?;
             }
             if session.closing {
                 session.splash.state.poll_shutdown(content);
@@ -201,6 +178,7 @@ pub(super) fn dispatch(
         }
         _ => {}
     }
+    presentation::reconcile(session, content, context.timings)?;
     activity(session, content)?;
     if let Some(observation) = session.activity.retirement(native_activity::RetirementFacts {
         main: session.main.as_ref().is_none_or(MainActor::retired),

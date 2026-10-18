@@ -27,6 +27,15 @@ use sugarsubstitute_splash::{
     SplashRenderer,
 };
 
+/// Select the first accepted raster's owned presentation coverage.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum FirstFrameContent {
+    /// Include status text and all native control chrome before startup admission.
+    Complete,
+    /// Qualify the renderer's explicit character-first demonstration path.
+    Character,
+}
+
 #[path = "preparation_delivery.rs"]
 mod delivery;
 
@@ -64,6 +73,7 @@ pub(crate) struct PreparationDriver {
     state_dirty: bool,
     closing: bool,
     bootstrap_published: bool,
+    first_frame: FirstFrameContent,
     enriched: bool,
 }
 
@@ -82,6 +92,7 @@ impl PreparationDriver {
         scope: Scope,
         jobs: JobSequence,
         console_presentation: sugarsubstitute_contracts::presentation::ConsolePresentation,
+        first_frame: FirstFrameContent,
     ) -> Result<Self, Box<dyn Error>> {
         Ok(Self {
             locale: locale.to_owned(),
@@ -103,6 +114,7 @@ impl PreparationDriver {
             state_dirty: false,
             closing: false,
             bootstrap_published: false,
+            first_frame,
             enriched: false,
         })
     }
@@ -185,7 +197,8 @@ impl PreparationDriver {
                 state_generation: self.gate.state_generation(),
                 sequence,
             },
-            bootstrap: !self.bootstrap_published,
+            bootstrap: !self.bootstrap_published
+                && self.first_frame == FirstFrameContent::Character,
             console,
             console_presentation: self.console_presentation,
         };
@@ -210,7 +223,8 @@ impl PreparationDriver {
         let identity = request.identity;
         let bytes = request.bytes;
         let input = request.input.clone();
-        let bootstrap = !self.bootstrap_published;
+        let bootstrap =
+            !self.bootstrap_published && self.first_frame == FirstFrameContent::Character;
         let reservation_bytes = if initializing { SPLASH_CACHE_RESERVATION_BYTES } else { bytes };
         let revision = self.allocate_identity()?;
         let spec = JobSpec {

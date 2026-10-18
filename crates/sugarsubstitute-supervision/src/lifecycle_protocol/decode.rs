@@ -126,6 +126,7 @@ pub(super) fn frame(source: &[u8]) -> Result<DecodedFrame<'_>, ProtocolError> {
             identity: main_fields::read_identity(&mut input, run)?,
             failed: lease(&mut input)?,
         },
+        21 => DecodedPayload::SplashPrepared(main_fields::read_identity(&mut input, run)?),
         _ => return Err(ProtocolError::UnsupportedTag),
     };
     input.finish()?;

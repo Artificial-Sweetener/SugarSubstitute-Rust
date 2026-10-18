@@ -180,7 +180,8 @@ impl GlyphPaint {
                     plan.color.r(),
                     plan.color.g(),
                     plan.color.b(),
-                    image.data.data[index],
+                    ((u16::from(image.data.data[index]) * u16::from(plan.color.a()) + 127) / 255)
+                        as u8,
                 ),
                 SwashContent::Color => {
                     let p = &image.data.data[index * 4..index * 4 + 4];

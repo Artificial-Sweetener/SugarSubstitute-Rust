@@ -168,5 +168,6 @@ fn received_payload_kind(bytes: &[u8]) -> &'static str {
         Payload::MainFailed(_) => "MainFailed",
         Payload::SettleAttempt { .. } => "SettleAttempt",
         Payload::RetryBackend { .. } => "RetryBackend",
+        Payload::SplashPrepared(_) => "SplashPrepared",
     }
 }

@@ -13,6 +13,13 @@ use windows::Win32::{
 };
 /// Borrow only the original live affine peer retained by the containing Console.
 pub(super) struct Messages(pub(super) HWND);
+/// Keep mutually exclusive native character-formatting scopes explicit at the boundary.
+pub(super) enum FormatScope {
+    /// Set the insertion defaults retained by the original native document.
+    Default,
+    /// Override only the exact selected source style run.
+    Selection,
+}
 impl Messages {
     /// Read native selection endpoints in internal UTF-16 character units.
     pub(super) fn selection(&self) -> CHARRANGE {
@@ -158,16 +165,16 @@ impl Messages {
             .filter(|n| *n < buffer.len())
             .ok_or_else(|| rejected("console_text_readback"))
     }
-    /// Apply a scalar background; Win32 returns the previous color.
-    pub(super) fn background(&self, color: u32) {
-        // SAFETY: Scalar color applies to the exact owned peer; return is its prior color.
-        unsafe {
-            SendMessageW(self.0, EM_SETBKGNDCOLOR, None, Some(LPARAM(color as isize)));
-        }
-    }
-    /// Apply initialized character formatting to either defaults or exact selection.
-    pub(super) fn format(&self, selected: bool, format: &CHARFORMAT2W) -> Result<(), DesktopError> {
-        let scope = if selected { SCF_SELECTION } else { SCF_DEFAULT };
+    /// Apply initialized character formatting to its one documented native scope.
+    pub(super) fn format(
+        &self,
+        scope: FormatScope,
+        format: &CHARFORMAT2W,
+    ) -> Result<(), DesktopError> {
+        let scope = match scope {
+            FormatScope::Default => SCF_DEFAULT,
+            FormatScope::Selection => SCF_SELECTION,
+        };
         // SAFETY: Exact initialized CHARFORMAT2W remains live during synchronous copying.
         if unsafe {
             SendMessageW(

@@ -98,6 +98,17 @@ fn parent_projection_composes_complete_managed_command_from_empty_extras()
     assert_eq!(launch.root(), std::path::Path::new(r"E:\comfyui"));
     assert_eq!(launch.interpreter(), std::path::Path::new(r"E:\comfyui\venv\Scripts\python.exe"));
     assert!(projected.backend_environment.is_some());
+    let backend_environment = String::from_utf16(
+        projected.backend_environment.as_ref().ok_or("Managed environment missing")?.as_utf16(),
+    )?;
+    for expected in [
+        r"PATH=E:\comfyui\venv\Scripts;",
+        "PYTHONIOENCODING=utf-8",
+        "SUGARSUBSTITUTE_SKIP_TTS_INSTALLER=1",
+    ] {
+        assert!(backend_environment.split('\0').any(|line| line == expected));
+    }
+    assert_eq!(projected.desktop_environment.as_utf16(), [0, 0]);
     let EntryConnectionView::Managed { arguments, .. } = original.connection() else {
         return Err("Original mode changed".into());
     };

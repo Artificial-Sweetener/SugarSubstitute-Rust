@@ -23,8 +23,12 @@ STARTUP_STAGES = ("event_loop_ready", "window_created", "presenter_ready", "cont
                   "execution_ready", "show_focus_returned", "first_preparation_request")
 STARTUP_ORDERS = {
     "surface_first": STARTUP_STAGES,
-    "execution_first": ("event_loop_ready", "execution_ready", "window_created", "presenter_ready",
+    "execution_first": ("execution_ready", "event_loop_ready", "window_created", "presenter_ready",
                         "controls_ready", "show_focus_returned", "first_preparation_request"),
+}
+PREPARED_STARTUP_ORDERS = {
+    name: (*stages[:5], "first_preparation_request", "show_focus_returned")
+    for name, stages in STARTUP_ORDERS.items()
 }
 
 
@@ -56,12 +60,12 @@ def validate(receipt):
     """
     if not isinstance(receipt, dict):
         raise ValueError("Native timings require an object")
-    version = integer(receipt.get("schema_version"), "schema version", 1, 3)
+    version = integer(receipt.get("schema_version"), "schema version", 1, 4)
     extra = {"startup_milestones"} if version >= 2 else set()
-    if version == 3:
+    if version >= 3:
         extra.add("startup_order")
     keys(receipt, RECEIPT_KEYS | extra, "native timings")
-    if version == 3 and (not isinstance(receipt["startup_order"], str)
+    if version >= 3 and (not isinstance(receipt["startup_order"], str)
                          or receipt["startup_order"] not in STARTUP_ORDERS):
         raise ValueError("Unknown native startup order")
     if receipt["source"] != "windows_qpc":
@@ -131,7 +135,9 @@ def validate(receipt):
 
 def validate_startup(receipt, lifetime):
     """Require exact ordered native startup checkpoints before any successful submission."""
-    stages = STARTUP_ORDERS[receipt["startup_order"]] if receipt["schema_version"] == 3 else STARTUP_STAGES
+    version = receipt["schema_version"]
+    stages = (PREPARED_STARTUP_ORDERS[receipt["startup_order"]] if version == 4 else
+              STARTUP_ORDERS[receipt["startup_order"]] if version == 3 else STARTUP_STAGES)
     milestones = receipt["startup_milestones"]
     if not isinstance(milestones, list) or len(milestones) > len(stages):
         raise ValueError("Startup milestones exceed the seven-stage inventory")
@@ -143,11 +149,12 @@ def validate_startup(receipt, lifetime):
         previous = integer(milestone["ticks"], "startup milestone ticks", previous, lifetime[1])
     submissions = receipt["submissions"]
     if isinstance(submissions, list) and submissions:
-        if len(milestones) != len(stages):
+        preparation = stages.index("first_preparation_request")
+        if len(milestones) <= preparation:
             raise ValueError("Successful native submission requires every startup milestone")
         first = submissions[0]
         if (not isinstance(first, dict) or type(first.get("begin_ticks")) is not int
-                or previous > first["begin_ticks"]):
+                or milestones[preparation]["ticks"] > first["begin_ticks"]):
             raise ValueError("First native preparation must precede its successful submission")
 
 
@@ -208,7 +215,7 @@ def analyse(receipt, *, profile="strict"):
             "accepted": complete and bool(callback_passes) and all(callback_passes) and producer_passed,
             "acceptance_scope": "Observed native distributions; campaign completeness is separately assessed by the orchestrator",
             "scope": "Native successful submission end-to-end intervals; retained exposures excluded from producer cadence. Full nested callback distributions are never summed. Display latency is outside this receipt."}
-    if receipt["schema_version"] == 3:
+    if receipt["schema_version"] >= 3:
         result["native_startup_order"] = receipt["startup_order"]
     if profile == "busy":
         producer = assess_timing(fresh_intervals["p95_ms"], 25, profile=profile)

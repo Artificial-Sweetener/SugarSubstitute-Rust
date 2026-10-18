@@ -87,7 +87,7 @@ pub(crate) trait ConsoleGlyph {
 /// Copy one actual shaper range rectangle before its native/layout owner returns.
 pub(crate) struct Background {
     pub(crate) bounds: [f32; 4],
-    pub(crate) color: [u8; 3],
+    pub(crate) color: [u8; 4],
 }
 
 /// Composite bounded background spans before glyphs without modifying foreign text.
@@ -167,11 +167,12 @@ impl BackgroundPaint {
 }
 
 /// Preserve premultiplied RGBA while compositing one owned foreground/background color.
-pub(crate) fn composite(pixel: &mut [u8], color: [u8; 3], alpha: u8) {
+pub(crate) fn composite(pixel: &mut [u8], color: [u8; 4], coverage: u8) {
     let multiply = |a: u8, b: u8| {
         let p = u32::from(a) * u32::from(b) + 128;
         ((p + (p >> 8)) >> 8) as u8
     };
+    let alpha = multiply(coverage, color[3]);
     for (channel, value) in pixel.iter_mut().take(3).zip(color) {
         *channel = multiply(value, alpha).saturating_add(multiply(*channel, 255 - alpha));
     }

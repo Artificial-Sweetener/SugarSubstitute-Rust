@@ -82,9 +82,9 @@ impl ConsoleFont for FontOwner {
         unsafe {
             layout.SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP)?;
         }
-        let mut colors = memory::reserve::<(IUnknown, [u8; 3])>(MAX_RUNS, METADATA_BYTES / 8)?;
+        let mut colors = memory::reserve::<(IUnknown, [u8; 4])>(MAX_RUNS, METADATA_BYTES / 8)?;
         let mut ranges =
-            memory::reserve::<(DWRITE_TEXT_RANGE, [u8; 3])>(MAX_RUNS, METADATA_BYTES / 8)?;
+            memory::reserve::<(DWRITE_TEXT_RANGE, [u8; 4])>(MAX_RUNS, METADATA_BYTES / 8)?;
         for run in row.runs {
             if run.utf16_start >= run.utf16_end || run.utf16_end as usize > text.len() {
                 return Err(io::Error::new(
@@ -147,7 +147,7 @@ impl ConsoleGlyph for GlyphPaint {
 /// Keep the actual layout until one hit-test range per turn has supplied all background geometry.
 pub(super) struct ConsoleBackground {
     layout: Option<IDWriteTextLayout>,
-    ranges: Vec<(DWRITE_TEXT_RANGE, [u8; 3])>,
+    ranges: Vec<(DWRITE_TEXT_RANGE, [u8; 4])>,
     range: usize,
     metrics: Vec<DWRITE_HIT_TEST_METRICS>,
     spans: Vec<Background>,
@@ -157,7 +157,7 @@ pub(super) struct ConsoleBackground {
 impl ConsoleBackground {
     fn new(
         layout: IDWriteTextLayout,
-        ranges: Vec<(DWRITE_TEXT_RANGE, [u8; 3])>,
+        ranges: Vec<(DWRITE_TEXT_RANGE, [u8; 4])>,
         spec: ConsolePaintSpec,
     ) -> io::Result<Self> {
         let mut metrics = memory::reserve(MAX_GLYPHS, METADATA_BYTES / 4)?;

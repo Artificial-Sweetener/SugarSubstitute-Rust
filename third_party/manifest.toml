@@ -46,6 +46,8 @@ source_url = "https://github.com/zhiyiYo/PyQt-Frameless-Window"
 license = "MIT"
 license_file = "third_party/licenses/frameless-window.LICENSE.txt"
 files = [
+  "crates/sugarsubstitute-desktop/assets/caption/close.coverage",
+  "crates/sugarsubstitute-desktop/src/windows_caption_glyphs.rs",
   "crates/sugarsubstitute-splash/assets/caption/close-100.png",
   "crates/sugarsubstitute-splash/assets/caption/close-125.png",
   "crates/sugarsubstitute-splash/assets/caption/close-150.png",

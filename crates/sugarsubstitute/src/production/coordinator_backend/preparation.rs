@@ -134,9 +134,7 @@ impl CoordinatorBackend {
             environment: original
                 .environment
                 .as_ref()
-                .map(|environment| {
-                    LaunchEnvironment::from_snapshot_utf16(environment.as_utf16(), &[])
-                })
+                .map(LaunchEnvironment::try_copy)
                 .transpose()?,
         };
         self.records[at] = Some(Backend {

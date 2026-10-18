@@ -240,15 +240,15 @@ pub(crate) unsafe extern "system" fn child_proc(
     let observation =
         NativeCallbackObservation::new(timings, proxy, NativeCallbackKind::WindowsChild);
     let result = (|| {
+        // SAFETY: The installed reference remains live through hover retirement and forwarding.
+        let callback = unsafe { callback::<Callback>(data) };
+        caption::child(callback, hwnd, message, wparam, lparam);
         if message == WM_NCDESTROY {
             // SAFETY: This callback still owns its transferred Rc until this final message.
             return unsafe {
                 destroy_callback::<Callback>(hwnd, Some(child_proc), wparam, lparam, data)
             };
         }
-        // SAFETY: The nonfinal invocation still owns its installed reference.
-        let callback = unsafe { callback::<Callback>(data) };
-        caption::child(callback, hwnd, message);
         match message {
             WM_NCHITTEST
                 if callback.paint_mode == crate::windows_controls::PaintMode::PreparedPixels =>

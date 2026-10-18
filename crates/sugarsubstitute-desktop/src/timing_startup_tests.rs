@@ -13,8 +13,8 @@ const STAGES: [NativeStartupStage; 7] = [
     NativeStartupStage::PresenterReady,
     NativeStartupStage::ControlsReady,
     NativeStartupStage::ExecutionReady,
-    NativeStartupStage::ShowFocusReturned,
     NativeStartupStage::FirstPreparationRequest,
+    NativeStartupStage::ShowFocusReturned,
 ];
 
 #[derive(Clone)]
@@ -155,7 +155,7 @@ fn successful_submission_requires_first_actual_preparation_observation() -> Test
         state_generation: Generation::new(1)?,
         sequence: Generation::new(1)?,
     };
-    for stage in &STAGES[..6] {
+    for stage in &STAGES[..5] {
         audit.startup(*stage)?;
     }
     let begin = audit.mark()?;

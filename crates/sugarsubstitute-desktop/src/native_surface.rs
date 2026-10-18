@@ -18,6 +18,8 @@ pub(crate) mod input;
 pub(crate) mod presentation;
 #[path = "runtime_state.rs"]
 pub(crate) mod state;
+#[path = "runtime_visibility.rs"]
+pub(crate) mod visibility;
 
 /// Validate actual device shape without scanning or touching retained pixel storage.
 pub(crate) fn surface_shape(

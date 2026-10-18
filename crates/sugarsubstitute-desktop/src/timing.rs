@@ -193,7 +193,7 @@ impl TimingAudit {
         begin: Stamp,
         identity: FrameIdentity,
     ) -> Result<(), DesktopError> {
-        if self.receipt.startup_milestones[6].is_none_or(|sample| sample.ticks > begin.ticks) {
+        if self.receipt.startup_milestones[5].is_none_or(|sample| sample.ticks > begin.ticks) {
             return Err(error("successful submission precedes the first preparation request"));
         }
         let end = self.mark()?;

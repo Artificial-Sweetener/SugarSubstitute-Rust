@@ -86,16 +86,56 @@ impl TeardownPermit {
 /// and its original buffers/claims/handles remain inaccessible until process termination.
 /// The caller's acquired STA reference must remain unreleased on that path; its existing
 /// apartment owner drops without CoUninitialize. Preserve the earliest original cause.
+#[cfg(target_os = "windows")]
 pub(crate) fn finish_after_native<C>(
-    mut content: C,
+    content: C,
     finish: impl FnOnce(&mut C) -> Result<(), DesktopError>,
     after_join: impl FnOnce() -> Result<(), DesktopError>,
     failure: &mut Option<DesktopError>,
 ) {
-    if let Err(cause) = finish(&mut content) {
-        tracing::error!(operation = "retain_final_content", cause = %cause,
+    finish_with_retention(content, finish, after_join, |_, cause| cause, failure);
+}
+
+/// Preserve application lifetime custody in a native failure before disposing content.
+pub(crate) fn finish_window_content<C: crate::WindowContent>(
+    content: C,
+    after_join: impl FnOnce() -> Result<(), DesktopError>,
+    failure: &mut Option<DesktopError>,
+) {
+    finish_with_retention(
+        content,
+        |content| {
+            content.finish_shutdown().map_err(|cause| DesktopError::boxed("finish_shutdown", cause))
+        },
+        after_join,
+        |content, cause| {
+            DesktopError::boxed("native_surface_lifetime", content.retain_failure(cause))
+        },
+        failure,
+    );
+}
+
+/// Attempt the final join before transferring original failure custody exactly once.
+fn finish_with_retention<C>(
+    mut content: C,
+    finish: impl FnOnce(&mut C) -> Result<(), DesktopError>,
+    after_join: impl FnOnce() -> Result<(), DesktopError>,
+    retain: impl FnOnce(&mut C, DesktopError) -> DesktopError,
+    failure: &mut Option<DesktopError>,
+) {
+    let joined = match finish(&mut content) {
+        Ok(()) => true,
+        Err(cause) => {
+            tracing::error!(operation = "retain_final_content", cause = %cause,
             "Retaining one unresolved final content owner until process termination");
-        DesktopError::retain_first(failure, cause);
+            DesktopError::retain_first(failure, cause);
+            false
+        }
+    };
+    if let Some(cause) = failure.take() {
+        *failure = Some(retain(&mut content, cause));
+    }
+    if !joined {
         std::mem::forget(content);
         return;
     }

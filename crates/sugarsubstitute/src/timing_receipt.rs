@@ -51,7 +51,7 @@ pub(crate) fn encode(receipt: NativeTimingReceipt) -> Value {
         .map(|sample| json!({"stage": startup_stage(sample.stage), "ticks": sample.ticks}))
         .collect();
     json!({
-        "schema_version": 3,
+        "schema_version": 4,
         "startup_order": match receipt.startup_order {
             NativeStartupOrder::SurfaceFirst => "surface_first",
             NativeStartupOrder::ExecutionFirst => "execution_first",
@@ -131,8 +131,8 @@ mod tests {
                 NativeStartupStage::PresenterReady,
                 NativeStartupStage::ControlsReady,
                 NativeStartupStage::ExecutionReady,
-                NativeStartupStage::ShowFocusReturned,
                 NativeStartupStage::FirstPreparationRequest,
+                NativeStartupStage::ShowFocusReturned,
             ]
             .map(|stage| Some(NativeStartupTiming { stage, ticks: 9_007_199_254_740_994 })),
             callbacks: vec![NativeCallbackTiming {
@@ -170,14 +170,15 @@ mod tests {
         assert_eq!(roundtrip["submissions"][0]["retained"], true);
         assert_eq!(roundtrip["submissions"][0]["identity"]["sequence"], 13);
         assert_eq!(roundtrip["source"], "windows_qpc");
-        assert_eq!(roundtrip["schema_version"], 3);
+        assert_eq!(roundtrip["schema_version"], 4);
         assert_eq!(roundtrip["startup_order"], "surface_first");
         assert_eq!(
             roundtrip["startup_milestones"].as_array().ok_or("Milestones missing")?.len(),
             7
         );
         assert_eq!(roundtrip["startup_milestones"][0]["stage"], "event_loop_ready");
-        assert_eq!(roundtrip["startup_milestones"][6]["stage"], "first_preparation_request");
+        assert_eq!(roundtrip["startup_milestones"][5]["stage"], "first_preparation_request");
+        assert_eq!(roundtrip["startup_milestones"][6]["stage"], "show_focus_returned");
         assert_eq!(
             roundtrip["startup_milestones"][6]["ticks"].as_i64(),
             Some(9_007_199_254_740_994)
@@ -208,7 +209,7 @@ mod tests {
             submissions_observed: 0,
             submission_samples_omitted: 0,
         });
-        assert_eq!(encoded["schema_version"], 3);
+        assert_eq!(encoded["schema_version"], 4);
         assert_eq!(
             encoded["startup_milestones"],
             json!([
@@ -242,7 +243,7 @@ mod tests {
             submissions_observed: 0,
             submission_samples_omitted: 0,
         });
-        assert_eq!(encoded["schema_version"], 3);
+        assert_eq!(encoded["schema_version"], 4);
         assert_eq!(encoded["startup_order"], "execution_first");
         assert_eq!(
             encoded["startup_milestones"],

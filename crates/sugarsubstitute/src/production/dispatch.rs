@@ -75,7 +75,7 @@ where
     match parse(arguments)? {
         Dispatch::Existing(arguments) => Ok(Some(arguments)),
         Dispatch::Production(command) => {
-            super::entry_runner::run(*command, child, diagnostics)?;
+            super::entry_runner::run_presented(*command, child, diagnostics)?;
             Ok(None)
         }
     }

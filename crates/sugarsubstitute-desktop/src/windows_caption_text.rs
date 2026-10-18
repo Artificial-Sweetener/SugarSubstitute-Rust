@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Render system caption glyphs and localized titles with composited text alpha.
+//! Render localized recovery text with composited alpha and native focus feedback.
 use crate::DesktopError;
 use windows::{
     Win32::{
         Foundation::{COLORREF, HWND, RECT},
         Graphics::Gdi::{
             ANTIALIASED_QUALITY, CLIP_DEFAULT_PRECIS, CreateFontW, DEFAULT_CHARSET, DEFAULT_PITCH,
-            DT_CENTER, DT_END_ELLIPSIS, DT_LEFT, DT_SINGLELINE, DT_VCENTER, DeleteObject, HDC,
+            DT_END_ELLIPSIS, DT_LEFT, DT_SINGLELINE, DT_VCENTER, DeleteObject, HDC,
             OUT_DEFAULT_PRECIS, SelectObject,
         },
         UI::Controls::{
@@ -18,9 +18,8 @@ use windows::{
     core::w,
 };
 
-/// Immutable native text policy for a caption title, glyph or recovery button.
+/// Immutable native text policy for the localized recovery button.
 pub(super) struct Style {
-    pub(super) icon: bool,
     pub(super) light_foreground: bool,
     pub(super) disabled: bool,
     pub(super) dpi: u32,
@@ -34,14 +33,14 @@ pub(super) fn draw(
     text: &[u16],
     style: Style,
 ) -> Result<(), DesktopError> {
-    let Style { icon, light_foreground, disabled, dpi } = style;
+    let Style { light_foreground, disabled, dpi } = style;
     if text.is_empty() || rect.right <= rect.left {
         return Ok(());
     }
     // SAFETY: The installed Windows font is selected only into this retained memory DC.
     let font = unsafe {
         CreateFontW(
-            -(((if icon { 10 } else { 12 }) * dpi / 96) as i32),
+            -((12 * dpi / 96) as i32),
             0,
             0,
             0,
@@ -54,7 +53,7 @@ pub(super) fn draw(
             CLIP_DEFAULT_PRECIS,
             ANTIALIASED_QUALITY,
             DEFAULT_PITCH.0 as u32,
-            if icon { w!("Segoe Fluent Icons") } else { w!("Segoe UI") },
+            w!("Segoe UI"),
         )
     };
     if font.is_invalid() {
@@ -75,7 +74,7 @@ pub(super) fn draw(
             } else if light_foreground {
                 255
             } else {
-                24
+                0
             };
             let options = DTTOPTS {
                 dwSize: size_of::<DTTOPTS>() as u32,
@@ -83,10 +82,7 @@ pub(super) fn draw(
                 crText: COLORREF(value * 0x010101),
                 ..Default::default()
             };
-            let format = DT_SINGLELINE
-                | DT_VCENTER
-                | DT_END_ELLIPSIS
-                | if icon { DT_CENTER } else { DT_LEFT };
+            let format = DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_LEFT;
             // SAFETY: Text, destination and options remain live for this synchronous alpha-aware draw.
             let mut failure = unsafe {
                 DrawThemeTextEx(

@@ -8,6 +8,7 @@
 //! and [Microsoft CRT argument parsing](https://learn.microsoft.com/en-us/cpp/c-language/parsing-c-command-line-arguments).
 use crate::{LaunchCommandError, arguments};
 use std::fmt;
+pub(crate) mod directory;
 mod paths;
 const MAX_UNITS: usize = 32767;
 /// Maximum number of arguments after argv0; matches supported launch configuration.
@@ -20,7 +21,8 @@ pub const MAX_WINDOWS_ARGUMENTS: usize = 64;
 pub struct WindowsLaunchBuffers {
     /// Explicit lpApplicationName, unquoted; never pass NULL or infer it from argv0.
     pub application_name: Vec<u16>,
-    /// Explicit lpCurrentDirectory, independent of ambient process cwd.
+    /// Explicit lpCurrentDirectory, independent of ambient process cwd. Short
+    /// extended paths use equivalent ordinary spelling for child path libraries.
     pub working_directory: Vec<u16>,
     /// Mutable lpCommandLine, including exact executable argv0 and terminating NUL.
     pub command_line: Vec<u16>,
@@ -46,7 +48,10 @@ impl WindowsLaunchCommand {
     /// Accept fully-qualified drive/UNC and extended drive/UNC lexical paths. Reject
     /// root-relative/drive-relative/device paths, dot components, executable roots,
     /// embedded path quotes and NUL. UTF-16 units, including unpaired surrogates,
-    /// remain exact. Canonical filesystem identity and trust are not established.
+    /// remain exact in the executable and argv. Short extended cwd paths use ordinary
+    /// drive/UNC spelling only when its Win32 meaning is unchanged. Longer paths and
+    /// components requiring the extended namespace retain their original spelling.
+    /// Canonical filesystem identity and trust are not established.
     ///
     /// Source count/length/aggregate bounds are checked before content scans or
     /// allocations. Exact quoting expansion is checked before native buffer allocation.
@@ -85,7 +90,7 @@ impl WindowsLaunchCommand {
         Ok(Self {
             buffers: WindowsLaunchBuffers {
                 application_name: arguments::terminated(executable)?,
-                working_directory: arguments::terminated(working_directory)?,
+                working_directory: directory::terminated(working_directory)?,
                 command_line,
             },
         })
@@ -114,11 +119,12 @@ impl WindowsLaunchCommand {
         self.buffers
     }
 
-    /// Encode native Windows paths/arguments exactly without lossy Unicode conversion.
+    /// Encode native Windows paths/arguments without lossy Unicode conversion.
     ///
     /// Bounded encoding-count and exact quoting-size passes precede every temporary
     /// and native-buffer allocation. Shape checks and CRT quoting then use the same
-    /// `from_utf16` owner; no filesystem resolution is performed.
+    /// `from_utf16` owner, including its child cwd spelling; no filesystem resolution
+    /// is performed.
     #[cfg(windows)]
     pub fn from_os(
         executable: &std::path::Path,

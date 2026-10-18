@@ -4,25 +4,27 @@
 use super::Callback;
 use crate::{DesktopError, NativeMaterial};
 use windows::Win32::{
-    Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, WPARAM},
-    Graphics::Gdi::{
-        BLACK_BRUSH, BeginPaint, DC_BRUSH, EndPaint, FillRect, GetStockObject, HBRUSH, HDC,
-        InvalidateRect, PAINTSTRUCT, SetDCBrushColor,
-    },
+    Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM},
+    Graphics::Gdi::{BeginPaint, EndPaint, HDC, PAINTSTRUCT},
     UI::{
         Controls::{
             BP_PAINTPARAMS, BPBF_TOPDOWNDIB, BPPF_ERASE, BeginBufferedPaint, BufferedPaintInit,
-            BufferedPaintSetAlpha, BufferedPaintUnInit, DRAWITEMSTRUCT, EndBufferedPaint,
-            ODS_DISABLED, ODS_FOCUS, ODS_NOFOCUSRECT, ODS_SELECTED, WM_MOUSELEAVE,
+            BufferedPaintUnInit, DRAWITEMSTRUCT, EndBufferedPaint, ODS_DISABLED, ODS_FOCUS,
+            ODS_NOFOCUSRECT, ODS_SELECTED,
         },
         HiDpi::GetDpiForWindow,
-        Input::KeyboardAndMouse::{TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent},
         WindowsAndMessaging::{
             GetClientRect, GetParent, GetWindowTextW, IsZoomed, WM_DRAWITEM, WM_ERASEBKGND,
-            WM_MOUSEMOVE, WM_PAINT,
+            WM_PAINT,
         },
     },
 };
+#[path = "windows_caption_glyphs.rs"]
+mod glyphs;
+#[path = "windows_caption_hover.rs"]
+mod hover;
+#[path = "windows_caption_pixels.rs"]
+mod pixels;
 #[path = "windows_caption_text.rs"]
 mod text;
 
@@ -66,42 +68,14 @@ pub(super) fn parent(
     }
 }
 
-/// Native BUTTON keeps capture/keyboard/pressed state; this owner adds bounded hover invalidation.
-pub(super) fn child(callback: &Callback, hwnd: HWND, message: u32) {
-    if callback.caption.get().is_none() {
-        return;
-    }
-    if message == WM_MOUSEMOVE && callback.hovered.get() != hwnd {
-        let mut tracking = TRACKMOUSEEVENT {
-            cbSize: size_of::<TRACKMOUSEEVENT>() as u32,
-            dwFlags: TME_LEAVE,
-            hwndTrack: hwnd,
-            ..Default::default()
-        };
-        // SAFETY: Original subclass retains this child throughout the synchronous native call.
-        match unsafe { TrackMouseEvent(&raw mut tracking) } {
-            Ok(()) => {
-                callback.hovered.set(hwnd);
-                // SAFETY: Invalidate only this retained child; no unrelated windows are touched.
-                if !unsafe { InvalidateRect(Some(hwnd), None, false) }.as_bool() {
-                    report(Err(DesktopError::message(
-                        "invalidate_caption_hover",
-                        "InvalidateRect failed",
-                    )));
-                }
-            }
-            Err(cause) => report(Err(DesktopError::new("track_caption_hover", cause))),
-        }
-    } else if message == WM_MOUSELEAVE && callback.hovered.get() == hwnd {
-        callback.hovered.set(HWND::default());
-        // SAFETY: The exact original child remains retained by this installed callback.
-        if !unsafe { InvalidateRect(Some(hwnd), None, false) }.as_bool() {
-            report(Err(DesktopError::message("invalidate_caption_leave", "InvalidateRect failed")));
-        }
+/// Keep hover ownership exclusive while Win32 retains capture, pressed and accessibility state.
+pub(super) fn child(callback: &Callback, hwnd: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) {
+    if callback.caption.get().is_some() {
+        report(hover::child(&callback.hovered, hwnd, message, wparam, lparam));
     }
 }
 
-/// Clear exactly the caption strip; the browser remains the authoritative owner below it.
+/// Clear the native backing plane; the full-window browser owns its complete frame presentation.
 fn paint_parent(hwnd: HWND, caption: Caption) -> Result<(), DesktopError> {
     let mut paint = PAINTSTRUCT::default();
     // SAFETY: The original parent callback owns this HWND and balances BeginPaint on every path.
@@ -114,32 +88,12 @@ fn paint_parent(hwnd: HWND, caption: Caption) -> Result<(), DesktopError> {
             // SAFETY: A valid retained HWND and live scalar output are borrowed synchronously.
             unsafe { GetClientRect(hwnd, &raw mut bounds) }
                 .map_err(|cause| DesktopError::new("caption_client_bounds", cause))?;
-            // SAFETY: This exact window remains retained and DPI is read without changing context.
-            let dpi = unsafe { GetDpiForWindow(hwnd) };
-            bounds.bottom = bounds.bottom.min(caption_height(dpi));
             if bounds.right <= bounds.left || bounds.bottom <= bounds.top {
                 return Ok(());
             }
-            buffered(dc, bounds, |buffer, handle| {
-                background(buffer, handle, &bounds, caption, false, false, false)?;
-                let mut title = [0_u16; 129];
-                // SAFETY: This bounded stack buffer receives only our own parent's localized title.
-                let length = unsafe { GetWindowTextW(hwnd, &mut title) }.max(0) as usize;
-                let mut title_bounds = bounds;
-                title_bounds.left += (12 * dpi / 96) as i32;
-                title_bounds.right -= (156 * dpi / 96) as i32;
-                text::draw(
-                    hwnd,
-                    buffer,
-                    title_bounds,
-                    &title[..length],
-                    text::Style {
-                        icon: false,
-                        light_foreground: caption.dark,
-                        disabled: false,
-                        dpi,
-                    },
-                )
+            buffered(dc, bounds, |_buffer, handle| {
+                background(handle, bounds, caption, false, false, false, 96)?;
+                Ok(())
             })
         })()
         .err()
@@ -154,7 +108,7 @@ fn paint_parent(hwnd: HWND, caption: Caption) -> Result<(), DesktopError> {
     failure.map_or(Ok(()), Err)
 }
 
-/// Paint icons from the system Fluent symbol font while preserving localized HWND names.
+/// Paint original vector geometry while preserving localized native accessible names.
 fn paint_button(item: &DRAWITEMSTRUCT, caption: Caption, hot: bool) -> Result<(), DesktopError> {
     let pressed = item.itemState.0 & ODS_SELECTED.0 != 0;
     let disabled = item.itemState.0 & ODS_DISABLED.0 != 0;
@@ -163,29 +117,25 @@ fn paint_button(item: &DRAWITEMSTRUCT, caption: Caption, hot: bool) -> Result<()
     let parent = parent.map_err(|cause| DesktopError::new("caption_button_parent", cause))?;
     // SAFETY: Exact parent remains retained; this query has no side effects.
     let maximized = unsafe { IsZoomed(parent) }.as_bool();
-    let glyph = glyph(item.CtlID, maximized);
-    let mut label = [0_u16; 129];
-    let content = if let Some(ref icon) = glyph {
-        std::slice::from_ref(icon)
-    } else {
-        // SAFETY: Read only the original localized retry peer name into a bounded buffer.
-        let length = unsafe { GetWindowTextW(item.hwndItem, &mut label) }.max(0) as usize;
-        &label[..length]
-    };
     buffered(item.hDC, item.rcItem, |buffer, handle| {
-        background(buffer, handle, &item.rcItem, caption, hot, pressed, item.CtlID == 3)?;
-        text::draw(
-            item.hwndItem,
-            buffer,
-            item.rcItem,
-            content,
-            text::Style {
-                icon: glyph.is_some(),
-                light_foreground: caption.dark || item.CtlID == 3 && (hot || pressed),
-                disabled,
-                dpi,
-            },
-        )?;
+        background(handle, item.rcItem, caption, hot, pressed, item.CtlID == 3, dpi)?;
+        let light = caption.dark || item.CtlID == 3 && (hot || pressed);
+        if (1..=3).contains(&item.CtlID) {
+            pixels::with_pixels(handle, item.rcItem, |pixels| {
+                glyphs::draw(pixels, item.CtlID, maximized, dpi, if light { 255 } else { 0 })
+            })?;
+        } else {
+            let mut label = [0_u16; 129];
+            // SAFETY: Read the original localized retry peer name into a bounded buffer.
+            let length = unsafe { GetWindowTextW(item.hwndItem, &mut label) }.max(0) as usize;
+            text::draw(
+                item.hwndItem,
+                buffer,
+                item.rcItem,
+                &label[..length],
+                text::Style { light_foreground: light, disabled, dpi },
+            )?;
+        }
         if item.itemState.0 & ODS_FOCUS.0 != 0 && item.itemState.0 & ODS_NOFOCUSRECT.0 == 0 {
             text::focus(buffer, handle, item.rcItem, caption.dark, dpi)?;
         }
@@ -193,71 +143,51 @@ fn paint_button(item: &DRAWITEMSTRUCT, caption: Caption, hot: bool) -> Result<()
     })
 }
 
-/// Match native caption metrics independently of physical scaling and current restore state.
-fn caption_height(dpi: u32) -> i32 {
-    ((40 * dpi + 48) / 96) as i32
-}
-/// These system-font PUA mappings are defined by Microsoft's Segoe Fluent Icons contract.
-fn glyph(id: u32, maximized: bool) -> Option<u16> {
-    match id {
-        1 => Some(0xe921),
-        2 => Some(if maximized { 0xe923 } else { 0xe922 }),
-        3 => Some(0xe8bb),
-        _ => None,
-    }
-}
-
-/// Keep Mica transparent in the rest state and publish opaque interaction/fallback surfaces.
+/// Preserve the original translucent feedback wash over the complete Mica backing plane.
 fn background(
-    dc: HDC,
     buffer: isize,
-    rect: &RECT,
+    rect: RECT,
     caption: Caption,
     hot: bool,
     pressed: bool,
     close: bool,
+    dpi: u32,
 ) -> Result<(), DesktopError> {
-    let color = if close && (hot || pressed) {
-        if pressed { COLORREF(0x002323b8) } else { COLORREF(0x002311c4) }
-    } else if hot || pressed || caption.material != NativeMaterial::Mica {
-        let value = if caption.dark {
-            if pressed {
-                48
-            } else if hot {
-                58
-            } else {
-                32
-            }
-        } else if pressed {
-            209
-        } else if hot {
-            228
-        } else {
-            243
-        };
-        COLORREF(value * 0x010101)
+    let rgba = if close && (hot || pressed) {
+        if pressed { [241, 112, 122, 255] } else { [232, 17, 35, 255] }
     } else {
-        COLORREF(0)
+        let value = if caption.dark { 255 } else { 0 };
+        [
+            value,
+            value,
+            value,
+            if pressed {
+                51
+            } else if hot {
+                26
+            } else {
+                0
+            },
+        ]
     };
-    // SAFETY: Buffer DC is local to this paint and stock brushes remain system owned.
-    unsafe {
-        if SetDCBrushColor(dc, color).0 == u32::MAX {
-            return Err(DesktopError::message(
-                "color_caption_background",
-                "SetDCBrushColor failed",
-            ));
-        }
-        let brush = if color.0 == 0 {
-            HBRUSH(GetStockObject(BLACK_BRUSH).0)
+    pixels::with_pixels(buffer, rect, |pixels| {
+        let value = if caption.dark { 32 } else { 243 };
+        pixels.fill(if caption.material == NativeMaterial::Mica {
+            [0; 4]
         } else {
-            HBRUSH(GetStockObject(DC_BRUSH).0)
-        };
-        if FillRect(dc, rect, brush) == 0 {
-            return Err(DesktopError::message("fill_caption_background", "FillRect failed"));
+            [value, value, value, 255]
+        });
+        if close && (hot || pressed) {
+            glyphs::fill_close_background(pixels, dpi, [rgba[0], rgba[1], rgba[2]])?;
+        } else {
+            for y in 0..pixels.height {
+                for x in 0..pixels.width {
+                    pixels.over(x, y, rgba[0], rgba[3]);
+                }
+            }
         }
-        BufferedPaintSetAlpha(buffer, Some(rect), if color.0 == 0 { 0 } else { 255 })
-            .map_err(|cause| DesktopError::new("caption_background_alpha", cause))
-    }
+        Ok(())
+    })
 }
 
 /// Balance thread-affine UxTheme resources and never publish a partially failed caption frame.

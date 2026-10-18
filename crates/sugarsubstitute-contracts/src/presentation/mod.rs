@@ -14,4 +14,7 @@ pub use frame::{
 };
 
 mod console;
-pub use console::{ConsolePresentation, NATIVE_CONSOLE_STORAGE_BYTES, console_color};
+pub use console::{
+    ConsolePresentation, NATIVE_CONSOLE_ACCESSIBILITY_BYTES, NATIVE_CONSOLE_PAINT_BYTES,
+    NATIVE_CONSOLE_STORAGE_BYTES, console_color,
+};

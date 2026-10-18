@@ -222,7 +222,7 @@ fn actual_runner_native_rejects_finite_box_and_real_finite_scope_preserves_origi
     let native = runner.native.as_ref().ok_or("Actual runner native scope missing")?;
     let source = runner.source.as_ref().ok_or("Actual source scope missing")?;
     let cleanup = runner.cleanup.as_ref().ok_or("Actual cleanup scope missing")?;
-    assert!(source.id() < finite.id() && finite.id() < native.id() && native.id() < cleanup.id());
+    assert!(cleanup.id() < source.id() && source.id() < finite.id() && finite.id() < native.id());
     assert!(finite.spec().deadline.is_none());
     assert!(native.spec().deadline.is_none());
     assert_eq!(finite.snapshot().reserved_bytes, 0);

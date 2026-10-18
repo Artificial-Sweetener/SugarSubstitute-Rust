@@ -145,7 +145,6 @@ fn startup_observer(
         Stage::PresenterReady,
         Stage::ControlsReady,
         Stage::ExecutionReady,
-        Stage::ShowFocusReturned,
     ] {
         observer.startup(stage)?;
     }
@@ -179,7 +178,7 @@ fn startup_request_observation_follows_actual_visible_shape_admission_and_never_
     assert_eq!(content.calls.iter().filter(|call| **call == "prepare").count(), 2);
     failure.set(false);
     let receipt = observer.finish()?;
-    assert_eq!(receipt.startup_milestones[6].ok_or("Actual request not recorded")?.ticks, 10);
+    assert_eq!(receipt.startup_milestones[5].ok_or("Actual request not recorded")?.ticks, 10);
     Ok(())
 }
 

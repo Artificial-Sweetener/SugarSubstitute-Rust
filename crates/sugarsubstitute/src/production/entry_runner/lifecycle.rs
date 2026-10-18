@@ -4,48 +4,8 @@
 use super::*;
 impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
     fn start(&mut self, wake: Arc<dyn CompletionWake>) -> Result<(), Box<dyn Error>> {
-        if self.execution.is_some() || self.closing {
-            return Err("Production entry cannot start twice or after close".into());
-        }
-        self.execution = Some(ExecutionOwner::new(self.clock.clone(), wake)?);
-        let client = self.execution.as_ref().ok_or("Production execution missing")?.client();
-        self.client = Some(client.clone());
-        let native_before = Instant::now();
-        let original = EntrySetupBudget::new(client.now()?)?;
-        self.original = Some(original);
-        self.setup_deadline = Some(
-            native_before
-                .checked_add(Duration::from_secs(30))
-                .ok_or("Production setup deadline overflow")?,
-        );
-        self.source = Some(
-            client.create_scope(ScopeSpec { id: self.scopes.allocate()?, deadline: None }, None)?,
-        );
-        self.finite = Some(
-            client.create_scope(ScopeSpec { id: self.scopes.allocate()?, deadline: None }, None)?,
-        );
-        self.native = Some(client.create_native_scope(
-            ScopeSpec { id: self.scopes.allocate()?, deadline: None },
-            None,
-        )?);
-        self.cleanup = Some(
-            client.create_scope(ScopeSpec { id: self.scopes.allocate()?, deadline: None }, None)?,
-        );
-        let command = self.command.take().ok_or("Production command consumed")?;
-        self.bootstrap = Some(EntryBootstrap::new(
-            command.options,
-            command.installation,
-            command.diagnostics,
-            self.executable.clone(),
-            original,
-        )?);
-        self.authority = Some(CoordinatorAuthority::new(original)?);
-        let source = self.source.take().ok_or("Original source scope missing")?;
-        self.bootstrap
-            .as_mut()
-            .ok_or("Production bootstrap missing")?
-            .start(&client, source, &self.jobs)?;
-        Ok(())
+        self.initialize_execution(wake)?;
+        self.begin_entry()
     }
     fn prepare_native_runtime(
         &mut self,

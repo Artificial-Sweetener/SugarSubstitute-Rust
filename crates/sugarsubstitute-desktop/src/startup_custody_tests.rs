@@ -201,6 +201,66 @@ fn failed_final_join_retains_consumed_content_and_never_admits_release()
     Ok(())
 }
 
+/// Preserve the original error allocation and final custody ordering on both join outcomes.
+#[test]
+fn failure_custody_transfers_after_join_attempt_before_content_drop_or_sta_release()
+-> Result<(), Box<dyn std::error::Error>> {
+    use std::{cell::RefCell, error::Error, rc::Rc};
+    struct Content(Rc<RefCell<Vec<&'static str>>>);
+    impl Drop for Content {
+        fn drop(&mut self) {
+            self.0.borrow_mut().push("drop");
+        }
+    }
+    for joined in [false, true] {
+        let order = Rc::new(RefCell::new(Vec::new()));
+        let original = Box::new(std::io::Error::other("original allocation"));
+        let identity = original.as_ref() as *const std::io::Error;
+        let mut failure = Some(DesktopError::boxed("original", original));
+        finish_with_retention(
+            Content(order.clone()),
+            |_| {
+                order.borrow_mut().push("finish");
+                if joined { Ok(()) } else { Err(DesktopError::message("finish", "unsettled")) }
+            },
+            || {
+                order.borrow_mut().push("release");
+                Ok(())
+            },
+            |_, cause| {
+                order.borrow_mut().push("retain");
+                assert_eq!(
+                    cause
+                        .source()
+                        .and_then(|cause| cause.downcast_ref::<std::io::Error>())
+                        .map(std::ptr::from_ref),
+                    Some(identity)
+                );
+                DesktopError::new("custody", cause)
+            },
+            &mut failure,
+        );
+        assert_eq!(
+            order.borrow().as_slice(),
+            if joined {
+                &["finish", "retain", "drop", "release"][..]
+            } else {
+                &["finish", "retain"][..]
+            }
+        );
+        let retained = failure.ok_or("Failure custody lost")?;
+        assert_eq!(
+            retained
+                .source()
+                .and_then(Error::source)
+                .and_then(|cause| cause.downcast_ref::<std::io::Error>())
+                .map(std::ptr::from_ref),
+            Some(identity)
+        );
+    }
+    Ok(())
+}
+
 #[test]
 fn failed_clock_cannot_suppress_closing_disposal_or_release_unsettled_custody()
 -> Result<(), Box<dyn std::error::Error>> {

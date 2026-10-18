@@ -28,17 +28,17 @@ accepted_versions = [1]
 compatibility = "reject"
 migrations = []
 
-# The native writer emits schema two reports after teardown. Qualification tools
-# analyse retained schema one reports directly; original reports are never rewritten.
+# Native reports record complete covered-frame preparation before show. Qualification
+# readers retain historical raw reports unchanged.
 [[formats]]
 id = "native-timing-report"
 owner = "sugarsubstitute"
 sources = ["crates/sugarsubstitute/src/timing_receipt.rs"]
-source_sha256 = "sha256:c9791e550edb1b48aee0f121e4a8c241e26c4d6865d215396af0a0fd1361aa13"
+source_sha256 = "sha256:73280053f610dc18c8ab382d3c043003bf353c22bfba0c70233972481b45153f"
 classification = "authored_document"
 preservation = "must_preserve"
-current_version = 3
-accepted_versions = [3]
+current_version = 4
+accepted_versions = [4]
 compatibility = "reject"
 migrations = []
 
@@ -71,11 +71,11 @@ migrations = []
 id = "windows-lifecycle-control"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/lifecycle_protocol.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/binary.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/decode.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/encode.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/errors.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/frame.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/payload.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/reply.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/target.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/utf16.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/main_fields.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/main_types.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/output.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/raw_windows.rs", "crates/sugarsubstitute-supervision/src/lifecycle_protocol/reply_codec.rs"]
-source_sha256 = "sha256:1c3eaf79e272d7b6d1e87b5bbd1d1e158fee1f19543b36c95c05210e9f208d73"
+source_sha256 = "sha256:8ffc00eb52923e9b87f582f99d3494a506c9a20d42b784794a3464b754093c21"
 classification = "protocol"
 preservation = "must_preserve"
-current_version = 7
-accepted_versions = [7]
+current_version = 8
+accepted_versions = [8]
 compatibility = "reject"
 migrations = []
 
@@ -563,6 +563,19 @@ id = "child-console-first-failure-diagnostic-decoder"
 owner = "sugarsubstitute"
 sources = ["crates/sugarsubstitute/src/production/entry_activation/desktop_output/diagnostic.rs", "crates/sugarsubstitute/src/production/entry_activation/desktop_output/diagnostic/console.rs", "crates/sugarsubstitute/src/production/entry_activation/desktop_output/diagnostic/failure.rs"]
 source_sha256 = "sha256:9c94b25a5d60ddbcc2b559521066b38aea30a343afe561ad29268a0a9913413a"
+classification = "protocol"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
+# SugarCubes owns the web frame; the native host accepts only presentation protocol one.
+[[formats]]
+id = "desktop-frame-presentation"
+owner = "sugarsubstitute-desktop"
+sources = ["crates/sugarsubstitute-desktop/src/main_actor/frame.rs", "crates/sugarsubstitute-desktop/src/main_actor/evidence/probe.rs", "crates/sugarsubstitute-desktop/src/main_readiness.rs"]
+source_sha256 = "sha256:76d5a46e2ad8036009375e2af1354dc3ebd0f082429a02ffe17f67c4369cccdd"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1

@@ -3,6 +3,8 @@
 //! Route the actual authenticated desktop pipe through the existing native owners.
 #[path = "parent_lifecycle/acquisition.rs"]
 mod acquisition;
+#[path = "parent_lifecycle/activity.rs"]
+mod activity;
 #[path = "parent_lifecycle/attempt.rs"]
 mod attempt;
 #[cfg(test)]
@@ -44,6 +46,8 @@ mod requests;
 mod retirement;
 #[path = "parent_lifecycle/retirement_trace.rs"]
 mod retirement_trace;
+#[path = "parent_lifecycle/splash.rs"]
+mod splash;
 #[cfg(test)]
 #[path = "parent_lifecycle/tests.rs"]
 mod tests;
@@ -92,6 +96,7 @@ pub(crate) struct ParentLifecycle {
     hello: bool,
     welcome: bool,
     registered: bool,
+    splash: splash::SplashHandoff,
     closed: bool,
     latest_operation: u64,
     read: Option<u64>,
@@ -183,6 +188,7 @@ impl ParentLifecycle {
             hello: false,
             welcome: false,
             registered: false,
+            splash: splash::SplashHandoff::default(),
             closed: false,
             latest_operation: 0,
             read: None,
@@ -229,86 +235,6 @@ impl ParentLifecycle {
             close_after_reply: None,
             backend_causes: Some(causes.take().ok_or(ParentError::Storage)?),
         })
-    }
-
-    /// Consume this pipe/profile's actual jobs from the one immutable global batch.
-    /// Registry/claim consumption remains with the coordinator before this call.
-    /// Every original frame and first failure remains owned on rejection.
-    pub(crate) fn activity(
-        &mut self,
-        batch: &CompletionBatch,
-        resources: &mut ParentResources<'_, '_>,
-    ) -> std::result::Result<(), ParentError> {
-        self.activity_failure_origin = ParentActivityFailureOrigin::Coordinator;
-        let mut step = "latch_terminal";
-        let result = self.advance(batch, resources, &mut step);
-        if let Err(cause) = result {
-            tracing::error!(operation="parent_lifecycle_transition_failed",step,run=?self.run,
-                main_stage=?self.main.stage(),main_identity=?self.main.snapshot().identity,
-                profile_pending=self.profile_pending.is_some(),native_profile_pending=resources.profile.snapshot().pending,
-                attempt_pending=self.attempt_cleanup.is_some(),read=self.read,write=self.write.is_some(),
-                rejection=?cause.downcast_ref::<ParentError>(),
-                "Actual parent transition rejected; original cause retained");
-            self.retain_failure(cause);
-            self.closed = true;
-            resources.session.control.close();
-            return Err(match self.activity_failure_origin {
-                ParentActivityFailureOrigin::DesktopPipeTerminal => ParentError::DesktopStopped,
-                ParentActivityFailureOrigin::Coordinator => ParentError::OwnerFailed,
-            });
-        }
-        Ok(())
-    }
-
-    fn advance(
-        &mut self,
-        batch: &CompletionBatch,
-        resources: &mut ParentResources<'_, '_>,
-        step: &mut &'static str,
-    ) -> Result<()> {
-        self.latch_terminal(batch, resources)?;
-        *step = "frontend_refresh";
-        self.progress_frontend_refresh(batch, resources)?;
-        *step = "consume_profile";
-        self.consume_profile(batch, resources)?;
-        *step = "finish_main_retirement";
-        self.finish_main_retirement(resources)?;
-        *step = "expire_acquisition";
-        self.expire_acquisition(resources.execution.client.now()?)?;
-        self.expire_recovery(resources.execution.client.now()?)?;
-        *step = "advance_backend_command_admission";
-        self.advance_backend_commands(resources)?;
-        while let Some(observation) = resources.session.control.take_observation() {
-            *step = match &observation {
-                sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeObservation::Prepared => "observe_prepared",
-                sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeObservation::Connected => "observe_connected",
-                sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeObservation::Authenticated(_) => "observe_authenticated",
-                sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeObservation::ReadPending { .. } => "observe_read_pending",
-                sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeObservation::Received { .. } => "observe_received",
-                sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeObservation::WriteIssued { .. } => "observe_write_issued",
-                sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeObservation::Written { .. } => "observe_written",
-                sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeObservation::WriteRevoked { .. } => "observe_write_revoked",
-            };
-            self.observe(observation, resources)?;
-        }
-        *step = "consume_terminal";
-        self.consume_terminal(resources)?;
-        if self.closed {
-            *step = "finish_disconnect";
-            self.finish_disconnect(resources)?;
-            return Ok(());
-        }
-        *step = "check_main_deadline";
-        self.check_main_deadline(resources)?;
-        *step = "advance_attempt_cleanup";
-        self.advance_attempt_cleanup(resources)?;
-        *step = "resume_received";
-        self.resume_acquisition_receive(resources)?;
-        *step = "send_next";
-        self.send_next(resources)?;
-        *step = "receive_next";
-        self.receive_next(resources)?;
-        Ok(())
     }
 
     /// Retain the original finite cleanup transaction; a repeated call cannot renew it.

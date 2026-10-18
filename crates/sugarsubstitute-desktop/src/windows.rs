@@ -10,9 +10,9 @@ use windows::Win32::{
     Foundation::{E_ACCESSDENIED, E_INVALIDARG, E_NOTIMPL, HWND, POINT, RECT},
     Graphics::{
         Dwm::{
-            DWM_BB_ENABLE, DWM_BLURBEHIND, DWMWA_SYSTEMBACKDROP_TYPE,
-            DWMWA_USE_IMMERSIVE_DARK_MODE, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWINDOWATTRIBUTE,
-            DwmEnableBlurBehindWindow, DwmExtendFrameIntoClientArea, DwmSetWindowAttribute,
+            DWMWA_SYSTEMBACKDROP_TYPE, DWMWA_USE_IMMERSIVE_DARK_MODE,
+            DWMWA_WINDOW_CORNER_PREFERENCE, DWMWINDOWATTRIBUTE, DwmExtendFrameIntoClientArea,
+            DwmSetWindowAttribute,
         },
         Gdi::{
             BitBlt, GetDC, GetMonitorInfoW, MONITOR_DEFAULTTOPRIMARY, MONITORINFO,
@@ -30,7 +30,7 @@ pub(crate) struct Presenter {
     dib: Option<Dib>,
     material: NativeMaterial,
     background: u8,
-    glass_top: i32,
+    last_clip: Option<RECT>,
 }
 
 impl Presenter {
@@ -40,10 +40,19 @@ impl Presenter {
     }
     /// Apply native material before showing the owned transparent surface.
     pub(crate) fn new(window: Rc<Window>, dark: bool) -> Result<Self, DesktopError> {
+        Self::with_backdrop(window, dark, 2)
+    }
+
+    /// Use the original main window's Mica Alt material beneath its integrated frame.
+    pub(crate) fn new_main(window: Rc<Window>, dark: bool) -> Result<Self, DesktopError> {
+        Self::with_backdrop(window, dark, 4)
+    }
+
+    /// Keep the entire client alpha surface backed by the selected system material.
+    fn with_backdrop(window: Rc<Window>, dark: bool, backdrop: i32) -> Result<Self, DesktopError> {
         center_on_cursor_work_area(&window)?;
         let hwnd = HWND(window.hwnd() as *mut c_void);
         let native_dark = i32::from(dark);
-        let backdrop = 2_i32;
         let corner = 2_i32;
         let margins =
             MARGINS { cxLeftWidth: -1, cxRightWidth: -1, cyTopHeight: -1, cyBottomHeight: -1 };
@@ -64,13 +73,6 @@ impl Presenter {
         // SAFETY: Tao owns this valid HWND on the current UI thread. The margins
         // structure remains live and is synchronously copied during the call.
         unsafe {
-            // Tao enables whole-window alpha for transparent windows. The presenter
-            // owns the glass extent so ordinary child GDI remains opaque outside it.
-            DwmEnableBlurBehindWindow(
-                hwnd,
-                &DWM_BLURBEHIND { dwFlags: DWM_BB_ENABLE, ..Default::default() },
-            )
-            .map_err(|error| DesktopError::new("claim_native_glass_extent", error))?;
             DwmExtendFrameIntoClientArea(hwnd, &margins)
                 .map_err(|error| DesktopError::new("extend_native_material", error))?;
         }
@@ -83,7 +85,7 @@ impl Presenter {
                 NativeMaterial::ThemedFallback
             },
             background: if dark { 32 } else { 243 },
-            glass_top: -1,
+            last_clip: None,
         })
     }
 
@@ -102,15 +104,6 @@ impl Presenter {
         frame: &PreparedFrame,
         excluded: Option<RECT>,
     ) -> Result<(), DesktopError> {
-        let hwnd = HWND(self.window.hwnd() as *mut c_void);
-        let margins = glass_margins(excluded);
-        if self.glass_top != margins.cyTopHeight {
-            // SAFETY: The exact retained window belongs to this UI thread. Keep
-            // ordinary GDI child text outside the alpha-composited glass region.
-            unsafe { DwmExtendFrameIntoClientArea(hwnd, &margins) }
-                .map_err(|cause| DesktopError::new("configure_console_glass_boundary", cause))?;
-            self.glass_top = margins.cyTopHeight;
-        }
         let dib = Dib::for_frame(&mut self.dib, frame)?;
         let destination = dib.pixels_mut()?;
         for (source, target) in frame.pixels().chunks_exact(4).zip(destination.chunks_exact_mut(4))
@@ -128,47 +121,62 @@ impl Presenter {
                 ]);
             }
         }
-        // SAFETY: Window and DIB handles remain valid on their creating thread. GetDC's
-        // borrowed DC is released on both success and failure before returning.
-        unsafe {
-            let target = GetDC(Some(hwnd));
-            if target.is_invalid() {
-                return Err(DesktopError::message("get_window_dc", "GetDC failed"));
-            }
-            let result = frame_clip::submit(target, excluded, || {
-                BitBlt(
-                    target,
-                    0,
-                    0,
-                    dib.width() as i32,
-                    dib.height() as i32,
-                    Some(dib.dc()),
-                    0,
-                    0,
-                    SRCCOPY,
-                )
-                .map_err(|error| DesktopError::new("present_cpu_frame", error))
-            });
-            let released = ReleaseDC(Some(hwnd), target);
-            result?;
-            if released == 0 {
-                return Err(DesktopError::message("release_window_dc", "ReleaseDC failed"));
-            }
-        }
+        let hwnd = HWND(self.window.hwnd() as *mut c_void);
+        copy_to_window(hwnd, dib, excluded)?;
+        self.last_clip = excluded;
         Ok(())
+    }
+
+    /// Repaint admitted pixels after native show before application startup may proceed.
+    /// Hidden windows can clip GDI output; this reuses the already complete native buffer.
+    pub(crate) fn expose_prepared(&self) -> Result<(), DesktopError> {
+        use windows::Win32::Graphics::Gdi::{
+            RDW_ALLCHILDREN, RDW_INVALIDATE, RDW_UPDATENOW, RedrawWindow,
+        };
+        let dib = self.dib.as_ref().ok_or_else(|| {
+            DesktopError::message("expose_prepared_frame", "native prepared pixels absent")
+        })?;
+        let hwnd = HWND(self.window.hwnd() as *mut c_void);
+        copy_to_window(hwnd, dib, self.last_clip)?;
+        // SAFETY: The original parent and native children remain owned on this UI thread.
+        unsafe {
+            RedrawWindow(Some(hwnd), None, None, RDW_ALLCHILDREN | RDW_INVALIDATE | RDW_UPDATENOW)
+        }
+        .ok()
+        .map_err(|cause| DesktopError::new("expose_prepared_controls", cause))
     }
 }
 
-/// Native GDI controls own opaque client pixels below the animated glass surface.
-/// Extending glass beneath RichEdit makes its GDI alpha undefined in DWM, even
-/// when a DC screenshot shows readable RGB text. Collapsing restores full glass.
-fn glass_margins(console: Option<RECT>) -> MARGINS {
-    match console {
-        Some(rect) => {
-            MARGINS { cxLeftWidth: 0, cxRightWidth: 0, cyTopHeight: rect.top, cyBottomHeight: 0 }
+/// Copy one retained native buffer without reallocating, scanning or preparing application work.
+fn copy_to_window(hwnd: HWND, dib: &Dib, excluded: Option<RECT>) -> Result<(), DesktopError> {
+    // SAFETY: Window and DIB handles remain valid on their creating thread. GetDC's
+    // borrowed DC is released on both success and failure before returning.
+    unsafe {
+        let target = GetDC(Some(hwnd));
+        if target.is_invalid() {
+            return Err(DesktopError::message("get_window_dc", "GetDC failed"));
         }
-        None => MARGINS { cxLeftWidth: -1, cxRightWidth: -1, cyTopHeight: -1, cyBottomHeight: -1 },
+        let result = frame_clip::submit(target, excluded, || {
+            BitBlt(
+                target,
+                0,
+                0,
+                dib.width() as i32,
+                dib.height() as i32,
+                Some(dib.dc()),
+                0,
+                0,
+                SRCCOPY,
+            )
+            .map_err(|error| DesktopError::new("present_cpu_frame", error))
+        });
+        let released = ReleaseDC(Some(hwnd), target);
+        result?;
+        if released == 0 {
+            return Err(DesktopError::message("release_window_dc", "ReleaseDC failed"));
+        }
     }
+    Ok(())
 }
 
 /// Center on the cursor monitor, using the primary monitor when cursor access is unavailable.
@@ -267,33 +275,9 @@ fn set_attribute(
 
 #[cfg(test)]
 mod tests {
-    use super::{centered_origin, glass_margins, placement_point};
+    use super::{centered_origin, placement_point};
     use tao::dpi::PhysicalPosition;
     use windows::Win32::Foundation::{E_ACCESSDENIED, E_INVALIDARG, POINT, RECT};
-
-    /// Keep the entire native text/scroll region outside glass at every physical scale.
-    #[test]
-    fn expanded_console_ends_glass_before_gdi_text_and_collapse_restores_full_material() {
-        for top in [357, 625, 714] {
-            let margins =
-                glass_margins(Some(RECT { left: 25, top, right: 534, bottom: top + 180 }));
-            assert_eq!(margins.cyTopHeight, top);
-            assert_eq!(
-                (margins.cxLeftWidth, margins.cxRightWidth, margins.cyBottomHeight),
-                (0, 0, 0)
-            );
-        }
-        let collapsed = glass_margins(None);
-        assert_eq!(
-            (
-                collapsed.cxLeftWidth,
-                collapsed.cxRightWidth,
-                collapsed.cyTopHeight,
-                collapsed.cyBottomHeight
-            ),
-            (-1, -1, -1, -1)
-        );
-    }
 
     /// Preserve an available cursor and permit window placement when its desktop denies access.
     #[test]

@@ -20,6 +20,7 @@ pub(crate) enum Command {
     Runtime,
     Page,
     Probe(ProbeTarget),
+    FrameConfiguration(ProbeTarget),
     Barrier(ProbeTarget),
     #[cfg(feature = "k1-native-qualification")]
     Downloads,

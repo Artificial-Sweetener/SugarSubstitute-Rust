@@ -14,10 +14,10 @@ use sugarsubstitute_desktop::{
 use sugarsubstitute_splash::{Appearance, Control, PaperFlip, ProgressFrame, Theme};
 
 /// Keep view-only disclosure and motion independent of native/connection authority.
-pub(super) struct StartupView {
-    pub(super) appearance: Appearance,
-    pub(super) animation: PaperFlip,
-    pub(super) elapsed: Duration,
+pub(in crate::production) struct StartupView {
+    pub(in crate::production) appearance: Appearance,
+    pub(in crate::production) animation: PaperFlip,
+    pub(in crate::production) elapsed: Duration,
     reduced_motion: bool,
     pressed: Option<Control>,
     messages: &'static Messages,
@@ -27,7 +27,7 @@ pub(super) struct StartupView {
 }
 impl StartupView {
     /// Resolve owned text through the sole locale registry; allocate no raster resources.
-    pub(super) fn new(presentation: Presentation) -> Self {
+    pub(in crate::production) fn new(presentation: Presentation) -> Self {
         let messages =
             sugarsubstitute_contracts::localization::messages(presentation.locale().as_str());
         let mut animation = PaperFlip::new(0x0053_5547_4152);
@@ -77,17 +77,17 @@ impl StartupView {
     }
     /// Describe the existing console inner rectangle only after matching frame publication.
     /// Leave the settled Retry peer's original rectangle available above this native child.
-    pub(super) fn console<'a>(
+    pub(in crate::production) fn console<'a>(
         &self,
         text: Option<&'a dyn sugarsubstitute_desktop::ConsoleText>,
     ) -> sugarsubstitute_desktop::ConsoleView<'a> {
         sugarsubstitute_desktop::ConsoleView {
             label: self.messages.output,
             bounds: ControlBounds {
-                x: 30.0,
-                y: 362.0,
-                width: 498.0,
-                height: if self.controls[2].visible { 118.0 } else { 166.0 },
+                x: 25.0,
+                y: 371.0,
+                width: 508.0,
+                height: if self.controls[2].visible { 109.0 } else { 162.0 },
             },
             visible: self.console_expanded,
             dark: self.appearance.theme == Theme::Dark,
@@ -96,7 +96,7 @@ impl StartupView {
     }
     /// Two acknowledged milestones: backend ready, then actual frontend ready.
     /// Elapsed time drives only activity/motion and never advances completed work.
-    pub(super) fn progress(&self, phase: StartupPhase) -> ProgressFrame {
+    pub(in crate::production) fn progress(&self, phase: StartupPhase) -> ProgressFrame {
         let completed = match phase {
             StartupPhase::ServerReady | StartupPhase::WebviewLoading => 0.5,
             StartupPhase::FrontendReady | StartupPhase::RevealingMain | StartupPhase::Running => {
@@ -117,7 +117,7 @@ impl StartupView {
         }
     }
     /// Match the accessible disclosure label to the last successfully published frame.
-    pub(super) fn publish_controls(&mut self) {
+    pub(in crate::production) fn publish_controls(&mut self) {
         self.console_expanded = self.appearance.expanded;
         self.controls[0].label = if self.appearance.expanded {
             self.messages.hide_output
@@ -126,11 +126,11 @@ impl StartupView {
         };
     }
     /// Consume only an actual pointer/accessibility activation, never a rendered fact.
-    pub(super) fn take_retry(&mut self) -> bool {
+    pub(in crate::production) fn take_retry(&mut self) -> bool {
         std::mem::take(&mut self.retry_requested)
     }
     /// Project the sole application phase into native copy and accessible affordances.
-    pub(super) fn phase(&mut self, phase: StartupPhase) {
+    pub(in crate::production) fn phase(&mut self, phase: StartupPhase) {
         self.controls[2].visible = phase == StartupPhase::Stopped;
         self.appearance.status = match phase {
             StartupPhase::Failed | StartupPhase::Cancelling => {
@@ -159,7 +159,7 @@ impl StartupView {
         }
     }
     /// Reserve native caption dragging/close while all other content remains client-owned.
-    pub(super) fn hit_test(&self, pointer: Pointer) -> HitTarget {
+    pub(in crate::production) fn hit_test(&self, pointer: Pointer) -> HitTarget {
         match self.control(pointer) {
             Some(Control::Close) => HitTarget::Close,
             Some(_) => HitTarget::Client,
@@ -168,7 +168,11 @@ impl StartupView {
         }
     }
     /// Apply disclosure and hover using the same geometry as painted/native controls.
-    pub(super) fn pointer(&mut self, action: PointerAction, pointer: Pointer) -> bool {
+    pub(in crate::production) fn pointer(
+        &mut self,
+        action: PointerAction,
+        pointer: Pointer,
+    ) -> bool {
         let before = (self.appearance.expanded, self.appearance.hovered, self.appearance.pressed);
         let control = self.control(pointer);
         match action {
@@ -196,15 +200,15 @@ impl StartupView {
         before != (self.appearance.expanded, self.appearance.hovered, self.appearance.pressed)
     }
     /// Focus navigation never activates disclosure or changes startup state.
-    pub(super) fn key(&mut self, _action: KeyAction) -> bool {
+    pub(in crate::production) fn key(&mut self, _action: KeyAction) -> bool {
         false
     }
     /// Keep every native identity preallocated; phase changes only Retry visibility and eligibility.
-    pub(super) fn controls(&self) -> &[AccessibleControl] {
+    pub(in crate::production) fn controls(&self) -> &[AccessibleControl] {
         &self.controls
     }
     /// Activate only the non-close disclosure control; desktop owns native close intent.
-    pub(super) fn activate(&mut self, id: u16) -> bool {
+    pub(in crate::production) fn activate(&mut self, id: u16) -> bool {
         if id == 3 && self.appearance.status == sugarsubstitute_splash::StartupStatus::RetryReady {
             self.retry_requested = true;
             return true;
@@ -216,7 +220,7 @@ impl StartupView {
         true
     }
     /// Static reduced-motion presentation requires only the renderer's initial enrichment.
-    pub(super) const fn motion(&self) -> bool {
+    pub(in crate::production) const fn motion(&self) -> bool {
         !self.reduced_motion
     }
 }

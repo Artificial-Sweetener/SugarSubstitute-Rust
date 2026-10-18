@@ -41,6 +41,8 @@ mod console;
 mod focus;
 #[path = "windows_controls_retry.rs"]
 mod retry;
+#[path = "windows_controls_stacking.rs"]
+mod stacking;
 #[path = "windows_controls_state.rs"]
 mod state;
 #[path = "windows_controls_visibility.rs"]

@@ -3,6 +3,7 @@
 //! Rebase actual native selection and viewport without treating tail-follow as focus.
 use super::index::DocumentIndex;
 use crate::DesktopError;
+use std::rc::Rc;
 /// Original native character positions and independently observed vertical scroll state.
 #[derive(Clone, Copy, Default)]
 pub(crate) struct Observation {
@@ -61,18 +62,22 @@ pub(crate) fn replace(
 /// Retain both exact document claims on an uncertain partial native replacement.
 /// A failed publication closes subsequent document admission until checked native teardown.
 pub(crate) struct Documents {
-    current: Option<DocumentIndex>,
-    pending: Option<DocumentIndex>,
+    current: Option<Rc<DocumentIndex>>,
+    pending: Option<Rc<DocumentIndex>>,
     failed: bool,
 }
 impl Documents {
     /// Adopt the already-admitted original document before native creation.
     pub(crate) fn new(incoming: DocumentIndex) -> Self {
-        Self { current: None, pending: Some(incoming), failed: false }
+        Self { current: None, pending: Some(Rc::new(incoming)), failed: false }
     }
     /// Borrow only the last complete native publication.
     pub(crate) fn current(&self) -> Option<&DocumentIndex> {
-        self.current.as_ref()
+        self.current.as_deref()
+    }
+    /// Share the original immutable index and its existing admission claim with native painting.
+    pub(crate) fn shared(&self) -> Option<Rc<DocumentIndex>> {
+        self.current.clone()
     }
     /// Adopt a complete replacement before its first external text effect.
     pub(crate) fn stage(&mut self, incoming: DocumentIndex) -> Result<(), DesktopError> {
@@ -87,7 +92,7 @@ impl Documents {
         }) {
             return Err(DesktopError::message("console_stage", "source revision regressed"));
         }
-        self.pending = Some(incoming);
+        self.pending = Some(Rc::new(incoming));
         Ok(())
     }
     /// Preserve both owners and close admission on any uncertain native effect.
@@ -101,7 +106,7 @@ impl Documents {
         let Some(incoming) = self.pending.as_ref() else {
             return Ok(());
         };
-        if let Err(cause) = replace(self.current.as_ref(), incoming, port) {
+        if let Err(cause) = replace(self.current.as_deref(), incoming, port) {
             self.failed = true;
             return Err(cause);
         }

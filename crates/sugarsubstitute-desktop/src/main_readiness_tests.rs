@@ -345,3 +345,6 @@ fn child_detachment_preserves_attribution_until_context_retirement_and_root_deta
 
 #[path = "main_readiness_probe_tests.rs"]
 mod probe;
+
+#[path = "main_readiness_frame_tests.rs"]
+mod frame;

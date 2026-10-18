@@ -25,6 +25,7 @@ impl SplashDemo {
             scope,
             JobSequence::new(),
             sugarsubstitute_contracts::presentation::ConsolePresentation::Raster,
+            crate::preparation::FirstFrameContent::Character,
         )?;
         preparation.set_visible(self.visible)?;
         self.preparation = Some(preparation);

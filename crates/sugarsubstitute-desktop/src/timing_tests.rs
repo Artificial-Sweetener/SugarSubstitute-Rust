@@ -49,8 +49,8 @@ fn audit() -> Result<TimingAudit, DesktopError> {
         NativeStartupStage::PresenterReady,
         NativeStartupStage::ControlsReady,
         NativeStartupStage::ExecutionReady,
-        NativeStartupStage::ShowFocusReturned,
         NativeStartupStage::FirstPreparationRequest,
+        NativeStartupStage::ShowFocusReturned,
     ] {
         audit.startup(stage)?;
     }

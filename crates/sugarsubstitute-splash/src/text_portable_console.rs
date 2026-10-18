@@ -48,20 +48,18 @@ impl ConsoleFont for FontOwner {
             Buffer::new(&mut fonts, Metrics::new(14.0 * surface.scale, 16.0 * surface.scale));
         buffer.set_size(Some(498.0 * surface.scale), Some(16.0 * surface.scale));
         buffer.set_wrap(Wrap::None);
-        let default_color = if surface.theme == crate::Theme::Dark {
-            Color::rgb(255, 255, 255)
-        } else {
-            Color::rgb(0, 0, 0)
-        };
+        let [r, g, b, a] = console_color(Default::default(), surface.theme, false)
+            .ok_or_else(|| io::Error::other("Console foreground absent"))?;
+        let default_color = Color::rgba(r, g, b, a);
         let default_attrs = Attrs::new().family(Family::SansSerif).color(default_color);
         let spans = row.runs.iter().enumerate().map(|(index, run)| {
-            let [r, g, b] =
-                console_color(run.style.foreground, surface.theme, false).unwrap_or([0; 3]);
+            let [r, g, b, a] =
+                console_color(run.style.foreground, surface.theme, false).unwrap_or([0; 4]);
             (
                 &row.text[run.start as usize..run.end as usize],
                 default_attrs
                     .clone()
-                    .color(Color::rgb(r, g, b))
+                    .color(Color::rgba(r, g, b, a))
                     .weight(if run.style.bold { Weight::BOLD } else { Weight::NORMAL })
                     .metadata(index),
             )

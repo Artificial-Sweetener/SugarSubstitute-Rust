@@ -28,6 +28,8 @@ pub enum LaunchEnvironmentError {
     Allocation(TryReserveError),
     /// An original Windows ordinal comparison failure or invalid native result.
     Ordinal(io::Error),
+    /// The selected backend path cannot be represented as an explicit child path.
+    BackendPath(crate::LaunchCommandError),
 }
 impl fmt::Debug for LaunchEnvironmentError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -49,6 +51,7 @@ impl fmt::Display for LaunchEnvironmentError {
             Self::BlockTooLong => "Environment exceeds the native block-size limit",
             Self::Allocation(_) => "Environment storage allocation failed",
             Self::Ordinal(_) => "Windows environment name comparison failed",
+            Self::BackendPath(_) => "Backend environment path is invalid",
         })
     }
 }
@@ -57,6 +60,7 @@ impl Error for LaunchEnvironmentError {
         match self {
             Self::Allocation(cause) => Some(cause),
             Self::Ordinal(cause) => Some(cause),
+            Self::BackendPath(cause) => Some(cause),
             _ => None,
         }
     }

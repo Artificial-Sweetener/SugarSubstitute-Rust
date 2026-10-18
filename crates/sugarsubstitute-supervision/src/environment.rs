@@ -7,6 +7,7 @@
 //! Native launch must supply `CREATE_UNICODE_ENVIRONMENT`; construction grants no
 //! process privilege, filesystem trust or bootstrap capability.
 //! See [Windows environments](https://learn.microsoft.com/en-us/windows/win32/procthread/changing-environment-variables).
+mod backend;
 mod entries;
 mod errors;
 #[allow(unsafe_code)]
@@ -72,6 +73,10 @@ impl LaunchEnvironment {
     ) -> Result<Self, LaunchEnvironmentError> {
         entries::preflight(snapshot, overrides)?;
         let entries = entries::merge(snapshot, overrides)?;
+        Self::from_entries(entries)
+    }
+    /// Serialize entries already validated by this owner's closed constructors.
+    fn from_entries(entries: Vec<entries::Entry<'_>>) -> Result<Self, LaunchEnvironmentError> {
         let mut length = 1_usize;
         for entry in &entries {
             let value = entry.value.ok_or(LaunchEnvironmentError::InvalidName)?;
@@ -94,6 +99,16 @@ impl LaunchEnvironment {
         if block.len() == 1 {
             block.push(0);
         }
+        Ok(Self { block })
+    }
+    /// Copy this validated owned block exactly, preserving its typed backend semantics.
+    /// This performs no ambient capture, override insertion or process launch.
+    /// # Errors
+    /// Preserves allocation failures; the original environment remains unchanged.
+    pub fn try_copy(&self) -> Result<Self, LaunchEnvironmentError> {
+        let mut block = Vec::new();
+        block.try_reserve_exact(self.block.len()).map_err(LaunchEnvironmentError::Allocation)?;
+        block.extend_from_slice(&self.block);
         Ok(Self { block })
     }
     /// Borrow the exact immutable native block, including its terminating double NUL.

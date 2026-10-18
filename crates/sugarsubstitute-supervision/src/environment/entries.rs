@@ -83,7 +83,7 @@ pub(super) fn snapshot_count(snapshot: &[u16]) -> Result<usize, LaunchEnvironmen
     }
     Ok(count)
 }
-fn position(
+pub(super) fn position(
     entries: &[Entry<'_>],
     name: &[u16],
 ) -> Result<Result<usize, usize>, LaunchEnvironmentError> {

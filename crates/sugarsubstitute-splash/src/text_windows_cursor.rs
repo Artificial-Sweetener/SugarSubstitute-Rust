@@ -160,9 +160,9 @@ impl GlyphPaint {
             let x = texture.bounds.left + (index % texture.width) as i32;
             let y = texture.bounds.top + (index / texture.width) as i32;
             let color = self.runs[self.run].color.unwrap_or(if self.theme == Theme::Dark {
-                [255; 3]
+                [255; 4]
             } else {
-                [0; 3]
+                [0, 0, 0, 255]
             });
             surface.composite(x, y, gray as u8, color);
         }

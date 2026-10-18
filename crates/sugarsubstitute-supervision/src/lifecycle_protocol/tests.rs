@@ -54,6 +54,7 @@ fn set_length(frame: &mut [u8]) {
 }
 mod framing;
 mod payloads;
+mod splash;
 mod targets;
 
 fn main() -> Result<MainIdentity, Box<dyn Error>> {

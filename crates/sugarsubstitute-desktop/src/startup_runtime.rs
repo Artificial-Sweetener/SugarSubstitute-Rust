@@ -27,8 +27,6 @@ use crate::{
 use std::{num::NonZeroUsize, time::Instant};
 use tao::{event_loop::ControlFlow, platform::run_return::EventLoopExtRunReturn};
 
-use crate::timing::{NativeStartupStage, observe_startup};
-
 struct Session {
     activity: native_activity::NativeActivity,
     observers: windows_activity::Observers,
@@ -199,15 +197,6 @@ pub fn run_startup(
     if let Err(cause) = session.splash.initialize(&options, &event_loop, &content, timings.clone())
     {
         session.fail(&mut content, cause);
-    } else {
-        let shown = (|| {
-            session.splash.window()?.set_visible(true);
-            session.splash.window()?.set_focus();
-            observe_startup(timings.as_ref(), NativeStartupStage::ShowFocusReturned)
-        })();
-        if let Err(cause) = shown {
-            session.fail(&mut content, cause);
-        }
     }
     let mut animation_period = crate::windows_animation_period::WindowsAnimationPeriod::new();
     let proxy = event_loop.create_proxy();
