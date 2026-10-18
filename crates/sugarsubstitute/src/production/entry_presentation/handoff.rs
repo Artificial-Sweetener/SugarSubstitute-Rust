@@ -44,7 +44,10 @@ impl<C: EntryActivation> EntryPresentation<C> {
         self.hidden = true;
         self.visible = false;
         if let Some(render) = &mut self.preparation {
-            render.set_visible(false)?;
+            render.request_retirement()?;
+            if render.poll_retirement()? {
+                render.finish_retirement()?;
+            }
         }
         self.release_child(identity)
     }

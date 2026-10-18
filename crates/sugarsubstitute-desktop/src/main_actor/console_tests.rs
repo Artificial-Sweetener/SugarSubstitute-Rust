@@ -22,6 +22,71 @@ fn event(kind: &str, arguments: serde_json::Value) -> String {
     .to_string()
 }
 
+/// Supply genuine positive DOM evidence through the same typed command decoder as WebView2.
+fn positive_dom(
+    owner: &mut MainReadiness,
+    target: ProbeTarget,
+    now: std::time::Instant,
+) -> Result<(), Box<dyn Error>> {
+    let receipt = serde_json::json!({
+        "schema_version":1,"launch_id":target.identity.launch.get(),
+        "navigation_generation":target.identity.navigation.get(),
+        "outcome":{"status":"ready","evidence":{"frontend_version":"1.47.11",
+            "sugarcubes_version":"0.15.0","app_graph_ready":true,"canvas_connected":true,
+            "loading_finished":true,"sugarcubes_registered":true,"sugarcubes_ready":true}},
+    });
+    let evaluation =
+        serde_json::json!({"result":{"type":"string","value":receipt.to_string()}}).to_string();
+    let effect = decode::consume(
+        owner,
+        Observation {
+            kind: Kind::Command,
+            command: Some(Command::Probe(target)),
+            payload: &evaluation,
+        },
+        now,
+    )?;
+    assert!(matches!(effect, Effect::Barrier(bound) if *bound == target));
+    assert!(!owner.ready());
+    Ok(())
+}
+
+/// Ordinary console text remains diagnostic data; only positive DOM plus its barrier grants readiness.
+#[test]
+fn long_and_nul_console_primitives_preserve_actual_positive_dom_and_barrier()
+-> Result<(), Box<dyn Error>> {
+    for (kind, value) in [
+        ("log", "x".repeat(1025)),
+        ("debug", "ordinary custom-node diagnostic\0with embedded NUL".into()),
+        ("error", "Error calling extension 'SugarCubes.UI' method 'setup'\0other".into()),
+        ("warning", "Extension SugarCubes.UI is disabled. additional diagnostic".into()),
+    ] {
+        let now = std::time::Instant::now();
+        let mut owner = loaded()?;
+        let target = owner.poll_probe(now)?.ok_or("Missing genuine probe")?;
+        let payload = event(kind, serde_json::json!([{"type":"string","value":value}]));
+        assert!(payload.len() < crate::main_events::PAYLOAD_BYTES);
+        assert!(matches!(consume(&mut owner, Kind::Console, &payload)?, Effect::None));
+        assert!(!owner.ready());
+        assert!(owner.poll_probe(now)?.is_none());
+        positive_dom(&mut owner, target, now)?;
+        let effect = decode::consume(
+            &mut owner,
+            Observation {
+                kind: Kind::Command,
+                command: Some(Command::Barrier(target)),
+                payload: r#"{"result":{"type":"number","value":0}}"#,
+            },
+            now,
+        )?;
+        assert!(
+            matches!(effect, Effect::Receipt(receipt) if receipt.navigation() == target.identity.navigation)
+        );
+        assert!(owner.ready());
+    }
+    Ok(())
+}
+
 #[test]
 fn valid_console_stack_and_remote_preview_preserve_pending_probe_without_readiness()
 -> Result<(), Box<dyn Error>> {
@@ -72,7 +137,16 @@ fn projected_console_keeps_exact_primitive_setup_failures_and_ignores_object_des
         ),
     ] {
         let mut owner = loaded()?;
-        let payload = event(kind, serde_json::json!([{"type":"string","value":message}]));
+        let target = owner.poll_probe(now)?.ok_or("Missing genuine probe")?;
+        positive_dom(&mut owner, target, now)?;
+        let payload = event(
+            kind,
+            serde_json::json!([
+                {"type":"string","value":"ordinary diagnostic".repeat(100)},
+                {"type":"string","value":"ordinary\0diagnostic"},
+                {"type":"string","value":message},
+            ]),
+        );
         assert!(bounded_json(&payload).is_err());
         let error =
             consume(&mut owner, Kind::Console, &payload).err().ok_or("Missing setup failure")?;
@@ -83,6 +157,7 @@ fn projected_console_keeps_exact_primitive_setup_failures_and_ignores_object_des
             Some(&fault)
         );
         assert_eq!(owner.poll_probe(now), Err(fault));
+        assert_eq!(owner.barrier_complete(target), Err(fault));
         assert!(!owner.ready());
         let mut ordinary = loaded()?;
         consume(
@@ -132,12 +207,22 @@ fn console_projection_rejects_foreign_duplicate_missing_and_invalid_typed_fields
         assert!(consume(&mut owner, Kind::Console, payload).is_err(), "Typed input accepted");
         assert!(!owner.ready());
     }
+    let mut owner = loaded()?;
+    let foreign = serde_json::json!({"type":"log","executionContextId":99,
+        "args":[{"type":"string","value":"ordinary\0diagnostic".repeat(100)}]})
+    .to_string();
+    let cause =
+        consume(&mut owner, Kind::Console, &foreign).err().ok_or("Foreign console accepted")?;
+    assert_eq!(
+        cause.source().and_then(|source| source.downcast_ref::<crate::main_readiness_types::ReadinessFault>()),
+        Some(&crate::main_readiness_types::ReadinessFault::ContextLost)
+    );
+    assert!(!owner.ready());
     Ok(())
 }
 
 #[test]
-fn console_projection_keeps_argument_and_primitive_string_admission_boundaries()
--> Result<(), Box<dyn Error>> {
+fn console_projection_keeps_argument_admission_boundaries() -> Result<(), Box<dyn Error>> {
     let mut owner = loaded()?;
     let args = vec![serde_json::json!({"type":"undefined"}); 32];
     consume(&mut owner, Kind::Console, &event("log", serde_json::json!(args)))?;
@@ -158,23 +243,6 @@ fn console_projection_keeps_argument_and_primitive_string_admission_boundaries()
             ]),
         ),
     )?;
-    for value in ["x".repeat(1025), "invalid\0primitive".into()] {
-        let mut owner = loaded()?;
-        assert!(
-            consume(
-                &mut owner,
-                Kind::Console,
-                &event(
-                    "log",
-                    serde_json::json!([
-                        {"type":"string","value":value},
-                    ])
-                )
-            )
-            .is_err()
-        );
-        assert!(!owner.ready());
-    }
     Ok(())
 }
 

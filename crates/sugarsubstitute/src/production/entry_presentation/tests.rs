@@ -24,6 +24,9 @@ use sugarsubstitute_desktop::HeadlessStep;
 use sugarsubstitute_execution::AuthenticatedEntryLaunch;
 type TestResult = Result<(), Box<dyn Error>>;
 
+#[path = "retirement_tests.rs"]
+mod retirement_tests;
+
 struct FrozenClock;
 impl sugarsubstitute_contracts::execution::Clock for FrozenClock {
     fn now(&self) -> sugarsubstitute_contracts::execution::Moment {

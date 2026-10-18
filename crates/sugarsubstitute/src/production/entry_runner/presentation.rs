@@ -99,7 +99,12 @@ impl<C: EntryActivation> EntryRunner<C> {
     ) -> Result<Option<PreparedFrame>, Box<dyn Error>> {
         let batch =
             self.client()?.drain_completions(max.min(NonZeroUsize::MIN.saturating_add(31)))?;
-        let frame = render.consume(&batch);
+        let frame = render.consume(&batch).and_then(|frame| {
+            if render.poll_retirement()? {
+                render.finish_retirement()?;
+            }
+            Ok(frame)
+        });
         let entry = self.consume_batch(&batch);
         match (frame, entry) {
             (Err(cause), _) | (_, Err(cause)) => Err(cause),
@@ -124,5 +129,20 @@ impl<C: EntryActivation> EntryRunner<C> {
     /// Observe whether the original entry setup budget has begun; this grants no admission proof.
     pub(in crate::production) const fn entry_setup_started(&self) -> bool {
         self.original.is_some()
+    }
+
+    /// Borrow real entry admission for presentation-lifetime pressure regressions.
+    #[cfg(test)]
+    pub(in crate::production) fn presentation_test_admission(
+        &self,
+    ) -> Result<(ExecutionClient, Scope, JobSequence), Box<dyn Error>> {
+        Ok((
+            self.client()?.clone(),
+            self.client()?.create_scope(
+                ScopeSpec { id: self.scopes.allocate()?, deadline: None },
+                self.cleanup.as_ref(),
+            )?,
+            self.jobs.clone(),
+        ))
     }
 }

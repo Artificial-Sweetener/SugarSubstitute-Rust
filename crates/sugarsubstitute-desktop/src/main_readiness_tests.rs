@@ -162,22 +162,12 @@ fn subframe_and_isolated_console_messages_cannot_supply_top_document_setup_failu
     Ok(())
 }
 #[test]
-fn unknown_console_context_and_oversized_native_observation_fail_closed() -> Result {
+fn unknown_console_context_cannot_supply_readiness_diagnostics() -> Result {
     let mut unknown = owner()?;
     loaded(&mut unknown)?;
     assert_eq!(
         unknown.console(99, ConsoleKind::Other, ConsoleArgument::Other),
         Err(ReadinessFault::ContextLost)
-    );
-    let mut oversized = owner()?;
-    loaded(&mut oversized)?;
-    assert_eq!(
-        oversized.console(
-            7,
-            ConsoleKind::Other,
-            ConsoleArgument::PrimitiveString(&"x".repeat(1025))
-        ),
-        Err(ReadinessFault::MalformedObservation)
     );
     Ok(())
 }

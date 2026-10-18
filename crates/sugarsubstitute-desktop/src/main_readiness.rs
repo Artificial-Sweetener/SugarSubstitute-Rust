@@ -237,6 +237,7 @@ impl MainReadiness {
     }
 
     /// Retain the two exact primitive diagnostics emitted by the inspected frontend dispatcher.
+    /// The native adapter admits the console envelope; unrelated text carries no readiness state.
     pub(crate) fn console(
         &mut self,
         context: i64,
@@ -262,9 +263,6 @@ impl MainReadiness {
         let ConsoleArgument::PrimitiveString(message) = argument else {
             return Ok(());
         };
-        if message.len() > 1024 || message.contains('\0') {
-            return self.reject(ReadinessFault::MalformedObservation);
-        }
         if kind == ConsoleKind::Error
             && message == "Error calling extension 'SugarCubes.UI' method 'setup'"
         {
