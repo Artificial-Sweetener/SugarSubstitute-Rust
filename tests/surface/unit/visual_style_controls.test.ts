@@ -85,6 +85,13 @@ test.each([true, false])(
     );
     group.activeid = 'workflow-1';
     await group.updateComplete;
+    const groupStyles = [...(group.shadowRoot?.querySelectorAll('style') ?? [])]
+      .map((style) => style.textContent)
+      .join('');
+    expect(groupStyles).toMatch(
+      /:host\(\[data-sc-workflow-tabs\]\[direction\^='horizontal'\]\) #list #selection-indicator\s*\{[^}]*inset-block-start:\s*0;[^}]*inset-block-end:\s*auto;/,
+    );
+    expect(groupStyles).toContain('var(--sc-accent-indicator)');
     for (const tab of tabs) {
       if (!(tab instanceof Tab)) throw new TypeError('Adobe workflow tab is unavailable.');
       await tab.updateComplete;

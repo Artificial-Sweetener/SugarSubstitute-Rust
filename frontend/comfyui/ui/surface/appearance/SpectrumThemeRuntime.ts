@@ -157,6 +157,24 @@ class SpectrumWorkflowTab extends Tab {
 
 /** Normalize Adobe's selection vocabulary for the shared tab interaction owner. */
 class SpectrumTabGroup extends Tabs {
+  /** Align workflow selection with Fluent's top accent bar while preserving segmented controls. */
+  static override get styles(): CSSResultArray {
+    return [
+      ...super.styles,
+      css`
+        :host([data-sc-workflow-tabs][direction^='horizontal']) #list #selection-indicator {
+          inset-block-start: 0;
+          inset-block-end: auto;
+          border-radius: 0;
+          background-color: var(
+            --highcontrast-tabs-selection-indicator-color,
+            var(--sc-accent-indicator)
+          );
+        }
+      `,
+    ];
+  }
+
   /** Expose the selected child identity used by native segmented controls and workflow tabs. */
   get activeid(): string {
     return this.selected;

@@ -11989,6 +11989,23 @@ var SpectrumWorkflowTab = class extends Tab {
   }
 };
 var SpectrumTabGroup = class extends Tabs {
+  /** Align workflow selection with Fluent's top accent bar while preserving segmented controls. */
+  static get styles() {
+    return [
+      ...super.styles,
+      i`
+        :host([data-sc-workflow-tabs][direction^='horizontal']) #list #selection-indicator {
+          inset-block-start: 0;
+          inset-block-end: auto;
+          border-radius: 0;
+          background-color: var(
+            --highcontrast-tabs-selection-indicator-color,
+            var(--sc-accent-indicator)
+          );
+        }
+      `
+    ];
+  }
   /** Expose the selected child identity used by native segmented controls and workflow tabs. */
   get activeid() {
     return this.selected;
