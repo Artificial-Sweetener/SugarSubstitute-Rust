@@ -69,7 +69,7 @@ export function createWorkflowTablist(document) {
 /** Create the selected provider's workflow tab while retaining shared drag and close behavior. */
 export function createWorkflowTab(document) {
     const tab = readOwnedVisualStyle(document) === 'spectrum'
-        ? document.createElement('sp-tab')
+        ? document.createElement('sc-spectrum-workflow-tab')
         : createFluentWorkflowTab(document);
     tab.dataset.scWorkflowTab = '';
     return tab;

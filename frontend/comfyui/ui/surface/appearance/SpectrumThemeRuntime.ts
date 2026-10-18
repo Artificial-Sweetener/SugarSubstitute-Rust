@@ -25,6 +25,7 @@ import '@spectrum-web-components/switch/sp-switch.js';
 import { Switch } from '@spectrum-web-components/switch/src/Switch.js';
 import { Slider } from '@spectrum-web-components/slider/src/Slider.js';
 import { Tabs } from '@spectrum-web-components/tabs/src/Tabs.js';
+import { Tab } from '@spectrum-web-components/tabs/src/Tab.js';
 import '@spectrum-web-components/tabs/sp-tab.js';
 import { Textfield } from '@spectrum-web-components/textfield/src/Textfield.js';
 import core from '@spectrum-web-components/theme/src/spectrum-two/theme.css.js';
@@ -129,6 +130,31 @@ class SpectrumSlider extends Slider implements NumericSliderControl {
   connectedMoveCallback(): void {}
 }
 
+/** Keep the workflow title and close accessory centered within Adobe's default label slot. */
+class SpectrumWorkflowTab extends Tab {
+  /** Lay out default-slot accessories in one row without changing ordinary segmented tabs. */
+  static override get styles(): CSSResultArray {
+    return [
+      ...super.styles,
+      css`
+        #item-label {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          flex: 1;
+          min-width: 0;
+          height: 100%;
+          margin: 0;
+        }
+        ::slotted(.sc-workflow-title) {
+          flex: 1;
+          min-width: 0;
+        }
+      `,
+    ];
+  }
+}
+
 /** Normalize Adobe's selection vocabulary for the shared tab interaction owner. */
 class SpectrumTabGroup extends Tabs {
   /** Expose the selected child identity used by native segmented controls and workflow tabs. */
@@ -137,7 +163,8 @@ class SpectrumTabGroup extends Tabs {
   }
   /** Project stable child ids into Adobe's value-based selection model. */
   set activeid(value: string) {
-    for (const tab of this.querySelectorAll('sp-tab')) {
+    for (const tab of this.children) {
+      if (!(tab instanceof Tab)) continue;
       tab.setAttribute('role', 'tab');
       tab.setAttribute('value', tab.id);
       tab.toggleAttribute('selected', tab.id === value);
@@ -186,6 +213,8 @@ if (!customElements.get('sc-spectrum-slider'))
   customElements.define('sc-spectrum-slider', SpectrumSlider);
 if (!customElements.get('sc-spectrum-tabs'))
   customElements.define('sc-spectrum-tabs', SpectrumTabGroup);
+if (!customElements.get('sc-spectrum-workflow-tab'))
+  customElements.define('sc-spectrum-workflow-tab', SpectrumWorkflowTab);
 if (!customElements.get('sc-spectrum-search'))
   customElements.define('sc-spectrum-search', SpectrumFinderInput);
 if (!customElements.get('sc-spectrum-menu-item'))

@@ -11680,9 +11680,6 @@ var Tabs = class extends SizedMixin(Focusable, { noDefaultSize: true }) {
 };
 l7([n4({ type: Boolean })], Tabs.prototype, "auto", 2), l7([n4({ type: Boolean, reflect: true })], Tabs.prototype, "compact", 2), l7([n4({ reflect: true })], Tabs.prototype, "direction", 2), l7([n4({ type: Boolean, reflect: true })], Tabs.prototype, "emphasized", 2), l7([n4()], Tabs.prototype, "label", 2), l7([n4({ type: Boolean })], Tabs.prototype, "enableTabsScroll", 2), l7([n4({ type: Boolean, reflect: true })], Tabs.prototype, "quiet", 2), l7([n4({ attribute: false })], Tabs.prototype, "selectionIndicatorStyle", 2), l7([n4({ attribute: false })], Tabs.prototype, "shouldAnimate", 2), l7([e5("slot")], Tabs.prototype, "slotEl", 2), l7([e5("#list")], Tabs.prototype, "tabList", 2), l7([n4({ reflect: true })], Tabs.prototype, "selected", 2);
 
-// node_modules/@spectrum-web-components/tabs/sp-tab.js
-init_define_element();
-
 // node_modules/@spectrum-web-components/tabs/src/Tab.js
 init_src();
 init_decorators2();
@@ -11744,6 +11741,7 @@ var Tab = class extends FocusVisiblePolyfillMixin(ObserveSlotText(ObserveSlotPre
 r15([n4({ type: Boolean, reflect: true })], Tab.prototype, "disabled", 2), r15([n4({ reflect: true })], Tab.prototype, "label", 2), r15([n4({ type: Boolean, reflect: true })], Tab.prototype, "selected", 2), r15([n4({ type: Boolean, reflect: true })], Tab.prototype, "vertical", 2), r15([n4({ type: String, reflect: true })], Tab.prototype, "value", 2);
 
 // node_modules/@spectrum-web-components/tabs/sp-tab.js
+init_define_element();
 defineElement("sp-tab", Tab);
 
 // frontend/comfyui/ui/surface/appearance/SpectrumThemeRuntime.ts
@@ -11967,6 +11965,29 @@ var SpectrumSlider = class extends Slider {
   connectedMoveCallback() {
   }
 };
+var SpectrumWorkflowTab = class extends Tab {
+  /** Lay out default-slot accessories in one row without changing ordinary segmented tabs. */
+  static get styles() {
+    return [
+      ...super.styles,
+      i`
+        #item-label {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          flex: 1;
+          min-width: 0;
+          height: 100%;
+          margin: 0;
+        }
+        ::slotted(.sc-workflow-title) {
+          flex: 1;
+          min-width: 0;
+        }
+      `
+    ];
+  }
+};
 var SpectrumTabGroup = class extends Tabs {
   /** Expose the selected child identity used by native segmented controls and workflow tabs. */
   get activeid() {
@@ -11974,7 +11995,8 @@ var SpectrumTabGroup = class extends Tabs {
   }
   /** Project stable child ids into Adobe's value-based selection model. */
   set activeid(value) {
-    for (const tab of this.querySelectorAll("sp-tab")) {
+    for (const tab of this.children) {
+      if (!(tab instanceof Tab)) continue;
       tab.setAttribute("role", "tab");
       tab.setAttribute("value", tab.id);
       tab.toggleAttribute("selected", tab.id === value);
@@ -12019,6 +12041,8 @@ if (!customElements.get("sc-spectrum-slider"))
   customElements.define("sc-spectrum-slider", SpectrumSlider);
 if (!customElements.get("sc-spectrum-tabs"))
   customElements.define("sc-spectrum-tabs", SpectrumTabGroup);
+if (!customElements.get("sc-spectrum-workflow-tab"))
+  customElements.define("sc-spectrum-workflow-tab", SpectrumWorkflowTab);
 if (!customElements.get("sc-spectrum-search"))
   customElements.define("sc-spectrum-search", SpectrumFinderInput);
 if (!customElements.get("sc-spectrum-menu-item"))

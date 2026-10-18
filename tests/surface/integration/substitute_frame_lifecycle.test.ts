@@ -362,6 +362,9 @@ test('new-workflow control follows the tabs and overflow appears only when the s
   expect(getComputedStyle(add).minHeight).toBe('24px');
   expect(getComputedStyle(add).marginLeft).toBe('3px');
   expect(add.textContent).toBe('');
+  const plus = add.querySelector('svg');
+  expect(plus?.getAttribute('viewBox')).toBe('0 0 12 12');
+  expect(plus?.getAttribute('aria-hidden')).toBe('true');
   expect(add.getAttribute('aria-label')).toBe('New workflow');
   expect(add.parentElement).toBe(view.element);
   expect(view.element.querySelector('.sc-workflow-strip')?.contains(add)).toBe(false);

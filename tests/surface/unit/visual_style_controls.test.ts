@@ -14,19 +14,100 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Exercise real provider controls through the shared normalized control contracts. */
-import { afterEach, expect, test } from '@jest/globals';
+import { afterAll, afterEach, beforeAll, expect, test } from '@jest/globals';
 import {
   createNumericSlider,
   createButton,
   createBooleanSegments,
+  createWorkflowTab,
+  createWorkflowTablist,
 } from '../../../frontend/comfyui/ui/surface/appearance/ControlFactory.js';
 import { publishVisualStyle } from '../../../frontend/comfyui/ui/surface/appearance/VisualStyleBoundary.js';
 import { spectrumRootTokens } from '../../../frontend/comfyui/ui/surface/appearance/SpectrumThemeTokens.js';
 import { MenuItem } from '@spectrum-web-components/menu/src/MenuItem.js';
+import { Tab } from '@spectrum-web-components/tabs/src/Tab.js';
+import { Tabs } from '@spectrum-web-components/tabs/src/Tabs.js';
 import { applyOwnedTheme } from '../../../frontend/comfyui/ui/surface/appearance/ThemeService.js';
+
+const resizeDescriptor = Object.getOwnPropertyDescriptor(window, 'ResizeObserver');
+
+/** Supply the browser-only geometry boundary while real Adobe tabs retain their slot lifecycle. */
+class HeaderResizeObserver implements ResizeObserver {
+  /** Leave geometry delivery to the manual browser proof. */
+  observe(): void {}
+  /** Release no fixture resources. */
+  unobserve(): void {}
+  /** Release no fixture resources. */
+  disconnect(): void {}
+}
+
+beforeAll(() => {
+  Object.defineProperty(window, 'ResizeObserver', {
+    configurable: true,
+    value: HeaderResizeObserver,
+  });
+});
+afterAll(() => {
+  if (resizeDescriptor) Object.defineProperty(window, 'ResizeObserver', resizeDescriptor);
+  else Reflect.deleteProperty(window, 'ResizeObserver');
+});
 
 afterEach(() => document.documentElement.removeAttribute('data-sc-visual-style'));
 afterEach(() => document.body.replaceChildren());
+
+test.each([true, false])(
+  'retains Adobe workflow selection and literal title/accessory slots with centered presentation, dark=%s',
+  async (dark) => {
+    publishVisualStyle(document, 'spectrum');
+    const surface = document.createElement('header');
+    applyOwnedTheme(surface, dark, 'spectrum');
+    const group = createWorkflowTablist(document);
+    const tabs = [createWorkflowTab(document), createWorkflowTab(document)];
+    expect(group).toBeInstanceOf(Tabs);
+    if (!(group instanceof Tabs)) throw new TypeError('Adobe workflow tabs are unavailable.');
+    for (const [index, tab] of tabs.entries()) {
+      expect(tab).toBeInstanceOf(Tab);
+      if (!(tab instanceof Tab)) throw new TypeError('Adobe workflow tab is unavailable.');
+      tab.id = `workflow-${index}`;
+      const title = document.createElement('span');
+      title.className = 'sc-workflow-title';
+      title.textContent = '<literal workflow>';
+      const close = createButton(document);
+      close.setAttribute('aria-label', 'Close workflow');
+      close.textContent = '×';
+      tab.append(title, close);
+      group.append(tab);
+    }
+    surface.append(group);
+    document.body.append(surface);
+    expect(getComputedStyle(group).getPropertyValue('--mod-tabs-item-horizontal-spacing')).toBe(
+      '0px',
+    );
+    group.activeid = 'workflow-1';
+    await group.updateComplete;
+    for (const tab of tabs) {
+      if (!(tab instanceof Tab)) throw new TypeError('Adobe workflow tab is unavailable.');
+      await tab.updateComplete;
+      expect(tab.getAttribute('aria-selected')).toBe(String(tab.id === 'workflow-1'));
+      expect(tab.getAttribute('value')).toBe(tab.id);
+      expect(tab.querySelector('literal')).toBeNull();
+      const slot = tab.shadowRoot?.querySelector('slot:not([name])');
+      expect(slot).toBeInstanceOf(HTMLSlotElement);
+      if (!(slot instanceof HTMLSlotElement)) throw new Error('Workflow label slot is missing.');
+      expect(slot.assignedElements()).toEqual([...tab.children]);
+      const layout = [...(tab.shadowRoot?.querySelectorAll('style') ?? [])]
+        .map((style) => style.textContent)
+        .join('');
+      expect(layout).toMatch(/#item-label\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*center;/);
+      expect(layout).toMatch(/#item-label\s*\{[^}]*margin:\s*0;/);
+    }
+    group.activeid = 'workflow-0';
+    expect(group.activeid).toBe('workflow-0');
+    expect(tabs[0]?.hasAttribute('selected')).toBe(true);
+    expect(tabs[1]?.hasAttribute('selected')).toBe(false);
+    applyOwnedTheme(surface, null);
+  },
+);
 
 test.each([true, false])(
   'shares Photoshop neutrals with owned controls and removes them when switching to Fluent, dark=%s',
