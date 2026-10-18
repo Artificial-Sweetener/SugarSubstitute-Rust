@@ -223,6 +223,8 @@ impl WindowsProfileLease {
             false,
         );
         admitted?;
+        self.release_operation = Some((scope.id(), spec));
+        self.release_successful = false;
         Ok(spec.id)
     }
     pub(super) fn is_held(&self) -> bool {

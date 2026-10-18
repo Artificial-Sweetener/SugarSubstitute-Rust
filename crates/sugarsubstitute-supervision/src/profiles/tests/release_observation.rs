@@ -65,14 +65,30 @@ fn release_observer_ignores_foreign_scope_and_preserves_actual_worker_failure() 
 #[test]
 fn release_observer_advances_original_profile_released_after_finite_job_consumption() -> TestResult
 {
+    release_acknowledgement_order(false, false)
+}
+
+/// An earlier exact helper ACK still waits for successful finite completion consumption.
+#[test]
+fn profile_successor_observes_helper_ack_before_original_finite_release_completion() -> TestResult {
+    release_acknowledgement_order(true, false)
+}
+
+/// Physical closure and an authentic ACK cannot turn a timed-out finite release into success.
+#[test]
+fn profile_successor_rejects_late_finite_release_even_after_exact_helper_ack() -> TestResult {
+    release_acknowledgement_order(false, true)
+}
+
+/// Supply only external native and correlated wire facts through existing profile consumers.
+fn release_acknowledgement_order(ack_before_terminal: bool, late_terminal: bool) -> TestResult {
     use crate::backend_custody_parent::observation_fixture;
     let mut h = Harness::new()?;
-    let release = h.spec(100)?;
-    h.lease.submit_release(&h.client, &h.scope, release, &h.registry)?;
-    let batch = h.terminal_batch()?;
-    let actual = h.lease.consume_release(run()?, &batch)?.ok_or("Original release absent")?;
-    assert_eq!(actual.job, release.id);
-    assert!(!h.lease.snapshot().pending);
+    assert_eq!(h.acquire()?.kind, TerminalKind::Success);
+    let barrier = h
+        .lease
+        .successor_retirement(std::path::Path::new(r"E:\fixture\profile"))
+        .ok_or("Actual acquired profile binding absent")?;
     let scope =
         h.client.create_native_scope(ScopeSpec { id: ScopeId::new(3)?, deadline: None }, None)?;
     let mut spec = h.spec(100)?;
@@ -91,8 +107,15 @@ fn release_observer_advances_original_profile_released_after_finite_job_consumpt
     let counter = h.client.encode_lifecycle_deadline(Moment::from_nanos(100))?;
     // Supply only external wire/retirement facts at the real correlation boundary.
     // This constructs no helper, remote output cells or native acknowledgement proof.
-    lock(&h.lease.shared.native).as_mut().ok_or("Original state absent")?.custody_release =
-        Some(custody::Release {
+    {
+        let mut native = lock(&h.lease.shared.native);
+        let state = native.as_mut().ok_or("Original state absent")?;
+        state.custody_record = Some(record::custody::CustodiedRecord::new(
+            state.record.ok_or("Original native record absent")?,
+            parent.key(),
+            profile,
+        )?);
+        state.custody_release = Some(custody::Release {
             parent: parent.clone(),
             key: profile,
             until: Some(Moment::from_nanos(100)),
@@ -100,20 +123,47 @@ fn release_observer_advances_original_profile_released_after_finite_job_consumpt
             counter: Some((counter.ticks(), counter.frequency())),
             ack: None,
         });
-    observation_fixture::reply(
-        &parent,
-        7,
-        BackendCustodyCommand::ProfileStop {
-            profile,
-            until_ticks: counter.ticks(),
-            frequency: counter.frequency(),
-        },
-        BackendCustodyReceipt::ProfileReleased(profile),
-    )?;
-    assert!(h.lease.custody_release_pending());
+    }
+    if late_terminal {
+        *lock(&h.fake.late_release) = Some(h.clock.clone());
+    }
+    let release = h.spec(100)?;
+    h.lease.submit_release(&h.client, &h.scope, release, &h.registry)?;
+    let batch = h.terminal_batch()?;
+    let reply = || {
+        observation_fixture::reply(
+            &parent,
+            7,
+            BackendCustodyCommand::ProfileStop {
+                profile,
+                until_ticks: counter.ticks(),
+                frequency: counter.frequency(),
+            },
+            BackendCustodyReceipt::ProfileReleased(profile),
+        )
+    };
+    if ack_before_terminal {
+        reply()?;
+        assert!(!barrier.released());
+    }
+    let actual = h.lease.consume_release(run()?, &batch)?.ok_or("Original release absent")?;
+    assert_eq!(actual.job, release.id);
+    assert_eq!(
+        actual.kind,
+        if late_terminal { TerminalKind::TimedOut } else { TerminalKind::Success }
+    );
+    assert!(actual.failure.is_none());
+    assert!(!h.lease.snapshot().pending);
+    assert_eq!(barrier.released(), ack_before_terminal && !late_terminal);
+    if !ack_before_terminal {
+        reply()?;
+        assert!(h.lease.custody_release_pending());
+    }
     let empty = CompletionBatch { notifications: vec![], remaining: 0 };
     assert!(h.lease.consume_release(run()?, &empty)?.is_none());
     assert!(!h.lease.custody_release_pending());
+    assert_eq!(barrier.released(), !late_terminal);
+    assert!(h.lease.snapshot().retirement_ready());
     let native = lock(&h.lease.shared.native);
     let retained = native
         .as_ref()

@@ -26,6 +26,21 @@ impl ProfileRetirement {
     }
 }
 impl WindowsProfileLease {
+    /// Join independently consumed finite success with actual native and helper retirement.
+    /// Both terminal-before-ACK and ACK-before-terminal remain within this same owner.
+    pub(super) fn publish_release_observation(&self, state: &storage::NativeState) {
+        if self.release_successful
+            && self.release_operation.is_none()
+            && self.pending.is_none()
+            && state.retired
+            && state.desktop_custody.is_none()
+            && state.custody_release.as_ref().is_none_or(|release| release.ack.is_some())
+            && self.shared.active.load(Ordering::Acquire) == RELEASED
+        {
+            self.shared.release_observed.store(true, Ordering::Release);
+        }
+    }
+
     /// Issue an ordering barrier for an exact repeat of this owner's original requested path.
     ///
     /// The caller separately verifies authenticated retirement intent. The binding comes

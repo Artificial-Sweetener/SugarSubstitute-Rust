@@ -62,6 +62,7 @@ pub(super) struct Fake {
     pub(super) fail_environment: AtomicBool,
     pub(super) fail_release: AtomicBool,
     pub(super) late_acquire: Mutex<Option<Arc<TestClock>>>,
+    pub(super) late_release: Mutex<Option<Arc<TestClock>>>,
 }
 impl storage::ProfilePort for Fake {
     fn acquire(
@@ -123,6 +124,9 @@ impl storage::ProfilePort for Fake {
         state.held = false;
         state.retired = true;
         state.release_published = true;
+        if let Some(clock) = lock(&self.late_release).take() {
+            clock.0.store(100, Ordering::Release);
+        }
         Ok(())
     }
 }

@@ -127,6 +127,8 @@ pub struct WindowsProfileLease {
     pending_attempt: Option<MainIdentity>,
     pending_browser: bool,
     release_deadline: Option<sugarsubstitute_contracts::execution::Moment>,
+    release_operation: Option<(sugarsubstitute_contracts::execution::ScopeId, JobSpec)>,
+    release_successful: bool,
     folder: Option<ProfileFolderFacts>,
     environment: Option<EnvironmentProfileProof>,
     browser: Option<BrowserFamilyProof>,
@@ -164,6 +166,8 @@ impl WindowsProfileLease {
             pending_attempt: None,
             pending_browser: false,
             release_deadline: None,
+            release_operation: None,
+            release_successful: false,
             folder: None,
             environment: None,
             browser: None,
@@ -218,6 +222,8 @@ impl WindowsProfileLease {
         let Some(completion) = job.try_take_completion() else {
             return custody_failure.map_or(Ok(None), Err);
         };
+        let release_completion =
+            self.release_operation == Some((completion.scope_id, completion.spec));
         let id = job.spec().id;
         self.pending = None;
         let identity = self.pending_attempt.take();
@@ -243,17 +249,18 @@ impl WindowsProfileLease {
             custody_failure.map_or(Ok(()), Err),
         )
         .err();
-        if kind == TerminalKind::Success && failure.is_none() {
-            if state.held && !self.shared.closing.load(Ordering::Acquire) {
-                self.observed_identity = state.record.filter(|record| record.run == self.run);
-            }
-            if self.release_deadline.is_some()
-                && state.retired
-                && self.shared.active.load(Ordering::Acquire) == RELEASED
-            {
-                self.shared.release_observed.store(true, Ordering::Release);
-            }
+        if release_completion {
+            self.release_operation = None;
+            self.release_successful = kind == TerminalKind::Success && failure.is_none();
         }
+        if kind == TerminalKind::Success
+            && failure.is_none()
+            && state.held
+            && !self.shared.closing.load(Ordering::Acquire)
+        {
+            self.observed_identity = state.record.filter(|record| record.run == self.run);
+        }
+        self.publish_release_observation(state);
         // Proofs never survive cancellation or late completion as successful authorization.
         if kind == TerminalKind::Success
             && failure.is_none()

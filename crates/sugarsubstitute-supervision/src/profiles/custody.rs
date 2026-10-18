@@ -84,6 +84,7 @@ impl WindowsProfileLease {
             return Ok(());
         };
         if release.ack.is_some() {
+            self.publish_release_observation(state);
             return Ok(());
         }
         let observed = release
@@ -133,6 +134,7 @@ impl WindowsProfileLease {
                 self.shared.active.store(RELEASED, Ordering::Release);
             }
         }
+        self.publish_release_observation(state);
         Ok(())
     }
     /// Prepare actual empty desktop Job and current profile guards before Held publication.
