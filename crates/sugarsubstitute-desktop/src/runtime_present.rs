@@ -53,51 +53,45 @@ impl Presentations {
         content: &mut impl WindowContent,
         #[cfg(target_os = "windows")] controls: &mut crate::windows_controls::Controls,
     ) -> Result<(), DesktopError> {
-        crate::timing::observe_submission(timings, frame.identity(), || {
-            let began = Instant::now();
-            let result = (|| {
-                let before = observe_move(window, self.audit.is_some())?;
-                #[cfg(target_os = "windows")]
-                let console = content.console();
-                #[cfg(target_os = "windows")]
-                {
-                    let excluded = console
-                        .as_ref()
-                        .filter(|view| view.visible)
-                        .map(|view| {
-                            crate::control_geometry::physical_bounds(
-                                &view.native_control(),
-                                window.scale_factor(),
-                            )
-                        })
-                        .transpose()?;
-                    presenter.present(frame, excluded)?;
-                }
-                #[cfg(not(target_os = "windows"))]
-                presenter.present(frame)?;
-                #[cfg(target_os = "windows")]
-                {
-                    controls.update(content.accessible_controls())?;
-                    controls.present_console(frame, console)?;
-                    controls.draw_focus()?;
-                }
-                #[cfg(not(target_os = "windows"))]
-                let _ = content;
-                let after = observe_move(window, self.audit.is_some())?;
-                if let Some(audit) = &mut self.audit {
-                    audit.record(
-                        Ok(frame.clone()),
-                        (before && after).then(|| self.started.elapsed()),
-                    )?;
-                }
-                Ok(())
-            })();
-            self.record_submission(result, frame.identity(), began, Instant::now())
-        })?;
-        let timings = timings.filter(|_| !self.visibility.ever_shown());
-        self.visibility.submitted(content, frame.identity(), |visible| {
-            native_visibility(window, visible, timings, presenter)
-        })
+        let began = Instant::now();
+        let result = crate::timing::observe_submission(timings, frame.identity(), || {
+            let before = observe_move(window, self.audit.is_some())?;
+            #[cfg(target_os = "windows")]
+            let console = content.console();
+            #[cfg(target_os = "windows")]
+            {
+                let excluded = console
+                    .as_ref()
+                    .filter(|view| view.visible)
+                    .map(|view| {
+                        crate::control_geometry::physical_bounds(
+                            &view.native_control(),
+                            window.scale_factor(),
+                        )
+                    })
+                    .transpose()?;
+                presenter.present(frame, excluded)?;
+            }
+            #[cfg(not(target_os = "windows"))]
+            presenter.present(frame)?;
+            #[cfg(target_os = "windows")]
+            {
+                controls.update(content.accessible_controls())?;
+                controls.present_console(frame, console)?;
+                controls.draw_focus()?;
+            }
+            let startup_timings = timings.filter(|_| !self.visibility.ever_shown());
+            self.visibility.submitted(content, frame.identity(), |visible| {
+                native_visibility(window, visible, startup_timings, presenter)
+            })?;
+            let after = observe_move(window, self.audit.is_some())?;
+            if let Some(audit) = &mut self.audit {
+                audit
+                    .record(Ok(frame.clone()), (before && after).then(|| self.started.elapsed()))?;
+            }
+            Ok(())
+        });
+        self.record_submission(result, frame.identity(), began, Instant::now())
     }
 
     /// Admit initial pixels while the native window remains covered.
@@ -123,7 +117,8 @@ impl Presentations {
             .reconcile(content, |visible| native_visibility(window, visible, timings, presenter))
     }
 
-    /// Count only successful native/control submissions, classifying reuse against actual delivery.
+    /// Count complete native/control handoffs after their required show and exposure succeeds.
+    /// A covered child's existing handoff reports its complete prepared submission.
     fn record_submission(
         &mut self,
         result: Result<(), DesktopError>,

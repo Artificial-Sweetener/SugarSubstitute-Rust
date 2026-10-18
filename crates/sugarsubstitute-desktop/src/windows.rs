@@ -19,10 +19,16 @@ use windows::Win32::{
             MonitorFromPoint, ReleaseDC, SRCCOPY,
         },
     },
-    UI::{Controls::MARGINS, WindowsAndMessaging::GetCursorPos},
+    UI::{
+        Controls::MARGINS,
+        WindowsAndMessaging::{GetCursorPos, IsWindowVisible},
+    },
 };
 #[path = "windows_frame_clip.rs"]
 mod frame_clip;
+#[cfg(test)]
+#[path = "windows_present_tests.rs"]
+mod present_tests;
 
 /// Keep the Tao window alive until every borrowed native resource has been released.
 pub(crate) struct Presenter {
@@ -98,33 +104,16 @@ impl Presenter {
         Ok(())
     }
 
-    /// Copy CPU BGRA bytes without replacing transparent pixels with an opaque fill.
+    /// Retain complete CPU BGRA pixels and submit them whenever the window is drawable.
     pub(crate) fn present(
         &mut self,
         frame: &PreparedFrame,
         excluded: Option<RECT>,
     ) -> Result<(), DesktopError> {
-        let dib = Dib::for_frame(&mut self.dib, frame)?;
-        let destination = dib.pixels_mut()?;
-        for (source, target) in frame.pixels().chunks_exact(4).zip(destination.chunks_exact_mut(4))
-        {
-            if self.material == NativeMaterial::Mica {
-                target.copy_from_slice(&[source[2], source[1], source[0], source[3]]);
-            } else {
-                let remainder =
-                    ((u16::from(self.background) * (255 - u16::from(source[3])) + 127) / 255) as u8;
-                target.copy_from_slice(&[
-                    source[2] + remainder,
-                    source[1] + remainder,
-                    source[0] + remainder,
-                    255,
-                ]);
-            }
-        }
+        let dib = prepare_pixels(&mut self.dib, frame, self.material, self.background)?;
         let hwnd = HWND(self.window.hwnd() as *mut c_void);
-        copy_to_window(hwnd, dib, excluded)?;
         self.last_clip = excluded;
-        Ok(())
+        submit_prepared(hwnd, dib, excluded)
     }
 
     /// Repaint admitted pixels after native show before application startup may proceed.
@@ -145,6 +134,41 @@ impl Presenter {
         .ok()
         .map_err(|cause| DesktopError::new("expose_prepared_controls", cause))
     }
+}
+
+/// Retain complete admitted native pixels before a hidden surface can become drawable.
+fn prepare_pixels<'a>(
+    retained: &'a mut Option<Dib>,
+    frame: &PreparedFrame,
+    material: NativeMaterial,
+    background: u8,
+) -> Result<&'a mut Dib, DesktopError> {
+    let dib = Dib::for_frame(retained, frame)?;
+    let destination = dib.pixels_mut()?;
+    for (source, target) in frame.pixels().chunks_exact(4).zip(destination.chunks_exact_mut(4)) {
+        if material == NativeMaterial::Mica {
+            target.copy_from_slice(&[source[2], source[1], source[0], source[3]]);
+        } else {
+            let remainder =
+                ((u16::from(background) * (255 - u16::from(source[3])) + 127) / 255) as u8;
+            target.copy_from_slice(&[
+                source[2] + remainder,
+                source[1] + remainder,
+                source[0] + remainder,
+                255,
+            ]);
+        }
+    }
+    Ok(dib)
+}
+
+/// Preserve a covered complete buffer until show supplies the window's GDI redirection surface.
+fn submit_prepared(hwnd: HWND, dib: &Dib, excluded: Option<RECT>) -> Result<(), DesktopError> {
+    // SAFETY: The caller retains this exact UI-thread window through the scalar visibility query.
+    if unsafe { IsWindowVisible(hwnd) }.as_bool() {
+        copy_to_window(hwnd, dib, excluded)?;
+    }
+    Ok(())
 }
 
 /// Copy one retained native buffer without reallocating, scanning or preparing application work.
