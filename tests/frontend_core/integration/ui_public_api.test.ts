@@ -49,12 +49,16 @@ describe('ui public api', () => {
     expect(typeof window.SugarCubes.scheduleCubeInstanceRefresh).toBe('function');
     expect(typeof window.SugarCubes.scheduleCubeDirtyRefresh).toBe('function');
     expect(typeof window.SugarCubes.setSubstituteFrame).toBe('function');
+    expect(typeof window.SugarCubes.configureDesktopFrame).toBe('function');
+    expect(typeof window.SugarCubes.readDesktopFrame).toBe('function');
     const keys = Object.keys(window.SugarCubes).sort();
     expect(keys).toEqual([
+      'configureDesktopFrame',
       'importSugarScript',
       'listCubes',
       'openLibrary',
       'previewCube',
+      'readDesktopFrame',
       'scheduleCubeDirtyRefresh',
       'scheduleCubeInstanceRefresh',
       'setSubstituteFrame',

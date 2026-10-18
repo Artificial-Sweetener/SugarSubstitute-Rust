@@ -29,3 +29,27 @@ test('delegates openLibrary to the supplied cart without constructing an old bro
   expect(document.querySelector('.sugarcubes-browser')).toBeNull();
   ui.dispose();
 });
+
+test('desktop configuration and read-only receipt delegate to the same presentation owner', () => {
+  const ui = new SugarCubesUI();
+  const receipt = {
+    schemaVersion: 1 as const,
+    captionWidth: 138 as const,
+    titlebarHeight: 34 as const,
+    darkTheme: true,
+    mounted: false,
+  };
+  const configure = jest.fn(() => receipt);
+  const read = jest.fn(() => receipt);
+  const api = createPublicApi(ui, {
+    openLibrary: () => undefined,
+    desktopFrame: { configureDesktopFrame: configure, readDesktopFrame: read },
+  });
+  const input = { ...receipt };
+  expect(api.configureDesktopFrame?.(input)).toBe(receipt);
+  expect(configure).toHaveBeenCalledWith(input);
+  expect(api.readDesktopFrame?.()).toBe(receipt);
+  expect(read).toHaveBeenCalledTimes(1);
+  expect(configure).toHaveBeenCalledTimes(1);
+  ui.dispose();
+});

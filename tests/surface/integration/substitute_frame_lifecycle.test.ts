@@ -129,8 +129,28 @@ test('mode restores host presentation and preserves native controls, graph, and 
   expect(native.parentElement).toBe(row);
   expect(document.querySelector('.sc-substitute-frame')).toBeNull();
   expect(document.documentElement.hasAttribute('data-sc-substitute-frame')).toBe(false);
+  expect(outer.hasAttribute('data-sc-desktop-frame-host')).toBe(false);
+  expect(host.readDesktopFrame()).toBeNull();
+  const configured = host.configureDesktopFrame({
+    schemaVersion: 1,
+    captionWidth: 138,
+    titlebarHeight: 34,
+    darkTheme: true,
+  });
+  expect(configured.mounted).toBe(true);
+  expect(outer.hasAttribute('data-sc-desktop-frame-host')).toBe(true);
+  const desktopFrame = document.querySelector('.sc-substitute-frame');
+  host.mode.setEnabled(false);
+  await settle();
+  expect(host.mode.enabled).toBe(true);
+  expect(document.querySelector('.sc-substitute-frame')).toBe(desktopFrame);
+  expect(host.readDesktopFrame()?.mounted).toBe(true);
+  expect(outer.style.getPropertyValue('--sc-native-caption-width')).toBe('138px');
+  expect(app.graph).toBe(graph);
   expect(report).not.toHaveBeenCalled();
   host.dispose();
+  expect(host.readDesktopFrame()).toBeNull();
+  expect(document.documentElement.hasAttribute('data-sc-desktop-frame-surface')).toBe(false);
 });
 
 test('literal titles and keyed tabs survive reorder and activity refresh without replaying shimmer', async () => {

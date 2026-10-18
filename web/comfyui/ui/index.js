@@ -43,6 +43,7 @@ export function createPublicApi(uiInstance, options) {
         throw new Error('SugarCubes UI instance required for public API.');
     }
     const importSugarScript = options.importSugarScript;
+    const desktopFrame = options.desktopFrame;
     return Object.freeze({
         listCubes: uiInstance.listCubes.bind(uiInstance),
         previewCube: uiInstance.previewCube.bind(uiInstance),
@@ -51,6 +52,12 @@ export function createPublicApi(uiInstance, options) {
         openLibrary: () => options.openLibrary(),
         ...(options.setSubstituteFrame
             ? { setSubstituteFrame: (enabled) => options.setSubstituteFrame?.(enabled === true) }
+            : {}),
+        ...(desktopFrame
+            ? {
+                configureDesktopFrame: (configuration) => desktopFrame.configureDesktopFrame(configuration),
+                readDesktopFrame: () => desktopFrame.readDesktopFrame(),
+            }
             : {}),
         ...(importSugarScript
             ? { importSugarScript: (source) => importSugarScript(source) }

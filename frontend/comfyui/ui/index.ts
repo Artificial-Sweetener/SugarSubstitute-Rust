@@ -19,6 +19,7 @@
 
 import { SugarCubesUI } from './SugarCubesUI.js';
 import type { UnknownRecord } from './types/common.js';
+import type { DesktopFramePort } from './surface/frame/DesktopFramePresentation.js';
 
 let instance: SugarCubesUI | null = null;
 
@@ -30,6 +31,7 @@ interface SugarCubesPublicApiOptions {
   openLibrary(): void;
   importSugarScript?(source: string): Promise<unknown>;
   setSubstituteFrame?(enabled: boolean): void;
+  desktopFrame?: DesktopFramePort;
 }
 
 /**
@@ -59,6 +61,7 @@ export function createPublicApi(uiInstance: SugarCubesUI, options: SugarCubesPub
     throw new Error('SugarCubes UI instance required for public API.');
   }
   const importSugarScript = options.importSugarScript;
+  const desktopFrame = options.desktopFrame;
   return Object.freeze({
     listCubes: uiInstance.listCubes.bind(uiInstance),
     previewCube: uiInstance.previewCube.bind(uiInstance),
@@ -67,6 +70,13 @@ export function createPublicApi(uiInstance: SugarCubesUI, options: SugarCubesPub
     openLibrary: () => options.openLibrary(),
     ...(options.setSubstituteFrame
       ? { setSubstituteFrame: (enabled: unknown) => options.setSubstituteFrame?.(enabled === true) }
+      : {}),
+    ...(desktopFrame
+      ? {
+          configureDesktopFrame: (configuration: unknown) =>
+            desktopFrame.configureDesktopFrame(configuration),
+          readDesktopFrame: () => desktopFrame.readDesktopFrame(),
+        }
       : {}),
     ...(importSugarScript
       ? { importSugarScript: (source: string) => importSugarScript(source) }

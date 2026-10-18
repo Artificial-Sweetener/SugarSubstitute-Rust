@@ -22,12 +22,15 @@ import { SubstituteFrameView } from './SubstituteFrameView.js';
 import { substituteFrameCss } from './SubstituteFrameStyles.js';
 import { GenerationStripHost } from './GenerationStripHost.js';
 import { SubstituteToolbarLayout } from './SubstituteToolbarLayout.js';
+import { DesktopFramePresentation } from './DesktopFramePresentation.js';
+import { desktopFrameCss } from './DesktopFrameStyles.js';
 /** Keep one frame lifetime independent of graph rendering, workflow contents and Rust chrome. */
 export class SubstituteFrameHost {
     options;
     mode = new SubstituteFrameMode();
     #stops = [];
     #style;
+    #desktop = new DesktopFramePresentation();
     #presence = null;
     #mount = null;
     #native = null;
@@ -43,7 +46,29 @@ export class SubstituteFrameHost {
         this.options = options;
         this.#style = options.document.createElement('style');
         this.#style.id = 'sugarcubes-substitute-frame';
-        this.#style.textContent = substituteFrameCss;
+        this.#style.textContent = substituteFrameCss + desktopFrameCss;
+    }
+    /** Configure one desktop document through the presentation protocol without persisting preferences. */
+    configureDesktopFrame(configuration) {
+        if (this.#disposed)
+            throw new Error('The SugarCubes frame lifetime has ended.');
+        this.#desktop.configure(configuration);
+        this.mode.setDesktop(true);
+        this.#reconcile();
+        const receipt = this.#desktop.read();
+        if (!receipt)
+            throw new Error('Desktop frame configuration was not retained.');
+        return receipt;
+    }
+    /** Read accepted desktop presentation without changing DOM, preferences, or workflow state. */
+    readDesktopFrame() {
+        const receipt = this.#desktop.read();
+        return receipt
+            ? Object.freeze({
+                ...receipt,
+                mounted: receipt.mounted && this.#view?.element.isConnected === true,
+            })
+            : null;
     }
     /** Subscribe to named host mounts and existing workflow and appearance owners only. */
     setup() {
@@ -60,6 +85,8 @@ export class SubstituteFrameHost {
     dispose = () => {
         this.#disposed = true;
         this.#unmount();
+        this.#desktop.dispose();
+        this.mode.setDesktop(false);
         this.#presence?.disconnect();
         for (const stop of this.#stops.splice(0))
             stop();
@@ -137,6 +164,7 @@ export class SubstituteFrameHost {
         });
         native.parentElement?.setAttribute('data-sc-frame-native', '');
         mount.append(this.#view.element);
+        this.#desktop.attach(mount);
         this.#generation = new GenerationStripHost(this.options.document, this.#view.element, this.options.app, this.options.report);
         this.#toolbarLayout = new SubstituteToolbarLayout(this.options.document);
     }
@@ -148,6 +176,7 @@ export class SubstituteFrameHost {
     }
     /** Retire the view while preserving host controls, workflow state and saved preferences. */
     #unmount() {
+        this.#desktop.detach();
         this.options.setOverridesInline(false);
         this.#toolbarLayout?.dispose();
         this.#toolbarLayout = null;

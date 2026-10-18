@@ -23,18 +23,26 @@ import { walkArtifactFiles, synchronizeWebArtifacts } from './WebArtifactSynchro
 import { browserSharedModulePlugin, publishBrowserBundle } from './BrowserSharedModules.js';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '..');
-const generatedRoot = path.join(repositoryRoot, '.generated', 'web');
 const runtimeRoot = path.join(repositoryRoot, 'web');
+const buildRoot = process.env.SUGARCUBES_WEB_BUILD_ROOT ?? path.join(repositoryRoot, '.generated');
+if (!path.isAbsolute(buildRoot)) throw new Error('SUGARCUBES_WEB_BUILD_ROOT must be absolute.');
+const generatedRoot = path.join(buildRoot, 'web');
+if (path.resolve(generatedRoot) === runtimeRoot)
+  throw new Error('Web staging must be separate from the runtime deployment tree.');
 const staticRoot = path.join(repositoryRoot, 'frontend', 'static');
 
 /** Compile authored TypeScript into the isolated staging directory. */
 function compileTypeScript(): Promise<void> {
   const compilerPath = path.join(repositoryRoot, 'node_modules', 'typescript', 'bin', 'tsc');
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [compilerPath, '--project', 'tsconfig.web.json'], {
-      cwd: repositoryRoot,
-      stdio: 'inherit',
-    });
+    const child = spawn(
+      process.execPath,
+      [compilerPath, '--project', 'tsconfig.web.json', '--outDir', generatedRoot],
+      {
+        cwd: repositoryRoot,
+        stdio: 'inherit',
+      },
+    );
     child.on('error', reject);
     child.on('exit', (code) => {
       if (code === 0) {

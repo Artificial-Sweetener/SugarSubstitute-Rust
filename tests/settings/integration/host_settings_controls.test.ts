@@ -179,7 +179,7 @@ async function submitFormModal(fieldValues: Record<string, unknown> = {}) {
   await flushPromises();
 }
 
-beforeEach(() => {
+function resetPage(): void {
   jest.resetModules();
   loadedUi = null;
   setupBaseApp();
@@ -232,24 +232,41 @@ beforeEach(() => {
   });
   // The host fetch boundary consumes only status and text for bundled model suggestions.
   globalThis.fetch = async () => ({ ok: true, text: async () => 'sdxl\nsd\n' }) as Response;
-});
+}
 
-afterEach(() => {
+function retirePage(): void {
   // Host adapters outlive the UI service graph and release resources on page teardown.
   window.dispatchEvent(new Event('pagehide'));
   loadedUi?.dispose();
   loadedUi = null;
   jest.restoreAllMocks();
-});
+}
+
+/** Prepare cold source transformation during collection, then retire its isolated service graph. */
+async function prepareEntrypoint(): Promise<SugarCubesUI> {
+  resetPage();
+  try {
+    await loadUi();
+    if (!loadedUi) throw new Error('Prepared UI module did not create its owned service graph.');
+    return loadedUi;
+  } finally {
+    retirePage();
+  }
+}
+
+const preparedUi = await prepareEntrypoint();
+beforeEach(resetPage);
+afterEach(retirePage);
 
 describe('host settings and public library APIs', () => {
-  // Cold entrypoint transformation competes with the parallel worker, outside UI runtime timing.
   test('setup registers settings without the old sidebar or its browser resources', async () => {
     const restore = silenceConsole();
     const registerSidebarTab = jest.fn();
     app.extensionManager.registerSidebarTab = registerSidebarTab;
     try {
       await setupExtension();
+      expect(loadedUi).not.toBe(preparedUi);
+      expect(window.SugarCubes.readDesktopFrame()).toBeNull();
       expect(registerSidebarTab).not.toHaveBeenCalled();
       expect(registeredSettings.length).toBeGreaterThan(0);
       expect(document.querySelector('.sugarcubes-sidebar-panel, .sugarcubes-browser')).toBeNull();

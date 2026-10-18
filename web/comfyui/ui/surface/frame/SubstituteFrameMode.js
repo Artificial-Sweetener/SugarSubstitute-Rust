@@ -23,15 +23,26 @@ export class SubstituteFrameMode {
     #listeners = new Set();
     #enabled = false;
     #started = false;
+    #desktop = false;
     /** Read the accepted mode used by frame and rail presentation. */
     get enabled() {
-        return this.#enabled;
+        return this.#enabled || this.#desktop;
     }
     /** Accept an explicit choice from settings or a future negotiated host integration. */
     setEnabled(enabled) {
-        if (this.#enabled === enabled)
-            return;
+        const previous = this.enabled;
         this.#enabled = enabled;
+        if (this.enabled === previous)
+            return;
+        for (const listener of this.#listeners)
+            listener();
+    }
+    /** Keep desktop chrome mounted while retaining the independent persisted browser preference. */
+    setDesktop(enabled) {
+        const previous = this.enabled;
+        this.#desktop = enabled;
+        if (this.enabled === previous)
+            return;
         for (const listener of this.#listeners)
             listener();
     }
