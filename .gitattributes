@@ -13,6 +13,11 @@
 *.yml text eol=lf
 *.yaml text eol=lf
 *.cube text eol=lf
+LICENSE text eol=lf
+
+# Preserve registered artwork hashes across Windows checkouts and browser deployment.
+frontend/static/**/*.svg -text
+web/**/*.svg -text
 
 # ComfyUI consumes this compiler-owned deployment tree.
 web/** linguist-generated=true

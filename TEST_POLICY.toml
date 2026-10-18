@@ -300,7 +300,15 @@ sources = [
   "frontend/comfyui/ui/overlays/**",
   "frontend/comfyui/ui/surface/**",
 ]
-proofs = ["integration", "unit"]
+proofs = ["contract", "integration", "unit"]
+
+[[boundary]]
+name = "desktop_frame_contract"
+area = "surface"
+
+[[subscription]]
+boundary = "desktop_frame_contract"
+groups = ["frontend_core/integration", "frontend_core/unit"]
 
 [[area]]
 name = "browser"

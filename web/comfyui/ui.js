@@ -454,6 +454,7 @@ if (windowRef) {
     Object.assign(windowRef, {
         SugarCubes: createPublicApi(ui, {
             setSubstituteFrame: (enabled) => frame.mode.setEnabled(enabled),
+            desktopFrame: frame,
             openLibrary: () => cubePicker.openCart(),
             importSugarScript: (source) => importHostCoordinator.importSugarScript(source),
         }),
