@@ -16,7 +16,11 @@ use windows::Win32::UI::{
 pub(super) fn initial_style(mode: PaintMode, id: u16, visible: bool) -> WINDOW_STYLE {
     WS_CHILD
         | WS_TABSTOP
-        | WINDOW_STYLE(BS_PUSHBUTTON as u32)
+        | WINDOW_STYLE(if matches!(mode, PaintMode::NativeButtons(_)) {
+            windows::Win32::UI::WindowsAndMessaging::BS_OWNERDRAW as u32
+        } else {
+            BS_PUSHBUTTON as u32
+        })
         | if !visible || matches!(mode, PaintMode::NativeButtons(_)) && id == 4 {
             WS_DISABLED
         } else {

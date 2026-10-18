@@ -41,6 +41,32 @@ impl NativeBoundary<'_> {
             .join(record_file::hex(resolved.namespace.bytes()));
         let slot =
             if entry { &mut self.state.election } else { &mut self.state.recovery_coordinator };
+        if let Some(held) = slot.as_ref() {
+            if !entry || !held.is_locked() {
+                return Err(ClaimError::invalid("entry_repeated_exclusion"));
+            }
+            paths::validate_regular(
+                &held.handle,
+                Some(0),
+                &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                    &held.handle.budget(),
+                )?,
+            )?;
+            security::verify(
+                &held.handle,
+                &resolved.account_sid,
+                &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                    &held.handle.budget(),
+                )?,
+            )?;
+            return paths::file_identity(
+                &held.handle,
+                &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                    &held.handle.budget(),
+                )?,
+            )
+            .map(Some);
+        }
         let budget = Budget::Protected(memory);
         let acquired = HeldFile::acquire_into(
             crate::protected_storage::exclusion::ExclusionOpen::CreateOrOpen,
@@ -101,8 +127,19 @@ impl ElectionBoundary for NativeBoundary<'_> {
 /// Rejects repeated election and preserves uncertain native effects in their state slots.
 pub(super) fn elect(state: &mut NativeState, context: &JobContext) -> Result<Elected, ClaimError> {
     check(context)?;
-    if state.election.is_some() || state.recovery_coordinator.is_some() {
+    if state.record_origin.is_some()
+        || state.recovery_coordinator.as_ref().is_some_and(HeldFile::is_locked)
+    {
         return Err(ClaimError::invalid("entry_election_repeated"));
+    }
+    for slot in [&mut state.recovery_coordinator, &mut state.election] {
+        if let Some(held) = slot.as_mut()
+            && !held.is_locked()
+        {
+            check(context)?;
+            ClaimError::finish(held.close(), check(context))?;
+            *slot = None;
+        }
     }
     let namespace = state
         .namespace

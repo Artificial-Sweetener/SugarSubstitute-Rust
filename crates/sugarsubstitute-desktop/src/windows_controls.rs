@@ -60,7 +60,7 @@ struct Peer {
 pub(crate) enum PaintMode {
     /// Splash content owns visuals; peers provide accessibility and keyboard focus.
     PreparedPixels,
-    /// The OS BUTTON procedure owns main caption visuals and pointer input.
+    /// Native buttons own input/accessibility; the caption owner paints their iconography.
     NativeButtons(crate::MainIdentity),
 }
 
@@ -75,6 +75,12 @@ pub(crate) struct Controls {
 }
 
 impl Controls {
+    /// Set the native caption palette before its original peers are constructed.
+    pub(crate) fn configure_caption(&self, dark: bool, material: crate::NativeMaterial) {
+        self.callback
+            .caption
+            .set(Some(crate::windows_callbacks::caption::Caption { dark, material }));
+    }
     /// Allocate inert retained callback/control data before any native initialization.
     pub(crate) fn new(
         window: Rc<Window>,

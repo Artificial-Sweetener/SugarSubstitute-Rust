@@ -122,6 +122,20 @@ impl Active {
                 Ok(())
             }
             (_, _, Received::Closing) => {
+                if !self.work.shared.server && self.connections[index].phase == Phase::Challenge {
+                    let original =
+                        self.client.as_ref().ok_or(EntryTransportError::InvalidPhase)?.header;
+                    if !original.same_source(header)
+                        || original.epoch.is_some_and(|epoch| Some(epoch) != header.epoch)
+                    {
+                        return Err(EntryTransportError::Authentication);
+                    }
+                    if self.work.input.as_ref().is_some_and(|input| input.recover_unsubmitted) {
+                        self.return_unsubmitted = true;
+                        self.connections[index].retry_at =
+                            Some(schedule::probe(received, self.work.shared.original_preparation)?);
+                    }
+                }
                 self.close_connection(core, index, None);
                 Ok(())
             }

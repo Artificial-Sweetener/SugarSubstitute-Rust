@@ -66,6 +66,7 @@ struct ClientStaging {
     header: protocol::Header,
     length: usize,
     hello: [u8; protocol::HEADER_BYTES],
+    dispatch: Option<Result<IssueDispatch<Progress>, EntryTransportError>>,
 }
 pub(crate) struct Active {
     work: EntryWork,
@@ -87,6 +88,7 @@ pub(crate) struct Active {
     source_pending: Option<source_staging::EntrySourceOutcome>,
     source_owner: Option<crate::entry_preparation::EntryPreparationOwner>,
     source_input_claim: Option<sugarsubstitute_contracts::execution::MemoryClaim>,
+    return_unsubmitted: bool,
 }
 impl Active {
     pub(crate) fn new(
@@ -122,6 +124,7 @@ impl Active {
             source_pending: None,
             source_owner: None,
             source_input_claim: None,
+            return_unsubmitted: false,
         }
     }
     pub(crate) fn completed(&self) -> bool {
@@ -243,6 +246,9 @@ impl Active {
             None
         };
         for (index, io) in self.connections.iter().enumerate() {
+            if let Some(deadline) = io.retry_at {
+                earliest = Some(earliest.map_or(deadline, |previous| previous.min(deadline)));
+            }
             if io.phase == Phase::Retiring {
                 continue;
             }

@@ -22,6 +22,62 @@ impl EntrySourceOutcome {
 }
 
 impl Active {
+    pub(super) fn prepare_source_launch(&self, core: &Core) -> Result<(), EntryTransportError> {
+        if self.work.input.is_some() {
+            self.source_fence(core, true)?;
+        }
+        Ok(())
+    }
+
+    pub(super) fn complete_source_launch(
+        &mut self,
+        core: &Core,
+        issued: Result<IssueDispatch<Progress>, EntryTransportError>,
+    ) -> Result<IssueDispatch<Progress>, EntryTransportError> {
+        if self.work.input.is_none()
+            || matches!(issued, Ok(IssueDispatch::Closed | IssueDispatch::Expired))
+        {
+            return issued;
+        }
+        // An issued write or uncertain native failure permanently consumes handback.
+        // Keep that exact native result before observing fallible original controls.
+        let Some(client) = self.client.as_mut() else {
+            return issued.and(Err(EntryTransportError::InvalidPhase));
+        };
+        client.dispatch = Some(issued);
+        let released = self.release_staged_source(core);
+        let issued = self
+            .client
+            .as_mut()
+            .and_then(|client| client.dispatch.take())
+            .ok_or(EntryTransportError::InvalidPhase)?;
+        match (issued, released) {
+            (Err(mut first), Err(after)) => {
+                first.retain_cleanup(after);
+                Err(first)
+            }
+            (Err(first), Ok(())) => Err(first),
+            (Ok(_), Err(after)) => Err(after),
+            (Ok(actual), Ok(())) => Ok(actual),
+        }
+    }
+
+    pub(super) fn source_fence_for_return(
+        &mut self,
+        core: &Core,
+    ) -> Result<(), EntryTransportError> {
+        self.source_fence(core, true)?;
+        let claim = self.source_input_claim.take().ok_or(EntryTransportError::InvalidPhase)?;
+        let mut input = self.work.input.take().ok_or(EntryTransportError::InvalidPhase)?;
+        input.request.retain_transport_memory(claim);
+        let mut state = lock(&self.work.shared.state);
+        if state.unsubmitted.is_some() {
+            return Err(EntryTransportError::InvalidPhase);
+        }
+        state.unsubmitted = Some(UnsubmittedEntryRequest { input });
+        Ok(())
+    }
+
     pub(super) fn stage_source(
         &mut self,
         core: &Core,
@@ -41,8 +97,12 @@ impl Active {
             source: input.source_setup,
             nonce: [0; 32],
         };
-        self.client =
-            Some(Box::new(ClientStaging { header, length: 0, hello: [0; protocol::HEADER_BYTES] }));
+        self.client = Some(Box::new(ClientStaging {
+            header,
+            length: 0,
+            hello: [0; protocol::HEADER_BYTES],
+            dispatch: None,
+        }));
         // Active owns this exact returned outcome before any lazy original check.
         self.source_pending = Some(EntrySourceOutcome::Launch(protocol::stage_launch(
             &mut self.connections[0].write.as_mut().ok_or(EntryTransportError::InvalidPhase)?.bytes,
@@ -61,6 +121,14 @@ impl Active {
         self.complete_source_step(core)?;
 
         // Both original and current client fences precede source destruction.
+        self.source_fence(core, true)?;
+        if self.work.input.as_ref().is_some_and(|input| input.recover_unsubmitted) {
+            return Ok(());
+        }
+        self.release_staged_source(core)
+    }
+
+    pub(super) fn release_staged_source(&mut self, core: &Core) -> Result<(), EntryTransportError> {
         self.source_fence(core, true)?;
         let dropped = catch_unwind(AssertUnwindSafe(|| drop(self.work.input.take())));
         self.source_pending = Some(EntrySourceOutcome::Transfer(dropped.map_err(|payload| {
@@ -154,10 +222,17 @@ impl Active {
     }
 
     pub(super) fn preserve_pending_source_failure(&mut self) {
+        if let Some(Err(first)) = self.client.as_mut().and_then(|client| client.dispatch.take()) {
+            self.outcome = Some(JobOutcome::Failure(first));
+        }
         if let Some(pending) = self.source_pending.take()
             && let Err(first) = pending.result()
         {
-            self.outcome = Some(JobOutcome::Failure(first));
+            if let Some(JobOutcome::Failure(original)) = &mut self.outcome {
+                original.retain_cleanup(first);
+            } else {
+                self.outcome = Some(JobOutcome::Failure(first));
+            }
         }
     }
 }

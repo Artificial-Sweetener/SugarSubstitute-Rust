@@ -178,6 +178,8 @@ impl Active {
             // Retire this exact unaccepted attempt before an original-budget retry.
             // Missing endpoint facts never authenticate a peer or grant election authority.
             self.connections[index].failure = Some(error.clone());
+            self.return_unsubmitted =
+                self.work.input.as_ref().is_some_and(|input| input.recover_unsubmitted);
             return self.expire_probe(core, index, core.clock.now());
         }
         match connected? {
@@ -256,6 +258,10 @@ impl Active {
         if deadline <= core.clock.now() {
             return Err(EntryTransportError::InvalidDeadline);
         }
+        let launch = !self.work.shared.server && next == Phase::Outcome;
+        if launch {
+            self.prepare_source_launch(core)?;
+        }
         let next = if self.work.shared.server && next == Phase::Retiring {
             self.connections[index].peer_retirement_until = Some(deadline);
             Phase::AwaitPeerRetirement
@@ -286,7 +292,9 @@ impl Active {
             role: Role::Write,
             deadline: Some(deadline),
         };
-        match lease.write(index, bytes, issue)? {
+        let written = lease.write(index, bytes, issue);
+        let written = if launch { self.complete_source_launch(core, written)? } else { written? };
+        match written {
             IssueDispatch::Issued(Progress::Pending) => Ok(()),
             IssueDispatch::Issued(Progress::Complete(bytes)) => {
                 self.complete(core, index, io, bytes)

@@ -18,13 +18,21 @@ use sugarsubstitute_contracts::{
 pub struct EntryRequestInput {
     request: Box<EntryLaunchRequest>,
     preparation: Option<EntryPreparationOwner>,
+    transport_memory: Option<sugarsubstitute_contracts::execution::MemoryClaim>,
 }
 impl From<EntryLaunchRequest> for EntryRequestInput {
     fn from(request: EntryLaunchRequest) -> Self {
-        Self { request: Box::new(request), preparation: None }
+        Self { request: Box::new(request), preparation: None, transport_memory: None }
     }
 }
 impl EntryRequestInput {
+    /// Keep the transport's actual storage charge across a checked source handback.
+    pub(crate) fn retain_transport_memory(
+        &mut self,
+        claim: sugarsubstitute_contracts::execution::MemoryClaim,
+    ) {
+        self.transport_memory = Some(claim);
+    }
     /// Borrow the authoritative Domain request, preserving its exact grammar.
     pub fn request(&self) -> &EntryLaunchRequest {
         &self.request
@@ -161,9 +169,11 @@ impl CapturedEntryEnvironment {
             units,
         );
         match request {
-            Ok(request) => {
-                Ok(EntryRequestInput { request: Box::new(request), preparation: Some(owner) })
-            }
+            Ok(request) => Ok(EntryRequestInput {
+                request: Box::new(request),
+                preparation: Some(owner),
+                transport_memory: None,
+            }),
             Err(source) => Err(EntryEnvironmentFailure::from_shape(source, owner)),
         }
     }
@@ -172,7 +182,7 @@ impl CapturedEntryEnvironment {
 /// Preserve the complete prepared wrapper and actual failure on checked rejection.
 pub struct EntryRequestAdoptionRejection {
     cause: EntryPreparationError,
-    prepared: EntryPreparationSuccess<EntryRequestInput>,
+    prepared: Box<EntryPreparationSuccess<EntryRequestInput>>,
 }
 impl EntryRequestAdoptionRejection {
     /// Borrow the genuine retained validation cause.
@@ -207,11 +217,11 @@ impl ExecutionClient {
         });
         if let Err(cause) = checked {
             let cause = EntryPreparationError::new(cause, prepared.owner().clone());
-            return Err(EntryRequestAdoptionRejection { cause, prepared });
+            return Err(EntryRequestAdoptionRejection { cause, prepared: Box::new(prepared) });
         }
         prepared.into_entry_request().map_err(|(cause, prepared)| {
             let cause = EntryPreparationError::new(cause, prepared.owner().clone());
-            EntryRequestAdoptionRejection { cause, prepared }
+            EntryRequestAdoptionRejection { cause, prepared: Box::new(prepared) }
         })
     }
 }

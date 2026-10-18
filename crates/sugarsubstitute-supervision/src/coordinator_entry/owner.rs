@@ -31,6 +31,7 @@ use sugarsubstitute_execution::{
 
 mod admission;
 mod completion;
+mod recovery;
 #[cfg(test)]
 mod tests;
 
@@ -61,6 +62,7 @@ pub struct CoordinatorEntryOwner {
     pending: Option<Pending>,
     discovered: Option<Discovered>,
     candidate: Option<CoordinatorEpoch>,
+    source_setup: Option<sugarsubstitute_contracts::execution::CounterDeadline>,
     election: Option<RetainedElectionProof>,
     coordinator: Option<RetainedCoordinatorProof>,
     owner: Option<CoordinatorKey>,
@@ -95,6 +97,7 @@ impl CoordinatorEntryOwner {
             pending: None,
             discovered: None,
             candidate: None,
+            source_setup: None,
             election: None,
             coordinator: None,
             owner: None,
@@ -207,12 +210,17 @@ impl CoordinatorEntryOwner {
         self.current()?;
         let known = self.discovered.ok_or(EntryAdmissionError::Identity)?;
         let client = self.client.as_ref().ok_or(EntryAdmissionError::Identity)?;
-        let source = client
-            .encode_prepared_entry_deadline(
-                self.request.as_ref().ok_or(EntryAdmissionError::Closed)?,
-                self.budget,
-            )
-            .map_err(EntryAdmissionError::PreparedTransport)?;
+        let request = self.request.as_ref().ok_or(EntryAdmissionError::Closed)?;
+        request.validate_original(client, self.budget).map_err(EntryAdmissionError::Preparation)?;
+        let source = if let Some(source) = self.source_setup {
+            source
+        } else {
+            let source = client
+                .encode_prepared_entry_deadline(request, self.budget)
+                .map_err(EntryAdmissionError::PreparedTransport)?;
+            self.source_setup = Some(source);
+            source
+        };
         let request = self.request.take().ok_or(EntryAdmissionError::Closed)?;
         CoordinatorEntryClientInput::from_owned(known.facts, self.candidate, request, source)
             .map_err(|cause| {

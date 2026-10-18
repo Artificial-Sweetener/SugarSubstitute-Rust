@@ -70,6 +70,7 @@ pub(super) struct Envelope {
     pub(super) observation: EntryTransportObservation,
 }
 pub(super) struct State {
+    pub(super) unsubmitted: Option<UnsubmittedEntryRequest>,
     pub(super) prepared: bool,
     pub(super) stopped: bool,
     pub(super) owner: Option<CoordinatorKey>,
@@ -83,6 +84,7 @@ pub(super) struct State {
 impl State {
     pub(super) fn new(server: bool) -> Self {
         Self {
+            unsubmitted: None,
             prepared: false,
             stopped: false,
             owner: None,

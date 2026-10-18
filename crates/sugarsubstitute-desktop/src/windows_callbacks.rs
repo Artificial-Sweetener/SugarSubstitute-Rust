@@ -11,7 +11,9 @@ use crate::{
     native_action::NativeAction,
     windows_subclass::{callback, destroy_callback},
 };
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
+#[path = "windows_caption.rs"]
+pub(crate) mod caption;
 #[path = "timing_native_callback.rs"]
 pub(crate) mod timing;
 use crate::timing::{NativeCallbackKind, TimingObserver};
@@ -36,6 +38,8 @@ pub(crate) struct Callback {
     timings: Option<TimingObserver>,
     controls: RefCell<Vec<(HWND, u16, Option<NativeAction>)>>,
     paint_mode: crate::windows_controls::PaintMode,
+    pub(crate) caption: Cell<Option<caption::Caption>>,
+    pub(crate) hovered: Cell<HWND>,
 }
 
 impl Callback {
@@ -56,7 +60,14 @@ impl Callback {
                 "identity capacity exceeded",
             ));
         }
-        Ok(Self { proxy, timings, controls: RefCell::new(controls), paint_mode })
+        Ok(Self {
+            proxy,
+            timings,
+            controls: RefCell::new(controls),
+            paint_mode,
+            caption: Cell::new(None),
+            hovered: Cell::new(HWND::default()),
+        })
     }
     pub(crate) fn proxy(&self) -> EventLoopProxy<NativeAction> {
         self.proxy.clone()
@@ -166,6 +177,9 @@ pub(crate) unsafe extern "system" fn parent_proc(
         }
         // SAFETY: The nonfinal invocation still owns its installed reference.
         let callback = unsafe { callback::<Callback>(data) };
+        if let Some(result) = caption::parent(callback, hwnd, message, wparam, lparam) {
+            return result;
+        }
         if message == WM_COMMAND
             && lparam.0 != 0
             && (wparam.0 >> 16) == 0
@@ -234,15 +248,14 @@ pub(crate) unsafe extern "system" fn child_proc(
         }
         // SAFETY: The nonfinal invocation still owns its installed reference.
         let callback = unsafe { callback::<Callback>(data) };
+        caption::child(callback, hwnd, message);
         match message {
             WM_NCHITTEST
                 if callback.paint_mode == crate::windows_controls::PaintMode::PreparedPixels =>
             {
                 return LRESULT(HTTRANSPARENT as isize);
             }
-            WM_ERASEBKGND
-                if callback.paint_mode == crate::windows_controls::PaintMode::PreparedPixels =>
-            {
+            WM_ERASEBKGND if callback.prepared_pixels() || callback.caption.get().is_some() => {
                 return LRESULT(1);
             }
             WM_PAINT

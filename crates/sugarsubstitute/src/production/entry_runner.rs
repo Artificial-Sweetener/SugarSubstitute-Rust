@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain real entry, authority, child and execution lifetimes through native headless pumping.
+#[path = "entry_runner/forward_recovery.rs"]
+mod forward_recovery;
 #[path = "entry_runner/lifecycle.rs"]
 mod lifecycle;
 #[path = "entry_runner/normal_idle.rs"]

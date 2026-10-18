@@ -50,6 +50,7 @@ pub struct CoordinatorEntryClientInput {
     pub(super) candidate: Option<CoordinatorEpoch>,
     pub(super) request: EntryRequestInput,
     pub(super) source_setup: CounterDeadline,
+    pub(super) recover_unsubmitted: bool,
 }
 impl CoordinatorEntryClientInput {
     /// Validate owned request capacity before native admission; preserve every original byte.
@@ -75,7 +76,14 @@ impl CoordinatorEntryClientInput {
         if request.request().retained_bytes() > MAX_ENTRY_REQUEST_ALLOCATION_BYTES {
             return Err(EntryShapeError::Capacity);
         }
-        Ok(Self { facts, candidate, request, source_setup })
+        Ok(Self { facts, candidate, request, source_setup, recover_unsubmitted: false })
+    }
+
+    /// Preserve charged source custody for re-election before any Launch dispatch.
+    /// Endpoint absence or authenticated Closing and complete native retirement precede handback.
+    pub fn with_unsubmitted_recovery(mut self) -> Self {
+        self.recover_unsubmitted = true;
+        self
     }
 }
 impl fmt::Debug for CoordinatorEntryClientInput {

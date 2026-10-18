@@ -232,7 +232,7 @@ impl EntryBootstrap {
         Ok(())
     }
 
-    fn advance(&mut self, jobs: &JobSequence) -> Result<(), EntryBootstrapIssue> {
+    pub(super) fn advance(&mut self, jobs: &JobSequence) -> Result<(), EntryBootstrapIssue> {
         if self.closing {
             return Ok(());
         }

@@ -8,7 +8,8 @@ impl Active {
         core: &Core,
         index: usize,
     ) -> Result<(), EntryTransportError> {
-        let reuse = self.work.shared.server || self.connections[index].retry_at.is_some();
+        let reuse = self.work.shared.server
+            || !self.return_unsubmitted && self.connections[index].retry_at.is_some();
         if !self.connections[index].native_retired {
             match self.lease()?.retire_connection(index, reuse) {
                 Ok(false) => return Ok(()),
@@ -69,6 +70,14 @@ impl Active {
         }
         self.connections[index].pending = None;
         if loan {
+            return Ok(());
+        }
+        if self.return_unsubmitted {
+            if self.connections[index].retry_at.is_some_and(|at| core.clock.now() < at) {
+                return Ok(());
+            }
+            self.connections[index].retry_at = None;
+            self.outcome = Some(JobOutcome::Success(self.report));
             return Ok(());
         }
         if reuse {
@@ -177,6 +186,12 @@ impl Active {
             }
         }
         self.replay = None;
+        if self.return_unsubmitted && matches!(self.outcome, Some(JobOutcome::Success(_))) {
+            let transferred = self.source_fence_for_return(core);
+            if let Err(cause) = transferred {
+                self.error(core, cause);
+            }
+        }
         drop(self.work.input.take());
         drop(self.source_pending.take());
         drop(self.source_owner.take());

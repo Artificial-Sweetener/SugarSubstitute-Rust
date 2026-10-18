@@ -10,9 +10,9 @@ use windows::Win32::{
     Foundation::{E_ACCESSDENIED, E_INVALIDARG, E_NOTIMPL, HWND, POINT, RECT},
     Graphics::{
         Dwm::{
-            DWMWA_SYSTEMBACKDROP_TYPE, DWMWA_USE_IMMERSIVE_DARK_MODE,
-            DWMWA_WINDOW_CORNER_PREFERENCE, DWMWINDOWATTRIBUTE, DwmExtendFrameIntoClientArea,
-            DwmSetWindowAttribute,
+            DWM_BB_ENABLE, DWM_BLURBEHIND, DWMWA_SYSTEMBACKDROP_TYPE,
+            DWMWA_USE_IMMERSIVE_DARK_MODE, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWINDOWATTRIBUTE,
+            DwmEnableBlurBehindWindow, DwmExtendFrameIntoClientArea, DwmSetWindowAttribute,
         },
         Gdi::{
             BitBlt, GetDC, GetMonitorInfoW, MONITOR_DEFAULTTOPRIMARY, MONITORINFO,
@@ -30,6 +30,7 @@ pub(crate) struct Presenter {
     dib: Option<Dib>,
     material: NativeMaterial,
     background: u8,
+    glass_top: i32,
 }
 
 impl Presenter {
@@ -63,6 +64,13 @@ impl Presenter {
         // SAFETY: Tao owns this valid HWND on the current UI thread. The margins
         // structure remains live and is synchronously copied during the call.
         unsafe {
+            // Tao enables whole-window alpha for transparent windows. The presenter
+            // owns the glass extent so ordinary child GDI remains opaque outside it.
+            DwmEnableBlurBehindWindow(
+                hwnd,
+                &DWM_BLURBEHIND { dwFlags: DWM_BB_ENABLE, ..Default::default() },
+            )
+            .map_err(|error| DesktopError::new("claim_native_glass_extent", error))?;
             DwmExtendFrameIntoClientArea(hwnd, &margins)
                 .map_err(|error| DesktopError::new("extend_native_material", error))?;
         }
@@ -75,6 +83,7 @@ impl Presenter {
                 NativeMaterial::ThemedFallback
             },
             background: if dark { 32 } else { 243 },
+            glass_top: -1,
         })
     }
 
@@ -93,6 +102,15 @@ impl Presenter {
         frame: &PreparedFrame,
         excluded: Option<RECT>,
     ) -> Result<(), DesktopError> {
+        let hwnd = HWND(self.window.hwnd() as *mut c_void);
+        let margins = glass_margins(excluded);
+        if self.glass_top != margins.cyTopHeight {
+            // SAFETY: The exact retained window belongs to this UI thread. Keep
+            // ordinary GDI child text outside the alpha-composited glass region.
+            unsafe { DwmExtendFrameIntoClientArea(hwnd, &margins) }
+                .map_err(|cause| DesktopError::new("configure_console_glass_boundary", cause))?;
+            self.glass_top = margins.cyTopHeight;
+        }
         let dib = Dib::for_frame(&mut self.dib, frame)?;
         let destination = dib.pixels_mut()?;
         for (source, target) in frame.pixels().chunks_exact(4).zip(destination.chunks_exact_mut(4))
@@ -110,7 +128,6 @@ impl Presenter {
                 ]);
             }
         }
-        let hwnd = HWND(self.window.hwnd() as *mut c_void);
         // SAFETY: Window and DIB handles remain valid on their creating thread. GetDC's
         // borrowed DC is released on both success and failure before returning.
         unsafe {
@@ -139,6 +156,18 @@ impl Presenter {
             }
         }
         Ok(())
+    }
+}
+
+/// Native GDI controls own opaque client pixels below the animated glass surface.
+/// Extending glass beneath RichEdit makes its GDI alpha undefined in DWM, even
+/// when a DC screenshot shows readable RGB text. Collapsing restores full glass.
+fn glass_margins(console: Option<RECT>) -> MARGINS {
+    match console {
+        Some(rect) => {
+            MARGINS { cxLeftWidth: 0, cxRightWidth: 0, cyTopHeight: rect.top, cyBottomHeight: 0 }
+        }
+        None => MARGINS { cxLeftWidth: -1, cxRightWidth: -1, cyTopHeight: -1, cyBottomHeight: -1 },
     }
 }
 
@@ -238,9 +267,33 @@ fn set_attribute(
 
 #[cfg(test)]
 mod tests {
-    use super::{centered_origin, placement_point};
+    use super::{centered_origin, glass_margins, placement_point};
     use tao::dpi::PhysicalPosition;
     use windows::Win32::Foundation::{E_ACCESSDENIED, E_INVALIDARG, POINT, RECT};
+
+    /// Keep the entire native text/scroll region outside glass at every physical scale.
+    #[test]
+    fn expanded_console_ends_glass_before_gdi_text_and_collapse_restores_full_material() {
+        for top in [357, 625, 714] {
+            let margins =
+                glass_margins(Some(RECT { left: 25, top, right: 534, bottom: top + 180 }));
+            assert_eq!(margins.cyTopHeight, top);
+            assert_eq!(
+                (margins.cxLeftWidth, margins.cxRightWidth, margins.cyBottomHeight),
+                (0, 0, 0)
+            );
+        }
+        let collapsed = glass_margins(None);
+        assert_eq!(
+            (
+                collapsed.cxLeftWidth,
+                collapsed.cxRightWidth,
+                collapsed.cyTopHeight,
+                collapsed.cyBottomHeight
+            ),
+            (-1, -1, -1, -1)
+        );
+    }
 
     /// Preserve an available cursor and permit window placement when its desktop denies access.
     #[test]

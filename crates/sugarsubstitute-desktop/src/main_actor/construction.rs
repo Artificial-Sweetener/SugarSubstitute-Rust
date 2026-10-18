@@ -77,6 +77,20 @@ impl MainActor {
                     None,
                 )?);
                 self.controls
+                    .as_ref()
+                    .ok_or_else(|| {
+                        DesktopError::message("configure_main_caption", "retained controls absent")
+                    })?
+                    .configure_caption(
+                        self.request()?.settings().dark,
+                        self.material.ok_or_else(|| {
+                            DesktopError::message(
+                                "configure_main_caption",
+                                "native material absent",
+                            )
+                        })?,
+                    );
+                self.controls
                     .as_mut()
                     .ok_or_else(|| {
                         DesktopError::message(

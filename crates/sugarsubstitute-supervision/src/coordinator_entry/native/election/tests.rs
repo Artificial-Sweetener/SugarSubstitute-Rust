@@ -166,3 +166,33 @@ fn genuine_coordinator_security_failure_preserves_cause_and_stops_readback() -> 
         Ok(())
     })
 }
+
+#[test]
+fn retiring_coordinator_requires_a_new_exclusion_observation_before_released_election() -> TestResult
+{
+    run(|context| {
+        let mut files = Files::new()?;
+        files.entry = None;
+        assert!(matches!(
+            decide(&mut files, NamespaceId::new([1; 32]), context)?,
+            Elected::Candidate(_)
+        ));
+        assert!(!files.entry_held && !files.coordinator_held);
+        files.entry = Some([9; 24]);
+        files.coordinator = None;
+        assert!(matches!(
+            decide(&mut files, NamespaceId::new([1; 32]), context)?,
+            Elected::Candidate(_)
+        ));
+        assert!(files.entry_held && !files.coordinator_held);
+        let mut released = Record::decode(&files.original)?;
+        released.state = RecordState::Released;
+        files.original = released.encode();
+        files.current = files.original;
+        files.calls.clear();
+        assert!(matches!(decide(&mut files, NamespaceId::new([1; 32]), context)?,
+            Elected::OrdinaryReleased { record, inode } if record == files.original && inode == [9;24]));
+        assert_eq!(files.calls, ["entry", "read"]);
+        Ok(())
+    })
+}

@@ -18,7 +18,9 @@ mod schedule;
 mod startup_snapshot;
 mod state;
 mod types;
+mod unsubmitted;
 pub(crate) use issue::{IssueDispatch, NativeIssue};
+pub use unsubmitted::UnsubmittedEntryRequest;
 #[cfg(test)]
 mod tests;
 pub(crate) mod worker;

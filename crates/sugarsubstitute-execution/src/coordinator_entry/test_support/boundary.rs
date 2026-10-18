@@ -52,6 +52,8 @@ pub(in crate::coordinator_entry::tests) struct Boundary {
     pub(in crate::coordinator_entry::tests) connects_issued: AtomicUsize,
     pub(in crate::coordinator_entry::tests) connect_failure: Mutex<Option<&'static str>>,
     pub(in crate::coordinator_entry::tests) absent_endpoint: AtomicBool,
+    pub(in crate::coordinator_entry::tests) closing_before_launch: AtomicBool,
+    pub(in crate::coordinator_entry::tests) closing_after_launch: AtomicBool,
     pub(in crate::coordinator_entry::tests) reads_issued: AtomicUsize,
 }
 impl Boundary {
@@ -102,6 +104,8 @@ impl Boundary {
             connects_issued: AtomicUsize::new(0),
             connect_failure: Mutex::new(None),
             absent_endpoint: AtomicBool::new(false),
+            closing_before_launch: AtomicBool::new(false),
+            closing_after_launch: AtomicBool::new(false),
             reads_issued: AtomicUsize::new(0),
         }))
     }
@@ -337,12 +341,19 @@ impl EntryLease for Lease {
                         let nonce = self.0.nonce.fetch_add(1, Ordering::AcqRel) + 1;
                         header.nonce =
                             [u8::try_from(nonce).map_err(|_| EntryTransportError::Capacity)?; 32];
-                        self.0.push(index, header, protocol::Payload::Challenge)?;
+                        let payload = if self.0.closing_before_launch.load(Ordering::Acquire) {
+                            protocol::Payload::Closing
+                        } else {
+                            protocol::Payload::Challenge
+                        };
+                        self.0.push(index, header, payload)?;
                     }
                 }
                 protocol::DecodedPayload::Launch(_) if !self.0.server => {
                     lock(&self.0.client_launches).push(frame.header);
-                    if !self.0.defer_client_outcome.load(Ordering::Acquire) {
+                    if self.0.closing_after_launch.load(Ordering::Acquire) {
+                        self.0.push(index, frame.header, protocol::Payload::Closing)?;
+                    } else if !self.0.defer_client_outcome.load(Ordering::Acquire) {
                         self.0.push(
                             index,
                             frame.header,

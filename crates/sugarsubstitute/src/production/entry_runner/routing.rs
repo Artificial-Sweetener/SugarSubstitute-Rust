@@ -58,7 +58,7 @@ impl<C: EntryActivation> EntryRunner<C> {
                 && self.forward.is_none()
                 && matches!(entry.snapshot().phase, EntryPhase::Candidate | EntryPhase::Contended)
             {
-                let input = entry.client_input()?;
+                let input = entry.client_input()?.with_unsubmitted_recovery();
                 let spec = JobSpec {
                     id: self.jobs.allocate()?,
                     operation: Operation::NativeLifecycle,
@@ -287,6 +287,7 @@ impl<C: EntryActivation> EntryRunner<C> {
         {
             self.transport_completions[2] = forward.completion.try_take_completion();
         }
+        self.recover_unsubmitted_forward()?;
         let initial = self.transport_completions[1]
             .as_ref()
             .filter(|_| {
