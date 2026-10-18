@@ -104,7 +104,7 @@ export function createWorkflowTablist(document: Document): HTMLElement & { activ
 export function createWorkflowTab(document: Document): HTMLElement {
   const tab =
     readOwnedVisualStyle(document) === 'spectrum'
-      ? document.createElement('sp-tab')
+      ? document.createElement('sc-spectrum-workflow-tab')
       : createFluentWorkflowTab(document);
   tab.dataset.scWorkflowTab = '';
   return tab;

@@ -49,7 +49,7 @@ export class SubstituteFrameView {
   #dark: boolean | null = null;
   #initialized = false;
 
-  /** Create official Fluent controls with stable child lifetimes and exact reference artwork. */
+  /** Create provider controls with stable child lifetimes and shared frame artwork. */
   constructor(
     private readonly document: Document,
     private readonly actions: SubstituteFrameViewActions,
@@ -78,6 +78,17 @@ export class SubstituteFrameView {
     );
     const create = this.#button('New workflow', '', () => actions.workflows.create());
     create.classList.add('sc-workflow-new');
+    const plus = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    plus.classList.add('sc-workflow-new-glyph');
+    plus.setAttribute('viewBox', '0 0 12 12');
+    plus.setAttribute('aria-hidden', 'true');
+    const cross = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    cross.setAttribute('d', 'M0 6H12M6 0V12');
+    cross.setAttribute('stroke', 'currentColor');
+    cross.setAttribute('stroke-width', '1');
+    cross.setAttribute('fill', 'none');
+    plus.append(cross);
+    create.append(plus);
     const overflow = this.#button('More workflows', '⌄', () =>
       this.#overflowMenu.open({
         label: 'Open workflows',

@@ -71,6 +71,7 @@ function ensureThemeStyles(document) {
     [data-sc-theme="spectrum"] [data-sc-workflow-tabs] {
       display:flex; height:30px; width:var(--sc-workflow-tabs-width); min-width:0; overflow:clip;
       --mod-tabs-height:30px; --mod-tabs-font-size:12px;
+      --mod-tabs-item-horizontal-spacing:0px;
     }
     [data-sc-theme="spectrum"] [data-sc-workflow-tab] {
       display:inline-flex; align-items:center; box-sizing:border-box; height:30px;
