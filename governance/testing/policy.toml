@@ -17,13 +17,13 @@ minimum_tests = 219
 package = "sugarsubstitute-comfy"
 root = "crates/sugarsubstitute-comfy"
 concern = "Bounded startup schema, effective managed argv and observed ComfyUI response contracts; Bounded fixed WinHTTP requests, installed runtime asset hash verification, deterministic readiness-owner custody and feature-gated external boundary fixtures; cancellable readiness campaigns, finite HTTP phases and typed native retry classification"
-minimum_tests = 113
+minimum_tests = 115
 
 [[owners]]
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
 concern = "Same-profile successor joins authenticated native release and domain settlement with unchanged cutoff; Fresh subordinate recovery composition with unchanged Root authority, admission before ACK, independent real receiving and checked cleanup; Production desktop startup and retirement through actual execution, authenticated parent/child transport, shared backends, profiles and native window adapters; retained failures, captured startup, bounded console rendering and isolated qualification roles; contained headless backend witness invocation and original-budget Finish lifecycle; genuine boxed incident construction and bounded original terminal/cause diagnostics; unique heap activation ownership outside the persistent native pump frame; original launched-profile release consumption and precise Finish request status; actual Desktop probe formatter and sole bounded Root stderr diagnostic decoding"
-minimum_tests = 865
+minimum_tests = 871
 
 [[owners]]
 package = "sugarsubstitute-execution"

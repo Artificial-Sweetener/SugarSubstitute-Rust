@@ -59,6 +59,10 @@ impl ReadinessCampaign {
                     self.attempt = None;
                     self.ready = true;
                     self.readiness = Some(proof);
+                    if matches!(&self.failure, Some(CampaignError::Transport(previous)) if retryable_attempt(previous, self.readiness_scope.is_some()))
+                    {
+                        self.failure = None;
+                    }
                     return Ok(CampaignStep::Ready);
                 }
                 Ok(Some(_)) => self.attempt = None,

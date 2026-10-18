@@ -145,6 +145,9 @@ pub(in crate::production::entry_activation) fn recovery_retirement(
 }
 /// Classify the exact first veto at the authoritative role policy.
 fn role_decision(record: &Record) -> std::result::Result<Role, &'static str> {
+    if let Some(completed) = &record.completed_normal {
+        return completed.budget(record).map(|budget| Role::Normal { budget, retired: true });
+    }
     if record.collection.pending() {
         return Err("CollectionPending");
     }
@@ -219,6 +222,26 @@ fn role_decision(record: &Record) -> std::result::Result<Role, &'static str> {
         _ => return Err("NormalRetirementIdentity"),
     };
     Ok(Role::Normal { budget: request.budget(), retired })
+}
+
+/// Admit irreversible normal-role disposal only through every live-owner idle guard.
+pub(super) fn completed_normal_budget(record: &Record) -> Option<ShutdownBudget> {
+    if record.completed_normal.is_some()
+        || !record.closed
+        || record.failed_cause.is_some()
+        || record.failed_shutdown.is_some()
+        || record.failed_family_adopted
+        || !record.seed.delivered()
+        || (record.seed.started()
+            && (!record.seeded || !matches!(record.seed.material(), Ok(Some(_)))))
+        || record.start.as_ref().is_some_and(|start| start.recovery.is_some())
+    {
+        return None;
+    }
+    match role_decision(record) {
+        Ok(Role::Normal { budget, retired: true }) => Some(budget),
+        _ => None,
+    }
 }
 /// All roles must be eligible. Earliest unresolved transactions remain binding;
 /// genuinely completed historical transactions use only the latest original close intent.

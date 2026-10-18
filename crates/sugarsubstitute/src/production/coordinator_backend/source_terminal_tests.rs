@@ -360,15 +360,34 @@ fn exercise_source_stop(
         )?;
     }
     assert!(backend.record(key)?.source_closed);
-    assert!(matches!(
-        backend.record(key)?.source_terminal.as_ref().map(|done| &done.outcome),
-        Some(JobOutcome::Success(()))
-    ));
+    assert!(backend.record(key)?.source_terminal.is_none());
     assert!(backend.cleanup_failure(key).is_none());
+    backend.cleanup(0, &mut resources)?;
+    assert!(backend.record(key)?.settled);
+    // Delivery does not join the executor's final context aliases. Keep the actual
+    // settled Backend alive while proving its obsolete close credit is released.
+    drop(execution);
+    assert_eq!(cleanup.snapshot().reserved_bytes, 0);
+    assert!(backend.record(key)?.source_closed);
+    assert!(backend.record(key)?.source_terminal.is_none());
+    if admission_fails {
+        assert!(backend.record(key)?.output.is_none());
+        assert!(backend.record(key)?.output_terminal.is_none());
+        assert_eq!(native.snapshot().reserved_bytes, 0);
+    }
+    if shutdown_first {
+        assert_eq!(
+            backend
+                .failure(key)
+                .and_then(Error::source)
+                .and_then(|cause| cause.downcast_ref::<std::io::Error>())
+                .map(std::ptr::from_ref),
+            Some(pointer),
+        );
+    }
     let Backend { scope: retained_scope, .. } =
         backend.records[0].take().ok_or("Original closed source record absent")?;
     drop(held);
-    drop(execution);
     assert_eq!(retained_scope.snapshot().reserved_bytes, 0);
     Ok(())
 }
@@ -394,3 +413,6 @@ fn backend_source_terminal_cancel_before_cleanup_remains_failure_until_explicit_
 fn custody_admission_failure_still_adopts_real_source_and_output_cleanup_terminals() -> Result<()> {
     exercise_source_stop(true, false, true)
 }
+
+#[path = "source_terminal_tests/output_retirement.rs"]
+mod output_retirement;

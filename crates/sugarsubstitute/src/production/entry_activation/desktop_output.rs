@@ -80,7 +80,11 @@ impl DesktopOutput {
             replacement: None,
         };
         let session = client.reserve_windows_output(native, spec, OutputIdentity::Desktop(run))?;
-        Ok(Self {
+        Ok(Self::with_session(run, session))
+    }
+    /// Adopt the already admitted queue and its native worker into one diagnostic owner.
+    fn with_session(run: RunKey, session: WindowsOutputSession) -> Self {
+        Self {
             session,
             terminal: None,
             loan: None,
@@ -91,7 +95,21 @@ impl DesktopOutput {
             closing: false,
             run,
             diagnostic: diagnostic::Diagnostic::new(),
-        })
+        }
+    }
+    /// Replace only external I/O; the execution worker and byte reservation remain production owners.
+    #[cfg(test)]
+    pub(super) fn boundary_fixture(
+        run: RunKey,
+        client: &ExecutionClient,
+        native: &Scope,
+        spec: JobSpec,
+        external: &sugarsubstitute_execution::windows_output::boundary_fixture::OutputFixture,
+    ) -> Result<Self> {
+        Ok(Self::with_session(
+            run,
+            external.reserve(client, native, spec, OutputIdentity::Desktop(run))?,
+        ))
     }
     pub(super) fn prepared(&self) -> bool {
         let actual = self.session.control.snapshot();

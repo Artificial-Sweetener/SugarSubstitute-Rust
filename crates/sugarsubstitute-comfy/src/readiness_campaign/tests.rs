@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise real campaign, source inspection, probe completion and cleanup owners.
 mod clock;
+mod custody;
 mod harness;
 mod incremental;
 mod managed;

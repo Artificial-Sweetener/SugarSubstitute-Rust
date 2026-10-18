@@ -150,6 +150,7 @@ fn normal_idle_partial_unlaunched_or_failed_record_never_becomes_a_normal_role()
         retained_causes: None,
         preparation: None,
         retired: None,
+        completed_normal: None,
         forwarded: None,
         ui_suspected: false,
         replied: true,

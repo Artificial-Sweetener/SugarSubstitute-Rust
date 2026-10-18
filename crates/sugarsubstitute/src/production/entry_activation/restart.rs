@@ -56,6 +56,9 @@ impl ProductionActivation {
         }
         let held = self.records[at].as_mut().ok_or("Actual restart record missing")?;
         let record = held.record.as_mut();
+        if record.completed_normal.is_some() {
+            return Err(sugarsubstitute_contracts::lifecycle::LifecycleRejection::WrongPhase.into());
+        }
         if record.restart.admitted {
             return Err("Actual restart intent repeated".into());
         }

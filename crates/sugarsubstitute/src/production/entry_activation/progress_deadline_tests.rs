@@ -63,6 +63,7 @@ fn retained_record(until: Moment) -> Result<RetainedRecord> {
             retained_causes: None,
             preparation: None,
             retired: None,
+            completed_normal: None,
             forwarded: None,
             ui_suspected: false,
             replied: false,

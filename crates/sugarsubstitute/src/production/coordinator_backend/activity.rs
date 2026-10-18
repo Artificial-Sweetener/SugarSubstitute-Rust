@@ -306,8 +306,12 @@ impl CoordinatorBackend {
             && !record.output_observed
             && let Some(completion) = output.completion.try_take_completion()
         {
-            record.output_observed = true;
-            if record.shutdown.is_none() {
+            record.output_observed = completion.scope_id == output.completion.scope_id()
+                && completion.spec == output.completion.spec();
+            if !record.output_observed {
+                record.output_terminal = Some(completion);
+                failure.get_or_insert_with(|| Box::new(LifecycleRejection::StaleIdentity));
+            } else if record.shutdown.is_none() {
                 let cause = Box::new(OutputTerminalFailure(completion));
                 if failure.is_none() {
                     failure = Some(cause);
@@ -416,9 +420,15 @@ fn consume_source(record: &mut Backend, now: Moment) -> Result<()> {
     if let Some(close) = &mut record.source_close
         && let Some(completion) = close.try_take_completion()
     {
-        record.source_closed = matches!(completion.outcome, JobOutcome::Success(()));
-        record.source_terminal = Some(completion);
+        let original = completion.scope_id == close.scope_id() && completion.spec == close.spec();
+        record.source_closed = original && matches!(completion.outcome, JobOutcome::Success(()));
+        if !record.source_closed {
+            record.source_terminal = Some(completion);
+        }
         record.source_close = None;
+        if !original {
+            return Err(LifecycleRejection::StaleIdentity.into());
+        }
     }
     Ok(())
 }

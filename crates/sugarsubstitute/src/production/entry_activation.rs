@@ -35,6 +35,8 @@ pub(in crate::production) use incident_reporting::RetiredReporter;
 mod launch;
 #[path = "entry_activation/normal_idle.rs"]
 mod normal_idle;
+#[path = "entry_activation/normal_retirement.rs"]
+mod normal_retirement;
 #[path = "entry_activation/parent_construction.rs"]
 mod parent_construction;
 #[path = "entry_activation/profile_admission.rs"]

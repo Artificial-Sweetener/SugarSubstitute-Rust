@@ -188,10 +188,15 @@ impl CoordinatorBackend {
         resources: &mut BackendResources<'_>,
     ) -> Result<ResourceTransition> {
         let record = self.records[at].as_mut().ok_or(LifecycleRejection::StaleIdentity)?;
-        let output_settled = record
-            .output
-            .as_ref()
-            .is_none_or(|output| output.control.snapshot().retired && record.output_observed);
+        let output_settled = record.output.as_ref().is_none_or(|output| {
+            let actual = output.control.snapshot();
+            actual.identity
+                == sugarsubstitute_execution::windows_output::OutputIdentity::Managed(record.key)
+                && actual.retired
+                && record.output_observed
+                && output.control.loan_available()
+                && record.output_fanout.current.is_none()
+        });
         if record.source_closed
             && record.campaign.settled()
             && output_settled
@@ -243,6 +248,22 @@ impl CoordinatorBackend {
                     .ok_or(LifecycleRejection::WrongPhase)?
                     .retire_settled(ticket.process())?;
                 record.launch = None;
+            }
+            // No native reader, launch pin or fanout guard remains. Historical failures
+            // retain their original completion credit; successful output custody is obsolete.
+            record.output = None;
+            let normal_terminal =
+                record.output_terminal.as_ref().is_some_and(|terminal| match &terminal.outcome {
+                    JobOutcome::Success(report) => report.retired
+                        && report.identity
+                            == sugarsubstitute_execution::windows_output::OutputIdentity::Managed(
+                                record.key,
+                            ),
+                    JobOutcome::Cancelled => record.shutdown.is_some(),
+                    _ => false,
+                });
+            if normal_terminal {
+                record.output_terminal = None;
             }
             record.settled = true;
             let key = record.key;

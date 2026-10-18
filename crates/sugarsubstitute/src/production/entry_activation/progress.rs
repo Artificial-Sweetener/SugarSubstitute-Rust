@@ -277,7 +277,12 @@ impl ProductionActivation {
                 backend.settle_run(retired).map_err(outer)
             }) {
                 Ok(true) => {}
-                Ok(false) => continue,
+                Ok(false) => {
+                    if let Err(cause) = super::normal_retirement::retire(record) {
+                        failure.get_or_insert(cause);
+                    }
+                    continue;
+                }
                 Err(cause) => {
                     failure.get_or_insert(cause);
                     continue;

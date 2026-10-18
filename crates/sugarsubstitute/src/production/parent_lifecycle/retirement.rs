@@ -120,6 +120,11 @@ pub(crate) struct RetiredRegistration {
     registered: bool,
 }
 impl RetiredRegistration {
+    /// Substitute only native retirement facts in owner-local classification tests.
+    #[cfg(test)]
+    pub(in crate::production) fn boundary_fixture(run: RunKey, registered: bool) -> Self {
+        Self { run, registered }
+    }
     pub(crate) fn run(&self) -> RunKey {
         self.run
     }

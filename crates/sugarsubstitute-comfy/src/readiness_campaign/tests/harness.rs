@@ -230,7 +230,13 @@ impl Harness {
     pub(super) fn retained_bytes(&self) -> u64 {
         self.attempt.snapshot().reserved_bytes
     }
-    pub(super) fn finish(mut self) -> TestResult<()> {
+    pub(super) fn finish(self) -> TestResult<()> {
+        let (campaign, _) = self.finish_execution()?;
+        assert!(campaign.settled());
+        Ok(())
+    }
+    /// Join the actual executor while returning campaign and scope custody for final observations.
+    pub(super) fn finish_execution(mut self) -> TestResult<(ReadinessCampaign, Scope)> {
         for fixture in &self.fixtures.0 {
             fixture.release();
         }
@@ -261,14 +267,12 @@ impl Harness {
         }
         drop(completion);
         assert!(self.campaign.settled());
-        drop(self.campaign);
         drop(self.source);
         drop(self.lease);
-        drop(self.attempt);
         drop(self.cleanup);
         drop(self.client);
         drop(self.executor);
-        Ok(())
+        Ok((self.campaign, self.attempt))
     }
 }
 struct FixtureGuard(Vec<Arc<FixtureHttp>>);

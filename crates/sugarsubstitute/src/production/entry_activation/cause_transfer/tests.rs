@@ -53,6 +53,7 @@ fn record(generation: u64) -> Result<Record> {
         retained_causes: None,
         preparation: None,
         retired: None,
+        completed_normal: None,
         forwarded: None,
         ui_suspected: false,
         replied: false,

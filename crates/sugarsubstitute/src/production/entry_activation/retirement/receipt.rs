@@ -9,6 +9,11 @@ pub(crate) struct RetiredDesktop {
     registration: RetiredRegistration,
 }
 impl RetiredDesktop {
+    /// Substitute the native retirement boundary solely for closed-role classification tests.
+    #[cfg(test)]
+    pub(in crate::production) fn boundary_fixture(run: RunKey, registered: bool) -> Self {
+        Self { registration: RetiredRegistration::boundary_fixture(run, registered) }
+    }
     pub(super) fn new(registration: RetiredRegistration) -> Self {
         Self { registration }
     }

@@ -38,6 +38,37 @@ impl Error for MaterialFailure {
     }
 }
 impl SeedPreparation {
+    /// Supply deterministic seed facts through a real admitted worker for ownership tests.
+    #[cfg(test)]
+    pub(super) fn boundary_fixture(
+        client: &sugarsubstitute_execution::ExecutionClient,
+        scope: &Scope,
+        spec: JobSpec,
+        run: RunKey,
+    ) -> Result<Self> {
+        let job = client.submit_blocking(scope, spec, move |context| {
+            let original = context.memory().clone();
+            let result = (|| -> std::result::Result<_, Box<dyn Error + Send + Sync>> {
+                let at = IncidentUtc::from_unix_seconds(0)?;
+                Ok(SeedMaterial {
+                    seed: IncidentSeed::new(
+                        IncidentKey::new(IncidentSubject::Desktop(run)),
+                        IncidentRevision::new(1)?,
+                        BuildIdentity::new("closed-normal-boundary")?,
+                        at,
+                        IncidentStage::DesktopInitialization,
+                    )?,
+                    context: IncidentRequestContext::new(
+                        IncidentOperationBudget::new(context.now())?,
+                        at,
+                    ),
+                    _storage: context.memory().claim(512)?,
+                })
+            })();
+            result.map_err(|cause| MaterialFailure { cause, _original: original })
+        })?;
+        Ok(Self { job: Some(job), completed: None, notice: None, admitted: true })
+    }
     pub(super) const fn new() -> Self {
         Self { job: None, completed: None, notice: None, admitted: false }
     }

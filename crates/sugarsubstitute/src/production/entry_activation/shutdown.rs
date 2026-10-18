@@ -53,7 +53,7 @@ impl ProductionActivation {
     ) -> Result<()> {
         let budget = record.parent.as_ref().map_or(budget, |parent| parent.cleanup_budget(budget));
         if record.closed {
-            return Ok(());
+            return super::normal_retirement::retire(record);
         }
         if record.collection.pending() {
             return Ok(());
@@ -84,7 +84,7 @@ impl ProductionActivation {
             // Native retirement already removed the ticket. Keep this receipt while
             // the independent backend cleanup owner finishes its current generation.
             record.closed = backend.settle_run(retired).map_err(outer)?;
-            return Ok(());
+            return super::normal_retirement::retire(record);
         }
         if record.start.is_none() {
             record.closed = true;
@@ -223,6 +223,6 @@ impl ProductionActivation {
                 record.closed = retirement::retire_unparented_recovery(start, registry)?;
             }
         }
-        Ok(())
+        super::normal_retirement::retire(record)
     }
 }
