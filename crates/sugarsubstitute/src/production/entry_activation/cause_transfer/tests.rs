@@ -48,6 +48,7 @@ fn record(generation: u64) -> Result<Record> {
         released_attach: None,
         attach_retirement: None,
         start: None,
+        profile_predecessor: None,
         parent: None,
         retained_causes: None,
         preparation: None,

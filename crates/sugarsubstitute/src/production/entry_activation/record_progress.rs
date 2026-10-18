@@ -16,6 +16,7 @@ impl ProductionActivation {
         resources: &mut EntryResources<'_>,
         closing: bool,
         backend_commands_open: bool,
+        profile_waiting: bool,
     ) -> Result<()> {
         let admission_closed = closing
             || record.failed.is_some()
@@ -117,7 +118,16 @@ impl ProductionActivation {
             let Some(parent) = parent else {
                 return Ok(());
             };
-            start.acquire_profile(&parent, resources)?;
+            if start.acquired {
+                start.acquire_profile(&parent, resources)?;
+            } else if !super::profile_admission::admit_profile(
+                profile_waiting,
+                resources.client.now()?,
+                start.value()?.until,
+                || start.acquire_profile(&parent, resources),
+            )? {
+                return Ok(());
+            }
             start.reserve_channel(resources)?;
         }
         if !admission_closed && !incidents.seed_ready(record, capture, backend, resources, None)? {

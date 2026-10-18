@@ -111,6 +111,12 @@ impl ProductionActivation {
             .chain(self.incidents.reporting.deadlines())
             .chain(self.incidents.recovery_deadline())
             .chain(self.records.iter().flatten().filter_map(|held| held.record.restart.deadline()))
+            .chain(
+                self.records
+                    .iter()
+                    .flatten()
+                    .filter_map(|held| held.record.profile_wait_deadline()),
+            )
     }
     /// Report this turn's first capture failure only after owned completion and
     /// deadline adoption; retained historical errors do not fail later turns again.
@@ -255,6 +261,7 @@ impl ProductionActivation {
         }
         let capture = self.capture.as_mut().ok_or("Actual capture owner missing")?;
         for at in 0..self.records.len() {
+            let profile_waiting = Self::profile_admission_waiting(&mut self.records, at)?;
             let backend_commands_open = !self.closing
                 && failure.is_none()
                 && commands_open(&self.records, delivery, backend);
@@ -287,6 +294,7 @@ impl ProductionActivation {
                 resources,
                 self.closing || failure.is_some() || delivery.pending(),
                 backend_commands_open,
+                profile_waiting,
             ) {
                 if self.failure.is_none() {
                     self.failure_run.get_or_insert(record.run);

@@ -37,6 +37,8 @@ mod launch;
 mod normal_idle;
 #[path = "entry_activation/parent_construction.rs"]
 mod parent_construction;
+#[path = "entry_activation/profile_admission.rs"]
+mod profile_admission;
 #[path = "entry_activation/progress.rs"]
 mod progress;
 #[cfg(test)]

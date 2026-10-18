@@ -145,6 +145,7 @@ fn normal_idle_partial_unlaunched_or_failed_record_never_becomes_a_normal_role()
         released_attach: None,
         attach_retirement: None,
         start: None,
+        profile_predecessor: None,
         parent: None,
         retained_causes: None,
         preparation: None,

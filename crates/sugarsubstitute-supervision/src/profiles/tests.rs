@@ -6,6 +6,7 @@ mod acknowledgement_retirement;
 mod attempt_tests;
 mod release_observation;
 mod release_progress;
+mod successor;
 mod support;
 use super::*;
 use sugarsubstitute_contracts::{

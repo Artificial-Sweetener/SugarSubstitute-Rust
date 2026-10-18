@@ -17,6 +17,8 @@ pub(super) struct Record {
     pub(super) attach_retirement:
         Option<std::result::Result<CaptureAttachRetirementReport, CaptureAttachFailure>>,
     pub(super) start: Option<DesktopStart>,
+    pub(super) profile_predecessor:
+        Option<sugarsubstitute_supervision::profiles::ProfileRetirement>,
     pub(super) parent: Option<Box<ParentLifecycle>>,
     pub(super) retained_causes: Option<crate::production::parent_lifecycle::causes::BackendCauses>,
     pub(super) preparation: Option<BackendPreparation>,
@@ -72,6 +74,7 @@ impl Record {
             released_attach: None,
             attach_retirement: None,
             start: None,
+            profile_predecessor: None,
             parent: None,
             retained_causes: None,
             preparation: None,

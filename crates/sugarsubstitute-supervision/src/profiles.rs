@@ -10,6 +10,8 @@ mod migration;
 mod proof;
 pub(crate) mod record;
 mod release_observation;
+mod successor;
+pub use successor::ProfileRetirement;
 mod storage;
 mod submission;
 #[cfg(test)]
@@ -84,6 +86,7 @@ struct Shared {
     active: Arc<AtomicU8>,
     observed_held: AtomicBool,
     closing: AtomicBool,
+    release_observed: AtomicBool,
 }
 impl Drop for Shared {
     fn drop(&mut self) {
@@ -128,6 +131,7 @@ pub struct WindowsProfileLease {
     environment: Option<EnvironmentProfileProof>,
     browser: Option<BrowserFamilyProof>,
     port: Arc<dyn storage::ProfilePort>,
+    observed_identity: Option<record::Record>,
 }
 impl WindowsProfileLease {
     /// Create a lexical owner bound to the actual registry lifetime.
@@ -149,6 +153,7 @@ impl WindowsProfileLease {
                 active: Arc::new(AtomicU8::new(INITIAL)),
                 observed_held: AtomicBool::new(false),
                 closing: AtomicBool::new(false),
+                release_observed: AtomicBool::new(false),
             }),
             prepared: Arc::new(AtomicU8::new(0)),
             pending: None,
@@ -163,6 +168,7 @@ impl WindowsProfileLease {
             environment: None,
             browser: None,
             port: Arc::new(storage::WindowsProfilePort),
+            observed_identity: None,
         })
     }
     /// Observe actual retained native facts; cancellation alone does not change ownership.
@@ -237,6 +243,17 @@ impl WindowsProfileLease {
             custody_failure.map_or(Ok(()), Err),
         )
         .err();
+        if kind == TerminalKind::Success && failure.is_none() {
+            if state.held && !self.shared.closing.load(Ordering::Acquire) {
+                self.observed_identity = state.record.filter(|record| record.run == self.run);
+            }
+            if self.release_deadline.is_some()
+                && state.retired
+                && self.shared.active.load(Ordering::Acquire) == RELEASED
+            {
+                self.shared.release_observed.store(true, Ordering::Release);
+            }
+        }
         // Proofs never survive cancellation or late completion as successful authorization.
         if kind == TerminalKind::Success
             && failure.is_none()

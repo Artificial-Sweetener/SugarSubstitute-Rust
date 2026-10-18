@@ -58,6 +58,7 @@ fn retained_record(until: Moment) -> Result<RetainedRecord> {
             released_attach: None,
             attach_retirement: None,
             start: None,
+            profile_predecessor: None,
             parent: None,
             retained_causes: None,
             preparation: None,
