@@ -23,9 +23,9 @@ impl CompletionWake for Wake {
 #[test]
 fn actual_windows_owner_layout() {
     println!(
-        "ProductionChild={} ProductionStartup={} ProfileTransaction={}",
+        "ProductionChild={} StartupHost={} ProfileTransaction={}",
         size_of::<ProductionChild>(),
-        size_of::<crate::production::startup::ProductionStartup>(),
+        size_of::<crate::startup::StartupHost<ProductionChild>>(),
         size_of::<profile_transaction::ProfileTransaction>()
     );
 }
@@ -69,12 +69,8 @@ fn real_driver_factory_cancelled_scope_keeps_partial_custody_until_actual_native
             },
         },
     })?;
-    let mut child = crate::production::startup::constructor_roundtrip(
-        run,
-        LaunchId::new(1)?,
-        child,
-        jobs.clone(),
-    )?;
+    let mut child =
+        crate::startup::constructor_roundtrip(run, LaunchId::new(1)?, child, jobs.clone())?;
     assert!(child.start(&client, scope, &jobs).is_err());
     assert!(child.failed);
     assert_eq!(child.completion_intent(), CompletionIntent::StartupFailed);

@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Parse bounded inert development intent; actual registered owners authorize every effect.
-#[cfg(all(test, feature = "k1-native-qualification"))]
-#[path = "qualification/error_fixture.rs"]
-pub(super) mod error_fixture;
 #[cfg(feature = "k1-native-qualification")]
 use std::ffi::OsStr;
 use std::{error::Error, ffi::OsString, iter::Peekable};

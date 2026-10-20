@@ -15,6 +15,73 @@ use std::{
 use sugarsubstitute_contracts::execution::{MemoryLease, MemoryRelease};
 use tiny_skia::Pixmap;
 
+/// Optional native arrays use font advances and zero offsets; callback errors remain observable.
+#[test]
+fn native_glyph_runs_accept_optional_arrays_and_retain_callback_errors()
+-> Result<(), Box<dyn std::error::Error>> {
+    use std::{cell::RefCell, mem::ManuallyDrop};
+    use windows::{Win32::Graphics::DirectWrite::*, core::ComObject};
+    let text = FontOwner::new("en")?;
+    let shaped = text.shape("Loading...")?;
+    let source = shaped.first().ok_or("Missing native glyphs")?;
+    let collector = ComObject::new(super::Collector {
+        runs: RefCell::new(Vec::with_capacity(1)),
+        failure: RefCell::new(None),
+        colors: Vec::new(),
+    });
+    let renderer: IDWriteTextRenderer = collector.to_interface();
+    let mut run = DWRITE_GLYPH_RUN {
+        fontFace: ManuallyDrop::new(Some(source.face.clone())),
+        fontEmSize: source.size,
+        glyphCount: source.indices.len() as u32,
+        glyphIndices: source.indices.as_ptr(),
+        ..Default::default()
+    };
+    // SAFETY: The retained font and glyph slice remain live through synchronous callbacks.
+    let result = unsafe {
+        renderer.DrawGlyphRun(
+            None,
+            0.0,
+            0.0,
+            DWRITE_MEASURING_MODE_NATURAL,
+            &run,
+            std::ptr::null(),
+            None,
+        )
+    };
+    // SAFETY: This fixture owns the sole manually retained reference in the native struct.
+    unsafe { ManuallyDrop::drop(&mut run.fontFace) };
+    result?;
+    assert!(collector.get().failure.borrow().is_none());
+    let copied = collector.get().runs.borrow();
+    assert_eq!(copied[0].indices, source.indices);
+    assert!(copied[0].advances.iter().all(|advance| advance.is_finite() && *advance > 0.0));
+    assert!(
+        copied[0]
+            .offsets
+            .iter()
+            .all(|offset| offset.advanceOffset == 0.0 && offset.ascenderOffset == 0.0)
+    );
+    drop(copied);
+    assert!(
+        // SAFETY: Null input exercises callback validation before dereference.
+        unsafe {
+            renderer.DrawGlyphRun(
+                None,
+                0.0,
+                0.0,
+                DWRITE_MEASURING_MODE_NATURAL,
+                std::ptr::null(),
+                std::ptr::null(),
+                None,
+            )
+        }
+        .is_err()
+    );
+    assert!(collector.get().failure.borrow().is_some());
+    Ok(())
+}
+
 /// Drive the actual offline cursor to completion for native raster comparisons.
 fn paint(
     text: &mut FontOwner,
@@ -44,37 +111,54 @@ fn all_labels_preserve_pixels_outside_status_widget() -> Result<(), Box<dyn std:
                 (534.0 * scale).round() as u32,
                 (530.0 * scale).round() as u32,
             ];
-            for theme in [Theme::Dark, Theme::Light] {
-                let mut target = Pixmap::new(size, size).ok_or("Cannot allocate clip test")?;
-                target.fill(tiny_skia::Color::from_rgba8(44, 77, 99, 180));
-                let before = target.data().to_vec();
-                let mut unclipped = target.clone();
-                let mut cursor =
-                    text.prepare_status_offline(locale.loading, theme, scale, size, size)?;
-                cursor.clip = [0, 0, size as i32, size as i32];
-                while !cursor
-                    .step(&mut unclipped, NonZeroUsize::new(65_536).ok_or("Invalid budget")?)?
-                {
-                }
-                paint(&mut text, &mut target, locale.loading, theme, scale)?;
-                let mut visible = false;
-                for (index, ((actual, original), expected)) in target
-                    .data()
-                    .chunks_exact(4)
-                    .zip(before.chunks_exact(4))
-                    .zip(unclipped.data().chunks_exact(4))
-                    .enumerate()
-                {
-                    let x = index as u32 % size;
-                    let y = index as u32 / size;
-                    if x < bounds[0] || y < bounds[1] || x >= bounds[2] || y >= bounds[3] {
-                        assert_eq!(actual, original, "{} scale {scale} at ({x},{y})", locale.id);
-                    } else {
-                        assert_eq!(actual, expected, "{} scale {scale} at ({x},{y})", locale.id);
-                        visible |= actual != original;
+            for message in [locale.loading, locale.loading_long, locale.loading_extended]
+                .into_iter()
+                .chain(locale.startup.labels())
+            {
+                for theme in [Theme::Dark, Theme::Light] {
+                    let mut target = Pixmap::new(size, size).ok_or("Cannot allocate clip test")?;
+                    target.fill(tiny_skia::Color::from_rgba8(44, 77, 99, 180));
+                    let before = target.data().to_vec();
+                    let mut unclipped = target.clone();
+                    let mut cursor =
+                        text.prepare_status_offline(message, theme, scale, size, size)?;
+                    cursor.clip = [0, 0, size as i32, size as i32];
+                    while !cursor
+                        .step(&mut unclipped, NonZeroUsize::new(65_536).ok_or("Invalid budget")?)?
+                    {
                     }
+                    paint(&mut text, &mut target, message, theme, scale)?;
+                    let mut visible = false;
+                    for (index, ((actual, original), expected)) in target
+                        .data()
+                        .chunks_exact(4)
+                        .zip(before.chunks_exact(4))
+                        .zip(unclipped.data().chunks_exact(4))
+                        .enumerate()
+                    {
+                        let x = index as u32 % size;
+                        let y = index as u32 / size;
+                        if x < bounds[0] || y < bounds[1] || x >= bounds[2] || y >= bounds[3] {
+                            assert_eq!(
+                                actual, original,
+                                "{} scale {scale} at ({x},{y})",
+                                locale.id
+                            );
+                        } else {
+                            assert_eq!(
+                                actual, expected,
+                                "{} scale {scale} at ({x},{y})",
+                                locale.id
+                            );
+                            visible |= actual != original;
+                        }
+                    }
+                    assert!(
+                        visible,
+                        "{} scale {scale} has no interior glyph coverage for {message:?}",
+                        locale.id
+                    );
                 }
-                assert!(visible, "{} scale {scale} has no interior glyph coverage", locale.id);
             }
         }
     }

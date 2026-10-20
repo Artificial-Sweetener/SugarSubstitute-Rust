@@ -94,9 +94,8 @@ fn managed_projection_preserves_raw_windows_units_and_exact_unicode_arguments() 
         interpreter_units
     );
     assert_eq!(
-        &launch.arguments()[..7],
+        &launch.arguments()[3..sugarsubstitute_comfy::launch::MANAGED_PREFIX_ARGUMENTS],
         [
-            "-u",
             "E:\\Comfy日本語\\main.py",
             "--listen",
             "127.0.0.1",
@@ -105,7 +104,10 @@ fn managed_projection_preserves_raw_windows_units_and_exact_unicode_arguments() 
             "--disable-auto-launch"
         ]
     );
-    assert_eq!(&launch.arguments()[7..], &[argument]);
+    assert_eq!(
+        &launch.arguments()[sugarsubstitute_comfy::launch::MANAGED_PREFIX_ARGUMENTS..],
+        &[argument]
+    );
     assert_eq!(launch.port().get(), 8188);
     let parent =
         crate::production::entry_activation::ProductionActivation::projected_target_for_test(
@@ -115,7 +117,10 @@ fn managed_projection_preserves_raw_windows_units_and_exact_unicode_arguments() 
         parent,
         sugarsubstitute_contracts::lifecycle::BackendTarget::Managed(launch.clone())
     );
-    assert_eq!(&launch.arguments()[7..], [argument]);
+    assert_eq!(
+        &launch.arguments()[sugarsubstitute_comfy::launch::MANAGED_PREFIX_ARGUMENTS..],
+        [argument]
+    );
     Ok(())
 }
 

@@ -88,6 +88,10 @@ impl ProfileComponent {
     pub(crate) fn command(
         arguments: impl IntoIterator<Item = std::ffi::OsString>,
     ) -> Result<crate::production::dispatch::ProductionCommand> {
+        let mut arguments = arguments.into_iter().peekable();
+        if arguments.peek().is_none_or(|argument| argument != "--production") {
+            return Err("Profile component requires explicit production arguments".into());
+        }
         match crate::production::dispatch::parse(arguments)? {
             crate::production::dispatch::Dispatch::Production(command) => Ok(*command),
             crate::production::dispatch::Dispatch::Existing(_) => {

@@ -20,9 +20,11 @@ fn constructs_exact_managed_prefix_and_preserves_supported_values() -> Result<()
     ])?;
     let effective = effective_managed_launch(&original)?;
     assert_eq!(
-        &effective.arguments()[..7],
+        &effective.arguments()[..9],
         &[
             "-u",
+            "-c",
+            include_str!("managed.py"),
             original.root().join("main.py").to_str().ok_or("script")?,
             "--listen",
             "127.0.0.1",
@@ -31,7 +33,7 @@ fn constructs_exact_managed_prefix_and_preserves_supported_values() -> Result<()
             "--disable-auto-launch"
         ]
     );
-    assert_eq!(&effective.arguments()[7..], original.arguments());
+    assert_eq!(&effective.arguments()[9..], original.arguments());
     assert_eq!(effective.root(), original.root());
     assert_eq!(effective.interpreter(), original.interpreter());
     assert_eq!(original.arguments().len(), 4);
@@ -109,13 +111,17 @@ fn option_value_text_is_preserved_without_treating_equals_content_as_an_option()
     ];
     let request = requested(args.into_iter().map(str::to_owned).collect())?;
     let effective = effective_managed_launch(&request)?;
-    assert_eq!(&effective.arguments()[7..], request.arguments());
+    assert_eq!(&effective.arguments()[MANAGED_PREFIX_ARGUMENTS..], request.arguments());
     Ok(())
 }
 #[test]
-fn complete_command_argument_count_includes_seven_managed_entries() -> Result<(), Box<dyn Error>> {
-    effective_managed_launch(&requested(vec!["--cpu".into(); MAX_ARGUMENTS - 7])?)?;
-    let request = requested(vec!["--cpu".into(); MAX_ARGUMENTS - 6])?;
+fn complete_command_argument_count_includes_managed_interpreter_and_server_entries()
+-> Result<(), Box<dyn Error>> {
+    effective_managed_launch(&requested(vec![
+        "--cpu".into();
+        MAX_ARGUMENTS - MANAGED_PREFIX_ARGUMENTS
+    ])?)?;
+    let request = requested(vec!["--cpu".into(); MAX_ARGUMENTS - MANAGED_PREFIX_ARGUMENTS + 1])?;
     assert!(matches!(
         effective_managed_launch(&request),
         Err(ManagedLaunchError::Configuration(ConfigurationError::TooManyArguments))

@@ -141,14 +141,15 @@ fn expired_original_setup_rejects_before_guard_can_grant_initialization() -> Tes
         PublicationFixture::new(ElectionRecordOrigin::Fresh(FreshRecordOrigin::Missing))?;
     let clock = fixture.entry.clock.clone();
     let original_until = fixture.entry.budget.until();
+    let guard_until = original_until.checked_add(std::time::Duration::from_secs(10))?;
     assert!(!check_proof(
         &mut fixture,
         move |_| {
             clock.0.store(original_until.as_nanos(), Ordering::Release);
             resolved()
         },
-        Moment::from_nanos(40_000_000_000)
+        guard_until
     )?);
-    fixture.entry.close(Moment::from_nanos(50_000_000_000))?;
+    fixture.entry.close(original_until.checked_add(std::time::Duration::from_secs(20))?)?;
     Ok(())
 }

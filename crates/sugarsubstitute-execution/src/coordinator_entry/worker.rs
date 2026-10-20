@@ -192,8 +192,15 @@ impl Active {
     }
     fn close_connection(&mut self, core: &Core, index: usize, error: Option<EntryTransportError>) {
         if let Some(error) = error {
-            let error = self.peer_retirement_error(index, error);
-            if !self.work.shared.server || error.requires_process_shutdown() {
+            let error = self.connection_error(index, error);
+            let recover = self.awaiting_discovery(index)
+                && self.work.input.as_ref().is_some_and(|input| input.recover_unsubmitted)
+                && matches!(error, EntryTransportError::PeerDisconnected(_))
+                && !error.contains_owner_panic();
+            if recover {
+                self.return_unsubmitted = true;
+            }
+            if (!self.work.shared.server && !recover) || error.requires_process_shutdown() {
                 self.error(core, error);
                 return;
             }

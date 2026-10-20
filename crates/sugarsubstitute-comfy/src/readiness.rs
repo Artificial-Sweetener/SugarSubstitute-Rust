@@ -106,7 +106,7 @@ pub fn decode_extensions(bytes: &[u8]) -> Result<ExtensionInventory, ReadinessEr
 }
 
 /// Compare only server argv against an already effective managed command.
-/// ComfyUI's `sys.argv` excludes the Python `-u` switch and includes `main.py`.
+/// ComfyUI's `sys.argv` begins with `main.py` after the managed interpreter bootstrap.
 /// Call this separately from installed identity checks for managed connections;
 /// attached connections do not require equality to a command owned by this host.
 /// Even exact equality does not authenticate the peer or grant process authority.
@@ -114,10 +114,10 @@ pub fn compare_managed_arguments(
     stats: &SystemStats,
     effective: &LaunchConfiguration,
 ) -> Result<(), ReadinessError> {
-    let Some((first, argv)) = effective.arguments().split_first() else {
+    let Some(argv) = crate::launch::server_arguments(effective) else {
         return Err(ReadinessError::ManagedArgumentsMismatch);
     };
-    if first != "-u" || stats.argv() != argv {
+    if stats.argv() != argv {
         return Err(ReadinessError::ManagedArgumentsMismatch);
     }
     Ok(())

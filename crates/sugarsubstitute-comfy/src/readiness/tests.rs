@@ -48,7 +48,7 @@ fn managed_argv_comparison_is_separate_and_excludes_only_python_unbuffered_switc
     let (root, python) = ("/comfy café", "/python/bin/python");
     let request = LaunchConfiguration::new(root.into(), python.into(), vec!["--cpu".into()], 8188)?;
     let effective = crate::launch::effective_managed_launch(&request)?;
-    let argv: Vec<&str> = effective.arguments()[1..].iter().map(String::as_str).collect();
+    let argv: Vec<&str> = effective.arguments()[3..].iter().map(String::as_str).collect();
     let stats = decode(&system(&argv))?;
     compare_managed_arguments(&stats, &effective)?;
     let mut wrong = system(&argv);

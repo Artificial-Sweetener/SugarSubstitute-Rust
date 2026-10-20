@@ -54,6 +54,9 @@ impl WindowContent for Content {
         }
         Ok(())
     }
+    fn user_close_requested(&mut self) {
+        self.calls.push("user_close");
+    }
     fn poll_shutdown(&mut self) -> Result<bool, Box<dyn Error>> {
         self.calls.push("settle");
         self.shutdown.pop_front().unwrap_or(Ok(false))
@@ -86,6 +89,20 @@ impl WindowContent for Content {
 }
 
 struct Release(Arc<AtomicUsize>);
+#[test]
+fn user_close_is_notified_once_before_cleanup_and_cannot_reclassify_a_failure() {
+    let mut content = Content::default();
+    let mut surface = SurfaceState::new(None);
+    surface.close_by_user(&mut content);
+    surface.close_by_user(&mut content);
+    assert_eq!(content.calls, vec!["user_close", "hide", "cancel"]);
+    let mut content = Content::default();
+    let mut surface = SurfaceState::new(None);
+    surface.fail(&mut content, DesktopError::message("original", "Native failure"));
+    surface.close_by_user(&mut content);
+    assert_eq!(content.calls, vec!["hide", "cancel"]);
+    assert!(surface.failure.is_some());
+}
 impl MemoryRelease for Release {
     fn release(&self, _: u64) {
         self.0.fetch_add(1, Ordering::SeqCst);

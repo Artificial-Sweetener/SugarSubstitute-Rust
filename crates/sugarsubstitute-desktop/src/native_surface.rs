@@ -48,14 +48,6 @@ pub(crate) fn observe_move(
     Ok(false)
 }
 
-/// Coalesce completion/expose redraws independently of preparation requests.
-pub(crate) fn invalidate(window: &tao::window::Window, pending: &mut bool) {
-    if !*pending {
-        *pending = true;
-        window.request_redraw();
-    }
-}
-
 /// Classify callbacks without borrowing content or touching frame storage.
 pub(crate) fn callback_kind(event: &Event<'_, NativeAction>) -> crate::timing::NativeCallbackKind {
     use crate::timing::NativeCallbackKind;

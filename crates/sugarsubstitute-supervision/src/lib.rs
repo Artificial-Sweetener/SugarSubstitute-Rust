@@ -31,6 +31,9 @@ mod claims;
 #[doc(hidden)]
 pub use claims::boundary_fixture as claim_boundary_fixture;
 #[cfg(windows)]
+#[allow(unsafe_code)]
+pub mod application_relaunch;
+#[cfg(windows)]
 pub mod committed_reader;
 #[cfg(windows)]
 pub mod coordinator_entry;
@@ -47,6 +50,9 @@ mod managed_output;
 #[cfg(windows)]
 #[allow(unsafe_code)]
 mod native_claims;
+#[cfg(windows)]
+#[allow(unsafe_code)]
+pub mod profile_conflict;
 #[cfg(windows)]
 pub mod profiles;
 #[cfg(windows)]

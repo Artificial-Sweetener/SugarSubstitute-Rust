@@ -85,11 +85,17 @@ impl<C: EntryActivation> EntryRunner<C> {
                 let Some(observed) = forward.control.take_observation() else {
                     break;
                 };
+                tracing::info!(
+                    operation = "entry_forward_progress",
+                    ?observed,
+                    "Existing coordinator request advanced"
+                );
                 if let EntryTransportObservation::OutcomeReceived { outcome: actual, .. } = observed
                 {
                     outcome = Some(actual);
                 }
             }
+            forward.control.rearm_observations();
             if let Some(outcome) = outcome {
                 match outcome {
                     EntryOutcome::Accepted(_) => {
@@ -148,7 +154,16 @@ impl<C: EntryActivation> EntryRunner<C> {
             && let Some(original) = self.original
             && self.client()?.now()? >= original.until()
         {
-            return Err("Production entry setup expired before actual admission".into());
+            tracing::error!(operation = "entry_setup_expired",
+                bootstrap = ?self.bootstrap.as_ref().and_then(EntryBootstrap::owner).map(|owner| owner.snapshot()),
+                forwarding = self.forward.is_some(), authority_started = self.authority_started,
+                intake_ready = self.intake_ready,
+                "Entry setup reached its deadline before admission");
+            return Err(format!(
+                "Production entry setup expired before actual admission: phase={:?}, authority={}, intake={}, forwarding={}",
+                self.bootstrap.as_ref().and_then(EntryBootstrap::owner).map(|owner| owner.snapshot().phase),
+                self.authority_started, self.intake_ready, self.forward.is_some()
+            ).into());
         }
         self.try_normal_shutdown()?;
         Ok(())

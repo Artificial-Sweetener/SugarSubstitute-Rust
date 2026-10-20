@@ -40,6 +40,50 @@ fn client_with_recovery(
 }
 
 #[test]
+fn coordinator_death_before_challenge_returns_unsubmitted_source_after_checked_retirement()
+-> TestResult {
+    let rig = Rig::new()?;
+    let boundary = Boundary::new(&rig, false)?;
+    *lock(&boundary.read_failure) = Some(EntryTransportError::native(NativeObservationError::new(
+        "pipe_completion",
+        windows::core::Error::from_hresult(windows::core::HRESULT::from_win32(109)),
+    )));
+    boundary.allow_retire.store(false, Ordering::Release);
+    let release = ReleaseBoundary(boundary.clone());
+    let (_scope, mut session) = client_with_recovery(&rig, &boundary, true)?;
+    boundary.retiring.wait()?;
+    assert!(session.control.take_unsubmitted_request().is_none());
+    assert!(session.completion.try_take_completion().is_none());
+    assert!(lock(&boundary.client_launches).is_empty());
+    drop(release);
+    let retired = fact(&rig, &session.control, |fact| {
+        matches!(fact, EntryTransportObservation::ConnectionRetired { .. })
+    })?;
+    assert!(matches!(
+        retired,
+        EntryTransportObservation::ConnectionRetired {
+            failure: Some(EntryTransportError::PeerDisconnected(_)),
+            ..
+        }
+    ));
+    assert!(matches!(rig.completion(&mut session.completion)?.outcome, JobOutcome::Success(_)));
+    let returned = session
+        .control
+        .take_unsubmitted_request()
+        .ok_or("Unsubmitted source lost after coordinator death")?;
+    returned.validate(
+        &facts()?,
+        None,
+        source()?,
+        &rig.client,
+        sugarsubstitute_contracts::coordinator_entry::EntrySetupBudget::new(Moment::from_nanos(0))?,
+    )?;
+    assert_eq!(boundary.writes.load(Ordering::Acquire), 1);
+    assert!(lock(&boundary.client_launches).is_empty());
+    Ok(())
+}
+
+#[test]
 fn never_connected_source_returns_only_after_checked_retirement_and_original_probe() -> TestResult {
     let rig = Rig::new()?;
     let boundary = Boundary::new(&rig, false)?;

@@ -30,6 +30,7 @@ pub(super) struct ScrollInput {
     target: Cell<u8>,
     started: Cell<u64>,
     repeating: Cell<bool>,
+    wheel: super::wheel::Wheel,
 }
 impl ScrollInput {
     /// Construct inert interaction state without installing a timer or capturing input.
@@ -45,6 +46,7 @@ impl ScrollInput {
             target: Cell::new(0),
             started: Cell::new(0),
             repeating: Cell::new(false),
+            wheel: super::wheel::Wheel::default(),
         }
     }
     /// Obtain physical scrollbar facts from the same native document used for input and drawing.
@@ -85,6 +87,7 @@ impl ScrollInput {
         lparam: LPARAM,
     ) -> Result<bool, DesktopError> {
         match message {
+            WM_MOUSEWHEEL => return self.wheel.message(engine, wparam),
             WM_TIMER if wparam.0 == ANIMATION && engine.state.owns_timer(wparam.0) => {
                 self.animate(engine)?;
                 return Ok(true);

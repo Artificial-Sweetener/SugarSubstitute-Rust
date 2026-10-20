@@ -13,6 +13,8 @@ pub use budget::{ConnectionBudget, ConnectionBudgetKind, FrontendBudget, ProbeBu
 
 mod session;
 pub use session::StartupSession;
+mod progress;
+pub use progress::StartupProgress;
 
 use std::{error::Error, fmt};
 use sugarsubstitute_contracts::startup::{ProbeFailure, StartupEvent, StartupFailure};

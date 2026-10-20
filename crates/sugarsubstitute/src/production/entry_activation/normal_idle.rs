@@ -55,6 +55,11 @@ impl ProductionActivation {
         if self.failure_resource.is_some() {
             return Err(IdleBlock::global("FailureResource"));
         }
+        // An accepted close starts bounded shutdown. Output, profile and diagnostic
+        // retirement belong inside that shutdown, and cannot veto its admission.
+        if let Some(budget) = self.requested_role_shutdown() {
+            return Ok(budget);
+        }
         if let Some(reason) = self.incidents.idle_block() {
             return Err(IdleBlock::global(reason));
         }
@@ -102,6 +107,30 @@ impl ProductionActivation {
         original_budget(roles, self.incidents.reporting.normal_close_budget())
             .ok_or(blocked.unwrap_or(IdleBlock::global("MissingAcceptedCloseIntent")))
     }
+    /// Fence new work only when every current desktop has accepted the user's close.
+    /// Native resources remain owned and must retire through the ordinary shutdown path.
+    fn requested_role_shutdown(&self) -> Option<ShutdownBudget> {
+        if self.pending.iter().any(Option::is_some)
+            || self.recovery_pending.as_ref().is_some_and(|pending| !pending.settled())
+            || self.incidents.reporting.keeps_user_surface_open()
+        {
+            return None;
+        }
+        let roles = self.records.iter().flatten().map(|held| {
+            let record = &held.record;
+            if let Some(completed) = &record.completed_normal {
+                return completed
+                    .budget(record)
+                    .ok()
+                    .map(|budget| Role::Normal { budget, retired: true });
+            }
+            if record.failed.is_some() {
+                return settled_failed_role(record).ok();
+            }
+            requested_role(record.run, record.parent.as_ref()?.normal_close_request())
+        });
+        original_budget(roles, None)
+    }
     /// Borrow only this accepted deliberate role's original grace-expired transaction.
     /// The exact launch ticket remains with existing native/profile/capture cleanup owners;
     /// other roles and backend interests remain serving. This is not normal-idle eligibility.
@@ -134,6 +163,12 @@ impl ProductionActivation {
             Ok(Role::SettledFailedDesktop) | Err(_) => None,
         }
     }
+}
+
+/// A matching accepted request authorizes cleanup, never disposal or native retirement.
+fn requested_role(run: RunKey, request: Option<DesktopCloseRequest>) -> Option<Role> {
+    let request = request.filter(|request| request.run() == run)?;
+    Some(Role::Normal { budget: request.budget(), retired: false })
 }
 
 /// Keep Root Entry live until its existing recovery control has genuinely retired.

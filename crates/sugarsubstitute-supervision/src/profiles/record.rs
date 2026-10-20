@@ -10,7 +10,7 @@ use sugarsubstitute_contracts::lifecycle::{
 
 const MAGIC: &[u8; 8] = b"SSPROFL1";
 /// Derive the unchanged persisted account binding from the native owner's retained SID.
-pub(super) fn account_identity(sid: &[u8]) -> [u8; 32] {
+pub(crate) fn account_identity(sid: &[u8]) -> [u8; 32] {
     use sha2::{Digest, Sha256};
     let mut hash = Sha256::new();
     for part in [b"SugarSubstitute.profile-account.v1".as_slice(), sid] {
@@ -22,17 +22,17 @@ pub(super) fn account_identity(sid: &[u8]) -> [u8; 32] {
 pub(super) const RECORD_BYTES: usize = 160;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum State {
+pub(crate) enum State {
     Held = 1,
     Released = 2,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) struct Record {
-    pub(super) account: [u8; 32],
-    pub(super) folder: [u8; 24],
-    pub(super) run: RunKey,
-    pub(super) state: State,
+pub(crate) struct Record {
+    pub(crate) account: [u8; 32],
+    pub(crate) folder: [u8; 24],
+    pub(crate) run: RunKey,
+    pub(crate) state: State,
 }
 
 impl Record {
@@ -93,7 +93,7 @@ impl Record {
         self.same_store(next) && (self.state == State::Released || self.run == next.run)
     }
 
-    fn same_store(self, other: Self) -> bool {
+    pub(in crate::profiles) fn same_store(self, other: Self) -> bool {
         self.account == other.account && self.folder == other.folder
     }
 }

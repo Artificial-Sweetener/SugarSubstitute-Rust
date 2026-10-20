@@ -10,48 +10,48 @@ pub(crate) enum Invocation {
     /// Existing interactive/off-screen demonstration inputs.
     Demo(DemoOptions),
     /// Qualify actual bounded capture registration and retirement.
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
     NativeCaptureFixture(crate::capture_fixture::Options),
     /// Windows qualification-only process exit; no splash or child process is created.
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
     NativeExitFixture(i32),
     /// Windows same-executable output qualification receipt destination.
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
     NativeOutputFixture(PathBuf),
     /// Fixed source-write/held-writer role with explicit optional bootstrap.
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
     NativeOutputChild(crate::output_fixture::ChildOptions),
     /// Windows headless same-executable registry qualification receipt destination.
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
     NativeRegistryFixture(PathBuf),
     /// Windows child with four explicit inherited fixture events and one original deadline.
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
     NativeHeldChild(crate::held_child::ChildOptions),
     /// Windows held64 cancellation campaign receipt destination.
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
     NativeHeldRegistryFixture(PathBuf),
     /// Windows forwarding root; fixed child inherits the retained outer Job.
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
     NativeForwardingRoot(crate::held_child::ChildOptions),
     /// Windows root-exit/surviving-descendant campaign receipt destination.
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
     NativeDescendantFixture(PathBuf),
     /// Windows authenticated lifecycle pipe campaign receipt destination.
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
     NativePipeFixture(PathBuf),
     /// Windows child admitted before adopting its single read-only bootstrap section.
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
     NativePipeChild(crate::pipe_fixture::ChildOptions),
     /// Actual cross-process claim qualification with an isolated D-drive workspace.
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
     NativeClaimFixture(crate::claim_fixture::CampaignOptions),
     /// Child reserves its original native deadline before fallible claim effects.
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
     NativeClaimChild(crate::claim_fixture::ChildOptions),
 }
 impl Invocation {
     /// Parse process arguments without starting native or execution resources.
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(all(target_os = "windows", feature = "windows-native-host")))]
     pub(crate) fn parse() -> Result<Self, Box<dyn Error>> {
         Self::parse_arguments(std::env::args_os().skip(1))
     }
@@ -61,9 +61,9 @@ impl Invocation {
         arguments: impl IntoIterator<Item = OsString>,
     ) -> Result<Self, Box<dyn Error>> {
         let arguments = arguments.into_iter();
-        #[cfg(target_os = "windows")]
+        #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         let mut arguments = arguments.peekable();
-        #[cfg(target_os = "windows")]
+        #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         if arguments.peek().is_some_and(|argument| argument == "--internal-native-capture-fixture")
         {
             arguments.next();
@@ -71,14 +71,14 @@ impl Invocation {
                 arguments,
             )?));
         }
-        #[cfg(target_os = "windows")]
+        #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         if arguments.peek().is_some_and(|argument| argument == "--internal-native-output-child") {
             arguments.next();
             return Ok(Self::NativeOutputChild(crate::output_fixture::ChildOptions::parse(
                 arguments,
             )?));
         }
-        #[cfg(target_os = "windows")]
+        #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         if arguments.peek().is_some_and(|argument| argument == "--internal-native-output-fixture") {
             arguments.next();
             if arguments.next().as_deref() != Some(std::ffi::OsStr::new("--receipt")) {
@@ -90,7 +90,7 @@ impl Invocation {
             }
             return Ok(Self::NativeOutputFixture(path));
         }
-        #[cfg(target_os = "windows")]
+        #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         if arguments.peek().is_some_and(|argument| argument == "--internal-native-forwarding-root")
         {
             arguments.next();
@@ -98,7 +98,7 @@ impl Invocation {
                 arguments,
             )?));
         }
-        #[cfg(target_os = "windows")]
+        #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         if arguments
             .peek()
             .is_some_and(|argument| argument == "--internal-native-descendant-fixture")
@@ -114,38 +114,38 @@ impl Invocation {
             }
             return Ok(Self::NativeDescendantFixture(path));
         }
-        #[cfg(target_os = "windows")]
+        #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         if arguments.peek().is_some_and(|argument| argument == "--internal-native-claim-fixture") {
             arguments.next();
             return Ok(Self::NativeClaimFixture(crate::claim_fixture::CampaignOptions::parse(
                 arguments,
             )?));
         }
-        #[cfg(target_os = "windows")]
+        #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         if arguments.peek().is_some_and(|argument| argument == "--internal-native-claim-child") {
             arguments.next();
             return Ok(Self::NativeClaimChild(crate::claim_fixture::ChildOptions::parse(
                 arguments,
             )?));
         }
-        #[cfg(target_os = "windows")]
+        #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         if arguments.peek().is_some_and(|argument| argument == "--internal-native-held-child") {
             arguments.next();
             return Ok(Self::NativeHeldChild(crate::held_child::ChildOptions::parse(arguments)?));
         }
-        #[cfg(target_os = "windows")]
+        #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         if arguments.peek().is_some_and(|argument| argument == "--internal-native-pipe-child") {
             arguments.next();
             return Ok(Self::NativePipeChild(crate::pipe_fixture::ChildOptions::parse(arguments)?));
         }
-        #[cfg(target_os = "windows")]
+        #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         let pipe =
             arguments.peek().is_some_and(|argument| argument == "--internal-native-pipe-fixture");
-        #[cfg(target_os = "windows")]
+        #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         let held = arguments
             .peek()
             .is_some_and(|argument| argument == "--internal-native-held-registry-fixture");
-        #[cfg(target_os = "windows")]
+        #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         if held
             || pipe
             || arguments
@@ -169,7 +169,7 @@ impl Invocation {
                 Self::NativeRegistryFixture(path)
             });
         }
-        #[cfg(target_os = "windows")]
+        #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         if arguments.peek().is_some_and(|argument| argument == "--internal-native-exit-fixture") {
             arguments.next();
             let code = arguments.next().ok_or("Native exit fixture requires an exit code")?;
@@ -229,7 +229,10 @@ impl DemoOptions {
         let mut arguments = arguments.into_iter();
         while let Some(argument) = arguments.next() {
             match argument.to_str().ok_or("Option name is not valid Unicode")? {
-                "--collapsed" => options.appearance.expanded = false,
+                "--collapsed" => {
+                    options.appearance.expanded = false;
+                    options.appearance.reveal = 0.0;
+                }
                 "--light" => options.appearance.theme = Theme::Light,
                 "--reduced-motion" => options.reduced_motion = true,
                 "--timing-audit" => options.timing_audit = true,

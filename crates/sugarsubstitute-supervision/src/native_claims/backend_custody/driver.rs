@@ -240,12 +240,17 @@ impl Driver {
                     .map_err(|cause| NativeObservationError::new("custody_reply_deadline", cause))?
                     .min(bound);
                 self.write = Some((operation, frame.nonce));
-                session
-                    .control()
-                    .write(operation, until, buffer, BACKEND_CUSTODY_FRAME_BYTES)
-                    .map_err(|rejected| {
-                        NativeObservationError::new("custody_reply", rejected.error)
-                    })?;
+                let issued = if matches!(
+                    receipt,
+                    sugarsubstitute_contracts::backend_custody::BackendCustodyReceipt::Heartbeat
+                ) {
+                    session.control().write_heartbeat(operation, buffer)
+                } else {
+                    session.control().write(operation, until, buffer, BACKEND_CUSTODY_FRAME_BYTES)
+                };
+                issued.map_err(|rejected| {
+                    NativeObservationError::new("custody_reply", rejected.error)
+                })?;
             }
         }
         // One pending transaction at a time; a Stop retains its original nonce
@@ -346,7 +351,26 @@ impl BackendCustodyDriver for Driver {
                     return Ok(BackendCustodyProgress::Settled);
                 }
             }
-            Ok(BackendCustodyProgress::Pending)
+            let next = {
+                let mut access = self.source.access().map_err(|cause| {
+                    NativeObservationError::new("custody_watchdog_owner", cause)
+                })?;
+                let state = access.state().map_err(|cause| {
+                    NativeObservationError::new("custody_watchdog_owner", cause)
+                })?;
+                match state.parent.as_mut() {
+                    Some(parent) => parent.poll_parent_progress()?,
+                    None => None,
+                }
+            };
+            match next {
+                Some(interval) => Ok(BackendCustodyProgress::ObserveParentAt(
+                    now.checked_add(interval.min(std::time::Duration::from_secs(1))).map_err(
+                        |cause| NativeObservationError::new("custody_watchdog_deadline", cause),
+                    )?,
+                )),
+                None => Ok(BackendCustodyProgress::Pending),
+            }
         };
         let result = progress();
         self.retained(result)

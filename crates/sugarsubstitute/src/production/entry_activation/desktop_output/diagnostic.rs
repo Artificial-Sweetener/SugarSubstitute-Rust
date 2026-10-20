@@ -63,7 +63,7 @@ pub(super) enum Observation {
     Preparation(Phase),
     Failure(Failure),
     Connection(Connection),
-    Close(crate::production::close_diagnostic::CloseTrace),
+    Close(crate::close_diagnostic::CloseTrace),
     MainFailure(MainFailure),
     Transport(crate::production::child_transport_diagnostic::Record),
     Probe(sugarsubstitute_desktop::frontend_probe_diagnostic::Record),

@@ -8,6 +8,18 @@ use std::{error::Error, fmt};
 use sugarsubstitute_contracts::configuration::{ConfigurationError, LaunchConfiguration};
 mod options;
 
+/// Fixed Python and ComfyUI argument count added to managed requests.
+pub const MANAGED_PREFIX_ARGUMENTS: usize = 9;
+/// Embedded shutdown adapter bytes retained by each effective command.
+pub const MANAGED_BOOTSTRAP_BYTES: usize = include_str!("launch/managed.py").len();
+
+/// Borrow ComfyUI's actual argv after checking the complete interpreter prefix.
+pub(crate) fn server_arguments(effective: &LaunchConfiguration) -> Option<&[String]> {
+    let [unbuffered, command, source, argv @ ..] = effective.arguments() else { return None };
+    (unbuffered == "-u" && command == "-c" && source == include_str!("launch/managed.py"))
+        .then_some(argv)
+}
+
 /// Reject an effective command without exposing supplied paths or option values.
 #[derive(Debug)]
 pub enum ManagedLaunchError {
@@ -39,7 +51,7 @@ impl Error for ManagedLaunchError {
     }
 }
 
-/// Prepare `-u main.py --listen 127.0.0.1 --port PORT --disable-auto-launch` plus extras.
+/// Prepare the managed interpreter, owned shutdown channel and ComfyUI arguments.
 ///
 /// The returned configuration supplies effective arguments for backend semantic
 /// identity. Its lexical root/interpreter still require the resource owner's
@@ -56,6 +68,8 @@ pub fn effective_managed_launch(
     let script = script.to_str().ok_or(ManagedLaunchError::ArgumentShape)?;
     let mut arguments = vec![
         "-u".into(),
+        "-c".into(),
+        include_str!("launch/managed.py").into(),
         script.into(),
         "--listen".into(),
         "127.0.0.1".into(),

@@ -51,7 +51,7 @@ impl PreparedMainInput {
 }
 
 /// Retain application state before its source loan and reusable allocation charge.
-pub(in crate::production) struct PreparedChildStartup {
+pub(crate) struct PreparedChildStartup {
     session: StartupSession,
     main: Option<PreparedMainInput>,
     source: Option<AuthenticatedStartupSnapshot>,

@@ -3,6 +3,8 @@
 //! Route the actual authenticated desktop pipe through the existing native owners.
 #[path = "parent_lifecycle/acquisition.rs"]
 mod acquisition;
+#[path = "parent_lifecycle/activation.rs"]
+mod activation;
 #[path = "parent_lifecycle/activity.rs"]
 mod activity;
 #[path = "parent_lifecycle/attempt.rs"]
@@ -13,6 +15,8 @@ pub(in crate::production) use attempt::SettledAttemptFailure;
 mod backend;
 #[path = "parent_lifecycle/causes.rs"]
 pub(in crate::production) mod causes;
+#[path = "parent_lifecycle/deadlines.rs"]
+mod deadlines;
 #[path = "parent_lifecycle/expiry.rs"]
 mod expiry;
 #[path = "parent_lifecycle/folders.rs"]
@@ -46,8 +50,6 @@ mod requests;
 mod retirement;
 #[path = "parent_lifecycle/retirement_trace.rs"]
 mod retirement_trace;
-#[path = "parent_lifecycle/splash.rs"]
-mod splash;
 #[cfg(test)]
 #[path = "parent_lifecycle/tests.rs"]
 mod tests;
@@ -96,7 +98,6 @@ pub(crate) struct ParentLifecycle {
     hello: bool,
     welcome: bool,
     registered: bool,
-    splash: splash::SplashHandoff,
     closed: bool,
     latest_operation: u64,
     read: Option<u64>,
@@ -188,7 +189,6 @@ impl ParentLifecycle {
             hello: false,
             welcome: false,
             registered: false,
-            splash: splash::SplashHandoff::default(),
             closed: false,
             latest_operation: 0,
             read: None,

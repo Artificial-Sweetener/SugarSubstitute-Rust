@@ -48,6 +48,9 @@ impl ParentLifecycle {
         if self.output_lease != Some(lease) {
             return Err(ParentError::ForeignPeer.into());
         }
+        if running.is_some() {
+            self.requests.defer_reply(index)?;
+        }
         self.consume_output_ack(lease, acknowledged, resources.backend)?;
         if self.recovery_output_reply(index, resources)? {
             return Ok(());

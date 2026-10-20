@@ -24,10 +24,15 @@ impl ProductionActivation {
             return Ok(());
         };
         let backend = retained_backend.backend.as_mut();
+        let mut failure = None;
         for record in self.records.iter_mut().flatten().map(|retained| retained.record.as_mut()) {
-            Self::close_record(record, backend, self.capture.as_ref(), resources, budget)?;
+            if let Err(cause) =
+                Self::close_record(record, backend, self.capture.as_ref(), resources, budget)
+            {
+                failure.get_or_insert(cause);
+            }
         }
-        backend
+        let custody = backend
             .close_custody(
                 budget,
                 self.recovery_pending.as_ref().is_none_or(|pending| pending.settled())
@@ -39,8 +44,15 @@ impl ProductionActivation {
                     }),
                 &mut progress::backend_resources(resources, self.capture.as_ref()),
             )
-            .map_err(outer)?;
-        Ok(())
+            .map_err(outer);
+        if let Some(cause) = failure {
+            if let Err(later) = custody {
+                self.preserve(later);
+            }
+            Err(cause)
+        } else {
+            custody
+        }
     }
     /// Advance the same actual native owners for explicit coordinator close or one failed desktop.
     /// The caller retains original collection/source custody until checked retirement permits this work.
@@ -88,6 +100,10 @@ impl ProductionActivation {
         }
         if record.start.is_none() {
             record.closed = true;
+            return Ok(());
+        }
+        let now = resources.client.now()?;
+        if record.parent.as_ref().is_some_and(|parent| parent.normal_close_handshake_pending(now)) {
             return Ok(());
         }
         if record.parent.is_some() {

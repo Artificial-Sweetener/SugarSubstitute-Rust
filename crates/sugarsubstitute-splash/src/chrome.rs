@@ -22,7 +22,12 @@ pub(crate) fn console(
     theme: Theme,
     scale: f32,
 ) -> Result<(), AllocationError> {
-    let mut cursor = ConsoleCursor::new(target.width(), target.height(), theme, scale)?;
+    let mut cursor = ConsoleCursor::new(
+        target.width(),
+        target.height(),
+        Appearance { theme, ..Appearance::demo() },
+        scale,
+    )?;
     while !cursor.step(target)? {}
     Ok(())
 }
@@ -31,16 +36,25 @@ mod console_cursor;
 pub(crate) use console_cursor::ConsoleCursor;
 use console_cursor::ConsolePass;
 
-fn console_passes(theme: Theme, scale: f32) -> Result<Vec<ConsolePass>, AllocationError> {
+fn console_passes(appearance: Appearance, scale: f32) -> Result<Vec<ConsolePass>, AllocationError> {
+    let theme = appearance.theme;
+    let bounds = appearance.feedback();
+    let top = bounds.y as f32;
+    let height = bounds.height as f32;
+    let corner = 6.0_f32.min(height / 2.0);
+    let left_center = 24.0 + corner;
+    let right_center = 534.0 - corner;
+    let upper_center = top + corner;
+    let lower_center = 534.0 - corner;
     let mut passes = Vec::with_capacity(13);
     let clip = Rect::from_ltrb(
         (24.0 * scale).round(),
-        (356.0 * scale).round(),
+        (top * scale).round(),
         (534.0 * scale).round(),
         (534.0 * scale).round(),
     )
     .ok_or(AllocationError::InvalidDimensions)?;
-    if let Some(path) = rounded(24.5, 356.5, 509.0, 177.0, 5.5, scale) {
+    if let Some(path) = rounded(24.5, top + 0.5, 509.0, height - 1.0, corner - 0.5, scale) {
         let fill = match theme {
             Theme::Dark => [8, 10, 12, 247],
             Theme::Light => [252, 253, 255, 244],
@@ -52,23 +66,35 @@ fn console_passes(theme: Theme, scale: f32) -> Result<Vec<ConsolePass>, Allocati
     let bottom = if theme == Theme::Dark { 112 } else { 61 };
     for (rectangle, corners, alpha) in [
         (
-            (30.0, 533.0, 498.0, 1.0),
-            [((30.0, 528.0), 2, false, false), ((528.0, 528.0), 1, true, true)],
+            (left_center, 533.0, right_center - left_center, 1.0),
+            [
+                ((left_center, lower_center), 2, false, false),
+                ((right_center, lower_center), 1, true, true),
+            ],
             bottom,
         ),
         (
-            (533.0, 362.0, 1.0, 166.0),
-            [((528.0, 362.0), 0, true, false), ((528.0, 528.0), 1, false, true)],
+            (533.0, upper_center, 1.0, lower_center - upper_center),
+            [
+                ((right_center, upper_center), 0, true, false),
+                ((right_center, lower_center), 1, false, true),
+            ],
             side,
         ),
         (
-            (24.0, 362.0, 1.0, 166.0),
-            [((30.0, 362.0), 3, false, true), ((30.0, 528.0), 2, true, true)],
+            (24.0, upper_center, 1.0, lower_center - upper_center),
+            [
+                ((left_center, upper_center), 3, false, true),
+                ((left_center, lower_center), 2, true, true),
+            ],
             side,
         ),
         (
-            (30.0, 356.0, 498.0, 1.0),
-            [((30.0, 362.0), 3, true, false), ((528.0, 362.0), 0, false, true)],
+            (left_center, top, right_center - left_center, 1.0),
+            [
+                ((left_center, upper_center), 3, true, false),
+                ((right_center, upper_center), 0, false, true),
+            ],
             side,
         ),
     ] {
@@ -79,7 +105,11 @@ fn console_passes(theme: Theme, scale: f32) -> Result<Vec<ConsolePass>, Allocati
         }
         for (center, quadrant, second, reverse) in corners {
             passes.push(ConsolePass::Arc(
-                arc_points(center, (quadrant, second, reverse)),
+                arc_points(
+                    (f64::from(center.0), f64::from(center.1)),
+                    (quadrant, second, reverse),
+                    f64::from(corner - 0.5),
+                ),
                 color,
                 clip,
             ));
@@ -89,9 +119,8 @@ fn console_passes(theme: Theme, scale: f32) -> Result<Vec<ConsolePass>, Allocati
 }
 
 /// Compute one independently capped half-corner in the original CSS order.
-fn arc_points(center: (f64, f64), arc: (u8, bool, bool)) -> [[f64; 2]; 4] {
+fn arc_points(center: (f64, f64), arc: (u8, bool, bool), radius: f64) -> [[f64; 2]; 4] {
     let (quadrant, second, reverse) = arc;
-    let radius = 5.5;
     let curve = radius * 0.552_284_749_8;
     let midpoint = |a: [f64; 2], b: [f64; 2]| [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5];
     let a = [0.0, -radius];

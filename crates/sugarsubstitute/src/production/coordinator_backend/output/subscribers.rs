@@ -105,9 +105,11 @@ impl Subscribers {
             }
         }
     }
-    pub(in crate::production::coordinator_backend) fn remove_resource(&mut self, key: ResourceKey) {
+    /// Keep copied delivery receipts until their exact late ACK or client disconnect.
+    /// The native batch is independently returned by the resource cleanup owner.
+    pub(in crate::production::coordinator_backend) fn retire_resource(&mut self, key: ResourceKey) {
         for slot in &mut self.0 {
-            if slot.as_ref().is_some_and(|s| s.lease.resource == key) {
+            if slot.as_ref().is_some_and(|s| s.lease.resource == key && s.pending.is_none()) {
                 *slot = None;
             }
         }

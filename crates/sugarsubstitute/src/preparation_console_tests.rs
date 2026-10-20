@@ -56,3 +56,43 @@ fn native_requests_release_unused_source_pins_before_real_cpu_admission_and_keep
     assert_eq!(driver.scope.snapshot().reserved_bytes, 0);
     Ok(())
 }
+
+/// Provisioning output cannot starve status pixels owned independently of native console text.
+#[test]
+fn native_output_updates_preserve_completed_status_frames() -> Result<(), Box<dyn Error>> {
+    let (mut driver, wake, mut owner) = support::started()?;
+    driver.console_presentation =
+        sugarsubstitute_contracts::presentation::ConsolePresentation::Native;
+    let bootstrap = support::prepare(&mut driver, &wake, 0.0)?;
+    let mut store = support::transcript(1)?;
+    support::request(&mut driver, 0.5)?;
+    support::terminal(&driver, &wake)?;
+    let original = driver
+        .active
+        .as_ref()
+        .and_then(|active| active.identity)
+        .ok_or("Status frame identity absent")?;
+    for sequence in 1..=4 {
+        store.apply(&OutputBatch::new(
+            store.resource(),
+            OutputStream::Stdout,
+            StreamSequence::new(sequence)?,
+            b"Provisioning dependency\n",
+            None,
+            false,
+        )?)?;
+        driver.request(
+            FrameShape::new(558, 558, 1.0)?,
+            Appearance::demo(),
+            PaperFlip::new(1).frame(Duration::ZERO),
+            ProgressFrame { completed: 0.5, activity: None },
+            Some(store.snapshot_tail(1)?.into()),
+        )?;
+    }
+    let frame = support::poll(&mut driver)?.ok_or("Output discarded completed status pixels")?;
+    assert_eq!(frame.identity(), original);
+    assert_eq!(driver.console_binding, Some((store.resource(), 4)));
+    drop((bootstrap, frame));
+    support::finish(&mut owner, &mut driver, &wake)?;
+    Ok(())
+}

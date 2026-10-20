@@ -36,6 +36,12 @@ impl Admission {
     }
 }
 impl<C: EntryActivation> EntryRunner<C> {
+    /// Freeze explicit user intent before cleanup can expose a later failure.
+    pub(in crate::production) fn accept_user_close(&mut self) {
+        if !self.closing && self.failure_source().is_none() {
+            self.normal_shutdown = true;
+        }
+    }
     /// Preserve live runner custody before asking its actual server to fence future entry admission.
     pub(super) fn try_normal_shutdown(&mut self) -> Result<(), Box<dyn Error>> {
         let admission = Admission {
@@ -58,6 +64,7 @@ impl<C: EntryActivation> EntryRunner<C> {
                 .map_err(|cause| Box::new(cause) as Box<dyn Error>)
         })?;
         if fenced {
+            self.accept_user_close();
             self.request_shutdown()?;
         }
         Ok(())

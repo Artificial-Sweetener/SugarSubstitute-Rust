@@ -52,6 +52,8 @@ pub(crate) enum ExclusionOpen {
     CreateOrOpen,
     /// Recovery must open the identical existing writer exclusion without recreation.
     Existing([u8; 24]),
+    /// Inspect an existing protected exclusion under a retained parent-directory identity.
+    InspectExisting,
 }
 impl<const N: usize> HeldFile<N> {
     pub(crate) fn is_locked(&self) -> bool {
@@ -105,6 +107,7 @@ impl<const N: usize> HeldFile<N> {
         let (disposition, expected_inode) = match mode {
             ExclusionOpen::CreateOrOpen => (OPEN_ALWAYS, None),
             ExclusionOpen::Existing(original) => (OPEN_EXISTING, Some(original)),
+            ExclusionOpen::InspectExisting => (OPEN_EXISTING, None),
         };
         let result = held.acquire(phase, disposition, expected_inode);
         phase.post_current_for(result, &mut held.causes)

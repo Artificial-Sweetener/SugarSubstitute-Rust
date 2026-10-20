@@ -4,9 +4,9 @@
 use super::{
     child::{ChildInputs, ProductionChild},
     entry_activation::{ProductionActivation, desktop_role::DesktopRole},
-    startup::{ProductionStartup, StartupScopes},
 };
 use crate::job_sequence::JobSequence;
+use crate::startup::{StartupHost, StartupScopes};
 use std::{error::Error, ffi::OsString};
 use sugarsubstitute_contracts::{
     execution::{ScopeId, ScopeSpec},
@@ -102,7 +102,7 @@ fn run_desktop(
             },
         },
     })?;
-    let content = ProductionStartup::new(
+    let content = StartupHost::new(
         role.run,
         role.launch,
         child,

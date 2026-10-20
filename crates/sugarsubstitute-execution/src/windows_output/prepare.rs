@@ -1,33 +1,58 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Create both owned byte pipes and a read-only NUL input after execution admission.
+//! Create owned output pipes and the identity-specific input after execution admission.
 use super::*;
 impl Lease {
     pub(super) fn prepare_handles(
         &mut self,
-        _resource: OutputIdentity,
+        resource: OutputIdentity,
     ) -> Result<(), NativeObservationError> {
         let attributes = SECURITY_ATTRIBUTES {
             nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
             bInheritHandle: true.into(),
             lpSecurityDescriptor: std::ptr::null_mut(),
         };
-        let nul = [b'N' as u16, b'U' as u16, b'L' as u16, 0];
-        // SAFETY: explicit NUL input and inheritable attributes; output sessions
-        // never read ambient stdin or grant write access through this child input.
-        let stdin = unsafe {
-            CreateFileW(
-                PCWSTR(nul.as_ptr()),
-                FILE_GENERIC_READ.0,
-                FILE_SHARE_READ | FILE_SHARE_WRITE,
-                Some(&attributes),
-                OPEN_EXISTING,
-                FILE_ATTRIBUTE_NORMAL,
-                None,
-            )
+        if matches!(resource, OutputIdentity::Managed(_)) {
+            let mut read = HANDLE::default();
+            let mut write = HANDLE::default();
+            // SAFETY: both synchronous pipe outputs are retained immediately. Only the
+            // read end inherits; the worker exclusively owns the shutdown writer.
+            let result = unsafe { CreatePipe(&mut read, &mut write, Some(&attributes), 0) };
+            if !read.is_invalid() {
+                self.child[0].adopt(read, "output_create_stdin")?;
+            }
+            if !write.is_invalid() {
+                self.input_writer.adopt(write, "output_create_stdin")?;
+            }
+            result.map_err(|cause| error("output_create_stdin", cause))?;
+            // SAFETY: this exact owned pipe end must never escape to a child, so EOF
+            // remains tied to this output owner's shutdown or process death.
+            unsafe {
+                SetHandleInformation(
+                    self.input_writer.raw(),
+                    HANDLE_FLAG_INHERIT.0,
+                    Default::default(),
+                )
+            }
+            .map_err(|cause| error("output_stdin_no_inherit", cause))?;
+        } else {
+            let nul = [b'N' as u16, b'U' as u16, b'L' as u16, 0];
+            // SAFETY: explicit NUL input and inheritable attributes; output sessions
+            // never read ambient stdin or grant write access through this child input.
+            let stdin = unsafe {
+                CreateFileW(
+                    PCWSTR(nul.as_ptr()),
+                    FILE_GENERIC_READ.0,
+                    FILE_SHARE_READ | FILE_SHARE_WRITE,
+                    Some(&attributes),
+                    OPEN_EXISTING,
+                    FILE_ATTRIBUTE_NORMAL,
+                    None,
+                )
+            }
+            .map_err(|e| error("output_open_nul", e))?;
+            self.child[0].adopt(stdin, "output_open_nul")?;
         }
-        .map_err(|e| error("output_open_nul", e))?;
-        self.child[0].adopt(stdin, "output_open_nul")?;
         let mut random = [0u8; 16];
         // SAFETY: system CSPRNG fills only this bounded non-secret name nonce.
         unsafe {

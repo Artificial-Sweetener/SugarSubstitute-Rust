@@ -21,6 +21,8 @@ fn all_custody_commands_preserve_complete_matching_facts_in_exact_fixed_frames()
         generation: ResourceGeneration::new(1)?,
     };
     let commands = [
+        BackendCustodyCommand::Heartbeat,
+        BackendCustodyCommand::Receipt(BackendCustodyReceipt::Heartbeat),
         BackendCustodyCommand::Hello { capability: [3; 32] },
         BackendCustodyCommand::Establish { parent: 40, pid: 9, birth: 20, containment: 44 },
         BackendCustodyCommand::Prepare {

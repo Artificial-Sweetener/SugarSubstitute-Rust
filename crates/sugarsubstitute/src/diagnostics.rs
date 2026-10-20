@@ -34,7 +34,7 @@ impl DiagnosticHealth {
         Self::new()
     }
     /// Inject only the external sink's data-only failure for active owner tests.
-    #[cfg(test)]
+    #[cfg(all(test, windows, feature = "windows-native-host"))]
     pub(crate) fn fixture_failure(cause: io::Error) -> Self {
         let health = Self::new();
         health.retain(cause);

@@ -41,6 +41,7 @@ fn caption_input_precedes_the_character_beneath_it() -> Result<(), Box<dyn Error
     for expanded in [false, true] {
         let mut appearance = Appearance::demo();
         appearance.expanded = expanded;
+        appearance.reveal = f64::from(expanded);
         let mut demo = SplashDemo::new("en", appearance, false)?;
         let caption = Pointer { x: 250.0, y: 16.0 };
         let before = demo.animation.frame(Duration::from_millis(100));
@@ -79,11 +80,13 @@ fn reduced_motion_enriches_once_and_repaints_only_meaningful_events() -> Result<
     let static_frame = test_support::prepare(&mut demo, &wake, Duration::from_secs(1))?;
     assert!(!demo.animating());
     let later_frame = test_support::prepare(&mut demo, &wake, Duration::from_secs(8))?;
-    assert_eq!(static_frame.pixels(), later_frame.pixels());
-    assert_eq!(bootstrap.pixels(), static_frame.pixels());
+    assert!(static_frame.pixels() == later_frame.pixels(), "static presentation changed");
+    assert_eq!(bootstrap.pixels(), static_frame.pixels(), "open console added simplified status");
     assert!(!demo.pointer(PointerAction::Press, Pointer { x: 200.0, y: 200.0 }));
     assert!(demo.key(KeyAction::Tab));
     assert!(!demo.animating());
+    let collapsed = test_support::prepare(&mut demo, &wake, Duration::from_secs(9))?;
+    assert!((486..530).any(|y| (24..534).any(|x| collapsed.pixels()[(y * 558 + x) * 4 + 3] != 0)));
     test_support::finish(&mut demo, &wake)?;
     Ok(())
 }

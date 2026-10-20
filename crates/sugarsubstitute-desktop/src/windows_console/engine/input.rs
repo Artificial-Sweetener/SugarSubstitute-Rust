@@ -159,6 +159,9 @@ impl Engine {
             return Ok(Some(LRESULT(0)));
         }
         match message {
+            // The backing STATIC procedure otherwise returns HTTRANSPARENT, preventing
+            // Windows from routing pointer input to this text-services host.
+            WM_NCHITTEST => Ok(Some(LRESULT(HTCLIENT as isize))),
             WM_PAINT => {
                 self.paint()?;
                 Ok(Some(LRESULT(0)))

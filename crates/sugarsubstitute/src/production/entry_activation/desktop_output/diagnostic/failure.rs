@@ -27,6 +27,10 @@ pub(super) fn parse(bytes: &[u8]) -> Option<Failure> {
         "CursorMonitor" => "CursorMonitor",
         "MonitorWorkArea" => "MonitorWorkArea",
         "CenterWindow" => "CenterWindow",
+        "NativeFocus" => "NativeFocus",
+        "NativeFocusRelease" => "NativeFocusRelease",
+        "ControlUpdate" => "ControlUpdate",
+        "FramePresented" => "FramePresented",
         "Other" => "Other",
         _ => return None,
     };

@@ -102,6 +102,25 @@ pub(crate) fn index(
     Ok((document, frame, released))
 }
 #[test]
+fn equal_foreground_runs_share_native_formatting_without_extending_backgrounds() -> TestResult {
+    let mut source = source(1, &[(1, "first"), (2, "second")])?;
+    let (colored, _, _) = index(&source)?;
+    assert_eq!(colored.styles().len(), 2);
+    for (slot, text) in source.records.iter_mut().zip(["first", "second"]) {
+        *slot = TranscriptRecord::new(
+            slot.id(),
+            OutputStream::Stdout,
+            text.to_owned(),
+            vec![StyleRun { start: 0, end: text.len() as u32, style: TextStyle::default() }],
+            true,
+        )?;
+    }
+    let (plain, _, _) = index(&source)?;
+    assert_eq!(plain.styles().len(), 1);
+    assert_eq!((plain.styles()[0].start, plain.styles()[0].end), (0, 12));
+    Ok(())
+}
+#[test]
 fn unicode_stream_preserves_exact_foreign_text_and_styles_at_every_callback_boundary() -> TestResult
 {
     let source = source(1, &[(1, "a😀日本\t\0"), (2, ""), (3, "e\u{301} 끝")])?;

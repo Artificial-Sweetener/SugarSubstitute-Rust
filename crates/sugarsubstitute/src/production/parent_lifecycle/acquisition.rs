@@ -18,7 +18,7 @@ pub(super) use write_state::WriteObservation;
 pub(super) struct Acquisition {
     pub(super) header: WireHeader,
     pub(super) original: Moment,
-    readiness_waiting: bool,
+    deferred_reply: bool,
     progress_until: Option<Moment>,
     original_identity: MainIdentity,
     identity: MainIdentity,
@@ -49,11 +49,11 @@ impl Acquisition {
     /// Admit the authenticated acquisition's lifecycle wait without process authority.
     /// Finite held-command admission and each actual write keep their own owners.
     pub(super) fn wait_for_readiness(&mut self) {
-        self.readiness_waiting = true;
+        self.deferred_reply = true;
     }
     /// Keep pre-admission pulls finite; admitted readiness owns no aggregate cutoff.
     pub(super) fn output_until(&self, supplied: Moment) -> Moment {
-        if self.readiness_waiting { supplied } else { supplied.min(self.original) }
+        if self.deferred_reply { supplied } else { supplied.min(self.original) }
     }
     /// Freeze one finite progress transfer when genuine data first becomes available.
     pub(super) fn progress_deadline(
@@ -84,7 +84,7 @@ impl Acquisition {
         Ok(Self {
             header,
             original,
-            readiness_waiting: false,
+            deferred_reply: false,
             progress_until: None,
             original_identity: identity,
             identity,
@@ -244,7 +244,7 @@ impl Acquisition {
     /// Fence only an unfinished original acquisition at its unchanged cutoff.
     /// A timely written Grant owns the running lease beyond acquisition expiry.
     pub(super) fn expire(&mut self, now: Moment) -> bool {
-        if self.readiness_waiting
+        if self.deferred_reply
             || now < self.original
             || (!self.retiring && self.disposition == Some(Disposition::Granted) && self.sent)
         {

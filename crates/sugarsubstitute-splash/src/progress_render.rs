@@ -43,8 +43,8 @@ impl ProgressCursor {
         frame: ProgressFrame,
         scale: f32,
     ) -> Result<Self, AllocationError> {
-        let y = if appearance.expanded { 356.0 } else { 530.0 };
-        let bar_height = if appearance.expanded { 6.0 } else { 4.0 };
+        let y = appearance.bar_y() as f32;
+        let bar_height = 4.0 + 2.0 * appearance.reveal as f32;
         let left = (24.0 * scale).round();
         let top = (y * scale).round();
         let path = PathBuilder::from_rect(
@@ -67,7 +67,7 @@ impl ProgressCursor {
             scale,
             width,
             height,
-            filled: if appearance.expanded { completed } else { completed.floor() },
+            filled: if appearance.reveal > 0.0 { completed } else { completed.floor() },
             y,
             bar_height,
         })
@@ -86,7 +86,7 @@ impl ProgressCursor {
             }
             Stage::Track => {
                 self.stage = Stage::Fill;
-                if self.appearance.expanded {
+                if self.appearance.reveal > 0.0 {
                     let alpha = if self.appearance.theme == Theme::Dark { 18 } else { 12 };
                     let foreground = if self.appearance.theme == Theme::Dark { 255 } else { 0 };
                     if let Some(path) =
@@ -115,7 +115,7 @@ impl ProgressCursor {
             Stage::Fill => {
                 self.stage = Stage::Done;
                 if let Some(path) = clip_path(
-                    self.appearance.expanded,
+                    self.appearance.reveal > 0.0,
                     24.0,
                     self.y,
                     self.filled,
@@ -197,7 +197,7 @@ impl ProgressCursor {
         if self.frame.activity.is_some() {
             let width = if self.filled > 0.0 { self.filled } else { 510.0 };
             if let Some(path) = clip_path(
-                self.appearance.expanded,
+                self.appearance.reveal > 0.0,
                 24.0,
                 self.y,
                 width,

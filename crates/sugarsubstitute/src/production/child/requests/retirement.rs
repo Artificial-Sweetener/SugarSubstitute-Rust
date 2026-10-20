@@ -25,12 +25,14 @@ impl ClientRequests {
     pub(in crate::production::child) fn output_pull(
         &mut self,
         header: WireHeader,
+        running: bool,
     ) -> Result<(), RequestError> {
         let pending = self.find_mut(header)?;
         if pending.phase != Phase::Prepared || pending.purpose != Purpose::Other {
             return Err(RequestError::Order);
         }
         pending.purpose = Purpose::OutputPull;
+        pending.deferred_reply = running;
         Ok(())
     }
     /// Mark the finite frontend replacement request before any native queue admission.
@@ -43,7 +45,7 @@ impl ClientRequests {
             return Err(RequestError::Order);
         }
         pending.purpose = Purpose::FrontendReload;
-        pending.waits_for_readiness = true;
+        pending.deferred_reply = true;
         Ok(())
     }
     /// Designate the same finite output consumer's distinct user retry request.
@@ -56,7 +58,7 @@ impl ClientRequests {
             return Err(RequestError::Order);
         }
         pending.purpose = Purpose::BackendRetry;
-        pending.waits_for_readiness = true;
+        pending.deferred_reply = true;
         Ok(())
     }
     /// Inspect only original queue admission; a prepared request has issued no native write.

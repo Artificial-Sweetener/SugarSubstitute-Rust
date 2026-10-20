@@ -218,14 +218,14 @@ impl WindowsProcessRegistry {
         self.records[index].as_ref().map(Record::snapshot).ok_or(RegistryAdmissionError::Stale)
     }
     /// Freeze one exact stop transaction and close launch admission before cleanup.
-    /// Only the canonical start+10s/+15s budget is accepted; repeats cannot reset it.
+    /// Phase splits share the fixed fifteen-second total; repeats cannot reset either cutoff.
     pub fn begin_stop(
         &mut self,
         key: ProcessKey,
         shutdown: ShutdownId,
         budget: ShutdownBudget,
     ) -> Result<(), RegistryAdmissionError> {
-        if ShutdownBudget::new(budget.started).ok() != Some(budget) {
+        if budget.validate().is_err() {
             return Err(RegistryAdmissionError::InvalidSpecification);
         }
         let index = self.index(key)?;

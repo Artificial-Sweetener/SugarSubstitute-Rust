@@ -97,9 +97,32 @@ fn snapshot_hidden_drive_entries_are_preserved_and_sorted() -> TestResult {
             Err(Failure::InvalidName)
         ));
     }
-    for invalid in ["==bad", "=1:=bad", "=ZZ:=bad", "NoSeparator"] {
+    for invalid in ["==bad", "NoSeparator"] {
         assert!(matches!(
             LaunchEnvironment::from_snapshot_utf16(&snapshot(&[invalid]), &[]),
+            Err(Failure::InvalidName)
+        ));
+    }
+    Ok(())
+}
+#[test]
+fn inherited_hidden_shell_metadata_survives_child_environment_preparation() -> TestResult {
+    let original = snapshot(&["Path=p", "=::=::\\", "=ExitCode=00000000", "=1:=opaque"]);
+    let prepared = LaunchEnvironment::from_snapshot_utf16(&original, &[])?;
+    assert_eq!(
+        prepared.as_utf16(),
+        snapshot(&["=1:=opaque", "=::=::\\", "=ExitCode=00000000", "Path=p"])
+    );
+    assert_eq!(
+        LaunchEnvironment::from_snapshot_utf16(prepared.as_utf16(), &[])?.as_utf16(),
+        prepared.as_utf16()
+    );
+    for hidden in ["=::", "=ExitCode"] {
+        assert!(matches!(
+            LaunchEnvironment::from_snapshot_utf16(
+                &[0, 0],
+                &[Change::Set { name: &wide(hidden), value: &wide("value") }]
+            ),
             Err(Failure::InvalidName)
         ));
     }

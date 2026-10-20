@@ -2,7 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Prepare bounded configuration and actual environment under one original owned job.
 
-use super::options::ProductionEntryOptions;
+use super::options::{ConfigurationSource, ProductionEntryOptions};
+#[path = "configuration/installed.rs"]
+mod installed;
 use crate::job_sequence::JobSequence;
 use std::{error::Error, fmt, fs::File};
 use sugarsubstitute_comfy::configuration::{
@@ -38,6 +40,7 @@ pub(crate) enum ConfigurationCause {
     Schema { source: Box<StartupConfigurationError>, after: Option<EntryPreparationError> },
     Capacity(std::collections::TryReserveError),
     TooLarge,
+    Installed(Box<dyn Error + Send + Sync>),
     Environment(EntryEnvironmentFailure),
 }
 impl fmt::Debug for ConfigurationCause {
@@ -61,6 +64,7 @@ impl Error for ConfigurationCause {
             Self::Capacity(cause) => Some(cause),
             Self::Environment(cause) => Some(cause),
             Self::TooLarge => None,
+            Self::Installed(cause) => Some(cause.as_ref()),
         }
     }
 }
@@ -92,7 +96,7 @@ pub(crate) fn submit(
     client: &ExecutionClient,
     scope: &Scope,
     jobs: &JobSequence,
-    options: ProductionEntryOptions,
+    options: ConfigurationSource,
     original: EntrySetupBudget,
 ) -> Result<PreparedRequestJob, Box<dyn Error>> {
     let spec = JobSpec {
@@ -105,6 +109,7 @@ pub(crate) fn submit(
     };
     client
         .submit_entry_preparation(scope, spec, original, move |context| {
+            let options = installed::resolve(&context, options)?;
             let LoadedConfiguration { options, configuration } =
                 load_configuration(&context, options)?;
             let captured =

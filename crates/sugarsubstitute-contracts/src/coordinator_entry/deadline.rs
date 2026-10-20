@@ -6,18 +6,21 @@ use super::EntryBudgetError;
 use crate::execution::{Moment, TimeError};
 use std::time::Duration;
 
-/// Original thirty-second setup budget in the execution owner's monotonic clock.
+/// Original one-hour setup budget in the execution owner's monotonic clock.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EntrySetupBudget {
     started: Moment,
     until: Moment,
 }
 impl EntrySetupBudget {
-    /// Freeze one checked thirty-second ancestor before queue admission.
+    /// Maximum application setup duration, shared by native and execution-clock adapters.
+    pub const DURATION: Duration = Duration::from_secs(3600);
+
+    /// Freeze one checked one-hour ancestor before queue admission.
     /// # Errors
     /// Returns the original clock overflow if the ancestor is unrepresentable.
     pub fn new(started: Moment) -> Result<Self, TimeError> {
-        Ok(Self { started, until: started.checked_add(Duration::from_secs(30))? })
+        Ok(Self { started, until: started.checked_add(Self::DURATION)? })
     }
     /// Return the original monotonic setup start.
     pub const fn started(self) -> Moment {

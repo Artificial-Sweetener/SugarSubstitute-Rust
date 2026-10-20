@@ -47,7 +47,7 @@ pub(super) struct Record {
     acquisition: Option<RequestId>,
     retired: bool,
     pub(super) until: Option<sugarsubstitute_contracts::execution::Moment>,
-    readiness_waiting: bool,
+    deferred_reply: bool,
     transfer_until: Option<sugarsubstitute_contracts::execution::Moment>,
     pub(super) output_bytes: Box<[u8]>,
 }
@@ -90,9 +90,10 @@ pub(super) struct Requests {
 }
 
 impl Requests {
-    /// Retain authenticated configured readiness intent; this grants no process or Ready authority.
+    /// Separate passive/readiness waiting from the finite final reply transfer.
+    /// This grants no process or Ready authority.
     /// A held command keeps its finite admission cutoff and must publish an actual terminal.
-    pub(super) fn wait_for_readiness(&mut self, index: usize) -> Result<(), ParentError> {
+    pub(super) fn defer_reply(&mut self, index: usize) -> Result<(), ParentError> {
         let record = self.get_mut(index)?;
         if record.held_backend.is_some()
             || record.reply.is_some()
@@ -101,7 +102,7 @@ impl Requests {
         {
             return Err(ParentError::WrongPhase);
         }
-        record.readiness_waiting = true;
+        record.deferred_reply = true;
         Ok(())
     }
     /// Freeze one finite native final transfer without changing the original wire header.
@@ -114,7 +115,7 @@ impl Requests {
         Box<dyn std::error::Error + Send + Sync>,
     > {
         let record = self.get_mut(index)?;
-        if !record.readiness_waiting {
+        if !record.deferred_reply {
             return Ok(record.until.ok_or(ParentError::WrongPhase)?);
         }
         if record.reply.is_none() {
@@ -127,9 +128,9 @@ impl Requests {
         record.transfer_until = Some(until);
         Ok(until)
     }
-    /// Borrow configured readiness intent; a held command is still subject to finite admission.
-    pub(super) fn readiness_waiting(&self, index: usize) -> Result<bool, ParentError> {
-        Ok(self.get(index)?.readiness_waiting)
+    /// Borrow passive reply intent; a held command is still subject to finite admission.
+    pub(super) fn deferred_reply(&self, index: usize) -> Result<bool, ParentError> {
+        Ok(self.get(index)?.deferred_reply)
     }
     pub(super) const fn new() -> Self {
         Self { records: [const { None }; SLOTS], high_water: 0 }
@@ -204,7 +205,7 @@ impl Requests {
             acquisition: None,
             retired: false,
             until: None,
-            readiness_waiting: false,
+            deferred_reply: false,
             transfer_until: None,
             output_bytes: output_bytes.into_boxed_slice(),
         });
@@ -356,7 +357,7 @@ impl Requests {
         }
         record.held_terminal = Some(HeldBackendTerminal::TimedOut);
         record.held_backend = None;
-        if record.readiness_waiting {
+        if record.deferred_reply {
             record.reply = Some(Reply::Failed(
                 sugarsubstitute_contracts::lifecycle::LifecycleFailureCode::Deadline,
             ));
@@ -375,7 +376,7 @@ impl Requests {
         }
         record.held_backend = None;
         record.held_terminal = Some(HeldBackendTerminal::Cancelled);
-        if record.readiness_waiting {
+        if record.deferred_reply {
             record.reply = Some(Reply::Cancelled);
         } else {
             record.abandoned = true;
@@ -413,7 +414,7 @@ impl Requests {
             .flatten()
             .filter(|record| !record.sent && !record.abandoned)
             .filter_map(|record| {
-                if record.readiness_waiting && record.held_backend.is_none() {
+                if record.deferred_reply && record.held_backend.is_none() {
                     record.transfer_until
                 } else {
                     record.until

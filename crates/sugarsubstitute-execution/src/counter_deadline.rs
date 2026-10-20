@@ -48,12 +48,20 @@ pub(crate) fn decode(
     counter: (u64, u64),
     original: CounterDeadline,
 ) -> Result<Moment, NativeObservationError> {
+    decode_if_live(before, counter, original)?.ok_or_else(|| invalid(ConversionError::Expired))
+}
+/// Distinguish an expired diagnostic cutoff from malformed clock facts.
+pub(crate) fn decode_if_live(
+    before: Moment,
+    counter: (u64, u64),
+    original: CounterDeadline,
+) -> Result<Option<Moment>, NativeObservationError> {
     let (ticks, frequency) = positive(counter)?;
     if frequency != original.frequency() as u64 {
         return Err(invalid(ConversionError::FrequencyMismatch));
     }
     if ticks >= original.ticks() as u64 {
-        return Err(invalid(ConversionError::Expired));
+        return Ok(None);
     }
     let remaining = u128::from(original.ticks() as u64 - ticks)
         .checked_mul(1_000_000_000)
@@ -61,9 +69,9 @@ pub(crate) fn decode(
         / u128::from(frequency);
     let remaining = u64::try_from(remaining).map_err(|_| arithmetic(TimeError::Overflow))?;
     if remaining == 0 {
-        return Err(invalid(ConversionError::Expired));
+        return Ok(None);
     }
-    before.checked_add(Duration::from_nanos(remaining)).map_err(arithmetic)
+    before.checked_add(Duration::from_nanos(remaining)).map(Some).map_err(arithmetic)
 }
 fn positive(counter: (u64, u64)) -> Result<(u64, u64), NativeObservationError> {
     let (ticks, frequency) = counter;

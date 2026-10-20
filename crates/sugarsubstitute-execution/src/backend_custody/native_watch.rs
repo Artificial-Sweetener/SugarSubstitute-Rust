@@ -15,6 +15,8 @@ pub struct BackendCustodyProcessWatch {
     expected: Option<(u32, u64)>,
     slot: Option<BackendCustodySlotTurn>,
     metadata: Option<BackendCustodyMemory>,
+    watchdog: Option<super::parent_watchdog::ParentWatchdog>,
+    termination_issued: bool,
 }
 impl BackendCustodyProcessWatch {
     /// Include the complete actual lease/wait/control peak before native allocation.
@@ -31,6 +33,8 @@ impl BackendCustodyProcessWatch {
             expected: metadata.parent_identity(),
             slot: None,
             metadata: Some(metadata.clone()),
+            watchdog: Some(super::parent_watchdog::ParentWatchdog::default()),
+            termination_issued: false,
         }
     }
     /// Adopt one actual membership-verified native source duplicate before effects.
@@ -44,6 +48,8 @@ impl BackendCustodyProcessWatch {
             expected: Some(expected),
             slot: Some(slot.clone()),
             metadata: Some(slot.metadata().clone()),
+            watchdog: None,
+            termination_issued: false,
         }
     }
     /// Start one same-worker wait after original ledger/scope validation.
@@ -92,6 +98,44 @@ impl BackendCustodyProcessWatch {
     /// Observe only the actual registered callback's original process signal.
     pub fn signaled(&self) -> bool {
         self.signal.as_ref().is_some_and(|signal| signal.completed())
+    }
+    /// Record a fresh authenticated coordinator command after native identity validation.
+    /// # Errors
+    /// Rejects member watches and preserves active-clock failures.
+    pub fn observe_parent_progress(&mut self) -> Result<(), NativeObservationError> {
+        if self.identity() != self.expected || self.expected.is_none() || self.wake.is_none() {
+            return Err(failure("parent_watchdog_identity"));
+        }
+        let now = crate::windows::process::Lease::active_time()?;
+        self.watchdog.as_mut().ok_or_else(|| failure("parent_watchdog_member"))?.observe(now);
+        Ok(())
+    }
+    /// Enforce the independent active-time lease using the original authenticated handle.
+    /// The returned interval schedules observation; termination never proves actual exit.
+    /// # Errors
+    /// Preserves native clock/termination causes and rejects member watches.
+    pub fn poll_parent_progress(
+        &mut self,
+    ) -> Result<Option<std::time::Duration>, NativeObservationError> {
+        if self.signaled() || self.termination_issued {
+            return Ok(None);
+        }
+        let now = crate::windows::process::Lease::active_time()?;
+        let remaining =
+            self.watchdog.as_mut().ok_or_else(|| failure("parent_watchdog_member"))?.remaining(now);
+        if remaining == Some(std::time::Duration::ZERO) {
+            self.lease
+                .as_ref()
+                .ok_or_else(|| failure("parent_watchdog_owner"))?
+                .terminate_unresponsive_parent()?;
+            self.termination_issued = true;
+            tracing::error!(
+                operation = "coordinator_watchdog_expired",
+                "Independent custodian terminated its unresponsive coordinator; actual exit and owned cleanup remain pending"
+            );
+            return Ok(None);
+        }
+        Ok(remaining)
     }
     /// Borrow cached identity after actual kernel validation, without another query.
     pub fn identity(&self) -> Option<(u32, u64)> {

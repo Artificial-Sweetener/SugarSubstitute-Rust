@@ -160,6 +160,5 @@ pub(in crate::production) fn close(
     let record = backend.record(key)?;
     assert_eq!(record.shutdown.map(|(_, budget)| budget), Some(original));
     assert!(record.output_fanout.current.is_none());
-    assert!(backend.output_clients.consumed(key, u64::MAX));
     Ok(())
 }

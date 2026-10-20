@@ -168,7 +168,7 @@ fn registered_startup_queue_saturation_retains_exact_source_and_first_cutoff_wit
     ));
     assert!(input.as_ref().is_some_and(|retained| source.same_source(retained)));
     assert_eq!(source.state()?.progress.lock().map_err(|_| "Progress poisoned")?.current, previous);
-    rig.clock.advance(30_000_000_000);
+    rig.clock.advance(original.until().as_nanos() - rig.client.now()?.as_nanos());
     let client = rig.client.clone();
     let expired = rig.client.submit_blocking_owned_box(
         &rig.scope,

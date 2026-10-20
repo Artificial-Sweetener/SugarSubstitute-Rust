@@ -223,7 +223,7 @@ impl ParentLifecycle {
     /// This admits no backend effect and supplies no native settlement witness.
     fn retain_held_terminal(&mut self, index: usize) -> Result<()> {
         let record = self.requests.get(index)?;
-        if self.requests.readiness_waiting(index)?
+        if self.requests.deferred_reply(index)?
             && record.held_terminal.is_some()
             && let Some(acquisition) = &mut self.acquisition
             && acquisition.header == record.header
@@ -320,7 +320,7 @@ impl ParentLifecycle {
         let Some(retry) = self.recovery.retry else {
             return Ok(());
         };
-        if self.requests.readiness_waiting(
+        if self.requests.deferred_reply(
             self.requests
                 .find(retry.header.request.ok_or(ParentError::WrongPhase)?)
                 .ok_or(ParentError::StaleRequest)?,

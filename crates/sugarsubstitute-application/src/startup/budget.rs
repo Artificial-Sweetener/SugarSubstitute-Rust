@@ -12,9 +12,9 @@ use sugarsubstitute_contracts::execution::{Moment, TimeError};
 /// Select the original preparation duration for the configured connection ownership.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ConnectionBudgetKind {
-    /// Prepare an attached connection within thirty seconds without process control.
+    /// Prepare an attached connection within one hundred fifty seconds without process control.
     Attached,
-    /// Prepare a managed backend within one hundred eighty seconds.
+    /// Prepare a managed backend within one hour.
     Managed,
 }
 
@@ -59,7 +59,7 @@ pub struct ConnectionBudget {
 }
 
 impl ConnectionBudget {
-    /// Freeze the attached thirty-second or managed one-hundred-eighty-second preparation budget.
+    /// Freeze the attached one-hundred-fifty-second or managed one-hour preparation budget.
     ///
     /// `started` uses the composing owner's monotonic nanosecond epoch. Construct
     /// this value before the first preparation operation and retain it across retries.
@@ -68,8 +68,8 @@ impl ConnectionBudget {
     /// Returns `TimeError::Overflow` if the original deadline is unrepresentable.
     pub fn new(kind: ConnectionBudgetKind, started: Moment) -> Result<Self, TimeError> {
         let duration = match kind {
-            ConnectionBudgetKind::Attached => Duration::from_secs(30),
-            ConnectionBudgetKind::Managed => Duration::from_secs(180),
+            ConnectionBudgetKind::Attached => Duration::from_secs(150),
+            ConnectionBudgetKind::Managed => Duration::from_secs(3600),
         };
         Ok(Self { kind, started, until: started.checked_add(duration)? })
     }
@@ -80,8 +80,8 @@ impl ConnectionBudget {
     /// data constructor authenticates no peer and grants no native authority.
     ///
     /// # Errors
-    /// Rejects equality/expiry and remaining intervals beyond the unchanged
-    /// attached30s or managed180s limit. Checked clock causes remain typed.
+    /// Rejects equality/expiry and remaining intervals beyond the attached
+    /// 150-second or managed one-hour limit. Checked clock causes remain typed.
     pub fn from_until(
         kind: ConnectionBudgetKind,
         observed: Moment,
@@ -92,8 +92,8 @@ impl ConnectionBudget {
         }
         let remaining = until.checked_duration_since(observed).map_err(ProbeBudgetError::Clock)?;
         let maximum = match kind {
-            ConnectionBudgetKind::Attached => Duration::from_secs(30),
-            ConnectionBudgetKind::Managed => Duration::from_secs(180),
+            ConnectionBudgetKind::Attached => Duration::from_secs(150),
+            ConnectionBudgetKind::Managed => Duration::from_secs(3600),
         };
         if remaining > maximum {
             return Err(ProbeBudgetError::IntervalTooLong);
@@ -160,7 +160,7 @@ impl ConnectionBudget {
     }
 }
 
-/// Retain the original thirty-second native Main preparation deadline.
+/// Retain the original one-hour native Main preparation deadline.
 ///
 /// The host freezes this local budget before constructing the Main request. Folder,
 /// environment and browser authorization retain its cutoff until native authorization.
@@ -177,7 +177,7 @@ impl FrontendBudget {
     /// # Errors
     /// Returns `TimeError::Overflow` if the original deadline is unrepresentable.
     pub fn new(started: Moment) -> Result<Self, TimeError> {
-        Ok(Self { started, until: started.checked_add(Duration::from_secs(30))? })
+        Ok(Self { started, until: started.checked_add(Duration::from_secs(3600))? })
     }
 
     /// Return the original start in the composing clock's monotonic nanosecond epoch.
@@ -185,7 +185,7 @@ impl FrontendBudget {
         self.started
     }
 
-    /// Return the immutable thirty-second deadline in that same clock epoch.
+    /// Return the immutable one-hour deadline in that same clock epoch.
     pub const fn until(&self) -> Moment {
         self.until
     }

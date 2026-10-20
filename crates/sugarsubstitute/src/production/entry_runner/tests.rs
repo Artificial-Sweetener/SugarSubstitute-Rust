@@ -20,7 +20,8 @@ fn original_cleanup_wake_is_consumed_before_unsettled_owner_returns() -> Result<
             cubes: installation.clone(),
             script: installation.clone(),
             profile: installation.clone(),
-        },
+        }
+        .into(),
     };
     let mut owner = EntryRunner::new(
         command,
@@ -116,7 +117,8 @@ fn child_factory_failure_preserves_cause_before_native_pump_or_configuration()
         cubes: installation.clone(),
         script: installation.clone(),
         profile: installation.clone(),
-    };
+    }
+    .into();
     let command = ProductionCommand {
         installation: installation.clone(),
         diagnostics: Default::default(),
@@ -194,7 +196,8 @@ fn actual_runner_retains_schema_failure_and_joins_without_environment_capture()
         cubes: directory.clone(),
         script: directory.clone(),
         profile: directory.clone(),
-    };
+    }
+    .into();
     let command = ProductionCommand {
         installation: directory.clone(),
         diagnostics: Default::default(),

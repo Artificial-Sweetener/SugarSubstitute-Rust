@@ -10,6 +10,8 @@ use windows::Win32::UI::WindowsAndMessaging::{GetScrollInfo, SB_VERT, SCROLLINFO
 #[path = "native_fixture.rs"]
 mod native_fixture;
 use native_fixture::{Hidden, MtaUsage, apartment_fact};
+#[path = "input_tests.rs"]
+mod input_tests;
 #[path = "native_alpha_tests.rs"]
 mod native_alpha_tests;
 #[path = "publication_tests.rs"]
@@ -47,6 +49,8 @@ fn actual_implicit_mta_sta_lifetime_preserves_native_console_text_scroll_and_cla
     )?;
     actual_hidden_native_console_accepts_absent_scrollbar_and_retains_real_positions(&apartment)?;
     actual_native_selection_clamping_reports_requested_and_observed_ranges(&apartment)?;
+    actual_console_publication_follows_successive_tail_updates(&apartment)?;
+    incremental_publication_preserves_selected_unicode_and_embedded_nul(&apartment)?;
     publication_tests::publication_never_paints_intermediate_text_or_selection(&apartment)?;
 
     // SAFETY: Every scenario returned only after exact child, parent and module checked retirement.
@@ -54,6 +58,69 @@ fn actual_implicit_mta_sta_lifetime_preserves_native_console_text_scroll_and_cla
     let restored = apartment_fact("ui_apartment_fixture_restored_query")?;
     mta.close()?;
     assert_eq!(restored, implicit);
+    Ok(())
+}
+
+/// Trimming and current-line replacement preserve the selected retained record's exact text.
+fn incremental_publication_preserves_selected_unicode_and_embedded_nul(
+    apartment: &UiApartment,
+) -> TestResult {
+    let (old, _frame, _release) =
+        index(&source(1, &[(1, "gone"), (2, "日本😀"), (3, "wait\0ing")])?)?;
+    let mut hidden = Hidden::new(old, apartment)?;
+    let hwnd = hidden.hwnd.ok_or("child absent")?;
+    let mut documents = update::Documents::new(hidden.document.take().ok_or("document absent")?);
+    publish(hwnd, &mut documents, true)?;
+    let control = super::super::messages::Messages(hwnd);
+    control.select(5, 9)?;
+    let (next, _next_frame, _next_release) =
+        index(&source(2, &[(2, "日本😀"), (3, "ready\0now"), (4, "new")])?)?;
+    documents.stage(next)?;
+    publish(hwnd, &mut documents, true)?;
+    let expected = documents.current().ok_or("current absent")?;
+    let mut actual = vec![0u16; expected.units as usize + 1];
+    assert_eq!(control.read(&mut actual)?, expected.units as usize);
+    assert_eq!(&actual[..expected.units as usize], expected.text());
+    assert_eq!((control.selection().cpMin, control.selection().cpMax), (0, 4));
+    assert_ne!(control.selected_format().Base.dwEffects & CFE_BOLD, Default::default());
+    hidden.close()?;
+    Ok(())
+}
+
+/// Exercise production redraw suspension while the unfocused console grows beyond its viewport.
+fn actual_console_publication_follows_successive_tail_updates(
+    apartment: &UiApartment,
+) -> TestResult {
+    let (empty, _frame, _release) = index(&source(1, &[])?)?;
+    let mut owner = Hidden::new(empty, apartment)?;
+    let hwnd = owner.hwnd.ok_or("hidden native peer absent")?;
+    let mut documents = update::Documents::new(owner.document.take().ok_or("document absent")?);
+    publish(hwnd, &mut documents, true)?;
+    for count in [10, 30, 60, 100] {
+        let lines: Vec<_> = (1..=count).map(|id| (id, "ComfyUI startup output 日本語😀")).collect();
+        let (incoming, _frame, _release) = index(&source(count + 1, &lines)?)?;
+        documents.stage(incoming)?;
+        publish(hwnd, &mut documents, true)?;
+        let observed = observe(hwnd, true)?;
+        assert!(observed.at_bottom, "tail lost after {count} records; first={}", observed.first);
+    }
+    let control = super::super::messages::Messages(hwnd);
+    control.scroll_lines(-10)?;
+    let scrollback = observe(hwnd, true)?;
+    assert!(!scrollback.at_bottom);
+    let lines: Vec<_> = (1..=110).map(|id| (id, "ComfyUI startup output 日本語😀")).collect();
+    let (incoming, _frame, _release) = index(&source(111, &lines)?)?;
+    documents.stage(incoming)?;
+    publish(hwnd, &mut documents, true)?;
+    assert_eq!(observe(hwnd, true)?.first, scrollback.first);
+    control.scroll_bottom()?;
+    assert!(observe(hwnd, true)?.at_bottom);
+    let lines: Vec<_> = (1..=120).map(|id| (id, "ComfyUI startup output 日本語😀")).collect();
+    let (incoming, _frame, _release) = index(&source(121, &lines)?)?;
+    documents.stage(incoming)?;
+    publish(hwnd, &mut documents, true)?;
+    assert!(observe(hwnd, true)?.at_bottom);
+    owner.close()?;
     Ok(())
 }
 
@@ -66,7 +133,7 @@ fn actual_readonly_native_document_preserves_unicode_nul_styles_and_selected_cha
     let mut owner = Hidden::new(document, apartment)?;
     let hwnd = owner.hwnd.ok_or("hidden native peer absent")?;
     let mut port = NativeText { hwnd, dark: true };
-    port.write(owner.document.as_ref().ok_or("original document absent")?)?;
+    port.write(owner.document.as_ref().ok_or("original document absent")?, None)?;
     port.selection(1, 3)?;
     let selection = port.control().selection();
     assert_eq!(selection.cpMin, 1);
@@ -105,7 +172,7 @@ fn actual_hidden_native_console_accepts_absent_scrollbar_and_retains_real_positi
     let mut owner = Hidden::new(empty, apartment)?;
     let hwnd = owner.hwnd.ok_or("hidden native peer absent")?;
     let mut port = NativeText { hwnd, dark: true };
-    port.write(owner.document.as_ref().ok_or("original empty document absent")?)?;
+    port.write(owner.document.as_ref().ok_or("original empty document absent")?, None)?;
     let empty = port.observe()?;
     assert_eq!((empty.start, empty.end, empty.first), (0, 0, 0));
     assert!(empty.at_bottom, "{}", {
@@ -153,7 +220,7 @@ fn actual_hidden_native_console_accepts_absent_scrollbar_and_retains_real_positi
     let populated_source = source(2, &lines)?;
     let (populated, _next_frame, _next_release) = index(&populated_source)?;
     let original = owner.document.replace(populated);
-    port.write(owner.document.as_ref().ok_or("populated document absent")?)?;
+    port.write(owner.document.as_ref().ok_or("populated document absent")?, None)?;
     drop(original);
     port.selection(2, 7)?;
     port.control().scroll_lines(8)?;
@@ -174,7 +241,7 @@ fn actual_native_selection_clamping_reports_requested_and_observed_ranges(
     let mut owner = Hidden::new(document, apartment)?;
     let hwnd = owner.hwnd.ok_or("hidden native peer absent")?;
     let mut port = NativeText { hwnd, dark: true };
-    port.write(owner.document.as_ref().ok_or("original document absent")?)?;
+    port.write(owner.document.as_ref().ok_or("original document absent")?, None)?;
     let requested = i32::MAX;
     let cause = match port.selection(0, requested) {
         Err(cause) => cause,

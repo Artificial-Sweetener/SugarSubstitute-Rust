@@ -15,7 +15,9 @@ pub struct WireHeader {
     pub request: Option<RequestId>,
     /// Positive absolute Windows QPC admission deadline, unchanged on retransmission/reply.
     /// Managed Acquire/Retry may await the actual producer beyond admission; each
-    /// native transfer has its own finite deadline. Other requests retain their cutoff.
+    /// native transfer has its own finite deadline. Running output subscriptions also
+    /// retain correlation while waiting, with bounded reply and parser transfers.
+    /// Other requests retain their cutoff.
     pub deadline_qpc: i64,
 }
 impl WireHeader {
@@ -26,7 +28,7 @@ impl WireHeader {
         let valid = match kind {
             1 => self.connection.is_none() && self.request.is_none(),
             2 | 9 => self.connection.is_some() && self.request.is_none(),
-            3..=8 | 10..=21 => self.connection.is_some() && self.request.is_some(),
+            3..=8 | 10..=20 => self.connection.is_some() && self.request.is_some(),
             _ => return Err(ProtocolError::UnsupportedTag),
         };
         if valid { Ok(()) } else { Err(ProtocolError::Identity) }

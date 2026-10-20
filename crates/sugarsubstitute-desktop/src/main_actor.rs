@@ -3,6 +3,7 @@
 //! Drive one admitted UI-affine browser lifetime through explicit native stages.
 
 mod admission;
+mod close_request;
 mod construction;
 mod evidence;
 mod frame;
@@ -214,7 +215,7 @@ impl MainActor {
         if self.constructor.as_ref().is_some_and(WebViewConstruction::take_close_requested)
             || self.view.as_ref().is_some_and(WebView::take_close_requested)
         {
-            return Ok(Some(DesktopStartupObservation::CloseRequested));
+            return close_request::observe(self.revealed);
         }
         if let Some(kind) = self.events()?.process_failed()
             && let Some(reason) =
@@ -336,33 +337,39 @@ impl MainActor {
         &mut self,
         id: tao::window::WindowId,
         event: &WindowEvent<'_>,
-    ) -> Result<bool, DesktopError> {
+    ) -> Result<Option<DesktopStartupObservation>, DesktopError> {
         if self.window.as_ref().is_none_or(|window| window.id() != id) {
-            return Ok(false);
+            return Ok(None);
         }
         if self.admission.closing() {
-            return Ok(false);
+            return Ok(None);
         }
         match event {
-            WindowEvent::CloseRequested | WindowEvent::Destroyed => return Ok(true),
+            WindowEvent::CloseRequested | WindowEvent::Destroyed => {
+                return close_request::observe(self.revealed);
+            }
             WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => self.resize()?,
             _ => {}
         }
-        Ok(false)
+        Ok(None)
     }
-    pub(crate) fn activate(&self, id: u16) -> Result<bool, DesktopError> {
+    /// Route caption actions through the same visibility and failure policy as native events.
+    pub(crate) fn activate(
+        &self,
+        id: u16,
+    ) -> Result<Option<DesktopStartupObservation>, DesktopError> {
         if self.admission.closing() {
-            return Ok(false);
+            return Ok(None);
         }
         match id {
             1 => self.window()?.set_minimized(true),
             2 => self.window()?.set_maximized(!self.window()?.is_maximized()),
-            3 => return Ok(true),
+            3 => return close_request::observe(self.revealed),
             _ => {
                 return Err(DesktopError::message("main_control", "unknown caption control"));
             }
         }
-        Ok(false)
+        Ok(None)
     }
 }
 

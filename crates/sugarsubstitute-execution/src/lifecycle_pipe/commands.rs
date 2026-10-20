@@ -118,11 +118,60 @@ impl Control {
         &self,
         operation: LifecyclePipeOperationId,
         original_deadline: Moment,
+        buffer: LifecyclePipeWriteBuffer,
+        encoded_length: usize,
+    ) -> Result<NativeWriteAdmission, LifecyclePipeWriteRejection> {
+        self.write_command(operation, Some(original_deadline), buffer, encoded_length)
+    }
+    /// Queue only a canonical authenticated custody heartbeat under its active-time watchdog.
+    pub(crate) fn write_heartbeat(
+        &self,
+        operation: LifecyclePipeOperationId,
+        buffer: LifecyclePipeWriteBuffer,
+    ) -> Result<NativeWriteAdmission, LifecyclePipeWriteRejection> {
+        self.write_command(
+            operation,
+            None,
+            buffer,
+            sugarsubstitute_contracts::backend_custody::BACKEND_CUSTODY_FRAME_BYTES,
+        )
+    }
+    /// Preserve the same buffer/admission owner for finite commands and typed heartbeats.
+    fn write_command(
+        &self,
+        operation: LifecyclePipeOperationId,
+        original_deadline: Option<Moment>,
         mut buffer: LifecyclePipeWriteBuffer,
         encoded_length: usize,
     ) -> Result<NativeWriteAdmission, LifecyclePipeWriteRejection> {
         let result = self.commit(|s, slots, now| {
-            validate(s, operation, original_deadline, now)?;
+            if let Some(until) = original_deadline {
+                validate(s, operation, until, now)?;
+            } else {
+                validate_operation(s, operation)?;
+                if !s.authenticated || slots.handshake_deadline().is_some() {
+                    return Err(LifecyclePipeError::NotReady);
+                }
+                use sugarsubstitute_contracts::backend_custody::{
+                    BackendCustodyCommand as Command, BackendCustodyFrame,
+                    BackendCustodyReceipt as Receipt,
+                };
+                let bytes = buffer
+                    .buffer
+                    .as_ref()
+                    .and_then(|buffer| buffer.bytes.get(..encoded_length))
+                    .ok_or(LifecyclePipeError::InvalidMessage)?;
+                let frame = BackendCustodyFrame::decode(bytes)
+                    .map_err(|_| LifecyclePipeError::InvalidMessage)?;
+                if Some(frame.key) != s.binding.and_then(PeerBinding::backend_custody)
+                    || !matches!(
+                        frame.command,
+                        Command::Heartbeat | Command::Receipt(Receipt::Heartbeat)
+                    )
+                {
+                    return Err(LifecyclePipeError::InvalidMessage);
+                }
+            }
             if !buffer.shared.same_allocation(&self.shared)
                 || buffer.buffer.is_none()
                 || encoded_length == 0
@@ -133,7 +182,9 @@ impl Control {
             if s.write_busy || !s.room(2) {
                 return Err(LifecyclePipeError::Busy);
             }
-            if !slots.arm(Role::Write, operation.get(), original_deadline) {
+            if original_deadline
+                .is_some_and(|until| !slots.arm(Role::Write, operation.get(), until))
+            {
                 return Err(LifecyclePipeError::Busy);
             }
             let storage = buffer.buffer.take().ok_or(LifecyclePipeError::InvalidMessage)?;

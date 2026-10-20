@@ -35,6 +35,8 @@ mod scroll_input;
 mod scrollbar;
 #[path = "engine/transaction.rs"]
 mod transaction;
+#[path = "engine/wheel.rs"]
+mod wheel;
 
 /// The module and child remain retained outside this owner until checked shutdown succeeds.
 pub(super) struct Engine {
@@ -145,6 +147,13 @@ impl Engine {
                 "native exact-color selection policy rejected",
             ));
         }
+        // A read-only transcript has no edit history. Native paint formatting must not
+        // accumulate undo records as each incoming revision replaces the bounded tail.
+        self.message(
+            windows::Win32::UI::Controls::RichEdit::EM_SETUNDOLIMIT,
+            WPARAM(0),
+            LPARAM(0),
+        )?;
         Ok(())
     }
     /// Borrow the original document without exporting native scheduler or HWND privileges.
@@ -278,23 +287,33 @@ impl Engine {
         if !scale.is_finite() || scale <= 0.0 {
             return Err(DesktopError::message("console_scale", "invalid native scale"));
         }
-        self.state.scale.set(scale);
+        let scale_changed = self.state.scale.replace(scale) != scale;
         self.admit_accessibility(frame)?;
         if self.renderer.borrow().is_none() {
             *self.renderer.borrow_mut() =
                 Some(renderer::Renderer::new(frame, document.clone(), bounds, dark)?);
         }
-        self.renderer
+        let changed = self
+            .renderer
             .borrow_mut()
             .as_mut()
             .ok_or_else(|| DesktopError::message("console_renderer", "paint custody absent"))?
             .prepare(frame, document, bounds, dark)?;
-        self.state.invalidate();
+        if changed || scale_changed {
+            self.state.invalidate();
+        } else {
+            self.state.expose();
+        }
         self.state.check()
     }
     /// Observe native scroll state from the authoritative text engine without a stock scrollbar HWND.
     pub(super) fn at_bottom(&self) -> Result<bool, DesktopError> {
         Ok(transaction::Scroll::observe(&self.services()?)?.at_bottom())
+    }
+    #[cfg(test)]
+    /// Count actual RichEdit raster transactions independently of expose/composite requests.
+    pub(super) fn qualified_glyph_draws(&self) -> usize {
+        self.renderer.borrow().as_ref().map_or(0, |renderer| renderer.glyph_draws)
     }
     #[cfg(test)]
     /// Paint the actual native engine into a separately admitted fixture DIB without showing a HWND.

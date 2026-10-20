@@ -39,6 +39,17 @@ pub(crate) struct Active {
     metadata: BackendCustodyMemory,
 }
 impl Active {
+    /// Keep the custodian's renewable parent observation on its existing timer allocation.
+    fn observe_parent_at(&self, core: &Core, at: Option<Moment>) {
+        let changed = crate::scope::lock(&core.state)
+            .jobs
+            .get_mut(&self.context.job_id())
+            .and_then(|record| record.custody_deadlines.as_mut())
+            .is_some_and(|deadlines| deadlines.observe_parent_at(at));
+        if changed {
+            core.changed();
+        }
+    }
     pub(crate) fn new(
         work: Box<Work>,
         metadata: BackendCustodyMemory,
@@ -116,7 +127,10 @@ impl Active {
             && let Some(driver) = &mut self.driver
         {
             match driver.progress(&self.context, now) {
-                Ok(BackendCustodyProgress::Pending) => {}
+                Ok(BackendCustodyProgress::Pending) => self.observe_parent_at(core, None),
+                Ok(BackendCustodyProgress::ObserveParentAt(at)) => {
+                    self.observe_parent_at(core, Some(at))
+                }
                 Ok(BackendCustodyProgress::Settled) => {
                     self.outcome = Some(JobOutcome::Success(BackendCustodyWorkerReport {
                         key: self.work.permit.key(),

@@ -29,6 +29,19 @@ fn actor_for(instance: u64) -> Result<ParentLifecycle> {
         &mut Some(crate::production::parent_lifecycle::causes::BackendCauses::new(storage)?),
     )?)
 }
+
+#[test]
+fn authenticated_live_desktop_accepts_reactivation_until_close_begins() -> Result<()> {
+    let mut parent = actor()?;
+    let process = ProcessKey { owner: parent.run.owner, id: ProcessId::new(1)? };
+    parent.exit = Some(DesktopExitTransaction::new(parent.run, process)?);
+    assert!(!parent.accepts_reactivation());
+    parent.registered = true;
+    assert!(parent.accepts_reactivation());
+    intent(&mut parent, CompletionIntent::Normal)?;
+    assert!(!parent.accepts_reactivation());
+    Ok(())
+}
 fn intent(parent: &mut ParentLifecycle, kind: CompletionIntent) -> Result<ProcessKey> {
     intent_at(parent, kind, Moment::from_nanos(1))
 }
@@ -89,6 +102,20 @@ fn parent_close_query_rejects_foreign_run_changed_budget_and_original_failure() 
     Ok(())
 }
 #[test]
+fn historical_acquisition_rejection_preserves_later_deliberate_close() -> Result<()> {
+    let mut parent = actor()?;
+    intent(&mut parent, CompletionIntent::StartupCancelled)?;
+    parent.registered = true;
+    parent._attempt_failure =
+        Some(Box::new(std::io::Error::other("Presented acquisition rejection")));
+    assert_eq!(parent.normal_close_request().map(|request| request.budget()), parent.cleanup);
+    assert!(parent._attempt_failure.is_some());
+    assert!(!parent.normal_cleanup_ready());
+    parent.failure = Some(Box::new(std::io::Error::other("Actual actor failure")));
+    assert!(parent.normal_close_request().is_none());
+    Ok(())
+}
+#[test]
 fn parent_close_query_preserves_hard_exit_and_startup_failure_attribution() -> Result<()> {
     for kind in [CompletionIntent::Normal, CompletionIntent::StartupFailed] {
         let mut parent = actor()?;
@@ -114,6 +141,9 @@ fn normal_parent_cleanup_waits_for_exact_final_written_receipt_or_matching_delib
     let mut parent = actor()?;
     let process = intent(&mut parent, CompletionIntent::Normal)?;
     parent.registered = true;
+    let budget = parent.cleanup.ok_or("Original close budget missing")?;
+    assert!(parent.normal_close_handshake_pending(budget.started));
+    assert!(!parent.normal_close_handshake_pending(budget.graceful_until));
     let (index, _) = parent.requests.admit(header(1)?, b"original ExitCompleted request")?;
     parent.close_after_reply = Some(index);
     parent.closed = true;
@@ -121,6 +151,7 @@ fn normal_parent_cleanup_waits_for_exact_final_written_receipt_or_matching_delib
     // Written/sent is external transport metadata; no native lease or retirement is manufactured.
     parent.requests.get_mut(index)?.sent = true;
     assert!(parent.normal_cleanup_ready());
+    assert!(!parent.normal_close_handshake_pending(budget.started));
     parent.close_after_reply = Some(index + 1);
     assert!(!parent.normal_cleanup_ready());
     parent.close_after_reply = None;

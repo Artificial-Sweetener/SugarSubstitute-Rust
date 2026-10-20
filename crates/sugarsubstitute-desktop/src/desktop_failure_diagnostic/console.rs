@@ -11,6 +11,10 @@ impl Code {
     /// Inspect direct types only; neither formatting nor source callbacks are invoked.
     pub(super) fn direct(cause: &(dyn Error + 'static)) -> Self {
         #[cfg(target_os = "windows")]
+        if let Some(paint) = crate::windows_controls::console::diagnostic_code(cause) {
+            return paint;
+        }
+        #[cfg(target_os = "windows")]
         if let Some(native) = cause.downcast_ref::<windows::core::Error>() {
             return Self::Hresult(native.code().0);
         }

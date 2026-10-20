@@ -294,10 +294,10 @@ fn setup_budget_preserves_original_ancestor_across_shortened_probes() -> Result<
 {
     let budget = EntrySetupBudget::new(Moment::from_nanos(100))?;
     assert_eq!(budget.started(), Moment::from_nanos(100));
-    assert_eq!(budget.until(), Moment::from_nanos(30_000_000_100));
+    assert_eq!(budget.until(), Moment::from_nanos(3_600_000_000_100));
     assert_eq!(budget.probe_until(Moment::from_nanos(100))?, Moment::from_nanos(2_000_000_100));
-    assert_eq!(budget.probe_until(Moment::from_nanos(29_000_000_100))?, budget.until());
-    assert_eq!(budget.until(), Moment::from_nanos(30_000_000_100));
+    assert_eq!(budget.probe_until(Moment::from_nanos(3_599_000_000_100))?, budget.until());
+    assert_eq!(budget.until(), Moment::from_nanos(3_600_000_000_100));
     Ok(())
 }
 
@@ -310,7 +310,7 @@ fn probe_rejects_clock_regression_and_expiry_equality() -> Result<(), TimeError>
     );
     assert_eq!(budget.probe_until(budget.until()), Err(EntryBudgetError::Expired));
     assert_eq!(
-        budget.probe_until(Moment::from_nanos(30_000_000_101)),
+        budget.probe_until(Moment::from_nanos(3_600_000_000_101)),
         Err(EntryBudgetError::Expired)
     );
     assert!(EntryBudgetError::Clock(TimeError::Regression).source().is_some());
@@ -319,11 +319,11 @@ fn probe_rejects_clock_regression_and_expiry_equality() -> Result<(), TimeError>
 
 #[test]
 fn near_clock_limit_caps_remaining_before_addition() -> Result<(), Box<dyn Error>> {
-    let budget = EntrySetupBudget::new(Moment::from_nanos(u64::MAX - 30_000_000_000))?;
+    let budget = EntrySetupBudget::new(Moment::from_nanos(u64::MAX - 3_600_000_000_000))?;
     assert_eq!(budget.until(), Moment::from_nanos(u64::MAX));
     assert_eq!(budget.probe_until(Moment::from_nanos(u64::MAX - 1))?, budget.until());
     assert_eq!(
-        EntrySetupBudget::new(Moment::from_nanos(u64::MAX - 29_999_999_999)),
+        EntrySetupBudget::new(Moment::from_nanos(u64::MAX - 3_599_999_999_999)),
         Err(TimeError::Overflow)
     );
     Ok(())

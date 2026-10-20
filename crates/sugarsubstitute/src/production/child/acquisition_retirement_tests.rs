@@ -182,7 +182,7 @@ fn acquisition_correlated_foreign_or_earlier_output_expiry_keeps_original_reject
     assert!(c.recover_acquisition_expiry(Box::new(cause)).is_err());
     let earlier = Moment::from_nanos(90);
     let output = ledger.prepare(earlier, CounterDeadline::new(90, 100)?)?;
-    ledger.output_pull(output)?;
+    ledger.output_pull(output, false)?;
     c.output.pending = Some((output, earlier));
     assert!(
         c.recover_acquisition_expiry(Box::new(ledger.expiry(output, RequestError::Deadline)?))

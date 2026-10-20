@@ -325,3 +325,16 @@ fn deliberate_close_cancels_only_unadmitted_command_and_keeps_exit_reply_live() 
     assert!(requests.poll_held_backend(Moment::from_nanos(10), true)?.is_none());
     Ok(())
 }
+
+#[test]
+fn invalidated_release_accepts_only_the_exact_failed_interest() -> TestResult {
+    let (mut owner, a, b) = initial()?;
+    assert_eq!(owner.invalidated_release(super::super::replies::reference(a))?, None);
+    owner.invalidate(death(a), 2)?;
+    assert_eq!(owner.invalidated_release(super::super::replies::reference(a))?, Some(a));
+    assert!(owner.invalidated_release(super::super::replies::reference(b)).is_err());
+    assert!(owner.live_lease().is_none());
+    assert!(owner.reload(super::super::replies::reference(a), |_| Ok(())).is_err());
+    assert_eq!(owner.outage.ok_or("Outage cause lost")?.failed, a);
+    Ok(())
+}

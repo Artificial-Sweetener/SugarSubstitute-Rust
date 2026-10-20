@@ -9,7 +9,7 @@ mod presentation;
 use super::*;
 use crate::{
     cadence::{advance_deadline, closing_wait, presentation_wait},
-    native_surface::{input, invalidate},
+    native_surface::input,
 };
 use sugarsubstitute_contracts::startup::{StartupFailure, StartupFailureCode};
 use tao::{
@@ -55,10 +55,8 @@ pub(super) fn dispatch(
     }
     match event {
         Event::WindowEvent { window_id, event, .. } => {
-            if let Some(main) = &mut session.main
-                && main.window_event(window_id, &event)?
-            {
-                session.observe(content, DesktopStartupObservation::CloseRequested)?;
+            if session.main.is_some() {
+                main_operation(session, content, |main| main.window_event(window_id, &event))?;
             }
             if !session.closing
                 && !session.splash.retiring
@@ -88,7 +86,7 @@ pub(super) fn dispatch(
                     session.splash.state.dirty();
                 }
                 if effect.expose {
-                    invalidate(session.splash.window()?, &mut session.redraw);
+                    session.splash.window()?.request_redraw();
                 }
             }
         }
@@ -105,9 +103,8 @@ pub(super) fn dispatch(
         Event::UserEvent(action @ NativeAction::MainControl(..)) if !session.closing => {
             if let Some(main) = &session.main
                 && let Some(id) = action.main_control(main.identity())
-                && main.activate(id)?
             {
-                session.observe(content, DesktopStartupObservation::CloseRequested)?;
+                main_operation(session, content, |main| main.activate(id))?;
             }
         }
         Event::UserEvent(NativeAction::MainBackendRetry(action)) if !session.closing => {
@@ -130,26 +127,25 @@ pub(super) fn dispatch(
         Event::UserEvent(NativeAction::FocusChanged)
             if !session.closing && !session.splash.retiring =>
         {
-            invalidate(session.splash.window()?, &mut session.redraw);
+            session.splash.window()?.request_redraw();
         }
         Event::UserEvent(NativeAction::Completions) => {
             if session.splash.state.poll(content, shape, session.drain, session.started.elapsed())
                 && !session.splash.retiring
             {
-                invalidate(session.splash.window()?, &mut session.redraw);
+                session.splash.window()?.request_redraw();
             }
         }
         Event::RedrawRequested(id)
             if session.splash.window.as_ref().is_some_and(|window| window.id() == id) =>
         {
-            session.redraw = false;
             presentation::submit(session, content, shape, context.timings)?;
         }
         Event::MainEventsCleared => {
             if session.splash.state.poll(content, shape, session.drain, session.started.elapsed())
                 && !session.splash.retiring
             {
-                invalidate(session.splash.window()?, &mut session.redraw);
+                session.splash.window()?.request_redraw();
             }
             if session.splash.presentations.as_ref().is_some_and(|owner| owner.preparing_first()) {
                 presentation::submit(session, content, shape, context.timings)?;

@@ -140,7 +140,7 @@ fn whole_close_intent_waits_for_actual_registration_but_not_capture_clock_measur
     let mut state = ChildShutdown::new();
     state.intent = Some(CompletionIntent::Normal);
     for _ in 0..4 {
-        state.request_exit_intent(false)?;
+        state.request_exit_intent(false, || Ok(Moment::from_nanos(0)))?;
     }
     assert!(state.shutdown.is_none());
     assert!(state.queued.iter().all(Option::is_none));
@@ -148,7 +148,7 @@ fn whole_close_intent_waits_for_actual_registration_but_not_capture_clock_measur
         state.observe_capture(Some(CaptureCleanupSnapshot::Requested))?,
         ShutdownInitiation::CapturePending
     );
-    state.request_exit_intent(true)?;
+    state.request_exit_intent(true, || Ok(Moment::from_nanos(0)))?;
     let id = state.shutdown.ok_or("Original shutdown identity absent")?;
     assert!(state.budget.is_none());
     assert!(matches!(take_first(&mut state.queued), Some(Control::ExitIntent)));
@@ -180,7 +180,7 @@ fn whole_close_intent_waits_for_actual_registration_but_not_capture_clock_measur
     });
     assert_eq!(state.deadline(), Some(control_until));
     for _ in 0..4 {
-        state.request_exit_intent(true)?;
+        state.request_exit_intent(true, || Ok(Moment::from_nanos(0)))?;
     }
     assert!(state.queued.iter().all(Option::is_none));
     let original = ShutdownBudget::new(Moment::from_nanos(50))?;
@@ -197,7 +197,7 @@ fn whole_close_intent_waits_for_actual_registration_but_not_capture_clock_measur
             .is_err()
     );
     assert_eq!(state.observe_capture(None)?, ShutdownInitiation::Captured(original));
-    state.request_exit_intent(true)?;
+    state.request_exit_intent(true, || Ok(Moment::from_nanos(0)))?;
     assert_eq!(state.shutdown, Some(id));
     assert_eq!(state.budget, Some(original));
     assert!(state.completion_ready(false));
@@ -234,12 +234,12 @@ fn bounded_early_intent_rejection_keeps_queue_and_unassigned_identity_for_actual
             activity: UiWatchdogActivity::VisibleActive,
         })?;
     }
-    assert!(state.request_exit_intent(true).is_err());
+    assert!(state.request_exit_intent(true, || Ok(Moment::from_nanos(0))).is_err());
     assert!(state.shutdown.is_none());
     assert!(
         matches!(take_first(&mut state.queued),Some(Control::Activity{revision,..}) if revision.get()==1)
     );
-    state.request_exit_intent(true)?;
+    state.request_exit_intent(true, || Ok(Moment::from_nanos(0)))?;
     for value in 2..=4 {
         assert!(
             matches!(take_first(&mut state.queued),Some(Control::Activity{revision,..}) if revision.get()==value)
@@ -301,6 +301,34 @@ fn inert_whole_close_child()
     Ok((child, calls))
 }
 #[test]
+fn closing_a_presented_settled_failure_cancels_startup_without_a_crash_report() -> Result<()> {
+    use sugarsubstitute_application::startup::StartupPhase;
+    for (acknowledged, settled, cleanup_failed, infrastructure_failed, expected) in [
+        (true, true, false, false, CompletionIntent::StartupCancelled),
+        (false, true, false, false, CompletionIntent::StartupFailed),
+        (true, false, false, false, CompletionIntent::StartupFailed),
+        (true, true, true, false, CompletionIntent::StartupFailed),
+        (true, true, false, true, CompletionIntent::StartupFailed),
+    ] {
+        let (mut child, _) = inert_whole_close_child()?;
+        child.phase = Some(StartupPhase::Stopped);
+        child.failed = true;
+        child.attempt = Some(super::super::attempt::AttemptCleanup::boundary_fixture(
+            acknowledged,
+            settled,
+            cleanup_failed,
+        ));
+        child.failure =
+            infrastructure_failed.then(|| std::io::Error::other("Infrastructure failed").into());
+        assert_eq!(child.completion_intent(), expected);
+        child.begin_shutdown()?;
+        assert_eq!(child.shutdown.intent, Some(expected));
+        assert!(child.attempt.is_some());
+        assert!(child.failed);
+    }
+    Ok(())
+}
+#[test]
 fn first_whole_close_intent_survives_phase_failure_registration_and_queue_delay_in_actual_payload()
 -> Result<()> {
     use sugarsubstitute_application::startup::StartupPhase;
@@ -340,11 +368,11 @@ fn first_whole_close_intent_survives_phase_failure_registration_and_queue_delay_
                 activity: UiWatchdogActivity::VisibleActive,
             })?;
         }
-        assert!(child.shutdown.request_exit_intent(true).is_err());
+        assert!(child.shutdown.request_exit_intent(true, || Ok(Moment::from_nanos(0))).is_err());
         assert_eq!(child.shutdown.intent, Some(expected));
         assert!(child.shutdown.shutdown.is_none());
         let _removed = take_first(&mut child.shutdown.queued);
-        child.shutdown.request_exit_intent(true)?;
+        child.shutdown.request_exit_intent(true, || Ok(Moment::from_nanos(0)))?;
         let id = child.shutdown.shutdown.ok_or("Original shutdown identity absent")?;
         let header = WireHeader {
             run: child.run,

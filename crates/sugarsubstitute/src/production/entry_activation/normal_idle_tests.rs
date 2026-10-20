@@ -23,6 +23,33 @@ fn actual_request(instance: u64, at: u64) -> Result<DesktopCloseRequest> {
     exit.normal_close_request().ok_or_else(|| "Actual deliberate request missing".into())
 }
 #[test]
+fn accepted_last_window_close_starts_shutdown_before_background_retirement() -> Result<()> {
+    let first = actual_request(1, 10)?;
+    let second = actual_request(2, 30)?;
+    assert_eq!(
+        original_budget([requested_role(first.run(), Some(first))].into_iter(), None),
+        Some(first.budget())
+    );
+    assert_eq!(
+        original_budget(
+            [requested_role(first.run(), Some(first)), requested_role(second.run(), None)]
+                .into_iter(),
+            None
+        ),
+        None
+    );
+    assert!(requested_role(first.run(), Some(second)).is_none());
+    assert_eq!(
+        original_budget(
+            [requested_role(first.run(), Some(first)), requested_role(second.run(), Some(second))]
+                .into_iter(),
+            None
+        ),
+        Some(first.budget())
+    );
+    Ok(())
+}
+#[test]
 fn normal_idle_two_roles_keep_original_unresolved_cutoff_and_deny_live_or_queued_other_role()
 -> Result<()> {
     let first = actual_request(1, 10)?.budget();

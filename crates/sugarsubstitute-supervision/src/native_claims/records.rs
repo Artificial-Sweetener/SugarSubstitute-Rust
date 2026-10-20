@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Preserve legacy generations and atomically publish authenticated backend custody records.
 use super::*;
-mod storage;
+pub(super) mod storage;
 #[cfg(test)]
 mod tests;
 pub(crate) use storage::{

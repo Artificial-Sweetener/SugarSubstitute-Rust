@@ -44,6 +44,7 @@ struct ActivePreparation {
     job: OwnedJob<PreparationOutput, PreparationFailure>,
     identity: Option<FrameIdentity>,
     bootstrap: bool,
+    appearance: Appearance,
     // Actual accepted request remains retained until its observed terminal disposal, even if uninvoked.
     _request: Option<PreparationTransfer<SplashRenderRequest<RenderConsole>>>,
 }
@@ -75,6 +76,7 @@ pub(crate) struct PreparationDriver {
     bootstrap_published: bool,
     first_frame: FirstFrameContent,
     enriched: bool,
+    published_appearance: Option<Appearance>,
 }
 
 impl PreparationDriver {
@@ -116,6 +118,7 @@ impl PreparationDriver {
             bootstrap_published: false,
             first_frame,
             enriched: false,
+            published_appearance: None,
         })
     }
 
@@ -149,6 +152,11 @@ impl PreparationDriver {
         self.enriched
     }
 
+    /// Borrow geometry from the accepted frame rather than a newer animation sample.
+    pub(crate) fn published_appearance(&self) -> Option<Appearance> {
+        self.published_appearance
+    }
+
     /// Capture the latest lightweight request while retaining currently running work.
     pub(crate) fn request(
         &mut self,
@@ -168,7 +176,10 @@ impl PreparationDriver {
             )
             .into());
         }
-        if self.console_binding != binding {
+        if self.console_binding != binding
+            && self.console_presentation
+                == sugarsubstitute_contracts::presentation::ConsolePresentation::Raster
+        {
             self.state_dirty = true;
         }
         self.synchronize_state()?;
@@ -179,7 +190,7 @@ impl PreparationDriver {
         }
         let sequence = self.allocate_identity()?;
         // Native text has its own affine copied-document owner. Raster work needs
-        // only the accepted source revision, not an extra immutable snapshot credit.
+        // neither a raster revision fence nor an extra immutable snapshot credit.
         let console = if self.console_presentation
             == sugarsubstitute_contracts::presentation::ConsolePresentation::Native
         {
@@ -221,6 +232,7 @@ impl PreparationDriver {
         let initializing = self.renderer.is_none();
         let request = self.pending.as_ref().ok_or("Pending preparation absent")?;
         let identity = request.identity;
+        let appearance = request.appearance;
         let bytes = request.bytes;
         let input = request.input.clone();
         let bootstrap =
@@ -268,7 +280,8 @@ impl PreparationDriver {
         if !initializing {
             self.pending = None;
         }
-        self.active = Some(ActivePreparation { job, identity, bootstrap, _request: retained });
+        self.active =
+            Some(ActivePreparation { job, identity, bootstrap, appearance, _request: retained });
         Ok(())
     }
 

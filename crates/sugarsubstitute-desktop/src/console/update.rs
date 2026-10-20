@@ -15,7 +15,11 @@ pub(crate) struct Observation {
 /// Replace external native effects; record identity and selection policy remain here.
 pub(crate) trait TextPort {
     fn observe(&mut self) -> Result<Observation, DesktopError>;
-    fn write(&mut self, document: &DocumentIndex) -> Result<(), DesktopError>;
+    fn write(
+        &mut self,
+        document: &DocumentIndex,
+        previous: Option<&DocumentIndex>,
+    ) -> Result<(), DesktopError>;
     fn restore(
         &mut self,
         start: i32,
@@ -56,7 +60,7 @@ pub(crate) fn replace(
     let follow = !same || observation.at_bottom && observation.start == observation.end;
     let (start, end) =
         if follow { (incoming.units as i32, incoming.units as i32) } else { (start, end) };
-    port.write(incoming)?;
+    port.write(incoming, current)?;
     port.restore(start, end, first, follow)
 }
 /// Retain both exact document claims on an uncertain partial native replacement.

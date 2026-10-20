@@ -14,6 +14,7 @@ impl PreparationDriver {
         let expected_scope = active.job.scope_id();
         let expected_identity = active.identity;
         let bootstrap = active.bootstrap;
+        let appearance = active.appearance;
         self.active = None;
         if completion.spec.id != expected_job || completion.scope_id != expected_scope {
             return Err("Preparation completion belongs to a different admitted job".into());
@@ -58,6 +59,7 @@ impl PreparationDriver {
                 let decision = self.gate.accept(&frame);
                 drop(console);
                 if decision == FramePublicationDecision::Accepted {
+                    self.published_appearance = Some(appearance);
                     self.bootstrap_published = true;
                     self.enriched |= !bootstrap;
                     Ok(Some(frame))

@@ -9,3 +9,4 @@ pub mod readiness;
 pub mod readiness_campaign;
 #[cfg(windows)]
 pub mod readiness_transport;
+pub mod startup_feedback;

@@ -60,6 +60,8 @@ struct Original {
     selection: CHARRANGE,
     scroll: Scroll,
     pixel: POINT,
+    first: i32,
+    first_y: i32,
 }
 impl Original {
     fn observe(services: &ITextServices2) -> Result<Self, DesktopError> {
@@ -67,18 +69,65 @@ impl Original {
         send(services, EM_EXGETSEL, WPARAM(0), LPARAM((&raw mut selection) as isize))?;
         let mut pixel = POINT::default();
         send(services, EM_GETSCROLLPOS, WPARAM(0), LPARAM((&raw mut pixel) as isize))?;
-        Ok(Self { selection, scroll: Scroll::observe(services)?, pixel })
+        use windows::Win32::UI::Controls::{EM_GETFIRSTVISIBLELINE, EM_LINEINDEX};
+        let line = send(services, EM_GETFIRSTVISIBLELINE, WPARAM(0), LPARAM(0))?.0;
+        let first = send(services, EM_LINEINDEX, WPARAM(line.max(0) as usize), LPARAM(0))?.0 as i32;
+        let mut point = POINT::default();
+        send(
+            services,
+            windows::Win32::UI::Controls::EM_POSFROMCHAR,
+            WPARAM((&raw mut point) as usize),
+            LPARAM(first as isize),
+        )?;
+        Ok(Self { selection, scroll: Scroll::observe(services)?, pixel, first, first_y: point.y })
     }
     fn restore(&self, services: &ITextServices2) -> Result<(), DesktopError> {
         send(services, EM_EXSETSEL, WPARAM(0), LPARAM((&raw const self.selection) as isize))?;
-        send(services, EM_SETSCROLLPOS, WPARAM(0), LPARAM((&raw const self.pixel) as isize))?;
+        let following = self.scroll.at_bottom() && self.selection.cpMin == self.selection.cpMax;
+        if following {
+            use windows::Win32::UI::WindowsAndMessaging::{SB_BOTTOM, WM_VSCROLL};
+            send(services, WM_VSCROLL, WPARAM(SB_BOTTOM.0 as usize), LPARAM(0))?;
+        } else {
+            send(services, EM_SETSCROLLPOS, WPARAM(0), LPARAM((&raw const self.pixel) as isize))?;
+            let mut point = POINT::default();
+            send(
+                services,
+                windows::Win32::UI::Controls::EM_POSFROMCHAR,
+                WPARAM((&raw mut point) as usize),
+                LPARAM(self.first as isize),
+            )?;
+            let mut position = POINT::default();
+            send(services, EM_GETSCROLLPOS, WPARAM(0), LPARAM((&raw mut position) as isize))?;
+            position.y += point.y - self.first_y;
+            send(services, EM_SETSCROLLPOS, WPARAM(0), LPARAM((&raw const position) as isize))?;
+        }
         let observed = Self::observe(services)?;
         if observed.selection.cpMin != self.selection.cpMin
             || observed.selection.cpMax != self.selection.cpMax
-            || observed.scroll != self.scroll
-            || observed.pixel != self.pixel
+            // RichEdit may refine its estimated document extent during formatting.
+            // Only the position is user input; range and page are layout outputs.
+            || if following {
+                !observed.scroll.at_bottom()
+            } else {
+                observed.first != self.first || observed.pixel.x != self.pixel.x
+            }
         {
-            return Err(rejected("console_paint_restore_input"));
+            return Err(DesktopError::message(
+                "console_paint_restore_input",
+                format!(
+                    "Native input restoration changed selection ({}, {}) to ({}, {}), scroll {:?} to {:?}, pixels {:?} to {:?}, first {} to {}",
+                    self.selection.cpMin,
+                    self.selection.cpMax,
+                    observed.selection.cpMin,
+                    observed.selection.cpMax,
+                    self.scroll,
+                    observed.scroll,
+                    self.pixel,
+                    observed.pixel,
+                    self.first,
+                    observed.first
+                ),
+            ));
         }
         Ok(())
     }
@@ -116,6 +165,7 @@ fn draw_guarded(
     let document: ITextDocument =
         services.cast().map_err(|cause| DesktopError::new("console_paint_document", cause))?;
     let theme = if dark { Theme::Dark } else { Theme::Light };
+    let visible = visible_range(engine, &services, source.text())?;
     let mut colors = Vec::new();
     let count = source
         .styles()
@@ -139,7 +189,7 @@ fn draw_guarded(
     engine.state.selection_background.set(TOKEN_BASE + 1);
     engine.state.selection_foreground.set(TOKEN_BASE + 2);
     let tagged = (|| {
-        set_colors(&services, 0, source.units as i32, TOKEN_BASE as i32, tomAutoColor.0)?;
+        set_colors(&services, visible.0, visible.1, TOKEN_BASE as i32, tomAutoColor.0)?;
         for (index, extent) in source.styles().iter().enumerate() {
             let token = TOKEN_BASE + 4 + index as u32 * 2;
             let foreground = console_color(extent.style.foreground, theme, false)
@@ -149,13 +199,17 @@ fn draw_guarded(
             if let Some(rgba) = background {
                 colors.push(PaintColor { token: token + 1, rgba });
             }
-            set_colors(
-                &services,
-                extent.start,
-                extent.end,
-                token as i32,
-                background.map_or(tomAutoColor.0, |_| (token + 1) as i32),
-            )?;
+            let start = extent.start.max(visible.0);
+            let end = extent.end.min(visible.1);
+            if start < end {
+                set_colors(
+                    &services,
+                    start,
+                    end,
+                    token as i32,
+                    background.map_or(tomAutoColor.0, |_| (token + 1) as i32),
+                )?;
+            }
         }
         original.restore(&services)?;
         let proxy = Proxy::new(target.clone(), colors)?;
@@ -177,7 +231,7 @@ fn draw_guarded(
     })();
     // Restoration is attempted even after tagging, lookup or native draw fails. No synthetic
     // formatting may escape the guard; failed restoration leaves observation closed through close.
-    let restored = restore_colors(&services, &document, source, theme)
+    let restored = restore_colors(&services, &document, source, theme, visible)
         .and_then(|()| original.restore(&services));
     match (tagged, restored) {
         (Err(cause), Err(restoration)) => {
@@ -194,16 +248,21 @@ fn restore_colors(
     document: &ITextDocument,
     source: &DocumentIndex,
     theme: Theme,
+    visible: (i32, i32),
 ) -> Result<(), DesktopError> {
     let default = console_color(Default::default(), theme, false)
         .ok_or_else(|| rejected("console_paint_palette"))?;
-    set_colors(services, 0, source.units as i32, rgb(default), tomAutoColor.0)?;
+    set_colors(services, visible.0, visible.1, rgb(default), tomAutoColor.0)?;
     for extent in source.styles() {
         let foreground = console_color(extent.style.foreground, theme, false)
             .ok_or_else(|| rejected("console_paint_palette"))?;
         let background =
             console_color(extent.style.background, theme, true).map_or(tomAutoColor.0, rgb);
-        set_colors(services, extent.start, extent.end, rgb(foreground), background)?;
+        let start = extent.start.max(visible.0);
+        let end = extent.end.min(visible.1);
+        if start < end {
+            set_colors(services, start, end, rgb(foreground), background)?;
+        }
     }
     // Inspect each native source run after restoration. Only colors were changed; native font,
     // shaping, word wrap and bidi ownership never moved to a second layout engine.
@@ -212,9 +271,49 @@ fn restore_colors(
             .ok_or_else(|| rejected("console_paint_palette"))?;
         let background =
             console_color(extent.style.background, theme, true).map_or(tomAutoColor.0, rgb);
-        verify_colors(document, extent.start, extent.end, rgb(foreground), background)?;
+        let start = extent.start.max(visible.0);
+        let end = extent.end.min(visible.1);
+        if start < end {
+            verify_colors(document, start, end, rgb(foreground), background)?;
+        }
     }
     Ok(())
+}
+
+/// Tag complete source paragraphs intersecting the viewport and its two-line margin.
+/// RichEdit retains paragraph layout across paints; a wrapped display line is not a format boundary.
+fn visible_range(
+    engine: &Engine,
+    services: &ITextServices2,
+    text: &[u16],
+) -> Result<(i32, i32), DesktopError> {
+    use windows::Win32::UI::Controls::{
+        EM_CHARFROMPOS, EM_GETFIRSTVISIBLELINE, EM_GETLINECOUNT, EM_LINEINDEX,
+    };
+    let units = text.len() as i32;
+    let lines = send(services, EM_GETLINECOUNT, WPARAM(0), LPARAM(0))?.0;
+    let first = send(services, EM_GETFIRSTVISIBLELINE, WPARAM(0), LPARAM(0))?.0.max(0) as i32;
+    let bounds = engine.state.client_bounds();
+    let bottom = POINT { x: (bounds.right - 1).max(0), y: (bounds.bottom - 1).max(0) };
+    let character =
+        send(services, EM_CHARFROMPOS, WPARAM(0), LPARAM((&raw const bottom) as isize))?
+            .0
+            .clamp(0, units as isize);
+    let last =
+        send(services, EM_EXLINEFROMCHAR, WPARAM(0), LPARAM(character))?.0.max(first as isize);
+    let start =
+        send(services, EM_LINEINDEX, WPARAM(first.saturating_sub(2).max(0) as usize), LPARAM(0))?.0;
+    let end = if last + 3 >= lines {
+        units as isize
+    } else {
+        send(services, EM_LINEINDEX, WPARAM(last as usize + 3), LPARAM(0))?.0
+    };
+    let start = start.clamp(0, units as isize) as usize;
+    let end = if end < 0 { text.len() } else { end.clamp(start as isize, units as isize) as usize };
+    let start = text[..start].iter().rposition(|unit| *unit == 13).map_or(0, |index| index + 1);
+    let end =
+        text[end..].iter().position(|unit| *unit == 13).map_or(text.len(), |index| end + index + 1);
+    Ok((start as i32, end as i32))
 }
 
 fn set_colors(
@@ -243,7 +342,7 @@ fn set_colors(
     if send(
         services,
         EM_SETCHARFORMAT,
-        WPARAM(SCF_SELECTION as usize),
+        WPARAM((SCF_SELECTION | SCF_NOKBUPDATE) as usize),
         LPARAM((&raw const format) as isize),
     )?
     .0 == 0

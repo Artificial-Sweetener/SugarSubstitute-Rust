@@ -93,7 +93,7 @@ fn rejected_response_retains_original_exchange_and_received_request_evidence()
         .ok_or("Rejected response accepted")?;
     assert_eq!(cause.downcast_ref::<ChallengeError>(), Some(&ChallengeError::Rejected));
     assert!(ui.matches_reply(actual));
-    assert_eq!(ui.deadline(), Some(original));
+    assert_eq!(ui.deadline(), None);
     assert_eq!(
         requests.outbound(actual, original, Moment::from_nanos(0)),
         Err(RequestError::Order)

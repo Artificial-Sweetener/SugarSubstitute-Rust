@@ -3,17 +3,29 @@
 
 //! Own SugarSubstitute's product copy and its sole supported-locale inventory.
 
+/// Localized profile-conflict decisions.
+pub mod conflict;
 /// Localized native incident reporting copy.
 pub mod incident;
+/// Localized operation-specific startup feedback.
+pub mod startup;
 /// Localized native main-window controls.
 pub mod window;
 
 /// Bind one supported locale to every user-facing splash message.
 pub struct Messages {
+    /// Native profile-conflict controls and feedback.
+    pub conflict: &'static conflict::ConflictMessages,
+    /// Startup operation and long-wait labels.
+    pub startup: &'static startup::StartupMessages,
     /// Locale identifier accepted by the executable.
     pub id: &'static str,
     /// Initial status and native window title.
     pub loading: &'static str,
+    /// Feedback after two minutes of active startup.
+    pub loading_long: &'static str,
+    /// Feedback after five minutes of active startup.
+    pub loading_extended: &'static str,
     /// Accessible intent for the collapsed output button.
     pub show_output: &'static str,
     /// Accessible intent for the expanded output button.
@@ -32,6 +44,8 @@ pub struct Messages {
     pub retry_ready: &'static str,
     /// Accessible retry action.
     pub retry: &'static str,
+    /// Explain a live profile exclusion conflict and how to open the requested copy.
+    pub profile_in_use: &'static str,
     /// Complete native report surface copy.
     pub report: &'static incident::ReportMessages,
     /// Accessible names for the native main-window caption controls.
@@ -42,7 +56,10 @@ pub struct Messages {
 pub static LOCALES: &[Messages] = &[
     Messages {
         id: "en",
+        startup: &startup::EN,
         loading: "Loading...",
+        loading_long: "This is taking longer than usual...",
+        loading_extended: "Still waiting. Dependencies or custom nodes\nmay take several minutes...",
         show_output: "Show Comfy output",
         hide_output: "Hide Comfy output",
         output: "Comfy output",
@@ -52,12 +69,17 @@ pub static LOCALES: &[Messages] = &[
         cleanup_failed: "Cleanup failed. Retry is unavailable",
         retry_ready: "Connection failed. Select here to retry",
         retry: "Retry",
+        profile_in_use: "This profile is already in use by another SugarSubstitute window or copy. Close that copy and let it finish shutting down, then open SugarSubstitute again. Your profile has not been changed.",
         report: &incident::EN,
+        conflict: &conflict::EN,
         window: &window::EN,
     },
     Messages {
         id: "zh-Hans",
+        startup: &startup::ZH_HANS,
         loading: "正在加载...",
+        loading_long: "加载时间比平时稍长...",
+        loading_extended: "仍在等待。依赖项或自定义节点\n可能需要几分钟...",
         show_output: "显示 Comfy 输出",
         hide_output: "隐藏 Comfy 输出",
         output: "Comfy 输出",
@@ -67,12 +89,17 @@ pub static LOCALES: &[Messages] = &[
         cleanup_failed: "清理失败，无法重试",
         retry_ready: "连接失败，点击此处重试",
         retry: "重试",
+        profile_in_use: "另一个 SugarSubstitute 窗口或副本正在使用此配置文件。请关闭该副本并等待其完全退出，然后重新打开 SugarSubstitute。您的配置文件未被更改。",
         report: &incident::ZH_HANS,
+        conflict: &conflict::ZH_HANS,
         window: &window::ZH_HANS,
     },
     Messages {
         id: "ja",
+        startup: &startup::JA,
         loading: "読み込み中...",
+        loading_long: "通常より時間がかかっています...",
+        loading_extended: "引き続き待機中です。依存関係やカスタムノードの\n準備には数分かかる場合があります...",
         show_output: "Comfy の出力を表示",
         hide_output: "Comfy の出力を非表示",
         output: "Comfy の出力",
@@ -82,12 +109,17 @@ pub static LOCALES: &[Messages] = &[
         cleanup_failed: "終了処理に失敗しました。再試行できません",
         retry_ready: "接続に失敗しました。ここを選択して再試行",
         retry: "再試行",
+        profile_in_use: "このプロファイルは別の SugarSubstitute のウィンドウまたはコピーで使用中です。そのコピーを閉じて終了処理が完了してから、SugarSubstitute を開き直してください。プロファイルは変更されていません。",
         report: &incident::JA,
+        conflict: &conflict::JA,
         window: &window::JA,
     },
     Messages {
         id: "ko",
+        startup: &startup::KO,
         loading: "불러오는 중...",
+        loading_long: "평소보다 시간이 오래 걸리고 있습니다...",
+        loading_extended: "계속 기다리는 중입니다. 의존성이나 사용자 정의 노드\n준비에 몇 분이 걸릴 수 있습니다...",
         show_output: "Comfy 출력 표시",
         hide_output: "Comfy 출력 숨기기",
         output: "Comfy 출력",
@@ -97,12 +129,17 @@ pub static LOCALES: &[Messages] = &[
         cleanup_failed: "정리 실패. 다시 시도할 수 없습니다",
         retry_ready: "연결 실패. 여기를 선택하여 다시 시도",
         retry: "다시 시도",
+        profile_in_use: "다른 SugarSubstitute 창 또는 복사본이 이 프로필을 사용 중입니다. 해당 복사본을 닫고 종료가 완료될 때까지 기다린 다음 SugarSubstitute를 다시 여세요. 프로필은 변경되지 않았습니다.",
         report: &incident::KO,
+        conflict: &conflict::KO,
         window: &window::KO,
     },
     Messages {
         id: "es",
+        startup: &startup::ES,
         loading: "Cargando...",
+        loading_long: "Esto está tardando más de lo habitual...",
+        loading_extended: "Seguimos esperando. Las dependencias o los nodos\npersonalizados pueden tardar varios minutos...",
         show_output: "Mostrar la salida de Comfy",
         hide_output: "Ocultar la salida de Comfy",
         output: "Salida de Comfy",
@@ -112,7 +149,9 @@ pub static LOCALES: &[Messages] = &[
         cleanup_failed: "Falló la limpieza. No se puede reintentar",
         retry_ready: "Error de conexión. Selecciona aquí para reintentar",
         retry: "Reintentar",
+        profile_in_use: "Otra ventana o copia de SugarSubstitute está usando este perfil. Cierra esa copia y espera a que termine de cerrarse; después, vuelve a abrir SugarSubstitute. Tu perfil no se ha modificado.",
         report: &incident::ES,
+        conflict: &conflict::ES,
         window: &window::ES,
     },
 ];
@@ -135,6 +174,8 @@ mod tests {
             assert!(
                 [
                     locale.loading,
+                    locale.loading_long,
+                    locale.loading_extended,
                     locale.show_output,
                     locale.hide_output,
                     locale.output,
@@ -143,11 +184,14 @@ mod tests {
                     locale.cleanup_pending,
                     locale.cleanup_failed,
                     locale.retry_ready,
-                    locale.retry
+                    locale.retry,
+                    locale.profile_in_use
                 ]
                 .into_iter()
                 .chain(locale.report.labels())
+                .chain(locale.conflict.labels())
                 .chain(locale.window.labels())
+                .chain(locale.startup.labels())
                 .all(|text| !text.is_empty() && !text.contains('\0'))
             );
         }

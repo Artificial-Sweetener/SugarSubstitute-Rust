@@ -6,7 +6,7 @@ use sugarsubstitute_contracts::execution::Moment;
 
 impl Record {
     /// Borrow the original charged projection while capture attachment changes its owner.
-    fn profile_projection(&self) -> Option<&ProjectedEntry> {
+    pub(super) fn profile_projection(&self) -> Option<&ProjectedEntry> {
         let completion =
             self.start.as_ref().map(|start| &start.projection).or(self.projected.as_ref())?;
         match &completion.outcome {

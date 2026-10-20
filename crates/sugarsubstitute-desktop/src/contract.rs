@@ -210,7 +210,7 @@ pub trait WindowContent {
     fn presentation_visible(&self) -> bool {
         true
     }
-    /// Acknowledge an actual native hide before another presentation owner may show.
+    /// Acknowledge an actual native hide on the surface's owning UI thread.
     fn presentation_hidden(&mut self) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
@@ -218,6 +218,9 @@ pub trait WindowContent {
     fn close_requested(&self) -> bool {
         false
     }
+    /// Observe explicit native user close intent before shutdown starts. This is
+    /// presentation policy only; it grants no cancellation or retirement proof.
+    fn user_close_requested(&mut self) {}
     /// Wake the native pump for application work even when its presentation is hidden.
     fn activity_deadline(&self) -> Option<std::time::Instant> {
         None

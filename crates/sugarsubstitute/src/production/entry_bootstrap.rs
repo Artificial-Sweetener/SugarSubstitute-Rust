@@ -4,7 +4,7 @@
 //! Original scopes, typed failures and native owner custody survive partial startup.
 #[path = "entry_bootstrap/failure.rs"]
 mod failure;
-use super::{configuration, options::ProductionEntryOptions};
+use super::{configuration, options::ConfigurationSource};
 use crate::job_sequence::JobSequence;
 use std::{error::Error, fmt, path::PathBuf};
 use sugarsubstitute_contracts::{
@@ -65,7 +65,7 @@ enum CleanupFailure {
 /// Compose the concrete admitted request producer with the real namespace/election owner.
 /// Cached phase observations grant no coordinator, backend or browser authority.
 pub(crate) struct EntryBootstrap {
-    options: Option<ProductionEntryOptions>,
+    options: Option<ConfigurationSource>,
     installation: Option<PathBuf>,
     diagnostics: Option<sugarsubstitute_supervision::coordinator_entry::DiagnosticStorageLocation>,
     executable: Option<PathBuf>,
@@ -87,7 +87,7 @@ impl EntryBootstrap {
     /// # Errors
     /// Rejects path grammar before transferring a prepared request to its native owner.
     pub(crate) fn new(
-        options: ProductionEntryOptions,
+        options: ConfigurationSource,
         installation: PathBuf,
         diagnostics: sugarsubstitute_supervision::coordinator_entry::DiagnosticStorageLocation,
         executable: PathBuf,

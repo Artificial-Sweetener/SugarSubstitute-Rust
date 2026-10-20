@@ -8,6 +8,7 @@ use sugarsubstitute_contracts::lifecycle::{
 /// Data only; the original response owner separately validates native source and nonce.
 #[derive(Clone, Copy)]
 pub(super) enum StoredReceipt {
+    Heartbeat,
     Established,
     Finished,
     Prepared(ResourceId, ResourceGeneration),
@@ -26,6 +27,7 @@ impl StoredReceipt {
     ) -> Result<Self, NativeObservationError> {
         use BackendCustodyReceipt as R;
         let actual = match value {
+            R::Heartbeat => return Ok(Self::Heartbeat),
             R::Established => return Ok(Self::Established),
             R::Finished => return Ok(Self::Finished),
             R::Prepared(key) | R::Root(key) | R::Released(key) => key.owner,
@@ -38,6 +40,7 @@ impl StoredReceipt {
             return Err(reject("custody_receipt_stored_owner"));
         }
         Ok(match value {
+            R::Heartbeat => Self::Heartbeat,
             R::Established => Self::Established,
             R::Finished => Self::Finished,
             R::Prepared(key) => Self::Prepared(key.id, key.generation),
@@ -53,6 +56,7 @@ impl StoredReceipt {
     pub(super) const fn expand(self, owner: CoordinatorKey) -> BackendCustodyReceipt {
         use BackendCustodyReceipt as R;
         match self {
+            Self::Heartbeat => R::Heartbeat,
             Self::Established => R::Established,
             Self::Finished => R::Finished,
             Self::Prepared(id, generation) => R::Prepared(ResourceKey { owner, id, generation }),

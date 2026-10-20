@@ -13,6 +13,8 @@ mod permit;
 pub use parent_storage::BackendCustodyParentStorage;
 #[cfg(windows)]
 mod native_watch;
+#[cfg(any(windows, test))]
+mod parent_watchdog;
 mod start;
 pub(crate) mod submission;
 mod types;

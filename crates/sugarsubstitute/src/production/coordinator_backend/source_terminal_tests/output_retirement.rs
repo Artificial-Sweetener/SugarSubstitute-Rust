@@ -114,6 +114,13 @@ fn exercise(failed: bool) -> Result<()> {
         authority: &mut authority,
         capture: None,
     };
+    if !failed {
+        let batch = client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
+        backend.consume_existing(0, &batch, &resources, Ok(true))?;
+        assert!(backend.record(key)?.shutdown.is_none());
+        assert!(backend.failure(key).is_none());
+        assert!(backend.record(key)?.output_observed);
+    }
     backend.begin_cleanup(key, Some(ShutdownBudget::new(client.now()?)?), &mut resources)?;
     let batch = client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
     backend.consume_existing(0, &batch, &resources, Ok(true))?;

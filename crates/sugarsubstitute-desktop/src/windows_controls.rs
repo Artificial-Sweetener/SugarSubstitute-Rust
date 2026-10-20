@@ -36,7 +36,7 @@ use windows::{
 mod creation;
 use creation::{Creation, NativePort};
 #[path = "windows_console.rs"]
-mod console;
+pub(crate) mod console;
 #[path = "windows_controls_focus.rs"]
 mod focus;
 #[path = "windows_controls_retry.rs"]

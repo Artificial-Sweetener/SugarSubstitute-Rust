@@ -29,7 +29,7 @@ concern = "ComfyUI startup configuration and connection boundaries"
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
 layer = "host"
-concern = "Desktop host composition and application identity"
+concern = "Platform-independent startup and conflict controllers, retained native adapter contracts, platform host composition and application identity"
 
 [[owners]]
 package = "sugarsubstitute-execution"

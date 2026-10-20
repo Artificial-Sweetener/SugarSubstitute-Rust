@@ -11,6 +11,58 @@ use sugarsubstitute_supervision::lifecycle_protocol::{
 
 type TestResult = Result<(), Box<dyn Error>>;
 
+#[test]
+fn concurrent_senders_preserve_prepared_wire_order_without_waiting_for_replies() -> TestResult {
+    let mut ledger = requests()?;
+    let until = Moment::from_nanos(500);
+    let older = ledger.prepare(until, CounterDeadline::new(1234, 100)?)?;
+    let newer = ledger.prepare(until, CounterDeadline::new(1234, 100)?)?;
+    assert!(!ledger.outbound(newer, until, Moment::from_nanos(10))?);
+    assert_eq!(ledger.admitted(newer), Err(RequestError::Order));
+    assert!(ledger.outbound(older, until, Moment::from_nanos(10))?);
+    ledger.admitted(older)?;
+    assert!(ledger.outbound(newer, until, Moment::from_nanos(10))?);
+    ledger.admitted(newer)?;
+    ledger.received(newer, Moment::from_nanos(20))?;
+    ledger.consumed(newer)?;
+    ledger.received(older, Moment::from_nanos(20))?;
+    ledger.consumed(older)?;
+    Ok(())
+}
+
+#[test]
+fn withdrawing_an_unissued_request_unblocks_the_next_original_request() -> TestResult {
+    let mut ledger = requests()?;
+    let until = Moment::from_nanos(500);
+    let older = ledger.prepare(until, CounterDeadline::new(1234, 100)?)?;
+    let newer = ledger.prepare(until, CounterDeadline::new(1234, 100)?)?;
+    assert!(!ledger.outbound(newer, until, Moment::from_nanos(10))?);
+    ledger.withdraw_prepared(older)?;
+    assert!(ledger.outbound(newer, until, Moment::from_nanos(10))?);
+    assert_eq!(ledger.outbound(newer, until, until), Err(RequestError::Deadline));
+    Ok(())
+}
+
+#[test]
+fn running_output_reply_survives_a_stall_while_provisional_pulls_keep_their_cutoff() -> TestResult {
+    for running in [false, true] {
+        let mut ledger = requests()?;
+        let original = Moment::from_nanos(100);
+        let header = ledger.prepare(original, CounterDeadline::new(1234, 100)?)?;
+        ledger.output_pull(header, running)?;
+        assert!(ledger.outbound(header, original, Moment::from_nanos(101)).is_err());
+        ledger.admitted(header)?;
+        let late = ledger.received(header, Moment::from_nanos(1000));
+        if running {
+            late?;
+            ledger.consumed(header)?;
+        } else {
+            assert_eq!(late, Err(RequestError::Deadline));
+        }
+    }
+    Ok(())
+}
+
 fn binding() -> Result<WireHandshake, Box<dyn Error>> {
     let run = RunKey {
         owner: CoordinatorKey {
@@ -350,7 +402,7 @@ fn managed_admitted_acquisition_waits_beyond_three_minutes_with_finite_output_re
     ledger.progress(h, late)?;
     let pull_until = late.checked_add(std::time::Duration::from_secs(30))?;
     let pull = ledger.prepare(pull_until, CounterDeadline::new(39000, 100)?)?;
-    ledger.output_pull(pull)?;
+    ledger.output_pull(pull, false)?;
     ledger.outbound(pull, pull_until, late)?;
     ledger.admitted(pull)?;
     assert_eq!(ledger.received(pull, pull_until), Err(RequestError::Deadline));

@@ -119,6 +119,18 @@ impl BackendCustodyPipeControl {
     ) -> Result<NativeWriteAdmission, LifecyclePipeWriteRejection> {
         self.inner.write(operation, original, buffer, length)
     }
+    /// Send only a canonical heartbeat on the established custody session.
+    /// Its independent active-time watchdog bounds silence; OS sleep cannot expire this I/O.
+    /// Cancellation still requires checked native retirement before releasing the buffer.
+    /// # Errors
+    /// Rejects foreign sessions, other payloads, reused operations and occupied storage.
+    pub fn write_heartbeat(
+        &self,
+        operation: LifecyclePipeOperationId,
+        buffer: LifecyclePipeWriteBuffer,
+    ) -> Result<NativeWriteAdmission, LifecyclePipeWriteRejection> {
+        self.inner.write_heartbeat(operation, buffer)
+    }
     /// Authenticate the immutable capability against actual kernel peer facts.
     pub fn verify_capability(
         &self,

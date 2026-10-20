@@ -21,7 +21,7 @@ mod native;
 mod native_abi_tests;
 /// Borrow the exact allowlist through CreateProcess and actual attribute deletion.
 pub struct WindowsOutputInheritance<'a> {
-    /// Read-only NUL input, inherited only by this owned launch.
+    /// Read-only shutdown pipe for a managed backend, or NUL for a desktop child.
     pub stdin: BorrowedHandle<'a>,
     /// Synchronous writable child stdout end; parent reading is overlapped.
     pub stdout: BorrowedHandle<'a>,

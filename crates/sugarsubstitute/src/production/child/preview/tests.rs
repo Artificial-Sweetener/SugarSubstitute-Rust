@@ -67,7 +67,7 @@ fn preview_until(until: Moment) -> Result<Preview, Box<dyn Error>> {
 fn failed(identity: MainIdentity) -> Result<DesktopStartupObservation, Box<dyn Error>> {
     Ok(DesktopStartupObservation::MainPreviewFailed {
         identity,
-        cause: crate::production::qualification::error_fixture::native_failure()?,
+        cause: crate::desktop_error_fixture::native_failure()?,
     })
 }
 
@@ -122,7 +122,7 @@ fn running_preview_keeps_original_campaign_after_completed_frontend_setup() -> T
     let client = runtime.client();
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
     let session = session(true)?;
-    let mut owner = preview_until(Moment::from_nanos(210_000_000_000))?;
+    let mut owner = preview_until(Moment::from_nanos(7_200_000_000_000))?;
     let frontend =
         sugarsubstitute_application::startup::FrontendBudget::new(Moment::from_nanos(0))?;
     let identity = main()?;
@@ -148,7 +148,7 @@ fn running_preview_keeps_original_campaign_after_completed_frontend_setup() -> T
         ),
         Err(PreviewError::State)
     ));
-    assert_eq!(owner.until, Moment::from_nanos(210_000_000_000));
+    assert_eq!(owner.until, Moment::from_nanos(7_200_000_000_000));
     let mut expired = preview()?;
     assert!(matches!(
         expired.after_main_revealed(identity, &session, &scope, &scope, Moment::from_nanos(100)),

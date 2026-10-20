@@ -143,6 +143,12 @@ fn blocking_cancellation_does_not_claim_stop_before_external_work_returns() -> T
     assert!(!progress.settled);
     assert!(progress.deadline_expired);
     assert_eq!(progress.unresolved_job_ids, vec![JobId::new(1)?]);
+    assert_eq!(progress.unresolved_jobs.len(), 1);
+    let retained = &progress.unresolved_jobs[0];
+    assert_eq!(retained.scope, rig.scope.id());
+    assert_eq!(retained.spec, job.spec());
+    assert_eq!(retained.phase, JobPhase::Running);
+    assert!(!retained.acknowledged && !retained.native_held);
     assert!(rig.owner.finish_shutdown().is_err());
     release.open();
     assert!(matches!(rig.completion(&mut job)?.outcome, JobOutcome::Cancelled));

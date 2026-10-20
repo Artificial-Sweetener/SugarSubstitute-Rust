@@ -3,7 +3,7 @@
 //! Exercise real executable dispatch before native or filesystem effects.
 use super::*;
 /// Internal claim roles dispatch through the real parser before any native effects.
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-native-host"))]
 #[test]
 fn native_claim_fixture_dispatch_requires_exact_ordered_headless_inputs()
 -> Result<(), Box<dyn Error>> {
@@ -76,7 +76,7 @@ fn native_claim_fixture_dispatch_requires_exact_ordered_headless_inputs()
 }
 
 /// Pipe roles use the actual parser while reserving all native effects for execution.
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-native-host"))]
 #[test]
 fn native_pipe_roles_require_exact_inputs() -> Result<(), Box<dyn Error>> {
     let path = r"D:\evidence\pipe.json";
@@ -106,7 +106,7 @@ fn native_pipe_roles_require_exact_inputs() -> Result<(), Box<dyn Error>> {
 }
 
 /// Mixed, reordered and non-Unicode role inputs fail before native adoption.
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-native-host"))]
 #[test]
 fn native_pipe_roles_reject_ambiguous_invocations() {
     use std::os::windows::ffi::OsStringExt;
@@ -161,36 +161,39 @@ fn demonstration_options_keep_their_invocation_role() -> Result<(), Box<dyn Erro
         ]
         .map(OsString::from),
     )?;
+    #[cfg(not(all(target_os = "windows", feature = "windows-native-host")))]
+    let Invocation::Demo(options) = invocation;
+    #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
     let options = match invocation {
         Invocation::Demo(options) => options,
-        #[cfg(target_os = "windows")]
+        #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         Invocation::NativeExitFixture(_) => {
             return Err("Presentation options selected an exit fixture".into());
         }
-        #[cfg(target_os = "windows")]
+        #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         Invocation::NativeCaptureFixture(_) => {
             return Err("Presentation options selected a capture fixture".into());
         }
-        #[cfg(target_os = "windows")]
+        #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         Invocation::NativeRegistryFixture(_) => {
             return Err("Presentation options selected a registry fixture".into());
         }
-        #[cfg(target_os = "windows")]
+        #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         Invocation::NativeHeldChild(_) => {
             return Err("Presentation options selected a held child fixture".into());
         }
-        #[cfg(target_os = "windows")]
+        #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         Invocation::NativePipeFixture(_)
         | Invocation::NativePipeChild(_)
         | Invocation::NativeOutputFixture(_)
         | Invocation::NativeOutputChild(_) => {
             return Err("Presentation options selected a lifecycle pipe fixture".into());
         }
-        #[cfg(target_os = "windows")]
+        #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         Invocation::NativeHeldRegistryFixture(_) => {
             return Err("Presentation options selected a held registry fixture".into());
         }
-        #[cfg(target_os = "windows")]
+        #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         Invocation::NativeClaimFixture(_)
         | Invocation::NativeClaimChild(_)
         | Invocation::NativeForwardingRoot(_)
@@ -209,7 +212,7 @@ fn demonstration_options_keep_their_invocation_role() -> Result<(), Box<dyn Erro
 }
 
 /// Both fixed descendant roles reject malformed or mixed arguments before effects.
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-native-host"))]
 #[test]
 fn native_descendant_fixture_dispatch_preserves_fixed_roles() -> Result<(), Box<dyn Error>> {
     let parsed = Invocation::parse_arguments(
@@ -256,7 +259,7 @@ fn native_descendant_fixture_dispatch_preserves_fixed_roles() -> Result<(), Box<
 }
 
 /// Exit 259 is a genuine signaled exit despite sharing STILL_ACTIVE's numeric value.
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-native-host"))]
 #[test]
 fn native_exit_fixture_preserves_all_supported_windows_codes() -> Result<(), Box<dyn Error>> {
     for (argument, expected) in [("0", 0), ("37", 37), ("259", 259)] {
@@ -269,7 +272,7 @@ fn native_exit_fixture_preserves_all_supported_windows_codes() -> Result<(), Box
 }
 
 /// Fixture selection rejects missing, extra, unsupported and non-Unicode input.
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-native-host"))]
 #[test]
 fn native_exit_fixture_rejects_ambiguous_invocations() {
     use std::os::windows::ffi::OsStringExt;
@@ -294,7 +297,7 @@ fn native_exit_fixture_rejects_ambiguous_invocations() {
 }
 
 /// Registry qualification has a single explicit role and an absolute output path.
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-native-host"))]
 #[test]
 fn native_registry_fixture_accepts_only_its_exact_role() -> Result<(), Box<dyn Error>> {
     let result = Invocation::parse_arguments(
@@ -308,7 +311,7 @@ fn native_registry_fixture_accepts_only_its_exact_role() -> Result<(), Box<dyn E
 }
 
 /// Relative destinations, mixed roles and non-Unicode flags fail before effects.
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-native-host"))]
 #[test]
 fn native_registry_fixture_rejects_ambiguous_or_missing_arguments() {
     use std::os::windows::ffi::OsStringExt;
@@ -361,7 +364,7 @@ fn timing_qualification_rejects_missing_receipt_and_offline_export() -> Result<(
 }
 
 /// Capture dispatch validates the ordered role before native or filesystem effects.
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-native-host"))]
 #[test]
 fn native_capture_fixture_dispatch_requires_exact_role_and_complete_inputs()
 -> Result<(), Box<dyn Error>> {

@@ -45,6 +45,19 @@ pub(super) struct AttemptCleanup {
     omitted_failures: u64,
 }
 impl AttemptCleanup {
+    /// Substitute remote settlement facts for owner-local close classification tests only.
+    #[cfg(test)]
+    pub(super) fn boundary_fixture(acknowledged: bool, settled: bool, failed: bool) -> Self {
+        Self {
+            original: Moment::from_nanos(1),
+            pending: None,
+            acknowledged,
+            local: None,
+            settled,
+            failures: [failed.then(|| std::io::Error::other("Cleanup failed").into()), None],
+            omitted_failures: 0,
+        }
+    }
     /// Original cleanup cutoff, retained independently of failure/timer presentation.
     pub(super) fn original_deadline(&self) -> Moment {
         self.original
@@ -56,6 +69,10 @@ impl AttemptCleanup {
     pub(super) fn complete(&self) -> bool {
         (self.acknowledged && self.settled)
             || self.local.as_ref().is_some_and(LocalAttemptRetirement::complete)
+    }
+    /// A presented startup failure is recoverable only after every cleanup owner settled successfully.
+    pub(super) fn settled_without_failure(&self) -> bool {
+        self.complete() && self.failures.iter().all(Option::is_none) && self.omitted_failures == 0
     }
     pub(super) fn deadline(&self) -> Option<Moment> {
         if self.complete() || self.failures.iter().any(Option::is_some) {

@@ -51,17 +51,17 @@ fn exact_contained_start_alone_admits_live_wait_and_matching_exit_fails_pending_
     assert!(!backend.record(key)?.started);
     assert_eq!(
         backend.record(key)?.campaign.campaign_until(),
-        Some(Moment::from_nanos(180_000_000_000))
+        Some(Moment::from_nanos(3_600_000_000_000))
     );
     let started =
         backend.managed_started_observation(key, process, process, Moment::from_nanos(1))?;
     assert!(started.replies.is_empty());
     assert!(backend.record(key)?.started);
-    clock.set(Moment::from_nanos(360_000_000_000));
+    clock.set(Moment::from_nanos(7_200_000_000_000));
     assert_eq!(backend.record(key)?.campaign.campaign_until(), None);
     assert_eq!(
         backend.record(key)?.campaign.probe_until(client.now()?)?,
-        Moment::from_nanos(362_000_000_000)
+        Moment::from_nanos(7_202_000_000_000)
     );
     assert_eq!(backend.record(key)?.scope.spec().deadline, None);
     assert!(!backend.record(key)?.scope.snapshot().cancellation_requested);

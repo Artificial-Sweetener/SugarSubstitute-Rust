@@ -37,7 +37,10 @@ fn component_retains_explicit_installed_and_profile_paths_for_authentic_entry() 
         .map(OsString::from),
     )?;
     assert_eq!(command.installation, PathBuf::from(r"D:\owned-component\installed"));
-    assert_eq!(command.options.configuration, PathBuf::from(r"D:\owned-component\startup.toml"));
+    let crate::production::options::ConfigurationSource::Explicit(paths) = command.options else {
+        return Err("Explicit launch paths missing".into());
+    };
+    assert_eq!(paths.configuration, PathBuf::from(r"D:\owned-component\startup.toml"));
     Ok(())
 }
 

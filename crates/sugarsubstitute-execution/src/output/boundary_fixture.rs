@@ -113,6 +113,9 @@ impl OutputLease for ExternalLease {
         *original = Some(signals);
         Ok([11, 12, 13])
     }
+    fn close_input(&mut self) -> Result<(), NativeObservationError> {
+        Ok(())
+    }
     fn release_child_ends(&mut self) -> Result<(), NativeObservationError> {
         Ok(())
     }

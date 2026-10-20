@@ -55,6 +55,7 @@ pub(in crate::coordinator_entry::tests) struct Boundary {
     pub(in crate::coordinator_entry::tests) closing_before_launch: AtomicBool,
     pub(in crate::coordinator_entry::tests) closing_after_launch: AtomicBool,
     pub(in crate::coordinator_entry::tests) reads_issued: AtomicUsize,
+    pub(in crate::coordinator_entry::tests) read_failure: Mutex<Option<EntryTransportError>>,
 }
 impl Boundary {
     pub(in crate::coordinator_entry::tests) fn new(
@@ -107,6 +108,7 @@ impl Boundary {
             closing_before_launch: AtomicBool::new(false),
             closing_after_launch: AtomicBool::new(false),
             reads_issued: AtomicUsize::new(0),
+            read_failure: Mutex::new(None),
         }))
     }
     pub(in crate::coordinator_entry::tests) fn close_peer(&self, index: usize) -> TestResult {
@@ -262,6 +264,9 @@ impl EntryLease for Lease {
         self.0.prepare_issue(index, crate::native_deadlines::Role::Read)?;
         issue.execute(|| {
             self.0.reads_issued.fetch_add(1, Ordering::AcqRel);
+            if let Some(cause) = lock(&self.0.read_failure).take() {
+                return Err(cause);
+            }
             lock(&self.0.reads)[index] = None;
             if bytes.len() == 1 {
                 lock(&self.0.peer_probes).insert(index);

@@ -19,6 +19,7 @@ struct RetainedChild {
     close_calls: usize,
     cleanup_ready: bool,
     retain_on_poll: bool,
+    fail_cleanup: bool,
     finish_calls: usize,
 }
 impl RetainedChild {
@@ -74,6 +75,9 @@ impl EntryActivation for RetainedChild {
         if self.retain_on_poll {
             self.retain_failure();
         }
+        if self.fail_cleanup {
+            return Err("Persistent failed external cleanup".into());
+        }
         Ok(self.cleanup_ready)
     }
     fn finish(&mut self) -> Result<(), Box<dyn Error>> {
@@ -83,6 +87,32 @@ impl EntryActivation for RetainedChild {
     }
 }
 struct QuietWake;
+
+#[test]
+fn expired_failed_cleanup_returns_after_actual_execution_join_instead_of_hiding_forever()
+-> Result<(), Box<dyn Error>> {
+    let mut runner = runner()?;
+    runner.child.retain_failure();
+    runner.child.fail_cleanup = true;
+    runner.request_shutdown()?;
+    runner.cleanup_deadline = Some(Instant::now());
+    assert!(runner.poll_shutdown().is_err());
+    let until = Instant::now().checked_add(Duration::from_secs(15)).ok_or("Guard overflow")?;
+    while !runner.poll_shutdown()? {
+        if Instant::now() >= until {
+            return Err("Actual execution workers did not settle".into());
+        }
+        std::hint::spin_loop();
+    }
+    assert!(!runner.child.cleanup_ready);
+    assert!(!runner.child_closed);
+    assert!(runner.execution.as_ref().ok_or("Execution absent")?.poll_shutdown()?.settled);
+    assert!(runner.finish_shutdown().is_err());
+    assert_eq!(runner.child.finish_calls, 0);
+    assert!(runner.failure_source().is_some());
+    Ok(())
+}
+
 impl CompletionWake for QuietWake {
     fn wake(&self) -> Result<(), ExecutionError> {
         Ok(())
@@ -101,7 +131,8 @@ fn runner() -> Result<EntryRunner<RetainedChild>, Box<dyn Error>> {
             cubes: invalid.clone(),
             script: invalid.clone(),
             profile: invalid.clone(),
-        },
+        }
+        .into(),
     };
     let identity = Arc::new(());
     let child = RetainedChild {
@@ -111,6 +142,7 @@ fn runner() -> Result<EntryRunner<RetainedChild>, Box<dyn Error>> {
         close_calls: 0,
         cleanup_ready: false,
         retain_on_poll: false,
+        fail_cleanup: false,
         finish_calls: 0,
     };
     let mut runner = EntryRunner::new(

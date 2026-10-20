@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Keep native UTF-16 offsets tied to bounded immutable record identities.
 use super::ConsoleText;
+mod retained;
 use crate::DesktopError;
 use sugarsubstitute_contracts::{
     execution::MemoryClaim, lifecycle::ResourceKey, presentation::NATIVE_CONSOLE_STORAGE_BYTES,
@@ -98,7 +99,7 @@ impl DocumentIndex {
         let mut text = Vec::new();
         text.try_reserve_exact(units as usize)
             .map_err(|e| DesktopError::new("console_text_allocate", e))?;
-        let mut styles = Vec::new();
+        let mut styles: Vec<StyleExtent> = Vec::new();
         styles
             .try_reserve_exact(run_count)
             .map_err(|e| DesktopError::new("console_styles_allocate", e))?;
@@ -124,11 +125,22 @@ impl DocumentIndex {
                 let next = position
                     + record.text()[run.start as usize..run.end as usize].encode_utf16().count()
                         as u32;
-                styles.push(StyleExtent {
-                    start: position as i32,
-                    end: next as i32,
-                    style: run.style,
-                });
+                if let Some(previous) = styles.last_mut()
+                    && previous.style == run.style
+                    && (previous.end == position as i32
+                        || previous.end + 1 == position as i32
+                            && run.style.background == Default::default())
+                {
+                    // Equal foreground runs can include a paragraph separator. An explicit
+                    // background must not paint that separator with another record's color.
+                    previous.end = next as i32;
+                } else {
+                    styles.push(StyleExtent {
+                        start: position as i32,
+                        end: next as i32,
+                        style: run.style,
+                    });
+                }
                 position = next;
             }
         }
@@ -180,6 +192,10 @@ pub(crate) struct TextStream<'a> {
 impl<'a> TextStream<'a> {
     pub(crate) fn new(document: &'a DocumentIndex) -> Self {
         Self { units: &document.text, offset: 0 }
+    }
+    /// Stream an already validated native edit slice, including an empty deletion.
+    pub(crate) fn slice(units: &'a [u16]) -> Self {
+        Self { units, offset: 0 }
     }
     /// Preserve exact UTF-16 bytes even when a callback splits a storage unit or surrogate pair.
     pub(crate) fn read(&mut self, target: &mut [u8]) -> usize {

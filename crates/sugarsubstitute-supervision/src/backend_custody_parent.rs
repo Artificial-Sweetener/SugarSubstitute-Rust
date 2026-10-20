@@ -10,6 +10,7 @@ use sugarsubstitute_contracts::{backend_custody::*, execution::Moment};
 use sugarsubstitute_execution::{backend_custody::*, windows::NativeObservationError};
 mod error;
 mod finish;
+mod heartbeat;
 #[cfg(test)]
 pub(crate) mod observation_fixture;
 mod receipt;
@@ -140,6 +141,7 @@ impl BackendCustodyParent {
                 established: false,
                 registrations: [None; 64],
                 finish: None,
+                heartbeat: heartbeat::Heartbeat::default(),
             }))))),
             storage: Arc::new(storage),
         })

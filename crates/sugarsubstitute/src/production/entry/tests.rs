@@ -46,7 +46,7 @@ fn inert_and_revoked_owner_cannot_supply_serving_admission() -> Result<(), Box<d
     assert!(matches!(current_owner(&owner), Err(EntryIntakeFailure::Identity)));
     let original = owner.original_setup_budget();
     assert_eq!(original.started(), Moment::from_nanos(7));
-    assert_eq!(original.until(), Moment::from_nanos(30_000_000_007));
+    assert_eq!(original.until(), Moment::from_nanos(3_600_000_000_007));
     owner.close_admission();
     assert!(matches!(current_owner(&owner), Err(EntryIntakeFailure::Identity)));
     assert_eq!(owner.original_setup_budget(), original);

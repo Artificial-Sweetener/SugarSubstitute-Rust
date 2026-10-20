@@ -260,7 +260,7 @@ fn registered_restart_witness_original_deadline_expiry_cannot_be_reborrowed_or_r
     let snapshot = snapshot(&completed)?;
     let witness = rig.client.borrow_registered_restart_admission(snapshot, &source, &completed)?;
     let cutoff = witness.effective_until();
-    rig.clock.advance(30_000_000_000);
+    rig.clock.advance(cutoff.as_nanos() - rig.client.now()?.as_nanos());
     assert!(witness.check().is_err());
     assert!(rig.client.borrow_registered_restart_admission(snapshot, &source, &completed).is_err());
     assert_eq!(witness.effective_until(), cutoff);

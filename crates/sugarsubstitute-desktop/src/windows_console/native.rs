@@ -13,7 +13,7 @@ use windows::{
     Win32::{
         Foundation::{FreeLibrary, HMODULE, HWND, LPARAM, WPARAM},
         System::LibraryLoader::{LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExW},
-        UI::Controls::RichEdit::{EM_AUTOURLDETECT, EM_EXLIMITTEXT, EM_SETUNDOLIMIT},
+        UI::Controls::RichEdit::{EM_AUTOURLDETECT, EM_EXLIMITTEXT},
         UI::{
             Input::KeyboardAndMouse::{EnableWindow, GetFocus, IsWindowEnabled},
             WindowsAndMessaging::*,
@@ -154,7 +154,6 @@ impl NativePort for Port<'_> {
         // TXTBIT_READONLY is supplied by the windowless host; HWND-only EM_SETREADONLY is
         // unprocessed by this native engine. Configure supported operations directly and check
         // their HRESULTs instead of losing S_FALSE through the window's LRESULT boundary.
-        peer.engine.message(EM_SETUNDOLIMIT, WPARAM(0), LPARAM(0))?;
         if peer.engine.message(EM_AUTOURLDETECT, WPARAM(0), LPARAM(0))?.0 != 0 {
             return Err(DesktopError::message(
                 "console_links_disable",
@@ -263,7 +262,7 @@ pub(super) fn present(
     Ok(())
 }
 
-/// Repaint a completed native document or layout change after parent-frame exclusion.
+/// Queue a completed document/layout paint so native input can run before expensive drawing.
 pub(super) fn repaint(hwnd: HWND, visible: bool) -> Result<(), DesktopError> {
     if visible {
         // SAFETY: Exact retained child is painted on its creating UI thread; no other
@@ -274,8 +273,7 @@ pub(super) fn repaint(hwnd: HWND, visible: bool) -> Result<(), DesktopError> {
                 None,
                 None,
                 windows::Win32::Graphics::Gdi::RDW_INVALIDATE
-                    | windows::Win32::Graphics::Gdi::RDW_FRAME
-                    | windows::Win32::Graphics::Gdi::RDW_UPDATENOW,
+                    | windows::Win32::Graphics::Gdi::RDW_FRAME,
             )
         }
         .ok()

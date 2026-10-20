@@ -133,6 +133,9 @@ impl OutputLease for Lease {
         }
         Ok([11, 12, 13])
     }
+    fn close_input(&mut self) -> Result<(), NativeObservationError> {
+        Ok(())
+    }
     fn release_child_ends(&mut self) -> Result<(), NativeObservationError> {
         self.0.releases.fetch_add(1, Ordering::AcqRel);
         Ok(())

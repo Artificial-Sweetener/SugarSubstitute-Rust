@@ -8,6 +8,17 @@ use sugarsubstitute_contracts::{
     coordinator_entry::MAX_ENTRY_REQUEST_ALLOCATION_BYTES,
 };
 
+/// Select explicit caller paths or the installed descriptor read after splash presentation.
+pub(crate) enum ConfigurationSource {
+    Explicit(ProductionEntryOptions),
+    Installed(PathBuf),
+}
+impl From<ProductionEntryOptions> for ConfigurationSource {
+    fn from(paths: ProductionEntryOptions) -> Self {
+        Self::Explicit(paths)
+    }
+}
+
 /// Keep the original six separately selected paths without discovering an install.
 pub(crate) struct ProductionEntryOptions {
     pub(crate) configuration: PathBuf,

@@ -187,7 +187,7 @@ fn real_schema_failure_preserves_redaction_and_original_whole_claim() -> TestRes
             &client,
             &scope,
             &JobSequence::new(),
-            input,
+            input.into(),
             EntrySetupBudget::new(Moment::from_nanos(0))?,
         )?;
         let completion = wake.completion(&mut job)?;

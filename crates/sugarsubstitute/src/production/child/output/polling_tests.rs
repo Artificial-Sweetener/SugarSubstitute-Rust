@@ -68,6 +68,29 @@ fn prepared(child: &mut ProductionChild) -> Result<(WireHeader, Moment)> {
 }
 
 #[test]
+fn later_sender_waits_for_the_original_output_pull_before_native_admission() -> Result<()> {
+    let (mut child, _rig, _) = fixture()?;
+    let (older, until) = prepared(&mut child)?;
+    let lease = child.output.binding.ok_or("Output binding absent")?.lease;
+    let channel = child.bootstrap.channel_mut();
+    let later = channel.prepare_request(until)?;
+    let message = sugarsubstitute_supervision::lifecycle_protocol::WireMessage {
+        header: later,
+        payload: sugarsubstitute_supervision::lifecycle_protocol::WirePayload::OutputPull {
+            lease,
+            acknowledged_delivery: None,
+        },
+    };
+    assert!(!channel.try_send(&message, until)?);
+    assert!(channel.request_prepared(older)? && channel.request_prepared(later)?);
+    channel.withdraw_prepared(older)?;
+    let rejected = channel.try_send(&message, until).err().ok_or("Native session absent")?;
+    assert_eq!(rejected.to_string(), "Lifecycle application session missing");
+    assert!(channel.request_prepared(later)?);
+    Ok(())
+}
+
+#[test]
 fn idle_reply_stops_early_native_wakes_and_admits_one_pull_at_the_exact_deadline() -> Result<()> {
     let (mut child, _rig, clock) = fixture()?;
     child.output.pull_after = polling::after_reply(Moment::from_nanos(0), true)?;
@@ -115,7 +138,7 @@ fn repeated_outage_reply_is_paced_and_current_user_retry_bypasses_the_interval()
     child.backend_retry_requested(child.identity, failed)?;
     assert_eq!(child.output.pull_after, None);
     let original = prepared(&mut child)?;
-    assert_eq!(original.1, Moment::from_nanos(180_000_000_000));
+    assert_eq!(original.1, Moment::from_nanos(3_600_000_000_000));
     assert!(child.output.retry_pending());
     assert_eq!(
         child.running_backend.as_ref().and_then(|running| running.retry_deadline()),
@@ -137,14 +160,13 @@ fn close_clears_idle_wake_and_prevents_preparing_a_new_request() -> Result<()> {
 }
 
 #[test]
-fn provisional_managed_output_after_three_minutes_keeps_finite_pulls_and_close_custody()
--> Result<()> {
+fn provisional_managed_output_after_two_hours_keeps_finite_pulls_and_close_custody() -> Result<()> {
     let (mut child, _rig, clock) = fixture()?;
     child.output.provisional = true;
-    clock.0.store(360_000_000_000, Ordering::SeqCst);
+    clock.0.store(7_200_000_000_000, Ordering::SeqCst);
     let original = prepared(&mut child)?;
-    assert_eq!(original.1, Moment::from_nanos(390_000_000_000));
-    clock.0.store(361_000_000_000, Ordering::SeqCst);
+    assert_eq!(original.1, Moment::from_nanos(7_230_000_000_000));
+    clock.0.store(7_201_000_000_000, Ordering::SeqCst);
     assert_eq!(prepared(&mut child)?, original);
     child.output.close();
     assert!(child.output.pending());

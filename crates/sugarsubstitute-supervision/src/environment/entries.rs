@@ -51,7 +51,9 @@ fn snapshot_entry(line: &[u16]) -> Result<Entry<'_>, LaunchEnvironmentError> {
         .ok_or(LaunchEnvironmentError::InvalidName)?;
     let name = &line[..separator];
     let valid = if hidden {
-        name.len() == 3 && matches!(name[1], 65..=90 | 97..=122) && name[2] == b':' as u16
+        // Shells also inherit hidden metadata such as =:: and =ExitCode.
+        // Preserve snapshot entries without interpreting them as drive letters.
+        ordinary_name(&name[1..])
     } else {
         ordinary_name(name)
     };

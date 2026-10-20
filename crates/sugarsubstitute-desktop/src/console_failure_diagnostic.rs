@@ -38,6 +38,97 @@ macro_rules! operations {
     };
 }
 operations! {
+    Accessibility => "console_accessibility",
+    AccessibilityClaim => "console_accessibility_claim",
+    AccessibilityDisconnect => "console_accessibility_disconnect",
+    AccessibilityQuery => "console_accessibility_query",
+    Activate => "console_activate",
+    AlphaEndDraw => "console_alpha_end_draw",
+    AlphaPresent => "console_alpha_present",
+    AlphaReadback => "console_alpha_readback",
+    BeginPaint => "console_begin_paint",
+    ClipboardRender => "console_clipboard_render",
+    ColorGlyphFactory => "console_color_glyph_factory",
+    CompositeExtent => "console_composite_extent",
+    Deactivate => "console_deactivate",
+    EndPaint => "console_end_paint",
+    Engine => "console_engine",
+    Factory => "console_factory",
+    FocusActivate => "console_focus_activate",
+    FocusDeactivate => "console_focus_deactivate",
+    FrameCrop => "console_frame_crop",
+    GlyphClaim => "console_glyph_claim",
+    GlyphDpi => "console_glyph_dpi",
+    GlyphsRetired => "console_glyphs_retired",
+    Host => "console_host",
+    HostBounds => "console_host_bounds",
+    HostDcIdentity => "console_host_dc_identity",
+    HostDcLimit => "console_host_dc_limit",
+    HostFailed => "console_host_failed",
+    HostFocus => "console_host_focus",
+    HostGetDc => "console_host_get_dc",
+    HostImeRelease => "console_host_ime_release",
+    HostInvalidate => "console_host_invalidate",
+    HostReleaseDc => "console_host_release_dc",
+    HostRetirement => "console_host_retirement",
+    HostScrollAxis => "console_host_scroll_axis",
+    HostScrollRange => "console_host_scroll_range",
+    HostTimerAdmission => "console_host_timer_admission",
+    HostTimerInstall => "console_host_timer_install",
+    HostTimerRemove => "console_host_timer_remove",
+    HostTimerRetire => "console_host_timer_retire",
+    InputIdentity => "console_input_identity",
+    InputInstall => "console_input_install",
+    InputPlatform => "console_input_platform",
+    InterfaceIdentity => "console_interface_identity",
+    Layout => "console_layout",
+    LibraryIdentity => "console_library_identity",
+    Message => "console_message",
+    NativeAlphaDraw => "console_native_alpha_draw",
+    NativeDelivery => "console_native_delivery",
+    NativeNotification => "console_native_notification",
+    NativePremultiplication => "console_native_premultiplication",
+    OutputRetired => "console_output_retired",
+    PaintAllocate => "console_paint_allocate",
+    PaintCapacity => "console_paint_capacity",
+    PaintClaim => "console_paint_claim",
+    PaintDocument => "console_paint_document",
+    PaintFormat => "console_paint_format",
+    PaintFunding => "console_paint_funding",
+    PaintMessage => "console_paint_message",
+    PaintPalette => "console_paint_palette",
+    PaintRange => "console_paint_range",
+    PaintReentry => "console_paint_reentry",
+    PaintRestore => "console_paint_restore",
+    PaintRestoreFormat => "console_paint_restore_format",
+    PaintRestoreInput => "console_paint_restore_input",
+    PaintTokens => "console_paint_tokens",
+    PaintVerify => "console_paint_verify",
+    Renderer => "console_renderer",
+    Scale => "console_scale",
+    ScrollAnimationRetire => "console_scroll_animation_retire",
+    ScrollBrush => "console_scroll_brush",
+    ScrollCapture => "console_scroll_capture",
+    ScrollCaptureRetire => "console_scroll_capture_retire",
+    ScrollFont => "console_scroll_font",
+    ScrollFontAlignment => "console_scroll_font_alignment",
+    ScrollFontFactory => "console_scroll_font_factory",
+    ScrollGeometry => "console_scroll_geometry",
+    ScrollTimer => "console_scroll_timer",
+    ScrollTimerRetire => "console_scroll_timer_retire",
+    ScrollTrack => "console_scroll_track",
+    SelectionStyle => "console_selection_style",
+    SemanticPaint => "console_semantic_paint",
+    Services => "console_services",
+    Shutdown => "console_shutdown",
+    ShutdownReference => "console_shutdown_reference",
+    SystemTheme => "console_system_theme",
+    TextCapture => "console_text_capture",
+    TextCaptureRelease => "console_text_capture_release",
+    UiDeactivate => "console_ui_deactivate",
+    WicBitmap => "console_wic_bitmap",
+    WicFactory => "console_wic_factory",
+    WicTarget => "console_wic_target",
     AccessibilityClear => "console_accessibility_clear",
     AccessibilityCreate => "console_accessibility_create",
     AccessibilityLabel => "console_accessibility_label",
@@ -110,6 +201,14 @@ pub enum ConsoleFailureCode {
     Allocation,
     /// The admitted immutable frame could not fund the console allocation.
     MemoryClaim,
+    /// An exact 24-bit native color was absent from the current semantic token table.
+    UnknownPaintToken(u32),
+    /// A native brush did not contain a normalized opaque semantic token.
+    InvalidPaintColor,
+    /// RichEdit requested an unsupported render-target operation.
+    UnsupportedPaint,
+    /// A native glyph advertised image formats not supported by the current renderer.
+    UnsupportedGlyphFormat(i32),
     /// The direct original cause has no supported concrete projection.
     Opaque,
 }
@@ -123,12 +222,26 @@ impl ConsoleFailureCode {
             "IntegerRange" => Self::IntegerRange,
             "Allocation" => Self::Allocation,
             "MemoryClaim" => Self::MemoryClaim,
+            "InvalidPaintColor" => Self::InvalidPaintColor,
+            "UnsupportedPaint" => Self::UnsupportedPaint,
             "Io(TimedOut)" => Self::Io(ConsoleFailureIoKind::TimedOut),
             "Io(Disconnected)" => Self::Io(ConsoleFailureIoKind::Disconnected),
             "Io(Denied)" => Self::Io(ConsoleFailureIoKind::Denied),
             "Io(InvalidInput)" => Self::Io(ConsoleFailureIoKind::InvalidInput),
             "Io(Io)" => Self::Io(ConsoleFailureIoKind::Io),
             _ => {
+                if let Some(raw) =
+                    value.strip_prefix("UnknownPaintToken(").and_then(|v| v.strip_suffix(')'))
+                {
+                    return native(raw)
+                        .filter(|value| (0..=0x00ff_ffff).contains(value))
+                        .map(|value| Self::UnknownPaintToken(value as u32));
+                }
+                if let Some(raw) =
+                    value.strip_prefix("UnsupportedGlyphFormat(").and_then(|v| v.strip_suffix(')'))
+                {
+                    return native(raw).map(Self::UnsupportedGlyphFormat);
+                }
                 if let Some(raw) = value.strip_prefix("Hresult(").and_then(|v| v.strip_suffix(')'))
                 {
                     return native(raw).map(Self::Hresult);
@@ -164,6 +277,11 @@ mod code_contract_tests {
             Code::Allocation,
             Code::IntegerRange,
             Code::MemoryClaim,
+            Code::UnknownPaintToken(0),
+            Code::UnknownPaintToken(0x00ff_ffff),
+            Code::InvalidPaintColor,
+            Code::UnsupportedPaint,
+            Code::UnsupportedGlyphFormat(128),
             Code::Io(Kind::Io),
             Code::Io(Kind::TimedOut),
             Code::Io(Kind::Disconnected),
@@ -190,6 +308,10 @@ mod code_contract_tests {
             "Hresult(1))",
             "Opaque PRIVATE",
             "MemoryClaim(1)",
+            "UnknownPaintToken(-1)",
+            "UnknownPaintToken(16777216)",
+            "UnknownPaintToken(01)",
+            "UnsupportedGlyphFormat(+1)",
             "Allocation\nPRIVATE",
             "",
         ] {

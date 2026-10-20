@@ -65,7 +65,7 @@ fn storage_and_original_preparation_horizon_reject_before_effects() -> TestResul
             &scope,
             specification,
             CoordinatorEntryServerInput::new(facts()?)?,
-            Moment::from_nanos(if too_small { 30_000_000_000 } else { 30_000_000_001 }),
+            Moment::from_nanos(if too_small { 30_000_000_000 } else { 3_600_000_000_001 }),
             Box::new(Lease(boundary.clone())),
         );
         if too_small {

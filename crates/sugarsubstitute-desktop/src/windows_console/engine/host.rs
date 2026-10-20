@@ -149,6 +149,10 @@ impl State {
     /// Invalidate only the exact child; deferring during paint prevents exposing staged formats.
     pub(super) fn invalidate(&self) {
         self.dirty.set(true);
+        self.expose();
+    }
+    /// Refresh the composed background without invalidating unchanged native text and selection.
+    pub(super) fn expose(&self) {
         if self.closing.get() || self.painting.get() || !self.redraw.get() {
             return;
         }

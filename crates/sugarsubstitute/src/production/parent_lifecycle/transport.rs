@@ -7,7 +7,7 @@ use super::{ParentError, ParentLifecycle, ParentResources, Reply, Result};
 use sha2::{Digest, Sha256};
 use sugarsubstitute_application::supervision::UiWatchdog;
 use sugarsubstitute_contracts::{
-    execution::{CompletionBatch, CounterDeadline, JobOutcome, Moment},
+    execution::{CompletionBatch, JobOutcome, Moment},
     lifecycle::ClientRegistration,
 };
 use sugarsubstitute_execution::windows_lifecycle_pipe::{
@@ -306,33 +306,6 @@ impl ParentLifecycle {
                 Err(rejection.error.into())
             }
         }
-    }
-
-    pub(super) fn deadline(
-        &self,
-        header: WireHeader,
-        resources: &ParentResources<'_, '_>,
-    ) -> Result<Moment> {
-        let until = resources.execution.client.decode_counter_deadline(CounterDeadline::new(
-            header.deadline_qpc,
-            self.original.frequency(),
-        )?)?;
-        let now = resources.execution.client.now()?;
-        let kind = match resources.target {
-            sugarsubstitute_contracts::lifecycle::BackendTarget::Managed(_) => {
-                sugarsubstitute_application::startup::ConnectionBudgetKind::Managed
-            }
-            sugarsubstitute_contracts::lifecycle::BackendTarget::Attached(_) => {
-                sugarsubstitute_application::startup::ConnectionBudgetKind::Attached
-            }
-        };
-        // This checks a supplied interval's bound. The accepted header/Moment are
-        // cached once; this upper-bound calculation never replaces that cutoff.
-        let maximum = sugarsubstitute_application::startup::ConnectionBudget::new(kind, now)?;
-        if until > maximum.until() || now >= until {
-            return Err(LifecyclePipeError::DeadlineExpired.into());
-        }
-        Ok(until)
     }
 
     pub(super) fn register(&mut self, resources: &mut ParentResources<'_, '_>) -> Result<()> {

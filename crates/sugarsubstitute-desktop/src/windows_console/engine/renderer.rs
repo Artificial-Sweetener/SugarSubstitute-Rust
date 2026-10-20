@@ -74,6 +74,8 @@ pub(super) struct Renderer {
     document: Rc<DocumentIndex>,
     bounds: RECT,
     dark: bool,
+    #[cfg(test)]
+    pub(super) glyph_draws: usize,
     _paint_claim: MemoryClaim,
 }
 impl Renderer {
@@ -98,6 +100,8 @@ impl Renderer {
             document,
             bounds,
             dark,
+            #[cfg(test)]
+            glyph_draws: 0,
             _paint_claim: claim,
         };
         owner.glyphs = Some(Glyphs::new(frame)?);
@@ -111,8 +115,12 @@ impl Renderer {
         document: Rc<DocumentIndex>,
         bounds: RECT,
         dark: bool,
-    ) -> Result<(), DesktopError> {
+    ) -> Result<bool, DesktopError> {
         validate(frame, bounds)?;
+        let changed = self.source.shape() != frame.shape()
+            || !Rc::ptr_eq(&self.document, &document)
+            || self.bounds != bounds
+            || self.dark != dark;
         if self.source.shape() != frame.shape() {
             let replacement = Glyphs::new(frame)?;
             Dib::for_frame(&mut self.output, frame)?;
@@ -122,38 +130,17 @@ impl Renderer {
         self.document = document;
         self.bounds = bounds;
         self.dark = dark;
-        Ok(())
+        Ok(changed)
     }
     /// Publish only after native drawing and original-format/input restoration both succeeded.
     pub(super) fn paint(&mut self, engine: &Engine, dc: HDC) -> Result<(), DesktopError> {
+        if engine.state.dirty.get() {
+            self.rasterize(engine)?;
+        }
         let glyphs = self.glyphs.as_ref().ok_or_else(|| rejected("console_glyphs_retired"))?;
-        // SAFETY: The affine owner exclusively holds the real software target and draw transaction.
-        unsafe {
-            glyphs.target.BeginDraw();
-            glyphs.target.Clear(Some(&D2D1_COLOR_F { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }));
-        }
-        let drawn = super::transaction::draw(engine, &self.document, self.dark, &glyphs.target)
-            .and_then(|()| {
-                if let Some(model) = super::input::Input::scroll_model(engine)? {
-                    super::scrollbar::draw(&glyphs.target, &model)?;
-                }
-                Ok(())
-            });
-        // EndDraw must be observed even if native drawing rejected a semantic paint.
-        // SAFETY: This exactly matches the retained target's BeginDraw above.
-        let ended = unsafe { glyphs.target.EndDraw(None, None) }
-            .map_err(|cause| DesktopError::new("console_alpha_end_draw", cause));
-        match (drawn, ended) {
-            (Err(cause), Err(ending)) => {
-                tracing::error!(operation="console_alpha_end_draw",error=%ending);
-                return Err(cause);
-            }
-            (Err(cause), _) | (_, Err(cause)) => return Err(cause),
-            _ => {}
-        }
         let output = self.output.as_mut().ok_or_else(|| rejected("console_output_retired"))?;
-        // Copy directly into the separately charged DIB; there is no third readback allocation.
-        // SAFETY: Both complete allocations have the same validated shape and exact byte extent.
+        // Copy directly into the separately charged DIB; the alpha plane remains reusable.
+        // SAFETY: Both allocations have the same validated shape and exact byte extent.
         unsafe {
             glyphs.bitmap.CopyPixels(
                 std::ptr::null(),
@@ -178,6 +165,48 @@ impl Renderer {
             )
         }
         .map_err(|cause| DesktopError::new("console_alpha_present", cause))?;
+        engine.state.check()
+    }
+    /// Rebuild native glyphs only after text, selection, viewport, palette or layout changes.
+    fn rasterize(&mut self, engine: &Engine) -> Result<(), DesktopError> {
+        let glyphs = self.glyphs.as_ref().ok_or_else(|| rejected("console_glyphs_retired"))?;
+        // SAFETY: The engine retains this affine native child throughout the paint.
+        let dpi = unsafe { windows::Win32::UI::HiDpi::GetDpiForWindow(engine.state.hwnd) };
+        if dpi == 0 {
+            return Err(rejected("console_glyph_dpi"));
+        }
+        // SAFETY: The affine owner exclusively holds the real software target and draw transaction.
+        unsafe {
+            // RichEdit maps its physical layout through the native window's DPI.
+            glyphs.target.SetDpi(dpi as f32, dpi as f32);
+            glyphs.target.BeginDraw();
+            glyphs.target.Clear(Some(&D2D1_COLOR_F { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }));
+        }
+        let drawn = super::transaction::draw(engine, &self.document, self.dark, &glyphs.target);
+        #[cfg(test)]
+        {
+            self.glyph_draws += 1;
+        }
+        // SAFETY: Custom scrollbar geometry is already expressed in physical bitmap pixels.
+        unsafe { glyphs.target.SetDpi(96.0, 96.0) };
+        let drawn = drawn.and_then(|()| {
+            if let Some(model) = super::input::Input::scroll_model(engine)? {
+                super::scrollbar::draw(&glyphs.target, &model)?;
+            }
+            Ok(())
+        });
+        // EndDraw must be observed even if native drawing rejected a semantic paint.
+        // SAFETY: This exactly matches the retained target's BeginDraw above.
+        let ended = unsafe { glyphs.target.EndDraw(None, None) }
+            .map_err(|cause| DesktopError::new("console_alpha_end_draw", cause));
+        match (drawn, ended) {
+            (Err(cause), Err(ending)) => {
+                tracing::error!(operation="console_alpha_end_draw",error=%ending);
+                return Err(cause);
+            }
+            (Err(cause), _) | (_, Err(cause)) => return Err(cause),
+            _ => {}
+        }
         engine.state.dirty.set(false);
         engine.state.check()
     }

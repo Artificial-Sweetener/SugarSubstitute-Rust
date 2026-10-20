@@ -10,11 +10,13 @@
 //! they carry no live process, browser or native surface ownership.
 
 mod events;
+mod feedback;
 mod intents;
 mod main_identity;
 mod readiness;
 
 pub use events::{StartupEvent, StartupFailure, StartupFailureCode, StartupObservation};
+pub use feedback::StartupOperation;
 pub use intents::{ConnectionCleanup, SplashIntent, StartupEffect};
 pub use main_identity::MainIdentity;
 

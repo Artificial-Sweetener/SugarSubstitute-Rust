@@ -25,6 +25,7 @@ mod messages;
 mod native;
 #[path = "windows_console/render_proxy.rs"]
 mod render_proxy;
+pub(crate) use render_proxy::diagnostic_code;
 #[path = "windows_console/text.rs"]
 mod text;
 use native::{Library, Peer, Port};

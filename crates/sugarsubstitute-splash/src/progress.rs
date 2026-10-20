@@ -160,7 +160,7 @@ mod tests {
             (2.0, [(1063, 155), (1064, 155)]),
         ] {
             let mut target = Pixmap::new(1116, 1116).ok_or("Cannot allocate progress raster")?;
-            let appearance = Appearance { expanded: false, ..Appearance::demo() };
+            let appearance = Appearance { expanded: false, reveal: 0.0, ..Appearance::demo() };
             paint(
                 &mut target,
                 appearance,
@@ -209,7 +209,7 @@ mod tests {
             let mut target = Pixmap::new(1116, 1116).ok_or("Cannot allocate corner raster")?;
             paint(
                 &mut target,
-                Appearance { expanded: false, ..Appearance::demo() },
+                Appearance { expanded: false, reveal: 0.0, ..Appearance::demo() },
                 ProgressFrame { completed: 0.4, activity: None },
                 scale,
             )?;

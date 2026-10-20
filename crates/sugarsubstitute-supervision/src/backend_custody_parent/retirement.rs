@@ -51,10 +51,6 @@ impl BackendCustodyParent {
         self.consume(
             NonZeroUsize::new(32).ok_or_else(|| self.failure(reject("custody_release_bound")))?,
         )?;
-        let counter = execution.encode_lifecycle_deadline(until).map_err(|cause| {
-            self.failure(NativeObservationError::new("custody_release_counter", cause))
-        })?;
-        self.storage.check().map_err(|cause| self.failure(cause))?;
         Ok(self
             .try_access(|state| {
                 let Some(at) = state
@@ -70,11 +66,11 @@ impl BackendCustodyParent {
                 let entry = state.registrations[at]
                     .as_mut()
                     .ok_or_else(|| reject("custody_release_registration"))?;
-                if entry.released.is_some() {
-                    return Ok(true);
-                }
                 if entry.stop.is_some_and(|(original, _)| original != until) {
                     return Err(reject("custody_release_renewed"));
+                }
+                if entry.released.is_some() {
+                    return Ok(true);
                 }
                 let stop = entry.stop.get_or_insert((until, None));
                 if let Some(facts) = state.receipt {
@@ -94,6 +90,12 @@ impl BackendCustodyParent {
                     }
                 }
                 if stop.1.is_none() && state.pending.is_none() && state.receipt.is_none() {
+                    // Cached release observations remain valid after helper exit.
+                    // Only a new Stop command requires a live transport and cutoff.
+                    self.storage.check()?;
+                    let counter = execution.encode_lifecycle_deadline(until).map_err(|cause| {
+                        NativeObservationError::new("custody_release_counter", cause)
+                    })?;
                     let nonce =
                         state.nonce.checked_add(1).ok_or_else(|| reject("custody_parent_nonce"))?;
                     state.nonce = nonce;
@@ -152,6 +154,11 @@ impl BackendCustodyParent {
         )?;
         Ok(self
             .try_access(|state| {
+                if state.finish.is_none()
+                    && state.registrations.iter().flatten().any(|entry| entry.released.is_none())
+                {
+                    return Ok(false);
+                }
                 let finish = state.finish.get_or_insert_with(|| finish::Finish::new(until));
                 let progress = finish.advance(
                     self.key(),
@@ -177,3 +184,7 @@ impl BackendCustodyParent {
             .unwrap_or(false))
     }
 }
+
+#[cfg(test)]
+#[path = "release_tests.rs"]
+mod tests;

@@ -34,6 +34,11 @@ impl ParentLifecycle {
         }
         let watchdog = self.watchdog.as_mut().ok_or(ParentError::WrongPhase)?;
         let effect = watchdog.poll(now)?;
+        if matches!(effect, Some(UiWatchdogEffect::Unresponsive { .. })) {
+            watchdog.retry_unresponsive(now)?;
+            self.retire_challenge(now)?;
+            return Ok(());
+        }
         if self.challenge.is_none()
             && let Some(UiWatchdogEffect::Challenge { challenge }) = effect
         {

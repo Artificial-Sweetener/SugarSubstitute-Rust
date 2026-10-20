@@ -25,6 +25,10 @@ pub enum StartupStatus {
     /// Normal startup is still in progress.
     #[default]
     Loading,
+    /// Startup remains active after two minutes; elapsed time grants no failure authority.
+    LoadingLong,
+    /// Startup remains active after five minutes and may still be preparing dependencies.
+    LoadingExtended,
     /// The application retained an original startup failure.
     Failed,
     /// Original attempt cleanup remains unresolved.
@@ -42,8 +46,12 @@ pub struct Appearance {
     pub theme: Theme,
     /// Localized application recovery presentation; this grants no cleanup authority.
     pub status: StartupStatus,
-    /// Expose the blank output surface and lift the character.
+    /// Latest observed startup operation, localized independently of elapsed time.
+    pub operation: sugarsubstitute_contracts::startup::StartupOperation,
+    /// Requested disclosure state used by the caption affordance.
     pub expanded: bool,
+    /// Sampled console expansion in the inclusive range zero to one.
+    pub reveal: f64,
     /// Control under the pointer.
     pub hovered: Option<Control>,
     /// Currently pressed control.
@@ -56,7 +64,9 @@ impl Appearance {
         Self {
             theme: Theme::Dark,
             status: StartupStatus::Loading,
+            operation: sugarsubstitute_contracts::startup::StartupOperation::Preparing,
             expanded: true,
+            reveal: 1.0,
             hovered: None,
             pressed: None,
         }
@@ -64,21 +74,27 @@ impl Appearance {
 
     /// Return the source widget's whole mascot slot before aspect fitting.
     pub const fn mascot(self) -> Bounds {
-        if self.expanded {
-            Bounds { x: 83.0, y: 7.0, width: 387.0, height: 386.0 }
-        } else {
-            Bounds { x: 85.0, y: 86.0, width: 387.0, height: 386.0 }
+        Bounds {
+            x: 85.0 - 2.0 * self.reveal,
+            y: 86.0 - 79.0 * self.reveal,
+            width: 387.0,
+            height: 386.0,
         }
     }
 
-    /// Return the fixed console or collapsed feedback panel rectangle.
+    /// Return the console panel growing upward from the fixed lower edge.
     pub const fn feedback(self) -> Bounds {
-        Bounds {
-            x: 24.0,
-            y: if self.expanded { 356.0 } else { 486.0 },
-            width: 510.0,
-            height: if self.expanded { 178.0 } else { 48.0 },
-        }
+        Bounds { x: 24.0, y: self.bar_y(), width: 510.0, height: 534.0 - self.bar_y() }
+    }
+
+    /// Keep the single progress bar attached to the moving console edge.
+    pub const fn bar_y(self) -> f64 {
+        530.0 - 174.0 * self.reveal
+    }
+
+    /// Simplified feedback appears only after the full console finishes closing.
+    pub fn status_visible(self) -> bool {
+        !self.expanded && self.reveal == 0.0
     }
 }
 
@@ -93,7 +109,8 @@ mod tests {
         assert_eq!(appearance.mascot().y, 7.0);
         assert_eq!(appearance.feedback().height, 178.0);
         appearance.expanded = false;
+        appearance.reveal = 0.0;
         assert_eq!(appearance.mascot().y, 86.0);
-        assert_eq!(appearance.feedback().y, 486.0);
+        assert_eq!(appearance.feedback().y, 530.0);
     }
 }

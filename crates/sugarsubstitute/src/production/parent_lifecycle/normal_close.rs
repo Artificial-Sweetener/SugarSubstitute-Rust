@@ -49,6 +49,16 @@ impl ParentLifecycle {
         }
         request.exited() || self.final_close_reply_written()
     }
+    /// Preserve normal close replies until their original grace expires or their ACK is written.
+    /// Global shutdown admission does not authorize cutting this live handshake short.
+    pub(crate) fn normal_close_handshake_pending(
+        &self,
+        now: sugarsubstitute_contracts::execution::Moment,
+    ) -> bool {
+        self.normal_close_request().is_some_and(|request| {
+            now < request.budget().graceful_until && !self.normal_cleanup_ready()
+        })
+    }
     /// Borrow only this registered role's authenticated whole-content exit transaction.
     /// Historical attempt failures do not cancel an actual later close request; normal-idle
     /// eligibility remains with its stricter independent query.
@@ -96,9 +106,9 @@ impl ParentLifecycle {
     /// Return only this registered actor's accepted deliberate exit transaction.
     /// The exact process and original budget remain inert facts. Native, backend,
     /// profile and report custody require their existing independent close owners.
-    /// Failed startup, unexpected exit and original actor failures cannot request normal idle.
+    /// Historical acquisition failures remain retained; actual actor failures and unexpected exits deny normal idle.
     pub(crate) fn normal_close_request(&self) -> Option<DesktopCloseRequest> {
-        if !self.registered || self.failure.is_some() || self._attempt_failure.is_some() {
+        if !self.registered || self.failure.is_some() {
             return None;
         }
         let request = self.exit.as_ref()?.normal_close_request()?;

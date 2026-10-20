@@ -214,6 +214,10 @@ impl SplashRenderer {
 }
 
 #[cfg(test)]
+#[path = "render_disclosure_tests.rs"]
+mod disclosure_tests;
+
+#[cfg(test)]
 mod tests {
     use super::SplashRenderer;
     use crate::{AnimationFrame, Appearance, ProgressFrame};
@@ -243,7 +247,7 @@ mod tests {
     fn bootstrap_defers_status_fonts_and_other_pose_decoding()
     -> Result<(), Box<dyn std::error::Error>> {
         let mut renderer = SplashRenderer::new("en")?;
-        let appearance = Appearance { expanded: false, ..Appearance::demo() };
+        let appearance = Appearance { expanded: false, reveal: 0.0, ..Appearance::demo() };
         let feedback = ProgressFrame { completed: 0.4, activity: None };
         let bootstrap = renderer.render_bootstrap(558, 558, 1.0, appearance, feedback)?;
         assert!(renderer.text.is_none());
@@ -275,7 +279,7 @@ mod tests {
     fn recovery_status_changes_real_status_pixels_without_changing_character_or_caption()
     -> Result<(), Box<dyn std::error::Error>> {
         let mut renderer = SplashRenderer::new("en")?;
-        let mut appearance = Appearance { expanded: false, ..Appearance::demo() };
+        let mut appearance = Appearance { expanded: false, reveal: 0.0, ..Appearance::demo() };
         let feedback = ProgressFrame { completed: 0.0, activity: None };
         let loading =
             renderer.render(558, 558, 1.0, appearance, AnimationFrame::bootstrap(), feedback)?;

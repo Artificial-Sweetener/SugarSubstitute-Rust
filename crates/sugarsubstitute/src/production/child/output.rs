@@ -30,7 +30,7 @@ pub(super) struct ChildOutput {
     replacement: Option<recovery::Replacement>,
     retry_cause: Option<Box<dyn Error>>,
     pub(super) retry_expired: bool,
-    retry_admitted: bool,
+    passive_admitted: bool,
 }
 impl ChildOutput {
     pub(super) fn new() -> Self {
@@ -49,7 +49,7 @@ impl ChildOutput {
             replacement: None,
             retry_cause: None,
             retry_expired: false,
-            retry_admitted: false,
+            passive_admitted: false,
         }
     }
     pub(super) fn begin(
@@ -107,7 +107,7 @@ impl ChildOutput {
             return None;
         }
         self.pending
-            .filter(|_| !self.retry_admitted)
+            .filter(|_| !self.passive_admitted)
             .map(|p| p.1)
             .or_else(|| self.job.as_ref().and_then(|j| j.spec().deadline))
             .or(self.pull_after)
@@ -260,6 +260,7 @@ impl ProductionChild {
             .take()
             .ok_or("Applied output disappeared after metadata consumption")?;
         self.output.pending = None;
+        self.output.passive_admitted = false;
         self.output.pull_after = pull_after;
         let current = self.output.binding.ok_or("Current output binding absent")?.lease;
         if let Some(running) = &mut self.running_backend
@@ -317,7 +318,7 @@ impl ProductionChild {
                 return Ok(());
             };
             owner.prepare_pull(header, original)?;
-            self.bootstrap.channel_mut().output_pull(header)?;
+            self.bootstrap.channel_mut().output_pull(header, self.running_backend.is_some())?;
             self.output.pending = Some((header, original));
         }
         let pending = self.output.owner_mut().and_then(|owner| owner.pending_message());
@@ -340,8 +341,8 @@ impl ProductionChild {
                 .admitted_request(message.header)?;
             if retry {
                 self.running_backend.as_mut().ok_or("Mounted backend absent")?.retry_admitted()?;
-                self.output.retry_admitted = true;
             }
+            self.output.passive_admitted = retry || self.running_backend.is_some();
         }
         Ok(())
     }

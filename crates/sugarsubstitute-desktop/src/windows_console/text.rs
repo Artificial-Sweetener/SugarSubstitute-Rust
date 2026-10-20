@@ -74,7 +74,12 @@ impl TextPort for NativeText {
         }
         Ok(Observation { start: range.cpMin, end: range.cpMax, first, at_bottom })
     }
-    fn write(&mut self, document: &DocumentIndex) -> Result<(), DesktopError> {
+    fn write(
+        &mut self,
+        document: &DocumentIndex,
+        previous: Option<&DocumentIndex>,
+    ) -> Result<(), DesktopError> {
+        let retained = document.retained(previous);
         let mut copied = Vec::new();
         let count = document.units as usize + 1;
         copied
@@ -102,9 +107,23 @@ impl TextPort for NativeText {
         }
         // Native insertion owns script-specific font binding. Establish its defaults before
         // streaming, then preserve those font faces when normalizing source size and colors.
-        self.control().format(super::messages::FormatScope::Default, &default)?;
-        let mut reader = TextStream::new(document);
-        self.control().stream(&mut reader)?;
+        if retained.units == 0 {
+            self.control().format(super::messages::FormatScope::Default, &default)?;
+        }
+        if retained.units > 0 {
+            if retained.trim > 0 {
+                self.selection(0, retained.trim as i32)?;
+                self.control().stream(&mut TextStream::slice(&[]), true)?;
+            }
+            let remaining = previous.ok_or_else(formatting)?.units - retained.trim;
+            self.selection(retained.units as i32, remaining as i32)?;
+            self.control().stream(
+                &mut TextStream::slice(&document.text()[retained.units as usize..]),
+                true,
+            )?;
+        } else {
+            self.control().stream(&mut TextStream::new(document), false)?;
+        }
         if self.control().length() != document.units as isize {
             return Err(DesktopError::message(
                 "console_text_stream",
@@ -121,9 +140,9 @@ impl TextPort for NativeText {
         }
         drop(copied);
         default.Base.dwMask &= !CFM_FACE;
-        self.selection(0, document.units as i32)?;
+        self.selection(retained.units as i32, document.units as i32)?;
         self.control().format(super::messages::FormatScope::Selection, &default)?;
-        for extent in document.styles() {
+        for extent in document.styles().iter().filter(|extent| extent.end > retained.units as i32) {
             let mut format = CHARFORMAT2W::default();
             format.Base.cbSize = size_of::<CHARFORMAT2W>() as u32;
             format.Base.dwMask = CFM_COLOR | CFM_BACKCOLOR | CFM_BOLD;
@@ -137,7 +156,7 @@ impl TextPort for NativeText {
             } else {
                 format.Base.dwEffects |= CFE_AUTOBACKCOLOR;
             }
-            self.selection(extent.start, extent.end)?;
+            self.selection(extent.start.max(retained.units as i32), extent.end)?;
             self.control().format(super::messages::FormatScope::Selection, &format)?;
         }
         Ok(())
@@ -151,10 +170,7 @@ impl TextPort for NativeText {
     ) -> Result<(), DesktopError> {
         self.selection(start, end)?;
         if follow {
-            // Scrolling the caret does not give this control focus or retain a fake selection.
-            self.selection(-1, -1)?;
-            self.control().scroll_caret();
-            self.selection(start, end)?;
+            self.control().scroll_bottom()?;
         } else {
             let wanted = self.control().line_from_character(first)?;
             let current = self.control().first_line()?;

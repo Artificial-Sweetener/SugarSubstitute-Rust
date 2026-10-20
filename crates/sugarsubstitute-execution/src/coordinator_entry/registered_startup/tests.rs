@@ -138,7 +138,7 @@ fn registered_startup_new_capsule_uses_exact_body_after_old_entry_deadline_witho
         )?,
         original.until()
     );
-    rig.clock.advance(30_000_000_000);
+    rig.clock.advance(original.until().as_nanos() - rig.client.now()?.as_nanos());
     assert!(
         binding
             .validate_current_locked(

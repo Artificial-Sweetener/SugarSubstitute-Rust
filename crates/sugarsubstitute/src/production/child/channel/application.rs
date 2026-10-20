@@ -63,11 +63,15 @@ impl ChildChannel {
         let now =
             self.client.as_ref().ok_or("Original lifecycle execution client missing")?.now()?;
         let ledger = self.requests.as_ref().ok_or("Original request ledger missing")?;
-        if let Err(cause) = ledger.outbound(message.header, original, now) {
-            return Err(match ledger.expiry(message.header, cause) {
-                Ok(expiry) => Box::new(expiry),
-                Err(cause) => Box::new(cause),
-            });
+        match ledger.outbound(message.header, original, now) {
+            Ok(true) => {}
+            Ok(false) => return Ok(false),
+            Err(cause) => {
+                return Err(match ledger.expiry(message.header, cause) {
+                    Ok(expiry) => Box::new(expiry),
+                    Err(cause) => Box::new(cause),
+                });
+            }
         }
         let accepted = Self::admit_write(
             self.session.as_ref().ok_or("Lifecycle application session missing")?,
@@ -127,13 +131,19 @@ impl ChildChannel {
                     .ok_or("Original lifecycle execution client missing")?
                     .now()?;
                 let ledger = self.requests.as_mut().ok_or("Original request ledger missing")?;
-                if let Err(cause) = ledger.received_or_retiring(frame.header, now) {
+                let diagnostic = self.ui.as_ref().is_some_and(|ui| ui.matches_reply(frame.header));
+                let received = if diagnostic {
+                    ledger.received_diagnostic(frame.header)
+                } else {
+                    ledger.received_or_retiring(frame.header, now)
+                };
+                if let Err(cause) = received {
                     return Err(match ledger.expiry(frame.header, cause) {
                         Ok(expiry) => Box::new(expiry),
                         Err(cause) => Box::new(cause),
                     });
                 }
-                if self.ui.as_ref().is_some_and(|ui| ui.matches_reply(frame.header)) {
+                if diagnostic {
                     let sugarsubstitute_supervision::lifecycle_protocol::DecodedPayload::Reply(
                         outcome,
                     ) = frame.payload

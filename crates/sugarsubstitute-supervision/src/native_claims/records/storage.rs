@@ -178,12 +178,12 @@ pub(crate) fn prepare_coordinator_release(
 pub(crate) fn retire_backend(
     file: &HeldFile,
     expected: &mut Option<Record>,
-    original_released: Option<&[u8; 128]>,
+    predecessor: Option<&[u8; 128]>,
     context: &sugarsubstitute_contracts::execution::JobContext,
 ) -> Result<(), ClaimError> {
     let encoded = expected.as_ref().map(Record::encode);
     let observed = record_file::retire_publication(file, encoded.as_ref(), context)?;
-    if prepare_backend_release(observed, expected, original_released)? {
+    if prepare_backend_release(observed, expected, predecessor)? {
         publish(
             file,
             expected.as_ref().ok_or_else(|| ClaimError::invalid("backend_release_generation"))?,
@@ -200,7 +200,7 @@ pub(crate) fn retire_backend(
 pub(crate) fn prepare_backend_release(
     observed: record_file::PublicationRetirement<128>,
     expected: &mut Option<Record>,
-    original_released: Option<&[u8; 128]>,
+    predecessor: Option<&[u8; 128]>,
 ) -> Result<bool, ClaimError> {
     if expected.is_none() {
         return match observed {
@@ -210,6 +210,7 @@ pub(crate) fn prepare_backend_release(
             }
         };
     }
+    let preserved = matches!(observed, record_file::PublicationRetirement::Preserved(_));
     let bytes = match observed {
         record_file::PublicationRetirement::Preserved(
             record_file::RecordRead::Missing | record_file::RecordRead::Empty,
@@ -218,8 +219,8 @@ pub(crate) fn prepare_backend_release(
         | record_file::PublicationRetirement::Activated(bytes) => bytes,
     };
     let actual = Record::decode(&bytes)?;
-    if original_released == Some(&bytes)
-        && actual.state == RecordState::Released
+    if predecessor == Some(&bytes)
+        && (actual.state == RecordState::Released || (preserved && actual.version == 2))
         && actual.resource != 0
     {
         return Ok(false);

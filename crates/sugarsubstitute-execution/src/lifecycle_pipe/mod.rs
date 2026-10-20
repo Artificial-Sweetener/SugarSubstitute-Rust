@@ -115,7 +115,8 @@ pub(crate) trait PipeLease: Send {
 }
 pub(crate) struct Command {
     pub(crate) operation: LifecyclePipeOperationId,
-    pub(crate) deadline: Moment,
+    /// Only authenticated custody heartbeats use their independent active-time watchdog.
+    pub(crate) deadline: Option<Moment>,
 }
 /// Preserve finite command facts or an authenticated passive receive with no idle timer.
 #[derive(Clone, Copy)]

@@ -219,6 +219,18 @@ impl Recovery {
         self.retry = None;
         Ok(())
     }
+    /// Authenticate release of an already invalidated interest without granting live authority.
+    /// The caller must also check the authoritative backend outage before acknowledging it.
+    pub(super) fn invalidated_release(
+        &self,
+        reference: sugarsubstitute_supervision::lifecycle_protocol::LeaseReference,
+    ) -> Result<Option<LeaseKey>> {
+        let Some(outage) = self.outage else { return Ok(None) };
+        if super::replies::reference(outage.failed) != reference {
+            return Err(ParentError::ForeignPeer.into());
+        }
+        Ok(Some(outage.failed))
+    }
     /// Preserve only a current healthy running lease as explicit Release/Reload authority.
     pub(super) fn live_lease(&self) -> Option<LeaseKey> {
         self.outage.is_none().then(|| self.running.map(|value| value.lease)).flatten()

@@ -3,7 +3,7 @@
 
 //! Report fixed admission limits and actual shutdown observations.
 
-use sugarsubstitute_contracts::execution::{JobId, ScopeId};
+use sugarsubstitute_contracts::execution::{JobId, JobPhase, JobSpec, ScopeId};
 
 /// Report original native output accounting retained by actual symbol and export owners.
 /// Counters describe custody and never establish successful OS close or quiescence.
@@ -134,6 +134,8 @@ pub enum EntryEnvironmentExtent {
 /// Observe shutdown while retaining work, untransferred results and cancellation callbacks.
 #[derive(Debug)]
 pub struct ShutdownProgress {
+    /// Original specifications and current custody for jobs still preventing shutdown.
+    pub unresolved_jobs: Vec<UnresolvedJob>,
     /// Genuine process-lifetime capture, separate from unresolved temporary native work.
     pub process_capture_custody: Vec<ProcessCaptureCustody>,
     /// Original held environment allocations; terminal ACK cannot erase these observations.
@@ -156,4 +158,19 @@ pub struct ShutdownProgress {
     pub running: usize,
     /// Actual retained worker observations.
     pub workers: WorkerStatus,
+}
+
+/// Passive diagnostics for an admitted job; these facts grant no execution authority.
+#[derive(Debug)]
+pub struct UnresolvedJob {
+    /// Original admitting scope.
+    pub scope: ScopeId,
+    /// Original operation, class, reservation and deadline.
+    pub spec: JobSpec,
+    /// Actual execution or terminal phase.
+    pub phase: JobPhase,
+    /// Whether the typed completion has been transferred or disposed.
+    pub acknowledged: bool,
+    /// Whether native ownership still requires checked retirement.
+    pub native_held: bool,
 }

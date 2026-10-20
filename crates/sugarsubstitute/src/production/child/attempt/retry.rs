@@ -12,9 +12,8 @@ impl ProductionChild {
     pub(in crate::production) fn ensure_retry_ready(&self, identity: MainIdentity) -> Result<()> {
         if identity.run != self.run
             || identity.launch.get() <= self.identity.launch.get()
-            || self.attempt.as_ref().is_none_or(|a| {
-                !a.complete() || a.failures.iter().any(Option::is_some) || a.omitted_failures != 0
-            })
+            || identity.navigation.get() <= self.identity.navigation.get()
+            || self.attempt.as_ref().is_none_or(|a| !a.settled_without_failure())
             || self.main.pending()
             || self.output.pending()
             || self.observation.is_some()

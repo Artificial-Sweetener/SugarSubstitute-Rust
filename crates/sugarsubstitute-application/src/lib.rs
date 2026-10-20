@@ -3,6 +3,7 @@
 //! Own application lifecycle decisions independently of native and runtime adapters.
 
 pub mod incident;
+pub mod instance_conflict;
 pub mod presentation;
 pub mod readiness;
 pub mod recovery_supervisor;

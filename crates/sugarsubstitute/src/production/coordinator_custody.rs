@@ -38,6 +38,10 @@ pub(crate) struct CoordinatorCustody {
     observed_exit: Option<u32>,
 }
 impl CoordinatorCustody {
+    /// An observed native helper exit permits independent retirement of its dead family.
+    pub(crate) fn exited(&self) -> bool {
+        self.observed_exit.is_some()
+    }
     /// Borrow the genuine established parent for early profile Job preparation.
     pub(crate) fn established_parent(&self) -> Option<BackendCustodyParent> {
         self.ready.then(|| self.parent.clone()).flatten()
@@ -109,6 +113,7 @@ impl CoordinatorCustody {
             (Ok(()), Ok(())) => {}
         }
         if self.ready {
+            parent.maintain_liveness(resources.client)?;
             parent
                 .validate_current_admission()
                 .map_err(|cause| diagnostics::failed("ready_current_admission", cause))?;
@@ -211,6 +216,7 @@ impl CoordinatorCustody {
                     &parent,
                 )?;
                 self.ready = true;
+                parent.maintain_liveness(resources.client)?;
                 tracing::info!(
                     operation = "backend_custody_established",
                     process_id = ticket.process().id.get(),
@@ -273,7 +279,13 @@ impl CoordinatorCustody {
     }
     /// Enumerate the unchanged original witness grace and total boundaries.
     pub(crate) fn deadlines(&self) -> impl Iterator<Item = Moment> + '_ {
-        self.retirement.deadlines().into_iter().flatten()
+        self.retirement.deadlines().into_iter().flatten().chain(
+            self.retirement
+                .original
+                .is_none()
+                .then(|| self.parent.as_ref().and_then(BackendCustodyParent::heartbeat_deadline))
+                .flatten(),
+        )
     }
 }
 /// Preserve class quotas and allocate IDs in actual admission order.

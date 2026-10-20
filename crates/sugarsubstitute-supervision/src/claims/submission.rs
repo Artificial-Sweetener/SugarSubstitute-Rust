@@ -170,7 +170,7 @@ impl WindowsResourceClaims {
             file: None,
             custody_probe: None,
             record: None,
-            original_released: None,
+            predecessor: None,
             claimed: false,
             released: false,
             custodian: self.custodian.clone(),

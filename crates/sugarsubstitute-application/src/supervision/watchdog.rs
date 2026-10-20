@@ -70,7 +70,7 @@ pub struct UiWatchdogSnapshot {
     pub suspicion_at: Option<Moment>,
     /// Absolute five-second cadence boundary when active without a pending challenge.
     pub next_challenge_at: Option<Moment>,
-    /// The one diagnostic effect has been issued; it is not proof of a hung process.
+    /// A probe timed out and no subsequent UI progress has cleared suspicion.
     pub suspicious: bool,
 }
 /// Monitor one exact desktop run through actual native UI-loop challenge evidence.
@@ -86,6 +86,7 @@ pub struct UiWatchdog {
     next_challenge_at: Option<Moment>,
     last_identity: u64,
     last_now: Moment,
+    suspicious: bool,
 }
 impl UiWatchdog {
     /// Start inactive using the composing owner's injected monotonic epoch.
@@ -97,6 +98,7 @@ impl UiWatchdog {
             next_challenge_at: None,
             last_identity: 0,
             last_now: now,
+            suspicious: false,
         }
     }
     /// Apply trusted native visibility/inactivity or acknowledged sleep/modal changes.
@@ -122,6 +124,7 @@ impl UiWatchdog {
                 None
             };
             self.activity = activity;
+            self.suspicious = false;
             self.pending = None;
             self.next_challenge_at = next;
         }
@@ -191,6 +194,7 @@ impl UiWatchdog {
                     .checked_add(UI_CHALLENGE_CADENCE)
                     .map_err(|_| LifecycleRejection::InvalidClock)?;
                 self.pending = None;
+                self.suspicious = false;
                 self.next_challenge_at = Some(next);
             }
         }
@@ -199,8 +203,8 @@ impl UiWatchdog {
     }
     /// Emit one challenge at cadence, or one diagnostic at actual-dispatch deadline.
     ///
-    /// Pending queued effects never cause suspicion or additional challenges. Expiry
-    /// retains ownership and never stops/restarts a process or replays inference.
+    /// Pending queued effects never cause suspicion or additional challenges. A timed-out
+    /// probe can be retired with `retry_unresponsive`; no process or inference is restarted.
     /// Regression and identity exhaustion reject without changing policy state.
     pub fn poll(&mut self, now: Moment) -> Result<Option<UiWatchdogEffect>, LifecycleRejection> {
         self.validate_clock(now)?;
@@ -209,6 +213,7 @@ impl UiWatchdog {
         } else if let Some(pending) = self.pending.as_mut() {
             if !pending.diagnostic_emitted && pending.suspicion_at.is_some_and(|at| now >= at) {
                 pending.diagnostic_emitted = true;
+                self.suspicious = true;
                 Some(UiWatchdogEffect::Unresponsive { challenge: pending.key })
             } else {
                 None
@@ -250,8 +255,24 @@ impl UiWatchdog {
             queued_at: self.pending.map(|p| p.queued_at),
             suspicion_at: self.pending.and_then(|p| p.suspicion_at),
             next_challenge_at: self.next_challenge_at,
-            suspicious: self.pending.is_some_and(|p| p.diagnostic_emitted),
+            suspicious: self.suspicious,
         }
+    }
+    /// Retire a timed-out diagnostic probe and schedule another bounded probe.
+    /// Suspicion remains latched until actual UI progress or an activity change.
+    /// # Errors
+    /// Rejects clock regression or retirement before the diagnostic was emitted.
+    pub fn retry_unresponsive(&mut self, now: Moment) -> Result<(), LifecycleRejection> {
+        self.validate_clock(now)?;
+        if self.pending.is_none_or(|pending| !pending.diagnostic_emitted) {
+            return Err(LifecycleRejection::WrongPhase);
+        }
+        let next =
+            now.checked_add(UI_CHALLENGE_CADENCE).map_err(|_| LifecycleRejection::InvalidClock)?;
+        self.pending = None;
+        self.next_challenge_at = Some(next);
+        self.last_now = now;
+        Ok(())
     }
     fn validate_run(&self, run: RunKey) -> Result<(), LifecycleRejection> {
         if run.owner != self.run.owner {

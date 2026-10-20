@@ -98,6 +98,7 @@ impl SplashDemo {
     /// Change requested disclosure state before invalidating preparation.
     fn toggle_output(&mut self) {
         self.appearance.expanded = !self.appearance.expanded;
+        self.appearance.reveal = f64::from(self.appearance.expanded);
     }
 
     /// Publish the control snapshot with its matching current-state pixels.

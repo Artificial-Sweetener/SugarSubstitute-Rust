@@ -39,7 +39,7 @@ fn passive_rejected_kind_has_one_slot_explicit_excess_disposal_and_observed_clos
     let failed = || -> Result<DesktopStartupObservation, Box<dyn Error>> {
         Ok(DesktopStartupObservation::MainPreviewFailed {
             identity: main,
-            cause: crate::production::qualification::error_fixture::native_failure()?,
+            cause: crate::desktop_error_fixture::native_failure()?,
         })
     };
     let mut first = Some(failed()?);

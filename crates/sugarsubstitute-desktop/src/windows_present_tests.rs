@@ -226,6 +226,7 @@ unsafe extern "system" fn procedure(
 fn hidden_complete_frame_reuses_same_native_buffer_across_checked_show_hide_exposure()
 -> Result<(), Box<dyn Error>> {
     let mut fixture = Fixture::new()?;
+    disable_splash_transitions(fixture.window)?;
     let (frame, released) = frame()?;
     let mut retained = None;
     let dib = prepare_pixels(&mut retained, &frame, NativeMaterial::Mica, 32)?;
@@ -260,5 +261,33 @@ fn hidden_complete_frame_reuses_same_native_buffer_across_checked_show_hide_expo
     fixture.close()?;
     drop((retained, frame, fixture));
     assert_eq!(released.load(Ordering::SeqCst), 1);
+    Ok(())
+}
+
+/// Actual DWM accepts the splash policy before showing either process's native surface.
+#[test]
+fn splash_transitions_are_disabled_before_offscreen_show_and_rejected_for_invalid_windows()
+-> Result<(), Box<dyn Error>> {
+    use windows::Win32::UI::WindowsAndMessaging::GetWindowRect;
+    for _ in 0..2 {
+        let mut fixture = Fixture::new()?;
+        assert!(!fixture.visible());
+        disable_splash_transitions(fixture.window)?;
+        let mut original = RECT::default();
+        // SAFETY: This fixture owns the hidden window and writable rectangle storage.
+        unsafe { GetWindowRect(fixture.window, &mut original) }?;
+        for visible in [true, false, true] {
+            fixture.show(visible);
+            let mut actual = RECT::default();
+            // SAFETY: Only the fixture's retained inactive-desktop window is queried.
+            unsafe { GetWindowRect(fixture.window, &mut actual) }?;
+            assert_eq!(actual, original);
+        }
+        fixture.close()?;
+    }
+    let failure =
+        disable_splash_transitions(HWND::default()).err().ok_or("Invalid HWND accepted")?;
+    assert!(failure.to_string().starts_with("disable_splash_transitions:"));
+    assert!(failure.source().is_some());
     Ok(())
 }

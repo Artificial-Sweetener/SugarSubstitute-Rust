@@ -270,7 +270,7 @@ fn publish(
         |old| match old {
             crate::protected_storage::record_file::RecordRead::Missing if file.created => Ok(()),
             crate::protected_storage::record_file::RecordRead::Present(bytes)
-                if state.original_released.as_ref() == Some(bytes) =>
+                if state.predecessor.as_ref() == Some(bytes) =>
             {
                 Ok(())
             }

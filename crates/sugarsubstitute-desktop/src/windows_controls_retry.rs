@@ -90,6 +90,9 @@ impl Controls {
         }
         peer.value.snapshot.label = presentation.label;
         peer.value.snapshot.visible = presentation.visible;
+        if presentation.visible {
+            self.raise_main()?;
+        }
         Ok(())
     }
 }

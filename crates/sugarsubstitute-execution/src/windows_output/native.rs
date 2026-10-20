@@ -23,6 +23,7 @@ mod prepare;
 pub(super) struct Lease {
     read: [Handle; 2],
     child: [Handle; 3],
+    input_writer: Handle,
     operations: [Option<operation::Operation>; 2],
 }
 pub(super) struct Handle(usize);
@@ -63,6 +64,7 @@ impl Lease {
         Self {
             read: [Handle(0), Handle(0)],
             child: [Handle(0), Handle(0), Handle(0)],
+            input_writer: Handle(0),
             operations: [None, None],
         }
     }
@@ -91,6 +93,9 @@ impl OutputLease for Lease {
         }
         Ok(())
     }
+    fn close_input(&mut self) -> Result<(), NativeObservationError> {
+        self.input_writer.close("output_close_shutdown_input")
+    }
     fn read(
         &mut self,
         stream: OutputStream,
@@ -114,6 +119,7 @@ impl OutputLease for Lease {
         self.operations[stream.index()].as_mut().and_then(|op| op.take_completed())
     }
     fn retire(&mut self, pinned: bool) -> Result<bool, NativeObservationError> {
+        self.close_input()?;
         let mut settled = true;
         for index in 0..2 {
             if let Some(operation) = &mut self.operations[index] {

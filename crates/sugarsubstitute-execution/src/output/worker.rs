@@ -123,6 +123,13 @@ impl Active {
             }
         }
         if self.outcome.is_none()
+            && lock(&self.work.shared.state).input_close_requested
+            && let Some(lease) = &mut self.lease
+            && let Err(error) = lease.close_input()
+        {
+            self.fail(error);
+        }
+        if self.outcome.is_none()
             && let Err(error) = self.read_turn(core, now, clock_available)
         {
             self.fail(error);

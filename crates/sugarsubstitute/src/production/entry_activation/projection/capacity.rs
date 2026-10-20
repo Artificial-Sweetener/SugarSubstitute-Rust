@@ -57,9 +57,18 @@ pub(super) fn preflight(
             argument_bytes = add(argument_bytes, count(argument.len())?)?;
         }
         bytes = add(bytes, mul(argument_bytes, 3)?)?;
-        bytes = add(bytes, vector(add(count(arguments.len())?, 7)?, size_of::<String>() as u64)?)?;
+        bytes = add(
+            bytes,
+            vector(
+                add(
+                    count(arguments.len())?,
+                    sugarsubstitute_comfy::launch::MANAGED_PREFIX_ARGUMENTS as u64,
+                )?,
+                size_of::<String>() as u64,
+            )?,
+        )?;
         bytes = add(bytes, vector(count(arguments.len())?, size_of::<String>() as u64)?)?;
-        bytes = add(bytes, 128)?; // Seven fixed Comfy options/port, excluding script.
+        bytes = add(bytes, 128 + sugarsubstitute_comfy::launch::MANAGED_BOOTSTRAP_BYTES as u64)?;
     }
     let units = count(view.environment().unit_len())?;
     // Raw snapshot, desktop/backend output and managed PATH scratch/reallocation.

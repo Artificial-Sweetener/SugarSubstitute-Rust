@@ -149,9 +149,11 @@ fn delivery_after_original_effective_deadline_rejects_actual_success_without_new
         ]
     );
     harness.clock.0.store(500, std::sync::atomic::Ordering::Release);
+    let cause = harness.owner.take_readiness().err().ok_or("Expected late delivery")?;
+    assert_eq!(cause.stage(), "attempt_delivery_expired");
     assert_eq!(
-        harness.owner.take_readiness().err().ok_or("Expected late delivery")?.stage(),
-        "attempt_delivery_or_retirement"
+        cause.retry_disposition(),
+        super::super::ProbeRetryDisposition::ProbeIntervalElapsed
     );
     assert_eq!(harness.attempt.snapshot().reserved_bytes, READINESS_TRANSPORT_BYTES);
     assert!(lock(&harness.boundary.phases).iter().all(|(_, deadline)| *deadline == 500));

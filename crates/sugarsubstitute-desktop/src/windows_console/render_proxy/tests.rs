@@ -2,6 +2,25 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise exact semantic identity and native COM interception without a window or device DC.
 use super::*;
+
+#[test]
+fn semantic_failure_projection_preserves_closed_native_details() {
+    use crate::console_failure_diagnostic::ConsoleFailureCode as Code;
+    for (detail, expected) in [
+        (Detail::Color { bits: [0; 4], token: Some(0x123456) }, Code::UnknownPaintToken(0x123456)),
+        (Detail::Color { bits: [0; 4], token: None }, Code::InvalidPaintColor),
+        (Detail::GlyphFormat { glyph: 1, formats: 128 }, Code::UnsupportedGlyphFormat(128)),
+        (Detail::Unsupported, Code::UnsupportedPaint),
+        (Detail::Native, Code::Hresult(E_INVALIDARG.0)),
+    ] {
+        let cause = NativeFailure {
+            cause: E_INVALIDARG.into(),
+            context: Context { method: "DrawGlyphRun", detail, glyph: None },
+        };
+        assert_eq!(diagnostic_code(&cause), Some(expected));
+    }
+    assert_eq!(diagnostic_code(&std::io::Error::other("Unrelated error")), None);
+}
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
 
 fn encoded(value: u32) -> D2D1_COLOR_F {

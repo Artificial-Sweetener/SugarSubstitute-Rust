@@ -108,6 +108,10 @@ enum Boundary {
     CursorMonitor,
     MonitorWorkArea,
     CenterWindow,
+    NativeFocus,
+    NativeFocusRelease,
+    ControlUpdate,
+    FramePresented,
     Other,
 }
 /// Classify a directly retained IO cause without invoking its formatter or source callback.
@@ -144,6 +148,12 @@ fn classify(operation: &'static str, cause: &(dyn Error + 'static)) -> Diagnosti
         "query_cursor_monitor" => Boundary::CursorMonitor,
         "query_monitor_work_area" => Boundary::MonitorWorkArea,
         "center_window" => Boundary::CenterWindow,
+        "draw_native_focus" => Boundary::NativeFocus,
+        "release_native_focus_dc" => Boundary::NativeFocusRelease,
+        "update_accessible_controls"
+        | "validate_accessible_controls"
+        | "validate_accessible_bounds" => Boundary::ControlUpdate,
+        "frame_presented" => Boundary::FramePresented,
         _ => Boundary::Other,
     };
     let kind = match cause.downcast_ref::<std::io::Error>().map(std::io::Error::kind) {

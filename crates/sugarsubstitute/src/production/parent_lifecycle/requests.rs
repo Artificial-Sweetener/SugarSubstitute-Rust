@@ -77,7 +77,9 @@ impl ParentLifecycle {
             self.requests.get_mut(index)?.sent = false;
             return Ok(true);
         }
-        if let DecodedPayload::OutputPull { lease, acknowledged_delivery } = decoded.payload {
+        if let DecodedPayload::OutputPull { lease, acknowledged_delivery } = decoded.payload
+            && self.lease.is_none()
+        {
             let supplied = resources.execution.client.decode_counter_deadline(
                 sugarsubstitute_contracts::execution::CounterDeadline::new(
                     header.deadline_qpc,
@@ -95,24 +97,25 @@ impl ParentLifecycle {
                 return Ok(true);
             }
         }
-        let mut until = if matches!(decoded.payload, DecodedPayload::UiResponse(_)) {
+        let mut until = if matches!(decoded.payload, DecodedPayload::OutputPull { .. }) {
+            self.output_deadline(header, resources)?
+        } else if matches!(decoded.payload, DecodedPayload::UiResponse(_)) {
             resources.execution.client.decode_counter_deadline(
                 sugarsubstitute_contracts::execution::CounterDeadline::new(
                     header.deadline_qpc,
                     self.original.frequency(),
                 )?,
             )?
-        } else {
-            self.deadline(header, resources)?
-        };
-        if matches!(
+        } else if matches!(
             decoded.payload,
             DecodedPayload::RequestedProfileFolder(_)
                 | DecodedPayload::EnvironmentPrepared(_)
                 | DecodedPayload::ControllerPrepared { .. }
         ) {
-            until = until.min(self.main.snapshot().frontend_until.ok_or(ParentError::WrongPhase)?);
-        }
+            self.frontend_deadline(header, resources)?
+        } else {
+            self.deadline(header, resources)?
+        };
         until = self.cleanup_control_deadline(&decoded.payload, until);
         if matches!(decoded.payload, DecodedPayload::OutputPull { .. }) && self.lease.is_none() {
             until = self.acquisition.as_ref().ok_or(ParentError::WrongPhase)?.output_until(until);
@@ -135,7 +138,6 @@ impl ParentLifecycle {
         let binding = self.binding()?;
         let request = header.request.ok_or(ParentError::WrongPhase)?;
         match decoded.payload {
-            DecodedPayload::SplashPrepared(identity) => self.prepare_splash(index, identity)?,
             DecodedPayload::Acquire { identity, target } => {
                 if self.cleanup.is_some()
                     || self.acquisition.is_some()
@@ -153,7 +155,7 @@ impl ParentLifecycle {
                 self.acquisition =
                     Some(super::acquisition::Acquisition::new(binding, header, identity, until)?);
                 self.acquisition.as_mut().ok_or(ParentError::WrongPhase)?.wait_for_readiness();
-                self.requests.wait_for_readiness(index)?;
+                self.requests.defer_reply(index)?;
                 self.hold_backend_command(
                     index,
                     super::history::HeldBackendCommand::Acquire(identity),
@@ -172,7 +174,7 @@ impl ParentLifecycle {
                 if !matches!(resources.target, BackendTarget::Managed(_)) {
                     return Err(ParentError::WrongPhase.into());
                 }
-                self.requests.wait_for_readiness(index)?;
+                self.requests.defer_reply(index)?;
                 self.hold_backend_command(
                     index,
                     super::history::HeldBackendCommand::Retry { identity, failed },
@@ -183,6 +185,13 @@ impl ParentLifecycle {
                 self.begin_attempt_cleanup(index, identity, acquisition, until, resources)?;
             }
             DecodedPayload::Release(reference) => {
+                if let Some(failed) = self.recovery.invalidated_release(reference)? {
+                    resources.backend.invalidated_lease(binding, failed)?;
+                    // Invalidation already removed the live lease. Keep its cause and
+                    // retry lineage until the authenticated run disconnects.
+                    self.requests.get_mut(index)?.reply = Some(Reply::Released);
+                    return Ok(true);
+                }
                 let lease = self.lease(reference)?;
                 self.hold_backend_command(
                     index,

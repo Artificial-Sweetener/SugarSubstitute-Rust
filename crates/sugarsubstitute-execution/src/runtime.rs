@@ -32,7 +32,7 @@ static NEXT_OWNER: AtomicU64 = AtomicU64::new(1);
 mod policy;
 pub use policy::{
     EntryEnvironmentCustody, EntryEnvironmentExtent, ExecutionLimits, NativeOutputCustody,
-    ProcessCaptureCustody, ShutdownProgress, WorkerStatus,
+    ProcessCaptureCustody, ShutdownProgress, UnresolvedJob, WorkerStatus,
 };
 
 /// Own runtime and CPU joins through teardown after the native event loop exits.
@@ -197,6 +197,17 @@ impl ExecutionOwner {
             .map(|(id, _)| *id)
             .collect();
         unresolved_job_ids.sort_unstable();
+        let unresolved_jobs = unresolved_job_ids
+            .iter()
+            .filter_map(|id| state.jobs.get(id))
+            .map(|record| UnresolvedJob {
+                scope: record.scope_id,
+                spec: record.spec,
+                phase: record.phase,
+                acknowledged: record.acknowledged,
+                native_held: record.held_native(),
+            })
+            .collect();
         let queued = state.jobs.values().filter(|record| record.phase == JobPhase::Queued).count();
         let running =
             state.jobs.values().filter(|record| record.phase == JobPhase::Running).count();
@@ -258,6 +269,7 @@ impl ExecutionOwner {
             && workers.cpu_finished
             && workers.native_finished;
         Ok(ShutdownProgress {
+            unresolved_jobs,
             process_capture_custody,
             native_output_custody,
             entry_environment_custody,

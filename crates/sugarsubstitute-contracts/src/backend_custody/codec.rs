@@ -8,7 +8,7 @@ use crate::lifecycle::{
 use std::{error::Error, fmt};
 
 /// Complete schema-one custody frame size, in bytes; no variable payload allocation.
-/// Profile operations extend the tag inventory without changing existing bytes.
+/// Profile and heartbeat operations extend the tag inventory without changing existing bytes.
 /// Older peers reject unknown tags; exact selected bundle/source pairing is required.
 pub const BACKEND_CUSTODY_FRAME_BYTES: usize = 384;
 
@@ -55,6 +55,7 @@ impl BackendCustodyFrame {
         put(&mut bytes, 64, self.key.session().get());
         put(&mut bytes, 72, self.nonce);
         match self.command {
+            BackendCustodyCommand::Heartbeat => bytes[10] = 21,
             BackendCustodyCommand::ProfilePublished { profile } => {
                 bytes[10] = 18;
                 profile_put(&mut bytes, profile);
@@ -146,6 +147,7 @@ impl BackendCustodyFrame {
             }
             BackendCustodyCommand::Receipt(receipt) => {
                 bytes[10] = match receipt {
+                    BackendCustodyReceipt::Heartbeat => 22,
                     BackendCustodyReceipt::ProfilePublished(_) => 19,
                     BackendCustodyReceipt::ProfilePrepared(_) => 15,
                     BackendCustodyReceipt::ProfileRoot(_) => 16,
@@ -165,7 +167,9 @@ impl BackendCustodyFrame {
                     | BackendCustodyReceipt::ProfileReleased(profile) => {
                         profile_put(&mut bytes, profile)
                     }
-                    BackendCustodyReceipt::Established | BackendCustodyReceipt::Finished => {}
+                    BackendCustodyReceipt::Heartbeat
+                    | BackendCustodyReceipt::Established
+                    | BackendCustodyReceipt::Finished => {}
                     BackendCustodyReceipt::Prepared(resource)
                     | BackendCustodyReceipt::Root(resource)
                     | BackendCustodyReceipt::Released(resource) => {
@@ -220,6 +224,8 @@ impl BackendCustodyFrame {
             .map_err(|_| BackendCustodyWireError::Identity)
         };
         let command = match bytes[10] {
+            21 => BackendCustodyCommand::Heartbeat,
+            22 => BackendCustodyCommand::Receipt(BackendCustodyReceipt::Heartbeat),
             18 => BackendCustodyCommand::ProfilePublished { profile: profile()? },
             19 => {
                 BackendCustodyCommand::Receipt(BackendCustodyReceipt::ProfilePublished(profile()?))
@@ -348,6 +354,7 @@ impl BackendCustodyFrame {
         };
         valid &= profile.is_none_or(|profile| profile.run().owner == self.key.owner());
         let resource = match self.command {
+            BackendCustodyCommand::Heartbeat => None,
             BackendCustodyCommand::ProfilePublished { .. }
             | BackendCustodyCommand::Receipt(BackendCustodyReceipt::ProfilePublished(_)) => None,
             BackendCustodyCommand::ProfilePrepare { .. }
@@ -395,7 +402,9 @@ impl BackendCustodyFrame {
                 None
             }
             BackendCustodyCommand::Receipt(
-                BackendCustodyReceipt::Established | BackendCustodyReceipt::Finished,
+                BackendCustodyReceipt::Heartbeat
+                | BackendCustodyReceipt::Established
+                | BackendCustodyReceipt::Finished,
             ) => None,
             BackendCustodyCommand::Receipt(
                 BackendCustodyReceipt::Prepared(resource)
@@ -410,6 +419,7 @@ impl BackendCustodyFrame {
 impl fmt::Debug for BackendCustodyCommand {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
+            Self::Heartbeat => "Heartbeat",
             Self::ProfilePublished { .. } => "ProfilePublished",
             Self::ProfilePrepare { .. } => "ProfilePrepare { owned Job and directory }",
             Self::ProfileRoot { .. } => "ProfileRoot { owned duplicate }",

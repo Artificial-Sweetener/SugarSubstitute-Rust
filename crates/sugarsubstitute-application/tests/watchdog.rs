@@ -8,6 +8,32 @@ type TestResult = Result<(), Box<dyn Error>>;
 fn at(seconds: u64) -> Moment {
     Moment::from_nanos(seconds * 1_000_000_000)
 }
+
+#[test]
+fn repeated_probes_preserve_suspicion_until_actual_recovery() -> TestResult {
+    let run = run()?;
+    let (mut watchdog, first) = queued(run)?;
+    dispatch(&mut watchdog, first, 5, 5)?;
+    assert!(watchdog.retry_unresponsive(at(6)).is_err());
+    assert_eq!(watchdog.poll(at(35))?, Some(UiWatchdogEffect::Unresponsive { challenge: first }));
+    watchdog.retry_unresponsive(at(35))?;
+    assert!(watchdog.snapshot().suspicious);
+    assert_eq!(watchdog.poll(at(39))?, None);
+    let Some(UiWatchdogEffect::Challenge { challenge: second }) = watchdog.poll(at(40))? else {
+        return Err("Fresh recovery probe missing".into());
+    };
+    assert_ne!(first, second);
+    assert!(watchdog.snapshot().suspicious);
+    dispatch(&mut watchdog, second, 40, 40)?;
+    assert!(
+        watchdog
+            .observe(run, UiWatchdogObservation::Responded { challenge: first }, at(41))
+            .is_err()
+    );
+    watchdog.observe(run, UiWatchdogObservation::Responded { challenge: second }, at(41))?;
+    assert!(!watchdog.snapshot().suspicious);
+    Ok(())
+}
 fn run() -> Result<RunKey, IdentityError> {
     Ok(RunKey {
         owner: CoordinatorKey {

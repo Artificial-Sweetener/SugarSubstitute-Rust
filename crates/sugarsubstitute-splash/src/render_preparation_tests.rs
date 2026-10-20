@@ -38,7 +38,7 @@ fn request(scale: f64, expanded: bool) -> TestResult<SplashRenderRequest> {
             state_generation: Generation::new(1)?,
             sequence: Generation::new(1)?,
         },
-        appearance: Appearance { expanded, ..Appearance::demo() },
+        appearance: Appearance { expanded, reveal: f64::from(expanded), ..Appearance::demo() },
         character: AnimationFrame::bootstrap(),
         feedback: ProgressFrame { completed: 0.4, activity: Some(0.5) },
         bootstrap: false,

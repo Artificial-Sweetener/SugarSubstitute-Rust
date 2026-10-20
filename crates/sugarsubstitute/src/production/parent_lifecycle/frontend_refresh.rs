@@ -288,7 +288,7 @@ impl ParentLifecycle {
         let spec = FrontendRefresh::spec(resources.execution, FRONTEND_SOURCE_BYTES, until)?;
         let mut source = source;
         source.submit_inspection(resources.execution.client, resources.finite, spec)?;
-        self.requests.wait_for_readiness(index)?;
+        self.requests.defer_reply(index)?;
         self.frontend_refresh = Some(FrontendRefresh {
             index,
             identity,

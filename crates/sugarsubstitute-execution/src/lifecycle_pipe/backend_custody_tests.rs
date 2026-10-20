@@ -13,6 +13,8 @@ mod captured_constructor;
 #[cfg(windows)]
 #[path = "captured_purpose_tests.rs"]
 mod captured_purpose;
+#[path = "backend_custody/heartbeat_tests.rs"]
+mod heartbeat;
 #[path = "process_creation_tests.rs"]
 mod process_creation;
 

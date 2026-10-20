@@ -8,6 +8,20 @@ use crate::{ExecutionClient, counter_deadline, windows_counter};
 use sugarsubstitute_contracts::execution::{CounterDeadline, Moment};
 
 impl ExecutionClient {
+    /// Decode a diagnostic cutoff, returning `None` when it already expired.
+    /// This grants no native admission or permission to renew an operation.
+    /// # Errors
+    /// Preserves native clock, frequency and arithmetic errors.
+    pub fn decode_live_counter_deadline(
+        &self,
+        original: CounterDeadline,
+    ) -> Result<Option<Moment>, NativeObservationError> {
+        counter_deadline::decode_if_live(
+            self.counter_moment()?,
+            windows_counter::sample()?,
+            original,
+        )
+    }
     /// Encode an original deadline from this executor's epoch into absolute QPC ticks.
     ///
     /// The actual native counter is sampled before this owner's central Moment.

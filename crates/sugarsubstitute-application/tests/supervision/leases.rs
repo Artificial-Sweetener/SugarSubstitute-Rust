@@ -239,9 +239,9 @@ fn managed_provisional_clients_keep_other_wait_after_elapsed_preparation_and_fai
     assert_eq!(before.outstanding_requests, 2);
     // This public policy receives trusted process facts; it creates no native proof.
     let preparation = ConnectionBudget::new(ConnectionBudgetKind::Managed, Moment::from_nanos(0))?;
-    let now = Moment::from_nanos(600_000_000_000);
+    let now = Moment::from_nanos(7_200_000_000_000);
     assert_eq!(preparation.probe_until(now), Err(ProbeBudgetError::Expired));
-    assert_eq!(preparation.readiness_probe_until(now)?, Moment::from_nanos(602_000_000_000));
+    assert_eq!(preparation.readiness_probe_until(now)?, Moment::from_nanos(7_202_000_000_000));
     assert_eq!(coordinator.snapshot(), before);
     let mut cancelled = ResourceTransition::default();
     coordinator.release_attempt(

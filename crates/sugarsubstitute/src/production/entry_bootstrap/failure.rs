@@ -9,6 +9,13 @@ impl EntryBootstrap {
         &mut self,
         observation: Option<EntryObservation>,
     ) -> Result<Option<EntryObservation>, EntryBootstrapIssue> {
+        if let Some(observation) = &observation {
+            tracing::info!(
+                operation = "entry_bootstrap_progress",
+                ?observation,
+                "Coordinator discovery advanced"
+            );
+        }
         let failure = match observation {
             Some(EntryObservation::Failed(cause)) => {
                 self.retain_native_failure(cause);

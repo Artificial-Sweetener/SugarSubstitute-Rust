@@ -278,7 +278,8 @@ impl Boundary for Port {
     }
     fn take_terminal(&mut self) -> Result<Option<Terminal>> {
         self.client.drain_completions(NonZeroUsize::MIN)?;
-        let result = self.parent.as_ref().ok_or("Actual original pipe absent")?.take_terminal()?;
+        let result =
+            self.parent.as_ref().map(BackendCustodyParent::take_terminal).transpose()?.flatten();
         if result.is_some() {
             self.terminal_taken = true;
             self.events.push(Event::Terminal);

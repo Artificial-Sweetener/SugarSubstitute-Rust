@@ -63,7 +63,7 @@ pub(crate) fn reserve_server(
             cause,
         ))
     })?;
-    if remaining > std::time::Duration::from_secs(30) {
+    if remaining > sugarsubstitute_contracts::coordinator_entry::EntrySetupBudget::DURATION {
         return Err(EntryTransportAdmissionError::Clock(NativeObservationError::new(
             "entry_preparation_horizon",
             EntryTransportError::InvalidDeadline,
@@ -206,8 +206,11 @@ pub(super) fn validate_horizon(
     let remaining = (source.ticks() as u64)
         .checked_sub(sample.0)
         .ok_or(EntryTransportError::InvalidDeadline)?;
-    let horizon =
-        u128::from(sample.1).checked_mul(30).ok_or(EntryTransportError::InvalidDeadline)?;
+    let horizon = u128::from(sample.1)
+        .checked_mul(u128::from(
+            sugarsubstitute_contracts::coordinator_entry::EntrySetupBudget::DURATION.as_secs(),
+        ))
+        .ok_or(EntryTransportError::InvalidDeadline)?;
     if remaining == 0 || u128::from(remaining) > horizon {
         return Err(EntryTransportError::InvalidDeadline);
     }

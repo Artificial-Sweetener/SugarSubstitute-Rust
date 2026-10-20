@@ -59,9 +59,29 @@ fn mismatched_source_qpc_frequency_rejects_before_challenge_or_cache() -> TestRe
 fn far_future_source_cannot_poison_bounded_replay_floor() -> TestResult {
     rejected(
         |boundary| {
-            *lock(&boundary.source) = CounterDeadline::new(30_000_001_001, 1_000_000_000)?;
+            *lock(&boundary.source) = CounterDeadline::new(3_600_000_001_001, 1_000_000_000)?;
             Ok(())
         },
         0,
     )
+}
+#[test]
+fn configured_startup_horizon_survives_counter_transport_validation() -> TestResult {
+    use sugarsubstitute_contracts::coordinator_entry::EntrySetupBudget;
+    for frequency in [10_000_000, 1_000_000_000] {
+        let sample = 1000;
+        let until = sample + frequency * EntrySetupBudget::DURATION.as_secs();
+        crate::coordinator_entry::admission::validate_horizon(
+            (sample, frequency),
+            CounterDeadline::new(until as i64, frequency as i64)?,
+        )?;
+        assert!(
+            crate::coordinator_entry::admission::validate_horizon(
+                (sample, frequency),
+                CounterDeadline::new(until as i64 + 1, frequency as i64)?
+            )
+            .is_err()
+        );
+    }
+    Ok(())
 }

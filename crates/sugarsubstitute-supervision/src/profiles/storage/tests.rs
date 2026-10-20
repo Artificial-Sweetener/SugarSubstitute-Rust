@@ -29,7 +29,7 @@ fn profile_custody_inline_metadata_remains_inside_original_funded_partition() {
         crate::profiles::PROFILE_OPERATION_BYTES
     );
 }
-fn generation(value: u64) -> Result<record::Record, ClaimError> {
+pub(super) fn generation(value: u64) -> Result<record::Record, ClaimError> {
     Ok(record::Record {
         account: [3; 32],
         folder: [4; 24],

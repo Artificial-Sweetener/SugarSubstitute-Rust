@@ -86,8 +86,28 @@ fn run() -> Result<()> {
         ],
         false,
     )?;
+    command::cargo(
+        root,
+        &[
+            "clippy",
+            "--locked",
+            "-p",
+            "sugarsubstitute",
+            "--no-default-features",
+            "--all-targets",
+            "--",
+            "-D",
+            "warnings",
+        ],
+        false,
+    )?;
     if task == "verify" {
         command::cargo(root, &["test", "--locked", "--workspace", "--all-features"], false)?;
+        command::cargo(
+            root,
+            &["test", "--locked", "-p", "sugarsubstitute", "--no-default-features", "--lib"],
+            false,
+        )?;
         command::cargo(
             root,
             &["doc", "--locked", "--workspace", "--all-features", "--no-deps"],

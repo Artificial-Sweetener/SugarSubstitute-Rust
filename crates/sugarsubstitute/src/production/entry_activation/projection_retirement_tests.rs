@@ -115,7 +115,45 @@ fn unused_projection_source_return_keeps_first_cause_controls_and_original_charg
         assert!(failure.retained.input()._charge.is_some());
         assert_eq!(scope.snapshot().reserved_bytes, PROJECTION_BYTES);
     }
-    drop(completed);
+    use super::super::{ProductionActivation, Record, RetainedRecord};
+    use sugarsubstitute_contracts::{lifecycle::*, startup::*};
+    let mut activation = ProductionActivation::new(
+        r"E:\unopened\sugarsubstitute.exe".into(),
+        r"E:\unopened".into(),
+        r"D:\unopened".into(),
+    )
+    .map_err(|cause| std::io::Error::other(cause.to_string()))?;
+    let run = RunKey {
+        owner: CoordinatorKey {
+            namespace: NamespaceId::new([1; 32]),
+            epoch: CoordinatorEpoch::new([2; 16])?,
+        },
+        instance: InstanceId::new(1)?,
+        generation: RunGeneration::new(1)?,
+    };
+    let mut record = Record::new(
+        MainIdentity { run, launch: LaunchId::new(1)?, navigation: Generation::new(1)? },
+        ConnectionId::new(1)?,
+        Default::default(),
+        false,
+        false,
+    );
+    let storage = completed.memory.claim(size_of::<Record>() as u64)?;
+    record.projected = Some(completed);
+    activation.records[0] = Some(RetainedRecord { record: Box::new(record), _storage: storage });
+    assert!(activation.backend.is_none());
+    assert!(!activation.incidents.host.prepared());
+    assert!(activation.check_initial_projection().is_err());
+    assert_eq!(activation.failure_run, Some(run));
+    assert_eq!(
+        activation
+            .failure_source()
+            .and_then(Error::source)
+            .ok_or("Original cause lost before incident initialization")?
+            .to_string(),
+        "original projection boundary cause"
+    );
+    drop(activation);
     assert_eq!(scope.snapshot().reserved_bytes, 0);
     Ok(())
 }

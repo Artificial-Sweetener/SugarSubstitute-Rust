@@ -9,7 +9,7 @@ mod tests;
 /// Schema-two extends the fixed160-byte row with genuine witness and family identity.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct CustodiedRecord {
-    pub(in crate::profiles) original: Record,
+    pub(crate) original: Record,
     pub(crate) custodian: u64,
     pub(crate) registry_process: u64,
 }

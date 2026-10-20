@@ -16,6 +16,66 @@ fn ready() -> Admission {
     }
 }
 #[test]
+fn only_accepted_normal_shutdown_suppresses_a_nested_failure_dialog() -> Result<(), Box<dyn Error>>
+{
+    #[derive(Debug)]
+    struct Wrapped(Box<dyn Error>);
+    impl fmt::Display for Wrapped {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str("Native lifetime failed")
+        }
+    }
+    impl Error for Wrapped {
+        fn source(&self) -> Option<&(dyn Error + 'static)> {
+            Some(self.0.as_ref())
+        }
+    }
+    for normal in [false, true] {
+        let path = PathBuf::from("unopened-relative-input");
+        let command = ProductionCommand {
+            installation: path.clone(),
+            diagnostics: Default::default(),
+            options: super::super::super::options::ProductionEntryOptions {
+                configuration: path.clone(),
+                package: path.clone(),
+                metadata: path.clone(),
+                cubes: path.clone(),
+                script: path.clone(),
+                profile: path.clone(),
+            }
+            .into(),
+        };
+        let mut lifetime = Box::new(EntryRunner::new(
+            command,
+            path,
+            Box::new(super::super::tests::NoChild),
+            crate::diagnostics::DiagnosticHealth::fixture(),
+        ));
+        lifetime.normal_shutdown = normal;
+        let failure = retain_failure("Original shutdown failure".into(), lifetime);
+        assert_eq!(
+            is_normal_shutdown_failure::<super::super::tests::NoChild>(failure.as_ref()),
+            normal
+        );
+        let nested = Wrapped(failure);
+        assert_eq!(is_normal_shutdown_failure::<super::super::tests::NoChild>(&nested), normal);
+        assert!(format!("{:?}", FailureDisplay(&nested)).contains("Original shutdown failure"));
+        let shown = Cell::new(false);
+        let failure: Box<dyn Error> = Box::new(nested);
+        let original = failure.as_ref() as *const dyn Error;
+        let reported = crate::production::entry_failure::report_failure::<
+            super::super::tests::NoChild,
+            std::io::Error,
+        >(failure, |_, _, _| {
+            shown.set(true);
+            Ok(())
+        });
+        assert_eq!(shown.get(), !normal);
+        assert!(std::ptr::eq(original, reported.as_ref() as *const dyn Error));
+    }
+    Ok(())
+}
+#[test]
 fn normal_idle_runner_retains_pending_projection_initial_terminal_forward_and_failure_before_fence()
 -> Result<(), Box<dyn Error>> {
     for obstruction in 0..8 {

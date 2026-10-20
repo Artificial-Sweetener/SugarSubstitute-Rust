@@ -99,8 +99,10 @@ pub(crate) fn export(scenarios: &Path, output: &Path) -> Result<(), Box<dyn Erro
         }
         let appearance = Appearance {
             status: sugarsubstitute_splash::StartupStatus::Loading,
+            operation: Default::default(),
             theme,
             expanded: scenario.expanded,
+            reveal: f64::from(scenario.expanded),
             hovered: control(scenario.hovered.as_deref())?,
             pressed: control(scenario.pressed.as_deref())?,
         };

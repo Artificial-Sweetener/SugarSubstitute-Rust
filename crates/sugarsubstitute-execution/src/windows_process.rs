@@ -29,6 +29,42 @@ pub(crate) struct Lease {
     creation: u64,
 }
 impl Lease {
+    /// Sample active system time in 100ns units; suspend and hibernation are excluded.
+    pub(crate) fn active_time() -> Result<u64, NativeObservationError> {
+        let mut ticks = 0;
+        // SAFETY: Windows writes one initialized, exclusively borrowed scalar.
+        unsafe {
+            ::windows::Win32::System::WindowsProgramming::QueryUnbiasedInterruptTime(&mut ticks)
+        }
+        .ok()
+        .map_err(|cause| NativeObservationError::new("parent_watchdog_clock", cause))?;
+        Ok(ticks)
+    }
+    /// Terminate only this retained and kernel-validated original process handle.
+    pub(crate) fn terminate_unresponsive_parent(&self) -> Result<(), NativeObservationError> {
+        if self.pid == 0 || self.creation == 0 {
+            return Err(NativeObservationError::new(
+                "parent_watchdog_identity",
+                std::io::Error::other("Parent observation is not validated"),
+            ));
+        }
+        let process = self.process()?;
+        use ::windows::Win32::{Foundation::WAIT_OBJECT_0, System::Threading::WaitForSingleObject};
+        // SAFETY: Zero-time observation borrows the same retained kernel object.
+        if unsafe { WaitForSingleObject(process, 0) } == WAIT_OBJECT_0 {
+            return Ok(());
+        }
+        // SAFETY: The authenticated parent duplicate remains owned and cannot be
+        // substituted by PID reuse. Only the custody watchdog invokes this method.
+        let result =
+            unsafe { ::windows::Win32::System::Threading::TerminateProcess(process, 0x53535744) };
+        // SAFETY: Natural exit can race termination; only an actual signaled
+        // handle permits accepting that race. The wait owner still observes exit.
+        if result.is_err() && unsafe { WaitForSingleObject(process, 0) } == WAIT_OBJECT_0 {
+            return Ok(());
+        }
+        result.map_err(|cause| NativeObservationError::new("parent_watchdog_terminate", cause))
+    }
     /// Complete custody observation peak including callback and distinct signal allocation.
     pub(crate) fn storage_bytes() -> usize {
         size_of::<Self>()

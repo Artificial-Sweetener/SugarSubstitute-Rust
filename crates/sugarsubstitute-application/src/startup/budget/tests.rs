@@ -26,8 +26,8 @@ fn received_original_cutoff_survives_delayed_dispatch_for_both_roles() -> Result
 #[test]
 fn received_cutoff_rejects_expiry_and_role_interval_excess() -> Result<(), Box<dyn Error>> {
     for (kind, nanos) in [
-        (ConnectionBudgetKind::Attached, 30_000_000_000),
-        (ConnectionBudgetKind::Managed, 180_000_000_000),
+        (ConnectionBudgetKind::Attached, 150_000_000_000),
+        (ConnectionBudgetKind::Managed, 3_600_000_000_000),
     ] {
         let now = Moment::from_nanos(100);
         assert_eq!(ConnectionBudget::from_until(kind, now, now), Err(ProbeBudgetError::Expired));
@@ -69,8 +69,8 @@ fn connection_kind_preserves_distinct_original_campaigns() -> Result<(), TimeErr
     assert_eq!(managed.kind(), ConnectionBudgetKind::Managed);
     assert_eq!(attached.started(), started);
     assert_eq!(managed.started(), started);
-    assert_eq!(attached.until().as_nanos(), 30_000_000_017);
-    assert_eq!(managed.until().as_nanos(), 180_000_000_017);
+    assert_eq!(attached.until().as_nanos(), 150_000_000_017);
+    assert_eq!(managed.until().as_nanos(), 3_600_000_000_017);
     Ok(())
 }
 
@@ -80,7 +80,7 @@ fn retries_use_two_seconds_without_renewing_original_deadline() -> Result<(), Bo
     let original = budget;
     assert_eq!(budget.probe_until(budget.started())?.as_nanos(), 2_000_000_000);
     assert_eq!(budget.probe_until(Moment::from_nanos(25_000_000_000))?.as_nanos(), 27_000_000_000);
-    assert_eq!(budget.probe_until(Moment::from_nanos(29_000_000_000))?, budget.until());
+    assert_eq!(budget.probe_until(Moment::from_nanos(149_000_000_000))?, budget.until());
     assert_eq!(budget, original);
     Ok(())
 }
@@ -90,10 +90,10 @@ fn final_nanosecond_is_admitted_but_expiry_and_later_starts_are_rejected()
 -> Result<(), Box<dyn Error>> {
     let budget = ConnectionBudget::new(ConnectionBudgetKind::Managed, Moment::from_nanos(0))?;
     let original = budget;
-    assert_eq!(budget.probe_until(Moment::from_nanos(179_999_999_999))?, budget.until());
+    assert_eq!(budget.probe_until(Moment::from_nanos(3_599_999_999_999))?, budget.until());
     assert_eq!(budget.probe_until(budget.until()), Err(ProbeBudgetError::Expired));
     assert_eq!(
-        budget.probe_until(Moment::from_nanos(180_000_000_001)),
+        budget.probe_until(Moment::from_nanos(3_600_000_000_001)),
         Err(ProbeBudgetError::Expired)
     );
     assert_eq!(budget, original);
@@ -116,8 +116,8 @@ fn earlier_clock_start_is_rejected_without_changing_campaign() -> Result<(), Box
 #[test]
 fn connection_deadline_overflow_rejects_both_campaign_kinds() -> Result<(), TimeError> {
     for (kind, duration_nanos) in [
-        (ConnectionBudgetKind::Attached, 30_000_000_000),
-        (ConnectionBudgetKind::Managed, 180_000_000_000),
+        (ConnectionBudgetKind::Attached, 150_000_000_000),
+        (ConnectionBudgetKind::Managed, 3_600_000_000_000),
     ] {
         let last_start = Moment::from_nanos(u64::MAX - duration_nanos);
         assert_eq!(ConnectionBudget::new(kind, last_start)?.until(), Moment::from_nanos(u64::MAX));
@@ -133,7 +133,7 @@ fn connection_deadline_overflow_rejects_both_campaign_kinds() -> Result<(), Time
 fn near_clock_limit_probe_caps_before_arithmetic() -> Result<(), Box<dyn Error>> {
     let budget = ConnectionBudget::new(
         ConnectionBudgetKind::Attached,
-        Moment::from_nanos(u64::MAX - 30_000_000_000),
+        Moment::from_nanos(u64::MAX - 150_000_000_000),
     )?;
     assert_eq!(budget.probe_until(Moment::from_nanos(u64::MAX - 1))?, budget.until());
     assert_eq!(budget.probe_until(Moment::from_nanos(u64::MAX)), Err(ProbeBudgetError::Expired));
@@ -156,12 +156,12 @@ fn probe_clock_rejection_preserves_typed_source_but_expiry_has_no_clock_cause()
 }
 
 #[test]
-fn frontend_grants_retain_original_thirty_second_budget() -> Result<(), TimeError> {
+fn frontend_grants_retain_original_one_hour_budget() -> Result<(), TimeError> {
     let started = Moment::from_nanos(41);
     let first_grant = FrontendBudget::new(started)?;
     let repeated_grant = first_grant;
     assert_eq!(first_grant.started(), started);
-    assert_eq!(first_grant.until().as_nanos(), 30_000_000_041);
+    assert_eq!(first_grant.until().as_nanos(), 3_600_000_000_041);
     assert_eq!(repeated_grant.started(), first_grant.started());
     assert_eq!(repeated_grant.until(), first_grant.until());
     Ok(())
@@ -169,7 +169,7 @@ fn frontend_grants_retain_original_thirty_second_budget() -> Result<(), TimeErro
 
 #[test]
 fn frontend_deadline_admits_last_start_and_rejects_overflow() -> Result<(), TimeError> {
-    let last_start = Moment::from_nanos(u64::MAX - 30_000_000_000);
+    let last_start = Moment::from_nanos(u64::MAX - 3_600_000_000_000);
     assert_eq!(FrontendBudget::new(last_start)?.until(), Moment::from_nanos(u64::MAX));
     assert_eq!(
         FrontendBudget::new(Moment::from_nanos(last_start.as_nanos() + 1)),
@@ -183,7 +183,7 @@ fn admitted_readiness_probe_remains_two_seconds_beyond_original_preparation_with
 -> Result<(), Box<dyn Error>> {
     let budget = ConnectionBudget::new(ConnectionBudgetKind::Managed, Moment::from_nanos(7))?;
     let original = budget;
-    for now in [budget.until(), Moment::from_nanos(600_000_000_007)] {
+    for now in [budget.until(), Moment::from_nanos(7_200_000_000_007)] {
         assert_eq!(budget.readiness_probe_until(now)?, now.checked_add(Duration::from_secs(2))?);
         assert_eq!(budget.probe_until(now), Err(ProbeBudgetError::Expired));
     }

@@ -34,7 +34,8 @@ fn late_actual_discovery_and_election_never_publish_preparation_proof() -> TestR
         assert!(h.owner.election.is_none());
         assert!(h.owner.take_namespace().is_none());
         assert!(lock(&h.owner.lifetime.state).memory.is_some());
-        assert!(matches!(h.close(Moment::from_nanos(50_000_000_000))?, EntryObservation::Retired));
+        let cleanup_until = h.budget.until().checked_add(std::time::Duration::from_secs(20))?;
+        assert!(matches!(h.close(cleanup_until)?, EntryObservation::Retired));
     }
     Ok(())
 }

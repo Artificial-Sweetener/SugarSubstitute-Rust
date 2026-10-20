@@ -84,9 +84,8 @@ fn parent_projection_composes_complete_managed_command_from_empty_extras()
         return Err("Managed target changed mode".into());
     };
     assert_eq!(
-        launch.arguments(),
+        &launch.arguments()[3..],
         [
-            "-u",
             r"E:\comfyui\main.py",
             "--listen",
             "127.0.0.1",

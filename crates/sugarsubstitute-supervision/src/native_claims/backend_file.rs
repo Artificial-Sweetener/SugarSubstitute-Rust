@@ -32,8 +32,8 @@ pub(crate) fn acquire_backend(
             backend.proof.slot.clone(),
         ))?,
     )?;
-    // Every successor must exclude an independent surviving witness, including
-    // legacy callers. Keep both outputs on failure; neither lock proves release.
+    // A surviving witness still owns the backend Job. Both locks must be held
+    // before a successor can recover a witnessed generation after owner loss.
     HeldFile::acquire_into(
         crate::protected_storage::exclusion::ExclusionOpen::CreateOrOpen,
         &mut backend.custody_probe,
@@ -53,10 +53,18 @@ pub(crate) fn acquire_backend(
         record.version = 2;
         record.custodian = parent.key().session().get();
     }
-    backend.original_released =
-        records::check_predecessor(file, &backend.proof.account_sid, &record, context)?;
+    backend.predecessor = backend_recovery::predecessor(
+        file,
+        backend
+            .custody_probe
+            .as_ref()
+            .ok_or_else(|| ClaimError::invalid("missing_custody_probe"))?,
+        &backend.proof.account_sid,
+        &record,
+        context,
+    )?;
     backend.record = Some(record.clone());
-    records::publish(file, &record, context)?;
+    backend_recovery::publish(file, &record, backend.predecessor.as_ref(), context)?;
     backend.claimed = true;
     backend
         .custody_probe

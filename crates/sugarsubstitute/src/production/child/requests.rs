@@ -74,7 +74,7 @@ struct Pending {
     original: Moment,
     phase: Phase,
     purpose: Purpose,
-    waits_for_readiness: bool,
+    deferred_reply: bool,
 }
 
 /// Retain immutable matching facts separately from native transport/frame custody.
@@ -131,13 +131,14 @@ impl ClientRequests {
             original,
             phase: Phase::Prepared,
             purpose: Purpose::Other,
-            waits_for_readiness: false,
+            deferred_reply: false,
         });
         self.latest = latest;
         Ok(header)
     }
 
     /// Check the original pair before attempting actual finite native write admission.
+    /// False preserves this request while an older prepared request awaits admission.
     /// # Errors
     /// Rejects closure, changed pair, duplicate admission or original deadline expiry.
     pub(super) fn outbound(
@@ -145,7 +146,7 @@ impl ClientRequests {
         header: WireHeader,
         original: Moment,
         now: Moment,
-    ) -> Result<(), RequestError> {
+    ) -> Result<bool, RequestError> {
         if self.closed {
             return Err(RequestError::Closed);
         }
@@ -159,13 +160,23 @@ impl ClientRequests {
         if now >= original {
             return Err(RequestError::Deadline);
         }
-        Ok(())
+        Ok(self.first_prepared(header))
+    }
+
+    /// Preserve the parent's monotonic wire order across independent semantic senders.
+    fn first_prepared(&self, header: WireHeader) -> bool {
+        !self.slots.iter().flatten().any(|pending| {
+            pending.phase == Phase::Prepared && pending.header.request < header.request
+        })
     }
 
     /// Record only a successful actual queue admission, without sampling another clock.
     /// # Errors
     /// Rejects a changed header or repeated admission without altering prior evidence.
     pub(super) fn admitted(&mut self, header: WireHeader) -> Result<(), RequestError> {
+        if !self.first_prepared(header) {
+            return Err(RequestError::Order);
+        }
         let pending = self.find_mut(header)?;
         if pending.phase != Phase::Prepared {
             return Err(RequestError::Order);
@@ -182,8 +193,19 @@ impl ClientRequests {
         if pending.phase != Phase::Admitted {
             return Err(RequestError::Order);
         }
-        if now >= pending.original && !pending.waits_for_readiness {
+        if now >= pending.original && !pending.deferred_reply {
             return Err(RequestError::Deadline);
+        }
+        pending.phase = Phase::Received;
+        Ok(())
+    }
+
+    /// Consume only an exact diagnostic acknowledgement after a suspended UI resumes.
+    /// Correlation and admission remain mandatory; this grants no application authority.
+    pub(super) fn received_diagnostic(&mut self, header: WireHeader) -> Result<(), RequestError> {
+        let pending = self.find_mut(header)?;
+        if pending.phase != Phase::Admitted {
+            return Err(RequestError::Order);
         }
         pending.phase = Phase::Received;
         Ok(())
@@ -209,7 +231,7 @@ impl ClientRequests {
             return Err(RequestError::Order);
         }
         pending.purpose = Purpose::Acquisition;
-        pending.waits_for_readiness = true;
+        pending.deferred_reply = true;
         Ok(())
     }
     /// Consume one validated nonfinal frame, retaining its original slot and cutoff.
@@ -219,7 +241,7 @@ impl ClientRequests {
         if pending.purpose != Purpose::Acquisition || pending.phase != Phase::Received {
             return Err(RequestError::Order);
         }
-        if now >= pending.original && !pending.waits_for_readiness {
+        if now >= pending.original && !pending.deferred_reply {
             return Err(RequestError::Deadline);
         }
         pending.phase = Phase::Admitted;

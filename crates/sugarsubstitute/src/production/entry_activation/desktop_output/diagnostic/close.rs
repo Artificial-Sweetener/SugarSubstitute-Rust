@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Validate closed finite close transitions inside the original bounded output decoder.
-use crate::production::close_diagnostic::{
+use crate::close_diagnostic::{
     BudgetStage, CloseTrace, Control, ControlStage, DeadlineSource, Prepared,
 };
 use sugarsubstitute_application::startup::StartupPhase;
@@ -69,7 +69,7 @@ pub(super) fn parse(bytes: &[u8]) -> Option<CloseTrace> {
         let prepared = if stage == ControlStage::Prepared {
             let original_ns = number(fields.next()?, "original_ns=")?;
             let source = match fields.next()? {
-                "deadline_source=ShutdownGrace" => DeadlineSource::ShutdownGrace,
+                "deadline_source=ExitNotification" => DeadlineSource::ExitNotification,
                 "deadline_source=ShutdownTotal" => DeadlineSource::ShutdownTotal,
                 "deadline_source=AttemptCleanup" => DeadlineSource::AttemptCleanup,
                 "deadline_source=ControlInterval" => DeadlineSource::ControlInterval,

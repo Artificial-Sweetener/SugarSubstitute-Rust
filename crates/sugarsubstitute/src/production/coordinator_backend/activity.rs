@@ -3,6 +3,19 @@
 //! Route actual adapter observations without deriving readiness from terminal metadata.
 use super::*;
 impl CoordinatorBackend {
+    /// Keep profile custody supervised whenever no resource has an active progress turn.
+    /// Historical settled records cannot keep this independent owner from advancing.
+    pub(crate) fn maintain_profile_custody_without_resources(
+        &mut self,
+        resources: &mut BackendResources<'_>,
+    ) -> Result<()> {
+        if self.resource_keys().iter().all(Option::is_none)
+            && let Some(custody) = &mut self.custody
+        {
+            custody.advance(resources)?;
+        }
+        Ok(())
+    }
     /// Consume one genuine claims observation routed by the actual authority.
     /// Unrelated observations are returned unchanged for their authoritative owner.
     pub(crate) fn claim_observation(
@@ -262,21 +275,7 @@ impl CoordinatorBackend {
                 return Err(Box::new(cause));
             }
             if !record.campaign.settled() && cleanup_current {
-                let until = record.campaign.cleanup_deadline(resources.client.now()?)?;
-                let spec = Self::spec(
-                    resources,
-                    Operation::Readiness,
-                    JobClass::InfrastructureLifecycle,
-                    sugarsubstitute_comfy::readiness_transport::READINESS_TRANSPORT_BYTES,
-                    Some(until),
-                )?;
-                match record.campaign.submit_cleanup(resources.client, resources.cleanup, spec) {
-                    Ok(_) => {}
-                    Err(sugarsubstitute_comfy::readiness_campaign::CampaignError::Rejected(
-                        sugarsubstitute_comfy::readiness_campaign::CampaignRejection::WrongPhase,
-                    )) => {}
-                    Err(cause) => return Err(Box::new(cause)),
-                }
+                Self::close_campaign(record, resources, resources.client.now()?)?;
             }
         }
         Ok(ResourceTransition::default())
@@ -308,10 +307,14 @@ impl CoordinatorBackend {
         {
             record.output_observed = completion.scope_id == output.completion.scope_id()
                 && completion.spec == output.completion.spec();
+            // EOF can precede the registered process-exit observation. It closes
+            // output only; the registry owns crash classification and recovery.
             if !record.output_observed {
                 record.output_terminal = Some(completion);
                 failure.get_or_insert_with(|| Box::new(LifecycleRejection::StaleIdentity));
-            } else if record.shutdown.is_none() {
+            } else if record.shutdown.is_none()
+                && !matches!(completion.outcome, JobOutcome::Success(_))
+            {
                 let cause = Box::new(OutputTerminalFailure(completion));
                 if failure.is_none() {
                     failure = Some(cause);

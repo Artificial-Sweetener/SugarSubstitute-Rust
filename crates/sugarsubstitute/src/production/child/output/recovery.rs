@@ -161,7 +161,7 @@ impl ProductionChild {
         let header = self.output.applied.as_ref().ok_or("Original notice frame absent")?.header;
         self.bootstrap.channel_mut().consume_reply(header)?;
         self.output.pending = None;
-        self.output.retry_admitted = false;
+        self.output.passive_admitted = false;
         self.output.pull_after = pull_after;
         // Return the actual passive loan only after semantic and correlation consumption.
         self.output.applied = None;
@@ -235,7 +235,7 @@ impl ProductionChild {
         )?;
         self.lease = Some(binding.lease);
         self.output.pending = None;
-        self.output.retry_admitted = false;
+        self.output.passive_admitted = false;
         self.output.applied = None;
         // The old parser already ended and its loan/request retired; old snapshots keep old credit.
         self.output.terminal = Some(completion);
@@ -299,7 +299,7 @@ impl ProductionChild {
         self.bootstrap.channel_mut().withdraw_prepared(header)?;
         self.output.owner_mut().ok_or("Original retry source absent")?.withdraw_retry(header)?;
         self.output.pending = None;
-        self.output.retry_admitted = false;
+        self.output.passive_admitted = false;
         if self.output.retry_cause.is_none() {
             self.output.retry_cause = Some(cause);
         }

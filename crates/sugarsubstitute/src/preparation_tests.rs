@@ -10,6 +10,37 @@ use sugarsubstitute_splash::PaperFlip;
 #[path = "preparation_test_support.rs"]
 mod support;
 
+/// Native input geometry must describe accepted pixels even when a later sample is queued.
+#[test]
+fn published_appearance_belongs_to_completed_frame_not_latest_request() -> Result<(), Box<dyn Error>>
+{
+    let (mut driver, wake, mut owner) = support::started()?;
+    let initial = support::prepare(&mut driver, &wake, 0.0)?;
+    let appearance = Appearance { reveal: 0.25, ..Appearance::demo() };
+    driver.request(
+        initial.shape(),
+        appearance,
+        PaperFlip::new(1).frame(Duration::ZERO),
+        ProgressFrame { completed: 0.4, activity: None },
+        None,
+    )?;
+    support::terminal(&driver, &wake)?;
+    driver.request(
+        initial.shape(),
+        Appearance { reveal: 0.75, ..appearance },
+        PaperFlip::new(1).frame(Duration::ZERO),
+        ProgressFrame { completed: 0.4, activity: None },
+        None,
+    )?;
+    let first = support::pending_frame(&mut driver, &wake)?;
+    assert_eq!(driver.published_appearance().ok_or("published appearance absent")?.reveal, 0.25);
+    let second = support::pending_frame(&mut driver, &wake)?;
+    assert_eq!(driver.published_appearance().ok_or("published appearance absent")?.reveal, 0.75);
+    drop((initial, first, second));
+    support::finish(&mut owner, &mut driver, &wake)?;
+    Ok(())
+}
+
 /// An unseen surface retains neither a request nor an admitted allocation.
 #[test]
 fn hidden_surface_updates_geometry_without_admitting_work() -> Result<(), Box<dyn Error>> {

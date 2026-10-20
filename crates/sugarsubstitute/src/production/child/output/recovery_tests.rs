@@ -96,7 +96,7 @@ fn repeated_notice_does_not_rearm_native_action_or_renew_original_managed_deadli
     let failed = running.key(binding.lease);
     let started = Moment::from_nanos(40);
     running.retry(identity, failed, started)?;
-    let deadline = started.checked_add(Duration::from_secs(180))?;
+    let deadline = started.checked_add(Duration::from_secs(3600))?;
     assert_eq!(running.retry_deadline(), Some(deadline));
     assert_eq!(running.unavailable(binding.lease, true)?, None);
     assert_eq!(
@@ -166,7 +166,7 @@ fn real_ledger_consumes_one_reply_per_distinct_pull_and_retry_header() -> Result
     let until = Moment::from_nanos(500);
     let encoded = CounterDeadline::new(1000, 100)?;
     let old_pull = ledger.prepare(until, encoded)?;
-    ledger.output_pull(old_pull)?;
+    ledger.output_pull(old_pull, false)?;
     ledger.admitted(old_pull)?;
     ledger.received(old_pull, Moment::from_nanos(100))?;
     ledger.consumed(old_pull)?;
@@ -174,7 +174,7 @@ fn real_ledger_consumes_one_reply_per_distinct_pull_and_retry_header() -> Result
     let retry = ledger.prepare(until, encoded)?;
     ledger.backend_retry(retry)?;
     assert_ne!(retry.request, old_pull.request);
-    assert!(ledger.output_pull(retry).is_err());
+    assert!(ledger.output_pull(retry, false).is_err());
     ledger.admitted(retry)?;
     ledger.received(retry, Moment::from_nanos(102))?;
     ledger.consumed(retry)?;
@@ -182,7 +182,7 @@ fn real_ledger_consumes_one_reply_per_distinct_pull_and_retry_header() -> Result
     assert!(ledger.received(retry, Moment::from_nanos(103)).is_err());
     let current = ledger.prepare(until, encoded)?;
     assert_ne!(current.request, retry.request);
-    ledger.output_pull(current)?;
+    ledger.output_pull(current, false)?;
     Ok(())
 }
 

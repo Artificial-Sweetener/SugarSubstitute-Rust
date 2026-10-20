@@ -71,6 +71,15 @@ impl WindowsOutputControl {
         self.job.cancel();
         self.shared.changed();
     }
+    /// Ask the managed backend to stop by closing its owned stdin pipe.
+    /// The native worker performs the close; stdout and stderr keep draining until EOF.
+    /// Repeated requests are harmless. Desktop diagnostic sessions have no shutdown input.
+    pub fn request_backend_shutdown(&self) {
+        if matches!(self.shared.identity, OutputIdentity::Managed(_)) {
+            lock(&self.shared.state).input_close_requested = true;
+            self.shared.changed();
+        }
+    }
     /// Verify a launch artifact belongs to this exact admitted session and identity.
     pub fn matches_child_stdio(&self, stdio: &WindowsChildStdio) -> bool {
         Arc::ptr_eq(&self.shared, &stdio.shared)

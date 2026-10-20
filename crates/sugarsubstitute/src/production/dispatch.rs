@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Select production explicitly while preserving the existing demo/fixture iterator.
-use super::options::ProductionEntryOptions;
+//! Start the installed application by default and select explicit qualification modes.
+use super::options::{ConfigurationSource, ProductionEntryOptions};
 use std::{
     error::Error,
     ffi::{OsStr, OsString},
@@ -14,7 +14,7 @@ pub(crate) struct ProductionCommand {
     pub(crate) installation: PathBuf,
     pub(crate) diagnostics:
         sugarsubstitute_supervision::coordinator_entry::DiagnosticStorageLocation,
-    pub(crate) options: ProductionEntryOptions,
+    pub(crate) options: ConfigurationSource,
 }
 /// Consume the production prefix only; fallback receives every original argument.
 pub(crate) enum Dispatch<I: Iterator<Item = OsString>> {
@@ -30,7 +30,10 @@ pub(crate) fn parse<I: IntoIterator<Item = OsString>>(
     arguments: I,
 ) -> Result<Dispatch<I::IntoIter>, Box<dyn Error>> {
     let mut arguments = arguments.into_iter().peekable();
-    if arguments.peek().is_none_or(|first| first != "--production") {
+    if arguments.peek().is_none() {
+        return Ok(Dispatch::Production(Box::new(installed_command(std::env::current_exe()?)?)));
+    }
+    if arguments.peek().is_some_and(|first| first != "--production") {
         return Ok(Dispatch::Existing(arguments));
     }
     arguments.next();
@@ -56,7 +59,26 @@ pub(crate) fn parse<I: IntoIterator<Item = OsString>>(
         sugarsubstitute_supervision::coordinator_entry::DiagnosticStorageLocation::Account
     };
     let options = ProductionEntryOptions::parse(arguments)?;
-    Ok(Dispatch::Production(Box::new(ProductionCommand { installation, diagnostics, options })))
+    Ok(Dispatch::Production(Box::new(ProductionCommand {
+        installation,
+        diagnostics,
+        options: options.into(),
+    })))
+}
+
+/// Build inert installed paths without disk IO before the first splash frame.
+fn installed_command(executable: PathBuf) -> Result<ProductionCommand, Box<dyn Error>> {
+    let installation =
+        executable.parent().ok_or("Installed executable has no directory")?.to_path_buf();
+    LaunchConfiguration::validate_path(&installation)?;
+    Ok(ProductionCommand {
+        diagnostics:
+            sugarsubstitute_supervision::coordinator_entry::DiagnosticStorageLocation::Account,
+        options: ConfigurationSource::Installed(
+            installation.join("sugarsubstitute-launch.local.json"),
+        ),
+        installation,
+    })
 }
 
 /// Run the selected real production role; return the untouched legacy iterator.
@@ -75,7 +97,7 @@ where
     match parse(arguments)? {
         Dispatch::Existing(arguments) => Ok(Some(arguments)),
         Dispatch::Production(command) => {
-            super::entry_runner::run_presented(*command, child, diagnostics)?;
+            super::entry_runner::run_application(*command, child, diagnostics)?;
             Ok(None)
         }
     }
@@ -84,6 +106,21 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn empty_arguments_select_real_installed_startup_without_reading_files()
+    -> Result<(), Box<dyn Error>> {
+        let Dispatch::Production(command) = parse(Vec::<OsString>::new())? else {
+            return Err("Double click selected the splash demo".into());
+        };
+        let ConfigurationSource::Installed(path) = command.options else {
+            return Err("Installed startup descriptor was not selected".into());
+        };
+        assert_eq!(path, command.installation.join("sugarsubstitute-launch.local.json"));
+        assert!(command.diagnostics.explicit_path().is_none());
+        let command = installed_command(PathBuf::from(r"E:\unopened\sugarsubstitute.exe"))?;
+        assert_eq!(command.installation, std::path::Path::new(r"E:\unopened"));
+        Ok(())
+    }
     #[test]
     fn executable_fallback_never_constructs_production_child() -> Result<(), Box<dyn Error>> {
         let calls = std::cell::Cell::new(0);
@@ -104,7 +141,7 @@ mod tests {
     fn legacy_fixture_and_demo_arguments_are_preserved_without_collecting()
     -> Result<(), Box<dyn Error>> {
         for arguments in
-            [vec!["--internal-native-pipe-child", "--section", "5"], vec!["--locale", "ja"], vec![]]
+            [vec!["--internal-native-pipe-child", "--section", "5"], vec!["--locale", "ja"]]
         {
             let expected: Vec<_> = arguments.into_iter().map(OsString::from).collect();
             let Dispatch::Existing(original) = parse(expected.clone())? else {
@@ -147,7 +184,10 @@ mod tests {
             return Err("Production prefix was ignored".into());
         };
         assert_eq!(command.installation, PathBuf::from(r"E:\installation"));
-        assert_eq!(command.options.configuration, PathBuf::from(r"E:\configuration.json"));
+        let ConfigurationSource::Explicit(paths) = command.options else {
+            return Err("Explicit launch paths missing".into());
+        };
+        assert_eq!(paths.configuration, PathBuf::from(r"E:\configuration.json"));
         Ok(())
     }
 }

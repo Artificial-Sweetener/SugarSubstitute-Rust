@@ -263,12 +263,10 @@ impl MainReadiness {
         let ConsoleArgument::PrimitiveString(message) = argument else {
             return Ok(());
         };
-        if kind == ConsoleKind::Error
-            && message == "Error calling extension 'SugarCubes.UI' method 'setup'"
-        {
+        if kind == ConsoleKind::Error && message == crate::main_console::SETUP_FAILED {
             return self.reject(ReadinessFault::SetupFailed);
         }
-        if kind == ConsoleKind::Warning && message == "Extension SugarCubes.UI is disabled." {
+        if kind == ConsoleKind::Warning && message == crate::main_console::DISABLED {
             return self.reject(ReadinessFault::DisabledExtension);
         }
         Ok(())

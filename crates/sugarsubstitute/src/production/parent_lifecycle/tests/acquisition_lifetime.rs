@@ -382,7 +382,7 @@ fn managed_wait_owns_late_final_reply_and_one_finite_transfer_without_rebasing_h
     let h = acquisition_header()?;
     let (index, _) = parent.requests.admit(h, b"actual managed original acquire")?;
     parent.requests.get_mut(index)?.until = Some(moment(180));
-    parent.requests.wait_for_readiness(index)?;
+    parent.requests.defer_reply(index)?;
     parent.acquisition = Some(Acquisition::new(binding()?, h, identity()?, moment(180))?);
     parent.acquisition.as_mut().ok_or("Acquisition missing")?.wait_for_readiness();
     parent.expire_acquisition(moment(360)).map_err(|cause| cause as Box<dyn Error>)?;
@@ -436,7 +436,7 @@ fn held_managed_preparation_timeout_publishes_finite_failure_without_admitting_b
     let id = identity()?;
     let (index, _) = parent.requests.admit(h, b"configured managed acquire awaiting admission")?;
     parent.requests.get_mut(index)?.until = Some(moment(180));
-    parent.requests.wait_for_readiness(index)?;
+    parent.requests.defer_reply(index)?;
     parent.requests.get_mut(index)?.held_backend = Some(HeldBackendCommand::Acquire(id));
     parent.acquisition = Some(Acquisition::new(binding()?, h, id, moment(180))?);
     parent.acquisition.as_mut().ok_or("Acquisition missing")?.wait_for_readiness();

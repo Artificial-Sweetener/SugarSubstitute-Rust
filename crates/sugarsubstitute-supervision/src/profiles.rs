@@ -3,6 +3,8 @@
 //! Hold actual profile identity through browser lifetime and checked family retirement.
 mod attempt;
 mod constructor_storage;
+mod contention;
+pub use contention::ProfileInUse;
 mod custody;
 mod folder;
 mod launch;

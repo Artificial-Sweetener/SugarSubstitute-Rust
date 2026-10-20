@@ -35,7 +35,7 @@ pub(super) struct GlyphRun {
 pub(super) struct Collector {
     /// Owned results become available after the layout returns.
     pub runs: RefCell<Vec<GlyphRun>>,
-    /// Preserve Rust allocator causes that cannot be represented by the COM HRESULT.
+    /// Preserve callback failures even when the layout returns a successful HRESULT.
     pub failure: RefCell<Option<std::io::Error>>,
     /// Exact effect references installed only by the current console layout owner.
     pub colors: Vec<(IUnknown, [u8; 4])>,
@@ -67,16 +67,13 @@ impl IDWritePixelSnapping_Impl for Collector_Impl {
     }
 }
 
-impl IDWriteTextRenderer_Impl for Collector_Impl {
-    /// Copy borrowed arrays and retain the font before returning to the layout.
-    fn DrawGlyphRun(
+impl Collector_Impl {
+    /// Copy synchronous DirectWrite arrays, retaining every failure outside its HRESULT.
+    fn collect_glyph_run(
         &self,
-        _: *const c_void,
         x: f32,
         y: f32,
-        _: DWRITE_MEASURING_MODE,
         run: *const DWRITE_GLYPH_RUN,
-        _: *const DWRITE_GLYPH_RUN_DESCRIPTION,
         effect: Ref<IUnknown>,
     ) -> windows::core::Result<()> {
         if run.is_null() {
@@ -89,8 +86,6 @@ impl IDWriteTextRenderer_Impl for Collector_Impl {
         }
         if run.glyphCount > MAX_GLYPHS as u32
             || run.glyphIndices.is_null()
-            || run.glyphAdvances.is_null()
-            || run.glyphOffsets.is_null()
             || run.fontFace.is_none()
             || !run.fontEmSize.is_finite()
             || run.fontEmSize <= 0.0
@@ -110,6 +105,7 @@ impl IDWriteTextRenderer_Impl for Collector_Impl {
             ),
         };
         let count = run.glyphCount as usize;
+        let face = run.fontFace.as_ref().ok_or(windows::core::Error::from(E_INVALIDARG))?.clone();
         let mut runs =
             self.runs.try_borrow_mut().map_err(|_| windows::core::Error::from(E_INVALIDARG))?;
         let total: usize = runs.iter().map(|run| run.indices.len()).sum();
@@ -126,8 +122,48 @@ impl IDWriteTextRenderer_Impl for Collector_Impl {
         // SAFETY: DirectWrite owns these count-element arrays through the callback.
         unsafe {
             indices.extend_from_slice(std::slice::from_raw_parts(run.glyphIndices, count));
-            advances.extend_from_slice(std::slice::from_raw_parts(run.glyphAdvances, count));
-            offsets.extend_from_slice(std::slice::from_raw_parts(run.glyphOffsets, count));
+        }
+        if run.glyphAdvances.is_null() {
+            let mut font_metrics = DWRITE_FONT_METRICS::default();
+            // SAFETY: The retained face writes into initialized local metrics storage.
+            unsafe { face.GetMetrics(&mut font_metrics) };
+            if font_metrics.designUnitsPerEm == 0 {
+                return Err(E_INVALIDARG.into());
+            }
+            let mut metrics =
+                memory::reserve(count, METADATA_BYTES / 4).map_err(allocation_error)?;
+            metrics.resize(count, DWRITE_GLYPH_METRICS::default());
+            // SAFETY: Both arrays contain exactly glyphCount elements and remain live.
+            unsafe {
+                face.GetDesignGlyphMetrics(
+                    indices.as_ptr(),
+                    run.glyphCount,
+                    metrics.as_mut_ptr(),
+                    run.isSideways.as_bool(),
+                )?;
+            }
+            let scale = run.fontEmSize / f32::from(font_metrics.designUnitsPerEm);
+            advances.extend(metrics.iter().map(|metric| {
+                let advance = if run.isSideways.as_bool() {
+                    metric.advanceHeight
+                } else {
+                    metric.advanceWidth
+                };
+                advance as f32 * scale
+            }));
+        } else {
+            // SAFETY: DirectWrite supplies glyphCount advances when this optional array exists.
+            unsafe {
+                advances.extend_from_slice(std::slice::from_raw_parts(run.glyphAdvances, count))
+            };
+        }
+        if run.glyphOffsets.is_null() {
+            offsets.resize(count, DWRITE_GLYPH_OFFSET::default());
+        } else {
+            // SAFETY: DirectWrite supplies glyphCount offsets when this optional array exists.
+            unsafe {
+                offsets.extend_from_slice(std::slice::from_raw_parts(run.glyphOffsets, count))
+            };
         }
         if advances.iter().any(|advance| !advance.is_finite())
             || offsets.iter().any(|offset| {
@@ -136,7 +172,6 @@ impl IDWriteTextRenderer_Impl for Collector_Impl {
         {
             return Err(E_INVALIDARG.into());
         }
-        let face = run.fontFace.as_ref().ok_or(windows::core::Error::from(E_INVALIDARG))?.clone();
         runs.push(GlyphRun {
             face,
             size: run.fontEmSize,
@@ -148,6 +183,29 @@ impl IDWriteTextRenderer_Impl for Collector_Impl {
             color,
         });
         Ok(())
+    }
+}
+
+impl IDWriteTextRenderer_Impl for Collector_Impl {
+    /// Copy borrowed arrays and retain the font before returning to the layout.
+    fn DrawGlyphRun(
+        &self,
+        _: *const c_void,
+        x: f32,
+        y: f32,
+        _: DWRITE_MEASURING_MODE,
+        run: *const DWRITE_GLYPH_RUN,
+        _: *const DWRITE_GLYPH_RUN_DESCRIPTION,
+        effect: Ref<IUnknown>,
+    ) -> windows::core::Result<()> {
+        let result = self.collect_glyph_run(x, y, run, effect);
+        if let Err(cause) = &result {
+            let mut failure = self.failure.borrow_mut();
+            if failure.is_none() {
+                *failure = Some(std::io::Error::other(cause.clone()));
+            }
+        }
+        result
     }
 
     /// Plain status labels never request underline geometry.

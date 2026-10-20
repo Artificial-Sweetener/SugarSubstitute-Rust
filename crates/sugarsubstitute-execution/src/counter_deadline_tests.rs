@@ -7,6 +7,20 @@ use std::cell::Cell;
 type TestResult = Result<(), Box<dyn Error>>;
 
 #[test]
+fn diagnostic_expiry_is_a_miss_but_invalid_clock_facts_remain_errors() -> TestResult {
+    let original = CounterDeadline::new(102, 3)?;
+    assert_eq!(decode_if_live(Moment::from_nanos(50), (102, 3), original)?, None);
+    assert_eq!(decode_if_live(Moment::from_nanos(50), (103, 3), original)?, None);
+    assert_eq!(
+        decode_if_live(Moment::from_nanos(50), (100, 3), original)?,
+        Some(Moment::from_nanos(666_666_716))
+    );
+    assert!(decode_if_live(Moment::from_nanos(50), (103, 2), original).is_err());
+    assert!(decode_if_live(Moment::from_nanos(50), (0, 3), original).is_err());
+    Ok(())
+}
+
+#[test]
 fn encode_samples_counter_before_the_central_clock() -> TestResult {
     let phase = Cell::new(0);
     let deadline = encode_sampled(

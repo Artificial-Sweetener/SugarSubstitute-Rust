@@ -79,6 +79,32 @@ impl Fixture {
         drop(self.owner.take().ok_or("Original execution owner absent")?);
         Ok(())
     }
+    /// Wait for the capacity wake registered by a real rejected admission.
+    pub(in crate::production::parent_lifecycle) fn reservation_at_most(
+        &self,
+        bytes: u64,
+    ) -> TestResult {
+        let until = std::time::Instant::now() + Duration::from_secs(10);
+        loop {
+            let prior = *self.wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            self.client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
+            if self.scope.snapshot().reserved_bytes <= bytes {
+                return Ok(());
+            }
+            let remaining = until
+                .checked_duration_since(std::time::Instant::now())
+                .ok_or("Original capacity wake absent")?;
+            let guard = self.wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            let (_guard, timeout) = self
+                .wake
+                .changed
+                .wait_timeout_while(guard, remaining, |value| *value == prior)
+                .map_err(|_| "Original capacity wake poisoned")?;
+            if timeout.timed_out() {
+                return Err("Original capacity wake absent".into());
+            }
+        }
+    }
 }
 fn spec(id: u64, bytes: u64) -> TestResult<JobSpec> {
     Ok(JobSpec {

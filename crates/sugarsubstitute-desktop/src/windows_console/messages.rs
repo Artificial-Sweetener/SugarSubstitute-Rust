@@ -5,10 +5,8 @@ use crate::{DesktopError, console::index::TextStream};
 use windows::Win32::{
     Foundation::{HWND, LPARAM, WPARAM},
     UI::{
-        Controls::{
-            EM_GETFIRSTVISIBLELINE, EM_LINEINDEX, EM_LINESCROLL, EM_SCROLLCARET, RichEdit::*,
-        },
-        WindowsAndMessaging::SendMessageW,
+        Controls::{EM_GETFIRSTVISIBLELINE, EM_LINEINDEX, EM_LINESCROLL, RichEdit::*},
+        WindowsAndMessaging::{SB_BOTTOM, SendMessageW, WM_VSCROLL},
     },
 };
 /// Borrow only the original live affine peer retained by the containing Console.
@@ -88,15 +86,21 @@ impl Messages {
         }
         Ok(())
     }
-    /// Expose the native caret without requesting keyboard focus.
-    pub(super) fn scroll_caret(&self) {
-        // SAFETY: Native caret scrolling borrows no pointer; documented return is not meaningful.
-        unsafe {
-            SendMessageW(self.0, EM_SCROLLCARET, None, None);
-        }
+    /// Follow the document tail even when the read-only console has no active caret or focus.
+    pub(super) fn scroll_bottom(&self) -> Result<(), DesktopError> {
+        super::engine::find(self.0)?.message(
+            WM_VSCROLL,
+            WPARAM(SB_BOTTOM.0 as usize),
+            LPARAM(0),
+        )?;
+        Ok(())
     }
     /// Copy the complete already-prepared Unicode byte stream synchronously.
-    pub(super) fn stream(&self, reader: &mut TextStream<'_>) -> Result<(), DesktopError> {
+    pub(super) fn stream(
+        &self,
+        reader: &mut TextStream<'_>,
+        selection: bool,
+    ) -> Result<(), DesktopError> {
         let mut transfer = EDITSTREAM {
             dwCookie: (reader as *mut TextStream<'_>) as usize,
             dwError: 0,
@@ -108,7 +112,9 @@ impl Messages {
             SendMessageW(
                 self.0,
                 EM_STREAMIN,
-                Some(WPARAM((SF_TEXT | SF_UNICODE) as usize)),
+                Some(WPARAM(
+                    (SF_TEXT | SF_UNICODE | if selection { SFF_SELECTION } else { 0 }) as usize,
+                )),
                 Some(LPARAM((&raw mut transfer) as isize)),
             );
         }
@@ -173,7 +179,7 @@ impl Messages {
     ) -> Result<(), DesktopError> {
         let scope = match scope {
             FormatScope::Default => SCF_DEFAULT,
-            FormatScope::Selection => SCF_SELECTION,
+            FormatScope::Selection => SCF_SELECTION | SCF_NOKBUPDATE,
         };
         // SAFETY: Exact initialized CHARFORMAT2W remains live during synchronous copying.
         if unsafe {

@@ -30,16 +30,7 @@ struct Pending {
     control: Control,
     admitted: bool,
 }
-/// Preserve pending capture clock observation separately from an absent capture owner.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::production) enum ShutdownInitiation {
-    /// No capture session was admitted; the composing owner measures its own clock once.
-    NoCapture,
-    /// The existing capture claimant is still observing its original clock.
-    CapturePending,
-    /// The genuine capture owner supplied its unchanged ten/fifteen-second transaction.
-    Captured(ShutdownBudget),
-}
+use crate::startup::ShutdownInitiation;
 pub(super) struct ChildShutdown {
     budget: Option<ShutdownBudget>,
     closing: bool,
@@ -54,6 +45,7 @@ pub(super) struct ChildShutdown {
     bootstrap_failure_observed: bool,
     shutdown: Option<ShutdownId>,
     intent: Option<CompletionIntent>,
+    intent_deadline: Option<Moment>,
     pending: Option<Pending>,
     queued: [Option<Control>; 4],
 }
@@ -94,6 +86,7 @@ impl ChildShutdown {
             bootstrap_failure_observed: false,
             shutdown: None,
             intent: None,
+            intent_deadline: None,
             pending: None,
             queued: [None; 4],
         }
@@ -157,7 +150,11 @@ impl ChildShutdown {
     }
     /// Queue deliberate whole-content exit independently of capture clock measurement.
     /// Neither this intent nor its eventual ACK supplies a Child shutdown budget or native proof.
-    fn request_exit_intent(&mut self, registered: bool) -> Result<()> {
+    fn request_exit_intent(
+        &mut self,
+        registered: bool,
+        now: impl FnOnce() -> Result<Moment>,
+    ) -> Result<()> {
         if !registered {
             return Ok(());
         }
@@ -165,6 +162,9 @@ impl ChildShutdown {
             return Err("Original whole-close intent absent".into());
         }
         if self.shutdown.is_none() {
+            if self.intent_deadline.is_none() {
+                self.intent_deadline = Some(now()?.checked_add(Duration::from_secs(30))?);
+            }
             let shutdown = ShutdownId::new(1)?;
             self.queue(Control::ExitIntent)?;
             self.shutdown = Some(shutdown);
@@ -183,6 +183,14 @@ impl ChildShutdown {
 }
 
 impl ProductionChild {
+    /// Freeze the notification interval before queue contention or capture cleanup can delay it.
+    fn queue_exit_intent(&mut self, registered: bool) -> Result<()> {
+        if !registered || self.shutdown.shutdown.is_some() {
+            return Ok(());
+        }
+        let client = self.client()?.clone();
+        self.shutdown.request_exit_intent(true, || Ok(client.now()?))
+    }
     /// Latch capture cleanup first; absent capture permits the composing content's original clock.
     /// # Errors
     /// Keeps clock/counter failures and actual partial capture/source custody unchanged.
@@ -200,7 +208,7 @@ impl ProductionChild {
         // The existing control owner freezes its own header before capture measurement
         // completes. Genuine capture custody and its independent budget remain unchanged.
         let registered = self.bootstrap.channel_mut().registered();
-        self.shutdown.request_exit_intent(registered)?;
+        self.queue_exit_intent(registered)?;
         if registered {
             self.advance_control()?;
         }
@@ -225,7 +233,7 @@ impl ProductionChild {
             return Ok(());
         }
         let registered = self.bootstrap.channel_mut().registered();
-        self.shutdown.request_exit_intent(registered)?;
+        self.queue_exit_intent(registered)?;
         if !registered {
             return Ok(());
         }
@@ -322,3 +330,7 @@ mod tests;
 #[cfg(test)]
 #[path = "retirement/absence_tests.rs"]
 mod absence_tests;
+
+#[cfg(test)]
+#[path = "retirement/notification_tests.rs"]
+mod notification_tests;

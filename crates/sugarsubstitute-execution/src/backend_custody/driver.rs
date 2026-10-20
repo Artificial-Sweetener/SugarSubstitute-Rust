@@ -25,6 +25,8 @@ impl BackendCustodyWake {
 pub enum BackendCustodyProgress {
     /// Native callbacks, registrations or cleanup still retain custody.
     Pending,
+    /// Recheck coordinator progress through the existing execution timer owner.
+    ObserveParentAt(Moment),
     /// Every registered family and native output was actually settled.
     Settled,
 }

@@ -117,9 +117,33 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
                 execution.request_shutdown(budget.settle_until);
             }
         }
-        self.drain(NonZeroUsize::MIN.saturating_add(31))?;
+        let drained = self.drain(NonZeroUsize::MIN.saturating_add(31));
+        if self.deadline_reported && self.execution_stopping {
+            if let Err(cause) = drained {
+                self.retain(cause);
+            }
+        } else {
+            drained?;
+        }
         if cutoff {
             return Err("Production shutdown remains owned after its original cutoff".into());
+        }
+        if self.deadline_reported && self.execution_stopping {
+            // Logical cleanup can retain a failure after every actual job and worker
+            // has stopped. Let the native window retire and return that failure;
+            // waiting for a failed logical owner here would hide the process forever.
+            let actual =
+                self.execution.as_ref().ok_or("Production execution missing")?.poll_shutdown()?;
+            let now = Instant::now();
+            if self
+                .shutdown_diagnostic
+                .is_none_or(|previous| now.duration_since(previous) >= Duration::from_secs(5))
+            {
+                tracing::warn!(operation="production_retained_shutdown", progress=?actual,
+                    "Original shutdown is still observing actual execution retirement");
+                self.shutdown_diagnostic = Some(now);
+            }
+            return Ok(actual.settled);
         }
         if !self.child_closed || !self.intake_settled {
             return Ok(false);
@@ -167,6 +191,11 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
         }
         if let Some(execution) = &mut self.execution {
             execution.finish_shutdown()?;
+        }
+        if self.deadline_reported {
+            return Err(
+                "Production shutdown exceeded its deadline; execution workers joined".into()
+            );
         }
         self.child.finish()?;
         // Original scopes, bootstrap outcomes and causes remain in this owner

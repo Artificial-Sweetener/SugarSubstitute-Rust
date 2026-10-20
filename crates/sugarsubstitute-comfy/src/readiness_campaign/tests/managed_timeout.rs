@@ -105,7 +105,7 @@ fn finite_probe_timeout_remains_terminal_for_attached_and_unadmitted_managed_cam
     Ok(())
 }
 #[test]
-fn managed_probe_timeout_does_not_hide_fatal_http_cleanup_or_late_success_delivery() -> TestResult {
+fn managed_probe_timeout_does_not_hide_fatal_http_cleanup() -> TestResult {
     for behavior in [Behavior::Malformed, Behavior::WrongAsset, Behavior::Panicked] {
         let mut h = live()?;
         let (fixture, step) = expire(&mut h, false)?;
@@ -130,7 +130,10 @@ fn managed_probe_timeout_does_not_hide_fatal_http_cleanup_or_late_success_delive
     assert!(h.campaign.take_readiness().is_none());
     assert!(error.source().is_some());
     drop(error);
-    h.finish()?;
+    h.finish()
+}
+#[test]
+fn late_success_delivery_retires_then_retries_without_publishing_stale_readiness() -> TestResult {
     let mut h = live()?;
     let until = h.campaign.probe_until(h.now())?;
     let fixture = h.submit(Behavior::Success, Some("close"), false, None)?;
@@ -138,9 +141,18 @@ fn managed_probe_timeout_does_not_hide_fatal_http_cleanup_or_late_success_delive
     fixture.release();
     h.wait_terminal_without_consuming()?;
     h.set_time(until.as_nanos());
-    assert_eq!(h.consume_saved()?, CampaignStep::Failed);
+    assert_eq!(h.consume_saved()?, CampaignStep::Progressed);
     assert!(h.campaign.take_readiness().is_none());
     assert!(!h.campaign.needs_input(h.now())?);
+    let until = h.campaign.cleanup_deadline(h.now())?;
+    h.submit_close(until)?;
+    assert_eq!(h.completion()?, CampaignStep::Progressed);
+    let next = h.campaign.next_deadline().ok_or("Retry backoff absent")?;
+    h.set_time(next.as_nanos());
+    assert!(h.campaign.needs_input(h.now())?);
+    h.submit(Behavior::Success, None, false, None)?;
+    assert_eq!(h.completion()?, CampaignStep::Ready);
+    assert!(h.campaign.take_readiness().is_some());
     h.finish()
 }
 #[test]

@@ -6,9 +6,9 @@
 //! actual finite parser result is observed; EOF never establishes process retirement.
 mod errors;
 mod recovery;
+use crate::transcript_snapshot as snapshot;
 pub(crate) use recovery::BackendNotice;
 use recovery::RequestKind;
-mod snapshot;
 mod state;
 mod worker;
 pub(crate) use errors::OutputError;
@@ -160,12 +160,12 @@ impl OutputOwner {
         let binding = self.binding;
         let acknowledged = self.acknowledged;
         let original = match pending.kind {
-            RequestKind::Retry(_) => client
+            RequestKind::Retry(_) | RequestKind::Pull(Some(_)) => client
                 .now()
                 .map_err(OutputError::Clock)?
                 .checked_add(std::time::Duration::from_secs(30))
                 .map_err(OutputError::Time)?,
-            RequestKind::Pull(_) => pending.original,
+            RequestKind::Pull(None) => pending.original,
         };
         match client.submit_blocking_owned_input(
             scope,

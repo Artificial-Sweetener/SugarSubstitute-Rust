@@ -10,12 +10,12 @@ use sugarsubstitute_contracts::execution::{IdentityError, JobId};
 /// The UI or headless composition thread owns all clones. Allocate immediately
 /// before admission; a rejected admission consumes its identity. Semantic frame
 /// revisions remain independent. `Rc` prevents transfer to execution workers.
-#[derive(Clone)]
-pub(crate) struct JobSequence(Rc<Cell<u64>>);
+#[derive(Clone, Default)]
+pub struct JobSequence(Rc<Cell<u64>>);
 
 impl JobSequence {
     /// Begin the sole application sequence for a newly created execution owner.
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self(Rc::new(Cell::new(0)))
     }
 
@@ -23,7 +23,7 @@ impl JobSequence {
     ///
     /// # Errors
     /// Returns `IdentityError::Exhausted` before wrapping; every clone stays exhausted.
-    pub(crate) fn allocate(&self) -> Result<JobId, IdentityError> {
+    pub fn allocate(&self) -> Result<JobId, IdentityError> {
         let value = self.0.get().checked_add(1).ok_or(IdentityError::Exhausted)?;
         let identity = JobId::new(value)?;
         self.0.set(value);

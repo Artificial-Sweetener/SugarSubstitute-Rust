@@ -83,9 +83,7 @@ fn payload(
             main_fields::write_identity(*identity, run, writer)?;
             writer.u32(browser_process_id.get())
         }
-        WirePayload::MainRetired(identity) | WirePayload::SplashPrepared(identity) => {
-            main_fields::write_identity(*identity, run, writer)
-        }
+        WirePayload::MainRetired(identity) => main_fields::write_identity(*identity, run, writer),
         WirePayload::NativeActivity { revision, activity } => {
             writer.u64(revision.get())?;
             writer.u8(match activity {

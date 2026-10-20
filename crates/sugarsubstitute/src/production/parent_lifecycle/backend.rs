@@ -227,7 +227,7 @@ impl ParentLifecycle {
                 resources.session.control.validate_current_admission()?;
                 let identity = record.identity.ok_or(ParentError::WrongPhase)?;
                 let until = record.until.ok_or(ParentError::WrongPhase)?;
-                if !self.requests.readiness_waiting(index)?
+                if !self.requests.deferred_reply(index)?
                     && resources.execution.client.now()? >= until
                 {
                     return Err(ParentError::WrongPhase.into());

@@ -34,7 +34,7 @@ minimum_tests = 631
 [[owners]]
 package = "sugarsubstitute-xtask"
 root = "tools/xtask"
-concern = "Governance rejection behavior and verification orchestration"
+concern = "Governance rejection behavior and verification orchestration, including shared-host checks and tests with the Windows composition excluded"
 minimum_tests = 50
 
 [[owners]]

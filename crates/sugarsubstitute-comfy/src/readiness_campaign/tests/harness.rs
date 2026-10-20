@@ -117,7 +117,12 @@ impl Harness {
         let lease = wake.until(&client, |_| Ok(source.take_inspection()?))?;
         let campaign = ReadinessCampaign::new(
             attached_target(8188)?,
-            ConnectionBudget::new(ConnectionBudgetKind::Attached, Moment::from_nanos(0))?,
+            // Exercise an imported remaining interval independently of the product's default.
+            ConnectionBudget::from_until(
+                ConnectionBudgetKind::Attached,
+                Moment::from_nanos(0),
+                Moment::from_nanos(30_000_000_000),
+            )?,
         )?;
         Ok(Self {
             fixtures: FixtureGuard(Vec::new()),

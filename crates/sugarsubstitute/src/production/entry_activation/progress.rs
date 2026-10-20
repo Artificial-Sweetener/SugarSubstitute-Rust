@@ -160,22 +160,17 @@ impl ProductionActivation {
         }
         self.adopt_installed_restarts(resources)?;
         let Some(retained_backend) = &mut self.backend else {
-            if let Some(record) =
-                self.records.iter().flatten().map(|held| held.record.as_ref()).find(|record| {
-                    record.projected.as_ref().is_some_and(|completed| {
-                        !matches!(completed.outcome, JobOutcome::Success(_))
-                    })
-                })
-            {
-                self.failure_run.get_or_insert(record.run);
-                return Err("Actual entry projection failed with retained original outcome".into());
-            }
             return Ok(());
         };
         let backend = retained_backend.backend.as_mut();
         let delivery = self.delivery.as_mut().ok_or("Actual backend delivery storage missing")?;
         let mut failure =
             relay::route(&mut self.records, backend, self.capture.as_ref(), resources).err();
+        if let Err(cause) = backend.maintain_profile_custody_without_resources(
+            &mut backend_resources(resources, self.capture.as_ref()),
+        ) {
+            failure.get_or_insert_with(|| outer(cause));
+        }
         delivery.capture_pending(|| backend.take_pending_transition());
         if let Err(cause) =
             delivery.route(&mut self.records, backend, self.capture.as_ref(), resources)

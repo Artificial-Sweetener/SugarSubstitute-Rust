@@ -49,7 +49,7 @@ fn write(handle: HANDLE, bytes: &[u8]) -> Result<(), NativeObservationError> {
 }
 
 /// Probe actual access masks without assuming source declarations establish rights.
-fn check_child_ends(handles: [HANDLE; 3]) -> Result<(), NativeObservationError> {
+fn check_child_ends(handles: [HANDLE; 3], stop: bool) -> Result<(), NativeObservationError> {
     for handle in handles {
         let mut flags = 0;
         // SAFETY: the live stdio pin retains each handle; flags is writable.
@@ -64,17 +64,38 @@ fn check_child_ends(handles: [HANDLE; 3]) -> Result<(), NativeObservationError> 
     }
     let mut input = [0; 1];
     let mut count = 1;
-    // SAFETY: the NUL input is synchronous and pinned; the initialized byte and
-    // count buffers are exactly the advertised writable ranges.
-    unsafe { ReadFile(handles[0], Some(&mut input), Some(&mut count), None) }
-        .map_err(|cause| native_error("output_abi_nul_read", cause))?;
-    if count != 0 {
-        return Err(NativeObservationError::new(
-            "output_abi_nul_read",
-            std::io::Error::other("NUL input did not report EOF"),
-        ));
+    if stop {
+        // SAFETY: the live read-only pipe receives one byte of bounded storage;
+        // the native worker owns the requested writer close independently of this pin.
+        let result = unsafe { ReadFile(handles[0], Some(&mut input), Some(&mut count), None) };
+        match result {
+            Err(cause)
+                if cause.code() == windows::core::HRESULT::from_win32(ERROR_BROKEN_PIPE.0) => {}
+            Err(cause) => return Err(native_error("output_shutdown_eof", cause)),
+            Ok(()) => return Err(crate::output::invariant("output_shutdown_expected_eof")),
+        }
+    } else {
+        let mut available = 0;
+        // SAFETY: the pinned synchronous shutdown pipe is queried without consuming or waiting.
+        unsafe {
+            windows::Win32::System::Pipes::PeekNamedPipe(
+                handles[0],
+                None,
+                0,
+                None,
+                Some(&mut available),
+                None,
+            )
+        }
+        .map_err(|cause| native_error("output_abi_input_pipe", cause))?;
+        if available != 0 {
+            return Err(NativeObservationError::new(
+                "output_abi_input_pipe",
+                std::io::Error::other("Shutdown input unexpectedly contains data"),
+            ));
+        }
     }
-    // SAFETY: the pinned NUL handle and one-byte immutable payload remain live.
+    // SAFETY: the pinned read-only pipe and one-byte immutable payload remain live.
     let denied = unsafe { WriteFile(handles[0], Some(b"x"), Some(&mut count), None) };
     require_denied(denied, "output_abi_nul_write")?;
     for handle in &handles[1..] {
@@ -106,6 +127,16 @@ fn require_denied(
 /// Real zero-length writes must not become EOF before subsequent bytes arrive.
 #[test]
 fn ffi_actual_stdio_rights_raw_drain_and_dual_eof_retire() -> TestResult {
+    qualify(false)
+}
+
+/// Closing managed stdin delivers EOF while output remains writable and fully drained.
+#[test]
+fn ffi_managed_shutdown_input_closes_without_cancelling_output() -> TestResult {
+    qualify(true)
+}
+
+fn qualify(stop: bool) -> TestResult {
     // Every completed nonempty read contains at least one byte, so even the
     // most fragmented scheduling cannot overflow the queue before consumption.
     assert!(STDOUT.len() + STDERR.len() <= MAX_WINDOWS_OUTPUT_CHUNKS);
@@ -134,6 +165,9 @@ fn ffi_actual_stdio_rights_raw_drain_and_dual_eof_retire() -> TestResult {
         rig.wake.wait_after(observed)?;
     }
     let stdio = session.control.take_child_stdio()?;
+    if stop {
+        session.control.request_backend_shutdown();
+    }
     let mut writer = rig.client.submit_blocking(
         &rig.scope,
         spec(2, JobClass::InfrastructureOrdinary, 4096)?,
@@ -143,7 +177,7 @@ fn ffi_actual_stdio_rights_raw_drain_and_dual_eof_retire() -> TestResult {
                 .map_err(|cause| NativeObservationError::new("output_abi_borrow", cause))?;
             let handles = [inheritance.stdin, inheritance.stdout, inheritance.stderr]
                 .map(|handle| HANDLE(handle.as_raw_handle()));
-            check_child_ends(handles)?;
+            check_child_ends(handles, stop)?;
             write(handles[1], b"")?;
             for byte in STDOUT {
                 write(handles[1], std::slice::from_ref(byte))?;

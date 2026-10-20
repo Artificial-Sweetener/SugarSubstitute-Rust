@@ -6,6 +6,7 @@
 mod account;
 pub(crate) mod backend_custody;
 mod backend_file;
+mod backend_recovery;
 pub(crate) mod files;
 mod paths;
 mod records;
@@ -92,7 +93,7 @@ pub(crate) struct Backend {
     pub(crate) file: Option<HeldFile>,
     pub(crate) custody_probe: Option<HeldFile>,
     pub(crate) record: Option<Record>,
-    pub(crate) original_released: Option<[u8; 128]>,
+    pub(crate) predecessor: Option<[u8; 128]>,
     pub(crate) claimed: bool,
     pub(crate) released: bool,
 }
@@ -181,7 +182,7 @@ impl NativePort for SystemPort {
             records::retire_backend(
                 file,
                 &mut backend.record,
-                backend.original_released.as_ref(),
+                backend.predecessor.as_ref(),
                 context,
             )?;
         }

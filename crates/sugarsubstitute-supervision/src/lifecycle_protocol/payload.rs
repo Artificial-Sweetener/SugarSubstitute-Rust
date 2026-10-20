@@ -133,10 +133,6 @@ pub enum WirePayload<'a> {
         /// Original unavailable lease, never a new target or process privilege.
         failed: LeaseReference,
     },
-    /// Tag21: actual complete covered splash submission for this initial child attempt.
-    /// The authenticated parent's reply follows its actual entry-splash hide; it
-    /// grants only child presentation, never backend, profile or Main readiness.
-    SplashPrepared(MainIdentity),
 }
 impl WirePayload<'_> {
     pub(super) const fn kind(&self) -> u16 {
@@ -161,7 +157,6 @@ impl WirePayload<'_> {
             Self::MainFailed(_) => 18,
             Self::SettleAttempt { .. } => 19,
             Self::RetryBackend { .. } => 20,
-            Self::SplashPrepared(_) => 21,
         }
     }
 }
@@ -254,6 +249,4 @@ pub enum DecodedPayload<'a> {
         /// Original unavailable lease, never a new target or process privilege.
         failed: LeaseReference,
     },
-    /// Covered child presentation claim, awaiting the authenticated parent's native hide.
-    SplashPrepared(MainIdentity),
 }

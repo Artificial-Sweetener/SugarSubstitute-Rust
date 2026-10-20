@@ -105,7 +105,15 @@ impl Issue<'_> {
                     }
                 }
             }
-            Activity::Write(command) => Some(command.deadline),
+            Activity::Write(command) => {
+                if command.deadline.is_none()
+                    && (!pipe.authenticated
+                        || pipe.binding.and_then(PeerBinding::backend_custody).is_none())
+                {
+                    return Err(failure("pipe_heartbeat_identity"));
+                }
+                command.deadline
+            }
         };
         if deadlines.is_some_and(|d| d.expired(at))
             || deadline.is_some_and(|until| until <= at)
@@ -124,6 +132,14 @@ impl Issue<'_> {
         let accepted = match native() {
             Ok(value) => value,
             Err(error) => {
+                let (kind, operation) = match self.activity {
+                    Activity::Connect => ("connect", None),
+                    Activity::Read(command) => ("read", Some(command.operation)),
+                    Activity::Write(command) => ("write", Some(command.operation)),
+                };
+                tracing::error!(operation="lifecycle_pipe_issue_failed", job=?self.context.job_id(),
+                    scope=?self.context.scope_id(), kind, native_operation=?operation,
+                    cause=%error, "Native lifecycle operation failed during issue");
                 if let Activity::Write(_) = self.activity
                     && let Some(admission) = &mut pipe.write_admission
                 {

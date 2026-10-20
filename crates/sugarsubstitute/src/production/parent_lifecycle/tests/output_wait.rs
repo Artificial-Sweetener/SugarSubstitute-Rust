@@ -8,6 +8,33 @@ use sugarsubstitute_contracts::lifecycle::RequestId;
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
 #[test]
+fn passive_output_reply_has_one_finite_transfer_after_a_long_coordinator_stall() -> TestResult {
+    let (mut parent, original, lease, _) = pending()?;
+    complete_progress(&mut parent, original)?;
+    let header =
+        WireHeader { request: Some(RequestId::new(4)?), deadline_qpc: 20_000_000_000, ..original };
+    let (index, _) = parent.requests.admit(header, b"original passive output pull")?;
+    parent.requests.get_mut(index)?.until = Some(Moment::from_nanos(20_000_000_000));
+    parent.requests.defer_reply(index)?;
+    parent.requests.get_mut(index)?.reply = Some(super::super::Reply::OutputIdle(lease));
+    let transfer = parent
+        .requests
+        .reply_deadline(index, Moment::from_nanos(60_000_000_000))
+        .map_err(|e| e as Box<dyn std::error::Error>)?;
+    assert_eq!(transfer, Moment::from_nanos(90_000_000_000));
+    assert_eq!(
+        parent
+            .requests
+            .reply_deadline(index, Moment::from_nanos(70_000_000_000))
+            .map_err(|e| e as Box<dyn std::error::Error>)?,
+        transfer
+    );
+    assert_eq!(parent.requests.get(index)?.header, header);
+    assert_eq!(parent.requests.next_deadline(), Some(transfer));
+    Ok(())
+}
+
+#[test]
 fn shared_output_wait_keeps_original_request_unadmitted_until_capacity_returns() -> TestResult {
     let (mut parent, original, lease, _) = pending()?;
     complete_progress(&mut parent, original)?;

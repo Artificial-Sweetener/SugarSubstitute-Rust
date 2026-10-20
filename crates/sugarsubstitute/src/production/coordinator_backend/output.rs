@@ -40,8 +40,11 @@ impl CoordinatorBackend {
     ) -> Result<Option<fanout::Delivery>> {
         let at = self.index(lease.resource)?;
         let record = self.records[at].as_mut().ok_or(LifecycleRejection::StaleIdentity)?;
-        if record.shutdown.is_some() || lease.run.owner != self.owner {
+        if lease.run.owner != self.owner {
             return Err(LifecycleRejection::WrongPhase.into());
+        }
+        if record.shutdown.is_some() {
+            return Ok(None);
         }
         // Reserve bounded cursor metadata before taking any native output loan.
         self.output_clients.subscribe(lease)?;
@@ -65,6 +68,9 @@ impl CoordinatorBackend {
         receipt: &OutputReceipt,
     ) -> Result<()> {
         self.output_clients.acknowledge(lease, receipt)?;
+        if self.record(lease.resource)?.shutdown.is_some() {
+            self.output_clients.remove_lease(lease);
+        }
         self.release_consumed_output();
         Ok(())
     }

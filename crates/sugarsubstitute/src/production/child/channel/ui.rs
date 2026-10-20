@@ -10,7 +10,7 @@ impl ChildChannel {
     /// Return one actual native UI command after validating its original local cutoff.
     /// Only Desktop's subsequent UiChallengeProcessed observation permits a response.
     /// # Errors
-    /// Retains clock/expiry causes; no command is emitted for a closed channel.
+    /// Retains clock failures; expired diagnostic work emits no command.
     pub(in super::super) fn take_ui_command(&mut self) -> Result<Option<DesktopStartupCommand>> {
         if !self.admission.open() || self.ui.is_none() {
             return Ok(None);
@@ -28,7 +28,7 @@ impl ChildChannel {
     /// Deliver the unchanged key returned by Desktop's actual native UI loop.
     /// Its caller supplies UiChallengeProcessed from the native loop.
     /// # Errors
-    /// Rejects foreign, duplicate, undispatched or expired callbacks without a response.
+    /// Rejects foreign, duplicate or undispatched callbacks. Expired probes grant no response.
     pub(in super::super) fn ui_processed(&mut self, key: UiChallengeKey) -> Result<()> {
         if !self.admission.open() {
             return Ok(());
@@ -56,14 +56,11 @@ impl ChildChannel {
         let binding = self.binding().ok_or("Original UI challenge binding missing")?;
         let counter = CounterDeadline::new(frame.header.deadline_qpc, binding.counter_frequency())?;
         let client = self.client.as_ref().ok_or("Original lifecycle execution client missing")?;
-        let original = client.decode_counter_deadline(counter)?;
+        let original = client.decode_live_counter_deadline(counter)?;
         let now = client.now()?;
-        self.ui.as_mut().ok_or("Original UI exchange missing")?.receive(
-            frame.header,
-            id,
-            original,
-            now,
-        )?;
+        let ui = self.ui.as_mut().ok_or("Original UI exchange missing")?;
+        ui.expire(self.requests.as_mut().ok_or("Original request ledger missing")?, now)?;
+        ui.receive(frame.header, id, original.unwrap_or(now), now)?;
         Ok(())
     }
 

@@ -134,7 +134,7 @@ fn original_expiry_during_get_never_renews_cleanup_budget() -> TestResult {
     let (completion, calls) = admitted_capture(
         &rig,
         Behavior::default(),
-        Some(Box::new(move || clock.advance(30_000_000_000))),
+        Some(Box::new(move || clock.advance(EntrySetupBudget::DURATION.as_secs() * 1_000_000_000))),
     )?;
     let JobOutcome::Failure(failure) = completion.outcome else {
         return Err("Expired original preparation published copied data".into());

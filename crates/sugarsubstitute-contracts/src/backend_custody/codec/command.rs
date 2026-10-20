@@ -8,6 +8,8 @@ use super::*;
 /// membership, birth, account and original source allocation.
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub enum BackendCustodyCommand {
+    /// Demonstrate coordinator progress on the authenticated custody channel.
+    Heartbeat,
     /// Confirm actual Held activation after Prepared, before root creation.
     ProfilePublished {
         /// Same authentic prepared profile/family.
@@ -124,6 +126,8 @@ pub enum BackendCustodyCommand {
 /// Acknowledgements retained by the parent operation's exact source/nonce owner.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BackendCustodyReceipt {
+    /// The independently running custodian observed this exact heartbeat.
+    Heartbeat,
     /// Exact matching Held row was observed under independent profile custody.
     ProfilePublished(ProfileCustodyKey),
     /// Actual independent profile lock, protected directory and empty Job retained.

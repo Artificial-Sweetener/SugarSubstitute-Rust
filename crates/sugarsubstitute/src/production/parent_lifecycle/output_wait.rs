@@ -10,6 +10,26 @@ use sugarsubstitute_contracts::{
 use sugarsubstitute_supervision::lifecycle_protocol::{DecodedPayload, LeaseReference, WireHeader};
 
 impl ParentLifecycle {
+    /// Running output is a passive subscription; each actual transfer remains finite.
+    /// Startup pulls retain their original acquisition cutoff.
+    pub(super) fn output_deadline(
+        &self,
+        header: WireHeader,
+        resources: &ParentResources<'_, '_>,
+    ) -> Result<Moment> {
+        if self.lease.is_none() {
+            return self.deadline(header, resources);
+        }
+        let live = resources.execution.client.decode_live_counter_deadline(
+            CounterDeadline::new(header.deadline_qpc, self.original.frequency())?,
+        )?;
+        let now = resources.execution.client.now()?;
+        if let Some(until) = live.filter(|until| *until > now) {
+            Self::bounded_deadline(until, now, resources)
+        } else {
+            Ok(now.checked_add(std::time::Duration::from_secs(30))?)
+        }
+    }
     /// Observe only capacity after common native/header authentication. Actual lease,
     /// ACK and native batch admission remain with the ordinary request/output owners.
     pub(super) fn defer_output_receive(
@@ -22,14 +42,11 @@ impl ParentLifecycle {
         let DecodedPayload::OutputPull { lease, acknowledged_delivery } = payload else {
             return Ok(false);
         };
-        let supplied = resources.execution.client.decode_counter_deadline(CounterDeadline::new(
-            header.deadline_qpc,
-            self.original.frequency(),
-        )?)?;
+        let supplied = self.output_deadline(header, resources)?;
         let now = resources.execution.client.now()?;
         // The ordinary owner handles expired provisional pulls. Any live wait must
         // first satisfy the same finite interval policy as ordinary admission.
-        if now < supplied {
+        if now < supplied && self.lease.is_none() {
             self.deadline(header, resources)?;
         }
         self.wait_output_loan(*lease, *acknowledged_delivery, supplied, now, |key| {

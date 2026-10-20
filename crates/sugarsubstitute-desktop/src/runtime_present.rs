@@ -104,7 +104,7 @@ impl Presentations {
         self.visibility.shown()
     }
 
-    /// Apply a presentation-only handoff while preserving the application/execution lifetime.
+    /// Apply requested visibility while preserving the application/execution lifetime.
     pub(crate) fn reconcile(
         &mut self,
         content: &mut impl WindowContent,
@@ -117,8 +117,7 @@ impl Presentations {
             .reconcile(content, |visible| native_visibility(window, visible, timings, presenter))
     }
 
-    /// Count complete native/control handoffs after their required show and exposure succeeds.
-    /// A covered child's existing handoff reports its complete prepared submission.
+    /// Count complete native/control submissions after required visibility and exposure succeed.
     fn record_submission(
         &mut self,
         result: Result<(), DesktopError>,

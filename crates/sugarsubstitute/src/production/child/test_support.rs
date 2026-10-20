@@ -71,7 +71,7 @@ impl NativeCaptureDriver for InertDriver {
 }
 
 /// Original deterministic identity shared by the real child fixture and composed callback tests.
-pub(in crate::production) fn run() -> super::Result<RunKey> {
+pub(crate) fn run() -> super::Result<RunKey> {
     Ok(RunKey {
         owner: CoordinatorKey {
             namespace: NamespaceId::new([7; 32]),
@@ -83,7 +83,7 @@ pub(in crate::production) fn run() -> super::Result<RunKey> {
 }
 
 /// Frozen execution clock used by actual child/recipient lifecycle tests.
-pub(in crate::production) struct Frozen(pub(in crate::production) AtomicU64);
+pub(crate) struct Frozen(pub(crate) AtomicU64);
 impl Clock for Frozen {
     fn now(&self) -> Moment {
         Moment::from_nanos(self.0.load(Ordering::SeqCst))
@@ -99,7 +99,7 @@ impl CompletionWake for Wake {
     }
 }
 /// Construct the real child with its real execution owner; only capture and time are external fakes.
-pub(in crate::production) fn child()
+pub(crate) fn child()
 -> super::Result<(ProductionChild, sugarsubstitute_execution::ExecutionOwner, Arc<Frozen>)> {
     let run = run()?;
     let clock = Arc::new(Frozen(AtomicU64::new(0)));

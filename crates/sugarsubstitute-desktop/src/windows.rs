@@ -10,9 +10,9 @@ use windows::Win32::{
     Foundation::{E_ACCESSDENIED, E_INVALIDARG, E_NOTIMPL, HWND, POINT, RECT},
     Graphics::{
         Dwm::{
-            DWMWA_SYSTEMBACKDROP_TYPE, DWMWA_USE_IMMERSIVE_DARK_MODE,
-            DWMWA_WINDOW_CORNER_PREFERENCE, DWMWINDOWATTRIBUTE, DwmExtendFrameIntoClientArea,
-            DwmSetWindowAttribute,
+            DWMWA_SYSTEMBACKDROP_TYPE, DWMWA_TRANSITIONS_FORCEDISABLED,
+            DWMWA_USE_IMMERSIVE_DARK_MODE, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWINDOWATTRIBUTE,
+            DwmExtendFrameIntoClientArea, DwmSetWindowAttribute,
         },
         Gdi::{
             BitBlt, GetDC, GetMonitorInfoW, MONITOR_DEFAULTTOPRIMARY, MONITORINFO,
@@ -44,8 +44,9 @@ impl Presenter {
     pub(crate) fn material(&self) -> NativeMaterial {
         self.material
     }
-    /// Apply native material before showing the owned transparent surface.
+    /// Prepare a splash at its final size without a compositor entrance or exit animation.
     pub(crate) fn new(window: Rc<Window>, dark: bool) -> Result<Self, DesktopError> {
+        disable_splash_transitions(HWND(window.hwnd() as *mut c_void))?;
         Self::with_backdrop(window, dark, 2)
     }
 
@@ -134,6 +135,22 @@ impl Presenter {
         .ok()
         .map_err(|cause| DesktopError::new("expose_prepared_controls", cause))
     }
+}
+
+/// Suppress only this splash's DWM transitions before its first native show.
+/// Both startup processes use this presenter; the main window keeps its normal transitions.
+fn disable_splash_transitions(hwnd: HWND) -> Result<(), DesktopError> {
+    let disabled = windows::core::BOOL::from(true);
+    // SAFETY: The caller retains this creating-thread HWND. DWM copies the documented BOOL.
+    unsafe {
+        DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_TRANSITIONS_FORCEDISABLED,
+            (&raw const disabled).cast(),
+            size_of::<windows::core::BOOL>() as u32,
+        )
+    }
+    .map_err(|cause| DesktopError::new("disable_splash_transitions", cause))
 }
 
 /// Retain complete admitted native pixels before a hidden surface can become drawable.

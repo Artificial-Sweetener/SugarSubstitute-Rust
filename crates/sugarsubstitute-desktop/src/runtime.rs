@@ -5,7 +5,7 @@
 #[cfg(any(target_os = "linux", test))]
 #[path = "linux_callback_failure.rs"]
 pub(crate) mod callback_failure;
-use crate::native_surface::{callback_kind, input, invalidate, presentation, state, surface_shape};
+use crate::native_surface::{callback_kind, input, presentation, state, surface_shape};
 
 use crate::cadence::{advance_deadline, closing_wait, presentation_wait};
 use crate::completion_wake as wake;
@@ -119,7 +119,6 @@ pub fn run(
     let mut pointer = Pointer::default();
     let mut pressed = None;
     let mut next_preparation = started;
-    let mut redraw_pending = false;
     #[cfg(target_os = "windows")]
     let mut animation_period = crate::windows_animation_period::WindowsAnimationPeriod::new();
     loop {
@@ -171,7 +170,7 @@ pub fn run(
                             ) {
                                 Ok(effect) => {
                                     if effect.close {
-                                        surface.close(&mut content);
+                                        surface.close_by_user(&mut content);
                                     }
                                     #[cfg(windows)]
                                     if let Some(backward) = effect.focus
@@ -183,7 +182,7 @@ pub fn run(
                                         surface.dirty();
                                     }
                                     if effect.expose && !surface.closing {
-                                        invalidate(&window, &mut redraw_pending);
+                                        window.request_redraw();
                                     }
                                 }
                                 Err(error) => surface.fail(&mut content, error),
@@ -196,11 +195,13 @@ pub fn run(
                                 drain_budget,
                                 started.elapsed(),
                             ) {
-                                invalidate(&window, &mut redraw_pending);
+                                window.request_redraw();
                             }
                         }
                         #[cfg(target_os = "windows")]
-                        Event::UserEvent(NativeAction::Close) => surface.close(&mut content),
+                        Event::UserEvent(NativeAction::Close) => {
+                            surface.close_by_user(&mut content)
+                        }
                         #[cfg(target_os = "windows")]
                         Event::UserEvent(NativeAction::Activate(id)) if !surface.closing => {
                             if content.activate(id) {
@@ -215,10 +216,9 @@ pub fn run(
                         }
                         #[cfg(target_os = "windows")]
                         Event::UserEvent(NativeAction::FocusChanged) if !surface.closing => {
-                            invalidate(&window, &mut redraw_pending);
+                            window.request_redraw();
                         }
                         Event::RedrawRequested(window_id) if window_id == window.id() => {
-                            redraw_pending = false;
                             if let Some(frame) = surface.exposable(actual_shape)
                                 && let Err(error) = presentations.submit(
                                     &window,
@@ -234,12 +234,14 @@ pub fn run(
                             }
                         }
                         Event::MainEventsCleared => {
-                            surface.poll(
+                            if surface.poll(
                                 &mut content,
                                 actual_shape,
                                 drain_budget,
                                 started.elapsed(),
-                            );
+                            ) {
+                                window.request_redraw();
+                            }
                             if presentations.preparing_first()
                                 && let Some(frame) = surface.exposable(actual_shape)
                                 && let Err(cause) = presentations.submit(

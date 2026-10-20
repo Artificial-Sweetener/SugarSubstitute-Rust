@@ -58,6 +58,8 @@ impl RenderStages {
             || !frame.scale.is_finite()
             || !(0.5..=4.0).contains(&frame.scale)
             || !frame.feedback.is_valid()
+            || !frame.appearance.reveal.is_finite()
+            || !(0.0..=1.0).contains(&frame.appearance.reveal)
         {
             return Err(RenderError::InvalidFrame);
         }
@@ -135,11 +137,11 @@ impl RenderStages {
                 let cursor = self.character.as_mut().ok_or(RenderError::InvalidFrame)?;
                 if cursor.step(&mut renderer.characters, target).map_err(RenderError::Character)? {
                     self.character = None;
-                    if frame.appearance.expanded {
+                    if frame.appearance.reveal > 0.0 {
                         self.console = Some(ConsoleCursor::new(
                             frame.width,
                             frame.height,
-                            frame.appearance.theme,
+                            frame.appearance,
                             frame.scale as f32,
                         )?);
                         self.stage = Stage::Console;
@@ -154,8 +156,13 @@ impl RenderStages {
                 let cursor = self.console.as_mut().ok_or(RenderError::InvalidFrame)?;
                 if cursor.step(target)? {
                     self.console = None;
-                    if frame.status && transcript.is_some_and(|view| view.records().len() != 0) {
+                    if frame.status
+                        && frame.appearance.reveal == 1.0
+                        && transcript.is_some_and(|view| view.records().len() != 0)
+                    {
                         self.stage = Stage::ConsolePrepare;
+                    } else if frame.status {
+                        self.stage = Stage::Fonts;
                     } else {
                         self.begin_progress()?;
                     }
@@ -185,10 +192,14 @@ impl RenderStages {
                 {
                     self.console_clipped_rows = cursor.clipped_rows();
                     self.console_text = None;
-                    self.begin_progress()?;
+                    self.stage = Stage::Fonts;
                 }
             }
             Stage::Fonts => {
+                if !frame.appearance.status_visible() {
+                    self.begin_progress()?;
+                    return Ok(false);
+                }
                 if renderer.text.is_none() {
                     renderer.text =
                         Some(FontOwner::new(&renderer.locale).map_err(RenderError::Font)?);
@@ -198,8 +209,11 @@ impl RenderStages {
             Stage::StatusPrepare => {
                 let text = renderer.text.as_mut().ok_or(RenderError::InvalidFrame)?;
                 let copy = messages(&renderer.locale);
+                let operation = copy.startup.operation(frame.appearance.operation);
                 let message = match frame.appearance.status {
-                    crate::StartupStatus::Loading => copy.loading,
+                    crate::StartupStatus::Loading => operation[0],
+                    crate::StartupStatus::LoadingLong => operation[1],
+                    crate::StartupStatus::LoadingExtended => operation[2],
                     crate::StartupStatus::Failed => copy.connection_failed,
                     crate::StartupStatus::Settling => copy.cleanup_pending,
                     crate::StartupStatus::RetryReady => copy.retry_ready,

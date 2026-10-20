@@ -9,7 +9,7 @@ use std::time::Duration;
 pub struct ShutdownBudget {
     /// Original transaction start in the composing owner's clock epoch.
     pub started: Moment,
-    /// Absolute end of the ten-second graceful interval.
+    /// Absolute end of the owner's graceful interval, within the fixed total.
     pub graceful_until: Moment,
     /// Absolute end of the fifteen-second force/reap/join interval.
     pub settle_until: Moment,
@@ -24,6 +24,20 @@ impl ShutdownBudget {
             .checked_add(Duration::from_secs(15))
             .map_err(|_| LifecycleRejection::InvalidClock)?;
         Ok(Self { started, graceful_until, settle_until })
+    }
+    /// Validate a composed phase split without extending the fifteen-second total.
+    /// Dependent owners can reserve time after an earlier owner's force boundary.
+    /// # Errors
+    /// Rejects reversed phases, renewed totals and overflowing original clocks.
+    pub fn validate(self) -> Result<(), LifecycleRejection> {
+        let canonical = Self::new(self.started)?;
+        if self.graceful_until < self.started
+            || self.graceful_until > self.settle_until
+            || self.settle_until != canonical.settle_until
+        {
+            return Err(LifecycleRejection::InvalidClock);
+        }
+        Ok(())
     }
 }
 /// Attribute desktop exit without equating it to supervisor resource settlement.

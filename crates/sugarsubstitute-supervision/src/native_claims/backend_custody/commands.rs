@@ -72,7 +72,23 @@ impl State {
         self.latest = Some(frame);
         self.reply = None;
         self.reply_until = None;
+        if let Some(parent) = &mut self.parent {
+            parent
+                .observe_parent_progress()
+                .map_err(|cause| ClaimError::new("custody_parent_progress", cause))?;
+        }
         let result = match frame.command {
+            Command::Heartbeat => {
+                self.require_established()?;
+                self.reply_until = Some(
+                    memory
+                        .check_registration()
+                        .map_err(|cause| ClaimError::new("custody_heartbeat_clock", cause))?
+                        .checked_add(std::time::Duration::from_secs(2))
+                        .map_err(|cause| ClaimError::new("custody_heartbeat_deadline", cause))?,
+                );
+                Receipt::Heartbeat
+            }
             Command::ProfilePrepare { .. }
             | Command::ProfilePublished { .. }
             | Command::ProfileRoot { .. }
@@ -98,6 +114,11 @@ impl State {
                     .activate(wake.clone())
                     .map_err(|cause| ClaimError::new("custody_parent_observation", cause))?;
                 self.established = true;
+                self.parent
+                    .as_mut()
+                    .ok_or_else(|| ClaimError::invalid("custody_parent_owner"))?
+                    .observe_parent_progress()
+                    .map_err(|cause| ClaimError::new("custody_parent_progress", cause))?;
                 Receipt::Established
             }
             Command::Prepare { resource, job, until_ticks, frequency, .. } => {

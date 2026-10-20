@@ -46,6 +46,7 @@ fn successful_original_source_close_returns_credit_before_http_cleanup_admission
     close.consume()?;
     assert!(close.closed() && !close.awaiting_source());
     assert!(lease.validate_live().is_err());
+    fixture.reservation_at_most(pressure + FRONTEND_SOURCE_BYTES)?;
     let mut http_close = fixture.client.submit_blocking(
         &fixture.scope,
         spec(5, READINESS_TRANSPORT_BYTES)?,

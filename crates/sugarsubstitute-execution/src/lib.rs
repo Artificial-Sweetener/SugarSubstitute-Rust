@@ -130,7 +130,8 @@ pub mod clock_fixture;
 pub use clock::MonotonicClock;
 pub use runtime::{
     EntryEnvironmentCustody, EntryEnvironmentExtent, ExecutionClient, ExecutionLimits,
-    ExecutionOwner, NativeOutputCustody, ProcessCaptureCustody, ShutdownProgress, WorkerStatus,
+    ExecutionOwner, NativeOutputCustody, ProcessCaptureCustody, ShutdownProgress, UnresolvedJob,
+    WorkerStatus,
 };
 
 #[cfg(test)]

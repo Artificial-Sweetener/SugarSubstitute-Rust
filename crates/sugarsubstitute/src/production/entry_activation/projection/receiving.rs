@@ -5,7 +5,7 @@ use super::super::*;
 impl ProductionActivation {
     pub(in crate::production::entry_activation) fn receive_projections(
         &mut self,
-        resources: &EntryResources<'_>,
+        resources: &mut EntryResources<'_>,
     ) -> Result<()> {
         for pending in self.pending.iter_mut().flatten() {
             if let Some(job) = &mut pending.job
@@ -23,6 +23,18 @@ impl ProductionActivation {
             }
         }
         for at in 0..self.pending.len() {
+            if !self.closing
+                && let Some(pending) = &self.pending[at]
+            {
+                match reactivation::reuse(&self.records, pending, resources)? {
+                    reactivation::Reuse::Accepted | reactivation::Reuse::Expired => {
+                        self.pending[at] = None;
+                        continue;
+                    }
+                    reactivation::Reuse::Waiting => continue,
+                    reactivation::Reuse::New => {}
+                }
+            }
             let Some(pending) = &mut self.pending[at] else {
                 continue;
             };
@@ -85,6 +97,24 @@ impl ProductionActivation {
             }
             self.records[at] = Some(successor);
             self.pending[at] = None;
+        }
+        self.check_initial_projection()
+    }
+
+    /// Observe failed initial preparation before incident recovery requires its successful source.
+    pub(in crate::production::entry_activation) fn check_initial_projection(
+        &mut self,
+    ) -> Result<()> {
+        if self.backend.is_none()
+            && let Some(record) =
+                self.records.iter().flatten().map(|held| held.record.as_ref()).find(|record| {
+                    record.projected.as_ref().is_some_and(|completed| {
+                        !matches!(completed.outcome, JobOutcome::Success(_))
+                    })
+                })
+        {
+            self.failure_run.get_or_insert(record.run);
+            return Err("Actual entry projection failed with retained original outcome".into());
         }
         Ok(())
     }

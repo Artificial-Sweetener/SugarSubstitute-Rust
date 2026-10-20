@@ -44,6 +44,7 @@ pub(crate) trait OutputLease: Send {
         signals: [Arc<Signal>; 2],
     ) -> Result<[usize; 3], NativeObservationError>;
     fn release_child_ends(&mut self) -> Result<(), NativeObservationError>;
+    fn close_input(&mut self) -> Result<(), NativeObservationError>;
     fn read(
         &mut self,
         stream: OutputStream,
@@ -121,6 +122,7 @@ pub(crate) struct Loss {
 pub(crate) struct State {
     prepared: bool,
     stopped: bool,
+    input_close_requested: bool,
     retired: bool,
     pending_reads: [bool; 2],
     pending_read_issues: [u64; 2],
@@ -144,6 +146,7 @@ impl State {
         Self {
             prepared: false,
             stopped: false,
+            input_close_requested: false,
             retired: false,
             pending_reads: [false; 2],
             pending_read_issues: [0; 2],

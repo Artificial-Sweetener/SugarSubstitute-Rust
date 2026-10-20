@@ -262,12 +262,17 @@ impl ReadinessProbeOwner {
                 .as_mut()
                 .ok_or_else(|| ReadinessTransportError::invalid("attempt_no_custody"))?;
             let state = &mut state.value;
-            if now >= state.deadline
-                || state.request != 0
-                || state.connect != 0
-                || state.session != 0
-            {
-                return Err(ReadinessTransportError::invalid("attempt_delivery_or_retirement"));
+            if state.request != 0 || state.connect != 0 || state.session != 0 {
+                return Err(ReadinessTransportError::invalid("attempt_retirement_incomplete"));
+            }
+            if now >= state.deadline {
+                return Err(ReadinessTransportError::elapsed(
+                    "attempt_delivery_expired",
+                    std::io::Error::new(
+                        std::io::ErrorKind::TimedOut,
+                        "Readiness probe delivery expired",
+                    ),
+                ));
             }
             self.input
                 .source

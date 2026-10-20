@@ -24,8 +24,6 @@ pub(super) enum ChallengeError {
     Replay,
     /// The native callback or transport transition arrived out of order.
     Order,
-    /// The unchanged local cutoff was reached.
-    Deadline,
     /// The coordinator rejected the exact response.
     Rejected,
 }
@@ -68,6 +66,7 @@ pub(super) struct UiChallengeExchange {
     latest: u64,
     pending: Option<Pending>,
     closed: bool,
+    expired_callback: Option<UiChallengeKey>,
 }
 impl UiChallengeExchange {
     /// Begin only after the real channel accepted its exact Register reply.
@@ -79,6 +78,7 @@ impl UiChallengeExchange {
             latest: 0,
             pending: None,
             closed: false,
+            expired_callback: None,
         })
     }
 
@@ -109,7 +109,8 @@ impl UiChallengeExchange {
             return Err(ChallengeError::Busy);
         }
         if now >= original {
-            return Err(ChallengeError::Deadline);
+            self.latest = id.get();
+            return Ok(());
         }
         self.pending = Some(Pending {
             key: UiChallengeKey { run: self.run, id },
@@ -135,7 +136,8 @@ impl UiChallengeExchange {
             return Ok(None);
         }
         if now >= pending.original {
-            return Err(ChallengeError::Deadline);
+            self.pending = None;
+            return Ok(None);
         }
         pending.phase = Phase::Dispatched;
         Ok(Some(pending.key))
@@ -151,6 +153,10 @@ impl UiChallengeExchange {
         if self.closed {
             return Ok(());
         }
+        if self.expired_callback == Some(key) {
+            self.expired_callback = None;
+            return Ok(());
+        }
         let pending = self.pending.as_mut().ok_or(ChallengeError::Order)?;
         if key != pending.key {
             return Err(ChallengeError::Identity);
@@ -159,7 +165,8 @@ impl UiChallengeExchange {
             return Err(ChallengeError::Order);
         }
         if now >= pending.original {
-            return Err(ChallengeError::Deadline);
+            self.pending = None;
+            return Ok(());
         }
         pending.phase = Phase::Processed;
         Ok(())
@@ -175,10 +182,8 @@ impl UiChallengeExchange {
         if self.closed {
             return Ok(None);
         }
+        self.expire(requests, now)?;
         let Some(pending) = &mut self.pending else { return Ok(None) };
-        if now >= pending.original {
-            return Err(Box::new(ChallengeError::Deadline));
-        }
         if pending.phase == Phase::Processed {
             pending.phase = Phase::Prepared(requests.prepare(pending.original, pending.counter)?);
         }
@@ -247,7 +252,34 @@ impl UiChallengeExchange {
 
     /// Expose the original wake deadline without sampling a provider or renewing it.
     pub(super) fn deadline(&self) -> Option<Moment> {
-        if self.closed { None } else { self.pending.as_ref().map(|pending| pending.original) }
+        if self.closed {
+            None
+        } else {
+            self.pending
+                .as_ref()
+                .filter(|pending| !matches!(pending.phase, Phase::Admitted(_)))
+                .map(|pending| pending.original)
+        }
+    }
+
+    /// Expiry discards diagnostic work only; admitted transport remains owned through its ACK.
+    pub(super) fn expire(
+        &mut self,
+        requests: &mut ClientRequests,
+        now: Moment,
+    ) -> Result<(), Box<dyn Error>> {
+        let Some(pending) = &self.pending else { return Ok(()) };
+        if now < pending.original || matches!(pending.phase, Phase::Admitted(_)) {
+            return Ok(());
+        }
+        if let Phase::Prepared(header) = pending.phase {
+            requests.withdraw_prepared(header)?;
+        }
+        if pending.phase == Phase::Dispatched {
+            self.expired_callback = Some(pending.key);
+        }
+        self.pending = None;
+        Ok(())
     }
 
     /// Fence UI dispatch and response while retaining original matching evidence.

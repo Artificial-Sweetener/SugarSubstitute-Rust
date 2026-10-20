@@ -5,7 +5,7 @@
 
 use super::{border_raster::BorderCursor, console_passes};
 use crate::{
-    Theme,
+    Appearance,
     shapes::{AllocationError, PaintCursor},
 };
 use tiny_skia::{Path, Pixmap, Rect};
@@ -31,11 +31,11 @@ impl ConsoleCursor {
     pub(crate) fn new(
         width: u32,
         height: u32,
-        theme: Theme,
+        appearance: Appearance,
         scale: f32,
     ) -> Result<Self, AllocationError> {
         Ok(Self {
-            passes: console_passes(theme, scale)?.into_iter(),
+            passes: console_passes(appearance, scale)?.into_iter(),
             active: None,
             width,
             height,

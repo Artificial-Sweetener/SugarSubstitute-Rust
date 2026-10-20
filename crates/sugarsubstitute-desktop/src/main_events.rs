@@ -56,6 +56,7 @@ pub(crate) struct Observation<'a> {
 
 struct Storage {
     slots: Vec<Slot>,
+    console_payload: String,
     first: usize,
     count: usize,
     failure: Option<DesktopError>,
@@ -83,11 +84,22 @@ impl Events {
     ) -> Result<Rc<Self>, DesktopError> {
         let bytes = (SLOTS * (PAYLOAD_BYTES + size_of::<Slot>())
             + size_of::<Self>()
-            + size_of::<Storage>()) as u64;
+            + size_of::<Storage>()
+            + 2 * PAYLOAD_BYTES) as u64;
         let claim =
             lease.claim(bytes).map_err(|cause| DesktopError::new("claim_main_events", cause))?;
-        let mut storage =
-            Storage { slots: Vec::new(), first: 0, count: 0, failure: None, _claim: claim };
+        let mut storage = Storage {
+            slots: Vec::new(),
+            console_payload: String::new(),
+            first: 0,
+            count: 0,
+            failure: None,
+            _claim: claim,
+        };
+        storage
+            .console_payload
+            .try_reserve_exact(PAYLOAD_BYTES)
+            .map_err(|cause| DesktopError::new("allocate_main_event_payload", cause))?;
         storage
             .slots
             .try_reserve_exact(SLOTS)
@@ -186,31 +198,49 @@ impl Events {
         }
         let result = (|| {
             let mut storage = self.storage.borrow_mut();
+            let mut copy = Some(copy);
+            if kind == Kind::Console {
+                storage.console_payload.clear();
+                copy.take()
+                    .ok_or_else(|| DesktopError::message("copy_main_event", "missing copier"))?(
+                    &mut storage.console_payload,
+                )?;
+                validate_payload(&storage.console_payload)?;
+                if !crate::main_console::retain(&storage.console_payload) {
+                    return Ok(false);
+                }
+            }
             if storage.count == SLOTS {
+                tracing::error!(operation="main_event_overflow", incoming=?kind,
+                    queued_console=storage.slots.iter().filter(|slot| slot.kind==Some(Kind::Console)).count(),
+                    "Lifecycle callback queue exhausted after console admission filtering");
                 return Err(DesktopError::message(
                     "main_event_overflow",
                     "bounded receiver queue exhausted",
                 ));
             }
             let index = (storage.first + storage.count) % SLOTS;
-            let slot = &mut storage.slots[index];
-            slot.payload.clear();
-            copy(&mut slot.payload)?;
-            if slot.payload.len() > PAYLOAD_BYTES || slot.payload.capacity() != PAYLOAD_BYTES {
-                return Err(DesktopError::message(
-                    "main_event_payload",
-                    "bounded receiver payload exceeded",
-                ));
+            if kind == Kind::Console {
+                let Storage { slots, console_payload, .. } = &mut *storage;
+                std::mem::swap(&mut slots[index].payload, console_payload);
+            } else {
+                storage.slots[index].payload.clear();
+                copy.take()
+                    .ok_or_else(|| DesktopError::message("copy_main_event", "missing copier"))?(
+                    &mut storage.slots[index].payload,
+                )?;
             }
+            let slot = &mut storage.slots[index];
+            validate_payload(&slot.payload)?;
             slot.kind = Some(kind);
             slot.command = command;
             storage.count += 1;
-            Ok(())
+            Ok(true)
         })();
-        if let Err(cause) = result {
-            self.fail(cause);
-        } else {
-            (self.wake)();
+        match result {
+            Err(cause) => self.fail(cause),
+            Ok(true) => (self.wake)(),
+            Ok(false) => {}
         }
     }
 
@@ -266,6 +296,17 @@ impl Events {
     pub(crate) fn notify_progress(&self) {
         (self.wake)();
     }
+}
+
+/// Every callback buffer stays inside its original preclaimed allocation.
+fn validate_payload(payload: &String) -> Result<(), DesktopError> {
+    if payload.len() > PAYLOAD_BYTES || payload.capacity() != PAYLOAD_BYTES {
+        return Err(DesktopError::message(
+            "main_event_payload",
+            "bounded receiver payload exceeded",
+        ));
+    }
+    Ok(())
 }
 
 pub(crate) struct Callback<'a>(&'a Events);

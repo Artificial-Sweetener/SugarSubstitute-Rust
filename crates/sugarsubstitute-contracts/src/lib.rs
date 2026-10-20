@@ -9,6 +9,7 @@ pub mod coordinator_entry;
 pub mod crash;
 pub mod execution;
 pub mod incident;
+pub mod instance_conflict;
 pub mod lifecycle;
 pub mod localization;
 pub mod presentation;

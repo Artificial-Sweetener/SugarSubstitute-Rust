@@ -4,6 +4,11 @@
 
 #[cfg(target_os = "windows")]
 mod bootstrap;
+#[cfg(target_os = "windows")]
+#[allow(unsafe_code)]
+mod windows_activation;
+#[cfg(target_os = "windows")]
+pub use windows_activation::activate_desktop_process;
 mod cadence;
 mod completion_wake;
 mod console;
@@ -36,7 +41,9 @@ pub mod qualification_trace;
 #[cfg(all(target_os = "windows", feature = "k1-native-qualification"))]
 mod qualified_preview;
 #[cfg(target_os = "windows")]
-pub use headless::{HeadlessLifetime, HeadlessStep, run_headless};
+pub use headless::run_headless;
+mod headless_contract;
+pub use headless_contract::{HeadlessLifetime, HeadlessStep};
 #[cfg(all(target_os = "windows", feature = "k1-native-qualification"))]
 pub use qualified_preview::{
     CapturedMainPreview, MainDownloadFixture, MainPreviewSnapshot, MainPreviewViewport,
@@ -48,6 +55,8 @@ mod macos;
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
 mod main_actor;
+#[cfg(any(target_os = "windows", test))]
+mod main_console;
 #[cfg(target_os = "windows")]
 mod main_events;
 mod native_action;
@@ -130,3 +139,9 @@ pub use host_contract::{
 };
 
 pub use main_environment::{MainEnvironmentError, MainEnvironmentFacts};
+
+#[cfg(target_os = "windows")]
+#[allow(unsafe_code)]
+mod startup_conflict;
+#[cfg(target_os = "windows")]
+pub use startup_conflict::show_startup_conflict;

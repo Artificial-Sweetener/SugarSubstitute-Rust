@@ -5,8 +5,12 @@ use super::super::requests::Purpose;
 use super::*;
 impl ChildChannel {
     /// Designate the original output owner before its actual native write.
-    pub(in super::super) fn output_pull(&mut self, header: WireHeader) -> Result<()> {
-        self.requests.as_mut().ok_or("Original ledger absent")?.output_pull(header)?;
+    pub(in super::super) fn output_pull(
+        &mut self,
+        header: WireHeader,
+        running: bool,
+    ) -> Result<()> {
+        self.requests.as_mut().ok_or("Original ledger absent")?.output_pull(header, running)?;
         Ok(())
     }
     pub(in super::super) fn backend_retry(&mut self, header: WireHeader) -> Result<()> {

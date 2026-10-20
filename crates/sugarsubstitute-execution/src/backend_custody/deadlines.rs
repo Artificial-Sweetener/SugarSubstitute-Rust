@@ -10,13 +10,24 @@ struct Entry {
     progress_due: bool,
     capture: bool,
 }
+
 ///64 actual backend cutoffs plus the helper's own close-only cutoff.
 pub(crate) struct Deadlines {
     slots: [Option<Entry>; 65],
+    parent: Option<Moment>,
 }
 impl Deadlines {
     pub(crate) fn new() -> Self {
-        Self { slots: [None; 65] }
+        Self { slots: [None; 65], parent: None }
+    }
+    /// Replace only the renewable parent observation; cleanup cutoffs stay immutable.
+    pub(crate) fn observe_parent_at(&mut self, at: Option<Moment>) -> bool {
+        if self.parent.is_some() && at.is_some() {
+            return false;
+        }
+        let changed = self.parent != at;
+        self.parent = at;
+        changed
     }
     pub(crate) fn arm(&mut self, index: usize, until: Moment) {
         if let Some(slot) = self.slots.get_mut(index)
@@ -84,6 +95,14 @@ impl Deadlines {
     pub(crate) fn scan(&mut self, now: Moment) -> (Option<Moment>, bool) {
         let mut next = None;
         let mut changed = false;
+        if let Some(at) = self.parent {
+            if now >= at {
+                self.parent = None;
+                changed = true;
+            } else {
+                next = Some(at);
+            }
+        }
         for entry in self.slots.iter_mut().flatten() {
             if entry.due {
                 continue;
@@ -114,5 +133,31 @@ impl Deadlines {
     }
     pub(crate) fn due(&self, index: usize) -> bool {
         self.slots.get(index).is_some_and(|entry| entry.is_some_and(|entry| entry.due))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn repeated_worker_progress_cannot_postpone_parent_observation() {
+        let mut deadlines = Deadlines::new();
+        assert!(deadlines.observe_parent_at(Some(Moment::from_nanos(10))));
+        assert!(!deadlines.observe_parent_at(Some(Moment::from_nanos(20))));
+        assert_eq!(deadlines.scan(Moment::from_nanos(9)), (Some(Moment::from_nanos(10)), false));
+        assert_eq!(deadlines.scan(Moment::from_nanos(10)), (None, true));
+        assert!(deadlines.observe_parent_at(Some(Moment::from_nanos(20))));
+        assert_eq!(deadlines.scan(Moment::from_nanos(20)), (None, true));
+    }
+    #[test]
+    fn parent_observation_never_renews_or_removes_owned_cleanup() {
+        let mut deadlines = Deadlines::new();
+        deadlines.arm(64, Moment::from_nanos(15));
+        deadlines.observe_parent_at(Some(Moment::from_nanos(10)));
+        assert_eq!(deadlines.scan(Moment::from_nanos(10)), (Some(Moment::from_nanos(15)), true));
+        deadlines.observe_parent_at(Some(Moment::from_nanos(20)));
+        assert!(deadlines.observe_parent_at(None));
+        assert_eq!(deadlines.scan(Moment::from_nanos(15)), (None, true));
+        assert!(deadlines.due(64));
     }
 }

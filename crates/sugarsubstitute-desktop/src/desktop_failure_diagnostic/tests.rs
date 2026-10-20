@@ -32,6 +32,12 @@ fn closed_first_failure_maps_only_known_boundary_and_direct_error_kinds() {
         ("query_cursor_monitor", Boundary::CursorMonitor),
         ("query_monitor_work_area", Boundary::MonitorWorkArea),
         ("center_window", Boundary::CenterWindow),
+        ("draw_native_focus", Boundary::NativeFocus),
+        ("release_native_focus_dc", Boundary::NativeFocusRelease),
+        ("update_accessible_controls", Boundary::ControlUpdate),
+        ("validate_accessible_controls", Boundary::ControlUpdate),
+        ("validate_accessible_bounds", Boundary::ControlUpdate),
+        ("frame_presented", Boundary::FramePresented),
         ("credential private unknown", Boundary::Other),
     ] {
         assert_eq!(classify(operation, &io).boundary, expected);

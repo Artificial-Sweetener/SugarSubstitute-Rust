@@ -16,7 +16,7 @@ mod tests;
 /// Persist/recheck the exact legacy predecessor through the original protected publication owner.
 /// Existing foreign backup bytes reject; partial outputs stay retained for checked shutdown.
 pub(super) fn preserve(state: &mut NativeState, context: &JobContext) -> Result<(), ClaimError> {
-    let Some(original) = state.original_released else {
+    let Some(original) = state.predecessor else {
         return Ok(());
     };
     if original[8..10] != [1, 0] {

@@ -17,14 +17,12 @@ use sugarsubstitute_splash::{
 /// Retain either an application's exclusive transcript or a complete charged output view.
 pub(crate) enum RenderConsole {
     Owned(TranscriptSnapshot),
-    #[cfg(windows)]
-    Output(crate::production_output::OutputSnapshot),
+    Output(crate::OutputSnapshot),
 }
 impl sugarsubstitute_splash::TranscriptView for RenderConsole {
     fn transcript(&self) -> &TranscriptSnapshot {
         match self {
             Self::Owned(view) => view,
-            #[cfg(windows)]
             Self::Output(view) => view.transcript(),
         }
     }
@@ -40,9 +38,8 @@ impl From<TranscriptSnapshot> for RenderConsole {
         Self::Owned(view)
     }
 }
-#[cfg(windows)]
-impl From<crate::production_output::OutputSnapshot> for RenderConsole {
-    fn from(view: crate::production_output::OutputSnapshot) -> Self {
+impl From<crate::OutputSnapshot> for RenderConsole {
+    fn from(view: crate::OutputSnapshot) -> Self {
         Self::Output(view)
     }
 }
@@ -50,6 +47,7 @@ impl From<crate::production_output::OutputSnapshot> for RenderConsole {
 /// Retain the actual non-clonable request across rejection or an uninvoked accepted factory.
 pub(crate) struct PendingPreparation {
     pub(crate) identity: FrameIdentity,
+    pub(crate) appearance: sugarsubstitute_splash::Appearance,
     pub(crate) bytes: u64,
     pub(crate) input: PreparationTransfer<SplashRenderRequest<RenderConsole>>,
 }
@@ -57,6 +55,7 @@ impl PendingPreparation {
     pub(crate) fn new(request: SplashRenderRequest<RenderConsole>) -> Self {
         Self {
             identity: request.identity,
+            appearance: request.appearance,
             bytes: request.reservation_bytes(),
             input: PreparationTransfer::new(request),
         }

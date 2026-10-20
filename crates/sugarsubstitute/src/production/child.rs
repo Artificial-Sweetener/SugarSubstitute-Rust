@@ -39,18 +39,18 @@ mod reload;
 mod requests;
 #[path = "child/retirement.rs"]
 mod retirement;
-#[path = "child/splash.rs"]
-mod splash;
-pub(in crate::production) use retirement::ShutdownInitiation;
+#[path = "child/startup_adapter.rs"]
+mod startup_adapter;
+use crate::startup::ShutdownInitiation;
 #[cfg(test)]
 #[path = "child/test_support.rs"]
-pub(in crate::production) mod test_support;
+pub(crate) mod test_support;
 use crate::{
     job_sequence::JobSequence,
     production_output::{OutputOwner, OutputSnapshot},
 };
 use bootstrap::ChildBootstrap;
-pub(in crate::production) use configuration::PreparedChildStartup;
+pub(crate) use configuration::PreparedChildStartup;
 use std::{error::Error, num::NonZeroUsize};
 use sugarsubstitute_application::startup::ConnectionBudget;
 use sugarsubstitute_contracts::{execution::*, lifecycle::*, startup::*};
@@ -78,12 +78,11 @@ pub(in crate::production) struct ChildInputs {
 }
 /// Keep all partial admissions, original frames, completions and permanent capture together.
 /// This owner creates no executor and uses only the application's shared job sequence.
-pub(in crate::production) struct ProductionChild {
+pub(crate) struct ProductionChild {
     diagnostics: crate::diagnostics::DiagnosticHealth,
     bootstrap: ChildBootstrap,
     run: RunKey,
     identity: MainIdentity,
-    splash: splash::SplashHandoff,
     client: Option<ExecutionClient>,
     jobs: Option<JobSequence>,
     connection_budget: Option<ConnectionBudget>,
@@ -149,7 +148,6 @@ impl ProductionChild {
             bootstrap,
             run,
             identity: MainIdentity { run, launch: identity.0, navigation: identity.1 },
-            splash: splash::SplashHandoff::default(),
             client: None,
             jobs: None,
             connection_budget: None,
@@ -181,7 +179,7 @@ impl ProductionChild {
     /// Transfer the genuine child scope before any fallible bootstrap admission.
     /// # Errors
     /// Retain the original client/scope/job identities through partial failure cleanup.
-    pub(in crate::production) fn start(
+    pub(crate) fn start(
         &mut self,
         client: &ExecutionClient,
         scope: Scope,
@@ -205,7 +203,7 @@ impl ProductionChild {
     /// Deliver one immutable batch to every actual owner before resolving any failure.
     /// # Errors
     /// Retain matching typed terminals and every native frame on failure.
-    pub(in crate::production) fn consume(
+    pub(crate) fn consume(
         &mut self,
         batch: &CompletionBatch,
         prepared: Option<&PreparedChildStartup>,
@@ -245,7 +243,7 @@ impl ProductionChild {
     /// Drive only actual capture/authentication/configuration before native surface admission.
     /// # Errors
     /// No positive preparation result exists until the same actual bootstrap returns Ready.
-    pub(in crate::production) fn prepare_native_ui(
+    pub(crate) fn prepare_native_ui(
         &mut self,
         max: NonZeroUsize,
     ) -> Result<StartupPreparationStep> {
@@ -263,13 +261,13 @@ impl ProductionChild {
         result
     }
     /// Move the complete guarded application state once after actual Ready.
-    pub(in crate::production) fn take_prepared_startup(&mut self) -> Option<PreparedChildStartup> {
+    pub(crate) fn take_prepared_startup(&mut self) -> Option<PreparedChildStartup> {
         if self.prepared { self.bootstrap.take_prepared_startup() } else { None }
     }
     /// Execute the sole application's decision with borrowed actual configuration custody.
     /// # Errors
     /// Reject wrong attempts/phases or duplicate work before further admission.
-    pub(in crate::production) fn apply(
+    pub(crate) fn apply(
         &mut self,
         effect: StartupEffect,
         prepared: &mut PreparedChildStartup,
@@ -308,7 +306,7 @@ impl ProductionChild {
     /// Preserve the actual callback before profile/IPC handling; no inert key grants authority.
     /// # Errors
     /// Failure retains the unchanged observation and first underlying cause.
-    pub(in crate::production) fn observe(
+    pub(crate) fn observe(
         &mut self,
         observation: DesktopStartupObservation,
         prepared: Option<&PreparedChildStartup>,
@@ -324,28 +322,26 @@ impl ProductionChild {
         result
     }
     /// Borrow actual retained Main construction/input/jobs for native absence checks.
-    pub(in crate::production) fn main_construction_pending(&self) -> bool {
+    pub(crate) fn main_construction_pending(&self) -> bool {
         self.main.construction_pending()
     }
     /// Borrow the actual immutable native-console source while its complete original
     /// source custody remains with this child. The affine adapter copies before this borrow ends.
-    pub(in crate::production) fn console_text(
-        &self,
-    ) -> Option<&dyn sugarsubstitute_desktop::ConsoleText> {
+    pub(crate) fn console_text(&self) -> Option<&dyn sugarsubstitute_desktop::ConsoleText> {
         self.snapshot.as_ref().map(|view| view as &dyn sugarsubstitute_desktop::ConsoleText)
     }
     /// Borrow only the actual bounded source-custodied transcript view.
-    pub(in crate::production) fn transcript(&self) -> Option<OutputSnapshot> {
+    pub(crate) fn transcript(&self) -> Option<OutputSnapshot> {
         self.snapshot.clone()
     }
     /// Transfer one original application observation after actual semantic consumption.
-    pub(in crate::production) fn take_startup_event(&mut self) -> Result<Option<StartupEvent>> {
+    pub(crate) fn take_startup_event(&mut self) -> Result<Option<StartupEvent>> {
         Ok(take_first(&mut self.events))
     }
     /// Transfer one native command; real challenge commands retain channel provenance.
     /// # Errors
     /// Preserves actual challenge clock/admission failure.
-    pub(in crate::production) fn take_command(&mut self) -> Result<Option<DesktopStartupCommand>> {
+    pub(crate) fn take_command(&mut self) -> Result<Option<DesktopStartupCommand>> {
         let result: Result<_> = (|| -> Result<_> {
             if let Some(command) = take_first(&mut self.commands) {
                 return Ok(Some(command));
@@ -368,7 +364,7 @@ impl ProductionChild {
         result
     }
     /// Borrow the earliest original pending operation or cleanup cutoff without renewing it.
-    pub(in crate::production) fn next_deadline(&self) -> Option<Moment> {
+    pub(crate) fn next_deadline(&self) -> Option<Moment> {
         if self.cleanup_failed() && !self.shutdown.closing() {
             return self.bootstrap.ui_deadline();
         }
@@ -377,7 +373,6 @@ impl ProductionChild {
                 .then(|| self.bootstrap.original_deadline())
                 .flatten(),
             self.bootstrap.ui_deadline(),
-            (!self.shutdown.closing()).then(|| self.splash.deadline()).flatten(),
             #[cfg(feature = "k1-native-qualification")]
             self.bootstrap.preview_deadline(),
             self.acquire.filter(|p| !p.retiring).and_then(connection::PendingAcquire::deadline),
@@ -400,7 +395,7 @@ impl ProductionChild {
     }
     /// Use only the actual session accepted by StartupPolicy after current MainRevealed.
     #[cfg(feature = "k1-native-qualification")]
-    pub(in crate::production) fn preview_after_main_revealed(
+    pub(crate) fn preview_after_main_revealed(
         &mut self,
         identity: sugarsubstitute_contracts::startup::MainIdentity,
         session: &sugarsubstitute_application::startup::StartupSession,
@@ -413,7 +408,7 @@ impl ProductionChild {
     }
     /// Consume only qualification payloads before they reach ordinary startup failure policy.
     #[cfg(feature = "k1-native-qualification")]
-    pub(in crate::production) fn accept_preview_observation(
+    pub(crate) fn accept_preview_observation(
         &mut self,
         observation: &mut Option<DesktopStartupObservation>,
     ) -> bool {

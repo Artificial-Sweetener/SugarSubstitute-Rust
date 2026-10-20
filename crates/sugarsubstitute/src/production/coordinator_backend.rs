@@ -349,23 +349,30 @@ impl CoordinatorBackend {
             && self.custody.as_ref().is_none_or(|custody| custody.settled())
     }
     /// Progress final witness retirement after local writers and families close.
-    /// The Parent transaction owner retains prior release until its exact ACK is consumed
-    /// by finish_cleanup; helper process cleanup requires the final Finished response.
+    /// Graceful retirement waits for original release receipts. The original grace
+    /// cutoff permits native helper retirement independently of an unresponsive peer.
     pub(crate) fn close_custody(
         &mut self,
         budget: ShutdownBudget,
         profiles_retired: bool,
         resources: &mut BackendResources<'_>,
     ) -> Result<()> {
-        if self.records.iter().flatten().all(|record| {
-            !record.resolution_pending
-                && !record.claim_pending
-                && (!record.backend_admitted || record.released)
-                && (record.launch.is_none() || record.family_settled)
-                && record.shutdown.is_some()
-        }) && let Some(custody) = &mut self.custody
+        // Finish closes the helper's protocol. Backend Stop/Released and local
+        // metadata retirement must finish first, including after backend force.
+        let dependents_retired =
+            profiles_retired && self.records.iter().flatten().all(|record| record.settled);
+        if (resources.client.now()? >= budget.graceful_until
+            || self.custody.as_ref().is_some_and(|custody| custody.exited())
+            || self.records.iter().flatten().all(|record| {
+                !record.resolution_pending
+                    && !record.claim_pending
+                    && (!record.backend_admitted || record.released)
+                    && (record.launch.is_none() || record.family_settled)
+                    && record.shutdown.is_some()
+            }))
+            && let Some(custody) = &mut self.custody
         {
-            custody.close(budget, profiles_retired, resources)?;
+            custody.close(budget, dependents_retired, resources)?;
         }
         Ok(())
     }

@@ -27,7 +27,11 @@ impl TextPort for Port {
         self.effect("observe")?;
         Ok(self.observation)
     }
-    fn write(&mut self, _document: &DocumentIndex) -> Result<(), DesktopError> {
+    fn write(
+        &mut self,
+        _document: &DocumentIndex,
+        _previous: Option<&DocumentIndex>,
+    ) -> Result<(), DesktopError> {
         self.effect("write")
     }
     fn restore(

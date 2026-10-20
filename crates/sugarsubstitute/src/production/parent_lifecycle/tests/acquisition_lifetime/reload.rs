@@ -33,7 +33,7 @@ fn admitted_reload_reply_keeps_original_header_and_one_finite_final_transfer() -
     let h = acquisition_header()?;
     let (index, _) = parent.requests.admit(h, b"actual original reload request")?;
     parent.requests.get_mut(index)?.until = Some(moment(180));
-    parent.requests.wait_for_readiness(index)?;
+    parent.requests.defer_reply(index)?;
     assert_eq!(parent.requests.next_deadline(), None);
     parent.requests.get_mut(index)?.reply =
         Some(Reply::Reloaded { lease: lease()?, identity: identity()? });

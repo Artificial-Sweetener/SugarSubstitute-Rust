@@ -3,6 +3,13 @@
 //! Observe actual report duties before the coordinator's existing normal-idle decision.
 use super::*;
 impl IncidentReporting {
+    /// Keep a separately launched report window alive until its accepted dismissal.
+    /// Stored diagnostics and background jobs retire with application shutdown.
+    pub(in crate::production::entry_activation) fn keeps_user_surface_open(&self) -> bool {
+        self.normal_close_budget().is_none()
+            && (self.launch_input.is_some() || self.session.is_some() || self.process.is_some())
+    }
+
     /// Copy retained Reporter state without native queries or receiving transitions.
     #[cfg(any(test, feature = "k1-native-qualification"))]
     pub(in crate::production::entry_activation) fn qualification_idle_state(
@@ -84,6 +91,7 @@ mod qualification_tests {
         assert_eq!(reporting.idle_block(), None);
         reporting.relay_needed = true;
         assert_eq!(reporting.idle_block(), Some("ReporterRelayNeeded"));
+        assert!(!reporting.keeps_user_surface_open());
         assert!(reporting.idle_block().is_some());
         reporting.dismiss_action = Some(ReportAction::Dismiss);
         let state = reporting.qualification_idle_state();
@@ -92,5 +100,22 @@ mod qualification_tests {
         reporting.relay_needed = false;
         assert_eq!(reporting.idle_block(), None);
         assert!(reporting.normal_close_budget().is_none());
+    }
+
+    #[test]
+    fn live_reporter_keeps_its_window_until_accepted_dismissal() -> Result<()> {
+        use sugarsubstitute_contracts::lifecycle::*;
+        let mut reporting = IncidentReporting::new();
+        reporting.process = Some(ProcessKey {
+            owner: CoordinatorKey {
+                namespace: NamespaceId::new([1; 32]),
+                epoch: CoordinatorEpoch::new([2; 16])?,
+            },
+            id: ProcessId::new(1)?,
+        });
+        assert!(reporting.keeps_user_surface_open());
+        reporting.dismiss_action = Some(ReportAction::Dismiss);
+        assert!(reporting.keeps_user_surface_open());
+        Ok(())
     }
 }

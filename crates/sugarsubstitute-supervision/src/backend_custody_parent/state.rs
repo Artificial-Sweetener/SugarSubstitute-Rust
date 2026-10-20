@@ -17,6 +17,7 @@ pub(super) struct State {
     pub(super) established: bool,
     pub(super) registrations: [Option<retirement::Registration>; 64],
     pub(super) finish: Option<finish::Finish>,
+    pub(super) heartbeat: heartbeat::Heartbeat,
 }
 impl State {
     /// Allocate no messages while advancing the sole connection-local operation sequence.
@@ -98,6 +99,10 @@ impl State {
                                 "Original correlated Finished response received");
                         }
                         self.receipt = Some(facts);
+                        if receipt == BackendCustodyReceipt::Heartbeat {
+                            self.heartbeat.acknowledge(facts.nonce)?;
+                            self.receipt = None;
+                        }
                         if let BackendCustodyReceipt::Prepared(resource) = receipt {
                             let slot = self
                                 .registrations
@@ -168,15 +173,23 @@ impl State {
                 .ok_or_else(|| reject("custody_parent_capacity"))?
                 .copy_from_slice(&bytes);
             let write = self.operation()?;
-            self.session
-                .control()
-                .write(write, until, buffer, BACKEND_CUSTODY_FRAME_BYTES)
-                .map_err(|cause| {
-                    NativeObservationError::new("custody_parent_write_admission", cause.error)
-                })?;
+            let heartbeat = matches!(frame.command, BackendCustodyCommand::Heartbeat);
+            let issued = if heartbeat {
+                self.session.control().write_heartbeat(write, buffer)
+            } else {
+                self.session.control().write(write, until, buffer, BACKEND_CUSTODY_FRAME_BYTES)
+            };
+            issued.map_err(|cause| {
+                NativeObservationError::new("custody_parent_write_admission", cause.error)
+            })?;
             self.write = Some(write);
             let read = self.operation()?;
-            self.session.control().read(read, until).map_err(|cause| {
+            let received = if heartbeat {
+                self.session.control().read_passive(read)
+            } else {
+                self.session.control().read(read, until)
+            };
+            received.map_err(|cause| {
                 NativeObservationError::new("custody_parent_read_admission", cause)
             })?;
             self.read = Some(read);
@@ -255,7 +268,8 @@ fn matches_reply(command: BackendCustodyCommand, receipt: BackendCustodyReceipt)
             BackendCustodyCommand::ProfileStop { profile, .. },
             BackendCustodyReceipt::ProfileReleased(actual),
         ) => profile == actual,
-        (BackendCustodyCommand::Establish { .. }, BackendCustodyReceipt::Established)
+        (BackendCustodyCommand::Heartbeat, BackendCustodyReceipt::Heartbeat)
+        | (BackendCustodyCommand::Establish { .. }, BackendCustodyReceipt::Established)
         | (BackendCustodyCommand::Finish { .. }, BackendCustodyReceipt::Finished) => true,
         (
             BackendCustodyCommand::Prepare { resource, .. },
@@ -276,6 +290,7 @@ pub(super) fn reject(stage: &'static str) -> NativeObservationError {
 /// Classify the retained operation without exposing payloads, paths or capabilities.
 fn command_kind(command: &BackendCustodyCommand) -> &'static str {
     match command {
+        BackendCustodyCommand::Heartbeat => "Heartbeat",
         BackendCustodyCommand::Hello { .. } => "Hello",
         BackendCustodyCommand::Establish { .. } => "Establish",
         BackendCustodyCommand::Prepare { .. } => "Prepare",

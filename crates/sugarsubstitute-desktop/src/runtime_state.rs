@@ -46,6 +46,14 @@ impl SurfaceState {
         self.close(content);
     }
 
+    /// Preserve explicit user intent separately from failure-triggered shutdown.
+    pub(crate) fn close_by_user(&mut self, content: &mut impl WindowContent) {
+        if !self.closing && self.failure.is_none() {
+            content.user_close_requested();
+        }
+        self.close(content);
+    }
+
     /// Disable publication/input before invalidation and one nonblocking shutdown request.
     pub(crate) fn close(&mut self, content: &mut impl WindowContent) {
         if self.closing {

@@ -32,7 +32,7 @@ fn acquisition_retirement_keeps_queued_receipt_slot_and_other_owner_bounds() -> 
     r.received(h, Moment::from_nanos(499))?;
     r.retire(h, Purpose::Acquisition)?;
     let output = prepare(&mut r)?;
-    r.output_pull(output)?;
+    r.output_pull(output, false)?;
     r.admitted(output)?;
     r.retire(output, Purpose::OutputPull)?;
     assert_eq!(r.received_or_retiring(h, Moment::from_nanos(600)), Err(RequestError::Order));
@@ -77,7 +77,7 @@ fn acquisition_local_withdrawal_requires_prepared_or_genuine_returned_no_issue_p
     assert_eq!(returned.original(), prepared.original());
     assert!(r.withdraw_acquisition(issued).is_err());
     let output = prepare(&mut r)?;
-    r.output_pull(output)?;
+    r.output_pull(output, false)?;
     assert!(r.withdraw_acquisition(output).is_err());
     assert_eq!(r.find(output)?.phase, Phase::Prepared);
     Ok(())

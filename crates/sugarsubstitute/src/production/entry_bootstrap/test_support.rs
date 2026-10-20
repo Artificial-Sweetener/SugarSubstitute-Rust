@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Own isolated files and synchronize actual terminal publication without sleeps.
 use super::*;
+use crate::production::options::ProductionEntryOptions;
 use std::{
     num::NonZeroUsize,
     sync::{
@@ -37,7 +38,8 @@ impl Files {
                 cubes: self.directory.join("SugarCubes"),
                 script: self.directory.join("main.py"),
                 profile: self.directory.join("profile"),
-            },
+            }
+            .into(),
             self.directory.clone(),
             sugarsubstitute_supervision::coordinator_entry::DiagnosticStorageLocation::Account,
             self.directory.join("SugarSubstitute.exe"),

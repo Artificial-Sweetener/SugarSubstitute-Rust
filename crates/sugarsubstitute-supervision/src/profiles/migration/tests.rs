@@ -52,7 +52,7 @@ fn legacy_released_original_is_protected_before_v2_activation_and_survives_norma
         drop(previous);
         let mut state = NativeState::new();
         port.acquire(&mut state, &path, run, &context)?;
-        assert_eq!(state.original_released, Some(original));
+        assert_eq!(state.predecessor, Some(original));
         preserve(&mut state, &context)?;
         preserve(&mut state, &context)?;
         let backup = path.join(".sugarsubstitute-profile-v1.original.record");

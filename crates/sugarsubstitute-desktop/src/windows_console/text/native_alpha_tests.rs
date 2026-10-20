@@ -24,14 +24,21 @@ use sugarsubstitute_contracts::{
 };
 use windows::{Win32::Foundation::RECT, core::Interface};
 
+#[path = "performance_tests.rs"]
+mod performance_tests;
+
 struct Release(Arc<AtomicUsize>);
 impl MemoryRelease for Release {
     fn release(&self, _bytes: u64) {
         self.0.fetch_add(1, Ordering::SeqCst);
     }
 }
-fn frame() -> Result<(PreparedFrame, Arc<AtomicUsize>), Box<dyn std::error::Error>> {
-    let shape = FrameShape::new(350, 160, 1.0)?;
+pub(super) fn frame() -> Result<(PreparedFrame, Arc<AtomicUsize>), Box<dyn std::error::Error>> {
+    frame_with_shape(FrameShape::new(350, 160, 1.0)?)
+}
+fn frame_with_shape(
+    shape: FrameShape,
+) -> Result<(PreparedFrame, Arc<AtomicUsize>), Box<dyn std::error::Error>> {
     let released = Arc::new(AtomicUsize::new(0));
     let lease = MemoryLease::new(
         ConsolePresentation::Native.storage_bytes(shape) + 2 * shape.byte_len() as u64,
@@ -148,7 +155,12 @@ fn native_alpha_console_preserves_exact_crop_semantic_alpha_unicode_selection_an
             let first = rect(&engine, 0, 1)?;
             let second = rect(&engine, 1, 2)?;
             let bytes = parent.pixels_mut()?;
-            assert_eq!(max_alpha(bytes, frame.stride(), first), 234);
+            assert_eq!(
+                max_alpha(bytes, frame.stride(), first),
+                234,
+                "first={first:?}, second={second:?}, {}",
+                layout_facts(&engine, 2)?
+            );
             assert_eq!(max_alpha(bytes, frame.stride(), second), 255);
             assert!(bytes.chunks_exact(4).any(|pixel| pixel[3] > 0));
             assert!(
@@ -215,7 +227,7 @@ fn native_alpha_console_preserves_exact_crop_semantic_alpha_unicode_selection_an
                 "forced WM_PAINT exposed a partially replaced native document"
             );
             let mut port = NativeText { hwnd, dark: true };
-            port.write(documents.current().ok_or("source index absent")?)?;
+            port.write(documents.current().ok_or("source index absent")?, None)?;
             port.restore(0, 1, 0, false)?;
             // SAFETY: Restore only this original child's redraw after the complete document returns.
             unsafe {
@@ -253,6 +265,70 @@ fn fingerprint(bytes: &[u8]) -> u64 {
     bytes.iter().fold(0xcbf2_9ce4_8422_2325, |hash, byte| {
         (hash ^ u64::from(*byte)).wrapping_mul(0x100_0000_01b3)
     })
+}
+
+/// A long provisioning transcript may acquire its first native layout during paint.
+#[test]
+fn native_alpha_long_transcript_preserves_scroll_and_selection_on_first_paint() -> TestResult {
+    let mut apartment = UiApartment::enter()?;
+    let (frame, released) = frame()?;
+    let lines: Vec<_> = (1..=128)
+        .map(|id| (id, "Provisioning dependency 日本語 😀 with a long wrapped status message"))
+        .collect();
+    let source = source(128, &lines)?;
+    let claim = frame.claim_storage(NATIVE_CONSOLE_STORAGE_BYTES)?;
+    let prepared = DocumentIndex::prepare(&source, claim)?;
+    let mut hidden = Hidden::new(prepared, &apartment)?;
+    let hwnd = hidden.hwnd.ok_or("Native child absent")?;
+    let mut documents = Documents::new(hidden.document.take().ok_or("Document absent")?);
+    publish(hwnd, &mut documents, true)?;
+    let engine = engine::find(hwnd)?;
+    let mut storage = None;
+    let target = Dib::for_frame(&mut storage, &frame)?;
+    engine.prepare(&frame, documents.shared().ok_or("Shared document absent")?, CROP, true, 1.0)?;
+    let control = messages::Messages(hwnd);
+    let selection = control.selection();
+    let line = control.first_line()?;
+    engine.qualify_pixels(target.dc(), false, target.pixels_mut()?)?;
+    assert_eq!(control.selection().cpMin, selection.cpMin);
+    assert_eq!(control.selection().cpMax, selection.cpMax);
+    assert_eq!(control.first_line()?, line);
+    let painted = fingerprint(target.pixels_mut()?);
+    let draws = engine.qualified_glyph_draws();
+    for _ in 0..4 {
+        engine.prepare(
+            &frame,
+            documents.shared().ok_or("Shared document absent")?,
+            CROP,
+            true,
+            1.0,
+        )?;
+        engine.qualify_pixels(target.dc(), false, target.pixels_mut()?)?;
+        assert_eq!(fingerprint(target.pixels_mut()?), painted);
+    }
+    assert_eq!(engine.qualified_glyph_draws(), draws, "unchanged console rerasterized on expose");
+    control.select(5, 14)?;
+    control.scroll_lines(-3)?;
+    let line = control.first_line()?;
+    engine.qualify_pixels(target.dc(), false, target.pixels_mut()?)?;
+    assert!(engine.qualified_glyph_draws() > draws, "input did not invalidate native glyphs");
+    assert_eq!(control.first_line()?, line);
+    assert_eq!(control.selection().cpMin, 5);
+    assert_eq!(control.selection().cpMax, 14);
+    for delta in [-50, -50, 25, 25] {
+        control.scroll_lines(delta)?;
+        let first = control.line_index(control.first_line()?)?;
+        engine.qualify_pixels(target.dc(), false, target.pixels_mut()?)?;
+        assert_eq!(control.line_index(control.first_line()?)?, first);
+        assert_eq!((control.selection().cpMin, control.selection().cpMax), (5, 14));
+    }
+    target.close()?;
+    hidden.close()?;
+    drop((engine, documents, hidden, frame));
+    assert_eq!(released.load(Ordering::SeqCst), 1);
+    // SAFETY: The original hidden window and all native console owners have retired.
+    unsafe { apartment.release_after_teardown() }?;
+    Ok(())
 }
 fn row_fingerprints(bytes: &[u8], stride: usize) -> [u64; 160] {
     std::array::from_fn(|row| fingerprint(&bytes[row * stride..(row + 1) * stride]))

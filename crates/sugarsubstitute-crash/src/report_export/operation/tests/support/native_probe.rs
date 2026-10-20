@@ -118,6 +118,8 @@ pub(in crate::report_export::operation::tests) fn predecessor_mutation(path: &Pa
     drop(probe);
     drop(main_completion.memory);
     drop(cleanup_completion.memory);
+    // Result delivery may precede worker-context disposal; join the actual owned workers first.
+    drop(owner);
     assert_eq!(main_scope.snapshot().reserved_bytes, 0);
     assert_eq!(cleanup_scope.snapshot().reserved_bytes, 0);
     Ok(())

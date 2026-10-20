@@ -35,6 +35,8 @@ pub(super) struct Retirement {
     pipe_closed: bool,
     pub(super) settled: bool,
     grace_observed: bool,
+    finish_grace: Option<Moment>,
+    finish_grace_observed: bool,
     total_observed: bool,
 }
 impl Retirement {
@@ -55,6 +57,16 @@ impl Retirement {
     }
     /// Freeze one unchanged original transaction, including pre-parent attachment cleanup.
     fn freeze(&mut self, budget: ShutdownBudget) -> Result<ShutdownBudget> {
+        if self.original.is_none() {
+            // Backend force starts at grace. Reserve a final exchange after that
+            // boundary while leaving three seconds of the original total for reaping.
+            self.finish_grace = Some(
+                budget
+                    .graceful_until
+                    .checked_add(std::time::Duration::from_secs(2))?
+                    .min(budget.settle_until),
+            );
+        }
         let original = *self.original.get_or_insert(budget);
         if original != budget {
             return Err("Custody original cleanup changed".into());
@@ -66,20 +78,32 @@ impl Retirement {
         &mut self,
         budget: ShutdownBudget,
         ready: bool,
-        profiles_retired: bool,
+        dependents_retired: bool,
         now: Moment,
         key: BackendCustodyKey,
         port: &mut impl Boundary,
     ) -> Result<()> {
         let original = self.freeze(budget)?;
+        // A dead helper can finish its pipe while family cleanup still fails.
+        // Consume that real completion independently so it cannot pin execution shutdown.
+        if self.terminal.is_none() {
+            self.terminal = port.take_terminal()?;
+        }
         if self.settled {
             return self.terminal_result(ready, key);
         }
         self.grace_observed |= now >= original.graceful_until;
+        let finish_grace = self.finish_grace.ok_or("Custody finish grace absent")?;
+        self.finish_grace_observed |= now >= finish_grace;
         self.total_observed |= now >= original.settle_until;
-        let mut failure = None;
+        let mut failure = self.terminal.as_ref().and_then(|terminal| match &terminal.outcome {
+            JobOutcome::Failure(cause) => {
+                Some(Box::new(cause.clone()) as Box<dyn std::error::Error + Send + Sync>)
+            }
+            _ => None,
+        });
         if ready && !self.finish_received && now < original.settle_until {
-            let observed = if profiles_retired {
+            let observed = if dependents_retired {
                 port.finish(original.settle_until)
             } else {
                 port.observe().map(|()| false)
@@ -97,15 +121,16 @@ impl Retirement {
         if ready && !self.finish_received && now >= original.settle_until {
             failure = Some(Box::new(RetirementRejected::FinishExpired {
                 until: original.settle_until,
-                profiles_retired,
+                dependents_retired,
                 status: port.finish_status(),
             }));
         }
-        if ready && !self.finish_received && failure.is_none() {
+        if ready && !self.finish_received && failure.is_none() && now < finish_grace {
             return Ok(());
         }
         let cleanup = (|| -> Result<()> {
-            if port.retire_family(original)? {
+            let helper_budget = ShutdownBudget { graceful_until: finish_grace, ..original };
+            if port.retire_family(helper_budget)? {
                 if !self.pipe_closed {
                     port.close_pipe()?;
                     self.pipe_closed = true;
@@ -149,13 +174,15 @@ impl Retirement {
             self.settled,
         )
     }
-    /// Preserve the existing original graceful and total wake observations.
-    pub(super) fn deadlines(&self) -> [Option<Moment>; 2] {
+    /// Wake for backend grace, final exchange grace, and the unchanged total cutoff.
+    pub(super) fn deadlines(&self) -> [Option<Moment>; 3] {
         match self.original.filter(|_| !self.settled && !self.total_observed) {
-            Some(budget) => {
-                [(!self.grace_observed).then_some(budget.graceful_until), Some(budget.settle_until)]
-            }
-            None => [None, None],
+            Some(budget) => [
+                (!self.grace_observed).then_some(budget.graceful_until),
+                self.finish_grace.filter(|_| !self.finish_grace_observed),
+                Some(budget.settle_until),
+            ],
+            None => [None, None, None],
         }
     }
 }
@@ -164,7 +191,7 @@ impl CoordinatorCustody {
     pub(crate) fn close(
         &mut self,
         budget: ShutdownBudget,
-        profiles_retired: bool,
+        dependents_retired: bool,
         resources: &mut BackendResources<'_>,
     ) -> Result<()> {
         self.retirement.freeze(budget)?;
@@ -180,7 +207,7 @@ impl CoordinatorCustody {
             attachment: &mut self.attachment,
             resources,
         };
-        self.retirement.advance(budget, self.ready, profiles_retired, now, key, &mut port)
+        self.retirement.advance(budget, self.ready, dependents_retired, now, key, &mut port)
     }
 }
 
@@ -221,7 +248,7 @@ where
 #[derive(Debug)]
 enum RetirementRejected {
     MissingFinished,
-    FinishExpired { until: Moment, profiles_retired: bool, status: BackendCustodyFinishStatus },
+    FinishExpired { until: Moment, dependents_retired: bool, status: BackendCustodyFinishStatus },
     ForeignKey,
     FamilyPending,
     Terminal(TerminalKind),
@@ -232,10 +259,10 @@ impl std::fmt::Display for RetirementRejected {
             Self::MissingFinished => {
                 formatter.write_str("Original helper Finished acknowledgement is missing")
             }
-            Self::FinishExpired { until, profiles_retired, status } => match status {
-                BackendCustodyFinishStatus::Unissued if !profiles_retired => write!(
+            Self::FinishExpired { until, dependents_retired, status } => match status {
+                BackendCustodyFinishStatus::Unissued if !dependents_retired => write!(
                     formatter,
-                    "Original helper Finish not issued: profile retirement pending at cutoff {until:?}"
+                    "Original helper Finish not issued: backend or profile retirement pending at cutoff {until:?}"
                 ),
                 BackendCustodyFinishStatus::Unissued => {
                     write!(formatter, "Original helper Finish not issued before cutoff {until:?}")

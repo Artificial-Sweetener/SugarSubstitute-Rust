@@ -49,12 +49,26 @@ impl Active {
             IssueDispatch::Expired => self.expire_probe(core, index, core.clock.now()),
         }
     }
-    pub(super) fn peer_retirement_error(
+    /// Identify discovery I/O before the Launch payload can have reached a coordinator.
+    pub(super) fn awaiting_discovery(&self, index: usize) -> bool {
+        !self.work.shared.server
+            && self.connections[index].pending.is_some_and(|io| {
+                io.next == Phase::Challenge
+                    && match self.connections[index].phase {
+                        Phase::Connecting => matches!(io.role, Role::Handshake | Role::Write),
+                        Phase::Challenge => io.role == Role::Read,
+                        _ => false,
+                    }
+            })
+    }
+    /// Classify only proven discovery loss or an already delivered final response.
+    pub(super) fn connection_error(
         &self,
         index: usize,
         error: EntryTransportError,
     ) -> EntryTransportError {
-        if self.work.shared.server
+        let unsubmitted = self.awaiting_discovery(index);
+        let reply_delivered = self.work.shared.server
             && self.connections[index].phase == Phase::AwaitPeerRetirement
             && self.connections[index].pending.is_some_and(|io| {
                 io.role == Role::Read
@@ -63,7 +77,8 @@ impl Active {
                     && io.operation.is_none()
                     && io.deadline.is_some()
                     && io.deadline == self.connections[index].peer_retirement_until
-            })
+            });
+        if (unsubmitted || reply_delivered)
             && let EntryTransportError::Native { cause, identity_unrestored: false } = error
         {
             if !cause.contains_owner_panic()
@@ -71,7 +86,11 @@ impl Active {
                 && cause
                     .source()
                     .and_then(|e| e.downcast_ref::<windows::core::Error>())
-                    .is_some_and(|e| e.code() == windows::core::HRESULT::from_win32(109))
+                    .is_some_and(|e| {
+                        [109, 232, 233]
+                            .into_iter()
+                            .any(|code| e.code() == windows::core::HRESULT::from_win32(code))
+                    })
             {
                 return EntryTransportError::PeerDisconnected(cause);
             }

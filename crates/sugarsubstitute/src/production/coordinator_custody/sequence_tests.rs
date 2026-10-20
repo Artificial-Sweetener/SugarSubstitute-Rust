@@ -8,7 +8,27 @@ use boundary::{Event, Fixture};
 #[path = "sequence/profile.rs"]
 mod profile;
 #[test]
-fn original_pending_release_or_finish_keeps_helper_stop_and_force_unissued() -> TestResult {
+fn missing_profile_receipt_cannot_veto_helper_force_at_fixed_helper_grace() -> TestResult {
+    let mut fixture = Fixture::new(None)?;
+    let budget = ShutdownBudget::new(Moment::from_nanos(0))?;
+    let mut owner = Retirement::default();
+    owner.advance(budget, true, false, budget.started, key()?, &mut fixture.port)?;
+    assert_eq!(fixture.port.events, vec![Event::Observe]);
+    fixture.clock.set(Moment::from_nanos(12_000_000_000));
+    owner.advance(budget, true, false, fixture.client.now()?, key()?, &mut fixture.port)?;
+    assert_eq!(
+        fixture.port.events,
+        vec![Event::Observe, Event::Observe, Event::Stop, Event::Force]
+    );
+    assert_eq!(
+        fixture.port.original,
+        Some(ShutdownBudget { graceful_until: Moment::from_nanos(12_000_000_000), ..budget })
+    );
+    assert!(!owner.finish_received && !owner.settled && !owner.pipe_closed);
+    Ok(())
+}
+#[test]
+fn pending_finish_has_bounded_exchange_grace_within_original_total() -> TestResult {
     let mut fixture = Fixture::new(None)?;
     let budget = ShutdownBudget::new(Moment::from_nanos(0))?;
     let mut owner = Retirement::default();
@@ -17,28 +37,67 @@ fn original_pending_release_or_finish_keeps_helper_stop_and_force_unissued() -> 
         owner.advance(budget, true, true, fixture.client.now()?, key()?, &mut fixture.port)?;
         assert_eq!(owner.original, Some(budget));
         if now == budget.started {
-            assert_eq!(owner.deadlines(), [Some(budget.graceful_until), Some(budget.settle_until)]);
+            assert_eq!(
+                owner.deadlines(),
+                [
+                    Some(budget.graceful_until),
+                    Some(Moment::from_nanos(12_000_000_000)),
+                    Some(budget.settle_until)
+                ]
+            );
         }
         assert!(!owner.finish_received && !owner.settled && owner.terminal.is_none());
     }
-    assert!(fixture.port.events.iter().all(|event| matches!(event, Event::FinishPending)));
+    assert_eq!(
+        fixture.port.events,
+        vec![
+            Event::FinishPending,
+            Event::FinishPending,
+            Event::FinishPending,
+            Event::Stop,
+            Event::Force
+        ]
+    );
     assert_eq!(owner.deadlines().into_iter().flatten().min(), Some(budget.settle_until));
     Ok(())
 }
 #[test]
-fn late_finished_precedes_helper_force_and_actual_pipe_terminal() -> TestResult {
+fn backend_force_waits_for_release_before_the_first_finish_exchange() -> TestResult {
+    let mut fixture = Fixture::new(None)?;
+    let budget = ShutdownBudget::new(Moment::from_nanos(0))?;
+    let mut owner = Retirement::default();
+    fixture.clock.set(budget.graceful_until);
+    owner.advance(budget, true, false, fixture.client.now()?, key()?, &mut fixture.port)?;
+    assert_eq!(fixture.port.events, vec![Event::Observe]);
+    assert_eq!(
+        owner.deadlines().into_iter().flatten().min(),
+        Some(Moment::from_nanos(12_000_000_000))
+    );
+    fixture.clock.set(Moment::from_nanos(10_100_000_000));
+    fixture.port.finished = true;
+    owner.advance(budget, true, true, fixture.client.now()?, key()?, &mut fixture.port)?;
+    assert_eq!(fixture.port.events, vec![Event::Observe, Event::Finished, Event::Stop]);
+    assert!(owner.finish_received);
+    assert_eq!(
+        fixture.port.original,
+        Some(ShutdownBudget { graceful_until: Moment::from_nanos(12_000_000_000), ..budget })
+    );
+    Ok(())
+}
+#[test]
+fn late_finished_is_observed_after_helper_force_without_renewing_cleanup() -> TestResult {
     let mut fixture = Fixture::new(Some(81))?;
     let budget = ShutdownBudget::new(Moment::from_nanos(0))?;
     let key = fixture.port.key()?;
     let mut owner = Retirement::default();
-    fixture.clock.set(budget.graceful_until);
-    owner.advance(budget, true, true, fixture.client.now()?, key, &mut fixture.port)?;
     fixture.clock.set(Moment::from_nanos(12_000_000_000));
+    owner.advance(budget, true, true, fixture.client.now()?, key, &mut fixture.port)?;
+    fixture.clock.set(Moment::from_nanos(13_000_000_000));
     fixture.port.finished = true;
     owner.advance(budget, true, true, fixture.client.now()?, key, &mut fixture.port)?;
     assert_eq!(
         fixture.port.events,
-        vec![Event::FinishPending, Event::Finished, Event::Stop, Event::Force]
+        vec![Event::FinishPending, Event::Stop, Event::Force, Event::Finished, Event::Force]
     );
     assert!(!owner.settled && !owner.pipe_closed);
     fixture.port.family_retired = true;
@@ -48,7 +107,10 @@ fn late_finished_precedes_helper_force_and_actual_pipe_terminal() -> TestResult 
         owner.terminal.as_ref().ok_or("Actual terminal absent")?.outcome,
         JobOutcome::Cancelled
     ));
-    assert_eq!(fixture.port.original, Some(budget));
+    assert_eq!(
+        fixture.port.original,
+        Some(ShutdownBudget { graceful_until: Moment::from_nanos(12_000_000_000), ..budget })
+    );
     assert_eq!(fixture.port.events.iter().filter(|event| **event == Event::Finished).count(), 1);
     drop(owner);
     fixture.close_fixture()?;
@@ -79,7 +141,10 @@ fn original_protocol_failure_survives_actual_cleanup_error() -> TestResult {
             .ok_or("Original cause replaced")?;
         assert_eq!(std::ptr::from_ref(original.source().ok_or("Retained source absent")?), pointer);
     }
-    assert_eq!(fixture.port.original, Some(budget));
+    assert_eq!(
+        fixture.port.original,
+        Some(ShutdownBudget { graceful_until: Moment::from_nanos(12_000_000_000), ..budget })
+    );
     assert!(!owner.settled && !owner.finish_received && !owner.pipe_closed);
     Ok(())
 }
@@ -94,9 +159,12 @@ fn original_cutoff_without_finished_preserves_failed_owned_cleanup() -> TestResu
         .advance(budget, true, true, fixture.client.now()?, key()?, &mut fixture.port)
         .err()
         .ok_or("Missing Finished accepted")?;
-    assert!(cause.source().and_then(|value|value.downcast_ref::<RetirementRejected>()).is_some_and(|value|matches!(value,RetirementRejected::FinishExpired { until, profiles_retired:true, status:BackendCustodyFinishStatus::Unissued } if *until==budget.settle_until)));
+    assert!(cause.source().and_then(|value|value.downcast_ref::<RetirementRejected>()).is_some_and(|value|matches!(value,RetirementRejected::FinishExpired { until, dependents_retired:true, status:BackendCustodyFinishStatus::Unissued } if *until==budget.settle_until)));
     assert_eq!(fixture.port.events, vec![Event::FinishPending, Event::Stop, Event::ExpiredCleanup]);
-    assert_eq!(fixture.port.original, Some(budget));
+    assert_eq!(
+        fixture.port.original,
+        Some(ShutdownBudget { graceful_until: Moment::from_nanos(12_000_000_000), ..budget })
+    );
     assert!(!owner.settled && !owner.finish_received && owner.terminal.is_none());
     assert_eq!(owner.deadlines().into_iter().flatten().min(), None);
     Ok(())
@@ -121,8 +189,8 @@ fn changed_original_budget_rejects_before_another_external_effect() -> TestResul
 
 #[test]
 fn original_finish_cutoff_distinguishes_profile_fence_unissued_and_queued_nonce() -> TestResult {
-    for (profiles_retired, status, text) in [
-        (false, BackendCustodyFinishStatus::Unissued, "profile retirement pending"),
+    for (dependents_retired, status, text) in [
+        (false, BackendCustodyFinishStatus::Unissued, "backend or profile retirement pending"),
         (true, BackendCustodyFinishStatus::Unissued, "Finish not issued before cutoff"),
         (true, BackendCustodyFinishStatus::Issued(7), "Finish nonce 7 queued"),
         (false, BackendCustodyFinishStatus::Unavailable, "Finish state unavailable"),
@@ -131,10 +199,24 @@ fn original_finish_cutoff_distinguishes_profile_fence_unissued_and_queued_nonce(
         fixture.port.finish_status = status;
         let budget = ShutdownBudget::new(Moment::from_nanos(0))?;
         let mut owner = Retirement::default();
-        owner.advance(budget, true, profiles_retired, budget.started, key()?, &mut fixture.port)?;
+        owner.advance(
+            budget,
+            true,
+            dependents_retired,
+            budget.started,
+            key()?,
+            &mut fixture.port,
+        )?;
         fixture.clock.set(budget.settle_until);
         let cause = owner
-            .advance(budget, true, profiles_retired, budget.settle_until, key()?, &mut fixture.port)
+            .advance(
+                budget,
+                true,
+                dependents_retired,
+                budget.settle_until,
+                key()?,
+                &mut fixture.port,
+            )
             .err()
             .ok_or("Cutoff admitted a missing Finished")?;
         let original = cause
@@ -142,8 +224,8 @@ fn original_finish_cutoff_distinguishes_profile_fence_unissued_and_queued_nonce(
             .and_then(|source| source.downcast_ref::<RetirementRejected>())
             .ok_or("Original cutoff cause replaced")?;
         assert!(matches!(original, RetirementRejected::FinishExpired {
-            until, profiles_retired: actual_profiles, status: actual_status,
-        } if *until == budget.settle_until && *actual_profiles == profiles_retired && *actual_status == status));
+            until, dependents_retired: actual_profiles, status: actual_status,
+        } if *until == budget.settle_until && *actual_profiles == dependents_retired && *actual_status == status));
         assert!(original.to_string().contains(text));
         assert!(!owner.finish_received && !owner.pipe_closed && !owner.settled);
         assert_eq!(owner.original, Some(budget));
@@ -204,6 +286,26 @@ fn stopped_pipe_terminal_is_adopted_before_fresh_admission_and_retained_until_cl
     assert!(owner.settled && owner.pipe_closed);
     assert_eq!(owner.original, Some(budget));
     assert!(fixture.scope.snapshot().reserved_bytes > 0);
+    drop(owner);
+    fixture.close_fixture()?;
+    Ok(())
+}
+
+#[test]
+fn late_pipe_completion_is_consumed_even_when_family_cleanup_fails() -> TestResult {
+    use sugarsubstitute_contracts::execution::JobId;
+    let mut fixture = Fixture::new(Some(113))?;
+    let key = fixture.port.key()?;
+    let budget = ShutdownBudget::new(fixture.client.now()?)?;
+    let mut owner = Retirement::default();
+    fixture.port.cleanup_failure = true;
+    assert!(owner.advance(budget, false, false, budget.started, key, &mut fixture.port).is_err());
+    fixture.port.parent()?.close()?;
+    fixture.terminal(JobId::new(1)?)?;
+    assert!(owner.advance(budget, false, false, budget.started, key, &mut fixture.port).is_err());
+    assert!(owner.terminal.is_some());
+    assert!(!owner.settled && !owner.pipe_closed);
+    assert!(fixture.port.events.contains(&Event::Terminal));
     drop(owner);
     fixture.close_fixture()?;
     Ok(())

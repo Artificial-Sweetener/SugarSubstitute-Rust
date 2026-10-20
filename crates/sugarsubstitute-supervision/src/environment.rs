@@ -20,7 +20,7 @@ const MAX_VARIABLES: usize = 1024;
 const MAX_OVERRIDES: usize = 64;
 
 /// Borrow an explicit ordinary-variable change for this child only.
-/// Names exclude NUL and `=`; values exclude NUL and may be empty. Hidden drive
+/// Names exclude NUL and `=`; values exclude NUL and may be empty. Hidden shell
 /// entries are snapshot-only. Project-private variables cannot be inserted.
 pub enum EnvironmentOverride<'a> {
     /// Replace or insert one case-insensitively matched ordinary variable.
@@ -59,7 +59,7 @@ impl LaunchEnvironment {
     /// override input each have at most 32767 UTF-16 units, with at most 64 changes.
     /// Snapshot/final variable counts are at most 1024. Output, including double
     /// NUL, is at most 32767 units. Duplicate names reject under Windows ordinal
-    /// ignore-case comparison. Snapshot-only `=X:` drive entries are retained.
+    /// ignore-case comparison. Snapshot-only hidden shell entries are retained.
     /// Snapshot project-private prefixes are stripped; insertion is rejected.
     /// No environment capture, process launch or capability injection occurs.
     ///

@@ -23,13 +23,13 @@ impl CoordinatorBackend {
         };
         self.next_shutdown = next;
         record.shutdown = Some((shutdown, budget));
-        self.output_clients.remove_resource(key);
+        self.output_clients.retire_resource(key);
         record.output_fanout.current = None;
         record.readiness = None;
         record.campaign.cancel(budget);
         record.scope.cancel();
         if let Some(output) = &record.output {
-            output.control.close();
+            output.control.request_backend_shutdown();
         }
         if let Some(ticket) = record.launch
             && let Err(cause) = resources
@@ -82,6 +82,7 @@ impl CoordinatorBackend {
         if now >= budget.settle_until {
             return self.finish_cleanup(at, resources);
         }
+        Self::close_campaign(record, resources, now)?;
         if !record.source_job
             && !record.source_closed
             && record.source_close.is_none()
@@ -181,6 +182,32 @@ impl CoordinatorBackend {
         }
         self.finish_cleanup(at, resources)
     }
+    /// Retire an admitted probe independently of the custodian's admission health.
+    /// A dead helper cannot veto cleanup of the existing HTTP transport.
+    pub(super) fn close_campaign(
+        record: &mut Backend,
+        resources: &BackendResources<'_>,
+        now: Moment,
+    ) -> Result<()> {
+        if record.campaign.settled() {
+            return Ok(());
+        }
+        let until = record.campaign.cleanup_deadline(now)?;
+        let spec = Self::spec(
+            resources,
+            Operation::Readiness,
+            JobClass::InfrastructureLifecycle,
+            sugarsubstitute_comfy::readiness_transport::READINESS_TRANSPORT_BYTES,
+            Some(until),
+        )?;
+        match record.campaign.submit_cleanup(resources.client, resources.cleanup, spec) {
+            Ok(_) => Ok(()),
+            Err(sugarsubstitute_comfy::readiness_campaign::CampaignError::Rejected(
+                sugarsubstitute_comfy::readiness_campaign::CampaignRejection::WrongPhase,
+            )) => Ok(()),
+            Err(cause) => Err(Box::new(cause)),
+        }
+    }
     /// Observe actual late closure without admitting another native effect or renewing time.
     fn finish_cleanup(
         &mut self,
@@ -188,6 +215,11 @@ impl CoordinatorBackend {
         resources: &mut BackendResources<'_>,
     ) -> Result<ResourceTransition> {
         let record = self.records[at].as_mut().ok_or(LifecycleRejection::StaleIdentity)?;
+        if (record.launch.is_none() || record.family_settled)
+            && let Some(output) = &record.output
+        {
+            output.control.close();
+        }
         let output_settled = record.output.as_ref().is_none_or(|output| {
             let actual = output.control.snapshot();
             actual.identity

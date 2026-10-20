@@ -94,6 +94,12 @@ fn two_parent_transcripts_receive_same_original_batches_and_independent_ack_owne
     fixture::close(backend, b.resource, &rig.client, &rig.native)
         .map_err(|cause| cause as Box<dyn Error>)?;
     assert!(second.output.is_some());
+    assert!(second.consume_output_ack(b, NonZeroU64::new(last.id.get() + 1), backend).is_err());
+    second
+        .consume_output_ack(b, Some(last.id), backend)
+        .map_err(|cause| cause as Box<dyn Error>)?;
+    assert!(second.output.is_none());
+    idle(&mut second, b, backend)?;
     rig.until(|| fixture::retire(backend, a.resource).map_err(|cause| cause as Box<dyn Error>))?;
     assert!(external.closes() > 0);
     drop((first, second, held));

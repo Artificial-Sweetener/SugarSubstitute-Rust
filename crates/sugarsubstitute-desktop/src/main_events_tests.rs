@@ -60,6 +60,56 @@ fn native_observation_storage_is_preclaimed_and_reused_in_fifo_order() -> Result
 }
 
 #[test]
+fn console_bursts_cannot_exhaust_lifecycle_slots_or_hide_setup_failures()
+-> Result<(), Box<dyn Error>> {
+    let released = Arc::new(AtomicUsize::new(0));
+    let events = Events::new(&lease(&released), || {})?;
+    events.record(Kind::Context, |text| {
+        text.push_str("context");
+        Ok(())
+    });
+    for _ in 0..1024 {
+        events.record(Kind::Console, |text| {
+            text.push_str(
+                r#"{"type":"log","args":[{"type":"string","value":"Custom node loaded"}]}"#,
+            );
+            Ok(())
+        });
+    }
+    let failure = r#"{"type":"error","executionContextId":7,"args":[{"type":"string","value":"Error calling extension 'SugarCubes.UI' method 'setup'"}]}"#;
+    events.record(Kind::Console, |text| {
+        text.push_str(failure);
+        Ok(())
+    });
+    events.record(Kind::Navigation { succeeded: true }, |_| Ok(()));
+    assert!(events.accepting());
+    assert!(events.take_failure().is_none());
+    assert_eq!(events.remaining(), 3);
+    events.consume(|event| {
+        assert_eq!(event.kind, Kind::Context);
+        Ok(())
+    })?;
+    events.consume(|event| {
+        assert_eq!(event.kind, Kind::Console);
+        assert_eq!(event.payload, failure);
+        Ok(())
+    })?;
+    events.consume(|event| {
+        assert_eq!(event.kind, Kind::Navigation { succeeded: true });
+        Ok(())
+    })?;
+    for _ in 0..SLOTS {
+        events.record(Kind::Context, |_| Ok(()));
+    }
+    events.record(Kind::Console, |text| {
+        text.push_str(r#"{"type":"debug","args":[]}"#);
+        Ok(())
+    });
+    assert!(events.accepting());
+    assert_eq!(events.remaining(), SLOTS);
+    Ok(())
+}
+#[test]
 fn receiver_overflow_stickily_closes_admission_without_losing_prior_facts()
 -> Result<(), Box<dyn Error>> {
     let released = Arc::new(AtomicUsize::new(0));

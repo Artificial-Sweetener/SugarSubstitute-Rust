@@ -53,7 +53,7 @@ fn fresh_restart_ack_queue_and_store_queue_wake_before_original_cutoff_without_u
     let original_cutoff = fresh.until();
     let mut specification = spec()?;
     specification.id = jobs.allocate()?;
-    specification.deadline = Some(original_cutoff);
+    specification.deadline = Some(context(now)?.budget().until());
     specification.reservation_bytes = DIAGNOSTIC_STORAGE_BYTES;
     let mut presented =
         client.submit_blocking(&finite, specification, |context| presented_fixture(&context))?;
@@ -86,7 +86,11 @@ fn fresh_restart_ack_queue_and_store_queue_wake_before_original_cutoff_without_u
     activation.arm_next_wake(&client, anchor)?;
     assert_eq!(activation.next_deadline(), Some(anchor));
     activation.arm_next_wake(&client, anchor)?;
-    assert_eq!(activation.next_deadline(), anchor.checked_add(Duration::from_secs(30)));
+    assert_eq!(
+        activation.next_deadline(),
+        anchor
+            .checked_add(sugarsubstitute_contracts::coordinator_entry::EntrySetupBudget::DURATION),
+    );
     let Some(IncidentEffect::Acknowledge { scope, binding: queued, at }) = host.take_effect()?
     else {
         return Err("Actual queued acknowledgement lost".into());
@@ -103,7 +107,7 @@ fn fresh_restart_ack_queue_and_store_queue_wake_before_original_cutoff_without_u
     activation.arm_next_wake(&client, anchor)?;
     assert_eq!(activation.next_deadline(), Some(anchor));
     activation.arm_next_wake(&client, anchor)?;
-    assert_eq!(activation.next_deadline(), anchor.checked_add(Duration::from_secs(30)));
+    assert_eq!(activation.next_deadline(), anchor.checked_add(Duration::from_secs(60)));
     let work = activation.incidents.reporting.store.as_ref().ok_or("Actual StoreWork missing")?;
     let input = work.input.as_ref().ok_or("Actual queued input missing")?;
     assert_eq!(work.scope, scope);

@@ -4,10 +4,8 @@
 #[path = "production/backend_custody.rs"]
 mod backend_custody;
 #[path = "production/child.rs"]
-mod child;
+pub(crate) mod child;
 mod child_transport_diagnostic;
-#[path = "production/close_diagnostic.rs"]
-mod close_diagnostic;
 #[path = "production/configuration.rs"]
 mod configuration;
 #[path = "production/coordinator_authority.rs"]
@@ -23,8 +21,8 @@ mod entry;
 mod entry_activation;
 #[path = "production/entry_bootstrap.rs"]
 mod entry_bootstrap;
-#[path = "production/entry_presentation.rs"]
-mod entry_presentation;
+#[path = "production/entry_failure.rs"]
+mod entry_failure;
 #[path = "production/entry_runner.rs"]
 mod entry_runner;
 #[path = "production/options.rs"]
@@ -35,8 +33,6 @@ mod parent_lifecycle;
 mod qualification;
 #[path = "production/runtime.rs"]
 mod runtime;
-#[path = "production/startup.rs"]
-mod startup;
 
 pub(crate) use runtime::execute;
 
@@ -49,3 +45,5 @@ mod reporter_role;
 
 #[path = "production/recovery_supervisor.rs"]
 mod recovery_supervisor;
+
+mod profile_conflict;

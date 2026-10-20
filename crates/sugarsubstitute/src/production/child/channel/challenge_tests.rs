@@ -186,23 +186,28 @@ fn unsolicited_foreign_or_duplicate_native_callbacks_never_prepare_response() ->
 }
 
 #[test]
-fn equality_is_expired_at_receive_dispatch_callback_and_response() -> TestResult {
+fn expired_probes_are_discarded_without_failing_the_recovered_ui() -> TestResult {
     let binding = registered()?;
     let until = Moment::from_nanos(100);
     let mut ui = UiChallengeExchange::new(&binding)?;
-    assert_eq!(
-        ui.receive(header(&binding), UiChallengeId::new(41)?, until, until),
-        Err(ChallengeError::Deadline)
-    );
+    ui.receive(header(&binding), UiChallengeId::new(40)?, until, until)?;
+    assert!(ui.deadline().is_none());
     receive(&mut ui, &binding)?;
-    assert_eq!(ui.dispatch(until), Err(ChallengeError::Deadline));
+    assert_eq!(ui.dispatch(until)?, None);
+    let mut ui = UiChallengeExchange::new(&binding)?;
+    receive(&mut ui, &binding)?;
     let key = ui.dispatch(Moment::from_nanos(99))?.ok_or("No command")?;
-    assert_eq!(ui.processed(key, until), Err(ChallengeError::Deadline));
-    ui.processed(key, Moment::from_nanos(99))?;
+    ui.processed(key, until)?;
+    assert!(ui.deadline().is_none());
+    let mut ui = UiChallengeExchange::new(&binding)?;
+    processed(&mut ui, &binding)?;
     let mut requests = ClientRequests::new(&binding)?;
-    let cause = ui.response(&mut requests, until).err().ok_or("Expired response accepted")?;
-    assert_eq!(cause.downcast_ref::<ChallengeError>(), Some(&ChallengeError::Deadline));
-    assert_eq!(ui.deadline(), Some(until));
+    let response = ui.response(&mut requests, Moment::from_nanos(99))?.ok_or("No response")?;
+    assert!(ui.response(&mut requests, until)?.is_none());
+    assert!(ui.deadline().is_none());
+    assert!(requests.outbound(response.header, response.original, until).is_err());
+    ui.receive(header(&binding), UiChallengeId::new(42)?, Moment::from_nanos(200), until)?;
+    assert!(ui.dispatch(until)?.is_some());
     Ok(())
 }
 
@@ -243,6 +248,24 @@ fn exact_received_acknowledgement_releases_only_its_original_metadata() -> TestR
         Moment::from_nanos(200),
         Moment::from_nanos(0),
     )?;
+    Ok(())
+}
+
+#[test]
+fn a_late_diagnostic_ack_preserves_correlation_without_expiring_the_desktop() -> TestResult {
+    let binding = registered()?;
+    let mut ui = UiChallengeExchange::new(&binding)?;
+    let mut requests = ClientRequests::new(&binding)?;
+    processed(&mut ui, &binding)?;
+    let response = ui.response(&mut requests, Moment::from_nanos(0))?.ok_or("No response")?;
+    assert!(requests.received_diagnostic(response.header).is_err());
+    requests.admitted(response.header)?;
+    ui.admitted(response.header)?;
+    assert!(ui.response(&mut requests, Moment::from_nanos(1000))?.is_none());
+    assert!(ui.deadline().is_none());
+    requests.received_diagnostic(response.header)?;
+    ui.acknowledged(&mut requests, response.header, ReplyOutcome::Acknowledged)?;
+    assert!(!ui.matches_reply(response.header));
     Ok(())
 }
 

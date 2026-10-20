@@ -339,7 +339,6 @@ impl ProductionChild {
         let route = ActivityRoute::select(self.shutdown.closing(), self.attempt.as_ref());
         match route {
             ActivityRoute::Shutdown => {
-                self.retire_splash_handoff()?;
                 self.retire_acquire()?;
                 return self.advance_shutdown();
             }
@@ -350,7 +349,6 @@ impl ProductionChild {
             }
             ActivityRoute::Startup => {}
         }
-        self.advance_splash_handoff()?;
         if let Some(prepared) = prepared {
             self.send_acquire(prepared)?;
         }

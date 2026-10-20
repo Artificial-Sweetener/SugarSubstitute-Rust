@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain one immutable authenticated request through native write contention and exact reply consumption.
 use super::*;
-use crate::production::close_diagnostic::{
+use crate::close_diagnostic::{
     CloseTrace, Control as CloseControl, ControlStage, DeadlineSource, Prepared,
 };
 impl Control {
@@ -100,47 +100,7 @@ impl ProductionChild {
         if self.shutdown.pending.is_none()
             && let Some(control) = take_first(&mut self.shutdown.queued)
         {
-            let (original, deadline_source) = if let Some(budget) = self.shutdown.budget {
-                if matches!(control, Control::ExitIntent) {
-                    (budget.graceful_until, DeadlineSource::ShutdownGrace)
-                } else {
-                    (budget.settle_until, DeadlineSource::ShutdownTotal)
-                }
-            } else if matches!(control, Control::MainRetired(_)) && self.attempt.is_some() {
-                (
-                    self.attempt.as_ref().ok_or("Original attempt absent")?.original_deadline(),
-                    DeadlineSource::AttemptCleanup,
-                )
-            } else if matches!(control, Control::MainRetired(_)) && self.reload.is_some() {
-                (
-                    self.reload.as_ref().ok_or("Original reload absent")?.until(),
-                    DeadlineSource::ControlInterval,
-                )
-            } else {
-                (
-                    self.client()?.now()?.checked_add(Duration::from_secs(30))?,
-                    DeadlineSource::ControlInterval,
-                )
-            };
-            let header = self.bootstrap.channel_mut().prepare_request(original)?;
-            if let Some(control) = control.diagnostic_label() {
-                CloseTrace::Control {
-                    stage: ControlStage::Prepared,
-                    control,
-                    request: header.request.map(|r| r.get()).unwrap_or(0),
-                    deadline_qpc: header.deadline_qpc,
-                    prepared: Some(Prepared {
-                        original_ns: original.as_nanos(),
-                        source: deadline_source,
-                        phase: self.phase,
-                        attempt_present: self.attempt.is_some(),
-                        attempt_complete: self.attempt.as_ref().is_some_and(|a| a.complete()),
-                        shutdown_budget_present: self.shutdown.budget.is_some(),
-                    }),
-                }
-                .emit();
-            }
-            self.shutdown.pending = Some(Pending { header, original, control, admitted: false });
+            self.shutdown.pending = Some(self.prepare_control(control)?);
         }
         if let Some(pending) = self.shutdown.pending
             && !pending.admitted
@@ -180,8 +140,56 @@ impl ProductionChild {
         }
         Ok(())
     }
+    /// Prepare one queued control with the cutoff retained by its authoritative owner.
+    pub(super) fn prepare_control(&mut self, control: Control) -> Result<Pending> {
+        let (original, deadline_source) = if matches!(control, Control::ExitIntent) {
+            (
+                self.shutdown.intent_deadline.ok_or("Original exit notification cutoff absent")?,
+                DeadlineSource::ExitNotification,
+            )
+        } else if let Some(budget) = self.shutdown.budget {
+            (budget.settle_until, DeadlineSource::ShutdownTotal)
+        } else if matches!(control, Control::MainRetired(_)) && self.attempt.is_some() {
+            (
+                self.attempt.as_ref().ok_or("Original attempt absent")?.original_deadline(),
+                DeadlineSource::AttemptCleanup,
+            )
+        } else if matches!(control, Control::MainRetired(_)) && self.reload.is_some() {
+            (
+                self.reload.as_ref().ok_or("Original reload absent")?.until(),
+                DeadlineSource::ControlInterval,
+            )
+        } else {
+            (
+                self.client()?.now()?.checked_add(Duration::from_secs(30))?,
+                DeadlineSource::ControlInterval,
+            )
+        };
+        let header = self.bootstrap.channel_mut().prepare_request(original)?;
+        if let Some(control) = control.diagnostic_label() {
+            CloseTrace::Control {
+                stage: ControlStage::Prepared,
+                control,
+                request: header.request.map(|r| r.get()).unwrap_or(0),
+                deadline_qpc: header.deadline_qpc,
+                prepared: Some(Prepared {
+                    original_ns: original.as_nanos(),
+                    source: deadline_source,
+                    phase: self.phase,
+                    attempt_present: self.attempt.is_some(),
+                    attempt_complete: self.attempt.as_ref().is_some_and(|a| a.complete()),
+                    shutdown_budget_present: self.shutdown.budget.is_some(),
+                }),
+            }
+            .emit();
+        }
+        Ok(Pending { header, original, control, admitted: false })
+    }
     pub(in super::super) fn completion_intent(&self) -> CompletionIntent {
-        if self.failed || self.failure.is_some() {
+        let handled_attempt = self.phase
+            == Some(sugarsubstitute_application::startup::StartupPhase::Stopped)
+            && self.attempt.as_ref().is_some_and(|attempt| attempt.settled_without_failure());
+        if self.failure.is_some() || self.failed && !handled_attempt {
             CompletionIntent::StartupFailed
         } else if self.phase == Some(sugarsubstitute_application::startup::StartupPhase::Running) {
             CompletionIntent::Normal

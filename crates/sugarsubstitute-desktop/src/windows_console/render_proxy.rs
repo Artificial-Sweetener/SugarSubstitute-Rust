@@ -23,6 +23,21 @@ mod diagnostics;
 #[path = "render_proxy/glyphs.rs"]
 mod glyphs;
 use diagnostics::{Context, Detail, GlyphFacts, NativeFailure};
+
+/// Project bounded native paint facts without formatting text or walking arbitrary error sources.
+pub(crate) fn diagnostic_code(
+    cause: &(dyn std::error::Error + 'static),
+) -> Option<crate::console_failure_diagnostic::ConsoleFailureCode> {
+    use crate::console_failure_diagnostic::ConsoleFailureCode as Code;
+    let failure = cause.downcast_ref::<NativeFailure>()?;
+    Some(match failure.context.detail {
+        Detail::Color { token: Some(token), .. } => Code::UnknownPaintToken(token),
+        Detail::Color { token: None, .. } => Code::InvalidPaintColor,
+        Detail::GlyphFormat { formats, .. } => Code::UnsupportedGlyphFormat(formats),
+        Detail::Unsupported => Code::UnsupportedPaint,
+        _ => Code::Hresult(failure.cause.code().0),
+    })
+}
 #[path = "render_proxy/target.rs"]
 mod target;
 #[cfg(test)]
