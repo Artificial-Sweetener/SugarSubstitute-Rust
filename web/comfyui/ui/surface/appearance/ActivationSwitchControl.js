@@ -16,6 +16,18 @@
 /** Normalize activation chrome while the card-state service owns node enablement. */
 import { ensureCubeFaceActivationStyles } from '../CubeFaceActivationStyles.js';
 import { activationSwitchGeometry } from './ActivationSwitchGeometry.js';
+/** Present activation through the shared checkbox while retaining the card-state contract. */
+export function createCheckboxActivation(checkbox) {
+    checkbox.dataset.scBooleanCheckbox = '';
+    return {
+        root: checkbox,
+        control: checkbox,
+        synchronize: (checked, actionLabel) => {
+            checkbox.checked = checked;
+            checkbox.setAttribute('aria-label', actionLabel);
+        },
+    };
+}
 /** Retain the established native/Fluent switch without relying on Comfy's lazy stylesheet. */
 export function createNativeActivationSwitch(document) {
     ensureCubeFaceActivationStyles(document);

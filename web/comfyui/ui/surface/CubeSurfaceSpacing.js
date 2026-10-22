@@ -15,8 +15,8 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own the renderer-independent spacing rule for Cube-face masonry. */
 /** Use one finite gap between cards and between the header and first card row. */
-export function resolveCubeSurfaceCardSpacing(state) {
-    const gap = Number.isFinite(state.gap) ? Math.max(0, state.gap) : 0;
+export function resolveCubeSurfaceCardSpacing(state, compact = false) {
+    const gap = compact ? 0 : Number.isFinite(state.gap) ? Math.max(0, state.gap) : 0;
     return {
         gap,
         headerInset: gap,

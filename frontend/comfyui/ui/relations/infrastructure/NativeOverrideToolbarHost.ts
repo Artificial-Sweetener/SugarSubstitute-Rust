@@ -20,6 +20,7 @@ import type {
 } from '../presentation/OverrideToolbarPlacement.js';
 import { NativeRunStripContentVisibility } from './NativeRunStripContentVisibility.js';
 import { NativeOverrideToolbarLayout } from './NativeOverrideToolbarLayout.js';
+import { relocateControl } from '../../core/ControlPlacement.js';
 
 interface ToolbarSurfaces {
   panel: HTMLElement;
@@ -36,6 +37,7 @@ export class NativeOverrideToolbarHost implements OverrideToolbarHost {
   #slot: HTMLElement | null = null;
   #target: HTMLElement | null = null;
   #dragging = false;
+  #pluginBar: HTMLElement | null = null;
   readonly #emptyContent = new NativeRunStripContentVisibility();
   readonly #layout = new NativeOverrideToolbarLayout();
 
@@ -44,8 +46,23 @@ export class NativeOverrideToolbarHost implements OverrideToolbarHost {
 
   /** Reparent the same toolbar into its dock slot or the workflow overlay. */
   attach(element: HTMLElement, docked: boolean): boolean {
+    const plugin = element.dataset.presentation === 'plugin';
+    const cardSlot = plugin
+      ? this.document.querySelector<HTMLElement>('.sc-plugin-overrides-slot')
+      : null;
+    if (cardSlot) {
+      this.#setPluginBar(null);
+      this.#layout.mount(null);
+      this.#emptyContent.mount(null);
+      if (element.parentElement !== cardSlot) relocateControl(element, cardSlot);
+      this.#removeSlot();
+      this.#removeTarget();
+      element.style.maxWidth = '100%';
+      return true;
+    }
     this.#surfaces = this.#read();
     const surfaces = this.#surfaces;
+    this.#setPluginBar(plugin ? (surfaces?.actionbar ?? null) : null);
     this.#layout.mount(surfaces?.actionbar ?? null);
     if (!surfaces) {
       this.#emptyContent.mount(null);
@@ -54,7 +71,7 @@ export class NativeOverrideToolbarHost implements OverrideToolbarHost {
       this.#removeTarget();
       return false;
     }
-    const inline = element.dataset.presentation === 'substitute';
+    const inline = element.dataset.presentation === 'substitute' || plugin;
     this.#emptyContent.mount(docked ? surfaces.actionbar : null);
     if (!inline && docked && !this.canDock()) return false;
     const nativeGrip = inline ? null : surfaces.grip;
@@ -73,7 +90,9 @@ export class NativeOverrideToolbarHost implements OverrideToolbarHost {
         this.#slot.append(element);
         old?.remove();
       } else if (element.parentElement !== this.#slot) this.#slot.append(element);
-      const width = `${inline ? this.#inlineBudget(surfaces.actionbar) : this.#budget()}px`;
+      const width = plugin
+        ? '100%'
+        : `${inline ? this.#inlineBudget(surfaces.actionbar) : this.#budget()}px`;
       if (element.style.maxWidth !== width) element.style.maxWidth = width;
     } else {
       if (
@@ -143,6 +162,7 @@ export class NativeOverrideToolbarHost implements OverrideToolbarHost {
 
   /** Remove owned chrome and release references when the toolbar is disposed. */
   dispose(): void {
+    this.#setPluginBar(null);
     this.#layout.dispose();
     this.#emptyContent.dispose();
     this.dragging(false);
@@ -233,6 +253,14 @@ export class NativeOverrideToolbarHost implements OverrideToolbarHost {
   #removeSlot(): void {
     this.#slot?.remove();
     this.#slot = null;
+  }
+
+  /** Reserve native row height only while it hosts the stacked Plugin Mode card. */
+  #setPluginBar(bar: HTMLElement | null): void {
+    if (this.#pluginBar === bar) return;
+    this.#pluginBar?.removeAttribute('data-sc-plugin-overrides-dock');
+    this.#pluginBar = bar;
+    bar?.setAttribute('data-sc-plugin-overrides-dock', '');
   }
 
   /** Keep one placeholder on the current native surface and exclude its width from dock budgets. */

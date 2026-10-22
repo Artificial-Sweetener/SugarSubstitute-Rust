@@ -1,5 +1,12 @@
 # Third-Party Notices
 
+## OpenPhoto PhotoPro interface
+
+PhotoPro adapts OpenPhoto's medium-gray panel colors and compact control paint
+under the MIT license. Source Sans 3 Regular and Semibold are distributed
+unmodified under the SIL Open Font License 1.1. The pinned source revision,
+paths, asset hashes, and license texts are recorded in `manifest.toml`.
+
 ## SugarSubstitute bundled prompt tags
 
 The complete Danbooru prompt-tag snapshot from SugarSubstitute is included in

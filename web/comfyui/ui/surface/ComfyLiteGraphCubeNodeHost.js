@@ -33,8 +33,10 @@ import { filterCubePreviewOutputs } from './CubePreviewModel.js';
 import { ComfyLiteGraphCubeFaceProjectionHost } from './ComfyLiteGraphCubeFaceProjectionHost.js';
 import { ComfyLiteGraphCubeDropTargetBridge } from './ComfyLiteGraphCubeDropTargetBridge.js';
 import { CubePreviewFrameResizePolicy } from './CubePreviewFrameResizePolicy.js';
+import { COMPACT_MASONRY_CHANGE } from './masonry/CompactMasonryPreference.js';
 /** Own the narrow Nodes 1.0 draw and interaction seam for native Cube nodes. */
 export class ComfyLiteGraphCubeNodeHost {
+    #document;
     #canvas;
     #rootGraph;
     #nodes;
@@ -57,6 +59,8 @@ export class ComfyLiteGraphCubeNodeHost {
     #items = [];
     /** Bind native draw hooks and focused face interactions. */
     constructor(options) {
+        this.#document = options.document;
+        this.#document.addEventListener(COMPACT_MASONRY_CHANGE, this.#onCompactChange);
         this.#canvas = options.canvas;
         this.#rootGraph = options.rootGraph;
         this.#nodes = options.nodes;
@@ -153,6 +157,7 @@ export class ComfyLiteGraphCubeNodeHost {
     }
     /** Restore every native node method and release focused pointer routing. */
     dispose() {
+        this.#document.removeEventListener(COMPACT_MASONRY_CHANGE, this.#onCompactChange);
         this.#interaction.dispose();
         this.#domWidgets.dispose();
         this.#faceProjections.dispose();
@@ -238,9 +243,10 @@ export class ComfyLiteGraphCubeNodeHost {
     /** Build one current face layout from the graph-owned node and persisted state. */
     #renderItem(node) {
         const state = parseCubeSurfaceState(requireCubeSurface(node));
+        const compact = this.#document.documentElement.hasAttribute('data-sc-compact-masonry');
         const titlebarActionKeys = resolveCubeFaceTitlebarActions(requireCubeIdentity(node), this.#chromeActions).map((action) => action.key);
         const externalInterface = resolveCubeExternalInterface(node);
-        let layout = computeCubeCanvasLayout(node, state, this.#titleHeight, titlebarActionKeys, externalInterface);
+        let layout = computeCubeCanvasLayout(node, state, this.#titleHeight, titlebarActionKeys, externalInterface, compact);
         const previewFrameResize = this.#previewFrameResizePolicies.get(node) ?? new CubePreviewFrameResizePolicy();
         this.#previewFrameResizePolicies.set(node, previewFrameResize);
         const resizedPreviewWidth = previewFrameResize.resolve({
@@ -252,10 +258,10 @@ export class ComfyLiteGraphCubeNodeHost {
         if (layout.preview && Math.abs(resizedPreviewWidth - layout.preview.width) >= 0.5) {
             state.preview.width = resizedPreviewWidth;
             replaceRecord(requireCubeSurface(node), serializeCubeSurfaceState(state));
-            layout = computeCubeCanvasLayout(node, state, this.#titleHeight, titlebarActionKeys, externalInterface);
+            layout = computeCubeCanvasLayout(node, state, this.#titleHeight, titlebarActionKeys, externalInterface, compact);
         }
         if (enforceCubeNodeMinimumSize(node, [Math.max(1, Number(node.size[0])), layout.minimumSize[1]])) {
-            layout = computeCubeCanvasLayout(node, state, this.#titleHeight, titlebarActionKeys, externalInterface);
+            layout = computeCubeCanvasLayout(node, state, this.#titleHeight, titlebarActionKeys, externalInterface, compact);
             this.#history.setDirtyCanvas?.(true, true);
             this.#refresh();
         }
@@ -338,6 +344,11 @@ export class ComfyLiteGraphCubeNodeHost {
     #refresh() {
         this.#canvas.setDirty?.(true, true);
     }
+    /** Recompute drawn Cube cards when the shared density preference changes. */
+    #onCompactChange = () => {
+        if (this.#enabled)
+            this.sync();
+    };
     /** Reflow after native prompt input returns control to Comfy's own widget callback. */
     #requestPromptGeometryReflow() {
         if (this.#promptGeometryQueued)

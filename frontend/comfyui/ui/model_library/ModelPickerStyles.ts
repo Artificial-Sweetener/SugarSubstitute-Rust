@@ -22,6 +22,7 @@ import {
   MODEL_PREVIEW_BACKDROP,
 } from './ModelRecommendationPreviewStyles.js';
 import { modelKeyRequiredBadgeCss } from './vue/ModelKeyRequiredBadge.js';
+import { CONTROL_HEIGHT } from '../surface/appearance/ControlGeometry.js';
 /** Style only picker-owned fields, navigation, menus, and reference galleries. */
 export const modelPickerCss =
   modelRecommendationPreviewCss +
@@ -30,7 +31,7 @@ export const modelPickerCss =
 .sc-model-find { display:inline-flex; align-items:center; justify-content:center; gap:8px; width:100%; height:32px; padding:0 12px; border:1px solid transparent; border-radius:4px; background:var(--sc-brand-fill,#0078d4); color:var(--sc-text-on-accent,#fff); font:12px var(--sc-font-family,"Segoe UI Variable","Segoe UI",sans-serif); cursor:pointer; }
 .sc-model-find:hover { background:var(--sc-brand-fill-hover,#106ebe); }
 .sc-model-find-icon { width:16px; height:16px; background:currentColor; mask:url("${findIcon}") center/contain no-repeat; }
-.sc-model-field { position:relative; display:flex; align-items:center; box-sizing:border-box; width:100%; max-width:100%; min-width:0; height:32px; overflow:hidden; border:1px solid var(--sc-border,#595959); border-bottom-color:var(--sc-border-accessible,#929292); border-radius:5px; background:var(--sc-surface,#383838); color:var(--sc-text,#eee); font:12px var(--sc-font-family,"Segoe UI Variable","Segoe UI",sans-serif); }
+.sc-model-field { position:relative; display:flex; align-items:center; box-sizing:border-box; width:100%; max-width:100%; min-width:0; height:${CONTROL_HEIGHT}; overflow:hidden; border:1px solid var(--sc-border,#595959); border-bottom-color:var(--sc-border-accessible,#929292); border-radius:5px; background:var(--sc-surface,#383838); color:var(--sc-text,#eee); font:12px var(--sc-font-family,"Segoe UI Variable","Segoe UI",sans-serif); }
 [data-sc-model-appearance]:not([data-sc-model-appearance="native"]) .sc-model-field:has(.sc-model-banner) { color:#fff; }
 [data-sc-model-appearance]:not([data-sc-model-appearance="native"]) .sc-model-field:has(.sc-model-banner) .sc-model-completion { color:#ffffffaf; }
 .sc-model-field::after { content:''; display:var(--sc-field-underline-display,block); position:absolute; inset:auto 0 0; height:2px; background:var(--sc-brand-border,#4ca6f9); transform:scaleX(0); transform-origin:center; transition:transform var(--sc-motion-duration,200ms) var(--sc-motion-decelerate,cubic-bezier(.1,.9,.2,1)); pointer-events:none; }

@@ -21,10 +21,32 @@ import type { NativeNumericField } from '../../../frontend/comfyui/ui/surface/ap
 import { readNativeNumericField } from '../../../frontend/comfyui/ui/surface/appearance/ComfyNativeNumericField.js';
 import { usesSubstituteSlider } from '../../../frontend/comfyui/ui/surface/appearance/NumericSliderPresentation.js';
 import { nativeNumericCss } from '../../../frontend/comfyui/ui/surface/appearance/NativeNumericStyles.js';
+import { createNumericSlider } from '../../../frontend/comfyui/ui/surface/appearance/ControlFactory.js';
+import { publishVisualStyle } from '../../../frontend/comfyui/ui/surface/appearance/VisualStyleBoundary.js';
 import { Slider } from '@fluentui/web-components/slider/class.js';
+import { SPINNER_WIDTH } from '../../../frontend/comfyui/ui/surface/appearance/ControlGeometry.js';
+import { nativeVisualStyleCss } from '../../../frontend/comfyui/ui/surface/appearance/ThemeService.js';
 import '../../../frontend/comfyui/ui/surface/appearance/FluentThemeRuntime.js';
 
-afterEach(() => document.body.replaceChildren());
+afterEach(() => {
+  document.body.replaceChildren();
+  document.documentElement.removeAttribute('data-sc-visual-style');
+});
+
+test.each(['fluent', 'spectrum', 'photopro'] as const)(
+  '%s shares compact widths between scalar and slider spinners while preserving full seed boxes',
+  (style) => {
+    const css = nativeVisualStyleCss(style, true);
+    expect(css).toContain(
+      `[data-sc-number-spinner]:not([data-sc-seed-box]) { width:${SPINNER_WIDTH};`,
+    );
+    expect(css).toContain(
+      `[data-sc-number-pair] > :first-child { width:${SPINNER_WIDTH}; min-width:${SPINNER_WIDTH};`,
+    );
+    expect(css).toContain(`flex-basis:${SPINNER_WIDTH};`);
+    expect(css).toContain('[data-sc-number-spinner][data-sc-seed-box] { width:192px;');
+  },
+);
 
 /** Model the official slider's synchronous change notification on value assignment. */
 class SliderFixture extends HTMLElement implements NumericSliderControl {
@@ -125,6 +147,34 @@ test('allows slider drag updates and completion to reach its window listeners', 
     controls.clear();
   }
 });
+
+test.each(['fluent', 'spectrum', 'photopro'] as const)(
+  'writes each %s slider input while dragging and ignores the duplicate final change',
+  (style) => {
+    publishVisualStyle(document, style);
+    const { root, field, write } = fixture();
+    const controls = new NativeNumericControls(createNumericSlider);
+    try {
+      controls.reconcile(root, [field]);
+      const slider = root.querySelector<HTMLElement>('[data-sc-number-slider]');
+      if (!slider) throw new Error('Numeric slider missing');
+      Reflect.set(slider, 'value', style === 'spectrum' ? 0.4 : '0.4');
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+      expect(field.input.value).toBe('0.4');
+      Reflect.set(slider, 'value', style === 'spectrum' ? 0.6 : '0.6');
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+      expect(field.input.value).toBe('0.6');
+      slider.dispatchEvent(new Event('change', { bubbles: true }));
+      expect(write).toHaveBeenCalledTimes(2);
+      controls.clear();
+      Reflect.set(slider, 'value', style === 'spectrum' ? 0.8 : '0.8');
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+      expect(write).toHaveBeenCalledTimes(2);
+    } finally {
+      controls.clear();
+    }
+  },
+);
 
 /** Build one native numeric field without replacing its editor or value callback. */
 function fixture(name = 'denoise', label = name, precision = 2) {
@@ -275,6 +325,8 @@ test('centers recognized numeric editors and uses the desktop slider cursor only
   expect(getComputedStyle(field.input).paddingLeft).toBe('8px');
   expect(getComputedStyle(field.input).paddingRight).toBe('8px');
   expect(getComputedStyle(slider).cursor).toBe('default');
+  expect(nativeNumericCss()).toContain('cursor:default !important');
+  expect(nativeNumericCss()).toContain('[data-sc-number-slider]::part(track-container)');
   expect(getComputedStyle(custom).textAlign).toBe('right');
   controls.clear();
   expect(getComputedStyle(field.input).textAlign).toBe(originalAlignment);

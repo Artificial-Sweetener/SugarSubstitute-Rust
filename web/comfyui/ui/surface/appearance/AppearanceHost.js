@@ -18,10 +18,12 @@ import { isRecord } from '../../types/common.js';
 import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
 import { createComfyRendererModeChangeSource, resolveComfyRendererMode, } from '../../core/ComfyRendererMode.js';
 import { NativeThemeScopes } from './NativeThemeScopes.js';
+import { identifyMenuSurface, releaseMenuSurface } from '../../menus/MenuSurface.js';
 import { NativeCardAdapter } from './NativeCardAdapter.js';
 import { nativeVisualStyleCss } from './ThemeService.js';
 import { createNumericSlider, createBooleanCheckbox, createBooleanSegments, } from './ControlFactory.js';
 import { NativeInlineComboSearch } from './NativeInlineComboSearch.js';
+import { acquireComboToggle } from './ComboToggleController.js';
 import { NativeCardTitlebar } from './NativeCardTitlebar.js';
 import { NativeToggleRows } from './NativeToggleRows.js';
 import { NativeBooleanSegments } from './NativeBooleanSegments.js';
@@ -41,6 +43,8 @@ import { ensureOwnedControlAppearanceStyles } from './OwnedControlAppearanceStyl
 import { refreshCubeTitleOpticalAlignment } from '../CubeTitleOpticalDomAlignment.js';
 import { registerVisualStylePreference } from './VisualStylePreference.js';
 import { publishVisualStyle, releaseVisualStyle } from './VisualStyleBoundary.js';
+import { registerCompactMasonryPreference } from '../masonry/CompactMasonryPreference.js';
+import { registerPhotoProPalettePreference } from './PhotoProPalettePreference.js';
 const surfaceSelector = '.sugarcubes-workflow-masonry, .sugarcubes-masonry-toggle, .sc-overrides-toolbar, .sugarcubes-native-widget';
 /** Keep appearance separate from graph, Cube policy, and masonry layout state. */
 export class AppearanceHost {
@@ -68,6 +72,9 @@ export class AppearanceHost {
     #dirty = new Set();
     #unsubscribe = null;
     #unsubscribePalette = null;
+    #releaseComboToggle = null;
+    #releaseCompactMasonry = null;
+    #releasePhotoProPalette = null;
     #selectedStyle = 'comfy';
     #active = false;
     #dark = null;
@@ -101,6 +108,7 @@ export class AppearanceHost {
         if (this.#setup || this.#disposed)
             return;
         this.#setup = true;
+        this.#releaseComboToggle = acquireComboToggle(this.#options.document);
         ensureOwnedControlAppearanceStyles(this.#options.document);
         this.#accent.setup();
         const settings = readSettings(this.#options.app);
@@ -138,6 +146,8 @@ export class AppearanceHost {
         this.#options.document.addEventListener(NATIVE_PRESENTATION_READY_EVENT, this.#onPresentationReady);
         this.#options.document.defaultView?.addEventListener('pagehide', this.#onPageHide);
         registerVisualStylePreference(this.#options.app, (style) => this.setStyle(style), this.#options.reportError);
+        this.#releaseCompactMasonry = registerCompactMasonryPreference(this.#options.app, this.#options.document, this.#options.reportError);
+        this.#releasePhotoProPalette = registerPhotoProPalettePreference(this.#options.app, this.#options.document, this.#options.reportError);
     }
     /** Apply preference without persisting presentation into workflow node data. */
     setStyle(style) {
@@ -163,6 +173,9 @@ export class AppearanceHost {
         this.#palette.disconnect();
         this.#unsubscribe?.();
         this.#unsubscribePalette?.();
+        this.#releaseComboToggle?.();
+        this.#releaseCompactMasonry?.();
+        this.#releasePhotoProPalette?.();
         this.#options.document.removeEventListener('pointerdown', this.#rememberPopupOrigin, true);
         this.#options.document.removeEventListener('keydown', this.#rememberPopupOrigin, true);
         this.#options.document.removeEventListener(NATIVE_PRESENTATION_READY_EVENT, this.#onPresentationReady);
@@ -215,10 +228,13 @@ export class AppearanceHost {
         for (const surface of this.#surfaces) {
             surface.removeAttribute('data-sc-style-surface');
             surface.removeAttribute('data-sc-style-popup');
+            releaseMenuSurface(surface);
         }
         this.#surfaces.clear();
-        for (const popup of this.#popups)
+        for (const popup of this.#popups) {
             popup.removeAttribute('data-sc-style-popup');
+            releaseMenuSurface(popup);
+        }
         this.#popups.clear();
         this.#popupOrigin = null;
         this.#dirty.clear();
@@ -349,7 +365,7 @@ export class AppearanceHost {
             return;
         this.#popupOrigin =
             event.target instanceof HTMLElement
-                ? event.target.closest('[data-sc-style-row]')
+                ? event.target.closest('[data-sc-style-row],.sugarcubes-native-widget')
                 : null;
     };
     /** Follow the source control's accessibility relationship to its own portalled menu. */
@@ -359,9 +375,10 @@ export class AppearanceHost {
         for (const trigger of this.#popupOrigin.querySelectorAll('[aria-controls]')) {
             const id = trigger.getAttribute('aria-controls');
             const popup = id ? this.#options.document.getElementById(id) : null;
-            if (!popup || popup.getAttribute('role') !== 'listbox')
+            if (!popup || popup.getAttribute('role') !== 'listbox' || popup.closest('.sc-model-popup'))
                 continue;
             popup.setAttribute('data-sc-style-popup', '');
+            identifyMenuSurface(popup, 'choices');
             this.#themes.retain(popup);
             this.#popups.add(popup);
             if (trigger instanceof HTMLElement)

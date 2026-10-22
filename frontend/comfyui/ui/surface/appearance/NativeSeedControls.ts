@@ -98,6 +98,11 @@ export class NativeSeedControls {
     menuButton.append(chevron);
     const menu = new ContextMenu(documentRef);
     split.append(primary, menuButton);
+    const retainInteraction = (event: Event): void => {
+      event.stopPropagation();
+    };
+    for (const name of ['pointerdown', 'mousedown', 'click'] as const)
+      split.addEventListener(name, retainInteraction);
     spinner.dataset.scSeedBox = '';
     let renderedMode = '';
     let renderedModes = '';
@@ -168,6 +173,8 @@ export class NativeSeedControls {
         delete spinner.dataset.scSeedBox;
         primary.removeEventListener('click', toggle);
         menuButton.removeEventListener('click', expand);
+        for (const name of ['pointerdown', 'mousedown', 'click'] as const)
+          split.removeEventListener(name, retainInteraction);
       },
     };
     let unsubscribe = (): void => undefined;

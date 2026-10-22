@@ -1,5 +1,5 @@
 import { usesSubstituteSlider } from './NumericSliderPresentation.js';
-/** Attach Microsoft's slider beside the existing spinbox only at recognized native boundaries. */
+/** Attach the selected slider beside the existing spinbox only at recognized native boundaries. */
 export class NativeNumericControls {
     #cards = new Map();
     #createSlider;
@@ -57,7 +57,7 @@ export class NativeNumericControls {
             target.addEventListener('pointerdown', retainNumericGesture);
         let synchronizing = false;
         let unsubscribe = () => undefined;
-        const change = () => {
+        const publishSliderValue = () => {
             if (synchronizing || !slider || binding.field.disabled())
                 return;
             const value = slider.readValue();
@@ -87,7 +87,8 @@ export class NativeNumericControls {
                     element.removeAttribute(attribute);
                 annotations.clear();
                 field.container.removeAttribute('data-sc-number-pair');
-                slider?.root.removeEventListener('change', change);
+                slider?.root.removeEventListener('input', publishSliderValue);
+                slider?.root.removeEventListener('change', publishSliderValue);
                 slider?.root.remove();
             },
         };
@@ -95,7 +96,8 @@ export class NativeNumericControls {
             slider.root.setAttribute('aria-label', `${field.label} slider`);
             slider.root.dataset.scNumberSlider = '';
             field.container.setAttribute('data-sc-number-pair', '');
-            slider.root.addEventListener('change', change);
+            slider.root.addEventListener('input', publishSliderValue);
+            slider.root.addEventListener('change', publishSliderValue);
             field.container.append(slider.root);
         }
         try {

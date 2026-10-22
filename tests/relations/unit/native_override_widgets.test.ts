@@ -64,6 +64,48 @@ test('shares palette foregrounds with legacy relation selectors and override inp
   expect(rule.style.color).toBe('var(--sc-text,var(--fg-color,#eee))');
 });
 
+test('keeps an empty Plugin Mode card visible and expanded without overwriting saved collapse state', () => {
+  const slot = document.createElement('div');
+  slot.className = 'sc-plugin-overrides-slot';
+  document.body.append(slot);
+  const state = emptyRelationState();
+  const relations = new WorkflowRelations({
+    inventory: () => ({ nodes: [], fields: [] }),
+    load: () => state,
+    save: jest.fn(),
+    transaction: (operation) => operation(),
+    refresh: jest.fn(),
+  });
+  const writeCollapsed = jest.fn();
+  const mount = jest.fn(() => ({ update: jest.fn(), dispose: jest.fn() }));
+  const toolbar = new GlobalOverrideToolbar(
+    document,
+    relations,
+    jest.fn(),
+    { mount, mountChoice: mount },
+    new NativeOverrideToolbarHost(document),
+    {
+      read: () => ({ docked: false, floating: null, anchor: null }),
+      write: jest.fn(),
+      readCollapsed: () => true,
+      writeCollapsed,
+    },
+    'plugin',
+  );
+  toolbar.reconcile();
+  expect(slot.firstElementChild).toBe(toolbar.element);
+  expect(toolbar.element.hidden).toBe(false);
+  expect(toolbar.element.dataset.collapsed).toBe('false');
+  expect(toolbar.element.querySelector<HTMLElement>('.sc-overrides-fields')?.hidden).toBe(false);
+  toolbar.element.querySelector<HTMLButtonElement>('.sc-overrides-disclosure')!.click();
+  expect(toolbar.element.dataset.collapsed).toBe('false');
+  expect(writeCollapsed).not.toHaveBeenCalled();
+  expect(mount).not.toHaveBeenCalled();
+  toolbar.setPresentation('comfy');
+  expect(toolbar.element.dataset.collapsed).toBe('true');
+  toolbar.dispose();
+});
+
 afterEach(() => {
   document.body.replaceChildren();
   document.getElementById('sc-relation-styles')?.remove();
@@ -251,6 +293,34 @@ test('reserves workflow space below Run and creates every field through the widg
   expect(getComputedStyle(menuButton.firstElementChild!).width).toBe('14px');
   toolbar.setPresentation('comfy');
   expect(getComputedStyle(menuButton).flexDirection).toBe('row');
+  const pluginSlot = document.createElement('div');
+  pluginSlot.className = 'sc-plugin-overrides-slot';
+  panel.prepend(pluginSlot);
+  toolbar.setPresentation('plugin');
+  toolbar.reconcile();
+  expect(pluginSlot.firstElementChild).toBe(toolbar.element);
+  expect(toolbar.element.getAttribute('role')).toBe('group');
+  expect(toolbar.element.querySelector('h3')?.textContent).toBe('Global Overrides');
+  expect(toolbar.element.querySelector('.sc-override-control')).toBe(nativeControl);
+  expect(toolbar.element.dataset.collapsed).toBe('false');
+  expect(
+    getComputedStyle(toolbar.element.querySelector('.sc-overrides-fields')!).flexDirection,
+  ).toBe('column');
+  expect(getComputedStyle(toolbar.element.querySelector('.sc-overrides-disclosure')!).display).toBe(
+    'none',
+  );
+  toolbar.element.querySelector<HTMLButtonElement>('.sc-overrides-disclosure')!.click();
+  expect(toolbar.element.dataset.collapsed).toBe('false');
+  expect(mount).toHaveBeenCalledTimes(1);
+  pluginSlot.remove();
+  toolbar.reconcile();
+  expect(actionbar.contains(toolbar.element)).toBe(true);
+  expect(actionbar.hasAttribute('data-sc-plugin-overrides-dock')).toBe(true);
+  expect(toolbar.element.querySelector('.sc-override-control')).toBe(nativeControl);
+  toolbar.setPresentation('comfy');
+  toolbar.reconcile();
+  expect(actionbar.hasAttribute('data-sc-plugin-overrides-dock')).toBe(false);
+  expect(pluginSlot.childElementCount).toBe(0);
   expect(toolbar.element.querySelector('.sc-overrides-menu')).toBe(menuButton);
   expect(toolbar.element.querySelector('.sc-override-control')).toBe(nativeControl);
   expect(mount).toHaveBeenCalledTimes(1);

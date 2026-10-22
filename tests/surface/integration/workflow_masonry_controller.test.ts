@@ -448,6 +448,7 @@ describe('workflow masonry controller', () => {
     surface.dispatchEvent(new Event('sugarcubes-disclosure-layout'));
     await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
     expect(header.dataset.masonryHeight).toBe('345');
+    expect(header.style.getPropertyValue('--sc-masonry-section-height')).toBe('345px');
     presented.style.height = '182px';
     owner.reset([cell]);
     queueMicrotask(() => {
@@ -1114,7 +1115,7 @@ test('assigns final themed masonry widths before the native renderer mounts cont
     openCube() {},
   });
   document.body.append(view.element);
-  const content = view.element.firstElementChild;
+  const content = view.element.querySelector('.sugarcubes-workflow-masonry__content');
   if (!content) throw new Error('Masonry content missing');
   Object.defineProperty(content, 'clientWidth', { value: 1100 });
   const prepare = (): void => {

@@ -29,7 +29,7 @@ import type { OverrideToolbarPlacementStore } from './OverrideToolbarPlacementSt
 import { OverrideToolbarFieldLayout } from './OverrideToolbarFieldLayout.js';
 
 /** Select host chrome without changing native widgets or workflow relation state. */
-export type OverrideToolbarPresentation = 'comfy' | 'substitute';
+export type OverrideToolbarPresentation = 'comfy' | 'substitute' | 'plugin';
 
 /** Keep toolbar controls stable while reconciling automatically discovered participant groups. */
 export class GlobalOverrideToolbar {
@@ -46,6 +46,7 @@ export class GlobalOverrideToolbar {
   readonly #disclosure: OverrideToolbarDisclosure;
   readonly #drag: OverrideToolbarDrag;
   readonly #placement: OverrideToolbarPlacement;
+  readonly #title: HTMLHeadingElement;
   #signature = '';
   #suspended = false;
 
@@ -94,6 +95,9 @@ export class GlobalOverrideToolbar {
     this.#fields.dataset.scScrollbarHorizontalOutset = '3';
     this.#fieldLayout = new OverrideToolbarFieldLayout(this.#fields);
     this.#fields.id = 'sc-overrides-fields';
+    this.#title = document.createElement('h3');
+    this.#title.className = 'sc-overrides-card-title';
+    this.#title.textContent = 'Global Overrides';
     const disclosure = document.createElement('button');
     disclosure.type = 'button';
     disclosure.className = 'sc-overrides-disclosure';
@@ -102,7 +106,7 @@ export class GlobalOverrideToolbar {
       this.#menu.close();
       queueMicrotask(this.#measureLabels);
     });
-    this.element.append(grip, this.#menuButton, this.#fields, disclosure);
+    this.element.append(grip, this.#menuButton, this.#title, this.#fields, disclosure);
     this.#placement = new OverrideToolbarPlacement(
       this.element,
       grip,
@@ -157,7 +161,11 @@ export class GlobalOverrideToolbar {
   setPresentation(presentation: OverrideToolbarPresentation): void {
     if (this.element.dataset.presentation === presentation) return;
     this.element.dataset.presentation = presentation;
-    const inline = presentation === 'substitute';
+    const plugin = presentation === 'plugin';
+    const inline = presentation !== 'comfy';
+    this.element.classList.toggle('sugarcubes-cube-face__node-card', plugin);
+    this.element.setAttribute('role', plugin ? 'group' : 'toolbar');
+    this.#title.hidden = !plugin;
     this.#disclosure.setInline(inline);
     this.#placement.setInline(inline);
     this.#fieldLayout.reconcile();
@@ -176,7 +184,8 @@ export class GlobalOverrideToolbar {
     if (!this.#placement.attached()) return;
     this.#disclosure.refresh();
     const groups = this.relations.snapshot().groups;
-    this.element.hidden = this.#suspended || groups.length === 0;
+    this.element.hidden =
+      this.#suspended || (groups.length === 0 && this.element.dataset.presentation !== 'plugin');
     const signature = JSON.stringify(groups);
     if (signature === this.#signature) return;
     this.#signature = signature;

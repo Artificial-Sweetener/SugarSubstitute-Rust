@@ -26,8 +26,9 @@ if (!customElements.get('fluent-menu-item')) await MenuItem.define(MenuItemDefin
 
 /** Suppress Adobe's independent selection and roving-focus owner inside shared menus. */
 export function createMenuList(document: Document): HTMLElement {
+  const style = readOwnedVisualStyle(document);
   const menu = document.createElement(
-    readOwnedVisualStyle(document) === 'spectrum' ? 'sp-menu' : 'fluent-menu-list',
+    style === 'spectrum' ? 'sp-menu' : style === 'photopro' ? 'div' : 'fluent-menu-list',
   );
   if (menu.localName === 'sp-menu') menu.setAttribute('ignore', '');
   return menu;
@@ -35,8 +36,13 @@ export function createMenuList(document: Document): HTMLElement {
 
 /** Create an official row with slots for icons, content and accessory text. */
 export function createMenuItem(document: Document): HTMLElement {
+  const style = readOwnedVisualStyle(document);
   return document.createElement(
-    readOwnedVisualStyle(document) === 'spectrum' ? 'sc-spectrum-menu-item' : 'fluent-menu-item',
+    style === 'spectrum'
+      ? 'sc-spectrum-menu-item'
+      : style === 'photopro'
+        ? 'div'
+        : 'fluent-menu-item',
   );
 }
 
@@ -52,9 +58,11 @@ export function setMenuItemChecked(row: HTMLElement, checked: boolean): void {
 
 /** Route shared icons and accessories into each library's documented slots. */
 export function menuItemSlot(document: Document, position: 'start' | 'end'): string {
-  return readOwnedVisualStyle(document) === 'spectrum'
-    ? position === 'start'
-      ? 'icon'
-      : 'value'
-    : position;
+  return readOwnedVisualStyle(document) === 'photopro'
+    ? ''
+    : readOwnedVisualStyle(document) === 'spectrum'
+      ? position === 'start'
+        ? 'icon'
+        : 'value'
+      : position;
 }

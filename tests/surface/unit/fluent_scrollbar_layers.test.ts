@@ -20,10 +20,36 @@ import {
   scrollbarCoordinateSpace,
 } from '../../../frontend/comfyui/ui/surface/appearance/ScrollbarLayers.js';
 import { ScrollbarView } from '../../../frontend/comfyui/ui/surface/appearance/ScrollbarView.js';
+import { scrollbarTrack } from '../../../frontend/comfyui/ui/surface/appearance/ScrollbarLayout.js';
 
 afterEach(() => {
   document.body.replaceChildren();
   jest.restoreAllMocks();
+});
+
+test('PhotoPro retains the full scroll-owner track when its first arrow moves offscreen', () => {
+  const owner = document.createElement('div');
+  owner.style.overflow = 'auto';
+  Object.defineProperties(owner, {
+    clientWidth: { value: 200 },
+    clientHeight: { value: 400 },
+    offsetWidth: { value: 200 },
+    offsetHeight: { value: 400 },
+  });
+  jest.spyOn(owner, 'getBoundingClientRect').mockReturnValue({
+    x: 10,
+    y: -120,
+    left: 10,
+    top: -120,
+    right: 210,
+    bottom: 280,
+    width: 200,
+    height: 400,
+    toJSON: () => ({}),
+  });
+  document.body.append(owner);
+  expect(scrollbarTrack(owner)?.top).toBe(0);
+  expect(scrollbarTrack(owner, true)).toMatchObject({ top: -120, height: 400 });
 });
 
 test('measures all native layer boundaries before inserting any scrollbar layer', () => {

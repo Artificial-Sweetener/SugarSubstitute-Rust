@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Share native card layout and control presentation across supported design systems. */
 import { nativeInteractionCss } from './NativeInteractionStyles.js';
+import { CONTROL_HEIGHT, SPINNER_WIDTH } from './ControlGeometry.js';
 import { nativeNumericCss } from './NativeNumericStyles.js';
 import { nativeSeedCss } from './NativeSeedStyles.js';
 import { scrollbarCss } from './ScrollbarStyles.js';
@@ -127,6 +128,9 @@ export function nativeAppearanceCss(palette, dark) {
       padding:8px 0; border-bottom:1px solid var(--sc-row-stroke);
     }
     [data-sc-style-node] [data-sc-style-row] { padding-top:8px; padding-bottom:8px; }
+    html[data-sc-compact-masonry] [data-sc-style-node] [data-sc-style-row] {
+      padding-top:4px; padding-bottom:4px;
+    }
     .sugarcubes-cube-face__node-card [data-sc-style-node] [data-sc-style-row] { padding-left:10px; padding-right:30px; }
     .sugarcubes-cube-face__node-card [data-sc-style-row][data-sc-style-kind="multiline"],
     .sugarcubes-cube-face__node-card [data-sc-style-row][data-sc-style-span="1"][data-sc-style-column="1"] { padding-right:10px; }
@@ -159,7 +163,7 @@ export function nativeAppearanceCss(palette, dark) {
     .sugarcubes-cube-face__node-card [data-sc-style-layout] > :first-child { min-width:0; flex:1; }
     .sugarcubes-cube-face__node-card [data-sc-style-layout]:not([data-sc-choice-inline] *) > :last-child { min-width:0; flex:0 1 156px; max-width:65%; }
     .sugarcubes-cube-face__node-card [data-sc-style-row][data-sc-style-widget^="WidgetInputNumber"] [data-sc-style-layout] > :last-child {
-      flex-basis:100px;
+      flex-basis:${SPINNER_WIDTH};
     }
     .sugarcubes-cube-face__node-card [data-sc-style-row][data-sc-style-widget="WidgetToggleSwitch"] [data-sc-style-layout] > :last-child {
       flex:0 0 auto;
@@ -168,18 +172,16 @@ export function nativeAppearanceCss(palette, dark) {
       flex-basis:360px; max-width:min(65%,360px);
     }
     .sugarcubes-cube-face__node-card [data-sc-style-row][data-sc-style-widget^="WidgetInputNumber"] [data-sc-style-layout] > :last-child > :first-child > :first-child {
-      height:33px; border:var(--sc-field-border-width) solid var(--sc-control-stroke);
+      height:${CONTROL_HEIGHT}; border:var(--sc-field-border-width) solid var(--sc-control-stroke);
       border-bottom-color:var(--sc-control-bottom-stroke); border-radius:var(--sc-field-radius);
       background:var(--sc-control-fill);
     }
-    [data-sc-style-combo-frame],
-    :where([data-sc-style-node], [data-sc-style-surface]) .sc-model-field:not(:has(.sc-model-banner, .sc-model-transfer-thumbnail)) {
-      box-sizing:border-box; height:33px; min-height:33px;
+    html [data-sc-style-combo-frame] {
+      box-sizing:border-box; height:${CONTROL_HEIGHT}; min-height:${CONTROL_HEIGHT};
       border:var(--sc-field-border-width) solid var(--sc-control-stroke); border-bottom-color:var(--sc-control-bottom-stroke);
       border-radius:var(--sc-field-radius); background:var(--sc-control-fill);
     }
-    [data-sc-style-combo-frame]:hover,
-    :where([data-sc-style-node], [data-sc-style-surface]) .sc-model-field:not(:has(.sc-model-banner, .sc-model-transfer-thumbnail)):hover {
+    html [data-sc-style-combo-frame]:hover {
       background:var(--sc-surface-hover);
     }
     :where([data-sc-style-node], [data-sc-style-surface]) .sc-model-field:not(:has(.sc-model-banner, .sc-model-transfer-thumbnail)) .sc-model-field-arrow {

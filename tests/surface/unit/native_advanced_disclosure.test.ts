@@ -86,8 +86,21 @@ function fixture() {
   };
   const adapter = new NativeAdvancedDisclosure();
   adapter.reconcile(card);
-  return { root, fields, advanced, button, callback, effects, adapter };
+  return { root, fields, advanced, button, callback, effects, adapter, card };
 }
+
+test('keeps an accessible disclosure name and state when PhotoPro displays only an ellipsis', () => {
+  const { button, adapter, card } = fixture();
+  expect(button.getAttribute('aria-label')).toBe('Show advanced inputs');
+  expect(button.getAttribute('aria-expanded')).toBe('false');
+  if (!card.advanced) throw new Error('Missing advanced disclosure');
+  adapter.reconcile({ ...card, advanced: { ...card.advanced, expanded: true } });
+  expect(button.getAttribute('aria-label')).toBe('Hide advanced inputs');
+  expect(button.getAttribute('aria-expanded')).toBe('true');
+  adapter.clear();
+  expect(button.hasAttribute('aria-label')).toBe(false);
+  expect(button.hasAttribute('aria-expanded')).toBe(false);
+});
 
 test('opens after native refresh and retains advanced controls until the accordion finishes closing', async () => {
   const { fields, advanced, button, callback, effects, adapter } = fixture();

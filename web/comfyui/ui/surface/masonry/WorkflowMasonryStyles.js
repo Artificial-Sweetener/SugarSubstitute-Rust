@@ -43,6 +43,12 @@ export function ensureWorkflowMasonryStyles(documentRef) {
       background:transparent;
       color:var(--fg-color,#ddd); outline:none;
     }
+    html[data-sc-compact-masonry] .sugarcubes-workflow-masonry {
+      --sugarcubes-masonry-gap:0;
+      --sc-masonry-inline-padding:0px;
+      padding:0 0 0 var(--sc-masonry-stack-width,0px);
+    }
+    html[data-sc-compact-masonry] .sugarcubes-workflow-masonry__section { height:36px; }
     .sugarcubes-workflow-masonry__backdrop {
       position:absolute; inset:0; z-index:${MASONRY_SURFACE_Z_INDEX}; pointer-events:none;
       background:var(--sugarcubes-masonry-surface,var(--comfy-menu-bg,#202020));
@@ -56,6 +62,8 @@ export function ensureWorkflowMasonryStyles(documentRef) {
       transform-origin:0 0;
     }
     .sugarcubes-workflow-masonry__content { position:relative; width:100%; }
+    .sc-plugin-overrides-slot:empty { display:none; }
+    .sc-plugin-overrides-slot { position:relative; margin-bottom:var(--sugarcubes-masonry-gap,12px); }
     .sugarcubes-workflow-masonry__section {
       position:absolute; left:0; right:0; height:36px;
       display:flex; align-items:center; gap:12px;

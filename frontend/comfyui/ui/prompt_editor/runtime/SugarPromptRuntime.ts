@@ -262,7 +262,8 @@ export class SugarPromptEditor {
   #applyAppearance(): void {
     const { style, dark } = this.#options.appearance.appearance;
     this.element.dataset.scPromptStyle = style;
-    this.element.style.colorScheme = dark ? 'dark' : 'light';
+    if (style === 'photopro') this.element.style.removeProperty('color-scheme');
+    else this.element.style.colorScheme = dark ? 'dark' : 'light';
     if (style === 'comfy') applyOwnedTheme(this.element, null);
     else applyOwnedTheme(this.element, dark, style);
     if (this.#fieldStyle !== style) {

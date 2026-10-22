@@ -174,7 +174,7 @@ test('keeps controls and explicit custom styling intact while restoring the curr
     ui: {
       settings: {
         addSetting: (setting: unknown) => {
-          registration = setting;
+          if (isRecord(setting) && setting.id === VISUAL_STYLE_SETTING) registration = setting;
         },
         getSettingValue: (id: string) => values.get(id),
         addEventListener: events.addEventListener.bind(events),
@@ -458,6 +458,60 @@ test('styles newly mounted relation controls during their native card reconcilia
   await Promise.resolve();
   expect(errors).not.toHaveBeenCalled();
   host.dispose();
+});
+
+test('styles a relation choice popup through the ordinary combobox popup owner', () => {
+  const frames: FrameRequestCallback[] = [];
+  jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+    frames.push(callback);
+    return frames.length;
+  });
+  const host = new AppearanceHost({
+    document,
+    app: {
+      ui: {
+        settings: {
+          addSetting() {},
+          getSettingValue: (key: string) => key === 'Comfy.VueNodes.Enabled',
+        },
+      },
+    },
+    reportError: jest.fn(),
+  });
+  host.setup();
+  host.setStyle('photopro');
+  const relation = document.createElement('div');
+  relation.className = 'sugarcubes-native-widget sc-field-relation';
+  const trigger = document.createElement('button');
+  trigger.setAttribute('role', 'combobox');
+  trigger.setAttribute('aria-controls', 'relation-popup');
+  relation.append(trigger);
+  document.body.append(relation);
+  trigger.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+  const popup = document.createElement('div');
+  popup.id = 'relation-popup';
+  popup.setAttribute('role', 'listbox');
+  document.body.append(popup);
+  prepareNativePresentation(relation);
+  frames.splice(0).forEach((frame) => frame(0));
+
+  expect(popup.hasAttribute('data-sc-style-popup')).toBe(true);
+  expect(popup.getAttribute('data-sc-menu-surface')).toBe('choices');
+  expect(popup.querySelector('input')).toBeNull();
+  const modelPopup = document.createElement('div');
+  modelPopup.className = 'sc-model-popup';
+  const modelChoices = document.createElement('div');
+  modelChoices.id = 'model-choices';
+  modelChoices.setAttribute('role', 'listbox');
+  modelPopup.append(modelChoices);
+  document.body.append(modelPopup);
+  trigger.setAttribute('aria-controls', modelChoices.id);
+  trigger.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+  prepareNativePresentation(relation);
+  frames.splice(0).forEach((frame) => frame(0));
+  expect(modelChoices.hasAttribute('data-sc-menu-surface')).toBe(false);
+  host.dispose();
+  expect(popup.hasAttribute('data-sc-menu-surface')).toBe(false);
 });
 
 test('owns one stable graph token scope across native card and masonry presentation', () => {

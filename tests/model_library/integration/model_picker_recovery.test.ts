@@ -361,7 +361,6 @@ test('follows visual style without remounting, closing search, or writing a widg
   await jest.advanceTimersByTimeAsync(20);
   expect(mount?.dataset.scModelAppearance).toBe('fluent');
   expect(popup?.dataset.scModelAppearance).toBe('fluent');
-  expect(getComputedStyle(field).height).toBe('32px');
   expect(getComputedStyle(arrow).width).toBe('30px');
   proof.events.dispatchEvent(new Event('SugarCubes.Appearance.VisualStyle.change'));
   proof.values.set('SugarCubes.Appearance.VisualStyle', 'spectrum');

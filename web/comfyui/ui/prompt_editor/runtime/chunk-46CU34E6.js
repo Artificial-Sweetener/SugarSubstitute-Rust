@@ -13,6 +13,7 @@ function installSugarPromptStyles(document) {
   position: relative;
   box-sizing: border-box;
 }
+.sugarprompt-editor .cm-scroller { overflow-x: hidden; }
 .sugarprompt-editor .cm-editor.cm-focused { outline: none; }
 .sugarprompt-editor .cm-content:focus { outline: none; }
 .sugarprompt-editor .cm-content {

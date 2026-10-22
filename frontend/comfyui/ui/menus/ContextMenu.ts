@@ -23,6 +23,7 @@ import {
   menuItemSlot,
 } from './MenuControlRuntime.js';
 import { subscribeVisualStyle } from '../surface/appearance/VisualStyleBoundary.js';
+import { identifyMenuSurface } from './MenuSurface.js';
 
 export interface ContextMenuEntry {
   readonly label: string;
@@ -126,6 +127,7 @@ export class ContextMenu {
     this.#trim(depth);
     const menu = createMenuList(this.#document);
     menu.className = 'sc-context-menu';
+    identifyMenuSurface(menu, 'actions');
     menu.setAttribute('role', 'menu');
     menu.setAttribute('tabindex', '-1');
     menu.setAttribute('aria-label', this.#options?.label ?? 'Actions');

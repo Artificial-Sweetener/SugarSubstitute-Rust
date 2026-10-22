@@ -11977,6 +11977,18 @@ var SpectrumMenuItem = class extends MenuItem {
   }
 };
 var SpectrumSlider = class extends Slider {
+  /** Keep Adobe's internal drag target on the shared arrow cursor. */
+  static get styles() {
+    return [
+      ...super.styles,
+      i`
+        :host #controls,
+        :host .handle {
+          cursor: default;
+        }
+      `
+    ];
+  }
   /** Expose the actual Adobe component without leaking its API to widget bindings. */
   get root() {
     return this;

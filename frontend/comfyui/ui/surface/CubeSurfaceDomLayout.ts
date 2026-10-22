@@ -54,7 +54,10 @@ export function layoutCubeSurfaceDom(
   options: CubeSurfaceDomLayoutOptions,
 ): CubeSurfaceDomLayoutResult {
   const safeWidth = Number.isFinite(options.width) ? Math.max(1, options.width) : 1;
-  const spacing = resolveCubeSurfaceCardSpacing(options.state);
+  const spacing = resolveCubeSurfaceCardSpacing(
+    options.state,
+    options.content.ownerDocument.documentElement.hasAttribute('data-sc-compact-masonry'),
+  );
   const minimumMasonryWidth = Math.min(safeWidth, Math.max(1, options.state.minimumColumnWidth));
   const previewEnabled = options.state.preview.visible;
   const previewWidthRange = resolveCubePreviewWidthRange(

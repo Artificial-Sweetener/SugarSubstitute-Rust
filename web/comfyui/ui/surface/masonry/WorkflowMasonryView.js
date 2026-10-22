@@ -24,6 +24,7 @@ import { SurfaceMotion } from '../motion/SurfaceMotion.js';
 import { MasonryStackInsetMotion } from './MasonryStackInsetMotion.js';
 import { SurfacePresentationBoundary } from '../motion/SurfacePresentationBoundary.js';
 import { prepareNativePresentation } from '../NativePresentationReady.js';
+import { COMPACT_MASONRY_CHANGE } from './CompactMasonryPreference.js';
 import { measureNativeCardPresentationSources, restoreNativeCardPresentations, } from '../NativeCardPresentationOwner.js';
 import { DISCLOSURE_LAYOUT_EVENT, measureDisclosureCardHeight, } from '../motion/DisclosureLayout.js';
 /** Retain shared Cube presentation while measuring only masonry geometry. */
@@ -31,6 +32,7 @@ export class WorkflowMasonryView {
     element;
     backdrop;
     #content;
+    #overrideSlot;
     #options;
     #views = new Map();
     #geometry;
@@ -68,9 +70,12 @@ export class WorkflowMasonryView {
         this.element.addEventListener(DISCLOSURE_LAYOUT_EVENT, this.#onDisclosureLayout);
         options.document.addEventListener('pointerdown', this.#onInteraction, true);
         options.document.addEventListener('keydown', this.#onInteraction, true);
+        options.document.addEventListener(COMPACT_MASONRY_CHANGE, this.#onCompactChange);
         this.#content = options.document.createElement('div');
         this.#content.className = 'sugarcubes-workflow-masonry__content';
-        this.element.append(this.#content);
+        this.#overrideSlot = options.document.createElement('div');
+        this.#overrideSlot.className = 'sc-plugin-overrides-slot';
+        this.element.append(this.#overrideSlot, this.#content);
         this.#geometry = new NativeCardGeometryObserver(options.document, () => {
             if (!this.#mounting)
                 this.#requestLayout();
@@ -171,6 +176,7 @@ export class WorkflowMasonryView {
         this.#mounting = false;
         this.#geometry.observe([
             this.element,
+            this.#overrideSlot,
             ...[...this.#views.values()].flatMap((view) => [...view.cells.values()]),
         ]);
         this.#requestLayout();
@@ -204,6 +210,7 @@ export class WorkflowMasonryView {
             if (header) {
                 header.dataset.masonryY = String(section.y);
                 header.dataset.masonryHeight = String(section.height);
+                header.style.setProperty('--sc-masonry-section-height', `${section.height}px`);
                 placements.push({
                     element: header,
                     rectangle: {
@@ -289,10 +296,11 @@ export class WorkflowMasonryView {
     }
     /** Read container constraints once before any card width writes. */
     #layoutOptions() {
+        const gap = Number.parseFloat(getComputedStyle(this.element).getPropertyValue('--sugarcubes-masonry-gap'));
         return {
             availableWidth: Math.max(1, this.#content.clientWidth),
             minimumColumnWidth: Number.parseFloat(getComputedStyle(this.element).getPropertyValue('--sugarcubes-masonry-column-width')) || 320,
-            gap: Number.parseFloat(getComputedStyle(this.element).getPropertyValue('--sugarcubes-masonry-gap')) || 12,
+            gap: Number.isFinite(gap) ? Math.max(0, gap) : 12,
         };
     }
     /** Establish native control widths before mount so text and sliders measure their final columns. */
@@ -337,7 +345,11 @@ export class WorkflowMasonryView {
         const header = this.#views.get(id)?.header;
         if (header)
             this.element.scrollTo({
-                top: header.offsetTop + Number(header.dataset.masonryY ?? 0),
+                top: header.offsetTop +
+                    Number(header.dataset.masonryY ?? 0) +
+                    (this.#overrideSlot.childElementCount
+                        ? this.#content.offsetTop - this.#overrideSlot.offsetTop
+                        : 0),
                 behavior: this.#options.document.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)').matches
                     ? 'instant'
                     : 'smooth',
@@ -383,6 +395,8 @@ export class WorkflowMasonryView {
         if (!this.#transitioning && !this.element.hasAttribute('data-sc-masonry-preparing'))
             this.#motion.settle();
     };
+    /** Repack mounted cards when the shared density preference changes. */
+    #onCompactChange = () => this.#requestLayout();
     /** Release observers and native mounts before restoring singleton custom widgets. */
     dispose() {
         if (this.#disposed)
@@ -390,6 +404,7 @@ export class WorkflowMasonryView {
         this.#disposed = true;
         this.#options.document.removeEventListener('pointerdown', this.#onInteraction, true);
         this.#options.document.removeEventListener('keydown', this.#onInteraction, true);
+        this.#options.document.removeEventListener(COMPACT_MASONRY_CHANGE, this.#onCompactChange);
         this.element.removeEventListener(DISCLOSURE_LAYOUT_EVENT, this.#onDisclosureLayout);
         this.element.removeEventListener('wheel', this.#onWheel);
         this.#generation += 1;

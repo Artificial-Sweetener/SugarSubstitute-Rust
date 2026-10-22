@@ -34,6 +34,16 @@ import {
   createSpectrumEditorField,
 } from './SpectrumThemeRuntime.js';
 import { readOwnedVisualStyle } from './VisualStyleBoundary.js';
+import {
+  createPhotoProButton,
+  createPhotoProCheckbox,
+  createPhotoProEditorField,
+  createPhotoProFinderInput,
+  createPhotoProSegments,
+  createPhotoProSlider,
+  createPhotoProTablist,
+  createPhotoProWorkflowTab,
+} from './PhotoProControls.js';
 import type { NumericSliderControl } from './NativeNumericControls.js';
 import type { BooleanCheckboxControl } from './NativeToggleRows.js';
 import type { BooleanSegmentsControls } from './NativeBooleanSegments.js';
@@ -43,6 +53,7 @@ import { adoptEditorFieldPadding, type EditorFieldControl } from './EditorFieldC
 import { relocateControl } from '../../core/ControlPlacement.js';
 import {
   createNativeActivationSwitch,
+  createCheckboxActivation,
   type ActivationSwitchControl,
 } from './ActivationSwitchControl.js';
 
@@ -51,7 +62,9 @@ export function createActivationSwitch(document: Document): ActivationSwitchCont
   const result =
     readOwnedVisualStyle(document) === 'spectrum'
       ? createSpectrumActivationSwitch(document)
-      : createNativeActivationSwitch(document);
+      : readOwnedVisualStyle(document) === 'photopro'
+        ? createCheckboxActivation(createPhotoProCheckbox(document))
+        : createNativeActivationSwitch(document);
   result.control.dataset.scActivationSwitch = '';
   return result;
 }
@@ -61,37 +74,51 @@ export function createButton(document: Document): HTMLElement {
   const button =
     readOwnedVisualStyle(document) === 'spectrum'
       ? createSpectrumButton(document)
-      : document.createElement('fluent-button');
+      : readOwnedVisualStyle(document) === 'photopro'
+        ? createPhotoProButton(document)
+        : document.createElement('fluent-button');
   button.dataset.scButton = '';
   return button;
 }
 
 /** Normalize design-system numeric APIs before binding to a native Comfy field. */
 export function createNumericSlider(document: Document): NumericSliderControl {
-  return readOwnedVisualStyle(document) === 'spectrum'
+  const style = readOwnedVisualStyle(document);
+  return style === 'spectrum'
     ? createSpectrumSlider(document)
-    : createFluentNumericSlider(document);
+    : style === 'photopro'
+      ? createPhotoProSlider(document)
+      : createFluentNumericSlider(document);
 }
 
 /** Keep checked-state semantics independent of the selected component library. */
 export function createBooleanCheckbox(document: Document): BooleanCheckboxControl {
-  return readOwnedVisualStyle(document) === 'spectrum'
+  const style = readOwnedVisualStyle(document);
+  return style === 'spectrum'
     ? createSpectrumCheckbox(document)
-    : createBooleanCheckboxControl(document);
+    : style === 'photopro'
+      ? createPhotoProCheckbox(document)
+      : createBooleanCheckboxControl(document);
 }
 
 /** Keep native boolean edits and undo history under the existing shared binding owner. */
 export function createBooleanSegments(document: Document): BooleanSegmentsControls {
-  return readOwnedVisualStyle(document) === 'spectrum'
+  const style = readOwnedVisualStyle(document);
+  return style === 'spectrum'
     ? createSpectrumSegments(document)
-    : createBooleanSegmentControls(document);
+    : style === 'photopro'
+      ? createPhotoProSegments(document)
+      : createBooleanSegmentControls(document);
 }
 
 /** Create a real accessible search field in the selected visual system. */
 export function createFinderInput(document: Document): FinderInputControl {
-  return readOwnedVisualStyle(document) === 'spectrum'
+  const style = readOwnedVisualStyle(document);
+  return style === 'spectrum'
     ? createSpectrumFinderInput(document)
-    : createFinderInputControl(document);
+    : style === 'photopro'
+      ? createPhotoProFinderInput(document)
+      : createFinderInputControl(document);
 }
 
 /** Select the existing provider's input asset for an editor with its own canonical document. */
@@ -101,7 +128,9 @@ export function createEditorField(document: Document, style: VisualStyle): Edito
       ? createFluentEditorField(document)
       : style === 'spectrum'
         ? createSpectrumEditorField(document)
-        : createComfyEditorField(document);
+        : style === 'photopro'
+          ? createPhotoProEditorField(document)
+          : createComfyEditorField(document);
   field.root.dataset.scEditorField = style;
   field.root.style.cssText +=
     ';display:block;box-sizing:border-box;width:100%;height:100%;min-width:0;min-height:0';
@@ -129,32 +158,42 @@ function createComfyEditorField(document: Document): EditorFieldControl {
 
 /** Create a workflow tab group whose adapter exposes stable child identity. */
 export function createWorkflowTablist(document: Document): HTMLElement & { activeid: string } {
+  const style = readOwnedVisualStyle(document);
   const group =
-    readOwnedVisualStyle(document) === 'spectrum'
+    style === 'spectrum'
       ? createSpectrumTablist(document)
-      : createFluentWorkflowTablist();
+      : style === 'photopro'
+        ? createPhotoProTablist(document)
+        : createFluentWorkflowTablist();
   group.dataset.scWorkflowTabs = '';
   return group;
 }
 
 /** Create the selected provider's workflow tab while retaining shared drag and close behavior. */
 export function createWorkflowTab(document: Document): HTMLElement {
+  const style = readOwnedVisualStyle(document);
   const tab =
-    readOwnedVisualStyle(document) === 'spectrum'
+    style === 'spectrum'
       ? document.createElement('sc-spectrum-workflow-tab')
-      : createFluentWorkflowTab(document);
+      : style === 'photopro'
+        ? createPhotoProWorkflowTab(document)
+        : createFluentWorkflowTab(document);
   tab.dataset.scWorkflowTab = '';
   return tab;
 }
 
 /** Choose the provider's accessory slots without leaking library-specific DOM into shared views. */
 export function workflowTabAccessorySlot(document: Document, position: 'start' | 'end'): string {
-  return readOwnedVisualStyle(document) === 'spectrum' ? '' : position;
+  return readOwnedVisualStyle(document) === 'fluent' ? position : '';
 }
 
 /** Name the already registered provider element for declarative Vue rendering. */
 export function buttonTag(style: VisualStyle): string {
-  return style === 'comfy' ? 'button' : style === 'spectrum' ? 'sp-action-button' : 'fluent-button';
+  return style === 'comfy' || style === 'photopro'
+    ? 'button'
+    : style === 'spectrum'
+      ? 'sp-action-button'
+      : 'fluent-button';
 }
 
 /** Select a registered text-field adapter for declarative search views. */
@@ -163,5 +202,7 @@ export function searchInputTag(style: VisualStyle): string {
     ? 'input'
     : style === 'spectrum'
       ? 'sc-spectrum-search'
-      : 'fluent-text-input';
+      : style === 'photopro'
+        ? 'sc-photopro-search'
+        : 'fluent-text-input';
 }

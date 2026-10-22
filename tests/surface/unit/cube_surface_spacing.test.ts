@@ -38,4 +38,14 @@ describe('resolveCubeSurfaceCardSpacing', () => {
       footerInset: 0,
     });
   });
+
+  test('uses zero card and edge gaps in compact mode without changing saved spacing', () => {
+    const state = { gap: 19 };
+    expect(resolveCubeSurfaceCardSpacing(state, true)).toEqual({
+      gap: 0,
+      headerInset: 0,
+      footerInset: 0,
+    });
+    expect(state.gap).toBe(19);
+  });
 });

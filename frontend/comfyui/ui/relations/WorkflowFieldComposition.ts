@@ -80,6 +80,7 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
   function setupPresentation(): void {
     appearance.setup();
     frame.setup();
+    relations.setupOverridePresentation();
     editorNavigation.setup();
     settingsWorkspace.setup();
   }

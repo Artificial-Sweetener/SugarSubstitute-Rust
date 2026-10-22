@@ -14,7 +14,11 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own global discovery and the reversible lifetime of themed overlay scrollbars. */
-import { nativeScrollbarCss, scrollbarPresentationCss } from './ScrollbarStyles.js';
+import {
+  nativeScrollbarCss,
+  photoProScrollbarCss,
+  scrollbarPresentationCss,
+} from './ScrollbarStyles.js';
 import { scrollbarTrack } from './ScrollbarLayout.js';
 import { ScrollbarView } from './ScrollbarView.js';
 import { ScrollbarLayers, scrollbarCoordinateSpace } from './ScrollbarLayers.js';
@@ -25,6 +29,8 @@ interface ScrollOwner {
   vertical: ScrollbarView;
   horizontal: ScrollbarView;
   assignedId: string | null;
+  basePaddingRight: string;
+  gutterReserved: boolean;
 }
 
 /** Observe native overflow while leaving the host's layout and scrolling intact. */
@@ -190,7 +196,14 @@ export class OverlayScrollbarHost {
       };
       const vertical = new ScrollbarView(element, 'vertical', element.id, update);
       const horizontal = new ScrollbarView(element, 'horizontal', element.id, update);
-      this.#owners.set(element, { vertical, horizontal, assignedId });
+      this.#owners.set(element, {
+        vertical,
+        horizontal,
+        assignedId,
+        basePaddingRight:
+          this.#document.defaultView?.getComputedStyle(element).paddingRight || '0px',
+        gutterReserved: false,
+      });
       this.#dirtyOwners.add(element);
       this.#views.set(vertical.element, vertical);
       this.#views.set(horizontal.element, horizontal);
@@ -203,7 +216,8 @@ export class OverlayScrollbarHost {
     if (root && !this.#shadowStyles.has(root)) {
       const styleElement = this.#document.createElement('style');
       styleElement.setAttribute('data-sc-scrollbar-policy', '');
-      styleElement.textContent = nativeScrollbarCss() + scrollbarPresentationCss();
+      styleElement.textContent =
+        nativeScrollbarCss() + scrollbarPresentationCss() + photoProScrollbarCss();
       root.append(styleElement);
       this.#shadowStyles.set(root, styleElement);
       root.addEventListener('scroll', this.#onContentChange, true);
@@ -213,6 +227,7 @@ export class OverlayScrollbarHost {
 
   /** Tear down a detached owner without restoring IDs subsequently changed by the host. */
   #remove(element: HTMLElement, owner: ScrollOwner): void {
+    this.#reserveGutter(element, owner, false);
     this.#dirtyOwners.delete(element);
     this.#views.delete(owner.vertical.element);
     this.#views.delete(owner.horizontal.element);
@@ -228,6 +243,12 @@ export class OverlayScrollbarHost {
 
   /** Route owned thumb presses before document-level popup dismissal and graph handlers. */
   readonly #captureThumb = (event: PointerEvent): void => {
+    if (
+      event
+        .composedPath()
+        .some((node) => node instanceof HTMLElement && node.matches('.sc-style-scrollbar-track'))
+    )
+      return;
     const thumb = event
       .composedPath()
       .find((node) => node instanceof HTMLElement && this.#views.has(node));
@@ -236,6 +257,19 @@ export class OverlayScrollbarHost {
     view.beginDrag(event);
     event.stopImmediatePropagation();
   };
+
+  /** Reserve a real content gutter while leaving the owner's declared padding intact. */
+  #reserveGutter(element: HTMLElement, owner: ScrollOwner, reserve: boolean): void {
+    if (owner.gutterReserved === reserve) return;
+    owner.gutterReserved = reserve;
+    if (reserve) {
+      element.style.setProperty('--sc-scrollbar-base-padding-right', owner.basePaddingRight);
+      element.setAttribute('data-sc-photopro-scroll-gutter', '');
+    } else {
+      element.removeAttribute('data-sc-photopro-scroll-gutter');
+      element.style.removeProperty('--sc-scrollbar-base-padding-right');
+    }
+  }
 
   /** Subscribe once per size owner so repeated discovery cannot retrigger resize delivery. */
   #observeSize(element: HTMLElement): void {
@@ -337,6 +371,12 @@ export class OverlayScrollbarHost {
             continue;
           }
           if (!this.#dirtyOwners.has(element) || this.#moving(element)) continue;
+          this.#reserveGutter(
+            element,
+            owner,
+            this.#document.documentElement.dataset.scVisualStyle === 'photopro' &&
+              element.scrollHeight > element.clientHeight,
+          );
           dirty.push({
             owner: element,
             vertical: owner.vertical.element,
@@ -354,7 +394,10 @@ export class OverlayScrollbarHost {
             space = scrollbarCoordinateSpace(layer);
             spaces.set(layer, space);
           }
-          const track = scrollbarTrack(element);
+          const track = scrollbarTrack(
+            element,
+            this.#document.documentElement.dataset.scVisualStyle === 'photopro',
+          );
           writes.push(owner.vertical.prepare(track, space), owner.horizontal.prepare(track, space));
           this.#dirtyOwners.delete(element);
         }
