@@ -169,6 +169,46 @@ test('workflow and native toolbar wrappers receive reversible marks without movi
   expect(document.querySelector('[data-sc-substitute-toolbar-line]')).toBeNull();
 });
 
+test('Extensions stays off the override row through late mounts and restores on mode exit', async () => {
+  const row = document.createElement('div');
+  const bar = document.createElement('div');
+  bar.className = 'actionbar-container';
+  const overrides = document.createElement('div');
+  overrides.className = 'sc-overrides-dock-slot';
+  bar.append(overrides);
+  row.append(bar);
+  document.body.append(row);
+  document.documentElement.setAttribute('data-sc-substitute-frame', '');
+  const layout = new SubstituteToolbarLayout(document);
+  const wrapper = document.createElement('div');
+  const extensions = document.createElement('button');
+  extensions.setAttribute('aria-label', 'Extensions traduites');
+  const icon = document.createElement('i');
+  icon.className = 'icon-[comfy--extensions-blocks] size-4';
+  extensions.append(icon);
+  wrapper.append(extensions);
+  const open = jest.fn();
+  extensions.addEventListener('click', open);
+  row.prepend(wrapper);
+  await Promise.resolve();
+  expect(getComputedStyle(wrapper).display).toBe('none');
+  expect(getComputedStyle(bar).display).not.toBe('none');
+  expect(getComputedStyle(overrides).display).not.toBe('none');
+  expect(extensions.parentElement).toBe(wrapper);
+  const replacement = wrapper.cloneNode(true);
+  if (!(replacement instanceof HTMLElement)) throw new Error('Expected a native manager wrapper');
+  wrapper.replaceWith(replacement);
+  await Promise.resolve();
+  expect(wrapper.hasAttribute('data-sc-substitute-extensions')).toBe(false);
+  expect(getComputedStyle(replacement).display).toBe('none');
+  document.documentElement.removeAttribute('data-sc-substitute-frame');
+  expect(getComputedStyle(replacement).display).not.toBe('none');
+  layout.dispose();
+  expect(document.querySelector('[data-sc-substitute-extensions]')).toBeNull();
+  extensions.click();
+  expect(open).toHaveBeenCalledTimes(1);
+});
+
 test('queue keeps its original parent, listeners and popover anchor while counts and geometry update', async () => {
   const parent = document.createElement('div');
   const button = document.createElement('button');

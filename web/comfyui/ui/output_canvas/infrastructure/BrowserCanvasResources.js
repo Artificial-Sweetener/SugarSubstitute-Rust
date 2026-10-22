@@ -46,6 +46,9 @@ export class BrowserCanvasResources {
         const plan = this.#plan;
         if (!plan || cells?.some((cell) => cell.preview))
             return null;
+        // Poster generation must never hold a mixed-media source-tab handoff behind a model load.
+        if (cells?.some((cell) => cell.item && cell.item.mediaKind !== 'image'))
+            return null;
         const targets = cells ?? [
             { key: 'primary', selection, item: canvasSelectedItem(catalog, selection) },
         ];
@@ -55,7 +58,7 @@ export class BrowserCanvasResources {
                 selection: target.selection,
                 item: target.item,
                 sourcePresent: plan.availableSources.includes(target.selection.sourceId),
-            });
+            }, cells !== null);
             if (!input)
                 return null;
             images.push({ slot: target.key, input: cells ? { ...input, role: 'thumbnail' } : input });
@@ -134,7 +137,7 @@ export class BrowserCanvasResources {
                 selection: cell.selection,
                 item: cell.item,
                 sourcePresent: plan.availableSources.includes(cell.selection.sourceId),
-            });
+            }, true);
             if (input)
                 images.push({ slot: cell.key, input: { ...input, role: 'thumbnail' } });
         }
@@ -240,11 +243,16 @@ export class BrowserCanvasResources {
         this.resources.dispose();
     }
     /** Build a full-fidelity request from an exact selected final. */
-    #final(slot) {
+    #final(slot, thumbnail = false) {
         const plan = this.#plan;
         const item = slot.item;
-        if (!plan || !slot.sourcePresent || !item || item.mediaKind !== 'image')
+        if (!plan ||
+            !slot.sourcePresent ||
+            !item ||
+            item.mediaKind === 'unsupported' ||
+            (!thumbnail && item.mediaKind !== 'image'))
             return null;
+        const poster = item.mediaKind !== 'image';
         return {
             key: item.id,
             runOrder: item.provenance.runOrder,
@@ -252,11 +260,13 @@ export class BrowserCanvasResources {
             lane: item.id,
             fallbackKey: null,
             dimensions: this.resources.dimensions(item.id) ??
-                item.dimensions ??
+                (poster ? { width: 512, height: 512 } : item.dimensions) ??
                 this.allowances.dimensions(plan.view.viewId, plan.generation, item.id),
             role: 'main',
             preview: false,
-            payload: { kind: 'file', url: this.url(item) },
+            payload: poster
+                ? { kind: 'media', item, url: this.url(item) }
+                : { kind: 'file', url: this.url(item) },
         };
     }
     /** Preserve multiplicity for an explicitly selected duplicate A/B image. */

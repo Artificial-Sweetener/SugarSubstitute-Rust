@@ -16,12 +16,25 @@
 /** Reconcile prompt autosizing within one renderer-owned DOM scope. */
 
 import { CubePromptTextareaAutosizer } from './CubePromptTextareaAutosizer.js';
+import { findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
+import type { ComfyNode } from '../types/graph.js';
+import {
+  mountPromptEditorSurface,
+  refreshPromptEditorSurface,
+} from '../prompt_editor/PromptEditorSurface.js';
+import type { PromptEditorSurface } from '../prompt_editor/PromptEditorSurface.js';
+import type { NativeNodeWidgetSource } from './NativeNodeCardRenderer.js';
+import { presentCubeCardNode } from './CubeCardWidgetSources.js';
 
 /** Own the set of prompt textareas currently rendered beneath one root. */
 export class CubePromptTextareaScope {
   readonly #root: HTMLElement;
   readonly #autosizer: CubePromptTextareaAutosizer;
   readonly #bound = new Set<HTMLTextAreaElement>();
+  readonly #editors = new Map<
+    HTMLTextAreaElement,
+    { surface: PromptEditorSurface; release: () => void }
+  >();
 
   /** Bind one independent native-card DOM scope. */
   constructor(root: HTMLElement) {
@@ -30,16 +43,50 @@ export class CubePromptTextareaScope {
   }
 
   /** Match autosizing ownership to the current semantic prompt presentation. */
-  reconcile(enabled: boolean): void {
+  reconcile(node: ComfyNode, sources: readonly NativeNodeWidgetSource[] = []): void {
+    const presented = findCubeFacePromptWidget(presentCubeCardNode(node, sources));
+    const source = sources.find((candidate) => candidate.targetName === presented?.name);
+    const owner = source?.node ?? node;
+    const widget = source
+      ? (owner.widgets?.find((candidate) => candidate.name === source.name) ?? null)
+      : presented;
     const desired = new Set(
-      enabled ? this.#root.querySelectorAll<HTMLTextAreaElement>('textarea') : [],
+      widget
+        ? this.#root.querySelectorAll<HTMLTextAreaElement>('textarea:not([data-sp-owned])')
+        : [],
     );
+    for (const [textarea, mounted] of this.#editors) {
+      if (desired.has(textarea) && mounted.surface.widget === widget) continue;
+      mounted.release();
+      this.#editors.delete(textarea);
+    }
     for (const textarea of [...this.#bound]) {
       if (desired.has(textarea)) continue;
       this.#autosizer.unbind(textarea);
       this.#bound.delete(textarea);
     }
     for (const textarea of desired) {
+      const mounted = this.#editors.get(textarea);
+      if (mounted) {
+        refreshPromptEditorSurface(mounted.surface);
+        continue;
+      }
+      if (widget && desired.size === 1) {
+        const surface: PromptEditorSurface = {
+          node: owner,
+          widget,
+          textarea,
+          geometryChanged: () => undefined,
+          hostReadOnly: () => false,
+        };
+        const release = mountPromptEditorSurface(surface);
+        if (release) {
+          this.#autosizer.unbind(textarea);
+          this.#bound.delete(textarea);
+          this.#editors.set(textarea, { surface, release });
+          continue;
+        }
+      }
       if (this.#bound.has(textarea)) continue;
       this.#autosizer.bind(textarea);
       this.#bound.add(textarea);
@@ -48,6 +95,8 @@ export class CubePromptTextareaScope {
 
   /** Restore every textarea when its native card unmounts. */
   dispose(): void {
+    for (const mounted of this.#editors.values()) mounted.release();
+    this.#editors.clear();
     this.#autosizer.dispose();
     this.#bound.clear();
   }

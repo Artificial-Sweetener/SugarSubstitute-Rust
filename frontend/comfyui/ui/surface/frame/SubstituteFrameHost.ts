@@ -19,6 +19,7 @@ import type { AccentThemeHost } from '../appearance/AccentThemeHost.js';
 import { subscribeVisualStyle } from '../appearance/VisualStyleBoundary.js';
 import type { WorkflowSessionStore } from '../../execution/application/WorkflowSessionStore.js';
 import type { WorkflowOutputActivity } from '../../execution/application/WorkflowOutputActivity.js';
+import type { WorkflowProgressStore } from '../../execution/application/WorkflowProgressStore.js';
 import type { CubeStackFrameControls } from '../stack/CubeStackHost.js';
 import { SubstituteFrameMode } from './SubstituteFrameMode.js';
 import { ComfyFrameWorkflowAdapter } from './ComfyFrameWorkflowAdapter.js';
@@ -35,6 +36,7 @@ export interface SubstituteFrameHostOptions {
   readonly palette: Pick<AccentThemeHost, 'theme' | 'subscribe'>;
   readonly sessions: WorkflowSessionStore;
   readonly activity: WorkflowOutputActivity;
+  readonly progress: Pick<WorkflowProgressStore, 'read' | 'subscribe'>;
   stackControls(): CubeStackFrameControls;
   openOverrides(trigger: HTMLElement): void;
   setOverridesInline(inline: boolean): void;
@@ -94,6 +96,7 @@ export class SubstituteFrameHost {
       this.options.palette.subscribe(() => this.#palette()),
       this.options.sessions.subscribe(() => this.#queue()),
       this.options.activity.subscribe(() => this.#queue()),
+      this.options.progress.subscribe(() => this.#refreshProgress()),
       subscribeVisualStyle(this.options.document, () => {
         this.#unmount();
         this.#reconcile();
@@ -155,12 +158,14 @@ export class SubstituteFrameHost {
         this.#attach(mount, native);
       }
       if (!this.#style.isConnected) document.head.append(this.#style);
-      document.documentElement.setAttribute('data-sc-substitute-frame', '');
+      if (!document.documentElement.hasAttribute('data-sc-substitute-frame'))
+        document.documentElement.setAttribute('data-sc-substitute-frame', '');
       this.options.setOverridesInline(true);
       this.#view?.update(this.#adapter?.read(this.options.sessions.read().open) ?? [], (id) =>
         this.options.activity.unread(id),
       );
       this.#palette();
+      this.#refreshProgress();
     } catch (error: unknown) {
       this.options.report(error);
       this.#unmount();
@@ -203,6 +208,11 @@ export class SubstituteFrameHost {
       this.options.report,
     );
     this.#toolbarLayout = new SubstituteToolbarLayout(this.options.document);
+  }
+
+  /** Refresh only the retained progress tracks for the currently presented workflow. */
+  #refreshProgress(): void {
+    this.#view?.updateProgress(this.options.progress.read(this.options.sessions.presentation()));
   }
 
   /** Project accepted palette facts without adding a theme observer or renderer dependency. */

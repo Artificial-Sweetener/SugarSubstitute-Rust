@@ -11888,6 +11888,38 @@ function photoshopColorDeclarations(dark) {
   return Object.entries(colors).map(([name, color]) => `${name}:${color};`).join("");
 }
 
+// frontend/comfyui/ui/surface/appearance/EditorFieldControl.ts
+function adoptEditorFieldPadding(field, nativeInput) {
+  const window2 = field.ownerDocument.defaultView;
+  const frame = nativeInput === field ? field : nativeInput.parentElement;
+  if (!window2 || !frame) throw new Error("The editor field requires a connected native frame.");
+  frame.style.removeProperty("padding");
+  const input = window2.getComputedStyle(nativeInput);
+  const outer = frame === nativeInput ? null : window2.getComputedStyle(frame);
+  const padding = (side) => `calc(${input[side] || "0px"} + ${outer?.[side] || "0px"})`;
+  field.style.setProperty(
+    "--sc-editor-content-padding",
+    `${padding("paddingTop")} ${padding("paddingRight")} ${padding("paddingBottom")} ${padding("paddingLeft")}`
+  );
+  field.style.setProperty("--sc-editor-content-padding-left", padding("paddingLeft"));
+  frame.style.padding = "0";
+}
+
+// frontend/comfyui/ui/core/ControlPlacement.ts
+function relocateControl(element, target, before = null) {
+  const focused = element.ownerDocument.activeElement;
+  const moveBefore = Reflect.get(target, "moveBefore");
+  if (typeof moveBefore === "function" && element.isConnected && target.isConnected)
+    moveBefore.call(target, element, before);
+  else target.insertBefore(element, before);
+  if (!(focused instanceof HTMLElement) || !element.contains(focused)) return;
+  if (element.ownerDocument.activeElement === focused) {
+    if (target.matches(":focus-within")) return;
+    focused.blur();
+  }
+  focused.focus({ preventScroll: true });
+}
+
 // frontend/comfyui/ui/surface/appearance/ActivationSwitchGeometry.ts
 var activationSwitchGeometry = { width: 40, height: 20, labelGap: 8 };
 
@@ -12054,6 +12086,56 @@ var SpectrumFinderInput = class extends Textfield {
   connectedMoveCallback() {
   }
 };
+var SpectrumEditorField = class extends Textfield {
+  /** Adapt layout only; Adobe continues to own border, fill and interaction paint. */
+  static get styles() {
+    return [
+      ...super.styles,
+      i`
+        #textfield {
+          block-size: 100%;
+          min-block-size: 0;
+        }
+        textarea.input,
+        input.input {
+          display: none;
+        }
+        slot[name='editor'] {
+          display: block;
+          grid-area: 1/1;
+          min-width: 0;
+          min-height: 0;
+          height: 100%;
+          padding: 0;
+          overflow: visible;
+        }
+      `
+    ];
+  }
+  /** Forward native editor focus into Adobe's existing focused-state owner. */
+  constructor() {
+    super();
+    this.multiline = true;
+    this.addEventListener("focusin", () => this.onFocus());
+    this.addEventListener("focusout", (event) => {
+      if (!(event.relatedTarget instanceof Node) || !this.contains(event.relatedTarget))
+        this.onBlur(event);
+    });
+  }
+  /** Extend the official field content without replacing its visual or validation implementation. */
+  renderField() {
+    return b2`${super.renderField()}<slot class="input" name="editor"></slot>`;
+  }
+  /** Read Adobe's actual input spacing after rendering, including native size and validation changes. */
+  updated(changes) {
+    super.updated(changes);
+    if (!this.style.getPropertyValue("--sc-editor-content-padding") || ["size", "quiet", "valid", "invalid"].some((property) => changes.has(property)))
+      adoptEditorFieldPadding(this, this.inputElement);
+  }
+  /** Preserve the connected field when the renderer moves its native card. */
+  connectedMoveCallback() {
+  }
+};
 if (!customElements.get("sc-spectrum-slider"))
   customElements.define("sc-spectrum-slider", SpectrumSlider);
 if (!customElements.get("sc-spectrum-tabs"))
@@ -12062,11 +12144,32 @@ if (!customElements.get("sc-spectrum-workflow-tab"))
   customElements.define("sc-spectrum-workflow-tab", SpectrumWorkflowTab);
 if (!customElements.get("sc-spectrum-search"))
   customElements.define("sc-spectrum-search", SpectrumFinderInput);
+if (!customElements.get("sc-spectrum-editor-field"))
+  customElements.define("sc-spectrum-editor-field", SpectrumEditorField);
 if (!customElements.get("sc-spectrum-menu-item"))
   customElements.define("sc-spectrum-menu-item", SpectrumMenuItem);
 if (!customElements.get("sc-spectrum-switch"))
   customElements.define("sc-spectrum-switch", SpectrumActivationSwitch);
 var base = spectrumRootTokens(theme_css_default.cssText) + ";" + spectrumRootTokens(scale_medium_css_default.cssText);
+function createSpectrumEditorField(documentRef) {
+  const field = documentRef.createElement("sc-spectrum-editor-field");
+  if (!(field instanceof SpectrumEditorField))
+    throw new TypeError("The Spectrum editor field is not registered.");
+  return {
+    root: field,
+    /** Keep the native editor in light DOM while Adobe's field controls its surrounding presentation. */
+    attachEditor(editor) {
+      editor.slot = "editor";
+      relocateControl(editor, field);
+      field.focused = !field.readonly && field.contains(documentRef.activeElement);
+    },
+    /** Reflect permission through Adobe's native readonly property. */
+    setReadOnly(readOnly) {
+      field.readonly = readOnly;
+      field.focused = !readOnly && field.contains(documentRef.activeElement);
+    }
+  };
+}
 var palettes = {
   dark: spectrumRootTokens(theme_dark_css_default.cssText),
   light: spectrumRootTokens(theme_light_css_default.cssText)
@@ -12157,6 +12260,7 @@ export {
   createSpectrumActivationSwitch,
   createSpectrumButton,
   createSpectrumCheckbox,
+  createSpectrumEditorField,
   createSpectrumFinderInput,
   createSpectrumSegments,
   createSpectrumSlider,

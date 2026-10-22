@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Transfer identified native cards between presentations without duplicating widget mounts. */
 import { settleCubePromptTextareaGeometry } from './CubePromptTextareaAutosizer.js';
+import { relocateControl } from '../core/ControlPlacement.js';
 const PRESENTATION_OWNER = Symbol('SugarCubes native card presentation owner');
 const GEOMETRY_PROPERTIES = ['position', 'left', 'top', 'width', 'height', 'transform'];
 /** Own exclusive presentation loans and invalidate them before native source teardown. */
@@ -125,7 +126,7 @@ export class NativeCardPresentationTransfer {
             return;
         this.#moved = true;
         this.element.before(this.#origin);
-        relocateCard(this.element, target);
+        relocateControl(this.element, target);
         Object.assign(this.element.style, {
             position: 'relative',
             left: '0px',
@@ -147,7 +148,7 @@ export class NativeCardPresentationTransfer {
             transfer.#active = false;
             const { element } = transfer;
             if (transfer.#moved && transfer.#origin.parentElement) {
-                relocateCard(element, transfer.#origin.parentElement, transfer.#origin);
+                relocateControl(element, transfer.#origin.parentElement, transfer.#origin);
                 transfer.#origin.remove();
                 for (const { name, value, priority } of transfer.#geometry) {
                     if (value)
@@ -204,18 +205,4 @@ export function measureNativeCardPresentationSources(cells) {
 export function prepareNativeCardPresentation(cell, onInvalidated) {
     const owner = Reflect.get(cell, PRESENTATION_OWNER);
     return owner instanceof NativeCardPresentationOwner ? owner.prepare(cell, onInvalidated) : null;
-}
-/** Preserve a focused control while reparenting its existing native DOM. */
-function relocateCard(element, target, before = null) {
-    const focused = element.ownerDocument.activeElement;
-    // Older host webviews lack state-preserving moves; keep that capability at the DOM boundary.
-    const moveBefore = Reflect.get(target, 'moveBefore');
-    if (typeof moveBefore === 'function' && element.isConnected && target.isConnected)
-        moveBefore.call(target, element, before);
-    else
-        target.insertBefore(element, before);
-    if (focused instanceof HTMLElement &&
-        element.contains(focused) &&
-        element.ownerDocument.activeElement !== focused)
-        focused.focus({ preventScroll: true });
 }

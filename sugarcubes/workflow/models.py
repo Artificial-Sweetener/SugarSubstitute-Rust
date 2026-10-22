@@ -24,7 +24,7 @@ from typing import Mapping
 
 @dataclass(frozen=True)
 class EmbeddedCubeDefinition:
-    """Represent one executable Cube definition embedded in a workflow."""
+    """Represent native Cube content with explicit draft state."""
 
     definition_id: str
     cube_id: str
@@ -33,6 +33,7 @@ class EmbeddedCubeDefinition:
     semantic_hash: str
     provenance: Mapping[str, object] | None
     payload: Mapping[str, object]
+    is_draft: bool
     document: Mapping[str, object] | None = None
     native_subgraphs: tuple[Mapping[str, object], ...] = ()
     native_node_definitions: Mapping[str, object] = field(default_factory=dict)
@@ -40,7 +41,7 @@ class EmbeddedCubeDefinition:
 
 @dataclass(frozen=True)
 class CubeInstance:
-    """Represent one marked native subgraph instance and its stable identity."""
+    """Represent stable workflow instance identity independently of first save."""
 
     instance_id: str
     node_id: str
@@ -49,6 +50,7 @@ class CubeInstance:
     cube_version: str
     instance_alias: str
     payload: Mapping[str, object]
+    is_draft: bool
     execution_mode: int = 0
 
 

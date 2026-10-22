@@ -20,6 +20,7 @@ import { WorkflowResultStore } from '../application/WorkflowResultStore.js';
 import { WorkflowSeedHistory } from '../application/WorkflowSeedHistory.js';
 import { WorkflowOutputActivity } from '../application/WorkflowOutputActivity.js';
 import { WorkflowRunRegistry } from '../application/WorkflowRunRegistry.js';
+import { WorkflowProgressStore } from '../application/WorkflowProgressStore.js';
 import { WorkflowSubmissionContexts } from '../application/WorkflowSubmissionContexts.js';
 import { WorkflowExecutionIngestor } from '../application/WorkflowExecutionIngestor.js';
 import { WorkflowResultLifecycle } from '../application/WorkflowResultLifecycle.js';
@@ -59,6 +60,7 @@ export class ComfyWorkflowExecutionRuntime {
   readonly results = new WorkflowResultStore();
   readonly seeds = new WorkflowSeedHistory();
   readonly activity = new WorkflowOutputActivity();
+  readonly progress = new WorkflowProgressStore((id) => this.#runs.read(id));
   readonly previews: ComfyWorkflowPreviewDelivery;
   readonly outputs: ComfyWorkflowOutputProjection;
   readonly submissionObserver: ComfyPromptSubmissionObserver;
@@ -99,7 +101,10 @@ export class ComfyWorkflowExecutionRuntime {
       logger: options.logger,
       seeds: this.seeds,
       submitting: (context) => this.#ingestor.submitting(context),
-      accepted: (context, id) => this.#ingestor.accepted(context, id),
+      accepted: (context, id) => {
+        this.#ingestor.accepted(context, id);
+        this.progress.refresh();
+      },
     });
     this.previews = new ComfyWorkflowPreviewDelivery(this.results, options.logger);
     this.#cubePreviews = new ComfyCubeLivePreview(
@@ -159,6 +164,7 @@ export class ComfyWorkflowExecutionRuntime {
       this.#events = new ComfyWorkflowEventAdapter({
         api: this.options.api,
         ingestor: this.#ingestor,
+        progress: this.progress,
         logger: this.options.logger,
         preview: (source, blob) => this.previews.deliver(source, blob),
         connection: (connected) => this.#setConnected(connected),
@@ -217,6 +223,7 @@ export class ComfyWorkflowExecutionRuntime {
     this.#disposed = true;
     this.#installed = false;
     this.#events?.dispose();
+    this.progress.dispose();
     this.#construction?.dispose();
     this.#loads?.dispose();
     this.#adapter?.dispose();

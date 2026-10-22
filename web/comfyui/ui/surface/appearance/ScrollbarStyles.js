@@ -42,9 +42,10 @@ export function scrollbarPresentationCss() {
     .sc-style-scrollbar[aria-orientation="horizontal"]::before { height:calc(2px / var(--sc-scrollbar-scale-y,1)); width:100%; bottom:0; }
     .sc-style-scrollbar[aria-orientation="vertical"]:is(:hover,:focus-visible,[data-dragging])::before { width:calc(6px / var(--sc-scrollbar-scale-x,1)); }
     .sc-style-scrollbar[aria-orientation="horizontal"]:is(:hover,:focus-visible,[data-dragging])::before { height:calc(4px / var(--sc-scrollbar-scale-y,1)); }
-    .sc-style-scrollbar:focus-visible::before { outline:1px solid Highlight; outline-offset:1px; }
+    .sc-style-scrollbar:focus-visible::before { outline:1px solid var(--sc-accent-indicator,Highlight); outline-offset:1px; }
     @media (prefers-reduced-motion:reduce) { .sc-style-scrollbar::before { transition:none; } }
     @media (forced-colors:active) { .sc-style-scrollbar::before { background:ButtonText; } }
+    @media (forced-colors:active) { .sc-style-scrollbar:focus-visible::before { outline-color:Highlight; } }
   `;
 }
 /** Apply the current palette without overriding the native owner's stacking context. */

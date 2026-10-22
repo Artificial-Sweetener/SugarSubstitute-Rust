@@ -128,6 +128,29 @@ test('ignores unrelated popup activity and handles palette changes without remou
   expect(input.value).toBe('retained');
 });
 
+test('identical native stylesheet rewrites do not force palette style reads', async () => {
+  const native = document.createElement('style');
+  native.textContent = '.native-input { color: white; }';
+  document.head.append(native);
+  createHost();
+  await settle();
+  const read = jest.spyOn(window, 'getComputedStyle');
+  try {
+    for (let index = 0; index < 5; index++) native.textContent = '.native-input { color: white; }';
+    await settle();
+    expect(read).not.toHaveBeenCalled();
+    native.textContent = ':root { --sugarcubes-accent: #ffe066; }';
+    await settle();
+    expect(read).toHaveBeenCalled();
+    read.mockClear();
+    native.media = 'print';
+    await settle();
+    expect(read).toHaveBeenCalled();
+  } finally {
+    read.mockRestore();
+  }
+});
+
 test('rejects invalid settings, falls back from invalid CSS, and releases only owned styles', async () => {
   const { setting, report, host } = createHost({ bad: 'data' });
   const style = document.getElementById('sugarcubes-accent-theme')!;

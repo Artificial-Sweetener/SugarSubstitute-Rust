@@ -19,6 +19,7 @@ import {
   createBooleanCheckboxControl,
   createBooleanSegmentControls,
   createFinderInputControl,
+  createFluentEditorField,
   createWorkflowTab as createFluentWorkflowTab,
   createWorkflowTablist as createFluentWorkflowTablist,
 } from './FluentThemeRuntime.js';
@@ -30,6 +31,7 @@ import {
   createSpectrumFinderInput,
   createSpectrumTablist,
   createSpectrumActivationSwitch,
+  createSpectrumEditorField,
 } from './SpectrumThemeRuntime.js';
 import { readOwnedVisualStyle } from './VisualStyleBoundary.js';
 import type { NumericSliderControl } from './NativeNumericControls.js';
@@ -37,6 +39,8 @@ import type { BooleanCheckboxControl } from './NativeToggleRows.js';
 import type { BooleanSegmentsControls } from './NativeBooleanSegments.js';
 import type { FinderInputControl } from './FinderControls.js';
 import type { VisualStyle } from './VisualStyle.js';
+import { adoptEditorFieldPadding, type EditorFieldControl } from './EditorFieldControl.js';
+import { relocateControl } from '../../core/ControlPlacement.js';
 import {
   createNativeActivationSwitch,
   type ActivationSwitchControl,
@@ -88,6 +92,39 @@ export function createFinderInput(document: Document): FinderInputControl {
   return readOwnedVisualStyle(document) === 'spectrum'
     ? createSpectrumFinderInput(document)
     : createFinderInputControl(document);
+}
+
+/** Select the existing provider's input asset for an editor with its own canonical document. */
+export function createEditorField(document: Document, style: VisualStyle): EditorFieldControl {
+  const field =
+    style === 'fluent'
+      ? createFluentEditorField(document)
+      : style === 'spectrum'
+        ? createSpectrumEditorField(document)
+        : createComfyEditorField(document);
+  field.root.dataset.scEditorField = style;
+  field.root.style.cssText +=
+    ';display:block;box-sizing:border-box;width:100%;height:100%;min-width:0;min-height:0';
+  return field;
+}
+
+/** Reuse Comfy's native multiline input asset and surrounding widget interaction frame. */
+function createComfyEditorField(document: Document): EditorFieldControl {
+  const root = document.createElement('div');
+  root.className = 'comfy-multiline-input';
+  return {
+    root,
+    /** Preserve the same editable node when leaving a shadow-slot provider. */
+    attachEditor(editor): void {
+      adoptEditorFieldPadding(root, root);
+      editor.removeAttribute('slot');
+      relocateControl(editor, root);
+    },
+    /** Native CodeMirror owns editing permission; expose it to host control presentation. */
+    setReadOnly(readOnly): void {
+      root.setAttribute('aria-readonly', String(readOnly));
+    },
+  };
 }
 
 /** Create a workflow tab group whose adapter exposes stable child identity. */

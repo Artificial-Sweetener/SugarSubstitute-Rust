@@ -21,6 +21,18 @@ import {
 } from './WorkflowTabStripLayout.js';
 /** Keep browser tabs legible on black; let the desktop host supply native frame background and foreground. */
 export const substituteFrameCss = `
+  .sc-generation-progress { position:absolute; left:0; right:0; top:calc(100% - 3px); height:6px;
+    display:flex; flex-direction:column; gap:0; pointer-events:none; z-index:3; background:transparent; }
+  .sc-generation-progress[hidden] { display:none; }
+  .sc-generation-progress > [role="progressbar"] { flex:0 0 3px; height:3px; border-radius:2px;
+    transition:width 150ms ease-out; background:var(--sc-accent-color); }
+  .sc-generation-progress > .sc-generation-progress__sampler { background:#f59e0b; }
+  .sc-substitute-frame[data-color-scheme="light"] .sc-generation-progress > .sc-generation-progress__sampler { background:#c56a00; }
+  :root[data-sc-substitute-frame] [data-testid="queue-inline-progress"],
+  :root[data-sc-substitute-frame] :has(> [data-testid="linear-progress-overall"]) { display:none !important; }
+  :root[data-sc-substitute-frame]:has([data-sc-generation-queue][aria-pressed="false"])
+    [data-testid="queue-progress-overlay"] { display:none !important; }
+  @media (prefers-reduced-motion:reduce) { .sc-generation-progress > [role="progressbar"] { transition:none; } }
   @property --sc-tab-cutout-radius { syntax:'<length>'; inherits:false; initial-value:0px; }
   @property --sc-tab-cutout-x { syntax:'<length>'; inherits:false; initial-value:-17px; }
   .sc-substitute-frame [data-sc-workflow-tab] { transition:--sc-tab-cutout-radius 160ms cubic-bezier(.645,.045,.355,1); }

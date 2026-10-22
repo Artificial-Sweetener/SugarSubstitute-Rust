@@ -16,6 +16,7 @@
 /** Bind an isolated overlay root to one revisioned surface port. */
 
 import { createApp, h, shallowRef } from 'vue';
+import { canvasMediaLabel } from '../CanvasMediaLabel.js';
 import { ContextMenu } from '../../../menus/ContextMenu.js';
 import { canvasContextActions } from './CanvasContextActions.js';
 import { sameCanvasAttachment } from '../../domain/CanvasIdentity.js';
@@ -189,7 +190,7 @@ function canvasAnnouncement(
       previous.resource.state !== 'ready' ||
       previous.preview)
   )
-    return `${source?.label ?? 'Output'}: image ${current.selected.batchIndex + 1} ready.`;
+    return `${source?.label ?? 'Output'}: ${canvasMediaLabel(current.selected.mediaKind)} ${current.selected.batchIndex + 1} ready.`;
   if (previous.connected && !current.connected) return 'Disconnected.';
   if (current.secondaryResource?.state === 'error' && previous.secondaryResource?.state !== 'error')
     return `B: ${current.secondaryResource.message}`;

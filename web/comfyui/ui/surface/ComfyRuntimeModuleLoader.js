@@ -16,6 +16,7 @@
 /** Resolve the installed Comfy runtime modules used by native Nodes 2.0. */
 import { ComfyRuntimeAssetUnavailableError, fetchComfyRuntimeText, isComfyModuleTransportFailure, } from './ComfyRuntimeAssetRequest.js';
 import { isRecord } from '../types/common.js';
+import { extractNativeVueNodeData } from './NativeVueNodeData.js';
 import { discoverComfyFrontendModules, } from './ComfyFrontendModuleGraph.js';
 const VUE_RUNTIME_URL_PATTERN = /\/vendor-vue-core-[^/?]+\.js(?:\?.*)?$/;
 const PRIME_VUE_RUNTIME_URL_PATTERN = /\/vendor-primevue-[^/?]+\.js(?:\?.*)?$/;
@@ -205,7 +206,7 @@ export async function loadComfyVueRuntime(documentRef, fetchText = fetchComfyRun
         },
         h: (component, props) => h(component, props),
         extractVueNodeData: (node) => {
-            const value = extractVueNodeData(node);
+            const value = extractNativeVueNodeData(node, extractVueNodeData);
             if (!isRecord(value)) {
                 throw new NativeRendererCompatibilityError('Comfy returned invalid native node render data.');
             }

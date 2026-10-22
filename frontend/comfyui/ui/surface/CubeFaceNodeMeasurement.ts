@@ -23,6 +23,7 @@ import {
 } from './CubeFaceNodePresentationPolicy.js';
 import { cubeFacePresentedWidgets } from './CubeFaceWidgetPolicy.js';
 import { cubePromptWidgetHeight } from './CubePromptWidgetHeightStore.js';
+import type { NativeNodeWidgetSource } from './NativeNodeCardRenderer.js';
 
 const HEADER_ONLY_BODY_HEIGHT = 1;
 const LEGACY_SLOT_HEIGHT = 20;
@@ -36,7 +37,10 @@ interface MeasurableWidget extends ComfyWidget {
 }
 
 /** Measure the native expanded widget body while excluding graph boundary rows. */
-export function measureCubeFaceNodeBodyHeight(node: ComfyNode): number {
+export function measureCubeFaceNodeBodyHeight(
+  node: ComfyNode,
+  sources: readonly NativeNodeWidgetSource[] = [],
+): number {
   const nativePreviewHeight = hasNativePreviewMedia(node) ? positiveNumber(node.size?.[1]) : null;
   if (!cubeFaceNodeHasPresentedWidgets(node)) {
     return nativePreviewHeight ?? HEADER_ONLY_BODY_HEIGHT;
@@ -45,7 +49,12 @@ export function measureCubeFaceNodeBodyHeight(node: ComfyNode): number {
   const width = positiveNumber(node.size?.[0]) ?? 200;
   let widgetsHeight = cubeFaceNodeWidgetStartY(node);
   for (const widget of cubeFacePresentedWidgets(node)) {
-    widgetsHeight += measureWidgetAllocation(widget, node, width);
+    const source = sources.find((candidate) => candidate.targetName === widget.name);
+    const owner = source?.node ?? node;
+    const owned = source
+      ? owner.widgets?.find((candidate) => candidate.name === source.name)
+      : widget;
+    widgetsHeight += measureWidgetAllocation(owned ?? widget, owner, width);
   }
 
   const constructorState = Reflect.get(node, 'constructor');

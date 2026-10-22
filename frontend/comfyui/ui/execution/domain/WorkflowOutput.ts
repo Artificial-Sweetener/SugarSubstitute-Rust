@@ -58,7 +58,7 @@ export interface WorkflowOutputItem {
   readonly mediaKind: WorkflowMediaKind;
 }
 
-export type WorkflowMediaKind = 'image' | 'animated' | 'video' | 'unsupported';
+export type WorkflowMediaKind = 'image' | 'animated' | 'video' | 'model' | 'unsupported';
 
 export interface WorkflowOutputSource {
   readonly id: OutputSourceId;

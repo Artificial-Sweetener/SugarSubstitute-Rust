@@ -22,7 +22,7 @@ import {
 } from './CubeFaceCardPolicy.js';
 import type { CubeSurfaceState } from './CubeSurfaceState.js';
 import type { NativeNodeWidgetSource } from './NativeNodeCardRenderer.js';
-import { resolveCubeCardWidgetSources } from './CubeCardWidgetSources.js';
+import { presentCubeCardNode, resolveCubeCardWidgetSources } from './CubeCardWidgetSources.js';
 import { cubeFaceCardColumnSpan, findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
 
 export interface ProjectedNodeCard extends CubeFaceCardDecision {
@@ -47,11 +47,7 @@ export function projectNodeCards(
   return resolveCubeFaceCardPresentation(nodes, state, graph, additionalControlNodes).cards.map(
     (card) => {
       const widgetSources = sources.get(card.node) ?? [];
-      const exposed = new Set(widgetSources.map((source) => source.targetName));
-      const presentedNode = {
-        ...card.node,
-        inputs: (card.node.inputs ?? []).filter((input) => !exposed.has(input.widget?.name ?? '')),
-      };
+      const presentedNode = presentCubeCardNode(card.node, widgetSources);
       return {
         ...card,
         ...(cube ? { cubeId: String(requireCubeIdentity(cube).instance_id ?? cube.id) } : {}),

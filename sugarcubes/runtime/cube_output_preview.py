@@ -22,6 +22,7 @@ import logging
 from .cube_output_events import CubeOutputArtifact
 from .cube_output_images import build_image_output_preview
 from .video_output_preview import build_video_output_preview
+from .model_output_preview import build_model_output_preview
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -37,7 +38,12 @@ def build_cube_output_preview(
     if images[1]:
         return images
     try:
-        return build_video_output_preview(value)
+        video = build_video_output_preview(value)
+        return (
+            video
+            if video[1]
+            else build_model_output_preview(value, save_outputs=save_outputs)
+        )
     except (
         AttributeError,
         ImportError,
@@ -47,7 +53,7 @@ def build_cube_output_preview(
         ValueError,
     ):
         _LOGGER.exception(
-            "Failed to create cube video output preview artifact.",
+            "Failed to create cube media output preview artifact.",
             extra={"value_type": type(value).__qualname__},
         )
         return {}, ()

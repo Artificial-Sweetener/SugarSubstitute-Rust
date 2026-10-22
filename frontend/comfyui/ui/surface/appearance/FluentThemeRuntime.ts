@@ -36,6 +36,11 @@ import { Checkbox } from '@fluentui/web-components/checkbox/class.js';
 import { definition as CheckboxDefinition } from '@fluentui/web-components/checkbox/definition.js';
 import { TextInput } from '@fluentui/web-components/text-input/class.js';
 import { definition as TextInputDefinition } from '@fluentui/web-components/text-input/definition.js';
+import { TextArea } from '@fluentui/web-components/textarea/class.js';
+import { definition as TextAreaDefinition } from '@fluentui/web-components/textarea/definition.js';
+import { tagName as textAreaTagName } from '@fluentui/web-components/textarea/options.js';
+import { adoptEditorFieldPadding, type EditorFieldControl } from './EditorFieldControl.js';
+import { relocateControl } from '../../core/ControlPlacement.js';
 import type { FinderInputControl } from './FinderControls.js';
 import type { NumericSliderControl } from './NativeNumericControls.js';
 import type { BooleanCheckboxControl } from './NativeToggleRows.js';
@@ -122,6 +127,12 @@ class PresentationTextInput extends TextInput implements FinderInputControl {
   }
 }
 
+/** Preserve Microsoft's textarea chrome while a slotted editor retains its own document. */
+class PresentationTextArea extends TextArea {
+  /** Retain the existing control and slot during supported connected moves. */
+  connectedMoveCallback(): void {}
+}
+
 // FAST completes component registration asynchronously, before consumers can create controls.
 if (!customElements.get('fluent-slider')) await PresentationSlider.define(SliderDefinition);
 if (!customElements.get('fluent-button')) await PresentationButton.define(ButtonDefinition);
@@ -130,6 +141,37 @@ if (!customElements.get('fluent-tablist')) await PresentationTablist.define(Tabl
 if (!customElements.get('fluent-checkbox')) await PresentationCheckbox.define(CheckboxDefinition);
 if (!customElements.get('fluent-text-input'))
   await PresentationTextInput.define(TextInputDefinition);
+if (!customElements.get(textAreaTagName)) await PresentationTextArea.define(TextAreaDefinition);
+
+/** Use the official textarea root, stylesheet and focus indicator for an externally owned editor. */
+export function createFluentEditorField(documentRef: Document): EditorFieldControl {
+  const field = documentRef.createElement(textAreaTagName);
+  if (!(field instanceof TextArea)) throw new TypeError('The Fluent textarea is not registered.');
+  field.setAttribute('block', '');
+  field.style.setProperty('--block-size', '100%');
+  return {
+    root: field,
+    /** Place content in the real control root; its unused form input never becomes editable. */
+    attachEditor(editor): void {
+      adoptEditorFieldPadding(field, field.controlEl);
+      field.controlEl.hidden = true;
+      field.controlEl.inert = true;
+      field.controlEl.style.display = 'none';
+      const slot = documentRef.createElement('slot');
+      slot.name = 'editor';
+      slot.className = 'control';
+      slot.style.cssText =
+        'display:block;min-width:0;min-height:0;grid-area:1/1;height:100%;padding:0;overflow:visible';
+      field.rootEl.append(slot);
+      editor.slot = 'editor';
+      relocateControl(editor, field);
+    },
+    /** Reflect native readonly state through Microsoft's existing component API. */
+    setReadOnly(readOnly): void {
+      field.readOnly = readOnly;
+    },
+  };
+}
 const workflowTabDefinition: typeof TabDefinition = {
   ...TabDefinition,
   name: 'sc-workflow-tab',

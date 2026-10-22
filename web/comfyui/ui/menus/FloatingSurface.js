@@ -16,6 +16,34 @@
 /** Own detached, bounded popup geometry and lifecycle without participating in application layout. */
 import { applyOwnedTheme } from '../surface/appearance/ThemeService.js';
 import { readComfyDarkTheme } from '../surface/appearance/ComfyColorScheme.js';
+/** Keep browser transport and native ancestry restoration under the shared floating owner. */
+export function createFloatingPlane(element) {
+    const surface = new FloatingSurface(element);
+    let origin = null;
+    return {
+        /** Retain host ancestry before entering the browser top layer. */
+        show() {
+            const parent = element.parentElement;
+            if (parent && parent !== element.ownerDocument.body)
+                origin = parent;
+            surface.open({
+                anchor: { kind: 'pointer', x: 0, y: 0 },
+                viewport: true,
+                dismiss: () => undefined,
+            });
+        },
+        /** Retain native connectivity so an inactive plane can reopen. */
+        hide() {
+            surface.close();
+            origin?.append(element);
+        },
+        /** Retire transport without restoring a renderer that is being destroyed. */
+        dispose() {
+            surface.close();
+            origin = null;
+        },
+    };
+}
 /** Keep all popup kinds within the viewport while preferring their natural opening direction. */
 export function floatingPosition(anchor, width, height, viewportWidth, viewportHeight) {
     const gap = 4;
@@ -83,6 +111,18 @@ export class FloatingSurface {
     reposition() {
         if (!this.#options)
             return;
+        if (this.#options.viewport) {
+            for (const [name, value] of Object.entries({
+                left: '0',
+                top: '0',
+                width: '100vw',
+                height: '100vh',
+                'max-width': 'none',
+                'max-height': 'none',
+            }))
+                this.element.style.setProperty(name, value, 'important');
+            return;
+        }
         const windowRef = this.#document.defaultView;
         this.element.style.setProperty('max-height', this.#options.maxHeight === undefined
             ? 'calc(100vh - 8px)'

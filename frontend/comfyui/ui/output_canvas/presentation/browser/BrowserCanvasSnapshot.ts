@@ -40,6 +40,7 @@ export function browserCanvasSnapshot(
   sources: readonly CanvasSourceSummary[],
   preparing: boolean,
   mediaActions: OutputMediaProfile | null,
+  detail: CanvasResourceStatus | null = null,
 ): CanvasViewSnapshot {
   const primary = images.find((slot) => slot.slot === 'primary');
   const secondary = images.find((slot) => slot.slot === 'secondary');
@@ -49,7 +50,7 @@ export function browserCanvasSnapshot(
   if (plan.primary && !plan.primary.sourcePresent)
     resource = status('unavailable', 'The selected workflow output is unavailable.');
   else if (plan.primary?.item && plan.primary.item.mediaKind !== 'image')
-    resource = status('unavailable', 'Open this media in the host viewer.');
+    resource = detail ?? status('unavailable', 'Open this media in the host viewer.');
   else if (plan.preview && !previewStarted)
     resource = status(
       'loading',

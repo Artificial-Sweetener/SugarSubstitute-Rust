@@ -16,6 +16,7 @@
 /** Prove external media descriptors cannot introduce traversal or mutable host values into result ownership. */
 
 import { decodeComfyMedia } from '../../../frontend/comfyui/ui/execution/infrastructure/ComfyMediaDecoder.js';
+import { combineWorkflowMedia } from '../../../frontend/comfyui/ui/execution/domain/WorkflowMedia.js';
 
 test('validates images, video, animation and dimensions while preserving malformed batch holes', () => {
   const decoded = decodeComfyMedia({
@@ -87,4 +88,50 @@ test('labels SVG and moving media explicitly instead of mounting them as ordinar
     'video',
     'animated',
   ]);
+});
+
+test('normalizes core, VHS and generic video envelopes without duplicating files', () => {
+  const clip = { filename: 'synthetic.webm', type: 'temp', subfolder: 'fixtures' };
+  for (const envelope of [{ videos: [clip] }, { gifs: [clip] }, { video: clip }]) {
+    expect(decodeComfyMedia(envelope)?.payload.videos[0]).toMatchObject({
+      file: clip,
+      mediaKind: 'video',
+    });
+  }
+  expect(
+    decodeComfyMedia({ images: [clip], videos: [clip], animated: true })?.payload.videos,
+  ).toEqual([]);
+  expect(
+    decodeComfyMedia({ images: [{ filename: 'animated.webp' }], animated: true })?.payload.images[0]
+      ?.mediaKind,
+  ).toBe('animated');
+  expect(
+    decodeComfyMedia({ gifs: [{ filename: 'animation.gif' }] })?.payload.videos[0]?.mediaKind,
+  ).toBe('animated');
+});
+
+test('accepts model file lists and preview tuples while rejecting unsafe and unrelated values', () => {
+  expect(
+    decodeComfyMedia({ '3d': [{ filename: 'triangle.glb', type: 'output' }] })?.payload.models[0]
+      ?.mediaKind,
+  ).toBe('model');
+  expect(
+    decodeComfyMedia({ result: ['models/triangle.glb', null, null] })?.payload.models[0]?.file,
+  ).toEqual({ filename: 'triangle.glb', subfolder: 'models', type: 'output' });
+  expect(decodeComfyMedia({ result: ['../triangle.glb', null, null] })?.payload.models).toEqual([]);
+  expect(decodeComfyMedia({ result: ['some string', null, null] })?.payload.models).toEqual([]);
+  expect(
+    decodeComfyMedia({ '3d': [{ filename: 'https://external/triangle.glb' }] })?.payload.models,
+  ).toEqual([null]);
+});
+
+test('replaces restored input previews when a video or model final arrives', () => {
+  const initial = decodeComfyMedia({ images: [{ filename: 'input.png', type: 'input' }] })!;
+  for (const envelope of [
+    { video: { filename: 'clip.webm' } },
+    { '3d': [{ filename: 'model.glb' }] },
+  ]) {
+    const final = decodeComfyMedia(envelope)!;
+    expect(combineWorkflowMedia(initial.payload, final.payload, false, false).images).toEqual([]);
+  }
 });

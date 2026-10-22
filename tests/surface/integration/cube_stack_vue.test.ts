@@ -468,6 +468,9 @@ test('discards held intent when refreshed graph availability still excludes the 
 
 /** Bind real Vue state and immutable row identities while isolating graph and canvas boundaries. */
 function setup(ids: readonly string[] = ['first', 'second']) {
+  // Synthetic events need a later turn than Vue listener registration, including capture-to-target delivery.
+  let eventTime = Date.now();
+  jest.spyOn(Date, 'now').mockImplementation(() => ++eventTime);
   jest.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
   const rows: CubeStackNavigationRow[] = ids.map((id) => ({
     id,

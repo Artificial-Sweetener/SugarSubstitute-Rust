@@ -27,7 +27,6 @@ import {
   cubeFaceNodeHasPresentedWidgets,
   cubeFaceNodeHasVisibleWidgets,
 } from './CubeFaceNodePresentationPolicy.js';
-import { findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
 import { CubePromptTextareaScope } from './CubePromptTextareaScope.js';
 import { ComfyVueNodeHeaderAccessoryHost } from './ComfyVueNodeHeaderAccessoryHost.js';
 import { NativeProjectedNodeCollapse } from './NativeProjectedNodeCollapse.js';
@@ -90,7 +89,14 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
     );
     const disclosureMotion = new CardDisclosureMotion(target);
     const contentDisclosure = new NativeCardContentDisclosure(target, disclosureMotion);
-    const observer = new MutationObserver(() => {
+    const observer = new MutationObserver((records) => {
+      if (
+        records.every(
+          (record) =>
+            record.target instanceof Element && record.target.closest('[data-sc-prompt-editor]'),
+        )
+      )
+        return;
       if (!disposed) {
         this.#applyPresentation(
           target,
@@ -104,8 +110,9 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
         );
       }
     });
-    const renderCard = (): void => {
-      if (disposed) return;
+    let pending: { nodeData: UnknownRecord; widgets: readonly string[] } | null = null;
+    /** Prepare one current native projection for both geometry admission and rendering. */
+    const prepareCard = (): { nodeData: UnknownRecord; widgets: readonly string[] } => {
       const nodeData = createCubeFaceNodeData(
         this.#runtime.extractVueNodeData(node),
         node,
@@ -132,41 +139,47 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
       const widgets = [nodeData.widgets, nodeData.sugarcubesEditorWidgets].flatMap(
         (value: unknown) => (Array.isArray(value) ? value : []),
       );
-      contentDisclosure.reconcile(
-        [
+      return {
+        nodeData,
+        widgets: [
           ...new Set(
             widgets.flatMap((widget: unknown) =>
               isRecord(widget) && typeof widget.name === 'string' ? [widget.name] : [],
             ),
           ),
         ].sort(),
-        () => {
-          // Comfy snapshots advanced footer state at setup instead of watching native node changes.
-          const vnodeValue = this.#runtime.h(this.#component, {
-            nodeData,
-            key: node.showAdvanced === true,
-          });
-          if (!isRecord(vnodeValue)) {
-            throw new TypeError('Comfy native renderer returned an invalid VNode.');
-          }
-          vnodeValue.appContext = scopedContext;
-          this.#runtime.render(vnodeValue, target);
-          if (!target.classList.contains('sugarcubes-native-node-card'))
-            target.classList.add('sugarcubes-native-node-card');
-          if (target.dataset.cubeFaceNative !== 'nodes-2')
-            target.dataset.cubeFaceNative = 'nodes-2';
-          this.#applyPresentation(
-            target,
-            node,
-            headerAccessoryHost,
-            promptTextareaScope,
-            collapseHost,
-            advancedInputsHost,
-            scrollBoundary,
-            options,
-          );
-        },
-      );
+      };
+    };
+    /** Consume the batch's prepared native data without repeating extraction or geometry reads. */
+    const renderCard = (): void => {
+      if (disposed) return;
+      const { nodeData, widgets } = pending ?? prepareCard();
+      pending = null;
+      contentDisclosure.reconcile(widgets, () => {
+        // Comfy snapshots advanced footer state at setup instead of watching native node changes.
+        const vnodeValue = this.#runtime.h(this.#component, {
+          nodeData,
+          key: node.showAdvanced === true,
+        });
+        if (!isRecord(vnodeValue)) {
+          throw new TypeError('Comfy native renderer returned an invalid VNode.');
+        }
+        vnodeValue.appContext = scopedContext;
+        this.#runtime.render(vnodeValue, target);
+        if (!target.classList.contains('sugarcubes-native-node-card'))
+          target.classList.add('sugarcubes-native-node-card');
+        if (target.dataset.cubeFaceNative !== 'nodes-2') target.dataset.cubeFaceNative = 'nodes-2';
+        this.#applyPresentation(
+          target,
+          node,
+          headerAccessoryHost,
+          promptTextareaScope,
+          collapseHost,
+          advancedInputsHost,
+          scrollBoundary,
+          options,
+        );
+      });
     };
     const collapseHost = new NativeProjectedNodeCollapse(
       target,
@@ -185,7 +198,10 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
       target.ownerDocument,
       [node, ...(options.widgetSources ?? []).map((source) => source.node)],
       renderCard,
-      () => contentDisclosure.prepare(),
+      () => {
+        pending = prepareCard();
+        contentDisclosure.prepare(pending.widgets);
+      },
     );
     observer.observe(target, { childList: true, subtree: true });
 
@@ -285,7 +301,7 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
         nativeRoot.dataset.cubeFaceBody)
     )
       reconcileNativeBody(nativeRoot, hasPresented);
-    promptTextareaScope.reconcile(findCubeFacePromptWidget(node) !== null);
+    promptTextareaScope.reconcile(node, options.widgetSources);
 
     const widgetsVNode = findVueComponent(targetRecord._vnode, 'NodeWidgets');
     const widgetsRoot = resolveComponentElement(widgetsVNode);

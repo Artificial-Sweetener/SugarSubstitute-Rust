@@ -27,10 +27,47 @@ export interface FloatingBounds {
   readonly bottom: number;
 }
 export interface FloatingSurfaceOptions {
+  /** Let native editor tooltips retain their own measured positions inside one shared top-layer plane. */
+  readonly viewport?: boolean;
   readonly anchor: FloatingAnchor;
   readonly dismiss: () => void;
   readonly containsTarget?: (target: Node) => boolean;
   readonly maxHeight?: number;
+}
+
+/** Expose only a native editor plane's finite publication lifetime to feature adapters. */
+export interface FloatingPlane {
+  show(): void;
+  hide(): void;
+  dispose(): void;
+}
+
+/** Keep browser transport and native ancestry restoration under the shared floating owner. */
+export function createFloatingPlane(element: HTMLElement): FloatingPlane {
+  const surface = new FloatingSurface(element);
+  let origin: HTMLElement | null = null;
+  return {
+    /** Retain host ancestry before entering the browser top layer. */
+    show(): void {
+      const parent = element.parentElement;
+      if (parent && parent !== element.ownerDocument.body) origin = parent;
+      surface.open({
+        anchor: { kind: 'pointer', x: 0, y: 0 },
+        viewport: true,
+        dismiss: () => undefined,
+      });
+    },
+    /** Retain native connectivity so an inactive plane can reopen. */
+    hide(): void {
+      surface.close();
+      origin?.append(element);
+    },
+    /** Retire transport without restoring a renderer that is being destroyed. */
+    dispose(): void {
+      surface.close();
+      origin = null;
+    },
+  };
 }
 
 /** Keep all popup kinds within the viewport while preferring their natural opening direction. */
@@ -106,6 +143,18 @@ export class FloatingSurface {
   /** Reconcile geometry when popup content changes without moving surrounding content. */
   reposition(): void {
     if (!this.#options) return;
+    if (this.#options.viewport) {
+      for (const [name, value] of Object.entries({
+        left: '0',
+        top: '0',
+        width: '100vw',
+        height: '100vh',
+        'max-width': 'none',
+        'max-height': 'none',
+      }))
+        this.element.style.setProperty(name, value, 'important');
+      return;
+    }
     const windowRef = this.#document.defaultView;
     this.element.style.setProperty(
       'max-height',

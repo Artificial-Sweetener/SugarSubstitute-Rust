@@ -18,6 +18,19 @@ import type { CubeNode } from '../cube/node/ComfyCubeNodeFactory.js';
 import type { ComfyNode } from '../types/graph.js';
 import type { NativeNodeWidgetSource } from './NativeNodeCardRenderer.js';
 
+/** Present exposed editable controls without classifying their boundary link as consumption. */
+export function presentCubeCardNode(
+  node: ComfyNode,
+  sources: readonly NativeNodeWidgetSource[],
+): ComfyNode {
+  if (!sources.length) return node;
+  const exposed = new Set(sources.map((source) => source.targetName));
+  return {
+    ...node,
+    inputs: (node.inputs ?? []).filter((input) => !exposed.has(input.widget?.name ?? '')),
+  };
+}
+
 /** Forward exposed widgets into their internal node cards while retaining host identity. */
 export function resolveCubeCardWidgetSources(
   cube: CubeNode,

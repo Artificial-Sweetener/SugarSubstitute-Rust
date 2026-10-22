@@ -73,16 +73,21 @@ export class BrowserCanvasResources {
   ): CanvasImagePreparationLease | null {
     const plan = this.#plan;
     if (!plan || cells?.some((cell) => cell.preview)) return null;
+    // Poster generation must never hold a mixed-media source-tab handoff behind a model load.
+    if (cells?.some((cell) => cell.item && cell.item.mediaKind !== 'image')) return null;
     const targets = cells ?? [
       { key: 'primary', selection, item: canvasSelectedItem(catalog, selection) },
     ];
     const images: CanvasVisibleImage<BrowserCanvasImagePayload>[] = [];
     for (const target of targets) {
-      const input = this.#final({
-        selection: target.selection,
-        item: target.item,
-        sourcePresent: plan.availableSources.includes(target.selection.sourceId),
-      });
+      const input = this.#final(
+        {
+          selection: target.selection,
+          item: target.item,
+          sourcePresent: plan.availableSources.includes(target.selection.sourceId),
+        },
+        cells !== null,
+      );
       if (!input) return null;
       images.push({ slot: target.key, input: cells ? { ...input, role: 'thumbnail' } : input });
     }
@@ -160,11 +165,14 @@ export class BrowserCanvasResources {
     this.#overviewPreviewSlot = null;
     for (const cell of cells) {
       if (cell.preview) this.#overviewPreviewSlot = cell.key;
-      const input = this.#final({
-        selection: cell.selection,
-        item: cell.item,
-        sourcePresent: plan.availableSources.includes(cell.selection.sourceId),
-      });
+      const input = this.#final(
+        {
+          selection: cell.selection,
+          item: cell.item,
+          sourcePresent: plan.availableSources.includes(cell.selection.sourceId),
+        },
+        true,
+      );
       if (input) images.push({ slot: cell.key, input: { ...input, role: 'thumbnail' } });
     }
     this.#overviewImages = images;
@@ -275,10 +283,21 @@ export class BrowserCanvasResources {
   }
 
   /** Build a full-fidelity request from an exact selected final. */
-  #final(slot: CanvasDisplaySlot): CanvasImageInput<BrowserCanvasImagePayload> | null {
+  #final(
+    slot: CanvasDisplaySlot,
+    thumbnail = false,
+  ): CanvasImageInput<BrowserCanvasImagePayload> | null {
     const plan = this.#plan;
     const item = slot.item;
-    if (!plan || !slot.sourcePresent || !item || item.mediaKind !== 'image') return null;
+    if (
+      !plan ||
+      !slot.sourcePresent ||
+      !item ||
+      item.mediaKind === 'unsupported' ||
+      (!thumbnail && item.mediaKind !== 'image')
+    )
+      return null;
+    const poster = item.mediaKind !== 'image';
     return {
       key: item.id,
       runOrder: item.provenance.runOrder,
@@ -287,11 +306,13 @@ export class BrowserCanvasResources {
       fallbackKey: null,
       dimensions:
         this.resources.dimensions(item.id) ??
-        item.dimensions ??
+        (poster ? { width: 512, height: 512 } : item.dimensions) ??
         this.allowances.dimensions(plan.view.viewId, plan.generation, item.id),
       role: 'main',
       preview: false,
-      payload: { kind: 'file', url: this.url(item) },
+      payload: poster
+        ? { kind: 'media', item, url: this.url(item) }
+        : { kind: 'file', url: this.url(item) },
     };
   }
 

@@ -57,6 +57,7 @@ export function auditContextMenus(
   const rowOwners = new Set([policy.context_menu, ...policy.search_dialogs]);
   const popupOwners = new Set([
     policy.context_menu,
+    policy.floating_surface,
     ...policy.search_dialogs,
     ...policy.choice_controls,
   ]);

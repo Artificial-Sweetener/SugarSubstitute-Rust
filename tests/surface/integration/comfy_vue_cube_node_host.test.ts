@@ -21,6 +21,24 @@ import type { CubeNode } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeN
 import { ComfyVueCubeNodeHost } from '../../../frontend/comfyui/ui/surface/ComfyVueCubeNodeHost.js';
 
 describe('ComfyVueCubeNodeHost', () => {
+  test('repairs native shell mounts without rewriting unchanged ancestor presentation attributes', async () => {
+    const { body } = nativeCubeRoot('cube-node');
+    const host = createHost();
+    const node = cubeNode('cube-node');
+    host.mount(node);
+    await Promise.resolve();
+    const write = jest.spyOn(body, 'setAttribute');
+    try {
+      body.prepend(document.createElement('button'));
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(write).not.toHaveBeenCalledWith('data-sugarcube-cube-body', '');
+      expect(body.hasAttribute('data-sugarcube-cube-body')).toBe(true);
+    } finally {
+      write.mockRestore();
+      host.dispose();
+    }
+  });
   test('tracks the native Cube colors as inherited card theme tokens', async () => {
     const { root, inner } = nativeCubeRoot('cube-node');
     inner.style.backgroundColor = '#2b2859';

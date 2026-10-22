@@ -30,6 +30,27 @@ from tests.execution.support.execution_fixtures import (
     cube_workflow,
     image_passthrough_document,
 )
+from tests.workflow.support.workflow_fixtures import draft_workflow
+
+
+def test_analysis_route_preserves_native_draft_without_a_saved_cube_id(
+    tmp_path: Path,
+    backend_services_factory: BackendServicesFactory,
+) -> None:
+    """Serve prompt edits and reorder refreshes before the draft's first save."""
+
+    source = draft_workflow()
+    response = asyncio.run(
+        build_route_handlers(backend_services_factory(tmp_path)).analyze_workflow(
+            FakeRequest(body={"schema_version": 1, "workflow": source}),
+        )
+    )
+    assert response.status == 200
+    payload = decode_json_response(response)
+    assert payload["workflow"] == source
+    assert payload["instances"][0]["instance_id"] == "draft-prompt-1"
+    assert payload["instances"][0]["cube_id"] == ""
+    assert payload["instances"][0]["cube_version"] == ""
 
 
 def test_analysis_route_returns_one_complete_cube_projection(

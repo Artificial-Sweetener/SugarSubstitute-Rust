@@ -110,6 +110,10 @@ export function ensureCubeSurfaceStyles(documentRef: Document): void {
       display: contents;
     }
     .lg-node[data-sugarcube-node="true"]
+      [data-sugarcube-boundary-row] .lg-node-widget > :not(.lg-slot):not(:has(.lg-slot)) {
+      display: none !important;
+    }
+    .lg-node[data-sugarcube-node="true"]
       [data-sugarcube-boundary-direction] {
       position: absolute;
       top: var(--sugarcube-boundary-position);

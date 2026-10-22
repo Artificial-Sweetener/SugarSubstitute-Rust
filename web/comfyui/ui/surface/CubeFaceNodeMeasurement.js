@@ -24,7 +24,7 @@ const LEGACY_WIDGET_HEIGHT = 20;
 const LEGACY_WIDGET_GAP = 4;
 const LEGACY_NODE_MARGIN = 6;
 /** Measure the native expanded widget body while excluding graph boundary rows. */
-export function measureCubeFaceNodeBodyHeight(node) {
+export function measureCubeFaceNodeBodyHeight(node, sources = []) {
     const nativePreviewHeight = hasNativePreviewMedia(node) ? positiveNumber(node.size?.[1]) : null;
     if (!cubeFaceNodeHasPresentedWidgets(node)) {
         return nativePreviewHeight ?? HEADER_ONLY_BODY_HEIGHT;
@@ -32,7 +32,12 @@ export function measureCubeFaceNodeBodyHeight(node) {
     const width = positiveNumber(node.size?.[0]) ?? 200;
     let widgetsHeight = cubeFaceNodeWidgetStartY(node);
     for (const widget of cubeFacePresentedWidgets(node)) {
-        widgetsHeight += measureWidgetAllocation(widget, node, width);
+        const source = sources.find((candidate) => candidate.targetName === widget.name);
+        const owner = source?.node ?? node;
+        const owned = source
+            ? owner.widgets?.find((candidate) => candidate.name === source.name)
+            : widget;
+        widgetsHeight += measureWidgetAllocation(owned ?? widget, owner, width);
     }
     const constructorState = Reflect.get(node, 'constructor');
     const slotStart = nonNegativeNumber(readMember(constructorState, 'slot_start_y')) ?? 0;

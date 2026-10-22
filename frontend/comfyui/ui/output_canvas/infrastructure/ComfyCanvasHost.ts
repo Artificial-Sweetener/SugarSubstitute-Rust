@@ -43,6 +43,10 @@ import { BrowserImageClipboard } from '../../output_saving/BrowserImageClipboard
 import { BrowserImageDownload } from '../../output_saving/BrowserImageDownload.js';
 import type { OutputSavingFeature } from '../../output_saving/OutputSavingFeature.js';
 import { NativeSourceSavingHost } from '../../output_saving/NativeSourceSavingHost.js';
+import { ComfyCanvasModelRuntime } from './ComfyCanvasModelRuntime.js';
+import { BrowserCanvasMediaSessions } from './BrowserCanvasMediaSessions.js';
+import { BrowserCanvasMediaPosters } from './BrowserCanvasMediaPosters.js';
+import { BrowserCanvasPosterRenderer } from './BrowserCanvasPosterRenderer.js';
 
 export interface ComfyCanvasHostOptions {
   readonly saving: OutputSavingFeature | null;
@@ -66,6 +70,8 @@ export class ComfyCanvasHost {
   readonly #imageActions: ComfyImageRevealHost;
   readonly #saving: NativeSourceSavingHost | null;
   readonly #transfers: BrowserOutputTransfer;
+  readonly #posters: BrowserCanvasMediaPosters;
+  readonly #mediaSessions = new BrowserCanvasMediaSessions();
   readonly #stops: (() => void)[] = [];
   #started = false;
   #disposed = false;
@@ -75,6 +81,10 @@ export class ComfyCanvasHost {
     const { document, execution, app, logger, report, saving } = options;
     const window = document.defaultView;
     if (!window) throw new Error('Output canvas window is unavailable.');
+    const models = new ComfyCanvasModelRuntime(() => (isRecord(window) ? window.comfyAPI : null));
+    this.#posters = new BrowserCanvasMediaPosters(
+      new BrowserCanvasPosterRenderer(document, models),
+    );
     const transfers = (this.#transfers = new BrowserOutputTransfer(
       document.location.origin,
       (input, init) => window.fetch(input, init),
@@ -164,10 +174,14 @@ export class ComfyCanvasHost {
       renderer: () => resolveComfyRendererMode(app, null, document),
       report,
       mount: (element, address, _catalog, accepts) => {
-        const loader = new BrowserCanvasImageLoader(document, {
-          create: (blob) => window.URL.createObjectURL(blob),
-          revoke: (url) => window.URL.revokeObjectURL(url),
-        });
+        const loader = new BrowserCanvasImageLoader(
+          document,
+          {
+            create: (blob) => window.URL.createObjectURL(blob),
+            revoke: (url) => window.URL.revokeObjectURL(url),
+          },
+          this.#posters,
+        );
         return new BrowserCanvasAttachment(element, {
           address,
           views,
@@ -178,6 +192,8 @@ export class ComfyCanvasHost {
           frames,
           loader,
           logger,
+          models,
+          mediaSessions: this.#mediaSessions,
           accepts,
           catalog: () => this.#coordinator.catalog(address.viewId),
           connected: () => execution.connected,
@@ -234,7 +250,11 @@ export class ComfyCanvasHost {
 
   /** Expose explicit primary-view resource accounting through the established debug surface. */
   diagnostics() {
-    return { ...this.#primary.diagnostics(), inventory: this.#sources.diagnostics() };
+    return {
+      ...this.#primary.diagnostics(),
+      inventory: this.#sources.diagnostics(),
+      ...this.#posters.diagnostics(),
+    };
   }
 
   /** Install one source adapter, catalog coordinator, preview consumer, and primary attachment. */
@@ -306,6 +326,8 @@ export class ComfyCanvasHost {
     this.#sources.dispose();
     this.#preferences.dispose();
     this.#transfers.dispose();
+    this.#posters.dispose();
+    this.#mediaSessions.dispose();
   }
 
   /** Honor actual page teardown without introducing a recurring visibility or frame loop. */

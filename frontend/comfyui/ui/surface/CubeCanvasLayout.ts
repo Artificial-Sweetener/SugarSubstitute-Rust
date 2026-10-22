@@ -22,7 +22,9 @@ import { CUBE_CANVAS_ACTIVATION_SIZE } from './CubeCanvasActivationControl.js';
 import { CUBE_RESIZE_EDGES, type CubeResizeEdge } from '../cube/geometry/CubeResizeGeometry.js';
 import type { Vec2 } from '../types/common.js';
 import type { ComfyNode } from '../types/graph.js';
-import { resolveCubeFaceCardPresentation } from './CubeFaceCardPolicy.js';
+import { projectNodeCards } from './NodeCardProjection.js';
+import { presentCubeCardNode } from './CubeCardWidgetSources.js';
+import type { NativeNodeWidgetSource } from './NativeNodeCardRenderer.js';
 import { measureCubeFaceNodeBodyHeight } from './CubeFaceNodeMeasurement.js';
 import { computeCubeMasonry } from './CubeMasonryLayout.js';
 import { cubeMinimumSize, resolveCubeSurfaceMinimumHeight } from './CubeSurfaceMinimumHeight.js';
@@ -51,6 +53,7 @@ export interface CubeCanvasRect {
 
 export interface CubeCanvasCard {
   node: ComfyNode;
+  widgetSources?: readonly NativeNodeWidgetSource[];
   id: string;
   label: string;
   enabled: boolean;
@@ -153,16 +156,19 @@ export function computeCubeCanvasLayout(
         preview.height,
       )
     : null;
-  const presentation = resolveCubeFaceCardPresentation(node.subgraph._nodes, state, node.subgraph);
+  const projected = projectNodeCards(node.subgraph._nodes, state, node.subgraph, node);
   const chrome = layoutCubeCanvasChrome(header, {
     showUnsavedIndicator: isCubeAwaitingFirstSave(requireCubeIdentity(node)),
     titlebarActionKeys,
   });
-  const measuredCards = presentation.cards
+  const measuredCards = projected
     .filter((card) => card.visible)
     .map((card) => ({
       ...card,
-      bodyHeight: measureCubeFaceNodeBodyHeight(card.node),
+      bodyHeight: measureCubeFaceNodeBodyHeight(
+        presentCubeCardNode(card.node, card.widgetSources ?? []),
+        card.widgetSources,
+      ),
     }));
   const masonryLayout = computeCubeMasonry(
     measuredCards.map((card) => ({
@@ -187,6 +193,7 @@ export function computeCubeCanvasLayout(
     );
     return {
       node: card.node,
+      widgetSources: card.widgetSources ?? [],
       id: card.id,
       label: card.label,
       enabled: card.enabled,

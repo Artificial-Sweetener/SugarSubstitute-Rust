@@ -17,6 +17,8 @@
 
 from __future__ import annotations
 
+from .definition_selection import select_saved_definition
+
 from typing import Literal, Protocol
 
 from ..cube_model import parse_canonical_cube_id
@@ -52,13 +54,9 @@ class CubeSourceSyncService:
     ) -> CubeSourceSyncResult:
         """Synchronize only after approval and never replace embedded content."""
 
-        definition = workflow.definition_index().get(request.definition_id)
-        if definition is None:
-            raise ValueError(
-                f"Embedded Cube definition '{request.definition_id}' is unavailable"
-            )
-        if definition.semantic_hash != request.expected_semantic_hash:
-            raise ValueError("Embedded Cube definition changed after classification")
+        definition = select_saved_definition(
+            workflow, request.definition_id, request.expected_semantic_hash
+        )
         if not request.approved:
             raise PermissionError(
                 "Cube source synchronization requires explicit approval"

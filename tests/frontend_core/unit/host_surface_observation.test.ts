@@ -93,3 +93,38 @@ test('identifies relocation separately from native content changes in the same d
   expect(changed).toHaveBeenLastCalledWith([{ element: card, kind: 'content', relocated: true }]);
   observer.disconnect();
 });
+
+test('keeps opaque editor paint out of host content observation while retaining card lifecycles', () => {
+  const changed = jest.fn();
+  const observer = new HostSurfaceObserver(document.body, '.card', changed, {
+    content: true,
+    characterData: true,
+    attributes: ['class'],
+  });
+  const card = document.createElement('section');
+  card.className = 'card';
+  const editor = document.createElement('div');
+  editor.setAttribute('data-sc-host-opaque', '');
+  card.append(editor);
+  document.body.append(card);
+  observer.flushPending();
+  expect(changed).toHaveBeenLastCalledWith([{ element: card, kind: 'mounted' }]);
+  changed.mockClear();
+  const line = document.createElement('div');
+  editor.append(line);
+  const text = document.createTextNode('typed');
+  line.append(text);
+  text.data = 'typed text';
+  line.className = 'rich-decoration';
+  editor.replaceChildren(document.createElement('span'));
+  observer.flushPending();
+  expect(changed).not.toHaveBeenCalled();
+  card.append(document.createElement('textarea'));
+  observer.flushPending();
+  expect(changed).toHaveBeenLastCalledWith([{ element: card, kind: 'content' }]);
+  changed.mockClear();
+  card.remove();
+  observer.flushPending();
+  expect(changed).toHaveBeenLastCalledWith([{ element: card, kind: 'removed' }]);
+  observer.disconnect();
+});

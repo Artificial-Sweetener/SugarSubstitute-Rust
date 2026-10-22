@@ -69,3 +69,10 @@ test('keeps horizontal paint thin and flush with the bottom while preserving ver
   expect(css).toContain('height:calc(4px / var(--sc-scrollbar-scale-y,1))');
   expect(css).toContain('width:calc(3px / var(--sc-scrollbar-scale-x,1))');
 });
+
+test('shares themed keyboard focus across all overlay thumbs with a system-color fallback', () => {
+  const css = scrollbarPresentationCss();
+  expect(css).toContain('outline:1px solid var(--sc-accent-indicator,Highlight)');
+  expect(css).toContain('.sc-style-scrollbar:focus-visible::before');
+  expect(css).toContain('outline-color:Highlight');
+});

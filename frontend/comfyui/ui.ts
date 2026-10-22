@@ -18,7 +18,7 @@
  */
 
 import { app } from '/scripts/app.js';
-import type { ComfyApp, ComfyExtension, ComfyNodeDefinition } from '/scripts/app.js';
+import type { SugarCubesExtension, SugarCubesHostApp } from './ui/types/extension.js';
 import { api } from '/scripts/api.js';
 import { createEditorActionsRuntime } from './ui/editor_actions/EditorActionsComposition.js';
 import { createComfyCubeRuntime, type ComfyCubeRuntime } from './ui/cube/ComfyCubeRuntime.js';
@@ -37,9 +37,6 @@ import { CubeImportHostCoordinator } from './ui/import/CubeImportHostCoordinator
 import { createPublicApi, getSugarCubesUI } from './ui/index.js';
 import { createHostSettingsComposition } from './ui/settings/HostSettingsComposition.js';
 import { attachSavingRunContext } from './ui/output_saving/ComfySavingRunContext.js';
-import type { SettingsManager } from './ui/settings/HostSettingsController.js';
-import type { UnknownRecord } from './ui/types/common.js';
-import type { ComfyApplication } from './ui/types/graph.js';
 import { CubeHostAffordanceController } from './ui/affordance/CubeHostAffordanceController.js';
 import { CubeAffordanceHostLifecycle } from './ui/affordance/CubeAffordanceHostLifecycle.js';
 import { notifyComfyGraphCleared } from './ui/affordance/ComfyGraphClearNotifier.js';
@@ -64,6 +61,8 @@ import { ModelProviderCacheSettings } from './ui/model_library/ModelProviderCach
 import { ModelProviderCacheClient } from './ui/model_library/ModelProviderCacheClient.js';
 import { ModelProviderPreferenceClient } from './ui/model_library/ModelProviderPreferences.js';
 import { ModelCatalogClient } from './ui/model_library/ModelCatalogClient.js';
+import { CubePromptEditorHost } from './ui/prompt_editor/CubePromptEditorHost.js';
+import { OwnedSurfaceAppearance } from './ui/surface/appearance/OwnedSurfaceAppearance.js';
 import { ModelDetectorClient } from './ui/model_library/ModelDetectorClient.js';
 import { refreshComfyModelChoices } from './ui/model_library/ComfyModelChoices.js';
 import { refreshNativeNodeCards } from './ui/surface/NativeNodeCardRefresh.js';
@@ -74,23 +73,7 @@ import { ModelLibrarySettings } from './ui/model_library/ModelLibrarySettings.js
 
 export { buildShiftedPlacementPayload };
 
-interface SugarCubesHostApp extends ComfyApplication {
-  ui?: { settings?: SettingsManager };
-  clean?(): void;
-  registerExtension?(extension: UnknownRecord): void;
-}
-
-export interface SugarCubesExtension extends ComfyExtension, UnknownRecord {
-  addCustomNodeDefs(definitions: Record<string, ComfyNodeDefinition>): Promise<void>;
-  beforeRegisterVueAppNodeDefs(definitions: ComfyNodeDefinition[]): void;
-  registerCustomNodes(): void;
-  refreshComboInNodes(): void;
-  setup(): Promise<void>;
-  beforeConfigureGraph(graphData?: unknown): void;
-  afterConfigureGraph(missingNodeTypes: unknown[], comfyApp: ComfyApp): void;
-  getCanvasMenuItems(canvas: unknown): unknown[];
-  getNodeMenuItems(node: unknown): unknown[];
-}
+export type { SugarCubesExtension } from './ui/types/extension.js';
 
 const EXTENSION_NAME = 'SugarCubes.UI';
 let invalidateCubeCatalogs: () => Promise<void> = async () => undefined;
@@ -131,6 +114,7 @@ const { appearance, relations, frame, setupPresentation } = createWorkflowFieldH
   document: documentRef ?? document,
   seeds: workflowExecution.seeds,
   activity: workflowExecution.activity,
+  progress: workflowExecution.progress,
   stackControls: () => workflowWorkspace.masonry.stackControls(),
   sessions: workflowExecution.sessions,
   getCardState: () => cubeRuntimeLifecycle.current()?.cardState ?? null,
@@ -382,6 +366,13 @@ const modelCatalog = new ModelCatalogClient(
   (path, options) => api.fetchApi(path, options),
   () => refreshComfyModelChoices(appRef),
 );
+/** Bind prompt editing to the same catalog used by native model controls. */
+const promptEditors = new CubePromptEditorHost(
+  documentRef ?? document,
+  modelCatalog,
+  modelBackgroundReporter(logger, 'prompt editor'),
+  new OwnedSurfaceAppearance(document, appearance.state),
+);
 const modelUpdates = new ModelUpdateClient((path, options) => api.fetchApi(path, options));
 const modelDetectors = new ModelDetectorClient((path, options) => api.fetchApi(path, options));
 /** Route update failures through the established SugarCubes feedback owner. */
@@ -499,6 +490,7 @@ export const sugarCubesExtension: SugarCubesExtension = {
     return cubeAffordances.getNodeMenuItems(node);
   },
   async setup() {
+    promptEditors.setup();
     await extensionSetupLifecycle.setup();
     workflowHistory.install();
     relations.setup();
@@ -514,6 +506,7 @@ export const sugarCubesExtension: SugarCubesExtension = {
     modelUpdateLifecycle.start();
   },
   beforeConfigureGraph(graphData?: unknown) {
+    promptEditors.beforeConfigureGraph();
     workflowHistory.setConfiguring(true);
     relations.beforeConfigureGraph();
     workflowWorkspace.masonry.beforeConfigureGraph();

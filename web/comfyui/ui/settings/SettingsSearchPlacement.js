@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Project Comfy's existing search and close controls into a reversible top toolbar. */
 import { SettingsSearchNavigation } from './SettingsSearchNavigation.js';
+import { relocateControl } from '../core/ControlPlacement.js';
 /** Keep native search controls stable while the settings shell changes presentation. */
 export class SettingsSearchPlacement {
     #bar;
@@ -42,7 +43,7 @@ export class SettingsSearchPlacement {
             const slot = document.createComment('SugarCubes settings presentation slot');
             element.before(slot);
             this.#moves.push({ element, slot });
-            this.#relocate(element, this.#bar, null);
+            relocateControl(element, this.#bar, null);
         }
     }
     /** Restore native slots even when a palette or mode changes with the dialog open. */
@@ -50,7 +51,7 @@ export class SettingsSearchPlacement {
         this.#navigation?.dispose();
         for (const { element, slot } of this.#moves) {
             if (slot.parentElement) {
-                this.#relocate(element, slot.parentElement, slot);
+                relocateControl(element, slot.parentElement, slot);
                 slot.remove();
             }
         }
@@ -59,18 +60,5 @@ export class SettingsSearchPlacement {
     /** Reconcile native search completion without taking ownership of its result filtering. */
     reconcile() {
         return this.#navigation?.reconcile() ?? false;
-    }
-    /** Preserve active search and popup state during connected native presentation moves. */
-    #relocate(element, target, before) {
-        const focused = element.ownerDocument.activeElement;
-        const move = Reflect.get(target, 'moveBefore');
-        if (typeof move === 'function' && target.isConnected && element.isConnected)
-            move.call(target, element, before);
-        else
-            target.insertBefore(element, before);
-        if (focused instanceof HTMLElement &&
-            element.contains(focused) &&
-            focused.ownerDocument.activeElement !== focused)
-            focused.focus({ preventScroll: true });
     }
 }

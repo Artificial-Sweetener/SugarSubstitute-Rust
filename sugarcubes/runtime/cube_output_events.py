@@ -28,7 +28,7 @@ LOGGER = logging.getLogger(__name__)
 CUBE_OUTPUT_OBSERVER_API_VERSION = 1
 _EVENT_BUS_MODULE_NAME = "_sugarcubes_cube_output_event_bus_v1"
 
-MediaKind = Literal["image", "audio", "video", "value", "unknown"]
+MediaKind = Literal["image", "audio", "video", "model", "value", "unknown"]
 
 
 @dataclass(frozen=True)

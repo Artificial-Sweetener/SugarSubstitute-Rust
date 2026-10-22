@@ -41,6 +41,14 @@ export function ensureBrowserCanvasStyles(document) {
     .sc-output-overview-cell-status:empty { display:none; }
     .sc-output-overview-image { min-height:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
     .sc-output-overview-thumbnail { width:100%; height:100%; object-fit:contain; }
+    .sc-output-media-detail { position:absolute; inset:0; background:var(--sugarcubes-canvas-background,#151515); cursor:default; }
+    .sc-output-media-detail[hidden] { display:none; }
+    .sc-output-media-detail > video,.sc-output-media-detail > img { width:100%; height:100%; object-fit:contain; }
+    .sc-output-model-container { position:absolute; inset:0; overflow:hidden; }
+    .sc-output-model-container > canvas { position:absolute; inset:0; max-width:100%; max-height:100%; }
+    .sc-output-poster-capture { position:fixed; left:-10000px; top:0; width:384px; height:384px; pointer-events:none; }
+    .sc-output-media-badge { position:absolute; left:10px; bottom:10px; padding:3px 8px;
+      border-radius:6px; background:#000b; color:white; font-size:12px; pointer-events:none; }
   `;
     document.head.append(style);
 }

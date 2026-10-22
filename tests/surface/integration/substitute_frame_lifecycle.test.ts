@@ -88,9 +88,10 @@ test('mode restores host presentation and preserves native controls, graph, and 
     $subscribe: () => () => undefined,
   };
   const graph = { nodes: ['unchanged'] };
+  const execute = jest.fn(async () => undefined);
   const app = {
     graph,
-    extensionManager: { workflow: store },
+    extensionManager: { workflow: store, command: { execute } },
     ui: { settings: { addSetting: () => undefined, getSettingValue: () => false } },
   };
   const report = jest.fn();
@@ -99,6 +100,10 @@ test('mode restores host presentation and preserves native controls, graph, and 
     app,
     sessions,
     activity: new WorkflowOutputActivity(),
+    progress: {
+      read: () => ({ visible: false, workflow: 0, sampler: 0 }),
+      subscribe: () => () => undefined,
+    },
     palette: { theme: { color: '#479ef5', dark: true }, subscribe: () => () => undefined },
     stackControls: () => ({
       available: true,
@@ -117,12 +122,26 @@ test('mode restores host presentation and preserves native controls, graph, and 
   await settle();
   expect(row.hasAttribute('data-sc-frame-native')).toBe(true);
   const frame = document.querySelector('.sc-substitute-frame');
+  frame?.querySelector<HTMLElement>('[aria-label="Application menu"]')?.click();
+  const extensions = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+    (item) => item.textContent?.trim() === 'Extensions',
+  );
+  expect(extensions).toBeDefined();
+  extensions?.click();
+  await settle();
+  expect(execute).toHaveBeenCalledWith('Comfy.Manager.CustomNodesManager.ShowCustomNodesMenu');
+  expect(document.querySelector('[role="menu"]')).toBeNull();
   const popup = document.createElement('div');
   popup.setAttribute('role', 'listbox');
   document.body.append(popup);
   await settle();
   expect(document.querySelector('.sc-substitute-frame')).toBe(frame);
   expect(app.graph).toBe(graph);
+  const write = jest.spyOn(document.documentElement, 'setAttribute');
+  sessions.synchronize([{ sessionId: a, title: 'Renamed', path: 'a' }], a);
+  await settle();
+  expect(write).not.toHaveBeenCalledWith('data-sc-substitute-frame', '');
+  write.mockRestore();
   host.mode.setEnabled(false);
   await settle();
   expect(row.hasAttribute('data-sc-frame-native')).toBe(false);
@@ -191,6 +210,34 @@ test('literal titles and keyed tabs survive reorder and activity refresh without
     new KeyboardEvent('keydown', { key: 'ArrowLeft', altKey: true, bubbles: true }),
   );
   expect(actions.reorder).toHaveBeenCalledWith(1, 0);
+  view.dispose();
+});
+
+test('unchanged workflow activity performs no tab scroll geometry reads', () => {
+  const viewport = document.createElement('div');
+  const readScroll = jest.fn(() => 0);
+  Object.defineProperty(viewport, 'scrollLeft', { get: readScroll, set: () => undefined });
+  const view = new WorkflowTabsView(
+    document,
+    {
+      activate: jest.fn(),
+      close: jest.fn(),
+      menu: async () => [],
+      reorder: jest.fn(),
+      create: jest.fn(),
+      report: jest.fn(),
+    },
+    viewport,
+  );
+  viewport.append(view.element);
+  document.body.append(viewport);
+  const tab = { id: workflowSessionId('typing'), title: 'Prompt', modified: true, selected: true };
+  view.update([tab], () => false);
+  readScroll.mockClear();
+  view.update([{ ...tab }], () => false);
+  expect(readScroll).not.toHaveBeenCalled();
+  view.update([{ ...tab, title: 'Renamed' }], () => false);
+  expect(view.element.textContent).toContain('Renamed');
   view.dispose();
 });
 

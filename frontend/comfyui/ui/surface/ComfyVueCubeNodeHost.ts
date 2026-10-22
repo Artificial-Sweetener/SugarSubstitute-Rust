@@ -112,7 +112,7 @@ export class ComfyVueCubeNodeHost {
 
     const body = findNativeNodeBody(nodeRoot);
     if (!body) return null;
-    body.dataset.sugarcubeCubeBody = '';
+    if (!body.hasAttribute('data-sugarcube-cube-body')) body.dataset.sugarcubeCubeBody = '';
     const colorScope = new ComfyVueCubeColorScope(nodeRoot);
     colorScope.mount();
     removeOrphanFaceHosts(body);
@@ -246,7 +246,7 @@ export class ComfyVueCubeNodeHost {
     const body = findNativeNodeBody(mount.nodeRoot);
     if (!body) return;
     mount.geometryObserver?.observe(body);
-    body.dataset.sugarcubeCubeBody = '';
+    if (!body.hasAttribute('data-sugarcube-cube-body')) body.dataset.sugarcubeCubeBody = '';
     if (mount.faceHost.parentElement !== body) body.append(mount.faceHost);
     for (const [element, wasHidden] of hideNativeCubeContent(mount.nodeRoot, body)) {
       if (!mount.hiddenElements.has(element)) mount.hiddenElements.set(element, wasHidden);
@@ -385,8 +385,9 @@ function containsNativeSlot(element: HTMLElement): boolean {
 function hideElement(element: HTMLElement, hidden: Map<HTMLElement, boolean>): void {
   if (hidden.has(element)) return;
   hidden.set(element, element.hidden);
-  element.hidden = true;
-  element.dataset.sugarcubeNativeHidden = '';
+  if (!element.hidden) element.hidden = true;
+  if (!element.hasAttribute('data-sugarcube-native-hidden'))
+    element.dataset.sugarcubeNativeHidden = '';
 }
 
 /** Restore an element that belongs to the retained native shell. */

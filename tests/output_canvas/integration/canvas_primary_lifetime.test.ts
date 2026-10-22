@@ -74,6 +74,7 @@ function fixture() {
             mediaKind: item.mediaKind,
           })),
           videos: [],
+          models: [],
           text: [],
         },
         'fixture',

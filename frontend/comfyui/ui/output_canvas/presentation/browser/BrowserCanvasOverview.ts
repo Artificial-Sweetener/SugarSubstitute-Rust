@@ -252,6 +252,17 @@ export class BrowserCanvasOverview {
     const status = document.createElement('span');
     status.className = 'sc-output-overview-cell-status';
     button.append(image, status);
+    if (cell.item && cell.item.mediaKind !== 'image' && cell.item.mediaKind !== 'unsupported') {
+      const badge = document.createElement('span');
+      badge.className = 'sc-output-media-badge';
+      badge.textContent =
+        cell.item.mediaKind === 'model'
+          ? '3D'
+          : cell.item.mediaKind === 'video'
+            ? 'Video'
+            : 'Animation';
+      button.append(badge);
+    }
     button.addEventListener('click', () => this.select(cell));
     return { cell, button, image, status };
   }

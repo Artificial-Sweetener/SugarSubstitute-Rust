@@ -72,7 +72,7 @@ export class SubstituteFrameHost {
     }
     /** Subscribe to named host mounts and existing workflow and appearance owners only. */
     setup() {
-        this.#stops.push(this.mode.subscribe(() => this.#reconcile()), this.options.palette.subscribe(() => this.#palette()), this.options.sessions.subscribe(() => this.#queue()), this.options.activity.subscribe(() => this.#queue()), subscribeVisualStyle(this.options.document, () => {
+        this.#stops.push(this.mode.subscribe(() => this.#reconcile()), this.options.palette.subscribe(() => this.#palette()), this.options.sessions.subscribe(() => this.#queue()), this.options.activity.subscribe(() => this.#queue()), this.options.progress.subscribe(() => this.#refreshProgress()), subscribeVisualStyle(this.options.document, () => {
             this.#unmount();
             this.#reconcile();
         }));
@@ -127,10 +127,12 @@ export class SubstituteFrameHost {
             }
             if (!this.#style.isConnected)
                 document.head.append(this.#style);
-            document.documentElement.setAttribute('data-sc-substitute-frame', '');
+            if (!document.documentElement.hasAttribute('data-sc-substitute-frame'))
+                document.documentElement.setAttribute('data-sc-substitute-frame', '');
             this.options.setOverridesInline(true);
             this.#view?.update(this.#adapter?.read(this.options.sessions.read().open) ?? [], (id) => this.options.activity.unread(id));
             this.#palette();
+            this.#refreshProgress();
         }
         catch (error) {
             this.options.report(error);
@@ -167,6 +169,10 @@ export class SubstituteFrameHost {
         this.#desktop.attach(mount);
         this.#generation = new GenerationStripHost(this.options.document, this.#view.element, this.options.app, this.options.report);
         this.#toolbarLayout = new SubstituteToolbarLayout(this.options.document);
+    }
+    /** Refresh only the retained progress tracks for the currently presented workflow. */
+    #refreshProgress() {
+        this.#view?.updateProgress(this.options.progress.read(this.options.sessions.presentation()));
     }
     /** Project accepted palette facts without adding a theme observer or renderer dependency. */
     #palette() {

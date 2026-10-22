@@ -26,6 +26,7 @@ export interface WorkflowMediaReference {
 export interface WorkflowMediaPayload {
   readonly images: readonly (WorkflowMediaReference | null)[];
   readonly videos: readonly (WorkflowMediaReference | null)[];
+  readonly models: readonly (WorkflowMediaReference | null)[];
   readonly text: readonly string[];
 }
 
@@ -46,6 +47,7 @@ export function freezeWorkflowMedia(payload: WorkflowMediaPayload): WorkflowMedi
   return Object.freeze({
     images: copy(payload.images),
     videos: copy(payload.videos),
+    models: copy(payload.models),
     text: Object.freeze([...payload.text]),
   });
 }
@@ -59,6 +61,8 @@ export function combineWorkflowMedia(
 ): WorkflowMediaPayload {
   const inputPreview =
     previous !== null &&
+    next.videos.length === 0 &&
+    next.models.length === 0 &&
     previous.images.length > 0 &&
     previous.images.every((entry) => entry?.file.type === 'input');
   const images = !containsImages && inputPreview ? previous.images : next.images;
@@ -66,6 +70,9 @@ export function combineWorkflowMedia(
     images: Object.freeze(merge && previous ? [...previous.images, ...images] : [...images]),
     videos: Object.freeze(
       merge && previous ? [...previous.videos, ...next.videos] : [...next.videos],
+    ),
+    models: Object.freeze(
+      merge && previous ? [...previous.models, ...next.models] : [...next.models],
     ),
     text: Object.freeze(merge && previous ? [...previous.text, ...next.text] : [...next.text]),
   });

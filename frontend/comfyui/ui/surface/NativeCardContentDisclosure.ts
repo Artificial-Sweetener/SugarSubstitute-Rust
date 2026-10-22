@@ -28,9 +28,12 @@ export class NativeCardContentDisclosure {
     private readonly motion: CardDisclosureMotion,
   ) {}
 
-  /** Capture source geometry in the shared read phase before any native card renders. */
-  prepare(): void {
-    this.#preparedHeight = this.motion.captureHeight();
+  /** Capture batch geometry only for an upcoming membership transition. */
+  prepare(widgets: readonly string[]): void {
+    this.#preparedHeight =
+      this.#membership !== null && this.#membership !== JSON.stringify(widgets)
+        ? this.motion.captureHeight()
+        : null;
   }
 
   /** Render native updates immediately, animating only a changed set of presented widgets. */

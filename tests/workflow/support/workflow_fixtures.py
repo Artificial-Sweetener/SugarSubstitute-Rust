@@ -20,6 +20,56 @@ from __future__ import annotations
 from copy import deepcopy
 
 
+def draft_workflow() -> dict[str, object]:
+    """Return a native prompt draft before its first save assigns library identity."""
+
+    identity: dict[str, object] = {
+        "kind": "draft",
+        "instance_id": "draft-prompt-1",
+        "default_alias": "Positive prompt",
+        "cube_id": "",
+        "cube_version": "",
+    }
+    source = "a cat, (bright eyes:1.2), <lora:example:0.8>, {colors}\r\ntail"
+    return {
+        "version": 0.4,
+        "nodes": [
+            {
+                "id": 12,
+                "type": "draft-prompt-definition",
+                "pos": [100, 100],
+                "size": [320, 240],
+                "inputs": [],
+                "outputs": [],
+                "widgets_values": [source],
+                "properties": {
+                    "sugarcubes_kind": "cube_draft",
+                    "sugarcubes_cube": deepcopy(identity),
+                },
+            }
+        ],
+        "links": [],
+        "definitions": {
+            "subgraphs": [
+                {
+                    "id": "draft-prompt-definition",
+                    "name": "Positive prompt",
+                    "nodes": [
+                        {"id": 1, "type": "CLIPTextEncode", "widgets_values": [source]}
+                    ],
+                    "links": [],
+                    "inputs": [],
+                    "outputs": [],
+                    "extra": {
+                        "sugarcubes_kind": "cube_draft",
+                        "sugarcubes_cube": deepcopy(identity),
+                    },
+                }
+            ]
+        },
+    }
+
+
 def cube_document() -> dict[str, object]:
     """Return one minimal canonical Cube document embedded with a workflow."""
 

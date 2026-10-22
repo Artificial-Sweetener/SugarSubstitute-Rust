@@ -17,20 +17,22 @@
 import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
 import { substituteToolbarCss } from './SubstituteToolbarStyles.js';
 
+const EXTENSIONS_ICON = '[class~="icon-[comfy--extensions-blocks]"]';
+
 /** Mark reversible native frame boundaries without adding graph or widget discovery. */
 export class SubstituteToolbarLayout {
   readonly #presence: HostSurfaceObserver;
   readonly #style: HTMLStyleElement;
   readonly #marked = new Map<HTMLElement, string>();
 
-  /** Observe only actual toolbar and workflow-selector mounts, independently of popup activity. */
+  /** Observe native toolbar controls, including the manager's independently mounted button. */
   constructor(private readonly document: Document) {
     this.#style = document.createElement('style');
     this.#style.textContent = substituteToolbarCss;
     document.head.append(this.#style);
     this.#presence = new HostSurfaceObserver(
       document.body,
-      '.actionbar-container,button[aria-label="Workflow actions"]',
+      `.actionbar-container,button[aria-label="Workflow actions"],${EXTENSIONS_ICON}`,
       () => this.#reconcile(),
     );
     this.#reconcile();
@@ -54,6 +56,9 @@ export class SubstituteToolbarLayout {
     if (workflow?.parentElement) next.set(workflow.parentElement, 'data-sc-workflow-selector');
     if (bar) {
       next.set(bar, 'data-sc-substitute-toolbar');
+      const extensions = bar.parentElement?.querySelector(EXTENSIONS_ICON)?.closest('button');
+      if (extensions?.parentElement && !bar.contains(extensions))
+        next.set(extensions.parentElement, 'data-sc-substitute-extensions');
       let line = bar.parentElement;
       while (line && !line.contains(workflow)) line = line.parentElement;
       if (line && workflow) {

@@ -15,6 +15,10 @@ document_observer_owners = [
   "frontend/comfyui/ui/surface/appearance/OverlayScrollbarHost.ts",
 ]
 mutation_observer_owners = [
+  # Native editor-local drag copies and paint: these observers never discover host graphs or surfaces.
+  "frontend/sugarprompt/editor/src/reorder-motion-observation.ts",
+  "frontend/sugarprompt/editor/src/reorder-native-projection.ts",
+  "frontend/sugarprompt/editor/src/reorder-slot-layout-read.ts",
   "frontend/comfyui/ui/surface/appearance/AccentThemeHost.ts",
   "frontend/comfyui/ui/core/HostSurfaceObserver.ts",
   "frontend/comfyui/ui/dialogs/ModalAppearance.ts",
@@ -363,3 +367,13 @@ forbidden_typescript_paths = [
   "frontend/comfyui/ui/settings",
   "frontend/comfyui/ui/surface",
 ]
+
+[[dependency]]
+name = "SUGARPROMPT_CORE"
+paths = ["frontend/sugarprompt/core/src/**/*.ts", "frontend/sugarprompt/core/src/*.ts"]
+forbidden_typescript_paths = ["frontend/sugarprompt/services", "frontend/sugarprompt/editor", "frontend/comfyui", "node_modules", "types/comfyui", "/scripts"]
+
+[[dependency]]
+name = "SUGARPROMPT_SERVICES"
+paths = ["frontend/sugarprompt/services/src/**/*.ts", "frontend/sugarprompt/services/src/*.ts"]
+forbidden_typescript_paths = ["frontend/sugarprompt/editor", "frontend/comfyui", "types/comfyui", "/scripts"]

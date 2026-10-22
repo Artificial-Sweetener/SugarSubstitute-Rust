@@ -5,29 +5,57 @@ export class HostSurfaceObserver {
     /** Observe named host boundaries and report only actual mounts or explicitly requested local changes. */
     constructor(root, selector, changed, options = {}) {
         this.#process = (records) => {
+            const excluded = new WeakMap();
+            /** Treat explicitly owned rendering trees as opaque and share ancestry checks within each delivery. */
+            const isExcluded = (element) => {
+                const path = [];
+                let current = element;
+                let result = false;
+                while (current) {
+                    const cached = excluded.get(current);
+                    if (cached !== undefined) {
+                        result = cached;
+                        break;
+                    }
+                    path.push(current);
+                    if (current.hasAttribute('data-sc-host-opaque') ||
+                        (options.exclude && current.matches(options.exclude))) {
+                        result = true;
+                        break;
+                    }
+                    current = current.parentElement;
+                }
+                for (const ancestor of path)
+                    excluded.set(ancestor, result);
+                return result;
+            };
             const changes = new Map();
             const mounted = new Set();
             const removed = new Set();
             const content = new Set();
             const collect = (node, kind) => {
-                if (!(node instanceof HTMLElement) || node.closest(options.exclude ?? ':not(*)'))
+                if (!(node instanceof HTMLElement) || isExcluded(node))
                     return;
                 if (node.matches(selector)) {
                     changes.set(node, kind);
                     (kind === 'mounted' ? mounted : removed).add(node);
                 }
+                if (!node.childElementCount)
+                    return;
                 for (const element of node.querySelectorAll(selector))
-                    if (!element.closest(options.exclude ?? ':not(*)')) {
+                    if (!isExcluded(element)) {
                         changes.set(element, kind);
                         (kind === 'mounted' ? mounted : removed).add(element);
                     }
             };
             for (const record of records) {
                 const target = record.target instanceof Element ? record.target : record.target.parentElement;
-                if (target?.closest(options.exclude ?? ':not(*)'))
+                if (target && isExcluded(target))
                     continue;
-                const surface = target?.closest(selector);
-                if ((options.content || record.type === 'attributes') && surface) {
+                const surface = options.content || record.type === 'attributes'
+                    ? target?.closest(selector)
+                    : null;
+                if (surface) {
                     changes.set(surface, 'content');
                     content.add(surface);
                 }
