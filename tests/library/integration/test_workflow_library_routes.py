@@ -19,7 +19,25 @@ from sugarcubes.library import CubeSourceSyncService
 from sugarcubes.workflow import read_canonical_workflow
 from tests.backend_api.support.backend_fixtures import FakeRequest, decode_json_response
 from tests.backend_api.support.typing_support import BackendServicesFactory
-from tests.workflow.support.workflow_fixtures import cube_document, cube_workflow
+from tests.workflow.support.workflow_fixtures import (
+    cube_document,
+    cube_workflow,
+    draft_workflow,
+)
+
+
+def test_classification_accepts_an_unsaved_native_draft(
+    tmp_path: Path,
+    backend_services_factory: BackendServicesFactory,
+) -> None:
+    """Classify reloaded workflow drafts successfully without saved artifact actions."""
+
+    handlers = build_route_handlers(backend_services_factory(tmp_path))
+    response = asyncio.run(
+        handlers.classify_workflow(FakeRequest(body={"workflow": draft_workflow()}))
+    )
+    assert response.status == 200
+    assert decode_json_response(response)["definitions"] == []
 
 
 @dataclass

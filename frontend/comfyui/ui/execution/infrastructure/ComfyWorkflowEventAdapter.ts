@@ -16,6 +16,11 @@
 /** Adapt Comfy's public events once, preserving preview byte ownership and disposing exact listeners. */
 
 import { isRecord, type UnknownRecord } from '../../types/common.js';
+import type { WorkflowProgressStore } from '../application/WorkflowProgressStore.js';
+import {
+  applyComfySamplerProgress,
+  applyComfyProgressState,
+} from './ComfyWorkflowProgressDecoder.js';
 import type {
   WorkflowExecutionIngestor,
   AttributedWorkflowSource,
@@ -30,6 +35,7 @@ import {
 export interface ComfyWorkflowEventAdapterOptions {
   readonly api: unknown;
   readonly ingestor: WorkflowExecutionIngestor;
+  readonly progress: WorkflowProgressStore;
   readonly logger: Pick<Console, 'error'>;
   preview(source: AttributedWorkflowSource, blob: Blob): void;
   connection(connected: boolean): void;
@@ -63,20 +69,34 @@ export class ComfyWorkflowEventAdapter {
       executed: (event) => {
         const decoded = decodeComfyFinalEvent(event);
         if (decoded) this.options.ingestor.final(decoded);
+        this.#job(event, (id) =>
+          this.options.progress.nodeFinished(
+            id,
+            decodeComfyExecutionPaths([comfyEventDetail(event)?.node]),
+          ),
+        );
       },
-      execution_start: (event) => this.#job(event, (id) => this.options.ingestor.started(id)),
-      execution_success: (event) =>
-        this.#job(event, (id) => this.options.ingestor.terminal(id, 'complete')),
-      execution_interrupted: (event) =>
-        this.#job(event, (id) => this.options.ingestor.terminal(id, 'cancelled')),
-      execution_error: (event) =>
-        this.#job(event, (id) => this.options.ingestor.terminal(id, 'error')),
-      execution_cached: (event) => this.#job(event, (id) => this.options.ingestor.cached(id)),
+      execution_start: (event) =>
+        this.#job(event, (id) => {
+          this.options.ingestor.started(id);
+          this.options.progress.started(id);
+        }),
+      execution_success: (event) => this.#terminal(event, 'complete'),
+      execution_interrupted: (event) => this.#terminal(event, 'cancelled'),
+      execution_error: (event) => this.#terminal(event, 'error'),
+      execution_cached: (event) =>
+        this.#job(event, (id) => {
+          this.options.ingestor.cached(id);
+          const nodes: unknown = comfyEventDetail(event)?.nodes;
+          if (Array.isArray(nodes))
+            this.options.progress.completed(id, decodeComfyExecutionPaths(nodes));
+        }),
       progress: (event) => this.#progress(event),
       progress_state: (event) => this.#progressState(event),
       b_preview_with_metadata: (event) => this.#enhancedPreview(event),
       disconnected: () => {
         this.options.ingestor.disconnected();
+        this.options.progress.reset();
         this.options.connection(false);
       },
       reconnected: () => {
@@ -136,8 +156,17 @@ export class ComfyWorkflowEventAdapter {
     if (id) receive(id);
   }
 
+  /** Retire the same qualified execution from both result and progress owners. */
+  #terminal(event: unknown, status: 'complete' | 'cancelled' | 'error'): void {
+    this.#job(event, (id) => {
+      this.options.ingestor.terminal(id, status);
+      this.options.progress.terminal(id);
+    });
+  }
+
   /** Prefer qualified progress because Comfy's public executing notification loses its original job ID. */
   #progress(event: unknown): void {
+    applyComfySamplerProgress(event, this.options.progress);
     const detail = comfyEventDetail(event);
     const id = decodeComfyPromptId(detail?.prompt_id);
     if (id && detail) this.options.ingestor.executing(id, decodeComfyExecutionPaths([detail.node]));
@@ -145,6 +174,7 @@ export class ComfyWorkflowEventAdapter {
 
   /** Translate running-node context from Comfy's enhanced progress-state map. */
   #progressState(event: unknown): void {
+    applyComfyProgressState(event, this.options.progress);
     const detail = comfyEventDetail(event);
     const id = decodeComfyPromptId(detail?.prompt_id);
     if (!id || !detail || !isRecord(detail.nodes) || Array.isArray(detail.nodes)) return;

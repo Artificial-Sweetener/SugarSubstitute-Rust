@@ -129,7 +129,10 @@ export class WorkflowResultStore {
             sourceOrder: update.source.order,
             revision: oldRevision + 1,
         });
-        const carried = !update.containsImages && inputPreview
+        const carried = !update.containsImages &&
+            !update.payload.videos.length &&
+            !update.payload.models.length &&
+            inputPreview
             ? previous.output.items.filter((item) => item.batchIndex < previous.payload.images.length)
             : [];
         this.#retain(session, update.source, provenance, payload, delivery, carried);
@@ -202,7 +205,7 @@ export class WorkflowResultStore {
     }
     /** Preserve carried input identities while constructing attributable new media and unavailable positions. */
     #retain(session, source, provenance, payload, delivery, carried = []) {
-        const media = [...payload.images, ...payload.videos];
+        const media = [...payload.images, ...payload.videos, ...payload.models];
         const items = [];
         const preserved = new Map(carried.map((item) => [item.batchIndex, item]));
         media.forEach((entry, batchIndex) => {

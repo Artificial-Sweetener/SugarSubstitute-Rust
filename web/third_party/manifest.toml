@@ -5,7 +5,7 @@ license_file = "third_party/licenses/spectrum-web-components.LICENSE.txt"
 source = "https://github.com/adobe/spectrum-web-components"
 revision = "2deb514ca7f46aae865b97375af9ef3a21afdfc5"
 version = "1.12.5"
-modifications = "Official components bundled with esbuild. Typed adapters normalize numeric values, tab selection, asynchronous focus readiness and connected presentation moves; upstream source is unchanged."
+modifications = "Official components bundled with esbuild. Typed adapters normalize numeric values, tab selection, asynchronous focus readiness, external editor slots and connected presentation moves; upstream source is unchanged."
 source_paths = ["1st-gen/packages/action-button","1st-gen/packages/base","1st-gen/packages/button","1st-gen/packages/checkbox","1st-gen/packages/divider","1st-gen/packages/field-label","1st-gen/packages/help-text","1st-gen/packages/icon","1st-gen/packages/icons-ui","1st-gen/packages/icons-workflow","1st-gen/packages/iconset","1st-gen/packages/infield-button","1st-gen/packages/menu","1st-gen/packages/number-field","1st-gen/packages/overlay","1st-gen/packages/popover","1st-gen/packages/reactive-controllers","1st-gen/packages/shared","1st-gen/packages/slider","1st-gen/packages/switch","1st-gen/packages/tabs","1st-gen/packages/textfield","1st-gen/packages/tooltip"]
 runtime_files = ["web/comfyui/ui/surface/appearance/SpectrumThemeRuntime.js"]
 
@@ -193,8 +193,8 @@ license_file = "third_party/licenses/fluentui.LICENSE.txt"
 source = "https://github.com/microsoft/fluentui"
 revision = "44cf3fb9906b4f98243589e0b078e4df9ca6227b"
 version = "3.1.3"
-modifications = "Official text input, button, tab, tablist, checkbox, slider and theme components bundled with esbuild. SugarCubes owns typed creation boundaries and connected presentation moves; upstream source is unchanged. FAST, focusgroup and tokens dependencies are pinned in package-lock.json and credited in NOTICE.md."
-source_paths = ["packages/web-components/src/text-input", "packages/web-components/src/button", "packages/web-components/src/tab", "packages/web-components/src/tablist", "packages/web-components/src/checkbox", "packages/web-components/src/slider", "packages/web-components/src/theme"]
+modifications = "Official text input, textarea, button, tab, tablist, checkbox, slider and theme components bundled with esbuild. SugarCubes owns typed creation boundaries, external editor slots and connected presentation moves; upstream source is unchanged. FAST, focusgroup and tokens dependencies are pinned in package-lock.json and credited in NOTICE.md."
+source_paths = ["packages/web-components/src/text-input", "packages/web-components/src/textarea", "packages/web-components/src/button", "packages/web-components/src/tab", "packages/web-components/src/tablist", "packages/web-components/src/checkbox", "packages/web-components/src/slider", "packages/web-components/src/theme"]
 runtime_files = ["web/comfyui/ui/surface/appearance/FluentThemeRuntime.js"]
 
 [[component]]
@@ -973,3 +973,136 @@ source_path = "qfluentwidgets/_rc/images/icons/History_black.svg"
 vendored_file = "frontend/static/orb/history.svg"
 runtime_file = "web/orb/history.svg"
 sha256 = "7affa00b4b880448871aa84138086ad1e5eaa5ad352b941bcd70542baccfda35"
+
+[[component]]
+name = "SugarSubstitute bundled Danbooru prompt tags"
+license = "GPL-3.0-or-later"
+license_file = "third_party/licenses/sugarsubstitute.LICENSE.txt"
+source = "https://github.com/Artificial-Sweetener/SugarSubstitute"
+revision = "038083381dd5e7bd8a86b2123d294bbcc3c054f5"
+source_paths = ["substitute/infrastructure/persistence/assets/prompt_autocomplete.txt"]
+source_sha256 = "38a5b8d1ff959d927d47423191575ea1281ee0c5e1a77e5773967ca1dfab5f82"
+vendored_file = "frontend/comfyui/ui/prompt_editor/assets/danbooru-tags.txt"
+modifications = "None; the complete 157516-row snapshot is embedded in the browser build. SugarPrompt prepares its shared immutable ranking and exact-tag index before editing."
+runtime_files = ["web/comfyui/ui/prompt_editor/runtime/SugarPromptRuntime.js", "web/comfyui/ui/prompt_editor/runtime/BundledPromptTags.js"]
+
+[[component]]
+name = "@codemirror/commands"
+license = "MIT"
+license_file = "third_party/licenses/codemirror-commands.LICENSE.txt"
+source = "https://code.haverbeke.berlin/codemirror/commands"
+revision = "npm:@codemirror/commands@6.11.1"
+version = "6.11.1"
+modifications = "None; bundled with the native SugarPrompt editor. Exact package integrity is pinned in package-lock.json."
+source_paths = ["dist/index.js"]
+runtime_files = ["web/comfyui/ui/prompt_editor/runtime/SugarPromptRuntime.js"]
+
+[[component]]
+name = "@codemirror/language"
+license = "MIT"
+license_file = "third_party/licenses/codemirror-language.LICENSE.txt"
+source = "https://code.haverbeke.berlin/codemirror/language"
+revision = "npm:@codemirror/language@6.12.4"
+version = "6.12.4"
+modifications = "None; bundled with the native SugarPrompt editor. Exact package integrity is pinned in package-lock.json."
+source_paths = ["dist/index.js"]
+runtime_files = ["web/comfyui/ui/prompt_editor/runtime/SugarPromptRuntime.js"]
+
+[[component]]
+name = "@codemirror/state"
+license = "MIT"
+license_file = "third_party/licenses/codemirror-state.LICENSE.txt"
+source = "https://code.haverbeke.berlin/codemirror/state"
+revision = "npm:@codemirror/state@6.7.6"
+version = "6.7.6"
+modifications = "None; bundled with the native SugarPrompt editor. Exact package integrity is pinned in package-lock.json."
+source_paths = ["dist/index.js"]
+runtime_files = ["web/comfyui/ui/prompt_editor/runtime/SugarPromptRuntime.js"]
+
+[[component]]
+name = "@codemirror/view"
+license = "MIT"
+license_file = "third_party/licenses/codemirror-view.LICENSE.txt"
+source = "https://code.haverbeke.berlin/codemirror/view"
+revision = "npm:@codemirror/view@6.43.13"
+version = "6.43.13"
+modifications = "SugarPrompt selection synchronization, public focus, 2048-character wrapped-line DOM overscan and scaled virtual-gap and scroll-anchor geometry patches are applied reproducibly by scripts/dependencies/install-codemirror-view.ts before bundling."
+source_paths = ["dist/index.js", "dist/index.cjs"]
+runtime_files = ["web/comfyui/ui/prompt_editor/runtime/SugarPromptRuntime.js"]
+
+[[component]]
+name = "@lezer/common"
+license = "MIT"
+license_file = "third_party/licenses/lezer-common.LICENSE.txt"
+source = "https://code.haverbeke.berlin/lezer/common"
+revision = "npm:@lezer/common@1.5.3"
+version = "1.5.3"
+modifications = "None; bundled with the native SugarPrompt editor. Exact package integrity is pinned in package-lock.json."
+source_paths = ["dist/index.js"]
+runtime_files = ["web/comfyui/ui/prompt_editor/runtime/SugarPromptRuntime.js"]
+
+[[component]]
+name = "@lezer/highlight"
+license = "MIT"
+license_file = "third_party/licenses/lezer-highlight.LICENSE.txt"
+source = "https://code.haverbeke.berlin/lezer/highlight"
+revision = "npm:@lezer/highlight@1.2.5"
+version = "1.2.5"
+modifications = "None; bundled with the native SugarPrompt editor. Exact package integrity is pinned in package-lock.json."
+source_paths = ["dist/index.js"]
+runtime_files = ["web/comfyui/ui/prompt_editor/runtime/SugarPromptRuntime.js"]
+
+[[component]]
+name = "@lezer/lr"
+license = "MIT"
+license_file = "third_party/licenses/lezer-lr.LICENSE.txt"
+source = "https://code.haverbeke.berlin/lezer/lr"
+revision = "npm:@lezer/lr@1.4.10"
+version = "1.4.10"
+modifications = "None; bundled with the native SugarPrompt editor. Exact package integrity is pinned in package-lock.json."
+source_paths = ["dist/index.js"]
+runtime_files = ["web/comfyui/ui/prompt_editor/runtime/SugarPromptRuntime.js"]
+
+[[component]]
+name = "@marijn/find-cluster-break"
+license = "MIT"
+license_file = "third_party/licenses/marijn-find-cluster-break.LICENSE.txt"
+source = "https://code.haverbeke.berlin/marijn/find-cluster-break"
+revision = "npm:@marijn/find-cluster-break@1.0.4"
+version = "1.0.4"
+modifications = "None; bundled with the native SugarPrompt editor. Exact package integrity is pinned in package-lock.json."
+source_paths = ["src/index.js"]
+runtime_files = ["web/comfyui/ui/prompt_editor/runtime/SugarPromptRuntime.js"]
+
+[[component]]
+name = "crelt"
+license = "MIT"
+license_file = "third_party/licenses/crelt.LICENSE.txt"
+source = "https://code.haverbeke.berlin/marijn/crelt"
+revision = "npm:crelt@1.0.7"
+version = "1.0.7"
+modifications = "None; bundled with the native SugarPrompt editor. Exact package integrity is pinned in package-lock.json."
+source_paths = ["index.js"]
+runtime_files = ["web/comfyui/ui/prompt_editor/runtime/SugarPromptRuntime.js"]
+
+[[component]]
+name = "style-mod"
+license = "MIT"
+license_file = "third_party/licenses/style-mod.LICENSE.txt"
+source = "https://code.haverbeke.berlin/marijn/style-mod"
+revision = "npm:style-mod@4.1.4"
+version = "4.1.4"
+modifications = "None; bundled with the native SugarPrompt editor. Exact package integrity is pinned in package-lock.json."
+source_paths = ["src/style-mod.js"]
+runtime_files = ["web/comfyui/ui/prompt_editor/runtime/SugarPromptRuntime.js"]
+
+[[component]]
+name = "w3c-keyname"
+license = "MIT"
+license_file = "third_party/licenses/w3c-keyname.LICENSE.txt"
+source = "https://github.com/marijnh/w3c-keyname"
+revision = "npm:w3c-keyname@2.2.8"
+version = "2.2.8"
+modifications = "None; bundled with the native SugarPrompt editor. Exact package integrity is pinned in package-lock.json."
+source_paths = ["index.js"]
+runtime_files = ["web/comfyui/ui/prompt_editor/runtime/SugarPromptRuntime.js"]

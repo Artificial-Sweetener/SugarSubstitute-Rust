@@ -30,6 +30,11 @@ import { canvasCatalogFixture } from '../support/CanvasCatalogFixture.js';
 import { CanvasFrameFixture } from '../support/CanvasFrameFixture.js';
 import { BrowserCanvasPlatformFixture } from '../support/BrowserCanvasPlatformFixture.js';
 import { WorkflowTestClock } from '../../execution/support/workflow_results.js';
+import { settleCanvasImages } from '../support/CanvasImageFixture.js';
+import {
+  mixedMediaFixture,
+  CanvasModelRuntimeFixture,
+} from '../support/CanvasMixedMediaFixture.js';
 
 /** Allocate real owners and replace only DOM measurement and platform decoding. */
 function fixture(brokenUrl = false) {
@@ -129,6 +134,62 @@ describe('composed browser canvas attachment', () => {
   afterEach(() => {
     document.body.replaceChildren();
     jest.restoreAllMocks();
+  });
+
+  test('releases outgoing image gestures before Comfy model controls receive pointer input', async () => {
+    const f = fixture();
+    const mixed = mixedMediaFixture();
+    f.replace(mixed.catalog);
+    const models = new CanvasModelRuntimeFixture();
+    const surface = new BrowserCanvasAttachment(f.root, { ...f.options, models });
+    await f.loader.ready(0);
+    f.frames.advance(250);
+    await f.command(surface, { type: 'batch', index: 2 });
+    f.frames.advance(250);
+    const model = f.root.querySelector('.sc-output-model-container')!;
+    const pointer = new MouseEvent('pointerdown', {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      clientX: 400,
+      clientY: 300,
+    });
+    model.dispatchEvent(pointer);
+    expect(pointer.defaultPrevented).toBe(false);
+    expect(f.root.querySelectorAll('.sc-output-image')).toHaveLength(0);
+    surface.dispose();
+    models.requests[0]!.resolve(models.viewer());
+    await Promise.resolve();
+    f.root.remove();
+  });
+
+  test('renders model failures literally and retries through the shared output overlay', async () => {
+    const f = fixture();
+    const report = jest.spyOn(f.options, 'report');
+    f.replace(mixedMediaFixture().catalog);
+    const models = new CanvasModelRuntimeFixture();
+    f.views.update(f.view, (state) => ({
+      ...state,
+      sourcePreview: false,
+      selection: { sourceId: f.catalog.entries[0]!.source.id, batchIndex: 2 },
+    }));
+    const surface = new BrowserCanvasAttachment(f.root, { ...f.options, models });
+    models.requests[0]!.reject(new Error('Model <b>unavailable</b>'));
+    await settleCanvasImages();
+    f.clock.advance(100);
+    await nextTick();
+    expect(f.root.textContent).toContain('Model <b>unavailable</b>');
+    expect(f.root.querySelector('b')).toBeNull();
+    expect(report).not.toHaveBeenCalled();
+    const retry = [...f.root.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Retry output',
+    )!;
+    retry.click();
+    await settleCanvasImages();
+    expect(models.requests).toHaveLength(2);
+    surface.dispose();
+    models.requests[1]!.resolve(models.viewer());
+    await settleCanvasImages();
   });
 
   test.each(

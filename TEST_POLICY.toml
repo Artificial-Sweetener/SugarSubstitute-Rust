@@ -421,7 +421,7 @@ groups = ["editor_actions/integration", "editor_actions/unit"]
 
 [[subscription]]
 boundary = "native_card_presentation"
-groups = ["frontend_core/integration", "model_library/integration", "editor_actions/integration", "relations/integration", "masonry_search/integration", "graph/unit", "output_canvas/integration"]
+groups = ["frontend_core/integration", "model_library/integration", "editor_actions/integration", "relations/integration", "masonry_search/integration", "graph/unit", "output_canvas/integration", "prompt_editor/integration"]
 
 [[subscription]]
 boundary = "cube_document"
@@ -523,3 +523,8 @@ area = "output_canvas"
 [[subscription]]
 boundary = "canvas_workspace"
 groups = ["surface/integration", "frontend_core/integration"]
+
+[[area]]
+name = "prompt_editor"
+sources = ["frontend/sugarprompt/**", "frontend/comfyui/ui/prompt_editor/**", "web/sugarprompt/**", "web/comfyui/ui/prompt_editor/**"]
+proofs = ["unit", "contract", "integration"]

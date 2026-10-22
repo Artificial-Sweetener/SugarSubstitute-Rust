@@ -15,7 +15,7 @@
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #    SugarCubes - composable workflow units for ComfyUI
 #    Copyright (C) 2026  Artificial Sweetener and contributors
-"""Normalize native Cube state from workflow-owned exact definitions."""
+"""Normalize saved Cube state while preserving native workflow-only drafts."""
 
 from __future__ import annotations
 
@@ -68,6 +68,8 @@ class NativeWorkflowNormalizer:
         native_subgraphs = _definition_index(normalized)
         documents_by_definition: dict[str, CubeDocument] = {}
         for definition in workflow.definitions:
+            if definition.is_draft:
+                continue
             target = definitions.get(definition.definition_id)
             if target is None:
                 continue
@@ -106,6 +108,7 @@ class NativeWorkflowNormalizer:
             raise NativeWorkflowNormalizationError(
                 f"Cube '{cube_id}' version '{cube_version}' cannot be normalized: {error}"
             ) from error
+
 
 def _reconcile_definition(
     native_definition: dict[str, object],

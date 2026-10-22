@@ -22,19 +22,31 @@ export function decodeComfyMedia(value) {
         return null;
     const animated = Array.isArray(value.animated) ? value.animated : [];
     const images = Array.isArray(value.images)
-        ? value.images.map((image, index) => media(image, animated[index] === true || (animated[0] === true && animated.length === 1)
+        ? value.images.map((image, index) => media(image, value.animated === true ||
+            animated[index] === true ||
+            (animated[0] === true && animated.length === 1)
             ? 'animated'
             : 'image'))
         : [];
-    const videos = Array.isArray(value.video)
-        ? value.video.map((video) => media(video, 'video'))
-        : [];
+    const declaredVideos = value.videos ?? value.gifs ?? value.video;
+    const videoValues = Array.isArray(declaredVideos)
+        ? declaredVideos
+        : record(declaredVideos)
+            ? [declaredVideos]
+            : [];
+    const imageFiles = new Set(images.filter((entry) => entry !== null).map((entry) => JSON.stringify(entry.file)));
+    const videos = videoValues
+        .map((video) => media(video, 'video'))
+        .filter((entry) => !entry || !imageFiles.has(JSON.stringify(entry.file)));
+    const models = Array.isArray(value['3d'])
+        ? value['3d'].map((model) => media(model, 'model'))
+        : modelPreview(value.result);
     const text = typeof value.text === 'string'
         ? [value.text]
         : Array.isArray(value.text)
             ? value.text.filter((entry) => typeof entry === 'string')
             : [];
-    const payload = freezeWorkflowMedia({ images, videos, text });
+    const payload = freezeWorkflowMedia({ images, videos, models, text });
     const containsImages = Array.isArray(value.images) && value.images.length > 0;
     return Object.freeze({
         payload,
@@ -55,12 +67,25 @@ function media(value, kind) {
     const suffix = filename.split('.').at(-1)?.toLowerCase();
     const mediaKind = suffix === 'svg'
         ? 'unsupported'
-        : suffix === 'mp4' || suffix === 'webm'
+        : ['mp4', 'webm', 'mov', 'mkv', 'avi', 'm4v'].includes(suffix ?? '')
             ? 'video'
-            : kind === 'image' && (suffix === 'gif' || suffix === 'apng')
-                ? 'animated'
-                : kind;
+            : ['glb', 'gltf', 'obj', 'fbx', 'stl', 'ply', 'splat', 'spz', 'ksplat'].includes(suffix ?? '')
+                ? 'model'
+                : suffix === 'gif' || suffix === 'apng' || (kind === 'video' && suffix === 'webp')
+                    ? 'animated'
+                    : kind;
     return Object.freeze({ file, dimensions: dimensions(value), mediaKind });
+}
+/** Decode Comfy's explicit three-part model preview tuple, preserving safe output-root addressing. */
+function modelPreview(value) {
+    if (!Array.isArray(value) || value.length !== 3)
+        return [];
+    const path = relativePath(value[0], false);
+    if (!path || !/\.(glb|gltf|obj|fbx|stl|ply|splat|spz|ksplat)$/i.test(path))
+        return [];
+    const parts = path.split('/');
+    const filename = parts.pop();
+    return [media({ filename, subfolder: parts.join('/'), type: 'output' }, 'model')];
 }
 /** Reject traversal, URL/absolute paths and control characters at the host-media adapter boundary. */
 function relativePath(value, allowEmpty) {

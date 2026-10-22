@@ -159,7 +159,9 @@ export class CanvasSelectionController {
                 this.#select(viewId, catalog, command.selection, 'image');
                 return true;
             case 'select-source':
-                this.#select(viewId, catalog, command.selection, 'source');
+                this.#select(viewId, catalog, command.selection.sourceId === state.selection?.sourceId
+                    ? command.selection
+                    : canvasAvailableSelection(catalog, command.selection), 'source');
                 return true;
             case 'select-preview':
                 this.#select(viewId, catalog, { sourceId: command.sourceId, batchIndex: 0 }, 'preview');
@@ -298,6 +300,9 @@ export class CanvasSelectionController {
             throw new TypeError('Canvas batch index is invalid.');
         const state = this.views.read(viewId);
         const secondary = intent === 'comparison';
+        const media = canvasSelectedItem(catalog, selection);
+        if (secondary && media && media.mediaKind !== 'image')
+            return;
         const sourcePreview = intent === 'source' || intent === 'preview';
         const overview = intent === 'source' && state.mode === 'overview';
         if (intent === 'preview' &&
@@ -324,7 +329,9 @@ export class CanvasSelectionController {
             sourcePreview: secondary ? current.sourcePreview : sourcePreview,
             comparison: secondary && current.comparison
                 ? { ...current.comparison, secondary: selection }
-                : current.comparison,
+                : media && media.mediaKind !== 'image'
+                    ? null
+                    : current.comparison,
         }));
     }
     /** Start reveal comparison with the first and last final stages in the selected batch. */

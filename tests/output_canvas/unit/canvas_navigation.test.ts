@@ -352,7 +352,7 @@ describe('canvas workflow navigation', () => {
   });
 });
 
-test('keeps the exact set when switching sources and rejects missing sets', () => {
+test('selects an available set when switching sources and rejects an explicit missing set', () => {
   const f = fixture();
   const a = f.catalog.entries[0]!;
   const catalog = {
@@ -378,9 +378,10 @@ test('keeps the exact set when switching sources and rejects missing sets', () =
     type: 'select-source',
     selection: { sourceId: catalog.entries[1]!.source.id, batchIndex: 1 },
   });
-  expect(f.views.read(f.view).selection).toEqual({ sourceId: a.source.id, batchIndex: 1 });
+  const destination = { sourceId: catalog.entries[1]!.source.id, batchIndex: 0 };
+  expect(f.views.read(f.view).selection).toEqual(destination);
   f.selection.apply(f.view, catalog, { type: 'batch', index: 8 });
-  expect(f.views.read(f.view).selection).toEqual({ sourceId: a.source.id, batchIndex: 1 });
+  expect(f.views.read(f.view).selection).toEqual(destination);
 });
 
 test('preserves grid navigation and last numbered set while switching source tabs', () => {

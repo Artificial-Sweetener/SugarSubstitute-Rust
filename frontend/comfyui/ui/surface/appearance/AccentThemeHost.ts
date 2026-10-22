@@ -36,6 +36,7 @@ export class AccentThemeHost {
   readonly #report: (error: unknown) => void;
   readonly #style: HTMLStyleElement;
   readonly #observer: MutationObserver;
+  readonly #styleTexts = new WeakMap<HTMLStyleElement, string>();
   #configured = DEFAULT_ACCENT_COLOR;
   #signature = '';
   #queued = false;
@@ -61,13 +62,7 @@ export class AccentThemeHost {
     this.#style = documentRef.createElement('style');
     this.#style.id = 'sugarcubes-accent-theme';
     this.#observer = new MutationObserver((records) => {
-      if (
-        records.every(
-          (record) => record.target === this.#style || this.#style.contains(record.target),
-        )
-      )
-        return;
-      this.#schedule();
+      if (this.#paletteChanged(records)) this.#schedule();
     });
   }
 
@@ -115,6 +110,8 @@ export class AccentThemeHost {
         },
       });
     this.#document.head.append(this.#style);
+    for (const style of this.#document.head.querySelectorAll('style'))
+      this.#styleTexts.set(style, style.textContent);
     this.#document.head.addEventListener('load', this.#onStylesheetLoad, true);
     for (const root of [this.#document.documentElement, this.#document.body])
       this.#observer.observe(root, { attributes: true, attributeFilter: ['class', 'style'] });
@@ -144,6 +141,39 @@ export class AccentThemeHost {
     const app = isRecord(this.#app) ? this.#app : {};
     const canvas = isRecord(app.canvas) ? app.canvas : {};
     if (typeof canvas.setDirty === 'function') canvas.setDirty.call(canvas, true, true);
+  }
+
+  /** Ignore identical stylesheet rewrites from native widget rendering before forcing computed palette style. */
+  #paletteChanged(records: readonly MutationRecord[]): boolean {
+    let changed = false;
+    const styles = new Set<HTMLStyleElement>();
+    for (const record of records) {
+      if (record.target === this.#style || this.#style.contains(record.target)) continue;
+      if (
+        record.target === this.#document.documentElement ||
+        record.target === this.#document.body
+      ) {
+        changed = true;
+        continue;
+      }
+      const target = record.target instanceof Element ? record.target : record.target.parentElement;
+      const style = target?.closest('style');
+      if (style instanceof HTMLStyleElement) styles.add(style);
+      if (record.type === 'attributes' && style instanceof HTMLStyleElement) changed = true;
+      if (target instanceof HTMLLinkElement) changed = true;
+      for (const node of record.addedNodes) {
+        if (node instanceof HTMLStyleElement) styles.add(node);
+        else if (node instanceof HTMLLinkElement) changed = true;
+      }
+      for (const node of record.removedNodes)
+        if (node instanceof HTMLStyleElement || node instanceof HTMLLinkElement) changed = true;
+    }
+    for (const style of styles) {
+      const text = style.textContent;
+      if (this.#styleTexts.get(style) !== text) changed = true;
+      this.#styleTexts.set(style, text);
+    }
+    return changed;
   }
 
   /** Release presentation overrides while preserving saved preferences and external host styles. */

@@ -23,6 +23,7 @@ import {
 import type { ComfyNode } from '../types/graph.js';
 import type { UnknownRecord } from '../types/common.js';
 import { isRecord } from '../types/common.js';
+import { extractNativeVueNodeData } from './NativeVueNodeData.js';
 import {
   discoverComfyFrontendModules,
   type ComfyFrontendModule,
@@ -339,7 +340,7 @@ export async function loadComfyVueRuntime(
     },
     h: (component, props) => h(component, props),
     extractVueNodeData: (node) => {
-      const value = extractVueNodeData(node);
+      const value = extractNativeVueNodeData(node, extractVueNodeData);
       if (!isRecord(value)) {
         throw new NativeRendererCompatibilityError(
           'Comfy returned invalid native node render data.',

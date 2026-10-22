@@ -14,9 +14,11 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Select official controls at the browser boundary without duplicating native value policies. */
-import { createFluentNumericSlider, createBooleanCheckboxControl, createBooleanSegmentControls, createFinderInputControl, createWorkflowTab as createFluentWorkflowTab, createWorkflowTablist as createFluentWorkflowTablist, } from './FluentThemeRuntime.js';
-import { createSpectrumButton, createSpectrumSlider, createSpectrumCheckbox, createSpectrumSegments, createSpectrumFinderInput, createSpectrumTablist, createSpectrumActivationSwitch, } from './SpectrumThemeRuntime.js';
+import { createFluentNumericSlider, createBooleanCheckboxControl, createBooleanSegmentControls, createFinderInputControl, createFluentEditorField, createWorkflowTab as createFluentWorkflowTab, createWorkflowTablist as createFluentWorkflowTablist, } from './FluentThemeRuntime.js';
+import { createSpectrumButton, createSpectrumSlider, createSpectrumCheckbox, createSpectrumSegments, createSpectrumFinderInput, createSpectrumTablist, createSpectrumActivationSwitch, createSpectrumEditorField, } from './SpectrumThemeRuntime.js';
 import { readOwnedVisualStyle } from './VisualStyleBoundary.js';
+import { adoptEditorFieldPadding } from './EditorFieldControl.js';
+import { relocateControl } from '../../core/ControlPlacement.js';
 import { createNativeActivationSwitch, } from './ActivationSwitchControl.js';
 /** Select activation presentation without taking ownership of node state or history. */
 export function createActivationSwitch(document) {
@@ -57,6 +59,36 @@ export function createFinderInput(document) {
     return readOwnedVisualStyle(document) === 'spectrum'
         ? createSpectrumFinderInput(document)
         : createFinderInputControl(document);
+}
+/** Select the existing provider's input asset for an editor with its own canonical document. */
+export function createEditorField(document, style) {
+    const field = style === 'fluent'
+        ? createFluentEditorField(document)
+        : style === 'spectrum'
+            ? createSpectrumEditorField(document)
+            : createComfyEditorField(document);
+    field.root.dataset.scEditorField = style;
+    field.root.style.cssText +=
+        ';display:block;box-sizing:border-box;width:100%;height:100%;min-width:0;min-height:0';
+    return field;
+}
+/** Reuse Comfy's native multiline input asset and surrounding widget interaction frame. */
+function createComfyEditorField(document) {
+    const root = document.createElement('div');
+    root.className = 'comfy-multiline-input';
+    return {
+        root,
+        /** Preserve the same editable node when leaving a shadow-slot provider. */
+        attachEditor(editor) {
+            adoptEditorFieldPadding(root, root);
+            editor.removeAttribute('slot');
+            relocateControl(editor, root);
+        },
+        /** Native CodeMirror owns editing permission; expose it to host control presentation. */
+        setReadOnly(readOnly) {
+            root.setAttribute('aria-readonly', String(readOnly));
+        },
+    };
 }
 /** Create a workflow tab group whose adapter exposes stable child identity. */
 export function createWorkflowTablist(document) {

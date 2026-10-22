@@ -16,19 +16,20 @@
 /** Adapt identified native toolbar wrappers to the Substitute row without moving Vue-owned controls. */
 import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
 import { substituteToolbarCss } from './SubstituteToolbarStyles.js';
+const EXTENSIONS_ICON = '[class~="icon-[comfy--extensions-blocks]"]';
 /** Mark reversible native frame boundaries without adding graph or widget discovery. */
 export class SubstituteToolbarLayout {
     document;
     #presence;
     #style;
     #marked = new Map();
-    /** Observe only actual toolbar and workflow-selector mounts, independently of popup activity. */
+    /** Observe native toolbar controls, including the manager's independently mounted button. */
     constructor(document) {
         this.document = document;
         this.#style = document.createElement('style');
         this.#style.textContent = substituteToolbarCss;
         document.head.append(this.#style);
-        this.#presence = new HostSurfaceObserver(document.body, '.actionbar-container,button[aria-label="Workflow actions"]', () => this.#reconcile());
+        this.#presence = new HostSurfaceObserver(document.body, `.actionbar-container,button[aria-label="Workflow actions"],${EXTENSIONS_ICON}`, () => this.#reconcile());
         this.#reconcile();
     }
     /** Restore every native wrapper when Substitute mode or its frame mount is retired. */
@@ -48,6 +49,9 @@ export class SubstituteToolbarLayout {
             next.set(workflow.parentElement, 'data-sc-workflow-selector');
         if (bar) {
             next.set(bar, 'data-sc-substitute-toolbar');
+            const extensions = bar.parentElement?.querySelector(EXTENSIONS_ICON)?.closest('button');
+            if (extensions?.parentElement && !bar.contains(extensions))
+                next.set(extensions.parentElement, 'data-sc-substitute-extensions');
             let line = bar.parentElement;
             while (line && !line.contains(workflow))
                 line = line.parentElement;

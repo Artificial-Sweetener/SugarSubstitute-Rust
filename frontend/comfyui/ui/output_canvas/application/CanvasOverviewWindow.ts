@@ -102,7 +102,7 @@ export function canvasOverviewWindow(
           Object.freeze({
             key: JSON.stringify([selection.sourceId, index]),
             selection,
-            label: `${entry.summary.label} · ${preview ? 'Source preview' : `Image ${index + 1}`}`,
+            label: `${entry.summary.label} · ${preview ? 'Source preview' : `${item?.mediaKind === 'model' ? '3D model' : item?.mediaKind === 'video' ? 'Video' : item?.mediaKind === 'animated' ? 'Animation' : 'Image'} ${index + 1}`}`,
             item,
             preview,
           }),

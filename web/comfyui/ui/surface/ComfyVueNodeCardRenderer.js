@@ -19,7 +19,6 @@ import { isNativeWidgetPresented } from './NativeWidgetPresentation.js';
 import { isRecord } from '../types/common.js';
 import { findVueComponent, findVueComponents } from './ComfyVueTree.js';
 import { createCubeFaceNodeData, cubeFaceNodeHasPresentedWidgets, cubeFaceNodeHasVisibleWidgets, } from './CubeFaceNodePresentationPolicy.js';
-import { findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
 import { CubePromptTextareaScope } from './CubePromptTextareaScope.js';
 import { ComfyVueNodeHeaderAccessoryHost } from './ComfyVueNodeHeaderAccessoryHost.js';
 import { NativeProjectedNodeCollapse } from './NativeProjectedNodeCollapse.js';
@@ -60,14 +59,16 @@ export class ComfyVueNodeCardRenderer {
         const titleBoundary = new NativeProjectedNodeTitleBoundary(target, options.allowRename !== false);
         const disclosureMotion = new CardDisclosureMotion(target);
         const contentDisclosure = new NativeCardContentDisclosure(target, disclosureMotion);
-        const observer = new MutationObserver(() => {
+        const observer = new MutationObserver((records) => {
+            if (records.every((record) => record.target instanceof Element && record.target.closest('[data-sc-prompt-editor]')))
+                return;
             if (!disposed) {
                 this.#applyPresentation(target, node, headerAccessoryHost, promptTextareaScope, collapseHost, advancedInputsHost, scrollBoundary, options);
             }
         });
-        const renderCard = () => {
-            if (disposed)
-                return;
+        let pending = null;
+        /** Prepare one current native projection for both geometry admission and rendering. */
+        const prepareCard = () => {
             const nodeData = createCubeFaceNodeData(this.#runtime.extractVueNodeData(node), node, renderCard, options.allowCollapse);
             nodeData.widgets = projectNativeWidgetEdits(node, nodeData.widgets);
             for (const source of options.widgetSources ?? []) {
@@ -82,9 +83,20 @@ export class ComfyVueNodeCardRenderer {
             }
             // Promoted editor controls can be absent from Comfy's extracted Vue widget list.
             const widgets = [nodeData.widgets, nodeData.sugarcubesEditorWidgets].flatMap((value) => (Array.isArray(value) ? value : []));
-            contentDisclosure.reconcile([
-                ...new Set(widgets.flatMap((widget) => isRecord(widget) && typeof widget.name === 'string' ? [widget.name] : [])),
-            ].sort(), () => {
+            return {
+                nodeData,
+                widgets: [
+                    ...new Set(widgets.flatMap((widget) => isRecord(widget) && typeof widget.name === 'string' ? [widget.name] : [])),
+                ].sort(),
+            };
+        };
+        /** Consume the batch's prepared native data without repeating extraction or geometry reads. */
+        const renderCard = () => {
+            if (disposed)
+                return;
+            const { nodeData, widgets } = pending ?? prepareCard();
+            pending = null;
+            contentDisclosure.reconcile(widgets, () => {
                 // Comfy snapshots advanced footer state at setup instead of watching native node changes.
                 const vnodeValue = this.#runtime.h(this.#component, {
                     nodeData,
@@ -105,7 +117,10 @@ export class ComfyVueNodeCardRenderer {
         const collapseHost = new NativeProjectedNodeCollapse(target, node, renderCard, disclosureMotion);
         const advancedInputsHost = new NativeProjectedAdvancedInputs(target, node, renderCard, disclosureMotion);
         renderCard();
-        const releaseNativeRefresh = subscribeNativeNodeCardRefresh(target.ownerDocument, [node, ...(options.widgetSources ?? []).map((source) => source.node)], renderCard, () => contentDisclosure.prepare());
+        const releaseNativeRefresh = subscribeNativeNodeCardRefresh(target.ownerDocument, [node, ...(options.widgetSources ?? []).map((source) => source.node)], renderCard, () => {
+            pending = prepareCard();
+            contentDisclosure.prepare(pending.widgets);
+        });
         observer.observe(target, { childList: true, subtree: true });
         const mount = {
             refresh: renderCard,
@@ -186,7 +201,7 @@ export class ComfyVueNodeCardRenderer {
                 (options.widgetSources?.length ?? 0) > 0 ||
                 nativeRoot.dataset.cubeFaceBody))
             reconcileNativeBody(nativeRoot, hasPresented);
-        promptTextareaScope.reconcile(findCubeFacePromptWidget(node) !== null);
+        promptTextareaScope.reconcile(node, options.widgetSources);
         const widgetsVNode = findVueComponent(targetRecord._vnode, 'NodeWidgets');
         const widgetsRoot = resolveComponentElement(widgetsVNode);
         if (widgetsRoot)

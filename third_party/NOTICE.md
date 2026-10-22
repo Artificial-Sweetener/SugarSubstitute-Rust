@@ -1,5 +1,13 @@
 # Third-Party Notices
 
+## SugarSubstitute bundled prompt tags
+
+The complete Danbooru prompt-tag snapshot from SugarSubstitute is included in
+`frontend/comfyui/ui/prompt_editor/assets/danbooru-tags.txt` under GPL-3.0-or-later.
+Its pinned source revision and SHA-256 are recorded in `manifest.toml`; the license
+is included in `licenses/sugarsubstitute.LICENSE.txt`. The browser build embeds
+the dataset for built-in SugarPrompt tag completion.
+
 Vendored runtime assets are recorded in `manifest.toml`, with licenses under
 `licenses/`. The browser deployment includes this notice, the manifest, and
 the applicable license texts.
@@ -143,6 +151,10 @@ are preserved in `licenses/fluentui.LICENSE.txt` and
 the package's published upstream revision
 `44cf3fb9906b4f98243589e0b078e4df9ca6227b`.
 
+Prompt fields use the official Fluent TextArea and Adobe Spectrum Textfield
+components through the shared control factory. External editor slots retain the
+provider styles and interaction states while CodeMirror owns editable content.
+
 SugarCubes menus use Microsoft's official MenuList and MenuItem components.
 Their shared runtime bundle is recorded in the provenance manifest.
 
@@ -184,3 +196,17 @@ The orb action cluster uses Microsoft's Fluent panel-left artwork from Substitut
 The generation strip adapts Substitute's titlebar control geometry and painting under GPL-3.0-or-later. Its play icon is QFluent artwork (GPL-3.0-or-later); stop and next artwork are copied from Substitute's MIT-licensed icon collection. Pinned sources, hashes and runtime paths are recorded in the manifest.
 
 The generation queue segment uses QFluent's unmodified History SVG under GPL-3.0-or-later. Its source revision, hash and deployment path are recorded in the manifest.
+
+CodeMirror, Lezer, and their editing and style helpers are bundled with SugarPrompt. Their MIT license texts are shipped under `third_party/licenses/`; exact versions and the CodeMirror view patch are recorded in `manifest.toml`.
+
+- @codemirror/commands 6.11.1
+- @codemirror/language 6.12.4
+- @codemirror/state 6.7.6
+- @codemirror/view 6.43.13
+- @lezer/common 1.5.3
+- @lezer/highlight 1.2.5
+- @lezer/lr 1.4.10
+- @marijn/find-cluster-break 1.0.4
+- crelt 1.0.7
+- style-mod 4.1.4
+- w3c-keyname 2.2.8

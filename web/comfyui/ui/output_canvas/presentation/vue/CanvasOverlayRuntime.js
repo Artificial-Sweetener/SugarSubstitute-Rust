@@ -7,7 +7,7 @@ import {
 } from "../../../chunk-5KUSCYB6.js";
 import {
   CanvasOverlay
-} from "../../../chunk-OMMMFGR6.js";
+} from "../../../chunk-H5JLW7HD.js";
 import "../../../chunk-T26L5BHO.js";
 import "../../../chunk-WIEFPHCO.js";
 import "../../../chunk-CIRP6VLK.js";
@@ -23,6 +23,22 @@ import {
   h,
   shallowRef
 } from "../../../chunk-6PAJ5Y37.js";
+
+// frontend/comfyui/ui/output_canvas/presentation/CanvasMediaLabel.ts
+function canvasMediaLabel(kind) {
+  switch (kind) {
+    case "model":
+      return "3D model";
+    case "video":
+      return "video";
+    case "animated":
+      return "animation";
+    case "image":
+      return "image";
+    case "unsupported":
+      return "output";
+  }
+}
 
 // frontend/comfyui/ui/output_canvas/presentation/vue/CanvasOverlayRuntime.ts
 import { ContextMenu } from "../../../menus/ContextMenu.js";
@@ -139,7 +155,7 @@ function canvasAnnouncement(previous, current) {
   if (current.resource.state === "error" && (previous.resource.state !== "error" || previous.resource.message !== current.resource.message))
     return current.resource.message;
   if (!current.preview && current.resource.state === "ready" && current.selected && (previous.selected?.id !== current.selected.id || previous.resource.state !== "ready" || previous.preview))
-    return `${source?.label ?? "Output"}: image ${current.selected.batchIndex + 1} ready.`;
+    return `${source?.label ?? "Output"}: ${canvasMediaLabel(current.selected.mediaKind)} ${current.selected.batchIndex + 1} ready.`;
   if (previous.connected && !current.connected) return "Disconnected.";
   if (current.secondaryResource?.state === "error" && previous.secondaryResource?.state !== "error")
     return `B: ${current.secondaryResource.message}`;

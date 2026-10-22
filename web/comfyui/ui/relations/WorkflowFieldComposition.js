@@ -38,6 +38,7 @@ export function createWorkflowFieldHost(options) {
         palette: appearance.palette,
         sessions: options.sessions,
         activity: options.activity,
+        progress: options.progress,
         stackControls: options.stackControls,
         openOverrides: (trigger) => relations.openOverrideMenu(trigger),
         setOverridesInline: (inline) => relations.setOverridesInline(inline),

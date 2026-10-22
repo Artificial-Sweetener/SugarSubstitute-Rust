@@ -120,3 +120,13 @@ owner = "SugarCubes Cube serialization"
 justification = "The module cohesively builds validated Cube serialization output, including symbolization and deterministic fingerprints."
 review_by = 2026-11-30
 max_lines = 547
+
+[[waiver]]
+id = "SC-PROMPT-REORDER-MEASUREMENT"
+kind = "structural"
+rule = "STRUCT003"
+path = "frontend/sugarprompt/editor/src/reorder-measurement.ts"
+owner = "SugarPrompt native drag measurement"
+justification = "Reviewed the adopted 574-line mounted measurement owner and its source assessment REORDERMEASUREMENTOWNER001. The module owns one native measurement/resource lifetime: supported READ/WRITE scheduling, capture, finite edge scrolling and retirement. Geometry, source transformations, paint and gesture authority remain delegated to focused collaborators. Keeping this resource lifetime together preserves epoch and all-attempt cleanup invariants."
+review_by = 2027-01-10
+max_lines = 574

@@ -25,6 +25,7 @@ from ..cube_model import parse_canonical_cube_id
 from ..workflow import CanonicalWorkflow, EmbeddedCubeDefinition
 from ..workflow.semantic_hash import semantic_hash
 from .models import CubeForkRequest, CubeForkResult, CubeInstanceRebind
+from .definition_selection import select_saved_definition
 
 
 class ForkDefinitionRepository(Protocol):
@@ -47,13 +48,9 @@ class CubeForkService:
     ) -> CubeForkResult:
         """Persist a derivative before returning an optional instance rebind patch."""
 
-        source = workflow.definition_index().get(request.definition_id)
-        if source is None:
-            raise ValueError(
-                f"Embedded Cube definition '{request.definition_id}' is unavailable"
-            )
-        if source.semantic_hash != request.expected_semantic_hash:
-            raise ValueError("Embedded Cube definition changed after classification")
+        source = select_saved_definition(
+            workflow, request.definition_id, request.expected_semantic_hash
+        )
         if request.new_cube_id == source.cube_id:
             raise ValueError("Fork Cube identity must differ from its source")
         parsed = parse_canonical_cube_id(request.new_cube_id)
@@ -118,6 +115,7 @@ def _build_fork(
             semantic_hash=content_hash,
             provenance=provenance_record,
             payload=payload,
+            is_draft=False,
             document=document,
             native_subgraphs=source.native_subgraphs,
             native_node_definitions=source.native_node_definitions,

@@ -18,6 +18,7 @@ export const substituteToolbarCss = `
   :root[data-sc-substitute-frame] [data-sc-substitute-toolbar-menu] { margin-left:0; padding-top:0; gap:0;
     background:var(--comfy-menu-bg,#202020); }
   :root[data-sc-substitute-frame] [data-sc-workflow-selector],
+  :root[data-sc-substitute-frame] [data-sc-substitute-extensions],
   :root[data-sc-substitute-frame] [data-sc-substitute-workflow-column] { display:none!important; }
   :root[data-sc-substitute-frame] [data-sc-substitute-toolbar-line] { display:block; min-width:0; height:44px; min-height:44px;
     flex-shrink:0; overflow:visible; padding-left:62px; background:var(--comfy-menu-bg,#202020); }

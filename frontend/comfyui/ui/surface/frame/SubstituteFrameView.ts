@@ -24,6 +24,8 @@ import type { CubeStackFrameControls } from '../stack/CubeStackHost.js';
 import type { FrameWorkflowTab } from './ComfyFrameWorkflowAdapter.js';
 import type { WorkflowSessionId } from '../../execution/domain/ExecutionIdentity.js';
 import { createCubeAddIconElement } from '../CubeAddIcon.js';
+import { GenerationProgressView } from './GenerationProgressView.js';
+import type { WorkflowProgressSnapshot } from '../../execution/application/WorkflowProgressStore.js';
 
 export interface SubstituteFrameViewActions {
   readonly workflows: WorkflowTabsActions;
@@ -45,6 +47,7 @@ export class SubstituteFrameView {
   readonly #stackGlyph: HTMLElement;
   readonly #addGlyph: HTMLElement;
   readonly #stopStack: () => void;
+  readonly #progress: GenerationProgressView;
   #presented: readonly FrameWorkflowTab[] = [];
   #dark: boolean | null = null;
   #initialized = false;
@@ -55,6 +58,7 @@ export class SubstituteFrameView {
     private readonly actions: SubstituteFrameViewActions,
   ) {
     this.element = document.createElement('header');
+    this.#progress = new GenerationProgressView(document);
     this.element.className = 'sc-substitute-frame';
     this.element.setAttribute('data-sc-style-theme-root', '');
     this.#menu = new ContextMenu(document);
@@ -72,6 +76,10 @@ export class SubstituteFrameView {
         { label: 'Save as', select: () => actions.command('Comfy.SaveWorkflowAs') },
         { label: 'Export workflow', select: () => actions.command('Comfy.ExportWorkflow') },
         { label: '', separator: true },
+        {
+          label: 'Extensions',
+          select: () => actions.command('Comfy.Manager.CustomNodesManager.ShowCustomNodesMenu'),
+        },
         { label: 'Settings', select: () => actions.command('Comfy.ShowSettingsDialog') },
       ],
       actions.report,
@@ -157,6 +165,12 @@ export class SubstituteFrameView {
     overrides.append(this.#glyph('sc-orb-pin-icon', 'pin.svg'), chevron);
     cluster.append(this.#stackButton, overrides);
     this.element.append(this.#orb.element, previous, viewport, next, create, overflow, cluster);
+    this.element.append(this.#progress.element);
+  }
+
+  /** Refresh generation feedback independently of tab layout and focus. */
+  updateProgress(snapshot: WorkflowProgressSnapshot): void {
+    this.#progress.update(snapshot);
   }
 
   /** Retain tab identities through workflow and activity updates. */

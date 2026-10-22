@@ -190,7 +190,10 @@ export class WorkflowResultStore {
       revision: oldRevision + 1,
     });
     const carried =
-      !update.containsImages && inputPreview
+      !update.containsImages &&
+      !update.payload.videos.length &&
+      !update.payload.models.length &&
+      inputPreview
         ? previous.output.items.filter((item) => item.batchIndex < previous.payload.images.length)
         : [];
     this.#retain(session, update.source, provenance, payload, delivery, carried);
@@ -288,7 +291,7 @@ export class WorkflowResultStore {
     delivery: string,
     carried: readonly WorkflowOutputItem[] = [],
   ): void {
-    const media = [...payload.images, ...payload.videos];
+    const media = [...payload.images, ...payload.videos, ...payload.models];
     const items: WorkflowOutputItem[] = [];
     const preserved = new Map(carried.map((item) => [item.batchIndex, item]));
     media.forEach((entry, batchIndex) => {

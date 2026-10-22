@@ -21,6 +21,7 @@ from collections.abc import Callable, Iterable
 
 from ..workflow import CanonicalWorkflow
 from .classification import classify_workflow
+from .definition_selection import select_saved_definition
 from .models import (
     CatalogCubeArtifact,
     CubeLibraryClassReport,
@@ -55,13 +56,9 @@ class CubeLibraryClassService:
     ) -> CaptureCubeResult:
         """Capture exact content without forking identity or rebinding instances."""
 
-        definition = workflow.definition_index().get(request.definition_id)
-        if definition is None:
-            raise ValueError(
-                f"Embedded Cube definition '{request.definition_id}' is unavailable"
-            )
-        if definition.semantic_hash != request.expected_semantic_hash:
-            raise ValueError("Embedded Cube definition changed after classification")
+        definition = select_saved_definition(
+            workflow, request.definition_id, request.expected_semantic_hash
+        )
         write = self._captured.capture(definition)
         refreshed = self.classify_workflow(workflow)
         classification = next(

@@ -19,19 +19,22 @@ import { canvasImageBytes, } from '../domain/CanvasImageResource.js';
 export class BrowserCanvasImageLoader {
     document;
     urls;
+    posters;
     #releases = new Set();
     #urls = new Set();
     #disposed = false;
     /** Inject the attachment document and URL allocator for explicit window ownership. */
-    constructor(document, urls) {
+    constructor(document, urls, posters) {
         this.document = document;
         this.urls = urls;
+        this.posters = posters;
     }
     /** Start one admitted ordinary image without copying pixels or retaining preview bytes. */
     start(input) {
         if (this.#disposed)
             throw new Error('Canvas image loader is disposed.');
         const image = this.document.createElement('img');
+        const controller = new AbortController();
         image.decoding = 'async';
         image.draggable = false;
         image.alt = '';
@@ -49,6 +52,7 @@ export class BrowserCanvasImageLoader {
             if (released)
                 return;
             released = true;
+            controller.abort();
             image.removeEventListener('load', loaded);
             image.removeEventListener('error', errored);
             image.removeAttribute('src');
@@ -102,14 +106,17 @@ export class BrowserCanvasImageLoader {
         this.#releases.add(cancel);
         image.addEventListener('load', loaded);
         image.addEventListener('error', errored);
-        try {
-            if (input.payload.kind === 'preview') {
-                url = this.urls.create(input.payload.blob);
+        /** Decode only an admitted, still-owned source or bounded captured poster. */
+        const assign = (source) => {
+            if (released)
+                return;
+            if (source instanceof Blob) {
+                url = this.urls.create(source);
                 this.#urls.add(url);
                 image.src = url;
             }
             else {
-                const target = new URL(input.payload.url, this.document.baseURI);
+                const target = new URL(source, this.document.baseURI);
                 const origin = new URL(this.document.baseURI).origin;
                 if (!['http:', 'https:'].includes(target.protocol) || target.origin !== origin)
                     throw new Error('Canvas file URL must use the current host origin.');
@@ -117,6 +124,18 @@ export class BrowserCanvasImageLoader {
             }
             if (typeof image.decode === 'function')
                 void image.decode().then(accept, reject);
+        };
+        try {
+            if (input.payload.kind === 'media') {
+                if (!this.posters)
+                    throw new Error('Canvas media previews are unavailable.');
+                void this.posters
+                    .read(input.payload.item, input.payload.url, controller.signal)
+                    .then((blob) => assign(blob), reject)
+                    .catch(reject);
+            }
+            else
+                assign(input.payload.kind === 'preview' ? input.payload.blob : input.payload.url);
         }
         catch (error) {
             reject(error);

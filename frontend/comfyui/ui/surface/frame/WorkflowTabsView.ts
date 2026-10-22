@@ -54,6 +54,7 @@ export class WorkflowTabsView {
   #tabWidth = WORKFLOW_TAB_WIDTH;
   #menuRequest = 0;
   #menuTarget: WorkflowSessionId | null = null;
+  #paintKey = '';
 
   /** Bind interaction intents without retaining host workflow objects in presentation. */
   constructor(
@@ -88,6 +89,10 @@ export class WorkflowTabsView {
     unread: (id: WorkflowSessionId) => boolean,
     animate = true,
   ): void {
+    const activity = tabs.map((tab) => unread(tab.id) && !tab.selected);
+    const paintKey = JSON.stringify([tabs, activity]);
+    if (paintKey === this.#paintKey) return;
+    this.#paintKey = paintKey;
     const positions = this.#drag.beforeUpdate(tabs.map((tab) => `sc-workflow-${tab.id}`));
     this.#projecting = true;
     this.#order = tabs;
@@ -111,7 +116,7 @@ export class WorkflowTabsView {
       if (view.title.textContent !== tab.title) view.title.textContent = tab.title;
       view.element.title = tab.title;
       view.element.toggleAttribute('data-modified', tab.modified);
-      const nextUnread = unread(tab.id) && !tab.selected;
+      const nextUnread = activity[index] ?? false;
       view.element.toggleAttribute('data-unread', nextUnread);
       if (nextUnread && !view.unread && animate) view.element.setAttribute('data-shimmer', '');
       if (!nextUnread) view.element.removeAttribute('data-shimmer');

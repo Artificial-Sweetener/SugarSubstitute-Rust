@@ -40,8 +40,9 @@ export function applyOwnedTheme(
     return;
   }
   ensureThemeStyles(element.ownerDocument);
-  element.dataset.scTheme = style;
-  element.dataset.scColorScheme = dark ? 'dark' : 'light';
+  if (element.dataset.scTheme !== style) element.dataset.scTheme = style;
+  const scheme = dark ? 'dark' : 'light';
+  if (element.dataset.scColorScheme !== scheme) element.dataset.scColorScheme = scheme;
 }
 
 /** Share native-card geometry while giving Spectrum its official foundations and rounded surfaces. */

@@ -37,7 +37,7 @@ def classify_workflow(
     workflow: CanonicalWorkflow,
     artifacts: Iterable[CatalogCubeArtifact],
 ) -> CubeLibraryClassReport:
-    """Compare every embedded definition while preserving embedded authority."""
+    """Compare saved embedded definitions while preserving workflow authority."""
 
     candidates: dict[tuple[str, str], list[CatalogCubeArtifact]] = defaultdict(list)
     for artifact in artifacts:
@@ -52,6 +52,7 @@ def classify_workflow(
             tuple(sorted(instance_ids.get(definition.definition_id, ()))),
         )
         for definition in workflow.definitions
+        if not definition.is_draft
     )
     return CubeLibraryClassReport(definitions=classifications)
 

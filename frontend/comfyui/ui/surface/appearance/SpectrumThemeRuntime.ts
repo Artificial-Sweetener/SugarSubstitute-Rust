@@ -15,7 +15,13 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Adapt official Adobe Spectrum components and Spectrum 2 foundations at the browser boundary. */
 import { ButtonBase } from '@spectrum-web-components/button/src/ButtonBase.js';
-import { css, type CSSResultArray } from '@spectrum-web-components/base';
+import {
+  css,
+  html,
+  type CSSResultArray,
+  type TemplateResult,
+  type PropertyValues,
+} from '@spectrum-web-components/base';
 import '@spectrum-web-components/action-button/sp-action-button.js';
 import '@spectrum-web-components/menu/sp-menu.js';
 import '@spectrum-web-components/menu/sp-menu-item.js';
@@ -38,6 +44,8 @@ import type { NumericSliderControl } from './NativeNumericControls.js';
 import type { BooleanCheckboxControl } from './NativeToggleRows.js';
 import type { BooleanSegmentsControls } from './NativeBooleanSegments.js';
 import type { FinderInputControl } from './FinderControls.js';
+import { adoptEditorFieldPadding, type EditorFieldControl } from './EditorFieldControl.js';
+import { relocateControl } from '../../core/ControlPlacement.js';
 import type { ActivationSwitchControl } from './ActivationSwitchControl.js';
 import { activationSwitchGeometry } from './ActivationSwitchGeometry.js';
 
@@ -227,6 +235,60 @@ class SpectrumFinderInput extends Textfield {
   connectedMoveCallback(): void {}
 }
 
+/** Retain Adobe's text-area implementation and stylesheet around one external editable surface. */
+class SpectrumEditorField extends Textfield {
+  /** Adapt layout only; Adobe continues to own border, fill and interaction paint. */
+  static override get styles(): CSSResultArray {
+    return [
+      ...super.styles,
+      css`
+        #textfield {
+          block-size: 100%;
+          min-block-size: 0;
+        }
+        textarea.input,
+        input.input {
+          display: none;
+        }
+        slot[name='editor'] {
+          display: block;
+          grid-area: 1/1;
+          min-width: 0;
+          min-height: 0;
+          height: 100%;
+          padding: 0;
+          overflow: visible;
+        }
+      `,
+    ];
+  }
+  /** Forward native editor focus into Adobe's existing focused-state owner. */
+  constructor() {
+    super();
+    this.multiline = true;
+    this.addEventListener('focusin', () => this.onFocus());
+    this.addEventListener('focusout', (event) => {
+      if (!(event.relatedTarget instanceof Node) || !this.contains(event.relatedTarget))
+        this.onBlur(event);
+    });
+  }
+  /** Extend the official field content without replacing its visual or validation implementation. */
+  protected override renderField(): TemplateResult {
+    return html`${super.renderField()}<slot class="input" name="editor"></slot>`;
+  }
+  /** Read Adobe's actual input spacing after rendering, including native size and validation changes. */
+  protected override updated(changes: PropertyValues): void {
+    super.updated(changes);
+    if (
+      !this.style.getPropertyValue('--sc-editor-content-padding') ||
+      ['size', 'quiet', 'valid', 'invalid'].some((property) => changes.has(property))
+    )
+      adoptEditorFieldPadding(this, this.inputElement);
+  }
+  /** Preserve the connected field when the renderer moves its native card. */
+  connectedMoveCallback(): void {}
+}
+
 if (!customElements.get('sc-spectrum-slider'))
   customElements.define('sc-spectrum-slider', SpectrumSlider);
 if (!customElements.get('sc-spectrum-tabs'))
@@ -235,12 +297,35 @@ if (!customElements.get('sc-spectrum-workflow-tab'))
   customElements.define('sc-spectrum-workflow-tab', SpectrumWorkflowTab);
 if (!customElements.get('sc-spectrum-search'))
   customElements.define('sc-spectrum-search', SpectrumFinderInput);
+if (!customElements.get('sc-spectrum-editor-field'))
+  customElements.define('sc-spectrum-editor-field', SpectrumEditorField);
 if (!customElements.get('sc-spectrum-menu-item'))
   customElements.define('sc-spectrum-menu-item', SpectrumMenuItem);
 if (!customElements.get('sc-spectrum-switch'))
   customElements.define('sc-spectrum-switch', SpectrumActivationSwitch);
 
 const base = spectrumRootTokens(core.cssText) + ';' + spectrumRootTokens(scale.cssText);
+
+/** Instantiate Adobe's actual multiline field without creating a second editing model. */
+export function createSpectrumEditorField(documentRef: Document): EditorFieldControl {
+  const field = documentRef.createElement('sc-spectrum-editor-field');
+  if (!(field instanceof SpectrumEditorField))
+    throw new TypeError('The Spectrum editor field is not registered.');
+  return {
+    root: field,
+    /** Keep the native editor in light DOM while Adobe's field controls its surrounding presentation. */
+    attachEditor(editor): void {
+      editor.slot = 'editor';
+      relocateControl(editor, field);
+      field.focused = !field.readonly && field.contains(documentRef.activeElement);
+    },
+    /** Reflect permission through Adobe's native readonly property. */
+    setReadOnly(readOnly): void {
+      field.readonly = readOnly;
+      field.focused = !readOnly && field.contains(documentRef.activeElement);
+    },
+  };
+}
 const palettes = {
   dark: spectrumRootTokens(dark.cssText),
   light: spectrumRootTokens(light.cssText),

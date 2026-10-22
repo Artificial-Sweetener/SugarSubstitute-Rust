@@ -69,6 +69,15 @@ test('allows shared ContextMenu aliases and ordinary feature event delegation', 
   ).toEqual([]);
 });
 
+test('allows the shared floating owner to construct its own native tooltip transport', () => {
+  expect(
+    audit(
+      'export class FloatingSurface { constructor(element:HTMLElement) {} } export function createPlane(element:HTMLElement) { return new FloatingSurface(element); }',
+      policy.floating_surface,
+    ),
+  ).toEqual([]);
+});
+
 test.each([
   'class ContextMenu {} new ContextMenu();',
   'declare const LiteGraph:{ContextMenu:new()=>object};const Foreign=LiteGraph.ContextMenu;new Foreign();',

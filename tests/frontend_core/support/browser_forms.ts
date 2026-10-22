@@ -64,7 +64,10 @@ class BrowserFormInternals {
   }
 }
 
-if (typeof HTMLElement.prototype.attachInternals !== 'function')
+if (
+  typeof HTMLElement !== 'undefined' &&
+  typeof HTMLElement.prototype.attachInternals !== 'function'
+)
   Object.defineProperty(HTMLElement.prototype, 'attachInternals', {
     configurable: true,
     /** Provide only the unavailable browser capability; production owners remain real. */

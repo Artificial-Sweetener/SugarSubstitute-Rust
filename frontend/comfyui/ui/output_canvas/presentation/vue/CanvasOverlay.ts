@@ -75,7 +75,9 @@ export const CanvasOverlay = defineComponent({
                 ? h(
                     'button',
                     { type: 'button', onClick: () => props.send({ type: 'retry' }) },
-                    'Retry image',
+                    snapshot.selected && snapshot.selected.mediaKind !== 'image'
+                      ? 'Retry output'
+                      : 'Retry image',
                   )
                 : null,
               (snapshot.resource.canAdmitLargeImage ||

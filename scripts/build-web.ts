@@ -101,6 +101,7 @@ async function bundleVueSurface(
       outdir: outputRoot,
       bundle: true,
       splitting: true,
+      loader: { '.txt': 'text' },
       external: ['/scripts/*'],
       plugins: [browserSharedModulePlugin(sourceRoot, sharedRoot, sharedOwners)],
       write: false,
@@ -165,6 +166,24 @@ async function main(): Promise<void> {
     'menus/ContextMenu.js',
     'menus/FloatingSurface.js',
   ]);
+  await bundleVueSurface('prompt_editor/runtime', [
+    'menus/ContextMenu.js',
+    'menus/FloatingSurface.js',
+    'surface/appearance/ThemeService.js',
+    'surface/appearance/ControlFactory.js',
+  ]);
+  await build({
+    entryPoints: [
+      path.join(repositoryRoot, 'frontend/comfyui/ui/prompt_editor/PromptLoraCatalog.ts'),
+    ],
+    outfile: path.join(generatedRoot, 'comfyui/ui/prompt_editor/PromptLoraCatalog.js'),
+    bundle: true,
+    format: 'esm',
+    platform: 'browser',
+    target: 'es2022',
+    legalComments: 'inline',
+  });
+  rmSync(path.join(generatedRoot, 'sugarprompt'), { force: true, recursive: true });
   await bundleVueSurface(
     ['surface/stack/vue', 'picker/vue', 'output_canvas/presentation/vue'],
     ['menus/ContextMenu.js', 'menus/FloatingSurface.js'],

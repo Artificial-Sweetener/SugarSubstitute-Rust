@@ -27,7 +27,10 @@ from pathlib import Path, PurePosixPath
 from .model import ArchitecturePolicy, Diagnostic, Severity
 
 _TYPESCRIPT_MODULE_PATTERN = re.compile(
-    r"(?:\b(?:import|export)\b[\s\S]*?\bfrom\s*|\bimport\s*)"
+    r"^[ \t]*(?:(?:import|export)\s+(?:type\s+)?"
+    r"(?:\*(?:\s+as\s+[\w$]+)?|\{[^}]*\}|"
+    r"[\w$]+(?:\s*,\s*(?:\{[^}]*\}|\*\s+as\s+[\w$]+))?)"
+    r"\s+from\s*|import\s*)"
     r"[\"'](?P<module>[^\"']+)[\"']",
     re.MULTILINE,
 )

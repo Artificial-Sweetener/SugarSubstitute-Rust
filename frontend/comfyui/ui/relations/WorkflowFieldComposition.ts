@@ -19,6 +19,7 @@ import { AppearanceHost } from '../surface/appearance/AppearanceHost.js';
 import { WorkflowEditorNavigationHost } from '../surface/WorkflowEditorNavigationHost.js';
 import { SubstituteFrameHost } from '../surface/frame/SubstituteFrameHost.js';
 import type { WorkflowOutputActivity } from '../execution/application/WorkflowOutputActivity.js';
+import type { WorkflowProgressStore } from '../execution/application/WorkflowProgressStore.js';
 import type { CubeStackFrameControls } from '../surface/stack/CubeStackHost.js';
 import { SettingsWorkspaceHost } from '../settings/SettingsWorkspaceHost.js';
 
@@ -27,6 +28,7 @@ export interface WorkflowFieldHostOptions
   reportRelationError(error: unknown): void;
   reportPresentationError(error: unknown): void;
   activity: WorkflowOutputActivity;
+  progress: WorkflowProgressStore;
   stackControls(): CubeStackFrameControls;
 }
 
@@ -54,6 +56,7 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
     palette: appearance.palette,
     sessions: options.sessions,
     activity: options.activity,
+    progress: options.progress,
     stackControls: options.stackControls,
     openOverrides: (trigger) => relations.openOverrideMenu(trigger),
     setOverridesInline: (inline) => relations.setOverridesInline(inline),

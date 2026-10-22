@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Bridge Nodes 1 prompt textarea height into renderer-neutral widget measurement. */
+import { mountPromptEditorSurface, refreshPromptEditorSurface, } from '../prompt_editor/PromptEditorSurface.js';
 import { CubePromptTextareaAutosizer } from './CubePromptTextareaAutosizer.js';
 import { clearCubePromptWidgetHeight, setCubePromptWidgetHeight, } from './CubePromptWidgetHeightStore.js';
 const DEFAULT_WIDGET_MARGIN = 10;
@@ -21,25 +22,45 @@ const DEFAULT_WIDGET_MARGIN = 10;
 export class CubePromptDomWidgetSizingHost {
     #autosizer;
     #onGeometryChange;
+    #hostReadOnly;
     #widgets = new Map();
+    #editors = new Map();
     /** Bind widget allocation updates to one document and geometry owner. */
-    constructor(documentRef, onGeometryChange) {
+    constructor(documentRef, onGeometryChange, hostReadOnly) {
         this.#autosizer = new CubePromptTextareaAutosizer(documentRef);
         this.#onGeometryChange = onGeometryChange;
+        this.#hostReadOnly = hostReadOnly;
     }
     /** Reconcile one mounted element with its current semantic prompt widget. */
-    reconcile(element, widget) {
+    reconcile(element, widget, node) {
         const textarea = asTextarea(element);
         if (!textarea || !widget) {
             this.release(element);
             return;
         }
         const existing = this.#widgets.get(textarea);
+        const mounted = this.#editors.get(textarea);
+        if (mounted && mounted.surface.widget === widget) {
+            refreshPromptEditorSurface(mounted.surface);
+            return;
+        }
         if (existing === widget)
             return;
         if (existing)
             this.release(textarea);
         this.#widgets.set(textarea, widget);
+        const surface = {
+            node,
+            widget,
+            textarea,
+            geometryChanged: this.#onGeometryChange,
+            hostReadOnly: this.#hostReadOnly,
+        };
+        const release = mountPromptEditorSurface(surface);
+        if (release) {
+            this.#editors.set(textarea, { surface, release });
+            return;
+        }
         this.#autosizer.bind(textarea, (contentHeight) => {
             const margin = finiteNonNegative(widget.margin) ?? DEFAULT_WIDGET_MARGIN;
             if (setCubePromptWidgetHeight(widget, contentHeight + margin * 2)) {
@@ -55,8 +76,12 @@ export class CubePromptDomWidgetSizingHost {
         const widget = this.#widgets.get(textarea);
         if (!widget)
             return;
+        const mounted = this.#editors.get(textarea);
+        mounted?.release();
+        this.#editors.delete(textarea);
         this.#autosizer.unbind(textarea);
-        clearCubePromptWidgetHeight(widget);
+        if (!mounted)
+            clearCubePromptWidgetHeight(widget);
         this.#widgets.delete(textarea);
     }
     /** Restore all graph widgets and browser resources. */

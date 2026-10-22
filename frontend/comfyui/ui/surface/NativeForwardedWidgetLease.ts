@@ -29,8 +29,11 @@ export class NativeForwardedWidgetLease {
       if (!internal || !owner) continue;
       let lastValue = internal.value;
       let active = true;
+      let pending = false;
       const forward = (): void => {
-        if (!active || lastValue === internal.value) return;
+        if (!active || !pending) return;
+        pending = false;
+        if (lastValue === internal.value) return;
         lastValue = internal.value;
         const previous = owner.value;
         if (previous === internal.value) return;
@@ -40,7 +43,17 @@ export class NativeForwardedWidgetLease {
         if (typeof changed === 'function')
           changed.call(source.node, source.name, owner.value, previous, owner);
       };
-      const afterNativeEdit = (): void => queueMicrotask(() => queueMicrotask(forward));
+      const afterNativeEdit = (event: Event): void => {
+        const element = internal.element;
+        if (
+          !(element instanceof HTMLElement) ||
+          !(event.target instanceof Node) ||
+          !element.contains(event.target)
+        )
+          return;
+        pending = true;
+        queueMicrotask(() => queueMicrotask(forward));
+      };
       target.addEventListener('input', afterNativeEdit, true);
       target.addEventListener('change', afterNativeEdit, true);
       this.#release.push(() => {

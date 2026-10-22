@@ -33,7 +33,7 @@ import type { CanvasInspectionStore } from '../application/CanvasInspectionStore
 import type { CanvasSelectionController } from '../application/CanvasSelectionController.js';
 import { CanvasStatusPublisher } from '../application/CanvasStatusPublisher.js';
 import type { CanvasViewRegistry } from '../application/CanvasViewRegistry.js';
-import { canvasCameraGeometry } from '../domain/CanvasCamera.js';
+import { inspectBrowserCanvasFrame } from './BrowserCanvasInspection.js';
 import type { CanvasCatalogSnapshot } from '../domain/CanvasCatalog.js';
 import type { CanvasAttachmentAddress } from '../domain/CanvasIdentity.js';
 import type { CanvasImageLoadPort } from '../domain/CanvasImageResource.js';
@@ -65,6 +65,10 @@ import {
   BrowserCanvasMediaActions,
   type BrowserCanvasMediaOptions,
 } from './BrowserCanvasMediaActions.js';
+import { BrowserCanvasMediaDetail } from './BrowserCanvasMediaDetail.js';
+import { BrowserCanvasMediaSessions } from './BrowserCanvasMediaSessions.js';
+import { ComfyCanvasModelRuntime, type CanvasModelRuntime } from './ComfyCanvasModelRuntime.js';
+import { isRecord } from '../../types/common.js';
 
 export interface BrowserCanvasAttachmentOptions {
   readonly address: CanvasAttachmentAddress;
@@ -76,6 +80,8 @@ export interface BrowserCanvasAttachmentOptions {
   readonly frames: CanvasFrameClock;
   readonly loader: CanvasImageLoadPort<BrowserCanvasImagePayload, HTMLImageElement>;
   readonly logger: Pick<Console, 'error'>;
+  readonly models?: CanvasModelRuntime;
+  readonly mediaSessions?: BrowserCanvasMediaSessions;
   /** Read the authoritative active catalog only at result/navigation boundaries. */
   catalog(): CanvasCatalogSnapshot | null;
   /** Check the fixed attachment and workflow generation without graph traversal. */
@@ -109,6 +115,7 @@ export class BrowserCanvasAttachment {
   readonly #input: BrowserCanvasInput;
   readonly #drag: BrowserCanvasDrag;
   readonly #media: BrowserCanvasMediaActions;
+  readonly #detail: BrowserCanvasMediaDetail;
   readonly #stopTransfer: () => void;
   readonly #geometry: BrowserCanvasGeometry;
   readonly #camera: CanvasCameraController;
@@ -148,6 +155,25 @@ export class BrowserCanvasAttachment {
     overlay.className = 'sc-output-overlay-root';
     element.append(this.viewport, overlay);
     this.#images = new BrowserCanvasImages(this.viewport, options.frames);
+    this.#detail = new BrowserCanvasMediaDetail(this.viewport, {
+      models:
+        options.models ??
+        new ComfyCanvasModelRuntime(() =>
+          isRecord(document.defaultView) ? document.defaultView.comfyAPI : null,
+        ),
+      sessions: options.mediaSessions ?? new BrowserCanvasMediaSessions(),
+      clock: options.clock,
+      url: options.url,
+      changed: () => {
+        if (this.#ready) this.#status.changed(true);
+      },
+      report: (error) =>
+        options.logger.error('SugarCubes output media could not be displayed.', {
+          error,
+          itemId: this.#plan.primary?.item?.id,
+          sourceId: this.#plan.primary?.item?.provenance.sourceId,
+        }),
+    });
     this.#overview = new BrowserCanvasOverview(
       element,
       options.frames,
@@ -255,8 +281,12 @@ export class BrowserCanvasAttachment {
         ],
       },
       accepts: () => !this.#disposed && options.accepts(),
-      apply: (command) =>
-        applyBrowserCanvasCommand(command, {
+      apply: (command) => {
+        if (command.type === 'retry' && this.#detail.status()) {
+          this.#detail.retry(this.#plan, this.#surface?.visible === true);
+          return true;
+        }
+        return applyBrowserCanvasCommand(command, {
           plan: this.#plan,
           catalog: this.#catalog,
           camera: this.#camera,
@@ -266,7 +296,8 @@ export class BrowserCanvasAttachment {
           snapshot: command.type === 'comparison' ? this.#snapshot() : this.port.read(),
           open: options.open,
           media: this.#media,
-        }),
+        });
+      },
       geometry: (geometry) => this.#resize(geometry),
       release: () => this.dispose(),
       report: options.report,
@@ -276,6 +307,7 @@ export class BrowserCanvasAttachment {
       () => this.#media.dispose(),
       this.#stopTransfer,
       () => this.#images.dispose(),
+      () => this.#detail.dispose(),
       () => this.#overview.dispose(),
       () => this.#browserResources.dispose(),
       () => this.#status.dispose(),
@@ -294,7 +326,7 @@ export class BrowserCanvasAttachment {
       cleanup.push(() => this.#overlay.dispose());
       this.#input = new BrowserCanvasInput(this.viewport, {
         outbound: (event) => this.#drag.allows(event),
-        contains: (point) => this.#images.contains(point),
+        contains: (point) => !this.#detail.status() && this.#images.contains(point),
         interrupt: () => this.#camera.interrupt(),
         pan: (delta) => {
           this.#camera.pan(delta);
@@ -373,9 +405,11 @@ export class BrowserCanvasAttachment {
     this.#images.wipe(this.#plan.view.comparison);
     this.#camera.comparison(Boolean(this.#plan.view.comparison));
     const overview = this.#plan.view.mode === 'overview';
+    this.#detail.reconcile(this.#plan, this.#surface?.visible === true);
     this.element.classList.toggle('sc-output-overview-mode', overview);
     this.#browserResources.reconcile(this.#plan);
     this.#overview.reconcile({ ...catalog, entries: this.#plan.grid }, overview);
+    if (this.#detail.status()) this.#resourcesChanged();
     const view = this.#plan.view;
     const signature = JSON.stringify([
       view.selection,
@@ -421,6 +455,7 @@ export class BrowserCanvasAttachment {
     return {
       ...this.#browserResources.resources.diagnostics(),
       renderFrames: this.#images.pendingFrames,
+      ...this.#detail.diagnostics(),
     };
   }
 
@@ -440,6 +475,7 @@ export class BrowserCanvasAttachment {
     this.#camera.dispose();
     this.#overlay.dispose();
     this.#images.dispose();
+    this.#detail.dispose();
     this.#overview.dispose();
     this.#browserResources.dispose();
     this.options.disposeLoader();
@@ -479,7 +515,7 @@ export class BrowserCanvasAttachment {
     this.#browserResources.measured();
     const images = this.#browserResources.resources.read();
     this.#overview.images(images);
-    if (this.#plan.view.mode === 'overview') {
+    if (this.#plan.view.mode === 'overview' || this.#detail.status()) {
       this.#images.images(null, null);
       this.#drag.reconcile();
       this.#input.cancel();
@@ -491,22 +527,8 @@ export class BrowserCanvasAttachment {
     const secondary = images.find((slot) => slot.slot === 'secondary')?.frame ?? null;
     this.#images.images(primary, secondary);
     this.#drag.reconcile();
-    const basis = primary ?? secondary;
-    const surface = this.#surface;
-    const geometry =
-      surface?.visible && basis
-        ? canvasCameraGeometry(
-            basis.dimensions,
-            surface.viewport,
-            surface.physicalPixelsPerCssPixel,
-          )
-        : null;
-    if (basis && geometry)
-      this.#camera.show(basis.selection, geometry, basis.runOrder, basis.previewLane);
-    else {
+    if (!inspectBrowserCanvasFrame(this.#camera, primary ?? secondary, this.#surface))
       this.#input.cancel();
-      this.#camera.suspend();
-    }
     this.#status.changed();
   }
 
@@ -515,6 +537,8 @@ export class BrowserCanvasAttachment {
     this.#surface = surface;
     this.#drag.reconcile();
     this.#browserResources.active(surface.visible);
+    this.#detail.reconcile(this.#plan, surface.visible);
+    this.#detail.resize();
     this.#overview.resize();
     this.#resourcesChanged();
   }
@@ -540,6 +564,7 @@ export class BrowserCanvasAttachment {
       this.#sources,
       this.#browserResources.preparing,
       this.#media.profile(),
+      this.#detail.status(),
     );
   }
 }

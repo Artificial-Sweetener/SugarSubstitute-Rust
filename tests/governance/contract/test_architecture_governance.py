@@ -25,7 +25,11 @@ import pytest
 from tools.architecture.checker import check_repository
 from tools.architecture.registry import RegistryError, load_waivers
 from tools.architecture.registry import load_policy
-from tools.architecture.scanner import source_fingerprint, source_paths
+from tools.architecture.scanner import (
+    source_fingerprint,
+    source_paths,
+    _typescript_imports,
+)
 from tools.architecture.system_git_policy import scan_system_git_dependencies
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -381,3 +385,25 @@ next_limit = 5
         assert "requires debt and next_limit" in str(error)
     else:
         raise AssertionError("Malformed remediation waiver unexpectedly loaded")
+
+
+def test_typescript_imports_do_not_cross_domain_declarations() -> None:
+    """Keep exported domain declarations and from/to data keys outside import discovery."""
+
+    source = """
+import { source } from './source.js';
+export interface Replacement { readonly range: { from: number; to: number } }
+export function prepare(): readonly string[] { return ['from', 'to']; }
+export type Result = 'ready' | 'rejected';
+export { external } from 'vendor';
+import './side-effect.js';
+const load = () => import('./dynamic.js');
+"""
+    assert _typescript_imports("frontend/domain/replacement.ts", source) == frozenset(
+        {
+            "frontend/domain/source",
+            "node_modules/vendor",
+            "frontend/domain/side-effect",
+            "frontend/domain/dynamic",
+        }
+    )

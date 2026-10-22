@@ -125,23 +125,9 @@ def _read_definitions(
             f"{path}.extra.sugarcubes_cube",
             "workflow.invalid_cube_definition",
         )
-        cube_id = _require_string(
-            metadata.get("cube_id"),
-            f"{path}.extra.sugarcubes_cube.cube_id",
-            "workflow.invalid_cube_definition",
-        )
-        try:
-            parse_canonical_cube_id(cube_id)
-        except CubeIdentityError as exc:
-            raise CanonicalWorkflowError(
-                "workflow.invalid_cube_identity",
-                f"{path}.extra.sugarcubes_cube.cube_id",
-                str(exc),
-            ) from exc
-        cube_version = _require_string(
-            metadata.get("cube_version"),
-            f"{path}.extra.sugarcubes_cube.cube_version",
-            "workflow.invalid_cube_definition",
+        is_draft = extra["sugarcubes_kind"] == "cube_draft"
+        cube_id, cube_version = _read_definition_identity(
+            metadata, f"{path}.extra.sugarcubes_cube", is_draft=is_draft
         )
         provenance_value = metadata.get("provenance")
         provenance = (
@@ -150,11 +136,15 @@ def _read_definitions(
             else None
         )
         copied_definition = deepcopy(dict(definition))
-        document = _read_embedded_document(
-            extra,
-            cube_id=cube_id,
-            cube_version=cube_version,
-            path=path,
+        document = (
+            None
+            if is_draft
+            else _read_embedded_document(
+                extra,
+                cube_id=cube_id,
+                cube_version=cube_version,
+                path=path,
+            )
         )
         result[definition_id] = EmbeddedCubeDefinition(
             definition_id=definition_id,
@@ -164,11 +154,50 @@ def _read_definitions(
             semantic_hash=semantic_hash(document or copied_definition),
             provenance=provenance,
             payload=copied_definition,
+            is_draft=is_draft,
             document=document,
             native_subgraphs=native_subgraphs,
             native_node_definitions=_read_native_node_definitions(metadata, path),
         )
     return result
+
+
+def _require_draft_identity(metadata: Mapping[str, object], path: str) -> None:
+    """Keep graph-only drafts from claiming malformed or persistent identity."""
+
+    for field in ("cube_id", "cube_version"):
+        value = metadata.get(field, "")
+        if not isinstance(value, str) or value.strip():
+            raise CanonicalWorkflowError(
+                "workflow.invalid_draft_identity",
+                f"{path}.{field}",
+                f"Cube draft at '{path}' must have no saved {field}.",
+            )
+
+
+def _read_definition_identity(
+    metadata: Mapping[str, object], path: str, *, is_draft: bool
+) -> tuple[str, str]:
+    """Validate saved identity while retaining identity-free native drafts."""
+
+    if is_draft:
+        _require_draft_identity(metadata, path)
+        return "", ""
+    cube_id = _require_string(
+        metadata.get("cube_id"), f"{path}.cube_id", "workflow.invalid_cube_definition"
+    )
+    try:
+        parse_canonical_cube_id(cube_id)
+    except CubeIdentityError as exc:
+        raise CanonicalWorkflowError(
+            "workflow.invalid_cube_identity", f"{path}.cube_id", str(exc)
+        ) from exc
+    version = _require_string(
+        metadata.get("cube_version"),
+        f"{path}.cube_version",
+        "workflow.invalid_cube_definition",
+    )
+    return cube_id, version
 
 
 def _read_native_node_definitions(
@@ -247,6 +276,15 @@ def _read_instances(
                 f"{path}.type",
                 f"Cube node '{node_id}' references missing embedded definition '{definition_id}'.",
             )
+        is_draft = kind == "cube_draft"
+        if is_draft != definition.is_draft:
+            raise CanonicalWorkflowError(
+                "workflow.cube_kind_mismatch",
+                f"{path}.properties.sugarcubes_kind",
+                f"Cube node '{node_id}' and definition '{definition_id}' disagree on draft state.",
+            )
+        if is_draft:
+            _require_draft_identity(metadata, f"{path}.properties.sugarcubes_cube")
         instance_id = _require_string(
             metadata.get("instance_id"),
             f"{path}.properties.sugarcubes_cube.instance_id",
@@ -279,6 +317,7 @@ def _read_instances(
                 instance_alias=_optional_string(metadata.get("instance_alias"))
                 or definition.default_alias,
                 payload=deepcopy(dict(node)),
+                is_draft=is_draft,
                 execution_mode=_read_execution_mode(node.get("mode"), f"{path}.mode"),
             )
         )

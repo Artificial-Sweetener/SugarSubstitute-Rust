@@ -18,6 +18,7 @@
 import { ComfyWorkflowEventAdapter } from '../../../frontend/comfyui/ui/execution/infrastructure/ComfyWorkflowEventAdapter.js';
 import { WorkflowEventApi, workflowResultsFixture } from '../support/workflow_results.js';
 import { promptId } from '../../../frontend/comfyui/ui/execution/domain/ExecutionIdentity.js';
+import { WorkflowProgressStore } from '../../../frontend/comfyui/ui/execution/application/WorkflowProgressStore.js';
 
 /** Bind the real event adapter to observable preview and diagnostic boundaries. */
 function fixture() {
@@ -27,9 +28,11 @@ function fixture() {
   const errors: unknown[] = [];
   const connections: boolean[] = [];
   let reconnects = 0;
+  const progress = new WorkflowProgressStore((id) => f.runs.read(id));
   const adapter = new ComfyWorkflowEventAdapter({
     api,
     ingestor: f.ingestor,
+    progress,
     logger: {
       error: (...args: unknown[]) => {
         errors.push(args);
@@ -46,8 +49,30 @@ function fixture() {
     },
   });
   f.ingestor.accepted(f.ingestor.submitting(f.a), f.id);
-  return { ...f, api, adapter, previews, errors, connections, reconnects: () => reconnects };
+  return {
+    ...f,
+    api,
+    adapter,
+    progress,
+    previews,
+    errors,
+    connections,
+    reconnects: () => reconnects,
+  };
 }
+
+test('public execution events keep workflow and sampler progress separate and retire terminal jobs', () => {
+  const f = fixture();
+  f.adapter.install();
+  f.api.emit('execution_start', { prompt_id: 'one' });
+  f.api.emit('progress', { prompt_id: 'one', node: '42:23', value: 4, max: 10 });
+  expect(f.progress.read(f.a.session)).toEqual({ visible: true, workflow: 0, sampler: 40 });
+  f.api.emit('executed', { prompt_id: 'one', node: '42:23' });
+  expect(f.progress.read(f.a.session)).toEqual({ visible: true, workflow: 100, sampler: 0 });
+  f.api.emit('execution_success', { prompt_id: 'one' });
+  expect(f.progress.read(f.a.session).visible).toBe(false);
+  f.adapter.dispose();
+});
 
 test('delivers enhanced preview bytes once and refuses to guess from an unassigned enhanced delivery', () => {
   const f = fixture();

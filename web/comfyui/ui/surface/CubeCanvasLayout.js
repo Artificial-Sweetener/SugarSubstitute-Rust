@@ -18,7 +18,8 @@ import { requireCubeIdentity } from '../cube/node/ComfyCubeNodeFactory.js';
 import { isCubeAwaitingFirstSave } from '../cube/CubeIdentityPresentation.js';
 import { CUBE_CANVAS_ACTIVATION_SIZE } from './CubeCanvasActivationControl.js';
 import { CUBE_RESIZE_EDGES } from '../cube/geometry/CubeResizeGeometry.js';
-import { resolveCubeFaceCardPresentation } from './CubeFaceCardPolicy.js';
+import { projectNodeCards } from './NodeCardProjection.js';
+import { presentCubeCardNode } from './CubeCardWidgetSources.js';
 import { measureCubeFaceNodeBodyHeight } from './CubeFaceNodeMeasurement.js';
 import { computeCubeMasonry } from './CubeMasonryLayout.js';
 import { cubeMinimumSize, resolveCubeSurfaceMinimumHeight } from './CubeSurfaceMinimumHeight.js';
@@ -62,16 +63,16 @@ export function computeCubeCanvasLayout(node, state, titleHeight, titlebarAction
     const previewDivider = preview
         ? rect(preview.x - CUBE_SURFACE_SECTION_GAP / 2 - PREVIEW_DIVIDER_HIT_WIDTH / 2, preview.y, PREVIEW_DIVIDER_HIT_WIDTH, preview.height)
         : null;
-    const presentation = resolveCubeFaceCardPresentation(node.subgraph._nodes, state, node.subgraph);
+    const projected = projectNodeCards(node.subgraph._nodes, state, node.subgraph, node);
     const chrome = layoutCubeCanvasChrome(header, {
         showUnsavedIndicator: isCubeAwaitingFirstSave(requireCubeIdentity(node)),
         titlebarActionKeys,
     });
-    const measuredCards = presentation.cards
+    const measuredCards = projected
         .filter((card) => card.visible)
         .map((card) => ({
         ...card,
-        bodyHeight: measureCubeFaceNodeBodyHeight(card.node),
+        bodyHeight: measureCubeFaceNodeBodyHeight(presentCubeCardNode(card.node, card.widgetSources ?? []), card.widgetSources),
     }));
     const masonryLayout = computeCubeMasonry(measuredCards.map((card) => ({
         id: card.id,
@@ -89,6 +90,7 @@ export function computeCubeCanvasLayout(node, state, titleHeight, titlebarAction
         const cardRect = rect(masonry.x + placement.x, masonry.y + placement.y, placement.width, placement.height);
         return {
             node: card.node,
+            widgetSources: card.widgetSources ?? [],
             id: card.id,
             label: card.label,
             enabled: card.enabled,

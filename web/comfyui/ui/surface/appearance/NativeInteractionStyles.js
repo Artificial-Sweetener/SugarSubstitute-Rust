@@ -111,6 +111,10 @@ export function nativeInteractionCss() {
     [data-sc-style-edit-frame] textarea:focus {
       background:var(--sc-surface); outline:none;
     }
+    [data-sc-style-edit-frame]:has([data-sc-editor-field="fluent"], [data-sc-editor-field="spectrum"]) {
+      --tw-ring-shadow:0 0 transparent; --tw-ring-color:transparent;
+      background:none; border:none; outline:none; box-shadow:none;
+    }
     [data-sc-style-row][data-sc-style-widget^="WidgetInputNumber"] [data-sc-style-layout] > :last-child > :first-child,
     [data-sc-style-row][data-sc-style-widget="WidgetSelect"] [data-sc-style-layout] > :last-child > :first-child,
     [data-sc-style-layout] > :last-child > :first-child:has(> [data-sc-boolean-segments]) {

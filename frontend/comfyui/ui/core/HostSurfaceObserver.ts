@@ -40,18 +40,44 @@ export class HostSurfaceObserver {
     options: HostSurfaceObservation = {},
   ) {
     this.#process = (records) => {
+      const excluded = new WeakMap<Element, boolean>();
+      /** Treat explicitly owned rendering trees as opaque and share ancestry checks within each delivery. */
+      const isExcluded = (element: Element): boolean => {
+        const path: Element[] = [];
+        let current: Element | null = element;
+        let result = false;
+        while (current) {
+          const cached = excluded.get(current);
+          if (cached !== undefined) {
+            result = cached;
+            break;
+          }
+          path.push(current);
+          if (
+            current.hasAttribute('data-sc-host-opaque') ||
+            (options.exclude && current.matches(options.exclude))
+          ) {
+            result = true;
+            break;
+          }
+          current = current.parentElement;
+        }
+        for (const ancestor of path) excluded.set(ancestor, result);
+        return result;
+      };
       const changes = new Map<HTMLElement, HostSurfaceChange['kind']>();
       const mounted = new Set<HTMLElement>();
       const removed = new Set<HTMLElement>();
       const content = new Set<HTMLElement>();
       const collect = (node: Node, kind: 'mounted' | 'removed'): void => {
-        if (!(node instanceof HTMLElement) || node.closest(options.exclude ?? ':not(*)')) return;
+        if (!(node instanceof HTMLElement) || isExcluded(node)) return;
         if (node.matches(selector)) {
           changes.set(node, kind);
           (kind === 'mounted' ? mounted : removed).add(node);
         }
+        if (!node.childElementCount) return;
         for (const element of node.querySelectorAll<HTMLElement>(selector))
-          if (!element.closest(options.exclude ?? ':not(*)')) {
+          if (!isExcluded(element)) {
             changes.set(element, kind);
             (kind === 'mounted' ? mounted : removed).add(element);
           }
@@ -59,9 +85,12 @@ export class HostSurfaceObserver {
       for (const record of records) {
         const target =
           record.target instanceof Element ? record.target : record.target.parentElement;
-        if (target?.closest(options.exclude ?? ':not(*)')) continue;
-        const surface = target?.closest<HTMLElement>(selector);
-        if ((options.content || record.type === 'attributes') && surface) {
+        if (target && isExcluded(target)) continue;
+        const surface =
+          options.content || record.type === 'attributes'
+            ? target?.closest<HTMLElement>(selector)
+            : null;
+        if (surface) {
           changes.set(surface, 'content');
           content.add(surface);
         }

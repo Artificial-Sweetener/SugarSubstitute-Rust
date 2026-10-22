@@ -78,11 +78,11 @@ var emptyArray = Object.freeze([]);
 function createTypeRegistry() {
   const typeToDefinition = /* @__PURE__ */ new Map();
   return Object.freeze({
-    register(definition7) {
-      if (typeToDefinition.has(definition7.type)) {
+    register(definition8) {
+      if (typeToDefinition.has(definition8.type)) {
         return false;
       }
-      typeToDefinition.set(definition7.type, definition7);
+      typeToDefinition.set(definition8.type, definition8);
       return true;
     },
     getByType(key) {
@@ -659,7 +659,7 @@ var defaultPolicy = Object.freeze({
   createHTML(value) {
     return fastTrustedType.createHTML(value);
   },
-  protect(tagName7, aspect, aspectName, sink) {
+  protect(tagName8, aspect, aspectName, sink) {
     return sink;
   }
 });
@@ -872,8 +872,8 @@ function attr(configOrTarget, prop) {
 
 // node_modules/@microsoft/fast-element/dist/esm/styles/element-styles.js
 var DefaultStyleStrategy;
-function reduceStyles(styles7) {
-  return styles7.reduce((reduced, current) => {
+function reduceStyles(styles8) {
+  return styles8.reduce((reduced, current) => {
     if (current instanceof ElementStyles) {
       reduced.push(...reduceStyles(current.styles));
     } else {
@@ -899,8 +899,8 @@ var ElementStyles = class _ElementStyles {
    * Creates an instance of ElementStyles.
    * @param styles - The styles that will be associated with elements.
    */
-  constructor(styles7) {
-    this.styles = styles7;
+  constructor(styles8) {
+    this.styles = styles8;
     this.targets = /* @__PURE__ */ new WeakSet();
     this._strategy = null;
   }
@@ -938,16 +938,16 @@ var ElementStyles = class _ElementStyles {
    * @param styles - The style options to normalize.
    * @returns A singular ElementStyles instance or undefined.
    */
-  static normalize(styles7) {
-    return styles7 === void 0 ? void 0 : Array.isArray(styles7) ? new _ElementStyles(styles7) : styles7 instanceof _ElementStyles ? styles7 : new _ElementStyles([styles7]);
+  static normalize(styles8) {
+    return styles8 === void 0 ? void 0 : Array.isArray(styles8) ? new _ElementStyles(styles8) : styles8 instanceof _ElementStyles ? styles8 : new _ElementStyles([styles8]);
   }
 };
 ElementStyles.supportsAdoptedStyleSheets = Array.isArray(document.adoptedStyleSheets) && "replace" in CSSStyleSheet.prototype;
 function createAdoptedSheetsStrategy() {
   const cache = /* @__PURE__ */ new Map();
   return class FallbackAdoptedSheetsStrategy {
-    constructor(styles7) {
-      this.sheets = styles7.map((x) => {
+    constructor(styles8) {
+      this.sheets = styles8.map((x) => {
         if (x instanceof CSSStyleSheet) {
           return x;
         }
@@ -973,8 +973,8 @@ function createAdoptedSheetsStrategy() {
 var fallbackStyleId = 0;
 function createStyleElementStrategy() {
   return class FallbackStyleElementStrategy {
-    constructor(styles7) {
-      this.styles = styles7;
+    constructor(styles8) {
+      this.styles = styles8;
       this.styleClass = `fast-${++fallbackStyleId}`;
     }
     addStylesTo(target) {
@@ -988,9 +988,9 @@ function createStyleElementStrategy() {
     }
     removeStylesFrom(target) {
       const t = target === document ? document.body : target;
-      const styles7 = t.querySelectorAll(`.${this.styleClass}`);
-      for (let i = 0, ii = styles7.length; i < ii; ++i) {
-        t.removeChild(styles7[i]);
+      const styles8 = t.querySelectorAll(`.${this.styleClass}`);
+      for (let i = 0, ii = styles8.length; i < ii; ++i) {
+        t.removeChild(styles8[i]);
       }
     }
   };
@@ -1003,15 +1003,15 @@ var typeRegistry = createTypeRegistry();
 var definitionInstances = /* @__PURE__ */ new WeakMap();
 var instanceRefs = /* @__PURE__ */ new WeakMap();
 var fastElementRegistry = Object.freeze({
-  register(definition7) {
-    if (!typeRegistry.register(definition7)) {
+  register(definition8) {
+    if (!typeRegistry.register(definition8)) {
       return false;
     }
-    const registeredTypes = getRegisteredTypes(definition7.registry);
-    if (!Object.prototype.hasOwnProperty.call(registeredTypes, definition7.name)) {
-      Observable.defineProperty(registeredTypes, definition7.name);
+    const registeredTypes = getRegisteredTypes(definition8.registry);
+    if (!Object.prototype.hasOwnProperty.call(registeredTypes, definition8.name)) {
+      Observable.defineProperty(registeredTypes, definition8.name);
     }
-    registeredTypes[definition7.name] = definition7.type;
+    registeredTypes[definition8.name] = definition8.type;
     return true;
   },
   getByType: typeRegistry.getByType,
@@ -1037,46 +1037,46 @@ function whenRegistered(name, registry3 = customElements) {
   if (!Object.prototype.hasOwnProperty.call(registeredTypes, name)) {
     Observable.defineProperty(registeredTypes, name);
   }
-  const definition7 = getDefinitionForType(registeredTypes[name]);
-  if (definition7 !== void 0) {
-    return Promise.resolve(definition7);
+  const definition8 = getDefinitionForType(registeredTypes[name]);
+  if (definition8 !== void 0) {
+    return Promise.resolve(definition8);
   }
   return new Promise((resolve) => {
     const notifier = Observable.getNotifier(registeredTypes);
     const subscriber = {
       handleChange: () => {
-        const definition8 = getDefinitionForType(registeredTypes[name]);
-        if (definition8 === void 0) {
+        const definition9 = getDefinitionForType(registeredTypes[name]);
+        if (definition9 === void 0) {
           return;
         }
         notifier.unsubscribe(subscriber, name);
-        resolve(definition8);
+        resolve(definition9);
       }
     };
     notifier.subscribe(subscriber, name);
   });
 }
-function trackFASTElementInstance(definition7, instance) {
+function trackFASTElementInstance(definition8, instance) {
   if (instanceRefs.has(instance)) {
     return false;
   }
-  let instances = definitionInstances.get(definition7);
+  let instances = definitionInstances.get(definition8);
   const isFirstInstance = instances === void 0;
   if (instances === void 0) {
     instances = /* @__PURE__ */ new Set();
-    definitionInstances.set(definition7, instances);
+    definitionInstances.set(definition8, instances);
   }
   const ref2 = new WeakRef(instance);
   instances.add(ref2);
   instanceRefs.set(instance, ref2);
   return isFirstInstance;
 }
-function trackedFASTElementInstances(definition7, callback) {
-  const instances = definitionInstances.get(definition7);
+function trackedFASTElementInstances(definition8, callback) {
+  const instances = definitionInstances.get(definition8);
   if (instances === void 0) {
     return;
   }
-  definitionInstances.delete(definition7);
+  definitionInstances.delete(definition8);
   for (const ref2 of instances) {
     const instance = ref2.deref();
     if (instance !== void 0) {
@@ -1100,23 +1100,23 @@ function isFASTElementTemplateResolver(value) {
 function isPromiseLike(value) {
   return typeof (value === null || value === void 0 ? void 0 : value.then) === "function";
 }
-function finalizeResolvedTemplate(definition7, template7) {
-  pendingTemplateResolutions.delete(definition7);
-  if (definition7.template === void 0 && template7 !== void 0) {
-    definition7.template = template7;
+function finalizeResolvedTemplate(definition8, template8) {
+  pendingTemplateResolutions.delete(definition8);
+  if (definition8.template === void 0 && template8 !== void 0) {
+    definition8.template = template8;
   }
-  if (definition7.template !== void 0) {
-    templateResolutionErrors.delete(definition7);
-    templateResolvers.delete(definition7);
-    return definition7.template;
+  if (definition8.template !== void 0) {
+    templateResolutionErrors.delete(definition8);
+    templateResolvers.delete(definition8);
+    return definition8.template;
   }
   return void 0;
 }
-function applyFASTElementExtensions(definition7, registry3 = definition7.registry, extensions) {
+function applyFASTElementExtensions(definition8, registry3 = definition8.registry, extensions) {
   if (!(extensions === null || extensions === void 0 ? void 0 : extensions.length)) {
     return;
   }
-  const typedDefinition = definition7;
+  const typedDefinition = definition8;
   let registries = extensionRegistries.get(typedDefinition);
   if (registries === null || registries === void 0 ? void 0 : registries.has(registry3)) {
     return;
@@ -1127,47 +1127,47 @@ function applyFASTElementExtensions(definition7, registry3 = definition7.registr
   }
   registries.add(registry3);
   for (const extension of extensions) {
-    extension(definition7);
+    extension(definition8);
   }
 }
-function getLateAttributeLookup(definition7) {
+function getLateAttributeLookup(definition8) {
   var _a2;
-  return (_a2 = lateAttributeLookups.get(definition7)) !== null && _a2 !== void 0 ? _a2 : null;
+  return (_a2 = lateAttributeLookups.get(definition8)) !== null && _a2 !== void 0 ? _a2 : null;
 }
-function resolveFASTElementTemplate(definition7) {
-  if (definition7.template !== void 0) {
-    templateResolutionErrors.delete(definition7);
-    return definition7.template;
+function resolveFASTElementTemplate(definition8) {
+  if (definition8.template !== void 0) {
+    templateResolutionErrors.delete(definition8);
+    return definition8.template;
   }
-  const pendingResolution = pendingTemplateResolutions.get(definition7);
+  const pendingResolution = pendingTemplateResolutions.get(definition8);
   if (pendingResolution) {
     return pendingResolution;
   }
-  const templateResolver = templateResolvers.get(definition7);
+  const templateResolver = templateResolvers.get(definition8);
   if (!templateResolver) {
     return void 0;
   }
-  templateResolutionErrors.delete(definition7);
-  let template7;
+  templateResolutionErrors.delete(definition8);
+  let template8;
   try {
-    template7 = templateResolver(definition7);
+    template8 = templateResolver(definition8);
   } catch (error) {
-    templateResolutionErrors.set(definition7, error);
+    templateResolutionErrors.set(definition8, error);
     throw error;
   }
-  if (isPromiseLike(template7)) {
-    const resolution = Promise.resolve(template7).then((resolvedTemplate) => finalizeResolvedTemplate(definition7, resolvedTemplate)).catch((error) => {
-      pendingTemplateResolutions.delete(definition7);
-      templateResolutionErrors.set(definition7, error);
+  if (isPromiseLike(template8)) {
+    const resolution = Promise.resolve(template8).then((resolvedTemplate) => finalizeResolvedTemplate(definition8, resolvedTemplate)).catch((error) => {
+      pendingTemplateResolutions.delete(definition8);
+      templateResolutionErrors.set(definition8, error);
       throw error;
     });
-    pendingTemplateResolutions.set(definition7, resolution);
+    pendingTemplateResolutions.set(definition8, resolution);
     return resolution;
   }
-  return finalizeResolvedTemplate(definition7, template7);
+  return finalizeResolvedTemplate(definition8, template8);
 }
-function setFASTElementTemplateError(definition7, error) {
-  const typedDefinition = definition7;
+function setFASTElementTemplateError(definition8, error) {
+  const typedDefinition = definition8;
   if (error === void 0) {
     templateResolutionErrors.delete(typedDefinition);
     return;
@@ -1233,8 +1233,8 @@ var FASTElementDefinition = class _FASTElementDefinition {
     if (!registry3.get(this.name)) {
       applyFASTElementExtensions(this, registry3, extensions);
       if (this.template === void 0 && templateResolvers.has(this)) {
-        void Promise.resolve().then(() => resolveFASTElementTemplate(this)).then((template7) => {
-          if (template7 !== void 0 && !registry3.get(this.name)) {
+        void Promise.resolve().then(() => resolveFASTElementTemplate(this)).then((template8) => {
+          if (template8 !== void 0 && !registry3.get(this.name)) {
             this.platformDefined = true;
             registry3.define(this.name, type, this.elementOptions);
           }
@@ -1256,9 +1256,9 @@ var FASTElementDefinition = class _FASTElementDefinition {
    * that describes the element to define.
    */
   static compose(type, nameOrDef) {
-    const definition7 = fastElementBaseTypes.has(type) || fastElementRegistry.getByType(type) ? new _FASTElementDefinition(class extends type {
+    const definition8 = fastElementBaseTypes.has(type) || fastElementRegistry.getByType(type) ? new _FASTElementDefinition(class extends type {
     }, nameOrDef) : new _FASTElementDefinition(type, nameOrDef);
-    return Promise.resolve(definition7);
+    return Promise.resolve(definition8);
   }
   /**
    * Registers a FASTElement base type.
@@ -1334,11 +1334,11 @@ var ElementController = class _ElementController {
   get template() {
     var _a2;
     if (this._template === null) {
-      const definition7 = this.definition;
+      const definition8 = this.definition;
       if (this.source.resolveTemplate) {
         this._template = this.source.resolveTemplate();
-      } else if (definition7.template) {
-        this._template = (_a2 = definition7.template) !== null && _a2 !== void 0 ? _a2 : null;
+      } else if (definition8.template) {
+        this._template = (_a2 = definition8.template) !== null && _a2 !== void 0 ? _a2 : null;
       }
     }
     return this._template;
@@ -1379,11 +1379,11 @@ var ElementController = class _ElementController {
   get mainStyles() {
     var _a2;
     if (this._mainStyles === null) {
-      const definition7 = this.definition;
+      const definition8 = this.definition;
       if (this.source.resolveStyles) {
         this._mainStyles = this.source.resolveStyles();
-      } else if (definition7.styles) {
-        this._mainStyles = (_a2 = definition7.styles) !== null && _a2 !== void 0 ? _a2 : null;
+      } else if (definition8.styles) {
+        this._mainStyles = (_a2 = definition8.styles) !== null && _a2 !== void 0 ? _a2 : null;
       }
     }
     return this._mainStyles;
@@ -1407,7 +1407,7 @@ var ElementController = class _ElementController {
    * controller in how to handle rendering and other platform integrations.
    * @internal
    */
-  constructor(element, definition7) {
+  constructor(element, definition8) {
     this.boundObservables = null;
     this.needsInitialization = true;
     this.hasExistingShadowRoot = false;
@@ -1427,8 +1427,8 @@ var ElementController = class _ElementController {
     this.view = null;
     this._notifier = new PropertyChangeNotifier(element);
     this.source = element;
-    this.definition = definition7;
-    this.shadowOptions = definition7.shadowOptions;
+    this.definition = definition8;
+    this.shadowOptions = definition8.shadowOptions;
     const prototype = Reflect.getPrototypeOf(element);
     const accessors = prototype === null ? [] : Observable.getAccessors(prototype);
     if (accessors.length > 0) {
@@ -1530,34 +1530,34 @@ var ElementController = class _ElementController {
    * Adds styles to this element. Providing an HTMLStyleElement will attach the element instance to the shadowRoot.
    * @param styles - The styles to add.
    */
-  addStyles(styles7) {
+  addStyles(styles8) {
     var _a2;
-    if (!styles7) {
+    if (!styles8) {
       return;
     }
     const source = this.source;
-    if (styles7 instanceof HTMLElement) {
+    if (styles8 instanceof HTMLElement) {
       const target = (_a2 = getShadowRoot(source)) !== null && _a2 !== void 0 ? _a2 : this.source;
-      target.append(styles7);
-    } else if (!styles7.isAttachedTo(source)) {
-      styles7.addStylesTo(source);
+      target.append(styles8);
+    } else if (!styles8.isAttachedTo(source)) {
+      styles8.addStylesTo(source);
     }
   }
   /**
    * Removes styles from this element. Providing an HTMLStyleElement will detach the element instance from the shadowRoot.
    * @param styles - the styles to remove.
    */
-  removeStyles(styles7) {
+  removeStyles(styles8) {
     var _a2;
-    if (!styles7) {
+    if (!styles8) {
       return;
     }
     const source = this.source;
-    if (styles7 instanceof HTMLElement) {
+    if (styles8 instanceof HTMLElement) {
       const target = (_a2 = getShadowRoot(source)) !== null && _a2 !== void 0 ? _a2 : source;
-      target.removeChild(styles7);
-    } else if (styles7.isAttachedTo(source)) {
-      styles7.removeStylesFrom(source);
+      target.removeChild(styles8);
+    } else if (styles8.isAttachedTo(source)) {
+      styles8.removeStylesFrom(source);
     }
   }
   /**
@@ -1759,7 +1759,7 @@ var ElementController = class _ElementController {
    * @remarks
    * If `null` is provided, any existing view will be removed.
    */
-  renderTemplate(template7) {
+  renderTemplate(template8) {
     var _a2;
     const element = this.source;
     const host = (_a2 = getShadowRoot(element)) !== null && _a2 !== void 0 ? _a2 : element;
@@ -1773,14 +1773,14 @@ var ElementController = class _ElementController {
         }
       }
     }
-    if (template7) {
+    if (template8) {
       const hasPrerenderedContent = this.hasExistingShadowRoot && this.needsInitialization;
       let didHydrate = false;
       if (hasPrerenderedContent && _ElementController.hydrationHook) {
-        didHydrate = _ElementController.hydrationHook(this, template7, element, host);
+        didHydrate = _ElementController.hydrationHook(this, template8, element, host);
       }
       if (!didHydrate) {
-        this.renderClientSide(template7, element, host);
+        this.renderClientSide(template8, element, host);
       }
       this._resolvePrerendered(hasPrerenderedContent);
       this._resolveHydrated(didHydrate);
@@ -1793,14 +1793,14 @@ var ElementController = class _ElementController {
    * Standard client-side render: clears any stale content, clones the
    * compiled fragment, binds, and appends to the host.
    */
-  renderClientSide(template7, element, host) {
+  renderClientSide(template8, element, host) {
     if (this.hasExistingShadowRoot) {
       for (let child = host.firstChild; child !== null; child = host.firstChild) {
         host.removeChild(child);
       }
       this.hasExistingShadowRoot = false;
     }
-    this.view = template7.render(element, host, element);
+    this.view = template8.render(element, host, element);
     this.view.sourceLifetime = SourceLifetime.coupled;
   }
   /**
@@ -1817,16 +1817,16 @@ var ElementController = class _ElementController {
     if (controller !== void 0 && !override) {
       return controller;
     }
-    const definition7 = FASTElementDefinition.getForInstance(element);
-    if (definition7 === void 0) {
+    const definition8 = FASTElementDefinition.getForInstance(element);
+    if (definition8 === void 0) {
       throw FAST.error(Message.missingElementDefinition);
     }
-    if (definition7.template === void 0 && trackFASTElementInstance(definition7, element)) {
-      const notifier = Observable.getNotifier(definition7);
+    if (definition8.template === void 0 && trackFASTElementInstance(definition8, element)) {
+      const notifier = Observable.getNotifier(definition8);
       const subscriber = {
         handleChange: () => {
           notifier.unsubscribe(subscriber, "template");
-          trackedFASTElementInstances(definition7, (tracked) => {
+          trackedFASTElementInstances(definition8, (tracked) => {
             const trackedElement = tracked;
             _ElementController.forCustomElement(trackedElement, true);
             if (trackedElement.isConnected) {
@@ -1837,7 +1837,7 @@ var ElementController = class _ElementController {
       };
       notifier.subscribe(subscriber, "template");
     }
-    return element.$fastController = new elementControllerStrategy(element, definition7);
+    return element.$fastController = new elementControllerStrategy(element, definition8);
   }
   /**
    * Sets the strategy that ElementController.forCustomElement uses to construct
@@ -1867,9 +1867,9 @@ function normalizeStyleTarget(target) {
   }
 }
 var AdoptedStyleSheetsStrategy = class _AdoptedStyleSheetsStrategy {
-  constructor(styles7) {
+  constructor(styles8) {
     const styleSheetCache = _AdoptedStyleSheetsStrategy.styleSheetCache;
-    this.sheets = styles7.map((x) => {
+    this.sheets = styles8.map((x) => {
       if (x instanceof CSSStyleSheet) {
         return x;
       }
@@ -1896,26 +1896,26 @@ function usableStyleTarget(target) {
   return target === document ? document.body : target;
 }
 var StyleElementStrategy = class {
-  constructor(styles7) {
-    this.styles = styles7;
+  constructor(styles8) {
+    this.styles = styles8;
     this.styleClass = nextStyleId();
   }
   addStylesTo(target) {
     target = usableStyleTarget(normalizeStyleTarget(target));
-    const styles7 = this.styles;
+    const styles8 = this.styles;
     const styleClass = this.styleClass;
-    for (let i = 0; i < styles7.length; i++) {
+    for (let i = 0; i < styles8.length; i++) {
       const element = document.createElement("style");
-      element.innerHTML = styles7[i];
+      element.innerHTML = styles8[i];
       element.className = styleClass;
       target.append(element);
     }
   }
   removeStylesFrom(target) {
     target = usableStyleTarget(normalizeStyleTarget(target));
-    const styles7 = target.querySelectorAll(`.${this.styleClass}`);
-    for (let i = 0, ii = styles7.length; i < ii; ++i) {
-      target.removeChild(styles7[i]);
+    const styles8 = target.querySelectorAll(`.${this.styleClass}`);
+    for (let i = 0, ii = styles8.length; i < ii; ++i) {
+      target.removeChild(styles8[i]);
     }
   }
 };
@@ -1981,9 +1981,9 @@ function define(type, nameOrDef, extensions) {
   const composePromise = isFunction(type) ? FASTElementDefinition.compose(type, nameOrDef) : FASTElementDefinition.compose(this, type);
   return composePromise.then((def) => {
     applyFASTElementExtensions(def, def.registry, extensions);
-    const template7 = resolveFASTElementTemplate(def);
-    if (isPromiseLike2(template7)) {
-      return template7.then(() => def.define().type);
+    const template8 = resolveFASTElementTemplate(def);
+    if (isPromiseLike2(template8)) {
+      return template8.then(() => def.define().type);
     }
     return def.define().type;
   });
@@ -2032,7 +2032,7 @@ var CSSDirective = Object.freeze({
 
 // node_modules/@microsoft/fast-element/dist/esm/styles/css.js
 function collectStyles(strings, values) {
-  const styles7 = [];
+  const styles8 = [];
   let cssString = "";
   for (let i = 0, ii = strings.length - 1; i < ii; ++i) {
     cssString += strings[i];
@@ -2042,26 +2042,26 @@ function collectStyles(strings, values) {
     }
     if (value instanceof ElementStyles || value instanceof CSSStyleSheet) {
       if (cssString.trim() !== "") {
-        styles7.push(cssString);
+        styles8.push(cssString);
         cssString = "";
       }
-      styles7.push(value);
+      styles8.push(value);
     } else {
       cssString += value;
     }
   }
   cssString += strings[strings.length - 1];
   if (cssString.trim() !== "") {
-    styles7.push(cssString);
+    styles8.push(cssString);
   }
-  return styles7;
+  return styles8;
 }
 var css = ((strings, ...values) => {
   return new ElementStyles(collectStyles(strings, values));
 });
 var CSSPartial = class {
-  constructor(styles7) {
-    this.value = styles7.length === 0 ? "" : styles7.length === 1 ? styles7[0] : new ElementStyles(styles7);
+  constructor(styles8) {
+    this.value = styles8.length === 0 ? "" : styles8.length === 1 ? styles8[0] : new ElementStyles(styles8);
   }
   createCSS() {
     return this.value;
@@ -3357,7 +3357,7 @@ var CompilationContext = class {
     this.descriptors = {};
     this.factories = [];
   }
-  addFactory(factory, parentId, nodeId, targetIndex, tagName7) {
+  addFactory(factory, parentId, nodeId, targetIndex, tagName8) {
     var _a2, _b;
     if (!this.nodeIds.has(nodeId)) {
       this.nodeIds.add(nodeId);
@@ -3365,7 +3365,7 @@ var CompilationContext = class {
     }
     factory.id = (_a2 = factory.id) !== null && _a2 !== void 0 ? _a2 : nextId();
     factory.targetNodeId = nodeId;
-    factory.targetTagName = tagName7;
+    factory.targetTagName = tagName8;
     factory.policy = (_b = factory.policy) !== null && _b !== void 0 ? _b : this.policy;
     this.factories.push(factory);
   }
@@ -3524,26 +3524,26 @@ var Compiler = {
    * @public
    */
   compile(html2, factories, policy = DOM.policy) {
-    let template7;
+    let template8;
     if (isString(html2)) {
-      template7 = document.createElement(templateTag);
-      template7.innerHTML = policy.createHTML(html2);
-      const fec = template7.content.firstElementChild;
+      template8 = document.createElement(templateTag);
+      template8.innerHTML = policy.createHTML(html2);
+      const fec = template8.content.firstElementChild;
       if (fec !== null && fec.tagName === templateTag) {
-        template7 = fec;
+        template8 = fec;
       }
     } else {
-      template7 = html2;
+      template8 = html2;
     }
-    if (!template7.content.firstChild && !template7.content.lastChild) {
-      template7.content.appendChild(document.createComment(""));
+    if (!template8.content.firstChild && !template8.content.lastChild) {
+      template8.content.appendChild(document.createComment(""));
     }
-    const fragment = document.adoptNode(template7.content);
+    const fragment = document.adoptNode(template8.content);
     const context = new CompilationContext(fragment, factories, policy);
     compileAttributes(
       context,
       "",
-      template7,
+      template8,
       /* host */
       "h",
       0,
@@ -3657,8 +3657,8 @@ var InlineTemplateDirective = class {
 };
 InlineTemplateDirective.empty = new InlineTemplateDirective("");
 HTMLDirective.define(InlineTemplateDirective);
-function createHTML2(value, prevString, add, definition7 = HTMLDirective.getForInstance(value)) {
-  if (definition7.aspected) {
+function createHTML2(value, prevString, add, definition8 = HTMLDirective.getForInstance(value)) {
+  if (definition8.aspected) {
     const match = lastAttributeNameRegex.exec(prevString);
     if (match !== null) {
       HTMLDirective.assignAspect(value, match[2]);
@@ -3775,17 +3775,17 @@ var ViewTemplate = class _ViewTemplate {
     for (let i = 0, ii = strings.length - 1; i < ii; ++i) {
       const currentString = strings[i];
       let currentValue = values[i];
-      let definition7;
+      let definition8;
       html2 += currentString;
       if (isFunction(currentValue)) {
         currentValue = new HTMLBindingDirective(oneWay(currentValue));
       } else if (currentValue instanceof Binding) {
         currentValue = new HTMLBindingDirective(currentValue);
-      } else if (!(definition7 = HTMLDirective.getForInstance(currentValue))) {
+      } else if (!(definition8 = HTMLDirective.getForInstance(currentValue))) {
         const staticValue = currentValue;
         currentValue = new HTMLBindingDirective(oneTime(() => staticValue));
       }
-      html2 += createHTML2(currentValue, currentString, add, definition7);
+      html2 += createHTML2(currentValue, currentString, add, definition8);
     }
     return new _ViewTemplate(html2 + strings[strings.length - 1], factories, policy);
   }
@@ -7169,11 +7169,11 @@ __decorate([
 applyMixins(Tab, StartEnd);
 
 // node_modules/@fluentui/web-components/dist/esm/tab/tab.options.js
-function isTab(element, tagName7 = "-tab") {
+function isTab(element, tagName8 = "-tab") {
   if (element?.nodeType !== Node.ELEMENT_NODE) {
     return false;
   }
-  return element.tagName.toLowerCase().endsWith(tagName7);
+  return element.tagName.toLowerCase().endsWith(tagName8);
 }
 var tagName3 = `${FluentDesignSystem.prefix}-tab`;
 
@@ -9482,6 +9482,837 @@ var definition6 = {
   template: template6
 };
 
+// node_modules/@fluentui/web-components/dist/esm/utils/whitespace-filter.js
+var whitespaceFilter = (value) => value.nodeType !== Node.TEXT_NODE || !!value.nodeValue?.trim().length;
+
+// node_modules/@fluentui/web-components/dist/esm/textarea/textarea.options.js
+var TextAreaAppearance = {
+  outline: "outline",
+  filledLighter: "filled-lighter",
+  filledDarker: "filled-darker"
+};
+var TextAreaAppearancesForDisplayShadow = [
+  TextAreaAppearance.filledLighter,
+  TextAreaAppearance.filledDarker
+];
+var TextAreaResize = {
+  none: "none",
+  both: "both",
+  horizontal: "horizontal",
+  vertical: "vertical"
+};
+var tagName7 = `${FluentDesignSystem.prefix}-textarea`;
+
+// node_modules/@fluentui/web-components/dist/esm/textarea/textarea.base.js
+var BaseTextArea = class extends FASTElement {
+  static {
+    this.formAssociated = true;
+  }
+  /**
+   * Sets up a mutation observer to watch for changes to the control element's
+   * attributes that could affect validity, and binds an input event listener to detect user interaction.
+   *
+   * @internal
+   */
+  controlElChanged() {
+    this.controlElAttrObserver = new MutationObserver(() => {
+      this.setValidity();
+    });
+    this.controlElAttrObserver.observe(this.controlEl, {
+      attributes: true,
+      attributeFilter: ["disabled", "required", "readonly", "maxlength", "minlength"]
+    });
+    this.controlEl.addEventListener("input", () => this.userInteracted = true, { once: true });
+  }
+  defaultSlottedNodesChanged() {
+    Updates.enqueue(() => {
+      const next2 = this.getContent();
+      this.defaultValue = next2;
+      this.value = next2;
+    });
+  }
+  labelSlottedNodesChanged() {
+    this.filteredLabelSlottedNodes = this.labelSlottedNodes.filter(whitespaceFilter);
+    if (this.labelEl) {
+      this.labelEl.hidden = !this.filteredLabelSlottedNodes.length;
+    }
+    this.filteredLabelSlottedNodes.forEach((node) => {
+      node.disabled = this.disabled;
+      node.required = this.required;
+    });
+  }
+  autoResizeChanged() {
+    this.maybeCreateAutoSizerEl();
+    toggleState(this.elementInternals, "auto-resize", this.autoResize);
+  }
+  disabledChanged() {
+    this.setDisabledSideEffect(this.disabled);
+  }
+  /**
+   * The form element that’s associated to the element, or `null` if no form is associated.
+   *
+   * @public
+   */
+  get form() {
+    return this.elementInternals.form;
+  }
+  /**
+   * A `NodeList` of `<label>` element associated with the element.
+   * @see The {@link https://developer.mozilla.org/en-US/docs/Web/API/HTMLTextAreaElement/labels | `labels`} property
+   *
+   * @public
+   */
+  get labels() {
+    return this.elementInternals.labels;
+  }
+  readOnlyChanged() {
+    if (this.elementInternals) {
+      this.elementInternals.ariaReadOnly = `${!!this.readOnly}`;
+      this.setValidity();
+    }
+  }
+  requiredChanged() {
+    this.elementInternals.ariaRequired = `${!!this.required}`;
+    if (this.filteredLabelSlottedNodes?.length) {
+      this.filteredLabelSlottedNodes.forEach((node) => node.required = this.required);
+    }
+  }
+  resizeChanged(prev, next2) {
+    swapStates(this.elementInternals, prev, next2, TextAreaResize, "resize-");
+    toggleState(this.elementInternals, "resize", hasMatchingState(TextAreaResize, next2) && next2 !== TextAreaResize.none);
+  }
+  /**
+   * The length of the current value.
+   * @see The {@link https://developer.mozilla.org/en-US/docs/Web/API/HTMLTextAreaElement#textLength | 'textLength'} property
+   *
+   * @public
+   */
+  get textLength() {
+    return this.controlEl.textLength;
+  }
+  /**
+   * The type of the element, which is always "textarea".
+   * @see The {@link https://developer.mozilla.org/en-US/docs/Web/API/HTMLTextAreaElement/type | `type`} property
+   *
+   * @public
+   */
+  get type() {
+    return "textarea";
+  }
+  /**
+   * The element's validity state.
+   *
+   * @public
+   * @remarks
+   * Reflects the {@link https://developer.mozilla.org/docs/Web/API/ElementInternals/validity | `ElementInternals.validity`} property.
+   */
+  get validity() {
+    return this.elementInternals.validity;
+  }
+  /**
+   * The validation message.
+   *
+   * @public
+   * @remarks
+   * Reflects the {@link https://developer.mozilla.org/docs/Web/API/ElementInternals/validationMessage | `ElementInternals.validationMessage`} property.
+   */
+  get validationMessage() {
+    return this.elementInternals.validationMessage || this.controlEl.validationMessage;
+  }
+  /**
+   * Determines if the control can be submitted for constraint validation.
+   *
+   * @public
+   * @remarks
+   * Reflects the {@link https://developer.mozilla.org/docs/Web/API/ElementInternals/willValidate | `ElementInternals.willValidate`} property.
+   */
+  get willValidate() {
+    return this.elementInternals.willValidate;
+  }
+  /**
+   * The text content of the element before user interaction.
+   * @see The {@link https://developer.mozilla.org/en-US/docs/Web/API/HTMLTextAreaElement#defaultvalue | `defaultValue`} property
+   *
+   * @public
+   * @remarks
+   * In order to set the initial/default value, an author should either add the default value in the HTML as the children
+   * of the component, or setting this property in JavaScript. Setting `innerHTML`, `innerText`, or `textContent` on this
+   * component will not change the default value or the content displayed inside the component.
+   */
+  get defaultValue() {
+    return this.controlEl?.defaultValue ?? this.preConnectControlEl.defaultValue;
+  }
+  set defaultValue(next2) {
+    const controlEl = this.controlEl ?? this.preConnectControlEl;
+    controlEl.defaultValue = next2;
+    if (this.controlEl && !this.userInteracted) {
+      this.controlEl.value = next2;
+    }
+  }
+  /**
+   * The value of the element.
+   *
+   * @public
+   * @remarks
+   * Reflects the `value` property.
+   */
+  get value() {
+    return this.controlEl?.value ?? this.preConnectControlEl.value;
+  }
+  set value(next2) {
+    const controlEl = this.controlEl ?? this.preConnectControlEl;
+    controlEl.value = next2;
+    this.setFormValue(next2);
+    this.setValidity();
+  }
+  constructor() {
+    super();
+    this.elementInternals = this.attachInternals();
+    this.filteredLabelSlottedNodes = [];
+    this.labelSlottedNodes = [];
+    this.userInteracted = false;
+    this.preConnectControlEl = document.createElement("textarea");
+    this.autoResize = false;
+    this.disabled = false;
+    this.displayShadow = false;
+    this.readOnly = false;
+    this.required = false;
+    this.resize = TextAreaResize.none;
+    this.spellcheck = false;
+  }
+  /**
+   * @internal
+   */
+  connectedCallback() {
+    super.connectedCallback();
+    requestAnimationFrame(() => {
+      if (!this.$fastController.isConnected) {
+        return;
+      }
+      const preConnect = this.preConnectControlEl;
+      const content = this.getContent();
+      this.defaultValue = content || preConnect?.defaultValue || "";
+      this.value = preConnect?.value || this.defaultValue;
+      this.setFormValue(this.value);
+      this.setValidity();
+      this.preConnectControlEl = null;
+      this.maybeCreateAutoSizerEl();
+      maybeSetAutoFocus(this);
+    });
+  }
+  /**
+   * @internal
+   */
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this.autoSizerObserver?.disconnect();
+    this.controlElAttrObserver?.disconnect();
+  }
+  /**
+   * Resets the value to its initial value when the form is reset.
+   *
+   * @internal
+   */
+  formResetCallback() {
+    this.value = this.defaultValue;
+  }
+  /**
+   * @internal
+   */
+  formDisabledCallback(disabled) {
+    this.setDisabledSideEffect(disabled);
+    this.setValidity();
+  }
+  /**
+   * Reflects the {@link https://developer.mozilla.org/docs/Web/API/ElementInternals/setFormValue | `ElementInternals.setFormValue()`} method.
+   *
+   * @internal
+   */
+  setFormValue(value, state2) {
+    this.elementInternals.setFormValue(value, value ?? state2);
+  }
+  /**
+   * Checks the validity of the element and returns the result.
+   *
+   * @public
+   * @remarks
+   * Reflects the {@link https://developer.mozilla.org/docs/Web/API/ElementInternals/checkValidity | `HTMLInputElement.checkValidity()`} method.
+   */
+  checkValidity() {
+    return this.elementInternals.checkValidity();
+  }
+  /**
+   * Reports the validity of the element.
+   *
+   * @public
+   * @remarks
+   * Reflects the {@link https://developer.mozilla.org/docs/Web/API/ElementInternals/reportValidity | `HTMLInputElement.reportValidity()`} method.
+   */
+  reportValidity() {
+    return this.elementInternals.reportValidity();
+  }
+  /**
+   * Sets the custom validity message.
+   * @param message - The message to set
+   *
+   * @public
+   */
+  setCustomValidity(message) {
+    this.elementInternals?.setValidity({ customError: !!message }, !!message ? message.toString() : void 0);
+    this.reportValidity();
+  }
+  /**
+   * Sets the validity of the control.
+   *
+   * @param flags - Validity flags. If not provided, the control's `validity` will be used.
+   * @param message - Optional message to supply. If not provided, the control's `validationMessage` will be used. If the control does not have a `validationMessage`, the message will be empty.
+   * @param anchor - Optional anchor to use for the validation message. If not provided, the control will be used.
+   *
+   * @internal
+   */
+  setValidity(flags, message, anchor2) {
+    if (!this.elementInternals) {
+      return;
+    }
+    if (this.disabled || this.readOnly) {
+      this.elementInternals.setValidity({});
+    } else {
+      this.elementInternals.setValidity(flags ?? this.controlEl?.validity, message ?? this.controlEl?.validationMessage, anchor2 ?? this.controlEl);
+    }
+    if (this.userInteracted) {
+      this.toggleUserValidityState();
+    }
+  }
+  /**
+   * Selects the content in the element.
+   *
+   * @public
+   */
+  select() {
+    this.controlEl.select();
+  }
+  /**
+   * Gets the content inside the light DOM, if any HTML element is present, use its `outerHTML` value.
+   */
+  getContent() {
+    return this.defaultSlottedNodes?.map((node) => {
+      switch (node.nodeType) {
+        case Node.ELEMENT_NODE:
+          return node.outerHTML;
+        case Node.TEXT_NODE:
+          return node.textContent.trim();
+        default:
+          return "";
+      }
+    }).join("") || "";
+  }
+  setDisabledSideEffect(disabled) {
+    this.elementInternals.ariaDisabled = `${disabled}`;
+    if (this.controlEl) {
+      this.controlEl.disabled = disabled;
+    }
+    if (this.filteredLabelSlottedNodes?.length) {
+      this.filteredLabelSlottedNodes.forEach((node) => node.disabled = this.disabled);
+    }
+  }
+  toggleUserValidityState() {
+    toggleState(this.elementInternals, "user-invalid", !this.validity.valid);
+    toggleState(this.elementInternals, "user-valid", this.validity.valid);
+  }
+  // Technique inspired by https://css-tricks.com/the-cleanest-trick-for-autogrowing-textareas/
+  // TODO: This should be removed after `field-sizing: content` is widely supported
+  // https://caniuse.com/mdn-css_properties_field-sizing_content
+  maybeCreateAutoSizerEl() {
+    if (CSS.supports("field-sizing: content")) {
+      return;
+    }
+    if (!this.autoResize) {
+      this.autoSizerEl?.remove();
+      this.autoSizerObserver?.disconnect();
+      return;
+    }
+    if (!this.autoSizerEl) {
+      this.autoSizerEl = document.createElement("div");
+      this.autoSizerEl.classList.add("auto-sizer");
+      this.autoSizerEl.ariaHidden = "true";
+    }
+    this.rootEl?.prepend(this.autoSizerEl);
+    if (!this.autoSizerObserver) {
+      this.autoSizerObserver = new ResizeObserver((_, observer) => {
+        const blockSizePropName = window.getComputedStyle(this).writingMode.startsWith("horizontal") ? "height" : "width";
+        if (this.style.getPropertyValue(blockSizePropName) !== "") {
+          this.autoSizerEl?.remove();
+          observer.disconnect();
+        }
+      });
+    }
+    this.autoSizerObserver.observe(this);
+  }
+  /**
+   * @internal
+   */
+  handleControlInput() {
+    if (this.autoResize && this.autoSizerEl) {
+      this.autoSizerEl.textContent = this.value + " ";
+    }
+    this.setFormValue(this.value);
+    this.setValidity();
+  }
+  /**
+   * @internal
+   */
+  handleControlChange() {
+    this.toggleUserValidityState();
+    this.$emit("change");
+  }
+  /**
+   * @internal
+   */
+  handleControlSelect() {
+    this.$emit("select");
+  }
+};
+__decorate([
+  observable
+], BaseTextArea.prototype, "controlEl", void 0);
+__decorate([
+  observable
+], BaseTextArea.prototype, "defaultSlottedNodes", void 0);
+__decorate([
+  observable
+], BaseTextArea.prototype, "labelSlottedNodes", void 0);
+__decorate([
+  attr
+], BaseTextArea.prototype, "autocomplete", void 0);
+__decorate([
+  attr({ attribute: "auto-resize", mode: "boolean" })
+], BaseTextArea.prototype, "autoResize", void 0);
+__decorate([
+  attr({ attribute: "dirname" })
+], BaseTextArea.prototype, "dirName", void 0);
+__decorate([
+  attr({ mode: "boolean" })
+], BaseTextArea.prototype, "disabled", void 0);
+__decorate([
+  attr({ attribute: "display-shadow", mode: "boolean" })
+], BaseTextArea.prototype, "displayShadow", void 0);
+__decorate([
+  attr({ attribute: "form" })
+], BaseTextArea.prototype, "initialForm", void 0);
+__decorate([
+  attr({ attribute: "maxlength", converter: nullableNumberConverter })
+], BaseTextArea.prototype, "maxLength", void 0);
+__decorate([
+  attr({ attribute: "minlength", converter: nullableNumberConverter })
+], BaseTextArea.prototype, "minLength", void 0);
+__decorate([
+  attr
+], BaseTextArea.prototype, "name", void 0);
+__decorate([
+  attr
+], BaseTextArea.prototype, "placeholder", void 0);
+__decorate([
+  attr({ attribute: "readonly", mode: "boolean" })
+], BaseTextArea.prototype, "readOnly", void 0);
+__decorate([
+  attr({ mode: "boolean" })
+], BaseTextArea.prototype, "required", void 0);
+__decorate([
+  attr({ mode: "fromView" })
+], BaseTextArea.prototype, "resize", void 0);
+__decorate([
+  attr({ mode: "boolean" })
+], BaseTextArea.prototype, "spellcheck", void 0);
+
+// node_modules/@fluentui/web-components/dist/esm/textarea/textarea.js
+var TextArea = class extends BaseTextArea {
+  constructor() {
+    super(...arguments);
+    this.appearance = TextAreaAppearance.outline;
+    this.block = false;
+  }
+  labelSlottedNodesChanged() {
+    super.labelSlottedNodesChanged();
+    this.labelSlottedNodes.forEach((node) => {
+      node.size = this.size;
+    });
+  }
+  /**
+   * @internal
+   */
+  handleChange(_, propertyName) {
+    switch (propertyName) {
+      case "size":
+        this.labelSlottedNodes.forEach((node) => {
+          node.size = this.size;
+        });
+        break;
+    }
+  }
+  /**
+   * @internal
+   */
+  connectedCallback() {
+    super.connectedCallback();
+    Observable.getNotifier(this).subscribe(this, "size");
+  }
+  /**
+   * @internal
+   */
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    Observable.getNotifier(this).unsubscribe(this, "size");
+  }
+};
+__decorate([
+  attr({ mode: "fromView" })
+], TextArea.prototype, "appearance", void 0);
+__decorate([
+  attr({ mode: "boolean" })
+], TextArea.prototype, "block", void 0);
+__decorate([
+  attr
+], TextArea.prototype, "size", void 0);
+
+// node_modules/@fluentui/web-components/dist/esm/textarea/textarea.styles.js
+var styles7 = css`
+  ${display("inline-block")}
+
+  :host {
+    /* typography */
+    --font-size: ${fontSizeBase300};
+    --line-height: ${lineHeightBase300};
+
+    /* layout */
+    --padding-inline: ${spacingHorizontalMNudge};
+    --padding-block: ${spacingVerticalSNudge};
+    --min-block-size: 52px;
+    --block-size: var(--min-block-size);
+    --inline-size: 18rem;
+    --border-width: ${strokeWidthThin};
+    --control-padding-inline: ${spacingHorizontalXXS};
+
+    /* colors */
+    --color: ${colorNeutralForeground1};
+    --background-color: ${colorNeutralBackground1};
+    --border-color: ${colorNeutralStroke1};
+    --border-block-end-color: ${colorNeutralStrokeAccessible};
+    --placeholder-color: ${colorNeutralForeground4};
+    --focus-indicator-color: ${colorCompoundBrandStroke};
+
+    /* elevations */
+    --box-shadow: none;
+
+    /* others */
+    --contain-size: size;
+    --resize: none;
+
+    color: var(--color);
+    font-family: ${fontFamilyBase};
+    font-size: var(--font-size);
+    font-weight: ${fontWeightRegular};
+    line-height: var(--line-height);
+    position: relative;
+  }
+
+  :host(:hover) {
+    --border-color: ${colorNeutralStroke1Hover};
+    --border-block-end-color: ${colorNeutralStrokeAccessibleHover};
+  }
+
+  :host(:active) {
+    --border-color: ${colorNeutralStroke1Pressed};
+    --border-block-end-color: ${colorNeutralStrokeAccessiblePressed};
+  }
+
+  :host(:focus-within) {
+    outline: none;
+  }
+
+  :host([block]:not([hidden])) {
+    display: block;
+  }
+
+  :host([size='small']) {
+    --font-size: ${fontSizeBase200};
+    --line-height: ${lineHeightBase200};
+    --min-block-size: 40px;
+    --padding-block: ${spacingVerticalXS};
+    --padding-inline: ${spacingHorizontalSNudge};
+    --control-padding-inline: ${spacingHorizontalXXS};
+  }
+
+  :host([size='large']) {
+    --font-size: ${fontSizeBase400};
+    --line-height: ${lineHeightBase400};
+    --min-block-size: 64px;
+    --padding-block: ${spacingVerticalS};
+    --padding-inline: ${spacingHorizontalM};
+    --control-padding-inline: ${spacingHorizontalSNudge};
+  }
+
+  :host([resize='both']:not(${nativeDisabledState})) {
+    --resize: both;
+  }
+
+  :host([resize='horizontal']:not(${nativeDisabledState})) {
+    --resize: horizontal;
+  }
+
+  :host([resize='vertical']:not(${nativeDisabledState})) {
+    --resize: vertical;
+  }
+
+  :host([auto-resize]) {
+    --block-size: auto;
+    --contain-size: inline-size;
+  }
+
+  :host([appearance='filled-darker']) {
+    --background-color: ${colorNeutralBackground3};
+    --border-color: var(--background-color);
+    --border-block-end-color: var(--border-color);
+  }
+
+  :host([appearance='filled-lighter']) {
+    --border-color: var(--background-color);
+    --border-block-end-color: var(--border-color);
+  }
+
+  :host([appearance='filled-darker'][display-shadow]),
+  :host([appearance='filled-lighter'][display-shadow]) {
+    --box-shadow: ${shadow2};
+  }
+
+  :host(${userInvalidState}) {
+    --border-color: ${colorPaletteRedBorder2};
+    --border-block-end-color: ${colorPaletteRedBorder2};
+  }
+
+  :host(${nativeDisabledState}) {
+    --color: ${colorNeutralForegroundDisabled};
+    --background-color: ${colorTransparentBackground};
+    --border-color: ${colorNeutralStrokeDisabled};
+    --border-block-end-color: var(--border-color);
+    --box-shadow: none;
+    --placeholder-color: ${colorNeutralForegroundDisabled};
+
+    cursor: no-drop;
+    user-select: none;
+  }
+
+  .root {
+    background-color: var(--background-color);
+    border: var(--border-width) solid var(--border-color);
+    border-block-end-color: var(--border-block-end-color);
+    border-radius: ${borderRadiusMedium};
+    box-sizing: border-box;
+    box-shadow: var(--box-shadow);
+    contain: paint layout style var(--contain-size);
+    display: grid;
+    grid-template: 1fr / 1fr;
+    inline-size: var(--inline-size);
+    min-block-size: var(--min-block-size);
+    block-size: var(--block-size);
+    overflow: hidden;
+    padding: var(--padding-block) var(--padding-inline);
+    position: relative;
+    resize: var(--resize);
+  }
+
+  :host([block]) .root {
+    inline-size: auto;
+  }
+
+  .root::after {
+    border-bottom: 2px solid var(--focus-indicator-color);
+    border-radius: 0 0 ${borderRadiusMedium} ${borderRadiusMedium};
+    box-sizing: border-box;
+    clip-path: inset(calc(100% - 2px) 1px 0px);
+    content: '';
+    height: max(2px, ${borderRadiusMedium});
+    inset: auto -1px 0;
+    position: absolute;
+    transform: scaleX(0);
+    transition-delay: ${curveAccelerateMid};
+    transition-duration: ${durationUltraFast};
+    transition-property: transform;
+  }
+
+  :host(:focus-within) .root::after {
+    transform: scaleX(1);
+    transition-property: transform;
+    transition-duration: ${durationNormal};
+    transition-delay: ${curveDecelerateMid};
+  }
+
+  :host([readonly]) .root::after,
+  :host(${nativeDisabledState}) .root::after {
+    content: none;
+  }
+
+  label {
+    color: var(--color);
+    display: flex;
+    inline-size: fit-content;
+    padding-block-end: ${spacingVerticalXS};
+    padding-inline-end: ${spacingHorizontalXS};
+  }
+
+  :host(:empty) label,
+  label[hidden] {
+    display: none;
+  }
+
+  .auto-sizer,
+  .control {
+    box-sizing: border-box;
+    font: inherit;
+    grid-column: 1 / -1;
+    grid-row: 1 / -1;
+    letter-space: inherit;
+    padding: 0 var(--control-padding-inline);
+  }
+
+  .auto-sizer {
+    display: none;
+    padding-block-end: 2px; /* avoid scroll bar in Firefox */
+    pointer-events: none;
+    visibility: hidden;
+    white-space: pre-wrap;
+  }
+
+  :host([auto-resize]) .auto-sizer {
+    display: block;
+  }
+
+  .control {
+    appearance: none;
+    background-color: transparent;
+    border: 0;
+    color: inherit;
+    field-sizing: content;
+    max-block-size: 100%;
+    outline: 0;
+    overflow: auto;
+    resize: none;
+    text-align: inherit;
+  }
+
+  .control:disabled {
+    cursor: inherit;
+  }
+
+  .control::placeholder {
+    color: var(--placeholder-color);
+  }
+
+  ::selection {
+    color: ${colorNeutralForegroundInverted};
+    background-color: ${colorNeutralBackgroundInverted};
+  }
+
+  @media (forced-colors: active) {
+    :host {
+      --border-color: FieldText;
+      --border-block-end-color: FieldText;
+      --focus-indicator-color: Highlight;
+      --placeholder-color: FieldText;
+    }
+
+    :host(:hover),
+    :host(:active),
+    :host(:focus-within) {
+      --border-color: Highlight;
+      --border-block-end-color: Highlight;
+    }
+
+    :host(${nativeDisabledState}) {
+      --color: GrayText;
+      --border-color: GrayText;
+      --border-block-end-color: GrayText;
+      --placeholder-color: GrayText;
+    }
+  }
+`;
+
+// node_modules/@fluentui/web-components/dist/esm/textarea/textarea.template.js
+function textAreaTemplate() {
+  return html`
+    <template>
+      <label ${ref("labelEl")} for="control" part="label">
+        <slot name="label" ${slotted("labelSlottedNodes")}></slot>
+      </label>
+      <div class="root" part="root" ${ref("rootEl")}>
+        <textarea
+          ${ref("controlEl")}
+          id="control"
+          class="control"
+          part="control"
+          ?required="${(x) => x.required}"
+          ?disabled="${(x) => x.disabled}"
+          ?readonly="${(x) => x.readOnly}"
+          ?spellcheck="${(x) => x.spellcheck}"
+          autocomplete="${(x) => x.autocomplete}"
+          maxlength="${(x) => x.maxLength}"
+          minlength="${(x) => x.minLength}"
+          placeholder="${(x) => x.placeholder}"
+          @change="${(x) => x.handleControlChange()}"
+          @select="${(x) => x.handleControlSelect()}"
+          @input="${(x) => x.handleControlInput()}"
+        ></textarea>
+      </div>
+      <div hidden>
+        <slot ${slotted("defaultSlottedNodes")}></slot>
+      </div>
+    </template>
+  `;
+}
+var template7 = textAreaTemplate();
+
+// node_modules/@fluentui/web-components/dist/esm/textarea/textarea.definition.js
+var definition7 = {
+  name: tagName7,
+  registry: FluentDesignSystem.registry,
+  shadowOptions: {
+    delegatesFocus: true
+  },
+  styles: styles7,
+  template: template7
+};
+
+// frontend/comfyui/ui/surface/appearance/EditorFieldControl.ts
+function adoptEditorFieldPadding(field, nativeInput) {
+  const window2 = field.ownerDocument.defaultView;
+  const frame = nativeInput === field ? field : nativeInput.parentElement;
+  if (!window2 || !frame) throw new Error("The editor field requires a connected native frame.");
+  frame.style.removeProperty("padding");
+  const input = window2.getComputedStyle(nativeInput);
+  const outer = frame === nativeInput ? null : window2.getComputedStyle(frame);
+  const padding = (side) => `calc(${input[side] || "0px"} + ${outer?.[side] || "0px"})`;
+  field.style.setProperty(
+    "--sc-editor-content-padding",
+    `${padding("paddingTop")} ${padding("paddingRight")} ${padding("paddingBottom")} ${padding("paddingLeft")}`
+  );
+  field.style.setProperty("--sc-editor-content-padding-left", padding("paddingLeft"));
+  frame.style.padding = "0";
+}
+
+// frontend/comfyui/ui/core/ControlPlacement.ts
+function relocateControl(element, target, before = null) {
+  const focused = element.ownerDocument.activeElement;
+  const moveBefore = Reflect.get(target, "moveBefore");
+  if (typeof moveBefore === "function" && element.isConnected && target.isConnected)
+    moveBefore.call(target, element, before);
+  else target.insertBefore(element, before);
+  if (!(focused instanceof HTMLElement) || !element.contains(focused)) return;
+  if (element.ownerDocument.activeElement === focused) {
+    if (target.matches(":focus-within")) return;
+    focused.blur();
+  }
+  focused.focus({ preventScroll: true });
+}
+
 // frontend/comfyui/ui/surface/appearance/FluentSliderGeometry.ts
 function adaptFluentSliderGeometry(slider) {
   const calculate = slider.calculateNewValue.bind(slider);
@@ -9683,6 +10514,11 @@ var PresentationTextInput = class extends TextInput {
     if (selectAll) this.select();
   }
 };
+var PresentationTextArea = class extends TextArea {
+  /** Retain the existing control and slot during supported connected moves. */
+  connectedMoveCallback() {
+  }
+};
 if (!customElements.get("fluent-slider")) await PresentationSlider.define(definition);
 if (!customElements.get("fluent-button")) await PresentationButton.define(definition2);
 if (!customElements.get("fluent-tab")) await PresentationTab.define(definition3);
@@ -9690,6 +10526,34 @@ if (!customElements.get("fluent-tablist")) await PresentationTablist.define(defi
 if (!customElements.get("fluent-checkbox")) await PresentationCheckbox.define(definition5);
 if (!customElements.get("fluent-text-input"))
   await PresentationTextInput.define(definition6);
+if (!customElements.get(tagName7)) await PresentationTextArea.define(definition7);
+function createFluentEditorField(documentRef) {
+  const field = documentRef.createElement(tagName7);
+  if (!(field instanceof TextArea)) throw new TypeError("The Fluent textarea is not registered.");
+  field.setAttribute("block", "");
+  field.style.setProperty("--block-size", "100%");
+  return {
+    root: field,
+    /** Place content in the real control root; its unused form input never becomes editable. */
+    attachEditor(editor) {
+      adoptEditorFieldPadding(field, field.controlEl);
+      field.controlEl.hidden = true;
+      field.controlEl.inert = true;
+      field.controlEl.style.display = "none";
+      const slot = documentRef.createElement("slot");
+      slot.name = "editor";
+      slot.className = "control";
+      slot.style.cssText = "display:block;min-width:0;min-height:0;grid-area:1/1;height:100%;padding:0;overflow:visible";
+      field.rootEl.append(slot);
+      editor.slot = "editor";
+      relocateControl(editor, field);
+    },
+    /** Reflect native readonly state through Microsoft's existing component API. */
+    setReadOnly(readOnly) {
+      field.readOnly = readOnly;
+    }
+  };
+}
 var workflowTabDefinition = {
   ...definition3,
   name: "sc-workflow-tab",
@@ -9811,6 +10675,7 @@ export {
   createBooleanCheckboxControl,
   createBooleanSegmentControls,
   createFinderInputControl,
+  createFluentEditorField,
   createFluentNumericSlider,
   createWorkflowTab,
   createWorkflowTablist,

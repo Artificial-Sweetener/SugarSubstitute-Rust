@@ -21,6 +21,7 @@ import { WorkflowTabStripLayout } from './WorkflowTabStripLayout.js';
 import { ContextMenu } from '../../menus/ContextMenu.js';
 import { applyOwnedTheme } from '../appearance/ThemeService.js';
 import { createCubeAddIconElement } from '../CubeAddIcon.js';
+import { GenerationProgressView } from './GenerationProgressView.js';
 /** Own frame rendering and interaction while collaborators retain all application policies. */
 export class SubstituteFrameView {
     document;
@@ -35,6 +36,7 @@ export class SubstituteFrameView {
     #stackGlyph;
     #addGlyph;
     #stopStack;
+    #progress;
     #presented = [];
     #dark = null;
     #initialized = false;
@@ -43,6 +45,7 @@ export class SubstituteFrameView {
         this.document = document;
         this.actions = actions;
         this.element = document.createElement('header');
+        this.#progress = new GenerationProgressView(document);
         this.element.className = 'sc-substitute-frame';
         this.element.setAttribute('data-sc-style-theme-root', '');
         this.#menu = new ContextMenu(document);
@@ -58,6 +61,10 @@ export class SubstituteFrameView {
             { label: 'Save as', select: () => actions.command('Comfy.SaveWorkflowAs') },
             { label: 'Export workflow', select: () => actions.command('Comfy.ExportWorkflow') },
             { label: '', separator: true },
+            {
+                label: 'Extensions',
+                select: () => actions.command('Comfy.Manager.CustomNodesManager.ShowCustomNodesMenu'),
+            },
             { label: 'Settings', select: () => actions.command('Comfy.ShowSettingsDialog') },
         ], actions.report);
         const create = this.#button('New workflow', '', () => actions.workflows.create());
@@ -129,6 +136,11 @@ export class SubstituteFrameView {
         overrides.append(this.#glyph('sc-orb-pin-icon', 'pin.svg'), chevron);
         cluster.append(this.#stackButton, overrides);
         this.element.append(this.#orb.element, previous, viewport, next, create, overflow, cluster);
+        this.element.append(this.#progress.element);
+    }
+    /** Refresh generation feedback independently of tab layout and focus. */
+    updateProgress(snapshot) {
+        this.#progress.update(snapshot);
     }
     /** Retain tab identities through workflow and activity updates. */
     update(tabs, unread) {

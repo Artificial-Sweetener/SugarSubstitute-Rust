@@ -26,18 +26,22 @@ export function freezeWorkflowMedia(payload) {
     return Object.freeze({
         images: copy(payload.images),
         videos: copy(payload.videos),
+        models: copy(payload.models),
         text: Object.freeze([...payload.text]),
     });
 }
 /** Merge declared incremental arrays and preserve only host-owned input previews on empty image updates. */
 export function combineWorkflowMedia(previous, next, merge, containsImages) {
     const inputPreview = previous !== null &&
+        next.videos.length === 0 &&
+        next.models.length === 0 &&
         previous.images.length > 0 &&
         previous.images.every((entry) => entry?.file.type === 'input');
     const images = !containsImages && inputPreview ? previous.images : next.images;
     return freezeWorkflowMedia({
         images: Object.freeze(merge && previous ? [...previous.images, ...images] : [...images]),
         videos: Object.freeze(merge && previous ? [...previous.videos, ...next.videos] : [...next.videos]),
+        models: Object.freeze(merge && previous ? [...previous.models, ...next.models] : [...next.models]),
         text: Object.freeze(merge && previous ? [...previous.text, ...next.text] : [...next.text]),
     });
 }

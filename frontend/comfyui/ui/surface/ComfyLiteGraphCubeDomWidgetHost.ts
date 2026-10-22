@@ -23,6 +23,7 @@ import { cubeFaceUnconsumedWidgets } from './CubeFaceWidgetPolicy.js';
 import { isNativeWidgetPresented } from './NativeWidgetPresentation.js';
 import { CubePromptDomWidgetSizingHost } from './CubePromptDomWidgetSizingHost.js';
 import { mountLiteGraphCanvasOverlay } from './ComfyLiteGraphCanvasOverlay.js';
+import { presentCubeCardNode } from './CubeCardWidgetSources.js';
 
 export interface LiteGraphCubeDomWidgetCanvas {
   canvas: HTMLCanvasElement;
@@ -34,7 +35,7 @@ export interface LiteGraphCubeDomWidgetCanvas {
 }
 
 export interface LiteGraphCubeDomWidgetItem {
-  layout: CubeCanvasLayout;
+  layout: Pick<CubeCanvasLayout, 'cards'>;
 }
 
 export interface ComfyLiteGraphCubeDomWidgetHostOptions {
@@ -62,6 +63,7 @@ interface MountedNativeWidget {
 }
 
 interface WidgetGeometry {
+  node: ComfyNode;
   x: number;
   y: number;
   width: number;
@@ -91,6 +93,7 @@ export class ComfyLiteGraphCubeDomWidgetHost {
     this.#promptSizing = new CubePromptDomWidgetSizingHost(
       options.document,
       options.onGeometryChange ?? (() => undefined),
+      () => this.#canvas.read_only === true,
     );
   }
 
@@ -108,7 +111,7 @@ export class ComfyLiteGraphCubeDomWidgetHost {
     for (const [element, geometry] of desired) {
       const mounted = this.#mounted.get(element) ?? this.#mount(element);
       this.#reclaimElement(mounted);
-      this.#promptSizing.reconcile(mounted.element, geometry.promptWidget);
+      this.#promptSizing.reconcile(mounted.element, geometry.promptWidget, geometry.node);
       this.#position(mounted.wrapper, geometry);
     }
     if (this.#mounted.size > 0) this.#ensureRoot();
@@ -125,10 +128,17 @@ export class ComfyLiteGraphCubeDomWidgetHost {
 
   /** Collect valid DOM widgets after Comfy has laid out the native face card. */
   #collectCardWidgets(card: CubeCanvasCard, desired: Map<HTMLElement, WidgetGeometry>): void {
-    for (const widget of cubeFaceUnconsumedWidgets(card.node).filter(isNativeWidgetPresented)) {
-      const nativeWidget = this.#asNativeDomWidget(widget);
-      if (!nativeWidget || !this.#isVisible(card.node, nativeWidget)) continue;
-      const geometry = this.#geometry(card, nativeWidget);
+    const presented = presentCubeCardNode(card.node, card.widgetSources ?? []);
+    for (const widget of cubeFaceUnconsumedWidgets(presented).filter(isNativeWidgetPresented)) {
+      const source = card.widgetSources?.find((candidate) => candidate.targetName === widget.name);
+      const owner = source?.node ?? card.node;
+      const owned = source
+        ? owner.widgets?.find((candidate) => candidate.name === source.name)
+        : widget;
+      const nativeWidget = owned ? this.#asNativeDomWidget(owned) : null;
+      if (!nativeWidget || !this.#isVisible(owner, nativeWidget)) continue;
+      const prompt = findCubeFacePromptWidget(presented) === widget;
+      const geometry = this.#geometry(card, nativeWidget, owner, prompt);
       if (geometry) desired.set(nativeWidget.element, geometry);
     }
   }
@@ -161,8 +171,13 @@ export class ComfyLiteGraphCubeDomWidgetHost {
   }
 
   /** Translate Comfy's native widget layout into fixed viewport geometry. */
-  #geometry(card: CubeCanvasCard, widget: NativeDomWidget): WidgetGeometry | null {
-    const promptWidget = findCubeFacePromptWidget(card.node) === widget ? widget : null;
+  #geometry(
+    card: CubeCanvasCard,
+    widget: NativeDomWidget,
+    owner: ComfyNode,
+    prompt: boolean,
+  ): WidgetGeometry | null {
+    const promptWidget = prompt ? widget : null;
     const widgetY =
       promptWidget === null
         ? (finiteNumber(widget.y) ?? finiteNumber(widget.last_y))
@@ -180,6 +195,7 @@ export class ComfyLiteGraphCubeDomWidgetHost {
     const graphX = card.rect.x + margin;
     const graphY = card.rect.y + titleHeight + widgetY + margin;
     return {
+      node: owner,
       x: bounds.left + (graphX + finiteVectorValue(offset, 0)) * scale,
       y: bounds.top + (graphY + finiteVectorValue(offset, 1)) * scale,
       width: Math.max(1, card.rect.width - margin * 2),
