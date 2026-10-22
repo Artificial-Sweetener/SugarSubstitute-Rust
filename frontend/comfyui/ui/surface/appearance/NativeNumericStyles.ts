@@ -14,16 +14,18 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Arrange native number spinners and Substitute's slider pairs through themed styling. */
+import { CONTROL_HEIGHT, SPINNER_WIDTH } from './ControlGeometry.js';
 
 /** Keep number geometry scoped to positively identified native components in both views. */
 export function nativeNumericCss(): string {
   return `
     [data-sc-number-spinner] {
       position:relative; display:flex; box-sizing:border-box; padding-right:20px;
-      height:33px; border:var(--sc-field-border-width) solid var(--sc-control-stroke); border-bottom-color:var(--sc-control-bottom-stroke);
+      height:${CONTROL_HEIGHT}; border:var(--sc-field-border-width) solid var(--sc-control-stroke); border-bottom-color:var(--sc-control-bottom-stroke);
       border-radius:var(--sc-field-radius); background:var(--sc-control-fill); overflow:hidden;
     }
     [data-sc-number-spinner] > div:has(> [data-sc-number-input]) { margin:0; padding:0; height:100%; min-width:0; }
+    [data-sc-number-spinner]:not([data-sc-seed-box]) { width:${SPINNER_WIDTH}; max-width:100%; flex:none; font-variant-numeric:tabular-nums; }
     [data-sc-number-input] { box-sizing:border-box; min-width:0; width:100%; border:0; margin:0; height:100%; text-align:center; padding:0 8px; }
     [data-sc-native-number-fill] { display:none; }
     [data-sc-number-increment], [data-sc-number-decrement] {
@@ -38,13 +40,14 @@ export function nativeNumericCss(): string {
     [data-sc-number-increment]:hover, [data-sc-number-decrement]:hover { background:var(--sc-surface-hover); }
     [data-sc-number-increment]:active, [data-sc-number-decrement]:active { background:var(--sc-surface-pressed); }
     [data-sc-number-pair] { display:flex; align-items:center; justify-content:flex-end; min-width:0; gap:6px; }
-    [data-sc-number-pair] > :first-child { width:80px; min-width:64px; flex:0 1 80px; }
-    [data-sc-number-slider] { width:120px; min-width:40px; max-width:120px; flex:1 1 120px; cursor:default; }
+    [data-sc-number-pair] > :first-child { width:${SPINNER_WIDTH}; min-width:${SPINNER_WIDTH}; flex:0 0 ${SPINNER_WIDTH}; }
+    [data-sc-number-slider] { width:120px; min-width:40px; max-width:120px; flex:1 1 120px; cursor:default !important; }
+    [data-sc-number-slider]::part(track-container), [data-sc-number-slider] [data-sc-slider-thumb], [data-sc-number-slider] [data-sc-slider-thumb] * { cursor:default !important; }
     [data-sc-number-slider]::after { content:none; }
     [data-sc-number-slider]::part(track-container) { border-radius:var(--border-radius); }
     [data-sc-number-slider]::part(track-container)::after { background-image:none; }
     .sugarcubes-cube-face__node-card [data-sc-style-row][data-sc-style-widget^="WidgetInputNumber"] [data-sc-style-layout] > [data-sc-number-pair] {
-      flex:0 0 206px; max-width:206px;
+      flex:0 0 calc(${SPINNER_WIDTH} + 126px); max-width:calc(${SPINNER_WIDTH} + 126px);
     }
   `;
 }

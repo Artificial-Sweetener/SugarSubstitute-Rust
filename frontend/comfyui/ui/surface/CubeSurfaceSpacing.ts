@@ -26,8 +26,9 @@ export interface CubeSurfaceCardSpacing {
 /** Use one finite gap between cards and between the header and first card row. */
 export function resolveCubeSurfaceCardSpacing(
   state: Pick<CubeSurfaceState, 'gap'>,
+  compact = false,
 ): CubeSurfaceCardSpacing {
-  const gap = Number.isFinite(state.gap) ? Math.max(0, state.gap) : 0;
+  const gap = compact ? 0 : Number.isFinite(state.gap) ? Math.max(0, state.gap) : 0;
   return {
     gap,
     headerInset: gap,

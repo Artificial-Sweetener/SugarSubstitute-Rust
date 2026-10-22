@@ -66,7 +66,7 @@ function fixture(style: VisualStyle) {
   return { host, root, input, values, registrations, events, frames, errors };
 }
 
-test.each(['comfy', 'fluent', 'spectrum'] as const)(
+test.each(['comfy', 'fluent', 'spectrum', 'photopro'] as const)(
   'restores %s from the combobox without following the superseded legacy toggle',
   (style) => {
     const f = fixture(style);
@@ -76,6 +76,7 @@ test.each(['comfy', 'fluent', 'spectrum'] as const)(
       { value: 'comfy', text: 'Comfy' },
       { value: 'fluent', text: 'Fluent' },
       { value: 'spectrum', text: 'Spectrum 2' },
+      { value: 'photopro', text: 'PhotoPro' },
     ]);
     expect(f.registrations.has('SugarCubes.Appearance.Fluent')).toBe(false);
     expect(f.host.state.appearance.style).toBe(style);

@@ -106,6 +106,7 @@ export function computeCubeCanvasLayout(
     inputSlots: node.inputs.map((_, index) => index),
     outputSlots: node.outputs.map((_, index) => index),
   },
+  compact = false,
 ): CubeCanvasLayout {
   const frame = rect(
     Number(node.pos[0]),
@@ -114,7 +115,7 @@ export function computeCubeCanvasLayout(
     Number(node.size[1]) + titleHeight,
   );
   const header = rect(frame.x, frame.y, frame.width, HEADER_HEIGHT);
-  const spacing = resolveCubeSurfaceCardSpacing(state);
+  const spacing = resolveCubeSurfaceCardSpacing(state, compact);
   const baseContent = rect(
     frame.x + CUBE_SURFACE_FRAME_PADDING,
     frame.y + HEADER_HEIGHT + spacing.headerInset,

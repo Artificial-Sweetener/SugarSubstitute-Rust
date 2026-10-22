@@ -23,6 +23,7 @@ from pathlib import Path
 import struct
 
 import av
+from av.video.stream import VideoStream
 import numpy as np
 from PIL import Image, ImageDraw
 
@@ -50,6 +51,8 @@ def generate_synthetic_media(root: Path) -> None:
     )
     with av.open(str(root / "clip.webm"), "w") as container:
         stream = container.add_stream("libvpx-vp9", rate=12)
+        if not isinstance(stream, VideoStream):
+            raise TypeError("The VP9 encoder did not create a video stream.")
         stream.width = 512
         stream.height = 320
         stream.pix_fmt = "yuv420p"

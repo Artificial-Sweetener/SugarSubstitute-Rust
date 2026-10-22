@@ -19,6 +19,7 @@ import { scrollWheelDistance } from '../ScrollWheelDistance.js';
 /** Keep input handling on the owned thumb, outside graph drag and zoom handlers. */
 export class ScrollbarView {
     element;
+    #trackElement;
     #owner;
     #axis;
     #schedule;
@@ -39,6 +40,36 @@ export class ScrollbarView {
         this.element.setAttribute('aria-orientation', axis);
         this.element.setAttribute('aria-controls', ownerId);
         this.element.setAttribute('aria-valuemin', '0');
+        this.#trackElement = owner.ownerDocument.createElement('div');
+        this.#trackElement.className = 'sc-style-scrollbar-track';
+        this.#trackElement.hidden = true;
+        this.#trackElement.addEventListener('pointerdown', (event) => event.stopPropagation());
+        this.#trackElement.addEventListener('click', (event) => {
+            if (event.target !== this.#trackElement || !this.#geometry)
+                return;
+            event.stopPropagation();
+            const thumb = this.element.getBoundingClientRect();
+            const before = this.#axis === 'vertical' ? event.clientY < thumb.top : event.clientX < thumb.left;
+            const page = this.#axis === 'vertical' ? this.#owner.clientHeight : this.#owner.clientWidth;
+            this.#scroll(this.#position() + (before ? -page : page));
+        });
+        for (const [edge, delta] of [
+            ['start', -40],
+            ['end', 40],
+        ]) {
+            const button = owner.ownerDocument.createElement('button');
+            button.type = 'button';
+            button.tabIndex = -1;
+            button.dataset.scScrollStep = edge;
+            button.setAttribute('aria-label', `${edge === 'start' ? 'Previous' : 'Next'} scroll step`);
+            button.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.#scroll(this.#position() + delta);
+            });
+            this.#trackElement.append(button);
+        }
+        this.element.append(this.#trackElement);
         this.element.addEventListener('pointerdown', this.beginDrag);
         this.element.addEventListener('pointermove', this.#pointerMove);
         this.element.addEventListener('pointerup', this.#pointerEnd);
@@ -56,36 +87,50 @@ export class ScrollbarView {
             !/auto|scroll/.test(overflow ?? '')) {
             return () => {
                 this.element.hidden = true;
+                this.#trackElement.hidden = true;
             };
         }
         this.#rtl = track?.rtl ?? false;
         const viewport = vertical ? this.#owner.clientHeight : this.#owner.clientWidth;
         const content = vertical ? this.#owner.scrollHeight : this.#owner.scrollWidth;
         const position = this.#position();
-        const size = track ? (vertical ? track.height : track.width) - 2 : 0;
+        const photoPro = this.#owner.ownerDocument.documentElement.dataset.scVisualStyle === 'photopro';
+        const arrowSpace = photoPro ? 28 : 0;
+        const crossSize = photoPro ? 14 : 12;
+        const size = track ? (vertical ? track.height : track.width) - 2 - arrowSpace : 0;
         this.#geometry = scrollbarGeometry(size, viewport, content, position);
         const geometry = this.#geometry;
         if (!track || !geometry) {
             return () => {
                 this.element.hidden = true;
+                this.#trackElement.hidden = true;
             };
         }
         const offset = !vertical && this.#rtl ? geometry.travel - geometry.offset : geometry.offset;
         const left = vertical
             ? this.#rtl
                 ? track.left
-                : track.left + track.width - 12
-            : track.left + 1 + offset;
-        const top = vertical ? track.top + 1 + offset : track.horizontalBottom - 12;
+                : track.left + track.width - crossSize
+            : track.left + 1 + arrowSpace / 2 + offset;
+        const top = vertical
+            ? track.top + 1 + arrowSpace / 2 + offset
+            : track.horizontalBottom - crossSize;
         const localLeft = (left - space.left) / space.scaleX;
         const localTop = (top - space.top) / space.scaleY;
-        const width = (vertical ? 12 : geometry.length) / space.scaleX;
-        const height = (vertical ? geometry.length : 12) / space.scaleY;
+        const width = (vertical ? crossSize : geometry.length) / space.scaleX;
+        const height = (vertical ? geometry.length : crossSize) / space.scaleY;
         const css = `left:${localLeft}px;top:${localTop}px;width:${width}px;height:${height}px;--sc-scrollbar-scale-x:${space.scaleX};--sc-scrollbar-scale-y:${space.scaleY}`;
+        const trackCss = vertical
+            ? `left:0px;top:${(track.top - top) / space.scaleY}px;width:${crossSize / space.scaleX}px;height:${track.height / space.scaleY}px`
+            : `left:${(track.left - left) / space.scaleX}px;top:0px;width:${track.width / space.scaleX}px;height:${crossSize / space.scaleY}px`;
         return () => {
             this.element.hidden = false;
             if (this.element.getAttribute('style') !== css)
                 this.element.setAttribute('style', css);
+            this.element.toggleAttribute('data-sc-photopro-scrollbar', photoPro);
+            this.#trackElement.hidden = !photoPro;
+            if (photoPro && this.#trackElement.getAttribute('style') !== trackCss)
+                this.#trackElement.setAttribute('style', trackCss);
             this.element.setAttribute('aria-valuemax', String(Math.round(geometry.maximum)));
             this.element.setAttribute('aria-valuenow', String(Math.round(position)));
         };
@@ -98,6 +143,7 @@ export class ScrollbarView {
     /** Suppress a track while its owner is between stable presentation coordinates. */
     hide() {
         this.element.hidden = true;
+        this.#trackElement.hidden = true;
     }
     /** Read native RTL coordinates as a positive distance from the leading edge. */
     #position() {

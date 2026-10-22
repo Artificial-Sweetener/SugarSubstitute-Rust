@@ -841,6 +841,96 @@ test.each(['fluent', 'spectrum', 'comfy'] as const)(
   30_000,
 );
 
+test.each(['nodes-1', 'nodes-2'] as const)(
+  '%s PhotoPro prompt editor follows live palette changes without remounting',
+  async (renderer) => {
+    const page = await browser.newPage();
+    try {
+      await page.goto(address);
+      await page.waitForFunction(() => !!window.promptBrowserProof);
+      await page.evaluate(
+        ({ renderer, value }) => window.promptBrowserProof.mount(renderer, 1, value),
+        {
+          renderer,
+          value: source,
+        },
+      );
+      await ready(page);
+      await page.evaluate(() => window.promptBrowserProof.theme('photopro', true));
+      const editor = page.locator('[data-sc-prompt-editor] .cm-editor');
+      await editor.evaluate((element) => {
+        if (!(element instanceof HTMLElement)) throw new Error('Missing native editor element.');
+        element.dataset.paletteProbe = 'original';
+      });
+      for (const [palette, expectedScheme] of [
+        ['black', 'dark'],
+        ['light-gray', 'light'],
+        ['medium-gray', 'dark'],
+      ] as const) {
+        await page.evaluate((value) => {
+          document.documentElement.dataset.scPhotoproPalette = value;
+        }, palette);
+        expect(
+          await page
+            .locator('[data-sc-prompt-editor]')
+            .evaluate((root) => getComputedStyle(root).colorScheme),
+        ).toBe(expectedScheme);
+        const contentPadding = await page
+          .locator('[data-sc-prompt-editor] .cm-content')
+          .evaluate((content) => {
+            const style = getComputedStyle(content);
+            return {
+              left: Number.parseFloat(style.paddingLeft),
+              right: Number.parseFloat(style.paddingRight),
+            };
+          });
+        expect(contentPadding.left).toBeGreaterThanOrEqual(6);
+        expect(contentPadding.right).toBe(6);
+        expect(await editor.getAttribute('data-palette-probe')).toBe('original');
+        expect(await page.evaluate(() => window.promptBrowserProof.read().source)).toBe(source);
+      }
+    } finally {
+      await page.close();
+    }
+  },
+);
+
+test.each(['nodes-1', 'nodes-2'] as const)(
+  '%s PhotoPro prompt editor wraps long text without a horizontal scrollbar',
+  async (renderer) => {
+    const page = await browser.newPage();
+    try {
+      await page.goto(address);
+      await page.waitForFunction(() => !!window.promptBrowserProof);
+      await page.evaluate(() => window.promptBrowserProof.theme('photopro', true));
+      const longPrompt = 'unbroken_prompt_token'.repeat(12);
+      await page.evaluate(
+        ({ renderer, value }) => window.promptBrowserProof.mount(renderer, 1, value),
+        { renderer, value: longPrompt },
+      );
+      await page.locator('[data-sc-prompt-editor] .cm-content').waitFor({ state: 'visible' });
+      const overflow = await page.locator('[data-sc-prompt-editor]').evaluate((root) => {
+        const field = root.querySelector<HTMLElement>('.sc-photopro-editor-field');
+        const scroller = root.querySelector<HTMLElement>('.cm-scroller');
+        const line = root.querySelector<HTMLElement>('.cm-line');
+        if (!field || !scroller || !line) throw new Error('Missing prompt scroll surfaces.');
+        return {
+          field: getComputedStyle(field).overflowX,
+          scroller: getComputedStyle(scroller).overflowX,
+          lineHeight: line.getBoundingClientRect().height,
+        };
+      });
+      expect(overflow.field).toBe('hidden');
+      expect(overflow.scroller).toBe('hidden');
+      expect(overflow.lineHeight).toBeGreaterThan(30);
+      expect(await page.evaluate(() => window.promptBrowserProof.read().source)).toBe(longPrompt);
+    } finally {
+      await page.close();
+    }
+  },
+  30_000,
+);
+
 test('publish the minimum prompt allocation before native renderer sizing can feed back', async () => {
   const page = await browser.newPage();
   try {

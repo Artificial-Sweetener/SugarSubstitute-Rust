@@ -27,6 +27,18 @@ export function ensureNodeCardAppearanceStyles(documentRef: Document): void {
       color:var(--sc-text,var(--fg-color,#eee));
     }
     .sugarcubes-cube-face__node-card { box-sizing:border-box; border:1px solid var(--interface-stroke,#454545); border-radius:12px; background:var(--sugarcubes-masonry-card-surface,var(--comfy-input-bg,#222)); }
+    html[data-sc-compact-masonry] .sugarcubes-cube-face__node-card,
+    html[data-sc-compact-masonry] .sugarcubes-cube-face__node-card .lg-node,
+    html[data-sc-compact-masonry] .sugarcubes-cube-face__node-card .lg-node > [data-testid="node-inner-wrapper"],
+    html[data-sc-compact-masonry] .sugarcubes-cube-face__node-card [data-testid^="node-header-"],
+    html[data-sc-compact-masonry] .sugarcubes-cube-face__node-card [data-testid^="node-body-"] {
+      border-radius:0 !important;
+    }
+    html[data-sc-compact-masonry] .sugarcubes-cube-face__node-card {
+      border:solid var(--interface-stroke,#454545);
+      border-width:0 1px 1px 0;
+    }
+    html[data-sc-compact-masonry] .sugarcubes-cube-face__node-card [data-sc-style-node] > [data-testid="node-inner-wrapper"] { border:0 !important; }
     .sugarcubes-cube-face__node-card .lg-node { cursor:default; }
     .sugarcubes-cube-face__node-card .lg-node:not([data-sc-style-node]) [data-testid="advanced-inputs-button"] {
       --node-component-header-surface:var(--sugarcubes-cube-card-header, var(--sugarcubes-masonry-card-surface, var(--comfy-input-bg, #222)));

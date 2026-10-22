@@ -5039,15 +5039,17 @@ import { readOwnedVisualStyle } from "../surface/appearance/VisualStyleBoundary.
 if (!customElements.get("fluent-menu-list")) await MenuList.define(definition);
 if (!customElements.get("fluent-menu-item")) await MenuItem.define(definition2);
 function createMenuList(document2) {
+  const style = readOwnedVisualStyle(document2);
   const menu = document2.createElement(
-    readOwnedVisualStyle(document2) === "spectrum" ? "sp-menu" : "fluent-menu-list"
+    style === "spectrum" ? "sp-menu" : style === "photopro" ? "div" : "fluent-menu-list"
   );
   if (menu.localName === "sp-menu") menu.setAttribute("ignore", "");
   return menu;
 }
 function createMenuItem(document2) {
+  const style = readOwnedVisualStyle(document2);
   return document2.createElement(
-    readOwnedVisualStyle(document2) === "spectrum" ? "sc-spectrum-menu-item" : "fluent-menu-item"
+    style === "spectrum" ? "sc-spectrum-menu-item" : style === "photopro" ? "div" : "fluent-menu-item"
   );
 }
 function setMenuItemChecked(row, checked) {
@@ -5059,7 +5061,7 @@ function setMenuItemChecked(row, checked) {
     );
 }
 function menuItemSlot(document2, position) {
-  return readOwnedVisualStyle(document2) === "spectrum" ? position === "start" ? "icon" : "value" : position;
+  return readOwnedVisualStyle(document2) === "photopro" ? "" : readOwnedVisualStyle(document2) === "spectrum" ? position === "start" ? "icon" : "value" : position;
 }
 export {
   createMenuItem,

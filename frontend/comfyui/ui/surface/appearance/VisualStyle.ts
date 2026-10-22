@@ -14,12 +14,12 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Define persisted visual styles independently of browser controls and renderer availability. */
-export type VisualStyle = 'comfy' | 'fluent' | 'spectrum';
+export type VisualStyle = 'comfy' | 'fluent' | 'spectrum' | 'photopro';
 export type StyledVisualStyle = Exclude<VisualStyle, 'comfy'>;
 
 /** Accept only styles with an installed presentation implementation. */
 export function isVisualStyle(value: unknown): value is VisualStyle {
-  return value === 'comfy' || value === 'fluent' || value === 'spectrum';
+  return value === 'comfy' || value === 'fluent' || value === 'spectrum' || value === 'photopro';
 }
 
 /** Preserve the public Fluent preference until a visual style has been explicitly saved. */

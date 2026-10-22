@@ -54,12 +54,14 @@ export function registerVisualStylePreference(
       { value: 'comfy', text: 'Comfy' },
       { value: 'fluent', text: 'Fluent' },
       { value: 'spectrum', text: 'Spectrum 2' },
+      { value: 'photopro', text: 'PhotoPro' },
     ],
     tooltip:
-      'Choose Comfy, Fluent, or Spectrum 2 for node cards, masonry, and SugarCubes surfaces.',
+      'Choose Comfy, Fluent, Spectrum 2, or PhotoPro for node cards, masonry, and SugarCubes surfaces.',
     onChange: (value: unknown) => {
       if (isVisualStyle(value)) accept(value);
-      else report(new TypeError('The visual style must be Comfy, Fluent, or Spectrum 2.'));
+      else
+        report(new TypeError('The visual style must be Comfy, Fluent, Spectrum 2, or PhotoPro.'));
     },
   });
   accept(initial);

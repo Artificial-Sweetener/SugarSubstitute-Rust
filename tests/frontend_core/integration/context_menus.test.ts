@@ -25,6 +25,9 @@ test('renders non-interactive section labels literally without introducing anoth
     entries: [{ label: '<b>Global</b>', section: true }, { label: '960 x 1344' }],
   });
   expect(document.querySelector('[data-sc-menu-section]')?.textContent).toBe('<b>Global</b>');
+  expect(document.querySelector('[role="menu"]')?.getAttribute('data-sc-menu-surface')).toBe(
+    'actions',
+  );
   expect(document.querySelector('[data-sc-menu-section] b')).toBeNull();
   expect(document.querySelectorAll('[role=menuitem]')).toHaveLength(1);
   expect(document.activeElement?.textContent).toBe('960 x 1344');

@@ -26,6 +26,39 @@ afterEach(() => {
   document.documentElement.removeAttribute('data-sc-visual-style');
 });
 
+test('PhotoPro activation uses the shared checkbox and preserves edits across style changes', () => {
+  publishVisualStyle(document, 'photopro');
+  const node = { id: 'patch', type: 'MahiroCFG' };
+  const card = {
+    id: 'patch',
+    node,
+    label: '<img src=x>',
+    enabled: true,
+    visible: true,
+    showActivationControl: true,
+  };
+  const onChange = jest.fn();
+  const view = new CubeFaceActivationControl(document, card, onChange);
+  document.body.append(view.root);
+  const checkbox = view.root.querySelector('input');
+  if (!checkbox) throw new Error('Missing PhotoPro checkbox');
+  expect(checkbox.type).toBe('checkbox');
+  expect(checkbox.hasAttribute('data-sc-boolean-checkbox')).toBe(true);
+  expect(checkbox.hasAttribute('role')).toBe(false);
+  expect(checkbox.checked).toBe(true);
+  expect(checkbox.getAttribute('aria-label')).toBe('Disable <img src=x>');
+  expect(view.root.querySelector('.p-toggleswitch')).toBeNull();
+  checkbox.click();
+  expect(onChange).toHaveBeenCalledTimes(1);
+  expect(onChange).toHaveBeenCalledWith(node, false);
+  publishVisualStyle(document, 'fluent');
+  expect(view.root.querySelector('[role="switch"]')).not.toBeNull();
+  publishVisualStyle(document, 'photopro');
+  expect(view.root.querySelector('input')?.checked).toBe(false);
+  expect(onChange).toHaveBeenCalledTimes(1);
+  view.dispose();
+});
+
 test('renders an accessible switch without a PrimeVue stylesheet and keeps its focused input', () => {
   const node = { id: 'lora', type: 'LoraLoader' };
   const card = {

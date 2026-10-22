@@ -18,10 +18,17 @@ import { applyOwnedFluentTheme, fluentTokenDeclarations } from './FluentThemeRun
 import { spectrumTokenDeclarations } from './SpectrumThemeRuntime.js';
 import { fluentAppearanceCss } from './FluentAppearanceStyles.js';
 import { spectrumAppearanceCss } from './SpectrumAppearanceStyles.js';
+import { photoProAppearanceCss, photoProControlCss } from './PhotoProAppearanceStyles.js';
+import { photoProPaletteCss, photoProTokenDeclarations } from './PhotoProThemeTokens.js';
+import { photoProMenuCss } from './PhotoProMenuStyles.js';
 import { readOwnedVisualStyle } from './VisualStyleBoundary.js';
 /** Return the complete token contract for one accepted design system and palette. */
 export function visualStyleTokens(style, dark) {
-    return style === 'spectrum' ? spectrumTokenDeclarations(dark) : fluentTokenDeclarations(dark);
+    return style === 'spectrum'
+        ? spectrumTokenDeclarations(dark)
+        : style === 'photopro'
+            ? photoProTokenDeclarations()
+            : fluentTokenDeclarations(dark);
 }
 /** Apply appearance without changing a surface's DOM identity, focus, or floating transport. */
 export function applyOwnedTheme(element, dark, style = readOwnedVisualStyle(element.ownerDocument)) {
@@ -45,7 +52,7 @@ export function applyOwnedTheme(element, dark, style = readOwnedVisualStyle(elem
 export function nativeVisualStyleCss(style, dark) {
     if (style === 'fluent')
         return fluentAppearanceCss(dark);
-    return spectrumAppearanceCss(dark);
+    return style === 'spectrum' ? spectrumAppearanceCss(dark) : photoProAppearanceCss();
 }
 /** Install static provider scopes once so detached controls receive tokens when they connect. */
 function ensureThemeStyles(document) {
@@ -54,9 +61,12 @@ function ensureThemeStyles(document) {
     const stylesheet = document.createElement('style');
     stylesheet.id = 'sugarcubes-theme-providers';
     stylesheet.textContent =
-        ['fluent', 'spectrum']
+        ['fluent', 'spectrum', 'photopro']
             .flatMap((style) => [true, false].map((dark) => `[data-sc-theme="${style}"][data-sc-color-scheme="${dark ? 'dark' : 'light'}"]{${visualStyleTokens(style, dark)}}`))
             .join('\n') +
+            photoProControlCss() +
+            photoProMenuCss() +
+            photoProPaletteCss() +
             `
     .sc-context-menu[data-sc-theme="spectrum"] {
       padding:4px; border-width:1px; border-style:solid; border-color:var(--sc-border);

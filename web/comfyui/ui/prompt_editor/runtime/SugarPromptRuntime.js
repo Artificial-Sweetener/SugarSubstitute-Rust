@@ -116,7 +116,7 @@ import {
 } from "./chunk-QTBJ64DI.js";
 import {
   installSugarPromptStyles
-} from "./chunk-OY6RWRX2.js";
+} from "./chunk-46CU34E6.js";
 import {
   SugarPromptTooltip
 } from "./chunk-5N7RXSME.js";
@@ -48391,7 +48391,8 @@ var SugarPromptEditor = class {
   #applyAppearance() {
     const { style, dark } = this.#options.appearance.appearance;
     this.element.dataset.scPromptStyle = style;
-    this.element.style.colorScheme = dark ? "dark" : "light";
+    if (style === "photopro") this.element.style.removeProperty("color-scheme");
+    else this.element.style.colorScheme = dark ? "dark" : "light";
     if (style === "comfy") applyOwnedTheme(this.element, null);
     else applyOwnedTheme(this.element, dark, style);
     if (this.#fieldStyle !== style) {

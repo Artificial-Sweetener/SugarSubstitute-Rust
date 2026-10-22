@@ -18,6 +18,7 @@ var _a;
 import { FloatingSurface } from './FloatingSurface.js';
 import { createMenuList, createMenuItem, setMenuItemChecked, menuItemSlot, } from './MenuControlRuntime.js';
 import { subscribeVisualStyle } from '../surface/appearance/VisualStyleBoundary.js';
+import { identifyMenuSurface } from './MenuSurface.js';
 /** Own a complete transient menu tree; features supply values, icons and actions only. */
 export class ContextMenu {
     static #active = new WeakMap();
@@ -78,6 +79,7 @@ export class ContextMenu {
         this.#trim(depth);
         const menu = createMenuList(this.#document);
         menu.className = 'sc-context-menu';
+        identifyMenuSurface(menu, 'actions');
         menu.setAttribute('role', 'menu');
         menu.setAttribute('tabindex', '-1');
         menu.setAttribute('aria-label', this.#options?.label ?? 'Actions');

@@ -33,6 +33,7 @@ import type { WorkflowSessionStore } from '../execution/application/WorkflowSess
 import { NativeRelationWidgetRenderer } from './infrastructure/NativeRelationWidgetRenderer.js';
 import { NativeRelationVisibility } from './infrastructure/NativeRelationVisibility.js';
 import { NativeOverrideToolbarHost } from './infrastructure/NativeOverrideToolbarHost.js';
+import { OverridePresentationHost } from './infrastructure/OverridePresentationHost.js';
 import { createNativeOverrideToolbarState } from './infrastructure/NativeOverrideToolbarState.js';
 import { GlobalOverrideToolbar } from './presentation/GlobalOverrideToolbar.js';
 import { CubeRelationPresenter } from './presentation/CubeRelationPresenter.js';
@@ -60,6 +61,7 @@ export class RelationHostLifecycle {
   readonly #seedMenus: NativeSeedMenuHost;
   readonly #execution: NativeRelationExecution;
   readonly #toolbar: GlobalOverrideToolbar;
+  readonly #overridePresentation: OverridePresentationHost;
   readonly #cards: CubeRelationPresenter;
   readonly #views: NativeRelationViews;
   readonly #visibility = new NativeRelationVisibility();
@@ -122,6 +124,7 @@ export class RelationHostLifecycle {
       new NativeOverrideToolbarHost(options.document),
       createNativeOverrideToolbarState(options.document, options.logger),
     );
+    this.#overridePresentation = new OverridePresentationHost(this.#toolbar);
     this.#cards = new CubeRelationPresenter(
       options.document,
       this.relations,
@@ -162,7 +165,7 @@ export class RelationHostLifecycle {
     );
     this.#chromePresence = new HostSurfaceObserver(
       this.options.document.body,
-      '.actionbar-container',
+      '.actionbar-container,.sc-plugin-overrides-slot',
       changed,
     );
     this.options.document.addEventListener('input', this.#nativeEdit, true);
@@ -235,7 +238,16 @@ export class RelationHostLifecycle {
 
   /** Delegate temporary embedding layout to the toolbar's presentation and preference owners. */
   setOverridesInline(inline: boolean): void {
-    this.#toolbar.setPresentation(inline ? 'substitute' : 'comfy');
+    this.#overridePresentation.setInline(inline);
+  }
+
+  /** Restore override presentation preferences after host appearance settings are available. */
+  setupOverridePresentation(): void {
+    this.#overridePresentation.setup(
+      this.options.app,
+      this.options.document,
+      this.options.reportError,
+    );
   }
 
   /** Suspend workflow-wide override presentation while retaining authoritative relation state. */
@@ -252,6 +264,7 @@ export class RelationHostLifecycle {
     this.#unsubscribeChoices?.();
     this.#unsubscribeChoices = null;
     this.beforeConfigureGraph();
+    this.#overridePresentation.dispose();
     this.#toolbar.dispose();
     this.options.document.removeEventListener('input', this.#nativeEdit, true);
     this.options.document.removeEventListener('change', this.#nativeEdit, true);

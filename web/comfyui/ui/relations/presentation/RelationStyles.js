@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Style relation chrome with Comfy tokens and explicit embedded Substitute presentation. */
 import { ensureOwnedControlAppearanceStyles } from '../../surface/appearance/OwnedControlAppearanceStyles.js';
+import { globalOverrideCardCss } from './GlobalOverrideCardStyles.js';
 /** Install relation geometry while shared native control foregrounds retain one owner. */
 export function ensureRelationStyles(document) {
     ensureOwnedControlAppearanceStyles(document);
@@ -82,6 +83,7 @@ export function ensureRelationStyles(document) {
   .sc-relation-canvas-header { position:absolute; top:2px; right:8px; z-index:2; }
   .sc-relation-canvas-header, .sc-relation-canvas-field { pointer-events:auto; }
   .sc-relation-canvas-field { position:absolute; z-index:2; }
+  ${globalOverrideCardCss}
   `;
     document.head.append(style);
 }

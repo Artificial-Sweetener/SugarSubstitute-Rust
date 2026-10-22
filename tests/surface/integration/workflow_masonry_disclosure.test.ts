@@ -61,6 +61,10 @@ test('packs simultaneous disclosure destinations once per frame without rebuildi
   document.body.append(view.element);
   const mount = jest.fn<NativeNodeCardRenderer['mount']>(() => ({ refresh() {}, unmount() {} }));
   await view.mountCards({ mount, dispose() {} });
+  expect(view.element.firstElementChild?.className).toBe('sc-plugin-overrides-slot');
+  expect(view.element.firstElementChild?.nextElementSibling?.className).toBe(
+    'sugarcubes-workflow-masonry__content',
+  );
   view.element.removeAttribute('data-sc-masonry-preparing');
   for (const callback of frames.splice(0)) callback(0);
   const layout = jest.spyOn(view, 'layout');
@@ -317,7 +321,7 @@ test('packs the settled height once and never sends neighbors through intermedia
     openCube() {},
   });
   document.body.append(view.element);
-  const content = view.element.firstElementChild;
+  const content = view.element.querySelector('.sugarcubes-workflow-masonry__content');
   if (!content) throw new Error('Masonry content missing');
   Object.defineProperty(content, 'clientWidth', { value: 824 });
   const heights = new Map([

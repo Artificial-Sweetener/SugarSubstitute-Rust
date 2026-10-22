@@ -129,6 +129,32 @@ test('dropdown offers the host modes, tracks selection and supports keyboard/dis
   f.controls.clear();
 });
 
+test('seed accessories retain pointer and click interaction from the host numeric editor', () => {
+  const f = fixture();
+  const hostPointer = jest.fn();
+  const hostMouse = jest.fn();
+  const hostClick = jest.fn(() => f.field.numeric.input.focus());
+  f.field.numeric.spinner.addEventListener('pointerdown', hostPointer);
+  f.field.numeric.spinner.addEventListener('mousedown', hostMouse);
+  f.field.numeric.spinner.addEventListener('click', hostClick);
+
+  f.arrow.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+  f.arrow.dispatchEvent(new Event('mousedown', { bubbles: true }));
+  f.arrow.click();
+  expect(f.arrow.getAttribute('aria-expanded')).toBe('true');
+  expect(document.activeElement?.getAttribute('data-sc-seed-option')).toBe('randomize');
+  expect(hostPointer).not.toHaveBeenCalled();
+  expect(hostMouse).not.toHaveBeenCalled();
+  expect(hostClick).not.toHaveBeenCalled();
+
+  document.querySelector<HTMLButtonElement>('[data-sc-seed-option="fixed"]')?.click();
+  expect(f.field.control.readMode()).toBe('fixed');
+  f.primary.click();
+  expect(f.field.control.readMode()).toBe('randomize');
+  expect(hostClick).not.toHaveBeenCalled();
+  f.controls.clear();
+});
+
 test('follows disabled input and removes accessories, subscriptions and markers on replacement', () => {
   const f = fixture();
   f.controls.reconcile(f.root, [f.field]);
@@ -148,6 +174,7 @@ test('follows disabled input and removes accessories, subscriptions and markers 
   expect(nativeSeedCss()).toContain('flex:0 1 192px');
   expect(nativeSeedCss()).toContain('min-width:60px');
   expect(nativeSeedCss()).toContain('font-variant-numeric:tabular-nums');
+  expect(nativeSeedCss()).toContain('[data-sc-seed-split] { position:absolute; z-index:11;');
   f.controls.clear();
 });
 

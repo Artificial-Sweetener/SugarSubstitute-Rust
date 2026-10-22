@@ -21,11 +21,28 @@ import { readProjectedAdvancedInputMount } from '../NativeProjectedAdvancedInput
 
 /** Route presentation to the mounted state owner rather than competing click handlers. */
 export class NativeAdvancedDisclosure {
+  readonly #buttons = new Map<HTMLButtonElement, Map<string, string | null>>();
   readonly #graph = new NativeGraphAdvancedDisclosure();
   readonly #projected = new NativeProjectedAdvancedDisclosure();
 
   /** Reconcile each recognized card through its renderer's disclosure lifetime. */
   reconcile(card: NativeCardBoundary): void {
+    for (const [button, attributes] of this.#buttons) {
+      if (!button.isConnected) {
+        restoreButton(button, attributes);
+        this.#buttons.delete(button);
+      }
+    }
+    if (card.advanced) {
+      const { button, expanded } = card.advanced;
+      if (!this.#buttons.has(button))
+        this.#buttons.set(
+          button,
+          new Map(['aria-label', 'aria-expanded'].map((name) => [name, button.getAttribute(name)])),
+        );
+      button.setAttribute('aria-label', `${expanded ? 'Hide' : 'Show'} advanced inputs`);
+      button.setAttribute('aria-expanded', String(expanded));
+    }
     const projection = readProjectedAdvancedInputMount(card.root);
     if (projection) this.#projected.reconcile(projection, card);
     else this.#graph.reconcile(card);
@@ -35,5 +52,18 @@ export class NativeAdvancedDisclosure {
   clear(): void {
     this.#graph.clear();
     this.#projected.clear();
+    for (const [button, attributes] of this.#buttons) restoreButton(button, attributes);
+    this.#buttons.clear();
+  }
+}
+
+/** Return host accessibility attributes when themed disclosure presentation retires. */
+function restoreButton(
+  button: HTMLButtonElement,
+  attributes: ReadonlyMap<string, string | null>,
+): void {
+  for (const [name, value] of attributes) {
+    if (value === null) button.removeAttribute(name);
+    else button.setAttribute(name, value);
   }
 }

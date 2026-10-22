@@ -34,9 +34,13 @@ function vnode(
   return { type: { __name: name }, component: { props, subTree: { el, children } } };
 }
 
-test.each(['native', 'cube', 'masonry'])(
-  'presents seed controls in %s and restores native UI across theme/renderer changes',
-  async (view) => {
+test.each(
+  (['fluent', 'spectrum', 'photopro'] as const).flatMap((style) =>
+    ['native', 'cube', 'masonry'].map((view) => ({ style, view })),
+  ),
+)(
+  'presents seed controls in $style $view and restores native UI across renderer changes',
+  async ({ style, view }) => {
     const surface = document.createElement('section');
     if (view === 'masonry') surface.className = 'sugarcubes-workflow-masonry';
     const mount = document.createElement('div');
@@ -132,14 +136,16 @@ test.each(['native', 'cube', 'masonry'])(
     const errors = jest.fn();
     const host = new AppearanceHost({ document, app, reportError: errors });
     host.setup();
-    host.setStyle('fluent');
+    host.setStyle(style);
     frames.splice(0).forEach((frame) => frame(0));
     const toggle = root.querySelector<HTMLButtonElement>('[data-sc-seed-toggle]');
     const arrow = root.querySelector<HTMLButtonElement>('[data-sc-seed-menu]');
     if (!toggle || !arrow) throw new Error('Seed UI was not discovered');
-    expect(getComputedStyle(input).paddingLeft).toBe('8px');
-    expect(getComputedStyle(input).paddingRight).toBe('8px');
-    expect(getComputedStyle(input).textAlign).toBe('left');
+    if (style === 'fluent') {
+      expect(getComputedStyle(input).paddingLeft).toBe('8px');
+      expect(getComputedStyle(input).paddingRight).toBe('8px');
+      expect(getComputedStyle(input).textAlign).toBe('left');
+    }
     if (view !== 'native') {
       expect(getComputedStyle(layout).display).toBe('flex');
       expect(getComputedStyle(container).flexShrink).toBe('1');
@@ -151,10 +157,15 @@ test.each(['native', 'cube', 'masonry'])(
     expect(getComputedStyle(nativeMode).display).toBe('none');
     toggle.click();
     expect(control.value).toBe('fixed');
-    arrow.click();
-    document.querySelector<HTMLButtonElement>('[data-sc-seed-option="decrement"]')?.click();
-    expect(control.value).toBe('decrement');
-    expect(modeCallback).toHaveBeenCalledWith('decrement');
+    for (const mode of ['increment', 'decrement', 'randomize', 'fixed'] as const) {
+      arrow.click();
+      expect(arrow.getAttribute('aria-expanded')).toBe('true');
+      document.querySelector<HTMLButtonElement>(`[data-sc-seed-option="${mode}"]`)?.click();
+      expect(control.value).toBe(mode);
+      expect(toggle.dataset.scSeedMode).toBe(mode);
+      expect(arrow.getAttribute('aria-expanded')).toBe('false');
+      expect(modeCallback).toHaveBeenCalledWith(mode);
+    }
     expect(widget.value).toBe(709312264123456);
     expect(input.value).toBe('709312264123456');
     vue = false;
@@ -163,18 +174,18 @@ test.each(['native', 'cube', 'masonry'])(
     expect(root.querySelector('[data-sc-seed-split]')).toBeNull();
     expect(input.hasAttribute('data-sc-number-input')).toBe(false);
     expect(getComputedStyle(nativeMode).display).not.toBe('none');
-    expect(control.value).toBe('decrement');
+    expect(control.value).toBe('fixed');
     vue = true;
     events.dispatchEvent(new Event('Comfy.VueNodes.Enabled.change'));
     await Promise.resolve();
     frames.splice(0).forEach((frame) => frame(0));
     expect(root.querySelector('[data-sc-seed-toggle]')?.getAttribute('data-sc-seed-mode')).toBe(
-      'decrement',
+      'fixed',
     );
     host.setStyle('comfy');
     expect(root.querySelector('[data-sc-seed-split]')).toBeNull();
     expect(input.isConnected).toBe(true);
-    expect(control.value).toBe('decrement');
+    expect(control.value).toBe('fixed');
     expect(stop).toHaveBeenCalledTimes(2);
     expect(errors).not.toHaveBeenCalled();
     host.dispose();

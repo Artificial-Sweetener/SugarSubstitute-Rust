@@ -9,8 +9,8 @@ export function scrollbarHorizontalOutset(element) {
     const value = Number(element.getAttribute('data-sc-scrollbar-horizontal-outset'));
     return Number.isFinite(value) ? Math.min(12, Math.max(0, value)) : 0;
 }
-/** Clip a scroll viewport without changing its box or inserting layout wrappers. */
-export function scrollbarTrack(element) {
+/** Preserve a classic scrollbar's full owner extent or clip a floating handle to the viewport. */
+export function scrollbarTrack(element, preserveOwnerExtent = false) {
     const windowRef = element.ownerDocument.defaultView;
     if (!windowRef || !element.isConnected)
         return null;
@@ -30,7 +30,7 @@ export function scrollbarTrack(element) {
     const edge = element.getAttribute('data-sc-scrollbar-edge') === 'parent' ? scrollParent(element) : null;
     if (edge)
         right = edge.getBoundingClientRect().right - 1;
-    for (let parent = scrollParent(element); parent && !root; parent = scrollParent(parent)) {
+    for (let parent = preserveOwnerExtent ? null : scrollParent(element); parent && !root; parent = scrollParent(parent)) {
         const style = windowRef.getComputedStyle(parent);
         const bounds = parent.getBoundingClientRect();
         if (/(auto|scroll|hidden|clip)/.test(style.overflowX)) {
@@ -43,11 +43,13 @@ export function scrollbarTrack(element) {
             horizontalBottom = Math.min(horizontalBottom, bounds.bottom);
         }
     }
-    left = Math.max(0, left);
-    top = Math.max(0, top);
-    right = Math.min(windowRef.innerWidth, right);
-    bottom = Math.min(windowRef.innerHeight, bottom);
-    horizontalBottom = Math.min(windowRef.innerHeight, horizontalBottom);
+    if (!preserveOwnerExtent) {
+        left = Math.max(0, left);
+        top = Math.max(0, top);
+        right = Math.min(windowRef.innerWidth, right);
+        bottom = Math.min(windowRef.innerHeight, bottom);
+        horizontalBottom = Math.min(windowRef.innerHeight, horizontalBottom);
+    }
     if (right - left <= 12 || bottom - top <= 12)
         return null;
     return {

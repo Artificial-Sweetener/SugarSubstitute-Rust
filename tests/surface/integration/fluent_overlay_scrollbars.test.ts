@@ -103,6 +103,45 @@ test('keeps the same viewport thumb visible when its positioned scroll owner mov
   }
 });
 
+test('PhotoPro scroll track uses working arrow buttons and follows theme switching', async () => {
+  const area = scrollArea();
+  area.style.position = 'relative';
+  area.style.paddingRight = '7px';
+  document.body.append(area);
+  const frames: FrameRequestCallback[] = [];
+  jest.spyOn(window, 'requestAnimationFrame').mockImplementation((frame) => {
+    frames.push(frame);
+    return frames.length;
+  });
+  document.documentElement.dataset.scVisualStyle = 'photopro';
+  const host = new OverlayScrollbarHost(document, jest.fn());
+  try {
+    host.enable();
+    await flush(frames);
+    const vertical = area.querySelector<HTMLElement>(
+      '.sc-style-scrollbar[aria-orientation="vertical"]',
+    );
+    const track = vertical?.querySelector<HTMLElement>('.sc-style-scrollbar-track');
+    const down = track?.querySelector<HTMLButtonElement>('[data-sc-scroll-step="end"]');
+    expect(vertical?.hidden).toBe(false);
+    expect(track?.hidden).toBe(false);
+    expect(area.hasAttribute('data-sc-photopro-scroll-gutter')).toBe(true);
+    expect(area.style.getPropertyValue('--sc-scrollbar-base-padding-right')).toBe('7px');
+    down?.click();
+    expect(area.scrollTop).toBe(40);
+    expect(track?.style.height).toBe('200px');
+    document.documentElement.dataset.scVisualStyle = 'fluent';
+    area.dispatchEvent(new Event('scroll', { bubbles: true }));
+    await flush(frames);
+    expect(track?.hidden).toBe(true);
+  } finally {
+    host.clear();
+    expect(area.hasAttribute('data-sc-photopro-scroll-gutter')).toBe(false);
+    expect(area.style.paddingRight).toBe('7px');
+    document.documentElement.removeAttribute('data-sc-visual-style');
+  }
+});
+
 test('reads new overflow candidates before mounting any tracks', async () => {
   const first = scrollArea(),
     second = scrollArea();

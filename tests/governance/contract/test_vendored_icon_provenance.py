@@ -84,6 +84,7 @@ def test_every_vendored_icon_has_exact_provenance_and_deployment_bytes() -> None
             "https://github.com/microsoft/fluentui",
             "https://github.com/microsoft/polyfills",
             "https://github.com/zhiyiYo/PyQt-Fluent-Widgets",
+            "https://github.com/yuanzhixiang/openphoto",
         }:
             continue
         assert source in {
@@ -138,6 +139,48 @@ def test_every_vendored_icon_has_exact_provenance_and_deployment_bytes() -> None
         if path.is_file()
     }
     assert recorded == actual
+
+
+def test_photopro_fonts_have_pinned_licensed_deployment_bytes() -> None:
+    """Verify PhotoPro font provenance and deployed bytes independently of icons."""
+    manifest = tomllib.loads((ROOT / "third_party/manifest.toml").read_text("utf-8"))
+    components: object = manifest["component"]
+    assert isinstance(components, list)
+    matches = [
+        component
+        for component in components
+        if isinstance(component, dict)
+        and component.get("name") == "Source Sans 3 PhotoPro fonts"
+    ]
+    assert len(matches) == 1
+    component = matches[0]
+    assert component["source"] == "https://github.com/yuanzhixiang/openphoto"
+    assert re.fullmatch(r"[0-9a-f]{40}", component["revision"])
+    assert component["license"] == "OFL-1.1"
+    license_path = Path(component["license_file"])
+    license_bytes = (ROOT / license_path).read_bytes()
+    assert b"SIL OPEN FONT LICENSE" in license_bytes
+    assert (ROOT / "web" / license_path).read_bytes() == license_bytes
+    assets: object = component["asset"]
+    assert isinstance(assets, list) and len(assets) == 2
+    recorded: set[Path] = set()
+    for asset in assets:
+        assert isinstance(asset, dict)
+        source_path = asset["source_path"]
+        authored_path = Path(asset["vendored_file"])
+        runtime_path = Path(asset["runtime_file"])
+        assert source_path == f"crates/op-ui/assets/fonts/{authored_path.name}"
+        assert authored_path.parent == Path("frontend/static/fonts")
+        assert runtime_path == Path("web/fonts") / authored_path.name
+        assert authored_path not in recorded
+        recorded.add(authored_path)
+        contents = (ROOT / authored_path).read_bytes()
+        assert hashlib.sha256(contents).hexdigest() == asset["sha256"]
+        assert (ROOT / runtime_path).read_bytes() == contents
+    assert recorded == {
+        path.relative_to(ROOT)
+        for path in (ROOT / "frontend/static/fonts").glob("SourceSans3-*.ttf")
+    }
 
 
 def test_detector_illustrations_preserve_reference_provenance() -> None:

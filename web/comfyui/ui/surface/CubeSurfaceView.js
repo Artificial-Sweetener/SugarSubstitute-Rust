@@ -24,11 +24,13 @@ import { NativeCardGeometryObserver } from './NativeCardGeometryObserver.js';
 import { CubePreviewFrameResizePolicy } from './CubePreviewFrameResizePolicy.js';
 import { CubeFaceHeaderView } from './CubeFaceHeaderView.js';
 import { NativeCardPresentationOwner } from './NativeCardPresentationOwner.js';
+import { COMPACT_MASONRY_CHANGE } from './masonry/CompactMasonryPreference.js';
 /** Own DOM composition, actions, and responsive geometry for one Cube face. */
 export class CubeSurfaceView {
     element;
     header;
     #state;
+    #document;
     #nodes;
     #graph;
     #cube;
@@ -50,6 +52,8 @@ export class CubeSurfaceView {
     #lastLayoutWidth = 1;
     /** Build a Cube view without assuming ownership of Comfy's renderer service. */
     constructor(options) {
+        this.#document = options.document;
+        this.#document.addEventListener(COMPACT_MASONRY_CHANGE, this.#onCompactChange);
         this.#state = options.state;
         this.#nodes = [...options.nodes];
         this.#graph = options.graph;
@@ -155,6 +159,7 @@ export class CubeSurfaceView {
     }
     /** Remove native card mounts owned by this view. */
     dispose() {
+        this.#document.removeEventListener(COMPACT_MASONRY_CHANGE, this.#onCompactChange);
         this.#headerView.dispose();
         this.#previewDividerController?.dispose();
         this.#previewView.dispose();
@@ -162,6 +167,8 @@ export class CubeSurfaceView {
         this.#presentation.dispose();
         this.#cardHost.dispose();
     }
+    /** Repack native cards without changing persisted Cube-face spacing. */
+    #onCompactChange = () => this.layout(this.#lastLayoutWidth);
     /** Reconcile exact native card mounts from the shared presentation policy. */
     #renderCards() {
         this.#presentation.reset([]);

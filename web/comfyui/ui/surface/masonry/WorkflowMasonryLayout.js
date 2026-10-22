@@ -23,10 +23,10 @@ export function computeWorkflowMasonry(sections, options) {
     for (const section of sections) {
         const grid = computeCubeMasonry(section.cards, options);
         const y = result.height;
-        const headerHeight = 44;
+        const headerHeight = options.gap === 0 ? 36 : 44;
         result.sections.push({ id: section.id, y, height: grid.height + headerHeight });
         result.placements.push(...grid.placements.map((card) => ({ ...card, y: y + headerHeight + card.y })));
-        result.height += headerHeight + grid.height + 24;
+        result.height += headerHeight + grid.height + (options.gap === 0 ? 0 : 24);
     }
     return result;
 }

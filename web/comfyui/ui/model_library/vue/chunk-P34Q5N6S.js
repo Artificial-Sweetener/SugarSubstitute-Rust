@@ -225,6 +225,52 @@ var ModelPickerSession = class {
   }
 };
 
+// frontend/comfyui/ui/surface/appearance/ComboToggleController.ts
+var leases = /* @__PURE__ */ new WeakMap();
+function acquireComboToggle(documentRef) {
+  let lease = leases.get(documentRef);
+  if (!lease) {
+    lease = { users: 0, onClick: (event) => closeOpenCombo(documentRef, event) };
+    leases.set(documentRef, lease);
+    documentRef.addEventListener("click", lease.onClick, true);
+  }
+  lease.users += 1;
+  let released = false;
+  return () => {
+    if (!lease || released) return;
+    released = true;
+    if (--lease.users !== 0) return;
+    documentRef.removeEventListener("click", lease.onClick, true);
+    leases.delete(documentRef);
+  };
+}
+function closeOpenCombo(documentRef, event) {
+  if (!(event.target instanceof Element)) return;
+  const inlineSearch = event.target.closest("[data-sc-inline-search]");
+  const frame = event.target.closest(
+    "[data-sc-style-combo-frame], [data-capture-wheel]"
+  );
+  const activation = event.target.closest(
+    '[role="combobox"], .sc-model-field-arrow, button[aria-hidden="true"]'
+  );
+  if (!inlineSearch && (!frame || !activation || !frame.contains(activation))) return;
+  const combo = inlineSearch ?? frame?.querySelector(':scope > [role="combobox"]');
+  if (combo?.getAttribute("aria-expanded") !== "true") return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  const popupId = combo.getAttribute("aria-controls");
+  const popup = popupId ? documentRef.getElementById(popupId) : null;
+  const target = popup?.querySelector("[data-sc-inline-search]") ?? popup ?? combo;
+  target.dispatchEvent(
+    new KeyboardEvent("keydown", {
+      key: "Escape",
+      code: "Escape",
+      bubbles: true,
+      cancelable: true
+    })
+  );
+}
+
 // frontend/comfyui/ui/model_library/vue/ModelPickerField.ts
 var ModelPickerField = defineComponent({
   name: "SugarCubesModelPickerField",
@@ -245,6 +291,7 @@ var ModelPickerField = defineComponent({
   },
   emits: { contextReady: (_read) => true },
   setup(props, { emit }) {
+    const releaseComboToggle = acquireComboToggle(document);
     const session = props.session ?? new ModelPickerSession(document, () => props.binding);
     const transfer = shallowRef(session.read());
     const unsubscribeTransfer = session.subscribe(() => {
@@ -354,6 +401,7 @@ var ModelPickerField = defineComponent({
     document.addEventListener("pointerdown", outside, true);
     document.addEventListener("keydown", escape, true);
     onBeforeUnmount(() => {
+      releaseComboToggle();
       close();
       unsubscribe();
       unsubscribeTransfer();
@@ -416,6 +464,7 @@ var ModelPickerField = defineComponent({
             "sc-model-field",
             { "sc-model-field-open": open.value, "sc-model-field-transferring": !!transfer.value }
           ],
+          "data-sc-style-combo-frame": "",
           "aria-busy": !!transfer.value,
           onPointerdown: (event) => event.stopPropagation(),
           onMousedown: (event) => event.stopPropagation(),
@@ -468,7 +517,7 @@ var ModelPickerField = defineComponent({
               tabindex: -1,
               disabled: !!transfer.value,
               "aria-label": `Choose ${props.binding.label}`,
-              onClick: () => open.value ? close() : show()
+              onClick: show
             },
             h("span", { class: "sc-model-chevron" })
           ),

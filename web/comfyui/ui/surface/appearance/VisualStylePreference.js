@@ -45,13 +45,14 @@ export function registerVisualStylePreference(app, accept, report) {
             { value: 'comfy', text: 'Comfy' },
             { value: 'fluent', text: 'Fluent' },
             { value: 'spectrum', text: 'Spectrum 2' },
+            { value: 'photopro', text: 'PhotoPro' },
         ],
-        tooltip: 'Choose Comfy, Fluent, or Spectrum 2 for node cards, masonry, and SugarCubes surfaces.',
+        tooltip: 'Choose Comfy, Fluent, Spectrum 2, or PhotoPro for node cards, masonry, and SugarCubes surfaces.',
         onChange: (value) => {
             if (isVisualStyle(value))
                 accept(value);
             else
-                report(new TypeError('The visual style must be Comfy, Fluent, or Spectrum 2.'));
+                report(new TypeError('The visual style must be Comfy, Fluent, Spectrum 2, or PhotoPro.'));
         },
     });
     accept(initial);

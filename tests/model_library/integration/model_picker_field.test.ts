@@ -119,13 +119,18 @@ test.each([true, false])(
     const field = fixture();
     field.container.dataset.scStyleSurface = '';
     const style = document.createElement('style');
-    style.textContent = modelPickerCss + fluentAppearanceCss(dark);
+    // JSDOM does not resolve the inherited control-height variable in computed styles.
+    style.textContent = (modelPickerCss + fluentAppearanceCss(dark)).replaceAll(
+      'var(--sc-control-height,33px)',
+      '33px',
+    );
     field.container.append(style);
     const regular = document.createElement('div');
     regular.dataset.scStyleComboFrame = '';
     field.container.append(regular);
     const model = field.container.querySelector('.sc-model-field');
     if (!(model instanceof HTMLElement)) throw new Error('No plain model field mounted.');
+    expect(model.hasAttribute('data-sc-style-combo-frame')).toBe(true);
     expect(model.querySelector('.sc-model-banner')).toBeNull();
     for (const property of [
       'height',
@@ -150,7 +155,7 @@ test.each([true, false])(
     await nextTick();
     const banner = model.querySelector('.sc-model-banner');
     if (!(banner instanceof HTMLImageElement)) throw new Error('No thumbnail banner mounted.');
-    expect(getComputedStyle(model).height).toBe('32px');
+    expect(getComputedStyle(model).height).toBe(getComputedStyle(regular).height);
     banner.dispatchEvent(new Event('error'));
     await nextTick();
     expect(model.querySelector('.sc-model-banner')).toBeNull();

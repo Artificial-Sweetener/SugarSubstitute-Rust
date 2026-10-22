@@ -48,7 +48,50 @@ export function scrollbarPresentationCss() {
     @media (forced-colors:active) { .sc-style-scrollbar:focus-visible::before { outline-color:Highlight; } }
   `;
 }
+/** Paint the same overlay controls as Photoshop's square tracks in every PhotoPro palette. */
+export function photoProScrollbarCss() {
+    return `
+    [data-sc-photopro-scroll-gutter] {
+      padding-right:calc(var(--sc-scrollbar-base-padding-right,0px) + 14px) !important;
+    }
+    .sc-style-scrollbar[data-sc-photopro-scrollbar] { isolation:isolate; }
+    .sc-style-scrollbar[data-sc-photopro-scrollbar] .sc-style-scrollbar-track {
+      position:absolute; z-index:0; display:flex; box-sizing:border-box; justify-content:space-between;
+      border:1px solid var(--sc-photopro-scroll-border,#1f1f1f); border-radius:0;
+      background:var(--sc-photopro-scroll-track,#333); pointer-events:auto;
+    }
+    .sc-style-scrollbar[data-sc-photopro-scrollbar] .sc-style-scrollbar-track[hidden] { display:none!important; }
+    .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="vertical"] .sc-style-scrollbar-track { flex-direction:column; }
+    .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="horizontal"] .sc-style-scrollbar-track { flex-direction:row; }
+    .sc-style-scrollbar[data-sc-photopro-scrollbar] .sc-style-scrollbar-track button {
+      position:relative; flex:none; box-sizing:border-box; width:12px; height:12px; padding:0;
+      border:0; border-radius:0; background:var(--sc-photopro-scroll-track,#333);
+      color:var(--sc-photopro-scroll-arrow,#999); cursor:default;
+    }
+    .sc-style-scrollbar[data-sc-photopro-scrollbar] .sc-style-scrollbar-track button:hover { background:var(--sc-photopro-scroll-thumb,#555); }
+    .sc-style-scrollbar[data-sc-photopro-scrollbar] .sc-style-scrollbar-track button::before {
+      content:''; position:absolute; left:4px; top:4px; width:4px; height:4px;
+      border-top:1px solid currentColor; border-left:1px solid currentColor;
+    }
+    .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="vertical"] [data-sc-scroll-step="start"]::before { transform:rotate(45deg); }
+    .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="vertical"] [data-sc-scroll-step="end"]::before { transform:rotate(225deg); }
+    .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="horizontal"] [data-sc-scroll-step="start"]::before { transform:rotate(-45deg); }
+    .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="horizontal"] [data-sc-scroll-step="end"]::before { transform:rotate(135deg); }
+    .sc-style-scrollbar[data-sc-photopro-scrollbar]::before {
+      z-index:1; box-sizing:border-box; border:1px solid var(--sc-photopro-scroll-border,#1f1f1f); border-radius:0;
+      background:var(--sc-photopro-scroll-thumb,#555); transition:none;
+    }
+    .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="vertical"]::before,
+    .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="vertical"]:is(:hover,:focus-visible,[data-dragging])::before {
+      width:calc(10px / var(--sc-scrollbar-scale-x,1)); height:100%; right:calc(2px / var(--sc-scrollbar-scale-x,1));
+    }
+    .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="horizontal"]::before,
+    .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="horizontal"]:is(:hover,:focus-visible,[data-dragging])::before {
+      height:calc(10px / var(--sc-scrollbar-scale-y,1)); width:100%; bottom:calc(2px / var(--sc-scrollbar-scale-y,1));
+    }
+  `;
+}
 /** Apply the current palette without overriding the native owner's stacking context. */
 export function scrollbarCss(dark) {
-    return `${nativeScrollbarCss()} :root { --sc-style-scrollbar-thumb:${dark ? 'rgba(255,255,255,.55)' : 'rgba(0,0,0,.45)'}; } ${scrollbarPresentationCss()}`;
+    return `${nativeScrollbarCss()} :root { --sc-style-scrollbar-thumb:${dark ? 'rgba(255,255,255,.55)' : 'rgba(0,0,0,.45)'}; } ${scrollbarPresentationCss()} ${photoProScrollbarCss()}`;
 }

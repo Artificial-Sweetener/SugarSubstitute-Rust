@@ -154,6 +154,28 @@ describe('workflow masonry sections', () => {
     expect(result.height).toBe(496);
   });
 
+  test('packs compact columns and consecutive sections without card gutters', () => {
+    const result = computeWorkflowMasonry(
+      [
+        {
+          id: 'first',
+          cards: [
+            { id: 'a', height: 40 },
+            { id: 'b', height: 40 },
+          ],
+        },
+        { id: 'second', cards: [{ id: 'c', height: 20 }] },
+      ],
+      { availableWidth: 400, minimumColumnWidth: 200, gap: 0 },
+    );
+    expect(result.placements.map((card) => [card.id, card.x, card.y, card.width])).toEqual([
+      ['a', 0, 36, 200],
+      ['b', 200, 36, 200],
+      ['c', 0, 112, 200],
+    ]);
+    expect(result.height).toBe(132);
+  });
+
   test('clamps spans in narrow viewports and handles empty sections', () => {
     const result = computeWorkflowMasonry(
       [

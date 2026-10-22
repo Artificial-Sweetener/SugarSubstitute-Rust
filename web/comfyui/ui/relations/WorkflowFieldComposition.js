@@ -62,6 +62,7 @@ export function createWorkflowFieldHost(options) {
     function setupPresentation() {
         appearance.setup();
         frame.setup();
+        relations.setupOverridePresentation();
         editorNavigation.setup();
         settingsWorkspace.setup();
     }

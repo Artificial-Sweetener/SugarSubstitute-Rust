@@ -17,6 +17,7 @@
 import { expect, test } from '@jest/globals';
 import { fluentAppearanceCss } from '../../../frontend/comfyui/ui/surface/appearance/FluentAppearanceStyles.js';
 import {
+  photoProScrollbarCss,
   scrollbarCss,
   scrollbarPresentationCss,
 } from '../../../frontend/comfyui/ui/surface/appearance/ScrollbarStyles.js';
@@ -75,4 +76,18 @@ test('shares themed keyboard focus across all overlay thumbs with a system-color
   expect(css).toContain('outline:1px solid var(--sc-accent-indicator,Highlight)');
   expect(css).toContain('.sc-style-scrollbar:focus-visible::before');
   expect(css).toContain('outline-color:Highlight');
+});
+
+test('PhotoPro paints square scroll tracks, thumbs, and directional arrows', () => {
+  const css = photoProScrollbarCss();
+  expect(css).toContain(
+    'padding-right:calc(var(--sc-scrollbar-base-padding-right,0px) + 14px) !important',
+  );
+  expect(css).toContain(
+    '.sc-style-scrollbar[data-sc-photopro-scrollbar] .sc-style-scrollbar-track',
+  );
+  expect(css).toContain('background:var(--sc-photopro-scroll-track,#333)');
+  expect(css).toContain('background:var(--sc-photopro-scroll-thumb,#555)');
+  expect(css).toContain('[data-sc-scroll-step="start"]::before');
+  expect(css).toContain('[data-sc-scroll-step="end"]::before');
 });

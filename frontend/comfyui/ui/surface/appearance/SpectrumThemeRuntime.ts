@@ -112,6 +112,19 @@ class SpectrumMenuItem extends MenuItem {
 
 /** Retain Adobe's gesture owner while normalizing numeric state for native Comfy bindings. */
 class SpectrumSlider extends Slider implements NumericSliderControl {
+  /** Keep Adobe's internal drag target on the shared arrow cursor. */
+  static override get styles(): CSSResultArray {
+    return [
+      ...super.styles,
+      css`
+        :host #controls,
+        :host .handle {
+          cursor: default;
+        }
+      `,
+    ];
+  }
+
   /** Expose the actual Adobe component without leaking its API to widget bindings. */
   get root(): HTMLElement {
     return this;

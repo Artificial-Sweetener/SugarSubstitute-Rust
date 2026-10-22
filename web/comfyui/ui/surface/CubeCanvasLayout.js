@@ -36,10 +36,10 @@ const PREVIEW_DIVIDER_HIT_WIDTH = 10;
 export function computeCubeCanvasLayout(node, state, titleHeight, titlebarActionKeys = [], externalInterface = {
     inputSlots: node.inputs.map((_, index) => index),
     outputSlots: node.outputs.map((_, index) => index),
-}) {
+}, compact = false) {
     const frame = rect(Number(node.pos[0]), Number(node.pos[1]) - titleHeight, Number(node.size[0]), Number(node.size[1]) + titleHeight);
     const header = rect(frame.x, frame.y, frame.width, HEADER_HEIGHT);
-    const spacing = resolveCubeSurfaceCardSpacing(state);
+    const spacing = resolveCubeSurfaceCardSpacing(state, compact);
     const baseContent = rect(frame.x + CUBE_SURFACE_FRAME_PADDING, frame.y + HEADER_HEIGHT + spacing.headerInset, Math.max(1, frame.width - CUBE_SURFACE_FRAME_PADDING * 2), Math.max(1, frame.height - HEADER_HEIGHT - spacing.headerInset - spacing.footerInset));
     const gutters = resolveCubePortGutters(frame, baseContent, {
         hasInputs: externalInterface.inputSlots.length > 0,

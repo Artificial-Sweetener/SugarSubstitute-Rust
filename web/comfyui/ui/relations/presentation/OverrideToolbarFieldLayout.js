@@ -26,6 +26,8 @@ export class OverrideToolbarFieldLayout {
             return;
         const scrollLeft = this.fields.scrollLeft;
         this.fields.removeAttribute('data-sc-override-overflow');
+        if (this.fields.closest('[data-presentation="plugin"]'))
+            return;
         if (this.fields.scrollWidth > this.fields.clientWidth + 1)
             this.fields.setAttribute('data-sc-override-overflow', '');
         this.fields.scrollLeft = scrollLeft;
