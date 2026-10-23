@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Keep receiving outputs, immutable report and genuine source alive through cleanup.
+use super::retention::Retained;
 use super::{ReportExportCause as E, ReportExportCode as C, ReportExportIntent, stream};
 use crate::{
     incident::{IncidentDumpReadLease, StoredIncidentSummary},
-    native::report_export::{Destination, retention::Retained},
     report_view::ReportView,
 };
 use std::borrow::Borrow;
@@ -13,6 +13,7 @@ use sugarsubstitute_execution::{
     CommittedReaderOrigin, CommittedReaderRetirement, ReportExportAdmission, ReportExportOrigin,
     ReportExportRetirement,
 };
+use sugarsubstitute_supervision::ReportFile;
 /// Actual selected export facts emitted only after flush, activation and checked close.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ReportExportReceipt {
@@ -43,7 +44,7 @@ pub struct ReportExportCustody {
 #[must_use = "Retain export outputs and original source until checked cleanup"]
 pub struct ReportExportOperation<V: Borrow<ReportView> = ReportView> {
     fields: Retained<Fields<V>>,
-    destination: Destination,
+    destination: ReportFile,
 }
 /// Retain original charges, canonical report, optional source and bounded failure slots.
 struct Fields<V> {
@@ -100,19 +101,24 @@ impl<V: Borrow<ReportView>> ReportExportOperation<V> {
                 source_retirement: None,
                 receiving_retired: false,
             }),
-            destination: Destination::new(original),
+            destination: ReportFile::new(original),
         })
     }
     /// Borrow genuine receiving lifetime for the central paired cleanup owner.
     /// # Errors
     /// Returns Identity if the native destination owner is unavailable.
     pub fn original_origin(&self) -> Result<&ReportExportOrigin, E> {
-        self.destination.origin()
+        self.destination.origin().map_err(E::from)
     }
     /// Observe physical receiving custody independently of finite result delivery.
     pub fn custody(&self) -> ReportExportCustody {
-        let (native_outputs, stage, predecessor, activated) = self.destination.custody();
-        ReportExportCustody { native_outputs, stage, predecessor, activated }
+        let custody = self.destination.custody();
+        ReportExportCustody {
+            native_outputs: custody.native_outputs,
+            stage: custody.stage,
+            predecessor: custody.predecessor,
+            activated: custody.activated,
+        }
     }
     /// Borrow genuine original reader custody for its own active cleanup factory.
     /// Returns None for text-only or after all source pins have checked closure.
@@ -142,6 +148,7 @@ impl<V: Borrow<ReportView>> ReportExportOperation<V> {
                 if let Err(cause) = self
                     .destination
                     .origin()
+                    .map_err(E::from)
                     .and_then(|origin| origin.check_effect().map_err(E::Control))
                 {
                     self.fields.secondary = Some(cause);
@@ -168,7 +175,7 @@ impl<V: Borrow<ReportView>> ReportExportOperation<V> {
             }
             dump.check_current().map_err(E::Dump)?;
         }
-        self.destination.open(&fields.intent)?;
+        self.destination.open(&fields.intent.destination).map_err(E::from)?;
         let written = stream::write(
             &mut self.destination,
             fields.view.as_ref().ok_or(E::Rejected(C::Identity))?.borrow(),
@@ -191,7 +198,7 @@ impl<V: Borrow<ReportView>> ReportExportOperation<V> {
         let result = self.destination.retire(receiving);
         if let Err(cause) = result {
             if self.fields.retirement.is_none() {
-                self.fields.retirement = Some(cause);
+                self.fields.retirement = Some(cause.into());
             }
             return Err(C::Retirement);
         }

@@ -123,5 +123,3 @@ pub(crate) fn current_clock_observer() -> u32 {
     // SAFETY: This metadata-only Win32 call has no arguments or retained outputs.
     unsafe { windows::Win32::System::Threading::GetCurrentThreadId() }
 }
-
-pub(crate) mod report_export;

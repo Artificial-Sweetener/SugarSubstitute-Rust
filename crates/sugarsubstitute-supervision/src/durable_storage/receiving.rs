@@ -1,15 +1,24 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Own bounded receiving paths, pinned ancestors and checked export file retirement.
+//! Retain user-selected receiving files under genuine export execution admission.
+//!
+//! The feature authenticates the request and authorizes overwrite before supplying an
+//! inert selection. This owner performs all bounded path, identity, staging, publication
+//! and physical close effects. An accepted native effect is adopted before the next
+//! cancellation/deadline observation. Abandonment retains outputs and their admission;
+//! dropping an owner never proves that a file or its cleanup job retired.
+mod error;
 mod files;
 mod lifecycle;
 mod names;
-pub(crate) mod retention;
-use crate::report_export::{ReportExportCause as E, ReportExportCode as C, ReportExportIntent};
+mod selection;
+use self::{ReportFileCode as C, ReportFileError as E};
+pub use error::{ReportFileCode, ReportFileError};
+pub use selection::ReportFileSelection;
 use sugarsubstitute_execution::{ReportExportOrigin, ReportExportOutput, ReportExportRetirement};
 use windows::Win32::Foundation::HANDLE;
 /// Couple one real kernel handle to its pre-reserved original output guard.
-pub(crate) struct Slot {
+struct Slot {
     handle: Option<HANDLE>,
     output: Option<ReportExportOutput>,
 }
@@ -24,7 +33,7 @@ impl Slot {
     }
 }
 /// Retain bounded paths, ancestor pins and accepted native phase observations.
-pub(crate) struct Fields {
+struct Fields {
     original: ReportExportOrigin,
     parents: [Slot; 64],
     parent_count: usize,
@@ -44,13 +53,35 @@ pub(crate) struct Fields {
     target_deleted: bool,
     opened: bool,
 }
-/// No public constructor accepts a bare JobContext, filesystem path or native handle.
-pub(crate) struct Destination {
+/// Own selected receiving files under original admitted export work through checked cleanup.
+/// The opaque owner exposes passive custody facts and typed effects under its retained
+/// original execution controls. File handles and unchecked publication stay private.
+///
+/// ```compile_fail
+/// use sugarsubstitute_supervision::ReportFile;
+/// fn detach(file: ReportFile) -> std::fs::File {
+///     file.into_inner()
+/// }
+/// ```
+#[must_use = "Retain receiving files through checked physical retirement"]
+pub struct ReportFile {
     fields: Option<Box<Fields>>,
 }
-impl Destination {
+/// Passive receiving-file observations; these grant no native effect or close right.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ReportFileCustody {
+    /// Number of physical parent/file outputs still retained.
+    pub native_outputs: u16,
+    /// Receiving stage retains its exact kernel handle.
+    pub stage: bool,
+    /// Selected predecessor retains its exact kernel handle.
+    pub predecessor: bool,
+    /// Same-stage activation succeeded, independently of later cleanup.
+    pub activated: bool,
+}
+impl ReportFile {
     /// Allocate the fixed destination envelope from genuine original admission.
-    pub(crate) fn new(original: ReportExportOrigin) -> Self {
+    pub fn new(original: ReportExportOrigin) -> Self {
         Self {
             fields: Some(Box::new(Fields {
                 original,
@@ -75,11 +106,16 @@ impl Destination {
         }
     }
     /// Borrow genuine original custody for separately activated paired cleanup.
-    pub(crate) fn origin(&self) -> Result<&ReportExportOrigin, E> {
+    /// # Errors
+    /// Returns Identity when the original receiving owner is unavailable.
+    pub fn origin(&self) -> Result<&ReportExportOrigin, E> {
         Ok(&self.fields.as_ref().ok_or(E::Rejected(C::Identity))?.original)
     }
     /// Pin selected ancestors and predecessor before creating the sole new stage.
-    pub(crate) fn open(&mut self, intent: &ReportExportIntent) -> Result<(), E> {
+    /// # Errors
+    /// Rejects repeated open, uncertain ancestry, links, absent overwrite consent,
+    /// failed native effects or expired original controls. Partial outputs stay retained.
+    pub fn open(&mut self, intent: &ReportFileSelection) -> Result<(), E> {
         let fields = self.fields.as_mut().ok_or(E::Rejected(C::Identity))?;
         if fields.opened {
             return Err(E::Rejected(C::Identity));
@@ -90,24 +126,35 @@ impl Destination {
         files::open(fields, intent)
     }
     /// Write one bounded chunk under the original running action controls.
-    pub(crate) fn write(&mut self, bytes: &[u8]) -> Result<(), E> {
+    /// # Errors
+    /// Rejects empty/oversized chunks, inactive stages, short native writes, OS errors
+    /// or original control failure. Accepted byte counts remain observed.
+    pub fn write(&mut self, bytes: &[u8]) -> Result<(), E> {
         files::write(self.fields.as_mut().ok_or(E::Rejected(C::Identity))?, bytes)
     }
     /// Observe actual synchronous flush of the same retained receiving stage.
-    pub(crate) fn flush(&mut self) -> Result<(), E> {
+    /// # Errors
+    /// Preserves the actual flush failure or original execution-control cause.
+    pub fn flush(&mut self) -> Result<(), E> {
         files::flush(self.fields.as_mut().ok_or(E::Rejected(C::Identity))?)
     }
     /// Preserve a held predecessor, then activate the stage with no replacement race.
-    pub(crate) fn activate(&mut self) -> Result<(), E> {
+    /// # Errors
+    /// Rejects changed predecessor/stage identity, unexpected destination occupants,
+    /// OS failures or expired controls. Accepted rename phases remain recorded.
+    pub fn activate(&mut self) -> Result<(), E> {
         lifecycle::activate(self.fields.as_mut().ok_or(E::Rejected(C::Identity))?)
     }
     /// Roll back or delete only exact owned stages/backups and checked-close outputs.
-    pub(crate) fn retire(&mut self, proof: &ReportExportRetirement) -> Result<(), E> {
+    /// # Errors
+    /// Rejects foreign/expired cleanup proof or native rollback/delete/close failure.
+    /// Outputs and admission charges remain held until their exact close succeeds.
+    pub fn retire(&mut self, proof: &ReportExportRetirement) -> Result<(), E> {
         let fields = self.fields.as_mut().ok_or(E::Rejected(C::Identity))?;
         lifecycle::retire(fields, proof)
     }
     /// Observe absence of every physical output after checked native close.
-    pub(crate) fn closed(&self) -> bool {
+    pub fn closed(&self) -> bool {
         self.fields.as_ref().is_none_or(|f| {
             f.stage.handle.is_none()
                 && f.target.handle.is_none()
@@ -115,21 +162,21 @@ impl Destination {
         })
     }
     /// Observe held outputs and accepted activation without granting OS access.
-    pub(crate) fn custody(&self) -> (u16, bool, bool, bool) {
-        self.fields.as_ref().map_or((0, false, false, false), |fields| {
+    pub fn custody(&self) -> ReportFileCustody {
+        self.fields.as_ref().map_or_else(ReportFileCustody::default, |fields| {
             let stage = fields.stage.handle.is_some();
             let predecessor = fields.target.handle.is_some();
             let parents = fields.parents.iter().filter(|slot| slot.handle.is_some()).count();
-            (
-                (parents + usize::from(stage) + usize::from(predecessor)) as u16,
+            ReportFileCustody {
+                native_outputs: (parents + usize::from(stage) + usize::from(predecessor)) as u16,
                 stage,
                 predecessor,
-                fields.stage_activated,
-            )
+                activated: fields.stage_activated,
+            }
         })
     }
 }
-impl Drop for Destination {
+impl Drop for ReportFile {
     fn drop(&mut self) {
         if !self.closed()
             && let Some(fields) = self.fields.take()
@@ -143,5 +190,5 @@ impl Drop for Destination {
 }
 // SAFETY: Handles are synchronous kernel files; all effects require one mutable owner
 // and genuine running/cleanup controls. No window-affine or callback handle is retained.
-unsafe impl Send for Destination {}
+unsafe impl Send for ReportFile {}
 const _: () = assert!(size_of::<Fields>() < 32_768);

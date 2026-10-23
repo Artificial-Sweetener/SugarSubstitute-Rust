@@ -3,7 +3,7 @@
 //! Preserve selected spelling and form bounded collision-resistant sibling names.
 use super::*;
 /// Form fixed selected-name siblings before any native opening effect.
-pub(super) fn prepare(fields: &mut Fields, intent: &ReportExportIntent) -> Result<(), E> {
+pub(super) fn prepare(fields: &mut Fields, intent: &ReportFileSelection) -> Result<(), E> {
     let prefix = [92, 92, 63, 92];
     fields.target_path[..4].copy_from_slice(&prefix);
     fields.target_path[4..intent.length + 4].copy_from_slice(&intent.path[..intent.length]);
@@ -14,7 +14,7 @@ pub(super) fn prepare(fields: &mut Fields, intent: &ReportExportIntent) -> Resul
 /// Reject SUBST roots and other non-volume aliases before any descendant creation.
 pub(super) fn rebase(
     fields: &mut Fields,
-    intent: &ReportExportIntent,
+    intent: &ReportFileSelection,
     root: &[u16],
 ) -> Result<(), E> {
     let prefix = [92, 92, 63, 92, 86, 111, 108, 117, 109, 101, 123];
@@ -33,7 +33,7 @@ pub(super) fn rebase(
     siblings(fields, intent)
 }
 /// Rebuild stage and backup names from the same actual canonical selected target.
-fn siblings(fields: &mut Fields, intent: &ReportExportIntent) -> Result<(), E> {
+fn siblings(fields: &mut Fields, intent: &ReportFileSelection) -> Result<(), E> {
     for (buffer, suffix) in [
         (&mut fields.stage_path, b"stage".as_slice()),
         (&mut fields.backup_path, b"prior".as_slice()),
@@ -42,7 +42,7 @@ fn siblings(fields: &mut Fields, intent: &ReportExportIntent) -> Result<(), E> {
         buffer[..fields.target_length].copy_from_slice(&fields.target_path[..fields.target_length]);
         let mut position = fields.target_length;
         push(buffer, &mut position, b".sugar-")?;
-        for value in [intent.binding().session().get(), intent.request().get()] {
+        for value in [intent.identity[0], intent.identity[1]] {
             for shift in (0..16).rev() {
                 let digit = ((value >> (shift * 4)) & 15) as usize;
                 push(buffer, &mut position, &[b"0123456789abcdef"[digit]])?;

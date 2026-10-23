@@ -70,6 +70,10 @@ pub mod profiles;
 #[cfg(windows)]
 pub use durable_storage::protected::{ProtectedStorageGeneration, ProtectedStorageRoot};
 #[cfg(windows)]
+pub use durable_storage::receiving::{
+    ReportFile, ReportFileCode, ReportFileCustody, ReportFileError, ReportFileSelection,
+};
+#[cfg(windows)]
 #[allow(unsafe_code)]
 mod native_process;
 #[cfg(all(windows, feature = "k1-native-qualification"))]

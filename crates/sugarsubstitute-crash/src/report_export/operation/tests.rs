@@ -20,6 +20,16 @@ fn report_export_native_text_is_complete_and_receipt_follows_checked_cleanup() -
     Ok(())
 }
 #[test]
+fn report_export_native_unicode_destination_uses_shared_receiving_owner() -> ResultT {
+    let path = destination()?.with_file_name("糖😀.txt");
+    let observed = export(&path, false, false, false, false)?;
+    assert_eq!(observed.outcome, Ok(()));
+    assert_eq!(std::fs::read(&path)?, observed.canonical);
+    assert!(observed.receipt.is_some());
+    assert_eq!(std::fs::read_dir(path.parent().ok_or("parent absent")?)?.count(), 1);
+    Ok(())
+}
+#[test]
 fn report_export_native_existing_file_requires_explicit_overwrite() -> ResultT {
     let path = destination()?;
     std::fs::write(&path, b"original selected bytes")?;

@@ -10,7 +10,7 @@ use windows::{
     core::PCWSTR,
 };
 /// Reject reparse ancestry and pin only the actual selected regular file.
-pub(super) fn open(fields: &mut Fields, intent: &ReportExportIntent) -> Result<(), E> {
+pub(super) fn open(fields: &mut Fields, intent: &ReportFileSelection) -> Result<(), E> {
     let saved = fields.target_path[7];
     fields.target_path[7] = 0;
     let result = produce(

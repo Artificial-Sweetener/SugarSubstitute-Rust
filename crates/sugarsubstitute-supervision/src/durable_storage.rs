@@ -14,6 +14,8 @@ pub(crate) mod protected;
 #[allow(unsafe_code)]
 pub(crate) mod protection;
 #[allow(unsafe_code)]
+pub(crate) mod receiving;
+#[allow(unsafe_code)]
 pub(crate) mod retirement;
 #[allow(unsafe_code)]
 pub(crate) mod staging;
