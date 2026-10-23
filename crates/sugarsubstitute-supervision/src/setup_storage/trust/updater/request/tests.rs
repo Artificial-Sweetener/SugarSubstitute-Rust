@@ -81,7 +81,7 @@ fn missing_established_engine_selection_is_never_reinitialized_by_discovery() ->
         let workspace = tempfile::tempdir()?;
         accept_prepared(prepared(root.path(), workspace.path(), context)?, context)?;
         let trust = TrustStore::open(root.path(), [92; 32], context)?;
-        let journal = trust.root.path.join(SELECTION);
+        let journal = trust.root.path().join(SELECTION);
         std::fs::remove_file(&journal)?;
         assert!(trust.updater_request(Channel::Release, context).is_err());
         assert!(trust.pin_updater(Channel::Release, 2, context).is_err());

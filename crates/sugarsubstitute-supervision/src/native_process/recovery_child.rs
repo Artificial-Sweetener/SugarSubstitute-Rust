@@ -68,18 +68,19 @@ impl Family {
         .map_err(|cause| RegistryError::new("recovery_child_job_limits", cause))?;
         validate_containment(limits.BasicLimitInformation.LimitFlags.0)?;
         membership::verify_job_checked(unsafe_current_process(), job, &mut || check())?;
-        let mut phase = crate::protected_storage::native_phase::NativePhase::ordinary(&budget)
-            .map_err(|cause| RegistryError::new("recovery_child_account_phase", cause))?;
+        let mut phase =
+            crate::durable_storage::protected::native_phase::NativePhase::ordinary(&budget)
+                .map_err(|cause| RegistryError::new("recovery_child_account_phase", cause))?;
         check()?;
-        let actual = crate::protected_storage::account::resolve_current(
+        let actual = crate::durable_storage::protected::account::resolve_current(
             account,
             budget.clone(),
-            crate::protected_storage::account::PrimaryAccountAccess::Query,
+            crate::durable_storage::protected::account::PrimaryAccountAccess::Query,
             &mut phase,
         )
         .map_err(|cause| RegistryError::new("recovery_child_account", cause))?;
         check()?;
-        crate::protected_storage::security::verify_recovery_job_borrowed(
+        crate::durable_storage::protected::security::verify_recovery_job_borrowed(
             job,
             &budget,
             actual.sid.bytes().map_err(|cause| RegistryError::new("recovery_child_sid", cause))?,

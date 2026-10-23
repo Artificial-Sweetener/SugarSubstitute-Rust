@@ -138,7 +138,7 @@ fn writer_exclusion_releases_without_stale_file_lockout_or_application_lease() -
         assert!(SelectionStore::open(installation.path(), context)?.load(context)?.is_some());
         drop(writer);
         store.refresh(current.metadata(), NOW, context)?;
-        assert!(store.root.path.join(LOCK).exists());
+        assert!(store.root.path().join(LOCK).exists());
         Ok(())
     })
 }
@@ -155,7 +155,7 @@ fn corrupt_missing_and_foreign_state_is_preserved_without_bootstrap_fallback() -
             &root,
             context,
         )?;
-        let path = store.root.path.join(RECORD);
+        let path = store.root.path().join(RECORD);
         let original = std::fs::read(&path)?;
         assert!(TrustStore::open(installation.path(), [99; 32], context).is_err());
         for bytes in [b"broken".to_vec(), {
@@ -202,10 +202,10 @@ fn checkpoint_copied_between_installations_is_rejected_and_preserved() -> TestRe
         let first = TrustStore::initialize(a.path(), Sha256::digest(&root).into(), &root, context)?;
         let second =
             TrustStore::initialize(b.path(), Sha256::digest(&root).into(), &root, context)?;
-        let bytes = std::fs::read(first.root.path.join(RECORD))?;
-        std::fs::write(second.root.path.join(RECORD), &bytes)?;
+        let bytes = std::fs::read(first.root.path().join(RECORD))?;
+        std::fs::write(second.root.path().join(RECORD), &bytes)?;
         assert!(TrustStore::open(b.path(), repository, context).is_err());
-        assert_eq!(std::fs::read(second.root.path.join(RECORD))?, bytes);
+        assert_eq!(std::fs::read(second.root.path().join(RECORD))?, bytes);
         Ok(())
     })
 }

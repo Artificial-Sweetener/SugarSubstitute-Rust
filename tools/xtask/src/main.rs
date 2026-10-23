@@ -5,6 +5,7 @@
 
 mod architecture;
 mod cache_storage;
+mod capability_source;
 mod catalog;
 mod command;
 mod error;
@@ -24,6 +25,7 @@ mod execution_tests;
 #[cfg(test)]
 mod fixtures;
 mod governance;
+mod infrastructure;
 mod metrics;
 mod policy;
 mod source;

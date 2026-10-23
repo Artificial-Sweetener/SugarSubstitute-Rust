@@ -17,7 +17,7 @@ fn admitted_trial_retains_payloads_and_run_custody_without_claiming_health() -> 
             case.context,
         )?;
         let generation = candidate.generation().clone();
-        let store = Arc::new(SelectionStore::open(&case.directory.path, case.context)?);
+        let store = Arc::new(SelectionStore::open(case.directory.path(), case.context)?);
         let mut owner = InstallationRun::acquire(store.clone(), case.context)?;
         let admitted = candidate.begin_trial(
             &mut owner,
@@ -46,7 +46,7 @@ fn admitted_trial_retains_payloads_and_run_custody_without_claiming_health() -> 
 #[test]
 fn expiry_and_withdrawal_after_preparation_never_start_a_trial() -> TestResult {
     run(1, |case| {
-        let store = Arc::new(SelectionStore::open(&case.directory.path, case.context)?);
+        let store = Arc::new(SelectionStore::open(case.directory.path(), case.context)?);
         let mut owner = InstallationRun::acquire(store.clone(), case.context)?;
         let candidate = case.prepared.prepare_update(
             case.runtime,
@@ -89,8 +89,8 @@ fn same_logical_installation_id_does_not_authorize_a_foreign_native_run() -> Tes
         let other = tempfile::tempdir()?;
         let directory = Directory::open(other.path(), false)?;
         fixture::installed(&directory, case.context)?;
-        let _trust = case.signed.initialize(&directory.path, case.context)?;
-        let foreign = Arc::new(SelectionStore::open(&directory.path, case.context)?);
+        let _trust = case.signed.initialize(directory.path(), case.context)?;
+        let foreign = Arc::new(SelectionStore::open(directory.path(), case.context)?);
         let before = foreign.load(case.context)?;
         let mut owner = InstallationRun::acquire(foreign.clone(), case.context)?;
         let candidate = case.prepared.prepare_update(
@@ -110,7 +110,7 @@ fn same_logical_installation_id_does_not_authorize_a_foreign_native_run() -> Tes
                 .is_err()
         );
         assert_eq!(foreign.load(case.context)?, before);
-        let state = SelectionStore::open(&case.directory.path, case.context)?
+        let state = SelectionStore::open(case.directory.path(), case.context)?
             .load(case.context)?
             .ok_or("Candidate absent")?;
         assert!(matches!(state.candidate(), Some(Candidate::Prepared { .. })));
@@ -127,7 +127,7 @@ fn candidate_cancelled_after_preparation_cannot_admit_a_stale_trial() -> TestRes
             || NOW,
             case.context,
         )?;
-        let store = Arc::new(SelectionStore::open(&case.directory.path, case.context)?);
+        let store = Arc::new(SelectionStore::open(case.directory.path(), case.context)?);
         let before = store.load(case.context)?.ok_or("Candidate absent")?;
         let cancelled = before.cancel_preparation(candidate.generation())?;
         store.compare_exchange(&before, &cancelled, case.context)?;

@@ -5,7 +5,7 @@ mod payload;
 mod prepared;
 #[cfg(test)]
 mod tests;
-use super::files::{self, Directory};
+use crate::durable_storage::files::{self, Directory};
 pub(super) use payload::Payload;
 pub(super) use prepared::VerifiedCopy;
 use std::{
@@ -75,7 +75,7 @@ impl VerifiedBundle {
         target: &Path,
         context: &JobContext,
     ) -> io::Result<()> {
-        super::protection::with(context, |protection| {
+        crate::durable_storage::protection::with(context, |protection| {
             files::write_immutable(
                 &target.join(super::inventory::INSTALLED_MANIFEST),
                 &self.payload.manifest_bytes,

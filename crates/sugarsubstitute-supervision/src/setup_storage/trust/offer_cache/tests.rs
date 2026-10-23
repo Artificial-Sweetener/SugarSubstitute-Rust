@@ -189,7 +189,7 @@ fn disposable_offer_cleanup_preserves_trust_settings_and_legacy_cache_bytes() ->
         let installation = worker::installation(92, context)?;
         let signed = SignedPackage::new(b"package", 1)?;
         let trust = TrustStore::initialize(installation.path(), [92; 32], &signed.root, context)?;
-        let legacy = trust.root.path.join(format!("offer-v1-{}", signed.request.target_name()));
+        let legacy = trust.root.path().join(format!("offer-v1-{}", signed.request.target_name()));
         std::fs::write(&legacy, b"legacy signed bytes")?;
         let settings = installation.path().join("user-settings");
         std::fs::write(&settings, b"authoritative settings")?;
@@ -202,13 +202,13 @@ fn disposable_offer_cleanup_preserves_trust_settings_and_legacy_cache_bytes() ->
             context,
         )?;
         trust.remember_offer(&offer, context)?;
-        let checkpoint = std::fs::read(trust.root.path.join(super::super::RECORD))?;
+        let checkpoint = std::fs::read(trust.root.path().join(super::super::RECORD))?;
         let report = trust
             .runtime_cache(context)?
             .maintain(cache::utc_seconds()? + Namespace::UpdateOffers.retention(), context)?;
         assert_eq!(report.removed_entries, 1);
         assert!(trust.cached_offer(signed.request, NOW, context)?.is_none());
-        assert_eq!(std::fs::read(trust.root.path.join(super::super::RECORD))?, checkpoint);
+        assert_eq!(std::fs::read(trust.root.path().join(super::super::RECORD))?, checkpoint);
         trust.offer(
             signed.metadata.metadata(),
             &signed.request,

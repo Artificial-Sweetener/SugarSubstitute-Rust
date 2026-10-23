@@ -73,7 +73,7 @@ impl CacheLease {
             let mut retained = 0;
             for existing in control.references {
                 if existing.family.retired(context)? {
-                    match deletion::file(&slot.path.join(&existing.name), existing.identity) {
+                    match retirement::file(&slot, &existing.name, existing.identity) {
                         Ok(()) => continue,
                         Err(cause) if record::busy(&cause) => {}
                         Err(cause) if record::kind(&cause) == io::ErrorKind::NotFound => continue,
@@ -128,7 +128,7 @@ impl NativeCachePin {
         protection::with(context, |protection| {
             let _writer = self.lease._cache.writer(protection, context)?;
             self.file = None;
-            match deletion::file(&self.slot.path.join(name), self.identity) {
+            match retirement::file(&self.slot, &name, self.identity) {
                 Ok(()) => {}
                 Err(cause) if record::kind(&cause) == io::ErrorKind::NotFound => {}
                 Err(cause) => return Err(cause),
@@ -186,13 +186,12 @@ pub(super) fn remove(
         }
     }
     for value in control.references {
-        deletion::file(&control.directory.path.join(value.name), value.identity)?;
+        retirement::file(&control.directory, &value.name, value.identity)?;
     }
-    tree::remove_file(&control.directory.path.join("owner"), context)?;
-    let path = control.directory.path.clone();
+    tree::remove_file(&control.directory.path().join("owner"), context)?;
     let identity = control.directory.identity()?;
     drop(control.directory);
-    deletion::directory(&path, identity)
+    retirement::directory(directory, "consumers", identity)
 }
 #[cfg(test)]
 mod tests {
@@ -248,7 +247,7 @@ mod tests {
             let family = CacheFamilyId::new(context)?;
             let pending = source
                 .directory
-                .path
+                .path()
                 .join("consumers")
                 .join(format!("{}.pin.next", family.encoded()));
             protection::with(context, |protection| {
@@ -280,7 +279,7 @@ mod tests {
             let pin = source.bind_native(family, context)?;
             let path = source.path();
             let control =
-                source.directory.path.join("consumers").join(format!("{}.pin", family.encoded()));
+                source.directory.path().join("consumers").join(format!("{}.pin", family.encoded()));
             drop((pin, source));
             std::fs::write(&control, b"damaged native binding")?;
             assert!(cache.clone().find(Namespace::PackedPayloads, &key, 100, context)?.is_none());
@@ -300,7 +299,7 @@ mod tests {
             let family = CacheFamilyId::new(context)?;
             let path = source
                 .directory
-                .path
+                .path()
                 .join("consumers")
                 .join(format!("{}.pin.next", family.encoded()));
             protection::with(context, |protection| {

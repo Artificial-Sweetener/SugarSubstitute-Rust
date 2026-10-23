@@ -17,7 +17,7 @@ impl TrustStore {
             return Err(invalid("Preparation custody already acquired").into());
         }
         let file = self.protected(context, |protection| {
-            let file = protection.rendezvous(&self.root.path.join(PREPARATION), context)?;
+            let file = protection.rendezvous(&self.root.path().join(PREPARATION), context)?;
             file.try_lock().map_err(io::Error::from)?;
             check(context)?;
             Ok(file)

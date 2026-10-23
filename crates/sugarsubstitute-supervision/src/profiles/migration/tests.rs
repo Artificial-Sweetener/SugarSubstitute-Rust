@@ -4,8 +4,8 @@
 use super::*;
 use crate::{
     coordinator_entry::fixture::Harness,
+    durable_storage::protected::record_file,
     profiles::storage::{ProfilePort, WindowsProfilePort},
-    protected_storage::record_file,
 };
 use std::sync::atomic::{AtomicU64, Ordering};
 use sugarsubstitute_contracts::{
@@ -27,7 +27,8 @@ fn legacy_released_original_is_protected_before_v2_activation_and_survives_norma
         NEXT.fetch_add(1, Ordering::Relaxed)
     ));
     let mut job = harness.client.submit_blocking(&harness.scope, spec, move |context| {
-        let directory = crate::protected_storage::profile_fixture::create(&directory, &context)?;
+        let directory =
+            crate::durable_storage::protected::profile_fixture::create(&directory, &context)?;
         let path = directory.join("profile");
         let run = RunKey {
             owner: CoordinatorKey {

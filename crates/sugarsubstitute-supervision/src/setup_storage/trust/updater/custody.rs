@@ -14,7 +14,11 @@ impl TrustStore {
         protection: &Protection,
         context: &JobContext,
     ) -> Result<(), TrustFailure> {
-        protection.verify_exclusive_rendezvous(file, &self.root.path.join(RENDEZVOUS), context)?;
+        protection.verify_exclusive_rendezvous(
+            file,
+            &self.root.path().join(RENDEZVOUS),
+            context,
+        )?;
         Ok(())
     }
 
@@ -28,7 +32,7 @@ impl TrustStore {
     ) -> Result<File, TrustFailure> {
         self.protected(context, |protection| {
             let file =
-                protection.exclusive_rendezvous(&self.root.path.join(RENDEZVOUS), context)?;
+                protection.exclusive_rendezvous(&self.root.path().join(RENDEZVOUS), context)?;
             check(context)?;
             Ok(file)
         })

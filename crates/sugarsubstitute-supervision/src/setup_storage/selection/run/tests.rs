@@ -55,7 +55,7 @@ fn unstarted_recovery_rebinds_only_the_original_native_installation_and_exact_sn
         let mut discarded_result = prepared.clone();
         recovery.restore(&store._installation, &mut discarded_result, context)?;
         assert_eq!(discarded_result, bound);
-        std::fs::write(store.root.path.join(super::super::RECORD), prepared.encode()?)?;
+        std::fs::write(store.root.path().join(super::super::RECORD), prepared.encode()?)?;
         let known = bound.clone();
         assert!(matches!(
             recovery.restore(&store._installation, &mut bound, context),
@@ -80,7 +80,7 @@ fn run_exclusion_does_not_block_preparation_and_leftover_files_do_not_lock_out()
         drop(run);
         let reopened = InstallationRun::acquire(other, context)?;
         drop(reopened);
-        assert!(store.root.path.join(LOCK).exists());
+        assert!(store.root.path().join(LOCK).exists());
         Ok(())
     })
 }
@@ -189,7 +189,7 @@ fn nonempty_run_rendezvous_is_preserved_and_never_stolen() -> TestResult {
         let store = Arc::new(SelectionStore::initialize(root.path(), &initial()?, context)?);
         let run = InstallationRun::acquire(Arc::clone(&store), context)?;
         drop(run);
-        let lock = store.root.path.join(LOCK);
+        let lock = store.root.path().join(LOCK);
         std::fs::write(&lock, b"unknown")?;
         assert!(InstallationRun::acquire(Arc::clone(&store), context).is_err());
         assert_eq!(std::fs::read(&lock)?, b"unknown");
@@ -205,7 +205,7 @@ fn duplicated_run_handle_retains_exclusion_until_its_last_owner_closes() -> Test
         let store = Arc::new(SelectionStore::initialize(root.path(), &initial()?, context)?);
         let run = InstallationRun::acquire(Arc::clone(&store), context)?;
         let duplicate = run.custody._lock.try_clone()?;
-        let lock = store.root.path.join(LOCK);
+        let lock = store.root.path().join(LOCK);
         assert!(File::open(&lock).is_err());
         drop(run);
         assert!(InstallationRun::acquire(Arc::clone(&store), context).is_err());
@@ -229,7 +229,7 @@ fn run_exclusion_interoperates_with_existing_byte_range_lock_owners() -> TestRes
         let root = root()?;
         let store = Arc::new(SelectionStore::initialize(root.path(), &initial()?, context)?);
         let legacy = store.protected(context, |protection| {
-            Ok(protection.rendezvous(&store.root.path.join(LOCK), context)?)
+            Ok(protection.rendezvous(&store.root.path().join(LOCK), context)?)
         })?;
         legacy.try_lock()?;
         assert!(InstallationRun::acquire(Arc::clone(&store), context).is_err());
@@ -238,13 +238,13 @@ fn run_exclusion_interoperates_with_existing_byte_range_lock_owners() -> TestRes
         assert!(
             store
                 .protected(context, |protection| {
-                    Ok(protection.rendezvous(&store.root.path.join(LOCK), context)?)
+                    Ok(protection.rendezvous(&store.root.path().join(LOCK), context)?)
                 })
                 .is_err()
         );
         drop(run);
         let legacy = store.protected(context, |protection| {
-            Ok(protection.rendezvous(&store.root.path.join(LOCK), context)?)
+            Ok(protection.rendezvous(&store.root.path().join(LOCK), context)?)
         })?;
         legacy.try_lock()?;
         Ok(())

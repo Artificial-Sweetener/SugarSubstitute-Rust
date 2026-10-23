@@ -8,16 +8,16 @@ use super::{
 };
 use crate::{
     ClaimError,
-    native_claims::{
-        Record, RecordState,
-        files::{Budget, Handle},
-    },
-    protected_storage::{
+    durable_storage::protected::{
         account,
         exclusion::HeldFile,
         paths,
         record_file::{self, RecordRead},
         security,
+    },
+    native_claims::{
+        Record, RecordState,
+        files::{Budget, Handle},
     },
 };
 use std::{error::Error, path::Path};
@@ -91,7 +91,9 @@ impl NativePort for SystemPort {
             .ok_or_else(|| ClaimError::invalid("entry_namespace_missing"))?;
         if paths::file_identity(
             handle,
-            &mut crate::protected_storage::native_phase::NativePhase::ordinary(&(handle).budget())?,
+            &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
+                &(handle).budget(),
+            )?,
         )? != inode
         {
             return Err(ClaimError::invalid("entry_coordinator_exclusion_binding"));
@@ -100,13 +102,17 @@ impl NativePort for SystemPort {
         paths::validate_regular(
             handle,
             Some(0),
-            &mut crate::protected_storage::native_phase::NativePhase::ordinary(&(handle).budget())?,
+            &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
+                &(handle).budget(),
+            )?,
         )?;
         check(context)?;
         security::verify(
             handle,
             &namespace.account_sid,
-            &mut crate::protected_storage::native_phase::NativePhase::ordinary(&(handle).budget())?,
+            &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
+                &(handle).budget(),
+            )?,
         )?;
         check(context)
     }
@@ -123,7 +129,7 @@ impl NativePort for SystemPort {
         if !held.is_locked()
             || paths::file_identity(
                 &held.handle,
-                &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
                     &held.handle.budget(),
                 )?,
             )? != proof.entry_inode
@@ -133,14 +139,14 @@ impl NativePort for SystemPort {
         paths::validate_regular(
             &held.handle,
             Some(0),
-            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+            &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
                 &held.handle.budget(),
             )?,
         )?;
         security::verify(
             &held.handle,
             &proof.account_sid,
-            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+            &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
                 &held.handle.budget(),
             )?,
         )?;
@@ -177,19 +183,21 @@ impl NativePort for SystemPort {
             true,
             budget.clone(),
             &mut state.handles,
-            &mut crate::protected_storage::native_phase::NativePhase::ordinary(&(budget.clone()))?,
+            &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
+                &(budget.clone()),
+            )?,
         )?;
         let installed_path = paths::final_path(
             &state.handles[installed],
-            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+            &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
                 &state.handles[installed].budget(),
             )?,
-            crate::protected_storage::native_name::NativeNameDestination::Ordinary,
+            crate::durable_storage::protected::native_name::NativeNameDestination::Ordinary,
         )
-        .and_then(crate::protected_storage::native_name::NativeName::into_ordinary)?;
+        .and_then(crate::durable_storage::protected::native_name::NativeName::into_ordinary)?;
         if paths::file_identity(
             &state.handles[installed],
-            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+            &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
                 &state.handles[installed].budget(),
             )?,
         )? != resolved.installation_identity
@@ -202,22 +210,24 @@ impl NativePort for SystemPort {
             true,
             budget.clone(),
             &mut state.handles,
-            &mut crate::protected_storage::native_phase::NativePhase::ordinary(&(budget.clone()))?,
+            &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
+                &(budget.clone()),
+            )?,
         )?;
         let expected_path = paths::final_path(
             &state.handles[expected],
-            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+            &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
                 &state.handles[expected].budget(),
             )?,
-            crate::protected_storage::native_name::NativeNameDestination::Ordinary,
+            crate::durable_storage::protected::native_name::NativeNameDestination::Ordinary,
         )
-        .and_then(crate::protected_storage::native_name::NativeName::into_ordinary)?;
+        .and_then(crate::durable_storage::protected::native_name::NativeName::into_ordinary)?;
         if !expected_path.starts_with(&installed_path) {
             return Err(ClaimError::invalid("entry_image_outside_installation"));
         }
         let image = paths::file_identity(
             &state.handles[expected],
-            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+            &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
                 &state.handles[expected].budget(),
             )?,
         )?;
@@ -225,7 +235,9 @@ impl NativePort for SystemPort {
             &expected_path,
             &mut state.handles,
             budget.clone(),
-            &mut crate::protected_storage::native_phase::NativePhase::ordinary(&(budget.clone()))?,
+            &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
+                &(budget.clone()),
+            )?,
         )?;
         paths::verify_pinned(
             &expected_path,
@@ -233,7 +245,9 @@ impl NativePort for SystemPort {
             &mut state.handles,
             false,
             budget.clone(),
-            &mut crate::protected_storage::native_phase::NativePhase::ordinary(&(budget.clone()))?,
+            &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
+                &(budget.clone()),
+            )?,
         )?;
         // The actual running host independently binds the expected installed image.
         let current =
@@ -244,11 +258,13 @@ impl NativePort for SystemPort {
             true,
             budget.clone(),
             &mut state.handles,
-            &mut crate::protected_storage::native_phase::NativePhase::ordinary(&(budget.clone()))?,
+            &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
+                &(budget.clone()),
+            )?,
         )?;
         if paths::file_identity(
             &state.handles[actual],
-            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+            &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
                 &state.handles[actual].budget(),
             )?,
         )? != image

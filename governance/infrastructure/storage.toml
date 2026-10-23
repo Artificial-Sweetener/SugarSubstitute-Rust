@@ -1,0 +1,210 @@
+schema_version = 1
+owner = "sugarsubstitute-supervision"
+implementation_root = "crates/sugarsubstitute-supervision/src/durable_storage"
+
+# Enforces known native/standard rename and handle-publication entry points in Rust,
+# plus conservative publication identifiers in authored worker/native sources.
+# General filesystem construction, computed script access, and alternate transport,
+# configuration and diagnostic routes require the subsequent owner-specific gates.
+
+[[records]]
+path = "installer/worker/cache-policy.ts"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:896dd217848ab5f71b24b03c165d50df842c8ca0f64c4a61e994a49a09868acb"
+disposition = "migration"
+rationale = "Existing provisioning-worker cache journal publication; preserve native producer recovery and generation admission."
+next_extraction = "Route worker cache journal reads and publication through the shared durable-storage boundary without releasing native producer pins."
+review_until = "2026-11-23"
+
+[[records]]
+path = "installer/worker/ownership.ts"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:3197a1147ef86db2b02dbe4422dd9653c0b2f487df5bf0bcb241bbe65b89a705"
+disposition = "migration"
+rationale = "Existing managed-environment ownership publication; preserve schema and unknown/interrupted attempts."
+next_extraction = "Replace worker-local bounded record I/O and publication with retained durable-storage capabilities through the host boundary."
+review_until = "2026-11-23"
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/durable_storage/files.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:7087d864184f07abeda29770d47c152539906cf60e4f000b49dba8929a1a0412"
+disposition = "implementation"
+rationale = "Retained filesystem publication or identity-checked retirement mechanics; feature authorization remains with the caller."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/durable_storage/retirement.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:b7d77ef9bbbcbb41e472c4683e0beec8afa09a51b487fbc33dd739af09dd7ab1"
+disposition = "implementation"
+rationale = "Retained filesystem publication or identity-checked retirement mechanics; feature authorization remains with the caller."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/durable_storage/staging.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:a17c7a9fb94ce09662e9760308dfe2759f8c27cce292bd8c7d314f839c81f5da"
+disposition = "implementation"
+rationale = "Retained filesystem publication or identity-checked retirement mechanics; feature authorization remains with the caller."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/durable_storage/protected/native_rename.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:ddb5fbb19dbfde5b8c7e32ca29bd07918e76320ee069948aea68642d73940f6a"
+disposition = "implementation"
+rationale = "Retained filesystem publication or identity-checked retirement mechanics; feature authorization remains with the caller."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/durable_storage/protected/record_file/streaming/lifecycle.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:c0b7ea815ecbd588b7e74deec22a8e52eaf312b8d3abd3466263045cc1d6ad40"
+disposition = "implementation"
+rationale = "Retained filesystem publication or identity-checked retirement mechanics; feature authorization remains with the caller."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/installed_frontend/tests/ownership/native_snapshot.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:15b6ddf744973929a8d914adb89e75e35f39d8f35a8e045241dedc842fc6185d"
+disposition = "fixture"
+rationale = "Native adversarial fixture deliberately renames retained or substituted objects to verify preservation and sharing exclusions."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/updater_package/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:94ddf4507ffd6d26bd58c96985cafc00f64324f07b7d80a7f9c045791e20bcfe"
+disposition = "fixture"
+rationale = "Native adversarial fixture deliberately renames retained or substituted objects to verify preservation and sharing exclusions."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/cache/tests/generations.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:55980441d013c5c1cb9d23821302ba72eedaff634aa378e0727f5276564abcd8"
+disposition = "fixture"
+rationale = "Native adversarial fixture deliberately renames retained or substituted objects to verify preservation and sharing exclusions."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/download/tests/failures.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:a75ee3f3887b9ae5bd219bf68964b9a1482c380fee29ce17ea0e46f0c0146ef6"
+disposition = "fixture"
+rationale = "Native adversarial fixture deliberately renames retained or substituted objects to verify preservation and sharing exclusions."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests/downloaded.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:06f0819a871d52fe3c577fb76b1f423e2b4ccced17df335f2adc01848443989d"
+disposition = "fixture"
+rationale = "Native adversarial fixture deliberately renames retained or substituted objects to verify preservation and sharing exclusions."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests/downloaded/authorization/candidates.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:c4e27b6888f1e3c8240972dd4f8f68c96847d84ebaadea38e7572f29aa9facf7"
+disposition = "fixture"
+rationale = "Native adversarial fixture deliberately renames retained or substituted objects to verify preservation and sharing exclusions."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests/downloaded/authorization/launch.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:f77a12c5e468d8b3198552232d2ef5d1aff076b0c1fd08f1120b3c331fb1735f"
+disposition = "fixture"
+rationale = "Native adversarial fixture deliberately renames retained or substituted objects to verify preservation and sharing exclusions."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests/downloaded/authorization/releases.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:185055ba11c288aad9280ef4ccc5dc6b5fc62c6c38fa73da6b914361c408762e"
+disposition = "fixture"
+rationale = "Native adversarial fixture deliberately renames retained or substituted objects to verify preservation and sharing exclusions."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests/downloaded/authorization/launch/running.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:208c2df9fb9f75ed67f4bc8bff8dfa35474b5add4c0c13a80fffc6dcffda070e"
+disposition = "fixture"
+rationale = "Native adversarial fixture deliberately renames retained or substituted objects to verify preservation and sharing exclusions."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests/downloaded/authorization/launch/running/image.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:26ba0288577a655385b4755b3908488b1686e4348d168cfe8d8844ef4a5af477"
+disposition = "fixture"
+rationale = "Native adversarial fixture deliberately renames retained or substituted objects to verify preservation and sharing exclusions."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/selection/initialize/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:86b55d3ab2cf482e9cf4faebcab978569c89635197b6d9c172e8da4d3345c580"
+disposition = "fixture"
+rationale = "Native adversarial fixture deliberately renames retained or substituted objects to verify preservation and sharing exclusions."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/selection/namespace/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:df9e3d710354f7b7ab6074ea4250910938021c88e0225086710c2cf0a7b0a89f"
+disposition = "fixture"
+rationale = "Native adversarial fixture deliberately renames retained or substituted objects to verify preservation and sharing exclusions."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/selection/run/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:3a001d395dd8e3623682aaebf74ac519af78086902bfff144e5228998dc54bee"
+disposition = "fixture"
+rationale = "Native adversarial fixture deliberately renames retained or substituted objects to verify preservation and sharing exclusions."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/selection/run/transfer/witness_tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:e194466227083e11d46e34ae6cf2c3ec8b1ecfe33f10d7b501f2a0b1d864c18e"
+disposition = "fixture"
+rationale = "Native adversarial fixture deliberately renames retained or substituted objects to verify preservation and sharing exclusions."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/fresh/reservation.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:25ff4561bdcec65bb22359ce73c4a452aaea7e2e71c3691e5b40623a6476b2be"
+disposition = "fixture"
+rationale = "Native adversarial fixture deliberately renames retained or substituted objects to verify preservation and sharing exclusions."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/fresh/supersession/guards.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:983ebac7c3bed1e4e2316d59ebcd3dbf7bd9050f124f93276154bab48f62b8cf"
+disposition = "fixture"
+rationale = "Native adversarial fixture deliberately renames retained or substituted objects to verify preservation and sharing exclusions."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/trust/initialize/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:93aa6c19e390c6fb1152ea32763abb95e3c952c421e895a798d648a3b1ad37c5"
+disposition = "fixture"
+rationale = "Native adversarial fixture deliberately renames retained or substituted objects to verify preservation and sharing exclusions."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/trust/installed/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:8d9ae942a28cbf8d1cad3e8cafb5e689f881ec15ad911fe6a284ce7d12215bcf"
+disposition = "fixture"
+rationale = "Native adversarial fixture deliberately renames retained or substituted objects to verify preservation and sharing exclusions."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/trust/session/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:30e239eb678fdadd06b4e011631ccf3beb495eed39343ff7dc9a8a237b5f344b"
+disposition = "fixture"
+rationale = "Native adversarial fixture deliberately renames retained or substituted objects to verify preservation and sharing exclusions."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/trust/tests/publication.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:ac47387da964f907a5ed4f03f427e6e412f3438fc5e8c210abdcbf168d83940f"
+disposition = "fixture"
+rationale = "Native adversarial fixture deliberately renames retained or substituted objects to verify preservation and sharing exclusions."
+
+[[records]]
+path = "crates/sugarsubstitute-crash/src/native/report_export/lifecycle.rs"
+owner = "sugarsubstitute-crash"
+source_sha256 = "sha256:433f6ca47b20029c25e60603559d87073b6e6a935115932116f53058a9fd2dea"
+disposition = "migration"
+rationale = "Existing exact-handle report export activation, rollback, deletion and checked-close custody."
+next_extraction = "Share report-export native publication mechanics while retaining original diagnostic allocation, consent and retirement authority."
+review_until = "2026-11-23"

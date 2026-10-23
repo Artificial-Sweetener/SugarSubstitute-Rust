@@ -22,7 +22,7 @@ pub(in crate::setup_storage::cache) fn initialize(
     protection: &mut Protection,
     context: &JobContext,
 ) -> io::Result<(u32, u32, u32)> {
-    let path = directory.path.join(DIRECTORY);
+    let path = directory.path().join(DIRECTORY);
     protection.directory(&path, Mode::CreateNew, context)?;
     let slot = Directory::open(&path, false)?;
     let identity = slot.identity()?;
@@ -43,7 +43,7 @@ pub(super) fn inspect(
     let Some(identity) = record.consumers else {
         return Ok(None);
     };
-    let slot = match Directory::open(&directory.path.join(DIRECTORY), false) {
+    let slot = match Directory::open(&directory.path().join(DIRECTORY), false) {
         Ok(slot) => slot,
         Err(cause) if record.deleting && record::kind(&cause) == io::ErrorKind::NotFound => {
             return Ok(None);
@@ -61,7 +61,7 @@ pub(super) fn inspect(
             }
         }
         Err(cause) if record.deleting && record::kind(&cause) == io::ErrorKind::NotFound => {
-            if std::fs::read_dir(&slot.path)?.next().is_some() {
+            if std::fs::read_dir(slot.path())?.next().is_some() {
                 return Err(invalid("Cache consumer ownership was removed before its references"));
             }
         }
@@ -69,7 +69,7 @@ pub(super) fn inspect(
     }
     let mut references = Vec::new();
     let mut children = 0;
-    for child in std::fs::read_dir(&slot.path)? {
+    for child in std::fs::read_dir(slot.path())? {
         check(context)?;
         let name = child?
             .file_name()

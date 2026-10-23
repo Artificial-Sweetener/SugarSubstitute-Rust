@@ -69,7 +69,7 @@ impl InstallationRun {
         context: &JobContext,
     ) -> Result<Self, SelectionFailure> {
         let lock = store.protected(context, |protection| {
-            let lock = protection.exclusive_rendezvous(&store.root.path.join(LOCK), context)?;
+            let lock = protection.exclusive_rendezvous(&store.root.path().join(LOCK), context)?;
             let _writer = super::writer(&store.root, protection, context)?;
             store.read(protection)?.ok_or(SelectionFailure::Missing)?;
             Ok(lock)

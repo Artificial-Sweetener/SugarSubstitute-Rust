@@ -91,7 +91,7 @@ impl CompletionWake for Wake {
         Ok(())
     }
 }
-pub(super) fn run(
+pub(crate) fn run(
     body: impl FnOnce(&JobContext, &TestClock) -> TestResult + Send + 'static,
 ) -> TestResult {
     execute(body, false, 16 * 1024 * 1024)

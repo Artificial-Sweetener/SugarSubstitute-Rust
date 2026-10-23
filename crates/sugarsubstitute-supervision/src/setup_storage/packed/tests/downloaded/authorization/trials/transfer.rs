@@ -59,7 +59,7 @@ fn transfer(
         || NOW,
         case.context,
     )?;
-    let store = Arc::new(SelectionStore::open(&case.directory.path, case.context)?);
+    let store = Arc::new(SelectionStore::open(case.directory.path(), case.context)?);
     let mut run = InstallationRun::acquire(store.clone(), case.context)?;
     let candidate = candidate.begin_trial(
         &mut run,
@@ -96,7 +96,7 @@ fn receiving_trial_after_creator_drop_retains_payloads_and_accepts_only_once() -
         let before = store.load(case.context)?.ok_or("Trial missing")?;
         drop(transfer);
         assert!(InstallationRun::acquire(store.clone(), case.context).is_err());
-        assert_eq!(snapshots(&case.directory.path)?.len(), 1);
+        assert_eq!(snapshots(case.directory.path())?.len(), 1);
         let RunningApplication::Trial(application) = retain_running_generation(
             &directory,
             Some(InheritedLaunch::Trial(inherited)),
@@ -107,7 +107,7 @@ fn receiving_trial_after_creator_drop_retains_payloads_and_accepts_only_once() -
             return Err("Running entry lost trial authority".into());
         };
         assert_eq!(application.directory(), directory);
-        assert!(snapshots(&case.directory.path)?.is_empty());
+        assert!(snapshots(case.directory.path())?.is_empty());
         assert!(std::fs::write(directory.join("sugarsubstitute.exe"), b"changed").is_err());
         assert_eq!(store.load(case.context)?, Some(before));
         // Storage-boundary health input; inert fixture executable is never launched.
@@ -189,7 +189,7 @@ fn transfer_rejects_another_live_run_without_changing_either_selection() -> Test
             || NOW,
             case.context,
         )?;
-        let store = Arc::new(SelectionStore::open(&case.directory.path, case.context)?);
+        let store = Arc::new(SelectionStore::open(case.directory.path(), case.context)?);
         let mut owner = InstallationRun::acquire(store.clone(), case.context)?;
         let candidate = candidate.begin_trial(
             &mut owner,
@@ -292,7 +292,7 @@ fn package_without_trial_entry_is_rejected_before_persisting_an_attempt() -> Tes
                 || NOW,
                 case.context,
             )?;
-            let store = Arc::new(SelectionStore::open(&case.directory.path, case.context)?);
+            let store = Arc::new(SelectionStore::open(case.directory.path(), case.context)?);
             let before = store.load(case.context)?;
             let mut run = InstallationRun::acquire(store.clone(), case.context)?;
             assert!(
@@ -318,7 +318,7 @@ fn transfer_snapshot_detects_record_tampering_and_is_deleted_after_rejection() -
         let inherited = capture(transfer.handles())?;
         let directory = transfer.directory().to_owned();
         drop(transfer);
-        let record = case.directory.path.join(".selection-state/.substitute-selection.json");
+        let record = case.directory.path().join(".selection-state/.substitute-selection.json");
         let original = std::fs::read(&record)?;
         let mut changed: serde_json::Value = serde_json::from_slice(&original)?;
         changed["installation"] = "f".repeat(32).into();
@@ -328,7 +328,7 @@ fn transfer_snapshot_detects_record_tampering_and_is_deleted_after_rejection() -
             InstallationRun::receive_trial(store, inherited, &directory, case.context).is_err()
         );
         assert_eq!(std::fs::read(record)?, changed);
-        assert!(snapshots(&case.directory.path)?.is_empty());
+        assert!(snapshots(case.directory.path())?.is_empty());
         case.preserved()
     })
 }

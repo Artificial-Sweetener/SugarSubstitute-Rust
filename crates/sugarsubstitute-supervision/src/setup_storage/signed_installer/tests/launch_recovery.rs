@@ -2,8 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Actual creator failures and independent cleanup jobs preserve resumable signed preparation.
 use super::*;
-use crate::application_launch::ApplicationLaunch;
-use crate::setup_storage::test_worker::pipeline::Pipeline;
+use crate::{
+    application_launch::ApplicationLaunch, setup_storage::test_worker::pipeline::Pipeline,
+};
 
 fn pending(context: &JobContext) -> Result<(Fixture, PathBuf, ApplicationLaunch), Failure> {
     let fixture = Fixture::new(context)?;

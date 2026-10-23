@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Rehash and pin staged application payloads against their retained authenticated manifest.
-use super::super::{check, files::Directory, invalid};
+use super::super::check;
+use super::super::invalid;
 use super::payload::{Input, hash};
+use crate::durable_storage::files::Directory;
 use std::{io, path::Path};
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
 use sugarsubstitute_update::package::Manifest;

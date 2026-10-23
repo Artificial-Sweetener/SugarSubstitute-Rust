@@ -22,7 +22,7 @@ fn abandoned_profile_recovers_without_deleting_browser_data_and_live_witness_blo
         NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     ));
     let mut job = harness.client.submit_blocking(&harness.scope, spec, move |context| {
-        let base = crate::protected_storage::profile_fixture::create(&base, &context)?;
+        let base = crate::durable_storage::protected::profile_fixture::create(&base, &context)?;
         let profile = base.join("profile");
         let run = super::super::tests::generation(1)?.run;
         let port = WindowsProfilePort;

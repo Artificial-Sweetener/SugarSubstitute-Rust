@@ -2,8 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Resume first setup while preserving protected unfinished predecessors from supersession.
 use super::*;
-use crate::setup_storage::SelectionStore;
-use crate::setup_storage::transaction::generation;
+use crate::setup_storage::{SelectionStore, transaction::generation};
 use sugarsubstitute_contracts::installation::{Candidate, GenerationId};
 
 /// Distinguish interrupted fresh setup from damaged installed configuration without an error fallback.
@@ -11,7 +10,7 @@ use sugarsubstitute_contracts::installation::{Candidate, GenerationId};
 /// Protected unfinished predecessors remain on disk. Only the selected candidate can be resumed
 /// by the independently authenticated preparation path; inspection grants no payload authority.
 pub(super) fn incomplete_candidate(root: &Directory, context: &JobContext) -> io::Result<bool> {
-    let Some(store) = SelectionStore::existing(&root.path, context).map_err(io::Error::other)?
+    let Some(store) = SelectionStore::existing(root.path(), context).map_err(io::Error::other)?
     else {
         return Ok(false);
     };
@@ -25,12 +24,12 @@ pub(super) fn incomplete_candidate(root: &Directory, context: &JobContext) -> io
     let Some(Candidate::Staging { generation }) = record.candidate() else {
         return Ok(false);
     };
-    let releases = match Directory::open(&root.path.join("releases"), false) {
+    let releases = match Directory::open(&root.path().join("releases"), false) {
         Ok(directory) => directory,
         Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(true),
         Err(cause) => return Err(cause),
     };
-    for (index, entry) in std::fs::read_dir(&releases.path)?.enumerate() {
+    for (index, entry) in std::fs::read_dir(releases.path())?.enumerate() {
         check(context)?;
         if index >= 1024 {
             return Err(invalid("Initial generation inventory exceeds its bound"));

@@ -2,11 +2,14 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Embedded distribution parsing reaches the real signed installer verifier and native journal.
 use super::*;
-use crate::setup_storage::{
-    existing::fixture,
-    files::Directory,
-    test_package::{self, repository::SignedPackage},
-    test_worker::{self as worker, TestResult},
+use crate::{
+    durable_storage::files::Directory,
+    setup_storage::{
+        existing::fixture,
+        test_package::{self, repository::SignedPackage},
+        test_worker as worker,
+        test_worker::TestResult,
+    },
 };
 use sha2::{Digest, Sha256};
 use sugarsubstitute_update::fixture::{EXPIRES, NOW};

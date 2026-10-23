@@ -35,7 +35,7 @@ impl RuntimeCache {
         };
         record::touch(&exclusion, now)?;
         record.touched = record.touched.max(record::last_use(&exclusion)?);
-        let data = Directory::open(&directory.path.join("data"), false)?;
+        let data = Directory::open(&directory.path().join("data"), false)?;
         Ok(Some(CacheLease {
             directory,
             record,
@@ -126,7 +126,7 @@ impl RuntimeCache {
             self.reclaim(Some((namespace, 0)), now, context)?;
             record::touch(&exclusion, now)?;
             record.touched = record.touched.max(record::last_use(&exclusion)?);
-            let data = Directory::open(&directory.path.join("data"), false)?;
+            let data = Directory::open(&directory.path().join("data"), false)?;
             Ok((directory, data, exclusion, record))
         })
         .map_err(record::public_error)?;
@@ -180,7 +180,7 @@ fn create(
         file.sync_all()?;
         directory.identity()
     })?;
-    let path = parent.path.join(key);
+    let path = parent.path().join(key);
     protection::with(context, |protection| {
         protection.publish(&staged, &path, identity, protection::Publication::Directory, context)
     })?;

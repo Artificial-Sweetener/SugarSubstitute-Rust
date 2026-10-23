@@ -56,7 +56,7 @@ impl RuntimeCache {
         let memory = context.memory().claim(256 * 1024).map_err(io::Error::other)?;
         let parent = self.namespace(namespace)?;
         let mut keys = BTreeSet::new();
-        for entry in std::fs::read_dir(&parent.path)? {
+        for entry in std::fs::read_dir(parent.path())? {
             check(context)?;
             let name = entry?.file_name().to_string_lossy().into_owned();
             if record::valid_entry_key(&name) {
@@ -88,16 +88,16 @@ impl PendingEntries {
         let parent = self.cache.namespace(namespace)?;
         for key in self.keys.by_ref() {
             let opened = protection::with(context, |protection| {
-                let directory = Directory::open(&parent.path.join(&key), false)?;
+                let directory = Directory::open(&parent.path().join(&key), false)?;
                 let exclusion = record::exclusion(&directory, protection)?;
                 let record = record::load(&directory, namespace, &key, protection)?;
                 if record.producer.is_none()
                     || record.deleting
-                    || parent.path.join(format!("{key}.retiring")).exists()
+                    || parent.path().join(format!("{key}.retiring")).exists()
                 {
                     return Ok(None);
                 }
-                let data = Directory::open(&directory.path.join("data"), false)?;
+                let data = Directory::open(&directory.path().join("data"), false)?;
                 Ok(Some((directory, data, exclusion, record)))
             });
             match opened {

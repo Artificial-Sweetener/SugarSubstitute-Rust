@@ -4,7 +4,7 @@
 use super::*;
 use crate::{
     coordinator_entry::fixture::{Harness, resolved},
-    protected_storage::record_file::{
+    durable_storage::protected::record_file::{
         publication::publish_with_boundary, retirement::retire_with_boundary, tests::boundary::Fake,
     },
 };

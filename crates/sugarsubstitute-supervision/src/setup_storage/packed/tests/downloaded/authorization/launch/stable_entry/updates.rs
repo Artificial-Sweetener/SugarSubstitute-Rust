@@ -20,12 +20,12 @@ fn next_package(
     value["release_id"] = "next-release".into();
     let archive = test_package::seal(&serde_json::to_vec(&value)?, &compressed);
     let signed = SignedPackage::new(&archive, 2)?;
-    let trust = TrustStore::open(&root.path, [92; 32], context)?;
+    let trust = TrustStore::open(root.path(), [92; 32], context)?;
     let target = trust
         .offer(signed.metadata.metadata(), &signed.request, &signed.descriptor, NOW, context)?
         .into_package()?;
     let bundle = Arc::new(VerifiedBundle::from_download(
-        receive(&archive, &root.path, target, context)?,
+        receive(&archive, root.path(), target, context)?,
         &crate::setup_storage::cache::RuntimeCache::open(
             workspace,
             crate::setup_storage::cache::CachePolicy::default(),
@@ -33,7 +33,7 @@ fn next_package(
         )?,
         context,
     )?);
-    let prepared = crate::setup_storage::InstallationSession::maintain(&root.path, context)?
+    let prepared = crate::setup_storage::InstallationSession::maintain(root.path(), context)?
         .prepare(bundle, context)?;
     Ok((prepared, signed, trust))
 }
@@ -47,7 +47,7 @@ fn preparation_and_trial_admission_recheck_the_installed_launcher() -> TestResul
         let application = prepare(&root, context)?;
         application.repair_launch_entry(context)?;
         drop(application);
-        let ownership = root.path.join(OWNERSHIP);
+        let ownership = root.path().join(OWNERSHIP);
         let original = std::fs::read(&ownership)?;
         let mut changed: serde_json::Value = serde_json::from_slice(&original)?;
         changed["contract"] =
@@ -55,7 +55,7 @@ fn preparation_and_trial_admission_recheck_the_installed_launcher() -> TestResul
                 .into();
         let incompatible = serde_json::to_vec(&changed)?;
         let (prepared, signed, trust) = next_package(&root, workspace.path(), context)?;
-        let store = Arc::new(SelectionStore::open(&root.path, context)?);
+        let store = Arc::new(SelectionStore::open(root.path(), context)?);
         let before = store.load(context)?;
         std::fs::write(&ownership, &incompatible)?;
         assert!(
@@ -99,8 +99,8 @@ fn accepting_another_application_retains_original_launcher_ownership_and_image()
         application.repair_launch_entry(context)?;
         let first = application.generation().clone();
         drop(application);
-        let ownership = std::fs::read(root.path.join(OWNERSHIP))?;
-        let identity = crate::setup_storage::files::file_identity(&root.read(LAUNCHER)?)?;
+        let ownership = std::fs::read(root.path().join(OWNERSHIP))?;
+        let identity = crate::durable_storage::files::file_identity(&root.read(LAUNCHER)?)?;
         let (prepared, signed, trust) = next_package(&root, workspace.path(), context)?;
         let candidate = prepared.prepare_update(
             prepared.maintenance_runtime().ok_or("Runtime absent")?,
@@ -108,7 +108,7 @@ fn accepting_another_application_retains_original_launcher_ownership_and_image()
             || NOW,
             context,
         )?;
-        let store = Arc::new(SelectionStore::open(&root.path, context)?);
+        let store = Arc::new(SelectionStore::open(root.path(), context)?);
         let mut run = InstallationRun::acquire(store.clone(), context)?;
         let admitted =
             candidate.begin_trial(&mut run, &signed.authorization(&trust), || NOW, context)?;
@@ -122,10 +122,10 @@ fn accepting_another_application_retains_original_launcher_ownership_and_image()
             return Err("Next accepted generation absent".into());
         };
         let installed = next.repair_launch_entry(context)?;
-        assert_eq!(installed.executable, root.path.join(LAUNCHER));
-        assert_eq!(std::fs::read(root.path.join(OWNERSHIP))?, ownership);
-        assert_eq!(crate::setup_storage::files::file_identity(&root.read(LAUNCHER)?)?, identity);
-        assert!(root.path.join("releases").join(first.id.as_str()).join(LAUNCHER).exists());
+        assert_eq!(installed.executable, root.path().join(LAUNCHER));
+        assert_eq!(std::fs::read(root.path().join(OWNERSHIP))?, ownership);
+        assert_eq!(crate::durable_storage::files::file_identity(&root.read(LAUNCHER)?)?, identity);
+        assert!(root.path().join("releases").join(first.id.as_str()).join(LAUNCHER).exists());
         Ok(())
     })
 }

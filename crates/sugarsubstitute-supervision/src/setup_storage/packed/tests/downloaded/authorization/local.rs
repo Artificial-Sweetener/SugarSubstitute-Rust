@@ -71,9 +71,9 @@ fn embedded_distribution_prepares_and_accepts_through_shared_trial_ownership() -
 
 fn accepts(delivery: Delivery) -> TestResult {
     run_source(2, true, test_package::distribution()?, delivery, |case| {
-        let store = Arc::new(SelectionStore::open(&case.directory.path, case.context)?);
+        let store = Arc::new(SelectionStore::open(case.directory.path(), case.context)?);
         let before = store.load(case.context)?.ok_or("Selection missing")?;
-        let document = case.directory.path.join("user-document");
+        let document = case.directory.path().join("user-document");
         std::fs::write(&document, b"user authored")?;
         let candidate = case.prepared.prepare_update(
             case.runtime,
@@ -121,7 +121,7 @@ fn revokes(delivery: Delivery) -> TestResult {
             || NOW,
             case.context,
         )?;
-        let store = Arc::new(SelectionStore::open(&case.directory.path, case.context)?);
+        let store = Arc::new(SelectionStore::open(case.directory.path(), case.context)?);
         let before = store.load(case.context)?;
         case.trust.rotate(&root(&key(94)?, 2, Some(&key(92)?))?, case.context)?;
         let mut run = InstallationRun::acquire(store.clone(), case.context)?;

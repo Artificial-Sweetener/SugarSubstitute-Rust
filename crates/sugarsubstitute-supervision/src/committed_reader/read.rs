@@ -4,8 +4,8 @@
 use super::*;
 use crate::{
     diagnostic_storage::{DIAGNOSTIC_IO_BYTES, DiagnosticReadFacts},
+    durable_storage::protected::native_file::{FileGrant, NativeFileAdmission},
     installed_release::allocation::CaptureRegion,
-    protected_storage::native_file::{FileGrant, NativeFileAdmission},
 };
 impl CommittedDiagnosticReader {
     /// Open a closed committed object once and retain its actual pin until cleanup.

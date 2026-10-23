@@ -31,7 +31,7 @@ impl AcceptedApplication {
 
     /// Verified generation's absolute directory for native launch composition.
     pub fn directory(&self) -> &Path {
-        &self.application.directory.path
+        self.application.directory.path()
     }
 
     /// Absolute executable whose bytes remain held against replacement or mutation.

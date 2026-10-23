@@ -53,8 +53,8 @@ impl TrustStore {
             &repository,
             &sugarsubstitute_update::ReleaseHistory::empty().encode()?,
         )?;
-        let destination = parent.path.join(DIRECTORY);
-        if Self::has_state(&parent.path)? {
+        let destination = parent.path().join(DIRECTORY);
+        if Self::has_state(parent.path())? {
             return Err(io::Error::new(
                 io::ErrorKind::AlreadyExists,
                 "Existing update trust state prevents initialization",
@@ -76,7 +76,7 @@ impl TrustStore {
             repository,
         };
         let marker = protection::with_domain(context, |protection| {
-            protection.directory(&store.root.path, Mode::Existing, context)?;
+            protection.directory(store.root.path(), Mode::Existing, context)?;
             let _writer = store.writer(protection)?;
             continuity::ensure(&store, protection, context)
         })

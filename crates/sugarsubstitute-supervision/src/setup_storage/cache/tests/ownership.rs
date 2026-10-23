@@ -56,7 +56,7 @@ fn interrupted_metadata_slots_recover_without_truncating_hardlinked_authoritativ
             100,
             context,
         )?;
-        let scratch = lease.directory.path.join("record.next");
+        let scratch = lease.directory.path().join("record.next");
         protection::with(context, |protection| {
             let mut file = protection.file(&scratch, context)?;
             file.write_all(b"interrupted scratch")?;
@@ -109,7 +109,7 @@ fn foreign_scratch_is_preserved_without_truncation_or_payload_publication() -> T
             100,
             context,
         )?;
-        let scratch = lease.directory.path.join("record.next");
+        let scratch = lease.directory.path().join("record.next");
         std::fs::write(&scratch, b"unowned scratch")?;
         assert!(lease.write("payload", b"complete", context).is_err());
         assert_eq!(std::fs::read(scratch)?, b"unowned scratch");

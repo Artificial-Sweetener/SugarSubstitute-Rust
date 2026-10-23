@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Consume the sole physical read core without file lookup or caller context renewal.
 use super::image::ReadAt;
-use crate::{ClaimError, protected_storage::native_file::NativeReadCore};
+use crate::{ClaimError, durable_storage::protected::native_file::NativeReadCore};
 
 impl ReadAt for NativeReadCore<'_, '_, '_> {
     type Error = ClaimError;

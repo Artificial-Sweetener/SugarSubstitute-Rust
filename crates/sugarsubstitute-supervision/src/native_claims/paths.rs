@@ -3,8 +3,8 @@
 //! Installation and backend identities use shared retained path validation.
 use super::*;
 #[cfg(test)]
-use crate::protected_storage::paths::{ancestor_paths, wide};
-pub(crate) use crate::protected_storage::paths::{
+use crate::durable_storage::protected::paths::{ancestor_paths, wide};
+pub(crate) use crate::durable_storage::protected::paths::{
     file_identity, final_path, open_retained, pin_ancestors, verify_pinned,
 };
 use sha2::{Digest, Sha256};
@@ -13,7 +13,8 @@ mod tests;
 pub(crate) fn resolve(resolution: &mut Resolution, sid: &[u8]) -> Result<(), ClaimError> {
     let budget = files::Budget::Slot(resolution.slot.clone());
     let mut handles = lock(&resolution.handles);
-    let mut phase = crate::protected_storage::native_phase::NativePhase::ordinary(&budget)?;
+    let mut phase =
+        crate::durable_storage::protected::native_phase::NativePhase::ordinary(&budget)?;
     let root = open_retained(
         resolution.configuration.root(),
         true,
@@ -25,7 +26,7 @@ pub(crate) fn resolve(resolution: &mut Resolution, sid: &[u8]) -> Result<(), Cla
     let root_path = final_path(
         &handles[root],
         &mut phase,
-        crate::protected_storage::native_name::NativeNameDestination::Ordinary,
+        crate::durable_storage::protected::native_name::NativeNameDestination::Ordinary,
     )?
     .into_ordinary()?;
     let root_identity = file_identity(&handles[root], &mut phase)?;
@@ -46,7 +47,7 @@ pub(crate) fn resolve(resolution: &mut Resolution, sid: &[u8]) -> Result<(), Cla
     let interpreter_path = final_path(
         &handles[interpreter],
         &mut phase,
-        crate::protected_storage::native_name::NativeNameDestination::Ordinary,
+        crate::durable_storage::protected::native_name::NativeNameDestination::Ordinary,
     )?
     .into_ordinary()?;
     let interpreter_identity = file_identity(&handles[interpreter], &mut phase)?;

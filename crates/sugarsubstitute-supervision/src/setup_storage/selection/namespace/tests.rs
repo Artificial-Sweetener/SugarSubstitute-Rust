@@ -114,9 +114,9 @@ fn invalid_or_unprotected_continuity_marker_is_preserved_without_creating_state(
             } else {
                 std::fs::write(&path, bytes)?;
             }
-            assert!(SelectionStore::existing(&directory.path, context).is_err());
-            assert!(SelectionStore::open(&directory.path, context).is_err());
-            assert!(!directory.path.join(DIRECTORY).exists());
+            assert!(SelectionStore::existing(directory.path(), context).is_err());
+            assert!(SelectionStore::open(directory.path(), context).is_err());
+            assert!(!directory.path().join(DIRECTORY).exists());
             assert_eq!(std::fs::read(path)?, bytes);
         }
         Ok(())

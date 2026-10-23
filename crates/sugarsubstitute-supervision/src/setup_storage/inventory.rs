@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Reject undeclared package files before any worker or library can load from the bundle.
-use super::{
-    files::{self, Directory},
-    invalid,
-};
+use super::invalid;
+use crate::durable_storage::files::{self, Directory};
 use std::{collections::BTreeSet, io, path::Path};
 
 /// Authenticated package inventory retained under installation ownership, independent of cache.
@@ -152,7 +150,7 @@ pub(super) fn verify(
     while let Some(relative) = pending.pop() {
         check()?;
         let directory = Directory::open(&root.join(&relative), false)?;
-        for entry in std::fs::read_dir(&directory.path)? {
+        for entry in std::fs::read_dir(directory.path())? {
             check()?;
             let entry = entry?;
             let leaf =

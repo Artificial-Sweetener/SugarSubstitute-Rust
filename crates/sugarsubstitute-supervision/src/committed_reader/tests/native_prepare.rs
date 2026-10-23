@@ -33,7 +33,7 @@ enum Case {
 /// Fail only the external close primitive while the genuine counted OS handle remains live.
 fn reject_verification_close(
     handle: &mut Handle,
-    phase: &mut crate::protected_storage::native_phase::NativePhase<'_>,
+    phase: &mut crate::durable_storage::protected::native_phase::NativePhase<'_>,
 ) -> Result<(), ClaimError> {
     let raw = handle.raw();
     let result = handle.close_in_phase_using(phase, |actual| {
@@ -172,7 +172,8 @@ fn run(case: Case) -> TestResult {
             if case == Case::MissingChild {
                 let root = fields.namespace.resolved()?.diagnostic_directory().0;
                 let namespace = fields.request.namespace();
-                let hex = crate::protected_storage::diagnostic::namespace_component(namespace);
+                let hex =
+                    crate::durable_storage::protected::diagnostic::namespace_component(namespace);
                 let leaf = std::str::from_utf8(&hex).map_err(|_| missing())?;
                 let directory = root.join("diagnostics").join("incident-v1").join(leaf);
                 std::fs::remove_file(directory.join("writer.lock")).map_err(|cause| {
@@ -227,7 +228,7 @@ fn run(case: Case) -> TestResult {
                         &mut fields.scratch,
                         &mut fields.directory_causes[index],
                     );
-                    let identity = crate::protected_storage::paths::file_identity(
+                    let identity = crate::durable_storage::protected::paths::file_identity(
                         &fields.directories[index],
                         &mut phase,
                     )?;

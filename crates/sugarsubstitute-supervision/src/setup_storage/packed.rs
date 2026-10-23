@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Decode the common native archive through installer trust or retained authenticated download custody.
-use super::{
-    VerifiedDownload,
-    bundle::Payload,
-    cache::{self, Namespace, RuntimeCache},
-    check,
-    files::{self, Directory},
-    invalid,
-};
+use super::VerifiedDownload;
+use super::bundle::Payload;
+use super::cache;
+use super::cache::Namespace;
+use super::cache::RuntimeCache;
+use super::check;
+use super::invalid;
+use crate::durable_storage::files::{self, Directory};
 use flate2::bufread::GzDecoder;
 use sha2::{Digest, Sha256};
 use std::{

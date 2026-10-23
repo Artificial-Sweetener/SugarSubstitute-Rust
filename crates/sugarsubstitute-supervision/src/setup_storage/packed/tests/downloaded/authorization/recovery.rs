@@ -15,7 +15,7 @@ struct Recovery<'a> {
 }
 impl Recovery<'_> {
     fn resume(&self) -> io::Result<PreparedInstallation> {
-        crate::setup_storage::InstallationSession::maintain(&self.directory.path, self.context)?
+        crate::setup_storage::InstallationSession::maintain(self.directory.path(), self.context)?
             .resume_update(self.bundle.clone(), self.context)
             .map_err(|cause| {
                 let chain =
@@ -40,8 +40,11 @@ impl Recovery<'_> {
         )?)
     }
     fn preserved(&self) -> TestResult {
-        assert_eq!(entrypoint::selected(self.directory)?.ok_or("Shell lost")?.path, self.original);
-        assert!(!self.directory.path.join("external-comfy").exists());
+        assert_eq!(
+            entrypoint::selected(self.directory)?.ok_or("Shell lost")?.path(),
+            self.original
+        );
+        assert!(!self.directory.path().join("external-comfy").exists());
         Ok(())
     }
 }
@@ -55,12 +58,12 @@ fn recover(body: impl FnOnce(Recovery<'_>, PathBuf) -> TestResult + Send + 'stat
         let (manifest, compressed) = test_package::distribution()?;
         let archive = test_package::seal(&manifest, &compressed);
         let signed = SignedPackage::new(&archive, 1)?;
-        let trust = signed.initialize(&directory.path, context)?;
+        let trust = signed.initialize(directory.path(), context)?;
         let target = trust
             .offer(signed.metadata.metadata(), &signed.request, &signed.descriptor, NOW, context)?
             .into_package()?;
         let bundle = Arc::new(VerifiedBundle::from_download(
-            receive(&archive, &directory.path, target, context)?,
+            receive(&archive, directory.path(), target, context)?,
             &crate::setup_storage::cache::RuntimeCache::open(
                 workspace.path(),
                 crate::setup_storage::cache::CachePolicy::default(),
@@ -69,7 +72,7 @@ fn recover(body: impl FnOnce(Recovery<'_>, PathBuf) -> TestResult + Send + 'stat
             context,
         )?);
         let prepared =
-            crate::setup_storage::InstallationSession::maintain(&directory.path, context)?
+            crate::setup_storage::InstallationSession::maintain(directory.path(), context)?
                 .prepare(bundle.clone(), context)?;
         let mut checks = 0;
         assert!(
@@ -85,15 +88,15 @@ fn recover(body: impl FnOnce(Recovery<'_>, PathBuf) -> TestResult + Send + 'stat
                 )
                 .is_err()
         );
-        let state = SelectionStore::open(&directory.path, context)?
+        let state = SelectionStore::open(directory.path(), context)?
             .load(context)?
             .ok_or("Missing staging")?;
         let Some(Candidate::Staging { generation }) = state.candidate() else {
             return Err("No interrupted candidate".into());
         };
-        let path = directory.path.join("releases").join(generation.id.as_str());
+        let path = directory.path().join("releases").join(generation.id.as_str());
         assert!(
-            crate::setup_storage::InstallationSession::maintain(&directory.path, context).is_err()
+            crate::setup_storage::InstallationSession::maintain(directory.path(), context).is_err()
         );
         drop(prepared);
         body(
@@ -113,7 +116,7 @@ fn recover(body: impl FnOnce(Recovery<'_>, PathBuf) -> TestResult + Send + 'stat
 #[test]
 fn interrupted_complete_candidate_reopens_and_preparation_is_idempotent() -> TestResult {
     recover(|case, path| {
-        let store = SelectionStore::open(&case.directory.path, case.context)?;
+        let store = SelectionStore::open(case.directory.path(), case.context)?;
         let before = store.load(case.context)?.ok_or("Missing staging")?;
         let resumed = case.resume()?;
         let candidate = case.finish(&resumed)?;
@@ -157,7 +160,7 @@ fn edited_candidate_configuration_is_preserved_and_cannot_be_completed() -> Test
     recover(|case, path| {
         let config = path.join("startup.local.toml");
         std::fs::write(&config, b"user edited candidate")?;
-        let store = SelectionStore::open(&case.directory.path, case.context)?;
+        let store = SelectionStore::open(case.directory.path(), case.context)?;
         let before = store.load(case.context)?;
         let resumed = case.resume()?;
         assert!(case.finish(&resumed).is_err());

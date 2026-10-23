@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Interrupted payload writes never become final generation files.
 use super::*;
-use crate::setup_storage::files;
+use crate::durable_storage::files;
 use crate::setup_storage::{materialize, test_package, test_worker};
 use sha2::{Digest, Sha256};
 use std::io::Write;

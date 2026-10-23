@@ -168,11 +168,11 @@ fn older_native_generation_without_receipt_keeps_trust_and_has_unknown_healthy_i
         drop(candidate);
         std::fs::remove_file(path)?;
         let trust = TrustStore::open(fixture.installation.path(), [92; 32], context)?;
-        let checkpoint = std::fs::read(trust.root.path.join(super::super::RECORD))?;
+        let checkpoint = std::fs::read(trust.root.path().join(super::super::RECORD))?;
         let request = trust.application_request(Channel::Release, context)?;
         assert_eq!(request.sequence_floor, 0);
         assert_eq!(request.sequence_digest, None);
-        assert_eq!(std::fs::read(trust.root.path.join(super::super::RECORD))?, checkpoint);
+        assert_eq!(std::fs::read(trust.root.path().join(super::super::RECORD))?, checkpoint);
         assert!(store.load(context)?.ok_or("Selection missing")?.accepted().is_some());
         fixture.preserved()
     })

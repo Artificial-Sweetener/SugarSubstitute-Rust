@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Admit a backend successor only under both writer and independent Job-witness exclusions.
 use super::*;
-use crate::protected_storage::record_file::{self, RecordRead};
+use crate::durable_storage::protected::record_file::{self, RecordRead};
 use sugarsubstitute_contracts::execution::JobContext;
 
 /// Read the exact predecessor while the caller retains both independently owned locks.

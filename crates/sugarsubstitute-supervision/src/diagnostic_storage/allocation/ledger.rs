@@ -31,7 +31,7 @@ struct LedgerState {
     native_generation: u64,
     closed: bool,
     namespace: Option<Arc<crate::coordinator_entry::namespace::NamespaceLifetime>>,
-    capture_source: Option<crate::protected_storage::capture_read::pin::ReadPins>,
+    capture_source: Option<crate::durable_storage::protected::capture_read::pin::ReadPins>,
 }
 #[derive(Clone)]
 pub(in crate::diagnostic_storage) struct Owner {
@@ -135,7 +135,7 @@ impl Owner {
     }
     pub(in crate::diagnostic_storage) fn bind_capture_source(
         &self,
-        source: crate::protected_storage::capture_read::pin::ReadPins,
+        source: crate::durable_storage::protected::capture_read::pin::ReadPins,
     ) -> Result<(), native::DiagnosticNativeAllocationFailure> {
         let inner = self
             .inner

@@ -10,16 +10,16 @@ mod retire;
 mod types;
 use crate::{
     ClaimError,
+    durable_storage::protected::{
+        exclusion::HeldFile,
+        native_file::{NativeCauseDestinations, NativeFile},
+        native_name::{NativeName, NativeSid},
+    },
     installed_release::{
         AllocationOrigin, CaptureCapacityFailure, CaptureOutputQuota, CaptureScratch,
         SharedCaptureLoan,
     },
     native_claims::files::Handle,
-    protected_storage::{
-        exclusion::HeldFile,
-        native_file::{NativeCauseDestinations, NativeFile},
-        native_name::{NativeName, NativeSid},
-    },
 };
 pub use owner::CommittedDiagnosticReader;
 pub use request::ProtectedCommittedReadRequest;
@@ -37,8 +37,8 @@ fn phase<'a>(
     original: &'a AllocationOrigin,
     scratch: &'a mut CaptureScratch,
     causes: &'a mut NativeCauseDestinations,
-) -> crate::protected_storage::native_phase::NativePhase<'a> {
-    crate::protected_storage::native_phase::NativePhase::Selected {
+) -> crate::durable_storage::protected::native_phase::NativePhase<'a> {
+    crate::durable_storage::protected::native_phase::NativePhase::Selected {
         original,
         scratch,
         causes: RefCell::new(causes),

@@ -4,12 +4,12 @@
 use super::*;
 use crate::{
     claim_error::BoundedNativeCause,
-    native_claims::files::Budget,
-    protected_storage::{
+    durable_storage::protected::{
         native_file::{FileGrant, NativeCauseDestinations, NativeFile, NativeFileAdmission},
         native_name::NativeName,
         native_phase::NativePhase,
     },
+    native_claims::files::Budget,
 };
 use std::path::PathBuf;
 
@@ -209,7 +209,7 @@ fn diagnostic_native_first_failure_observes_actual_expiry_and_retains_escaped_pa
 
 #[test]
 fn diagnostic_native_named_peaks_cover_real_phase_buffers_within_original_residual() -> TestResult {
-    use crate::protected_storage::{account, paths, security};
+    use crate::durable_storage::protected::{account, paths, security};
     let path = paths::diagnostic_path_layout()?;
     let account = account::diagnostic_account_layout()?;
     let security = security::diagnostic_security_layout()?;
@@ -373,7 +373,7 @@ fn funded_native_secondary_preserves_inline_primary_and_last_alias_credit() -> T
 #[test]
 fn rejected_native_name_and_sid_slots_keep_exact_original_inputs() -> TestResult {
     admitted(|context, _| {
-        use crate::protected_storage::native_name::NativeSid;
+        use crate::durable_storage::protected::native_name::NativeSid;
         let (mut storage, operation) = bound_empty(&context)?;
         let original = operation.shared._allocation.native_grant();
         let mut path = PathBuf::from(r"E:\fixture-bounded-name");

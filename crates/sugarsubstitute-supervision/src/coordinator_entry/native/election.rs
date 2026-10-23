@@ -48,20 +48,20 @@ impl NativeBoundary<'_> {
             paths::validate_regular(
                 &held.handle,
                 Some(0),
-                &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
                     &held.handle.budget(),
                 )?,
             )?;
             security::verify(
                 &held.handle,
                 &resolved.account_sid,
-                &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
                     &held.handle.budget(),
                 )?,
             )?;
             return paths::file_identity(
                 &held.handle,
-                &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
                     &held.handle.budget(),
                 )?,
             )
@@ -69,19 +69,19 @@ impl NativeBoundary<'_> {
         }
         let budget = Budget::Protected(memory);
         let acquired = HeldFile::acquire_into(
-            crate::protected_storage::exclusion::ExclusionOpen::CreateOrOpen,
+            crate::durable_storage::protected::exclusion::ExclusionOpen::CreateOrOpen,
             slot,
-            crate::protected_storage::native_name::NativeName::Ordinary(
+            crate::durable_storage::protected::native_name::NativeName::Ordinary(
                 stem.with_extension(if entry { "entry.claim" } else { "claim" }),
             ),
-            crate::protected_storage::native_name::NativeName::Ordinary(
+            crate::durable_storage::protected::native_name::NativeName::Ordinary(
                 stem.with_extension("record"),
             ),
-            crate::protected_storage::native_name::NativeSid::Ordinary(
+            crate::durable_storage::protected::native_name::NativeSid::Ordinary(
                 resolved.account_sid.clone(),
             ),
             budget.clone(),
-            &mut crate::protected_storage::native_phase::NativePhase::ordinary(&budget)?,
+            &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(&budget)?,
         );
         if let Err(cause) = acquired {
             return if is_contention(&cause) { Ok(None) } else { Err(cause) };
@@ -89,7 +89,7 @@ impl NativeBoundary<'_> {
         let held = slot.as_ref().ok_or_else(|| ClaimError::invalid("entry_exclusion_missing"))?;
         paths::file_identity(
             &held.handle,
-            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+            &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
                 &held.handle.budget(),
             )?,
         )

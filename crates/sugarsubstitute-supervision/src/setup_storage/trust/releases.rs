@@ -52,7 +52,7 @@ impl TrustStore {
         file.write_all(&bytes)?;
         file.sync_all()?;
         drop(file);
-        staging::replace_record(&staged, &self.root.path.join(RECORD))?;
+        staging::replace_record(&staged, &self.root.path().join(RECORD))?;
         check(context)?;
         Ok(())
     }

@@ -72,7 +72,7 @@ fn native_initialized_store_prepares_finished_roles_with_original_residual()
                     ._allocation
                     .fixture_residual_bytes()
                     .ok_or("Actual ledger absent")?;
-                let scan = crate::protected_storage::record_file::StreamingPort::diagnostic_scan_state_layout(DIAGNOSTIC_SCAN_BOUND)?;
+                let scan = crate::durable_storage::protected::record_file::StreamingPort::diagnostic_scan_state_layout(DIAGNOSTIC_SCAN_BOUND)?;
                 let prepared = storage.reserve_finished_owner(
                     generation.as_mut().ok_or("Actual read lease absent")?,
                     &operation,

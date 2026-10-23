@@ -6,7 +6,8 @@ use super::{
     names::{CaptureNativeName, CapturePathRole},
 };
 use crate::{
-    ClaimError, claim_error::BoundedNativeCause, protected_storage::native_phase::NativePhase,
+    ClaimError, claim_error::BoundedNativeCause,
+    durable_storage::protected::native_phase::NativePhase,
 };
 use std::{ffi::OsString, os::windows::ffi::OsStringExt, path::PathBuf};
 use windows::Win32::System::LibraryLoader::GetModuleFileNameW;
@@ -49,7 +50,7 @@ pub(super) fn read(
     append_current_name(&mut path, parsed);
     drop(decoded);
     let path = PathBuf::from(path);
-    crate::protected_storage::paths::validate_local_shape(&path)
+    crate::durable_storage::protected::paths::validate_local_shape(&path)
         .map_err(|reason| phase.invalid(reason))?;
     phase.check()?;
     destination.finish(path).map_err(|cause| phase.selected_name_error(cause))

@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Shared inert native installation for signed installer and preparation-worker qualification.
-use crate::setup_storage::{
-    existing::fixture,
-    files::Directory,
-    test_package::{self, repository::SignedPackage},
-    test_worker::TestResult,
-    *,
+use crate::{
+    durable_storage::files::Directory,
+    setup_storage::{
+        existing::fixture,
+        test_package::{self, repository::SignedPackage},
+        test_worker::TestResult,
+        *,
+    },
 };
 use std::{
     path::{Path, PathBuf},

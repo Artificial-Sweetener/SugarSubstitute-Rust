@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Inspect a selected native installation and preserve its actual saved launch inputs.
-use super::{
-    RuntimePaths, Selection, check, entrypoint,
-    files::{self, Directory},
-    invalid,
-};
+use super::RuntimePaths;
+use super::Selection;
+use super::check;
+use super::entrypoint;
+use super::invalid;
+use crate::durable_storage::files::{self, Directory};
 mod accepted;
 mod initial;
 mod recovery;
@@ -70,7 +71,7 @@ pub fn inspect_installation(
         return Ok(None);
     }
     let root = Directory::open(path, false)?;
-    if !root.path.join(".substitute-installation.json").try_exists()? {
+    if !root.path().join(".substitute-installation.json").try_exists()? {
         return if std::fs::read_dir(path)?.next().is_none() {
             Ok(None)
         } else {
@@ -91,7 +92,7 @@ impl ExistingInstallation {
         if initial::incomplete_candidate(root, context)? {
             return Ok(None);
         }
-        let selected = accepted::generation(&root.path, context)?;
+        let selected = accepted::generation(root.path(), context)?;
         let existing = if let Some(generation) = &selected {
             Some(accepted::read(root, marker, generation, context)?)
         } else {
@@ -100,7 +101,7 @@ impl ExistingInstallation {
                 None => recovery::discover(root, marker, context)?,
             }
         };
-        if accepted::generation(&root.path, context)? != selected {
+        if accepted::generation(root.path(), context)? != selected {
             return Err(invalid("Accepted installation changed during configuration inspection"));
         }
         Ok(existing)
@@ -128,7 +129,7 @@ impl ExistingInstallation {
         }
         record.selection.validate()?;
         if std::fs::canonicalize(&record.selection.install_root)?
-            != std::fs::canonicalize(&root.path)?
+            != std::fs::canonicalize(root.path())?
         {
             return Err(invalid("Saved installation choices belong to another folder"));
         }
@@ -201,7 +202,7 @@ impl ExistingInstallation {
         context: &JobContext,
     ) -> io::Result<Self> {
         check(context)?;
-        let path = root.path.join("releases").join(generation.id.as_str());
+        let path = root.path().join("releases").join(generation.id.as_str());
         let candidate = Self::from_directory(
             root,
             Directory::open(&path, false)?,
@@ -212,7 +213,7 @@ impl ExistingInstallation {
             || candidate.runtime != self.runtime
             || candidate.startup != self.startup
             || candidate.descriptor.arguments != self.relocated_descriptor(&path)?.arguments
-            || accepted::generation(&root.path, context)? != self.accepted
+            || accepted::generation(root.path(), context)? != self.accepted
         {
             return Err(invalid("Prepared candidate differs from saved installation choices"));
         }
@@ -258,7 +259,7 @@ impl LaunchDescriptor {
             files::lexical(Path::new(&pair[1]))?;
             if pair[0] == "--startup-config" {
                 if std::fs::canonicalize(&pair[1])?
-                    != std::fs::canonicalize(directory.path.join("startup.local.toml"))?
+                    != std::fs::canonicalize(directory.path().join("startup.local.toml"))?
                 {
                     return Err(invalid(
                         "Saved launch configuration is outside its installation generation",

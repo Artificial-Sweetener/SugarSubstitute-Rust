@@ -50,6 +50,8 @@ pub mod coordinator_entry;
 #[cfg(windows)]
 pub mod diagnostic_storage;
 #[cfg(windows)]
+mod durable_storage;
+#[cfg(windows)]
 mod environment;
 #[cfg(windows)]
 pub mod fixture_descendant;
@@ -66,10 +68,7 @@ pub mod profile_conflict;
 #[cfg(windows)]
 pub mod profiles;
 #[cfg(windows)]
-#[allow(unsafe_code)]
-mod protected_storage;
-#[cfg(windows)]
-pub use protected_storage::{ProtectedStorageGeneration, ProtectedStorageRoot};
+pub use durable_storage::protected::{ProtectedStorageGeneration, ProtectedStorageRoot};
 #[cfg(windows)]
 #[allow(unsafe_code)]
 mod native_process;

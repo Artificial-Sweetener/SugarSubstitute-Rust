@@ -21,7 +21,7 @@ pub use updater_probe::{InheritedUpdaterProbe, capture_updater_probe};
 mod entrypoint;
 mod existing;
 pub use existing::{InstallationSummary, RecoveryFailure, inspect_installation};
-mod files;
+mod identity;
 mod image;
 mod inventory;
 pub use image::PreparationImage;
@@ -30,10 +30,6 @@ pub use running::{RunningApplication, retain_running_generation};
 mod ownership;
 mod packed;
 mod profile;
-#[allow(unsafe_code)]
-mod protection;
-#[allow(unsafe_code)]
-mod staging;
 pub use packed::{MATERIALIZATION_RESERVATION_BYTES, materialize};
 pub use profile::InstallerProfile;
 mod selection;

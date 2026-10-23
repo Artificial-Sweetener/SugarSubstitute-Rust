@@ -5,7 +5,7 @@ use super::*;
 use crate::diagnostic_storage::inventory::ObservedEntry;
 fn observe(filesystem: &Filesystem, object: DiagnosticObject, bytes: &[u8]) -> TestResult {
     let facts = filesystem.put(object, bytes);
-    let (class, digest) = crate::protected_storage::record_file::diagnostic_object_binding(
+    let (class, digest) = crate::durable_storage::protected::record_file::diagnostic_object_binding(
         object,
         owner_key(2)?.namespace,
     );
@@ -37,14 +37,12 @@ fn diagnostic_recovery_inventory_binds_full_historical_key_and_preserves_wrong_c
                     filesystem.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
                 match fault {
                     1 => disk.observations[0].class = DiagnosticEntryClass::Summary,
-                    2 => {
-                        disk.observations[0].digest =
-                            crate::protected_storage::record_file::diagnostic_object_binding(
-                                DiagnosticObject::Journal(key(1)?),
-                                owner_key(2)?.namespace,
-                            )
-                            .1
-                    }
+                    2 => disk.observations[0].digest =
+                        crate::durable_storage::protected::record_file::diagnostic_object_binding(
+                            DiagnosticObject::Journal(key(1)?),
+                            owner_key(2)?.namespace,
+                        )
+                        .1,
                     3 => disk.observations[1].class = DiagnosticEntryClass::Journal,
                     4 => disk.observations[1].digest = [7; 32],
                     _ => return Err("unknown fixture fault".into()),

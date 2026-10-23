@@ -28,7 +28,7 @@ enum SelectionRead {
 impl TrustStore {
     /// Installation ancestry retained by the engine's authenticated trust owner.
     pub(in crate::setup_storage) fn updater_installation_path(&self) -> &Path {
-        &self._installation_root.path
+        self._installation_root.path()
     }
 
     /// Read or initialize empty updater selection under independent update ownership.
@@ -123,7 +123,7 @@ impl TrustStore {
                 }
             }
             let generation = Generation {
-                id: staging::generation_id()?,
+                id: crate::setup_storage::identity::generation()?,
                 package: PackageDigest::new(digest.to_owned()).map_err(io::Error::other)?,
             };
             let next = match state.candidate() {
@@ -182,7 +182,7 @@ impl TrustStore {
 
     /// Generation payloads are protected siblings of their journal, outside application releases.
     pub(in crate::setup_storage) fn updater_path(&self, generation: &Generation) -> PathBuf {
-        self.root.path.join(format!("engine-{}", generation.id.as_str()))
+        self.root.path().join(format!("engine-{}", generation.id.as_str()))
     }
 
     /// Validate immutable identity before using an existing reservation as resumption authority.

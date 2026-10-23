@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Bind the elected application's generation to protected installation run ownership.
-use super::{
-    AcceptedApplication, InstallationLaunch, InstallationRun, SelectionStore, check,
-    files::Directory, invalid,
-};
+use super::AcceptedApplication;
+use super::InstallationLaunch;
+use super::InstallationRun;
+use super::SelectionStore;
+use super::check;
+use super::invalid;
 use super::{InheritedLaunch, TrialApplication};
+use crate::durable_storage::files::Directory;
 use std::{io, path::Path, sync::Arc};
 use sugarsubstitute_contracts::execution::JobContext;
 
@@ -48,7 +51,7 @@ pub fn retain_running_generation(
     context: &JobContext,
 ) -> io::Result<Option<RunningApplication>> {
     check(context)?;
-    super::files::lexical(generation)?;
+    crate::durable_storage::files::lexical(generation)?;
     let Some(releases) = generation.parent().filter(|path| {
         path.file_name()
             .and_then(|name| name.to_str())

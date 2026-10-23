@@ -110,10 +110,11 @@ impl Port for Filesystem {
             if entries.iter().any(|entry| entry.identity == file.identity) {
                 continue;
             }
-            let (class, digest) = crate::protected_storage::record_file::diagnostic_object_binding(
-                file.object,
-                namespace,
-            );
+            let (class, digest) =
+                crate::durable_storage::protected::record_file::diagnostic_object_binding(
+                    file.object,
+                    namespace,
+                );
             entries.push(crate::diagnostic_storage::inventory::ObservedEntry {
                 digest,
                 class,
@@ -121,7 +122,7 @@ impl Port for Filesystem {
                 bytes: file.bytes.len() as u64,
                 protected_regular: true,
                 payload_group:
-                    crate::protected_storage::record_file::diagnostic_payload_group_digest(
+                    crate::durable_storage::protected::record_file::diagnostic_payload_group_digest(
                         file.object,
                     ),
             });
@@ -140,7 +141,7 @@ impl Port for Filesystem {
             .collect();
         disk.stage_scan_complete = !disk.faults.scan_incomplete;
         for (_, object, historical, identity, bytes) in &disk.stage_scan {
-            let digest = crate::protected_storage::record_file::diagnostic_object_binding(
+            let digest = crate::durable_storage::protected::record_file::diagnostic_object_binding(
                 *object,
                 historical.owner().namespace,
             )
@@ -152,7 +153,9 @@ impl Port for Filesystem {
                 bytes: *bytes,
                 protected_regular: true,
                 payload_group:
-                    crate::protected_storage::record_file::diagnostic_payload_group_digest(*object),
+                    crate::durable_storage::protected::record_file::diagnostic_payload_group_digest(
+                        *object,
+                    ),
             });
         }
         Ok(crate::diagnostic_storage::inventory::Scan {

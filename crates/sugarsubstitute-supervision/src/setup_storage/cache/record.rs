@@ -144,7 +144,7 @@ pub(super) fn publish(
     if bytes.len() > MAX_RECORD {
         return Err(invalid("Cache metadata exceeds its byte bound"));
     }
-    let staged = directory.path.join(format!("{name}.next"));
+    let staged = directory.path().join(format!("{name}.next"));
     protection::with(context, |protection| {
         let mut file = match OpenOptions::new()
             .read(true)
@@ -172,7 +172,7 @@ pub(super) fn publish(
         drop(file);
         protection.publish(
             &staged,
-            &directory.path.join(name),
+            &directory.path().join(name),
             identity,
             protection::Publication::File { replace },
             context,
@@ -206,7 +206,7 @@ fn pin(directory: &Directory, protection: &Protection, writable: bool) -> io::Re
         .access_mode(access)
         .share_mode(if writable { 0 } else { 1 })
         .custom_flags(0x0020_0000)
-        .open(directory.path.join("lease"))?;
+        .open(directory.path().join("lease"))?;
     let metadata = file.metadata()?;
     if !metadata.is_file() || metadata.file_attributes() & 0x400 != 0 || metadata.len() != 0 {
         return Err(invalid("Cache lease must be an empty regular file"));
@@ -224,7 +224,7 @@ fn metadata_record(directory: &Directory) -> io::Result<File> {
         .read(true)
         .share_mode(5)
         .custom_flags(0x0020_0000)
-        .open(directory.path.join("record"))?;
+        .open(directory.path().join("record"))?;
     let metadata = file.metadata()?;
     if !metadata.is_file() || metadata.file_attributes() & 0x400 != 0 {
         return Err(invalid("Cache metadata must be a regular file"));

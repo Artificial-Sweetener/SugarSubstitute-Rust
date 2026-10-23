@@ -31,7 +31,7 @@ impl TrustStore {
             return Ok(cache.clone());
         }
         let cache = super::super::cache::RuntimeCache::open_retained(
-            &self._installation_root.path,
+            self._installation_root.path(),
             super::super::cache::CachePolicy::default(),
             &self.workspace,
             context,

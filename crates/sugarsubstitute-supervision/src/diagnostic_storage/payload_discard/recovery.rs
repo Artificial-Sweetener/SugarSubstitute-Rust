@@ -40,7 +40,7 @@ impl DiagnosticStorage {
                 .ok_or_else(|| error(operation.key, Code::Closed))?;
             let subject_digest = match (selected.object, selected.candidate) {
                 (Some(DiagnosticObject::Summary(key)), _) => {
-                    crate::protected_storage::record_file::diagnostic_subject_digest(key)
+                    crate::durable_storage::protected::record_file::diagnostic_subject_digest(key)
                 }
                 (None, Some((DiagnosticEntryClass::Summary, digest))) => digest,
                 _ => return Err(error(operation.key, Code::InvalidIdentity)),
@@ -49,7 +49,7 @@ impl DiagnosticStorage {
                 read.id != summary.id
                     && read.id != journal.id
                     && (read.object.is_some_and(|object| {
-                        crate::protected_storage::record_file::diagnostic_object_binding(
+                        crate::durable_storage::protected::record_file::diagnostic_object_binding(
                             object,
                             operation.key.owner().namespace,
                         )

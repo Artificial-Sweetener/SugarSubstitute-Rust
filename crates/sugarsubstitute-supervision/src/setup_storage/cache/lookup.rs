@@ -16,7 +16,7 @@ impl RuntimeCache {
         let parent = self.namespace(namespace)?;
         let prefix = format!("{semantic}-");
         let mut keys = BTreeSet::new();
-        for entry in std::fs::read_dir(&parent.path)? {
+        for entry in std::fs::read_dir(parent.path())? {
             check(context)?;
             let entry = entry?;
             let name = entry.file_name().to_string_lossy().into_owned();
@@ -29,7 +29,7 @@ impl RuntimeCache {
         }
         for key in keys.into_iter().rev() {
             let opened = protection::with(context, |protection| {
-                let directory = Directory::open(&parent.path.join(&key), false)?;
+                let directory = Directory::open(&parent.path().join(&key), false)?;
                 // Unpublished replacements must not hide the last complete generation, including
                 // while their producer retains its exclusive native lease. Recheck after pinning.
                 if record::load(&directory, namespace, &key, protection)?.staged {
@@ -44,7 +44,7 @@ impl RuntimeCache {
                 if record.staged
                     || record.deleting
                     || (!writable && record.producer.is_some())
-                    || parent.path.join(format!("{key}.retiring")).exists()
+                    || parent.path().join(format!("{key}.retiring")).exists()
                 {
                     return Ok(None);
                 }
@@ -75,7 +75,7 @@ impl RuntimeCache {
         let mut highest = 0u64;
         let mut keys = BTreeSet::new();
         for namespace in Namespace::ALL {
-            for entry in std::fs::read_dir(self.namespace(namespace)?.path)? {
+            for entry in std::fs::read_dir(self.namespace(namespace)?.path())? {
                 check(context)?;
                 let name = entry?.file_name().to_string_lossy().into_owned();
                 let key = name

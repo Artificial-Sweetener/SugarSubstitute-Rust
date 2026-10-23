@@ -82,11 +82,11 @@ impl TrialWitness {
         let (run, trial) = custody::receive(store, inherited, context)?;
         let store = &run.custody.store;
         let path =
-            store._installation.path.join("releases").join(trial.attempt.generation.id.as_str());
-        let generation = crate::setup_storage::protection::with(context, |protection| {
+            store._installation.path().join("releases").join(trial.attempt.generation.id.as_str());
+        let generation = crate::durable_storage::protection::with(context, |protection| {
             protection.directory(
                 &path,
-                crate::protected_storage::directories::Mode::Existing,
+                crate::durable_storage::protected::directories::Mode::Existing,
                 context,
             )?;
             Directory::open(&path, false)

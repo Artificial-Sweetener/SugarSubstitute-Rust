@@ -14,7 +14,7 @@ pub(in crate::setup_storage) fn legacy<T>(
     protection::with(context, |protection| {
         let _transition = namespace::transition(installation, protection, context)?;
         for leaf in [DIRECTORY, NAMESPACE_MARKER, RECORD, LOCK] {
-            match std::fs::symlink_metadata(installation.path.join(leaf)) {
+            match std::fs::symlink_metadata(installation.path().join(leaf)) {
                 Ok(_) => {
                     return Err(super::super::invalid(
                         "This installation requires health-checked update activation; its shortcut has been preserved",

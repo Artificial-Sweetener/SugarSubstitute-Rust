@@ -17,7 +17,7 @@ pub(in crate::diagnostic_storage) fn recognized_origin(
             known.generation == data.scan_generation
                 && known.facts.file_identity() == entry.identity
                 && known.facts.bytes() == entry.bytes
-                && crate::protected_storage::record_file::diagnostic_object_binding(
+                && crate::durable_storage::protected::record_file::diagnostic_object_binding(
                     DiagnosticObject::Journal(known.operation),
                     known.operation.owner().namespace,
                 )
@@ -60,7 +60,7 @@ impl DiagnosticStorage {
                 entry.class == DiagnosticEntryClass::Journal
                     && entry.identity == read.facts.file_identity()
                     && entry.bytes == read.facts.bytes()
-                    && crate::protected_storage::record_file::diagnostic_object_binding(
+                    && crate::durable_storage::protected::record_file::diagnostic_object_binding(
                         DiagnosticObject::Journal(record.operation),
                         operation.key.owner().namespace,
                     )

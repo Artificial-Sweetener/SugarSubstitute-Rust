@@ -11,9 +11,10 @@ impl DiagnosticStorage {
             return Err(DiagnosticStorageError::rejected(None, Code::Capacity));
         }
         let allocation = allocation::owner(memory)?;
-        let port =
-            crate::protected_storage::record_file::StreamingPort::admit(allocation.native_grant())
-                .map_err(|cause| DiagnosticStorageError::native(None, Code::Admission, cause))?;
+        let port = crate::durable_storage::protected::record_file::StreamingPort::admit(
+            allocation.native_grant(),
+        )
+        .map_err(|cause| DiagnosticStorageError::native(None, Code::Admission, cause))?;
         Self::from_port(allocation, port)
     }
     pub(super) fn from_port(

@@ -7,7 +7,7 @@
 //! every operation, retained source and durable disposition authority.
 pub(in crate::diagnostic_storage) mod boundary;
 use super::*;
-pub use crate::protected_storage::capture_read::fixture::ProtectedCaptureSourceFixture;
+pub use crate::durable_storage::protected::capture_read::fixture::ProtectedCaptureSourceFixture;
 use boundary::Filesystem;
 
 pub(in crate::diagnostic_storage) trait BoundaryClock:

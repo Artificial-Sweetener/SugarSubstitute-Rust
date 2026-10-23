@@ -13,10 +13,11 @@ impl Family {
         grant: &sugarsubstitute_execution::RegisteredRecoveryGrant,
         context: &sugarsubstitute_contracts::execution::JobContext,
     ) -> Result<(), RegistryError> {
-        let mut phase = crate::protected_storage::native_phase::NativePhase::ordinary(budget)
-            .map_err(|cause| RegistryError::new("recovery_job_security_phase", cause))?;
+        let mut phase =
+            crate::durable_storage::protected::native_phase::NativePhase::ordinary(budget)
+                .map_err(|cause| RegistryError::new("recovery_job_security_phase", cause))?;
         let descriptor =
-            crate::protected_storage::security::Descriptor::recovery_job(sid, &mut phase)
+            crate::durable_storage::protected::security::Descriptor::recovery_job(sid, &mut phase)
                 .map_err(|cause| RegistryError::new("recovery_job_security_descriptor", cause))?;
         let attributes = descriptor.attributes();
         grant
@@ -51,7 +52,7 @@ impl Family {
         grant
             .check_context(context)
             .map_err(|cause| RegistryError::new("recovery_job_security_readback", cause))?;
-        crate::protected_storage::security::verify_recovery_job_borrowed(
+        crate::durable_storage::protected::security::verify_recovery_job_borrowed(
             handle(self.job, "recovery_job_security_readback")?,
             budget,
             sid,

@@ -7,7 +7,7 @@ use crate::{
         election::{ElectionRecordOrigin, RetainedElectionProof},
         fixture::Harness,
     },
-    protected_storage::account::ResolvedNamespace,
+    durable_storage::protected::account::ResolvedNamespace,
 };
 use std::error::Error;
 use sugarsubstitute_contracts::execution::JobContext;

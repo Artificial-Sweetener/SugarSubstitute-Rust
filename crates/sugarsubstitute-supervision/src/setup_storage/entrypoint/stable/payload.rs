@@ -26,7 +26,7 @@ pub(super) fn ensure(
         Err(cause) => return Err(cause),
     }
     let source =
-        Directory::open(&root.path.join("releases").join(record.source.id.as_str()), false)?;
+        Directory::open(&root.path().join("releases").join(record.source.id.as_str()), false)?;
     let mut input = source.read(EXECUTABLE)?;
     verify(&mut input, record, context)?;
     let staged = staging::unique_path(root, ".launcher-image-stage")?;
@@ -55,7 +55,7 @@ pub(super) fn ensure(
     check(context)?;
     protection.publish(
         &staged,
-        &root.path.join(EXECUTABLE),
+        &root.path().join(EXECUTABLE),
         identity,
         Publication::File { replace: false },
         context,

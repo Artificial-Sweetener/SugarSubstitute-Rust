@@ -24,7 +24,7 @@ impl SelectionStore {
         let (root, marker) = protection::with_domain(context, |protection| {
             let _transition = namespace::transition(&installation, protection, context)?;
             for leaf in [DIRECTORY, NAMESPACE_MARKER] {
-                match std::fs::symlink_metadata(installation.path.join(leaf)) {
+                match std::fs::symlink_metadata(installation.path().join(leaf)) {
                     Ok(_) => return Err(SelectionFailure::Changed),
                     Err(cause) if cause.kind() == io::ErrorKind::NotFound => {}
                     Err(cause) => return Err(cause.into()),
@@ -41,7 +41,7 @@ impl SelectionStore {
                 check(context)?;
                 Ok((path, root.identity()?))
             })?;
-            let destination = installation.path.join(DIRECTORY);
+            let destination = installation.path().join(DIRECTORY);
             protection::with(context, |owner| {
                 owner.publish(
                     &stage,

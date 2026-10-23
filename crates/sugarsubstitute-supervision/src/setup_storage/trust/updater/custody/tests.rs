@@ -33,7 +33,7 @@ fn last_duplicate_owns_exclusion_after_original_file_and_store_retire() -> TestR
         let root = worker::installation(140, context)?;
         let trust = initialize(root.path(), context)?;
         let original = trust.claim_updater_preparation(context)?;
-        let identity = storage::files::file_identity(&original)?;
+        let identity = crate::durable_storage::files::file_identity(&original)?;
         let duplicate = original.try_clone()?;
         drop(original);
         drop(trust);
@@ -45,7 +45,7 @@ fn last_duplicate_owns_exclusion_after_original_file_and_store_retire() -> TestR
         reopened.protected(context, |protection| {
             protection.verify_exclusive_rendezvous(
                 &final_holder,
-                &reopened.root.path.join(RENDEZVOUS),
+                &reopened.root.path().join(RENDEZVOUS),
                 context,
             )?;
             Ok(())
@@ -56,7 +56,7 @@ fn last_duplicate_owns_exclusion_after_original_file_and_store_retire() -> TestR
         assert!(reopened.claim_updater_preparation(context).is_err());
         drop(final_holder);
         let successor = reopened.claim_updater_preparation(context)?;
-        assert_eq!(storage::files::file_identity(&successor)?, identity);
+        assert_eq!(crate::durable_storage::files::file_identity(&successor)?, identity);
         assert_eq!(successor.metadata()?.len(), 0);
         Ok(())
     })
@@ -67,7 +67,7 @@ fn historical_byte_range_and_exclusive_owners_conflict_in_both_directions() -> T
     run(|context| {
         let root = worker::installation(141, context)?;
         let trust = initialize(root.path(), context)?;
-        let path = trust.root.path.join(RENDEZVOUS);
+        let path = trust.root.path().join(RENDEZVOUS);
         let legacy =
             trust.protected(context, |protection| Ok(protection.rendezvous(&path, context)?))?;
         legacy.try_lock().map_err(io::Error::from)?;
@@ -96,17 +96,17 @@ fn unknown_rendezvous_contents_are_preserved_and_do_not_claim_application_owners
     run(|context| {
         let root = worker::installation(142, context)?;
         let trust = initialize(root.path(), context)?;
-        let path = trust.root.path.join(RENDEZVOUS);
+        let path = trust.root.path().join(RENDEZVOUS);
         trust.protected(context, |protection| {
             let mut file = protection.file(&path, context)?;
             file.write_all(b"unknown retained data")?;
             file.sync_all()?;
             Ok(())
         })?;
-        let checkpoint = std::fs::read(trust.root.path.join("checkpoint"))?;
+        let checkpoint = std::fs::read(trust.root.path().join("checkpoint"))?;
         assert!(trust.claim_updater_preparation(context).is_err());
         assert_eq!(std::fs::read(&path)?, b"unknown retained data");
-        assert_eq!(std::fs::read(trust.root.path.join("checkpoint"))?, checkpoint);
+        assert_eq!(std::fs::read(trust.root.path().join("checkpoint"))?, checkpoint);
         let selection = Arc::new(storage::SelectionStore::open(root.path(), context)?);
         let _application = storage::InstallationRun::acquire(selection, context)?;
         let _setup = storage::transaction::admission::Admission::open(root.path(), false)?;

@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Verify one protected generation's retained manifest and pin every executable payload.
-use super::{
-    bundle::VerifiedCopy,
-    check,
+use super::bundle::VerifiedCopy;
+use super::check;
+use super::inventory;
+use crate::durable_storage::{
     files::{self, Directory},
-    inventory, protection,
+    protection,
 };
 use sha2::{Digest, Sha256};
 use std::{fs::File, io};
@@ -36,11 +37,11 @@ impl VerifiedApplication {
     ) -> io::Result<Self> {
         check(context)?;
         let _work = context.memory().claim(super::RESERVATION_BYTES).map_err(io::Error::other)?;
-        let path = installation.path.join("releases").join(generation.id.as_str());
+        let path = installation.path().join("releases").join(generation.id.as_str());
         let (directory, inventory_file, payload) = protection::with_domain(context, |protection| {
             protection.directory(
                 &path,
-                crate::protected_storage::directories::Mode::Existing,
+                crate::durable_storage::protected::directories::Mode::Existing,
                 context,
             )?;
             let directory = Directory::open(&path, false)?;

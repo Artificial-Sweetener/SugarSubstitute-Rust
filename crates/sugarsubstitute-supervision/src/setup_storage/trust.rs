@@ -26,14 +26,16 @@ mod releases;
 mod session;
 mod subscription;
 mod updater;
-use super::{
-    SelectionStore, check,
+use super::SelectionStore;
+use super::check;
+use super::invalid;
+use super::ownership;
+use crate::durable_storage::{
     files::{self, Directory},
-    invalid, ownership,
+    protected::directories::Mode,
     protection::{self, Protection},
     staging,
 };
-use crate::protected_storage::directories::Mode;
 pub use failure::TrustFailure;
 use std::{fs::File, io, io::Write, path::Path};
 use sugarsubstitute_contracts::{
@@ -88,7 +90,7 @@ impl TrustStore {
         let mut store = Self {
             cache: std::sync::Mutex::new(None),
             preparation: None,
-            root: Directory::open(&parent.path.join(DIRECTORY), false)?,
+            root: Directory::open(&parent.path().join(DIRECTORY), false)?,
             _installation_root: parent,
             _ownership: ownership,
             _continuity: None,
@@ -190,7 +192,7 @@ impl TrustStore {
             file.write_all(&bytes)?;
             file.sync_all()?;
             drop(file);
-            staging::replace_record(&staged, &self.root.path.join(RECORD))
+            staging::replace_record(&staged, &self.root.path().join(RECORD))
         })();
         if let Err(storage) = publication {
             return Err(TrustFailure::Publication { storage, verification: outcome.err() });
@@ -209,7 +211,7 @@ impl TrustStore {
         check(context)?;
         let _memory = self.workspace.claim(WORK_BYTES).map_err(io::Error::other)?;
         protection::with_domain(context, |protection| {
-            protection.directory(&self.root.path, Mode::Existing, context)?;
+            protection.directory(self.root.path(), Mode::Existing, context)?;
             operation(protection)
         })
         .map_err(TrustFailure::from)

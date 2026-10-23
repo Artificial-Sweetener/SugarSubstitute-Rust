@@ -55,7 +55,7 @@ fn downloaded_candidate_case(missing: bool, missing_entry: bool) -> TestResult {
         let root = Directory::open(target.path(), false)?;
         let original = fixture::installed(&root, context)?;
         let signed = SignedPackage::new(&archive, 1)?;
-        let trust = signed.initialize(&root.path, context)?;
+        let trust = signed.initialize(root.path(), context)?;
         let offer = trust.offer(
             signed.metadata.metadata(),
             &signed.request,
@@ -80,31 +80,31 @@ fn downloaded_candidate_case(missing: bool, missing_entry: bool) -> TestResult {
             std::fs::remove_file(original.join("sugarsubstitute.exe"))?;
         }
         if missing_entry {
-            std::fs::remove_file(root.path.join("SugarSubstitute.lnk"))?;
+            std::fs::remove_file(root.path().join("SugarSubstitute.lnk"))?;
         }
         let saved = std::fs::read(original.join("startup.local.toml"))?;
-        std::fs::write(root.path.join("user-document"), b"authored data")?;
-        let prepared = crate::setup_storage::InstallationSession::maintain(&root.path, context)?
+        std::fs::write(root.path().join("user-document"), b"authored data")?;
+        let prepared = crate::setup_storage::InstallationSession::maintain(root.path(), context)?
             .prepare(bundle.clone(), context)?;
         let runtime = prepared.maintenance_runtime().ok_or("Maintenance runtime absent")?.clone();
         prepared.stage(context)?;
         assert_eq!(
-            entrypoint::selected(&root)?.map(|directory| directory.path),
+            entrypoint::selected(&root)?.map(|directory| directory.path().to_path_buf()),
             if missing_entry { None } else { Some(original.clone()) }
         );
         assert!(prepared.activate(&runtime, context).is_err());
-        let reopened = TrustStore::open(&root.path, [92; 32], context)?;
+        let reopened = TrustStore::open(root.path(), [92; 32], context)?;
         let installed =
             prepared.prepare_update(&runtime, &signed.authorization(&reopened), || NOW, context)?;
         assert_ne!(installed.directory(), original);
         assert_eq!(std::fs::read(installed.directory().join("startup.local.toml"))?, saved);
         assert_eq!(std::fs::read(original.join("startup.local.toml"))?, saved);
-        assert_eq!(std::fs::read(root.path.join("user-document"))?, b"authored data");
+        assert_eq!(std::fs::read(root.path().join("user-document"))?, b"authored data");
         assert_eq!(
-            entrypoint::selected(&root)?.map(|directory| directory.path),
+            entrypoint::selected(&root)?.map(|directory| directory.path().to_path_buf()),
             if missing_entry { None } else { Some(original.clone()) }
         );
-        let store = crate::setup_storage::SelectionStore::open(&root.path, context)?;
+        let store = crate::setup_storage::SelectionStore::open(root.path(), context)?;
         let state = store.load(context)?.ok_or("Candidate selection absent")?;
         assert!(state.accepted().is_none());
         assert!(matches!(state.candidate(),
@@ -112,10 +112,10 @@ fn downloaded_candidate_case(missing: bool, missing_entry: bool) -> TestResult {
                 if generation == installed.generation()));
         assert_eq!(
             installed.directory(),
-            root.path.join("releases").join(installed.generation().id.as_str())
+            root.path().join("releases").join(installed.generation().id.as_str())
         );
         assert_eq!(installed.generation().package.as_str(), bundle.digest());
-        assert!(std::fs::rename(installed.directory(), root.path.join("moved")).is_err());
+        assert!(std::fs::rename(installed.directory(), root.path().join("moved")).is_err());
         assert!(!runtime.directory.exists());
         assert!(!runtime.python.exists());
         assert!(std::fs::write(&bundle.worker_paths().0, b"tampered").is_err());

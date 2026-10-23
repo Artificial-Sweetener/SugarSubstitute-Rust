@@ -18,13 +18,13 @@ pub(super) mod publication;
 mod reservation;
 pub use reservation::{ReservedApplication, ReservedLaunch, reserve_installed_launch};
 mod run;
-use super::{
-    check,
+use super::check;
+use crate::durable_storage::{
     files::{self, Directory},
+    protected::directories::Mode,
     protection::{self, Protection},
     staging,
 };
-use crate::protected_storage::directories::Mode;
 pub use failure::SelectionFailure;
 pub(crate) use run::UnstartedTrial;
 pub use run::{AcceptedApplication, InstallationLaunch, InstallationRun, OwnedTrial};
@@ -105,7 +105,7 @@ impl SelectionStore {
         let installation = Directory::open(root, false)?;
         let ownership = super::ownership::read(&installation)?;
         for earlier in [RECORD, LOCK] {
-            match std::fs::symlink_metadata(installation.path.join(earlier)) {
+            match std::fs::symlink_metadata(installation.path().join(earlier)) {
                 Ok(_) => {
                     return Err(
                         super::invalid("Unprotected selection requires verified recovery").into()
@@ -184,7 +184,7 @@ impl SelectionStore {
         operation: impl FnOnce(&mut Protection) -> Result<T, SelectionFailure>,
     ) -> Result<T, SelectionFailure> {
         protection::with_domain(context, |protection| {
-            protection.directory(&self.root.path, Mode::Existing, context)?;
+            protection.directory(self.root.path(), Mode::Existing, context)?;
             operation(protection)
         })
         .map_err(SelectionFailure::from)
@@ -240,14 +240,14 @@ impl SelectionStore {
         file.sync_all()?;
         drop(file);
         check(context)?;
-        staging::replace_record(&staged, &self.root.path.join(RECORD))?;
+        staging::replace_record(&staged, &self.root.path().join(RECORD))?;
         Ok(())
     }
 }
 
 /// Serialize selection publication and its one-time continuity marker with the same OS lock.
 fn writer(root: &Directory, protection: &Protection, context: &JobContext) -> io::Result<File> {
-    let lock = protection.rendezvous(&root.path.join(LOCK), context)?;
+    let lock = protection.rendezvous(&root.path().join(LOCK), context)?;
     lock.try_lock().map_err(io::Error::from)?;
     Ok(lock)
 }

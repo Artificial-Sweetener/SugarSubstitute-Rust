@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Grant private installer profiles before SDK effects and finalize only after actual browser release.
-use super::{
-    cache::{self, CacheLease, Namespace, RuntimeCache},
-    cache_custody::CacheFamilyId,
-    check,
-    files::Directory,
-    invalid,
-};
+use super::cache;
+use super::cache::CacheLease;
+use super::cache::Namespace;
+use super::cache::RuntimeCache;
+use super::cache_custody::CacheFamilyId;
+use super::check;
+use super::invalid;
+use crate::durable_storage::files::Directory;
 use sha2::{Digest, Sha256};
 use std::{
     io,

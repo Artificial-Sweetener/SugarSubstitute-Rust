@@ -135,8 +135,8 @@ fn abandoned_initialization_at_each_file_boundary_cannot_lock_out_fresh_trust() 
         for count in 0..=3 {
             let installation = installation(39, context)?;
             let parent = Directory::open(installation.path(), false)?;
-            let (checkpoint, history) = records(&parent.path, &trusted_root, context)?;
-            let orphan = parent.path.join(".update-trust-stage-interrupted");
+            let (checkpoint, history) = records(parent.path(), &trusted_root, context)?;
+            let orphan = parent.path().join(".update-trust-stage-interrupted");
             let records = [
                 (LOCK, b"".as_slice()),
                 (releases::RECORD, history.as_slice()),
@@ -151,13 +151,13 @@ fn abandoned_initialization_at_each_file_boundary_cannot_lock_out_fresh_trust() 
                 }
                 Ok(())
             })?;
-            let store = TrustStore::initialize(&parent.path, [39; 32], &trusted_root, context)?;
+            let store = TrustStore::initialize(parent.path(), [39; 32], &trusted_root, context)?;
             assert_eq!(store.next_root_version(context)?, 2);
             assert_eq!(std::fs::read_dir(&orphan)?.count(), count);
             for (name, bytes) in records.iter().take(count) {
                 assert_eq!(std::fs::read(orphan.join(name))?, *bytes);
             }
-            assert_eq!(std::fs::read(parent.path.join(DIRECTORY).join(RECORD))?, checkpoint);
+            assert_eq!(std::fs::read(parent.path().join(DIRECTORY).join(RECORD))?, checkpoint);
         }
         Ok(())
     })
@@ -171,8 +171,8 @@ fn cancellation_before_directory_publication_preserves_unpublished_state() -> Te
         let staged = InitialState::stage(&parent, b"checkpoint", b"history", context)?;
         let saved = staged.path.clone();
         clock.expire();
-        assert!(staged.publish(&parent.path.join(DIRECTORY), context).is_err());
-        assert!(!parent.path.join(DIRECTORY).exists());
+        assert!(staged.publish(&parent.path().join(DIRECTORY), context).is_err());
+        assert!(!parent.path().join(DIRECTORY).exists());
         assert_eq!(std::fs::read(saved.join(RECORD))?, b"checkpoint");
         assert_eq!(std::fs::read(saved.join(releases::RECORD))?, b"history");
         Ok(())
@@ -185,7 +185,7 @@ fn replacing_a_staging_path_with_identical_bytes_cannot_publish_another_director
         let installation = installation(41, context)?;
         let parent = Directory::open(installation.path(), false)?;
         let staged = InitialState::stage(&parent, b"checkpoint", b"history", context)?;
-        let saved = parent.path.join("original-stage");
+        let saved = parent.path().join("original-stage");
         std::fs::rename(&staged.path, &saved)?;
         protection::with(context, |protection| {
             protection.directory(&staged.path, Mode::CreateNew, context)?;
@@ -201,8 +201,8 @@ fn replacing_a_staging_path_with_identical_bytes_cannot_publish_another_director
             Ok(())
         })?;
         let replacement = staged.path.clone();
-        assert!(staged.publish(&parent.path.join(DIRECTORY), context).is_err());
-        assert!(!parent.path.join(DIRECTORY).exists());
+        assert!(staged.publish(&parent.path().join(DIRECTORY), context).is_err());
+        assert!(!parent.path().join(DIRECTORY).exists());
         assert_eq!(std::fs::read(saved.join(RECORD))?, b"checkpoint");
         assert_eq!(std::fs::read(replacement.join(RECORD))?, b"checkpoint");
         Ok(())
@@ -216,7 +216,7 @@ fn publication_never_replaces_an_existing_directory_or_its_files() -> TestResult
         let parent = Directory::open(installation.path(), false)?;
         let staged = InitialState::stage(&parent, b"checkpoint", b"history", context)?;
         let source = staged.path.clone();
-        let destination = parent.path.join(DIRECTORY);
+        let destination = parent.path().join(DIRECTORY);
         std::fs::create_dir(&destination)?;
         std::fs::write(destination.join("user-file"), b"preserve")?;
         assert!(staged.publish(&destination, context).is_err());
@@ -253,16 +253,16 @@ fn crash_after_publication_leaves_complete_trust_that_reopens_without_initializi
         let installation = installation(43, context)?;
         let parent = Directory::open(installation.path(), false)?;
         let trusted_root = root(&key(39)?, 1, None)?;
-        let (checkpoint, history) = records(&parent.path, &trusted_root, context)?;
+        let (checkpoint, history) = records(parent.path(), &trusted_root, context)?;
         let staged = InitialState::stage(&parent, &checkpoint, &history, context)?;
         let source = staged.path.clone();
-        drop(staged.publish(&parent.path.join(DIRECTORY), context)?);
+        drop(staged.publish(&parent.path().join(DIRECTORY), context)?);
         assert!(!source.exists());
-        let store = TrustStore::open(&parent.path, [39; 32], context)?;
+        let store = TrustStore::open(parent.path(), [39; 32], context)?;
         assert_eq!(store.next_root_version(context)?, 2);
-        assert!(TrustStore::initialize(&parent.path, [39; 32], &trusted_root, context).is_err());
-        assert_eq!(std::fs::read(parent.path.join(DIRECTORY).join(RECORD))?, checkpoint);
-        assert_eq!(std::fs::read(parent.path.join(DIRECTORY).join(releases::RECORD))?, history);
+        assert!(TrustStore::initialize(parent.path(), [39; 32], &trusted_root, context).is_err());
+        assert_eq!(std::fs::read(parent.path().join(DIRECTORY).join(RECORD))?, checkpoint);
+        assert_eq!(std::fs::read(parent.path().join(DIRECTORY).join(releases::RECORD))?, history);
         Ok(())
     })
 }

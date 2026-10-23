@@ -62,7 +62,7 @@ pub(super) fn read(state: &Directory, protection: &Protection) -> io::Result<Opt
     let mut file = match state.read(RECORD) {
         Ok(file) => file,
         Err(cause) if cause.kind() == io::ErrorKind::NotFound => {
-            return match std::fs::symlink_metadata(state.path.join(NAME)) {
+            return match std::fs::symlink_metadata(state.path().join(NAME)) {
                 Ok(_) => Err(invalid(
                     "Stable launcher ownership is missing; existing shell state has been preserved",
                 )),
@@ -92,5 +92,7 @@ pub(super) fn publish(
         return Err(invalid("Stable launcher ownership exceeds its bound"));
     }
     check(context)?;
-    files::write_immutable(&state.path.join(RECORD), &bytes, |path| protection.file(path, context))
+    files::write_immutable(&state.path().join(RECORD), &bytes, |path| {
+        protection.file(path, context)
+    })
 }

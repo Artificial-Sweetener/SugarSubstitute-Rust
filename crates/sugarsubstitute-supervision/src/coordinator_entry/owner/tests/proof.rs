@@ -5,13 +5,13 @@ use super::*;
 use crate::{
     claims::entry::fixture::PublicationFixture,
     coordinator_entry::election::{ElectionRecordOrigin, FreshRecordOrigin},
-    protected_storage::record_file::RecordRead,
+    durable_storage::protected::record_file::RecordRead,
 };
 use sugarsubstitute_contracts::{execution::JobContext, lifecycle::NamespaceId};
 
 fn check_proof(
     fixture: &mut PublicationFixture,
-    resolve: impl FnOnce(&JobContext) -> crate::protected_storage::account::ResolvedNamespace
+    resolve: impl FnOnce(&JobContext) -> crate::durable_storage::protected::account::ResolvedNamespace
     + Send
     + 'static,
     deadline: Moment,

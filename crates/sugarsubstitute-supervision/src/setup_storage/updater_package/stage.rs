@@ -2,8 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Stage a complete updater generation before publishing preparation; application selection stays separate.
 use super::*;
-use crate::protected_storage::directories::Mode;
-use crate::setup_storage::{files::Directory, protection, staging};
+use crate::durable_storage::{files::Directory, protected::directories::Mode, protection, staging};
 use std::{fs::File, io};
 use sugarsubstitute_contracts::installation::Generation;
 mod trial;

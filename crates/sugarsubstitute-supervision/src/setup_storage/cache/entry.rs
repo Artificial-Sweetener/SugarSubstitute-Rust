@@ -19,7 +19,7 @@ impl CacheLease {
     /// Pinned content directory. Readers may pass it only to read-only native consumers.
     /// Producers write only declared disposable files or their exclusively granted generated output.
     pub fn path(&self) -> PathBuf {
-        self.directory.path.join("data")
+        self.directory.path().join("data")
     }
     /// Maximum aggregate payload bytes charged before this entry was returned.
     pub fn reserved_bytes(&self) -> u64 {

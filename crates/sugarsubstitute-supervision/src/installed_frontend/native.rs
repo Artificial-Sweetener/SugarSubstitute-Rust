@@ -6,7 +6,7 @@ use super::{
     state::{Inspection, SourcePort, checkpoint},
     *,
 };
-use crate::{native_claims::files::Budget, protected_storage::paths};
+use crate::{durable_storage::protected::paths, native_claims::files::Budget};
 use sha2::{Digest, Sha256};
 use std::{
     path::{Path, PathBuf},
@@ -51,13 +51,13 @@ impl SourcePort for SystemPort {
             let script = pin(&input.script, false, retained, context)?;
             manifest.script = paths::final_path(
                 &retained.handles[script],
-                &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
                     &retained.handles[script].budget(),
                 )
                 .map_err(|cause| FrontendSourceError::new("source_native_phase", cause))?,
-                crate::protected_storage::native_name::NativeNameDestination::Ordinary,
+                crate::durable_storage::protected::native_name::NativeNameDestination::Ordinary,
             )
-            .and_then(crate::protected_storage::native_name::NativeName::into_ordinary)
+            .and_then(crate::durable_storage::protected::native_name::NativeName::into_ordinary)
             .map_err(|e| FrontendSourceError::new("backend_script_path", e))?;
             let length = file_size(script, MAX_FRONTEND_ASSET_BYTES, retained, context)?;
             let mut digest = Sha256::new();
@@ -143,8 +143,9 @@ fn pin(
     }
     let index = {
         let budget = Budget::Protected(retained.claim.clone());
-        let mut phase = crate::protected_storage::native_phase::NativePhase::ordinary(&budget)
-            .map_err(|cause| FrontendSourceError::new("source_native_phase", cause))?;
+        let mut phase =
+            crate::durable_storage::protected::native_phase::NativePhase::ordinary(&budget)
+                .map_err(|cause| FrontendSourceError::new("source_native_phase", cause))?;
         if directory {
             paths::open_retained(
                 path,
@@ -162,17 +163,17 @@ fn pin(
     checkpoint(context)?;
     let canonical = paths::final_path(
         &retained.handles[index],
-        &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+        &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
             &retained.handles[index].budget(),
         )
         .map_err(|cause| FrontendSourceError::new("source_native_phase", cause))?,
-        crate::protected_storage::native_name::NativeNameDestination::Ordinary,
+        crate::durable_storage::protected::native_name::NativeNameDestination::Ordinary,
     )
-    .and_then(crate::protected_storage::native_name::NativeName::into_ordinary)
+    .and_then(crate::durable_storage::protected::native_name::NativeName::into_ordinary)
     .map_err(|e| FrontendSourceError::new("source_canonical", e))?;
     let identity = paths::file_identity(
         &retained.handles[index],
-        &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+        &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
             &retained.handles[index].budget(),
         )
         .map_err(|cause| FrontendSourceError::new("source_native_phase", cause))?,
@@ -185,7 +186,7 @@ fn pin(
         &mut retained.handles,
         directory,
         Budget::Protected(retained.claim.clone()),
-        &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+        &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
             &(Budget::Protected(retained.claim.clone())),
         )
         .map_err(|cause| FrontendSourceError::new("source_native_phase", cause))?,
@@ -202,13 +203,13 @@ fn pin_directory(
     let index = pin(path, true, retained, context)?;
     let canonical = paths::final_path(
         &retained.handles[index],
-        &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+        &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
             &retained.handles[index].budget(),
         )
         .map_err(|cause| FrontendSourceError::new("source_native_phase", cause))?,
-        crate::protected_storage::native_name::NativeNameDestination::Ordinary,
+        crate::durable_storage::protected::native_name::NativeNameDestination::Ordinary,
     )
-    .and_then(crate::protected_storage::native_name::NativeName::into_ordinary)
+    .and_then(crate::durable_storage::protected::native_name::NativeName::into_ordinary)
     .map_err(|e| FrontendSourceError::new("source_directory_path", e))?;
     checkpoint(context)?;
     for ancestor in paths::ancestor_paths(&canonical).map_err(|operation| {
@@ -227,7 +228,7 @@ fn pin_directory(
             true,
             Budget::Protected(retained.claim.clone()),
             &mut retained.handles,
-            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+            &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
                 &(Budget::Protected(retained.claim.clone())),
             )
             .map_err(|cause| FrontendSourceError::new("source_native_phase", cause))?,
@@ -372,7 +373,7 @@ fn inventory(
                     }
                     let identity = paths::file_identity(
                         &retained.handles[index],
-                        &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                        &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
                             &retained.handles[index].budget(),
                         )
                         .map_err(|cause| FrontendSourceError::new("source_native_phase", cause))?,

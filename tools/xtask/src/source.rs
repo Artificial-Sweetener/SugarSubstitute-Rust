@@ -32,6 +32,11 @@ pub(crate) fn resolve(root: &Path, relative: &str) -> Result<PathBuf> {
 
 /// Discover Rust files deterministically, rejecting linked source trees.
 pub(crate) fn rust_files(directory: &Path) -> Result<Vec<PathBuf>> {
+    source_files(directory, &["rs"])
+}
+
+/// Discover selected authored languages with identical path and link checks.
+pub(crate) fn source_files(directory: &Path, extensions: &[&str]) -> Result<Vec<PathBuf>> {
     let entries = std::fs::read_dir(directory)
         .map_err(|error| Failure::external(format!("scan {}", directory.display()), error))?;
     let mut paths = Vec::new();
@@ -48,8 +53,13 @@ pub(crate) fn rust_files(directory: &Path) -> Result<Vec<PathBuf>> {
                 entry.file_name() != "target",
                 "keep build outputs outside governed source roots",
             )?;
-            paths.extend(rust_files(&entry.path())?);
-        } else if entry.path().extension().is_some_and(|extension| extension == "rs") {
+            paths.extend(source_files(&entry.path(), extensions)?);
+        } else if entry
+            .path()
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| extensions.contains(&extension))
+        {
             paths.push(entry.path());
         }
     }

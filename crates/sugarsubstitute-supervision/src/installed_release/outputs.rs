@@ -58,7 +58,7 @@ impl CaptureOutputQuota {
     /// The cause destinations are admitted before the genuine Core reservation call.
     pub(crate) fn reserve_selected(
         &self,
-        causes: &mut crate::protected_storage::native_file::NativeCauseDestinations,
+        causes: &mut crate::durable_storage::protected::native_file::NativeCauseDestinations,
     ) -> Result<CaptureOutputGuard, crate::ClaimError> {
         causes.matches_selected(&self.original)?;
         let symbol = match self.original.original() {
@@ -141,7 +141,7 @@ impl Drop for CaptureOutputGuard {
 /// with a permanently pinned or uncertain module owner.
 pub struct CaptureModuleOutput {
     _guard: CaptureOutputGuard,
-    causes: crate::protected_storage::native_file::NativeCauseDestinations,
+    causes: crate::durable_storage::protected::native_file::NativeCauseDestinations,
 }
 impl CaptureModuleOutput {
     /// Observe actual original admission before a fresh finite module effect.
@@ -165,7 +165,7 @@ impl CaptureModuleOutput {
 
     pub(super) fn from_guard(
         guard: CaptureOutputGuard,
-        causes: crate::protected_storage::native_file::NativeCauseDestinations,
+        causes: crate::durable_storage::protected::native_file::NativeCauseDestinations,
     ) -> Self {
         Self { _guard: guard, causes }
     }

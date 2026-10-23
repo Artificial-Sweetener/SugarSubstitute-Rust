@@ -40,13 +40,13 @@ pub(super) fn regions(
     // Actual canonical decode has one raw UTF16 vector and one WTF8 destination;
     // producing native path plus bounded security descriptor are a separate phase.
     let path_peak = 65_534_usize + 98_301 + size_of::<Vec<u16>>() + size_of::<std::path::PathBuf>();
-    let security = crate::protected_storage::security::diagnostic_security_layout()
+    let security = crate::durable_storage::protected::security::diagnostic_security_layout()
         .map_err(|_| CaptureCapacityFailure::new(CapacityFailureKind::Layout))?
         .peak;
     let hash = NativeFile::diagnostic_hash_layout()
         .map_err(|_| CaptureCapacityFailure::new(CapacityFailureKind::Layout))?
         .peak;
-    let account = crate::protected_storage::account::diagnostic_account_layout()
+    let account = crate::durable_storage::protected::account::diagnostic_account_layout()
         .map_err(|_| CaptureCapacityFailure::new(CapacityFailureKind::Layout))?
         .peak;
     let scratch = [path_peak, 65_534 + security, hash, account]

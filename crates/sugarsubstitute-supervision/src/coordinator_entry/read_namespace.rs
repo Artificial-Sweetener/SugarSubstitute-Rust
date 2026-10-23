@@ -98,7 +98,7 @@ impl NamespaceReadLoan {
         &self,
         original: &DiagnosticNativeGrant,
         current: &JobContext,
-    ) -> Result<&crate::protected_storage::account::ResolvedNamespace, ClaimError> {
+    ) -> Result<&crate::durable_storage::protected::account::ResolvedNamespace, ClaimError> {
         let binding = self.writer.as_ref().ok_or_else(rejected)?;
         if !original.matches_original(&binding.original) || binding.execution != current.owner_id()
         {
@@ -124,7 +124,7 @@ impl NamespaceReadLoan {
     }
     pub(crate) fn resolved(
         &self,
-    ) -> Result<&crate::protected_storage::account::ResolvedNamespace, ClaimError> {
+    ) -> Result<&crate::durable_storage::protected::account::ResolvedNamespace, ClaimError> {
         self.state.as_ref().and_then(|state| state.namespace.as_ref()).ok_or_else(rejected)
     }
     pub(crate) fn handles(&self) -> Result<&[crate::native_claims::files::Handle], ClaimError> {

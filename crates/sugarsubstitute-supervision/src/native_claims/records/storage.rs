@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Claims own exact predecessor compatibility and released legacy backend upgrades.
 use super::*;
-use crate::protected_storage::record_file;
+use crate::durable_storage::protected::record_file;
 #[cfg(test)]
 use record_file::finish_activation;
 #[cfg(test)]

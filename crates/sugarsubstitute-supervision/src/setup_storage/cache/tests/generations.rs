@@ -67,7 +67,7 @@ fn damaged_record_is_an_observable_miss_and_new_storage_preserves_original_bytes
         )?;
         original.write("payload", b"preserve", context)?;
         let path = original.path();
-        let metadata = original.directory.path.join("record");
+        let metadata = original.directory.path().join("record");
         drop(original);
         std::fs::write(&metadata, b"damaged record")?;
         assert!(

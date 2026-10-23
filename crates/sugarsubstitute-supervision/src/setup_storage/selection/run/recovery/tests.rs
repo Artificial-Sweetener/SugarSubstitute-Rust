@@ -94,7 +94,7 @@ fn expired_recovery_preserves_original_selection_bytes() -> TestResult {
         drop(trial);
         drop(run);
         let run = InstallationRun::acquire(store.clone(), context)?;
-        let path = store.root.path.join(super::super::super::RECORD);
+        let path = store.root.path().join(super::super::super::RECORD);
         let before = std::fs::read(&path)?;
         clock.expire();
         assert!(run.recover_abandoned_trial(context).is_err());
@@ -109,7 +109,7 @@ fn recovery_preserves_corrupt_selection_bytes() -> TestResult {
         let root = root()?;
         let store = Arc::new(SelectionStore::initialize(root.path(), &initial()?, context)?);
         let run = InstallationRun::acquire(store.clone(), context)?;
-        let path = store.root.path.join(super::super::super::RECORD);
+        let path = store.root.path().join(super::super::super::RECORD);
         std::fs::write(&path, b"invalid selection")?;
         assert!(run.recover_abandoned_trial(context).is_err());
         assert_eq!(std::fs::read(path)?, b"invalid selection");

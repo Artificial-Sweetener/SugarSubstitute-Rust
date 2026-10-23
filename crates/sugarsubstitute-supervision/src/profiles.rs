@@ -146,7 +146,8 @@ impl WindowsProfileLease {
         path: PathBuf,
         registry: &WindowsProcessRegistry,
     ) -> Result<Self, ClaimAdmissionError> {
-        crate::protected_storage::paths::wide(&path).map_err(ClaimAdmissionError::Native)?;
+        crate::durable_storage::protected::paths::wide(&path)
+            .map_err(ClaimAdmissionError::Native)?;
         let identity = registry.claim_identity(run.owner).map_err(ClaimAdmissionError::Registry)?;
         Ok(Self {
             run,

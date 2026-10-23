@@ -67,7 +67,7 @@ fn measure_directory(
     depth: usize,
 ) -> io::Result<u64> {
     let mut bytes = 0u64;
-    for entry in std::fs::read_dir(&directory.path)? {
+    for entry in std::fs::read_dir(directory.path())? {
         check(context)?;
         let entry = entry?;
         *count += 1;

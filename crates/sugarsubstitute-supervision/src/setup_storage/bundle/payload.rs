@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain exact distribution files authenticated by the installer or a verified update archive.
-use super::super::{
-    check,
-    files::{self, Directory},
-    invalid,
-};
+use super::super::check;
+use super::super::invalid;
+use crate::durable_storage::files::{self, Directory};
 use sha2::{Digest, Sha256};
 use std::os::windows::fs::FileExt;
 use std::{
@@ -107,9 +105,9 @@ impl Payload {
             }
             directory
         } else {
-            directory.unmanaged_payload()?
+            unmanaged_payload(directory)?
         };
-        let root = directory.path.clone();
+        let root = directory.path().to_path_buf();
         let mut source = directory.read("setup-manifest.json")?;
         let bytes = files::read_bounded(&mut source, 1024 * 1024)?;
         let digest = format!("{:x}", Sha256::digest(&bytes));
@@ -211,7 +209,7 @@ impl Payload {
                 Err(cause) if cause.kind() == io::ErrorKind::NotFound => {}
                 Err(cause) => return Err(cause),
             }
-            let staged = super::super::staging::unique_path(&parent, ".payload-stage")?;
+            let staged = crate::durable_storage::staging::unique_path(&parent, ".payload-stage")?;
             let mut destination = create(&staged)?;
             let mut offset = 0;
             let mut buffer = [0_u8; 65536];
@@ -230,7 +228,7 @@ impl Payload {
             destination.sync_all()?;
             drop(destination);
             check(context)?;
-            super::super::staging::publish(&staged, &output)?;
+            crate::durable_storage::staging::publish(&staged, &output)?;
         }
         Ok(())
     }
@@ -248,7 +246,7 @@ impl Payload {
     /// Extraction inputs need authenticity and custody; installed engine generations also need this policy.
     pub(in crate::setup_storage) fn require_protected(
         &self,
-        protection: &super::super::protection::Protection,
+        protection: &crate::durable_storage::protection::Protection,
     ) -> io::Result<()> {
         protection.verify_file(&self._manifest)?;
         for input in &self.inputs {
@@ -272,4 +270,20 @@ pub(super) fn hash(file: &mut File, context: &JobContext) -> io::Result<String> 
     }
     file.seek(SeekFrom::Start(0))?;
     Ok(digest.finish_hex())
+}
+
+/// Require the cache owner's original lease even when a payload arrived through a drive alias.
+fn unmanaged_payload(directory: Directory) -> io::Result<Directory> {
+    let resolved = directory.resolved()?;
+    for part in resolved.path().components() {
+        if let std::path::Component::Normal(name) = part {
+            let name = name.to_string_lossy().to_ascii_lowercase();
+            if name.strip_prefix("runtime-cache-v").is_some_and(|version| {
+                !version.is_empty() && version.bytes().all(|byte| byte.is_ascii_digit())
+            }) {
+                return Err(invalid("Cached payload requires its original storage lease"));
+            }
+        }
+    }
+    Ok(resolved)
 }

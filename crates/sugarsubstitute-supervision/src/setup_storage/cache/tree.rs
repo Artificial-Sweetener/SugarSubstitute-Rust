@@ -20,7 +20,7 @@ pub(super) fn inspect(
     record: &record::Record,
     context: &JobContext,
 ) -> io::Result<Inventory> {
-    for entry in std::fs::read_dir(&directory.path)? {
+    for entry in std::fs::read_dir(directory.path())? {
         check(context)?;
         let entry = entry?;
         if ["record", "record.next", "lease"].iter().any(|name| entry.file_name() == *name) {
@@ -49,7 +49,7 @@ pub(super) fn inspect(
         name_bytes: 0,
         objects: 0,
     };
-    let path = directory.path.join("data");
+    let path = directory.path().join("data");
     match Directory::open(&path, false) {
         Ok(root) => visit(&root, &path, Some(&allowed), &mut inventory, context)?,
         Err(cause) if record.deleting && cause.kind() == io::ErrorKind::NotFound => {}
@@ -66,7 +66,7 @@ fn visit(
     context: &JobContext,
 ) -> io::Result<()> {
     let mut children = 0usize;
-    for entry in std::fs::read_dir(&directory.path)? {
+    for entry in std::fs::read_dir(directory.path())? {
         check(context)?;
         let entry = entry?;
         children += 1;
@@ -117,9 +117,9 @@ fn visit(
             return Err(invalid("Cache tree contains an unsupported object"));
         }
     }
-    if children == 0 && directory.path != root {
+    if children == 0 && directory.path() != root {
         let relative = directory
-            .path
+            .path()
             .strip_prefix(root)
             .map_err(io::Error::other)?
             .to_string_lossy()
@@ -172,7 +172,7 @@ fn remove_children(
     context: &JobContext,
     count: &mut usize,
 ) -> io::Result<()> {
-    for entry in std::fs::read_dir(&directory.path)? {
+    for entry in std::fs::read_dir(directory.path())? {
         check(context)?;
         let path = entry?.path();
         *count += 1;
@@ -218,7 +218,7 @@ pub(super) fn remove_file(path: &Path, context: &JobContext) -> io::Result<()> {
     let identity = files::file_identity(&file)?;
     drop(file);
     // The parent remains pinned. Reopen with DELETE rights and compare the exact native object.
-    super::deletion::file(&parent.path.join(leaf), identity)
+    retirement::file(&parent, leaf, identity)
 }
 
 /// Verify an empty directory under its pinned parent before native deletion.
@@ -235,15 +235,18 @@ pub(super) fn remove_directory(path: &Path, context: &JobContext) -> io::Result<
     };
     let identity = child.identity()?;
     drop(child);
-    super::deletion::directory(
-        &parent.path.join(path.file_name().ok_or_else(|| invalid("Cache directory leaf absent"))?),
+    retirement::directory(
+        &parent,
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| invalid("Cache directory leaf absent"))?,
         identity,
     )
 }
 
 /// Inventory a fully settled native producer's private output before declaring cleanup ownership.
 pub(super) fn generated(directory: &Directory, context: &JobContext) -> io::Result<Inventory> {
-    let path = directory.path.join("data");
+    let path = directory.path().join("data");
     let root = Directory::open(&path, false)?;
     let mut inventory = Inventory {
         bytes: 0,

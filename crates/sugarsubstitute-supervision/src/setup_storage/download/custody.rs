@@ -2,12 +2,16 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Keep feature-owned target verification separate from shared disk admission and eviction pins.
 use super::DownloadFailure;
-use crate::setup_storage::{
-    SelectionStore,
-    cache::{self, CacheLease, Namespace, RuntimeCache},
-    check,
-    files::{self, Directory},
-    invalid, ownership, protection,
+use crate::{
+    durable_storage::{
+        files::{self, Directory},
+        protection,
+    },
+    setup_storage::{
+        SelectionStore,
+        cache::{self, CacheLease, Namespace, RuntimeCache},
+        check, invalid, ownership,
+    },
 };
 use std::{
     fs::{File, OpenOptions},
@@ -63,10 +67,10 @@ impl Custody {
             let entry_owner = match entry.read("owner") {
                 Ok(owner) => owner,
                 Err(cause) if cause.kind() == io::ErrorKind::NotFound => {
-                    if std::fs::read_dir(&entry.path)?.next().is_some() {
+                    if std::fs::read_dir(entry.path())?.next().is_some() {
                         return Err(invalid("Download cache contains unowned bytes"));
                     }
-                    let mut marker = protection.file(&entry.path.join("owner"), context)?;
+                    let mut marker = protection.file(&entry.path().join("owner"), context)?;
                     marker.write_all(&declaration)?;
                     marker.sync_all()?;
                     drop(marker);
@@ -79,7 +83,7 @@ impl Custody {
             if files::read_bounded(&mut entry_owner, declaration.len())? != declaration {
                 return Err(invalid("Download entry ownership is damaged or belongs elsewhere"));
             }
-            let payload = entry.path.join("payload");
+            let payload = entry.path().join("payload");
             let file = match OpenOptions::new()
                 .read(true)
                 .write(true)

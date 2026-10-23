@@ -14,11 +14,11 @@ use super::{
 };
 use crate::{
     ClaimError,
-    native_claims::files::Handle,
-    protected_storage::{
+    durable_storage::protected::{
         native_file::{NativeCauseDestinations, NativeFile},
         native_name::NativeSid,
     },
+    native_claims::files::Handle,
 };
 pub use lease::{
     CaptureBundleLease, CaptureBundleParts, CaptureBundleRetention, CaptureRegistrationFacts,

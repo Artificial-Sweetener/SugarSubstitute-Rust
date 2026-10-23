@@ -33,7 +33,7 @@ impl State {
         if self.initialized {
             return Err(ClaimError::invalid("custody_source_reinitialized"));
         }
-        let resolved = crate::protected_storage::account::resolve_namespace(
+        let resolved = crate::durable_storage::protected::account::resolve_namespace(
             &self.installation,
             &mut self.handles,
             Budget::CustodyCore(self.control.clone()),

@@ -50,7 +50,7 @@ pub(super) fn write(
         drop(file);
         protection.publish(
             &staged,
-            &parent.path.join(name),
+            &parent.path().join(name),
             identity,
             protection::Publication::File { replace: true },
             context,

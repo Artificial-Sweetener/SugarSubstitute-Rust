@@ -63,7 +63,7 @@ impl TrustStore {
                     Payload::open(&path, generation.package.as_str(), Component::Updater, context)?;
                 payload.require_protected(payload_protection)?;
                 payload.compatibility.require_updater()?;
-                let installation = Directory::open(&self._installation_root.path, false)?;
+                let installation = Directory::open(self._installation_root.path(), false)?;
                 check(context)?;
                 Ok(Some(PreparationImage::updater(generation.clone(), payload, installation)))
             })

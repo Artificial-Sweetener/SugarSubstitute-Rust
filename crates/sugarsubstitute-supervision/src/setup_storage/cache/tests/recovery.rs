@@ -57,7 +57,7 @@ fn deletion_journal_resumes_after_partial_payload_removal_without_touching_other
         let parent = cache.namespace(Namespace::UpdateOffers)?;
         let mut record = lease.record.clone();
         record.deleting = true;
-        let journal = parent.path.join(format!("{}.retiring", record.key));
+        let journal = parent.path().join(format!("{}.retiring", record.key));
         protection::with(context, |protection| {
             let mut file = protection.file(&journal, context)?;
             file.write_all(&serde_json::to_vec(&record)?)?;

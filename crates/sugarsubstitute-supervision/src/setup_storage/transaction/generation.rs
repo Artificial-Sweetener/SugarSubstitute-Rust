@@ -2,8 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Publish complete initial generation custody before exposing its canonical directory.
 use super::*;
-use crate::protected_storage::directories::Mode;
-use crate::setup_storage::{protection, staging};
+use crate::durable_storage::{protected::directories::Mode, protection, staging};
 use sugarsubstitute_contracts::installation::PackageDigest;
 
 pub(in crate::setup_storage) const INITIAL_PREFIX: &str = ".generation-init-";

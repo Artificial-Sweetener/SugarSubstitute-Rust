@@ -32,7 +32,7 @@ fn rejected(
 #[test]
 fn preparation_preserves_accepted_generation_and_coexists_with_installation_run() -> TestResult {
     run_accepted(|case| {
-        let store = Arc::new(SelectionStore::open(&case.directory.path, case.context)?);
+        let store = Arc::new(SelectionStore::open(case.directory.path(), case.context)?);
         let before = store.load(case.context)?.ok_or("Selection absent")?;
         let mut running = InstallationRun::acquire(Arc::clone(&store), case.context)?;
         let candidate = case.prepared.prepare_update(
@@ -41,7 +41,7 @@ fn preparation_preserves_accepted_generation_and_coexists_with_installation_run(
             || NOW,
             case.context,
         )?;
-        let reopened = SelectionStore::open(&case.directory.path, case.context)?;
+        let reopened = SelectionStore::open(case.directory.path(), case.context)?;
         let after = reopened.load(case.context)?.ok_or("Selection absent")?;
         assert_eq!(after.accepted(), before.accepted());
         assert_eq!(after.retained(), before.retained());
@@ -61,7 +61,7 @@ fn preparation_preserves_accepted_generation_and_coexists_with_installation_run(
 fn expired_final_check_retains_staging_and_never_admits_trial() -> TestResult {
     for expired_check in [3, 4] {
         run_accepted(move |case| {
-            let store = Arc::new(SelectionStore::open(&case.directory.path, case.context)?);
+            let store = Arc::new(SelectionStore::open(case.directory.path(), case.context)?);
             let before = store.load(case.context)?.ok_or("Selection absent")?;
             let mut checks = 0;
             assert!(
@@ -86,7 +86,7 @@ fn expired_final_check_retains_staging_and_never_admits_trial() -> TestResult {
             };
             assert_eq!(
                 case.directory
-                    .path
+                    .path()
                     .join("releases")
                     .join(generation.id.as_str())
                     .join("application-update-v1.record")
@@ -104,7 +104,7 @@ fn expired_final_check_retains_staging_and_never_admits_trial() -> TestResult {
 #[test]
 fn automatic_quarantine_requires_explicit_repair_before_candidate_publication() -> TestResult {
     run(1, |case| {
-        let store = Arc::new(SelectionStore::open(&case.directory.path, case.context)?);
+        let store = Arc::new(SelectionStore::open(case.directory.path(), case.context)?);
         let before = rejected(&case, &store)?;
         assert!(
             case.prepared
@@ -134,9 +134,9 @@ fn automatic_quarantine_requires_explicit_repair_before_candidate_publication() 
 #[test]
 fn selection_publication_failure_preserves_old_record_and_allows_clean_retry() -> TestResult {
     run(1, |case| {
-        let store = SelectionStore::open(&case.directory.path, case.context)?;
+        let store = SelectionStore::open(case.directory.path(), case.context)?;
         let before = store.load(case.context)?;
-        let protected = Directory::open(&case.directory.path.join(".selection-state"), false)?;
+        let protected = Directory::open(&case.directory.path().join(".selection-state"), false)?;
         let pinned = protected.read(".substitute-selection.json")?;
         assert!(
             case.prepared
@@ -168,9 +168,9 @@ fn selection_publication_failure_preserves_old_record_and_allows_clean_retry() -
 fn altered_destination_rejects_preparation_and_verified_candidate_pins_exact_payloads() -> TestResult
 {
     run(1, |case| {
-        let store = SelectionStore::open(&case.directory.path, case.context)?;
+        let store = SelectionStore::open(case.directory.path(), case.context)?;
         let before = store.load(case.context)?;
-        let directory = std::fs::read_dir(case.directory.path.join("releases"))?
+        let directory = std::fs::read_dir(case.directory.path().join("releases"))?
             .map(|entry| entry.map(|entry| entry.path()))
             .collect::<io::Result<Vec<_>>>()?
             .into_iter()
@@ -206,7 +206,7 @@ fn altered_destination_rejects_preparation_and_verified_candidate_pins_exact_pay
         assert_eq!(candidate.directory(), directory);
         assert!(std::fs::write(&executable, &altered).is_err());
         assert!(std::fs::remove_file(&executable).is_err());
-        assert!(std::fs::rename(&directory, case.directory.path.join("moved")).is_err());
+        assert!(std::fs::rename(&directory, case.directory.path().join("moved")).is_err());
         let prepared = store.load(case.context)?;
         let generation = candidate.generation().clone();
         drop(candidate);

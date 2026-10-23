@@ -8,8 +8,8 @@ pub(in crate::setup_storage) fn installed(
     root: &Directory,
     context: &JobContext,
 ) -> io::Result<PathBuf> {
-    files::write_new(&root.path.join(ownership::MARKER), ownership::CONTENT)?;
-    let generation = root.path.join("releases").join("installed");
+    files::write_new(&root.path().join(ownership::MARKER), ownership::CONTENT)?;
+    let generation = root.path().join("releases").join("installed");
     let _directory = Directory::open(&generation, true)?;
     files::write_new(&generation.join("sugarsubstitute.exe"), b"unexecuted fixture")?;
     files::write_new(
@@ -17,19 +17,19 @@ pub(in crate::setup_storage) fn installed(
         b"schema_version = 1\r\n# User customization\r\n[backend]\r\nport = 9191\r\n",
     )?;
     let runtime = RuntimePaths {
-        directory: root.path.join("external-comfy"),
-        python: root.path.join("python.exe"),
-        frontend: root.path.join("frontend"),
-        metadata: root.path.join("METADATA"),
+        directory: root.path().join("external-comfy"),
+        python: root.path().join("python.exe"),
+        frontend: root.path().join("frontend"),
+        metadata: root.path().join("METADATA"),
     };
     let selection = Selection {
         locale: "ja".into(),
-        install_root: root.path.clone(),
+        install_root: root.path().to_path_buf(),
         mode: "attached".into(),
         comfy_root: runtime.directory.clone(),
         python: String::new(),
-        models: root.path.join("models"),
-        outputs: root.path.join("outputs"),
+        models: root.path().join("models"),
+        outputs: root.path().join("outputs"),
         selection_token: None,
     };
     files::write_new(
@@ -42,9 +42,9 @@ pub(in crate::setup_storage) fn installed(
         ("--startup-config", generation.join("startup.local.toml")),
         ("--frontend-package", runtime.frontend),
         ("--frontend-metadata", runtime.metadata),
-        ("--sugarcubes-root", root.path.join("custom cube")),
+        ("--sugarcubes-root", root.path().join("custom cube")),
         ("--backend-script", runtime.directory.join("main.py")),
-        ("--profile-directory", root.path.join("custom profile")),
+        ("--profile-directory", root.path().join("custom profile")),
     ]
     .into_iter()
     .flat_map(|(flag, path)| [flag.to_owned(), path.to_string_lossy().into_owned()])

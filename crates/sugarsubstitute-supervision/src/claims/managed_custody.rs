@@ -4,7 +4,9 @@
 use super::*;
 use crate::{
     BackendCustodyParent,
-    protected_storage::{exclusion::HeldFile, native_phase::NativePhase, paths, record_file},
+    durable_storage::protected::{
+        exclusion::HeldFile, native_phase::NativePhase, paths, record_file,
+    },
 };
 use sugarsubstitute_contracts::execution::JobContext;
 

@@ -36,7 +36,7 @@ impl TrustStore {
         file.sync_all()?;
         drop(file);
         check(context)?;
-        staging::replace_record(&staged, &self.root.path.join(name))?;
+        staging::replace_record(&staged, &self.root.path().join(name))?;
         Ok(())
     }
 
@@ -50,7 +50,7 @@ impl TrustStore {
         context: &JobContext,
     ) -> Result<(), TrustFailure> {
         let bytes = envelope::encode(kind, &self.installation, &self.repository, payload)?;
-        files::write_immutable(&self.root.path.join(name), &bytes, |path| {
+        files::write_immutable(&self.root.path().join(name), &bytes, |path| {
             protection.file(path, context)
         })?;
         protection.verify_file(&self.root.read(name)?)?;

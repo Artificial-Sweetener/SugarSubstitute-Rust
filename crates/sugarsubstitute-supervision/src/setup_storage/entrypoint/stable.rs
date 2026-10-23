@@ -4,10 +4,9 @@
 mod payload;
 mod record;
 use super::*;
-use crate::setup_storage::{
-    application::VerifiedApplication,
-    check,
-    protection::{Protection, Publication},
+use crate::{
+    durable_storage::protection::{Protection, Publication},
+    setup_storage::{application::VerifiedApplication, check},
 };
 use sugarsubstitute_contracts::application_launch::LauncherContract;
 
@@ -34,7 +33,7 @@ pub(in crate::setup_storage) fn repair(
     let record = match existing {
         Some(record) => record,
         None => {
-            match std::fs::symlink_metadata(root.path.join(EXECUTABLE)) {
+            match std::fs::symlink_metadata(root.path().join(EXECUTABLE)) {
                 Ok(_) => {
                     return Err(invalid(
                         "The stable launcher path contains an unowned file; it has been preserved",
@@ -67,7 +66,7 @@ pub(in crate::setup_storage) fn repair(
     check(context)?;
     protection.publish(
         &stage,
-        &root.path.join(NAME),
+        &root.path().join(NAME),
         identity,
         Publication::File { replace },
         context,
@@ -99,15 +98,15 @@ fn retained_link(
     match state.read(NAME) {
         Ok(mut file) => {
             protection.verify_file(&file)?;
-            if native::target(&state.path.join(NAME))? != root.path.join(EXECUTABLE) {
+            if native::target(&state.path().join(NAME))? != root.path().join(EXECUTABLE) {
                 return Err(invalid("Retained stable shortcut belongs to another target"));
             }
             files::read_bounded(&mut file, 65536)
         }
         Err(cause) if cause.kind() == io::ErrorKind::NotFound => {
-            let bytes = link_bytes(state, &root.path.join(EXECUTABLE))?;
+            let bytes = link_bytes(state, &root.path().join(EXECUTABLE))?;
             check(context)?;
-            files::write_immutable(&state.path.join(NAME), &bytes, |path| {
+            files::write_immutable(&state.path().join(NAME), &bytes, |path| {
                 protection.file(path, context)
             })?;
             Ok(bytes)
@@ -123,7 +122,7 @@ fn validate_link(root: &Directory, state: &Directory, protection: &Protection) -
         Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(false),
         Err(cause) => return Err(cause),
     };
-    if native::target(&root.path.join(NAME))? == root.path.join(EXECUTABLE) {
+    if native::target(&root.path().join(NAME))? == root.path().join(EXECUTABLE) {
         let mut original = state.read(NAME)?;
         protection.verify_file(&original)?;
         if files::read_bounded(&mut file, 65536)? != files::read_bounded(&mut original, 65536)? {

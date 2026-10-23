@@ -45,7 +45,7 @@ pub(super) fn receive(
     let snapshot = store.protected(context, |protection| {
         protection.verify_exclusive_rendezvous(
             &inherited.run,
-            &store.root.path.join(LOCK),
+            &store.root.path().join(LOCK),
             context,
         )?;
         protection.verify_file(&inherited.snapshot)?;

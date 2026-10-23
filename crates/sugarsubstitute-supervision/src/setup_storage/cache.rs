@@ -8,10 +8,8 @@
 //! are never admitted here. Unknown content is preserved and reported by maintenance.
 mod admission;
 mod consumers;
-pub(crate) use consumers::NativeCachePin;
-#[allow(unsafe_code)]
-mod deletion;
 pub use admission::storage_key;
+pub(crate) use consumers::NativeCachePin;
 mod entry;
 mod lookup;
 mod maintenance;
@@ -25,14 +23,14 @@ mod retire;
 mod root;
 mod stream;
 mod tree;
-use super::{
-    check,
+use super::check;
+use super::invalid;
+use crate::durable_storage::{
     files::{self, Directory},
-    invalid,
+    protected::directories::Mode,
     protection::{self, Protection},
-    staging,
+    retirement, staging,
 };
-use crate::protected_storage::directories::Mode;
 pub use entry::CacheLease;
 pub use maintenance::Maintenance;
 pub use policy::{CachePolicy, Namespace};
@@ -90,11 +88,11 @@ impl RuntimeCache {
     }
     /// Explicit application-owned anchor whose native identity remains pinned by this scope.
     pub fn anchor(&self) -> &Path {
-        &self.scope.anchor.path
+        self.scope.anchor.path()
     }
     /// Stable path shared by native and delegated cache consumers.
     pub fn path(&self) -> &Path {
-        &self.scope.root.path
+        self.scope.root.path()
     }
 }
 

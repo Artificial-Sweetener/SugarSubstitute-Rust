@@ -29,7 +29,7 @@ pub(super) fn ensure(
     file.sync_all()?;
     drop(file);
     check(context)?;
-    staging::publish(&staged, &store._installation_root.path.join(MARKER))?;
+    staging::publish(&staged, &store._installation_root.path().join(MARKER))?;
     read(store, protection)?
         .ok_or_else(|| invalid("Published update trust continuity is absent").into())
 }

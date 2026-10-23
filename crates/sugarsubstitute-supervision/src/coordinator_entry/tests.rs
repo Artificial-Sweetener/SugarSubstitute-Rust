@@ -7,8 +7,8 @@ use super::{
 };
 use crate::{
     ClaimError,
+    durable_storage::protected::record_file::RecordRead,
     native_claims::{Record, RecordState},
-    protected_storage::record_file::RecordRead,
 };
 use sugarsubstitute_contracts::{
     coordinator_entry::EntryOwnerDegradation,

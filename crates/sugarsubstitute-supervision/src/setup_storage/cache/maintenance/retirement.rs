@@ -12,7 +12,7 @@ impl RuntimeCache {
         context: &JobContext,
     ) -> io::Result<Removal> {
         let parent = self.namespace(candidate.namespace)?;
-        let path = parent.path.join(&candidate.key);
+        let path = parent.path().join(&candidate.key);
         let directory = match Directory::open(&path, false) {
             Ok(directory) => Some(directory),
             Err(cause) if candidate.retiring && record::kind(&cause) == io::ErrorKind::NotFound => {
@@ -76,8 +76,11 @@ impl RuntimeCache {
             drop(directory);
             tree::remove_directory(&path, context)?;
         }
-        tree::remove_file(&parent.path.join(format!("{}.retiring.next", candidate.key)), context)?;
-        tree::remove_file(&parent.path.join(format!("{}.retiring", candidate.key)), context)?;
+        tree::remove_file(
+            &parent.path().join(format!("{}.retiring.next", candidate.key)),
+            context,
+        )?;
+        tree::remove_file(&parent.path().join(format!("{}.retiring", candidate.key)), context)?;
         Ok(Removal::Removed)
     }
 }

@@ -31,7 +31,7 @@ pub(super) fn discover(
     marker: File,
     context: &JobContext,
 ) -> io::Result<Option<ExistingInstallation>> {
-    let releases = root.path.join("releases");
+    let releases = root.path().join("releases");
     let directory = match Directory::open(&releases, false) {
         Ok(directory) => directory,
         Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(None),
@@ -39,7 +39,7 @@ pub(super) fn discover(
     };
     let mut recovered: Option<ExistingInstallation> = None;
     let mut occupied = false;
-    for (index, entry) in std::fs::read_dir(&directory.path)?.enumerate() {
+    for (index, entry) in std::fs::read_dir(directory.path())?.enumerate() {
         check(context)?;
         if index >= MAX_ENTRIES {
             return Err(io::Error::other(RecoveryFailure::InventoryBound));
@@ -63,7 +63,7 @@ pub(super) fn discover(
             if !equivalent(previous, &candidate) {
                 return Err(io::Error::other(RecoveryFailure::ConflictingSettings));
             }
-            if previous._directory.path <= candidate._directory.path {
+            if previous._directory.path() <= candidate._directory.path() {
                 continue;
             }
         }

@@ -20,7 +20,8 @@ fn rejected_native_profile_closes_file_once_and_retains_root_until_same_cutoff_r
         NEXT.fetch_add(1, Ordering::Relaxed)
     ));
     let mut job = harness.client.submit_blocking(&harness.scope, spec, move |context| {
-        let directory = crate::protected_storage::profile_fixture::create(&directory, &context)?;
+        let directory =
+            crate::durable_storage::protected::profile_fixture::create(&directory, &context)?;
         let profile = directory.join("profile");
         let marker = profile.join(".sugarsubstitute-profile-v1.record");
         let claim = profile.join(".sugarsubstitute-profile-v1.claim");

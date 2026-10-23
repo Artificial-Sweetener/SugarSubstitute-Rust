@@ -3,8 +3,7 @@
 //! Select closed native destinations under the original storage operation.
 mod scan;
 use super::*;
-use crate::native_claims::files::{NativeLayoutFailure, NativeRoleLayout};
-use crate::protected_storage::{
+use crate::durable_storage::protected::{
     ProtectedStorageRoot, account,
     native_file::NativeFile,
     native_name::{NativeName, NativeSid},
@@ -12,6 +11,7 @@ use crate::protected_storage::{
     record_file::StreamingPort,
     security,
 };
+use crate::native_claims::files::{NativeLayoutFailure, NativeRoleLayout};
 pub(crate) use scan::DiagnosticNativeScanRetention;
 
 /// Retain the sole original allocation ledger without exposing its claim.
@@ -96,7 +96,7 @@ impl NativeRole {
                 peak: super::super::finished_owner::FINISHED_OWNER_STORAGE_BYTES,
             }),
             Self::CaptureReadOwner => {
-                crate::protected_storage::capture_read::CaptureReadOwner::layout()
+                crate::durable_storage::protected::capture_read::CaptureReadOwner::layout()
             }
             Self::RootOwner => ProtectedStorageRoot::diagnostic_owner_layout(),
             Self::StreamingOwner => StreamingPort::diagnostic_owner_layout(),
@@ -146,7 +146,7 @@ impl DiagnosticNativeGrant {
     }
     pub(crate) fn bind_capture_source(
         &self,
-        source: crate::protected_storage::capture_read::pin::ReadPins,
+        source: crate::durable_storage::protected::capture_read::pin::ReadPins,
         context: &JobContext,
     ) -> Result<(), DiagnosticNativeAllocationFailure> {
         self.check(context)?;

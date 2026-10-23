@@ -117,7 +117,7 @@ pub(crate) fn run(body: impl FnOnce(&JobContext) -> TestResult + Send + 'static)
 
 /// Retain a genuine read pin that prevents atomic updater-journal replacement.
 pub(crate) fn pin_journal(root: &Path) -> io::Result<std::fs::File> {
-    storage::files::Directory::open(&root.join(".update-trust"), false)?
+    crate::durable_storage::files::Directory::open(&root.join(".update-trust"), false)?
         .read("updater-selection-v1")
 }
 

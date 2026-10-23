@@ -10,7 +10,6 @@ use std::{
 use windows::{
     Win32::{
         Foundation::RPC_E_CHANGED_MODE,
-        Storage::FileSystem::{MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH, MoveFileExW},
         System::Com::{
             CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx,
             CoUninitialize, IPersistFile, STGM_READ,
@@ -127,22 +126,4 @@ fn bounded_path(path: &[u16]) -> io::Result<PathBuf> {
         .filter(|end| *end > 0 && *end < 4096)
         .ok_or_else(|| super::invalid("Shell target exceeds its bound"))?;
     Ok(PathBuf::from(OsString::from_wide(&path[..end])))
-}
-
-pub(super) fn publish(source: &Path, destination: &Path, replace: bool) -> io::Result<()> {
-    let flags = if replace {
-        MOVEFILE_WRITE_THROUGH | MOVEFILE_REPLACE_EXISTING
-    } else {
-        MOVEFILE_WRITE_THROUGH
-    };
-    // SAFETY: The caller pins both parents and verifies the replaced bytes belong to setup.
-    // Same-volume atomic rename preserves either the old or the new complete shell entry.
-    unsafe {
-        MoveFileExW(
-            &HSTRING::from(source.as_os_str()),
-            &HSTRING::from(destination.as_os_str()),
-            flags,
-        )
-    }
-    .map_err(io::Error::other)
 }

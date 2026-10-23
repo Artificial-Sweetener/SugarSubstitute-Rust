@@ -43,14 +43,14 @@ fn earlier_complete_trust_enables_continuity_without_rewriting_accepted_floors()
             context,
         )?;
         store.rotate(&root(&key(61)?, 2, Some(&key(60)?))?, context)?;
-        let checkpoint = std::fs::read(store.root.path.join(RECORD))?;
-        let history = std::fs::read(store.root.path.join(releases::RECORD))?;
+        let checkpoint = std::fs::read(store.root.path().join(RECORD))?;
+        let history = std::fs::read(store.root.path().join(releases::RECORD))?;
         drop(store);
         std::fs::remove_file(installation.path().join(MARKER))?;
         let reopened = TrustStore::open(installation.path(), [60; 32], context)?;
         assert_eq!(reopened.next_root_version(context)?, 3);
-        assert_eq!(std::fs::read(reopened.root.path.join(RECORD))?, checkpoint);
-        assert_eq!(std::fs::read(reopened.root.path.join(releases::RECORD))?, history);
+        assert_eq!(std::fs::read(reopened.root.path().join(RECORD))?, checkpoint);
+        assert_eq!(std::fs::read(reopened.root.path().join(releases::RECORD))?, history);
         assert!(installation.path().join(MARKER).exists());
         Ok(())
     })
@@ -64,7 +64,7 @@ fn unprotected_corrupt_or_foreign_markers_are_preserved_and_never_replaced() -> 
             let initial_root = root(&key(60)?, 1, None)?;
             let store =
                 TrustStore::initialize(installation.path(), [60; 32], &initial_root, context)?;
-            let checkpoint = std::fs::read(store.root.path.join(RECORD))?;
+            let checkpoint = std::fs::read(store.root.path().join(RECORD))?;
             let identity = if variant == 4 {
                 InstallationId::new("f".repeat(32))?
             } else {
@@ -116,7 +116,7 @@ fn incomplete_earlier_history_cannot_enable_continuity() -> TestResult {
             &root(&key(60)?, 1, None)?,
             context,
         )?;
-        let checkpoint = std::fs::read(store.root.path.join(RECORD))?;
+        let checkpoint = std::fs::read(store.root.path().join(RECORD))?;
         drop(store);
         let marker = installation.path().join(MARKER);
         std::fs::remove_file(&marker)?;

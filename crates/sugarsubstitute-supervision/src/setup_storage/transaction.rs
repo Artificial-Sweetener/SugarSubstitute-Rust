@@ -11,12 +11,11 @@ mod resume;
 mod session;
 pub use session::InstallationSession;
 mod trial;
+use super::VerifiedBundle;
+use super::check;
 use super::existing::ExistingInstallation;
-use super::{
-    VerifiedBundle, check,
-    files::{self, Directory},
-    invalid,
-};
+use super::invalid;
+use crate::durable_storage::files::{self, Directory};
 use admission::Admission;
 pub use candidate::PreparedCandidate;
 use serde::{Deserialize, Serialize};
@@ -119,7 +118,7 @@ impl PreparedInstallation {
     /// # Errors
     /// Preserves partial files and the held installation lock on failed or cancelled copies.
     pub fn stage(&self, context: &JobContext) -> io::Result<()> {
-        super::protection::with(context, |protection| {
+        crate::durable_storage::protection::with(context, |protection| {
             self.bundle
                 .payload
                 .copy("app/", &self.generation, context, |path| protection.file(path, context))
@@ -170,9 +169,10 @@ impl PreparedInstallation {
         }
         let _frontend = Directory::open(&runtime.frontend, false)?;
         let nodes = Directory::open(&runtime.directory.join("custom_nodes"), true)?;
-        let cube = nodes.path.join("SugarCubes");
+        let cube = nodes.path().join("SugarCubes");
         if !cube.try_exists()? {
-            let stage = super::staging::directory(&_comfy, ".substitute-node-stage")?;
+            let stage =
+                crate::durable_storage::staging::directory(&_comfy, ".substitute-node-stage")?;
             self.bundle.payload.copy("sugarcubes/", &stage, context, files::create_new)?;
             {
                 let directory = Directory::open(&stage, false)?;
@@ -181,7 +181,7 @@ impl PreparedInstallation {
                     .map_err(io::Error::other)?;
             }
             check(context)?;
-            super::staging::publish(&stage, &cube)?;
+            crate::durable_storage::staging::publish(&stage, &cube)?;
         }
         let cube_directory = Directory::open(&cube, false)?;
         let project = files::read_bounded(&mut cube_directory.read("pyproject.toml")?, 65536)?;

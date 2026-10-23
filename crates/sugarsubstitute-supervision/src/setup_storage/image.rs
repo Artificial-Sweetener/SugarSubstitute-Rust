@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain authenticated application or updater helper files independently of application-run ownership.
-use super::{
-    RunningApplication, application::VerifiedApplication, bundle::Payload, check, files::Directory,
-    invalid,
-};
+use super::RunningApplication;
+use super::application::VerifiedApplication;
+use super::bundle::Payload;
+use super::check;
+use super::invalid;
+use crate::durable_storage::files::Directory;
 use std::{
     io,
     path::{Path, PathBuf},
@@ -38,13 +40,13 @@ impl PreparationImage {
 
     /// Pinned installation root for composing this installation's helper arguments.
     pub fn installation(&self) -> &Path {
-        &self.installation.path
+        self.installation.path()
     }
 
     /// Pinned generation directory for the helper's working directory.
     pub fn directory(&self) -> &Path {
         match &self.source {
-            ImageSource::Application(application) => &application.directory.path,
+            ImageSource::Application(application) => application.directory.path(),
             ImageSource::Updater { payload, .. } => &payload.root,
         }
     }

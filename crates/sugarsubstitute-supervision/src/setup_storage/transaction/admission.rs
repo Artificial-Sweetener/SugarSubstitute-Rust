@@ -15,9 +15,9 @@ impl Admission {
     /// Adopt only an empty directory when requested; otherwise require verified ownership.
     pub(in crate::setup_storage) fn open(path: &Path, create: bool) -> io::Result<Self> {
         let root = Directory::open(path, create)?;
-        let marker_path = root.path.join(ownership::MARKER);
+        let marker_path = root.path().join(ownership::MARKER);
         if create && !marker_path.try_exists()? {
-            if std::fs::read_dir(&root.path)?.next().is_some() {
+            if std::fs::read_dir(root.path())?.next().is_some() {
                 return Err(invalid("This folder contains files from an unknown installation"));
             }
             files::write_new(&marker_path, ownership::CONTENT)?;
@@ -30,7 +30,7 @@ impl Admission {
             .truncate(false)
             .share_mode(3)
             .custom_flags(0x0020_0000)
-            .open(root.path.join(".setup-lock"))?;
+            .open(root.path().join(".setup-lock"))?;
         let metadata = lock.metadata()?;
         if !metadata.is_file() || metadata.file_attributes() & 0x400 != 0 {
             return Err(invalid("Installation exclusion must be a regular file"));

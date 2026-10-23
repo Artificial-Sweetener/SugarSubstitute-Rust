@@ -227,7 +227,7 @@ fn unknown_lock_contents_are_preserved_and_not_treated_as_a_stale_owner() -> Tes
     worker::run(|context, _| {
         let root = root()?;
         let store = SelectionStore::initialize(root.path(), &initial()?, context)?;
-        let lock = store.root.path.join(LOCK);
+        let lock = store.root.path().join(LOCK);
         std::fs::write(&lock, b"unknown")?;
         assert!(store.load(context).is_err());
         assert_eq!(std::fs::read(&lock)?, b"unknown");
@@ -240,7 +240,7 @@ fn inherited_permissions_do_not_replace_explicit_record_protection() -> TestResu
     worker::run(|context, _| {
         let root = root()?;
         let store = SelectionStore::initialize(root.path(), &initial()?, context)?;
-        let record = store.root.path.join(RECORD);
+        let record = store.root.path().join(RECORD);
         std::fs::remove_file(&record)?;
         std::fs::write(&record, initial()?.encode()?)?;
         assert!(store.load(context).is_err());

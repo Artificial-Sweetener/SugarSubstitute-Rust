@@ -43,7 +43,7 @@ impl UnstartedTrial {
     /// This grants no launch authority and cannot be reconstructed by reopening the installation.
     pub(in crate::setup_storage) fn restore(
         &self,
-        installation: &crate::setup_storage::files::Directory,
+        installation: &crate::durable_storage::files::Directory,
         prepared: &mut InstallationRecord,
         context: &JobContext,
     ) -> Result<(), SelectionFailure> {

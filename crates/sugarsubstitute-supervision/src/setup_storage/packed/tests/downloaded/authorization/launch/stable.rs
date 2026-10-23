@@ -13,14 +13,14 @@ fn stable_lookup_does_not_enable_selection_for_an_earlier_installation() -> Test
         let temporary = tempfile::tempdir()?;
         let directory = Directory::open(temporary.path(), false)?;
         fixture::installed(&directory, context)?;
-        let transition = directory.path.join(".selection-transition-lock");
+        let transition = directory.path().join(".selection-transition-lock");
         let original_transition = std::fs::read(&transition)?;
         assert!(matches!(
-            reserve_installed_launch(&directory.path, context)?,
+            reserve_installed_launch(directory.path(), context)?,
             ReservedLaunch::NeedsInstallation
         ));
         for leaf in [".selection-state", ".selection-enabled.json"] {
-            assert!(!directory.path.join(leaf).exists());
+            assert!(!directory.path().join(leaf).exists());
         }
         assert_eq!(std::fs::read(transition)?, original_transition);
         Ok(())
@@ -34,9 +34,9 @@ fn prepared_native_launch_retains_selection_until_explicit_retirement_without_ta
         let temporary = tempfile::tempdir()?;
         let directory = Directory::open(temporary.path(), false)?;
         accept_fixture(&directory, context)?;
-        let store = Arc::new(SelectionStore::open(&directory.path, context)?);
+        let store = Arc::new(SelectionStore::open(directory.path(), context)?);
         let ReservedLaunch::Application(reservation) =
-            reserve_installed_launch(&directory.path, context)?
+            reserve_installed_launch(directory.path(), context)?
         else {
             return Err("Accepted application absent".into());
         };
@@ -44,7 +44,7 @@ fn prepared_native_launch_retains_selection_until_explicit_retirement_without_ta
         let copy = launch.clone();
         drop(launch);
         let run = InstallationRun::acquire(store.clone(), context)?;
-        let record = directory.path.join(".selection-state/.substitute-selection.json");
+        let record = directory.path().join(".selection-state/.substitute-selection.json");
         assert!(std::fs::OpenOptions::new().write(true).open(&record).is_err());
         copy.retire()?;
         drop(std::fs::OpenOptions::new().write(true).open(record)?);
@@ -62,12 +62,12 @@ fn expired_native_launch_does_not_execute_the_reserved_inert_payload() -> TestRe
         let directory = Directory::open(temporary.path(), false)?;
         accept_fixture(&directory, context)?;
         let ReservedLaunch::Application(reservation) =
-            reserve_installed_launch(&directory.path, context)?
+            reserve_installed_launch(directory.path(), context)?
         else {
             return Err("Accepted application absent".into());
         };
         let launch = ApplicationLaunch::selected(reservation.prepare_inheritance(context)?)?;
-        let record = directory.path.join(".selection-state/.substitute-selection.json");
+        let record = directory.path().join(".selection-state/.substitute-selection.json");
         let before = std::fs::read(&record)?;
         clock.expire();
         assert!(launch.launch(context).is_err());

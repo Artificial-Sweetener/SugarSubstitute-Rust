@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Feed offline distribution bytes through the same retained cache and signed target verifier.
 use super::*;
-use crate::setup_storage::{files::Directory, invalid};
+use crate::{durable_storage::files::Directory, setup_storage::invalid};
 
 /// Source layout is selected locally; untrusted footer bytes never grant target authority.
 enum Layout {
@@ -66,7 +66,7 @@ impl Download {
         context: &JobContext,
     ) -> Result<VerifiedDownload, DownloadFailure> {
         check(context)?;
-        crate::setup_storage::files::lexical(source)?;
+        crate::durable_storage::files::lexical(source)?;
         let parent = Directory::open(
             source.parent().ok_or_else(|| invalid("Local package parent is absent"))?,
             false,

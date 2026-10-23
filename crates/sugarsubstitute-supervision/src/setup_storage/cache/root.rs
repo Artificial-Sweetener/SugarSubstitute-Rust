@@ -16,7 +16,7 @@ pub(super) fn open(
     let memory = admitted.claim(ROOT_BYTES).map_err(io::Error::other)?;
     let parent = Directory::open(anchor, true)?.resolved()?;
     let expected = "SugarSubstitute runtime cache 1\n";
-    let path = parent.path.join(DIRECTORY);
+    let path = parent.path().join(DIRECTORY);
     match Directory::open(&path, false) {
         Ok(_) => {}
         Err(cause) if cause.kind() == io::ErrorKind::NotFound => {
@@ -62,9 +62,9 @@ pub(super) fn open(
         if files::read_bounded(&mut owner, 256)? != expected.as_bytes() {
             return Err(invalid("Cache scope ownership marker is invalid"));
         }
-        let writer = protection.exclusive_rendezvous(&root.path.join("writer"), context)?;
+        let writer = protection.exclusive_rendezvous(&root.path().join("writer"), context)?;
         for namespace in Namespace::ALL {
-            let directory = root.path.join(namespace.directory());
+            let directory = root.path().join(namespace.directory());
             match Directory::open(&directory, false) {
                 Ok(_) => {
                     protection.directory(&directory, Mode::Existing, context)?;
@@ -94,11 +94,11 @@ impl RuntimeCache {
     pub(super) fn writer(&self, protection: &Protection, context: &JobContext) -> io::Result<File> {
         check(context)?;
         protection
-            .exclusive_rendezvous(&self.scope.root.path.join("writer"), context)
+            .exclusive_rendezvous(&self.scope.root.path().join("writer"), context)
             .map_err(record::public_error)
     }
     /// Open one registered namespace while retaining its canonical ancestor chain.
     pub(super) fn namespace(&self, namespace: Namespace) -> io::Result<Directory> {
-        Directory::open(&self.scope.root.path.join(namespace.directory()), false)
+        Directory::open(&self.scope.root.path().join(namespace.directory()), false)
     }
 }

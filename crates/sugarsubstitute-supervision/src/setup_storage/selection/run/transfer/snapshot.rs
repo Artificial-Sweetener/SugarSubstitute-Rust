@@ -2,8 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Carry a bounded immutable trial snapshot without holding the mutable selection file open.
 use super::*;
-use crate::setup_storage::{
-    disk_inheritance::duplicate_readonly_inheritable, files, protection::Protection, staging,
+use crate::{
+    durable_storage::{files, protection::Protection, staging},
+    setup_storage::disk_inheritance::duplicate_readonly_inheritable,
 };
 use serde::{Deserialize, Serialize};
 use std::{io::Write, os::windows::fs::FileExt};

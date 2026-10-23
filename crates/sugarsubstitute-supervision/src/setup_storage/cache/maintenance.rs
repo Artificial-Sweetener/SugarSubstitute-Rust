@@ -59,7 +59,7 @@ impl RuntimeCache {
         context: &JobContext,
     ) -> io::Result<Maintenance> {
         let mut outcome = Maintenance::default();
-        for entry in std::fs::read_dir(&self.scope.root.path)? {
+        for entry in std::fs::read_dir(self.scope.root.path())? {
             check(context)?;
             let entry = entry?;
             let name = entry.file_name();
@@ -85,7 +85,7 @@ impl RuntimeCache {
         for namespace in Namespace::ALL {
             let parent = self.namespace(namespace)?;
             let mut entries = BTreeMap::new();
-            for entry in std::fs::read_dir(&parent.path)? {
+            for entry in std::fs::read_dir(parent.path())? {
                 check(context)?;
                 let entry = entry?;
                 let name = entry.file_name().to_string_lossy().into_owned();
@@ -119,13 +119,13 @@ impl RuntimeCache {
                         journal(&parent, namespace, &key, protection)?
                     } else {
                         record::load(
-                            &Directory::open(&parent.path.join(&key), false)?,
+                            &Directory::open(&parent.path().join(&key), false)?,
                             namespace,
                             &key,
                             protection,
                         )?
                     };
-                    let directory = match Directory::open(&parent.path.join(&key), false) {
+                    let directory = match Directory::open(&parent.path().join(&key), false) {
                         Ok(directory) => directory,
                         Err(cause)
                             if retiring && record::kind(&cause) == io::ErrorKind::NotFound =>
@@ -160,7 +160,7 @@ impl RuntimeCache {
                     };
                     if record.producer.is_some() {
                         let charged = record.reserved.max(tree::preserved_charge(
-                            &directory.path.join("data"),
+                            &directory.path().join("data"),
                             namespace,
                             context,
                         )?);
@@ -180,7 +180,7 @@ impl RuntimeCache {
                             ) =>
                         {
                             let reserved = record.reserved.max(tree::preserved_charge(
-                                &directory.path,
+                                directory.path(),
                                 namespace,
                                 context,
                             )?);
@@ -199,7 +199,7 @@ impl RuntimeCache {
                     {
                         outcome.preserved_entries += 1;
                         let charge =
-                            tree::preserved_charge(&parent.path.join(&key), namespace, context)?;
+                            tree::preserved_charge(&parent.path().join(&key), namespace, context)?;
                         outcome.charged_bytes = outcome.charged_bytes.saturating_add(charge);
                         budgets[index(namespace)?] =
                             budgets[index(namespace)?].saturating_add(charge);
@@ -209,7 +209,7 @@ impl RuntimeCache {
                     Err(cause) => return Err(cause),
                 };
                 if !pinned && !preserved && record.consumers.is_some() {
-                    let path = parent.path.join(&key);
+                    let path = parent.path().join(&key);
                     let live = match Directory::open(&path, false) {
                         Ok(directory) => consumers::live(&directory, &record, context),
                         Err(cause)

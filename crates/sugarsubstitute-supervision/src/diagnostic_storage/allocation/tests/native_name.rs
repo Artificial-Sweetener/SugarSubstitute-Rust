@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Preserve full producing peaks and exact immutable native-name capacity through final aliases.
 use super::*;
-use crate::protected_storage::native_name::NativeName;
+use crate::durable_storage::protected::native_name::NativeName;
 use std::path::{Path, PathBuf};
 
 #[test]

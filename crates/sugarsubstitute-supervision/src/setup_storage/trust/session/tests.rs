@@ -55,7 +55,7 @@ fn existing_session_authority_ignores_bootstrap_bytes_and_preserves_rotated_keys
         let session = InstallationSession::create(choices(temporary.path()), context)?;
         let trust = session.update_trust([70; 32], &original, context)?;
         trust.rotate(&root(&next, 2, Some(&old))?, context)?;
-        let checkpoint = std::fs::read(trust.root.path.join(RECORD))?;
+        let checkpoint = std::fs::read(trust.root.path().join(RECORD))?;
         let identity = trust.installation.clone();
         drop(trust);
         drop(session);
@@ -63,7 +63,7 @@ fn existing_session_authority_ignores_bootstrap_bytes_and_preserves_rotated_keys
         assert!(reopened.update_trust([71; 32], &original, context).is_err());
         let trust = reopened.update_trust([70; 32], b"unused bootstrap bytes", context)?;
         assert_eq!(trust.installation, identity);
-        assert_eq!(std::fs::read(trust.root.path.join(RECORD))?, checkpoint);
+        assert_eq!(std::fs::read(trust.root.path().join(RECORD))?, checkpoint);
         assert!(
             trust
                 .refresh(Set::new(&old, [1; 3], b"old", EXPIRES)?.metadata(), NOW, context)

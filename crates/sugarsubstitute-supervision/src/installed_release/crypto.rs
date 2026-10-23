@@ -42,7 +42,7 @@ struct SymbolCryptoOrigin {
 }
 struct CaptureCryptoOrigin {
     original: super::allocation::AllocationOrigin,
-    causes: [crate::protected_storage::native_file::NativeCauseDestinations; 2],
+    causes: [crate::durable_storage::protected::native_file::NativeCauseDestinations; 2],
 }
 struct CryptoOrigin {
     #[cfg(test)]
@@ -102,7 +102,7 @@ impl CryptoOwner {
         original: super::allocation::AllocationOrigin,
         provider: super::outputs::CaptureOutputGuard,
         key: super::outputs::CaptureOutputGuard,
-        causes: [crate::protected_storage::native_file::NativeCauseDestinations; 2],
+        causes: [crate::durable_storage::protected::native_file::NativeCauseDestinations; 2],
     ) -> Result<Self, ClaimError> {
         if !provider.original().matches(&original) || !key.original().matches(&original) {
             return Err(ClaimError::capture_allocation(

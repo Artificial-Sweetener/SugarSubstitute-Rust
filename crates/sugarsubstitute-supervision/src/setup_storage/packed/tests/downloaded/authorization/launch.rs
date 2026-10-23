@@ -35,12 +35,12 @@ fn accept_distribution(
     let (manifest, compressed) = distribution;
     let archive = test_package::seal(&manifest, &compressed);
     let signed = SignedPackage::new(&archive, 1)?;
-    let trust = signed.initialize(&directory.path, context)?;
+    let trust = signed.initialize(directory.path(), context)?;
     let target = trust
         .offer(signed.metadata.metadata(), &signed.request, &signed.descriptor, NOW, context)?
         .into_package()?;
     let bundle = Arc::new(VerifiedBundle::from_download(
-        receive(&archive, &directory.path, target, context)?,
+        receive(&archive, directory.path(), target, context)?,
         &crate::setup_storage::cache::RuntimeCache::open(
             workspace.path(),
             crate::setup_storage::cache::CachePolicy::default(),
@@ -49,7 +49,7 @@ fn accept_distribution(
         context,
     )?);
     let preparation =
-        crate::setup_storage::InstallationSession::maintain(&directory.path, context)?
+        crate::setup_storage::InstallationSession::maintain(directory.path(), context)?
             .prepare(bundle, context)?;
     let candidate = preparation.prepare_update(
         preparation.maintenance_runtime().ok_or("Runtime absent")?,
@@ -58,7 +58,7 @@ fn accept_distribution(
         context,
     )?;
     let generation = candidate.generation().clone();
-    let store = Arc::new(SelectionStore::open(&directory.path, context)?);
+    let store = Arc::new(SelectionStore::open(directory.path(), context)?);
     let mut owner = InstallationRun::acquire(store, context)?;
     let admitted =
         candidate.begin_trial(&mut owner, &signed.authorization(&trust), || NOW, context)?;
@@ -75,10 +75,10 @@ fn accepted_launch_needs_no_extracted_cache_or_repository_and_retains_native_cus
         let (generation, workspace) = accept_fixture(&directory, context)?;
         assert!(!workspace.exists());
         std::fs::write(
-            directory.path.join(".update-trust/checkpoint"),
+            directory.path().join(".update-trust/checkpoint"),
             b"repository needs repair",
         )?;
-        let store = Arc::new(SelectionStore::open(&directory.path, context)?);
+        let store = Arc::new(SelectionStore::open(directory.path(), context)?);
         let mut owner = InstallationRun::acquire(store.clone(), context)?;
         let InstallationLaunch::Application(application) = owner.select_launch(None, context)?
         else {
@@ -87,12 +87,12 @@ fn accepted_launch_needs_no_extracted_cache_or_repository_and_retains_native_cus
         assert_eq!(application.generation(), &generation);
         assert_eq!(
             application.directory(),
-            directory.path.join("releases").join(generation.id.as_str())
+            directory.path().join("releases").join(generation.id.as_str())
         );
         assert_eq!(application.executable(), application.directory().join("sugarsubstitute.exe"));
         assert!(owner.select_launch(None, context).is_err());
         assert!(std::fs::write(application.executable(), b"changed").is_err());
-        assert!(std::fs::rename(application.directory(), directory.path.join("moved")).is_err());
+        assert!(std::fs::rename(application.directory(), directory.path().join("moved")).is_err());
         drop(owner);
         assert!(InstallationRun::acquire(store.clone(), context).is_err());
         let before = store.load(context)?.ok_or("Selection absent")?;
@@ -119,11 +119,11 @@ fn changed_inventory_or_application_bytes_cannot_supply_an_accepted_launch() -> 
             let temporary = tempfile::tempdir()?;
             let directory = Directory::open(temporary.path(), false)?;
             let (generation, _) = accept_fixture(&directory, context)?;
-            let path = directory.path.join("releases").join(generation.id.as_str()).join(leaf);
+            let path = directory.path().join("releases").join(generation.id.as_str()).join(leaf);
             let mut edited = std::fs::read(&path)?;
             edited[0] ^= 1;
             std::fs::write(&path, &edited)?;
-            let store = Arc::new(SelectionStore::open(&directory.path, context)?);
+            let store = Arc::new(SelectionStore::open(directory.path(), context)?);
             let before = store.load(context)?;
             let mut owner = InstallationRun::acquire(store.clone(), context)?;
             assert!(owner.select_launch(None, context).is_err());
@@ -141,7 +141,7 @@ fn released_run_lock_recovers_previous_acceptance_without_accepting_the_interrup
         let temporary = tempfile::tempdir()?;
         let directory = Directory::open(temporary.path(), false)?;
         let (healthy, _) = accept_fixture(&directory, context)?;
-        let store = Arc::new(SelectionStore::open(&directory.path, context)?);
+        let store = Arc::new(SelectionStore::open(directory.path(), context)?);
         let before = store.load(context)?.ok_or("Selection absent")?;
         let generation = Generation {
             id: GenerationId::new("2".repeat(32))?,

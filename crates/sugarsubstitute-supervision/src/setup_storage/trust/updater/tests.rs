@@ -19,10 +19,10 @@ fn resuming_the_same_engine_preserves_the_existing_release_history_file() -> Tes
         drop(prepared);
         let trust = TrustStore::open(root.path(), [92; 32], context)?;
         let history = trust.root.read("releases")?;
-        let original = std::fs::read(trust.root.path.join("releases"))?;
+        let original = std::fs::read(trust.root.path().join("releases"))?;
         let resumed = imported(root.path(), workspace.path(), context)?.stage(|| NOW, context)?;
         assert_eq!(resumed.generation(), &generation);
-        assert_eq!(std::fs::read(trust.root.path.join("releases"))?, original);
+        assert_eq!(std::fs::read(trust.root.path().join("releases"))?, original);
         drop(resumed);
         // The pinned file denies replacement: a new signed release must still commit its floor.
         let (bytes, _) = archive(CURRENT_UPDATER_CONTRACT)?;
@@ -43,7 +43,7 @@ fn resuming_the_same_engine_preserves_the_existing_release_history_file() -> Tes
             context,
         )?;
         assert!(package.stage(|| NOW, context).is_err());
-        assert_eq!(std::fs::read(trust.root.path.join("releases"))?, original);
+        assert_eq!(std::fs::read(trust.root.path().join("releases"))?, original);
         assert_eq!(
             trust.updater_selection(context)?.candidate().map(Candidate::generation),
             Some(&generation)
@@ -64,7 +64,7 @@ fn explicit_engine_repair_uses_a_fresh_generation_and_preserves_damaged_bytes() 
         let trust = TrustStore::open(root.path(), [92; 32], context)?;
         let old_file = trust.updater_path(&previous).join("app/sugarsubstitute-updater.exe");
         std::fs::write(&old_file, b"damaged")?;
-        std::fs::remove_file(trust.root.path.join(TrustStore::updater_receipt_name(&previous)))?;
+        std::fs::remove_file(trust.root.path().join(TrustStore::updater_receipt_name(&previous)))?;
         drop(trust);
         let (bytes, _) = archive(CURRENT_UPDATER_CONTRACT)?;
         let (trust, offer, download) = storage::test_package::updater::evidence_intent(
@@ -109,9 +109,11 @@ fn engine_records_cannot_be_substituted_between_installations_or_record_domains(
         drop(imported(second.path(), workspace.path(), context)?.stage(|| NOW, context)?);
         let first = TrustStore::open(first.path(), [92; 32], context)?;
         let second = TrustStore::open(second.path(), [92; 32], context)?;
-        for source in [first.root.path.join(SELECTION), second.root.path.join("subscription-v1")] {
+        for source in
+            [first.root.path().join(SELECTION), second.root.path().join("subscription-v1")]
+        {
             let bytes = std::fs::read(source)?;
-            let destination = second.root.path.join(SELECTION);
+            let destination = second.root.path().join(SELECTION);
             std::fs::write(&destination, &bytes)?;
             assert!(second.updater_selection(context).is_err());
             assert_eq!(std::fs::read(destination)?, bytes);
@@ -170,7 +172,7 @@ fn missing_release_receipt_never_relabels_a_prepared_generation() -> TestResult 
         drop(original);
         let trust = TrustStore::open(root.path(), [92; 32], context)?;
         let before = trust.updater_selection(context)?;
-        let receipt = trust.root.path.join(TrustStore::updater_receipt_name(&generation));
+        let receipt = trust.root.path().join(TrustStore::updater_receipt_name(&generation));
         std::fs::remove_file(&receipt)?;
         drop(trust);
         assert!(imported(root.path(), workspace.path(), context)?.stage(|| NOW, context).is_err());
@@ -263,7 +265,7 @@ fn corrupt_or_missing_established_engine_journal_is_preserved_and_not_reinitiali
                 imported(root.path(), workspace.path(), context)?.stage(|| NOW, context)?;
             drop(prepared);
             let trust = TrustStore::open(root.path(), [92; 32], context)?;
-            let path = trust.root.path.join(SELECTION);
+            let path = trust.root.path().join(SELECTION);
             if missing {
                 std::fs::remove_file(&path)?;
             } else {
