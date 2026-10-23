@@ -14,6 +14,7 @@ import { integrate } from './integration'
 import { observe } from './telemetry'
 import { argument } from './arguments'
 import { Events } from './events.mjs'
+import { NativeRecords, NativeRecordError, bindNativeRecords } from './records'
 
 declare const UPSTREAM_REVISION: string
 let transport: Socket | undefined
@@ -32,6 +33,8 @@ function write(id: string | null, event: string, data: unknown): void {
   transport.write(bytes)
 }
 observeCachePressure(namespace => write(null, 'cache_pressure', { namespace }))
+const records = new NativeRecords((id, data) => write(id, 'storage', data))
+bindNativeRecords(records)
 const events = new Events(write)
 const send = (id: string | null, event: string, data: unknown) => events.send(id, event, data)
 const flushing = setInterval(() => events.flush(), 100)
@@ -63,6 +66,7 @@ app.disableHardwareAcceleration()
 observe((event, properties) => send(active?.id ?? null, 'diagnostic', { event, properties }))
 
 async function dispatch(command: ReturnType<Decoder['push']>[number]): Promise<void> {
+  if (command.operation === 'storage_reply') { records.accept(command); return }
   if (command.operation === 'cancel') {
     if (!active || command.input.requestId !== active.id) {
       send(command.id, 'failed', { message: 'Cancellation does not match the active request' })
@@ -79,6 +83,7 @@ async function dispatch(command: ReturnType<Decoder['push']>[number]): Promise<v
   const control = new AbortController()
   active = { id: command.id, control }
   try {
+    records.begin(command.id, command.input.directory)
     let result: unknown
     if (command.operation === 'options') result = await options(command.input)
     else if (command.operation === 'inspect') result = await inspect(command.input, control.signal)
@@ -91,9 +96,10 @@ async function dispatch(command: ReturnType<Decoder['push']>[number]): Promise<v
   } catch (cause) {
     send(command.id, control.signal.aborted ? 'cancelled' : 'failed', {
       message: cause instanceof Error ? cause.message : String(cause),
-      ...(cause instanceof CacheStorageError ? { statusCode: cause.statusCode } : {}),
+      ...(cause instanceof CacheStorageError || cause instanceof NativeRecordError ? { statusCode: cause.statusCode } : {}),
     })
   } finally {
+    records.close()
     active = undefined
     if (closing) app.quit()
   }
@@ -110,7 +116,7 @@ void app.whenReady().then(() => {
   const decoder = new Decoder()
   socket.on('connect', () => {
     socket.write(JSON.stringify({ version: VERSION, event: 'authenticate', token }) + '\n')
-    send(null, 'ready', { cacheProtocol: 1, upstreamRevision: UPSTREAM_REVISION, operations: ['options', 'inspect', 'provision', 'integrate', 'cancel'] })
+    send(null, 'ready', { cacheProtocol: 1, storageProtocol: 1, upstreamRevision: UPSTREAM_REVISION, operations: ['options', 'inspect', 'provision', 'integrate', 'cancel'] })
   })
   socket.on('data', (chunk: Buffer) => {
     try {
@@ -124,10 +130,12 @@ void app.whenReady().then(() => {
   })
   socket.on('close', () => {
     closing = true
+    records.close()
     active?.control.abort()
     if (!active) app.quit()
   })
   socket.on('error', cause => {
+    records.close(cause)
     console.error('Provisioning connection failed', cause.message)
     active?.control.abort()
     if (!active) app.exit(1)

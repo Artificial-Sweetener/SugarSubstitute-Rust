@@ -14,6 +14,7 @@ const build = process.env.SUBSTITUTE_INSTALLER_BUILD
 if (!build || !path.isAbsolute(build)) throw new Error('Build the worker and set SUBSTITUTE_INSTALLER_BUILD')
 
 test('real headless worker rejects unsafe requests and exits on host closure', { timeout: 30000 }, async t => {
+  const observed = []
   const workspace = await fs.mkdtemp(path.join(build, 'protocol-'))
   const downloads = path.join(workspace, 'downloads')
   const metadata = path.join(workspace, 'metadata')
@@ -47,18 +48,21 @@ test('real headless worker rejects unsafe requests and exits on host closure', {
   child.stdout.resume()
   let socket, lines
   t.after(async () => {
+    if (t.signal.aborted) t.diagnostic(JSON.stringify({ observed, stderr }))
     if (child.exitCode === null && child.signalCode === null) child.kill()
     socket?.destroy()
     server.close()
     lines?.close()
     await closed
   })
+  observed.push('waiting for authenticated worker')
   ;[socket] = await Promise.race([
     connected,
     closed.then(([code, signal]) => {
       throw new Error(`Worker exited before connecting (${code}, ${signal}): ${stderr}`)
     }),
   ])
+  observed.push('connected')
   server.close()
   lines = readline.createInterface({ input: socket, signal: t.signal })
   const iterator = lines[Symbol.asyncIterator]()
@@ -71,6 +75,7 @@ test('real headless worker rejects unsafe requests and exits on host closure', {
       }
       if (!next.value.trim()) continue
       const frame = JSON.parse(next.value)
+      observed.push({ event: frame.event, id: frame.id })
       assert.equal(frame.version, 1)
       if (frame.event === 'diagnostic') continue
       assert.equal(frame.event, event, JSON.stringify(frame))
@@ -81,6 +86,7 @@ test('real headless worker rejects unsafe requests and exits on host closure', {
   assert.equal(JSON.parse(authentication.value).token, token)
   const ready = await nextTerminal('ready')
   assert.equal(ready.data.cacheProtocol, 1)
+  assert.equal(ready.data.storageProtocol, 1)
   assert.match(ready.data.upstreamRevision, /^[a-f0-9]{40}$/)
   assert.deepEqual(ready.data.operations, ['options', 'inspect', 'provision', 'integrate', 'cancel'])
   socket.write(JSON.stringify({
@@ -90,6 +96,18 @@ test('real headless worker rejects unsafe requests and exits on host closure', {
   const failure = await nextTerminal('failed')
   assert.equal(failure.id, 'stale')
   await assert.rejects(fs.access(path.join(workspace, 'must-not-exist')))
+  const selected = path.join(workspace, 'selected-missing')
+  socket.write(JSON.stringify({ version: 1, id: 'inspect-records', operation: 'inspect', input: { directory: selected } }) + '\n')
+  const storage = await nextTerminal('storage')
+  assert.equal(storage.id, 'inspect-records')
+  assert.equal(storage.data.version, 1)
+  assert.deepEqual(storage.data.operation, { op: 'open', create: false })
+  socket.write(JSON.stringify({ version: 1, id: storage.id, operation: 'storage_reply', input: {
+    version: 1, serial: storage.data.serial, index: 0, done: true,
+    result: { ok: true, data: { absent: true } },
+  } }) + '\n')
+  assert.equal((await nextTerminal('failed')).id, 'inspect-records')
+  await assert.rejects(fs.access(selected))
   socket.write(JSON.stringify({
     version: 1, id: 'templates', operation: 'options', input: { field: 'bundledTemplate' },
   }) + '\n')

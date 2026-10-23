@@ -17,8 +17,12 @@ pub(super) fn cache_event(value: &serde_json::Value) -> Result<CacheEvent> {
         return Err("Unsupported provisioning response".into());
     }
     match value["event"].as_str() {
-        Some("ready") if value["data"]["cacheProtocol"] == 1 => Ok(CacheEvent::Ready),
-        Some("ready") => Err("Unsupported provisioning cache protocol".into()),
+        Some("ready")
+            if value["data"]["cacheProtocol"] == 1 && value["data"]["storageProtocol"] == 1 =>
+        {
+            Ok(CacheEvent::Ready)
+        }
+        Some("ready") => Err("Unsupported provisioning storage/cache protocol".into()),
         Some("cache_pressure") => match value["data"]["namespace"].as_str() {
             Some("downloads") => Ok(CacheEvent::DownloadsFull),
             Some("metadata") => Ok(CacheEvent::MetadataFull),
@@ -38,6 +42,10 @@ mod tests {
             json!({"cacheProtocol":0}),
             json!({"cacheProtocol":2}),
             json!({"cacheProtocol":"1"}),
+            json!({"cacheProtocol":1}),
+            json!({"cacheProtocol":1,"storageProtocol":0}),
+            json!({"cacheProtocol":1,"storageProtocol":2}),
+            json!({"cacheProtocol":1,"storageProtocol":"1"}),
         ] {
             assert!(cache_event(&json!({"version":1,"event":"ready","data":data})).is_err());
         }
@@ -45,7 +53,9 @@ mod tests {
     #[test]
     fn current_native_grant_protocol_admits_the_matching_worker() -> Result<()> {
         assert_eq!(
-            cache_event(&json!({"version":1,"event":"ready","data":{"cacheProtocol":1}}))?,
+            cache_event(
+                &json!({"version":1,"event":"ready","data":{"cacheProtocol":1,"storageProtocol":1}})
+            )?,
             CacheEvent::Ready
         );
         Ok(())
@@ -77,7 +87,7 @@ mod tests {
         for value in [
             json!(null),
             json!("ready"),
-            json!({"event":"ready","data":{"cacheProtocol":1}}),
+            json!({"event":"ready","data":{"cacheProtocol":1,"storageProtocol":1}}),
             json!({"version":1,"event":"cache_pressure","data":[]}),
         ] {
             assert!(cache_event(&value).is_err());

@@ -17,18 +17,9 @@ next_extraction = "Route worker cache journal reads and publication through the 
 review_until = "2026-11-23"
 
 [[records]]
-path = "installer/worker/ownership.ts"
-owner = "sugarsubstitute"
-source_sha256 = "sha256:3197a1147ef86db2b02dbe4422dd9653c0b2f487df5bf0bcb241bbe65b89a705"
-disposition = "migration"
-rationale = "Existing managed-environment ownership publication; preserve schema and unknown/interrupted attempts."
-next_extraction = "Replace worker-local bounded record I/O and publication with retained durable-storage capabilities through the host boundary."
-review_until = "2026-11-23"
-
-[[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/files.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:aee3f72140e8738882f7d2d71b3a27e4ee28526fcaf22ef396b1caa7d753192a"
+source_sha256 = "sha256:75ef47bcf2c7822aa1fc1956b01a9b5c855aeadfb24bab7005b6de4a0a71aa67"
 disposition = "implementation"
 rationale = "Retained filesystem publication or identity-checked retirement mechanics; feature authorization remains with the caller."
 
@@ -42,7 +33,7 @@ rationale = "Retained filesystem publication or identity-checked retirement mech
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/staging.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:a17c7a9fb94ce09662e9760308dfe2759f8c27cce292bd8c7d314f839c81f5da"
+source_sha256 = "sha256:b5a0908a46e87451139df11db55a5e67a2bda0e260eb86456390dbfe7d22bc0f"
 disposition = "implementation"
 rationale = "Retained filesystem publication or identity-checked retirement mechanics; feature authorization remains with the caller."
 
@@ -206,3 +197,10 @@ owner = "sugarsubstitute-supervision"
 source_sha256 = "sha256:6524c65e09c3405930a964ff15b7102719d067c04e133b1b84904afe62de3358"
 disposition = "implementation"
 rationale = "Exact-handle receiving-stage activation, rollback, deletion and checked-close custody under original export admission and matched cleanup proof."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/durable_storage/records/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:32b5299f18d5d41d4b216cb581cf581b9c7f2cc4e55476c733ee1bcaf01ada36"
+disposition = "implementation"
+rationale = "The storage owner's unit qualification source attempts to rename retained selected directories and proves native-sharing rejection; exact registration covers this adversarial access."

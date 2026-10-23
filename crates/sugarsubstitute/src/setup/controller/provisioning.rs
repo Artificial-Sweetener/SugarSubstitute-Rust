@@ -55,13 +55,18 @@ impl Controller {
         if self.pending.is_some() {
             return Err("Provisioning is already active".into());
         }
-        self.worker.as_ref().ok_or("Provisioning is preparing")?.send(&json!({
+        self.worker.as_mut().ok_or("Provisioning is preparing")?.send(&json!({
             "version":1,"id":id,"operation":operation,"input":input,
         }))?;
         self.pending = Some(Pending { id, purpose });
         Ok(())
     }
-    pub(super) fn worker_event(&mut self, value: Value) -> Result<()> {
+    pub(super) fn worker_event(&mut self, mut value: Value) -> Result<()> {
+        if value["data"]["statusCode"] == "setupFailed" {
+            value["data"]["message"] = json!(
+                sugarsubstitute_contracts::localization::installer::messages(&self.locale)["setupFailed"]
+            );
+        }
         let event = value["event"].as_str().ok_or("Worker event missing")?;
         tracing::debug!(operation="installer_worker_event", event, request_id=?value["id"].as_str(), "Received provisioning event");
         if value["data"]["statusCode"] == "cacheFull" {

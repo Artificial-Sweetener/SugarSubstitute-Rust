@@ -76,6 +76,10 @@ pub use durable_storage::receiving::{
     ReportFile, ReportFileCode, ReportFileCustody, ReportFileError, ReportFileSelection,
 };
 #[cfg(windows)]
+pub use durable_storage::records::{
+    RECORD_PAGE_ENTRIES, RecordBytes, RecordDirectory, RecordEntry, WORKER_RECORD_BYTES,
+};
+#[cfg(windows)]
 #[allow(unsafe_code)]
 mod native_process;
 #[cfg(all(windows, feature = "k1-native-qualification"))]

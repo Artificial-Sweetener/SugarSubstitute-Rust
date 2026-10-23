@@ -17,6 +17,7 @@ pub(crate) mod protection;
 #[allow(unsafe_code)]
 pub(crate) mod receiving;
 mod record_read;
+pub(crate) mod records;
 #[allow(unsafe_code)]
 pub(crate) mod retirement;
 #[allow(unsafe_code)]

@@ -4,6 +4,7 @@
 mod cache_jobs;
 mod process;
 mod protocol;
+mod records;
 use crate::job_sequence::JobSequence;
 use cache_jobs::CacheFinish;
 use std::{error::Error, path::PathBuf, sync::Arc, time::Duration};
@@ -48,6 +49,9 @@ pub(super) struct Worker {
     stopped: bool,
     ready: bool,
     pressure: sugarsubstitute_supervision::setup_storage::ProvisioningCachePressure,
+    record_scope: Option<records::RecordScope>,
+    record_state: Option<records::RecordSession>,
+    record_job: Option<OwnedJob<records::RecordCompletion, std::io::Error>>,
 }
 
 impl Worker {
@@ -111,19 +115,27 @@ impl Worker {
             stopped: false,
             ready: false,
             pressure: Default::default(),
+            record_scope: None,
+            record_state: None,
+            record_job: None,
         })
     }
     pub(super) fn ready(&self) -> bool {
         self.ready && !self.closing
     }
-    pub(super) fn send(&self, value: &serde_json::Value) -> Result<()> {
+    pub(super) fn send(&mut self, value: &serde_json::Value) -> Result<()> {
         if !self.ready() {
             return Err("Provisioning worker is not ready".into());
         }
+        let authority = self.record_authority(value)?;
         self.transport
             .as_ref()
             .ok_or("Provisioning transport missing")?
             .send(serde_json::to_string(value)?)?;
+        if value["operation"] != "cancel" {
+            self.record_state = None;
+            self.record_scope = authority;
+        }
         Ok(())
     }
     pub(super) fn advance(&mut self, batch: &CompletionBatch) -> Result<Vec<serde_json::Value>> {
@@ -141,33 +153,35 @@ impl Worker {
             registry.consume(batch)?;
         }
         self.poll_cache_jobs()?;
+        self.poll_record_job()?;
         let mut events = Vec::new();
-        if let Some(transport) = &self.transport {
-            for _ in 0..16 {
-                match transport.next_event() {
-                    Some(TransportEvent::Listening { port, token }) => {
-                        self.endpoint = Some((port, token))
-                    }
-                    Some(TransportEvent::Frame(frame)) => {
-                        let mut value: serde_json::Value = serde_json::from_str(&frame)?;
-                        if matches!(value["event"].as_str(), Some("failed" | "fatal"))
-                            && (self.pressure.downloads || self.pressure.metadata)
-                        {
-                            value
-                                .get_mut("data")
-                                .and_then(serde_json::Value::as_object_mut)
-                                .ok_or("Provisioning failure data is invalid")?
-                                .insert("statusCode".into(), serde_json::json!("cacheFull"));
-                        }
-                        match protocol::cache_event(&value)? {
-                            protocol::CacheEvent::Ready => self.ready = true,
-                            protocol::CacheEvent::DownloadsFull => self.pressure.downloads = true,
-                            protocol::CacheEvent::MetadataFull => self.pressure.metadata = true,
-                            protocol::CacheEvent::Other => events.push(value),
-                        }
-                    }
-                    None => break,
+        for _ in 0..16 {
+            match self.transport.as_ref().and_then(Transport::next_event) {
+                Some(TransportEvent::Listening { port, token }) => {
+                    self.endpoint = Some((port, token))
                 }
+                Some(TransportEvent::Frame(frame)) => {
+                    let mut value: serde_json::Value = serde_json::from_str(&frame)?;
+                    if self.record_event(&value)? {
+                        continue;
+                    }
+                    if matches!(value["event"].as_str(), Some("failed" | "fatal"))
+                        && (self.pressure.downloads || self.pressure.metadata)
+                    {
+                        value
+                            .get_mut("data")
+                            .and_then(serde_json::Value::as_object_mut)
+                            .ok_or("Provisioning failure data is invalid")?
+                            .insert("statusCode".into(), serde_json::json!("cacheFull"));
+                    }
+                    match protocol::cache_event(&value)? {
+                        protocol::CacheEvent::Ready => self.ready = true,
+                        protocol::CacheEvent::DownloadsFull => self.pressure.downloads = true,
+                        protocol::CacheEvent::MetadataFull => self.pressure.metadata = true,
+                        protocol::CacheEvent::Other => events.push(value),
+                    }
+                }
+                None => break,
             }
         }
         if !self.closing
@@ -219,6 +233,11 @@ impl Worker {
         self.closing = true;
         self.ready = false;
         self.transport = None;
+        self.record_scope = None;
+        self.record_state = None;
+        if let Some(job) = &self.record_job {
+            job.cancel();
+        }
         if let Some(job) = &self.preparing {
             job.cancel();
         }
@@ -238,6 +257,7 @@ impl Worker {
             && self.retired.is_none()
             && self.cache_finalized
             && self.transport_job.is_none()
+            && self.record_job.is_none()
             && self.registry.as_ref().is_none_or(WindowsProcessRegistry::is_empty)
     }
 }

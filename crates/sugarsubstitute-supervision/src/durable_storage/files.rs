@@ -117,6 +117,7 @@ pub(crate) fn lexical(path: &Path) -> io::Result<()> {
         || path.as_os_str().len() > 4096
         || path.parent().is_none()
         || path.components().any(|part| matches!(part, Component::ParentDir | Component::CurDir))
+        || path.to_string_lossy().split(['\\', '/']).any(|part| part == "." || part == "..")
         || path.to_string_lossy().starts_with(r"\\")
     {
         return Err(invalid("Select an absolute local folder below a drive root"));
@@ -216,6 +217,13 @@ pub(crate) fn create_new(path: &Path) -> io::Result<File> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn literal_dot_components_are_rejected_before_path_normalization() {
+        for path in [r"C:\owned\.\nested", "C:/owned/./nested", r"C:\owned\..\other"] {
+            assert!(lexical(Path::new(path)).is_err(), "accepted {path}");
+        }
+        assert!(lexical(Path::new(r"C:\owned\nested")).is_ok());
+    }
     #[test]
     fn nested_reads_require_pinned_descendants() -> io::Result<()> {
         let temporary = tempfile::tempdir()?;
