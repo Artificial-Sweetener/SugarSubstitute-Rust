@@ -17,9 +17,12 @@
 export const globalOverrideCardCss = `
   .sc-overrides-card-title { display:none; }
   .sc-overrides-graph-content { position:relative; width:100%; height:100%; }
-  html .sc-overrides-toolbar[data-sc-overrides-graph] { width:100%; border:0; border-radius:0; }
+  html .sc-overrides-toolbar[data-presentation="plugin"][data-sc-overrides-graph] { width:100%; border:0; border-radius:0; }
   .sc-overrides-toolbar[data-sc-overrides-graph] > .sc-overrides-card-title { display:none !important; }
-  .sc-overrides-toolbar[data-sc-overrides-graph] > .sc-overrides-menu { position:absolute; top:0; right:0; z-index:1; }
+  .lg-node:has(.sc-overrides-graph-content) .lg-node-header [data-testid="node-collapse-button"] { visibility:hidden; pointer-events:none; }
+  html .sc-overrides-graph-content > .sc-overrides-toolbar[data-presentation="plugin"][data-sc-overrides-graph] > .sc-overrides-menu {
+    position:absolute; top:var(--sc-overrides-pin-top,0px); right:var(--sc-overrides-pin-right,10px); margin:0; z-index:2;
+  }
 
   html .sc-overrides-toolbar[data-presentation="plugin"] {
     position:relative; display:grid; grid-template-columns:minmax(0,1fr) auto;

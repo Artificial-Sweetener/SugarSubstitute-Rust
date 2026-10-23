@@ -30,47 +30,56 @@ afterAll(async () => {
   await browser.close();
 });
 
-test('places the override pin beside its title with the same footprint and gap as activation', async () => {
+test('keeps the override pin at the top right across card widths with the activation footprint', async () => {
   const dom = new JSDOM();
   ensureRelationStyles(dom.window.document);
   const relationCss = dom.window.document.getElementById('sc-relation-styles')!.textContent!;
   const page = await browser.newPage();
   try {
     await page.setContent(`<!doctype html><html data-sc-visual-style="photopro"><body>
-      <div class="sc-overrides-toolbar" data-presentation="plugin" data-sc-theme="photopro">
+      <main style="width:260px"><div class="sc-overrides-toolbar" data-presentation="plugin" data-sc-theme="photopro">
         <button class="sc-overrides-menu"><span></span><span></span></button>
         <h3 class="sc-overrides-card-title">Global Overrides</h3>
         <div class="sc-overrides-fields">Fields</div>
-      </div>
+      </div></main>
       <div data-sc-titlebar-controls><div style="display:flex;align-items:center">
         <span id="node-title">Enabled Node</span>
         <div data-cube-card-activation><input type="checkbox" data-sc-boolean-checkbox></div>
       </div></div>
     </body></html>`);
     await page.addStyleTag({ content: relationCss + photoProAppearanceCss() });
-    const geometry = await page.evaluate(() => {
-      const pin = document.querySelector('.sc-overrides-menu')!;
-      const title = document.querySelector('.sc-overrides-card-title')!;
-      const checkbox = document.querySelector('[data-sc-boolean-checkbox]')!;
-      const nodeTitle = document.querySelector('#node-title')!;
-      const pinBounds = pin.getBoundingClientRect();
-      const titleBounds = title.getBoundingClientRect();
-      const checkboxBounds = checkbox.getBoundingClientRect();
-      return {
-        pinSize: [pinBounds.width, pinBounds.height],
-        checkboxSize: [checkboxBounds.width, checkboxBounds.height],
-        pinGap: pinBounds.left - titleBounds.right,
-        checkboxGap: checkboxBounds.left - nodeTitle.getBoundingClientRect().right,
-        centered: pinBounds.top + pinBounds.height / 2 === titleBounds.top + titleBounds.height / 2,
-        chevron: getComputedStyle(pin.lastElementChild!).display,
-      };
-    });
-    expect(geometry.pinSize).toEqual([14, 14]);
-    expect(geometry.pinSize).toEqual(geometry.checkboxSize);
-    expect(geometry.pinGap).toBe(8);
-    expect(geometry.pinGap).toBe(geometry.checkboxGap);
-    expect(geometry.centered).toBe(true);
-    expect(geometry.chevron).toBe('none');
+    for (const width of [260, 480, 800]) {
+      await page.locator('main').evaluate((main, cardWidth) => {
+        main.style.width = `${String(cardWidth)}px`;
+      }, width);
+      const geometry = await page.evaluate(() => {
+        const pin = document.querySelector('.sc-overrides-menu')!;
+        const title = document.querySelector('.sc-overrides-card-title')!;
+        const checkbox = document.querySelector('[data-sc-boolean-checkbox]')!;
+        const nodeTitle = document.querySelector('#node-title')!;
+        const pinBounds = pin.getBoundingClientRect();
+        const titleBounds = title.getBoundingClientRect();
+        const checkboxBounds = checkbox.getBoundingClientRect();
+        return {
+          pinSize: [pinBounds.width, pinBounds.height],
+          checkboxSize: [checkboxBounds.width, checkboxBounds.height],
+          rightInset:
+            pin.closest('.sc-overrides-toolbar')!.getBoundingClientRect().right - pinBounds.right,
+          titleBeforePin: titleBounds.right <= pinBounds.left,
+          checkboxGap: checkboxBounds.left - nodeTitle.getBoundingClientRect().right,
+          centered:
+            pinBounds.top + pinBounds.height / 2 === titleBounds.top + titleBounds.height / 2,
+          chevron: getComputedStyle(pin.lastElementChild!).display,
+        };
+      });
+      expect(geometry.pinSize).toEqual([14, 14]);
+      expect(geometry.pinSize).toEqual(geometry.checkboxSize);
+      expect(geometry.rightInset).toBe(11);
+      expect(geometry.titleBeforePin).toBe(true);
+      expect(geometry.checkboxGap).toBe(8);
+      expect(geometry.centered).toBe(true);
+      expect(geometry.chevron).toBe('none');
+    }
     await page.evaluate(() => document.documentElement.removeAttribute('data-sc-visual-style'));
     expect(
       await page.locator('.sc-overrides-menu').evaluate((pin) => getComputedStyle(pin).width),
