@@ -99,6 +99,7 @@ def load_test_policy(path: Path) -> TestPolicy:
         root,
         context=str(path),
         required=frozenset({"schema", "test_root", "area", "boundary", "subscription"}),
+        optional=frozenset({"full_suite_sources"}),
     )
     schema = root["schema"]
     if not isinstance(schema, int) or isinstance(schema, bool) or schema != 1:
@@ -179,6 +180,11 @@ def load_test_policy(path: Path) -> TestPolicy:
         areas=tuple(areas),
         boundaries=tuple(boundaries),
         subscriptions=tuple(subscriptions),
+        full_suite_sources=(
+            _strings(root["full_suite_sources"], "full_suite_sources")
+            if "full_suite_sources" in root
+            else ()
+        ),
     )
 
 

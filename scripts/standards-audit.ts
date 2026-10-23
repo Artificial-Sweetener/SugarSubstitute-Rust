@@ -22,6 +22,7 @@ function repoRoot(rootDir: string = process.cwd()): string {
 }
 
 function walkFiles(rootDir: string, predicate: (filePath: string) => boolean): string[] {
+  if (!existsSync(rootDir)) return [];
   const results: string[] = [];
   const stack = [rootDir];
   while (stack.length) {
@@ -79,11 +80,14 @@ const NON_COMFY_DROPDOWN_PATTERNS = [
 ] as const;
 
 /** Audit authored frontend and tooling code against repository standards. */
-export function auditStandards(rootDir: string = process.cwd()): string[] {
+export function auditStandards(
+  rootDir: string = process.cwd(),
+  authoredRoots: readonly string[] = ['frontend', 'integrations'],
+): string[] {
   const root = repoRoot(rootDir);
   const failures: string[] = [];
-  const frontendFiles = walkFiles(path.join(root, 'frontend'), (fullPath) =>
-    fullPath.endsWith('.ts'),
+  const frontendFiles = authoredRoots.flatMap((directory) =>
+    walkFiles(path.join(root, directory), (fullPath) => /\.tsx?$/.test(fullPath)),
   );
   for (const fullPath of frontendFiles) {
     const relativePath = path.relative(root, fullPath).replaceAll('\\', '/');
@@ -102,8 +106,8 @@ export function auditStandards(rootDir: string = process.cwd()): string[] {
     });
   }
 
-  const authoredJavaScript = walkFiles(path.join(root, 'frontend'), (fullPath) =>
-    fullPath.endsWith('.js'),
+  const authoredJavaScript = authoredRoots.flatMap((directory) =>
+    walkFiles(path.join(root, directory), (fullPath) => /\.(?:[cm]?js|jsx)$/.test(fullPath)),
   );
   for (const fullPath of authoredJavaScript) {
     failures.push(
@@ -147,7 +151,10 @@ export function auditStandards(rootDir: string = process.cwd()): string[] {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const failures = auditStandards();
+  const failures = auditStandards(
+    process.cwd(),
+    process.argv.includes('--integrations') ? ['integrations'] : ['frontend', 'integrations'],
+  );
   if (failures.length) {
     console.error('Web/tooling standards audit failed:');
     for (const failure of failures) {

@@ -19,12 +19,19 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 from .model import TestGroup, TestPolicy, TestSelection
 
 
-def run_selection(root: Path, policy: TestPolicy, selection: TestSelection) -> int:
+def run_selection(
+    root: Path,
+    policy: TestPolicy,
+    selection: TestSelection,
+    *,
+    environment: Mapping[str, str] | None = None,
+) -> int:
     """Run selected groups and return the first failing process status."""
 
     ordinary_python: list[str] = []
@@ -43,7 +50,11 @@ def run_selection(root: Path, policy: TestPolicy, selection: TestSelection) -> i
             str(path.relative_to(root)) for path in files if path.suffix == ".ts"
         )
     if ordinary_python:
-        status = _run(root, [sys.executable, "-m", "pytest", "-q", *ordinary_python])
+        status = _run(
+            root,
+            [sys.executable, "-m", "pytest", "-q", *ordinary_python],
+            environment=environment,
+        )
         if status:
             return status
     if ordinary_typescript:
@@ -56,13 +67,18 @@ def run_selection(root: Path, policy: TestPolicy, selection: TestSelection) -> i
                 "--runTestsByPath",
                 *ordinary_typescript,
             ],
+            environment=environment,
         )
         if status:
             return status
     for path in sorted(isolated):
         relative = str(path.relative_to(root))
         if path.suffix == ".py":
-            status = _run(root, [sys.executable, "-m", "pytest", "-q", relative])
+            status = _run(
+                root,
+                [sys.executable, "-m", "pytest", "-q", relative],
+                environment=environment,
+            )
         else:
             status = _run(
                 root,
@@ -73,6 +89,7 @@ def run_selection(root: Path, policy: TestPolicy, selection: TestSelection) -> i
                     "--runTestsByPath",
                     relative,
                 ],
+                environment=environment,
             )
         if status:
             return status
@@ -111,10 +128,14 @@ def group_test_files(
     )
 
 
-def _run(root: Path, command: list[str]) -> int:
+def _run(
+    root: Path, command: list[str], *, environment: Mapping[str, str] | None = None
+) -> int:
     """Run one inherited-output test process without shell interpretation."""
 
-    completed = subprocess.run(command, cwd=root, check=False)  # noqa: S603
+    completed = subprocess.run(
+        command, cwd=root, check=False, env=environment
+    )  # noqa: S603
     return completed.returncode
 
 

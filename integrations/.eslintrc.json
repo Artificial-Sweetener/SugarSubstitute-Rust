@@ -1,0 +1,18 @@
+{
+  "root": true,
+  "env": { "es2022": true },
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "project": ["./tsconfig.integrations.json", "./tsconfig.photoshop.json"]
+  },
+  "plugins": ["@typescript-eslint"],
+  "extends": ["plugin:@typescript-eslint/strict-type-checked", "prettier"],
+  "rules": {
+    "@typescript-eslint/no-explicit-any": "error",
+    "@typescript-eslint/no-floating-promises": "error",
+    "@typescript-eslint/no-misused-promises": "error",
+    "no-eval": "error",
+    "no-new-func": "error",
+    "no-restricted-imports": ["error", { "patterns": ["node:*"] }]
+  }
+}

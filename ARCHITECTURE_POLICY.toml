@@ -1,5 +1,15 @@
 schema = 1
 
+[integrations]
+contracts = "integrations/contracts"
+shared = "integrations/shared"
+
+[[integrations.editors]]
+name = "photoshop"
+root = "integrations/photoshop"
+infrastructure = "integrations/photoshop/src/infrastructure"
+modules = ["photoshop", "uxp"]
+
 [menus]
 context_menu = "frontend/comfyui/ui/menus/ContextMenu.ts"
 floating_surface = "frontend/comfyui/ui/menus/FloatingSurface.ts"
@@ -46,6 +56,7 @@ source_roots = [
   "sugarcubes_model_roots",
   "sugarcubes",
   "frontend",
+  "integrations",
   "scripts",
   "tools",
   "stubs",

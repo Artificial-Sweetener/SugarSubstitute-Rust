@@ -19,6 +19,7 @@ import { spawn } from 'node:child_process';
 import { copyFileSync, mkdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { build } from 'esbuild';
+import { browserDependencyResolution } from './BrowserBuildEnvironment.js';
 import { walkArtifactFiles, synchronizeWebArtifacts } from './WebArtifactSynchronization.js';
 import { browserSharedModulePlugin, publishBrowserBundle } from './BrowserSharedModules.js';
 
@@ -95,6 +96,7 @@ async function bundleVueSurface(
     );
     const sharedRoot = path.join(generatedRoot, 'comfyui/ui');
     const result = await build({
+      ...browserDependencyResolution,
       entryPoints: entries,
       outbase:
         typeof relativeRoots === 'string' ? path.join(sourceRoot, relativeRoots) : sourceRoot,
@@ -126,6 +128,7 @@ async function main(): Promise<void> {
   rmSync(generatedRoot, { force: true, recursive: true });
   await compileTypeScript();
   await build({
+    ...browserDependencyResolution,
     entryPoints: [
       path.join(repositoryRoot, 'frontend/comfyui/ui/surface/appearance/FluentThemeRuntime.ts'),
     ],
@@ -137,6 +140,7 @@ async function main(): Promise<void> {
     legalComments: 'inline',
   });
   await build({
+    ...browserDependencyResolution,
     entryPoints: [path.join(repositoryRoot, 'frontend/comfyui/ui/menus/MenuControlRuntime.ts')],
     outfile: path.join(generatedRoot, 'comfyui/ui/menus/MenuControlRuntime.js'),
     external: [
@@ -150,6 +154,7 @@ async function main(): Promise<void> {
     legalComments: 'inline',
   });
   await build({
+    ...browserDependencyResolution,
     entryPoints: [
       path.join(repositoryRoot, 'frontend/comfyui/ui/surface/appearance/SpectrumThemeRuntime.ts'),
     ],
@@ -173,6 +178,7 @@ async function main(): Promise<void> {
     'surface/appearance/ControlFactory.js',
   ]);
   await build({
+    ...browserDependencyResolution,
     entryPoints: [
       path.join(repositoryRoot, 'frontend/comfyui/ui/prompt_editor/PromptLoraCatalog.ts'),
     ],

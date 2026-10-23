@@ -28,6 +28,8 @@ from .model import (
     ArchitecturePolicy,
     ArchitectureWaiver,
     DependencyRule,
+    EditorBoundary,
+    IntegrationPolicy,
     MenuPolicy,
     StructurePolicy,
     WaiverKind,
@@ -124,7 +126,7 @@ def load_policy(path: Path) -> ArchitecturePolicy:
         root,
         context=str(path),
         required=frozenset({"schema", "structure", "dependency"}),
-        optional=frozenset({"invalidation", "menus"}),
+        optional=frozenset({"invalidation", "menus", "integrations"}),
     )
     schema = _integer(root["schema"], "policy.schema")
     if schema != 1:
@@ -225,7 +227,60 @@ def load_policy(path: Path) -> ArchitecturePolicy:
         mutation_observer_owners=observer_owners,
         document_observer_owners=document_owners,
         menus=_menu_policy(root.get("menus")),
+        integrations=_integration_policy(root.get("integrations")),
     )
+
+
+def _integration_policy(value: object) -> IntegrationPolicy | None:
+    """Require explicit, non-overlapping editor roots and native module ownership."""
+
+    if value is None:
+        return None
+    table = _mapping(value, "integrations")
+    _keys(
+        table,
+        context="integrations",
+        required=frozenset({"contracts", "shared", "editors"}),
+    )
+    editors: list[EditorBoundary] = []
+    roots = [_string(table[key], key) for key in ("contracts", "shared")]
+    modules: set[str] = set()
+    for item in _tables(table["editors"], "integrations.editors"):
+        _keys(
+            item,
+            context="editor",
+            required=frozenset({"name", "root", "infrastructure", "modules"}),
+        )
+        name, root, infrastructure = (
+            _string(item[key], key) for key in ("name", "root", "infrastructure")
+        )
+        native_modules = _strings(item["modules"], "editor.modules")
+        if root != f"integrations/{name}" or not infrastructure.startswith(
+            f"{root}/src/"
+        ):
+            raise RegistryError(
+                "editor roots and native infrastructure must be scoped to integrations/<name>/src"
+            )
+        if modules.intersection(native_modules):
+            raise RegistryError("native editor modules must have exactly one owner")
+        modules.update(native_modules)
+        roots.append(root)
+        editors.append(EditorBoundary(name, root, infrastructure, native_modules))
+    for root in roots:
+        if (
+            not root.startswith("integrations/")
+            or ".." in root.split("/")
+            or "\\" in root
+        ):
+            raise RegistryError("integration roots must be repository-relative paths")
+    if any(
+        left == right or left.startswith(f"{right}/")
+        for i, left in enumerate(roots)
+        for j, right in enumerate(roots)
+        if i != j
+    ):
+        raise RegistryError("integration roots must not overlap")
+    return IntegrationPolicy(roots[0], roots[1], tuple(editors))
 
 
 def _menu_policy(value: object) -> MenuPolicy:

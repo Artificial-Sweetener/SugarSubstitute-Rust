@@ -45,7 +45,7 @@ jobs:
         run: pip install -e ".[dev]"
 
       - name: Verify repository gate
-        run: npm run check:commit
+        run: npm run check
 
       - name: Verify generated files are committed
         run: git diff --exit-code

@@ -76,6 +76,25 @@ class MenuPolicy:
 
 
 @dataclass(frozen=True, slots=True)
+class EditorBoundary:
+    """Identify one editor's package and exclusive native API owner."""
+
+    name: str
+    root: str
+    infrastructure: str
+    modules: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class IntegrationPolicy:
+    """Protect portable editor contracts from concrete host dependencies."""
+
+    contracts: str
+    shared: str
+    editors: tuple[EditorBoundary, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class ArchitecturePolicy:
     """Collect the repository's executable structural architecture contract."""
 
@@ -85,6 +104,7 @@ class ArchitecturePolicy:
     mutation_observer_owners: tuple[str, ...] = ()
     document_observer_owners: tuple[str, ...] = ()
     menus: MenuPolicy = MenuPolicy()
+    integrations: IntegrationPolicy | None = None
 
 
 @dataclass(frozen=True, slots=True)

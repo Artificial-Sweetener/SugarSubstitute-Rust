@@ -30,7 +30,9 @@ class SnapshotError(RuntimeError):
 
 
 @contextmanager
-def repository_snapshot(project_root: Path, *, staged: bool) -> Iterator[Path]:
+def repository_snapshot(
+    project_root: Path, *, staged: bool, package_name: str | None = None
+) -> Iterator[Path]:
     """Yield the worktree or an isolated copy of the exact Git index."""
 
     root = project_root.resolve()
@@ -38,7 +40,16 @@ def repository_snapshot(project_root: Path, *, staged: bool) -> Iterator[Path]:
         yield root
         return
     with TemporaryDirectory(prefix="sugarcubes-architecture-index-") as temp:
-        snapshot_root = Path(temp).resolve()
+        if package_name is not None and not package_name.isidentifier():
+            raise SnapshotError(
+                "Execution snapshots require a valid Python package directory name."
+            )
+        snapshot_root = (
+            Path(temp).resolve() / package_name
+            if package_name
+            else Path(temp).resolve()
+        )
+        snapshot_root.mkdir(exist_ok=True)
         prefix = f"{snapshot_root}{os.sep}"
         completed = subprocess.run(  # noqa: S603
             ["git", "checkout-index", "--all", f"--prefix={prefix}"],
