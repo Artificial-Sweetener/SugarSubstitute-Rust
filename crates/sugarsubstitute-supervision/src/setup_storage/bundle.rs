@@ -30,7 +30,7 @@ impl VerifiedBundle {
     }
 
     /// Extract an authenticated application download and retain exact archive and payload custody.
-    /// Reserve `RESERVATION_BYTES` alongside the download claim on an admitted storage worker.
+    /// Reserve 24 MiB alongside retained download and cache-scope admission on a storage worker.
     /// # Errors
     /// Rejects incomplete application packages, altered bytes, unsafe paths and cancellation.
     pub fn from_download(

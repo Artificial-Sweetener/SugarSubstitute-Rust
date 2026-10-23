@@ -9,7 +9,7 @@ import { download } from '@upstream/lib/download'
 import { extract } from '@upstream/lib/extract'
 import { downloadCache } from './cache'
 import { getActivePythonPath } from '@upstream/lib/pythonEnv'
-import { cacheDir } from './paths'
+import { cacheGrants } from './cache-policy'
 import { consumePlan } from './selection'
 import { reserve, record, ready } from './ownership'
 
@@ -40,7 +40,7 @@ export async function provision(
   }
   try {
     await standalone.install!(installation, {
-      signal, sendProgress, download, extract, cache: downloadCache(cacheDir()),
+      signal, sendProgress, download, extract, cache: downloadCache(cacheGrants().downloads),
     })
     await standalone.postInstall!(installation, {
       signal, sendProgress,

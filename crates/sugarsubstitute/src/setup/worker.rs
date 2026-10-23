@@ -3,6 +3,7 @@
 //! Bind the provisioning transport to the existing retained Windows process-family owner.
 mod cache_jobs;
 mod process;
+mod protocol;
 use crate::job_sequence::JobSequence;
 use cache_jobs::CacheFinish;
 use std::{error::Error, path::PathBuf, sync::Arc, time::Duration};
@@ -46,6 +47,7 @@ pub(super) struct Worker {
     closing: bool,
     stopped: bool,
     ready: bool,
+    pressure: sugarsubstitute_supervision::setup_storage::ProvisioningCachePressure,
 }
 
 impl Worker {
@@ -108,6 +110,7 @@ impl Worker {
             closing: false,
             stopped: false,
             ready: false,
+            pressure: Default::default(),
         })
     }
     pub(super) fn ready(&self) -> bool {
@@ -146,14 +149,21 @@ impl Worker {
                         self.endpoint = Some((port, token))
                     }
                     Some(TransportEvent::Frame(frame)) => {
-                        let value: serde_json::Value = serde_json::from_str(&frame)?;
-                        if value["version"] != 1 {
-                            return Err("Unsupported provisioning response".into());
+                        let mut value: serde_json::Value = serde_json::from_str(&frame)?;
+                        if matches!(value["event"].as_str(), Some("failed" | "fatal"))
+                            && (self.pressure.downloads || self.pressure.metadata)
+                        {
+                            value
+                                .get_mut("data")
+                                .and_then(serde_json::Value::as_object_mut)
+                                .ok_or("Provisioning failure data is invalid")?
+                                .insert("statusCode".into(), serde_json::json!("cacheFull"));
                         }
-                        if value["event"] == "ready" {
-                            self.ready = true;
-                        } else {
-                            events.push(value);
+                        match protocol::cache_event(&value)? {
+                            protocol::CacheEvent::Ready => self.ready = true,
+                            protocol::CacheEvent::DownloadsFull => self.pressure.downloads = true,
+                            protocol::CacheEvent::MetadataFull => self.pressure.metadata = true,
+                            protocol::CacheEvent::Other => events.push(value),
                         }
                     }
                     None => break,

@@ -5,6 +5,7 @@ use super::*;
 mod generations;
 mod ownership;
 mod recovery;
+mod retirement;
 use crate::setup_storage::test_worker::{self as worker, TestResult};
 use std::io::{Read, Write};
 

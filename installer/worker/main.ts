@@ -7,6 +7,7 @@ import { format } from 'node:util'
 import { createConnection, type Socket } from 'node:net'
 import { Decoder, VERSION } from './protocol.mjs'
 import { configDir } from './paths'
+import { CacheStorageError, observeCachePressure } from './cache-policy'
 import { options } from './selection'
 import { inspect, provision } from './provision'
 import { integrate } from './integration'
@@ -30,6 +31,7 @@ function write(id: string | null, event: string, data: unknown): void {
   }
   transport.write(bytes)
 }
+observeCachePressure(namespace => write(null, 'cache_pressure', { namespace }))
 const events = new Events(write)
 const send = (id: string | null, event: string, data: unknown) => events.send(id, event, data)
 const flushing = setInterval(() => events.flush(), 100)
@@ -55,6 +57,8 @@ for (const level of ['log', 'info', 'warn', 'error', 'debug'] as const) {
 }
 fs.mkdirSync(configDir(), { recursive: true })
 app.setPath('userData', configDir())
+app.setPath('sessionData', argument('cache-runtime'))
+app.commandLine.appendSwitch('disk-cache-size', String(64 * 1024 * 1024))
 app.disableHardwareAcceleration()
 observe((event, properties) => send(active?.id ?? null, 'diagnostic', { event, properties }))
 
@@ -87,6 +91,7 @@ async function dispatch(command: ReturnType<Decoder['push']>[number]): Promise<v
   } catch (cause) {
     send(command.id, control.signal.aborted ? 'cancelled' : 'failed', {
       message: cause instanceof Error ? cause.message : String(cause),
+      ...(cause instanceof CacheStorageError ? { statusCode: cause.statusCode } : {}),
     })
   } finally {
     active = undefined
@@ -105,7 +110,7 @@ void app.whenReady().then(() => {
   const decoder = new Decoder()
   socket.on('connect', () => {
     socket.write(JSON.stringify({ version: VERSION, event: 'authenticate', token }) + '\n')
-    send(null, 'ready', { upstreamRevision: UPSTREAM_REVISION, operations: ['options', 'inspect', 'provision', 'integrate', 'cancel'] })
+    send(null, 'ready', { cacheProtocol: 1, upstreamRevision: UPSTREAM_REVISION, operations: ['options', 'inspect', 'provision', 'integrate', 'cancel'] })
   })
   socket.on('data', (chunk: Buffer) => {
     try {

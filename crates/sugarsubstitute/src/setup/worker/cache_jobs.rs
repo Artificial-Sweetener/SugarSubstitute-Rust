@@ -82,6 +82,7 @@ impl Worker {
             return Ok(());
         }
         let mut resources = self.retired.take();
+        let pressure = self.pressure;
         let cache = self.cache.clone();
         let mut specification = self.spec(
             JobClass::InfrastructureLifecycle,
@@ -92,11 +93,19 @@ impl Worker {
         self.cache_job =
             Some(self.client.submit_blocking(&self.scope, specification, move |context| {
                 let result = match &mut resources {
-                    Some(resources) => resources.finish(&context),
+                    Some(resources) => resources.finish(pressure, &context),
                     None => sugarsubstitute_supervision::setup_storage::recover_provisioning_cache(
                         &cache, &context,
                     ),
                 };
+                let result = result.and_then(|()| {
+                    resources = None;
+                    cache.maintain(
+                        sugarsubstitute_supervision::setup_storage::cache::utc_seconds()?,
+                        &context,
+                    )?;
+                    Ok(())
+                });
                 Ok(CacheFinish { resources, failure: result.err() })
             })?);
         Ok(())

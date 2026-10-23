@@ -34,8 +34,12 @@ impl ProvisioningLaunch {
         self.caches.family()
     }
     /// Called only by the native registry's unique actually settled provisioning result.
-    pub(crate) fn finish_settled(&mut self, context: &JobContext) -> io::Result<()> {
-        self.caches.finish_settled(context)?;
+    pub(crate) fn finish_settled(
+        &mut self,
+        pressure: crate::setup_storage::ProvisioningCachePressure,
+        context: &JobContext,
+    ) -> io::Result<()> {
+        self.caches.finish_settled(pressure, context)?;
         if let Some(pin) = &mut self.pin {
             pin.retire_settled(context)?;
         }

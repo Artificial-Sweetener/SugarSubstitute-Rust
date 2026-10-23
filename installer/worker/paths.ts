@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-/** Isolate upstream metadata and downloads inside the installer's explicit workspace. */
+/** Keep authoritative configuration separate from native disposable cache grants. */
 import path from 'node:path'
 import { argument } from './arguments'
+import { cacheGrants } from './cache-policy'
 
 function root(): string {
   const value = argument('workspace')
@@ -10,7 +11,7 @@ function root(): string {
   return value
 }
 
-export function cacheDir(): string { return path.join(root(), 'cache-v1') }
+export function cacheDir(): string { return cacheGrants().metadata.root }
 export function configDir(): string { return path.join(root(), 'configuration') }
 export function dataDir(): string { return path.join(root(), 'data') }
 export function stateDir(): string { return path.join(root(), 'state') }

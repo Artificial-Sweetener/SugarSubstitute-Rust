@@ -9,7 +9,7 @@ pub(crate) mod cache_custody;
 mod compatibility;
 pub(crate) mod provisioning_cache;
 pub use application::LAUNCH_RESERVATION_BYTES;
-pub use provisioning_cache::recover_provisioning_cache;
+pub use provisioning_cache::{ProvisioningCachePressure, recover_provisioning_cache};
 #[allow(unsafe_code)]
 mod disk_inheritance;
 mod download;

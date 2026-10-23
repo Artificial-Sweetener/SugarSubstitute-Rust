@@ -72,6 +72,7 @@ const KEYS: &[&str] = &[
     "recoveryConflict",
     "recoveryIncomplete",
     "recoveryInventoryBound",
+    "cacheFull",
 ];
 /// Resolve installer labels with the same canonical fallback as every native surface.
 pub fn messages(locale: &str) -> BTreeMap<&'static str, &'static str> {

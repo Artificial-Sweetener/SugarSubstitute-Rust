@@ -15,6 +15,11 @@ if (!build || !path.isAbsolute(build)) throw new Error('Build the worker and set
 
 test('real headless worker rejects unsafe requests and exits on host closure', { timeout: 30000 }, async t => {
   const workspace = await fs.mkdtemp(path.join(build, 'protocol-'))
+  const downloads = path.join(workspace, 'downloads')
+  const metadata = path.join(workspace, 'metadata')
+  await fs.mkdir(downloads); await fs.mkdir(metadata)
+  const runtime = path.join(workspace, 'runtime')
+  await fs.mkdir(runtime)
   const executable = process.platform === 'win32' ? 'electron.exe' :
     process.platform === 'darwin' ? 'Electron.app/Contents/MacOS/Electron' : 'electron'
   const server = createServer()
@@ -27,7 +32,10 @@ test('real headless worker rejects unsafe requests and exits on host closure', {
   delete env.NODE_OPTIONS
   const child = spawn(path.join(build, 'electron', executable), [
     path.join(build, 'worker'), '--setup-workspace', workspace,
+    '--setup-cache-runtime', runtime,
     '--setup-port', String(server.address().port), '--setup-token', token,
+    '--setup-cache-downloads', downloads, '--setup-cache-download-bytes', String(24 * 1024 ** 3),
+    '--setup-cache-metadata', metadata, '--setup-cache-metadata-bytes', String(256 * 1024 ** 2),
   ], {
     windowsHide: true,
     env,
@@ -72,6 +80,7 @@ test('real headless worker rejects unsafe requests and exits on host closure', {
   const authentication = await iterator.next()
   assert.equal(JSON.parse(authentication.value).token, token)
   const ready = await nextTerminal('ready')
+  assert.equal(ready.data.cacheProtocol, 1)
   assert.match(ready.data.upstreamRevision, /^[a-f0-9]{40}$/)
   assert.deepEqual(ready.data.operations, ['options', 'inspect', 'provision', 'integrate', 'cancel'])
   socket.write(JSON.stringify({

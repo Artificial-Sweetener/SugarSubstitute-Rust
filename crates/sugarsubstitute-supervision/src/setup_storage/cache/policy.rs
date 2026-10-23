@@ -22,15 +22,18 @@ pub enum Namespace {
     SetupDownloads,
     /// Reconstructible upstream catalogues and HTTP metadata.
     UpstreamMetadata,
+    /// Private headless provisioning session data, never application sessions.
+    SetupRuntime,
 }
 impl Namespace {
-    pub(super) const ALL: [Self; 6] = [
+    pub(super) const ALL: [Self; 7] = [
         Self::UpdateOffers,
         Self::UpdateDownloads,
         Self::PackedPayloads,
         Self::SetupBrowser,
         Self::SetupDownloads,
         Self::UpstreamMetadata,
+        Self::SetupRuntime,
     ];
     /// Canonical schema/epoch-qualified directory component.
     pub const fn directory(self) -> &'static str {
@@ -41,6 +44,7 @@ impl Namespace {
             Self::SetupBrowser => "setup-webview-v1",
             Self::SetupDownloads => "setup-downloads-v1",
             Self::UpstreamMetadata => "setup-upstream-metadata-v1",
+            Self::SetupRuntime => "setup-runtime-v1",
         }
     }
     /// Production byte budget for this namespace, including reserved active entries.
@@ -50,7 +54,7 @@ impl Namespace {
             Self::UpdateDownloads | Self::SetupDownloads => 24 * GIB,
             Self::PackedPayloads => 32 * GIB,
             Self::SetupBrowser => GIB,
-            Self::UpstreamMetadata => 256 * 1024 * 1024,
+            Self::UpstreamMetadata | Self::SetupRuntime => 256 * 1024 * 1024,
         }
     }
     /// Maximum idle age in UTC seconds. Clock regression never makes an entry older.
@@ -59,7 +63,7 @@ impl Namespace {
             Self::UpdateOffers | Self::UpstreamMetadata => 7 * DAY,
             Self::UpdateDownloads | Self::SetupDownloads => 30 * DAY,
             Self::PackedPayloads => 7 * DAY,
-            Self::SetupBrowser => DAY,
+            Self::SetupBrowser | Self::SetupRuntime => DAY,
         }
     }
 }

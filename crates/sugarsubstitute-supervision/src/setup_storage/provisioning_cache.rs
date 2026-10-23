@@ -13,6 +13,14 @@ use std::{ffi::OsString, io};
 use sugarsubstitute_contracts::execution::JobContext;
 const DOWNLOAD_BYTES: u64 = 24 * 1024 * 1024 * 1024;
 const METADATA_BYTES: u64 = 256 * 1024 * 1024;
+/// Authenticated worker pressure selects disposable grants after actual native settlement.
+#[derive(Clone, Copy, Default)]
+pub struct ProvisioningCachePressure {
+    /// The download byte grant rejected a write before mutation.
+    pub downloads: bool,
+    /// The reconstructible metadata byte grant rejected a write before mutation.
+    pub metadata: bool,
+}
 const PREFIX: &str = "setup-worker-v1";
 
 /// Writable grants remain durably pinned until every native process in this family has retired.
@@ -20,6 +28,7 @@ pub(crate) struct ProvisioningCaches {
     family: CacheFamilyId,
     downloads: CacheLease,
     metadata: CacheLease,
+    runtime: CacheLease,
 }
 impl ProvisioningCaches {
     /// Keep upstream semantic keys and byte verification in the authenticated provisioning worker.
@@ -47,6 +56,13 @@ impl ProvisioningCaches {
             now,
             context,
         )?;
+        let mut runtime = cache.clone().fresh(
+            Namespace::SetupRuntime,
+            &cache::storage_key(format!("setup-runtime-v1:{}", family.encoded()).as_bytes()),
+            METADATA_BYTES,
+            now,
+            context,
+        )?;
         downloads.verify_storage(context)?;
         metadata.verify_storage(context)?;
         downloads.begin_generated(
@@ -57,14 +73,16 @@ impl ProvisioningCaches {
             &descriptor(&metadata, Namespace::UpstreamMetadata, family)?,
             context,
         )?;
-        Ok(Self { family, downloads, metadata })
+        runtime
+            .begin_generated(&descriptor(&runtime, Namespace::SetupRuntime, family)?, context)?;
+        Ok(Self { family, downloads, metadata, runtime })
     }
     /// Matching facts for the native adapter's private named containment job.
     pub(crate) fn family(&self) -> CacheFamilyId {
         self.family
     }
     /// Explicit paths and byte ceilings; presentation/IPC content cannot select these grants.
-    pub(crate) fn arguments(&self) -> [OsString; 8] {
+    pub(crate) fn arguments(&self) -> [OsString; 10] {
         [
             "--setup-cache-downloads".into(),
             self.downloads.path().into_os_string(),
@@ -74,15 +92,29 @@ impl ProvisioningCaches {
             self.metadata.path().into_os_string(),
             "--setup-cache-metadata-bytes".into(),
             METADATA_BYTES.to_string().into(),
+            "--setup-cache-runtime".into(),
+            self.runtime.path().into_os_string(),
         ]
     }
     /// Finalize from the registry's unique actually settled family result. This is called only
     /// after every owned process and observation has retired; supplied exit codes grant nothing.
     /// Startup recovery independently requires native object absence before calling `finalize`.
-    pub(crate) fn finish_settled(&mut self, context: &JobContext) -> io::Result<()> {
+    pub(crate) fn finish_settled(
+        &mut self,
+        pressure: ProvisioningCachePressure,
+        context: &JobContext,
+    ) -> io::Result<()> {
         check(context)?;
         finalize(&mut self.downloads, context)?;
-        finalize(&mut self.metadata, context)
+        finalize(&mut self.metadata, context)?;
+        finalize(&mut self.runtime, context)?;
+        if pressure.downloads {
+            self.downloads.retire(context)?;
+        }
+        if pressure.metadata {
+            self.metadata.retire(context)?;
+        }
+        self.runtime.retire(context)
     }
 }
 /// Recover disposable provisioning output only after its private native containment object vanishes.
@@ -91,7 +123,9 @@ impl ProvisioningCaches {
 /// # Errors
 /// Preserves damaged ownership, cancellation and unexpected native query or storage failures.
 pub fn recover_provisioning_cache(cache: &RuntimeCache, context: &JobContext) -> io::Result<()> {
-    for namespace in [Namespace::SetupDownloads, Namespace::UpstreamMetadata] {
+    for namespace in
+        [Namespace::SetupDownloads, Namespace::UpstreamMetadata, Namespace::SetupRuntime]
+    {
         let mut entries = cache.pending(namespace, context)?;
         while let Some(mut lease) = entries.next(context)? {
             let value =
@@ -108,6 +142,9 @@ pub fn recover_provisioning_cache(cache: &RuntimeCache, context: &JobContext) ->
             }
             if family.retired(context)? {
                 finalize(&mut lease, context)?;
+                if namespace == Namespace::SetupRuntime {
+                    lease.retire(context)?;
+                }
             }
         }
     }

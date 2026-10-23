@@ -17,7 +17,11 @@ impl SettledProvisioning {
     /// finalization with a fresh current job; a successful earlier inventory is idempotent.
     /// # Errors
     /// Preserves cancellation, unknown control files and actual native/storage retirement failures.
-    pub fn finish(&mut self, context: &JobContext) -> io::Result<()> {
+    pub fn finish(
+        &mut self,
+        pressure: crate::setup_storage::ProvisioningCachePressure,
+        context: &JobContext,
+    ) -> io::Result<()> {
         let launch = self
             .family
             .preparation_image
@@ -26,7 +30,7 @@ impl SettledProvisioning {
         let PreparationPayload::Provisioning(provisioning) = &mut launch.payload else {
             return Err(io::Error::other("Settled provisioning role differs"));
         };
-        provisioning.finish_settled(context)
+        provisioning.finish_settled(pressure, context)
     }
 }
 impl WindowsProcessRegistry {

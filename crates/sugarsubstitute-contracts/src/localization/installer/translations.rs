@@ -70,6 +70,7 @@ pub(super) const EN: &[&str] = &[
     "Saved installations contain different settings. Automatic repair cannot choose between them. Your files have been preserved.",
     "Saved setup is incomplete. Your existing files have been preserved.",
     "This installation has too many entries to inspect automatically. Your files have been preserved.",
+    "Setup reached its cache storage limit. Close setup and reopen it to reclaim retired cache files, then try again.",
 ];
 pub(super) const ZH_HANS: &[&str] = &[
     "SugarSubstitute 安装",
@@ -139,6 +140,7 @@ pub(super) const ZH_HANS: &[&str] = &[
     "已保存的安装记录包含不同的设置，自动修复无法在它们之间作出选择。您的文件已保留。",
     "已保存的安装配置不完整。现有文件已保留。",
     "此安装包含的条目过多，无法自动检查。您的文件已保留。",
+    "安装程序已达到缓存存储上限。请关闭并重新打开安装程序以清理已停用的缓存文件，然后重试。",
 ];
 pub(super) const JA: &[&str] = &[
     "SugarSubstitute セットアップ",
@@ -208,6 +210,7 @@ pub(super) const JA: &[&str] = &[
     "保存されたインストールごとに設定が異なるため、自動修復では選択できません。ファイルは保持されています。",
     "保存されたセットアップ情報が不完全です。既存のファイルは保持されています。",
     "このインストールには項目が多すぎるため、自動で確認できません。ファイルは保持されています。",
+    "セットアップのキャッシュ容量が上限に達しました。セットアップを閉じて再度開き、使用が終了したキャッシュファイルを削除してから、もう一度お試しください。",
 ];
 pub(super) const KO: &[&str] = &[
     "SugarSubstitute 설치",
@@ -277,6 +280,7 @@ pub(super) const KO: &[&str] = &[
     "저장된 설치 기록의 설정이 서로 달라 자동 복구에서 선택할 수 없습니다. 파일은 보존되었습니다.",
     "저장된 설치 설정이 불완전합니다. 기존 파일은 보존되었습니다.",
     "이 설치에는 항목이 너무 많아 자동으로 확인할 수 없습니다. 파일은 보존되었습니다.",
+    "설치 캐시 저장 용량 한도에 도달했습니다. 설치 프로그램을 닫았다가 다시 열어 사용이 끝난 캐시 파일을 정리한 후 다시 시도하세요.",
 ];
 pub(super) const ES: &[&str] = &[
     "Instalación de SugarSubstitute",
@@ -346,4 +350,5 @@ pub(super) const ES: &[&str] = &[
     "Las instalaciones guardadas tienen ajustes distintos. La reparación automática no puede elegir entre ellos. Tus archivos se han conservado.",
     "La configuración guardada está incompleta. Tus archivos existentes se han conservado.",
     "Esta instalación tiene demasiados elementos para revisarlos automáticamente. Tus archivos se han conservado.",
+    "La instalación alcanzó el límite de almacenamiento de caché. Cierra y vuelve a abrir el instalador para limpiar los archivos de caché que ya no se usan y vuelve a intentarlo.",
 ];

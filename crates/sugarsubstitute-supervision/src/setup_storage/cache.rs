@@ -21,6 +21,7 @@ mod policy;
 mod reader;
 mod record;
 pub use reader::CacheReader;
+mod retire;
 mod root;
 mod stream;
 mod tree;

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 /** Read only the explicit worker capability arguments supplied by the native owner. */
-export function argument(name: 'workspace' | 'port' | 'token'): string {
+export function argument(name: 'workspace' | 'port' | 'token' | 'cache-downloads' | 'cache-download-bytes' | 'cache-metadata' | 'cache-metadata-bytes' | 'cache-runtime'): string {
   const flag = `--setup-${name}`
   const matches = process.argv.map((value, index) => value === flag ? index : -1).filter(index => index >= 0)
   if (matches.length !== 1) throw new Error(`Exactly one ${flag} is required`)

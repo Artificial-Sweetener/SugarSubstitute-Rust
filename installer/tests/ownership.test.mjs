@@ -4,17 +4,17 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { transform } from 'esbuild'
+import { build as bundle } from 'esbuild'
 
 const build = process.env.SUBSTITUTE_INSTALLER_BUILD
 if (!build || !path.isAbsolute(build)) throw new Error('Explicit test artifact directory required')
 async function module(name) {
-  const source = await fs.readFile(new URL(`../worker/${name}.ts`, import.meta.url), 'utf8')
-  const { code } = await transform(source, { loader: 'ts', format: 'esm', target: 'node22' })
-  return import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`)
+  const { outputFiles } = await bundle({ entryPoints: [new URL(`../worker/${name}.ts`, import.meta.url).pathname.replace(/^\/([A-Z]:)/i, '$1')], bundle: true, write: false, platform: 'node', format: 'esm', target: 'node22' })
+  return import(`data:text/javascript;base64,${Buffer.from(outputFiles[0].text).toString('base64')}`)
 }
 const { reserve, record, ready } = await module('ownership')
 const { downloadCache } = await module('cache')
+const { CacheGrant } = await module('cache-policy')
 
 test('failed and ready environments survive retries in the same managed destination', async () => {
   const workspace = await fs.mkdtemp(path.join(build, 'ownership-'))
@@ -69,7 +69,7 @@ test('completed environments can be rediscovered and reused only for the same up
 
 test('download cache reuses identities without evicting unknown files or failed partials', async () => {
   const workspace = await fs.mkdtemp(path.join(build, 'cache-'))
-  const cache = downloadCache(workspace)
+  const cache = downloadCache(new CacheGrant(workspace, 16 * 1024 * 1024))
   const entry = cache.getCachePath('../../upstream-key')
   assert.equal(path.dirname(entry), workspace)
   assert.equal(cache.getCachePath('../../upstream-key'), entry)

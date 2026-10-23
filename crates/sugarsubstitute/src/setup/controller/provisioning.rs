@@ -64,6 +64,12 @@ impl Controller {
     pub(super) fn worker_event(&mut self, value: Value) -> Result<()> {
         let event = value["event"].as_str().ok_or("Worker event missing")?;
         tracing::debug!(operation="installer_worker_event", event, request_id=?value["id"].as_str(), "Received provisioning event");
+        if value["data"]["statusCode"] == "cacheFull" {
+            let message = sugarsubstitute_contracts::localization::installer::messages(
+                &self.locale,
+            )["cacheFull"];
+            return self.worker_failed(message.into());
+        }
         if matches!(event, "fatal" | "protocol_error") {
             return Err("Provisioning worker failed".into());
         }

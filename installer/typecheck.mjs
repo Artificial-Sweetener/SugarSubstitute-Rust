@@ -15,6 +15,7 @@ const upstream = input.slice(0, input.indexOf('/src/main/'))
 const replacements = new Map([
   ['src/main/settings.ts', 'settings.ts'], ['src/main/lib/paths.ts', 'paths.ts'],
   ['src/main/lib/telemetry.ts', 'telemetry.ts'], ['src/main/lib/bundledScript.ts', 'bundled-script.ts'],
+  ['src/main/lib/cache-policy.ts', 'cache-policy.ts'],
 ])
 const options = {
   noEmit: true, strict: true, skipLibCheck: true, allowJs: true, checkJs: false,
