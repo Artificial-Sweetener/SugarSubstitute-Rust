@@ -69,6 +69,11 @@ export class ComfyGenerationQueueSurface {
     if (this.#button) this.#button.dataset.scQueueTheme = dark ? 'dark' : 'light';
   }
 
+  /** Reposition the native queue anchor after its owned generation slot changes parents. */
+  refreshPosition(): void {
+    this.#schedule();
+  }
+
   /** Restore the native trigger's original accessible name and remove all presentation hooks. */
   dispose(): void {
     this.#disposed = true;

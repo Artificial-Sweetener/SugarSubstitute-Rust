@@ -20,6 +20,7 @@ import { ComfyCanvasWorkspaceHost } from '../../../frontend/comfyui/ui/output_ca
 import { ComfyCanvasPreferences } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/ComfyCanvasPreferences.js';
 import { CanvasFrameFixture } from '../support/CanvasFrameFixture.js';
 import { installCanvasWorkspaceAnimation } from '../support/CanvasWorkspaceMotionFixture.js';
+import { publishPluginMode } from '../../../frontend/comfyui/ui/core/PluginMode.js';
 
 interface Setting {
   readonly id: string;
@@ -153,6 +154,28 @@ test('mounts identified surfaces and preserves allocated content through app/con
   expect(f.listeners.size).toBe(0);
   expect(f.frames.pending).toBe(0);
   expect(f.report).not.toHaveBeenCalled();
+});
+
+test('Plugin Mode closes the canvas and blocks all reopen paths without changing workflow preferences', async () => {
+  const f = fixture();
+  await Promise.resolve();
+  const content = f.host.content;
+  expect(f.host.visible).toBe(true);
+  publishPluginMode(document, true);
+  expect(f.host.visible).toBe(false);
+  expect(f.host.canvas).toBeNull();
+  expect(f.host.content).toBe(content);
+  f.host.toggle();
+  f.host.show();
+  f.host.beforeConfigureGraph();
+  f.host.afterConfigureGraph();
+  expect(f.host.visible).toBe(false);
+  expect(f.presentation.snapshot.canvas).toBe(true);
+  publishPluginMode(document, false);
+  expect(f.host.visible).toBe(true);
+  expect(f.host.content).toBe(content);
+  expect(f.report).not.toHaveBeenCalled();
+  f.dispose();
 });
 
 test('opens a narrow drawer when its accepted desktop visibility is already enabled', async () => {

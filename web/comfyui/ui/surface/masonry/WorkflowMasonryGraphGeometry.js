@@ -1,3 +1,20 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Measure identified graph cards without discovering nodes or changing canonical geometry. */
+import { masonrySupplementSources } from './MasonrySupplementBoundary.js';
 /** Read actual loose-node and exposed Cube-face bounds in one shared screen coordinate space. */
 export function measureWorkflowMasonryGraph(container, sections) {
     const elements = workflowMasonryGraphCards(container, sections);
@@ -45,6 +62,8 @@ export function workflowMasonryGraphCards(container, sections) {
             cards.set(card.id, element);
         }
     }
+    for (const [id, source] of masonrySupplementSources(root))
+        cards.set(id, source);
     return cards;
 }
 /** Identify host graph layers shared by visual transitions and resting interaction suppression. */

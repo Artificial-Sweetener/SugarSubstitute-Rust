@@ -69,69 +69,79 @@ function pointer(
   target.dispatchEvent(event);
 }
 
-test('pointer movement animates a transient permutation and commits once on release', async () => {
-  const viewport = document.createElement('div');
-  Object.defineProperties(viewport, {
-    clientWidth: { value: 540 },
-  });
-  jest.spyOn(viewport, 'getBoundingClientRect').mockImplementation(() => ({
-    x: 0,
-    y: 0,
-    left: 0,
-    top: 0,
-    right: 540,
-    bottom: 30,
-    width: 540,
-    height: 30,
-    toJSON: () => ({}),
-  }));
-  let tabs = ['a', 'b', 'c'].map((key, index) => ({
-    id: workflowSessionId(key),
-    title: key,
-    selected: index === 0,
-    modified: false,
-  }));
-  const reorder = jest.fn((from: number, to: number) => {
-    const next = [...tabs];
-    const moved = next.splice(from, 1)[0]!;
-    next.splice(to, 0, moved);
-    tabs = next;
+test.each([true, false])(
+  'pointer movement retains one reorder with orb visibility %s',
+  async (orbVisible) => {
+    const viewport = document.createElement('div');
+    Object.defineProperties(viewport, {
+      clientWidth: { value: 540 },
+    });
+    jest.spyOn(viewport, 'getBoundingClientRect').mockImplementation(() => ({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 540,
+      bottom: 30,
+      width: 540,
+      height: 30,
+      toJSON: () => ({}),
+    }));
+    let tabs = ['a', 'b', 'c'].map((key, index) => ({
+      id: workflowSessionId(key),
+      title: key,
+      selected: index === 0,
+      modified: false,
+    }));
+    const reorder = jest.fn((from: number, to: number) => {
+      const next = [...tabs];
+      const moved = next.splice(from, 1)[0]!;
+      next.splice(to, 0, moved);
+      tabs = next;
+      view.update(tabs, () => false);
+    });
+    const view = new WorkflowTabsView(
+      document,
+      {
+        activate: jest.fn(),
+        close: jest.fn(),
+        menu: async () => [],
+        reorder,
+        create: jest.fn(),
+        report: jest.fn(),
+      },
+      viewport,
+    );
+    view.setOrbVisible(orbVisible);
+    viewport.append(view.element);
+    document.body.append(viewport);
     view.update(tabs, () => false);
-  });
-  const view = new WorkflowTabsView(
-    document,
-    {
-      activate: jest.fn(),
-      close: jest.fn(),
-      menu: async () => [],
-      reorder,
-      create: jest.fn(),
-      report: jest.fn(),
-    },
-    viewport,
-  );
-  viewport.append(view.element);
-  document.body.append(viewport);
-  view.update(tabs, () => false);
-  await Updates.next();
-  const ids = tabs.map((tab) => `sc-workflow-${tab.id}`);
-  const a = document.getElementById(ids[0]!)!;
-  const b = document.getElementById(ids[1]!)!;
-  const capture = captureBoundary([viewport, a, b]);
-  pointer(a, 'pointerdown', 50);
-  pointer(viewport, 'pointermove', 230);
-  expect(viewport.hasAttribute('data-sc-tab-dragging')).toBe(true);
-  expect(a.style.transform).toBe('translateX(180px)');
-  expect(b.style.transform).toBe('translateX(-180px)');
-  expect(reorder).not.toHaveBeenCalled();
-  expect([...view.element.children].map((e) => e.id)).toEqual(ids);
-  pointer(viewport, 'pointerup', 230, { buttons: 0 });
-  expect(reorder).toHaveBeenCalledTimes(1);
-  expect(reorder).toHaveBeenCalledWith(0, 1);
-  expect([...view.element.children].map((e) => e.id)).toEqual([ids[1], ids[0], ids[2]]);
-  expect(capture.record).toHaveBeenCalledWith(a, 1);
-  view.dispose();
-});
+    await Updates.next();
+    const ids = tabs.map((tab) => `sc-workflow-${tab.id}`);
+    const a = document.getElementById(ids[0]!)!;
+    const b = document.getElementById(ids[1]!)!;
+    const capture = captureBoundary([viewport, a, b]);
+    pointer(a, 'pointerdown', 50);
+    pointer(viewport, 'pointermove', 230);
+    expect(viewport.hasAttribute('data-sc-tab-dragging')).toBe(true);
+    expect(a.style.transform).toBe('translateX(180px)');
+    if (!orbVisible) {
+      expect(view.element.querySelector('[data-orb-adjacent]')).toBeNull();
+      expect(a.style.getPropertyValue('--sc-tab-cutout-radius')).toBe('0px');
+      expect(b.style.getPropertyValue('--sc-tab-cutout-radius')).toBe('0px');
+      expect(a.style.paddingLeft).toBe('20px');
+    }
+    expect(b.style.transform).toBe('translateX(-180px)');
+    expect(reorder).not.toHaveBeenCalled();
+    expect([...view.element.children].map((e) => e.id)).toEqual(ids);
+    pointer(viewport, 'pointerup', 230, { buttons: 0 });
+    expect(reorder).toHaveBeenCalledTimes(1);
+    expect(reorder).toHaveBeenCalledWith(0, 1);
+    expect([...view.element.children].map((e) => e.id)).toEqual([ids[1], ids[0], ids[2]]);
+    expect(capture.record).toHaveBeenCalledWith(a, 1);
+    view.dispose();
+  },
+);
 
 test('stationary captured presses retain the native control as the browser click target', () => {
   const viewport = document.createElement('div');

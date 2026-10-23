@@ -50,6 +50,7 @@ export function projectWorkflowMasonry(
   const looseMembers = new Map<string, ComfyNode[]>();
   let loose: WorkflowMasonrySection | null = null;
   for (const node of orderWorkflowNodes(graph, connections)) {
+    if (node.sugarcubesPresentationOnly === true) continue;
     const id = String(node.id);
     const cube = cubeSet.has(node) ? cubes.find((candidate) => candidate === node) : undefined;
     if (cube) {

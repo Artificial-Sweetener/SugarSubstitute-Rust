@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own the continuous scroll surface and measured native card placement. */
+import { masonrySupplementCards } from './MasonrySupplementBoundary.js';
 import { WorkflowMasonryRemountQueue } from './WorkflowMasonryRemountQueue.js';
 import { NativeCardGeometryObserver } from '../NativeCardGeometryObserver.js';
 import { ensureCubeSurfaceStyles } from '../CubeSurfaceStyles.js';
@@ -357,9 +358,14 @@ export class WorkflowMasonryView {
     }
     /** Expose complete painted cells after SurfaceMotion commits their settled placements. */
     transitionCards() {
-        return [...this.#views.values()].flatMap((view) => [...view.cells].flatMap(([id, cell]) => {
-            return cell.querySelector('.sugarcubes-cube-face__native-card-mount') ? [{ id, cell }] : [];
-        }));
+        return [
+            ...masonrySupplementCards(this.element),
+            ...[...this.#views.values()].flatMap((view) => [...view.cells].flatMap(([id, cell]) => {
+                return cell.querySelector('.sugarcubes-cube-face__native-card-mount')
+                    ? [{ id, cell }]
+                    : [];
+            })),
+        ];
     }
     /** Wait for native mount or restored graph styles before measuring animation endpoints. */
     settlePresentation() {

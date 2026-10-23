@@ -55,6 +55,7 @@ export class WorkflowTabsView {
   #menuRequest = 0;
   #menuTarget: WorkflowSessionId | null = null;
   #paintKey = '';
+  #orbVisible = true;
 
   /** Bind interaction intents without retaining host workflow objects in presentation. */
   constructor(
@@ -160,6 +161,15 @@ export class WorkflowTabsView {
     this.#updateOrbAdjacency();
   }
 
+  /** Retire orb geometry in Plugin Mode while keeping the same tab and drag owners. */
+  setOrbVisible(visible: boolean): void {
+    if (this.#orbVisible === visible) return;
+    this.#drag.cancelForResize();
+    this.#orbVisible = visible;
+    this.viewport.toggleAttribute('data-sc-orb-hidden', !visible);
+    this.#updateOrbAdjacency();
+  }
+
   /** Preserve captured pointer alignment when endpoint arrows change the viewport allocation. */
   refreshScrollLayout(): void {
     this.#drag.viewportChanged();
@@ -180,9 +190,10 @@ export class WorkflowTabsView {
   #updateOrbAdjacency(): void {
     if (this.#drag.active) return;
     const index = Math.floor(Math.max(0, this.viewport.scrollLeft) / this.#tabWidth);
-    const adjacent = this.viewport.hasAttribute('data-sc-overflow')
-      ? undefined
-      : this.#order[index]?.id;
+    const adjacent =
+      !this.#orbVisible || this.viewport.hasAttribute('data-sc-overflow')
+        ? undefined
+        : this.#order[index]?.id;
     for (const [id, tab] of this.#tabs) {
       tab.element.toggleAttribute('data-orb-adjacent', id === adjacent);
       if (id === adjacent)

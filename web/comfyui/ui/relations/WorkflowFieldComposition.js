@@ -16,6 +16,7 @@
 /** Compose native field appearance and relation policy around one submitted seed history. */
 import { RelationHostLifecycle } from './RelationHostLifecycle.js';
 import { AppearanceHost } from '../surface/appearance/AppearanceHost.js';
+import { OwnedSurfaceAppearance } from '../surface/appearance/OwnedSurfaceAppearance.js';
 import { WorkflowEditorNavigationHost } from '../surface/WorkflowEditorNavigationHost.js';
 import { SubstituteFrameHost } from '../surface/frame/SubstituteFrameHost.js';
 import { SettingsWorkspaceHost } from '../settings/SettingsWorkspaceHost.js';
@@ -24,7 +25,7 @@ export function createWorkflowFieldHost(options) {
     const relations = new RelationHostLifecycle({
         ...options,
         reportError: options.reportRelationError,
-        appearance: () => appearance.state,
+        appearance: () => ownedAppearance,
     });
     const appearance = new AppearanceHost({
         app: options.app,
@@ -32,6 +33,7 @@ export function createWorkflowFieldHost(options) {
         seedReuse: (node, name) => relations.seedReuse.field(node, name),
         reportError: options.reportPresentationError,
     });
+    const ownedAppearance = new OwnedSurfaceAppearance(options.document, appearance.state);
     const frame = new SubstituteFrameHost({
         app: options.app,
         document: options.document,

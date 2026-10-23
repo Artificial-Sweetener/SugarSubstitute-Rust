@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own the accessible Output Canvas affordance across identified native action-bar mounts. */
 import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
+import { readPluginMode, subscribePluginMode } from '../../core/PluginMode.js';
 /** Reuse one toolbar button without moving Comfy controls or acquiring image resources. */
 export class ComfyCanvasToolbar {
     document;
@@ -22,6 +23,8 @@ export class ComfyCanvasToolbar {
     #button;
     #observer = null;
     #disposed = false;
+    #available = false;
+    #stopMode = null;
     /** Construct safe static icon/text chrome and bind the shared workspace toggle. */
     constructor(document, toggle) {
         this.document = document;
@@ -40,6 +43,8 @@ export class ComfyCanvasToolbar {
     setup() {
         if (this.#observer || this.#disposed)
             return;
+        this.#stopMode = subscribePluginMode(this.document, () => this.#mode());
+        this.#mode();
         this.#observer = new HostSurfaceObserver(this.document.body, '.actionbar-container', this.#attach, { content: true });
         this.#attach();
     }
@@ -47,14 +52,22 @@ export class ComfyCanvasToolbar {
     update(visible, available) {
         this.#button.setAttribute('aria-pressed', String(visible));
         this.#button.title = visible ? 'Close output canvas' : 'Open output canvas';
-        this.#button.disabled = !available;
+        this.#available = available;
+        this.#mode();
     }
     /** Release toolbar observation and the owned control with the canvas host. */
     dispose() {
         this.#disposed = true;
         this.#observer?.disconnect();
+        this.#stopMode?.();
         this.#button.removeEventListener('click', this.toggle);
         this.#button.remove();
+    }
+    /** Remove the affordance while the workspace owner enforces Plugin Mode's closed canvas. */
+    #mode() {
+        const plugin = readPluginMode(this.document);
+        this.#button.hidden = plugin;
+        this.#button.disabled = !this.#available || plugin;
     }
     /** Insert alongside existing SugarCubes view controls, retaining all native node identity. */
     #attach = () => {

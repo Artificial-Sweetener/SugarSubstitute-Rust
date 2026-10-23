@@ -104,6 +104,7 @@ const cubeRuntimeLifecycle = new ComfyCubeRuntimeLifecycle(createCubeRuntime);
 const { appearance, relations, frame, setupPresentation } = createWorkflowFieldHost({
     app: appRef,
     document: documentRef ?? document,
+    getLiteGraph: () => adapter.getLiteGraph?.(),
     seeds: workflowExecution.seeds,
     activity: workflowExecution.activity,
     progress: workflowExecution.progress,

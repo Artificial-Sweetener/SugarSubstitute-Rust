@@ -19,18 +19,10 @@ import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
 import { createComfyRendererModeChangeSource, resolveComfyRendererMode, } from '../../core/ComfyRendererMode.js';
 import { NativeThemeScopes } from './NativeThemeScopes.js';
 import { identifyMenuSurface, releaseMenuSurface } from '../../menus/MenuSurface.js';
-import { NativeCardAdapter } from './NativeCardAdapter.js';
 import { nativeVisualStyleCss } from './ThemeService.js';
-import { createNumericSlider, createBooleanCheckbox, createBooleanSegments, } from './ControlFactory.js';
+import { NativeFieldAppearance } from './NativeFieldAppearance.js';
 import { NativeInlineComboSearch } from './NativeInlineComboSearch.js';
 import { acquireComboToggle } from './ComboToggleController.js';
-import { NativeCardTitlebar } from './NativeCardTitlebar.js';
-import { NativeToggleRows } from './NativeToggleRows.js';
-import { NativeBooleanSegments } from './NativeBooleanSegments.js';
-import { NativeAdvancedDisclosure } from './NativeAdvancedDisclosure.js';
-import { NativeNumericControls } from './NativeNumericControls.js';
-import { NativeLabelPresentation } from './NativeLabelPresentation.js';
-import { NativeSeedControls } from './NativeSeedControls.js';
 import { readComfyDarkTheme } from './ComfyColorScheme.js';
 import { OverlayScrollbarHost } from './OverlayScrollbarHost.js';
 import { isBorrowedNativeCardPresentation } from '../NativeCardPresentationOwner.js';
@@ -50,16 +42,11 @@ const surfaceSelector = '.sugarcubes-workflow-masonry, .sugarcubes-masonry-toggl
 export class AppearanceHost {
     state = new AppearanceState();
     #options;
-    #adapter;
+    #nodes;
+    #widgets;
+    #nativeCards = false;
     #graphGeometry;
     #themes = new NativeThemeScopes();
-    #titlebars = new NativeCardTitlebar();
-    #labels = new NativeLabelPresentation();
-    #toggleRows = new NativeToggleRows(createBooleanCheckbox);
-    #booleanSegments = new NativeBooleanSegments(createBooleanSegments);
-    #advanced = new NativeAdvancedDisclosure();
-    #numeric = new NativeNumericControls(createNumericSlider);
-    #seeds = new NativeSeedControls();
     #comboSearch;
     #scrollbars;
     #style;
@@ -92,7 +79,8 @@ export class AppearanceHost {
         this.#accent = new AccentThemeHost(options.document, options.app, options.reportError);
         this.#iconAppearance = new CubeIconAppearanceHost(options.document, this.state);
         this.#scrollbars = new OverlayScrollbarHost(options.document, options.reportError);
-        this.#adapter = new NativeCardAdapter(options.app, options.seedReuse);
+        this.#nodes = new NativeFieldAppearance(options.app, 'card', options.seedReuse);
+        this.#widgets = new NativeFieldAppearance(options.app, 'widget', options.seedReuse);
         this.#graphGeometry = new NativeCardGraphGeometry({
             document: options.document,
             ...(options.getSlotLayoutSync ? { getSynchronizer: options.getSlotLayoutSync } : {}),
@@ -153,7 +141,7 @@ export class AppearanceHost {
     setStyle(style) {
         if (this.#disposed)
             return;
-        if (style !== this.#selectedStyle && style !== 'comfy')
+        if (style !== this.#selectedStyle)
             this.#deactivate(false);
         this.#selectedStyle = style;
         publishVisualStyle(this.#options.document, style);
@@ -181,22 +169,25 @@ export class AppearanceHost {
         this.#options.document.removeEventListener(NATIVE_PRESENTATION_READY_EVENT, this.#onPresentationReady);
         this.#options.document.defaultView?.removeEventListener('pagehide', this.#onPageHide);
     }
-    /** Suspend under Nodes 1 while retaining the preference for returning to Nodes 2. */
+    /** Keep owned widgets styled while native-card presentation follows its graph renderer. */
     #reconcile() {
         if (this.#disposed)
             return;
-        const active = this.#selectedStyle !== 'comfy' &&
-            resolveComfyRendererMode(this.#options.app, null, this.#options.document) === 'vue';
-        if (!active) {
-            this.#deactivate();
-            refreshCubeTitleOpticalAlignment(this.#options.document);
-            return;
+        const themed = this.#selectedStyle !== 'comfy';
+        const nativeCards = themed && resolveComfyRendererMode(this.#options.app, null, this.#options.document) === 'vue';
+        if (this.#nativeCards && !nativeCards) {
+            this.#nodes.clear();
+            this.#scrollbars.clear();
+            this.#graphGeometry.clear();
         }
+        this.#nativeCards = nativeCards;
         this.#active = true;
-        if (!this.#style.isConnected)
+        if (themed && !this.#style.isConnected)
             this.#options.document.head.append(this.#style);
         this.#refreshPalette();
-        this.#scrollbars.enable();
+        ensureOwnedControlAppearanceStyles(this.#options.document);
+        if (themed)
+            this.#scrollbars.enable();
         this.#queue(this.#options.document.body);
         this.#schedule();
         refreshCubeTitleOpticalAlignment(this.#options.document);
@@ -211,15 +202,10 @@ export class AppearanceHost {
             this.state.update('comfy', readComfyDarkTheme(this.#options.document));
         this.#style.remove();
         this.#scrollbars.clear();
-        this.#adapter.clear();
+        this.#nodes.clear();
+        this.#widgets.clear();
+        this.#nativeCards = false;
         this.#themes.clear();
-        this.#labels.clear();
-        this.#titlebars.clear();
-        this.#toggleRows.clear();
-        this.#booleanSegments.clear();
-        this.#advanced.clear();
-        this.#numeric.clear();
-        this.#seeds.clear();
         if (synchronizeRestored)
             this.#graphGeometry.stylesRemoved();
         else
@@ -246,7 +232,7 @@ export class AppearanceHost {
     /** Follow Comfy's theme selector without replacing its palette owner. */
     #refreshPalette() {
         const dark = readComfyDarkTheme(this.#options.document);
-        this.state.update(this.#active ? this.#selectedStyle : 'comfy', dark);
+        this.state.update(this.#active && this.#nativeCards ? this.#selectedStyle : 'comfy', dark);
         if (!this.#active)
             return;
         if (dark === this.#dark)
@@ -298,41 +284,38 @@ export class AppearanceHost {
                 if (!popup.isConnected)
                     this.#popups.delete(popup);
             this.#themes.prune();
-            this.#comboSearch.reconcile();
-            this.#annotatePopup();
-            if ([...this.#dirty].some((element) => element.matches('.lg-node')))
-                this.#adapter.beginBatch(this.#options.document, [...this.#dirty].filter((element) => element.matches('.lg-node')));
+            const themed = this.#selectedStyle !== 'comfy';
+            if (themed) {
+                this.#comboSearch.reconcile();
+                this.#annotatePopup();
+            }
+            if (this.#nativeCards && [...this.#dirty].some((element) => element.matches('.lg-node')))
+                this.#nodes.beginBatch(this.#options.document, [...this.#dirty].filter((element) => element.matches('.lg-node')));
             for (const element of this.#dirty) {
                 if (!element.isConnected)
                     continue;
-                this.#themes.retain(element);
+                if (themed)
+                    this.#themes.retain(element);
                 if (element.matches('.lg-node, .sugarcubes-native-widget')) {
                     const standalone = element.matches('.sugarcubes-native-widget');
-                    const card = standalone
-                        ? this.#adapter.annotateWidget(element)
-                        : this.#adapter.annotate(element);
+                    if (!standalone && !this.#nativeCards)
+                        continue;
+                    (standalone ? this.#widgets : this.#nodes).present(element, themed);
                     if (!standalone)
                         for (const widget of element.querySelectorAll('.sugarcubes-native-widget'))
                             this.#dirty.add(widget);
-                    this.#labels.reconcile(element, card.labelElements);
-                    if (!standalone)
-                        this.#titlebars.reconcile(element, card.header, card.collapsed, card.canCollapse);
-                    this.#toggleRows.reconcile(element);
-                    this.#booleanSegments.reconcile(element);
-                    this.#advanced.reconcile(card);
-                    this.#numeric.reconcile(element, card.numericFields);
-                    this.#seeds.reconcile(element, card.seedFields);
                     if (!standalone)
                         this.#graphGeometry.request(element);
                 }
-                else {
+                else if (themed) {
                     if (!element.hasAttribute('data-sc-style-surface'))
                         element.setAttribute('data-sc-style-surface', '');
                     this.#surfaces.add(element);
                 }
             }
             this.#dirty.clear();
-            this.#adapter.endBatch();
+            this.#nodes.endBatch();
+            this.#widgets.endBatch();
             this.#presence?.discardPending();
         }
         catch (error) {

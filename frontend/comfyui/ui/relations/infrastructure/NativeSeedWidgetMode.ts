@@ -29,10 +29,10 @@ export class NativeSeedWidgetMode {
   }
 
   /** Track host-originated mode writes before their synchronous parent refresh can render. */
-  prepare(widget: UnknownRecord, seed: NativeSeedControl, fluent: boolean): number {
+  prepare(widget: UnknownRecord, seed: NativeSeedControl, managed: boolean): number {
     const expected = seed.readMode();
     if (this.#mode === null) this.#mode = expected;
-    if (!fluent && this.#mode !== expected) {
+    if (!managed && this.#mode !== expected) {
       this.#mode = expected;
       this.#revision++;
     }

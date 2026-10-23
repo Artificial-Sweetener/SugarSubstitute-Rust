@@ -15,10 +15,10 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Share native card layout and control presentation across supported design systems. */
 import { nativeInteractionCss } from './NativeInteractionStyles.js';
-import { CONTROL_HEIGHT, SPINNER_WIDTH } from './ControlGeometry.js';
+import { CONTROL_HEIGHT } from './ControlGeometry.js';
 import { nativeNumericCss } from './NativeNumericStyles.js';
-import { nativeSeedCss } from './NativeSeedStyles.js';
 import { scrollbarCss } from './ScrollbarStyles.js';
+import { nativeFieldLayoutCss } from './NativeFieldLayoutStyles.js';
 /** Share host geometry and native value presentation independently of the selected design system. */
 export function nativeAppearanceCss(palette, dark) {
     return `
@@ -157,25 +157,7 @@ export function nativeAppearanceCss(palette, dark) {
       min-width:0; width:100%; height:auto; min-height:33px;
       grid-column:2;
     }
-    .sugarcubes-cube-face__node-card [data-sc-style-layout] {
-      display:flex; flex-direction:row; align-items:center; justify-content:space-between; gap:6px;
-    }
-    .sugarcubes-cube-face__node-card [data-sc-style-layout] > :first-child { min-width:0; flex:1; }
-    .sugarcubes-cube-face__node-card [data-sc-style-layout]:not([data-sc-choice-inline] *) > :last-child { min-width:0; flex:0 1 156px; max-width:65%; }
-    .sugarcubes-cube-face__node-card [data-sc-style-row][data-sc-style-widget^="WidgetInputNumber"] [data-sc-style-layout] > :last-child {
-      flex-basis:${SPINNER_WIDTH};
-    }
-    .sugarcubes-cube-face__node-card [data-sc-style-row][data-sc-style-widget="WidgetToggleSwitch"] [data-sc-style-layout] > :last-child {
-      flex:0 0 auto;
-    }
-    .sugarcubes-cube-face__node-card [data-sc-style-row] [data-sc-style-layout]:not([data-sc-choice-inline] *) > :last-child:has(.sc-model-mount) {
-      flex-basis:360px; max-width:min(65%,360px);
-    }
-    .sugarcubes-cube-face__node-card [data-sc-style-row][data-sc-style-widget^="WidgetInputNumber"] [data-sc-style-layout] > :last-child > :first-child > :first-child {
-      height:${CONTROL_HEIGHT}; border:var(--sc-field-border-width) solid var(--sc-control-stroke);
-      border-bottom-color:var(--sc-control-bottom-stroke); border-radius:var(--sc-field-radius);
-      background:var(--sc-control-fill);
-    }
+    ${nativeFieldLayoutCss('.sugarcubes-cube-face__node-card')}
     html [data-sc-style-combo-frame] {
       box-sizing:border-box; height:${CONTROL_HEIGHT}; min-height:${CONTROL_HEIGHT};
       border:var(--sc-field-border-width) solid var(--sc-control-stroke); border-bottom-color:var(--sc-control-bottom-stroke);
@@ -237,6 +219,5 @@ export function nativeAppearanceCss(palette, dark) {
       border-radius:4px; outline:none; z-index:1;
     }
     ${nativeNumericCss()}
-    ${nativeSeedCss()}
   `;
 }

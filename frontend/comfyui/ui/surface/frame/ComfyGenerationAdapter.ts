@@ -126,7 +126,7 @@ export class ComfyGenerationAdapter {
     const observer = new HostSurfaceObserver(this.document.body, '.actionbar-container', changed, {
       content: true,
       attributes: ['disabled'],
-      exclude: '.sc-substitute-frame',
+      exclude: '.sc-substitute-frame,.sc-generation-strip,.sc-plugin-toolbar-start',
     });
     const settings = this.#settings();
     const subscribe = settings?.$subscribe;

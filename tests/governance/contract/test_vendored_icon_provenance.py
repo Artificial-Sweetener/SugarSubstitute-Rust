@@ -27,12 +27,13 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_substitute_frame_artwork_has_pinned_licensed_deployment_bytes() -> None:
-    """Verify every original orb and action glyph rather than accepting unrecorded replacements."""
+    """Verify every frame icon against pinned, licensed upstream and deployment bytes."""
     manifest = tomllib.loads((ROOT / "third_party/manifest.toml").read_text("utf-8"))
     expected = {
         "SugarSubstitute frame presentation": "GPL-3.0-or-later",
         "Substitute panel-control Fluent artwork": "MIT",
         "QFluent override pin artwork": "GPL-3.0-or-later",
+        "QFluent application settings artwork": "GPL-3.0-or-later",
         "QFluent generation play artwork": "GPL-3.0-or-later",
         "QFluent generation queue artwork": "GPL-3.0-or-later",
         "Substitute generation segment artwork": "MIT",

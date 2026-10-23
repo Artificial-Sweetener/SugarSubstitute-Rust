@@ -17,7 +17,7 @@
 import { createButton } from '../appearance/ControlFactory.js';
 import { WorkflowTabsView } from './WorkflowTabsView.js';
 import { AppOrbView } from './AppOrbView.js';
-import { WorkflowTabStripLayout } from './WorkflowTabStripLayout.js';
+import { WorkflowTabStripLayout, FRAME_TAB_START } from './WorkflowTabStripLayout.js';
 import { ContextMenu } from '../../menus/ContextMenu.js';
 import { applyOwnedTheme } from '../appearance/ThemeService.js';
 import { createCubeAddIconElement } from '../CubeAddIcon.js';
@@ -37,6 +37,8 @@ export class SubstituteFrameView {
     #addGlyph;
     #stopStack;
     #progress;
+    #cluster;
+    #plugin = false;
     #presented = [];
     #dark = null;
     #initialized = false;
@@ -100,6 +102,7 @@ export class SubstituteFrameView {
         viewport.append(this.#tabs.element);
         this.#stripLayout = new WorkflowTabStripLayout(document, this.element, viewport, this.#tabs.element, { overflow, previous, next }, (width) => this.#tabs.resize(width), () => this.#overflowMenu.close(), () => this.#tabs.refreshScrollLayout());
         const cluster = document.createElement('div');
+        this.#cluster = cluster;
         cluster.className = 'sc-orb-actions';
         this.#stackButton = this.#button('Cube stack', '', () => {
             if (actions.stack.available)
@@ -141,6 +144,22 @@ export class SubstituteFrameView {
     /** Refresh generation feedback independently of tab layout and focus. */
     updateProgress(snapshot) {
         this.#progress.update(snapshot);
+    }
+    /** Expose the application menu for reversible placement in the Plugin Mode toolbar. */
+    get applicationMenu() {
+        return this.#orb.element;
+    }
+    /** Keep the application menu while hiding auxiliary orb actions in Plugin Mode. */
+    setPluginMode(enabled) {
+        if (this.#plugin === enabled)
+            return;
+        this.#plugin = enabled;
+        this.#menu.close();
+        this.#cluster.hidden = enabled;
+        this.element.toggleAttribute('data-plugin-mode', enabled);
+        this.#orb.setPluginMode(enabled);
+        this.#tabs.setOrbVisible(!enabled);
+        this.#stripLayout.setLeadingInset(enabled ? 0 : FRAME_TAB_START);
     }
     /** Retain tab identities through workflow and activity updates. */
     update(tabs, unread) {

@@ -206,7 +206,8 @@ export class NativeRelationWidgetRenderer {
                     ? this.document.activeElement
                     : null;
                 const key = seed
-                    ? seedMode.prepare(widget, seed, appearance !== undefined && appearance.appearance.style !== 'comfy')
+                    ? seedMode.prepare(widget, seed, root.querySelector('[data-sc-seed-split]') !== null ||
+                        (appearance !== undefined && appearance.appearance.style !== 'comfy'))
                     : null;
                 const vnode = runtime.h(runtime.components.get(component), {
                     ...(key === null ? {} : { key }),

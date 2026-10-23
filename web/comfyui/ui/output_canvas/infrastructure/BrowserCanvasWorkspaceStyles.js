@@ -25,6 +25,7 @@ export function ensureBrowserCanvasWorkspaceStyles(document) {
     .sc-output-canvas-toggle { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;
       width:32px; height:32px; padding:0; border:0; border-radius:6px; cursor:pointer;
       color:var(--fg-color,#ddd); background:var(--secondary-background,var(--comfy-menu-bg,#202020)); }
+    .sc-output-canvas-toggle[hidden] { display:none !important; }
     .sc-output-canvas-toggle:hover { background:var(--secondary-background-hover,#404040); }
     .sc-output-canvas-toggle:focus-visible { outline:2px solid var(--ring,currentColor); outline-offset:2px; }
     .sc-output-canvas-toggle:disabled { opacity:.5; cursor:default; }

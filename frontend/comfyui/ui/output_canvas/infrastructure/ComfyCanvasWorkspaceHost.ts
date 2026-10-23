@@ -23,6 +23,7 @@ import type { CanvasFrameClock } from '../application/CanvasCameraTransition.js'
 import { BrowserCanvasWorkspace } from './BrowserCanvasWorkspace.js';
 import type { ComfyCanvasPreferences } from './ComfyCanvasPreferences.js';
 import type { WorkflowViewSource } from '../../workflow/domain/WorkflowView.js';
+import { readPluginMode, subscribePluginMode } from '../../core/PluginMode.js';
 
 /** Retain content identity through temporary host suspension while retiring replaced native surfaces. */
 export class ComfyCanvasWorkspaceHost {
@@ -71,6 +72,7 @@ export class ComfyCanvasWorkspaceHost {
     const mode = createComfyAppModeSource(this.app);
     this.#appMode = mode.active;
     this.#stops.push(
+      subscribePluginMode(this.document, () => this.#refreshPreferences()),
       mode.subscribe((active) => {
         this.#appMode = active;
         this.#workspace?.suspend(this.#suspension());
@@ -136,7 +138,7 @@ export class ComfyCanvasWorkspaceHost {
 
   /** Animate one accepted local action through the authoritative workflow preference owner. */
   #visibility(visible: boolean): void {
-    if (this.#disposed) return;
+    if (this.#disposed || readPluginMode(this.document)) return;
     this.#userVisibilityChange = true;
     try {
       this.presentation.change({ canvas: visible });
@@ -149,7 +151,10 @@ export class ComfyCanvasWorkspaceHost {
 
   /** Combine global sizing with the workflow's authoritative visibility choice. */
   #preferences() {
-    return { ...this.preferences.snapshot, visible: this.presentation.snapshot.canvas };
+    return {
+      ...this.preferences.snapshot,
+      visible: !readPluginMode(this.document) && this.presentation.snapshot.canvas,
+    };
   }
 
   /** Hide replacement pixels without collapsing allocation; app mode relinquishes the whole frame. */

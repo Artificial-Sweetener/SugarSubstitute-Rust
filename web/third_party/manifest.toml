@@ -1161,3 +1161,17 @@ source_path = "crates/op-ui/assets/fonts/SourceSans3-Semibold.ttf"
 vendored_file = "frontend/static/fonts/SourceSans3-Semibold.ttf"
 runtime_file = "web/fonts/SourceSans3-Semibold.ttf"
 sha256 = "a3f4f8dcf343a8f24dc61951de93f3ba1558b15cd250ba24af8a40e957081b7d"
+
+[[component]]
+name = "QFluent application settings artwork"
+license = "GPL-3.0-or-later"
+license_file = "third_party/licenses/qfluentwidgets.LICENSE.txt"
+source = "https://github.com/zhiyiYo/PyQt-Fluent-Widgets"
+revision = "d90c008c534b2b0079ce7981d19b2bc957b354a5"
+modifications = "None; original settings SVG copied verbatim and tinted through a CSS mask."
+
+[[component.asset]]
+source_path = "qfluentwidgets/_rc/images/icons/Setting_white.svg"
+vendored_file = "frontend/static/orb/settings.svg"
+runtime_file = "web/orb/settings.svg"
+sha256 = "4ad9a555033cd921356ca768f02dbf4fdd971903656d406f80c5c904945cad85"

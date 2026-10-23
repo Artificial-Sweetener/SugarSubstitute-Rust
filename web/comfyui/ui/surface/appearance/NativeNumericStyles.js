@@ -19,7 +19,7 @@ import { CONTROL_HEIGHT, SPINNER_WIDTH } from './ControlGeometry.js';
 export function nativeNumericCss() {
     return `
     [data-sc-number-spinner] {
-      position:relative; display:flex; box-sizing:border-box; padding-right:20px;
+      position:relative; display:flex; box-sizing:border-box; padding-right:var(--sc-spinner-stepper-width,20px);
       height:${CONTROL_HEIGHT}; border:var(--sc-field-border-width) solid var(--sc-control-stroke); border-bottom-color:var(--sc-control-bottom-stroke);
       border-radius:var(--sc-field-radius); background:var(--sc-control-fill); overflow:hidden;
     }

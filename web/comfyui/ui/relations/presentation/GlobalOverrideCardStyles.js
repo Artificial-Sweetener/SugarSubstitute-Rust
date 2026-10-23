@@ -13,14 +13,17 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Lay out the existing override controls as a fixed, stacked node card. */
+/** Fill the available card area with responsive rows of existing override controls. */
 export const globalOverrideCardCss = `
-  [data-sc-plugin-overrides-dock] { height:auto !important; align-items:flex-start; }
-  [data-sc-substitute-toolbar-line]:has([data-sc-plugin-overrides-dock]) { height:auto !important; }
   .sc-overrides-card-title { display:none; }
+  .sc-overrides-graph-content { position:relative; width:100%; height:100%; }
+  html .sc-overrides-toolbar[data-sc-overrides-graph] { width:100%; border:0; border-radius:0; }
+  .sc-overrides-toolbar[data-sc-overrides-graph] > .sc-overrides-card-title { display:none !important; }
+  .sc-overrides-toolbar[data-sc-overrides-graph] > .sc-overrides-menu { position:absolute; top:0; right:0; z-index:1; }
+
   html .sc-overrides-toolbar[data-presentation="plugin"] {
     position:relative; display:grid; grid-template-columns:minmax(0,1fr) auto;
-    align-self:stretch; align-items:center; width:min(100%,calc(var(--sugarcubes-masonry-column-width,400) * 1px));
+    align-self:stretch; align-items:center; width:100%;
     max-width:100%; min-height:0; padding:0; margin:0; z-index:auto; transition:none;
     border:1px solid var(--sc-card-stroke,var(--interface-stroke,#454545));
     border-radius:var(--sc-node-card-radius,12px); background:var(--sc-card-fill,var(--comfy-input-bg,#222));
@@ -34,13 +37,17 @@ export const globalOverrideCardCss = `
   .sc-overrides-toolbar[data-presentation="plugin"] > .sc-overrides-menu { grid-column:2; grid-row:1; margin:0 6px 0 0; }
   .sc-overrides-toolbar[data-presentation="plugin"] > :is(.sc-overrides-grip,.sc-overrides-disclosure) { display:none; }
   .sc-overrides-toolbar[data-presentation="plugin"] > .sc-overrides-fields {
-    display:flex; grid-column:1 / -1; flex-direction:column; align-items:stretch;
+    display:flex; grid-column:1 / -1; flex-flow:row wrap; align-items:stretch;
     width:100%; gap:0; margin:0; overflow:visible;
   }
-  .sc-overrides-toolbar[data-presentation="plugin"] .sc-override-control { width:100%; min-width:0; box-sizing:border-box; padding:8px 10px; }
+  .sc-overrides-toolbar[data-presentation="plugin"] .sc-override-control {
+    flex:1 0 calc(var(--sc-override-label-width,0px) + var(--sc-override-width) + 24px);
+    width:auto; max-width:100%; min-width:min(100%,calc(var(--sc-override-label-width,0px) + 88px));
+    box-sizing:border-box; padding:8px 10px;
+  }
   html[data-sc-compact-masonry] .sc-overrides-toolbar[data-presentation="plugin"] { border-radius:0; border-width:0 1px 1px 0; }
   html[data-sc-compact-masonry] .sc-overrides-toolbar[data-presentation="plugin"] .sc-override-control { padding-top:4px; padding-bottom:4px; }
   .sc-overrides-toolbar[data-presentation="plugin"] .sc-override-control :has(> [data-testid="widget-layout-field-label"]) { width:100%; }
-  .sc-overrides-toolbar[data-presentation="plugin"] [data-testid="widget-layout-field-label"] { flex:1; padding:0; }
-  .sc-overrides-toolbar[data-presentation="plugin"] .sc-override-control :has(> [data-testid="widget-layout-field-label"]) > :last-child { max-width:65%; }
+  .sc-overrides-toolbar[data-presentation="plugin"] .sc-override-control [data-testid="widget-layout-field-label"] { flex:none; padding:0; }
+  .sc-overrides-toolbar[data-presentation="plugin"] .sc-override-control :has(> [data-testid="widget-layout-field-label"]) > :last-child { margin-left:auto; max-width:65%; }
 `;

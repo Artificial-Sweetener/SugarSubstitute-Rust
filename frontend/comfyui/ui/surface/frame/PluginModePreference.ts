@@ -16,6 +16,7 @@
 /** Own the opt-in Plugin Mode setting independently of workflow data and visual style. */
 import { sugarCubesSettingsSection } from '../../settings/SugarCubesSettingsSections.js';
 import { isRecord } from '../../types/common.js';
+import { publishPluginMode } from '../../core/PluginMode.js';
 
 /** Persist the opt-in mode with Comfy's appearance preferences. */
 export const PLUGIN_MODE_SETTING = 'SugarCubes.Appearance.PluginMode';
@@ -34,7 +35,7 @@ export function registerPluginModePreference(
       report(new TypeError('Plugin Mode must be enabled or disabled.'));
       return;
     }
-    document.documentElement.toggleAttribute('data-sc-plugin-mode', value);
+    publishPluginMode(document, value);
     changed(value);
   };
   if (typeof settings.addSetting === 'function') {
@@ -52,5 +53,5 @@ export function registerPluginModePreference(
     typeof settings.getSettingValue === 'function' &&
       settings.getSettingValue.call(settings, PLUGIN_MODE_SETTING) === true,
   );
-  return () => document.documentElement.removeAttribute('data-sc-plugin-mode');
+  return () => publishPluginMode(document, false);
 }
