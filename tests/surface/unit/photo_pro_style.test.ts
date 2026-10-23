@@ -182,7 +182,7 @@ test('places neutral activation beside the title and presents advanced settings 
   const css = nativeVisualStyleCss('photopro', false);
   expect(css).toContain('--color-bypass:var(--sc-text-secondary)');
   expect(css).toContain(
-    ':is([data-sc-titlebar-controls] [data-cube-card-activation], .sc-overrides-toolbar[data-presentation="plugin"] > .sc-overrides-menu) { margin:0 0 0 8px; padding:0; }',
+    '[data-sc-titlebar-controls] [data-cube-card-activation] { margin:0 0 0 8px; padding:0; }',
   );
   expect(css).toContain('width:28px; min-width:28px; height:20px; min-height:20px');
   expect(css).toContain(

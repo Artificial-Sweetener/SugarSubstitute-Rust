@@ -19,6 +19,7 @@ import { identifyMasonrySupplement, releaseMasonrySupplement, } from '../../surf
 import { relocateControl } from '../../core/ControlPlacement.js';
 import { createNativeOverrideGraphNode, isNativeOverrideGraphNode, } from './NativeOverrideGraphNode.js';
 import { captureOverrideGraphLayout, readOverrideGraphLayout, writeOverrideGraphLayout, } from './OverrideGraphLayout.js';
+import { placeNativeOverridePin } from './NativeOverridePinPlacement.js';
 /** Delegate pan, zoom, movement and DOM-widget lifetime to Comfy's graph renderer. */
 export class NativeOverrideGraphSurface {
     document;
@@ -156,6 +157,7 @@ export class NativeOverrideGraphSurface {
         const root = this.#root, node = this.#node;
         if (!root || !node || root.closest('[data-sc-geometry-moving]'))
             return;
+        placeNativeOverridePin(root, node, this.application(), this.runtime());
         const content = this.#borrowed ? root.querySelector('.sc-overrides-fields') : root;
         const height = Math.max(40, content?.scrollHeight ?? 0);
         if (height === this.#height)
