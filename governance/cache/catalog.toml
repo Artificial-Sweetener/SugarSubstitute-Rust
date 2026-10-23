@@ -56,7 +56,7 @@ recovery = "Reject changed ownership and links; preserve unknown files."
 id = "setup-packed-payloads"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/setup_storage/bundle.rs", "crates/sugarsubstitute-supervision/src/setup_storage/bundle/payload.rs", "crates/sugarsubstitute-supervision/src/setup_storage/updater_package.rs", "crates/sugarsubstitute-supervision/src/setup_storage/inventory.rs", "crates/sugarsubstitute-supervision/src/setup_storage/packed.rs", "crates/sugarsubstitute-supervision/src/setup_storage/packed/footer.rs", "crates/sugarsubstitute-supervision/src/setup_storage/staging.rs", "crates/sugarsubstitute-supervision/src/setup_storage/packed/extract.rs", "crates/sugarsubstitute-supervision/src/setup_storage/files.rs", "crates/sugarsubstitute-supervision/src/setup_storage/files/identity.rs"]
-source_sha256 = "sha256:99c5d31a620b8adffae6edf9da1b8c7e01640a7e287b48133b797ce39443a071"
+source_sha256 = "sha256:627bf1d6174e3fc3143b57bf99a9cd92cfc04be2c52d46fbbbc1e808bc45c5fb"
 namespace = "payloads-v1"
 storage_schema = 1
 compatibility_epoch = 1
@@ -77,3 +77,16 @@ compatibility_inputs = ["pinned_upstream_revision", "upstream_metadata_schema"]
 freshness = "Pinned upstream readers own ETag and catalogue freshness."
 retention = "Retain isolated upstream data and configuration in the setup workspace."
 recovery = "Upstream readers reject or refresh incompatible metadata; these paths never contain environments or user documents."
+
+[[caches]]
+id = "runtime-cache-storage"
+owner = "sugarsubstitute-supervision"
+sources = ["crates/sugarsubstitute-supervision/src/setup_storage/cache.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/admission.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/deletion.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/entry.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/lookup.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/maintenance.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/native_output.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/maintenance/retirement.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/policy.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/reader.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/record.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/root.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/tests.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/tests/generations.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/tests/ownership.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/tests/recovery.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/tree.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/tree/usage.rs", "crates/sugarsubstitute-supervision/src/setup_storage/files.rs", "crates/sugarsubstitute-supervision/src/setup_storage/files/child.rs", "crates/sugarsubstitute-supervision/src/setup_storage/files/identity.rs", "crates/sugarsubstitute-supervision/src/setup_storage/protection.rs", "crates/sugarsubstitute-supervision/src/setup_storage/staging.rs"]
+source_sha256 = "sha256:8ff08834b4dc10c8a65179ecffbc57e972fa2084c17cc06680a37a1c2998ccc7"
+namespace = "runtime-cache-v1"
+storage_schema = 1
+compatibility_epoch = 1
+compatibility_inputs = ["cache_scope_owner_marker", "entry_record_schema", "feature_namespace_epoch", "feature_semantic_key", "native_generation_identity", "feature_owned_native_recovery_descriptor"]
+freshness = "Feature owners authenticate cache content. Shared storage tracks UTC last use and independent replacement generations; native read pins exclude mutation and cleanup."
+retention = "Each explicit cache scope admits at most 64 GiB of payload ceilings and enforces namespace limits of 64 MiB for offers, 24 GiB for each download namespace, 32 GiB for extracted payloads, 1 GiB for setup browser data and 256 MiB for upstream metadata. Idle retention is seven days for offers, payloads and metadata, thirty days for downloads and one day for setup browser data. Active native leases and durable unfinished producer grants win over pressure. Bounded control metadata remains separate from payload accounting."
+recovery = "Damaged entry records are observable misses. New independent generations preserve their bytes. Feature owners recover unfinished native producers before finalizing their inventories. Cleanup validates exact inventories, journals intent, compares native identities and resumes after interruption; unknown files and authoritative siblings remain intact. Admission conservatively accounts for preserved content."

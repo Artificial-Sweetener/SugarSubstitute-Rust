@@ -3,6 +3,7 @@
 //! Authenticate packaged setup inputs and retain filesystem custody during installation.
 mod application;
 mod bundle;
+pub mod cache;
 mod compatibility;
 pub use application::LAUNCH_RESERVATION_BYTES;
 #[allow(unsafe_code)]
