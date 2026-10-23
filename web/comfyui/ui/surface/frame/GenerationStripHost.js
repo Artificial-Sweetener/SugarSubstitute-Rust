@@ -18,6 +18,7 @@ import { ComfyGenerationAdapter } from './ComfyGenerationAdapter.js';
 import { GenerationStripView } from './GenerationStripView.js';
 import { generationStripCss } from './GenerationStripStyles.js';
 import { ComfyGenerationQueueSurface } from './ComfyGenerationQueueSurface.js';
+import { applyOwnedTheme } from '../appearance/ThemeService.js';
 /** Coordinate stable strip presentation without absorbing host execution or styling policy. */
 export class GenerationStripHost {
     frame;
@@ -43,6 +44,7 @@ export class GenerationStripHost {
             skip: () => this.#adapter.skip(),
             report,
         });
+        this.#view.element.setAttribute('data-sc-style-theme-root', '');
         frame.setAttribute('data-generation-strip', '');
         frame.append(this.#view.element);
         this.#queue = new ComfyGenerationQueueSurface(document, frame, this.#view.queueSlot);
@@ -58,8 +60,17 @@ export class GenerationStripHost {
         this.#style.remove();
         this.frame.removeAttribute('data-generation-strip');
     }
+    /** Expose the retained generation surface to the frame's placement owner. */
+    get element() {
+        return this.#view.element;
+    }
+    /** Retain the queue's native ownership while its visual slot moves between frame and toolbar. */
+    refreshPlacement() {
+        this.#queue.refreshPosition();
+    }
     /** Project the frame's accepted theme onto its retained native queue surface. */
     setPalette(dark) {
+        applyOwnedTheme(this.#view.element, dark);
         this.#queue.setPalette(dark);
     }
     /** Project validated host state onto the existing presentation controls. */

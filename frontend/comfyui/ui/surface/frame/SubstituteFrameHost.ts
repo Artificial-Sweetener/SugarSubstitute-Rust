@@ -29,6 +29,9 @@ import { GenerationStripHost } from './GenerationStripHost.js';
 import { SubstituteToolbarLayout } from './SubstituteToolbarLayout.js';
 import { DesktopFramePresentation, type DesktopFrameReceipt } from './DesktopFramePresentation.js';
 import { desktopFrameCss } from './DesktopFrameStyles.js';
+import { readPluginMode, subscribePluginMode } from '../../core/PluginMode.js';
+import { PluginToolbarPlacement } from './PluginToolbarPlacement.js';
+import { pluginFrameCss } from './PluginFrameStyles.js';
 
 export interface SubstituteFrameHostOptions {
   readonly document: Document;
@@ -55,6 +58,7 @@ export class SubstituteFrameHost {
   #view: SubstituteFrameView | null = null;
   #generation: GenerationStripHost | null = null;
   #toolbarLayout: SubstituteToolbarLayout | null = null;
+  #pluginToolbar: PluginToolbarPlacement | null = null;
   #adapter: ComfyFrameWorkflowAdapter | null = null;
   #stopWorkflow: (() => void) | null = null;
   #queued = false;
@@ -64,7 +68,7 @@ export class SubstituteFrameHost {
   constructor(private readonly options: SubstituteFrameHostOptions) {
     this.#style = options.document.createElement('style');
     this.#style.id = 'sugarcubes-substitute-frame';
-    this.#style.textContent = substituteFrameCss + desktopFrameCss;
+    this.#style.textContent = substituteFrameCss + desktopFrameCss + pluginFrameCss;
   }
 
   /** Configure one desktop document through the presentation protocol without persisting preferences. */
@@ -92,6 +96,7 @@ export class SubstituteFrameHost {
   /** Subscribe to named host mounts and existing workflow and appearance owners only. */
   setup(): void {
     this.#stops.push(
+      subscribePluginMode(this.options.document, () => this.#reconcile()),
       this.mode.subscribe(() => this.#reconcile()),
       this.options.palette.subscribe(() => this.#palette()),
       this.options.sessions.subscribe(() => this.#queue()),
@@ -141,7 +146,8 @@ export class SubstituteFrameHost {
   #reconcile(): void {
     if (this.#disposed) return;
     const { document } = this.options;
-    if (!this.mode.enabled) {
+    const plugin = readPluginMode(document);
+    if (!this.mode.enabled && !plugin) {
       this.#unmount();
       this.#style.remove();
       document.documentElement.removeAttribute('data-sc-substitute-frame');
@@ -158,6 +164,19 @@ export class SubstituteFrameHost {
         this.#attach(mount, native);
       }
       if (!this.#style.isConnected) document.head.append(this.#style);
+      this.#view?.setPluginMode(plugin);
+      if (plugin && !this.#pluginToolbar && this.#view && this.#generation)
+        this.#pluginToolbar = new PluginToolbarPlacement(
+          document,
+          this.#view.element,
+          this.#view.applicationMenu,
+          this.#generation.element,
+          () => this.#generation?.refreshPlacement(),
+        );
+      else if (!plugin && this.#pluginToolbar) {
+        this.#pluginToolbar.dispose();
+        this.#pluginToolbar = null;
+      }
       if (!document.documentElement.hasAttribute('data-sc-substitute-frame'))
         document.documentElement.setAttribute('data-sc-substitute-frame', '');
       this.options.setOverridesInline(true);
@@ -220,11 +239,14 @@ export class SubstituteFrameHost {
     const { color, dark } = this.options.palette.theme;
     this.#view?.setPalette(color, dark);
     this.#generation?.setPalette(dark);
+    this.#pluginToolbar?.setPalette(dark);
   }
 
   /** Retire the view while preserving host controls, workflow state and saved preferences. */
   #unmount(): void {
     this.#desktop.detach();
+    this.#pluginToolbar?.dispose();
+    this.#pluginToolbar = null;
     this.options.setOverridesInline(false);
     this.#toolbarLayout?.dispose();
     this.#toolbarLayout = null;

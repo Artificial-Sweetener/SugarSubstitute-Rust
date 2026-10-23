@@ -250,6 +250,14 @@ sources = [
 ]
 proofs = ["integration", "unit"]
 
+[[boundary]]
+name = "plugin_mode"
+area = "frontend_core"
+
+[[subscription]]
+boundary = "plugin_mode"
+groups = ["surface/integration", "relations/unit", "output_canvas/integration"]
+
 [[area]]
 name = "graph"
 sources = [

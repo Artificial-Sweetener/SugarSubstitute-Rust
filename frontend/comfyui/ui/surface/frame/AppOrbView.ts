@@ -23,6 +23,8 @@ export class AppOrbView {
   readonly element: HTMLElement;
   readonly #renderer: AppOrbRenderer;
   readonly #menu: ContextMenu;
+  readonly #gear: HTMLElement;
+  #plugin = false;
 
   /** Reuse existing application commands; artwork remains separate from menu policy. */
   constructor(
@@ -36,8 +38,16 @@ export class AppOrbView {
     this.element.setAttribute('aria-label', 'Application menu');
     this.element.setAttribute('aria-haspopup', 'menu');
     this.#renderer = new AppOrbRenderer(document, report);
+    this.#gear = document.createElement('span');
+    this.#gear.className = 'sc-application-gear';
+    this.#gear.style.setProperty(
+      '--sc-application-glyph',
+      `url("${new URL('../../../../orb/settings.svg', import.meta.url).href}")`,
+    );
+    this.#gear.setAttribute('aria-hidden', 'true');
+    this.#gear.hidden = true;
     this.#menu = new ContextMenu(document);
-    this.element.append(this.#renderer.canvas);
+    this.element.append(this.#renderer.canvas, this.#gear);
     this.element.addEventListener('pointerenter', () => this.#renderer.setState('hover'));
     this.element.addEventListener('pointerleave', () => this.#renderer.setState('idle'));
     this.element.addEventListener('pointerdown', () => this.#renderer.setState('pressed'));
@@ -60,7 +70,16 @@ export class AppOrbView {
 
   /** Prepare a palette change without subscribing to a second accent or theme owner. */
   update(color: string, dark: boolean): Promise<void> {
-    return this.#renderer.update(color, dark);
+    return this.#plugin ? Promise.resolve() : this.#renderer.update(color, dark);
+  }
+
+  /** Present the same application menu as a gear without retaining the orb's interaction shape. */
+  setPluginMode(enabled: boolean): void {
+    this.#plugin = enabled;
+    this.element.classList.toggle('sc-app-orb', !enabled);
+    this.element.classList.toggle('sc-plugin-settings', enabled);
+    this.#renderer.canvas.hidden = enabled;
+    this.#gear.hidden = !enabled;
   }
 
   /** Release decoded artwork and transient menu surfaces on mode exit. */

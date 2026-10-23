@@ -255,7 +255,8 @@ export class NativeRelationWidgetRenderer implements RelationWidgetRenderer {
             ? seedMode.prepare(
                 widget,
                 seed,
-                appearance !== undefined && appearance.appearance.style !== 'comfy',
+                root.querySelector('[data-sc-seed-split]') !== null ||
+                  (appearance !== undefined && appearance.appearance.style !== 'comfy'),
               )
             : null;
           const vnode = runtime.h(runtime.components.get(component), {

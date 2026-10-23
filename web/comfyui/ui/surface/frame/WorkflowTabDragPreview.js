@@ -29,11 +29,12 @@ export class WorkflowTabDragPreview {
         this.#active = true;
         this.viewport.setAttribute('data-sc-tab-dragging', '');
         const first = Math.floor(this.viewport.scrollLeft / this.tabWidth());
-        const overflowing = this.viewport.hasAttribute('data-sc-overflow');
-        const progress = overflowing
+        const cutoutDisabled = this.viewport.hasAttribute('data-sc-overflow') ||
+            this.viewport.hasAttribute('data-sc-orb-hidden');
+        const progress = cutoutDisabled
             ? 0
             : Math.max(0, Math.min(1, 1 - (placement.draggedLeft / this.tabWidth() - first)));
-        const successor = overflowing ? -1 : origin === first ? first + 1 : first;
+        const successor = cutoutDisabled ? -1 : origin === first ? first + 1 : first;
         for (const [index, tab] of tabs.entries()) {
             const offset = placement.offsets[index] ?? 0;
             const destination = `translateX(${String(offset)}px)`;

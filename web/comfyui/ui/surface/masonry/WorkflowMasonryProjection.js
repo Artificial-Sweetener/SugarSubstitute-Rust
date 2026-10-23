@@ -10,6 +10,8 @@ export function projectWorkflowMasonry(graph, cubes, connections = [], analysis 
     const looseMembers = new Map();
     let loose = null;
     for (const node of orderWorkflowNodes(graph, connections)) {
+        if (node.sugarcubesPresentationOnly === true)
+            continue;
         const id = String(node.id);
         const cube = cubeSet.has(node) ? cubes.find((candidate) => candidate === node) : undefined;
         if (cube) {

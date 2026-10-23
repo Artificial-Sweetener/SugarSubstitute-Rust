@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Measure identified graph cards without discovering nodes or changing canonical geometry. */
+import { masonrySupplementSources } from './MasonrySupplementBoundary.js';
 import type { WorkflowMasonrySection } from './WorkflowMasonryProjection.js';
 
 export interface WorkflowMasonryGraphCard {
@@ -89,6 +90,7 @@ export function workflowMasonryGraphCards(
       cards.set(card.id, element);
     }
   }
+  for (const [id, source] of masonrySupplementSources(root)) cards.set(id, source);
   return cards;
 }
 

@@ -217,10 +217,11 @@ test('reserves workflow space below Run and creates every field through the widg
     const label = document.createElement('span');
     label.dataset.testid = 'widget-layout-field-label';
     label.textContent = '<b>Seed</b>';
+    Object.defineProperty(label, 'offsetWidth', { value: 38 });
     label.getBoundingClientRect = () => ({
       x: 0,
       y: 0,
-      width: 38,
+      width: 19,
       height: 33,
       top: 0,
       bottom: 33,
@@ -231,12 +232,25 @@ test('reserves workflow space below Run and creates every field through the widg
     root.append(label);
     return { update: jest.fn(), dispose: jest.fn() };
   });
+  const graphCard = document.createElement('div');
+  document.body.append(graphCard);
+  const graphSurface = {
+    showInMasonry: (element: HTMLElement, slot: HTMLElement) => {
+      slot.append(element);
+      return true;
+    },
+    attach: jest.fn((element: HTMLElement) => {
+      graphCard.append(element);
+      return true;
+    }),
+    detach: jest.fn(),
+  };
   const toolbar = new GlobalOverrideToolbar(
     document,
     relations,
     jest.fn(),
     { mount, mountChoice: mount },
-    new NativeOverrideToolbarHost(document),
+    new NativeOverrideToolbarHost(document, graphSurface),
     {
       read: () => ({ docked: false, floating: null, anchor: null }),
       write: jest.fn(),
@@ -303,9 +317,9 @@ test('reserves workflow space below Run and creates every field through the widg
   expect(toolbar.element.querySelector('h3')?.textContent).toBe('Global Overrides');
   expect(toolbar.element.querySelector('.sc-override-control')).toBe(nativeControl);
   expect(toolbar.element.dataset.collapsed).toBe('false');
-  expect(
-    getComputedStyle(toolbar.element.querySelector('.sc-overrides-fields')!).flexDirection,
-  ).toBe('column');
+  expect(getComputedStyle(toolbar.element.querySelector('.sc-overrides-fields')!).flexFlow).toBe(
+    'row wrap',
+  );
   expect(getComputedStyle(toolbar.element.querySelector('.sc-overrides-disclosure')!).display).toBe(
     'none',
   );
@@ -314,8 +328,9 @@ test('reserves workflow space below Run and creates every field through the widg
   expect(mount).toHaveBeenCalledTimes(1);
   pluginSlot.remove();
   toolbar.reconcile();
-  expect(actionbar.contains(toolbar.element)).toBe(true);
-  expect(actionbar.hasAttribute('data-sc-plugin-overrides-dock')).toBe(true);
+  expect(graphCard.contains(toolbar.element)).toBe(true);
+  expect(actionbar.contains(toolbar.element)).toBe(false);
+  expect(graphSurface.attach).toHaveBeenCalledWith(toolbar.element);
   expect(toolbar.element.querySelector('.sc-override-control')).toBe(nativeControl);
   toolbar.setPresentation('comfy');
   toolbar.reconcile();

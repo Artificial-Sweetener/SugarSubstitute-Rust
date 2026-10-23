@@ -39,6 +39,7 @@ export class WorkflowTabStripLayout {
   #available = 0;
   #animationFrame: number | null = null;
   #disposed = false;
+  #leadingInset = FRAME_TAB_START;
 
   /** Observe the enclosing frame so container resizing and tab-count changes share one policy. */
   constructor(
@@ -71,6 +72,13 @@ export class WorkflowTabStripLayout {
     this.#refresh();
   }
 
+  /** Allocate the leading edge from the actual application-menu presentation. */
+  setLeadingInset(inset: number): void {
+    if (this.#leadingInset === inset) return;
+    this.#leadingInset = inset;
+    this.#refresh();
+  }
+
   /** Disconnect geometry observation and cancel pending work before the controls are removed. */
   dispose(): void {
     this.#disposed = true;
@@ -99,7 +107,7 @@ export class WorkflowTabStripLayout {
     const available = (this.#available = Math.max(
       0,
       this.frame.clientWidth -
-        FRAME_TAB_START -
+        this.#leadingInset -
         trailing -
         WORKFLOW_NEW_BUTTON_GAP -
         WORKFLOW_TAB_TOOL_WIDTH,

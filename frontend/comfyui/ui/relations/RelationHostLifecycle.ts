@@ -32,6 +32,7 @@ import type { WorkflowSeedHistory } from '../execution/application/WorkflowSeedH
 import type { WorkflowSessionStore } from '../execution/application/WorkflowSessionStore.js';
 import { NativeRelationWidgetRenderer } from './infrastructure/NativeRelationWidgetRenderer.js';
 import { NativeRelationVisibility } from './infrastructure/NativeRelationVisibility.js';
+import { NativeOverrideGraphSurface } from './infrastructure/NativeOverrideGraphSurface.js';
 import { NativeOverrideToolbarHost } from './infrastructure/NativeOverrideToolbarHost.js';
 import { OverridePresentationHost } from './infrastructure/OverridePresentationHost.js';
 import { createNativeOverrideToolbarState } from './infrastructure/NativeOverrideToolbarState.js';
@@ -48,6 +49,7 @@ export interface RelationHostOptions {
   seeds: WorkflowSeedHistory;
   sessions: WorkflowSessionStore;
   appearance?(): AppearanceSource;
+  getLiteGraph?(): unknown;
   reportError(error: unknown): void;
   getCardState(): CubeFaceCardStateService | null;
   getConnections?(graph: ComfyGraph): readonly WorkflowNodeConnection[];
@@ -61,6 +63,7 @@ export class RelationHostLifecycle {
   readonly #seedMenus: NativeSeedMenuHost;
   readonly #execution: NativeRelationExecution;
   readonly #toolbar: GlobalOverrideToolbar;
+  readonly #overrideGraph: NativeOverrideGraphSurface;
   readonly #overridePresentation: OverridePresentationHost;
   readonly #cards: CubeRelationPresenter;
   readonly #views: NativeRelationViews;
@@ -116,12 +119,17 @@ export class RelationHostLifecycle {
       options.appearance,
     );
     this.#views = new NativeRelationViews(options.document);
+    this.#overrideGraph = new NativeOverrideGraphSurface(
+      options.document,
+      () => options.app,
+      () => options.getLiteGraph?.(),
+    );
     this.#toolbar = new GlobalOverrideToolbar(
       options.document,
       this.relations,
       options.reportError,
       widgets,
-      new NativeOverrideToolbarHost(options.document),
+      new NativeOverrideToolbarHost(options.document, this.#overrideGraph),
       createNativeOverrideToolbarState(options.document, options.logger),
     );
     this.#overridePresentation = new OverridePresentationHost(this.#toolbar);
@@ -179,6 +187,7 @@ export class RelationHostLifecycle {
   /** Drop stale mounted views before another native workflow is configured. */
   beforeConfigureGraph(): void {
     this.#configuring = true;
+    this.#overrideGraph.beforeConfigureGraph();
     this.#seedMenus.close();
     this.#generation++;
     if (this.#presentationFrame !== null)

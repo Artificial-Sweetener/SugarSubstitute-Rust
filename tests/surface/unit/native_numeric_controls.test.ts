@@ -20,6 +20,7 @@ import type { NumericSliderControl } from '../../../frontend/comfyui/ui/surface/
 import type { NativeNumericField } from '../../../frontend/comfyui/ui/surface/appearance/ComfyNativeNumericField.js';
 import { readNativeNumericField } from '../../../frontend/comfyui/ui/surface/appearance/ComfyNativeNumericField.js';
 import { usesSubstituteSlider } from '../../../frontend/comfyui/ui/surface/appearance/NumericSliderPresentation.js';
+import { ensureOwnedControlAppearanceStyles } from '../../../frontend/comfyui/ui/surface/appearance/OwnedControlAppearanceStyles.js';
 import { nativeNumericCss } from '../../../frontend/comfyui/ui/surface/appearance/NativeNumericStyles.js';
 import { createNumericSlider } from '../../../frontend/comfyui/ui/surface/appearance/ControlFactory.js';
 import { publishVisualStyle } from '../../../frontend/comfyui/ui/surface/appearance/VisualStyleBoundary.js';
@@ -44,7 +45,12 @@ test.each(['fluent', 'spectrum', 'photopro'] as const)(
       `[data-sc-number-pair] > :first-child { width:${SPINNER_WIDTH}; min-width:${SPINNER_WIDTH};`,
     );
     expect(css).toContain(`flex-basis:${SPINNER_WIDTH};`);
-    expect(css).toContain('[data-sc-number-spinner][data-sc-seed-box] { width:192px;');
+    ensureOwnedControlAppearanceStyles(document);
+    const seed = document.createElement('div');
+    seed.dataset.scNumberSpinner = '';
+    seed.dataset.scSeedBox = '';
+    document.body.append(seed);
+    expect(getComputedStyle(seed).width).toBe('192px');
   },
 );
 

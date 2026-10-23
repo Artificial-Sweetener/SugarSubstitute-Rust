@@ -18,7 +18,11 @@
 /** Place the host chevron at the icon edge and retain only card boundary rules. */
 export function photoProCardCss(): string {
   return `
-    html[data-sc-visual-style="photopro"] .sc-overrides-toolbar[data-presentation="plugin"] > .sc-overrides-card-title { padding:5px 10px; font-size:10px; line-height:14px; font-weight:600; }
+    html[data-sc-visual-style="photopro"] .sc-overrides-toolbar[data-presentation="plugin"] { grid-template-columns:max-content minmax(0,1fr); }
+    html[data-sc-visual-style="photopro"] .sc-overrides-toolbar[data-presentation="plugin"] > .sc-overrides-card-title { padding:5px 0 5px 10px; font-size:10px; line-height:14px; font-weight:600; }
+    html[data-sc-visual-style="photopro"] .sc-overrides-toolbar[data-presentation="plugin"] > .sc-overrides-menu { justify-self:start; box-sizing:border-box; min-width:0; min-height:0; gap:0; border:0; background:transparent; }
+    html[data-sc-visual-style="photopro"] .sc-overrides-toolbar[data-presentation="plugin"] > .sc-overrides-menu > :first-child { width:100%; height:100%; }
+    html[data-sc-visual-style="photopro"] .sc-overrides-toolbar[data-presentation="plugin"] > .sc-overrides-menu > :last-child { display:none; }
     html[data-sc-visual-style="photopro"] .sugarcubes-workflow-masonry__section { isolation:isolate; }
     html[data-sc-visual-style="photopro"] .sugarcubes-workflow-masonry__section::before {
       content:''; position:absolute; z-index:-1; pointer-events:none; top:36px; left:0; width:100%;
@@ -26,7 +30,7 @@ export function photoProCardCss(): string {
       box-shadow:inset 0 -1px 0 var(--sc-border);
     }
     html[data-sc-visual-style="photopro"] .sugarcubes-cube-face__node-card [data-sc-style-node] { --color-bypass:var(--sc-text-secondary); }
-    html[data-sc-visual-style="photopro"] [data-sc-titlebar-controls] [data-cube-card-activation] { margin-inline-start:8px; padding:0; }
+    html[data-sc-visual-style="photopro"] :is([data-sc-titlebar-controls] [data-cube-card-activation], .sc-overrides-toolbar[data-presentation="plugin"] > .sc-overrides-menu) { margin:0 0 0 8px; padding:0; }
     html[data-sc-visual-style="photopro"] [data-sc-titlebar-controls] > :first-child { justify-content:flex-start; gap:0; }
     html[data-sc-visual-style="photopro"] [data-sc-titlebar-controls] > :first-child > :has(> [data-testid="node-title"]) { flex:0 1 auto; margin-right:0; }
     html[data-sc-visual-style="photopro"] .sugarcubes-cube-face__node-card .sugarcubes-workflow-masonry__node-icon { display:none; }
@@ -46,9 +50,9 @@ export function photoProCardCss(): string {
     }
     html[data-sc-visual-style="photopro"] .sugarcubes-cube-face__node-card [data-testid="node-collapse-button"] i { width:11px; height:11px; rotate:0deg; transform:rotate(0deg) !important; }
     html[data-sc-visual-style="photopro"] .sugarcubes-cube-face__node-card [data-sc-titlebar-collapsed="true"] [data-testid="node-collapse-button"] i { transform:rotate(-90deg) !important; }
-    html[data-sc-visual-style="photopro"] .sugarcubes-cube-face__node-card [data-sc-style-node] [data-sc-style-row],
-    html[data-sc-visual-style="photopro"] .sugarcubes-cube-face__node-card [data-sc-style-node] [data-sc-style-row] ~ [data-sc-style-row],
-    html[data-sc-visual-style="photopro"] .sugarcubes-cube-face__node-card [data-sc-style-node] [data-sc-style-ports]:not([hidden]) { border-top:0 !important; border-bottom:0 !important; }
+    html[data-sc-visual-style="photopro"] :is([data-sc-style-node], .sc-overrides-toolbar[data-presentation="plugin"]) [data-sc-style-row],
+    html[data-sc-visual-style="photopro"] :is([data-sc-style-node], .sc-overrides-toolbar[data-presentation="plugin"]) [data-sc-style-row] ~ [data-sc-style-row],
+    html[data-sc-visual-style="photopro"] [data-sc-style-node] [data-sc-style-ports]:not([hidden]) { border-top:0 !important; border-bottom:0 !important; }
     html[data-sc-visual-style="photopro"] .sugarcubes-cube-face__node-card [data-sc-style-node] [data-testid="advanced-inputs-button"] {
       display:flex; align-items:center; justify-content:center; flex:none; box-sizing:border-box;
       width:28px; min-width:28px; height:20px; min-height:20px; padding:0; margin:4px 8px 6px auto;

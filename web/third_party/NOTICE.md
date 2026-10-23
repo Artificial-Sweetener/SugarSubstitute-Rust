@@ -202,6 +202,8 @@ The orb action cluster uses Microsoft's Fluent panel-left artwork from Substitut
 
 The generation strip adapts Substitute's titlebar control geometry and painting under GPL-3.0-or-later. Its play icon is QFluent artwork (GPL-3.0-or-later); stop and next artwork are copied from Substitute's MIT-licensed icon collection. Pinned sources, hashes and runtime paths are recorded in the manifest.
 
+The application settings button uses QFluent's unmodified Setting SVG under GPL-3.0-or-later. Its source revision, hash and deployment path are recorded in the manifest.
+
 The generation queue segment uses QFluent's unmodified History SVG under GPL-3.0-or-later. Its source revision, hash and deployment path are recorded in the manifest.
 
 CodeMirror, Lezer, and their editing and style helpers are bundled with SugarPrompt. Their MIT license texts are shipped under `third_party/licenses/`; exact versions and the CodeMirror view patch are recorded in `manifest.toml`.

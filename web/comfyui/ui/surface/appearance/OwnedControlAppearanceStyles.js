@@ -13,10 +13,15 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Share control foregrounds and seed accessories independently of the selected node renderer. */
+import { nativeSeedCss } from './NativeSeedStyles.js';
 /** Keep borrowed native controls aligned with their actual owned surface palette. */
 export function ensureOwnedControlAppearanceStyles(document) {
-    if (document.getElementById('sugarcubes-owned-control-appearance'))
+    const existing = document.getElementById('sugarcubes-owned-control-appearance');
+    if (existing) {
+        document.head.append(existing);
         return;
+    }
     const style = document.createElement('style');
     style.id = 'sugarcubes-owned-control-appearance';
     style.textContent = `
@@ -24,6 +29,7 @@ export function ensureOwnedControlAppearanceStyles(document) {
       :is(input, textarea, [role="combobox"]):not(.sc-model-field input) {
       color:var(--sc-text,var(--fg-color,#eee));
     }
+    ${nativeSeedCss()}
   `;
     document.head.append(style);
 }

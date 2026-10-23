@@ -93,6 +93,7 @@ export const substituteFrameCss = `
     padding:0; border:0; border-radius:50%; background:transparent; overflow:hidden; clip-path:circle(50%); z-index:2; }
   .sc-substitute-frame .sc-app-orb canvas { display:block; width:46px; height:46px; pointer-events:none; }
   .sc-substitute-frame .sc-orb-actions { position:absolute; top:38px; left:8px; display:flex; gap:1px; width:47px; height:36px; }
+  .sc-substitute-frame .sc-orb-actions[hidden] { display:none; }
   .sc-substitute-frame .sc-orb-actions::after { content:''; position:absolute; left:23px; top:20px; height:10px; width:1px; background:var(--sc-border-subtle); }
   .sc-substitute-frame .sc-orb-actions [data-sc-button] { position:relative; width:23px; height:36px; flex:0 0 23px; min-width:0; padding:0; border-radius:5px; mask-image:radial-gradient(circle 25px at var(--sc-orb-center-x,23px) -9px,transparent 24px,#000 25px); }
   .sc-substitute-frame .sc-orb-actions [data-sc-button]:last-child { --sc-orb-center-x:-1px; }

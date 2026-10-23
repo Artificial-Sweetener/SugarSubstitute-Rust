@@ -227,13 +227,13 @@ export class GlobalOverrideToolbar {
     this.element.remove();
   }
 
-  /** Keep label width fixed while each asynchronously mounted native control surrenders its surplus. */
+  /** Measure intrinsic layout widths so graph zoom never changes field wrapping. */
   readonly #measureLabels = (): void => {
     for (const control of this.#controls.values()) {
       const label = control.root.querySelector<HTMLElement>(
         '[data-testid="widget-layout-field-label"]',
       );
-      const width = label?.getBoundingClientRect().width ?? 0;
+      const width = label?.offsetWidth ?? 0;
       if (width > 0) control.root.style.setProperty('--sc-override-label-width', `${width}px`);
     }
     this.#disclosure.refresh();

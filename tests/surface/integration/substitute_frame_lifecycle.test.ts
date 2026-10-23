@@ -26,6 +26,7 @@ import type { ContextMenuEntry } from '../../../frontend/comfyui/ui/menus/Contex
 import { WorkflowSessionStore } from '../../../frontend/comfyui/ui/execution/application/WorkflowSessionStore.js';
 import { WorkflowOutputActivity } from '../../../frontend/comfyui/ui/execution/application/WorkflowOutputActivity.js';
 import { workflowSessionId } from '../../../frontend/comfyui/ui/execution/domain/ExecutionIdentity.js';
+import { publishPluginMode } from '../../../frontend/comfyui/ui/core/PluginMode.js';
 
 const internalsDescriptor = Object.getOwnPropertyDescriptor(
   HTMLElement.prototype,
@@ -55,6 +56,7 @@ afterAll(() => {
 });
 
 afterEach(() => {
+  publishPluginMode(document, false);
   document.body.replaceChildren();
   document.head.replaceChildren();
   document.documentElement.removeAttribute('data-sc-substitute-frame');
@@ -142,6 +144,64 @@ test('mode restores host presentation and preserves native controls, graph, and 
   await settle();
   expect(write).not.toHaveBeenCalledWith('data-sc-substitute-frame', '');
   write.mockRestore();
+  const bar = document.createElement('div');
+  bar.className = 'actionbar-container';
+  const nativeToggle = document.createElement('button');
+  nativeToggle.textContent = 'Native toggle';
+  bar.append(nativeToggle);
+  document.body.append(bar);
+  const auxiliary = frame?.querySelector<HTMLElement>('.sc-orb-actions');
+  expect(auxiliary?.hidden).toBe(false);
+  publishPluginMode(document, true);
+  await settle();
+  expect(auxiliary?.hidden).toBe(true);
+  expect(auxiliary?.parentElement).toBe(frame);
+  expect(auxiliary && getComputedStyle(auxiliary).display).toBe('none');
+  expect(bar.querySelector('.sc-orb-actions')).toBeNull();
+  const gear = bar.querySelector<HTMLElement>('.sc-plugin-settings');
+  const generation = bar.querySelector('.sc-generation-strip');
+  expect(gear?.getAttribute('aria-label')).toBe('Application menu');
+  expect(bar.firstElementChild?.firstElementChild).toBe(gear);
+  expect(bar.hasAttribute('data-sc-style-theme-root')).toBe(true);
+  expect(bar.hasAttribute('data-sc-theme')).toBe(true);
+  expect(generation).not.toBeNull();
+  expect(
+    gear
+      ?.querySelector<HTMLElement>('.sc-application-gear')
+      ?.style.getPropertyValue('--sc-application-glyph'),
+  ).toContain('/orb/settings.svg');
+  expect(gear?.textContent).not.toContain('\u2699');
+  expect(document.querySelector('.sc-app-orb')).toBeNull();
+  expect(frame?.querySelector('[data-orb-adjacent]')).toBeNull();
+  expect(nativeToggle.parentElement).toBe(bar);
+  host.mode.setEnabled(false);
+  await settle();
+  expect(document.querySelector('.sc-substitute-frame')).toBe(frame);
+  const replacement = document.createElement('div');
+  replacement.className = 'actionbar-container';
+  bar.replaceWith(replacement);
+  await settle();
+  expect(replacement.querySelector('.sc-plugin-settings')).toBe(gear);
+  expect(bar.hasAttribute('data-sc-style-theme-root')).toBe(false);
+  expect(bar.hasAttribute('data-sc-theme')).toBe(false);
+  expect(replacement.hasAttribute('data-sc-theme')).toBe(true);
+  expect(replacement.querySelector('.sc-generation-strip')).toBe(generation);
+  gear?.click();
+  await settle();
+  expect(document.querySelector('[role="menu"][aria-label="Application menu"]')).not.toBeNull();
+  gear?.click();
+  host.mode.setEnabled(true);
+  publishPluginMode(document, false);
+  await settle();
+  expect(frame?.querySelector('.sc-app-orb')).toBe(gear);
+  expect(frame?.querySelector('.sc-orb-actions')).toBe(auxiliary);
+  expect(auxiliary?.hidden).toBe(false);
+  expect(auxiliary && getComputedStyle(auxiliary).display).toBe('flex');
+  expect(auxiliary?.querySelectorAll('[data-sc-button]')).toHaveLength(2);
+  expect(frame?.querySelector('.sc-generation-strip')).toBe(generation);
+  expect(replacement.hasAttribute('data-sc-plugin-toolbar')).toBe(false);
+  expect(replacement.hasAttribute('data-sc-style-theme-root')).toBe(false);
+  expect(replacement.hasAttribute('data-sc-theme')).toBe(false);
   host.mode.setEnabled(false);
   await settle();
   expect(row.hasAttribute('data-sc-frame-native')).toBe(false);

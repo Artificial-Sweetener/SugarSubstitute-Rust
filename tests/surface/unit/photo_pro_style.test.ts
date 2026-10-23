@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove PhotoPro retains SugarCubes layout while using OpenPhoto paint and native gestures. */
 import { afterEach, expect, jest, test } from '@jest/globals';
+import { nativeSeedCss } from '../../../frontend/comfyui/ui/surface/appearance/NativeSeedStyles.js';
 import { publishVisualStyle } from '../../../frontend/comfyui/ui/surface/appearance/VisualStyleBoundary.js';
 import {
   applyOwnedTheme,
@@ -101,12 +102,12 @@ test('paints native comboboxes as one compact field while retaining model picker
   expect(css).toContain('[data-sc-style-combo-frame] {');
   expect(css).toContain('align-self:center; border-radius:3px');
   expect(css).toContain('--sc-control-height:22px');
-  expect(css).toContain('[data-sc-number-spinner] { padding-right:0; }');
+  expect(css).not.toContain('[data-sc-number-spinner] { padding-right:0; }');
   expect(css).toContain(
     'height:var(--sc-control-height,33px); min-height:var(--sc-control-height,33px)',
   );
   expect(css).toContain(
-    '[data-sc-number-spinner] {\n      position:relative; display:flex; box-sizing:border-box; padding-right:20px;\n      height:var(--sc-control-height,33px)',
+    '[data-sc-number-spinner] {\n      position:relative; display:flex; box-sizing:border-box; padding-right:var(--sc-spinner-stepper-width,20px);\n      height:var(--sc-control-height,33px)',
   );
   expect(css).toContain(
     '[data-sc-style-combo-frame]:not(.sc-model-field) > button[aria-hidden="true"]::after',
@@ -118,10 +119,32 @@ test('paints native comboboxes as one compact field while retaining model picker
   );
 });
 
+test('keeps seed accessories inside the field instead of painting standalone button frames', () => {
+  const css = nativeVisualStyleCss('photopro', false);
+  const standaloneButtons = css.match(/[^{}]+:is\(button,\[data-sc-button\]\)[^{}]*\{/g);
+  expect(standaloneButtons).toHaveLength(3);
+  for (const selector of standaloneButtons ?? [])
+    expect(selector).toContain(
+      ':where(:not([data-sc-style-combo-frame] > button,[data-sc-seed-split] > button,.sc-generation-strip button))',
+    );
+  const standaloneFields = css.match(/[^{}]+:is\(input:not\(\[type="checkbox"\]\)[^{}]*\{/g);
+  expect(standaloneFields).toHaveLength(2);
+  for (const selector of standaloneFields ?? [])
+    expect(selector).toContain(
+      ':where(:not([data-sc-style-combo-frame] > [role="combobox"],[data-sc-number-input],.sc-generation-strip input))',
+    );
+  expect(css).toContain('--sc-spinner-stepper-width:0px');
+  const seed = nativeSeedCss();
+  expect(seed).toContain('min-width:60px; padding-right:46px;');
+  expect(seed).toContain(
+    'border-radius:0 var(--sc-field-radius,4px) var(--sc-field-radius,4px) 0 !important;',
+  );
+});
+
 test('centers the PhotoPro check mark inside its checkbox', () => {
   const css = nativeVisualStyleCss('photopro', false);
   expect(css).toContain(
-    '[data-sc-boolean-checkbox] { appearance:none; position:relative; box-sizing:border-box; width:14px; height:14px',
+    ':is([data-sc-boolean-checkbox], .sc-overrides-toolbar[data-presentation="plugin"] > .sc-overrides-menu) { width:14px; height:14px; }',
   );
   expect(css).toContain(
     "[data-sc-boolean-checkbox]:checked::after { content:''; position:absolute; box-sizing:border-box; width:9px; height:6px; left:50%; top:50%",
@@ -158,7 +181,9 @@ test('squares each PhotoPro masonry section to its measured extent without chang
 test('places neutral activation beside the title and presents advanced settings as an ellipsis button', () => {
   const css = nativeVisualStyleCss('photopro', false);
   expect(css).toContain('--color-bypass:var(--sc-text-secondary)');
-  expect(css).toContain('[data-cube-card-activation] { margin-inline-start:8px; padding:0; }');
+  expect(css).toContain(
+    ':is([data-sc-titlebar-controls] [data-cube-card-activation], .sc-overrides-toolbar[data-presentation="plugin"] > .sc-overrides-menu) { margin:0 0 0 8px; padding:0; }',
+  );
   expect(css).toContain('width:28px; min-width:28px; height:20px; min-height:20px');
   expect(css).toContain(
     ':has(> [data-testid="advanced-inputs-button"]) { margin-top:0; z-index:auto; background:var(--sc-card-fill); }',

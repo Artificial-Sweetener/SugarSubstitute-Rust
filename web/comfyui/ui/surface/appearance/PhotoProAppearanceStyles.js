@@ -19,6 +19,7 @@ import { photoProComboCss } from './PhotoProComboStyles.js';
 import { photoProPaletteCss, photoProTokenDeclarations } from './PhotoProThemeTokens.js';
 import { photoProCardCss } from './PhotoProCardStyles.js';
 import { SPINNER_WIDTH } from './ControlGeometry.js';
+import { nativeFieldLayoutCss } from './NativeFieldLayoutStyles.js';
 const regularFont = new URL('../../../../fonts/SourceSans3-Regular.ttf', import.meta.url).href;
 const semiboldFont = new URL('../../../../fonts/SourceSans3-Semibold.ttf', import.meta.url).href;
 /** Retain shared card, masonry, field and scrollbar geometry with medium-gray materials. */
@@ -34,6 +35,7 @@ export function photoProAppearanceCss() {
         controlBottomStroke: 'var(--sc-field-bottom-stroke)',
         radius: '4px',
     }, true) +
+        nativeFieldLayoutCss('html[data-sc-visual-style="photopro"] :where([data-sc-style-node])') +
         photoProControlCss() +
         photoProComboCss() +
         photoProCardCss() +
@@ -41,6 +43,8 @@ export function photoProAppearanceCss() {
 }
 /** Skin owned controls, menus and tabs without taking their interaction or layout owners. */
 export function photoProControlCss() {
+    const standaloneButton = 'html[data-sc-visual-style="photopro"] :is([data-sc-theme="photopro"], [data-sc-style-node], [data-sc-style-surface], [data-sc-style-popup]) :is(button,[data-sc-button]):where(:not([data-sc-style-combo-frame] > button,[data-sc-seed-split] > button,.sc-generation-strip button))';
+    const standaloneField = 'html[data-sc-visual-style="photopro"] :is([data-sc-theme="photopro"], [data-sc-style-node], [data-sc-style-surface], [data-sc-style-popup]) :is(input:not([type="checkbox"]):not([type="range"]),textarea,[role="combobox"]):where(:not([data-sc-style-combo-frame] > [role="combobox"],[data-sc-number-input],.sc-generation-strip input))';
     return `
     html[data-sc-visual-style="photopro"] { --sc-control-height:22px; --sc-spinner-stepper-width:0px; }
     @font-face { font-family:"PhotoPro Source Sans 3"; src:url("${regularFont}") format("truetype"); font-weight:400; font-display:swap; }
@@ -49,25 +53,25 @@ export function photoProControlCss() {
       color-scheme:dark; font-family:var(--sc-font-family); color:var(--sc-text);
     }
     html[data-sc-visual-style="photopro"][data-sc-photopro-palette="light-gray"] :is([data-sc-theme="photopro"], [data-sc-style-node], [data-sc-style-surface], [data-sc-style-popup]) { color-scheme:light; }
-    html[data-sc-visual-style="photopro"] :is([data-sc-theme="photopro"], [data-sc-style-node], [data-sc-style-surface], [data-sc-style-popup]) :is(button,[data-sc-button]):where(:not([data-sc-style-combo-frame] > button)) {
+    ${standaloneButton} {
       color:var(--sc-text); background:var(--sc-button-fill); border:1px solid var(--sc-button-bottom-stroke);
       border-radius:var(--sc-button-radius); font:inherit;
     }
-    html[data-sc-visual-style="photopro"] :is([data-sc-theme="photopro"], [data-sc-style-node], [data-sc-style-surface], [data-sc-style-popup]) :is(button,[data-sc-button]):where(:not([data-sc-style-combo-frame] > button)):hover:not(:disabled) { background:var(--sc-button-hover-fill); }
-    html[data-sc-visual-style="photopro"] :is([data-sc-theme="photopro"], [data-sc-style-node], [data-sc-style-surface], [data-sc-style-popup]) :is(button,[data-sc-button]):where(:not([data-sc-style-combo-frame] > button)):active:not(:disabled) { background:var(--sc-button-pressed-fill); }
-    html[data-sc-visual-style="photopro"] :is([data-sc-theme="photopro"], [data-sc-style-node], [data-sc-style-surface], [data-sc-style-popup]) :is(input:not([type="checkbox"]):not([type="range"]),textarea,[role="combobox"]):where(:not([data-sc-style-combo-frame] > [role="combobox"])) {
+    ${standaloneButton}:hover:not(:disabled) { background:var(--sc-button-hover-fill); }
+    ${standaloneButton}:active:not(:disabled) { background:var(--sc-button-pressed-fill); }
+    ${standaloneField} {
       color:var(--sc-text); background:var(--sc-field-fill); border:1px solid var(--sc-field-stroke);
       border-radius:var(--sc-field-radius); font:inherit;
     }
-    html[data-sc-visual-style="photopro"] :is([data-sc-theme="photopro"], [data-sc-style-node], [data-sc-style-surface], [data-sc-style-popup]) :is(input:not([type="checkbox"]):not([type="range"]),textarea,[role="combobox"]):where(:not([data-sc-style-combo-frame] > [role="combobox"])):hover { border-color:var(--sc-field-hover-stroke); }
+    ${standaloneField}:hover { border-color:var(--sc-field-hover-stroke); }
     html[data-sc-visual-style="photopro"] :is([data-sc-theme="photopro"], [data-sc-style-node], [data-sc-style-surface], [data-sc-style-popup]) :is(input,textarea,button,[role="tab"],[role="menuitem"]):focus-visible { outline:1px solid var(--sc-focus-ring); outline-offset:1px; }
-    html[data-sc-visual-style="photopro"] [data-sc-boolean-checkbox] { appearance:none; position:relative; box-sizing:border-box; width:14px; height:14px; margin:0; border:1px solid var(--sc-text-secondary); border-radius:3px; background:var(--sc-field-fill); flex:none; }
+    html[data-sc-visual-style="photopro"] :is([data-sc-boolean-checkbox], .sc-overrides-toolbar[data-presentation="plugin"] > .sc-overrides-menu) { width:14px; height:14px; }
+    html[data-sc-visual-style="photopro"] [data-sc-boolean-checkbox] { appearance:none; position:relative; box-sizing:border-box; margin:0; border:1px solid var(--sc-text-secondary); border-radius:3px; background:var(--sc-field-fill); flex:none; }
     html[data-sc-visual-style="photopro"] [data-sc-boolean-checkbox]:checked { background:var(--sc-text-secondary); border-color:var(--sc-text-secondary); }
     html[data-sc-visual-style="photopro"] [data-sc-boolean-checkbox]:checked::after { content:''; position:absolute; box-sizing:border-box; width:9px; height:6px; left:50%; top:50%; border-left:2px solid var(--sc-surface-secondary); border-bottom:2px solid var(--sc-surface-secondary); transform:translate(-50%,-65%) rotate(-45deg); }
     html[data-sc-visual-style="photopro"] [data-sc-boolean-checkbox]:disabled { background:var(--sc-surface-tertiary); border-color:var(--sc-border-disabled); }
     html[data-sc-visual-style="photopro"] [data-sc-number-pair] { gap:10px; }
-    html[data-sc-visual-style="photopro"] [data-sc-number-spinner] { padding-right:0; }
-    html[data-sc-visual-style="photopro"] .sugarcubes-cube-face__node-card [data-sc-style-row][data-sc-style-widget^="WidgetInputNumber"] [data-sc-style-layout] > [data-sc-number-pair] { flex:0 0 calc(${SPINNER_WIDTH} + 100px); max-width:calc(${SPINNER_WIDTH} + 100px); }
+    html[data-sc-visual-style="photopro"] [data-sc-style-row][data-sc-style-widget^="WidgetInputNumber"] [data-sc-style-layout] > [data-sc-number-pair] { flex:0 0 calc(${SPINNER_WIDTH} + 100px); max-width:calc(${SPINNER_WIDTH} + 100px); }
     html[data-sc-visual-style="photopro"] [data-sc-number-pair] > :first-child { order:1; align-self:center; }
     html[data-sc-visual-style="photopro"] [data-sc-number-input] { padding:0 4px; text-align:left; font:10px/12px var(--sc-font-family); }
     html[data-sc-visual-style="photopro"] :is([data-sc-number-increment],[data-sc-number-decrement]) { display:none; }
