@@ -46,7 +46,8 @@ impl UpdaterPackage {
             started,
             context,
         )?;
-        let payload = Payload::from_download(download, workspace, Component::Updater, context)?;
+        let cache = trust.workspace_cache(workspace, context)?;
+        let payload = Payload::from_download(download, &cache, Component::Updater, context)?;
         let finished = now();
         if finished < started {
             return Err(sugarsubstitute_update::Error::ClockRollback.into());

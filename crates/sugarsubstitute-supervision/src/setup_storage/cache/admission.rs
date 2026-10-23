@@ -114,7 +114,7 @@ impl RuntimeCache {
                     (directory, exclusion, record)
                 }
             };
-            if record.producer.is_some() {
+            if record.producer.is_some() || super::consumers::live(&directory, &record, context)? {
                 return Err(io::Error::new(
                     io::ErrorKind::WouldBlock,
                     "Cache producer requires observed native retirement recovery",
@@ -160,6 +160,7 @@ fn create(
         let lease = protection.file(&staged.join("lease"), context)?;
         record::initialize_time(&lease, now)?;
         lease.sync_all()?;
+        let consumers = super::consumers::initialize(&directory, protection, context)?;
         let record = record::Record {
             schema: 1,
             identity: directory.identity()?,
@@ -170,6 +171,7 @@ fn create(
             deleting: false,
             staged: unpublished,
             producer: None,
+            consumers: Some(consumers),
             files: Vec::new(),
             directories: Vec::new(),
         };

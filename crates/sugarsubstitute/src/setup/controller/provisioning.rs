@@ -28,7 +28,7 @@ impl Controller {
             return Ok(());
         }
         let bundle = self.bundle.as_ref().ok_or("Installer package is not ready")?;
-        let (executable, package) = bundle.worker_paths();
+        let cache = self.cache.as_ref().ok_or("Installer cache scope is absent")?;
         let client = self.client.as_ref().ok_or("Installer client absent")?;
         let scope = client.create_scope(
             ScopeSpec { id: ScopeId::new(2)?, deadline: None },
@@ -38,8 +38,8 @@ impl Controller {
             client.clone(),
             scope,
             self.jobs.clone(),
-            executable,
-            package,
+            bundle.clone(),
+            cache.clone(),
             self.workspace.clone(),
         )?);
         Ok(())

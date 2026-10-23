@@ -19,8 +19,17 @@ fn embedded_bundle(
     let archive = workspace.join("installer.exe");
     std::fs::write(&archive, test_package::seal(&manifest, &compressed))?;
     let digest = format!("{:x}", Sha256::digest(&manifest));
-    let extracted = crate::setup_storage::materialize(&archive, workspace, &digest, context)?;
-    Ok(Arc::new(VerifiedBundle::open(&extracted, &digest, context)?))
+    let extracted = crate::setup_storage::materialize(
+        &archive,
+        &crate::setup_storage::cache::RuntimeCache::open(
+            workspace,
+            crate::setup_storage::cache::CachePolicy::default(),
+            context,
+        )?,
+        &digest,
+        context,
+    )?;
+    Ok(Arc::new(extracted))
 }
 
 #[test]

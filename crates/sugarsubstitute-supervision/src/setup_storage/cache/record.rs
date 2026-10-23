@@ -24,6 +24,8 @@ pub(super) struct Record {
     pub(super) staged: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) producer: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) consumers: Option<(u32, u32, u32)>,
     #[serde(deserialize_with = "bounded_files")]
     pub(super) files: Vec<String>,
     #[serde(deserialize_with = "bounded_files")]
@@ -128,7 +130,7 @@ pub(super) fn start_retirement(
     )
 }
 /// Reuse only a schema-owned scratch slot; interruption preserves the previous complete record.
-fn publish(
+pub(super) fn publish(
     directory: &Directory,
     name: &str,
     bytes: &[u8],

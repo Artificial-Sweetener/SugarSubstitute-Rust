@@ -109,7 +109,15 @@ fn signed_delivery_prepares_under_the_original_session_while_run_custody_remains
             || NOW,
             context,
         )?;
-        let bundle = Arc::new(VerifiedBundle::from_download(download, workspace.path(), context)?);
+        let bundle = Arc::new(VerifiedBundle::from_download(
+            download,
+            &crate::setup_storage::cache::RuntimeCache::open(
+                workspace.path(),
+                crate::setup_storage::cache::CachePolicy::default(),
+                context,
+            )?,
+            context,
+        )?);
         assert!(InstallationSession::maintain(&directory.path, context).is_err());
         let prepared = session.prepare(bundle, context)?;
         assert!(InstallationSession::maintain(&directory.path, context).is_err());

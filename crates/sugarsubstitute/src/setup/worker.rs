@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Bind the provisioning transport to the existing retained Windows process-family owner.
+mod cache_jobs;
+mod process;
 use crate::job_sequence::JobSequence;
-use std::{error::Error, path::PathBuf, time::Duration};
+use cache_jobs::CacheFinish;
+use std::{error::Error, path::PathBuf, sync::Arc, time::Duration};
 use sugarsubstitute_contracts::{
     execution::{
         CompletionBatch, ExecutionPort, JobClass, JobOutcome, JobSpec, Moment, Operation, OwnedJob,
         Scope, ScopeId, ScopeSpec,
     },
     lifecycle::{
-        CoordinatorEpoch, CoordinatorKey, InstanceId, NamespaceId, ProcessKey, RunGeneration,
-        RunKey, ShutdownBudget, ShutdownId,
+        CoordinatorEpoch, CoordinatorKey, NamespaceId, ProcessKey, ShutdownBudget, ShutdownId,
     },
 };
 use sugarsubstitute_execution::{
@@ -18,7 +20,7 @@ use sugarsubstitute_execution::{
     provisioning_transport::{self, Transport, TransportEvent},
 };
 use sugarsubstitute_supervision::{
-    FamilyBinding, RegistryError, RegistryObservation, WindowsLaunchCommand, WindowsLaunchInput,
+    FamilyBinding, RegistryError, RegistryObservation, SettledProvisioning, WindowsLaunchInput,
     WindowsProcessRegistry,
 };
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
@@ -34,8 +36,12 @@ pub(super) struct Worker {
     client: ExecutionClient,
     scope: Scope,
     jobs: JobSequence,
-    executable: PathBuf,
-    package: PathBuf,
+    bundle: Arc<sugarsubstitute_supervision::setup_storage::VerifiedBundle>,
+    cache: sugarsubstitute_supervision::setup_storage::cache::RuntimeCache,
+    preparing: Option<OwnedJob<WindowsLaunchInput, std::io::Error>>,
+    cache_job: Option<OwnedJob<CacheFinish, std::io::Error>>,
+    retired: Option<SettledProvisioning>,
+    cache_finalized: bool,
     workspace: PathBuf,
     closing: bool,
     stopped: bool,
@@ -47,8 +53,8 @@ impl Worker {
         client: ExecutionClient,
         scope: Scope,
         jobs: JobSequence,
-        executable: PathBuf,
-        package: PathBuf,
+        bundle: Arc<sugarsubstitute_supervision::setup_storage::VerifiedBundle>,
+        cache: sugarsubstitute_supervision::setup_storage::cache::RuntimeCache,
         workspace: PathBuf,
     ) -> Result<Self> {
         // These local matching facts grant no external authority. The socket's
@@ -92,8 +98,12 @@ impl Worker {
             client,
             scope,
             jobs,
-            executable,
-            package,
+            bundle,
+            cache,
+            preparing: None,
+            cache_job: None,
+            retired: None,
+            cache_finalized: false,
             workspace,
             closing: false,
             stopped: false,
@@ -127,6 +137,7 @@ impl Worker {
         if let Some(registry) = &mut self.registry {
             registry.consume(batch)?;
         }
+        self.poll_cache_jobs()?;
         let mut events = Vec::new();
         if let Some(transport) = &self.transport {
             for _ in 0..16 {
@@ -151,10 +162,11 @@ impl Worker {
         }
         if !self.closing
             && self.process.is_none()
+            && self.preparing.is_none()
             && self.registry.is_some()
             && self.endpoint.is_some()
         {
-            self.launch()?;
+            self.prepare_input()?;
         }
         if let Some(job) = &mut self.transport_job
             && let Some(completion) = job.try_take_completion()
@@ -193,49 +205,13 @@ impl Worker {
             replacement: None,
         })
     }
-    fn launch(&mut self) -> Result<()> {
-        let (port, token) = self.endpoint.take().ok_or("Provisioning endpoint absent")?;
-        let cwd = self.package.parent().ok_or("Provisioning package has no parent")?;
-        let arguments = [
-            self.package.as_os_str().to_owned(),
-            "--setup-workspace".into(),
-            self.workspace.as_os_str().to_owned(),
-            "--setup-port".into(),
-            port.to_string().into(),
-            "--setup-token".into(),
-            token.into(),
-        ];
-        let command = WindowsLaunchCommand::from_os(&self.executable, cwd, &arguments)?;
-        let environment =
-            crate::worker_environment::capture().map_err(|cause| cause as Box<dyn Error>)?;
-        let input = WindowsLaunchInput::new(command, environment)?;
-        let watch = self.spec(JobClass::NativeObservation, 4096, None)?;
-        let creation = self.spec(
-            JobClass::InfrastructureLifecycle,
-            input.required_reservation_bytes(),
-            Some(self.client.now()?.checked_add(Duration::from_secs(30))?),
-        )?;
-        let binding = FamilyBinding::Desktop(RunKey {
-            owner: self.identity,
-            instance: InstanceId::new(1)?,
-            generation: RunGeneration::new(1)?,
-        });
-        let ticket = self.registry.as_mut().ok_or("Provisioning registry missing")?.submit_launch(
-            &self.client,
-            &self.scope,
-            ScopeSpec { id: ScopeId::new(3)?, deadline: None },
-            creation,
-            watch,
-            binding,
-            input,
-        )?;
-        self.process = Some(ticket.process());
-        Ok(())
-    }
     pub(super) fn close(&mut self) -> Result<()> {
         self.closing = true;
         self.ready = false;
         self.transport = None;
+        if let Some(job) = &self.preparing {
+            job.cancel();
+        }
         if let Some(job) = &self.transport_job {
             job.cancel();
         }
@@ -244,49 +220,13 @@ impl Worker {
         }
         self.cleanup()
     }
-    fn cleanup(&mut self) -> Result<()> {
-        let Some(process) = self.process else {
-            return Ok(());
-        };
-        let now = self.client.now()?;
-        if !self.stopped {
-            self.registry.as_mut().ok_or("Provisioning registry missing")?.begin_stop(
-                process,
-                ShutdownId::new(1)?,
-                ShutdownBudget::new(now)?,
-            )?;
-            self.stopped = true;
-        }
-        let snapshot =
-            self.registry.as_ref().ok_or("Provisioning registry missing")?.snapshot(process)?;
-        if snapshot.settled {
-            self.registry
-                .as_mut()
-                .ok_or("Provisioning registry missing")?
-                .retire_settled(process)?;
-            self.process = None;
-        } else if snapshot.cleanup_step_due(now) {
-            let watch = if snapshot.member_watch_required {
-                Some(self.spec(JobClass::NativeObservation, 4096, None)?)
-            } else {
-                None
-            };
-            let cleanup = self.spec(JobClass::InfrastructureLifecycle, 4096, None)?;
-            self.registry.as_mut().ok_or("Provisioning registry missing")?.submit_cleanup_step(
-                &self.client,
-                process,
-                &self.scope,
-                cleanup,
-                watch,
-            )?;
-        } else if snapshot.deadline_expired(now) {
-            return Err("Provisioning family remains unsettled after cleanup deadline".into());
-        }
-        Ok(())
-    }
     pub(super) fn settled(&self) -> bool {
         self.closing
             && self.creating.is_none()
+            && self.preparing.is_none()
+            && self.cache_job.is_none()
+            && self.retired.is_none()
+            && self.cache_finalized
             && self.transport_job.is_none()
             && self.registry.as_ref().is_none_or(WindowsProcessRegistry::is_empty)
     }

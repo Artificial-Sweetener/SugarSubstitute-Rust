@@ -4,7 +4,7 @@
 use super::*;
 
 pub(super) enum StorageResult {
-    Bundle(Arc<VerifiedBundle>),
+    Bundle(Arc<VerifiedBundle>, setup_storage::cache::RuntimeCache),
     Inspected(PathBuf, Option<Box<setup_storage::InstallationSummary>>),
     Imported(Box<setup_storage::SignedInstallation>),
     Prepared(Box<SignedPreparation>),
@@ -54,7 +54,11 @@ impl Controller {
             StorageWork::Launch | StorageWork::Retire => {
                 Some(client.now()?.checked_add(std::time::Duration::from_secs(30))?)
             }
-            StorageWork::Payload | StorageWork::Import | StorageWork::Prepare => None,
+            // Protected native effects require a finite phase, including large local archives.
+            // Streamed copies still observe cancellation between blocks.
+            StorageWork::Payload | StorageWork::Import | StorageWork::Prepare => {
+                Some(client.now()?.checked_add(std::time::Duration::from_secs(30 * 60))?)
+            }
         };
         let job = client.submit_blocking(
             self.scope.as_ref().ok_or("Installer scope is absent")?,
@@ -68,6 +72,7 @@ impl Controller {
                 },
                 deadline,
                 reservation_bytes: match work {
+                    StorageWork::Payload => setup_storage::MATERIALIZATION_RESERVATION_BYTES,
                     StorageWork::Import => setup_storage::SIGNED_INSTALLER_RESERVATION_BYTES,
                     StorageWork::Prepare => setup_storage::SIGNED_PREPARATION_RESERVATION_BYTES,
                     StorageWork::Transfer => setup_storage::SIGNED_TRANSFER_RESERVATION_BYTES,
@@ -152,8 +157,9 @@ impl Controller {
                     }),
                 )?;
             }
-            JobOutcome::Success(StorageResult::Bundle(bundle)) => {
+            JobOutcome::Success(StorageResult::Bundle(bundle, cache)) => {
                 self.bundle = Some(bundle);
+                self.cache = Some(cache);
             }
             JobOutcome::Success(StorageResult::Imported(imported)) => {
                 self.submit(StorageWork::Prepare, move |context| {

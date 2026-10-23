@@ -18,6 +18,12 @@ pub(super) fn create(
     let bytes = input.required_reservation_bytes() - crate::registry_input::FAMILY_STORAGE_BYTES;
     let claim =
         context.memory().claim(bytes).map_err(|cause| RegistryError::new("input_memory", cause))?;
+    // The accepted creation reservation and its exact claim now fund command/environment
+    // storage before releasing the original storage job's allocation admission.
+    let mut input = input;
+    if let Some(launch) = &mut input.preparation {
+        launch.transfer_input_memory();
+    }
     let mut charged = ChargedInput { input, _claim: claim };
     let family = Family::allocate_owned(context.memory())?;
     let mut unwind = CreationOutputGuard { shared: shared.clone(), armed: true };
@@ -43,6 +49,11 @@ fn create_owned(
 ) -> Result<(), RegistryError> {
     let family = state.family.as_mut().ok_or_else(|| RegistryError::invalid("creation_owner"))?;
     family.preparation_image = input.preparation.take();
+    family.cache_family = family
+        .preparation_image
+        .as_ref()
+        .and_then(|launch| launch.provisioning())
+        .map(|launch| launch.family());
     if stopped(context) || shared.admission.load(Ordering::Acquire) == CLOSED {
         return Err(RegistryError::invalid("creation_canceled_before_effect"));
     }

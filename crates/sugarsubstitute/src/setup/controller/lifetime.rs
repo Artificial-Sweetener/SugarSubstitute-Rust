@@ -60,9 +60,13 @@ impl InstallerLifetime for Controller {
             let distribution = super::super::distribution::decode(distribution, &context)?;
             let expected = distribution.manifest_digest().to_owned();
             drop(distribution);
-            let root = setup_storage::materialize(&root, &workspace, &expected, &context)?;
-            VerifiedBundle::open(&root, &expected, &context)
-                .map(|bundle| StorageResult::Bundle(Arc::new(bundle)))
+            let cache = setup_storage::cache::RuntimeCache::open(
+                &workspace,
+                setup_storage::cache::CachePolicy::default(),
+                &context,
+            )?;
+            let bundle = setup_storage::materialize(&root, &cache, &expected, &context)?;
+            Ok(StorageResult::Bundle(Arc::new(bundle), cache))
         })
     }
     fn request(&mut self, json: &str) -> Result<()> {

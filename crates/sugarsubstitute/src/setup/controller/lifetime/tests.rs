@@ -297,3 +297,47 @@ fn closing_cancels_preparation_but_observes_transfer_and_creation_without_discar
     }
     Ok(())
 }
+
+#[test]
+fn production_payload_import_and_preparation_jobs_authorize_protected_cache_creation() -> Result<()>
+{
+    let (mut controller, wake) = fixture()?;
+    controller.relaunch = None;
+    for work in [StorageWork::Payload, StorageWork::Import, StorageWork::Prepare] {
+        let root = tempfile::tempdir()?;
+        let path = root.path().to_owned();
+        controller.submit(work, move |context| {
+            let cache = setup_storage::cache::RuntimeCache::open(
+                &path,
+                setup_storage::cache::CachePolicy::default(),
+                &context,
+            )?;
+            assert!(cache.path().join("owner").is_file());
+            Ok(StorageResult::Transferred)
+        })?;
+        observe(&wake, || {
+            controller
+                .client
+                .as_ref()
+                .ok_or("Execution client absent")?
+                .drain_completions(NonZeroUsize::new(32).ok_or("Invalid drain bound")?)?;
+            let job = &mut controller.storage.as_mut().ok_or("Storage job absent")?.job;
+            let Some(completion) = job.try_take_completion() else {
+                return Ok(false);
+            };
+            controller.storage = None;
+            match completion.outcome {
+                JobOutcome::Success(StorageResult::Transferred) => Ok(true),
+                JobOutcome::Failure(cause) => Err(cause.into()),
+                _ => Err("Protected cache creation did not complete".into()),
+            }
+        })?;
+        assert!(root.path().join(setup_storage::cache::DIRECTORY).join("owner").is_file());
+    }
+    controller.close()?;
+    observe(&wake, || {
+        controller.advance()?;
+        controller.settled()
+    })?;
+    controller.finish()
+}

@@ -100,7 +100,15 @@ fn run_source(
         let download =
             delivery.receive(workspace.path(), &archive, &directory.path, target, context)?;
         clock.checkpoint("extract_and_verify_bundle");
-        let bundle = Arc::new(VerifiedBundle::from_download(download, workspace.path(), context)?);
+        let bundle = Arc::new(VerifiedBundle::from_download(
+            download,
+            &crate::setup_storage::cache::RuntimeCache::open(
+                workspace.path(),
+                crate::setup_storage::cache::CachePolicy::default(),
+                context,
+            )?,
+            context,
+        )?);
         clock.checkpoint("reserve_maintenance_generation");
         let prepared = session.prepare(bundle, context)?;
         clock.checkpoint("stage_application_payload");

@@ -4,8 +4,12 @@
 mod application;
 mod bundle;
 pub mod cache;
+#[allow(unsafe_code)]
+pub(crate) mod cache_custody;
 mod compatibility;
+pub(crate) mod provisioning_cache;
 pub use application::LAUNCH_RESERVATION_BYTES;
+pub use provisioning_cache::recover_provisioning_cache;
 #[allow(unsafe_code)]
 mod disk_inheritance;
 mod download;
@@ -30,7 +34,7 @@ mod profile;
 mod protection;
 #[allow(unsafe_code)]
 mod staging;
-pub use packed::materialize;
+pub use packed::{MATERIALIZATION_RESERVATION_BYTES, materialize};
 pub use profile::InstallerProfile;
 mod selection;
 pub(crate) use selection::UnstartedTrial;

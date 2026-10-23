@@ -23,7 +23,20 @@ pub(super) fn inspect(
     for entry in std::fs::read_dir(&directory.path)? {
         check(context)?;
         let entry = entry?;
-        if !["record", "record.next", "lease", "data"].iter().any(|name| entry.file_name() == *name)
+        if ["record", "record.next", "lease"].iter().any(|name| entry.file_name() == *name) {
+            let metadata = std::fs::symlink_metadata(entry.path())?;
+            let maximum = if entry.file_name() == "lease" { 0 } else { MAX_RECORD as u64 };
+            if !metadata.is_file()
+                || metadata.file_attributes() & 0x400 != 0
+                || metadata.len() > maximum
+            {
+                return Err(invalid("Cache control exceeds its schema bound"));
+            }
+        }
+        if !(["record", "record.next", "lease", "data"]
+            .iter()
+            .any(|name| entry.file_name() == *name)
+            || (record.consumers.is_some() && entry.file_name() == "consumers"))
         {
             return Err(invalid("Cache entry contains unknown control files"));
         }

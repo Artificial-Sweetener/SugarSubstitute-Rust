@@ -113,7 +113,11 @@ fn signed_repository_download_disconnect_reopen_and_resume_reaches_verified_cust
         let workspace = tempfile::tempdir()?;
         let bundle = crate::setup_storage::VerifiedBundle::from_download(
             verified,
-            workspace.path(),
+            &crate::setup_storage::cache::RuntimeCache::open(
+                workspace.path(),
+                crate::setup_storage::cache::CachePolicy::default(),
+                context,
+            )?,
             context,
         )?;
         assert_eq!(bundle.release(), "local-package");

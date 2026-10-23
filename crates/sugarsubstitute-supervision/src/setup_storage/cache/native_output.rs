@@ -34,21 +34,26 @@ impl CacheLease {
         self.record.producer.as_deref()
     }
 }
+/// Bounded snapshot of pending native grants; callers release each lease before advancing.
+/// A live grant cannot prevent inspection of later recoverable entries in the same namespace.
+pub struct PendingEntries {
+    cache: RuntimeCache,
+    namespace: Namespace,
+    keys: std::collections::btree_set::IntoIter<String>,
+    _memory: sugarsubstitute_contracts::execution::MemoryClaim,
+}
 impl RuntimeCache {
-    /// Exclusively retain one unfinished generation for feature-owned native retirement recovery.
-    /// Live native pins are skipped. Use the path only with that feature's recovery protocol;
-    /// call `record_generated` only after proving every previous native consumer has stopped.
-    /// No ordinary producer or cache read may reuse this grant before that proof.
+    /// Enumerate a bounded snapshot for feature-owned native retirement recovery.
+    /// Consume this cursor within the current storage job; it retains that job's small index claim.
     /// # Errors
-    /// Preserves cancellation, malformed native storage and unexpected I/O causes.
-    pub fn recover_pending(
-        self,
+    /// Preserves cancellation and invalid or unexpectedly large native directory inventories.
+    pub fn pending(
+        &self,
         namespace: Namespace,
         context: &JobContext,
-    ) -> io::Result<Option<CacheLease>> {
+    ) -> io::Result<PendingEntries> {
         check(context)?;
-        let _workspace = context.memory().claim(RESERVATION_BYTES).map_err(io::Error::other)?;
-        let memory = self.scope.memory.claim(ENTRY_BYTES).map_err(io::Error::other)?;
+        let memory = context.memory().claim(256 * 1024).map_err(io::Error::other)?;
         let parent = self.namespace(namespace)?;
         let mut keys = BTreeSet::new();
         for entry in std::fs::read_dir(&parent.path)? {
@@ -61,7 +66,27 @@ impl RuntimeCache {
                 return Err(invalid("Native cache recovery capacity exceeded"));
             }
         }
-        for key in keys {
+        Ok(PendingEntries {
+            cache: self.clone(),
+            namespace,
+            keys: keys.into_iter(),
+            _memory: memory,
+        })
+    }
+}
+impl PendingEntries {
+    /// Exclusively retain the next unfinished generation and skip live native file pins.
+    /// Inspect the feature descriptor and prove actual native retirement before recording output.
+    /// Dropping a returned lease preserves its durable producer grant and advances this cursor.
+    /// # Errors
+    /// Preserves cancellation and unexpected native storage failures; damaged records are misses.
+    pub fn next(&mut self, context: &JobContext) -> io::Result<Option<CacheLease>> {
+        check(context)?;
+        let _workspace = context.memory().claim(RESERVATION_BYTES).map_err(io::Error::other)?;
+        let memory = self.cache.scope.memory.claim(ENTRY_BYTES).map_err(io::Error::other)?;
+        let namespace = self.namespace;
+        let parent = self.cache.namespace(namespace)?;
+        for key in self.keys.by_ref() {
             let opened = protection::with(context, |protection| {
                 let directory = Directory::open(&parent.path.join(&key), false)?;
                 let exclusion = record::exclusion(&directory, protection)?;
@@ -83,7 +108,7 @@ impl RuntimeCache {
                         record,
                         writable: true,
                         _exclusion: exclusion,
-                        _cache: self,
+                        _cache: self.cache.clone(),
                         _memory: memory,
                     }));
                 }
@@ -97,7 +122,8 @@ impl RuntimeCache {
                             | io::ErrorKind::NotFound
                     ) =>
                 {
-                    tracing::warn!(operation="cache_recovery_miss", namespace=namespace.directory(), entry=%key, cause=%cause, "Preserving damaged producer recovery data");
+                    tracing::warn!(operation="cache_recovery_miss", namespace=namespace.directory(),
+                        entry=%key, cause=%cause, "Preserving damaged producer recovery data");
                 }
                 Err(cause) => return Err(record::public_error(cause)),
             }

@@ -61,7 +61,11 @@ fn recover(body: impl FnOnce(Recovery<'_>, PathBuf) -> TestResult + Send + 'stat
             .into_package()?;
         let bundle = Arc::new(VerifiedBundle::from_download(
             receive(&archive, &directory.path, target, context)?,
-            workspace.path(),
+            &crate::setup_storage::cache::RuntimeCache::open(
+                workspace.path(),
+                crate::setup_storage::cache::CachePolicy::default(),
+                context,
+            )?,
             context,
         )?);
         let prepared =

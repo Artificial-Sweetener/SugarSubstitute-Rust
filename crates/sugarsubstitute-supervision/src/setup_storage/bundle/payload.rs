@@ -35,8 +35,18 @@ pub(in crate::setup_storage) struct Payload {
     _manifest: File,
     _root: Directory,
     _memory: MemoryClaim,
+    cache: Option<std::sync::Arc<super::super::cache::CacheLease>>,
 }
 impl Payload {
+    /// Retain immutable cache custody through the actual native process family.
+    pub(super) fn bind_native_cache(
+        &self,
+        family: super::super::cache_custody::CacheFamilyId,
+        context: &JobContext,
+    ) -> io::Result<Option<super::super::cache::NativeCachePin>> {
+        self.cache.as_ref().map(|cache| cache.bind_native(family, context)).transpose()
+    }
+
     /// Extract a signed update using the installer's package contract and retain all verified files.
     /// The source is the original exclusively held download, never a caller-supplied path/hash.
     /// Reserve `RESERVATION_BYTES` in addition to the retained download's storage claim.
@@ -45,14 +55,11 @@ impl Payload {
     /// Failed attempts retain their files; retry creates a separate extraction generation.
     pub(in crate::setup_storage) fn from_download(
         mut source: super::super::VerifiedDownload,
-        workspace: &Path,
+        cache: &super::super::cache::RuntimeCache,
         component: sugarsubstitute_contracts::update::Component,
         context: &JobContext,
     ) -> io::Result<Self> {
-        let (root, digest) =
-            super::super::packed::downloaded(&mut source, workspace, component, context)?;
-        let mut bundle = tracing::trace_span!(target: "sugarsubstitute::storage", "bundle_verify")
-            .in_scope(|| Self::open(&root, &digest, component, context))?;
+        let mut bundle = super::super::packed::downloaded(&mut source, cache, component, context)?;
         check(context)?;
         bundle.download = Some(source);
         Ok(bundle)
@@ -75,6 +82,16 @@ impl Payload {
         component: sugarsubstitute_contracts::update::Component,
         context: &JobContext,
     ) -> io::Result<Self> {
+        Self::open_pinned(root, expected, component, None, context)
+    }
+    /// Authenticate cache content while retaining the exact immutable storage lease.
+    pub(in crate::setup_storage) fn open_pinned(
+        root: &Path,
+        expected: &str,
+        component: sugarsubstitute_contracts::update::Component,
+        cache: Option<std::sync::Arc<super::super::cache::CacheLease>>,
+        context: &JobContext,
+    ) -> io::Result<Self> {
         check(context)?;
         let memory =
             context.memory().claim(super::super::RESERVATION_BYTES).map_err(io::Error::other)?;
@@ -84,6 +101,15 @@ impl Payload {
             ));
         }
         let directory = Directory::open(root, false)?;
+        let directory = if let Some(lease) = &cache {
+            if directory.identity()? != Directory::open(&lease.path(), false)?.identity()? {
+                return Err(invalid("Payload and cache lease identities differ"));
+            }
+            directory
+        } else {
+            directory.unmanaged_payload()?
+        };
+        let root = directory.path.clone();
         let mut source = directory.read("setup-manifest.json")?;
         let bytes = files::read_bounded(&mut source, 1024 * 1024)?;
         let digest = format!("{:x}", Sha256::digest(&bytes));
@@ -115,7 +141,7 @@ impl Payload {
             compatibility.inspect_verified(entry.path(), &mut file)?;
             inputs.push(Input { file, _parent: parent });
         }
-        super::super::inventory::verify(root, &names, || check(context))?;
+        super::super::inventory::verify(&root, &names, || check(context))?;
         match component {
             sugarsubstitute_contracts::update::Component::Application => {
                 compatibility.validate_pair()?
@@ -126,7 +152,7 @@ impl Payload {
         }
         Ok(Self {
             compatibility,
-            root: root.into(),
+            root,
             digest,
             inventory: manifest,
             manifest_bytes: bytes,
@@ -135,6 +161,7 @@ impl Payload {
             _manifest: source,
             _root: directory,
             _memory: memory,
+            cache,
         })
     }
     /// Immutable generation identity used by installation transactions.

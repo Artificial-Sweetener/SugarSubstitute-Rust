@@ -34,7 +34,8 @@ impl InstallationSession {
             started,
             context,
         )?;
-        let bundle = Arc::new(VerifiedBundle::from_download(download, workspace, context)?);
+        let cache = trust.workspace_cache(workspace, context)?;
+        let bundle = Arc::new(VerifiedBundle::from_download(download, &cache, context)?);
         let finished = now();
         if finished < started {
             return Err(sugarsubstitute_update::Error::ClockRollback.into());

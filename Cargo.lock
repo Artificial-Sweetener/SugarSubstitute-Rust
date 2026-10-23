@@ -2286,6 +2286,7 @@ dependencies = [
  "sugarsubstitute-execution",
  "sugarsubstitute-splash",
  "sugarsubstitute-supervision",
+ "tempfile",
  "tracing",
  "tracing-subscriber",
 ]

@@ -32,7 +32,11 @@ fn incompatible_download_cannot_change_accepted_selection_or_begin_preparation()
                 .into_package()?;
             let bundle = Arc::new(VerifiedBundle::from_download(
                 receive(&archive, &directory.path, target, context)?,
-                workspace.path(),
+                &crate::setup_storage::cache::RuntimeCache::open(
+                    workspace.path(),
+                    crate::setup_storage::cache::CachePolicy::default(),
+                    context,
+                )?,
                 context,
             )?);
             let preparation =

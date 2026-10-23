@@ -19,8 +19,16 @@ fn malformed_authenticated_application_contract_never_becomes_a_verified_bundle(
         let digest = format!("{:x}", Sha256::digest(&manifest));
         let source = temporary.path().join("setup.exe");
         std::fs::write(&source, test_package::seal(&manifest, &compressed))?;
-        let extracted = materialize(&source, temporary.path(), &digest, context)?;
-        let Err(cause) = VerifiedBundle::open(&extracted, &digest, context) else {
+        let Err(cause) = materialize(
+            &source,
+            &crate::setup_storage::cache::RuntimeCache::open(
+                temporary.path(),
+                crate::setup_storage::cache::CachePolicy::default(),
+                context,
+            )?,
+            &digest,
+            context,
+        ) else {
             return Err("Malformed contract admitted".into());
         };
         assert_eq!(
@@ -37,32 +45,47 @@ fn malformed_authenticated_application_contract_never_becomes_a_verified_bundle(
 #[test]
 fn interrupted_copy_retains_only_temporary_bytes_and_retry_completes_exact_payloads()
 -> test_worker::TestResult {
-    test_worker::run_reserved(32 * 1024 * 1024, |context, _| {
-        let temporary = tempfile::tempdir()?;
-        let (manifest, compressed) = test_package::distribution()?;
-        let digest = format!("{:x}", Sha256::digest(&manifest));
-        let source = temporary.path().join("setup.exe");
-        std::fs::write(&source, test_package::seal(&manifest, &compressed))?;
-        let extracted = materialize(&source, temporary.path(), &digest, context)?;
-        let bundle = VerifiedBundle::open(&extracted, &digest, context)?;
-        let destination = temporary.path().join("candidate");
-        let interrupted = bundle.payload.copy("app/", &destination, context, |path| {
-            let mut file = files::create_new(path)?;
-            file.write_all(b"partial write")?;
-            file.sync_all()?;
-            Err(io::ErrorKind::Interrupted.into())
-        });
-        assert!(matches!(interrupted, Err(cause) if cause.kind() == io::ErrorKind::Interrupted));
-        for entry in bundle.payload.inventory.entries() {
-            if let Some(relative) = entry.path().strip_prefix("app/") {
-                assert!(!destination.join(relative).exists());
+    test_worker::run_reserved(
+        crate::setup_storage::MATERIALIZATION_RESERVATION_BYTES
+            + crate::setup_storage::RESERVATION_BYTES,
+        |context, _| {
+            let temporary = tempfile::tempdir()?;
+            let (manifest, compressed) = test_package::distribution()?;
+            let digest = format!("{:x}", Sha256::digest(&manifest));
+            let source = temporary.path().join("setup.exe");
+            std::fs::write(&source, test_package::seal(&manifest, &compressed))?;
+            let extracted = materialize(
+                &source,
+                &crate::setup_storage::cache::RuntimeCache::open(
+                    temporary.path(),
+                    crate::setup_storage::cache::CachePolicy::default(),
+                    context,
+                )?,
+                &digest,
+                context,
+            )?;
+            let bundle = extracted;
+            let destination = temporary.path().join("candidate");
+            let interrupted = bundle.payload.copy("app/", &destination, context, |path| {
+                let mut file = files::create_new(path)?;
+                file.write_all(b"partial write")?;
+                file.sync_all()?;
+                Err(io::ErrorKind::Interrupted.into())
+            });
+            assert!(
+                matches!(interrupted, Err(cause) if cause.kind() == io::ErrorKind::Interrupted)
+            );
+            for entry in bundle.payload.inventory.entries() {
+                if let Some(relative) = entry.path().strip_prefix("app/") {
+                    assert!(!destination.join(relative).exists());
+                }
             }
-        }
-        let orphan =
-            std::fs::read_dir(&destination)?.next().ok_or("Interrupted file missing")??.path();
-        bundle.payload.copy("app/", &destination, context, files::create_new)?;
-        let _verified = VerifiedCopy::open(&bundle.payload.inventory, &destination, context)?;
-        assert_eq!(std::fs::read(orphan)?, b"partial write");
-        Ok(())
-    })
+            let orphan =
+                std::fs::read_dir(&destination)?.next().ok_or("Interrupted file missing")??.path();
+            bundle.payload.copy("app/", &destination, context, files::create_new)?;
+            let _verified = VerifiedCopy::open(&bundle.payload.inventory, &destination, context)?;
+            assert_eq!(std::fs::read(orphan)?, b"partial write");
+            Ok(())
+        },
+    )
 }

@@ -2,7 +2,10 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Decode the common native archive through installer trust or retained authenticated download custody.
 use super::{
-    VerifiedDownload, check,
+    VerifiedDownload,
+    bundle::Payload,
+    cache::{self, Namespace, RuntimeCache},
+    check,
     files::{self, Directory},
     invalid,
 };
@@ -10,12 +13,17 @@ use flate2::bufread::GzDecoder;
 use sha2::{Digest, Sha256};
 use std::{
     io::{self, BufReader, Read, Seek, SeekFrom},
-    path::{Path, PathBuf},
+    path::Path,
 };
 use sugarsubstitute_contracts::execution::JobContext;
 use sugarsubstitute_contracts::update::Component;
 use sugarsubstitute_update::package::{MAX_MANIFEST_BYTES, Manifest};
 const MAGIC: &[u8; 8] = b"SSSETUP1";
+/// Storage admission for materialization, retained scope/entry metadata and authenticated files.
+/// Later copy operations require their own reservation alongside this retained source admission.
+pub const MATERIALIZATION_RESERVATION_BYTES: u64 = 32 * 1024 * 1024;
+const ARCHIVE_MEMORY: u64 = 2 * 1024 * 1024;
+const EXTRACTION_MEMORY: u64 = 14 * 1024 * 1024;
 mod extract;
 mod footer;
 
@@ -25,15 +33,15 @@ mod footer;
 /// Rejects malformed archives, untrusted inventories, traversal and changed payload bytes.
 pub fn materialize(
     source: &Path,
-    workspace: &Path,
+    cache: &RuntimeCache,
     expected: &str,
     context: &JobContext,
-) -> io::Result<PathBuf> {
+) -> io::Result<super::VerifiedBundle> {
     check(context)?;
     if source.is_dir() {
-        return Ok(source.to_owned());
+        return super::VerifiedBundle::open(source, expected, context);
     }
-    let _memory = context.memory().claim(super::RESERVATION_BYTES).map_err(io::Error::other)?;
+    let _memory = context.memory().claim(ARCHIVE_MEMORY).map_err(io::Error::other)?;
     let parent = Directory::open(
         source.parent().ok_or_else(|| invalid("Installer parent missing"))?,
         false,
@@ -44,26 +52,27 @@ pub fn materialize(
         .ok_or_else(|| invalid("Installer filename invalid"))?;
     let mut file = parent.read(leaf)?;
     let archive = inventory(&mut file, expected)?;
-    unpack(&mut file, archive, workspace, expected, Component::Application, context)
+    Ok(super::VerifiedBundle {
+        payload: unpack(&mut file, archive, cache, expected, Component::Application, context)?,
+    })
 }
 
 /// Authenticate the inventory through the exact verified archive handle, without reopening a path.
 /// Bare update archives use the same format as installer payloads, with no executable envelope.
 pub(super) fn downloaded(
     source: &mut VerifiedDownload,
-    workspace: &Path,
+    cache: &RuntimeCache,
     component: Component,
     context: &JobContext,
-) -> io::Result<(PathBuf, String)> {
+) -> io::Result<Payload> {
     check(context)?;
-    let _memory = context.memory().claim(super::RESERVATION_BYTES).map_err(io::Error::other)?;
+    let _memory = context.memory().claim(ARCHIVE_MEMORY).map_err(io::Error::other)?;
     let archive = read_inventory(source)?;
     if archive.offset != 0 || archive.end != source.identity().length() {
         return Err(invalid("Update package has an unexpected executable envelope"));
     }
     let digest = format!("{:x}", Sha256::digest(&archive.manifest));
-    let root = unpack(source, archive, workspace, &digest, component, context)?;
-    Ok((root, digest))
+    unpack(source, archive, cache, &digest, component, context)
 }
 
 /// Exact bounded sections; this structural description grants no authenticity on its own.
@@ -130,27 +139,93 @@ fn layout(file: &mut (impl Read + Seek)) -> io::Result<Layout> {
 fn unpack(
     file: &mut (impl Read + Seek),
     archive: Archive,
-    workspace: &Path,
+    cache: &RuntimeCache,
     digest: &str,
     component: Component,
     context: &JobContext,
-) -> io::Result<PathBuf> {
-    let package = Manifest::decode(&archive.manifest).map_err(io::Error::other)?;
-    super::inventory::require_component(&package, component)?;
+) -> io::Result<Payload> {
     check(context)?;
-    let root = Directory::open(&workspace.join("payloads-v1"), true)?;
-    let destination = super::staging::directory(&root, digest)?;
-    let _destination = Directory::open(&destination, false)?;
-    file.seek(SeekFrom::Start(archive.offset))?;
-    let mut stream = GzDecoder::new(BufReader::with_capacity(65536, file.take(archive.compressed)));
-    extract::extract(&mut stream, &package, &destination, || check(context))?;
-    let compressed = stream.into_inner();
-    if compressed.get_ref().limit() != 0 || !compressed.buffer().is_empty() {
-        return Err(invalid("Unexpected data follows the compressed package"));
+    let component_name = match component {
+        Component::Application => "application",
+        Component::Updater => "updater",
+    };
+    let key = cache::storage_key(format!("payload-v1:{component_name}:{digest}").as_bytes());
+    let now = cache::utc_seconds()?;
+    if let Some(lease) = cache.clone().find(Namespace::PackedPayloads, &key, now, context)? {
+        {
+            let _verification =
+                context.memory().claim(EXTRACTION_MEMORY).map_err(io::Error::other)?;
+            let package = Manifest::decode(&archive.manifest).map_err(io::Error::other)?;
+            super::inventory::require_component(&package, component)?;
+            file.seek(SeekFrom::Start(archive.offset))?;
+            let mut stream =
+                GzDecoder::new(BufReader::with_capacity(65536, file.take(archive.compressed)));
+            extract::verify(&mut stream, &package, || check(context))?;
+            let compressed = stream.into_inner();
+            if compressed.get_ref().limit() != 0 || !compressed.buffer().is_empty() {
+                return Err(invalid("Unexpected data follows the compressed package"));
+            }
+        }
+        let path = lease.path();
+        match Payload::open_pinned(
+            &path,
+            digest,
+            component,
+            Some(std::sync::Arc::new(lease)),
+            context,
+        ) {
+            Ok(payload) => return Ok(payload),
+            Err(cause)
+                if matches!(
+                    cause.kind(),
+                    io::ErrorKind::InvalidInput
+                        | io::ErrorKind::InvalidData
+                        | io::ErrorKind::NotFound
+                        | io::ErrorKind::PermissionDenied
+                ) =>
+            {
+                tracing::warn!(operation="payload_cache_miss", package=%digest, cause=%cause, "Preserving rejected extracted cache bytes");
+            }
+            Err(cause) => return Err(cause),
+        }
     }
-    check(context)?;
-    files::write_new(&destination.join("setup-manifest.json"), &archive.manifest)?;
-    Ok(destination)
+    let lease = {
+        let _extraction = context.memory().claim(EXTRACTION_MEMORY).map_err(io::Error::other)?;
+        let package = Manifest::decode(&archive.manifest).map_err(io::Error::other)?;
+        super::inventory::require_component(&package, component)?;
+        let maximum =
+            package.entries().iter().try_fold(archive.manifest.len() as u64, |total, entry| {
+                total
+                    .checked_add(entry.bytes())
+                    .ok_or_else(|| invalid("Extracted cache reservation overflowed"))
+            })?;
+        let mut lease =
+            cache.clone().fresh(Namespace::PackedPayloads, &key, maximum, now, context)?;
+        lease.declare(
+            package
+                .entries()
+                .iter()
+                .map(|entry| entry.path().to_owned())
+                .chain(std::iter::once("setup-manifest.json".into())),
+            context,
+        )?;
+        let destination = lease.path();
+        file.seek(SeekFrom::Start(archive.offset))?;
+        let mut stream =
+            GzDecoder::new(BufReader::with_capacity(65536, file.take(archive.compressed)));
+        extract::extract(&mut stream, &package, &destination, || check(context))?;
+        let compressed = stream.into_inner();
+        if compressed.get_ref().limit() != 0 || !compressed.buffer().is_empty() {
+            return Err(invalid("Unexpected data follows the compressed package"));
+        }
+        check(context)?;
+        files::write_new(&destination.join("setup-manifest.json"), &archive.manifest)?;
+        lease.verify_storage(context)?;
+        lease.publish(context)?;
+        lease.into_reader(context)?
+    };
+    let path = lease.path();
+    Payload::open_pinned(&path, digest, component, Some(std::sync::Arc::new(lease)), context)
 }
 
 #[cfg(test)]

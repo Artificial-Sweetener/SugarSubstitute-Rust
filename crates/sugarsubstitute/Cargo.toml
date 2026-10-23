@@ -32,6 +32,7 @@ sugarsubstitute-crash = { path = "../sugarsubstitute-crash" }
 sugarsubstitute-supervision = { path = "../sugarsubstitute-supervision" }
 
 [target.'cfg(windows)'.dev-dependencies]
+tempfile.workspace = true
 sugarsubstitute-execution = { path = "../sugarsubstitute-execution", features = ["boundary-fixtures"] }
 sugarsubstitute-desktop = { path = "../sugarsubstitute-desktop", features = ["boundary-fixtures"] }
 sugarsubstitute-supervision = { path = "../sugarsubstitute-supervision", features = ["boundary-fixtures"] }

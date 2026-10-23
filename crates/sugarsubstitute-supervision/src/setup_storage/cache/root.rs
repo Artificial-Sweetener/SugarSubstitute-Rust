@@ -14,7 +14,7 @@ pub(super) fn open(
     check(context)?;
     policy.validate()?;
     let memory = admitted.claim(ROOT_BYTES).map_err(io::Error::other)?;
-    let parent = Directory::open(anchor, false)?;
+    let parent = Directory::open(anchor, true)?.resolved()?;
     let expected = "SugarSubstitute runtime cache 1\n";
     let path = parent.path.join(DIRECTORY);
     match Directory::open(&path, false) {

@@ -135,3 +135,9 @@ pub use registry::{
     InheritedRecoveryJobInput, RecoveryChildCreation, RecoveryChildCreationRejection,
     RecoveryChildInput, RecoveryChildInputRejection, RecoveryChildStatus,
 };
+
+#[cfg(windows)]
+pub use registry_input::ProvisioningEndpoint;
+
+#[cfg(windows)]
+pub use registry::SettledProvisioning;

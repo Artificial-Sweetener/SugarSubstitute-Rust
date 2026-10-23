@@ -7,6 +7,8 @@
 //! every file, native consumer and job using an entry. Settings, trust and installed generations
 //! are never admitted here. Unknown content is preserved and reported by maintenance.
 mod admission;
+mod consumers;
+pub(crate) use consumers::NativeCachePin;
 #[allow(unsafe_code)]
 mod deletion;
 pub use admission::storage_key;
@@ -14,6 +16,7 @@ mod entry;
 mod lookup;
 mod maintenance;
 mod native_output;
+pub use native_output::PendingEntries;
 mod policy;
 mod reader;
 mod record;
@@ -68,7 +71,7 @@ struct Scope {
 }
 impl RuntimeCache {
     /// Open or atomically initialize this scope's disposable cache directory.
-    /// The anchor must be an absolute existing local directory. No ambient path is consulted.
+    /// The anchor must be an absolute local directory, created when missing. No ambient path is consulted.
     /// # Errors
     /// Rejects links, foreign ownership, unsupported schemas, invalid limits and native failures.
     pub fn open(anchor: &Path, policy: CachePolicy, context: &JobContext) -> io::Result<Self> {

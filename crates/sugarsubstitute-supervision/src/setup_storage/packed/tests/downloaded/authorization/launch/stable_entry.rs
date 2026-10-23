@@ -203,9 +203,17 @@ fn matching_installer_publishes_and_returns_the_stable_launcher() -> TestResult 
         let archive = workspace.path().join("installer.exe");
         std::fs::write(&archive, test_package::seal(&manifest, &compressed))?;
         let digest = format!("{:x}", Sha256::digest(&manifest));
-        let extracted =
-            crate::setup_storage::materialize(&archive, workspace.path(), &digest, context)?;
-        let bundle = Arc::new(VerifiedBundle::open(&extracted, &digest, context)?);
+        let extracted = crate::setup_storage::materialize(
+            &archive,
+            &crate::setup_storage::cache::RuntimeCache::open(
+                workspace.path(),
+                crate::setup_storage::cache::CachePolicy::default(),
+                context,
+            )?,
+            &digest,
+            context,
+        )?;
+        let bundle = Arc::new(extracted);
         let prepared = crate::setup_storage::InstallationSession::maintain(&root.path, context)?
             .prepare(bundle, context)?;
         prepared.stage(context)?;

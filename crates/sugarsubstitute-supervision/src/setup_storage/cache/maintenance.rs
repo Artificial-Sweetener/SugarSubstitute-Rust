@@ -64,10 +64,8 @@ impl RuntimeCache {
             let entry = entry?;
             let name = entry.file_name();
             let known = name.to_str().is_some_and(|name| {
-                ["owner", "writer"].iter().any(|known| name.eq_ignore_ascii_case(known))
-                    || Namespace::ALL
-                        .iter()
-                        .any(|namespace| name.eq_ignore_ascii_case(namespace.directory()))
+                ["owner", "writer"].contains(&name)
+                    || Namespace::ALL.iter().any(|namespace| name == namespace.directory())
             });
             if !known {
                 outcome.preserved_entries += 1;
@@ -182,7 +180,7 @@ impl RuntimeCache {
                             ) =>
                         {
                             let reserved = record.reserved.max(tree::preserved_charge(
-                                &directory.path.join("data"),
+                                &directory.path,
                                 namespace,
                                 context,
                             )?);
@@ -192,7 +190,7 @@ impl RuntimeCache {
                         Err(cause) => Err(cause),
                     }
                 });
-                let (record, charge, pinned, preserved) = match loaded {
+                let (record, mut charge, mut pinned, mut preserved) = match loaded {
                     Ok(loaded) => loaded,
                     Err(cause)
                         if record::kind(&cause) == io::ErrorKind::InvalidInput
@@ -210,6 +208,33 @@ impl RuntimeCache {
                     }
                     Err(cause) => return Err(cause),
                 };
+                if !pinned && !preserved && record.consumers.is_some() {
+                    let path = parent.path.join(&key);
+                    let live = match Directory::open(&path, false) {
+                        Ok(directory) => consumers::live(&directory, &record, context),
+                        Err(cause)
+                            if retiring && record::kind(&cause) == io::ErrorKind::NotFound =>
+                        {
+                            Ok(false)
+                        }
+                        Err(cause) => Err(cause),
+                    };
+                    match live {
+                        Ok(value) => pinned = value,
+                        Err(cause) if record::busy(&cause) => pinned = true,
+                        Err(cause)
+                            if matches!(
+                                record::kind(&cause),
+                                io::ErrorKind::InvalidInput | io::ErrorKind::InvalidData
+                            ) =>
+                        {
+                            preserved = true;
+                            charge = charge.max(tree::preserved_charge(&path, namespace, context)?);
+                            tracing::warn!(operation="cache_native_controls", namespace=namespace.directory(), entry=%key, cause=%cause, "Preserving damaged native consumer controls");
+                        }
+                        Err(cause) => return Err(cause),
+                    }
+                }
                 outcome.charged_bytes = outcome
                     .charged_bytes
                     .checked_add(charge)

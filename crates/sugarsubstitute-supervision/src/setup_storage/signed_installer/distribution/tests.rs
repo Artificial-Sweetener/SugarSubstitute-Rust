@@ -16,21 +16,28 @@ type Failure = Box<dyn std::error::Error + Send + Sync>;
 fn retained_preview_and_signed_import_complete_on_the_same_execution_ledger() -> TestResult {
     use crate::setup_storage::test_worker::pipeline::Pipeline;
     let mut pipeline = Pipeline::new()?;
-    let (fixture, preview) = pipeline.run(RESERVATION_BYTES, |context| {
-        let fixture = Fixture::new(&context)?;
-        let distribution =
-            InstallerDistribution::decode(&serde_json::to_vec(&fixture.configuration)?, &context)?;
-        let digest = distribution.manifest_digest().to_owned();
-        drop(distribution);
-        let root = crate::setup_storage::materialize(
-            &fixture.executable,
-            fixture.workspace.path(),
-            &digest,
-            &context,
-        )?;
-        let preview = VerifiedBundle::open(&root, &digest, &context)?;
-        Ok((fixture, preview))
-    })?;
+    let (fixture, preview) =
+        pipeline.run(crate::setup_storage::MATERIALIZATION_RESERVATION_BYTES, |context| {
+            let fixture = Fixture::new(&context)?;
+            let distribution = InstallerDistribution::decode(
+                &serde_json::to_vec(&fixture.configuration)?,
+                &context,
+            )?;
+            let digest = distribution.manifest_digest().to_owned();
+            drop(distribution);
+            let root = crate::setup_storage::materialize(
+                &fixture.executable,
+                &crate::setup_storage::cache::RuntimeCache::open(
+                    fixture.workspace.path(),
+                    crate::setup_storage::cache::CachePolicy::default(),
+                    &context,
+                )?,
+                &digest,
+                &context,
+            )?;
+            let preview = root;
+            Ok((fixture, preview))
+        })?;
     let (fixture, imported) = pipeline.run(SIGNED_INSTALLER_RESERVATION_BYTES, move |context| {
         let imported = fixture.import(NOW, &context)?;
         Ok((fixture, imported))

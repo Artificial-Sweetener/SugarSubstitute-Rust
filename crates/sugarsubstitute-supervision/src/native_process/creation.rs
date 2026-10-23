@@ -8,7 +8,10 @@ use std::{
 };
 use windows::{
     Win32::{
-        Foundation::{DUPLICATE_SAME_ACCESS, DuplicateHandle},
+        Foundation::{
+            DUPLICATE_SAME_ACCESS, DuplicateHandle, ERROR_ALREADY_EXISTS, ERROR_SUCCESS,
+            GetLastError, SetLastError,
+        },
         System::{
             JobObjects::{
                 CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
@@ -24,13 +27,27 @@ use windows::{
 impl WindowsPort {
     /// Create the original empty containment Job before remote adoption or root creation.
     pub(super) fn prepare_job_native(&self, family: &mut Family) -> Result<(), RegistryError> {
-        if family.job.is_some() {
+        if family.job.is_some() || family.rejected_job.is_some() {
             return Err(RegistryError::invalid("prepared_job_already_owned"));
         }
         family.check_native()?;
-        // SAFETY: unnamed, non-inheritable Job is immediately adopted before any later fallible operation.
-        let job = unsafe { CreateJobObjectW(None, PCWSTR::null()) }
-            .map_err(|cause| RegistryError::new("create_job", cause))?;
+        let name = family.cache_family.map(|identity| identity.native_name());
+        let name_pointer = name.as_ref().map_or(PCWSTR::null(), |name| PCWSTR(name.as_ptr()));
+        // SAFETY: the stable optional UTF-16 name lives through this synchronous creation.
+        // Adopt even a rejected existing-object handle before any later fallible operation.
+        let (created, existed) = unsafe {
+            SetLastError(ERROR_SUCCESS);
+            let created = CreateJobObjectW(None, name_pointer);
+            let existed = GetLastError() == ERROR_ALREADY_EXISTS;
+            (created, existed)
+        };
+        let job = created.map_err(|cause| RegistryError::new("create_job", cause))?;
+        if existed {
+            // This handle grants no ownership of the existing family. Cleanup closes only this
+            // new handle; it must never change limits, enroll members or terminate that Job.
+            family.rejected_job = Some(job.0 as usize);
+            return Err(RegistryError::invalid("cache_containment_job_already_exists"));
+        }
         family.job = Some(job.0 as usize);
         family.job_list[0] = job.0 as usize;
         let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();

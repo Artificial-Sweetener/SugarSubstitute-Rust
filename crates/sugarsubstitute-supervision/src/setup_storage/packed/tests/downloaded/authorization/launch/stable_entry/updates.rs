@@ -26,7 +26,11 @@ fn next_package(
         .into_package()?;
     let bundle = Arc::new(VerifiedBundle::from_download(
         receive(&archive, &root.path, target, context)?,
-        workspace,
+        &crate::setup_storage::cache::RuntimeCache::open(
+            workspace,
+            crate::setup_storage::cache::CachePolicy::default(),
+            context,
+        )?,
         context,
     )?);
     let prepared = crate::setup_storage::InstallationSession::maintain(&root.path, context)?

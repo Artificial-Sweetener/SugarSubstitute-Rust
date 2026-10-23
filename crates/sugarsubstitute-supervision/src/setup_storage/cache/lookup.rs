@@ -48,6 +48,7 @@ impl RuntimeCache {
                 {
                     return Ok(None);
                 }
+                consumers::validate(&directory, &record, protection, context)?;
                 Ok(Some((directory, pin, record)))
             });
             match opened {

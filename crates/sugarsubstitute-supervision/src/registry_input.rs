@@ -107,3 +107,5 @@ impl fmt::Debug for WindowsLaunchInput {
             .finish_non_exhaustive()
     }
 }
+
+pub use preparation::ProvisioningEndpoint;

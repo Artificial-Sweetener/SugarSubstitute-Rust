@@ -195,7 +195,8 @@ fn durable_native_producer_pin_survives_host_loss_until_feature_owned_retirement
             io::ErrorKind::WouldBlock
         );
         let mut recovered = open(root.path(), 64, context)?
-            .recover_pending(Namespace::SetupBrowser, context)?
+            .pending(Namespace::SetupBrowser, context)?
+            .next(context)?
             .ok_or("Pending producer absent")?;
         assert_eq!(recovered.producer(), Some("feature-native-recovery-v1"));
         assert!(recovered.write("payload", b"forbidden", context).is_err());
@@ -228,6 +229,33 @@ fn native_output_adoption_requires_a_bounded_prior_grant() -> TestResult {
         lease.begin_generated("native-v1", context)?;
         assert_eq!(lease.record_generated(100, context)?, 0);
         assert!(lease.producer().is_none());
+        Ok(())
+    })
+}
+
+#[test]
+fn pending_cursor_advances_past_a_retained_live_producer_to_later_recoverable_output() -> TestResult
+{
+    worker::run_reserved(32 * 1024 * 1024, |context, _| {
+        let root = tempfile::tempdir()?;
+        let cache = open(root.path(), 32, context)?;
+        for (key, descriptor) in [("0".repeat(64), "live"), ("f".repeat(64), "retired")] {
+            let mut lease =
+                cache.clone().acquire(Namespace::SetupBrowser, &key, 8, 100, context)?;
+            lease.begin_generated(descriptor, context)?;
+        }
+        let mut pending = cache.pending(Namespace::SetupBrowser, context)?;
+        let first = pending.next(context)?.ok_or("First producer absent")?;
+        assert_eq!(first.producer(), Some("live"));
+        drop(first);
+        let mut second = pending.next(context)?.ok_or("Later producer hidden")?;
+        assert_eq!(second.producer(), Some("retired"));
+        second.record_generated(100, context)?;
+        drop(second);
+        assert!(pending.next(context)?.is_none());
+        let mut retry = cache.pending(Namespace::SetupBrowser, context)?;
+        assert_eq!(retry.next(context)?.ok_or("Live producer lost")?.producer(), Some("live"));
+        assert!(retry.next(context)?.is_none());
         Ok(())
     })
 }

@@ -177,7 +177,8 @@ fn cleanup_step(
     if family.count == 0 || family.closure_committed {
         family.closure_committed = true;
         shared.port.close(family)?;
-        if family.preparation_image.as_ref().and_then(|launch| launch.probe()).is_none() {
+        if !family.preparation_image.as_ref().is_some_and(|launch| launch.retains_settled_payload())
+        {
             state.family = None;
         }
         retire_custody_metadata(state, context)?;
@@ -222,7 +223,8 @@ fn cleanup_step(
         // subsequent steps retry only outstanding closes after partial success.
         family.closure_committed = true;
         shared.port.close(family)?;
-        if family.preparation_image.as_ref().and_then(|launch| launch.probe()).is_none() {
+        if !family.preparation_image.as_ref().is_some_and(|launch| launch.retains_settled_payload())
+        {
             state.family = None;
         }
         retire_custody_metadata(state, context)?;

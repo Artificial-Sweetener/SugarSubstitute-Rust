@@ -39,6 +39,8 @@ pub(crate) struct Family {
     pub(crate) preparation_image:
         Option<Box<crate::registry_input::preparation::PreparationLaunch>>,
     pub(crate) job: Option<usize>,
+    pub(crate) rejected_job: Option<usize>,
+    pub(crate) cache_family: Option<crate::setup_storage::cache_custody::CacheFamilyId>,
     pub(crate) thread: Option<usize>,
     pub(crate) watch_duplicate: Option<usize>,
     pub(crate) members: [Option<Member>; MAX_MEMBERS],
@@ -122,6 +124,8 @@ impl Family {
             family: Box::new(Self {
                 preparation_image: None,
                 job: None,
+                rejected_job: None,
+                cache_family: None,
                 thread: None,
                 watch_duplicate: None,
                 members: std::array::from_fn(|_| None),
@@ -297,3 +301,6 @@ mod recovery_carrier;
 
 mod recovery_child;
 pub(crate) use recovery_child::close_recovery_input;
+
+#[cfg(test)]
+pub(crate) mod cache_fixture;

@@ -43,7 +43,7 @@ impl RuntimeCache {
             if directory.identity()? != record.identity {
                 return Err(invalid("Cache deletion journal directory changed identity"));
             }
-            if record.producer.is_some() {
+            if record.producer.is_some() || consumers::live(&directory, &record, context)? {
                 return Ok(Removal::Busy);
             }
             if !candidate.retiring
@@ -63,6 +63,7 @@ impl RuntimeCache {
             if !candidate.retiring {
                 record::start_retirement(&parent, &record, context)?;
             }
+            consumers::remove(&directory, &record, context)?;
             for file in inventory.files {
                 tree::remove_file(&path.join("data").join(file), context)?;
             }

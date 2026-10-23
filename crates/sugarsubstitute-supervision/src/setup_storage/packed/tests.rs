@@ -69,8 +69,17 @@ fn installer_and_update_use_one_extractor_that_rejects_compressed_tail_and_prese
         let expected = format!("{:x}", Sha256::digest(&manifest));
         let source = workspace.path().join("setup.exe");
         std::fs::write(&source, test_package::seal(&manifest, &compressed))?;
-        let installed = materialize(&source, workspace.path(), &expected, context)?;
-        let bundle = VerifiedBundle::open(&installed, &expected, context)?;
+        let installed = materialize(
+            &source,
+            &crate::setup_storage::cache::RuntimeCache::open(
+                workspace.path(),
+                crate::setup_storage::cache::CachePolicy::default(),
+                context,
+            )?,
+            &expected,
+            context,
+        )?;
+        let bundle = installed;
         assert_eq!(bundle.release(), "local-package");
         let sentinel = workspace.path().join("user-file");
         std::fs::write(&sentinel, b"preserve")?;
@@ -78,11 +87,66 @@ fn installer_and_update_use_one_extractor_that_rejects_compressed_tail_and_prese
             let mut changed = compressed.clone();
             changed.extend_from_slice(suffix);
             std::fs::write(&source, test_package::seal(&manifest, &changed))?;
-            assert!(materialize(&source, workspace.path(), &expected, context).is_err());
+            assert!(
+                materialize(
+                    &source,
+                    &crate::setup_storage::cache::RuntimeCache::open(
+                        workspace.path(),
+                        crate::setup_storage::cache::CachePolicy::default(),
+                        context
+                    )?,
+                    &expected,
+                    context
+                )
+                .is_err()
+            );
         }
         assert_eq!(std::fs::read(&sentinel)?, b"preserve");
-        assert!(installed.join("setup-manifest.json").is_file());
-        assert_eq!(std::fs::read_dir(workspace.path().join("payloads-v1"))?.count(), 3);
+        assert!(bundle.payload.root.join("setup-manifest.json").is_file());
+        assert_eq!(
+            std::fs::read_dir(
+                workspace.path().join(cache::DIRECTORY).join(Namespace::PackedPayloads.directory())
+            )?
+            .count(),
+            1
+        );
+        Ok(())
+    })
+}
+
+#[test]
+fn cache_reuse_retains_one_generation_and_checks_the_supplied_archive() -> TestResult {
+    worker::run_reserved(64 * 1024 * 1024, |context, _| {
+        let workspace = tempfile::tempdir()?;
+        let cache = RuntimeCache::open(workspace.path(), cache::CachePolicy::default(), context)?;
+        let (manifest, compressed) = test_package::distribution()?;
+        let digest = format!("{:x}", Sha256::digest(&manifest));
+        let source = workspace.path().join("installer.exe");
+        std::fs::write(&source, test_package::seal(&manifest, &compressed))?;
+        let first = materialize(&source, &cache, &digest, context)?;
+        let second = materialize(&source, &cache, &digest, context)?;
+        assert_eq!(first.payload.root, second.payload.root);
+        assert!(VerifiedBundle::open(&first.payload.root, &digest, context).is_err());
+        let report = cache
+            .maintain(cache::utc_seconds()? + Namespace::PackedPayloads.retention(), context)?;
+        assert_eq!(report.removed_entries, 0);
+        assert_eq!(report.pinned_entries, 1);
+        let mut corrupt = compressed;
+        corrupt.extend_from_slice(b"trailing bytes");
+        std::fs::write(&source, test_package::seal(&manifest, &corrupt))?;
+        let Err(cause) = materialize(&source, &cache, &digest, context) else {
+            return Err("Cache hit bypassed compressed archive validation".into());
+        };
+        assert_eq!(cause.kind(), io::ErrorKind::InvalidInput);
+        let path = first.payload.root.clone();
+        drop((first, second));
+        assert_eq!(
+            cache
+                .maintain(cache::utc_seconds()? + Namespace::PackedPayloads.retention(), context)?
+                .removed_entries,
+            1
+        );
+        assert!(!path.exists());
         Ok(())
     })
 }

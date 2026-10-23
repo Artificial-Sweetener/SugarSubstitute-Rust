@@ -65,7 +65,11 @@ fn downloaded_candidate_case(missing: bool, missing_entry: bool) -> TestResult {
         )?;
         let bundle = Arc::new(VerifiedBundle::from_download(
             receive(&archive, source_root.path(), offer.into_package()?, context)?,
-            workspace.path(),
+            &crate::setup_storage::cache::RuntimeCache::open(
+                workspace.path(),
+                crate::setup_storage::cache::CachePolicy::default(),
+                context,
+            )?,
             context,
         )?);
         assert_eq!(
@@ -152,7 +156,11 @@ fn signed_but_malformed_archive_cannot_return_a_bundle_or_delete_saved_files() -
         assert!(
             VerifiedBundle::from_download(
                 verified(&archive, source_root.path(), context)?,
-                workspace.path(),
+                &crate::setup_storage::cache::RuntimeCache::open(
+                    workspace.path(),
+                    crate::setup_storage::cache::CachePolicy::default(),
+                    context
+                )?,
                 context
             )
             .is_err()
@@ -162,7 +170,11 @@ fn signed_but_malformed_archive_cannot_return_a_bundle_or_delete_saved_files() -
         assert!(
             VerifiedBundle::from_download(
                 verified(&prefixed, source_root.path(), context)?,
-                workspace.path(),
+                &crate::setup_storage::cache::RuntimeCache::open(
+                    workspace.path(),
+                    crate::setup_storage::cache::CachePolicy::default(),
+                    context
+                )?,
                 context
             )
             .is_err()
