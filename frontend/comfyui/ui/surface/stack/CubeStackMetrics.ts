@@ -17,5 +17,17 @@
 export const CUBE_STACK_ROW_HEIGHT = 46;
 /** Retain the reference rail's spacing between adjacent rows. */
 export const CUBE_STACK_ROW_GAP = 4;
-/** Advance one settled slot regardless of an in-flight visual transform. */
-export const CUBE_STACK_ROW_STRIDE = CUBE_STACK_ROW_HEIGHT + CUBE_STACK_ROW_GAP;
+/** Pack compact squares together while retaining expanded row spacing. */
+export function cubeStackRowGap(compact: boolean): number {
+  return compact ? 0 : CUBE_STACK_ROW_GAP;
+}
+
+/** Advance one settled slot independently of an in-flight visual transform. */
+export function cubeStackRowStride(compact: boolean): number {
+  return CUBE_STACK_ROW_HEIGHT + cubeStackRowGap(compact);
+}
+
+/** Reserve only the tile width for compact navigation and retain expanded labels. */
+export function cubeStackWidth(compact: boolean): number {
+  return compact ? CUBE_STACK_ROW_HEIGHT : 224;
+}

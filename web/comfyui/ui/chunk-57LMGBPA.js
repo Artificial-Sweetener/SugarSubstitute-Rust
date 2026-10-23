@@ -1,7 +1,6 @@
 import {
-  CUBE_STACK_ROW_HEIGHT,
-  CUBE_STACK_ROW_STRIDE
-} from "./chunk-GP5LDPUZ.js";
+  CUBE_STACK_ROW_HEIGHT
+} from "./chunk-3BUER5QA.js";
 import {
   onBeforeUnmount,
   ref
@@ -64,7 +63,7 @@ function useCubeStackPointerDrag(options) {
     const listTop = list.getBoundingClientRect().top;
     let index = remaining.length;
     for (const [slot, id] of remaining.entries()) {
-      const destination = current.indexOf(id) * CUBE_STACK_ROW_STRIDE + CUBE_STACK_ROW_HEIGHT / 2;
+      const destination = current.indexOf(id) * options.rowStride() + CUBE_STACK_ROW_HEIGHT / 2;
       if (center < listTop + destination) {
         index = slot;
         break;

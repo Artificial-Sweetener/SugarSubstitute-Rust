@@ -14,6 +14,9 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Calculate scrollbar travel independently of DOM layout and native scrolling. */
+/** Match the reference Photoshop track and its two square arrow buttons in screen pixels. */
+export const PHOTOPRO_SCROLLBAR_WIDTH = 16;
+
 export interface ScrollbarGeometry {
   length: number;
   offset: number;

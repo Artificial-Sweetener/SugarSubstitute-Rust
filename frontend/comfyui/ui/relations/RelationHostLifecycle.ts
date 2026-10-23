@@ -41,6 +41,7 @@ import { CubeRelationPresenter } from './presentation/CubeRelationPresenter.js';
 import { ensureRelationStyles } from './presentation/RelationStyles.js';
 import type { CubeFaceCardStateService } from '../surface/CubeFaceCardStateService.js';
 import type { WorkflowNodeConnection } from '../surface/WorkflowNodeOrder.js';
+import type { EmbeddedPresentationSource } from '../core/embedded/EmbeddedPresentation.js';
 
 export interface RelationHostOptions {
   app: ComfyApplication | null;
@@ -251,11 +252,12 @@ export class RelationHostLifecycle {
   }
 
   /** Restore override presentation preferences after host appearance settings are available. */
-  setupOverridePresentation(): void {
+  setupOverridePresentation(embedded?: EmbeddedPresentationSource): void {
     this.#overridePresentation.setup(
       this.options.app,
       this.options.document,
       this.options.reportError,
+      embedded,
     );
   }
 

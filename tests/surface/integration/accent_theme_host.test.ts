@@ -28,6 +28,11 @@ interface ColorSetting {
   onChange: (value: unknown) => void;
 }
 
+import {
+  EmbeddedPresentation,
+  type EmbeddedPresentationSource,
+} from '../../../frontend/comfyui/ui/core/embedded/EmbeddedPresentation.js';
+
 const hosts: AccentThemeHost[] = [];
 afterEach(() => {
   hosts.splice(0).forEach((host) => host.dispose());
@@ -37,7 +42,7 @@ afterEach(() => {
 });
 
 /** Bind a real observer and stylesheet to a narrow Comfy settings boundary. */
-function createHost(saved: unknown = '#b58cff') {
+function createHost(saved: unknown = '#b58cff', embedded?: EmbeddedPresentationSource) {
   let setting: ColorSetting | undefined;
   const setDirty = jest.fn();
   const report = jest.fn();
@@ -59,6 +64,7 @@ function createHost(saved: unknown = '#b58cff') {
       },
     },
     report,
+    embedded,
   );
   hosts.push(host);
   host.setup();
@@ -165,4 +171,43 @@ test('rejects invalid settings, falls back from invalid CSS, and releases only o
   expect(document.documentElement.style.getPropertyValue('--sugarcubes-accent')).toBe(
     'transparent',
   );
+});
+
+test('uses the negotiated Photoshop accent without persisting it and restores the latest saved choice', () => {
+  const embedded = new EmbeddedPresentation();
+  const f = createHost('#b58cff', embedded);
+  document.documentElement.style.setProperty('--sugarcubes-accent', '#ff0000');
+  embedded.set({
+    pluginMode: true,
+    visualStyle: 'photopro',
+    photoProPalette: 'dark-gray',
+    accentColor: '#d6d6d6',
+    resizeCornerSize: 0,
+  });
+  expect(f.host.theme.color).toBe('#d6d6d6');
+  f.setting.onChange('#123456');
+  expect(f.host.theme.color).toBe('#d6d6d6');
+  embedded.set({
+    pluginMode: true,
+    visualStyle: 'photopro',
+    photoProPalette: 'dark-gray',
+    accentColor: '#c0c0c0',
+    resizeCornerSize: 0,
+  });
+  expect(f.host.theme.color).toBe('#c0c0c0');
+  embedded.set(null);
+  expect(f.host.theme.color).toBe('#ff0000');
+  document.documentElement.style.removeProperty('--sugarcubes-accent');
+  f.host.refresh();
+  expect(f.host.theme.color).toBe('#123456');
+  expect(f.setSettingValue).not.toHaveBeenCalled();
+  f.host.dispose();
+  embedded.set({
+    pluginMode: true,
+    visualStyle: 'photopro',
+    photoProPalette: 'dark-gray',
+    accentColor: '#d6d6d6',
+    resizeCornerSize: 0,
+  });
+  expect(f.host.theme.color).toBe('#123456');
 });

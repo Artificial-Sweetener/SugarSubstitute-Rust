@@ -1,7 +1,7 @@
 import {
   CUBE_STACK_ROW_HEIGHT,
-  CUBE_STACK_ROW_STRIDE
-} from "./chunk-GP5LDPUZ.js";
+  cubeStackRowStride
+} from "./chunk-3BUER5QA.js";
 import {
   defineComponent,
   h
@@ -9,7 +9,10 @@ import {
 
 // frontend/comfyui/ui/surface/stack/vue/CubeStackSelectionIndicator.ts
 var CubeStackSelectionIndicator = defineComponent({
-  props: { position: { type: Number, default: null } },
+  props: {
+    position: { type: Number, default: null },
+    compact: { type: Boolean, default: false }
+  },
   setup(props) {
     return () => h("div", {
       class: "sc-cube-stack__selection",
@@ -17,7 +20,7 @@ var CubeStackSelectionIndicator = defineComponent({
       "data-position": props.position ?? void 0,
       style: {
         opacity: props.position === null ? "0" : "1",
-        transform: `translateY(${String((props.position ?? 0) * CUBE_STACK_ROW_STRIDE + (CUBE_STACK_ROW_HEIGHT - 16) / 2)}px)`
+        transform: `translateY(${String((props.position ?? 0) * cubeStackRowStride(props.compact) + (CUBE_STACK_ROW_HEIGHT - 16) / 2)}px)`
       }
     });
   }

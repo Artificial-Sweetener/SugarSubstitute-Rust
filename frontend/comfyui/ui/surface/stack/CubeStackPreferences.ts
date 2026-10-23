@@ -33,6 +33,8 @@ export class CubeStackPreferences {
   readonly #app: unknown;
   readonly #listeners = new Set<() => void>();
   #snapshot: CubeStackPreferenceSnapshot = Object.freeze({ visible: true, compact: false });
+  #saved: CubeStackPreferenceSnapshot = this.#snapshot;
+  #pluginCompact: boolean | null = null;
   #setValue: ((id: string, value: boolean) => Promise<void>) | null = null;
   #started = false;
   #disposed = false;
@@ -98,9 +100,16 @@ export class CubeStackPreferences {
     return this.#write(CUBE_STACK_VISIBLE_SETTING, 'visible', visible);
   }
 
-  /** Persist expanded or compact presentation without recording an undoable graph edit. */
+  /** Keep Plugin Mode choices local and persist ordinary stack presentation outside workflow undo. */
   setCompact(compact: boolean): Promise<void> {
     return this.#write(CUBE_STACK_COMPACT_SETTING, 'compact', compact);
+  }
+
+  /** Begin compact in Plugin Mode while retaining its choices only for the current mode lifetime. */
+  setPluginMode(enabled: boolean): void {
+    if (this.#disposed || (this.#pluginCompact !== null) === enabled) return;
+    this.#pluginCompact = enabled ? true : null;
+    this.#publish();
   }
 
   /** Retire callbacks retained by host registration after the owning extension is disposed. */
@@ -114,14 +123,28 @@ export class CubeStackPreferences {
   async #write(id: string, key: keyof CubeStackPreferenceSnapshot, value: boolean): Promise<void> {
     if (!this.#setValue || this.#disposed)
       throw new Error('Cube stack preferences are unavailable.');
+    if (key === 'compact' && this.#pluginCompact !== null) {
+      this.#pluginCompact = value;
+      this.#publish();
+      return;
+    }
     await this.#setValue(id, value);
     this.#accept(key, value);
   }
 
   /** Publish one immutable accepted snapshot for either external settings or local controls. */
   #accept(key: keyof CubeStackPreferenceSnapshot, value: boolean): void {
-    if (this.#disposed || this.#snapshot[key] === value) return;
-    this.#snapshot = Object.freeze({ ...this.#snapshot, [key]: value });
+    if (this.#disposed || this.#saved[key] === value) return;
+    this.#saved = Object.freeze({ ...this.#saved, [key]: value });
+    this.#publish();
+  }
+
+  /** Publish effective presentation without overwriting the saved Comfy preference. */
+  #publish(): void {
+    const compact = this.#pluginCompact ?? this.#saved.compact;
+    if (this.#snapshot.visible === this.#saved.visible && this.#snapshot.compact === compact)
+      return;
+    this.#snapshot = Object.freeze({ visible: this.#saved.visible, compact });
     for (const listener of this.#listeners) listener();
   }
 }

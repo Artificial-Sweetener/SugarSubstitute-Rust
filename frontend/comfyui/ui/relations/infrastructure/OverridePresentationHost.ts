@@ -16,6 +16,7 @@
 /** Select one override presentation while preserving independent frame and Plugin Mode preferences. */
 import type { GlobalOverrideToolbar } from '../presentation/GlobalOverrideToolbar.js';
 import { registerPluginModePreference } from '../../surface/frame/PluginModePreference.js';
+import type { EmbeddedPresentationSource } from '../../core/embedded/EmbeddedPresentation.js';
 
 /** Keep mode precedence at one owner instead of competing frame callbacks. */
 export class OverridePresentationHost {
@@ -29,7 +30,12 @@ export class OverridePresentationHost {
   ) {}
 
   /** Restore Plugin Mode once Comfy settings are ready. */
-  setup(app: unknown, document: Document, report: (error: unknown) => void): void {
+  setup(
+    app: unknown,
+    document: Document,
+    report: (error: unknown) => void,
+    embedded?: EmbeddedPresentationSource,
+  ): void {
     if (this.#release) return;
     this.#release = registerPluginModePreference(
       app,
@@ -39,6 +45,7 @@ export class OverridePresentationHost {
         this.#present();
       },
       report,
+      embedded,
     );
   }
 

@@ -66,12 +66,14 @@ test('switches compact packing without touching the selected visual style', () =
   document.documentElement.removeAttribute('data-sc-visual-style');
 });
 
-test('sets zero masonry padding and square card geometry for all visual styles', () => {
+test('packs compact masonry while preserving the native resize corner', () => {
   ensureWorkflowMasonryStyles(document);
   const css = document.getElementById('sugarcubes-workflow-masonry-styles')?.textContent;
   expect(css).toContain('html[data-sc-compact-masonry] .sugarcubes-workflow-masonry {');
   expect(css).toContain('--sugarcubes-masonry-gap:0;');
-  expect(css).toContain('padding:0 0 0 var(--sc-masonry-stack-width,0px);');
+  expect(css).toContain(
+    'padding:0 0 var(--sc-panel-resize-corner,0px) var(--sc-masonry-stack-width,0px);',
+  );
   ensureNodeCardAppearanceStyles(document);
   expect(document.getElementById('sugarcubes-node-card-appearance')?.textContent).toContain(
     'border-radius:0 !important;',

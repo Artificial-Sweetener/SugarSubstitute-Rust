@@ -16,7 +16,7 @@
 /** Present a stable Vue navigation rail with canonical drag constraints and keyboard equivalents. */
 import { defineComponent, h, ref, computed, watch, type PropType } from 'vue';
 import { buttonTag } from '../../appearance/ControlFactory.js';
-import { CUBE_STACK_ROW_GAP, CUBE_STACK_ROW_STRIDE } from '../CubeStackMetrics.js';
+import { cubeStackRowGap, cubeStackRowStride } from '../CubeStackMetrics.js';
 import type {
   CubeStackNavigationRow,
   CubeStackViewActions,
@@ -41,9 +41,11 @@ export const CubeStackRail = defineComponent({
     const awaiting = ref(false);
     const submittedOrder = ref<readonly string[] | null>(null);
     useCubeStackFocus(root);
+    const rowStride = computed(() => cubeStackRowStride(props.state.compact));
     const gesture = useCubeStackPointerDrag({
       root,
       rows: () => props.state.rows,
+      rowStride: () => rowStride.value,
       pending: () => props.state.pending || awaiting.value,
       preview: props.actions.previewOrder,
       announce: (message) => {
@@ -178,12 +180,13 @@ export const CubeStackRail = defineComponent({
             {
               class: 'sc-cube-stack__rows',
               style: {
-                height: `${String(Math.max(0, rows.value.length * CUBE_STACK_ROW_STRIDE - CUBE_STACK_ROW_GAP))}px`,
+                height: `${String(Math.max(0, rows.value.length * rowStride.value - cubeStackRowGap(props.state.compact)))}px`,
               },
             },
             [
               h(CubeStackSelectionIndicator, {
                 key: 'selection',
+                compact: props.state.compact,
                 position: rows.value.some((row) => row.selected)
                   ? rows.value.findIndex((row) => row.selected)
                   : null,
@@ -192,7 +195,7 @@ export const CubeStackRail = defineComponent({
                 h(CubeStackRow, {
                   key: row.id,
                   row,
-                  style: { transform: `translateY(${String(index * CUBE_STACK_ROW_STRIDE)}px)` },
+                  style: { transform: `translateY(${String(index * rowStride.value)}px)` },
                   compact: props.state.compact,
                   pending: props.state.pending || !props.interactive,
                   removable: !props.state.compact,

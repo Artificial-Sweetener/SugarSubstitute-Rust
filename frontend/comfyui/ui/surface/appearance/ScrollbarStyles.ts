@@ -13,6 +13,9 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Share native suppression and owned overlay scrollbar paint across visual styles. */
+import { PHOTOPRO_SCROLLBAR_WIDTH } from './ScrollbarGeometry.js';
+
 /** Own the themed-wide native suppression and floating scrollbar presentation. */
 export function nativeScrollbarCss(): string {
   return `
@@ -54,42 +57,41 @@ export function scrollbarPresentationCss(): string {
 export function photoProScrollbarCss(): string {
   return `
     [data-sc-photopro-scroll-gutter] {
-      padding-right:calc(var(--sc-scrollbar-base-padding-right,0px) + 14px) !important;
+      padding-right:calc(var(--sc-scrollbar-base-padding-right,0px) + ${String(PHOTOPRO_SCROLLBAR_WIDTH)}px) !important;
     }
     .sc-style-scrollbar[data-sc-photopro-scrollbar] { isolation:isolate; }
     .sc-style-scrollbar[data-sc-photopro-scrollbar] .sc-style-scrollbar-track {
       position:absolute; z-index:0; display:flex; box-sizing:border-box; justify-content:space-between;
-      border:1px solid var(--sc-photopro-scroll-border,#1f1f1f); border-radius:0;
+      border:0; border-radius:0;
       background:var(--sc-photopro-scroll-track,#333); pointer-events:auto;
     }
     .sc-style-scrollbar[data-sc-photopro-scrollbar] .sc-style-scrollbar-track[hidden] { display:none!important; }
     .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="vertical"] .sc-style-scrollbar-track { flex-direction:column; }
     .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="horizontal"] .sc-style-scrollbar-track { flex-direction:row; }
     .sc-style-scrollbar[data-sc-photopro-scrollbar] .sc-style-scrollbar-track button {
-      position:relative; flex:none; box-sizing:border-box; width:12px; height:12px; padding:0;
+      position:relative; flex:none; box-sizing:border-box; width:calc(${String(PHOTOPRO_SCROLLBAR_WIDTH)}px / var(--sc-scrollbar-scale-x,1)); height:calc(${String(PHOTOPRO_SCROLLBAR_WIDTH)}px / var(--sc-scrollbar-scale-y,1)); padding:0;
       border:0; border-radius:0; background:var(--sc-photopro-scroll-track,#333);
       color:var(--sc-photopro-scroll-arrow,#999); cursor:default;
     }
-    .sc-style-scrollbar[data-sc-photopro-scrollbar] .sc-style-scrollbar-track button:hover { background:var(--sc-photopro-scroll-thumb,#555); }
     .sc-style-scrollbar[data-sc-photopro-scrollbar] .sc-style-scrollbar-track button::before {
-      content:''; position:absolute; left:4px; top:4px; width:4px; height:4px;
-      border-top:1px solid currentColor; border-left:1px solid currentColor;
+      content:''; position:absolute; box-sizing:content-box; left:calc(6px / var(--sc-scrollbar-scale-x,1)); top:calc(6px / var(--sc-scrollbar-scale-y,1)); width:calc(4px / var(--sc-scrollbar-scale-x,1)); height:calc(4px / var(--sc-scrollbar-scale-y,1));
+      border-top:calc(1px / var(--sc-scrollbar-scale-y,1)) solid currentColor; border-left:calc(1px / var(--sc-scrollbar-scale-x,1)) solid currentColor;
     }
-    .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="vertical"] [data-sc-scroll-step="start"]::before { transform:rotate(45deg); }
-    .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="vertical"] [data-sc-scroll-step="end"]::before { transform:rotate(225deg); }
-    .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="horizontal"] [data-sc-scroll-step="start"]::before { transform:rotate(-45deg); }
-    .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="horizontal"] [data-sc-scroll-step="end"]::before { transform:rotate(135deg); }
+    .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="vertical"] [data-sc-scroll-step="start"]::before { top:calc(9px / var(--sc-scrollbar-scale-y,1)); transform:rotate(45deg); }
+    .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="vertical"] [data-sc-scroll-step="end"]::before { top:calc(1px / var(--sc-scrollbar-scale-y,1)); transform:rotate(225deg); }
+    .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="horizontal"] [data-sc-scroll-step="start"]::before { left:calc(9px / var(--sc-scrollbar-scale-x,1)); transform:rotate(-45deg); }
+    .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="horizontal"] [data-sc-scroll-step="end"]::before { left:calc(1px / var(--sc-scrollbar-scale-x,1)); transform:rotate(135deg); }
     .sc-style-scrollbar[data-sc-photopro-scrollbar]::before {
-      z-index:1; box-sizing:border-box; border:1px solid var(--sc-photopro-scroll-border,#1f1f1f); border-radius:0;
+      z-index:1; box-sizing:border-box; border:0; border-radius:2px;
       background:var(--sc-photopro-scroll-thumb,#555); transition:none;
     }
     .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="vertical"]::before,
     .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="vertical"]:is(:hover,:focus-visible,[data-dragging])::before {
-      width:calc(10px / var(--sc-scrollbar-scale-x,1)); height:100%; right:calc(2px / var(--sc-scrollbar-scale-x,1));
+      width:calc(${String(PHOTOPRO_SCROLLBAR_WIDTH - 4)}px / var(--sc-scrollbar-scale-x,1)); height:100%; right:calc(2px / var(--sc-scrollbar-scale-x,1));
     }
     .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="horizontal"]::before,
     .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="horizontal"]:is(:hover,:focus-visible,[data-dragging])::before {
-      height:calc(10px / var(--sc-scrollbar-scale-y,1)); width:100%; bottom:calc(2px / var(--sc-scrollbar-scale-y,1));
+      height:calc(${String(PHOTOPRO_SCROLLBAR_WIDTH - 4)}px / var(--sc-scrollbar-scale-y,1)); width:100%; bottom:calc(2px / var(--sc-scrollbar-scale-y,1));
     }
   `;
 }

@@ -31,7 +31,7 @@ import type { ComfyNode, ComfyWidget } from '../../../frontend/comfyui/ui/types/
 test('Nodes 1 presentation release retains the rich session allocation across renderer switches', () => {
   const release = registerPromptEditorSurfaceOwner(document, {
     mount: () => () => undefined,
-    refresh: () => undefined,
+    refresh: () => true,
     dispose: () => undefined,
   });
   const widget: ComfyWidget = { name: 'text', value: 'prompt' };
@@ -58,7 +58,7 @@ test('extension setup replacement retires the previous owner and fences its late
   let mounts = 0;
   const first = registerPromptEditorSurfaceOwner(document, {
     mount: () => () => undefined,
-    refresh: () => undefined,
+    refresh: () => true,
     dispose: () => {
       retired++;
     },
@@ -68,7 +68,7 @@ test('extension setup replacement retires the previous owner and fences its late
       mounts++;
       return () => undefined;
     },
-    refresh: () => undefined,
+    refresh: () => true,
     dispose: () => undefined,
   });
   try {
@@ -106,7 +106,7 @@ test('promoted prompt binds the boundary widget while preserving its internal pr
         releases++;
       };
     },
-    refresh: () => undefined,
+    refresh: () => true,
     dispose: () => undefined,
   });
   const root = document.createElement('section');

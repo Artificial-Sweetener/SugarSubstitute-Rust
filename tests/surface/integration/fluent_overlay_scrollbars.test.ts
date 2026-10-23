@@ -130,6 +130,8 @@ test('PhotoPro scroll track uses working arrow buttons and follows theme switchi
     down?.click();
     expect(area.scrollTop).toBe(40);
     expect(track?.style.height).toBe('200px');
+    expect(track?.style.width).toBe('16px');
+    expect(vertical?.style.width).toBe('16px');
     document.documentElement.dataset.scVisualStyle = 'fluent';
     area.dispatchEvent(new Event('scroll', { bubbles: true }));
     await flush(frames);

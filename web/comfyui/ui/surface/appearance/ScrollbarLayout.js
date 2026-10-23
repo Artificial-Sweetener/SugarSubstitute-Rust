@@ -26,6 +26,9 @@ export function scrollbarTrack(element, preserveOwnerExtent = false) {
     let bottom = root
         ? windowRef.innerHeight
         : Math.min(rect.bottom, top + element.clientHeight * scaleY);
+    const bottomInset = Number.parseFloat(windowRef.getComputedStyle(element).scrollPaddingBottom);
+    if (Number.isFinite(bottomInset))
+        bottom = Math.max(top, bottom - Math.max(0, bottomInset) * scaleY);
     let horizontalBottom = bottom + scrollbarHorizontalOutset(element);
     const edge = element.getAttribute('data-sc-scrollbar-edge') === 'parent' ? scrollParent(element) : null;
     if (edge)

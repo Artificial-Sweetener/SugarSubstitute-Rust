@@ -20,6 +20,16 @@ export type PhotoProPalette = 'black' | 'dark-gray' | 'medium-gray' | 'light-gra
 
 interface PhotoProColors {
   readonly canvas: string;
+  readonly toolSelectedFill: string;
+  readonly toolSelectedBorder: string;
+  readonly toolForeground: string;
+  readonly tab: string;
+  readonly tabHover: string;
+  readonly tabCloseHoverBorder: string;
+  readonly tabCloseHoverText: string;
+  readonly tabText: string;
+  readonly tabSelectedText: string;
+  readonly tabBorder: string;
   readonly surface: string;
   readonly hover: string;
   readonly pressed: string;
@@ -44,6 +54,16 @@ interface PhotoProColors {
 const palettes: Record<PhotoProPalette, PhotoProColors> = {
   black: {
     canvas: '#151515',
+    toolSelectedFill: '#181818',
+    toolSelectedBorder: '#515151',
+    toolForeground: '#d2d2d2',
+    tab: '#1d1d1d',
+    tabHover: '#303030',
+    tabCloseHoverBorder: '#515151',
+    tabCloseHoverText: '#b8b8b8',
+    tabText: '#aaa',
+    tabSelectedText: '#ececec',
+    tabBorder: '#111111',
     surface: '#242424',
     hover: '#303030',
     pressed: '#181818',
@@ -66,6 +86,16 @@ const palettes: Record<PhotoProPalette, PhotoProColors> = {
   },
   'dark-gray': {
     canvas: '#202020',
+    toolSelectedFill: '#1f1f1f',
+    toolSelectedBorder: '#3e3e3e',
+    toolForeground: '#d6d6d6',
+    tab: '#262626',
+    tabHover: '#2e2e2e',
+    tabCloseHoverBorder: '#474747',
+    tabCloseHoverText: '#808080',
+    tabText: '#878787',
+    tabSelectedText: '#e1e1e1',
+    tabBorder: '#212121',
     surface: '#323232',
     hover: '#404040',
     pressed: '#282828',
@@ -82,12 +112,22 @@ const palettes: Record<PhotoProPalette, PhotoProColors> = {
     textDisabled: '#777',
     rangeTrack: '#666666',
     rangeThumb: '#e6e6e6',
-    scrollTrack: '#252525',
-    scrollThumb: '#454545',
-    scrollArrow: '#777777',
+    scrollTrack: '#292929',
+    scrollThumb: '#474747',
+    scrollArrow: '#797979',
   },
   'medium-gray': {
     canvas: '#282828',
+    toolSelectedFill: '#383838',
+    toolSelectedBorder: '#666666',
+    toolForeground: '#d8d8d8',
+    tab: '#424242',
+    tabHover: '#5e5e5e',
+    tabCloseHoverBorder: '#666666',
+    tabCloseHoverText: '#bcbcbc',
+    tabText: '#b0b0b0',
+    tabSelectedText: '#eaeaea',
+    tabBorder: '#393939',
     surface: '#535353',
     hover: '#5e5e5e',
     pressed: '#383838',
@@ -110,6 +150,16 @@ const palettes: Record<PhotoProPalette, PhotoProColors> = {
   },
   'light-gray': {
     canvas: '#a6a6a6',
+    toolSelectedFill: '#c1c1c1',
+    toolSelectedBorder: '#9b9b9b',
+    toolForeground: '#333333',
+    tab: '#c9c9c9',
+    tabHover: '#e2e2e2',
+    tabCloseHoverBorder: '#9b9b9b',
+    tabCloseHoverText: '#555555',
+    tabText: '#666666',
+    tabSelectedText: '#222222',
+    tabBorder: '#8d8d8d',
     surface: '#d6d6d6',
     hover: '#e2e2e2',
     pressed: '#c1c1c1',
@@ -206,7 +256,7 @@ export function photoProTokenDeclarations(palette: PhotoProPalette = 'medium-gra
     'motion-ease': 'ease-out',
     'motion-decelerate': 'ease-out',
   };
-  return `--sc-photopro-pasteboard:${colors.canvas};--sc-photopro-field:${colors.field};--sc-photopro-tab:${colors.secondary};--sc-photopro-list:${colors.tertiary};--sc-photopro-range-track:${colors.rangeTrack};--sc-photopro-range-thumb:${colors.rangeThumb};${themeTokenDeclarations(tokens)}`;
+  return `--sc-photopro-pasteboard:${colors.canvas};--sc-photopro-field:${colors.field};--sc-photopro-tool-selected-fill:${colors.toolSelectedFill};--sc-photopro-tool-selected-border:${colors.toolSelectedBorder};--sc-photopro-tool-foreground:${colors.toolForeground};--sc-photopro-tool-hover-border:${colors.tabCloseHoverBorder};--sc-photopro-tool-hover-fill:${colors.field};--sc-photopro-tab:${colors.tab};--sc-photopro-tab-hover:${colors.tabHover};--sc-photopro-tab-close-hover-border:${colors.tabCloseHoverBorder};--sc-photopro-tab-close-hover-text:${colors.tabCloseHoverText};--sc-photopro-tab-text:${colors.tabText};--sc-photopro-tab-selected-text:${colors.tabSelectedText};--sc-photopro-tab-border:${colors.tabBorder};--sc-photopro-list:${colors.tertiary};--sc-photopro-range-track:${colors.rangeTrack};--sc-photopro-range-thumb:${colors.rangeThumb};${themeTokenDeclarations(tokens)}`;
 }
 
 /** Keep overlay scrollbar colors on the document root when its layer sits outside a card. */
@@ -217,15 +267,20 @@ export function photoProScrollbarTokenDeclarations(
   return `--sc-photopro-scroll-track:${colors.scrollTrack};--sc-photopro-scroll-thumb:${colors.scrollThumb};--sc-photopro-scroll-arrow:${colors.scrollArrow};--sc-photopro-scroll-border:${colors.border};`;
 }
 
+/** Publish document-level surfaces outside themed cards from the same palette. */
+function photoProDocumentTokens(palette: PhotoProPalette = 'medium-gray'): string {
+  return `${photoProScrollbarTokenDeclarations(palette)}--sc-photopro-workspace-fill:${palettes[palette].surface};`;
+}
+
 /** Update the same tokens on every PhotoPro surface as a palette preference changes. */
 export function photoProPaletteCss(): string {
   return (
-    `html[data-sc-visual-style="photopro"]{${photoProScrollbarTokenDeclarations()}}\n` +
+    `html[data-sc-visual-style="photopro"]{${photoProDocumentTokens()}}\n` +
     (Object.keys(palettes) as PhotoProPalette[])
       .filter((palette) => palette !== 'medium-gray')
       .map(
         (palette) =>
-          `html[data-sc-visual-style="photopro"][data-sc-photopro-palette="${palette}"]{${photoProScrollbarTokenDeclarations(palette)}}\nhtml[data-sc-visual-style="photopro"][data-sc-photopro-palette="${palette}"] :is([data-sc-style-theme-root],[data-sc-theme="photopro"]){${photoProTokenDeclarations(palette)}}`,
+          `html[data-sc-visual-style="photopro"][data-sc-photopro-palette="${palette}"]{${photoProDocumentTokens(palette)}}\nhtml[data-sc-visual-style="photopro"][data-sc-photopro-palette="${palette}"] :is([data-sc-style-theme-root],[data-sc-theme="photopro"]){${photoProTokenDeclarations(palette)}}`,
       )
       .join('\n')
   );

@@ -15,13 +15,16 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Bind one Vue rail to masonry, accepted appearance, persisted preferences and graph use cases. */
 import { readOwnedVisualStyle, subscribeVisualStyle } from '../appearance/VisualStyleBoundary.js';
+import { readPluginMode, subscribePluginMode } from '../../core/PluginMode.js';
 import { applyOwnedTheme } from '../appearance/ThemeService.js';
+import { cubeStackWidth } from './CubeStackMetrics.js';
 import { CubeStackPreferences } from './CubeStackPreferences.js';
 import { projectCubeStackRows } from './CubeStackProjection.js';
 import { ensureCubeStackStyles } from './CubeStackStyles.js';
 import { mountCubeStackView } from './vue/CubeStackVueRuntime.js';
 import { CubeStackScrollSelection } from './CubeStackScrollSelection.js';
 import { CubeStackDrawerMotion } from './CubeStackDrawerMotion.js';
+import { CubeStackWheelRouting } from './CubeStackWheelRouting.js';
 /** Retain one presentation application for a mounted surface and release it before native teardown. */
 export class CubeStackHost {
     frameControls;
@@ -33,6 +36,7 @@ export class CubeStackHost {
     #element = null;
     #mounted = null;
     #motion = null;
+    #wheel = null;
     #surfaceVisible = true;
     #reorder = null;
     #unsubscribeReorder = null;
@@ -87,9 +91,10 @@ export class CubeStackHost {
         if (this.#started || this.#disposed)
             return;
         this.#preferences.setup();
+        this.#preferences.setPluginMode(readPluginMode(this.#options.document));
         this.#started = true;
         ensureCubeStackStyles(this.#options.document);
-        this.#subscriptions.push(this.#preferences.subscribe(() => this.#reconcile()), this.#options.appearance.subscribeAppearance(() => this.#reconcile()), subscribeVisualStyle(this.#options.document, () => this.#reconcile()));
+        this.#subscriptions.push(this.#preferences.subscribe(() => this.#reconcile()), this.#options.appearance.subscribeAppearance(() => this.#reconcile()), subscribeVisualStyle(this.#options.document, () => this.#reconcile()), subscribePluginMode(this.#options.document, () => this.#preferences.setPluginMode(readPluginMode(this.#options.document))));
         if (this.#options.frame)
             this.#subscriptions.push(this.#options.frame.subscribe(() => this.#reconcile(false)));
     }
@@ -204,6 +209,7 @@ export class CubeStackHost {
             this.#element = this.#options.document.createElement('aside');
             this.#element.className = 'sc-cube-stack-host';
             container.append(this.#element);
+            this.#wheel = new CubeStackWheelRouting(this.#element, view.element);
         }
         const appearance = this.#options.appearance.appearance;
         this.#element.dataset.appearance = state.appearance;
@@ -216,7 +222,7 @@ export class CubeStackHost {
             this.#motion = new CubeStackDrawerMotion(this.#element);
             this.#mounted.setInteractive(false);
         }
-        view.setStackWidth(this.#options.frame?.enabled ? (state.compact ? 58 : 224) : state.compact ? 82 : 248);
+        view.setStackWidth(cubeStackWidth(state.compact) + (state.compact || this.#options.frame?.enabled ? 0 : 24));
         if (this.#surfaceVisible)
             void this.#present(true, animate).catch(this.#options.reportError);
         this.#scrollSelection?.refresh(state.rows.map((row) => row.id));
@@ -308,6 +314,8 @@ export class CubeStackHost {
     }
     /** Remove owned presentation while retaining preferences for the next eligible masonry surface. */
     #unmount() {
+        this.#wheel?.dispose();
+        this.#wheel = null;
         this.#motion?.dispose();
         this.#motion = null;
         this.#view?.previewCubeOrder(null);

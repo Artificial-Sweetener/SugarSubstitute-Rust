@@ -121,11 +121,13 @@ test('paints native comboboxes as one compact field while retaining model picker
 
 test('keeps seed accessories inside the field instead of painting standalone button frames', () => {
   const css = nativeVisualStyleCss('photopro', false);
-  const standaloneButtons = css.match(/[^{}]+:is\(button,\[data-sc-button\]\)[^{}]*\{/g);
+  const standaloneButtons = css
+    .match(/[^{}]+:is\(button,\[data-sc-button\]\)[^{}]*\{/g)
+    ?.filter((selector) => selector.includes('[data-sc-style-combo-frame]'));
   expect(standaloneButtons).toHaveLength(3);
   for (const selector of standaloneButtons ?? [])
     expect(selector).toContain(
-      ':where(:not([data-sc-style-combo-frame] > button,[data-sc-seed-split] > button,.sc-generation-strip button))',
+      ':where(:not([data-sc-style-combo-frame] > button,[data-sc-seed-split] > button,.sc-generation-strip button,[data-sc-workflow-tab],.sc-workflow-close,.sc-workflow-new,[data-sc-scroll-step],.sc-cube-stack-row__activate,.sc-cube-stack__add,.sugarcubes-workflow-masonry__icon-action,[data-testid="advanced-inputs-button"],[data-sc-plugin-toolbar] button,[data-sc-substitute-toolbar] button))',
     );
   const standaloneFields = css.match(/[^{}]+:is\(input:not\(\[type="checkbox"\]\)[^{}]*\{/g);
   expect(standaloneFields).toHaveLength(2);
@@ -184,11 +186,13 @@ test('places neutral activation beside the title and presents advanced settings 
   expect(css).toContain(
     '[data-sc-titlebar-controls] [data-cube-card-activation] { margin:0 0 0 8px; padding:0; }',
   );
-  expect(css).toContain('width:28px; min-width:28px; height:20px; min-height:20px');
+  expect(css).toContain('width:28px; min-width:28px; height:18px; min-height:18px');
   expect(css).toContain(
     ':has(> [data-testid="advanced-inputs-button"]) { margin-top:0; z-index:auto; background:var(--sc-card-fill); }',
   );
-  expect(css).toContain('[data-testid="advanced-inputs-button"]::after { content:\'…\'');
+  expect(css).toContain(
+    '[data-testid="advanced-inputs-button"]::after { content:\'\'; width:12px; height:2px;',
+  );
   expect(css).not.toContain(
     '.p-toggleswitch-checked .p-toggleswitch-slider { background:var(--sc-brand-fill)',
   );

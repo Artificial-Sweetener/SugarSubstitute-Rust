@@ -28,7 +28,7 @@ export interface PromptEditorSurface {
 /** One document's prompt component owns all registered renderer presentations. */
 export interface PromptEditorSurfaceOwner {
   mount(surface: PromptEditorSurface): () => void;
-  refresh(surface: PromptEditorSurface): void;
+  refresh(surface: PromptEditorSurface): boolean;
   dispose(): void;
 }
 
@@ -52,7 +52,7 @@ export function mountPromptEditorSurface(surface: PromptEditorSurface): (() => v
   return owners.get(surface.textarea.ownerDocument)?.mount(surface) ?? null;
 }
 
-/** Refresh only the known prompt after its native renderer adopts host state. */
-export function refreshPromptEditorSurface(surface: PromptEditorSurface): void {
-  owners.get(surface.textarea.ownerDocument)?.refresh(surface);
+/** Report expired sessions so retained renderer surfaces can reacquire their editor. */
+export function refreshPromptEditorSurface(surface: PromptEditorSurface): boolean {
+  return owners.get(surface.textarea.ownerDocument)?.refresh(surface) ?? false;
 }

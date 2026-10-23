@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Project Comfy's existing search and close controls into a reversible top toolbar. */
+/** Project Comfy's existing search and header controls into a reversible top toolbar. */
 import { SettingsSearchNavigation } from './SettingsSearchNavigation.js';
 import { relocateControl } from '../core/ControlPlacement.js';
 
@@ -38,10 +38,10 @@ export class SettingsSearchPlacement {
     let wrapper: HTMLElement | null = search ?? null;
     while (wrapper?.parentElement && wrapper.parentElement !== sidebar)
       wrapper = wrapper.parentElement;
-    const close = root.querySelector<HTMLElement>(
-      'button[aria-label="Close dialog"], :scope > div > div > header button',
-    );
-    for (const element of [wrapper, close]) {
+    const actions = [...root.querySelectorAll<HTMLElement>(':scope > div > div > header button')];
+    const close = root.querySelector<HTMLElement>('button[aria-label="Close dialog"]');
+    if (close && !actions.includes(close)) actions.push(close);
+    for (const element of [wrapper, ...actions]) {
       if (!element?.parentNode) continue;
       const slot = document.createComment('SugarCubes settings presentation slot');
       element.before(slot);

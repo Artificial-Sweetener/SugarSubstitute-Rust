@@ -29,9 +29,22 @@ import path from 'node:path';
 import { buildPhotoshop } from '../../../scripts/photoshop/build.js';
 import {
   packagePath,
+  record,
   validateManifest,
   validatePackage,
 } from '../../../scripts/photoshop/manifest.js';
+
+test('the SugarCubes panel declares room for independent width and height resizing', () => {
+  const authored: unknown = JSON.parse(
+    readFileSync('integrations/photoshop/manifest.json', 'utf8'),
+  );
+  const manifest = record(authored, 'manifest');
+  if (!Array.isArray(manifest.entrypoints)) throw new Error('Missing panel entrypoints.');
+  const panel = record(manifest.entrypoints[0], 'panel');
+  const maximum = record(panel.maximumSize, 'maximumSize');
+  expect(maximum.width).toBeGreaterThanOrEqual(3840);
+  expect(maximum.height).toBeGreaterThanOrEqual(2160);
+});
 
 /** Return a minimal independent fixture identity, host and explicit WebView permission. */
 function manifest(): Record<string, unknown> {

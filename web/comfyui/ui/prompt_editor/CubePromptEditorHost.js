@@ -82,14 +82,15 @@ export class CubePromptEditorHost {
             }
         };
     }
-    /** Reconcile known host values without DOM discovery or unrelated card refresh. */
+    /** Refresh retained sessions and report workflow retirement to their renderer owner. */
     refresh(surface) {
         const session = this.#sessions.get(surface.widget);
-        if (!session)
-            return;
+        if (!session || !session.surfaces.has(surface))
+            return false;
         session.editor?.refresh(session.binding.read(), this.#readOnly(surface));
         if (session.active === surface)
             this.#present(session, surface);
+        return true;
     }
     /** Retire native documents before replacing an entire workflow. */
     beforeConfigureGraph() {
