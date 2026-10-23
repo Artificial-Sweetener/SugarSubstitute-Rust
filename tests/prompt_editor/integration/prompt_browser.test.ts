@@ -70,6 +70,54 @@ afterAll(async () => {
 }, 30_000);
 
 test.each(['nodes-1', 'nodes-2'] as const)(
+  '%s restores a retained PhotoPro prompt after workflow editor sessions reset',
+  async (renderer) => {
+    const page = await browser.newPage();
+    try {
+      await page.goto(address);
+      await page.waitForFunction(() => !!window.promptBrowserProof);
+      await page.evaluate(
+        ({ renderer, source }) => {
+          window.promptBrowserProof.theme('photopro', true);
+          window.promptBrowserProof.mount(renderer, 1, source);
+        },
+        { renderer, source },
+      );
+      await ready(page);
+      for (let reset = 0; reset < 3; reset++) {
+        await page.evaluate(() => {
+          window.promptBrowserProof.reset();
+          window.promptBrowserProof.refresh();
+        });
+        await expectPromptRestored(page);
+      }
+      await page.locator('.cm-content').focus();
+      await page.keyboard.press('Control+a');
+      await page.keyboard.type('retained prompt');
+      await page.waitForFunction(
+        () => window.promptBrowserProof.read().source === 'retained prompt',
+      );
+      expect(await page.evaluate(() => window.promptBrowserProof.read().errors)).toEqual([]);
+    } finally {
+      await page.close();
+    }
+  },
+);
+
+/** Require the rich presentation rather than the native textarea's two-line fallback. */
+async function expectPromptRestored(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () => {
+      const root = document.querySelector<HTMLElement>('[data-sc-prompt-editor]');
+      return root && root.offsetHeight >= 128 && getComputedStyle(root).display !== 'none';
+    },
+    null,
+    { timeout: 2000 },
+  );
+  expect(await page.locator('[data-sc-prompt-editor]').count()).toBe(1);
+}
+
+test.each(['nodes-1', 'nodes-2'] as const)(
   '%s offers bundled Danbooru tags and preserves native acceptance history across renderer moves',
   async (renderer) => {
     const page = await browser.newPage();

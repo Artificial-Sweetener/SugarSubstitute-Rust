@@ -17,7 +17,7 @@
 
 import { MASONRY_STACK_Z_INDEX } from '../../core/OverlayStacking.js';
 import { WORKFLOW_MASONRY_TOP_INSET } from '../masonry/WorkflowMasonryLayout.js';
-import { CUBE_STACK_ROW_GAP, CUBE_STACK_ROW_HEIGHT } from './CubeStackMetrics.js';
+import { CUBE_STACK_ROW_GAP, CUBE_STACK_ROW_HEIGHT, cubeStackWidth } from './CubeStackMetrics.js';
 import {
   CUBE_MODEL_PILL_BACKGROUND,
   CUBE_MODEL_PILL_FOREGROUND,
@@ -57,12 +57,16 @@ export function ensureCubeStackStyles(documentRef: Document): void {
       --sc-text:var(--fg-color,#eee) !important;
       --sc-border:var(--interface-stroke,#555) !important;
     }
-    .sc-cube-stack[data-compact] { width:58px; }
+    .sc-cube-stack[data-compact] { width:${String(cubeStackWidth(true))}px; }
     .sc-cube-stack[data-kind="rail"] { transition:width 220ms var(--sc-stack-curve); }
     .sc-cube-stack__rows { position:relative; list-style:none; padding:0 6px; margin:0; display:flex; flex-direction:column; gap:${String(CUBE_STACK_ROW_GAP)}px; }
     .sc-cube-stack[data-kind="rail"] .sc-cube-stack__rows > .sc-cube-stack-row {
       position:absolute; left:6px; right:6px; top:0; transition:transform 220ms var(--sc-stack-curve);
     }
+    .sc-cube-stack[data-compact] .sc-cube-stack__rows { gap:0; padding:0; }
+    .sc-cube-stack[data-compact] .sc-cube-stack__rows > .sc-cube-stack-row { left:0; right:0; }
+    .sc-cube-stack[data-compact] .sc-cube-stack__selection { left:1px; }
+    .sc-cube-stack[data-compact] .sc-cube-stack__add { margin:0; width:100%; border-radius:0; }
     .sc-cube-stack-move { transition:transform 220ms var(--sc-stack-curve); }
     .sc-cube-stack-enter-active,.sc-cube-stack-leave-active { transition:opacity 160ms ease,transform 220ms var(--sc-stack-curve); }
     .sc-cube-stack-enter-from,.sc-cube-stack-leave-to { opacity:0; transform:translateY(8px); }
@@ -72,6 +76,7 @@ export function ensureCubeStackStyles(documentRef: Document): void {
       border:1px solid var(--sc-stack-border); border-radius:5px;
       background:var(--sc-stack-row); color:var(--sc-stack-text); list-style:none;
     }
+    .sc-cube-stack[data-compact] .sc-cube-stack-row { border-radius:0; }
     .sc-cube-stack-row:hover { background:var(--sc-stack-hover); }
     .sc-cube-stack[data-kind="rail"] .sc-cube-stack-row { background:transparent; border-color:transparent; }
     .sc-cube-stack[data-kind="rail"] .sc-cube-stack-row:hover { background:var(--sc-stack-hover); }
@@ -117,6 +122,10 @@ export function ensureCubeStackStyles(documentRef: Document): void {
     .sc-cube-stack button:focus-visible { outline:2px solid var(--sc-stack-accent); outline-offset:2px; }
     .sc-cube-stack button:disabled { cursor:default; }
     .sc-cube-stack-row[data-reorderable],.sc-cube-stack-row[data-reorderable] .sc-cube-stack-row__activate { cursor:default; touch-action:none; user-select:none; }
+    .sc-cube-stack[data-compact] .sc-cube-stack-row__activate { padding:5px; gap:0; }
+    .sc-cube-stack[data-compact] .sc-cube-stack-row__icon { width:100%; height:100%; flex:0 0 100%; }
+    .sc-cube-stack[data-compact] .sc-cube-stack-row__text { display:none; }
+    .sc-cube-stack[data-compact] .sc-cube-stack-row__model { right:0; bottom:0; }
     .sc-cube-stack-row__icon { user-select:none; -webkit-user-drag:none; }
     .sc-cube-stack[data-pointer-dragging],.sc-cube-stack[data-pointer-dragging] * { cursor:default; user-select:none; }
     .sc-cube-stack[data-kind="rail"] .sc-cube-stack-row[data-dragging] {
@@ -137,6 +146,7 @@ export function ensureCubeStackStyles(documentRef: Document): void {
     .sc-cube-stack__status { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
     .sc-cube-stack-host { position:absolute; z-index:${MASONRY_STACK_Z_INDEX}; pointer-events:auto; left:12px; top:${WORKFLOW_MASONRY_TOP_INSET}px; bottom:12px; overflow-y:auto; overflow-x:hidden; padding:6px 0; border-radius:8px; background:var(--comfy-menu-bg,#202020); }
     .sc-cube-stack-host[data-appearance]:not([data-appearance="comfy"]) { background:var(--sc-surface-secondary,#202020); border:1px solid var(--sc-border-subtle,transparent); box-shadow:var(--sc-shadow-small,0 2px 4px #0002); }
+    .sc-cube-stack-host:has(.sc-cube-stack[data-kind="rail"][data-compact]) { left:0; top:0; bottom:0; padding:0; border:0; border-radius:0; }
     @media (hover:none) { .sc-cube-stack-row__remove { opacity:1; } }
     @media (prefers-reduced-motion:reduce) {
       .sc-cube-stack-move,.sc-cube-stack-enter-active,.sc-cube-stack-leave-active,

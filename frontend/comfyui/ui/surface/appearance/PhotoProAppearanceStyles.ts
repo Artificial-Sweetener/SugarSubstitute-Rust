@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Apply OpenPhoto's compact paint to existing SugarCubes surfaces and layout. */
+import { photoProWorkspaceCss } from './PhotoProWorkspaceStyles.js';
 import { nativeAppearanceCss } from './NativeAppearanceStyles.js';
 import { photoProComboCss } from './PhotoProComboStyles.js';
 import { photoProPaletteCss, photoProTokenDeclarations } from './PhotoProThemeTokens.js';
@@ -52,10 +53,11 @@ export function photoProAppearanceCss(): string {
 /** Skin owned controls, menus and tabs without taking their interaction or layout owners. */
 export function photoProControlCss(): string {
   const standaloneButton =
-    'html[data-sc-visual-style="photopro"] :is([data-sc-theme="photopro"], [data-sc-style-node], [data-sc-style-surface], [data-sc-style-popup]) :is(button,[data-sc-button]):where(:not([data-sc-style-combo-frame] > button,[data-sc-seed-split] > button,.sc-generation-strip button))';
+    'html[data-sc-visual-style="photopro"] :is([data-sc-theme="photopro"], [data-sc-style-node], [data-sc-style-surface], [data-sc-style-popup]) :is(button,[data-sc-button]):where(:not([data-sc-style-combo-frame] > button,[data-sc-seed-split] > button,.sc-generation-strip button,[data-sc-workflow-tab],.sc-workflow-close,.sc-workflow-new,[data-sc-scroll-step],.sc-cube-stack-row__activate,.sc-cube-stack__add,.sugarcubes-workflow-masonry__icon-action,[data-testid="advanced-inputs-button"],[data-sc-plugin-toolbar] button,[data-sc-substitute-toolbar] button))';
   const standaloneField =
     'html[data-sc-visual-style="photopro"] :is([data-sc-theme="photopro"], [data-sc-style-node], [data-sc-style-surface], [data-sc-style-popup]) :is(input:not([type="checkbox"]):not([type="range"]),textarea,[role="combobox"]):where(:not([data-sc-style-combo-frame] > [role="combobox"],[data-sc-number-input],.sc-generation-strip input))';
-  return `
+  return (
+    `
     html[data-sc-visual-style="photopro"] { --sc-control-height:22px; --sc-spinner-stepper-width:0px; }
     @font-face { font-family:"PhotoPro Source Sans 3"; src:url("${regularFont}") format("truetype"); font-weight:400; font-display:swap; }
     @font-face { font-family:"PhotoPro Source Sans 3"; src:url("${semiboldFont}") format("truetype"); font-weight:600; font-display:swap; }
@@ -121,11 +123,21 @@ export function photoProControlCss(): string {
     html[data-sc-visual-style="photopro"] [data-sc-boolean-segments] { background:var(--sc-surface-secondary); border-color:var(--sc-border); border-radius:3px; }
     html[data-sc-visual-style="photopro"] [data-sc-boolean-segment] { border:0; border-radius:2px; background:transparent; }
     html[data-sc-visual-style="photopro"] [data-sc-boolean-segment][aria-selected="true"] { background:var(--sc-surface-tertiary); color:var(--sc-text); }
+    html[data-sc-visual-style="photopro"][data-sc-substitute-frame] { --workflow-tabs-height:30px; }
+    html[data-sc-visual-style="photopro"] .sc-substitute-frame { height:30px; padding-top:0; }
+    html[data-sc-visual-style="photopro"] .sc-cube-stack__selection,
+    html[data-sc-visual-style="photopro"] .sc-cube-stack-row[data-selected]::before { display:none; }
     html[data-sc-visual-style="photopro"] [data-sc-workflow-tabs] { display:flex; height:30px; width:var(--sc-workflow-tabs-width); min-width:0; overflow:clip; background:var(--sc-photopro-tab); }
-    html[data-sc-visual-style="photopro"] [data-sc-workflow-tab] { display:inline-flex; align-items:center; box-sizing:border-box; height:30px; width:var(--sc-workflow-tab-width,180px); min-width:var(--sc-workflow-tab-width,180px); max-width:var(--sc-workflow-tab-width,180px); flex:0 0 var(--sc-workflow-tab-width,180px); padding:0 8px 0 20px; gap:6px; border:0; border-right:1px solid var(--sc-border); border-radius:0; background:var(--sc-photopro-tab); color:var(--sc-text-subtle); font:600 12px/1.3 var(--sc-font-family); }
-    html[data-sc-visual-style="photopro"] [data-sc-workflow-tab][aria-selected="true"] { background:var(--sc-surface); color:var(--sc-text); }
+    html[data-sc-visual-style="photopro"] [data-sc-workflow-tab] { display:inline-flex; align-items:center; box-sizing:border-box; height:30px; width:var(--sc-workflow-tab-width,180px); min-width:var(--sc-workflow-tab-width,180px); max-width:var(--sc-workflow-tab-width,180px); flex:0 0 var(--sc-workflow-tab-width,180px); padding:0 8px 0 10px; gap:6px; border:0; border-right:1px solid var(--sc-photopro-tab-border); border-bottom:1px solid var(--sc-photopro-tab-border); border-radius:0; background:var(--sc-photopro-tab); color:var(--sc-photopro-tab-text); font:600 11px/1.3 var(--sc-font-family); }
+    html[data-sc-visual-style="photopro"] [data-sc-workflow-tab]:not([aria-selected="true"]):hover { background:var(--sc-photopro-tab-hover); }
+    html[data-sc-visual-style="photopro"] [data-sc-workflow-tab][aria-selected="true"] { background:var(--sc-surface); color:var(--sc-photopro-tab-selected-text); }
+    html[data-sc-visual-style="photopro"] .sc-substitute-frame [data-sc-workflow-tab] .sc-workflow-close { position:relative; margin:0; padding:0; visibility:visible; flex:0 0 14px; width:14px; min-width:14px; height:12px; min-height:0; box-sizing:border-box; border:1px solid transparent; border-radius:1px; background:transparent; color:var(--sc-photopro-tab-text); font-size:0; }
+    html[data-sc-visual-style="photopro"] .sc-substitute-frame [data-sc-workflow-tab] .sc-workflow-close:is(:hover,:focus-visible) { border-color:var(--sc-photopro-tab-close-hover-border); color:var(--sc-photopro-tab-close-hover-text); }
+    html[data-sc-visual-style="photopro"] [data-sc-workflow-tab] .sc-workflow-close::after { content:''; position:absolute; left:50%; top:50%; width:6px; height:6px; transform:translate(-50%,-50%); background:linear-gradient(45deg,transparent calc(50% - .5px),currentColor calc(50% - .5px),currentColor calc(50% + .5px),transparent calc(50% + .5px)),linear-gradient(-45deg,transparent calc(50% - .5px),currentColor calc(50% - .5px),currentColor calc(50% + .5px),transparent calc(50% + .5px)); }
+    html[data-sc-visual-style="photopro"] .sc-substitute-frame .sc-workflow-new { display:flex; align-items:center; justify-content:center; align-self:center; height:30px; margin-top:0; margin-bottom:0; padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; color:var(--sc-photopro-tab-selected-text); }
     html[data-sc-visual-style="photopro"] [data-sc-workflow-tab][data-orb-adjacent] { padding-left:32px; }
     html[data-sc-visual-style="photopro"] [data-sc-workflow-tab] .sc-workflow-title { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    html[data-sc-visual-style="photopro"] .sc-substitute-frame[data-sc-theme="photopro"] { background:var(--sc-surface-secondary); --sc-frame-muted:var(--sc-text-subtle); --sc-frame-hover:var(--sc-surface-hover); --sc-frame-pressed:var(--sc-surface-pressed); }
-  `;
+    html[data-sc-visual-style="photopro"] .sc-substitute-frame[data-sc-theme="photopro"] { background:var(--sc-surface); --sc-frame-muted:var(--sc-text-subtle); --sc-frame-hover:var(--sc-surface-hover); --sc-frame-pressed:var(--sc-surface-pressed); }
+  ` + photoProWorkspaceCss()
+  );
 }

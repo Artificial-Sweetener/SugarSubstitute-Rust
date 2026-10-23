@@ -54,12 +54,14 @@ export function photoProCardCss(): string {
     html[data-sc-visual-style="photopro"] [data-sc-style-node] [data-sc-style-ports]:not([hidden]) { border-top:0 !important; border-bottom:0 !important; }
     html[data-sc-visual-style="photopro"] .sugarcubes-cube-face__node-card [data-sc-style-node] [data-testid="advanced-inputs-button"] {
       display:flex; align-items:center; justify-content:center; flex:none; box-sizing:border-box;
-      width:28px; min-width:28px; height:20px; min-height:20px; padding:0; margin:4px 8px 6px auto;
-      border:1px solid var(--sc-button-bottom-stroke); border-radius:2px;
-      background:var(--sc-button-fill); color:var(--sc-text-secondary); font-size:0; gap:0;
+      width:28px; min-width:28px; height:18px; min-height:18px; padding:0; margin:4px 4px 4px auto;
+      border:1px solid transparent; border-radius:0; box-shadow:none;
+      background:transparent; color:var(--sc-photopro-tool-foreground); font-size:0; gap:0;
     }
+    html[data-sc-visual-style="photopro"] .sugarcubes-cube-face__node-card [data-sc-style-node] [data-testid="advanced-inputs-button"]:is(:hover,:focus-visible) { background:var(--sc-photopro-tool-hover-fill); border-color:var(--sc-photopro-tool-hover-border); border-radius:4px; }
+    html[data-sc-visual-style="photopro"] .sugarcubes-cube-face__node-card [data-sc-style-node] [data-testid="advanced-inputs-button"][aria-expanded="true"] { background:var(--sc-photopro-tool-selected-fill); border-color:var(--sc-photopro-tool-selected-border); }
     html[data-sc-visual-style="photopro"] .sugarcubes-cube-face__node-card [data-testid="advanced-inputs-button"] > * { display:none; }
-    html[data-sc-visual-style="photopro"] .sugarcubes-cube-face__node-card [data-testid="advanced-inputs-button"]::after { content:'…'; font:600 16px/1 var(--sc-font-family); }
+    html[data-sc-visual-style="photopro"] .sugarcubes-cube-face__node-card [data-testid="advanced-inputs-button"]::after { content:''; width:12px; height:2px; background:radial-gradient(circle at 1px 1px,currentColor 1px,transparent 1px) 0 0/5px 2px repeat-x; }
     html[data-sc-visual-style="photopro"] .sugarcubes-cube-face__node-card [data-sc-style-row][data-sc-style-column="2"]::before { display:none; }
     html[data-sc-visual-style="photopro"] .sugarcubes-cube-face__node-card [data-sc-style-node] > :has(> [data-testid="advanced-inputs-button"]) { margin-top:0; z-index:auto; background:var(--sc-card-fill); }
   `;

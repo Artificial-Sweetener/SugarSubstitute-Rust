@@ -43,6 +43,7 @@ import { registerVisualStylePreference } from './VisualStylePreference.js';
 import { publishVisualStyle, releaseVisualStyle } from './VisualStyleBoundary.js';
 import { registerCompactMasonryPreference } from '../masonry/CompactMasonryPreference.js';
 import { registerPhotoProPalettePreference } from './PhotoProPalettePreference.js';
+import type { EmbeddedPresentationSource } from '../../core/embedded/EmbeddedPresentation.js';
 
 const surfaceSelector =
   '.sugarcubes-workflow-masonry, .sugarcubes-masonry-toggle, .sc-overrides-toolbar, .sugarcubes-native-widget';
@@ -50,6 +51,7 @@ const surfaceSelector =
 export interface AppearanceHostOptions {
   document: Document;
   app: unknown;
+  embedded?: EmbeddedPresentationSource;
   seedReuse?: NativeSeedReuseResolver;
   getSlotLayoutSync?(): Promise<() => void>;
   reportError(error: unknown): void;
@@ -79,6 +81,7 @@ export class AppearanceHost {
   #releaseComboToggle: (() => void) | null = null;
   #releaseCompactMasonry: (() => void) | null = null;
   #releasePhotoProPalette: (() => void) | null = null;
+  #releaseVisualStyle: (() => void) | null = null;
   #selectedStyle: VisualStyle = 'comfy';
   #active = false;
   #dark: boolean | null = null;
@@ -95,7 +98,12 @@ export class AppearanceHost {
   /** Prepare observers without altering styles until the user opts in. */
   constructor(options: AppearanceHostOptions) {
     this.#options = options;
-    this.#accent = new AccentThemeHost(options.document, options.app, options.reportError);
+    this.#accent = new AccentThemeHost(
+      options.document,
+      options.app,
+      options.reportError,
+      options.embedded,
+    );
     this.#iconAppearance = new CubeIconAppearanceHost(options.document, this.state);
     this.#scrollbars = new OverlayScrollbarHost(options.document, options.reportError);
     this.#nodes = new NativeFieldAppearance(options.app, 'card', options.seedReuse);
@@ -166,10 +174,11 @@ export class AppearanceHost {
       this.#onPresentationReady,
     );
     this.#options.document.defaultView?.addEventListener('pagehide', this.#onPageHide);
-    registerVisualStylePreference(
+    this.#releaseVisualStyle = registerVisualStylePreference(
       this.#options.app,
       (style) => this.setStyle(style),
       this.#options.reportError,
+      this.#options.embedded,
     );
     this.#releaseCompactMasonry = registerCompactMasonryPreference(
       this.#options.app,
@@ -180,6 +189,7 @@ export class AppearanceHost {
       this.#options.app,
       this.#options.document,
       this.#options.reportError,
+      this.#options.embedded,
     );
   }
 
@@ -208,6 +218,7 @@ export class AppearanceHost {
     this.#releaseComboToggle?.();
     this.#releaseCompactMasonry?.();
     this.#releasePhotoProPalette?.();
+    this.#releaseVisualStyle?.();
     this.#options.document.removeEventListener('pointerdown', this.#rememberPopupOrigin, true);
     this.#options.document.removeEventListener('keydown', this.#rememberPopupOrigin, true);
     this.#options.document.removeEventListener(

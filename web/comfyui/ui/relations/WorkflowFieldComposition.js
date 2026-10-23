@@ -20,8 +20,11 @@ import { OwnedSurfaceAppearance } from '../surface/appearance/OwnedSurfaceAppear
 import { WorkflowEditorNavigationHost } from '../surface/WorkflowEditorNavigationHost.js';
 import { SubstituteFrameHost } from '../surface/frame/SubstituteFrameHost.js';
 import { SettingsWorkspaceHost } from '../settings/SettingsWorkspaceHost.js';
+import { EmbeddedPresentation } from '../core/embedded/EmbeddedPresentation.js';
+import { startEmbeddedPanel } from '../core/embedded/EmbeddedPanelHost.js';
 /** Share seed reuse across actual native field mounts and the override toolbar. */
 export function createWorkflowFieldHost(options) {
+    const embedded = new EmbeddedPresentation();
     const relations = new RelationHostLifecycle({
         ...options,
         reportError: options.reportRelationError,
@@ -32,6 +35,7 @@ export function createWorkflowFieldHost(options) {
         document: options.document,
         seedReuse: (node, name) => relations.seedReuse.field(node, name),
         reportError: options.reportPresentationError,
+        embedded,
     });
     const ownedAppearance = new OwnedSurfaceAppearance(options.document, appearance.state);
     const frame = new SubstituteFrameHost({
@@ -64,9 +68,17 @@ export function createWorkflowFieldHost(options) {
     function setupPresentation() {
         appearance.setup();
         frame.setup();
-        relations.setupOverridePresentation();
+        relations.setupOverridePresentation(embedded);
         editorNavigation.setup();
         settingsWorkspace.setup();
+        const windowRef = options.document.defaultView;
+        if (windowRef)
+            startEmbeddedPanel({
+                window: windowRef,
+                presentation: embedded,
+                connected: options.connected,
+                report: options.reportPresentationError,
+            });
     }
     return { appearance, relations, frame, setupPresentation };
 }

@@ -33,6 +33,37 @@ import type { CubeNode } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeN
 import type { CubeGraphAnalysis } from '../../../frontend/comfyui/ui/workflow/domain/CubeGraphModels.js';
 import { CubeStackDrawerMotion } from '../../../frontend/comfyui/ui/surface/stack/CubeStackDrawerMotion.js';
 import { SubstituteFrameMode } from '../../../frontend/comfyui/ui/surface/frame/SubstituteFrameMode.js';
+import { publishPluginMode } from '../../../frontend/comfyui/ui/core/PluginMode.js';
+import { pluginFrameCss } from '../../../frontend/comfyui/ui/surface/frame/PluginFrameStyles.js';
+
+test('Plugin Mode compacts the existing rail and removes extra space before the cards', async () => {
+  const frame = new SubstituteFrameMode();
+  frame.setEnabled(true);
+  const fixture = setup(true, true, frame);
+  fixture.surface.element.className = 'sugarcubes-workflow-masonry';
+  ensureWorkflowMasonryStyles(document);
+  const style = document.createElement('style');
+  style.textContent = pluginFrameCss;
+  document.head.append(style);
+  fixture.host.setup();
+  fixture.host.ready(fixture.surface, false);
+  await nextTick();
+  const rail = document.querySelector('.sc-cube-stack-host');
+  publishPluginMode(document, true);
+  await nextTick();
+  expect(document.querySelector('.sc-cube-stack-host')).toBe(rail);
+  expect(rail?.querySelector('[data-compact]')).not.toBeNull();
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(46);
+  expect(
+    getComputedStyle(fixture.surface.element).getPropertyValue('--sc-masonry-inline-padding'),
+  ).toBe('0px');
+  fixture.settings.get(CUBE_STACK_COMPACT_SETTING)?.onChange(false);
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(46);
+  publishPluginMode(document, false);
+  await nextTick();
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(224);
+  expect(document.querySelector('.sc-cube-stack-host')).toBe(rail);
+});
 
 test('frame mode changes allocation without replacing the existing rail or accent indicator', async () => {
   const frame = new SubstituteFrameMode();
@@ -49,13 +80,79 @@ test('frame mode changes allocation without replacing the existing rail or accen
   expect(rail?.querySelector('.sc-cube-stack__selection')).toBe(indicator);
   fixture.settings.get(CUBE_STACK_COMPACT_SETTING)?.onChange(true);
   await nextTick();
-  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(58);
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(46);
   frame.setEnabled(false);
   await nextTick();
-  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(82);
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(46);
 });
 
 const owned: CubeStackHost[] = [];
+test.each([0, 1, 2])(
+  'routes non-overflowing stack wheel units %s into its paired masonry',
+  async (deltaMode) => {
+    const fixture = setup();
+    fixture.host.setup();
+    fixture.host.ready(fixture.surface);
+    await nextTick();
+    const rail = document.querySelector<HTMLElement>('.sc-cube-stack-host')!;
+    Object.defineProperties(rail, { clientHeight: { value: 600 }, scrollHeight: { value: 600 } });
+    Object.defineProperty(fixture.surface.element, 'clientHeight', { value: 500 });
+    const event = new WheelEvent('wheel', {
+      bubbles: true,
+      cancelable: true,
+      deltaY: 2,
+      deltaMode,
+    });
+    rail.querySelector('button')!.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(fixture.surface.element.scrollTop).toBe(
+      deltaMode === 1 ? 32 : deltaMode === 2 ? 1000 : 2,
+    );
+    fixture.host.release();
+    rail.dispatchEvent(new WheelEvent('wheel', { cancelable: true, deltaY: 50 }));
+    expect(fixture.surface.element.scrollTop).toBe(
+      deltaMode === 1 ? 32 : deltaMode === 2 ? 1000 : 2,
+    );
+  },
+);
+
+test('preserves scrolling stacks, nested controls, horizontal gestures and zoom', async () => {
+  const fixture = setup();
+  fixture.host.setup();
+  fixture.host.ready(fixture.surface);
+  await nextTick();
+  const rail = document.querySelector<HTMLElement>('.sc-cube-stack-host')!;
+  Object.defineProperties(rail, {
+    clientHeight: { value: 300 },
+    scrollHeight: { value: 600, configurable: true },
+  });
+  const dispatch = (target: HTMLElement, options: WheelEventInit): void => {
+    const event = new WheelEvent('wheel', {
+      bubbles: true,
+      cancelable: true,
+      deltaY: 50,
+      ...options,
+    });
+    target.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(fixture.surface.element.scrollTop).toBe(0);
+  };
+  dispatch(rail, {});
+  Object.defineProperty(rail, 'scrollHeight', { value: 300 });
+  for (const options of [
+    { ctrlKey: true },
+    { metaKey: true },
+    { shiftKey: true },
+    { deltaY: 0, deltaX: 50 },
+  ])
+    dispatch(rail, options);
+  const nested = document.createElement('div');
+  nested.style.overflowY = 'auto';
+  Object.defineProperties(nested, { clientHeight: { value: 50 }, scrollHeight: { value: 100 } });
+  rail.append(nested);
+  dispatch(nested, {});
+});
+
 test('restores an already-selected workflow rail without allocating entrance animations', () => {
   const fixture = setup();
   fixture.host.setup();
@@ -70,6 +167,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   for (const host of owned.splice(0)) host.dispose();
+  publishPluginMode(document, false);
   document.body.replaceChildren();
   document.head.replaceChildren();
   jest.restoreAllMocks();
@@ -218,14 +316,14 @@ test('retains one mounted rail, follows official appearance and recovers a hidde
   expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(248);
   fixture.settings.get(CUBE_STACK_COMPACT_SETTING)?.onChange(true);
   await nextTick();
-  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(82);
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(46);
   fixture.settings.get(CUBE_STACK_VISIBLE_SETTING)?.onChange(false);
   expect(document.querySelector('.sc-cube-stack')).toBeNull();
   expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(0);
   fixture.settings.get(CUBE_STACK_VISIBLE_SETTING)?.onChange(true);
   await nextTick();
   expect(document.querySelector('.sc-cube-stack')).not.toBeNull();
-  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(82);
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(46);
 });
 
 test('routes navigation through search and waits for accepted masonry state after keyboard reorder', async () => {

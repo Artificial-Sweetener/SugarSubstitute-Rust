@@ -1,13 +1,13 @@
 import {
   useCubeStackPointerDrag
-} from "./chunk-LPTIR6EP.js";
+} from "./chunk-57LMGBPA.js";
 import {
   CubeStackSelectionIndicator
-} from "./chunk-QPU7WOVZ.js";
+} from "./chunk-EVJ2MGKH.js";
 import {
-  CUBE_STACK_ROW_GAP,
-  CUBE_STACK_ROW_STRIDE
-} from "./chunk-GP5LDPUZ.js";
+  cubeStackRowGap,
+  cubeStackRowStride
+} from "./chunk-3BUER5QA.js";
 import {
   useCubeStackFocus
 } from "./chunk-FMYVNRZD.js";
@@ -37,9 +37,11 @@ var CubeStackRail = defineComponent({
     const awaiting = ref(false);
     const submittedOrder = ref(null);
     useCubeStackFocus(root);
+    const rowStride = computed(() => cubeStackRowStride(props.state.compact));
     const gesture = useCubeStackPointerDrag({
       root,
       rows: () => props.state.rows,
+      rowStride: () => rowStride.value,
       pending: () => props.state.pending || awaiting.value,
       preview: props.actions.previewOrder,
       announce: (message) => {
@@ -167,19 +169,20 @@ var CubeStackRail = defineComponent({
           {
             class: "sc-cube-stack__rows",
             style: {
-              height: `${String(Math.max(0, rows.value.length * CUBE_STACK_ROW_STRIDE - CUBE_STACK_ROW_GAP))}px`
+              height: `${String(Math.max(0, rows.value.length * rowStride.value - cubeStackRowGap(props.state.compact)))}px`
             }
           },
           [
             h(CubeStackSelectionIndicator, {
               key: "selection",
+              compact: props.state.compact,
               position: rows.value.some((row) => row.selected) ? rows.value.findIndex((row) => row.selected) : null
             }),
             ...rows.value.map(
               (row, index) => h(CubeStackRow, {
                 key: row.id,
                 row,
-                style: { transform: `translateY(${String(index * CUBE_STACK_ROW_STRIDE)}px)` },
+                style: { transform: `translateY(${String(index * rowStride.value)}px)` },
                 compact: props.state.compact,
                 pending: props.state.pending || !props.interactive,
                 removable: !props.state.compact,

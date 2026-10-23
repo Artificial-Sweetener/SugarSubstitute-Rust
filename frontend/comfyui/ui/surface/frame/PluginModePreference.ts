@@ -17,6 +17,7 @@
 import { sugarCubesSettingsSection } from '../../settings/SugarCubesSettingsSections.js';
 import { isRecord } from '../../types/common.js';
 import { publishPluginMode } from '../../core/PluginMode.js';
+import type { EmbeddedPresentationSource } from '../../core/embedded/EmbeddedPresentation.js';
 
 /** Persist the opt-in mode with Comfy's appearance preferences. */
 export const PLUGIN_MODE_SETTING = 'SugarCubes.Appearance.PluginMode';
@@ -27,16 +28,26 @@ export function registerPluginModePreference(
   document: Document,
   changed: (enabled: boolean) => void,
   report: (error: unknown) => void,
+  embedded?: EmbeddedPresentationSource,
 ): () => void {
   const ui = isRecord(app) && isRecord(app.ui) ? app.ui : {};
   const settings = isRecord(ui.settings) ? ui.settings : {};
+  let saved = false;
+  let applied: boolean | null = null;
+  const refresh = (): void => {
+    const enabled = embedded?.read()?.pluginMode ?? saved;
+    if (enabled === applied) return;
+    applied = enabled;
+    publishPluginMode(document, enabled);
+    changed(enabled);
+  };
   const accept = (value: unknown): void => {
     if (typeof value !== 'boolean') {
       report(new TypeError('Plugin Mode must be enabled or disabled.'));
       return;
     }
-    publishPluginMode(document, value);
-    changed(value);
+    saved = value;
+    refresh();
   };
   if (typeof settings.addSetting === 'function') {
     settings.addSetting.call(settings, {
@@ -53,5 +64,9 @@ export function registerPluginModePreference(
     typeof settings.getSettingValue === 'function' &&
       settings.getSettingValue.call(settings, PLUGIN_MODE_SETTING) === true,
   );
-  return () => publishPluginMode(document, false);
+  const stop = embedded?.subscribe(refresh);
+  return () => {
+    stop?.();
+    publishPluginMode(document, false);
+  };
 }

@@ -19,6 +19,7 @@ import { isRecord, type UnknownRecord } from '../../types/common.js';
 import { readComfyDarkTheme } from './ComfyColorScheme.js';
 import { DEFAULT_ACCENT_COLOR, normalizeAccentColor } from './AccentPalette.js';
 import { createAccentColorSetting } from './AccentColorSetting.js';
+import type { EmbeddedPresentationSource } from '../../core/embedded/EmbeddedPresentation.js';
 import { accentThemeCss } from './AccentThemeStyles.js';
 
 /** Persist the user's accent independently of every workflow document. */
@@ -42,6 +43,7 @@ export class AccentThemeHost {
   #queued = false;
   #disposed = false;
   #setup = false;
+  #releaseEmbedded: (() => void) | null = null;
 
   /** Expose the authoritative accepted palette independently of node renderer presentation. */
   get theme(): Readonly<{ color: string; dark: boolean }> {
@@ -55,7 +57,12 @@ export class AccentThemeHost {
   }
 
   /** Bind the host-facing settings and CSS boundary without claiming external variables. */
-  constructor(documentRef: Document, app: unknown, reportError: (error: unknown) => void) {
+  constructor(
+    documentRef: Document,
+    app: unknown,
+    reportError: (error: unknown) => void,
+    private readonly embedded?: EmbeddedPresentationSource,
+  ) {
     this.#document = documentRef;
     this.#app = app;
     this.#report = reportError;
@@ -122,15 +129,18 @@ export class AccentThemeHost {
       attributes: true,
       attributeFilter: ['href', 'media', 'disabled'],
     });
+    this.#releaseEmbedded = this.embedded?.subscribe(() => this.refresh()) ?? null;
     this.refresh();
   }
 
-  /** Resolve external CSS before the saved preference and publish only an actual palette change. */
+  /** Resolve the negotiated host accent before external CSS before the saved preference and publish only an actual palette change. */
   refresh(): void {
     if (this.#disposed || !this.#setup) return;
     const style = this.#document.defaultView?.getComputedStyle(this.#document.documentElement);
     const color =
-      normalizeAccentColor(style?.getPropertyValue('--sugarcubes-accent')) ?? this.#configured;
+      normalizeAccentColor(this.embedded?.read()?.accentColor) ??
+      normalizeAccentColor(style?.getPropertyValue('--sugarcubes-accent')) ??
+      this.#configured;
     const dark = readComfyDarkTheme(this.#document);
     const signature = `${color}:${dark}`;
     if (signature === this.#signature) return;
@@ -181,6 +191,7 @@ export class AccentThemeHost {
     if (this.#disposed) return;
     this.#disposed = true;
     this.#listeners.clear();
+    this.#releaseEmbedded?.();
     this.#observer.disconnect();
     this.#document.head.removeEventListener('load', this.#onStylesheetLoad, true);
     this.#style.remove();

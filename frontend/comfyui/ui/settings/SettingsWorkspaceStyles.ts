@@ -88,7 +88,7 @@ export const settingsWorkspaceCss = `
   width:min(1400px,94vw); height:min(900px,90vh);
 }
 [data-sc-settings-themed] > div {
-  height:calc(100% - 64px); grid-template-columns:260px minmax(0,1fr) !important;
+  height:calc(100% - 64px);
 }
 [data-sc-settings-themed] > div > nav {
   background:var(--sc-surface-secondary); padding-top:8px;
@@ -104,7 +104,7 @@ export const settingsWorkspaceCss = `
   border-bottom:1px solid var(--sc-border-subtle);
 }
 .sc-settings-search-bar h2 { font-size:20px; font-weight:600; margin:0; flex:0 0 220px; }
-.sc-settings-search-bar > div { flex:1; max-width:720px; padding:0; }
+.sc-settings-search-bar > div { flex:1; min-width:0; max-width:720px; padding:0; }
 .sc-settings-search-bar input {
   font:inherit; font-size:14px; min-height:32px;
   color:var(--sc-text);
@@ -115,7 +115,8 @@ export const settingsWorkspaceCss = `
 }
 .sc-settings-search-bar > div:focus-within > div > div:first-child { border-color:var(--sc-field-focus-stroke); border-bottom:2px solid var(--sc-field-focus-bottom-stroke); }
 .sc-settings-search-bar > div:has(:focus-visible) > div > div:first-child { outline:var(--sc-field-focus-outline); outline-offset:var(--sc-field-focus-outline-offset); }
-.sc-settings-search-bar > button { margin-left:auto; width:32px; height:32px; padding:6px; border-radius:4px; }
+.sc-settings-search-bar > button { flex:0 0 32px; width:32px; height:32px; padding:6px; border-radius:4px; }
+.sc-settings-search-bar > button:first-of-type { margin-left:auto; }
 [data-sc-settings-themed] [data-nav-id] {
   position:relative; border-radius:5px; padding:10px 14px; min-height:40px;
   font:14px var(--sc-font-family); color:var(--sc-text); gap:14px;
@@ -179,7 +180,6 @@ export const settingsWorkspaceCss = `
 [data-sc-settings] .sc-settings-about__versions > .sc-settings-about__card { margin:0; }
 [data-sc-settings-themed] [data-setting-id="SugarCubes.About.Information"] { background:transparent; padding:0; border:0; }
 @media(max-width:800px) {
-  [data-sc-settings-themed] > div { grid-template-columns:180px minmax(0,1fr) !important; }
   .sc-settings-search-bar h2 { flex-basis:140px; }
   [data-sc-settings-themed] main > div { padding:16px; }
   [data-sc-settings-themed] [data-sc-setting-kind] > div { flex-wrap:wrap; gap:12px; }

@@ -28,13 +28,22 @@ export function readVisualStylePreference(app) {
     return resolveVisualStyle(settings.getSettingValue.call(settings, VISUAL_STYLE_SETTING), settings.getSettingValue.call(settings, LEGACY_FLUENT_SETTING));
 }
 /** Register the visual-style combobox while retaining the public legacy preference as a default. */
-export function registerVisualStylePreference(app, accept, report) {
+export function registerVisualStylePreference(app, accept, report, embedded) {
     const settings = settingsBoundary(app);
     if (typeof settings.addSetting !== 'function') {
         report(new Error('Comfy settings registration is unavailable for visual style.'));
-        return;
+        return () => undefined;
     }
     const initial = readVisualStylePreference(app);
+    let saved = initial;
+    let applied = null;
+    const refresh = () => {
+        const style = embedded?.read()?.visualStyle ?? saved;
+        if (style === applied)
+            return;
+        applied = style;
+        accept(style);
+    };
     settings.addSetting.call(settings, {
         id: VISUAL_STYLE_SETTING,
         name: 'Visual style',
@@ -49,13 +58,16 @@ export function registerVisualStylePreference(app, accept, report) {
         ],
         tooltip: 'Choose Comfy, Fluent, Spectrum 2, or PhotoPro for node cards, masonry, and SugarCubes surfaces.',
         onChange: (value) => {
-            if (isVisualStyle(value))
-                accept(value);
+            if (isVisualStyle(value)) {
+                saved = value;
+                refresh();
+            }
             else
                 report(new TypeError('The visual style must be Comfy, Fluent, Spectrum 2, or PhotoPro.'));
         },
     });
-    accept(initial);
+    refresh();
+    return embedded?.subscribe(refresh) ?? (() => undefined);
 }
 /** Narrow Comfy's dynamic settings object before invoking host methods. */
 function settingsBoundary(app) {

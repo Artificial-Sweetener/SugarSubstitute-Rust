@@ -15,11 +15,14 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Render one interruptible traveling marker rather than mounting selection marks on each row. */
 import { defineComponent, h, type PropType } from 'vue';
-import { CUBE_STACK_ROW_HEIGHT, CUBE_STACK_ROW_STRIDE } from '../CubeStackMetrics.js';
+import { CUBE_STACK_ROW_HEIGHT, cubeStackRowStride } from '../CubeStackMetrics.js';
 
 /** Animate one centered marker between the active card's settled row positions. */
 export const CubeStackSelectionIndicator = defineComponent({
-  props: { position: { type: Number as PropType<number | null>, default: null } },
+  props: {
+    position: { type: Number as PropType<number | null>, default: null },
+    compact: { type: Boolean, default: false },
+  },
   setup(props) {
     return () =>
       h('div', {
@@ -28,7 +31,7 @@ export const CubeStackSelectionIndicator = defineComponent({
         'data-position': props.position ?? undefined,
         style: {
           opacity: props.position === null ? '0' : '1',
-          transform: `translateY(${String((props.position ?? 0) * CUBE_STACK_ROW_STRIDE + (CUBE_STACK_ROW_HEIGHT - 16) / 2)}px)`,
+          transform: `translateY(${String((props.position ?? 0) * cubeStackRowStride(props.compact) + (CUBE_STACK_ROW_HEIGHT - 16) / 2)}px)`,
         },
       });
   },

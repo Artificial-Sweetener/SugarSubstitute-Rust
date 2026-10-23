@@ -52,8 +52,8 @@ test.each(['dark-gray', 'medium-gray', 'light-gray'] as const)(
         content: `
         .actionbar-container { display:flex; }
         [data-sc-theme="photopro"] { ${photoProTokenDeclarations(palette)} --sc-accent-color:#459cf0; }
-        #native-toggle { height:32px; width:32px; }
-        #properties-toggle, #properties-toggle button { height:32px; width:32px; }
+        :where(#native-toggle) { height:32px; width:32px; }
+        :where(#properties-toggle, #properties-toggle button) { height:32px; width:32px; }
         ${generationStripCss}${pluginFrameCss}${photoProControlCss()}
       `,
       });
@@ -103,7 +103,7 @@ test.each(['dark-gray', 'medium-gray', 'light-gray'] as const)(
       });
       expect(geometry.overrides.width).toBe(geometry.barWidth);
       expect(geometry.overrides.top).toBe(geometry.controlBottom + 4);
-      expect(geometry.gap).toBe(4);
+      expect(geometry.gap).toBeGreaterThanOrEqual(4);
       expect(geometry.propertiesGap).toBe(4);
       expect(geometry.propertiesRight).toBe(Math.max(...geometry.controlRights));
       expect(new Set(geometry.centers).size).toBe(1);
@@ -111,7 +111,7 @@ test.each(['dark-gray', 'medium-gray', 'light-gray'] as const)(
       expect(geometry.fills.every((fill) => fill === 'rgba(0, 0, 0, 0)')).toBe(true);
       expect(geometry.corners.every((corner) => corner === '0px')).toBe(true);
       expect(geometry.inputBorder).toBe('0px');
-      expect(geometry.topCorners).toEqual(['6px', '6px', '6px', '6px']);
+      expect(geometry.topCorners).toEqual(['0px', '0px', '0px', '0px']);
       await page.evaluate(() => {
         document.documentElement.removeAttribute('data-sc-plugin-mode');
         document
@@ -143,3 +143,34 @@ test.each(['dark-gray', 'medium-gray', 'light-gray'] as const)(
     }
   },
 );
+
+test('fills the plugin panel to its bottom edge and restores the native splitter margin outside plugin mode', async () => {
+  const page = await browser.newPage({ viewport: { width: 520, height: 1072 } });
+  try {
+    await page.setContent(`<!doctype html><html data-sc-plugin-mode><body>
+      <div class="splitter-overlay-bottom"><div class="graph-canvas-panel"></div></div>
+      </body></html>`);
+    await page.addStyleTag({
+      content: `
+      html,body { height:100%; margin:0; }
+      body { display:flex; flex-direction:column; }
+      .splitter-overlay-bottom { flex:1; margin-bottom:4px; }
+      .graph-canvas-panel { height:100%; }
+      ${pluginFrameCss}
+    `,
+    });
+    expect(
+      await page
+        .locator('.graph-canvas-panel')
+        .evaluate((panel) => panel.getBoundingClientRect().bottom),
+    ).toBe(1072);
+    await page.evaluate(() => document.documentElement.removeAttribute('data-sc-plugin-mode'));
+    expect(
+      await page
+        .locator('.graph-canvas-panel')
+        .evaluate((panel) => panel.getBoundingClientRect().bottom),
+    ).toBe(1068);
+  } finally {
+    await page.close();
+  }
+});

@@ -127,6 +127,25 @@ async function main(): Promise<void> {
   const checkOnly = process.argv.includes('--check');
   rmSync(generatedRoot, { force: true, recursive: true });
   await compileTypeScript();
+  for (const source of walkArtifactFiles(path.join(generatedRoot, 'frontend'))) {
+    const output = path.join(
+      generatedRoot,
+      path.relative(path.join(generatedRoot, 'frontend'), source),
+    );
+    mkdirSync(path.dirname(output), { recursive: true });
+    copyFileSync(source, output);
+  }
+  rmSync(path.join(generatedRoot, 'frontend'), { recursive: true, force: true });
+  rmSync(path.join(generatedRoot, 'integrations'), { recursive: true, force: true });
+  await build({
+    entryPoints: [path.join(repositoryRoot, 'frontend/comfyui/ui/core/embedded/PanelRuntime.ts')],
+    outfile: path.join(generatedRoot, 'comfyui/ui/core/embedded/PanelRuntime.js'),
+    bundle: true,
+    format: 'esm',
+    platform: 'browser',
+    target: 'es2022',
+    legalComments: 'inline',
+  });
   await build({
     ...browserDependencyResolution,
     entryPoints: [

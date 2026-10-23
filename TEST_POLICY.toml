@@ -569,4 +569,4 @@ area = "editor_integrations"
 
 [[subscription]]
 boundary = "editor_adapter_contract"
-groups = ["photoshop/contract"]
+groups = ["photoshop/contract", "frontend_core/unit", "frontend_core/integration", "surface/unit", "surface/integration", "relations/unit"]

@@ -78,10 +78,10 @@ test('shares themed keyboard focus across all overlay thumbs with a system-color
   expect(css).toContain('outline-color:Highlight');
 });
 
-test('PhotoPro paints square scroll tracks, thumbs, and directional arrows', () => {
+test('PhotoPro paints reference-width tracks, inset thumbs, and directional arrows', () => {
   const css = photoProScrollbarCss();
   expect(css).toContain(
-    'padding-right:calc(var(--sc-scrollbar-base-padding-right,0px) + 14px) !important',
+    'padding-right:calc(var(--sc-scrollbar-base-padding-right,0px) + 16px) !important',
   );
   expect(css).toContain(
     '.sc-style-scrollbar[data-sc-photopro-scrollbar] .sc-style-scrollbar-track',

@@ -1,3 +1,21 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Calculate scrollbar travel independently of DOM layout and native scrolling. */
+/** Match the reference Photoshop track and its two square arrow buttons in screen pixels. */
+export const PHOTOPRO_SCROLLBAR_WIDTH = 16;
 /** Keep a bounded minimum handle and clamp overscroll to the authoritative range. */
 export function scrollbarGeometry(track, viewport, content, position) {
     if (![track, viewport, content, position].every(Number.isFinite))

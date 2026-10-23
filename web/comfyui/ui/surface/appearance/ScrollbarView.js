@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Present accessible overlay handles that delegate every value change to native scrolling. */
-import { scrollbarDragPosition, scrollbarGeometry } from './ScrollbarGeometry.js';
+import { scrollbarDragPosition, scrollbarGeometry, PHOTOPRO_SCROLLBAR_WIDTH, } from './ScrollbarGeometry.js';
 import { scrollWheelDistance } from '../ScrollWheelDistance.js';
 /** Keep input handling on the owned thumb, outside graph drag and zoom handlers. */
 export class ScrollbarView {
@@ -95,9 +95,10 @@ export class ScrollbarView {
         const content = vertical ? this.#owner.scrollHeight : this.#owner.scrollWidth;
         const position = this.#position();
         const photoPro = this.#owner.ownerDocument.documentElement.dataset.scVisualStyle === 'photopro';
-        const arrowSpace = photoPro ? 28 : 0;
-        const crossSize = photoPro ? 14 : 12;
-        const size = track ? (vertical ? track.height : track.width) - 2 - arrowSpace : 0;
+        const arrowSpace = photoPro ? PHOTOPRO_SCROLLBAR_WIDTH * 2 : 0;
+        const edgeInset = photoPro ? 0 : 1;
+        const crossSize = photoPro ? PHOTOPRO_SCROLLBAR_WIDTH : 12;
+        const size = track ? (vertical ? track.height : track.width) - edgeInset * 2 - arrowSpace : 0;
         this.#geometry = scrollbarGeometry(size, viewport, content, position);
         const geometry = this.#geometry;
         if (!track || !geometry) {
@@ -111,9 +112,9 @@ export class ScrollbarView {
             ? this.#rtl
                 ? track.left
                 : track.left + track.width - crossSize
-            : track.left + 1 + arrowSpace / 2 + offset;
+            : track.left + edgeInset + arrowSpace / 2 + offset;
         const top = vertical
-            ? track.top + 1 + arrowSpace / 2 + offset
+            ? track.top + edgeInset + arrowSpace / 2 + offset
             : track.horizontalBottom - crossSize;
         const localLeft = (left - space.left) / space.scaleX;
         const localTop = (top - space.top) / space.scaleY;

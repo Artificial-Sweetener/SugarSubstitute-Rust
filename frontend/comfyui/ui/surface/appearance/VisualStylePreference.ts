@@ -17,6 +17,7 @@
 import { sugarCubesSettingsSection } from '../../settings/SugarCubesSettingsSections.js';
 import { isRecord, type UnknownRecord } from '../../types/common.js';
 import { isVisualStyle, resolveVisualStyle, type VisualStyle } from './VisualStyle.js';
+import type { EmbeddedPresentationSource } from '../../core/embedded/EmbeddedPresentation.js';
 
 /** Persist visual style independently of workflow documents and renderer selection. */
 export const VISUAL_STYLE_SETTING = 'SugarCubes.Appearance.VisualStyle';
@@ -37,13 +38,22 @@ export function registerVisualStylePreference(
   app: unknown,
   accept: (style: VisualStyle) => void,
   report: (error: unknown) => void,
-): void {
+  embedded?: EmbeddedPresentationSource,
+): () => void {
   const settings = settingsBoundary(app);
   if (typeof settings.addSetting !== 'function') {
     report(new Error('Comfy settings registration is unavailable for visual style.'));
-    return;
+    return () => undefined;
   }
   const initial = readVisualStylePreference(app);
+  let saved = initial;
+  let applied: VisualStyle | null = null;
+  const refresh = (): void => {
+    const style = embedded?.read()?.visualStyle ?? saved;
+    if (style === applied) return;
+    applied = style;
+    accept(style);
+  };
   settings.addSetting.call(settings, {
     id: VISUAL_STYLE_SETTING,
     name: 'Visual style',
@@ -59,12 +69,15 @@ export function registerVisualStylePreference(
     tooltip:
       'Choose Comfy, Fluent, Spectrum 2, or PhotoPro for node cards, masonry, and SugarCubes surfaces.',
     onChange: (value: unknown) => {
-      if (isVisualStyle(value)) accept(value);
-      else
+      if (isVisualStyle(value)) {
+        saved = value;
+        refresh();
+      } else
         report(new TypeError('The visual style must be Comfy, Fluent, Spectrum 2, or PhotoPro.'));
     },
   });
-  accept(initial);
+  refresh();
+  return embedded?.subscribe(refresh) ?? (() => undefined);
 }
 
 /** Narrow Comfy's dynamic settings object before invoking host methods. */

@@ -19,6 +19,7 @@ import { ComfySettingsCatalog } from '../../../frontend/comfyui/ui/settings/Comf
 import { SettingsWorkspaceSurface } from '../../../frontend/comfyui/ui/settings/SettingsWorkspaceSurface.js';
 import { SettingsWorkspaceHost } from '../../../frontend/comfyui/ui/settings/SettingsWorkspaceHost.js';
 import { SettingsPopupTheme } from '../../../frontend/comfyui/ui/settings/SettingsPopupTheme.js';
+import { settingsWorkspaceCss } from '../../../frontend/comfyui/ui/settings/SettingsWorkspaceStyles.js';
 import { publishVisualStyle } from '../../../frontend/comfyui/ui/surface/appearance/VisualStyleBoundary.js';
 import { Switch } from '@spectrum-web-components/switch/src/Switch.js';
 
@@ -158,6 +159,44 @@ test('move the original search and close controls and restore their exact slots 
   expect(f.root.querySelector('.sc-settings-search-bar')).toBeNull();
   expect(document.activeElement).toBe(f.input);
   surface.dispose();
+});
+
+test('retains native sidebar collapse authority and both header actions in themed settings', () => {
+  const f = fixture();
+  const grid = f.root.firstElementChild;
+  if (!(grid instanceof HTMLElement)) throw new Error('Missing native settings grid.');
+  const toggle = document.createElement('button');
+  toggle.setAttribute('aria-label', 'Show left panel');
+  f.header.prepend(toggle);
+  f.sidebar.inert = true;
+  f.sidebar.setAttribute('aria-hidden', 'true');
+  grid.style.gridTemplateColumns = '0rem 1fr';
+  toggle.addEventListener('click', () => {
+    f.sidebar.inert = !f.sidebar.inert;
+    f.sidebar.setAttribute('aria-hidden', String(f.sidebar.inert));
+    grid.style.gridTemplateColumns = f.sidebar.inert ? '0rem 1fr' : '18rem 1fr';
+  });
+  const closed = jest.fn();
+  f.close.addEventListener('click', closed);
+  const style = document.createElement('style');
+  style.textContent = settingsWorkspaceCss;
+  document.head.append(style);
+  const surface = new SettingsWorkspaceSurface(f.root, f.catalog);
+  surface.update(true, true);
+  expect(f.sidebar.inert).toBe(true);
+  expect(getComputedStyle(grid).gridTemplateColumns).toBe('0rem 1fr');
+  expect(toggle.closest('.sc-settings-search-bar')).not.toBeNull();
+  expect(f.close.closest('.sc-settings-search-bar')).not.toBeNull();
+  toggle.click();
+  expect(f.sidebar.inert).toBe(false);
+  expect(getComputedStyle(grid).gridTemplateColumns).toBe('18rem 1fr');
+  f.close.click();
+  expect(closed).toHaveBeenCalledTimes(1);
+  toggle.click();
+  expect(f.sidebar.inert).toBe(true);
+  surface.dispose();
+  expect([...f.header.children]).toEqual([toggle, f.close]);
+  expect(f.sidebar.inert).toBe(true);
 });
 
 test('theme registered standard rows while preserving custom plugin subtrees and callbacks', () => {

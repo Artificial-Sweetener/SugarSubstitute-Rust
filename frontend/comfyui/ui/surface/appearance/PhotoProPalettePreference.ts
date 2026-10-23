@@ -17,6 +17,7 @@
 import { sugarCubesSettingsSection } from '../../settings/SugarCubesSettingsSections.js';
 import { isRecord } from '../../types/common.js';
 import { isPhotoProPalette, type PhotoProPalette } from './PhotoProThemeTokens.js';
+import type { EmbeddedPresentationSource } from '../../core/embedded/EmbeddedPresentation.js';
 
 /** Persist PhotoPro brightness independently of the host color scheme. */
 export const PHOTOPRO_PALETTE_SETTING = 'SugarCubes.Appearance.PhotoProPalette';
@@ -26,6 +27,7 @@ export function registerPhotoProPalettePreference(
   app: unknown,
   documentRef: Document,
   report: (error: unknown) => void,
+  embedded?: EmbeddedPresentationSource,
 ): () => void {
   const application = isRecord(app) ? app : {};
   const ui = isRecord(application.ui) ? application.ui : {};
@@ -34,9 +36,11 @@ export function registerPhotoProPalettePreference(
   const register = settings.addSetting;
   const value = typeof read === 'function' ? read.call(settings, PHOTOPRO_PALETTE_SETTING) : null;
   const initial: PhotoProPalette = isPhotoProPalette(value) ? value : 'medium-gray';
+  let saved = initial;
   const accept = (palette: PhotoProPalette): void => {
     documentRef.documentElement.dataset.scPhotoproPalette = palette;
   };
+  const refresh = (): void => accept(embedded?.read()?.photoProPalette ?? saved);
   if (typeof register === 'function') {
     register.call(settings, {
       id: PHOTOPRO_PALETTE_SETTING,
@@ -52,11 +56,17 @@ export function registerPhotoProPalettePreference(
       ],
       tooltip: 'Choose one of Photoshop desktop’s four interface brightness levels.',
       onChange: (candidate: unknown) => {
-        if (isPhotoProPalette(candidate)) accept(candidate);
-        else report(new TypeError('PhotoPro color theme must be a supported Photoshop palette.'));
+        if (isPhotoProPalette(candidate)) {
+          saved = candidate;
+          refresh();
+        } else report(new TypeError('PhotoPro color theme must be a supported Photoshop palette.'));
       },
     });
   } else report(new Error('Comfy settings registration is unavailable for PhotoPro palettes.'));
-  accept(initial);
-  return () => documentRef.documentElement.removeAttribute('data-sc-photopro-palette');
+  refresh();
+  const stop = embedded?.subscribe(refresh);
+  return () => {
+    stop?.();
+    documentRef.documentElement.removeAttribute('data-sc-photopro-palette');
+  };
 }

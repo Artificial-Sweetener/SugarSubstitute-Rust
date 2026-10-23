@@ -14,7 +14,7 @@ export function registerPromptEditorSurfaceOwner(document, owner) {
 export function mountPromptEditorSurface(surface) {
     return owners.get(surface.textarea.ownerDocument)?.mount(surface) ?? null;
 }
-/** Refresh only the known prompt after its native renderer adopts host state. */
+/** Report expired sessions so retained renderer surfaces can reacquire their editor. */
 export function refreshPromptEditorSurface(surface) {
-    owners.get(surface.textarea.ownerDocument)?.refresh(surface);
+    return owners.get(surface.textarea.ownerDocument)?.refresh(surface) ?? false;
 }

@@ -154,8 +154,8 @@ export class RelationHostLifecycle {
         this.#overridePresentation.setInline(inline);
     }
     /** Restore override presentation preferences after host appearance settings are available. */
-    setupOverridePresentation() {
-        this.#overridePresentation.setup(this.options.app, this.options.document, this.options.reportError);
+    setupOverridePresentation(embedded) {
+        this.#overridePresentation.setup(this.options.app, this.options.document, this.options.reportError, embedded);
     }
     /** Suspend workflow-wide override presentation while retaining authoritative relation state. */
     setEditorActive(active) {

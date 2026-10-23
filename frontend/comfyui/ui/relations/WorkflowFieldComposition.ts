@@ -23,6 +23,8 @@ import type { WorkflowOutputActivity } from '../execution/application/WorkflowOu
 import type { WorkflowProgressStore } from '../execution/application/WorkflowProgressStore.js';
 import type { CubeStackFrameControls } from '../surface/stack/CubeStackHost.js';
 import { SettingsWorkspaceHost } from '../settings/SettingsWorkspaceHost.js';
+import { EmbeddedPresentation } from '../core/embedded/EmbeddedPresentation.js';
+import { startEmbeddedPanel } from '../core/embedded/EmbeddedPanelHost.js';
 
 export interface WorkflowFieldHostOptions
   extends Omit<RelationHostOptions, 'reportError' | 'appearance'> {
@@ -31,6 +33,7 @@ export interface WorkflowFieldHostOptions
   activity: WorkflowOutputActivity;
   progress: WorkflowProgressStore;
   stackControls(): CubeStackFrameControls;
+  connected(): boolean;
 }
 
 /** Share seed reuse across actual native field mounts and the override toolbar. */
@@ -40,6 +43,7 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
   frame: SubstituteFrameHost;
   setupPresentation(): void;
 } {
+  const embedded = new EmbeddedPresentation();
   const relations: RelationHostLifecycle = new RelationHostLifecycle({
     ...options,
     reportError: options.reportRelationError,
@@ -50,6 +54,7 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
     document: options.document,
     seedReuse: (node, name) => relations.seedReuse.field(node, name),
     reportError: options.reportPresentationError,
+    embedded,
   });
   const ownedAppearance = new OwnedSurfaceAppearance(options.document, appearance.state);
   const frame = new SubstituteFrameHost({
@@ -82,9 +87,17 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
   function setupPresentation(): void {
     appearance.setup();
     frame.setup();
-    relations.setupOverridePresentation();
+    relations.setupOverridePresentation(embedded);
     editorNavigation.setup();
     settingsWorkspace.setup();
+    const windowRef = options.document.defaultView;
+    if (windowRef)
+      startEmbeddedPanel({
+        window: windowRef,
+        presentation: embedded,
+        connected: options.connected,
+        report: options.reportPresentationError,
+      });
   }
   return { appearance, relations, frame, setupPresentation };
 }

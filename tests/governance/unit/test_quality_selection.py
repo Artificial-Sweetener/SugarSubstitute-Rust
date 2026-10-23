@@ -47,7 +47,7 @@ def _checks(*paths: str) -> frozenset[str]:
 def test_unrelated_work_omits_editor_checks_and_shared_work_includes_consumers() -> (
     None
 ):
-    """Keep ordinary SugarCubes work independent from optional editor validation."""
+    """Keep editor-only work isolated and validate browser consumers of shared contracts."""
 
     assert _checks("sugarcubes/cube_model/schema.py") == {"comfy"}
     assert _checks("scripts/build-web.ts") == {"comfy"}
@@ -55,7 +55,13 @@ def test_unrelated_work_omits_editor_checks_and_shared_work_includes_consumers()
         "integrations",
         "photoshop",
     }
-    assert _checks("integrations/contracts/document.schema.json") == {
+    assert _checks("integrations/contracts/panel.schema.json") == {
+        "comfy",
+        "integrations",
+        "photoshop",
+    }
+    assert _checks("integrations/shared/PanelSession.ts") == {
+        "comfy",
         "integrations",
         "photoshop",
     }

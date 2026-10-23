@@ -10,13 +10,13 @@ export class OverridePresentationHost {
         this.toolbar = toolbar;
     }
     /** Restore Plugin Mode once Comfy settings are ready. */
-    setup(app, document, report) {
+    setup(app, document, report, embedded) {
         if (this.#release)
             return;
         this.#release = registerPluginModePreference(app, document, (enabled) => {
             this.#plugin = enabled;
             this.#present();
-        }, report);
+        }, report, embedded);
     }
     /** Retain frame intent while Plugin Mode owns the override card. */
     setInline(inline) {

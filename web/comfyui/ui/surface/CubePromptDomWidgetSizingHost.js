@@ -38,12 +38,13 @@ export class CubePromptDomWidgetSizingHost {
             this.release(element);
             return;
         }
-        const existing = this.#widgets.get(textarea);
         const mounted = this.#editors.get(textarea);
         if (mounted && mounted.surface.widget === widget) {
-            refreshPromptEditorSurface(mounted.surface);
-            return;
+            if (refreshPromptEditorSurface(mounted.surface))
+                return;
+            this.release(textarea);
         }
+        const existing = this.#widgets.get(textarea);
         if (existing === widget)
             return;
         if (existing)

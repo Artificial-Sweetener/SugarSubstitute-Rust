@@ -39,14 +39,16 @@ export function ensureWorkflowMasonryStyles(documentRef) {
     .sugarcubes-workflow-masonry {
       position:absolute; inset:0; z-index:${MASONRY_SURFACE_Z_INDEX}; box-sizing:border-box; pointer-events:auto;
       overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain;
+      scroll-padding-bottom:var(--sc-panel-resize-corner,0px);
       padding:${WORKFLOW_MASONRY_TOP_INSET}px var(--sc-masonry-inline-padding,20px) 96px calc(var(--sc-masonry-inline-padding,20px) + var(--sc-masonry-stack-width,0px));
       background:transparent;
       color:var(--fg-color,#ddd); outline:none;
     }
+    :has(> .sc-cube-stack-host .sc-cube-stack[data-compact]) > .sugarcubes-workflow-masonry,
     html[data-sc-compact-masonry] .sugarcubes-workflow-masonry {
       --sugarcubes-masonry-gap:0;
       --sc-masonry-inline-padding:0px;
-      padding:0 0 0 var(--sc-masonry-stack-width,0px);
+      padding:0 0 var(--sc-panel-resize-corner,0px) var(--sc-masonry-stack-width,0px);
     }
     html[data-sc-compact-masonry] .sugarcubes-workflow-masonry__section { height:36px; }
     .sugarcubes-workflow-masonry__backdrop {
@@ -62,6 +64,10 @@ export function ensureWorkflowMasonryStyles(documentRef) {
       transform-origin:0 0;
     }
     .sugarcubes-workflow-masonry__content { position:relative; width:100%; }
+    /* Retain a measurable scale box with zero flow height, anchored by native scrolling. */
+    .sugarcubes-workflow-masonry > .sc-style-scrollbar-layer {
+      position:sticky; inset:auto; bottom:0; width:100%; height:1px; margin-top:-1px;
+    }
     .sc-plugin-overrides-slot:empty { display:none; }
     .sc-plugin-overrides-slot { position:relative; margin-bottom:var(--sugarcubes-masonry-gap,12px); }
     .sugarcubes-workflow-masonry__section {

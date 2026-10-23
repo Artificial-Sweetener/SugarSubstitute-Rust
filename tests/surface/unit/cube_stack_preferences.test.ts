@@ -82,6 +82,31 @@ test('rejects incomplete persistence capability without registering partial sett
   expect(() => preferences.setup()).toThrow('settings persistence');
 });
 
+test('starts Plugin Mode compact, keeps panel choices local, and restores the latest saved choice', async () => {
+  const fixture = setup();
+  fixture.preferences.setup();
+  fixture.preferences.setPluginMode(true);
+  expect(fixture.preferences.snapshot.compact).toBe(true);
+  expect(fixture.write).not.toHaveBeenCalled();
+  await fixture.preferences.setCompact(false);
+  fixture.preferences.setPluginMode(true);
+  expect(fixture.preferences.snapshot.compact).toBe(false);
+  expect(fixture.write).not.toHaveBeenCalled();
+  fixture.registered.get(CUBE_STACK_COMPACT_SETTING)?.onChange(true);
+  expect(fixture.preferences.snapshot.compact).toBe(false);
+  fixture.preferences.setPluginMode(false);
+  expect(fixture.preferences.snapshot.compact).toBe(true);
+  fixture.preferences.setPluginMode(true);
+  await fixture.preferences.setCompact(false);
+  fixture.registered.get(CUBE_STACK_COMPACT_SETTING)?.onChange(false);
+  fixture.preferences.setPluginMode(false);
+  expect(fixture.preferences.snapshot.compact).toBe(false);
+  expect(fixture.write).not.toHaveBeenCalled();
+  fixture.preferences.dispose();
+  fixture.preferences.setPluginMode(true);
+  expect(fixture.preferences.snapshot.compact).toBe(false);
+});
+
 /** Supply an actual setting-callback boundary with isolated durable values. */
 function setup() {
   const values = new Map<string, unknown>();

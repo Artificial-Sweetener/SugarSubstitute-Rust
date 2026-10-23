@@ -62,6 +62,7 @@ export class AppearanceHost {
     #releaseComboToggle = null;
     #releaseCompactMasonry = null;
     #releasePhotoProPalette = null;
+    #releaseVisualStyle = null;
     #selectedStyle = 'comfy';
     #active = false;
     #dark = null;
@@ -76,7 +77,7 @@ export class AppearanceHost {
     /** Prepare observers without altering styles until the user opts in. */
     constructor(options) {
         this.#options = options;
-        this.#accent = new AccentThemeHost(options.document, options.app, options.reportError);
+        this.#accent = new AccentThemeHost(options.document, options.app, options.reportError, options.embedded);
         this.#iconAppearance = new CubeIconAppearanceHost(options.document, this.state);
         this.#scrollbars = new OverlayScrollbarHost(options.document, options.reportError);
         this.#nodes = new NativeFieldAppearance(options.app, 'card', options.seedReuse);
@@ -133,9 +134,9 @@ export class AppearanceHost {
         this.#options.document.addEventListener('keydown', this.#rememberPopupOrigin, true);
         this.#options.document.addEventListener(NATIVE_PRESENTATION_READY_EVENT, this.#onPresentationReady);
         this.#options.document.defaultView?.addEventListener('pagehide', this.#onPageHide);
-        registerVisualStylePreference(this.#options.app, (style) => this.setStyle(style), this.#options.reportError);
+        this.#releaseVisualStyle = registerVisualStylePreference(this.#options.app, (style) => this.setStyle(style), this.#options.reportError, this.#options.embedded);
         this.#releaseCompactMasonry = registerCompactMasonryPreference(this.#options.app, this.#options.document, this.#options.reportError);
-        this.#releasePhotoProPalette = registerPhotoProPalettePreference(this.#options.app, this.#options.document, this.#options.reportError);
+        this.#releasePhotoProPalette = registerPhotoProPalettePreference(this.#options.app, this.#options.document, this.#options.reportError, this.#options.embedded);
     }
     /** Apply preference without persisting presentation into workflow node data. */
     setStyle(style) {
@@ -164,6 +165,7 @@ export class AppearanceHost {
         this.#releaseComboToggle?.();
         this.#releaseCompactMasonry?.();
         this.#releasePhotoProPalette?.();
+        this.#releaseVisualStyle?.();
         this.#options.document.removeEventListener('pointerdown', this.#rememberPopupOrigin, true);
         this.#options.document.removeEventListener('keydown', this.#rememberPopupOrigin, true);
         this.#options.document.removeEventListener(NATIVE_PRESENTATION_READY_EVENT, this.#onPresentationReady);

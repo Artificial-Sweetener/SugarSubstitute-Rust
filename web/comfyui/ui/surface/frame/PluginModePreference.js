@@ -20,16 +20,26 @@ import { publishPluginMode } from '../../core/PluginMode.js';
 /** Persist the opt-in mode with Comfy's appearance preferences. */
 export const PLUGIN_MODE_SETTING = 'SugarCubes.Appearance.PluginMode';
 /** Restore the host preference and publish only validated presentation changes. */
-export function registerPluginModePreference(app, document, changed, report) {
+export function registerPluginModePreference(app, document, changed, report, embedded) {
     const ui = isRecord(app) && isRecord(app.ui) ? app.ui : {};
     const settings = isRecord(ui.settings) ? ui.settings : {};
+    let saved = false;
+    let applied = null;
+    const refresh = () => {
+        const enabled = embedded?.read()?.pluginMode ?? saved;
+        if (enabled === applied)
+            return;
+        applied = enabled;
+        publishPluginMode(document, enabled);
+        changed(enabled);
+    };
     const accept = (value) => {
         if (typeof value !== 'boolean') {
             report(new TypeError('Plugin Mode must be enabled or disabled.'));
             return;
         }
-        publishPluginMode(document, value);
-        changed(value);
+        saved = value;
+        refresh();
     };
     if (typeof settings.addSetting === 'function') {
         settings.addSetting.call(settings, {
@@ -46,5 +56,9 @@ export function registerPluginModePreference(app, document, changed, report) {
         report(new Error('Comfy settings registration is unavailable for Plugin Mode.'));
     accept(typeof settings.getSettingValue === 'function' &&
         settings.getSettingValue.call(settings, PLUGIN_MODE_SETTING) === true);
-    return () => publishPluginMode(document, false);
+    const stop = embedded?.subscribe(refresh);
+    return () => {
+        stop?.();
+        publishPluginMode(document, false);
+    };
 }

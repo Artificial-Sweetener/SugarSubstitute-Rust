@@ -107,7 +107,7 @@ export const substituteFrameCss = `
   :root[data-sc-substitute-frame] .splitter-overlay-bottom:has(> .graph-canvas-panel) { margin-left:0; margin-right:0; }
   :root[data-sc-substitute-frame] .sc-cube-stack-host::-webkit-scrollbar { display:none; }
   :root[data-sc-substitute-frame] .sc-cube-stack[data-kind='rail'] .sc-cube-stack__toolbar { display:none; }
-  :root[data-sc-substitute-frame] .sc-cube-stack-row { border-radius:4px; }
+  :root[data-sc-substitute-frame] .sc-cube-stack:not([data-compact]) .sc-cube-stack-row { border-radius:4px; }
   :root[data-sc-substitute-frame] .sc-cube-stack-row__text { mask-image:linear-gradient(90deg,#000 calc(100% - 10px),transparent); }
   :root[data-sc-substitute-frame] .sc-cube-stack-row__label { text-overflow:clip; }
   :root[data-sc-substitute-frame] .sc-cube-stack[data-kind='rail'] .sc-cube-stack-row:hover { background:rgba(255,255,255,.059); }

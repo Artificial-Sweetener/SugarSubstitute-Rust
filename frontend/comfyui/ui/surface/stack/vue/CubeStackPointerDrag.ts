@@ -16,7 +16,7 @@
 /** Own captured pointer gestures and lifted Vue previews without browser drag payloads. */
 import { ref, onBeforeUnmount, type Ref } from 'vue';
 import type { CubeStackNavigationRow } from '../CubeStackView.js';
-import { CUBE_STACK_ROW_HEIGHT, CUBE_STACK_ROW_STRIDE } from '../CubeStackMetrics.js';
+import { CUBE_STACK_ROW_HEIGHT } from '../CubeStackMetrics.js';
 
 interface PointerCandidate {
   readonly id: string;
@@ -34,6 +34,7 @@ export interface CubeStackPointerOptions {
   root: Ref<HTMLElement | null>;
   rows(): readonly CubeStackNavigationRow[];
   pending(): boolean;
+  rowStride(): number;
   preview(order: readonly string[] | null): void;
   commit(id: string, order: readonly string[]): void;
   announce(message: string): void;
@@ -107,7 +108,7 @@ export function useCubeStackPointerDrag(options: CubeStackPointerOptions) {
     const listTop = list.getBoundingClientRect().top;
     let index = remaining.length;
     for (const [slot, id] of remaining.entries()) {
-      const destination = current.indexOf(id) * CUBE_STACK_ROW_STRIDE + CUBE_STACK_ROW_HEIGHT / 2;
+      const destination = current.indexOf(id) * options.rowStride() + CUBE_STACK_ROW_HEIGHT / 2;
       if (center < listTop + destination) {
         index = slot;
         break;

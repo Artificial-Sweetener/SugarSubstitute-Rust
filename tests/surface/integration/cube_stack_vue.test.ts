@@ -32,6 +32,54 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
+test('packs compact squares edge to edge while preserving selected styling and expanded spacing', async () => {
+  ensureCubeStackStyles(document);
+  const f = setup(['first', 'second', 'third']);
+  const selected = f.row(0);
+  const background = getComputedStyle(selected).backgroundColor;
+  const border = getComputedStyle(selected).borderColor;
+  const marker = f.element.querySelector<HTMLElement>('.sc-cube-stack__selection')!;
+  const accent = getComputedStyle(marker).backgroundColor;
+  f.view.update({ ...f.state, compact: true });
+  await nextTick();
+  expect([0, 1, 2].map((index) => f.row(index).style.transform)).toEqual([
+    'translateY(0px)',
+    'translateY(46px)',
+    'translateY(92px)',
+  ]);
+  expect(f.rail.querySelector<HTMLElement>('.sc-cube-stack__rows')!.style.height).toBe('138px');
+  expect(getComputedStyle(selected).borderRadius).toBe('0');
+  expect(getComputedStyle(selected).backgroundColor).toBe(background);
+  expect(getComputedStyle(selected).borderColor).toBe(border);
+  expect(getComputedStyle(marker).backgroundColor).toBe(accent);
+  expect(selected.hasAttribute('data-selected')).toBe(true);
+  f.view.update({
+    ...f.state,
+    compact: true,
+    rows: f.state.rows.map((row) => ({ ...row, selected: row.id === 'second' })),
+  });
+  await nextTick();
+  expect(marker.style.transform).toBe('translateY(61px)');
+  f.view.update(f.state);
+  await nextTick();
+  expect(f.row(1).style.transform).toBe('translateY(50px)');
+  expect(f.rail.querySelector<HTMLElement>('.sc-cube-stack__rows')!.style.height).toBe('146px');
+  expect(getComputedStyle(selected).borderRadius).toBe('5px');
+});
+
+test('reorders compact rows at their touching square boundaries', async () => {
+  const f = setup(['first', 'second', 'third']);
+  f.view.update({ ...f.state, compact: true });
+  await nextTick();
+  f.row(0).dispatchEvent(pointer('pointerdown', 23));
+  f.rail.dispatchEvent(pointer('pointermove', 70));
+  await nextTick();
+  expect(f.actions.previewOrder).toHaveBeenLastCalledWith(['second', 'first', 'third']);
+  f.rail.dispatchEvent(pointer('pointerup', 70));
+  await nextTick();
+  expect(f.actions.reorder).toHaveBeenCalledWith('first', ['second', 'first', 'third']);
+});
+
 test('keeps the normal arrow cursor over reorderable cards and throughout a pointer drag', async () => {
   ensureCubeStackStyles(document);
   const f = setup();
@@ -221,7 +269,7 @@ test('supports two accepted drops followed by navigation, compact toggles and an
   await nextTick();
   expect(f.element.querySelector('.sc-cube-stack__selection')).toBe(marker);
   expect(marker?.getAttribute('data-position')).toBe('1');
-  expect(marker?.getAttribute('style')).toContain('translateY(65px)');
+  expect(marker?.getAttribute('style')).toContain('translateY(61px)');
   f.row(0).dispatchEvent(pointer('pointerdown', 23));
   f.rail.dispatchEvent(pointer('pointermove', 130));
   await nextTick();

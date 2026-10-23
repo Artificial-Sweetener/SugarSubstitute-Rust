@@ -68,8 +68,9 @@ export class CubePromptTextareaScope {
     for (const textarea of desired) {
       const mounted = this.#editors.get(textarea);
       if (mounted) {
-        refreshPromptEditorSurface(mounted.surface);
-        continue;
+        if (refreshPromptEditorSurface(mounted.surface)) continue;
+        mounted.release();
+        this.#editors.delete(textarea);
       }
       if (widget && desired.size === 1) {
         const surface: PromptEditorSurface = {

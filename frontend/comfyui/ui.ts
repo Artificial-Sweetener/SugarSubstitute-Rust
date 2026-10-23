@@ -116,6 +116,7 @@ const { appearance, relations, frame, setupPresentation } = createWorkflowFieldH
   seeds: workflowExecution.seeds,
   activity: workflowExecution.activity,
   progress: workflowExecution.progress,
+  connected: () => workflowExecution.connected,
   stackControls: () => workflowWorkspace.masonry.stackControls(),
   sessions: workflowExecution.sessions,
   getCardState: () => cubeRuntimeLifecycle.current()?.cardState ?? null,
