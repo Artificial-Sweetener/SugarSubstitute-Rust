@@ -59,6 +59,28 @@ impl RuntimeCache {
         context: &JobContext,
     ) -> io::Result<Maintenance> {
         let mut outcome = Maintenance::default();
+        for entry in std::fs::read_dir(&self.scope.root.path)? {
+            check(context)?;
+            let entry = entry?;
+            let name = entry.file_name();
+            let known = name.to_str().is_some_and(|name| {
+                ["owner", "writer"].iter().any(|known| name.eq_ignore_ascii_case(known))
+                    || Namespace::ALL
+                        .iter()
+                        .any(|namespace| name.eq_ignore_ascii_case(namespace.directory()))
+            });
+            if !known {
+                outcome.preserved_entries += 1;
+                if outcome.preserved_entries > MAX_ENTRIES {
+                    return Err(invalid("Cache scope contains excessive unrecognized content"));
+                }
+                outcome.charged_bytes = outcome.charged_bytes.saturating_add(tree::scope_charge(
+                    &entry.path(),
+                    self.scope.policy.total_bytes,
+                    context,
+                )?);
+            }
+        }
         let mut candidates = Vec::new();
         let mut budgets = [0_u64; Namespace::ALL.len()];
         let mut occupied = 0usize;
@@ -232,13 +254,13 @@ impl RuntimeCache {
             if !entry_slot_needed
                 && !candidate.retiring
                 && !expired
-                && outcome.charged_bytes.saturating_add(needed) <= self.policy.total_bytes
+                && outcome.charged_bytes.saturating_add(needed) <= self.scope.policy.total_bytes
                 && budgets[index(ns)?].saturating_add(namespace_needed) <= ns.budget()
             {
                 continue;
             }
             let expiry_only = !entry_slot_needed
-                && outcome.charged_bytes.saturating_add(needed) <= self.policy.total_bytes
+                && outcome.charged_bytes.saturating_add(needed) <= self.scope.policy.total_bytes
                 && budgets[index(ns)?].saturating_add(namespace_needed) <= ns.budget();
             match self.remove(&candidate, expiry_only.then_some(now), context) {
                 Ok(Removal::Removed) => {
@@ -264,7 +286,7 @@ impl RuntimeCache {
             && (outcome
                 .charged_bytes
                 .checked_add(bytes)
-                .is_none_or(|used| used > self.policy.total_bytes)
+                .is_none_or(|used| used > self.scope.policy.total_bytes)
                 || budgets[index(namespace)?]
                     .checked_add(bytes)
                     .is_none_or(|used| used > namespace.budget())

@@ -27,7 +27,15 @@ fn receive(
     target: sugarsubstitute_update::Target,
     context: &JobContext,
 ) -> Result<VerifiedDownload, Box<dyn std::error::Error + Send + Sync>> {
-    let mut download = Download::open(installation_root, target, context)?;
+    let mut download = Download::open(
+        crate::setup_storage::cache::RuntimeCache::open(
+            installation_root,
+            crate::setup_storage::cache::CachePolicy::default(),
+            context,
+        )?,
+        target,
+        context,
+    )?;
     download.receive(
         Response { status: 200, length: Some(bytes.len() as u64), range: None, encoding: None },
         &mut io::Cursor::new(bytes),

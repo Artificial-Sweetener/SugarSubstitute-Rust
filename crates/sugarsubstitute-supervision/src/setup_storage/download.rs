@@ -4,7 +4,7 @@
 mod custody;
 mod failure;
 mod local;
-use super::check;
+use super::{cache::RuntimeCache, check};
 use custody::Custody;
 pub use failure::DownloadFailure;
 use std::{
@@ -18,7 +18,7 @@ use sugarsubstitute_update::{
 };
 
 /// Admission for one retained cache entry, fixed streaming buffer and protected native opens.
-pub const DOWNLOAD_RESERVATION_BYTES: u64 = 8 * 1024 * 1024;
+pub const DOWNLOAD_RESERVATION_BYTES: u64 = 16 * 1024 * 1024;
 const CHUNK: usize = 256 * 1024;
 
 /// Exclusive package preparation; it never acquires the application's lease or starts work.
@@ -34,11 +34,11 @@ impl Download {
     /// # Errors
     /// Rejects unknown installations, busy writers, unsafe paths, damaged ownership and I/O.
     pub fn open(
-        root: &Path,
+        cache: RuntimeCache,
         target: Target,
         context: &JobContext,
     ) -> Result<Self, DownloadFailure> {
-        let custody = Custody::open(root, &target, context)?;
+        let custody = Custody::open(cache, &target, context)?;
         let reset = custody.file.metadata()?.len() > target.length();
         if reset {
             custody.file.set_len(0)?;

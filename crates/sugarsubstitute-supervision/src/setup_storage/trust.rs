@@ -18,7 +18,7 @@ pub(in crate::setup_storage) use installed::PublishedRelease;
 mod offer_cache;
 pub(crate) mod offered;
 mod preparation;
-pub use offer_cache::OFFER_CACHE_RESERVATION_BYTES;
+pub use offer_cache::{OFFER_LOOKUP_RESERVATION_BYTES, OFFER_PUBLICATION_RESERVATION_BYTES};
 pub use offered::{AuthenticatedOffer, OFFER_RESERVATION_BYTES};
 mod receipt;
 mod records;
@@ -64,6 +64,7 @@ pub struct TrustStore {
     _continuity: Option<File>,
     _memory: MemoryClaim,
     workspace: MemoryLease,
+    cache: std::sync::Mutex<Option<super::cache::RuntimeCache>>,
     installation: InstallationId,
     repository: [u8; 32],
 }
@@ -85,6 +86,7 @@ impl TrustStore {
         let parent = Directory::open(installation_root, false)?;
         let ownership = ownership::read(&parent)?;
         let mut store = Self {
+            cache: std::sync::Mutex::new(None),
             preparation: None,
             root: Directory::open(&parent.path.join(DIRECTORY), false)?,
             _installation_root: parent,

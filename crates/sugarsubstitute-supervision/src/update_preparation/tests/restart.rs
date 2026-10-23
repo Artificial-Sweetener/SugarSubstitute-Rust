@@ -195,12 +195,11 @@ fn missing_and_partial_offline_evidence_never_asserts_current_or_downloads() -> 
     assert_unlocked(&mut pipeline, &fixture)?;
     drop((pipeline, fixture));
     let (fixture, generation) = prepared()?;
-    let payload = fixture
-        .installation
-        .path()
-        .join("update-downloads-v1")
-        .join(format!("{:x}", Sha256::digest(&fixture.archive)))
-        .join("payload");
+    let payload = crate::setup_storage::test_worker::cache_file(
+        fixture.installation.path(),
+        crate::setup_storage::cache::Namespace::UpdateDownloads,
+        "payload",
+    )?;
     std::fs::write(&payload, &fixture.archive[..7])?;
     std::fs::remove_file(generation.join("sugarsubstitute.exe"))?;
     let mut pipeline = Pipeline::new()?;
@@ -240,12 +239,11 @@ fn offline_restart_rejects_expired_authority_and_corrupt_repair_archive() -> Tes
     // Expiry advances the clock floor; a separate installation isolates byte tampering from it.
     drop((pipeline, fixture));
     let (fixture, generation) = prepared()?;
-    let payload = fixture
-        .installation
-        .path()
-        .join("update-downloads-v1")
-        .join(format!("{:x}", Sha256::digest(&fixture.archive)))
-        .join("payload");
+    let payload = crate::setup_storage::test_worker::cache_file(
+        fixture.installation.path(),
+        crate::setup_storage::cache::Namespace::UpdateDownloads,
+        "payload",
+    )?;
     let mut damaged = fixture.archive.clone();
     damaged[0] ^= 1;
     std::fs::write(&payload, damaged)?;

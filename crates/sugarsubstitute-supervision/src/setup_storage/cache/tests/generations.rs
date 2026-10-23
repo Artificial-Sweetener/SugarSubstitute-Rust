@@ -16,6 +16,7 @@ fn fresh_generation_replaces_lookup_without_mutating_or_unpinning_older_readers(
             context,
         )?;
         first.write("offer", b"old bytes", context)?;
+        first.publish(context)?;
         drop(first);
         let previous = open(root.path(), 4096, context)?
             .find(Namespace::UpdateOffers, &key, 100, context)?
@@ -29,6 +30,7 @@ fn fresh_generation_replaces_lookup_without_mutating_or_unpinning_older_readers(
         )?;
         replacement.write("offer", b"new bytes", context)?;
         assert_eq!(previous.read("offer", context)?.read_bounded(16)?, b"old bytes");
+        replacement.publish(context)?;
         drop(replacement);
         let current = open(root.path(), 4096, context)?
             .find(Namespace::UpdateOffers, &key, 100, context)?
@@ -111,6 +113,77 @@ fn relocated_owned_cache_keeps_entries_and_authoritative_siblings_intact() -> Te
         assert_eq!(lease.read("payload", context)?.read_bounded(16)?, b"cache");
         assert_eq!(std::fs::read(first.path().join("settings"))?, b"settings");
         assert_eq!(std::fs::read(second.path().join("user-document"))?, b"document");
+        Ok(())
+    })
+}
+
+#[test]
+fn cloned_scope_funds_retained_entries_without_retaining_later_job_admission() -> TestResult {
+    let mut pipeline = worker::pipeline::Pipeline::new()?;
+    let (root, cache) = pipeline.run(16 * 1024 * 1024, |context| {
+        let root = tempfile::tempdir()?;
+        let cache = open(root.path(), 4096, &context)?;
+        Ok((root, cache))
+    })?;
+    let next = cache.clone();
+    let entry = pipeline.run(240 * 1024 * 1024, move |context| {
+        let mut entry =
+            next.acquire(Namespace::UpdateOffers, &storage_key(b"later job"), 16, 100, &context)?;
+        entry.write("offer", b"bytes", &context)?;
+        Ok(entry)
+    })?;
+    // A retained entry must not retain the second job's entire 240 MiB reservation.
+    pipeline.run(240 * 1024 * 1024, |_| Ok(()))?;
+    drop((entry, cache, root));
+    Ok(())
+}
+
+#[test]
+fn bounded_stream_publication_rejects_short_long_and_failed_writers_before_replacing_target()
+-> TestResult {
+    worker::run_reserved(16 * 1024 * 1024, |context, _| {
+        let root = tempfile::tempdir()?;
+        let mut entry = open(root.path(), 128, context)?.acquire(
+            Namespace::UpdateOffers,
+            &storage_key(b"streamed record"),
+            128,
+            100,
+            context,
+        )?;
+        entry.write("record", b"previous", context)?;
+        assert_eq!(
+            entry
+                .write_with("record", 4, context, |output| output.write_all(b"no"))
+                .err()
+                .ok_or("Short stream accepted")?
+                .kind(),
+            io::ErrorKind::UnexpectedEof
+        );
+        assert_eq!(std::fs::read(entry.path().join("record"))?, b"previous");
+        assert_eq!(
+            entry
+                .write_with("record", 4, context, |output| output.write_all(b"longer"))
+                .err()
+                .ok_or("Long stream accepted")?
+                .kind(),
+            io::ErrorKind::InvalidInput
+        );
+        assert_eq!(std::fs::read(entry.path().join("record"))?, b"previous");
+        let failed = entry.write_with("record", 4, context, |output| {
+            output.write_all(b"part")?;
+            Err(io::Error::from(io::ErrorKind::ConnectionReset))
+        });
+        assert_eq!(
+            failed.err().ok_or("Failed writer accepted")?.kind(),
+            io::ErrorKind::ConnectionReset
+        );
+        assert_eq!(std::fs::read(entry.path().join("record"))?, b"previous");
+        entry.write_with("record", 4, context, |output| {
+            output.write_all(b"ne")?;
+            output.write_all(b"xt")
+        })?;
+        assert_eq!(std::fs::read(entry.path().join("record"))?, b"next");
+        assert!(entry.verify_storage(context)? <= 128);
         Ok(())
     })
 }

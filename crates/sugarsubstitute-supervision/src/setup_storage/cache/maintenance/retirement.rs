@@ -90,8 +90,7 @@ pub(super) fn journal(
 ) -> io::Result<record::Record> {
     let mut file = parent.read(&format!("{key}.retiring"))?;
     protection.verify_file(&file)?;
-    let record: record::Record =
-        serde_json::from_slice(&files::read_bounded(&mut file, MAX_RECORD)?)?;
+    let record: record::Record = serde_json::from_slice(&record::read_metadata(&mut file)?)?;
     record.validate(namespace, key)?;
     if !record.deleting {
         return Err(invalid("Cache deletion journal is not retired"));

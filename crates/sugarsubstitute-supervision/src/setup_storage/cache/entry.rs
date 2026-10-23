@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain an entry through producer writes and every native/read consumer's actual retirement.
 use super::*;
-use std::io::Write;
 
 /// Cross-process entry custody. Producers are exclusive; `find` acquires shared read-only pins.
 /// Dropping releases its pin and performs no cleanup.
@@ -39,7 +38,7 @@ impl CacheLease {
         self.declare_owned(names, context)
     }
     /// Publish declarations using the caller's already admitted traversal workspace.
-    fn declare_owned(
+    pub(super) fn declare_owned(
         &mut self,
         names: impl IntoIterator<Item = String>,
         context: &JobContext,
@@ -60,54 +59,44 @@ impl CacheLease {
         self.record = next;
         Ok(())
     }
-    /// Atomically publish one complete file while retaining prior complete bytes on failure.
+    /// Atomically publish one complete file and preserve declared scratch after interruption.
     /// This owner checks total physical payload length against its admitted reservation.
     /// # Errors
     /// Rejects unknown files, capacity exhaustion, cancellation, changed protection or native I/O.
     pub fn write(&mut self, name: &str, bytes: &[u8], context: &JobContext) -> io::Result<()> {
+        self.write_with(name, bytes.len() as u64, context, |output| output.write_all(bytes))
+    }
+    /// Publish an exact bounded stream without buffering its complete content in memory.
+    /// The borrowed writer grants sequential writes only and cannot outlive this lease.
+    /// Feature owners authenticate content; this owner enforces the declared length and disk grant.
+    /// # Errors
+    /// Callback and length failures preserve the previous target. Publication/metadata failures
+    /// retain complete target bytes and declared scratch; their original causes remain visible.
+    pub fn write_with(
+        &mut self,
+        name: &str,
+        length: u64,
+        context: &JobContext,
+        write: impl FnOnce(&mut dyn std::io::Write) -> io::Result<()>,
+    ) -> io::Result<()> {
+        super::stream::write(self, name, length, context, write).map_err(record::public_error)
+    }
+    /// Publish a completed replacement for subsequent lookup after feature-owned verification.
+    /// The caller retains its exclusive lease until return and must then release it for readers.
+    /// # Errors
+    /// Preserves incomplete storage, unsettled native producers, cancellation and metadata failures.
+    pub fn publish(&mut self, context: &JobContext) -> io::Result<()> {
         let _workspace = context.memory().claim(RESERVATION_BYTES).map_err(io::Error::other)?;
         self.require_declared_writer()?;
-        files::relative(name)
-            .map_err(|cause| io::Error::new(io::ErrorKind::InvalidInput, cause))?;
-        if name.contains('/') {
-            return Err(invalid("Atomic cache records require a flat leaf"));
-        }
-        let inspected = self.inspect(context)?;
-        if inspected
-            .bytes
-            .checked_add(bytes.len() as u64)
-            .is_none_or(|length| length > self.record.reserved)
-        {
+        let inventory = self.inspect(context)?;
+        if inventory.bytes > self.record.reserved {
             return Err(io::Error::new(
                 io::ErrorKind::StorageFull,
-                "Cache entry byte reservation exhausted",
+                "Cache publication exceeds admission",
             ));
         }
-        self.declare_owned([name.to_owned()], context)?;
-        let parent = Directory::open(&self.path(), false)?;
-        let staged = staging::unique_path(&parent, "cache-pending")?;
-        let staged_name = staged
-            .file_name()
-            .and_then(|value| value.to_str())
-            .ok_or_else(|| invalid("Cache staging leaf is absent"))?
-            .to_owned();
-        self.declare_owned([staged_name.clone()], context)?;
-        protection::with(context, |protection| {
-            let mut file = protection.file(&staged, context)?;
-            file.write_all(bytes)?;
-            file.sync_all()?;
-            let identity = files::file_identity(&file)?;
-            drop(file);
-            protection.publish(
-                &staged,
-                &parent.path.join(name),
-                identity,
-                protection::Publication::File { replace: true },
-                context,
-            )
-        })?;
         let mut next = self.record.clone();
-        next.files.retain(|name| name != &staged_name);
+        next.staged = false;
         record::save(&self.directory, &next, context)?;
         self.record = next;
         Ok(())
@@ -197,7 +186,7 @@ impl CacheLease {
         Ok(())
     }
     /// Keep declared-file publication separate from unsettled opaque native output.
-    fn require_declared_writer(&self) -> io::Result<()> {
+    pub(super) fn require_declared_writer(&self) -> io::Result<()> {
         self.require_writable()?;
         if self.record.producer.is_some() {
             return Err(io::Error::new(

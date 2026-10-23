@@ -4,7 +4,7 @@
 mod usage;
 use super::*;
 use std::{collections::BTreeSet, os::windows::fs::MetadataExt};
-pub(super) use usage::preserved_charge;
+pub(super) use usage::{preserved_charge, scope_charge};
 
 /// Bound physical usage and exact deletion inputs without authenticating content.
 pub(super) struct Inventory {

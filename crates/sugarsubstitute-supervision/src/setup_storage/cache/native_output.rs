@@ -48,7 +48,7 @@ impl RuntimeCache {
     ) -> io::Result<Option<CacheLease>> {
         check(context)?;
         let _workspace = context.memory().claim(RESERVATION_BYTES).map_err(io::Error::other)?;
-        let memory = context.memory().claim(ENTRY_BYTES).map_err(io::Error::other)?;
+        let memory = self.scope.memory.claim(ENTRY_BYTES).map_err(io::Error::other)?;
         let parent = self.namespace(namespace)?;
         let mut keys = BTreeSet::new();
         for entry in std::fs::read_dir(&parent.path)? {

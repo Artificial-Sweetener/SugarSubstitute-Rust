@@ -2,8 +2,12 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Bounded disposable metadata records inventory ownership and restartable deletion progress.
 use super::*;
+mod names;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeSet, io::Write};
+use std::{
+    collections::BTreeSet,
+    io::{Read, Write},
+};
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -16,6 +20,8 @@ pub(super) struct Record {
     pub(super) reserved: u64,
     pub(super) touched: u64,
     pub(super) deleting: bool,
+    #[serde(default)]
+    pub(super) staged: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) producer: Option<String>,
     #[serde(deserialize_with = "bounded_files")]
@@ -40,33 +46,7 @@ impl Record {
         {
             return Err(invalid("Cache entry schema, identity or reservation is invalid"));
         }
-        let mut names = BTreeSet::new();
-        let mut name_bytes = 0usize;
-        for name in self.files.iter().chain(&self.directories) {
-            name_bytes = name_bytes
-                .checked_add(name.len().saturating_add(4))
-                .ok_or_else(|| invalid("Cache inventory length overflowed"))?;
-            if name_bytes > MAX_RECORD - 1024 {
-                return Err(invalid("Cache inventory exceeds metadata capacity"));
-            }
-            files::relative(name)
-                .map_err(|cause| io::Error::new(io::ErrorKind::InvalidInput, cause))?;
-            if !names.insert(name.to_lowercase()) {
-                return Err(invalid("Cache inventory contains aliased names"));
-            }
-        }
-        let file_names: BTreeSet<_> = self.files.iter().map(|name| name.to_lowercase()).collect();
-        for name in self.files.iter().chain(&self.directories) {
-            let mut parent = Path::new(name).parent();
-            while let Some(value) = parent.filter(|value| !value.as_os_str().is_empty()) {
-                if file_names.contains(&value.to_string_lossy().replace('\\', "/").to_lowercase()) {
-                    return Err(invalid("Cache inventory aliases files and directories"));
-                }
-                parent = value.parent();
-            }
-        }
-        self.inventory_names()?;
-        Ok(())
+        names::validate(&self.files, &self.directories)
     }
     /// Index owned leaves without multiplying long shared ancestor paths in memory.
     pub(super) fn inventory_names(&self) -> io::Result<BTreeSet<String>> {
@@ -102,12 +82,26 @@ pub(super) fn load(
 ) -> io::Result<Record> {
     let mut file = metadata_record(directory)?;
     protection.verify_file(&file)?;
-    let record: Record = serde_json::from_slice(&files::read_bounded(&mut file, MAX_RECORD)?)?;
+    let record: Record = serde_json::from_slice(&read_metadata(&mut file)?)?;
     record.validate(namespace, key)?;
     if directory.identity()? != record.identity {
         return Err(invalid("Cache entry native identity changed"));
     }
     Ok(record)
+}
+/// Read fixed-size metadata without geometric buffer growth; native opens exclude writers.
+/// The extra-byte probe still rejects a changed length before any record is accepted.
+pub(super) fn read_metadata(file: &mut File) -> io::Result<Vec<u8>> {
+    let length = usize::try_from(file.metadata()?.len()).map_err(io::Error::other)?;
+    if length > MAX_RECORD {
+        return Err(invalid("Cache metadata exceeds its byte bound"));
+    }
+    let mut bytes = vec![0; length];
+    file.read_exact(&mut bytes)?;
+    if file.read(&mut [0])? != 0 {
+        return Err(invalid("Cache metadata changed length"));
+    }
+    Ok(bytes)
 }
 /// Flush a replacement before atomically publishing its complete inventory.
 pub(super) fn save(directory: &Directory, record: &Record, context: &JobContext) -> io::Result<()> {
@@ -168,7 +162,7 @@ fn publish(
             return Err(invalid("Cache scratch storage is not a regular file"));
         }
         protection.verify_file(&file)?;
-        super::deletion::single_link(&file)?;
+        files::single_link(&file)?;
         file.set_len(0)?;
         file.write_all(bytes)?;
         file.sync_all()?;

@@ -24,14 +24,33 @@ impl Delivery {
             Self::File => {
                 let source = workspace.join("offline.ssupdate");
                 std::fs::write(&source, archive)?;
-                Ok(Download::import_file(installation, target, &source, || NOW, context)?)
+                Ok(Download::import_file(
+                    crate::setup_storage::cache::RuntimeCache::open(
+                        installation,
+                        crate::setup_storage::cache::CachePolicy::default(),
+                        context,
+                    )?,
+                    target,
+                    &source,
+                    || NOW,
+                    context,
+                )?)
             }
             Self::Installer => {
                 let source = workspace.join("setup.exe");
                 let bytes = [b"inert installer prefix".as_slice(), archive].concat();
                 std::fs::write(&source, &bytes)?;
-                let download =
-                    Download::import_installer(installation, target, &source, || NOW, context)?;
+                let download = Download::import_installer(
+                    crate::setup_storage::cache::RuntimeCache::open(
+                        installation,
+                        crate::setup_storage::cache::CachePolicy::default(),
+                        context,
+                    )?,
+                    target,
+                    &source,
+                    || NOW,
+                    context,
+                )?;
                 assert_eq!(std::fs::read(source)?, bytes);
                 Ok(download)
             }

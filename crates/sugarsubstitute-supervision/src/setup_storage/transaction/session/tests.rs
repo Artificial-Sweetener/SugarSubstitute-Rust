@@ -102,8 +102,13 @@ fn signed_delivery_prepares_under_the_original_session_while_run_custody_remains
             .into_package()?;
         let source = workspace.path().join("setup.exe");
         std::fs::write(&source, [b"inert setup prefix".as_slice(), &archive].concat())?;
-        let download =
-            Download::import_installer(session.directory(), target, &source, || NOW, context)?;
+        let download = Download::import_installer(
+            trust.runtime_cache(context)?,
+            target,
+            &source,
+            || NOW,
+            context,
+        )?;
         let bundle = Arc::new(VerifiedBundle::from_download(download, workspace.path(), context)?);
         assert!(InstallationSession::maintain(&directory.path, context).is_err());
         let prepared = session.prepare(bundle, context)?;

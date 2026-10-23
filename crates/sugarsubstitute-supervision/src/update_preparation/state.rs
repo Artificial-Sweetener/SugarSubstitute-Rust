@@ -125,7 +125,7 @@ impl State {
                     )?
                     .into_package()?;
                 let total = target.length();
-                let download = Download::open(&self.installation, target, context)?;
+                let download = Download::open(trust.runtime_cache(context)?, target, context)?;
                 if download.offset()? != total {
                     (Phase::Empty, Progress::Unavailable)
                 } else {

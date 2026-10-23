@@ -95,7 +95,7 @@ fn delivered(fixture: &Fixture, context: &JobContext) -> Result<Delivery, Failur
     let source = fixture.workspace.path().join("download.ssupdate");
     std::fs::write(&source, &fixture.archive)?;
     let download =
-        Download::import_file(fixture.installation.path(), target, &source, || NOW, context)?;
+        Download::import_file(trust.runtime_cache(context)?, target, &source, || NOW, context)?;
     Ok((trust, offer, download))
 }
 
@@ -190,7 +190,7 @@ fn verified_bytes_for_another_signed_package_cannot_enter_the_imported_offer() -
         let source = fixture.workspace.path().join("other.ssupdate");
         std::fs::write(&source, other)?;
         let download =
-            Download::import_file(fixture.installation.path(), target, &source, || NOW, context)?;
+            Download::import_file(trust.runtime_cache(context)?, target, &source, || NOW, context)?;
         let extraction = tempfile::tempdir()?;
         let result = InstallationSession::maintain(fixture.installation.path(), context)?
             .import_download(trust, offer, download, extraction.path(), || NOW, context);

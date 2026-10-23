@@ -64,6 +64,7 @@ impl TrustStore {
         let staged = InitialState::stage(&parent, &bytes, &history, context)?;
         let root = staged.publish(&destination, context)?;
         let mut store = Self {
+            cache: std::sync::Mutex::new(None),
             preparation: None,
             root,
             _installation_root: parent,

@@ -3,34 +3,34 @@ schema_version = 1
 [[caches]]
 id = "native-update-offers"
 owner = "sugarsubstitute-supervision"
-sources = ["crates/sugarsubstitute-supervision/src/setup_storage/trust/offer_cache.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/offer_cache/codec.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/envelope.rs"]
-source_sha256 = "sha256:326086a7c61f79a5c8a9fb5d0ef9a1875b8d35907bd2ce4c68f6c18401b4b558"
+sources = ["crates/sugarsubstitute-supervision/src/setup_storage/trust/offer_cache.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/offer_cache/codec.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/envelope.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/offered.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/discovery.rs"]
+source_sha256 = "sha256:157204c38f5484feefc36ccc8ffd5d9a49d7696ea1d7a45d97aada464ef5bf23"
 namespace = "offer-v1"
 storage_schema = 1
 compatibility_epoch = 1
 compatibility_inputs = ["installation_identity", "repository_identity", "subscription_route", "signed_metadata_bytes", "current_signing_authority", "current_engine_capabilities"]
 freshness = "Every read reauthenticates exact signed bytes with current local subscription/engine facts and protected repository trust, including expiry, clock and release floors. Cache bytes grant no activation authority."
-retention = "Keep one complete record per route under the trust owner's offer-v1 prefix; atomically replace recognized owned records. Keep interrupted staging and unknown or corrupt files. No recursive eviction."
+retention = "Shared runtime storage owns a 64 MiB namespace budget and seven-day idle retention. Complete independent generations replace lookup after explicit publication; readers keep their native pins. Protected signing trust and legacy offer files remain outside disposable storage."
 recovery = "Missing records are observable cache misses. Invalid, expired, revoked or foreign records retain their bytes and report their cause. Complete package bytes must be independently hashed again before preparation."
 
 [[caches]]
 id = "native-update-downloads"
 owner = "sugarsubstitute-supervision"
-sources = ["crates/sugarsubstitute-supervision/src/setup_storage/download/local.rs", "crates/sugarsubstitute-supervision/src/setup_storage/download.rs", "crates/sugarsubstitute-supervision/src/setup_storage/download/custody.rs"]
-source_sha256 = "sha256:30bdf5b8bdd16edcf9f5cba79cac68683265dca200520505db544d941cf502ad"
+sources = ["crates/sugarsubstitute-supervision/src/setup_storage/download/local.rs", "crates/sugarsubstitute-supervision/src/setup_storage/download.rs", "crates/sugarsubstitute-supervision/src/setup_storage/download/custody.rs", "crates/sugarsubstitute-supervision/src/setup_storage/files/identity.rs"]
+source_sha256 = "sha256:1c7ed99b86a2b169574bea0514191634215d987adfab08d09d73cdf8af8f26ae"
 namespace = "update-downloads-v1"
 storage_schema = 1
 compatibility_epoch = 1
 compatibility_inputs = ["installation_identity", "signed_target_sha256", "signed_target_length", "entry_owner_schema"]
 freshness = "Every completed payload, including every resumed prefix, is rehashed against a currently authenticated target before returning retained read custody."
-retention = "Retain partial and complete package bytes across attempts; no recursive eviction or user-data access."
-recovery = "Resume the actual file length; restart an ignored range; reset only declared oversized or hash-invalid payloads; preserve ambiguous ownership and unknown files."
+retention = "Shared runtime storage admits each target length and ownership marker before writes, enforces a 24 GiB namespace budget and thirty-day idle retention, and preserves all live download/extraction pins. Legacy download directories remain intact outside this scope."
+recovery = "Resume the actual length under shared entry custody; restart ignored ranges; reset only declared oversized or hash-invalid payloads. Reject changed feature bindings before mutation. Shared cleanup reclaims inventoried disposable files; damaged shared ownership and unknown files remain intact."
 
 [[caches]]
 id = "setup-browser-profile"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/setup_storage/profile.rs", "crates/sugarsubstitute-supervision/src/setup_storage/files/identity.rs"]
-source_sha256 = "sha256:89d243c4df7907ffb33ac013e8084df6455d1d13718af21d326e262f588d7bfb"
+source_sha256 = "sha256:887d2d50873cc699a6517ab4d420d120483f269bcadff3abd125b52f6519544a"
 namespace = "setup-webview-v1"
 storage_schema = 1
 compatibility_epoch = 1
@@ -56,7 +56,7 @@ recovery = "Reject changed ownership and links; preserve unknown files."
 id = "setup-packed-payloads"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/setup_storage/bundle.rs", "crates/sugarsubstitute-supervision/src/setup_storage/bundle/payload.rs", "crates/sugarsubstitute-supervision/src/setup_storage/updater_package.rs", "crates/sugarsubstitute-supervision/src/setup_storage/inventory.rs", "crates/sugarsubstitute-supervision/src/setup_storage/packed.rs", "crates/sugarsubstitute-supervision/src/setup_storage/packed/footer.rs", "crates/sugarsubstitute-supervision/src/setup_storage/staging.rs", "crates/sugarsubstitute-supervision/src/setup_storage/packed/extract.rs", "crates/sugarsubstitute-supervision/src/setup_storage/files.rs", "crates/sugarsubstitute-supervision/src/setup_storage/files/identity.rs"]
-source_sha256 = "sha256:627bf1d6174e3fc3143b57bf99a9cd92cfc04be2c52d46fbbbc1e808bc45c5fb"
+source_sha256 = "sha256:8fc808ac277fea5c76cc2c8a3a0747be9b7c97d25f5b94e9feba324a1fa182b9"
 namespace = "payloads-v1"
 storage_schema = 1
 compatibility_epoch = 1
@@ -81,8 +81,8 @@ recovery = "Upstream readers reject or refresh incompatible metadata; these path
 [[caches]]
 id = "runtime-cache-storage"
 owner = "sugarsubstitute-supervision"
-sources = ["crates/sugarsubstitute-supervision/src/setup_storage/cache.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/admission.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/deletion.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/entry.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/lookup.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/maintenance.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/native_output.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/maintenance/retirement.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/policy.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/reader.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/record.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/root.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/tests.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/tests/generations.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/tests/ownership.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/tests/recovery.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/tree.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/tree/usage.rs", "crates/sugarsubstitute-supervision/src/setup_storage/files.rs", "crates/sugarsubstitute-supervision/src/setup_storage/files/child.rs", "crates/sugarsubstitute-supervision/src/setup_storage/files/identity.rs", "crates/sugarsubstitute-supervision/src/setup_storage/protection.rs", "crates/sugarsubstitute-supervision/src/setup_storage/staging.rs"]
-source_sha256 = "sha256:8ff08834b4dc10c8a65179ecffbc57e972fa2084c17cc06680a37a1c2998ccc7"
+sources = ["crates/sugarsubstitute-supervision/src/setup_storage/cache.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/admission.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/deletion.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/entry.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/lookup.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/maintenance.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/native_output.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/maintenance/retirement.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/policy.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/reader.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/record.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/root.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/stream.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/record/names.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/tests.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/tests/generations.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/tests/ownership.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/tests/recovery.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/tree.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/tree/usage.rs", "crates/sugarsubstitute-supervision/src/setup_storage/files.rs", "crates/sugarsubstitute-supervision/src/setup_storage/files/child.rs", "crates/sugarsubstitute-supervision/src/setup_storage/files/identity.rs", "crates/sugarsubstitute-supervision/src/setup_storage/protection.rs", "crates/sugarsubstitute-supervision/src/setup_storage/staging.rs"]
+source_sha256 = "sha256:5dc8433f8c43c9f1c9ab2457fa96e43be5f4335ea566488743e40a5b0118630f"
 namespace = "runtime-cache-v1"
 storage_schema = 1
 compatibility_epoch = 1

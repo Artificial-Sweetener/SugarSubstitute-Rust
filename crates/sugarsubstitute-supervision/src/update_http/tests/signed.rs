@@ -89,7 +89,7 @@ fn signed_repository_download_disconnect_reopen_and_resume_reaches_verified_cust
             let store = TrustStore::initialize(installation.path(), repository, &root, context)?;
             let target =
                 store.offer(metadata, &request, &descriptor, NOW, context)?.into_package()?;
-            let mut download = Download::open(installation.path(), target, context)?;
+            let mut download = Download::open(store.runtime_cache(context)?, target, context)?;
             assert!(
                 http.package(&policy, policy.asset(&package_name)?, &mut download, IDLE, context)
                     .is_err()
@@ -101,7 +101,7 @@ fn signed_repository_download_disconnect_reopen_and_resume_reaches_verified_cust
         let metadata =
             MetadataSet { timestamp: &timestamp, snapshot: &snapshot, targets: &targets };
         let target = store.offer(metadata, &request, &descriptor, NOW, context)?.into_package()?;
-        let mut download = Download::open(installation.path(), target, context)?;
+        let mut download = Download::open(store.runtime_cache(context)?, target, context)?;
         assert_eq!(download.offset()?, prefix as u64);
         http.package(&policy, policy.asset(&package_name)?, &mut download, IDLE, context)?;
         assert!(http.settled());

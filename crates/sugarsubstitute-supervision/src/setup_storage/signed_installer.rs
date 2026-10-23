@@ -16,12 +16,14 @@ pub use distribution::{InstallerDistribution, MAX_DISTRIBUTION_BYTES};
 
 /// Storage-job budget covering trust verification, metadata, download and both source/destination
 /// payload custody. Source and verified candidate files remain retained together through transfer.
+/// Four cache-control inventories share the original import admission; publication streams signed
+/// bytes without retaining another encoded copy. Transient cache work overlaps existing phases.
 /// Reserve this for import. Later jobs reuse the retained trust workspace and reserve only
 /// `SIGNED_PREPARATION_RESERVATION_BYTES` or `SIGNED_TRANSFER_RESERVATION_BYTES`.
 pub const SIGNED_INSTALLER_RESERVATION_BYTES: u64 = TRUST_RESERVATION_BYTES
     + OFFER_RESERVATION_BYTES
-    + DOWNLOAD_RESERVATION_BYTES
-    + 2 * RESERVATION_BYTES;
+    + 2 * RESERVATION_BYTES
+    + 4 * cache::ENTRY_BYTES;
 
 /// Active-job budget for preparation/staging/completion alongside retained signed-import custody.
 pub const SIGNED_PREPARATION_RESERVATION_BYTES: u64 =
@@ -108,7 +110,7 @@ impl InstallationSession {
             )?
             .into_package()?;
         let download = Download::import_installer(
-            self.directory(),
+            trust.runtime_cache(context)?,
             target,
             source.executable,
             &mut now,

@@ -24,7 +24,7 @@ impl RuntimeCache {
     ) -> io::Result<Option<CacheLease>> {
         check(context)?;
         let _workspace = context.memory().claim(RESERVATION_BYTES).map_err(io::Error::other)?;
-        let memory = context.memory().claim(ENTRY_BYTES).map_err(io::Error::other)?;
+        let memory = self.scope.memory.claim(ENTRY_BYTES).map_err(io::Error::other)?;
         if !record::valid_key(key) {
             return Err(invalid("Cache key is invalid"));
         }
@@ -64,7 +64,8 @@ impl RuntimeCache {
         self.admit(namespace, key, maximum_bytes, now, false, context)
     }
     /// Create an independent generation for complete authenticated replacement bytes.
-    /// Earlier generations retain their own pins and remain eligible for ordinary idle retention.
+    /// Call `CacheLease::publish` after completing feature verification. Earlier generations retain
+    /// their pins and remain visible until the replacement is published.
     /// # Errors
     /// Preserves capacity, cancellation, competing writers and native storage failures.
     pub fn fresh(
@@ -89,11 +90,11 @@ impl RuntimeCache {
     ) -> io::Result<CacheLease> {
         check(context)?;
         let _workspace = context.memory().claim(RESERVATION_BYTES).map_err(io::Error::other)?;
-        let retained = context.memory().claim(ENTRY_BYTES).map_err(io::Error::other)?;
+        let retained = self.scope.memory.claim(ENTRY_BYTES).map_err(io::Error::other)?;
         if !record::valid_key(key)
             || maximum == 0
             || maximum > namespace.budget()
-            || maximum > self.policy.total_bytes
+            || maximum > self.scope.policy.total_bytes
         {
             return Err(invalid("Cache key or byte reservation is invalid"));
         }
@@ -106,7 +107,8 @@ impl RuntimeCache {
                     let physical = self.next_key(key, context)?;
                     self.reclaim(Some((namespace, maximum)), now, context)?;
                     let parent = self.namespace(namespace)?;
-                    let directory = create(&parent, namespace, &physical, maximum, now, context)?;
+                    let directory =
+                        create(&parent, namespace, &physical, maximum, now, fresh, context)?;
                     let exclusion = record::exclusion(&directory, protection)?;
                     let record = record::load(&directory, namespace, &physical, protection)?;
                     (directory, exclusion, record)
@@ -147,6 +149,7 @@ fn create(
     key: &str,
     reserved: u64,
     now: u64,
+    unpublished: bool,
     context: &JobContext,
 ) -> io::Result<Directory> {
     let staged = staging::unique_path(parent, "entry-initializing")?;
@@ -165,6 +168,7 @@ fn create(
             reserved,
             touched: now,
             deleting: false,
+            staged: unpublished,
             producer: None,
             files: Vec::new(),
             directories: Vec::new(),

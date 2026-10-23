@@ -17,9 +17,24 @@ impl Directory {
 
 /// Compare retained native objects without reopening a caller-controlled path.
 pub(in crate::setup_storage) fn file_identity(file: &File) -> io::Result<(u32, u32, u32)> {
+    let information = information(file)?;
+    Ok((information.dwVolumeSerialNumber, information.nFileIndexHigh, information.nFileIndexLow))
+}
+
+/// Reject multiple directory links before any in-place write to cache-owned scratch storage.
+pub(in crate::setup_storage) fn single_link(file: &File) -> io::Result<()> {
+    let information = information(file)?;
+    if information.nNumberOfLinks != 1 {
+        return Err(invalid("Cache writable files must have exactly one directory link"));
+    }
+    Ok(())
+}
+
+/// Query one borrowed native handle for identity and link-count invariants before mutation.
+fn information(file: &File) -> io::Result<BY_HANDLE_FILE_INFORMATION> {
     let mut information = BY_HANDLE_FILE_INFORMATION::default();
-    // SAFETY: File retains this valid handle and the ABI output remains live for this call.
+    // SAFETY: File retains the valid handle and the initialized ABI output lives through the call.
     unsafe { GetFileInformationByHandle(HANDLE(file.as_raw_handle()), &mut information) }
         .map_err(io::Error::other)?;
-    Ok((information.dwVolumeSerialNumber, information.nFileIndexHigh, information.nFileIndexLow))
+    Ok(information)
 }

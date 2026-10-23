@@ -17,12 +17,11 @@ fn cached(fixture: &Fixture) -> Result<Worker, Failure> {
 fn completed_candidate_reopens_with_inaccessible_archive_and_unusable_extraction_workspace()
 -> TestResult {
     let (fixture, generation) = restart::prepared()?;
-    let archive = fixture
-        .installation
-        .path()
-        .join("update-downloads-v1")
-        .join(format!("{:x}", Sha256::digest(&fixture.archive)))
-        .join("payload");
+    let archive = crate::setup_storage::test_worker::cache_file(
+        fixture.installation.path(),
+        crate::setup_storage::cache::Namespace::UpdateDownloads,
+        "payload",
+    )?;
     let _exclusive =
         std::fs::OpenOptions::new().read(true).write(true).share_mode(0).open(&archive)?;
     assert!(std::fs::read(&archive).is_err());

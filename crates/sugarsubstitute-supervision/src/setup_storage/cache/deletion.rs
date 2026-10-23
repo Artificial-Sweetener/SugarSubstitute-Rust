@@ -53,19 +53,3 @@ fn object(path: &Path, identity: (u32, u32, u32), directory: bool) -> io::Result
     }
     .map_err(io::Error::other)
 }
-
-/// Reject multiple directory links before any in-place write to cache-owned scratch storage.
-pub(super) fn single_link(file: &File) -> io::Result<()> {
-    use windows::Win32::Storage::FileSystem::{
-        BY_HANDLE_FILE_INFORMATION, GetFileInformationByHandle,
-    };
-    let mut information = BY_HANDLE_FILE_INFORMATION::default();
-    // SAFETY: the borrowed file keeps this valid handle live for the synchronous query and
-    // the initialized output has exactly the Windows ABI layout expected by the function.
-    unsafe { GetFileInformationByHandle(HANDLE(file.as_raw_handle()), &mut information) }
-        .map_err(io::Error::other)?;
-    if information.nNumberOfLinks != 1 {
-        return Err(invalid("Cache writable files must have exactly one directory link"));
-    }
-    Ok(())
-}

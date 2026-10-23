@@ -3,7 +3,7 @@
 //! Bind protected checkpoint bytes to an installation and stable repository identity.
 //! The checksum detects damaged storage; filesystem protection supplies local trust.
 use sha2::{Digest, Sha256};
-use std::io;
+use std::io::{self, Write};
 use sugarsubstitute_contracts::installation::InstallationId;
 use sugarsubstitute_update::MAX_CHECKPOINT_BYTES;
 
@@ -50,6 +50,13 @@ impl Kind {
             Self::UpdaterRelease => super::receipt::MAX_BYTES,
         }
     }
+    /// Exact envelope size after validating its feature-owned payload length.
+    pub(super) fn record_size(self, bytes: usize) -> io::Result<usize> {
+        if bytes == 0 || bytes > self.payload_limit() {
+            return Err(invalid());
+        }
+        Ok(HEADER + bytes + DIGEST)
+    }
     pub(super) fn limit(self) -> usize {
         HEADER + self.payload_limit() + DIGEST
     }
@@ -64,17 +71,32 @@ pub(super) fn encode(
     repository: &[u8; 32],
     checkpoint: &[u8],
 ) -> io::Result<Vec<u8>> {
-    if checkpoint.is_empty() || checkpoint.len() > kind.payload_limit() {
-        return Err(invalid());
-    }
-    let mut bytes = Vec::with_capacity(HEADER + checkpoint.len() + DIGEST);
-    bytes.extend_from_slice(kind.magic());
-    bytes.extend_from_slice(installation.as_str().as_bytes());
-    bytes.extend_from_slice(repository);
-    bytes.extend_from_slice(checkpoint);
-    let digest = Sha256::digest(&bytes);
-    bytes.extend_from_slice(&digest);
+    let mut bytes = Vec::with_capacity(kind.record_size(checkpoint.len())?);
+    write(kind, installation, repository, &[checkpoint], &mut bytes)?;
     Ok(bytes)
+}
+
+/// Stream bounded payload slices with the same wire bytes and checksum as buffered encoding.
+pub(super) fn write(
+    kind: Kind,
+    installation: &InstallationId,
+    repository: &[u8; 32],
+    payload: &[&[u8]],
+    output: &mut dyn Write,
+) -> io::Result<()> {
+    let length = payload
+        .iter()
+        .try_fold(0usize, |total, part| total.checked_add(part.len()).ok_or_else(invalid))?;
+    kind.record_size(length)?;
+    let mut digest = Sha256::new();
+    for part in [kind.magic().as_slice(), installation.as_str().as_bytes(), repository.as_slice()]
+        .into_iter()
+        .chain(payload.iter().copied())
+    {
+        output.write_all(part)?;
+        digest.update(part);
+    }
+    output.write_all(&digest.finalize())
 }
 
 /// Reject foreign state, unknown versions, corruption and oversized input without adopting it.

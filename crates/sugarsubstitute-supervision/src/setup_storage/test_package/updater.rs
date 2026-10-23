@@ -98,7 +98,7 @@ pub(crate) fn evidence_intent(
     let target = trust
         .offer(signed.metadata.metadata(), &signed.request, &signed.descriptor, NOW, context)?
         .into_package()?;
-    let mut download = storage::Download::open(root, target, context)?;
+    let mut download = storage::Download::open(trust.runtime_cache(context)?, target, context)?;
     download.receive(
         Response { status: 200, length: Some(bytes.len() as u64), range: None, encoding: None },
         &mut io::Cursor::new(bytes),

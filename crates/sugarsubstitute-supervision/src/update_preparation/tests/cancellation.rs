@@ -191,12 +191,15 @@ fn cancellation_after_extraction_releases_live_setup_custody_without_publishing_
     retire(&mut pipeline, &mut worker)?;
     assert_unlocked(&mut pipeline, &fixture)?;
     assert!(
-        !fixture
-            .installation
-            .path()
-            .join(".update-trust")
-            .join("offer-v1-application-release-windows-x86_64.json")
-            .exists()
+        std::fs::read_dir(
+            fixture
+                .installation
+                .path()
+                .join(crate::setup_storage::cache::DIRECTORY)
+                .join(crate::setup_storage::cache::Namespace::UpdateOffers.directory())
+        )?
+        .next()
+        .is_none()
     );
     Ok(())
 }

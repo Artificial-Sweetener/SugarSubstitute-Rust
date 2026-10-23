@@ -19,6 +19,7 @@ mod reader;
 mod record;
 pub use reader::CacheReader;
 mod root;
+mod stream;
 mod tree;
 use super::{
     check,
@@ -41,9 +42,10 @@ use sugarsubstitute_contracts::execution::JobContext;
 /// Schema-qualified directory below an explicit application-owned installation or setup scope.
 pub const DIRECTORY: &str = "runtime-cache-v1";
 /// Maximum metadata and traversal workspace, in addition to native protection admission.
-pub const RESERVATION_BYTES: u64 = 8 * 1024 * 1024;
+pub const RESERVATION_BYTES: u64 = 6 * 1024 * 1024;
 const ROOT_BYTES: u64 = 64 * 1024;
-const ENTRY_BYTES: u64 = 2 * 1024 * 1024;
+/// Retained generation inventory and native ancestry, charged to its scope's original admission.
+pub(super) const ENTRY_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_RECORD: usize = 1024 * 1024;
 const MAX_ENTRIES: usize = 1024;
 const MAX_FILES: usize = 8192;
@@ -51,10 +53,17 @@ const MAX_OBJECTS: usize = MAX_FILES * MAX_DEPTH;
 const MAX_DEPTH: usize = 512;
 
 /// Pinned cache scope with one policy shared by admission and maintenance.
+#[derive(Clone)]
 pub struct RuntimeCache {
+    scope: std::sync::Arc<Scope>,
+}
+/// Share native scope custody and its original retained allocation admission across feature jobs.
+struct Scope {
+    anchor: Directory,
     root: Directory,
     _owner: File,
     policy: CachePolicy,
+    memory: sugarsubstitute_contracts::execution::MemoryLease,
     _memory: sugarsubstitute_contracts::execution::MemoryClaim,
 }
 impl RuntimeCache {
@@ -63,11 +72,25 @@ impl RuntimeCache {
     /// # Errors
     /// Rejects links, foreign ownership, unsupported schemas, invalid limits and native failures.
     pub fn open(anchor: &Path, policy: CachePolicy, context: &JobContext) -> io::Result<Self> {
-        root::open(anchor, policy, context).map_err(record::public_error)
+        Self::open_retained(anchor, policy, context.memory(), context)
+    }
+    /// Open later storage using its owner's original admitted allocation and current cancellation.
+    /// This retains allocation capacity, not an old execution context or scheduler authority.
+    pub(in crate::setup_storage) fn open_retained(
+        anchor: &Path,
+        policy: CachePolicy,
+        memory: &sugarsubstitute_contracts::execution::MemoryLease,
+        context: &JobContext,
+    ) -> io::Result<Self> {
+        root::open(anchor, policy, memory, context).map_err(record::public_error)
+    }
+    /// Explicit application-owned anchor whose native identity remains pinned by this scope.
+    pub fn anchor(&self) -> &Path {
+        &self.scope.anchor.path
     }
     /// Stable path shared by native and delegated cache consumers.
     pub fn path(&self) -> &Path {
-        &self.root.path
+        &self.scope.root.path
     }
 }
 

@@ -19,6 +19,20 @@ pub(crate) fn installation(
     )?;
     Ok(root)
 }
+/// Inspect one explicitly owned cache fixture generation for deliberate corruption assertions.
+/// Runtime consumers retain a `CacheLease`; this test helper grants no custody or authority.
+pub(crate) fn cache_file(
+    anchor: &std::path::Path,
+    namespace: super::cache::Namespace,
+    leaf: &str,
+) -> io::Result<std::path::PathBuf> {
+    let parent = anchor.join(super::cache::DIRECTORY).join(namespace.directory());
+    let entries = std::fs::read_dir(parent)?.collect::<io::Result<Vec<_>>>()?;
+    if entries.len() != 1 {
+        return Err(io::Error::other("Cache fixture must contain exactly one generation"));
+    }
+    Ok(entries[0].path().join("data").join(leaf))
+}
 use std::{
     sync::{
         Arc, Condvar, Mutex, OnceLock,

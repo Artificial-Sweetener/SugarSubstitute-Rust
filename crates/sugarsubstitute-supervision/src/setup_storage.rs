@@ -55,7 +55,10 @@ pub use transaction::{
     PreparedInstallation, RuntimePaths, Selection,
 };
 pub(crate) use trust::offered::OfferInputs;
-pub use trust::{AuthenticatedOffer, OFFER_CACHE_RESERVATION_BYTES, OFFER_RESERVATION_BYTES};
+pub use trust::{
+    AuthenticatedOffer, OFFER_LOOKUP_RESERVATION_BYTES, OFFER_PUBLICATION_RESERVATION_BYTES,
+    OFFER_RESERVATION_BYTES,
+};
 pub use trust::{
     TRUST_OPERATION_RESERVATION_BYTES, TRUST_RESERVATION_BYTES, TrustFailure, TrustStore,
     UpdateAuthorization,

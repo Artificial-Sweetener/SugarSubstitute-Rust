@@ -117,3 +117,29 @@ fn foreign_scratch_is_preserved_without_truncation_or_payload_publication() -> T
         Ok(())
     })
 }
+
+#[test]
+fn unknown_scope_children_are_preserved_and_consume_aggregate_disk_capacity() -> TestResult {
+    worker::run_reserved(16 * 1024 * 1024, |context, _| {
+        let root = tempfile::tempdir()?;
+        let cache = open(root.path(), 8, context)?;
+        let unknown = cache.path().join("unrecognized-root-file");
+        std::fs::write(&unknown, b"preserve")?;
+        let report = cache.maintain(100, context)?;
+        assert_eq!(report.preserved_entries, 1);
+        assert_eq!(report.charged_bytes, 8);
+        let rejected = cache.clone().acquire(
+            Namespace::UpdateOffers,
+            &storage_key(b"new payload"),
+            1,
+            100,
+            context,
+        );
+        assert_eq!(
+            rejected.err().ok_or("Unknown bytes escaped disk admission")?.kind(),
+            io::ErrorKind::StorageFull
+        );
+        assert_eq!(std::fs::read(unknown)?, b"preserve");
+        Ok(())
+    })
+}

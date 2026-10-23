@@ -5,7 +5,7 @@ use super::*;
 use sugarsubstitute_contracts::update::MAX_OFFER_BYTES;
 use sugarsubstitute_update::MAX_METADATA_BYTES;
 
-/// Admission for retained role/descriptor bytes and their bounded copy during construction.
+/// Admission for signed inputs and bounded construction copies.
 pub const OFFER_RESERVATION_BYTES: u64 = 8 * 1024 * 1024;
 
 /// Owned transport bytes; construction alone grants no authority.
@@ -27,6 +27,8 @@ impl OfferInputs {
 pub struct AuthenticatedOffer {
     inputs: OfferInputs,
     offer: VerifiedOffer,
+    installation: InstallationId,
+    repository: [u8; 32],
     _memory: MemoryClaim,
 }
 impl AuthenticatedOffer {
@@ -72,7 +74,18 @@ impl AuthenticatedOffer {
         validate_bounds(&inputs.metadata(), &inputs.descriptor)?;
         let offer =
             trust.offer(inputs.metadata(), &inputs.request, &inputs.descriptor, now, context)?;
-        Ok(Self { inputs, offer, _memory: memory })
+        Ok(Self {
+            inputs,
+            offer,
+            installation: trust.installation.clone(),
+            repository: trust.repository,
+            _memory: memory,
+        })
+    }
+
+    /// Keep saved preparation evidence bound to the installation that authenticated it.
+    pub(super) fn belongs_to(&self, trust: &TrustStore) -> bool {
+        self.installation == trust.installation && self.repository == trust.repository
     }
 
     /// Authenticated presentation facts and initial compatibility decision.

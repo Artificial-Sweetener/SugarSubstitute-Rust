@@ -8,11 +8,12 @@ use std::io::Write;
 pub(super) fn open(
     anchor: &Path,
     policy: CachePolicy,
+    admitted: &sugarsubstitute_contracts::execution::MemoryLease,
     context: &JobContext,
 ) -> io::Result<RuntimeCache> {
     check(context)?;
     policy.validate()?;
-    let memory = context.memory().claim(ROOT_BYTES).map_err(io::Error::other)?;
+    let memory = admitted.claim(ROOT_BYTES).map_err(io::Error::other)?;
     let parent = Directory::open(anchor, false)?;
     let expected = "SugarSubstitute runtime cache 1\n";
     let path = parent.path.join(DIRECTORY);
@@ -61,7 +62,16 @@ pub(super) fn open(
         if files::read_bounded(&mut owner, 256)? != expected.as_bytes() {
             return Err(invalid("Cache scope ownership marker is invalid"));
         }
-        Ok(RuntimeCache { root, _owner: owner, policy, _memory: memory })
+        Ok(RuntimeCache {
+            scope: std::sync::Arc::new(Scope {
+                anchor: parent,
+                root,
+                _owner: owner,
+                policy,
+                memory: admitted.clone(),
+                _memory: memory,
+            }),
+        })
     })
 }
 
@@ -70,11 +80,11 @@ impl RuntimeCache {
     pub(super) fn writer(&self, protection: &Protection, context: &JobContext) -> io::Result<File> {
         check(context)?;
         protection
-            .exclusive_rendezvous(&self.root.path.join("writer"), context)
+            .exclusive_rendezvous(&self.scope.root.path.join("writer"), context)
             .map_err(record::public_error)
     }
     /// Open one registered namespace while retaining its canonical ancestor chain.
     pub(super) fn namespace(&self, namespace: Namespace) -> io::Result<Directory> {
-        Directory::open(&self.root.path.join(namespace.directory()), false)
+        Directory::open(&self.scope.root.path.join(namespace.directory()), false)
     }
 }

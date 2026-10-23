@@ -5,7 +5,7 @@ mod child;
 #[allow(unsafe_code)]
 mod identity;
 use super::invalid;
-pub(super) use identity::file_identity;
+pub(super) use identity::{file_identity, single_link};
 use std::{
     fs::{File, OpenOptions},
     io::{self, Read, Write},

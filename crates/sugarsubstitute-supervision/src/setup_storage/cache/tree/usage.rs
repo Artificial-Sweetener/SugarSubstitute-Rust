@@ -10,6 +10,18 @@ pub(in crate::setup_storage::cache) fn preserved_charge(
     namespace: Namespace,
     context: &JobContext,
 ) -> io::Result<u64> {
+    preserved(path, namespace.budget(), namespace.directory(), context)
+}
+/// Unrecognized scope-level content consumes aggregate capacity without entering any namespace.
+pub(in crate::setup_storage::cache) fn scope_charge(
+    path: &Path,
+    maximum: u64,
+    context: &JobContext,
+) -> io::Result<u64> {
+    preserved(path, maximum, DIRECTORY, context)
+}
+/// Apply the same bounded preservation rules at either actual ownership level.
+fn preserved(path: &Path, maximum: u64, namespace: &str, context: &JobContext) -> io::Result<u64> {
     match measure(path, context, &mut 0, 0) {
         Ok(bytes) => Ok(bytes),
         Err(cause) if record::kind(&cause) == io::ErrorKind::NotFound => Ok(0),
@@ -21,8 +33,8 @@ pub(in crate::setup_storage::cache) fn preserved_charge(
                     | io::ErrorKind::PermissionDenied
             ) =>
         {
-            tracing::warn!(operation="cache_unmeasured_content", namespace=namespace.directory(), cause=%cause, "Preserved content prevents bounded namespace admission");
-            Ok(namespace.budget())
+            tracing::warn!(operation="cache_unmeasured_content", namespace, cause=%cause, "Preserved content prevents bounded namespace admission");
+            Ok(maximum)
         }
         Err(cause) => Err(cause),
     }

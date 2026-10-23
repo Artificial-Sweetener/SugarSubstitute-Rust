@@ -30,13 +30,19 @@ impl RuntimeCache {
         for key in keys.into_iter().rev() {
             let opened = protection::with(context, |protection| {
                 let directory = Directory::open(&parent.path.join(&key), false)?;
+                // Unpublished replacements must not hide the last complete generation, including
+                // while their producer retains its exclusive native lease. Recheck after pinning.
+                if record::load(&directory, namespace, &key, protection)?.staged {
+                    return Ok(None);
+                }
                 let pin = if writable {
                     record::exclusion(&directory, protection)?
                 } else {
                     record::reader(&directory, protection)?
                 };
                 let record = record::load(&directory, namespace, &key, protection)?;
-                if record.deleting
+                if record.staged
+                    || record.deleting
                     || (!writable && record.producer.is_some())
                     || parent.path.join(format!("{key}.retiring")).exists()
                 {

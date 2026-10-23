@@ -3,23 +3,51 @@
 //! Four bounded length-prefixed byte strings inside the versioned installation envelope.
 use super::*;
 
-/// Preserve every signed byte without JSON escaping or interpreting metadata fields.
-pub(super) fn encode(metadata: MetadataSet<'_>, descriptor: &[u8]) -> io::Result<Vec<u8>> {
+/// Validate each field before hashing or writing any envelope bytes.
+fn fields<'a>(metadata: &MetadataSet<'a>, descriptor: &'a [u8]) -> io::Result<[&'a [u8]; 4]> {
     let parts = [metadata.timestamp, metadata.snapshot, metadata.targets, descriptor];
     if parts.iter().enumerate().any(|(index, part)| part.is_empty() || part.len() > limit(index)) {
         return Err(invalid("Cached offer field exceeds its bound"));
     }
+    Ok(parts)
+}
+/// Exact disk admission for this signed record; no encoded copy is retained in memory.
+pub(super) fn record_len(metadata: &MetadataSet<'_>, descriptor: &[u8]) -> io::Result<usize> {
+    let parts = fields(metadata, descriptor)?;
+    envelope::Kind::Offer.record_size(16 + parts.iter().map(|part| part.len()).sum::<usize>())
+}
+/// Stream unchanged signed fields into an installation/repository-bound envelope.
+pub(super) fn write(
+    installation: &InstallationId,
+    repository: &[u8; 32],
+    metadata: MetadataSet<'_>,
+    descriptor: &[u8],
+    output: &mut dyn std::io::Write,
+) -> io::Result<()> {
+    let parts = fields(&metadata, descriptor)?;
+    let lengths = parts.map(|part| (part.len() as u32).to_le_bytes());
+    let payload: [&[u8]; 8] = [
+        &lengths[0],
+        parts[0],
+        &lengths[1],
+        parts[1],
+        &lengths[2],
+        parts[2],
+        &lengths[3],
+        parts[3],
+    ];
+    envelope::write(envelope::Kind::Offer, installation, repository, &payload, output)
+}
+/// Produce independent reference bytes for codec and hostile-cache tests.
+#[cfg(test)]
+pub(super) fn encode(metadata: MetadataSet<'_>, descriptor: &[u8]) -> io::Result<Vec<u8>> {
+    let parts = fields(&metadata, descriptor)?;
     let mut bytes = Vec::with_capacity(16 + parts.iter().map(|part| part.len()).sum::<usize>());
     for part in parts {
         bytes.extend_from_slice(&(part.len() as u32).to_le_bytes());
         bytes.extend_from_slice(part);
     }
     Ok(bytes)
-}
-
-/// Validate ownership format before replacing an existing cache record.
-pub(super) fn validate(bytes: &[u8]) -> io::Result<()> {
-    parts(bytes).map(|_| ())
 }
 
 /// The request comes exclusively from the caller; cache content supplies only signed bytes.
