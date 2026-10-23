@@ -9,12 +9,14 @@
 //! Paths borrowed from a retained object are observations, never authority grants.
 
 pub(crate) mod files;
+pub(crate) mod input;
 #[allow(unsafe_code)]
 pub(crate) mod protected;
 #[allow(unsafe_code)]
 pub(crate) mod protection;
 #[allow(unsafe_code)]
 pub(crate) mod receiving;
+mod record_read;
 #[allow(unsafe_code)]
 pub(crate) mod retirement;
 #[allow(unsafe_code)]

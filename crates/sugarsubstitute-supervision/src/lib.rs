@@ -68,6 +68,8 @@ pub mod profile_conflict;
 #[cfg(windows)]
 pub mod profiles;
 #[cfg(windows)]
+pub use durable_storage::input::{PreparationFileError, read_preparation_file};
+#[cfg(windows)]
 pub use durable_storage::protected::{ProtectedStorageGeneration, ProtectedStorageRoot};
 #[cfg(windows)]
 pub use durable_storage::receiving::{

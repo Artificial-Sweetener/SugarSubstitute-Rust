@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Verify actual preparation/opaque failure custody without reading process environment.
+#[path = "tests/input.rs"]
+mod input;
 use super::*;
 use std::{
     ffi::OsString,
-    io::{Cursor, Read},
     sync::{Arc, Condvar, Mutex},
     time::{Duration, Instant},
 };
-use sugarsubstitute_comfy::configuration::MAX_STARTUP_CONFIGURATION_BYTES;
 use sugarsubstitute_contracts::execution::{
     Clock, CompletionWake, ExecutionError, ExecutionPort, JobCompletion, JobOutcome, Moment,
     ScopeId, ScopeSpec, WaitFuture,
@@ -88,49 +88,6 @@ fn options() -> Result<ProductionEntryOptions, Box<dyn Error>> {
 }
 
 #[test]
-fn exact_read_bound_and_overflow_preserve_original_policy() -> TestResult {
-    for length in [0, 1, MAX_STARTUP_CONFIGURATION_BYTES] {
-        let bytes =
-            read_bounded(Cursor::new(vec![b'x'; length]), || Ok::<_, ()>(()), || Ok::<_, ()>(()))
-                .map_err(|_| "Bounded read rejected")?;
-        assert_eq!(bytes.len(), length);
-        assert_eq!(bytes.capacity(), MAX_STARTUP_CONFIGURATION_BYTES + 1);
-    }
-    assert!(matches!(
-        read_bounded(
-            Cursor::new(vec![0; MAX_STARTUP_CONFIGURATION_BYTES + 1]),
-            || Ok::<_, ()>(()),
-            || Ok::<_, ()>(())
-        ),
-        Err(ReadFailure::TooLarge)
-    ));
-    Ok(())
-}
-#[test]
-fn returned_read_error_stays_owned_through_lazy_post_failure() -> TestResult {
-    struct Fails;
-    impl Read for Fails {
-        fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
-            Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "original read"))
-        }
-    }
-    let checks = std::cell::Cell::new(0);
-    let result = read_bounded(
-        Fails,
-        || Ok::<_, ()>(()),
-        || {
-            checks.set(checks.get() + 1);
-            Err(())
-        },
-    );
-    let Err(ReadFailure::Read { source, after: Some(()) }) = result else {
-        return Err("First read error disappeared".into());
-    };
-    assert_eq!(source.kind(), std::io::ErrorKind::PermissionDenied);
-    assert_eq!(checks.get(), 1);
-    Ok(())
-}
-#[test]
 fn failed_primary_is_adopted_before_post_provider_runs() -> TestResult {
     struct Primary(Arc<std::sync::atomic::AtomicBool>);
     impl Drop for Primary {
@@ -140,36 +97,13 @@ fn failed_primary_is_adopted_before_post_provider_runs() -> TestResult {
     }
     let dropped = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let outcome: Result<(), _> = Err(Primary(dropped.clone()));
-    let result = completed_step(outcome, || {
+    let result = observe_parse(outcome, || {
         assert!(!dropped.load(std::sync::atomic::Ordering::Acquire));
         Err("post")
     });
-    assert!(matches!(result, Err(StepFailure::Primary { after: Some("post"), .. })));
+    assert!(matches!(result, Err(ParseFailure::Primary { after: Some("post"), .. })));
     drop(result);
     assert!(dropped.load(std::sync::atomic::Ordering::Acquire));
-    Ok(())
-}
-#[test]
-fn pre_and_post_read_rejections_do_not_issue_another_read() -> TestResult {
-    struct Observed<'a>(&'a std::cell::Cell<usize>);
-    impl Read for Observed<'_> {
-        fn read(&mut self, bytes: &mut [u8]) -> std::io::Result<usize> {
-            self.0.set(self.0.get() + 1);
-            bytes[0] = 1;
-            Ok(1)
-        }
-    }
-    let calls = std::cell::Cell::new(0);
-    assert!(matches!(
-        read_bounded(Observed(&calls), || Err(()), || Ok(())),
-        Err(ReadFailure::Control(()))
-    ));
-    assert_eq!(calls.get(), 0);
-    assert!(matches!(
-        read_bounded(Observed(&calls), || Ok(()), || Err(())),
-        Err(ReadFailure::Control(()))
-    ));
-    assert_eq!(calls.get(), 1);
     Ok(())
 }
 #[test]

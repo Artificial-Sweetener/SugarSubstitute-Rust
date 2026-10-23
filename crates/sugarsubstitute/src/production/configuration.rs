@@ -6,9 +6,9 @@ use super::options::{ConfigurationSource, ProductionEntryOptions};
 #[path = "configuration/installed.rs"]
 mod installed;
 use crate::job_sequence::JobSequence;
-use std::{error::Error, fmt, fs::File};
+use std::{error::Error, fmt};
 use sugarsubstitute_comfy::configuration::{
-    StartupConfigurationError, parse_startup_configuration,
+    MAX_STARTUP_CONFIGURATION_BYTES, StartupConfigurationError, parse_startup_configuration,
 };
 use sugarsubstitute_contracts::{
     configuration::StartupConfiguration,
@@ -20,9 +20,25 @@ use sugarsubstitute_execution::{
     EntryPreparationFailure, EntryPreparationSuccess, EntryRequestInput, ExecutionClient,
 };
 
-#[path = "configuration/steps.rs"]
-mod steps;
-use steps::{ReadFailure, StepFailure, completed_step, read_bounded};
+use sugarsubstitute_supervision::{PreparationFileError, read_preparation_file};
+
+/// Preserve a parser result while independently observing its original preparation controls.
+enum ParseFailure<E, C> {
+    Primary { source: E, after: Option<C> },
+    Control(C),
+}
+/// The returned parser value/cause remains owned until the lazy observer finishes.
+fn observe_parse<T, E, C>(
+    outcome: Result<T, E>,
+    after: impl FnOnce() -> Result<(), C>,
+) -> Result<T, ParseFailure<E, C>> {
+    let post = after();
+    match (outcome, post) {
+        (Err(source), after) => Err(ParseFailure::Primary { source, after: after.err() }),
+        (Ok(value), Ok(())) => Ok(value),
+        (Ok(_), Err(cause)) => Err(ParseFailure::Control(cause)),
+    }
+}
 
 /// Original known retained storage; the operating-system block extent is unmeasured.
 pub(crate) const CONFIGURATION_RESERVATION_BYTES: u64 = 4 * 1024 * 1024;
@@ -69,12 +85,12 @@ impl Error for ConfigurationCause {
     }
 }
 impl ConfigurationCause {
-    fn read(outcome: ReadFailure<EntryPreparationError>) -> Self {
+    fn read(outcome: PreparationFileError) -> Self {
         match outcome {
-            ReadFailure::Control(cause) => Self::Control(cause),
-            ReadFailure::Read { source, after } => Self::Read { source, after },
-            ReadFailure::Capacity(cause) => Self::Capacity(cause),
-            ReadFailure::TooLarge => Self::TooLarge,
+            PreparationFileError::Control(cause) => Self::Control(cause),
+            PreparationFileError::Read { source, after } => Self::Read { source, after },
+            PreparationFileError::Capacity(cause) => Self::Capacity(cause),
+            PreparationFileError::TooLarge => Self::TooLarge,
         }
     }
     /// Borrow genuine post-control while leaving the primary source unchanged.
@@ -132,32 +148,18 @@ fn load_configuration(
     context: &EntryPreparationContext,
     options: ProductionEntryOptions,
 ) -> Result<LoadedConfiguration, ConfigurationCause> {
-    context.check().map_err(ConfigurationCause::Control)?;
-    let opened = File::open(&options.configuration);
-    let source =
-        completed_step(opened, || context.observe_control().map(|_| ())).map_err(|failure| {
-            match failure {
-                StepFailure::Primary { source, after } => {
-                    ConfigurationCause::Read { source, after }
-                }
-                StepFailure::Control(cause) => ConfigurationCause::Control(cause),
-            }
-        })?;
-    let bytes = read_bounded(
-        source,
-        || context.check().map(|_| ()),
-        || context.observe_control().map(|_| ()),
-    )
-    .map_err(ConfigurationCause::read)?;
+    let bytes =
+        read_preparation_file(context, &options.configuration, MAX_STARTUP_CONFIGURATION_BYTES)
+            .map_err(ConfigurationCause::read)?;
     context.check().map_err(ConfigurationCause::Control)?;
     let parsed = parse_startup_configuration(&bytes);
     let configuration =
-        completed_step(parsed, || context.observe_control().map(|_| ())).map_err(|failure| {
+        observe_parse(parsed, || context.observe_control().map(|_| ())).map_err(|failure| {
             match failure {
-                StepFailure::Primary { source, after } => {
+                ParseFailure::Primary { source, after } => {
                     ConfigurationCause::Schema { source: Box::new(source), after }
                 }
-                StepFailure::Control(cause) => ConfigurationCause::Control(cause),
+                ParseFailure::Control(cause) => ConfigurationCause::Control(cause),
             }
         })?;
     Ok(LoadedConfiguration { options, configuration })

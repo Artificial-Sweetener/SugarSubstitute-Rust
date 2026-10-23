@@ -9,7 +9,7 @@ use super::invalid;
 pub(crate) use identity::{file_identity, single_link};
 use std::{
     fs::{File, OpenOptions},
-    io::{self, Read, Write},
+    io::{self, Write},
     os::windows::fs::{MetadataExt, OpenOptionsExt},
     path::{Component, Path, PathBuf},
 };
@@ -140,15 +140,27 @@ pub(crate) fn read_bounded(file: &mut File, maximum: usize) -> io::Result<Vec<u8
         .checked_add(1)
         .and_then(|bound| u64::try_from(bound).ok())
         .ok_or_else(|| invalid("Record bound must leave room for overflow detection"))?;
-    if file.metadata()?.len() >= read_limit {
+    let observed = file.metadata()?.len();
+    if observed >= read_limit {
         return Err(invalid("Installation record is too large"));
     }
-    let mut bytes = Vec::new();
-    file.take(read_limit).read_to_end(&mut bytes)?;
-    if bytes.len() as u64 >= read_limit {
-        return Err(invalid("Installation record exceeded its bound"));
-    }
-    Ok(bytes)
+    use super::record_read::{self, Allocation, InterruptedReads, ReadFailure};
+    record_read::bounded(
+        file,
+        maximum,
+        Allocation::Incremental { observed: observed as usize },
+        InterruptedReads::Resume,
+        || Ok::<_, std::convert::Infallible>(()),
+        || Ok(()),
+    )
+    .map_err(|failure| match failure {
+        ReadFailure::Read { source, after: None } => source,
+        ReadFailure::Control(never) | ReadFailure::Read { after: Some(never), .. } => {
+            match never {}
+        }
+        ReadFailure::Capacity(cause) => io::Error::new(io::ErrorKind::OutOfMemory, cause),
+        ReadFailure::TooLarge => invalid("Installation record exceeded its bound"),
+    })
 }
 
 /// Flush complete bytes into an absent name while the caller retains its parent ancestry.

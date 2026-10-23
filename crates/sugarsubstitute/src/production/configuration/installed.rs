@@ -21,18 +21,8 @@ pub(super) fn resolve(
         ConfigurationSource::Explicit(paths) => return Ok(paths),
         ConfigurationSource::Installed(path) => path,
     };
-    context.check().map_err(ConfigurationCause::Control)?;
-    let opened = completed_step(File::open(path), || context.observe_control().map(|_| ()))
-        .map_err(|failure| match failure {
-            StepFailure::Primary { source, after } => ConfigurationCause::Read { source, after },
-            StepFailure::Control(cause) => ConfigurationCause::Control(cause),
-        })?;
-    let bytes = read_bounded(
-        opened,
-        || context.check().map(|_| ()),
-        || context.observe_control().map(|_| ()),
-    )
-    .map_err(ConfigurationCause::read)?;
+    let bytes = read_preparation_file(context, &path, MAX_STARTUP_CONFIGURATION_BYTES)
+        .map_err(ConfigurationCause::read)?;
     let paths = parse(&bytes).map_err(ConfigurationCause::Installed)?;
     context.check().map_err(ConfigurationCause::Control)?;
     Ok(paths)

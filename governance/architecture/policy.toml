@@ -49,7 +49,7 @@ concern = "Repository governance and verification"
 package = "sugarsubstitute-supervision"
 root = "crates/sugarsubstitute-supervision"
 layer = "adapter"
-concern = "Windows process and claim custody, shared retained durable filesystem mechanics and admitted report receiving files, disposable runtime cache storage, protected native installation/update storage, authenticated update preparation and create-only native preview artifacts"
+concern = "Windows process and claim custody, shared retained durable filesystem mechanics, admitted preparation input reads and report receiving files, disposable runtime cache storage, protected native installation/update storage, authenticated update preparation and create-only native preview artifacts"
 
 [[owners]]
 package = "sugarsubstitute-splash"
