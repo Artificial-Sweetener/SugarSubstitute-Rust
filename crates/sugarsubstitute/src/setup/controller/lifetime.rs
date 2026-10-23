@@ -9,28 +9,26 @@ use sugarsubstitute_contracts::execution::{
 use sugarsubstitute_desktop::installer::InstallerLifetime;
 
 impl InstallerLifetime for Controller {
+    fn prepare_browser(&mut self) {
+        self.profiles.request();
+    }
+    fn profile_path(&self) -> Option<PathBuf> {
+        self.profiles.path()
+    }
+    fn recovering_profile(&self) -> bool {
+        self.profiles.recovering()
+    }
+    fn browser_retired(
+        &mut self,
+        outcome: sugarsubstitute_desktop::installer::BrowserRetirement,
+    ) -> Result<()> {
+        self.profiles.retired(outcome)
+    }
     fn environment_observed(&mut self, path: PathBuf) -> Result<()> {
-        if self.profile_job.is_some() || self.profile.is_some() || self.closing {
-            return Err("Installer environment already observed or closing".into());
-        }
-        let expected = self.workspace.join("webview-v1").join(std::process::id().to_string());
-        let client = self.client.as_ref().ok_or("Installer execution missing")?;
-        self.profile_job = Some(client.submit_blocking(
-            self.scope.as_ref().ok_or("Installer scope missing")?,
-            JobSpec {
-                id: self.jobs.allocate()?,
-                operation: Operation::Infrastructure,
-                class: JobClass::InfrastructureLifecycle,
-                deadline: Some(client.now()?.checked_add(Duration::from_secs(30))?),
-                reservation_bytes: 1024 * 1024,
-                replacement: None,
-            },
-            move |context| setup_storage::InstallerProfile::acquire(&expected, &path, &context),
-        )?);
-        Ok(())
+        self.profiles.observed(path)
     }
     fn environment_ready(&self) -> bool {
-        self.profile.is_some() && !self.closing
+        self.profiles.ready()
     }
     fn console_layout(
         &mut self,
@@ -53,36 +51,23 @@ impl InstallerLifetime for Controller {
             Some(client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?);
         self.client = Some(client);
         self.console = Some(super::super::console::Output::new()?);
-        let root = self.bundle_root.clone();
-        let workspace = self.workspace.clone();
-        let distribution = self.distribution;
-        self.submit(StorageWork::Payload, move |context| {
-            let distribution = super::super::distribution::decode(distribution, &context)?;
-            let expected = distribution.manifest_digest().to_owned();
-            drop(distribution);
-            let cache = setup_storage::cache::RuntimeCache::open(
-                &workspace,
-                setup_storage::cache::CachePolicy::default(),
-                &context,
-            )?;
-            let bundle = setup_storage::materialize(&root, &cache, &expected, &context)?;
-            Ok(StorageResult::Bundle(Arc::new(bundle), cache))
-        })
+        if self.profiles.requested() { Ok(()) } else { self.start_payload() }
     }
+
     fn request(&mut self, json: &str) -> Result<()> {
         self.request_value(json)
     }
     fn advance(&mut self) -> Result<Vec<String>> {
-        if let Some(job) = &mut self.profile_job
-            && let Some(completion) = job.try_take_completion()
+        if let (Some(client), Some(scope)) = (&self.client, &self.scope) {
+            self.profiles.advance(client, scope, &self.jobs, &self.workspace)?;
+        }
+        if !self.closing
+            && !self.payload_started
+            && self.profiles.requested()
+            && self.profiles.path().is_some()
+            && !self.profiles.recovering()
         {
-            self.profile_job = None;
-            match completion.outcome {
-                JobOutcome::Success(profile) => self.profile = Some(profile),
-                JobOutcome::Cancelled if self.closing => {}
-                JobOutcome::Failure(cause) => return Err(cause.into()),
-                _ => return Err("Installer profile verification did not complete".into()),
-            }
+            self.start_payload()?;
         }
         if let Some(client) = &self.client {
             let batch = client
@@ -128,18 +113,15 @@ impl InstallerLifetime for Controller {
         if let Some(storage) = &self.storage {
             storage.cancel_preparation();
         }
-        if let Some(job) = &self.profile_job {
-            job.cancel();
-        }
+        self.profiles.close();
         if let Some(worker) = &mut self.worker {
             worker.close()?;
         }
         Ok(())
     }
-    fn settled(&mut self) -> Result<bool> {
+    fn work_settled(&mut self) -> Result<bool> {
         if !self.closing
             || self.storage.is_some()
-            || self.profile_job.is_some()
             || self.console.as_ref().is_some_and(|console| !console.settled())
             || self.worker.as_ref().is_some_and(|worker| !worker.settled())
         {
@@ -147,6 +129,12 @@ impl InstallerLifetime for Controller {
         }
         if let Some(relaunch) = self.relaunch.clone() {
             self.retire_launch(relaunch)?;
+            return Ok(false);
+        }
+        Ok(true)
+    }
+    fn settled(&mut self) -> Result<bool> {
+        if !self.work_settled()? || !self.profiles.settled() {
             return Ok(false);
         }
         let Some(owner) = &mut self.owner else {
@@ -175,11 +163,34 @@ impl InstallerLifetime for Controller {
         self.relaunch = None;
         self.launch_failure = None;
         self.console = None;
-        self.profile = None;
+        self.profiles = profiles::Profiles::default();
         self.bundle = None;
         self.scope = None;
         self.client = None;
         self.owner = None;
+        Ok(())
+    }
+}
+
+impl Controller {
+    /// Admit source materialization after GUI profile initialization has released the cache writer.
+    fn start_payload(&mut self) -> Result<()> {
+        let root = self.bundle_root.clone();
+        let workspace = self.workspace.clone();
+        let distribution = self.distribution;
+        self.submit(StorageWork::Payload, move |context| {
+            let distribution = super::super::distribution::decode(distribution, &context)?;
+            let expected = distribution.manifest_digest().to_owned();
+            drop(distribution);
+            let cache = setup_storage::cache::RuntimeCache::open(
+                &workspace,
+                setup_storage::cache::CachePolicy::default(),
+                &context,
+            )?;
+            let bundle = setup_storage::materialize(&root, &cache, &expected, &context)?;
+            Ok(StorageResult::Bundle(Arc::new(bundle), cache))
+        })?;
+        self.payload_started = true;
         Ok(())
     }
 }

@@ -24,6 +24,7 @@ use wry::{
     WebViewConstruction, WebViewExtWindows, WebViewRetirement,
 };
 mod bridge;
+mod browser;
 mod dialog;
 
 pub(super) fn run(
@@ -47,39 +48,12 @@ pub(super) fn run(
             .build(&events)?,
     );
     let presenter = Presenter::new_main(window.clone(), true)?;
-    let mut context = WebContext::new(Some(options.profile));
-    let build_proxy = proxy.clone();
-    let builder = WebViewBuilder::new_with_web_context(&mut context)
-        .with_url("about:blank")
-        .with_visible(false)
-        .with_focused(false)
-        .with_additional_browser_args("")
-        .without_download_handlers()
-        .with_bounds(wry::Rect {
-            position: tao::dpi::PhysicalPosition::new(0, 0).into(),
-            size: window.inner_size().into(),
-        })
-        .with_transparent(true)
-        .with_scroll_bar_style(wry::ScrollBarStyle::FluentOverlay);
-    let mut constructor: Option<WebViewConstruction> = None;
-    let mut partial: Option<WebViewRetirement> = None;
-    let mut view: Option<WebView> = None;
+    let mut browser = browser::Browser::default();
     let mut bridge: Option<bridge::Bridge> = None;
     let mut console: Option<Console> = None;
     let mut console_above_browser = false;
     let mut failure: Option<Box<dyn Error>> = None;
-    match builder.begin_owned_as_child(window.as_ref(), move || {
-        if let Err(cause) = build_proxy.send_event(NativeAction::Main) {
-            tracing::error!(operation="installer_construction", cause=%cause, "Installer wake failed");
-        }
-    }) {
-        Ok(value) => constructor = Some(value),
-        Err(error) => {
-            let (cause, ownership) = error.into_parts();
-            partial = Some(ownership);
-            failure = Some(Box::new(cause));
-        }
-    }
+    lifetime.prepare_browser();
     if let Err(cause) = lifetime.start(Arc::new(ProxyWake::new(
         proxy.clone(),
         wake_lifetime.clone(),
@@ -91,8 +65,8 @@ pub(super) fn run(
     let mut closed = false;
     let mut revealed = false;
     let mut document_ready = false;
-    let mut environment_observed = false;
-    let mut last_progress = None;
+    let mut recovering = false;
+    let mut browser_done = false;
     let mut outbound = std::collections::VecDeque::new();
     events.run_return(|event, _, control| {
         *control = ControlFlow::WaitUntil(Instant::now() + Duration::from_millis(20));
@@ -101,14 +75,14 @@ pub(super) fn run(
                 Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => closing = true,
                 Event::UserEvent(NativeAction::Close) => closing = true,
                 Event::UserEvent(NativeAction::FocusNext(backward)) => {
-                    if let Some(view) = &view { view.focus()?; }
+                    if let Some(view) = &browser.view { view.focus()?; }
                     if let Some(bridge) = &bridge {
                         bridge.post(&serde_json::json!({"event":"console_focus_exit","backward":backward}).to_string())?;
                     }
                 }
                 Event::WindowEvent { event: WindowEvent::Resized(size), .. } => {
                     console_above_browser = false;
-                    if let Some(view) = &view {
+                    if let Some(view) = &browser.view {
                         view.set_bounds(wry::Rect {
                             position: tao::dpi::PhysicalPosition::new(0, 0).into(),
                             size: size.into(),
@@ -159,7 +133,7 @@ pub(super) fn run(
                         if let Some(bridge) = &bridge {
                             bridge.post("{\"event\":\"closing\"}")?;
                         }
-                        if let Some(constructor) = &mut constructor { constructor.cancel(); }
+                        browser.cancel();
                     }
                     let messages = lifetime.advance()?;
                     if messages.len() > 16 || messages.iter().any(|message| message.len() > 65536) {
@@ -175,46 +149,28 @@ pub(super) fn run(
                         }
                     }
                     if !closing {
-                        if let Some(pending) = &mut constructor {
-                            if pending.take_close_requested() { closing = true; }
-                            let progress = pending.progress()?;
-                            if last_progress != Some(progress) {
-                                tracing::info!(operation="installer_construction", ?progress, "Installer construction advanced");
-                                last_progress = Some(progress);
-                            }
-                            if progress == ConstructionProgress::EnvironmentPrepared {
-                                if !environment_observed {
-                                    if let Some(folder) = pending.user_data_folder()? {
-                                        use std::os::windows::ffi::OsStringExt;
-                                        lifetime.environment_observed(PathBuf::from(std::ffi::OsString::from_wide(&folder.into_utf16())))?;
-                                        environment_observed = true;
-                                    }
-                                } else if lifetime.environment_ready() {
-                                    pending.authorize_environment()?;
+                        if !recovering {
+                            match browser.advance(lifetime, window.as_ref(), &proxy) {
+                                Ok(true) if lifetime.recovering_profile() => recovering = true,
+                                Ok(true) => {
+                                    let current = browser.view.as_ref().ok_or("Installer view absent")?;
+                                    bridge = Some(bridge::Bridge::new(current.webview(), proxy.clone()));
+                                    bridge.as_mut().ok_or("Installer bridge absent")?.install()?;
+                                    current.load_html(&options.html)?;
+                                    tracing::info!(operation="installer_document_load", "Installer document submitted");
+                                    current.set_visible(true)?;
                                 }
-                            }
-                            if progress == ConstructionProgress::Finished {
-                                let result = pending.take_result().ok_or("Installer controller result missing")?;
-                                constructor = None;
-                                match result {
-                                    Ok(value) => {
-                                        view = Some(value);
-                                        let current = view.as_ref().ok_or("Installer view absent")?;
-                                        bridge = Some(bridge::Bridge::new(current.webview(), proxy.clone()));
-                                        bridge.as_mut().ok_or("Installer bridge absent")?.install()?;
-                                        current.load_html(&options.html)?;
-                                        tracing::info!(operation="installer_document_load", "Installer document submitted");
-                                        current.set_visible(true)?;
-                                    },
-                                    Err(error) => {
-                                        let (cause, ownership) = error.into_parts();
-                                        partial = Some(ownership);
-                                        return Err(Box::new(cause));
-                                    }
+                                Ok(false) => {},
+                                Err(cause) if lifetime.recovering_profile() => {
+                                    tracing::warn!(operation="installer_profile_recovery", cause=%cause,
+                                        "Preserving a private browser profile whose recovery could not complete");
+                                    recovering = true;
+                                    browser.cancel();
                                 }
+                                Err(cause) => return Err(cause),
                             }
                         }
-                        if view.is_some() && document_ready && !revealed {
+                        if browser.view.is_some() && document_ready && !revealed {
                             window.set_visible(options.visible);
                             if options.visible { window.set_focus(); }
                             revealed = true;
@@ -236,7 +192,8 @@ pub(super) fn run(
                                 bridge.post("{\"event\":\"native_console_ready\"}")?;
                             }
                         }
-                    } else if lifetime.settled()? {
+                    }
+                    if (closing && lifetime.work_settled()?) || recovering {
                         if let Some(owner) = &mut console {
                             owner.shutdown(window.as_ref())?;
                             if !owner.retired() { return Ok(()); }
@@ -246,7 +203,16 @@ pub(super) fn run(
                             if !owner.retire()? { return Ok(()); }
                             bridge = None;
                         }
-                        if retire(&mut constructor, &mut partial, &mut view)? {
+                        if !browser_done && let Some(outcome) = browser.retire()? {
+                            lifetime.browser_retired(outcome)?;
+                            browser_done = true;
+                            if recovering && !closing {
+                                recovering = false;
+                                browser = browser::Browser::default();
+                                browser_done = false;
+                            }
+                        }
+                        if closing && browser_done && lifetime.settled()? {
                             *control = ControlFlow::Exit;
                         }
                     }
@@ -264,10 +230,7 @@ pub(super) fn run(
     wake_lifetime.disconnect();
     drop(console);
     drop(bridge);
-    drop(view);
-    drop(partial);
-    drop(constructor);
-    drop(context);
+    drop(browser);
     drop(presenter);
     drop(window);
     drop(events);
@@ -279,30 +242,4 @@ pub(super) fn run(
         Some(cause) => Err(cause),
         None => Ok(()),
     }
-}
-
-fn retire(
-    constructor: &mut Option<WebViewConstruction>,
-    partial: &mut Option<WebViewRetirement>,
-    view: &mut Option<WebView>,
-) -> Result<bool, Box<dyn Error>> {
-    if let Some(value) = constructor {
-        if value.checked_retire()? {
-            *constructor = None;
-        }
-        return Ok(false);
-    }
-    if let Some(value) = partial {
-        if value.checked_retire()? {
-            *partial = None;
-        }
-        return Ok(false);
-    }
-    if let Some(value) = view {
-        if value.checked_retire()? {
-            *view = None;
-        }
-        return Ok(false);
-    }
-    Ok(true)
 }

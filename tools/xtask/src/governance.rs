@@ -6,7 +6,7 @@
 use std::path::Path;
 
 use crate::{
-    architecture, catalog,
+    architecture, cache_storage, catalog,
     error::{Failure, Result, read, require},
     execution,
     policy::{self, Architecture, Debt, Records, Testing, Waiver},
@@ -32,6 +32,8 @@ pub(crate) fn check(root: &Path) -> Result<()> {
     catalog::check_persistence(root, &architecture, &persistence)?;
     let caches: catalog::Caches = policy::load(root, "governance/cache/catalog.toml")?;
     catalog::check_caches(root, &architecture, &caches)?;
+    let storage: cache_storage::Storage = policy::load(root, "governance/cache/storage.toml")?;
+    cache_storage::check(root, &architecture, &caches, &storage)?;
     let vendors: vendor::Manifest = policy::load(root, "third_party/manifest.toml")?;
     vendor::check(root, &vendors)?;
     eprintln!("SugarSubstitute governance passed");

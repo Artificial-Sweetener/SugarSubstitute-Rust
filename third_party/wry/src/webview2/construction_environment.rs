@@ -132,6 +132,29 @@ impl WebViewConstruction {
     }
   }
 
+  /// Register one collection-exit observer for an explicitly exclusive owned private profile.
+  /// Retain the returned observer through checked view/controller retirement on this UI thread.
+  /// This observes native lifetime only; the caller independently validates actual folder identity.
+  /// # Errors
+  /// Rejects shared profiles, wrong construction order, duplicate observers and SDK failures.
+  pub fn private_profile_observer(&mut self) -> Result<PrivateProfileObserver> {
+    let driver = self.driver.as_ref().ok_or_else(|| owned_config::invalid("construction already transferred"))?;
+    let shared = driver.shared.clone();
+    let _call = shared.begin_call()?;
+    let environment = {
+      let state = shared.native.borrow();
+      if !driver.config.owned || !driver.config.platform.exclusive_user_data_folder_access
+        || state.ledger.stage != Stage::EnvironmentPrepared || state.ledger.retiring
+        || state.failure.is_some() || state.private_profile.is_some() {
+        return Err(owned_config::invalid("private profile observer is not admitted"));
+      }
+      state.env.clone().ok_or_else(|| owned_config::invalid("private environment absent"))?
+    };
+    let observer = PrivateProfileObserver::install(&environment)?;
+    shared.native.borrow_mut().private_profile = Some(observer.retained());
+    Ok(observer)
+  }
+
   /// Authorize controller admission once after the trusted desktop validates this environment.
   ///
   /// The native caller must match its current application identity/generation and retain

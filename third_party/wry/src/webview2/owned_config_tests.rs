@@ -76,3 +76,21 @@ fn owned_queue_producers_and_generic_handlers_are_rejected_before_creation() {
     assert!(owned_config::Config::new(attrs, platform(), true, true).is_err());
   }
 }
+
+#[test]
+fn owned_private_profile_admits_only_the_reviewed_cache_limit_argument() -> Result<()> {
+  let mut context = context();
+  let mut private = platform();
+  private.exclusive_user_data_folder_access = true;
+  private.additional_browser_args = Some("--disk-cache-size=33554432".into());
+  assert!(owned_config::Config::new(attrs(&mut context), private, true, true).is_ok());
+  for (exclusive, arguments) in [(false, "--disk-cache-size=33554432"),
+    (true, "--disk-cache-size=33554433"), (true, "--disable-web-security"),
+    (true, "--disk-cache-size=33554432 --disable-web-security")] {
+    let mut private = platform();
+    private.exclusive_user_data_folder_access = exclusive;
+    private.additional_browser_args = Some(arguments.into());
+    assert!(owned_config::Config::new(attrs(&mut context), private, true, true).is_err());
+  }
+  Ok(())
+}

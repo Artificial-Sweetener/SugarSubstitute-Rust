@@ -135,7 +135,8 @@ fn shared_cleanup_waits_for_verified_download_and_preserves_authoritative_and_le
         use crate::setup_storage::cache::{self, Namespace};
         let root = installation(91, context)?;
         let cache = storage(root.path(), context)?;
-        let legacy = root.path().join("update-downloads-v1");
+        let legacy =
+            root.path().join(crate::setup_storage::cache::Namespace::UpdateDownloads.directory());
         std::fs::create_dir(&legacy)?;
         std::fs::write(legacy.join("unknown-package"), b"legacy bytes")?;
         let settings = root.path().join("settings");

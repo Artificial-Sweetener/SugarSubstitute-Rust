@@ -29,15 +29,15 @@ recovery = "Resume the actual length under shared entry custody; restart ignored
 [[caches]]
 id = "setup-browser-profile"
 owner = "sugarsubstitute-supervision"
-sources = ["crates/sugarsubstitute-supervision/src/setup_storage/profile.rs", "crates/sugarsubstitute-supervision/src/setup_storage/files/identity.rs"]
-source_sha256 = "sha256:887d2d50873cc699a6517ab4d420d120483f269bcadff3abd125b52f6519544a"
+sources = ["crates/sugarsubstitute-supervision/src/setup_storage/profile.rs", "crates/sugarsubstitute-supervision/src/setup_storage/files/identity.rs", "crates/sugarsubstitute-supervision/src/setup_storage/profile/tests.rs"]
+source_sha256 = "sha256:2ef33645d631414c83a41f52f396e46c1a30117e9efb177ddc2e60d0f9125220"
 namespace = "setup-webview-v1"
 storage_schema = 1
 compatibility_epoch = 1
-compatibility_inputs = ["webview2_profile_format", "process_identity", "native_directory_identity"]
-freshness = "Each installer process verifies its isolated browser directory before controller construction."
-retention = "Keep profile bytes after teardown; no automatic recursive deletion."
-recovery = "A new process uses its own verified directory and OS-backed exclusion."
+compatibility_inputs = ["webview2_profile_format", "exclusive_native_environment", "native_directory_identity", "profile_producer_descriptor"]
+freshness = "Each private installer UI receives a fresh native-selected SDK grant. The observed effective folder must match its native directory identity before controller admission. Prior unfinished grants run inert recovery controllers before a fresh UI is prepared."
+retention = "Shared storage admits 128 MiB per private browser attempt under a 1 GiB namespace with one-day idle retention. Chromium disk cache requests 32 MiB. Actual collection exit permits inventory and journaled retirement; unproven release preserves the durable producer."
+recovery = "Bounded inert startup attempts use exclusive user-data-folder access and retain the environment through the matching BrowserProcessExited event. Checked controller Close alone never permits cleanup. Unknown ownership, redirected folders and unproven collections remain intact."
 
 [[caches]]
 id = "setup-downloads"

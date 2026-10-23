@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Coordinate one installer transaction through admitted storage jobs and the retained worker.
 mod lifetime;
+mod profiles;
 mod provisioning;
 mod storage;
 use storage::{StorageJob, StorageResult, StorageWork};
@@ -64,8 +65,8 @@ pub(super) struct Controller {
     stopping: bool,
     unavailable: bool,
     console: Option<super::console::Output>,
-    profile_job: Option<OwnedJob<setup_storage::InstallerProfile, io::Error>>,
-    profile: Option<setup_storage::InstallerProfile>,
+    profiles: profiles::Profiles,
+    payload_started: bool,
     locale: String,
 }
 
@@ -102,8 +103,8 @@ impl Controller {
             stopping: false,
             unavailable: false,
             console: None,
-            profile_job: None,
-            profile: None,
+            profiles: profiles::Profiles::default(),
+            payload_started: false,
             locale: "en".into(),
         }
     }

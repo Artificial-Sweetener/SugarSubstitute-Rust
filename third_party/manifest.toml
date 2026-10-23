@@ -203,6 +203,7 @@ files = [
   "third_party/wry/src/webview2/owned_environment_tests.rs",
   "third_party/wry/src/webview2/owned_race_tests.rs",
   "third_party/wry/src/webview2/owned_state.rs",
+  "third_party/wry/src/webview2/private_profile.rs",
   "third_party/wry/src/webview2/owned_tests.rs",
   "third_party/wry/src/webview2/retirement.rs",
   "third_party/wry/src/webview2/retirement_reference.rs",

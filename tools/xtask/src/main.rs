@@ -4,6 +4,7 @@
 //! Provide the same portable verification entry point for local work, hooks and CI.
 
 mod architecture;
+mod cache_storage;
 mod catalog;
 mod command;
 mod error;

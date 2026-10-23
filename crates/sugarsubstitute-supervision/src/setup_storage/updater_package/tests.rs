@@ -101,7 +101,12 @@ fn foreign_component_and_application_payload_are_rejected_before_extraction() ->
                 )
                 .is_err()
             );
-            assert!(!workspace.path().join("payloads-v1").exists());
+            assert!(
+                !workspace
+                    .path()
+                    .join(crate::setup_storage::cache::Namespace::PackedPayloads.directory())
+                    .exists()
+            );
         }
         Ok(())
     })
@@ -144,7 +149,12 @@ fn updater_declaration_clock_and_installation_identity_fail_closed() -> TestResu
             }
             assert!(!root.path().join("releases").exists());
             if case == 2 {
-                assert!(!workspace.path().join("payloads-v1").exists());
+                assert!(
+                    !workspace
+                        .path()
+                        .join(crate::setup_storage::cache::Namespace::PackedPayloads.directory())
+                        .exists()
+                );
             }
         }
         Ok(())

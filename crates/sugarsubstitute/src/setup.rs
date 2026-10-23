@@ -133,7 +133,6 @@ fn run_inner(distribution: &'static [u8]) -> Result<(), Box<dyn Error>> {
             title: sugarsubstitute_contracts::localization::installer::messages("en")["title"]
                 .into(),
             html,
-            profile: workspace.join("webview-v1").join(std::process::id().to_string()),
         },
         &mut controller,
     ))

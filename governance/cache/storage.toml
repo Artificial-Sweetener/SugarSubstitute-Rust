@@ -1,0 +1,5 @@
+schema_version = 1
+owner = "sugarsubstitute-supervision"
+control_cache = "runtime-cache-storage"
+entry_source = "crates/sugarsubstitute-supervision/src/setup_storage/cache.rs"
+registry_source = "crates/sugarsubstitute-supervision/src/setup_storage/cache/policy.rs"

@@ -40,12 +40,35 @@ pub struct InstallerWindow {
     pub title: String,
     /// Complete embedded document; no external navigation or network is admitted.
     pub html: String,
-    /// Isolated webview data folder owned by this installation attempt.
-    pub profile: PathBuf,
+}
+
+/// Actual private browser release facts supplied only by the trusted native UI adapter.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BrowserRetirement {
+    /// This attempt never submitted an SDK creation call.
+    NoEffects,
+    /// The matching native browser collection released its resources and user data folder.
+    Released,
+    /// Native object teardown completed without proof that the browser collection released storage.
+    Unproven,
 }
 
 /// Application state owner polled by the native event loop without blocking it.
 pub trait InstallerLifetime {
+    /// Select GUI profile initialization before starting execution-owned preparation.
+    fn prepare_browser(&mut self);
+    /// Borrow the current storage-owned profile path after its grant is durable.
+    fn profile_path(&self) -> Option<PathBuf>;
+    /// Whether this private profile requires an inert recovery controller before the installer UI.
+    fn recovering_profile(&self) -> bool;
+    /// Record actual native retirement before execution-owned cache finalization.
+    /// # Errors
+    /// Rejects duplicate or out-of-order native observations.
+    fn browser_retired(&mut self, outcome: BrowserRetirement) -> Result<(), Box<dyn Error>>;
+    /// Observe application work settlement so the native adapter may retire its browser.
+    /// # Errors
+    /// Preserves actual process, storage and launch retirement failures.
+    fn work_settled(&mut self) -> Result<bool, Box<dyn Error>>;
     /// Verify an observed browser profile off the UI thread before controller creation.
     /// # Errors
     /// Rejects duplicate or invalid environment admission.

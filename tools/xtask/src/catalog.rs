@@ -73,11 +73,11 @@ pub(crate) struct Caches {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Cache {
-    id: String,
-    owner: String,
-    sources: Vec<String>,
-    source_sha256: String,
-    namespace: String,
+    pub(crate) id: String,
+    pub(crate) owner: String,
+    pub(crate) sources: Vec<String>,
+    pub(crate) source_sha256: String,
+    pub(crate) namespace: String,
     storage_schema: u32,
     compatibility_epoch: u32,
     compatibility_inputs: Vec<String>,
