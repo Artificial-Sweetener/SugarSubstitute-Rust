@@ -38,7 +38,7 @@ pub(crate) fn validate_local_shape(path: &Path) -> Result<(), &'static str> {
     }
     if path.as_os_str().len() > 32766 * 3
         || path.as_os_str().is_empty()
-        || path.as_os_str().encode_wide().count() >= 32767
+        || crate::durable_storage::files::native_units(path).count() >= 32767
     {
         return Err("path_shape");
     }
@@ -50,7 +50,7 @@ pub(crate) fn validate_local_shape(path: &Path) -> Result<(), &'static str> {
 /// Allocate one native NUL path only after the shared shape validation succeeds.
 pub(crate) fn wide(path: &Path) -> Result<Vec<u16>, ClaimError> {
     validate_local_shape(path).map_err(ClaimError::invalid)?;
-    let mut units: Vec<u16> = path.as_os_str().encode_wide().collect();
+    let mut units: Vec<u16> = crate::durable_storage::files::native_units(path).collect();
     units.push(0);
     Ok(units)
 }

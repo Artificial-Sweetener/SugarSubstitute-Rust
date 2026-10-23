@@ -10,16 +10,16 @@ implementation_root = "crates/sugarsubstitute-supervision/src/durable_storage"
 [[records]]
 path = "installer/worker/cache-policy.ts"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:896dd217848ab5f71b24b03c165d50df842c8ca0f64c4a61e994a49a09868acb"
+source_sha256 = "sha256:da8ba282308f629ee2cd1b105205e86ce563645422a16afdbe2a7448d02acdbc"
 disposition = "migration"
-rationale = "Existing provisioning-worker cache journal publication; preserve native producer recovery and generation admission."
-next_extraction = "Route worker cache journal reads and publication through the shared durable-storage boundary without releasing native producer pins."
+rationale = "Existing provisioning-worker download sidecar publication; preserve native producer recovery and generation admission."
+next_extraction = "Route worker download sidecar reads and publication through the shared durable-storage boundary without releasing native producer pins."
 review_until = "2026-11-23"
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/files.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:75ef47bcf2c7822aa1fc1956b01a9b5c855aeadfb24bab7005b6de4a0a71aa67"
+source_sha256 = "sha256:b43f5f6c1aa06332a79290e8489c672f2c562c38ef90c4206d22fa1c424574ee"
 disposition = "implementation"
 rationale = "Retained filesystem publication or identity-checked retirement mechanics; feature authorization remains with the caller."
 
@@ -33,7 +33,7 @@ rationale = "Retained filesystem publication or identity-checked retirement mech
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/staging.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:b5a0908a46e87451139df11db55a5e67a2bda0e260eb86456390dbfe7d22bc0f"
+source_sha256 = "sha256:45444a35ab8dca89e162009ab73f67e9590e39e27e17db494e284328903f0067"
 disposition = "implementation"
 rationale = "Retained filesystem publication or identity-checked retirement mechanics; feature authorization remains with the caller."
 

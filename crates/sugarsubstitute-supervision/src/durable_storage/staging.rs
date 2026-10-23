@@ -4,16 +4,12 @@
 use super::invalid;
 use crate::durable_storage::files::{self, Directory};
 use std::{
-    ffi::OsString,
     io,
     path::{Path, PathBuf},
 };
-use windows::{
-    Win32::{
-        Storage::FileSystem::{MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH, MoveFileExW},
-        System::Com::CoCreateGuid,
-    },
-    core::HSTRING,
+use windows::Win32::{
+    Storage::FileSystem::{MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH, MoveFileExW},
+    System::Com::CoCreateGuid,
 };
 
 /// Existing attempts never consume the namespace of a subsequent retry.
@@ -56,8 +52,14 @@ pub(crate) fn publish(source: &Path, destination: &Path) -> io::Result<()> {
     files::lexical(destination)?;
     // SAFETY: Both UTF-16 paths stay live for this synchronous call. Omitting
     // REPLACE_EXISTING and COPY_ALLOWED preserves every existing destination.
-    unsafe { MoveFileExW(&native_path(source), &native_path(destination), MOVEFILE_WRITE_THROUGH) }
-        .map_err(io::Error::other)
+    unsafe {
+        MoveFileExW(
+            &files::native_path(source),
+            &files::native_path(destination),
+            MOVEFILE_WRITE_THROUGH,
+        )
+    }
+    .map_err(io::Error::other)
 }
 
 /// Replace one verified selection record after flushing its complete staged bytes.
@@ -75,21 +77,12 @@ pub(crate) fn replace_record(source: &Path, destination: &Path) -> io::Result<()
     // ancestry and writer custody. Same-volume replacement never enables a copy fallback.
     unsafe {
         MoveFileExW(
-            &native_path(source),
-            &native_path(destination),
+            &files::native_path(source),
+            &files::native_path(destination),
             MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
         )
     }
     .map_err(io::Error::other)
-}
-
-/// Validated local absolute paths use extended syntax independently of process manifests.
-/// Normalize separators before adding the prefix, which disables Win32 slash normalization.
-fn native_path(path: &Path) -> HSTRING {
-    let normalized: PathBuf = path.components().collect();
-    let mut extended = OsString::from(r"\\?\");
-    extended.push(normalized);
-    HSTRING::from(extended.as_os_str())
 }
 
 #[cfg(test)]

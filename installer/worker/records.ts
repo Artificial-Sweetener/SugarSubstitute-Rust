@@ -3,61 +3,25 @@
 /** Exchange bounded ordinary record operations with the active host-selected native owner. */
 import path from 'node:path'
 const MAX_RECORD = 65536
-type Data = Record<string, unknown>
-type Pending = { serial: number; frames: Data[]; resolve: (data: Data[]) => void; reject: (cause: Error) => void }
-
+import { NativeExchange, type Data } from './native-exchange'
 /** Native record failures retain developer detail while the host supplies localized product copy. */
 export class NativeRecordError extends Error { readonly statusCode = 'setupFailed' }
-
-/** One in-flight exchange, owned by the current provisioning command and its transport. */
+/** Selected ordinary-record operations share one ordered transport exchange. */
 export class NativeRecords {
-  private id: string | undefined
   private selected: string | undefined
-  private serial = 0
-  private pending: Pending | undefined
   private root: string | undefined
-  constructor(private readonly send: (id: string, data: Data) => void) {}
-
-  /** A host command starts a fresh sequence; cancellation preserves its recovery-write scope. */
+  private readonly exchange: NativeExchange
+  constructor(send: (id: string, data: Data) => void) {
+    this.exchange = new NativeExchange(send, message => new NativeRecordError(message))
+  }
   begin(id: string, selected?: string): void {
-    if (this.pending) throw new NativeRecordError('Native record exchange is still active')
-    this.id = id; this.selected = selected; this.serial = 0; this.root = undefined
+    this.exchange.begin(id); this.selected = selected; this.root = undefined
   }
-  /** Transport closure rejects the actual pending exchange; it grants no filesystem completion. */
-  close(cause: Error = new NativeRecordError('Native record transport closed')): void {
-    const pending = this.pending
-    this.pending = undefined; this.id = undefined; this.selected = undefined; this.root = undefined
-    pending?.reject(cause)
+  close(cause?: Error): void {
+    this.exchange.close(cause); this.selected = undefined; this.root = undefined
   }
-  /** Consume only a matching ordered reply. Duplicate, foreign and excessive frames fail closed. */
-  accept(command: { id: string; input: { serial: number; index: number; done: boolean; result: any } }): void {
-    const pending = this.pending
-    const { serial, index, done, result } = command.input
-    if (!pending || command.id !== this.id || serial !== pending.serial || index !== pending.frames.length || index >= 8) {
-      throw new NativeRecordError('Native record reply changed identity or sequence')
-    }
-    if (result.ok !== true) {
-      if (index !== 0 || !done) throw new NativeRecordError('Native record failure was fragmented')
-      this.pending = undefined
-      const cause = Object.assign(new NativeRecordError('Native managed-record operation failed'), result.error)
-      pending.reject(cause)
-      return
-    }
-    pending.frames.push(result.data)
-    if (done) { this.pending = undefined; pending.resolve(pending.frames) }
-  }
-  private call(operation: Data): Promise<Data[]> {
-    if (!this.id || this.pending || this.serial >= Number.MAX_SAFE_INTEGER) {
-      return Promise.reject(new NativeRecordError('Native record scope is unavailable or busy'))
-    }
-    const id = this.id
-    const serial = ++this.serial
-    return new Promise((resolve, reject) => {
-      this.pending = { serial, frames: [], resolve, reject }
-      try { this.send(id, { version: 1, serial, operation }) }
-      catch (cause) { this.pending = undefined; reject(cause) }
-    })
-  }
+  accept(command: Parameters<NativeExchange['accept']>[0]): void { this.exchange.accept(command) }
+  private call(operation: Data): Promise<Data[]> { return this.exchange.call(operation) }
   /** Pin exactly the selected local folder. Its parent must already exist. */
   async open(directory: string, create: boolean): Promise<string | undefined> {
     if (!path.isAbsolute(directory) || path.parse(directory).root === directory ||

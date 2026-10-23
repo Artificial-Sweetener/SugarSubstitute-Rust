@@ -78,7 +78,7 @@ fn pressure_retires_only_selected_grants_after_native_settlement() -> TestResult
         let mut grants = ProvisioningCaches::prepare(&cache, &"b".repeat(64), context)?;
         let mut family = CacheFamily::named(grants.family(), context)?;
         let download = grants.downloads.path();
-        let metadata = grants.metadata.path();
+        let metadata = grants.metadata.path()?;
         let runtime = grants.runtime.path();
         std::fs::write(download.join("partial"), b"reclaim")?;
         std::fs::write(metadata.join("catalogue"), b"keep")?;

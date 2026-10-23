@@ -22,6 +22,7 @@ pub(crate) mod records;
 pub(crate) mod retirement;
 #[allow(unsafe_code)]
 pub(crate) mod staging;
+pub(crate) mod streamed_record;
 
 use std::io;
 use sugarsubstitute_contracts::execution::JobContext;

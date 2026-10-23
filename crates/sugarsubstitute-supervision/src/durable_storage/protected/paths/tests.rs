@@ -109,9 +109,11 @@ fn path_phase_parity_preserves_local_case_roots_and_raw_surrogates() -> TestResu
         vec![92, 92, 63, 92, 69, 58, 92, 0xdc01, 97, 0xd800],
     ] {
         let path = PathBuf::from(OsString::from_wide(&units));
-        let encoded = wide(&path)?;
+        let mut expected = if units[0] == 69 { vec![92, 92, 63, 92] } else { Vec::new() };
+        expected.extend_from_slice(&units);
+        expected.push(0);
+        assert_eq!(wide(&path)?, expected);
         units.push(0);
-        assert_eq!(encoded, units);
         // SAFETY: The owned exact NUL buffer stays live throughout the bounded scan.
         let scanned = unsafe { read_native_path(PWSTR(units.as_mut_ptr()), units.len()) }?;
         assert_eq!(scanned.as_os_str(), path.as_os_str());

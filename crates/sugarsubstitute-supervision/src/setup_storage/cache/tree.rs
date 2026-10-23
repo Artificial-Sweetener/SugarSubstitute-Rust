@@ -13,6 +13,19 @@ pub(super) struct Inventory {
     pub(super) directories: Vec<String>,
     name_bytes: usize,
     objects: usize,
+    worker_records: bool,
+}
+impl Inventory {
+    /// Admit the additional complete stage before mutation, including every retained name.
+    pub(super) fn admit_record_stage(&self, name: &str) -> io::Result<()> {
+        if !self.worker_records
+            || self.objects >= MAX_FILES
+            || self.name_bytes.checked_add(name.len() + 8).is_none_or(|bytes| bytes > 512 * 1024)
+        {
+            return Err(invalid("Metadata staging inventory is full"));
+        }
+        Ok(())
+    }
 }
 /// Compare current contents to declared ownership before returning deletion inputs.
 pub(super) fn inspect(
@@ -48,6 +61,7 @@ pub(super) fn inspect(
         directories: Vec::new(),
         name_bytes: 0,
         objects: 0,
+        worker_records: false,
     };
     let path = directory.path().join("data");
     match Directory::open(&path, false) {
@@ -71,12 +85,21 @@ fn visit(
         let entry = entry?;
         children += 1;
         output.objects += 1;
-        if output.objects > MAX_OBJECTS {
+        if output.objects > if output.worker_records { MAX_FILES } else { MAX_OBJECTS } {
             return Err(invalid("Cache tree exceeds inspection capacity"));
         }
         let path = entry.path();
         let relative =
             path.strip_prefix(root).map_err(io::Error::other)?.to_string_lossy().replace('\\', "/");
+        if output.worker_records {
+            output.name_bytes = output
+                .name_bytes
+                .checked_add(relative.len() + 8)
+                .ok_or_else(|| invalid("Metadata name accounting overflowed"))?;
+            if output.name_bytes > 512 * 1024 {
+                return Err(invalid("Metadata inventory names exceed their bound"));
+            }
+        }
         files::relative(&relative)
             .map_err(|cause| io::Error::new(io::ErrorKind::InvalidInput, cause))?;
         if relative.split('/').count() > MAX_DEPTH {
@@ -132,10 +155,12 @@ fn visit(
 
 /// Bound retained leaf names while walking implicit ancestors without duplicating them.
 fn account_name(output: &mut Inventory, relative: &str) -> io::Result<()> {
-    output.name_bytes = output
-        .name_bytes
-        .checked_add(relative.len())
-        .ok_or_else(|| invalid("Cache inventory name accounting overflowed"))?;
+    if !output.worker_records {
+        output.name_bytes = output
+            .name_bytes
+            .checked_add(relative.len())
+            .ok_or_else(|| invalid("Cache inventory name accounting overflowed"))?;
+    }
     if output.files.len() + output.directories.len() >= MAX_FILES
         || output.name_bytes > MAX_RECORD - 1024
     {
@@ -246,6 +271,20 @@ pub(super) fn remove_directory(path: &Path, context: &JobContext) -> io::Result<
 
 /// Inventory a fully settled native producer's private output before declaring cleanup ownership.
 pub(super) fn generated(directory: &Directory, context: &JobContext) -> io::Result<Inventory> {
+    generated_with(directory, false, context)
+}
+/// Preserve delegated worker admission's 8,192-object and 512-KiB name ceilings during migration.
+pub(super) fn generated_records(
+    directory: &Directory,
+    context: &JobContext,
+) -> io::Result<Inventory> {
+    generated_with(directory, true, context)
+}
+fn generated_with(
+    directory: &Directory,
+    worker_records: bool,
+    context: &JobContext,
+) -> io::Result<Inventory> {
     let path = directory.path().join("data");
     let root = Directory::open(&path, false)?;
     let mut inventory = Inventory {
@@ -254,6 +293,7 @@ pub(super) fn generated(directory: &Directory, context: &JobContext) -> io::Resu
         directories: Vec::new(),
         name_bytes: 0,
         objects: 0,
+        worker_records,
     };
     visit(&root, &path, None, &mut inventory, context)?;
     Ok(inventory)

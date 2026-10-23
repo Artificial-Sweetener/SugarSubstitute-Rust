@@ -10,12 +10,37 @@ pub(crate) use identity::{file_identity, single_link};
 use std::{
     fs::{File, OpenOptions},
     io::{self, Write},
-    os::windows::fs::{MetadataExt, OpenOptionsExt},
-    path::{Component, Path, PathBuf},
+    os::windows::{
+        ffi::OsStrExt,
+        fs::{MetadataExt, OpenOptionsExt},
+    },
+    path::{Component, Path, PathBuf, Prefix},
 };
+use windows::core::HSTRING;
 const REPARSE_POINT: u32 = 0x400;
 const OPEN_REPARSE_POINT: u32 = 0x0020_0000;
 const BACKUP_SEMANTICS: u32 = 0x0200_0000;
+
+/// Encode rooted DOS drive paths with extended Win32 syntax, preserving original UTF-16 units.
+/// Callers retain and validate the original parent/name under their own storage policy.
+/// Existing native prefixes retain their original representation.
+pub(crate) fn native_path(path: &Path) -> HSTRING {
+    HSTRING::from_wide(&native_units(path).collect::<Vec<_>>())
+}
+/// Lend the same encoding to admitted native buffers without allocating an intermediate name.
+pub(crate) fn native_units(path: &Path) -> impl Iterator<Item = u16> + '_ {
+    let dos = path.has_root()
+        && matches!(path.components().next(), Some(Component::Prefix(prefix)) if matches!(prefix.kind(), Prefix::Disk(_)));
+    [92_u16, 92, 63, 92]
+        .into_iter()
+        .take(if dos { 4 } else { 0 })
+        .chain(dos.then_some(path.components()).into_iter().flatten().enumerate().flat_map(
+            |(index, part)| {
+                (index > 2).then_some(92).into_iter().chain(part.as_os_str().encode_wide())
+            },
+        ))
+        .chain((!dos).then_some(path.as_os_str()).into_iter().flat_map(OsStrExt::encode_wide))
+}
 
 /// Keep every ancestor pinned while exposing only an immutable observed location.
 pub(crate) struct Directory {
@@ -217,6 +242,23 @@ pub(crate) fn create_new(path: &Path) -> io::Result<File> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn native_encoding_normalizes_dos_separators_and_preserves_native_utf16_names() {
+        use std::ffi::OsString;
+        use std::os::windows::ffi::{OsStrExt, OsStringExt};
+        assert_eq!(
+            native_path(Path::new("C:/owned/record")).to_string_lossy(),
+            r"\\?\C:\owned\record"
+        );
+        let native = Path::new(r"\\?\C:\owned\record");
+        assert_eq!(&*native_path(native), native.as_os_str().encode_wide().collect::<Vec<_>>());
+        let mut units: Vec<u16> = r"C:\owned\".encode_utf16().collect();
+        units.extend([0xd800, b'x' as u16, 0xdc00]);
+        let path = PathBuf::from(OsString::from_wide(&units));
+        let mut expected: Vec<u16> = r"\\?\".encode_utf16().collect();
+        expected.extend(units);
+        assert_eq!(&*native_path(&path), expected);
+    }
     #[test]
     fn literal_dot_components_are_rejected_before_path_normalization() {
         for path in [r"C:\owned\.\nested", "C:/owned/./nested", r"C:\owned\..\other"] {

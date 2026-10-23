@@ -435,11 +435,14 @@ impl<'origin> NativePhase<'origin> {
     fn path_units(&mut self, path: &Path) -> Result<Vec<u16>, ClaimError> {
         paths::validate_local_shape(path).map_err(|operation| self.invalid(operation))?;
         let mut units = Vec::new();
-        let count = path.as_os_str().encode_wide().count() + 1;
+        let count = crate::durable_storage::files::native_units(path).count() + 1;
+        if count > 32767 {
+            return Err(self.invalid("path_shape"));
+        }
         units.try_reserve_exact(count).map_err(|cause| {
             self.error("path_units_reservation", BoundedNativeCause::Reserve(cause))
         })?;
-        units.extend(path.as_os_str().encode_wide());
+        units.extend(crate::durable_storage::files::native_units(path));
         units.push(0);
         if units.capacity().checked_mul(size_of::<u16>()).is_none_or(|bytes| bytes > 65_534) {
             return Err(self.invalid("path_units_capacity"));

@@ -88,7 +88,7 @@ impl WindowsLaunchInput {
             "--setup-token".into(),
             endpoint.token.into(),
         ];
-        arguments.extend(caches.arguments());
+        arguments.extend(caches.arguments()?);
         let command = WindowsLaunchCommand::from_os(&executable, cwd, &arguments)
             .map_err(io::Error::other)?;
         let mut input = Self::new(command, environment).map_err(io::Error::other)?;
@@ -102,5 +102,16 @@ impl WindowsLaunchInput {
             })),
         }));
         Ok(input)
+    }
+    /// Retain native metadata access from this exact prepared provisioning family.
+    /// No filesystem work occurs. Release every clone and transfer before family finalization.
+    /// # Errors
+    /// Rejects unrelated launch roles; presentation state and worker paths grant no access.
+    pub fn provisioning_metadata(&self) -> io::Result<crate::setup_storage::ProvisioningMetadata> {
+        self.preparation
+            .as_ref()
+            .and_then(|launch| launch.provisioning())
+            .map(|launch| launch.caches.metadata())
+            .ok_or_else(|| io::Error::other("Provisioning metadata role absent"))
     }
 }

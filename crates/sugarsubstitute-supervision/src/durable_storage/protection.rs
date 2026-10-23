@@ -5,7 +5,7 @@ use super::check;
 use crate::{
     ClaimError,
     durable_storage::{
-        files::Directory,
+        files::{self, Directory},
         protected::{
             account, directories, native_name::NativeNameDestination, native_phase::NativePhase,
             paths, security,
@@ -24,10 +24,7 @@ use std::{
     sync::Arc,
 };
 use sugarsubstitute_contracts::execution::JobContext;
-use windows::{
-    Win32::{Foundation::HANDLE, Storage::FileSystem::*},
-    core::HSTRING,
-};
+use windows::Win32::{Foundation::HANDLE, Storage::FileSystem::*};
 
 mod exclusion;
 mod outcome;
@@ -213,7 +210,7 @@ impl Protection {
         // The descriptor and path remain live, and File adopts the sole returned handle immediately.
         let raw = unsafe {
             CreateFileW(
-                &HSTRING::from(path.as_os_str()),
+                &files::native_path(path),
                 FILE_GENERIC_READ.0
                     | FILE_GENERIC_WRITE.0
                     | if delete_on_close { DELETE.0 } else { 0 },

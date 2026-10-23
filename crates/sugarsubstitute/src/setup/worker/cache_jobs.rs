@@ -78,6 +78,7 @@ impl Worker {
             || self.preparing.is_some()
             || self.creating.is_some()
             || self.process.is_some()
+            || self.metadata_io.is_some()
         {
             return Ok(());
         }

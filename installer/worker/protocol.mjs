@@ -25,6 +25,7 @@ export function parseCommand(bytes) {
   if (!/^[a-zA-Z0-9_-]+$/.test(value.id)) throw new Error('Invalid request identity')
   const input = value.input ?? {}
   switch (value.operation) {
+    case 'metadata_reply':
     case 'storage_reply':
       keys(input, ['version', 'serial', 'index', 'done', 'result'])
       if (input.version !== 1 || !Number.isSafeInteger(input.serial) || input.serial <= 0 ||
@@ -34,7 +35,7 @@ export function parseCommand(bytes) {
         if ('error' in input.result || !input.result.data || typeof input.result.data !== 'object' || Array.isArray(input.result.data)) throw new Error('Invalid native storage result')
       } else if (input.result.ok === false) {
         keys(input.result.error, ['code', 'osCode'])
-        if ('data' in input.result || !['ENOENT', 'EEXIST', 'EACCES', 'EBUSY', 'EINTR', 'ETIMEDOUT', 'EIO'].includes(input.result.error.code) ||
+        if ('data' in input.result || !['ENOENT', 'EEXIST', 'EACCES', 'EBUSY', 'EINTR', 'ETIMEDOUT', 'EIO', ...(value.operation === 'metadata_reply' ? ['ENOSPC'] : [])].includes(input.result.error.code) ||
             input.result.error.osCode !== null && !Number.isSafeInteger(input.result.error.osCode)) throw new Error('Invalid native storage error')
       } else throw new Error('Invalid native storage outcome')
       break

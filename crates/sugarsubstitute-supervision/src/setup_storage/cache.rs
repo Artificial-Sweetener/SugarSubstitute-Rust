@@ -11,6 +11,7 @@ mod consumers;
 pub use admission::storage_key;
 pub(crate) use consumers::NativeCachePin;
 mod entry;
+mod generated_records;
 mod lookup;
 mod maintenance;
 mod native_output;

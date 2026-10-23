@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Bind the provisioning transport to the existing retained Windows process-family owner.
 mod cache_jobs;
+mod metadata;
 mod process;
 mod protocol;
 mod records;
@@ -52,6 +53,10 @@ pub(super) struct Worker {
     record_scope: Option<records::RecordScope>,
     record_state: Option<records::RecordSession>,
     record_job: Option<OwnedJob<records::RecordCompletion, std::io::Error>>,
+    metadata_access: Option<sugarsubstitute_supervision::setup_storage::ProvisioningMetadata>,
+    metadata_scope: Option<metadata::MetadataScope>,
+    metadata_state: Option<metadata::session::Session>,
+    metadata_io: Option<OwnedJob<metadata::MetadataCompletion, std::io::Error>>,
 }
 
 impl Worker {
@@ -118,6 +123,10 @@ impl Worker {
             record_scope: None,
             record_state: None,
             record_job: None,
+            metadata_access: None,
+            metadata_scope: None,
+            metadata_state: None,
+            metadata_io: None,
         })
     }
     pub(super) fn ready(&self) -> bool {
@@ -128,11 +137,17 @@ impl Worker {
             return Err("Provisioning worker is not ready".into());
         }
         let authority = self.record_authority(value)?;
+        let metadata = metadata::command_scope(value)?;
+        if value["operation"] != "cancel" && self.metadata_io.is_some() {
+            return Err("Native metadata operation is still active".into());
+        }
         self.transport
             .as_ref()
             .ok_or("Provisioning transport missing")?
             .send(serde_json::to_string(value)?)?;
         if value["operation"] != "cancel" {
+            self.metadata_state = None;
+            self.metadata_scope = metadata;
             self.record_state = None;
             self.record_scope = authority;
         }
@@ -154,6 +169,7 @@ impl Worker {
         }
         self.poll_cache_jobs()?;
         self.poll_record_job()?;
+        self.poll_metadata_io()?;
         let mut events = Vec::new();
         for _ in 0..16 {
             match self.transport.as_ref().and_then(Transport::next_event) {
@@ -162,6 +178,9 @@ impl Worker {
                 }
                 Some(TransportEvent::Frame(frame)) => {
                     let mut value: serde_json::Value = serde_json::from_str(&frame)?;
+                    if self.metadata_event(&value)? {
+                        continue;
+                    }
                     if self.record_event(&value)? {
                         continue;
                     }
@@ -235,6 +254,12 @@ impl Worker {
         self.transport = None;
         self.record_scope = None;
         self.record_state = None;
+        self.metadata_access = None;
+        self.metadata_scope = None;
+        self.metadata_state = None;
+        if let Some(job) = &self.metadata_io {
+            job.cancel();
+        }
         if let Some(job) = &self.record_job {
             job.cancel();
         }
@@ -258,6 +283,7 @@ impl Worker {
             && self.cache_finalized
             && self.transport_job.is_none()
             && self.record_job.is_none()
+            && self.metadata_io.is_none()
             && self.registry.as_ref().is_none_or(WindowsProcessRegistry::is_empty)
     }
 }

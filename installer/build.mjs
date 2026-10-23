@@ -48,6 +48,7 @@ const aliases = new Map([
   ['src/main/lib/telemetry.ts', 'telemetry.ts'],
   ['src/main/lib/bundledScript.ts', 'bundled-script.ts'],
   ['src/main/lib/cache-policy.ts', 'cache-policy.ts'],
+  ['src/main/lib/native-metadata.ts', 'metadata.ts'],
 ])
 const bundle = path.join(output, 'worker/out/main/index.cjs')
 const result = await build({

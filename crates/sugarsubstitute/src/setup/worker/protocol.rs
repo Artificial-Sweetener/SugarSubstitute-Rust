@@ -18,7 +18,9 @@ pub(super) fn cache_event(value: &serde_json::Value) -> Result<CacheEvent> {
     }
     match value["event"].as_str() {
         Some("ready")
-            if value["data"]["cacheProtocol"] == 1 && value["data"]["storageProtocol"] == 1 =>
+            if value["data"]["cacheProtocol"] == 1
+                && value["data"]["storageProtocol"] == 1
+                && value["data"]["metadataProtocol"] == 1 =>
         {
             Ok(CacheEvent::Ready)
         }
@@ -46,6 +48,8 @@ mod tests {
             json!({"cacheProtocol":1,"storageProtocol":0}),
             json!({"cacheProtocol":1,"storageProtocol":2}),
             json!({"cacheProtocol":1,"storageProtocol":"1"}),
+            json!({"cacheProtocol":1,"storageProtocol":1}),
+            json!({"cacheProtocol":1,"storageProtocol":1,"metadataProtocol":2}),
         ] {
             assert!(cache_event(&json!({"version":1,"event":"ready","data":data})).is_err());
         }
@@ -54,7 +58,7 @@ mod tests {
     fn current_native_grant_protocol_admits_the_matching_worker() -> Result<()> {
         assert_eq!(
             cache_event(
-                &json!({"version":1,"event":"ready","data":{"cacheProtocol":1,"storageProtocol":1}})
+                &json!({"version":1,"event":"ready","data":{"cacheProtocol":1,"storageProtocol":1,"metadataProtocol":1}})
             )?,
             CacheEvent::Ready
         );
@@ -87,7 +91,7 @@ mod tests {
         for value in [
             json!(null),
             json!("ready"),
-            json!({"event":"ready","data":{"cacheProtocol":1,"storageProtocol":1}}),
+            json!({"event":"ready","data":{"cacheProtocol":1,"storageProtocol":1,"metadataProtocol":1}}),
             json!({"version":1,"event":"cache_pressure","data":[]}),
         ] {
             assert!(cache_event(&value).is_err());

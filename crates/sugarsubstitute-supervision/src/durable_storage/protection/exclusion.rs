@@ -49,7 +49,7 @@ fn open_existing(path: &Path, access: u32) -> windows::core::Result<File> {
     // successful unique ownership is adopted immediately. No handle is made inheritable.
     let handle = unsafe {
         CreateFileW(
-            &HSTRING::from(path.as_os_str()),
+            &files::native_path(path),
             access,
             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
             None,

@@ -77,6 +77,14 @@ test('real headless worker rejects unsafe requests and exits on host closure', {
       const frame = JSON.parse(next.value)
       observed.push({ event: frame.event, id: frame.id })
       assert.equal(frame.version, 1)
+      if (frame.event === 'metadata') {
+        assert.ok(['read', 'abort'].includes(frame.data.operation.op))
+        socket.write(JSON.stringify({ version: 1, id: frame.id, operation: 'metadata_reply', input: {
+          version: 1, serial: frame.data.serial, index: 0, done: true,
+          result: frame.data.operation.op === 'read' ? { ok: false, error: { code: 'ENOENT', osCode: 2 } } : { ok: true, data: {} },
+        } }) + '\n')
+        continue
+      }
       if (frame.event === 'diagnostic') continue
       assert.equal(frame.event, event, JSON.stringify(frame))
       return frame
@@ -87,6 +95,7 @@ test('real headless worker rejects unsafe requests and exits on host closure', {
   const ready = await nextTerminal('ready')
   assert.equal(ready.data.cacheProtocol, 1)
   assert.equal(ready.data.storageProtocol, 1)
+  assert.equal(ready.data.metadataProtocol, 1)
   assert.match(ready.data.upstreamRevision, /^[a-f0-9]{40}$/)
   assert.deepEqual(ready.data.operations, ['options', 'inspect', 'provision', 'integrate', 'cancel'])
   socket.write(JSON.stringify({

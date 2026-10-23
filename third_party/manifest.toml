@@ -280,6 +280,7 @@ files = [
   "installer/patches/0001-provisioning-entry.patch",
   "installer/patches/0002-require-complete-provisioning.patch",
   "installer/patches/0003-shared-cache-grants.patch",
+  "installer/patches/0004-native-metadata.patch",
   "third_party/comfy-desktop/lib/git_operations.py",
   "third_party/comfy-desktop/lib/pygit2_compat.py",
   "third_party/comfy-desktop/lib/update_comfyui.py",

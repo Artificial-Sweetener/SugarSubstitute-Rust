@@ -84,9 +84,14 @@ fn native_path_conversion_rejects_remote_device_nul_and_oversized_input() -> Tes
     ] {
         assert!(wide(Path::new(value)).is_err());
     }
-    let maximum = format!("E:\\{}", "x".repeat(32763));
-    assert_eq!(wide(Path::new(&maximum))?.len(), 32767);
-    assert!(wide(Path::new(&format!("{maximum}x"))).is_err());
+    for prefix in ["E:\\", r"\\?\E:\"] {
+        let maximum = format!("{prefix}{}", "x".repeat(32759));
+        let encoded = wide(Path::new(&maximum))?;
+        assert_eq!(encoded.len(), 32767);
+        assert_eq!(&encoded[..7], &[92, 92, 63, 92, 69, 58, 92]);
+        assert_eq!(encoded.last(), Some(&0));
+        assert!(wide(Path::new(&format!("{maximum}x"))).is_err());
+    }
     assert_eq!(wide(Path::new("E:\\漢字"))?.last(), Some(&0));
     Ok(())
 }

@@ -3,7 +3,7 @@
 /** Keep authoritative configuration separate from native disposable cache grants. */
 import path from 'node:path'
 import { argument } from './arguments'
-import { cacheGrants } from './cache-policy'
+import { metadataRoot } from './metadata'
 
 function root(): string {
   const value = argument('workspace')
@@ -11,7 +11,7 @@ function root(): string {
   return value
 }
 
-export function cacheDir(): string { return cacheGrants().metadata.root }
+export function cacheDir(): string { return metadataRoot() }
 export function configDir(): string { return path.join(root(), 'configuration') }
 export function dataDir(): string { return path.join(root(), 'data') }
 export function stateDir(): string { return path.join(root(), 'state') }

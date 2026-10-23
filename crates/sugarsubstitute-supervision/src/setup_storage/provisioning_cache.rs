@@ -12,6 +12,10 @@ use crate::durable_storage::files::Directory;
 use sha2::{Digest, Sha256};
 use std::{ffi::OsString, io};
 use sugarsubstitute_contracts::execution::JobContext;
+mod metadata;
+pub use metadata::{
+    MetadataChunk, MetadataRead, MetadataRecord, MetadataWrite, ProvisioningMetadata,
+};
 const DOWNLOAD_BYTES: u64 = 24 * 1024 * 1024 * 1024;
 const METADATA_BYTES: u64 = 256 * 1024 * 1024;
 /// Authenticated worker pressure selects disposable grants after actual native settlement.
@@ -28,7 +32,7 @@ const PREFIX: &str = "setup-worker-v1";
 pub(crate) struct ProvisioningCaches {
     family: CacheFamilyId,
     downloads: CacheLease,
-    metadata: CacheLease,
+    metadata: ProvisioningMetadata,
     runtime: CacheLease,
 }
 impl ProvisioningCaches {
@@ -76,26 +80,30 @@ impl ProvisioningCaches {
         )?;
         runtime
             .begin_generated(&descriptor(&runtime, Namespace::SetupRuntime, family)?, context)?;
-        Ok(Self { family, downloads, metadata, runtime })
+        Ok(Self { family, downloads, metadata: ProvisioningMetadata::new(metadata), runtime })
     }
     /// Matching facts for the native adapter's private named containment job.
     pub(crate) fn family(&self) -> CacheFamilyId {
         self.family
     }
     /// Explicit paths and byte ceilings; presentation/IPC content cannot select these grants.
-    pub(crate) fn arguments(&self) -> [OsString; 10] {
-        [
+    pub(crate) fn arguments(&self) -> io::Result<[OsString; 10]> {
+        Ok([
             "--setup-cache-downloads".into(),
             self.downloads.path().into_os_string(),
             "--setup-cache-download-bytes".into(),
             DOWNLOAD_BYTES.to_string().into(),
             "--setup-cache-metadata".into(),
-            self.metadata.path().into_os_string(),
+            self.metadata.path()?.into_os_string(),
             "--setup-cache-metadata-bytes".into(),
             METADATA_BYTES.to_string().into(),
             "--setup-cache-runtime".into(),
             self.runtime.path().into_os_string(),
-        ]
+        ])
+    }
+    /// Clone only the actual prepared metadata grant, never a worker-selected filesystem path.
+    pub(crate) fn metadata(&self) -> ProvisioningMetadata {
+        self.metadata.clone()
     }
     /// Finalize from the registry's unique actually settled family result. This is called only
     /// after every owned process and observation has retired; supplied exit codes grant nothing.
@@ -107,13 +115,10 @@ impl ProvisioningCaches {
     ) -> io::Result<()> {
         check(context)?;
         finalize(&mut self.downloads, context)?;
-        finalize(&mut self.metadata, context)?;
+        self.metadata.finish(pressure.metadata, context)?;
         finalize(&mut self.runtime, context)?;
         if pressure.downloads {
             self.downloads.retire(context)?;
-        }
-        if pressure.metadata {
-            self.metadata.retire(context)?;
         }
         self.runtime.retire(context)
     }

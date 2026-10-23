@@ -196,20 +196,13 @@ export class CacheGrant {
 let reportPressure: (namespace: 'downloads' | 'metadata') => void = () => {}
 /** Private authenticated worker telemetry; cleanup still waits for actual native family retirement. */
 export function observeCachePressure(report: typeof reportPressure): void { reportPressure = report }
-let native: { downloads: CacheGrant; metadata: CacheGrant } | undefined
+let native: { downloads: CacheGrant } | undefined
 /** Require explicit native grants; no ambient workspace path is a cache fallback. */
-export function cacheGrants(): { downloads: CacheGrant; metadata: CacheGrant } {
+export function cacheGrants(): { downloads: CacheGrant } {
   if (!native) native = {
     downloads: new CacheGrant(argument('cache-downloads'), Number(argument('cache-download-bytes')), () => reportPressure('downloads')),
-    metadata: new CacheGrant(argument('cache-metadata'), Number(argument('cache-metadata-bytes')), () => reportPressure('metadata')),
   }
   return native
-}
-/** Reconstructible metadata writers are the only upstream imports replaced by this boundary. */
-export function writeFileSafe(file: string, data: string): void {
-  const grant = cacheGrants().metadata
-  if (!grant.contains(file)) throw new Error('Metadata write is outside its native cache grant')
-  grant.write(file, data)
 }
 /** Feature-owned downloads to authored destinations retain upstream behavior outside cache storage. */
 export function cacheDownload(file: string, append: boolean, expected = 0): ReturnType<CacheGrant['download']> | undefined {
