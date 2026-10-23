@@ -30,7 +30,7 @@ function fixture() {
     extra: { retained: true },
     onSerialize: previousSerialize,
     add: (node) => {
-      node.id = 2;
+      node.id = String(Math.max(1, ...(graph._nodes ?? []).map((item) => Number(item.id))) + 1);
       graph._nodes?.push(node);
     },
     remove: (node) => {
@@ -96,6 +96,8 @@ test('the same override controls float in a native node with no connections', ()
   expect(node?.block_delete).toBe(true);
   const RegisteredNode = f.runtime.registerNodeType.mock.calls[0]?.[1];
   expect(RegisteredNode && new RegisteredNode().isVirtualNode).toBe(true);
+  const clone = node?.clone;
+  expect(typeof clone === 'function' ? clone.call(node) : 'missing').toBeNull();
   expect(f.root.closest('.sc-overrides-graph-content')).not.toBeNull();
   expect(f.surface.attach(f.root)).toBe(true);
   expect(f.graph._nodes).toHaveLength(2);
@@ -114,7 +116,10 @@ test('serialization saves only graph placement and retains executable nodes and 
   if (!node) throw new Error('Expected the presentation node');
   node.pos = [320, 480];
   node.size = [420, 180];
-  const data: UnknownRecord = { nodes: [{ id: 1 }, { id: 2 }], extra: { retained: true } };
+  const data: UnknownRecord = {
+    nodes: [{ id: 1 }, { id: 2, type: 'SugarCubes/GlobalOverrides' }],
+    extra: { retained: true },
+  };
   const serialize = f.graph.onSerialize;
   if (typeof serialize !== 'function') throw new Error('Expected serialization hook');
   serialize.call(f.graph, data);
@@ -197,7 +202,7 @@ test('keeps presentation nodes out of native removal history snapshots', () => {
   const snapshots: unknown[] = [];
   f.graph.remove = (node) => {
     const data: UnknownRecord = {
-      nodes: f.graph._nodes?.map((item) => ({ id: item.id })),
+      nodes: f.graph._nodes?.map((item) => ({ id: Number(item.id), type: item.type })),
       extra: {},
     };
     const serialize = f.graph.onSerialize;
@@ -206,6 +211,54 @@ test('keeps presentation nodes out of native removal history snapshots', () => {
     remove?.(node);
   };
   f.surface.detach();
-  expect(snapshots).toEqual([[{ id: 1 }]]);
+  expect(snapshots).toEqual([[{ id: 1, type: 'KSampler' }]]);
+  expect(f.graph.onSerialize).toBe(f.previousSerialize);
+});
+
+test('a saved workflow excludes the card when native serialization converts its string ID to a number', () => {
+  const f = fixture();
+  f.surface.attach(f.root);
+  const data: UnknownRecord = {
+    nodes: [
+      ...(f.graph._nodes ?? []).map((node) => ({ id: Number(node.id), type: node.type })),
+      { id: 99, type: 'SugarCubes/GlobalOverrides' },
+    ],
+  };
+  const serialize = f.graph.onSerialize;
+  if (typeof serialize !== 'function') throw new Error('Expected serialization hook');
+  serialize.call(f.graph, data);
+  expect(data.nodes).toEqual([{ id: 1, type: 'KSampler' }]);
+  f.surface.detach();
+});
+
+test('repairs persisted duplicate cards and removes later native copies while retaining the live controls', () => {
+  const f = fixture();
+  const stale: ComfyNode[] = [
+    { id: '2', type: 'SugarCubes/GlobalOverrides', pos: [200, 200] },
+    { id: '3', type: 'SugarCubes/GlobalOverrides', pos: [400, 200] },
+  ];
+  f.graph._nodes?.push(...stale);
+  f.surface.attach(f.root);
+  const managed = f.graph._nodes?.find((node) => node !== f.existing);
+  expect(f.graph._nodes).toEqual([f.existing, managed]);
+  expect(stale.some((node) => f.graph._nodes?.includes(node))).toBe(false);
+  f.graph._nodes?.push({ id: '99', type: 'SugarCubes/GlobalOverrides' });
+  f.surface.reconcile();
+  const slot = document.createElement('div');
+  document.body.append(slot);
+  f.surface.showInMasonry(f.root, slot);
+  f.surface.showInMasonry(f.root, slot);
+  expect(f.graph._nodes).toEqual([f.existing, managed]);
+  expect(slot.querySelector('input')).toBe(f.input);
+  f.surface.attach(f.root);
+  expect(f.graph._nodes).toEqual([f.existing, managed]);
+  f.surface.detach();
+});
+
+test('removes restored presentation nodes when Plugin Mode is disabled without deleting workflow nodes', () => {
+  const f = fixture();
+  f.graph._nodes?.push({ id: '2', type: 'SugarCubes/GlobalOverrides' });
+  f.surface.detach();
+  expect(f.graph._nodes).toEqual([f.existing]);
   expect(f.graph.onSerialize).toBe(f.previousSerialize);
 });

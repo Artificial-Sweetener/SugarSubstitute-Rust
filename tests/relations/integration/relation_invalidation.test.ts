@@ -21,7 +21,7 @@ import { RelationHostLifecycle } from '../../../frontend/comfyui/ui/relations/Re
 import { NativeRelationInventory } from '../../../frontend/comfyui/ui/relations/infrastructure/NativeRelationInventory.js';
 import { CubeRelationPresenter } from '../../../frontend/comfyui/ui/relations/presentation/CubeRelationPresenter.js';
 import { refreshNativeNodeCards } from '../../../frontend/comfyui/ui/surface/NativeNodeCardRefresh.js';
-import type { ComfyGraph } from '../../../frontend/comfyui/ui/types/graph.js';
+import type { ComfyGraph, ComfyNode } from '../../../frontend/comfyui/ui/types/graph.js';
 import type { ObservableNativeSubgraph } from '../../../frontend/comfyui/ui/surface/NativeSubgraphChangeObserver.js';
 import { emptyRelationState } from '../../../frontend/comfyui/ui/relations/domain/RelationContracts.js';
 
@@ -36,6 +36,42 @@ async function settle(): Promise<void> {
   await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
   for (let index = 0; index < 6; index++) await Promise.resolve();
 }
+
+test('workflow restoration and native additions retire stale override cards before field discovery', async () => {
+  const sampler: ComfyNode = { id: '1', type: 'KSampler' };
+  const graph: ComfyGraph = {
+    _nodes: [sampler],
+    extra: {},
+    add: (node) => graph._nodes?.push(node),
+    remove: (node) => {
+      graph._nodes = graph._nodes?.filter((item) => item !== node) ?? [];
+    },
+  };
+  const errors = jest.fn();
+  const host = new RelationHostLifecycle({
+    seeds: new WorkflowSeedHistory(),
+    sessions: new WorkflowSessionStore(),
+    app: { graph },
+    document,
+    logger: console,
+    reportError: errors,
+    getCardState: () => null,
+  });
+  try {
+    host.setup();
+    await settle();
+    host.beforeConfigureGraph();
+    graph._nodes = [sampler, { id: '2', type: 'SugarCubes/GlobalOverrides' }];
+    host.afterConfigureGraph();
+    expect(graph._nodes).toEqual([sampler]);
+    graph.add?.({ id: '3', type: 'SugarCubes/GlobalOverrides' });
+    await settle();
+    expect(graph._nodes).toEqual([sampler]);
+    expect(errors).not.toHaveBeenCalled();
+  } finally {
+    host.dispose();
+  }
+});
 
 test('blocks queued discovery and DOM value refresh throughout graph restoration', async () => {
   const inventory = jest.spyOn(NativeRelationInventory.prototype, 'read');

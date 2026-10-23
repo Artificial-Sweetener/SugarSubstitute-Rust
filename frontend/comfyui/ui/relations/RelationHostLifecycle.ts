@@ -316,6 +316,7 @@ export class RelationHostLifecycle {
 
   /** Observe topology changes independently from the currently active graph or masonry surface. */
   #observeGraphs(): void {
+    this.#overrideGraph.reconcile();
     const active = new Set<ComfyGraph>();
     const visit = (graph: ComfyGraph | null | undefined): void => {
       if (!graph || active.has(graph)) return;

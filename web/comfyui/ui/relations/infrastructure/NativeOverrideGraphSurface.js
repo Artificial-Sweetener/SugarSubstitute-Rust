@@ -17,7 +17,7 @@
 import { isRecord } from '../../types/common.js';
 import { identifyMasonrySupplement, releaseMasonrySupplement, } from '../../surface/masonry/MasonrySupplementBoundary.js';
 import { relocateControl } from '../../core/ControlPlacement.js';
-import { createNativeOverrideGraphNode, } from './NativeOverrideGraphNode.js';
+import { createNativeOverrideGraphNode, isNativeOverrideGraphNode, } from './NativeOverrideGraphNode.js';
 import { captureOverrideGraphLayout, readOverrideGraphLayout, writeOverrideGraphLayout, } from './OverrideGraphLayout.js';
 /** Delegate pan, zoom, movement and DOM-widget lifetime to Comfy's graph renderer. */
 export class NativeOverrideGraphSurface {
@@ -69,6 +69,7 @@ export class NativeOverrideGraphSurface {
         identifyMasonrySupplement(root, content, 'plugin:global-overrides');
         this.#previousSerialize = graph.onSerialize;
         graph.onSerialize = this.#serialize;
+        this.#removeStaleNodes(graph, node);
         relocateControl(root, content);
         root.dataset.scOverridesGraph = '';
         root.style.maxWidth = '100%';
@@ -109,9 +110,13 @@ export class NativeOverrideGraphSurface {
                 this.#root.remove();
             if (graph._nodes?.includes(node))
                 graph.remove?.(node);
+            this.#removeStaleNodes(graph, null);
             if (graph.onSerialize === this.#serialize)
                 graph.onSerialize = this.#previousSerialize;
         }
+        const current = this.application()?.graph;
+        if (current && current !== graph)
+            this.#removeStaleNodes(current, null);
         this.#content?.remove();
         this.#graph = null;
         this.#node = null;
@@ -123,16 +128,29 @@ export class NativeOverrideGraphSurface {
     beforeConfigureGraph() {
         this.detach();
     }
+    /** Reconcile restored or pasted cards only when the workflow topology changes. */
+    reconcile() {
+        const graph = this.application()?.graph;
+        if (graph)
+            this.#removeStaleNodes(graph, graph === this.#graph ? this.#node : null);
+    }
     /** Retain earlier serialization hooks and keep this presentation node out of saved executable data. */
     #serialize = (data) => {
         if (typeof this.#previousSerialize === 'function')
             this.#previousSerialize.call(this.#graph, data);
-        if (!isRecord(data) || !this.#node)
+        if (!isRecord(data))
             return;
         if (Array.isArray(data.nodes))
-            data.nodes = data.nodes.filter((node) => !isRecord(node) || node.id !== this.#node?.id);
-        data.extra = writeOverrideGraphLayout(data.extra, captureOverrideGraphLayout(this.#node));
+            data.nodes = data.nodes.filter((node) => !isNativeOverrideGraphNode(node));
+        if (this.#node)
+            data.extra = writeOverrideGraphLayout(data.extra, captureOverrideGraphLayout(this.#node));
     };
+    /** Repair restored or pasted presentation copies while preserving the authoritative live card. */
+    #removeStaleNodes(graph, live) {
+        for (const node of [...(graph._nodes ?? [])])
+            if (node !== live && isNativeOverrideGraphNode(node))
+                graph.remove?.(node);
+    }
     /** Size the native DOM widget from unscaled content dimensions without following graph zoom. */
     #resize() {
         const root = this.#root, node = this.#node;
