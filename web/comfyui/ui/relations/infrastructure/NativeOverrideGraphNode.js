@@ -16,6 +16,11 @@
 /** Adapt Comfy's native virtual-node and DOM-widget capabilities for the existing override card. */
 import { isRecord } from '../../types/common.js';
 const constructors = new WeakMap();
+const OVERRIDE_NODE_TYPE = 'SugarCubes/GlobalOverrides';
+/** Recognize live and serialized cards independently of the host's numeric ID conversion. */
+export function isNativeOverrideGraphNode(value) {
+    return isRecord(value) && value.type === OVERRIDE_NODE_TYPE;
+}
 /** Construct a registered frontend-only node so both native renderers recognize its virtual identity. */
 export function createNativeOverrideGraphNode(runtime, content, height) {
     const Constructor = overrideConstructor(runtime);
@@ -48,7 +53,7 @@ function overrideConstructor(runtime) {
         /** Keep every native instance virtual and singular, including host duplication attempts. */
         constructor() {
             super('Global Overrides');
-            this.type = 'SugarCubes/GlobalOverrides';
+            this.type = OVERRIDE_NODE_TYPE;
             this.isVirtualNode = true;
             this.sugarcubesPresentationOnly = true;
             this.inputs = [];
@@ -59,8 +64,12 @@ function overrideConstructor(runtime) {
             Object.defineProperty(this, 'collapsible', { value: false, configurable: true });
             this.collapse = preventCollapse;
         }
+        /** Refuse native clone paths that bypass the canvas clonable affordance. */
+        clone() {
+            return null;
+        }
     }
-    runtime.registerNodeType.call(runtime, 'SugarCubes/GlobalOverrides', GlobalOverridesNode);
+    runtime.registerNodeType.call(runtime, OVERRIDE_NODE_TYPE, GlobalOverridesNode);
     constructors.set(runtime, GlobalOverridesNode);
     return GlobalOverridesNode;
 }
