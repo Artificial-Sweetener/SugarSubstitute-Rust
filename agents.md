@@ -172,17 +172,27 @@ Engineering priority is maintainability, clear architecture, behavior safety dur
 
 ## Tooling and Verification
 
-- Run `npm run check` before reporting success.
+- Run `npm run check:changed` before reporting success for local work. It selects quality profiles and behavioral proofs from the same authoritative ownership and consumer subscriptions.
 - `npm run check` is the non-mutating repository quality gate. It runs strict TypeScript checking, strict mypy checking, formatting validation, linting, standards audits, architecture governance, automated tests, and build-output verification.
 - Use `npm run format` only to apply formatting. Validation and CI use `npm run format:check` and must not rewrite source.
 - Run `npm run architecture` for the worktree and `npm run architecture:staged` for the exact Git index.
-- Run `npm run check:commit` for the complete commit-ready repository gate. CI runs the same command and rejects tracked-file mutation.
+- Run `npm run check:staged` (also `check:commit`) for the exact Git-index source and policy snapshot. CI runs the complete `npm run check` gate and rejects tracked-file mutation.
 - The quality gate must remain green for completed changes unless an explicit blocker is reported.
 - Author frontend TypeScript and static inputs under `frontend`; treat `web` as the compiler-owned ComfyUI deployment tree.
 - Keep TypeScript source and generated browser JavaScript synchronized through the repository build; never hand-reconcile generated output.
 - Copyright headers must be maintained with `python tools/add_license_headers.py`.
 - Import ComfyUI core modules (`/scripts/app.js`, `/scripts/ui.js`, `/scripts/api.js`) via absolute `/scripts/...` paths to avoid extension-relative 404s.
 - Keep test-runner mappings aligned with any `/scripts/...` imports used by frontend modules.
+
+## Editor Integration Development
+
+- `integrations/contracts` owns portable schemas and values; `integrations/shared` owns reusable adapter mechanics; `integrations/<editor>` owns that editor's native translation and package.
+- Follow `integrations/AGENTS.md` and the editor's nested instructions. Register new hosts in architecture, test, and quality policy before adding runtime behavior.
+- Shared integration code must remain independent of ComfyUI, browser, Node, and native editor APIs. Compiler configurations and architecture audits enforce the dependency direction, including resolved imports and CommonJS access.
+- Photoshop runtime uses its own compiler and lint environment. Keep UXP and Photoshop declarations out of other runtime environments.
+- `QUALITY_POLICY.toml` maps affected test areas to validation-only check profiles. Unknown runtime paths fail; shared tooling and repository configuration expand validation through `TEST_POLICY.toml`.
+- `npm run check:changed -- --plan` explains local selection. Photoshop profiles run for Photoshop, shared integration, and declared shared tooling changes; unrelated product and ComfyUI build changes retain their existing proofs.
+- Build products, packages, local paths, and development diagnostics are ignored. Author source and static inputs; generate editor packages through their declared build owner.
 
 ## Testing Policy
 
@@ -206,8 +216,8 @@ Engineering priority is maintainability, clear architecture, behavior safety dur
 
 - `TEST_POLICY.toml` maps every authored production path to exactly one behavioral area, declares its proof groups and public boundaries, and records consumer subscriptions to those boundaries.
 - Run `npm run test:list` to discover supported area/proof targets. Run `npm run test:explain -- <path>` to see the exact owner and subscription rules for a path. Run `npm run test:run -- <area> [proof]` for direct iteration without private test node IDs.
-- End behavioral work with `npm run test:changed`. It selects policy-required proofs from staged, unstaged, and untracked worktree paths and prints the reason for every selected group.
-- Before committing runtime or test work, stage the intended snapshot and run `npm run test:commit`. The staged commit selector validates architecture from the same index and expands an affected SugarCubes area to the complete product suite.
+- End behavioral work with `npm run check:changed`, which includes policy-required proofs from staged, unstaged, and untracked paths and explains every selected group. `npm run test:changed` provides the same proof selection during iteration. A passing full `npm run check` satisfies these checks when full validation is required.
+- Before committing runtime or test work, stage the intended snapshot and run `npm run check:staged`. `npm run test:commit` runs only the policy-selected proofs against that same exact index snapshot.
 - Use `npm run test:staged` for focused staged proof and `npm run test:isolated` to run every proof group in a fresh test process when diagnosing shared-state or order dependence.
 - Direct pytest or Jest commands are appropriate for diagnosis and rapid iteration. They do not replace the policy-selected changed or staged command.
 - A changed runtime path must map to exactly one behavioral owner and may never silently select zero tests. Public-boundary changes select the owner's proofs and every declared consumer subscription.
@@ -217,10 +227,10 @@ Engineering priority is maintainability, clear architecture, behavior safety dur
 ## Verification Workflow
 
 - Run focused checks during implementation, preferably through `npm run test:run -- <area> [proof]`.
-- Run `npm run test:changed` before ending a behavioral work turn; do not claim coverage from a manually narrowed command alone.
+- Complete policy-selected proof before ending a behavioral work turn; do not claim coverage from a manually narrowed command alone.
 - Verify the specific reported behavior directly when feasible; do not declare a UI or interaction issue fixed from code inspection alone.
 - Record which Nodes renderer and browser combinations were manually observed for applicable web changes; Nodes 1.0 and Nodes 2.0 in both Chrome and Firefox are the required matrix unless the change is demonstrably browser- or renderer-independent.
-- Run the full repository gate before reporting completion.
+- Complete the selected local quality gate before reporting completion. Run the full repository gate for changes to selection/governance machinery and whenever unresolved impact requires broader validation; CI always runs the full gate.
 - Distinguish observed results from inferred results in progress updates and completion reports.
 - Do not introduce new lint, format, or test failures in modified files.
 - Do not report completion if any blocking gate fails.
@@ -238,7 +248,7 @@ Engineering priority is maintainability, clear architecture, behavior safety dur
 - Required docstrings are present and meaningful.
 - Logging and error handling are actionable.
 - Applicable verification is complete.
-- `npm run check` passes before completion is reported unless an explicit blocker is documented.
+- The applicable selected quality gate passes before completion is reported unless an explicit blocker is documented. Full-gate results are required when quality-selection machinery changes.
 
 ## Commit Policy
 

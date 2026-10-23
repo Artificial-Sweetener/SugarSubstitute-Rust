@@ -23,7 +23,7 @@ from pathlib import Path, PurePosixPath
 from tools.architecture.registry import load_policy
 from tools.architecture.scanner import source_paths, visible_repository_paths
 
-from .model import SelectionReason, TestGroup, TestPolicy, TestSelection
+from .model import SelectionReason, TestGroup, TestPolicy, TestSelection, matches_path
 
 
 class TestSelectionError(ValueError):
@@ -31,7 +31,20 @@ class TestSelectionError(ValueError):
 
 
 _RUNTIME_EXTENSIONS = frozenset(
-    {".py", ".pyi", ".ts", ".tsx", ".js", ".json", ".toml", ".yml", ".yaml"}
+    {
+        ".py",
+        ".pyi",
+        ".ts",
+        ".tsx",
+        ".js",
+        ".json",
+        ".toml",
+        ".yml",
+        ".yaml",
+        ".html",
+        ".css",
+        ".svg",
+    }
 )
 
 
@@ -92,8 +105,6 @@ def validate_inventory(root: Path, policy: TestPolicy) -> None:
 def select_paths(
     policy: TestPolicy,
     paths: tuple[str, ...],
-    *,
-    commit: bool = False,
 ) -> TestSelection:
     """Select deterministic proof groups for changed repository paths."""
 
@@ -107,17 +118,6 @@ def select_paths(
         for group, reason in groups:
             selected.add(group)
             reasons.append(SelectionReason(path=path, group=group, reason=reason))
-    if commit and selected:
-        for group in policy.groups:
-            if group not in selected:
-                reasons.append(
-                    SelectionReason(
-                        path="<commit>",
-                        group=group,
-                        reason="commit mode expands the affected SugarCubes product",
-                    )
-                )
-        selected = set(policy.groups)
     return TestSelection(
         groups=tuple(sorted(selected)),
         reasons=tuple(
@@ -131,6 +131,12 @@ def _groups_for_path(
     path: str,
 ) -> tuple[tuple[TestGroup, str], ...]:
     """Return direct and subscribed proof groups for one changed path."""
+
+    if any(matches_path(path, pattern) for pattern in policy.full_suite_sources):
+        return tuple(
+            (group, "changed shared tooling or repository configuration")
+            for group in policy.groups
+        )
 
     test_prefix = f"{policy.test_root}/"
     if path.startswith(test_prefix):
@@ -210,8 +216,8 @@ def changed_paths(root: Path, *, staged: bool) -> tuple[str, ...]:
     """Return normalized staged or complete worktree changes from Git."""
 
     if staged:
-        return _git_paths(root, "diff", "--cached", "--name-only", "-z")
-    tracked = _git_paths(root, "diff", "HEAD", "--name-only", "-z")
+        return _git_paths(root, "diff", "--cached", "--no-renames", "--name-only", "-z")
+    tracked = _git_paths(root, "diff", "HEAD", "--no-renames", "--name-only", "-z")
     untracked = _git_paths(root, "ls-files", "--others", "--exclude-standard", "-z")
     return tuple(sorted(set(tracked) | set(untracked)))
 

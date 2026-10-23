@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": ["node", "jest"],
+    "paths": {},
+    "jsx": "preserve"
+  },
+  "include": [
+    "scripts/integrations/**/*",
+    "scripts/photoshop/**/*",
+    "tests/editor_integrations/**/*",
+    "tests/photoshop/**/*"
+  ],
+  "exclude": []
+}

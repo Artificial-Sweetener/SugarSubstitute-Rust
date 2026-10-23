@@ -38,6 +38,7 @@ from .scanner import (
 from .snapshot import SnapshotError, repository_snapshot
 from .system_git_policy import scan_system_git_dependencies
 from .browser_ui_policy import scan_browser_ui
+from .integration_policy import scan_integrations
 
 POLICY_PATH = "ARCHITECTURE_POLICY.toml"
 DEBT_PATH = "ARCHITECTURE_DEBT.toml"
@@ -82,6 +83,7 @@ def _check_snapshot(
     structure, metrics = scan_structure(root, policy, paths)
     dependencies = scan_dependencies(root, policy, paths)
     system_git = scan_system_git_dependencies(root)
+    integrations = scan_integrations(root, tooling_root, paths, policy.integrations)
     browser_ui = scan_browser_ui(
         root,
         tooling_root,
@@ -99,7 +101,7 @@ def _check_snapshot(
         today=today,
     )
     waived, waiver_usage = _apply_waivers(
-        diagnostics=structure + dependencies + system_git + browser_ui,
+        diagnostics=structure + dependencies + system_git + browser_ui + integrations,
         waivers=waivers,
     )
     unused = tuple(

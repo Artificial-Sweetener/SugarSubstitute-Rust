@@ -11,3 +11,9 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 coverage/
+*.ccx
+*.tsbuildinfo
+/integrations/*/*.local.json
+.env.local
+.env.*.local
+/artifacts/integrations/local/

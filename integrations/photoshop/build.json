@@ -1,0 +1,6 @@
+{
+  "entry": "src/index.ts",
+  "static": "static",
+  "output": "build/photoshop",
+  "target": "es2022"
+}

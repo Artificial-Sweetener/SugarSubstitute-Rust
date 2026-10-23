@@ -38,9 +38,11 @@ def test_check_script_uses_validation_only_formatters() -> None:
     assert "prettier --check" in scripts["format:check"]
     assert "--write" not in scripts["check"]
     assert "prettier --write" in scripts["format"]
-    assert scripts["check:commit"] == "npm run check"
+    assert scripts["check:commit"] == "npm run check:staged"
+    assert scripts["check:changed"] == "python -m tools.quality changed"
+    assert scripts["check:staged"] == "python -m tools.quality staged"
     assert scripts["test:changed"] == "python -m tools.test changed"
-    assert scripts["test:commit"] == "python -m tools.test staged --commit"
+    assert scripts["test:commit"] == "python -m tools.test staged"
     assert scripts["test:isolated"] == "python -m tools.test isolated"
     assert scripts["test:all"] == "python -m tools.test all"
     assert "npm run test:all" in scripts["check"]

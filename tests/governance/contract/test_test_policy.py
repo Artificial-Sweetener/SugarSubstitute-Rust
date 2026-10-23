@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import subprocess
+from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
@@ -146,10 +147,7 @@ def test_windows_and_posix_paths_select_identical_groups(policy: _TestPolicy) ->
     windows = select_paths(policy, (r".github\workflows\quality.yml",))
 
     assert windows.groups == posix.groups
-    assert {group.name for group in posix.groups} == {
-        "governance/contract",
-        "governance/unit",
-    }
+    assert posix.groups == tuple(sorted(policy.groups))
 
 
 def test_generated_browser_output_selects_its_authored_owner(
@@ -248,18 +246,18 @@ def test_ambiguous_runtime_path_fails_closed(policy: _TestPolicy) -> None:
         select_paths(ambiguous, ("sugarcubes/cube_model/schema.py",))
 
 
-def test_commit_mode_expands_an_affected_product_completely(
+def test_local_selection_keeps_an_affected_product_scoped(
     policy: _TestPolicy,
 ) -> None:
-    """Expand a runtime impact to every SugarCubes proof before commit."""
+    """Keep ordinary changes scoped while preserving declared consumer proof."""
 
     selection = select_paths(
         policy,
         ("frontend/comfyui/ui/graph/DirtyManager.ts",),
-        commit=True,
     )
 
-    assert selection.groups == tuple(sorted(policy.groups))
+    assert selection.groups != tuple(sorted(policy.groups))
+    assert "photoshop" not in {group.area for group in selection.groups}
 
 
 def test_staged_path_query_reads_exact_git_index(tmp_path: Path) -> None:
@@ -303,7 +301,9 @@ def test_isolated_gate_runs_each_group_in_a_fresh_process(
         )
     commands: list[tuple[str, ...]] = []
 
-    def capture(_root: Path, command: list[str]) -> int:
+    def capture(
+        _root: Path, command: list[str], *, environment: Mapping[str, str] | None = None
+    ) -> int:
         """Capture one isolated subprocess command."""
 
         commands.append(tuple(command))

@@ -1,5 +1,13 @@
 schema = 1
 test_root = "tests"
+full_suite_sources = [
+  "package.json", "package-lock.json", "TEST_POLICY.toml", "QUALITY_POLICY.toml",
+  "ARCHITECTURE_*.toml", "tools/architecture/**", "tools/testing/**", "tools/quality/**",
+  "tools/test.py", "jest.config.json", "tsconfig.json", "tsconfig.tests.json", ".eslintrc.json",
+  ".github/workflows/**",
+  ".gitignore", ".gitattributes", ".prettierrc.json",
+  "scripts/standards-audit.ts", "tools/add_license_headers.py",
+]
 
 [[area]]
 name = "output_saving"
@@ -33,7 +41,9 @@ proofs = ["unit", "contract", "integration"]
 name = "governance"
 sources = [
   "__init__.py",
-  "scripts/**",
+  "scripts/*.ts",
+  "scripts/*.py",
+  "scripts/dependencies/**",
   "tools/**",
   "third_party/**",
   "web/third_party/**",
@@ -48,9 +58,15 @@ sources = [
   "pyproject.toml",
   "requirements.txt",
   "jest.config.json",
-  "tsconfig*.json",
+  "tsconfig.json", "tsconfig.web.json", "tsconfig.tests.json", "tsconfig.output-canvas-tests.json",
   "ARCHITECTURE_*.toml",
   "TEST_POLICY.toml",
+  "QUALITY_POLICY.toml",
+  "agents.md",
+  ".gitignore",
+  ".gitattributes",
+  ".eslintrc.json",
+  ".prettierrc.json",
   "artifacts/phase6-acceptance/**",
   "artifacts/recipe-compatibility/**",
   ".github/workflows/**",
@@ -536,3 +552,21 @@ groups = ["surface/integration", "frontend_core/integration"]
 name = "prompt_editor"
 sources = ["frontend/sugarprompt/**", "frontend/comfyui/ui/prompt_editor/**", "web/sugarprompt/**", "web/comfyui/ui/prompt_editor/**"]
 proofs = ["unit", "contract", "integration"]
+
+[[area]]
+name = "editor_integrations"
+sources = ["integrations/AGENTS.md", "integrations/.eslintrc.json", "integrations/contracts/**", "integrations/shared/**", "scripts/integrations/**", "tsconfig.integrations.json", "tsconfig.integration-tools.json"]
+proofs = ["contract"]
+
+[[area]]
+name = "photoshop"
+sources = ["integrations/photoshop/**", "scripts/photoshop/**", "tsconfig.photoshop.json"]
+proofs = ["contract"]
+
+[[boundary]]
+name = "editor_adapter_contract"
+area = "editor_integrations"
+
+[[subscription]]
+boundary = "editor_adapter_contract"
+groups = ["photoshop/contract"]

@@ -24,7 +24,6 @@ from pathlib import Path
 
 from tools.architecture.checker import check_repository
 from tools.architecture.model import Diagnostic
-from tools.architecture.snapshot import repository_snapshot
 from tools.testing.model import SelectionReason, TestGroup, TestPolicy, TestSelection
 from tools.testing.policy import TestPolicyError, load_test_policy
 from tools.testing.runner import run_isolated_groups, run_selection
@@ -34,6 +33,7 @@ from tools.testing.selection import (
     select_paths,
     validate_inventory,
 )
+from tools.quality.__main__ import main as quality_main
 
 POLICY_PATH = "TEST_POLICY.toml"
 
@@ -59,10 +59,7 @@ def _parser() -> argparse.ArgumentParser:
         help="run every proof group in a fresh test process",
     )
     subparsers.add_parser("changed", help="run proofs selected by worktree changes")
-    staged = subparsers.add_parser(
-        "staged", help="run proofs selected by the Git index"
-    )
-    staged.add_argument("--commit", action="store_true")
+    subparsers.add_parser("staged", help="run proofs selected by the Git index")
     return parser
 
 
@@ -71,12 +68,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     args = _parser().parse_args(list(argv) if argv is not None else None)
     root = Path(__file__).resolve().parents[1]
-    staged = args.command == "staged"
+    if args.command == "staged":
+        return quality_main(("staged", "--tests-only"))
     try:
-        with repository_snapshot(root, staged=staged) as policy_root:
-            policy = load_test_policy(policy_root / POLICY_PATH)
-            validate_inventory(policy_root, policy)
-        architecture = check_repository(root, staged=staged)
+        policy = load_test_policy(root / POLICY_PATH)
+        validate_inventory(root, policy)
+        architecture = check_repository(root)
         _render_architecture(architecture.diagnostics)
         if not architecture.succeeded:
             return 1
@@ -110,15 +107,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "run":
             selection = _explicit_selection(policy, args.area, args.proof)
         else:
-            paths = changed_paths(root, staged=staged)
-            if staged and not paths:
-                raise TestSelectionError(
-                    "staged gate requires at least one staged path"
-                )
+            paths = changed_paths(root, staged=False)
             selection = select_paths(
                 policy,
                 paths,
-                commit=bool(getattr(args, "commit", False)),
             )
         _render_selection(selection)
         if not selection.groups:

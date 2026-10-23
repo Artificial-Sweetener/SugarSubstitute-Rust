@@ -93,6 +93,7 @@ class TestPolicy:
     areas: tuple[TestArea, ...]
     boundaries: tuple[PublicBoundary, ...]
     subscriptions: tuple[ContractSubscription, ...]
+    full_suite_sources: tuple[str, ...] = ()
 
     @property
     def groups(self) -> tuple[TestGroup, ...]:

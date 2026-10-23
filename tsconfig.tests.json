@@ -8,5 +8,11 @@
     "noUnusedParameters": false
   },
   "include": ["frontend/**/*.ts", "tests/**/*.ts", "types/**/*.d.ts"],
-  "exclude": ["scripts"]
+  "exclude": [
+    "scripts",
+    "scripts/integrations",
+    "scripts/photoshop",
+    "tests/editor_integrations",
+    "tests/photoshop"
+  ]
 }

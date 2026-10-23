@@ -209,67 +209,67 @@ modifications = "None; SVG files copied verbatim."
 source_path = "assets/App Generic/SVG/ic_fluent_app_generic_20_regular.svg"
 vendored_file = "frontend/static/icons/node/app-generic.svg"
 runtime_file = "web/icons/node/app-generic.svg"
-sha256 = "b37ef4e4acb7d92f479ab06cb76077f09e0a0cfccd02679ae55e774741fd92ad"
+sha256 = "63a1ebd8a6ebb1b395f6979e7ca391a5bc7fa52de84e7135f7f64fa3827e2abe"
 
 [[component.asset]]
 source_path = "assets/Edit/SVG/ic_fluent_edit_20_regular.svg"
 vendored_file = "frontend/static/icons/node/edit.svg"
 runtime_file = "web/icons/node/edit.svg"
-sha256 = "4ae9e650d5b7c45cb481466b4817215bde363b84edd2a7ad34ac905da2bf0fc3"
+sha256 = "f14fdc76c0e3953d273e99394e724003bebd8779a55e30df6130455841f237c6"
 
 [[component.asset]]
 source_path = "assets/Eraser/SVG/ic_fluent_eraser_20_regular.svg"
 vendored_file = "frontend/static/icons/node/eraser.svg"
 runtime_file = "web/icons/node/eraser.svg"
-sha256 = "82dffc4b2394fd53138ba32d249c41bdcad459d662c32a444357ab40541cb592"
+sha256 = "8e416de6d847eebb2dc8409f5610585ef418658596ffe56cf03d2a488e1bbc3d"
 
 [[component.asset]]
 source_path = "assets/Folder/SVG/ic_fluent_folder_20_regular.svg"
 vendored_file = "frontend/static/icons/node/folder.svg"
 runtime_file = "web/icons/node/folder.svg"
-sha256 = "1c2980b77954a81cfd8b669a758063df74193c6fcb8e002effb684909fd74755"
+sha256 = "7fb7fb2567a518b9e09997c9ddd4588a78c9e02fd1c3e2bb714efa7798a2e560"
 
 [[component.asset]]
 source_path = "assets/Brain Circuit/SVG/ic_fluent_brain_circuit_20_regular.svg"
 vendored_file = "frontend/static/icons/node/brain-circuit.svg"
 runtime_file = "web/icons/node/brain-circuit.svg"
-sha256 = "001b1ef1ba11f7913bf8cfb79a26f1aa084c01de08d32b9c35d700c934538f18"
+sha256 = "926bbcb22a4e9545f912a9c7d5f94a37560cc4e515af5088826c464f6b9d3cd7"
 
 [[component.asset]]
 source_path = "assets/Color/SVG/ic_fluent_color_20_regular.svg"
 vendored_file = "frontend/static/icons/node/color.svg"
 runtime_file = "web/icons/node/color.svg"
-sha256 = "01aebdb4cf92c2d2cb6e7f6612e0a98949574d3a2beb0d8f4190d6c03fec13b7"
+sha256 = "f81c97c46b9f0055d04e288ddb7290648b25b546e3709dc99dd171adae7f0b3c"
 
 [[component.asset]]
 source_path = "assets/Image/SVG/ic_fluent_image_20_regular.svg"
 vendored_file = "frontend/static/icons/node/image.svg"
 runtime_file = "web/icons/node/image.svg"
-sha256 = "a29ba9e4ab5e24d3d4869fb52893154a48ba8f1de3636da0a17bb9e56f3a648b"
+sha256 = "3a0db668b30da746f0bf6805c9c95debf35d1180aa3e7033b9409898f7e3c876"
 
 [[component.asset]]
 source_path = "assets/Board/SVG/ic_fluent_board_20_regular.svg"
 vendored_file = "frontend/static/icons/view/board.svg"
 runtime_file = "web/icons/view/board.svg"
-sha256 = "de5d2b4836512c173e96b839dad65cc5eb7a01e2f2022223cedb8210c5c84771"
+sha256 = "2c5d82fbb94de4e543c6cb135f365fa83d854f20b4825a188f56488ab673215a"
 
 [[component.asset]]
 source_path = "assets/Flowchart/SVG/ic_fluent_flowchart_20_regular.svg"
 vendored_file = "frontend/static/icons/view/flowchart.svg"
 runtime_file = "web/icons/view/flowchart.svg"
-sha256 = "9a4f35ecfa1942229dfb9775913bf695cc8a2af2b8ec6789a7bec7513d001ffe"
+sha256 = "883d49055c5ca780026385788ca1ddaeb2818d0c08af53c680aff2a6f42354e3"
 
 [[component.asset]]
 source_path = "assets/Add/SVG/ic_fluent_add_20_regular.svg"
 vendored_file = "frontend/static/icons/seed/add.svg"
 runtime_file = "web/icons/seed/add.svg"
-sha256 = "681eeefb05a98a2cd10afa2e3a8ebc3e5490266f3dbaced884ab2fa3a4ffcde5"
+sha256 = "fdf9fefaf083ff2349ac94afd47aab8ecb554650781c5797176b9d6ad3caee05"
 
 [[component.asset]]
 source_path = "assets/Subtract/SVG/ic_fluent_subtract_20_regular.svg"
 vendored_file = "frontend/static/icons/seed/subtract.svg"
 runtime_file = "web/icons/seed/subtract.svg"
-sha256 = "cb2825b8c04cf792c55bd9c0cd37a0a15d5bc9e708127195acb2d2bdae76b190"
+sha256 = "cdba492b0fe35494b23b8b0934a9b38af3b52058852777d4820ee8ced991c24f"
 
 [[component.asset]]
 source_path = "assets/Arrow Counterclockwise/SVG/ic_fluent_arrow_counterclockwise_20_regular.svg"
@@ -281,32 +281,32 @@ sha256 = "34f7c4fe968e48e2bab176b5e4d9feb8247ace5b9d532a1954501b2e0dc46d0f"
 source_path = "assets/Arrow Circle Up Sparkle/SVG/ic_fluent_arrow_circle_up_sparkle_20_regular.svg"
 vendored_file = "frontend/static/icons/model/update.svg"
 runtime_file = "web/icons/model/update.svg"
-sha256 = "97f129c2939d54e04b46e573fbe7f290b36900b7fffdf45c547a57723c6b848a"
+sha256 = "00ec9e6f8c2ab76f4fe3df7b53bc9474ee8da700a32ba3b57422a7fab7bf3062"
 
 
 [[component.asset]]
 source_path = "assets/Globe/SVG/ic_fluent_globe_20_regular.svg"
 vendored_file = "frontend/static/icons/model/globe.svg"
 runtime_file = "web/icons/model/globe.svg"
-sha256 = "cc981a685e7dfe6eb0b7a9234ed7b9d5f40a4df7a5b2476448dd0842451ea52c"
+sha256 = "54c4387778893c6b6f4c8c8715f89b4eb05b7395329de96856f932c15f4b4281"
 
 [[component.asset]]
 source_path = "assets/Arrow Download/SVG/ic_fluent_arrow_download_20_regular.svg"
 vendored_file = "frontend/static/icons/model/download.svg"
 runtime_file = "web/icons/model/download.svg"
-sha256 = "003fde5a3b8a229c5a51dbe04bfb30f98b52e1d769d13c44e542b22123d5c1e1"
+sha256 = "28e752ccfd95feb1850de1da3d170f34fd31765417d3431a7dbf3da89840ea33"
 
 [[component.asset]]
 source_path = "assets/Key/SVG/ic_fluent_key_20_regular.svg"
 vendored_file = "frontend/static/icons/model/key.svg"
 runtime_file = "web/icons/model/key.svg"
-sha256 = "7977d3963b316b2ad7cf397dc81de65ffeb8d7adc46fd210eb0b5114943f8deb"
+sha256 = "667b3bf0c2b407343d1d8f1075ccc995c7fb13dc4fe2e236c128e9d950231fee"
 
 [[component.asset]]
 source_path = "assets/Eye/SVG/ic_fluent_eye_20_regular.svg"
 vendored_file = "frontend/static/icons/model/eye.svg"
 runtime_file = "web/icons/model/eye.svg"
-sha256 = "0dc2a3cd24b2bd3f85a85e349bad9b2851d15aac29ba3c0926312c3d2aee0b43"
+sha256 = "3fedb211bdbd5d47c9d1e2a820fe73ffd0067ebf555ed8fe435033a09d0d2d1d"
 
 [[component.asset]]
 source_path = "assets/Eye Off/SVG/ic_fluent_eye_off_20_regular.svg"
@@ -350,13 +350,13 @@ modifications = "None; SVG files copied verbatim."
 source_path = "assets/Game die/High Contrast/game_die_high_contrast.svg"
 vendored_file = "frontend/static/icons/seed/game-die.svg"
 runtime_file = "web/icons/seed/game-die.svg"
-sha256 = "c3dc9dd557318492b9888501da0a111a5db68dbe5f9ef4a7fce220661a1bd855"
+sha256 = "cdd15c54142a961a8e982ec65f390536be6922f30a50f0d3e392cfa912973ef4"
 
 [[component.asset]]
 source_path = "assets/Locked/High Contrast/locked_high_contrast.svg"
 vendored_file = "frontend/static/icons/seed/locked.svg"
 runtime_file = "web/icons/seed/locked.svg"
-sha256 = "cc6f0a3d58ff3b86737ee78a158b29431f6c34a1bf720435f7aa4cd519f29401"
+sha256 = "f187b955e22fb0740508b796fbae95f81ecc7570f9f2b373a3ffea667ed46766"
 
 [[component]]
 name = "SugarSubstitute model catalog and suggestions"
