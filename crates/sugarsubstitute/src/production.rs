@@ -33,8 +33,9 @@ mod parent_lifecycle;
 mod qualification;
 #[path = "production/runtime.rs"]
 mod runtime;
+mod startup_readiness_diagnostic;
 
-pub(crate) use runtime::execute;
+pub(crate) use runtime::{execute, execute_inherited};
 
 #[path = "production/diagnostic_helper.rs"]
 mod diagnostic_helper;

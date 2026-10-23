@@ -21,6 +21,7 @@ fn later_cleanup_failures_preserve_original_policy_cause_and_original_scope_budg
     let jobs = JobSequence::new();
     let mut authority = CoordinatorAuthority::new(
         sugarsubstitute_contracts::coordinator_entry::EntrySetupBudget::new(Moment::from_nanos(0))?,
+        None,
     )?;
     let mut held = tests::unadmitted_policy()?;
     let backend = held.backend.as_mut();
@@ -129,6 +130,7 @@ fn late_original_grace_admission_progresses_actual_inert_cleanup_without_another
             sugarsubstitute_contracts::coordinator_entry::EntrySetupBudget::new(
                 Moment::from_nanos(0),
             )?,
+            None,
         )?;
         let mut held = tests::unadmitted_policy()?;
         let backend = held.backend.as_mut();

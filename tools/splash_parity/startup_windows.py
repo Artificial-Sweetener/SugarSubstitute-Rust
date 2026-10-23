@@ -42,6 +42,9 @@ class ReferenceProcesses:
     def __init__(self) -> None:
         """Declare pointer-width process APIs before ancestry, identity and lifetime observation."""
         self.kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        self.native = ctypes.WinDLL("ntdll")
+        self.native.NtSuspendProcess.argtypes = [wintypes.HANDLE]
+        self.native.NtSuspendProcess.restype = wintypes.LONG
         for function, arguments, result in (
             (self.kernel.CreateToolhelp32Snapshot, [wintypes.DWORD, wintypes.DWORD], wintypes.HANDLE),
             (self.kernel.Process32FirstW, [wintypes.HANDLE, ctypes.POINTER(ProcessEntry)], wintypes.BOOL),
@@ -87,8 +90,8 @@ class ReferenceProcesses:
             raise ctypes.WinError(ctypes.get_last_error())
         return pid, Path(path.value).resolve(strict=True), creation
 
-    def children(self, parent: int) -> list[tuple[int, str]]:
-        """Enumerate only direct-child PID/name pairs, rejecting oversized or failed snapshots."""
+    def ancestry(self) -> dict[int, list[tuple[int, str]]]:
+        """Group one bounded native snapshot by parent for a complete discovery pass."""
         snapshot = self.kernel.CreateToolhelp32Snapshot(2, 0)
         if snapshot in (None, 0, ctypes.c_void_p(-1).value):
             raise ctypes.WinError(ctypes.get_last_error())
@@ -96,14 +99,13 @@ class ReferenceProcesses:
             entry = ProcessEntry()
             entry.size = ctypes.sizeof(entry)
             found = self.kernel.Process32FirstW(snapshot, ctypes.byref(entry))
-            children = []
+            children = {}
             count = 0
             while found:
                 count += 1
                 if count > 4096:
                     raise RuntimeError("Reference ancestry snapshot exceeded its process inventory bound")
-                if entry.parent == parent:
-                    children.append((entry.pid, entry.executable))
+                children.setdefault(entry.parent, []).append((entry.pid, entry.executable))
                 found = self.kernel.Process32NextW(snapshot, ctypes.byref(entry))
             if ctypes.get_last_error() != 18:
                 raise ctypes.WinError(ctypes.get_last_error())
@@ -120,18 +122,43 @@ class ReferenceProcesses:
 
     def alive(self, handle: int) -> bool:
         """Test liveness on a retained process object without adopting a reused PID."""
-        status = self.kernel.WaitForSingleObject(handle, 0)
+        return not self.wait_exited(handle, 0)
+
+    def wait_exited(self, handle: int, timeout_ms: int) -> bool:
+        """Observe the original process's exit event with a bounded wait of at most two seconds."""
+        if type(timeout_ms) is not int or not 0 <= timeout_ms <= 2000:
+            raise ValueError("Process exit observation requires a bounded millisecond timeout")
+        status = self.kernel.WaitForSingleObject(handle, timeout_ms)
         if status not in (0, 0x102):
             raise RuntimeError(f"Reference process observation failed with wait status {status}")
-        return status == 0x102
+        return status == 0
 
     def stop(self, handle: int) -> None:
         """Terminate only a verified owned interpreter, then observe its terminal state within two seconds."""
         if self.alive(handle):
             if not self.kernel.TerminateProcess(handle, 1):
                 raise ctypes.WinError(ctypes.get_last_error())
-            if self.kernel.WaitForSingleObject(handle, 2000) != 0:
+            if not self.wait_exited(handle, 2000):
                 raise RuntimeError("The owned reference interpreter did not terminate within two seconds")
+
+    def suspend(self, handle: int) -> None:
+        """Fault the retained process through a separately verified, minimally privileged handle.
+
+        The original handle remains owned throughout; querying and matching creation identity
+        prevents fault injection from adopting a different process through a numeric PID.
+        """
+        original = self.lifetime_identity(handle)
+        suspension = self.kernel.OpenProcess(0x1000 | 0x0800, False, original[0])
+        if not suspension:
+            raise ctypes.WinError(ctypes.get_last_error())
+        try:
+            if self.lifetime_identity(suspension) != original:
+                raise RuntimeError("Suspension process differs from retained custody")
+            status = self.native.NtSuspendProcess(suspension)
+            if status != 0:
+                raise RuntimeError(f"Owned root suspension failed: {status:#x}")
+        finally:
+            self.close(suspension)
 
 
 class ReferenceOwner:
@@ -154,7 +181,7 @@ class ReferenceOwner:
         while time.perf_counter() < deadline and self.process.poll() is None:
             candidates = []
             try:
-                for pid, name in self.processes.children(self.process.pid):
+                for pid, name in self.processes.ancestry().get(self.process.pid, ()):
                     if name.casefold() != self.base.name.casefold():
                         continue
                     handle = self.processes.open(pid)

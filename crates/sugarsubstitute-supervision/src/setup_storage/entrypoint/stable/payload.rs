@@ -1,0 +1,94 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Artificial Sweetener and contributors
+//! Copy and verify the independently owned root executable without replacing unknown bytes.
+use super::*;
+use std::{
+    fs::File,
+    io::{Read, Seek, SeekFrom, Write},
+};
+use sugarsubstitute_update::package::PayloadHasher;
+
+/// Hold the root executable against mutation through shortcut publication.
+/// A missing owned file is recovered from its recorded source; changed files are preserved.
+pub(super) fn ensure(
+    root: &Directory,
+    record: &record::Record,
+    protection: &mut Protection,
+    context: &JobContext,
+) -> io::Result<File> {
+    match root.read(EXECUTABLE) {
+        Ok(mut file) => {
+            protection.verify_file(&file)?;
+            verify(&mut file, record, context)?;
+            return Ok(file);
+        }
+        Err(cause) if cause.kind() == io::ErrorKind::NotFound => {}
+        Err(cause) => return Err(cause),
+    }
+    let source =
+        Directory::open(&root.path.join("releases").join(record.source.id.as_str()), false)?;
+    let mut input = source.read(EXECUTABLE)?;
+    verify(&mut input, record, context)?;
+    let staged = staging::unique_path(root, ".launcher-image-stage")?;
+    let mut output = protection.file(&staged, context)?;
+    let mut buffer = [0; 65536];
+    loop {
+        check(context)?;
+        let count = input.read(&mut buffer)?;
+        if count == 0 {
+            break;
+        }
+        output.write_all(&buffer[..count])?;
+    }
+    output.sync_all()?;
+    drop(output);
+    let identity = {
+        let leaf = staged
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| invalid("Launcher stage leaf absent"))?;
+        let mut copied = root.read(leaf)?;
+        protection.verify_file(&copied)?;
+        verify(&mut copied, record, context)?;
+        files::file_identity(&copied)?
+    };
+    check(context)?;
+    protection.publish(
+        &staged,
+        &root.path.join(EXECUTABLE),
+        identity,
+        Publication::File { replace: false },
+        context,
+    )?;
+    let mut file = root.read(EXECUTABLE)?;
+    protection.verify_file(&file)?;
+    verify(&mut file, record, context)?;
+    Ok(file)
+}
+
+/// Match the retained handle to protected ownership without reopening its path.
+fn verify(file: &mut File, record: &record::Record, context: &JobContext) -> io::Result<()> {
+    if file.metadata()?.len() != record.bytes || hash(file, context)? != record.sha256 {
+        return Err(invalid(
+            "Stable launcher bytes differ from protected ownership; existing files have been preserved",
+        ));
+    }
+    Ok(())
+}
+
+/// Stream with the caller's cancellation and deadline, restoring the retained input cursor.
+pub(super) fn hash(file: &mut File, context: &JobContext) -> io::Result<String> {
+    file.seek(SeekFrom::Start(0))?;
+    let mut hasher = PayloadHasher::new();
+    let mut buffer = [0; 65536];
+    loop {
+        check(context)?;
+        let count = file.read(&mut buffer)?;
+        if count == 0 {
+            break;
+        }
+        hasher.update(&buffer[..count]);
+    }
+    file.seek(SeekFrom::Start(0))?;
+    Ok(hasher.finish_hex())
+}

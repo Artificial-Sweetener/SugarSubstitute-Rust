@@ -27,7 +27,10 @@ impl CoordinatorAuthority {
     ) -> Result<(), AuthorityIssue> {
         self.request_close();
         self.close_until = Some(self.close_until.map_or(until, |old| old.min(until)));
-        if self.closed || self.close_job.is_some() {
+        if self.closed {
+            return self.settle_installation(client, scope, jobs);
+        }
+        if self.close_job.is_some() {
             return Ok(());
         }
         match self.close_attempt {
@@ -126,5 +129,6 @@ impl CoordinatorAuthority {
             && self.closed
             && !self.pending()
             && self.registry().is_none_or(WindowsProcessRegistry::is_empty)
+            && self.installation.settled()
     }
 }

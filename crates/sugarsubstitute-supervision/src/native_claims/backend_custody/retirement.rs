@@ -72,6 +72,10 @@ impl State {
         if self.parent.as_ref().is_some_and(|parent| parent.signaled()) {
             self.stop_lost(Moment::from_nanos(u64::MAX))?;
         }
+        if !self.stopping && !self.established && self.parent.is_some() && self.trial.ready()? {
+            self.established = true;
+            self.reply = Some(BackendCustodyReceipt::Established);
+        }
         let mut failures: [Option<ClaimError>; 8] = std::array::from_fn(|_| None);
         let mut failure = None;
         for entry in self.registrations.iter_mut().flatten() {
@@ -124,6 +128,11 @@ impl State {
             return Ok(false);
         }
         let proof = self.control.cleanup(Moment::from_nanos(u64::MAX))?;
+        let authorized =
+            self.parent.as_ref().is_some_and(|parent| parent.signaled()) || self.finish_authorized;
+        if !self.trial.settle(proof.until(), authorized)? {
+            return Ok(false);
+        }
         if let Some(parent) = &mut self.parent {
             parent
                 .retire(&proof)

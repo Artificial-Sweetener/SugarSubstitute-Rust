@@ -30,6 +30,7 @@ impl ParentLifecycle {
             DecodedPayload::EnvironmentPrepared(_) => Some("EnvironmentPrepared"),
             DecodedPayload::ControllerPrepared { .. } => Some("ControllerPrepared"),
             DecodedPayload::MainRetired(_) => Some("MainRetired"),
+            DecodedPayload::MainRevealed(_) => Some("MainRevealed"),
             DecodedPayload::MainFailed(_) => Some("MainFailed"),
             DecodedPayload::Release(_) => Some("Release"),
             DecodedPayload::ExitIntent { .. } => Some("ExitIntent"),
@@ -250,6 +251,10 @@ impl ParentLifecycle {
             }
             DecodedPayload::MainRetired(identity) => {
                 self.native_main_retired(index, identity, resources)?;
+            }
+            DecodedPayload::MainRevealed(identity) => {
+                self.main_revealed(identity, binding, request, resources)?;
+                self.requests.get_mut(index)?.reply = Some(Reply::Acknowledged);
             }
             DecodedPayload::NativeActivity { revision, activity } => {
                 if revision.get() <= self.activity_revision {

@@ -121,11 +121,12 @@ class PrivateDesktop:
 
     def discover(self):
         """Retain descendant handles before parents exit; handle ownership prevents PID reuse."""
+        ancestry = self.processes.ancestry()
         queue = list(self.handles)
         for parent in queue:
             if len(self.handles) > 256:
                 raise RuntimeError("Test process family exceeded 256 retained processes")
-            for pid, _ in self.processes.children(parent):
+            for pid, _ in ancestry.get(parent, ()):
                 if pid in self.handles:
                     continue
                 try:
@@ -148,17 +149,41 @@ class PrivateDesktop:
     def alive(self):
         return [pid for pid, handle in self.handles.items() if self.processes.alive(handle)]
 
+    def observe_images(self, report):
+        """Record images or verified terminal metadata loss against retained process lifetimes."""
+        images = report.setdefault("process_images", {})
+        unavailable = report.setdefault("unavailable_process_images", {})
+        for pid, handle in self.handles.items():
+            if pid in images or pid in unavailable:
+                continue
+            try:
+                actual, executable, creation = self.processes.identity(handle)
+            except OSError as cause:
+                # Image metadata can disappear before the retained process's exit event signals.
+                if cause.winerror not in (5, 31) or not self.processes.wait_exited(handle, 100):
+                    raise
+                actual, creation = self.processes.lifetime_identity(handle)
+                if actual != pid or creation != self.creations[pid]:
+                    raise RuntimeError("Exited process lifetime differs from retained custody") from cause
+                unavailable[pid] = {
+                    "winerror": cause.winerror,
+                    "creation_100ns": creation,
+                    "exited": True,
+                    "exit_code": self.exit_codes()[pid],
+                    "reason": "Image metadata retired after original retained process exited",
+                }
+            else:
+                if actual != pid or creation != self.creations[pid]:
+                    raise RuntimeError("Image observation differs from retained process lifetime")
+                images[pid] = str(executable)
+
     def stop(self, pid):
         """Fault only a process whose original native handle belongs to this test."""
         self.processes.stop(self.handles[pid])
 
     def suspend(self, pid):
         """Freeze a root created by this fixture to exercise its real watchdog."""
-        native = ctypes.WinDLL("ntdll")
-        suspend = declare(native, "NtSuspendProcess", [wintypes.HANDLE], wintypes.LONG)
-        status = suspend(self.handles[pid])
-        if status != 0:
-            raise RuntimeError(f"Owned root suspension failed: {status:#x}")
+        self.processes.suspend(self.handles[pid])
 
     def windows(self):
         """Read only this desktop's application windows; keep callback errors observable."""

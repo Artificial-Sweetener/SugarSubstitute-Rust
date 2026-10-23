@@ -56,6 +56,27 @@ impl Family {
         if self.attributes_initialized {
             return Err(RegistryError::invalid("live_inheritance_reuse"));
         }
+        if let Some(probe) = self.preparation_image.as_ref().and_then(|launch| launch.probe()) {
+            if !probe.can_launch()
+                || self.recovery_carrier.is_some()
+                || self.lifecycle_bootstrap.is_some()
+                || self.diagnostic_bootstrap.is_some()
+                || self.backend_custody.is_some()
+                || self.fixture_events.is_some()
+                || self.output_pin.is_some()
+            {
+                return Err(RegistryError::invalid("updater_probe_inheritance_conflict"));
+            }
+            let (handles, count) = allowlist(
+                None,
+                Some(probe.exclusion_handle().as_raw_handle() as usize),
+                None,
+                None,
+            )?;
+            self.inherited_handles = handles;
+            self.inherited_count = count;
+            return Ok(());
+        }
         if self.recovery_carrier.is_some() {
             return self.prepare_recovery_carrier_inheritance();
         }

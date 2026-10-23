@@ -34,7 +34,7 @@ impl Capture {
         let handler =
             self.registration.snapshot().handler.ok_or("Fresh actual capture handler missing")?;
         let handler = CaptureProcessFacts::new(handler.process_id, handler.creation_time_100ns)?;
-        let budget = CaptureBudget::new(client.now()?)?;
+        let budget = CaptureBudget::registration(client.now()?, self.origin.original_until())?;
         let expected = CaptureAttachExpectation::new(
             self.origin.key().run().owner,
             CaptureTarget::Desktop(self.origin.key().run()),

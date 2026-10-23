@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Preserve bounded correlation facts and reject every changed wire authority field.
 use super::*;
+mod installation;
 type TestResult = Result<(), Box<dyn Error>>;
 fn key() -> Result<BackendCustodyKey, Box<dyn Error>> {
     Ok(BackendCustodyKey::new(
@@ -24,7 +25,13 @@ fn all_custody_commands_preserve_complete_matching_facts_in_exact_fixed_frames()
         BackendCustodyCommand::Heartbeat,
         BackendCustodyCommand::Receipt(BackendCustodyReceipt::Heartbeat),
         BackendCustodyCommand::Hello { capability: [3; 32] },
-        BackendCustodyCommand::Establish { parent: 40, pid: 9, birth: 20, containment: 44 },
+        BackendCustodyCommand::Establish {
+            parent: 40,
+            pid: 9,
+            birth: 20,
+            containment: 44,
+            trial: None,
+        },
         BackendCustodyCommand::Prepare {
             resource,
             digest: [4; 32],
@@ -103,7 +110,8 @@ fn invalid_destination_handles_and_counter_facts_fail_before_adoption() -> TestR
                     parent: raw,
                     pid: 1,
                     birth: 1,
-                    containment: 40
+                    containment: 40,
+                    trial: None,
                 }
             }
             .encode()

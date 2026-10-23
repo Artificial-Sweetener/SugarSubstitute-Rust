@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise the actual pure owner with deterministic input and completion facts.
 mod ordering;
+mod readiness;
 mod requests;
 mod retirement;
 use super::*;

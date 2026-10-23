@@ -34,6 +34,7 @@ pub(super) struct Lifetime {
     capture_scope: Option<Scope>,
     capture_input: Option<sugarsubstitute_execution::InheritedCaptureAttachInput>,
     source: Option<BackendCustodySource>,
+    storage: super::installation::Storage,
     capability: Option<LifecycleClientCapability>,
     scope: Option<Scope>,
     client: Option<ExecutionClient>,
@@ -61,6 +62,7 @@ impl Lifetime {
             capture_scope: None,
             capture_input: None,
             source: None,
+            storage: super::installation::Storage::default(),
             capability: None,
             scope: None,
             client: None,
@@ -78,8 +80,13 @@ impl Lifetime {
     fn drain(&mut self, max: NonZeroUsize) -> Result<(), Box<dyn Error>> {
         let batch =
             self.client.as_ref().ok_or("Custody execution missing")?.drain_completions(max)?;
-        self.capture.observe(&batch)?;
-        Ok(())
+        let mut failure = None;
+        retain(
+            &mut failure,
+            self.storage.advance(self.client.as_ref().ok_or("Custody execution missing")?, &batch),
+        );
+        retain(&mut failure, self.capture.observe(&batch));
+        failure.map_or(Ok(()), Err)
     }
     /// Complete actual kernel/capability authentication before creating the funded source.
     fn authenticate(&mut self) -> Result<(), Box<dyn Error>> {
@@ -195,8 +202,10 @@ impl Lifetime {
             let source = BackendCustodySource::new(
                 start.metadata(),
                 self.role.installation.take().ok_or("Custody installation missing")?,
+                self.storage.wake()?,
             )?;
             self.source = Some(source.clone());
+            self.storage.bind(&source)?;
             let driver = source.driver(&mut self.session)?;
             let start = self.worker_start.take().ok_or("Original custody worker start missing")?;
             // The fixed one-driver factory stays in the original funded metadata envelope.
@@ -214,6 +223,14 @@ impl Lifetime {
     }
     /// Keep unresolved native custody observable; only its authenticated self owner can exit.
     fn observe(&mut self) -> Result<HeadlessStep, Box<dyn Error>> {
+        if self.source.as_ref().is_some_and(|source| {
+            source.retirement_until().is_some() && !source.recovery_capture_pending()
+        }) {
+            // Capture retains a loan from the pipe's bootstrap mapping. Return that
+            // temporary loan during custody retirement, before waiting for the pipe
+            // worker's terminal; permanent crash registration stays with this process.
+            self.capture.request_cleanup();
+        }
         if let Some(source) = &self.source
             && let Some(cause) = source.failure()
         {
@@ -255,7 +272,11 @@ impl Lifetime {
         if self.source.as_ref().is_none_or(|source| !source.recovery_capture_pending())
             && let (Some(execution), Some(until)) = (&mut self.execution, self.until)
         {
-            execution.request_shutdown(until);
+            let pending = self.source.as_ref().is_some_and(BackendCustodySource::unresolved);
+            let expired = self.client.as_ref().ok_or("Custody execution absent")?.now()? >= until;
+            if !pending || expired {
+                execution.request_shutdown(until);
+            }
         }
         observed
     }
@@ -269,7 +290,12 @@ impl Lifetime {
         let mut failure = None;
         if let Some(drained) = drained {
             match drained {
-                Ok(batch) => retain(&mut failure, self.capture.observe(&batch)),
+                Ok(batch) => {
+                    if let Some(client) = &self.client {
+                        retain(&mut failure, self.storage.advance(client, &batch));
+                    }
+                    retain(&mut failure, self.capture.observe(&batch));
+                }
                 Err(cause) => retain(&mut failure, Err(Box::new(cause))),
             }
         }
@@ -342,7 +368,7 @@ impl HeadlessLifetime for Lifetime {
         if self.execution.is_some() || self.closing {
             return Err("Custody lifetime cannot start twice".into());
         }
-        self.execution = Some(ExecutionOwner::new(MonotonicClock::new(), wake)?);
+        self.execution = Some(ExecutionOwner::new(MonotonicClock::new(), wake.clone())?);
         let client = self.execution.as_ref().ok_or("Custody execution absent")?.client();
         self.client = Some(client.clone());
         let scope =
@@ -350,6 +376,7 @@ impl HeadlessLifetime for Lifetime {
         self.scope = Some(scope);
         self.capture_scope =
             Some(client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?);
+        self.storage.initialize(&client, wake)?;
         let request = spec(1, MIN_LIFECYCLE_PIPE_BYTES)?;
         let permit = client.reserve_captured_backend_custody_pipe_client(
             self.scope.as_ref().ok_or("Custody scope absent")?,

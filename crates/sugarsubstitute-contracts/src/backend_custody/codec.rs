@@ -8,12 +8,12 @@ use crate::lifecycle::{
 use std::{error::Error, fmt};
 
 /// Complete schema-one custody frame size, in bytes; no variable payload allocation.
-/// Profile and heartbeat operations extend the tag inventory without changing existing bytes.
+/// Profile, heartbeat and trial enrollment extend the tags without changing existing bytes.
 /// Older peers reject unknown tags; exact selected bundle/source pairing is required.
 pub const BACKEND_CUSTODY_FRAME_BYTES: usize = 384;
 
 mod command;
-pub use command::{BackendCustodyCommand, BackendCustodyReceipt};
+pub use command::{BackendCustodyCommand, BackendCustodyReceipt, InstallationTrialCustody};
 
 /// Keep one complete purpose/key/nonce association with the bounded command.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -99,12 +99,18 @@ impl BackendCustodyFrame {
                 bytes[10] = 1;
                 bytes[80..112].copy_from_slice(&capability);
             }
-            BackendCustodyCommand::Establish { parent, pid, birth, containment } => {
-                bytes[10] = 2;
+            BackendCustodyCommand::Establish { parent, pid, birth, containment, trial } => {
+                bytes[10] = if trial.is_some() { 23 } else { 2 };
                 put(&mut bytes, 80, parent);
                 put(&mut bytes, 88, u64::from(pid));
                 put(&mut bytes, 96, birth);
                 put(&mut bytes, 104, containment);
+                if let Some(trial) = trial {
+                    put(&mut bytes, 112, trial.run);
+                    put(&mut bytes, 120, trial.snapshot);
+                    put(&mut bytes, 128, trial.until_ticks as u64);
+                    put(&mut bytes, 136, trial.frequency as u64);
+                }
             }
             BackendCustodyCommand::Prepare {
                 resource,
@@ -268,11 +274,17 @@ impl BackendCustodyFrame {
             1 => {
                 BackendCustodyCommand::Hello { capability: std::array::from_fn(|i| bytes[80 + i]) }
             }
-            2 => BackendCustodyCommand::Establish {
+            2 | 23 => BackendCustodyCommand::Establish {
                 parent: get(bytes, 80),
                 pid: pid(88)?,
                 birth: get(bytes, 96),
                 containment: get(bytes, 104),
+                trial: (bytes[10] == 23).then(|| InstallationTrialCustody {
+                    run: get(bytes, 112),
+                    snapshot: get(bytes, 120),
+                    until_ticks: get(bytes, 128) as i64,
+                    frequency: get(bytes, 136) as i64,
+                }),
             },
             3 => BackendCustodyCommand::Prepare {
                 resource: resource()?,
@@ -369,8 +381,22 @@ impl BackendCustodyFrame {
                 valid &= capability.iter().any(|b| *b != 0);
                 None
             }
-            BackendCustodyCommand::Establish { parent, pid, birth, containment } => {
-                valid &= handle(parent) && handle(containment) && pid != 0 && birth != 0;
+            BackendCustodyCommand::Establish { parent, pid, birth, containment, trial } => {
+                valid &= handle(parent)
+                    && handle(containment)
+                    && parent != containment
+                    && pid != 0
+                    && birth != 0;
+                if let Some(trial) = trial {
+                    let handles = [parent, containment, trial.run, trial.snapshot];
+                    valid &= trial.until_ticks > 0
+                        && trial.frequency > 0
+                        && handles.iter().all(|value| handle(*value))
+                        && handles
+                            .iter()
+                            .enumerate()
+                            .all(|(index, value)| !handles[..index].contains(value));
+                }
                 None
             }
             BackendCustodyCommand::Prepare {

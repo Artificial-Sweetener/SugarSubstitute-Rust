@@ -177,7 +177,9 @@ fn cleanup_step(
     if family.count == 0 || family.closure_committed {
         family.closure_committed = true;
         shared.port.close(family)?;
-        state.family = None;
+        if family.preparation_image.as_ref().and_then(|launch| launch.probe()).is_none() {
+            state.family = None;
+        }
         retire_custody_metadata(state, context)?;
         state.cleanup =
             Some(CleanupFacts { retained: 0, root: None, next: None, watched: None, closed: true });
@@ -200,7 +202,7 @@ fn cleanup_step(
         let permit = lock(&shared.permit)
             .take()
             .ok_or_else(|| RegistryError::invalid("cleanup_watch_reservation"))?;
-        state.watch = submission::bind(permit, duplicate);
+        state.watch = creation::bind(permit, duplicate);
         watched = Some(expected);
     }
     let after_native = context.now();
@@ -220,7 +222,9 @@ fn cleanup_step(
         // subsequent steps retry only outstanding closes after partial success.
         family.closure_committed = true;
         shared.port.close(family)?;
-        state.family = None;
+        if family.preparation_image.as_ref().and_then(|launch| launch.probe()).is_none() {
+            state.family = None;
+        }
         retire_custody_metadata(state, context)?;
     }
     state.cleanup = Some(CleanupFacts { retained: inventory.count, root, next, watched, closed });

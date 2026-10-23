@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Adopt writable stage outputs before every native validation or activation check.
 use super::*;
+use crate::protected_storage::native_rename;
 pub(super) fn create<const N: usize>(
     file: &HeldFile<N>,
     value: &mut Stage<N>,
@@ -123,9 +124,9 @@ pub(super) fn activate<const N: usize>(
     value: &mut Stage<N>,
 ) -> Result<(), ClaimError> {
     let target = file.record_path.path()?.to_owned();
-    rename(
+    native_rename::rename(
         &value.handle,
-        RenameTarget::Absolute(&target),
+        native_rename::Target::Absolute(&target),
         true,
         &mut crate::protected_storage::native_phase::NativePhase::ordinary(&value.handle.budget())?,
     )?;

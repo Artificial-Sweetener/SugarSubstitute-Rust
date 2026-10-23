@@ -5,7 +5,7 @@ use super::*;
 impl ProductionChild {
     pub(in super::super) fn observe_native(
         &mut self,
-        _prepared: Option<&PreparedChildStartup>,
+        prepared: Option<&PreparedChildStartup>,
     ) -> Result<()> {
         if let Some(profile) = self.main.profile_mut()
             && profile.observe(&mut self.observation)?
@@ -13,6 +13,9 @@ impl ProductionChild {
             return self.advance_profile();
         }
         match self.observation.as_ref() {
+            Some(DesktopStartupObservation::MainRevealed(identity)) => {
+                self.report_main_revealed(*identity, prepared)?;
+            }
             Some(DesktopStartupObservation::MainReloadRequested { identity, .. }) => {
                 self.request_reload(*identity)?;
             }

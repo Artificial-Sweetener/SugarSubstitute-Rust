@@ -13,7 +13,7 @@ use sugarsubstitute_contracts::execution::{
 };
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner};
 use sugarsubstitute_supervision::installed_frontend::{
-    FRONTEND_SOURCE_BYTES, InstalledFrontendOwner, boundary_fixture,
+    FRONTEND_SOURCE_BYTES, FRONTEND_SOURCE_CLOSE_BYTES, InstalledFrontendOwner, boundary_fixture,
 };
 #[derive(Default)]
 pub(super) struct TestClock(pub(super) AtomicU64);
@@ -203,7 +203,7 @@ impl Harness {
                 operation: Operation::Readiness,
                 class: JobClass::InfrastructureLifecycle,
                 deadline: Some(Moment::from_nanos(20000)),
-                reservation_bytes: FRONTEND_SOURCE_BYTES,
+                reservation_bytes: FRONTEND_SOURCE_CLOSE_BYTES,
                 replacement: None,
             },
         )?;

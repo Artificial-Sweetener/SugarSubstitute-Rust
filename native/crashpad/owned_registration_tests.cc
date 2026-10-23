@@ -3,6 +3,7 @@
 // CPU-only tests of the production owner using an entirely fake native boundary.
 #include "sugarsubstitute/owned_start.h"
 #include <cstdio>
+#include <limits>
 
 namespace {
 struct Boundary {
@@ -298,6 +299,48 @@ bool SubMillisecondBudgetNeverRoundsUp() {
       !boundary.transaction_calls && !boundary.open_calls,
       "original-positive-sub-millisecond-tail-does-not-renew-budget");
 }
+bool StartupDeadlineRemainsOriginal() {
+  boundary = {}; auto owner = Owner(false);
+  const int64_t cutoff = boundary.now + 3600000;
+  owner.connection.deadline_counter = cutoff;
+  if (!Check(owner.connection.Remaining() == 3600000 &&
+      owner.connection.CheckDeadline(), "startup-registration-accepts-original-hour-cutoff")) return false;
+  boundary.now += 120000;
+  if (!Check(owner.connection.Remaining() == 3480000 &&
+      owner.connection.CheckDeadline() && owner.connection.deadline_counter == cutoff,
+      "registration-after-two-minutes-does-not-renew-original-cutoff")) return false;
+  boundary.now = cutoff;
+  return Check(!owner.connection.CheckDeadline() && owner.connection.error == ERROR_TIMEOUT,
+      "startup-registration-expires-at-exact-original-cutoff");
+}
+bool LongDeadlineSaturatesFiniteWait() {
+  boundary = {}; auto owner = Owner(false);
+  owner.connection.frequency = 1;
+  owner.connection.deadline_counter = std::numeric_limits<int64_t>::max();
+  return Check(owner.connection.Remaining() == INFINITE - 1 &&
+      owner.connection.CheckDeadline() && !owner.connection.error &&
+      owner.connection.deadline_counter == std::numeric_limits<int64_t>::max(),
+      "long-counter-interval-cannot-overflow-or-produce-infinite-wait");
+}
+bool FiniteWaitBoundaryPreservesMilliseconds() {
+  boundary = {}; auto owner = Owner(false);
+  const int64_t maximum = INFINITE - 1;
+  const int64_t intervals[] = {maximum - 1, maximum, maximum + 1};
+  for (const int64_t remaining : intervals) {
+    owner.connection.deadline_counter = boundary.now + remaining;
+    const DWORD expected = remaining < maximum ? static_cast<DWORD>(remaining) : INFINITE - 1;
+    if (!Check(owner.connection.Remaining() == expected && !owner.connection.error,
+        "finite-wait-boundary-clamps-only-unrepresentable-tail")) return false;
+  }
+  return true;
+}
+bool HighFrequencyConversionDoesNotOverflow() {
+  boundary = {}; auto owner = Owner(false);
+  owner.connection.frequency = std::numeric_limits<int64_t>::max() / 1000;
+  owner.connection.deadline_counter = boundary.now + owner.connection.frequency - 1;
+  return Check(owner.connection.Remaining() == 999 && !owner.connection.error,
+      "high-frequency-fraction-preserves-floor-without-overflow");
+}
 bool CreatorBirthFailureBeforeOpen() {
   boundary = {}; boundary.birth_error = ERROR_ACCESS_DENIED;
   auto owner = PreparedOwner();
@@ -388,11 +431,13 @@ int main() {
       HandlerWaitFailureRejected() && ExitedHandlerRejected() && LateHandlerExitRejected() &&
       BorrowedEventIsNotClosed() && BorrowedPendingStorageSurvives() &&
       ConnectionFailedCloseRetains() && SubMillisecondBudgetNeverRoundsUp() &&
+      StartupDeadlineRemainsOriginal() && LongDeadlineSaturatesFiniteWait() &&
+      FiniteWaitBoundaryPreservesMilliseconds() && HighFrequencyConversionDoesNotOverflow() &&
       CreatorBirthFailureBeforeOpen() && ZeroCreatorBirthRejected() &&
       HandlerBirthFailureBeforeIssue() && ZeroHandlerBirthRejected() &&
       OriginalBirthFactsSurviveRetirement() && PriorFailureStopsDeadlineWithoutNativeObservation() &&
       PriorFailureStopsPreparationBeforeOpen() && PriorFailureStopsConfirmationBeforeIssue() &&
       LegacyV1CleanupStillClosesAfterMainDeadline();
-  if (passed) std::puts("35 CPU-only production-registration/connection boundary cases PASS; no native calls");
+  if (passed) std::puts("39 CPU-only production-registration/connection boundary cases PASS; no native calls");
   return passed ? 0 : 1;
 }

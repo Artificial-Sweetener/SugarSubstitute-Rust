@@ -179,7 +179,7 @@ impl RecoveryDesktopWatch {
                 .permit
                 .take()
                 .ok_or_else(|| RegistryError::invalid("recovery_member_watch_consumed"))?;
-            let watch = submission::bind(permit, input)
+            let watch = creation::bind(permit, input)
                 .ok_or_else(|| RegistryError::invalid("recovery_member_watch_binding"))?;
             let family = self
                 .family

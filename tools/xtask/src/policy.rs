@@ -39,8 +39,18 @@ pub(crate) struct Architecture {
 pub(crate) struct Owner {
     pub(crate) package: String,
     pub(crate) root: String,
+    /// Authored non-Cargo runtime surfaces consumed by this crate.
+    #[serde(default)]
+    pub(crate) auxiliary_roots: Vec<String>,
     pub(crate) layer: String,
     pub(crate) concern: String,
+}
+
+impl Owner {
+    /// Return every explicitly registered source root without implying another Cargo package.
+    pub(crate) fn roots(&self) -> impl Iterator<Item = &str> {
+        std::iter::once(self.root.as_str()).chain(self.auxiliary_roots.iter().map(String::as_str))
+    }
 }
 
 /// Hold an explicitly empty or reviewed registry.

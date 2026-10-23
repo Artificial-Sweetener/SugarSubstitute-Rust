@@ -26,7 +26,7 @@ fn observed_failure_closes_runner_admission_once_and_keeps_first_causes() -> Tes
     let client = executor.client();
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
     let budget = EntrySetupBudget::new(Moment::from_nanos(0))?;
-    let mut authority = CoordinatorAuthority::new(budget)?;
+    let mut authority = CoordinatorAuthority::new(budget, None)?;
     let mut entry = inert_entry(budget)?;
     let jobs = JobSequence::new();
     authority.fail(Failure::Clock(ExecutionError::new(
@@ -70,7 +70,7 @@ fn observed_failure_closes_runner_admission_once_and_keeps_first_causes() -> Tes
 #[test]
 fn close_capacity_rejection_and_busy_do_not_claim_an_admitted_native_attempt() -> TestResult {
     let budget = EntrySetupBudget::new(Moment::from_nanos(0))?;
-    let mut authority = CoordinatorAuthority::new(budget)?;
+    let mut authority = CoordinatorAuthority::new(budget, None)?;
     let scope = ScopeId::new(1)?;
     assert_eq!(
         authority.observe_close_admission(scope, Err(ClaimAdmissionError::Busy)),
@@ -144,7 +144,7 @@ fn inert_entry_cannot_prepare_claims_or_consume_job_identity() -> TestResult {
     let client = executor.client();
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
     let budget = EntrySetupBudget::new(Moment::from_nanos(0))?;
-    let mut authority = CoordinatorAuthority::new(budget)?;
+    let mut authority = CoordinatorAuthority::new(budget, None)?;
     let mut entry = inert_entry(budget)?;
     let jobs = JobSequence::new();
     assert_eq!(
@@ -190,7 +190,7 @@ fn original_equality_expiry_precedes_identity_allocation() -> TestResult {
     let client = executor.client();
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
     let budget = EntrySetupBudget::new(Moment::from_nanos(0))?;
-    let mut authority = CoordinatorAuthority::new(budget)?;
+    let mut authority = CoordinatorAuthority::new(budget, None)?;
     authority.association = Some((scope.owner_id(), scope.id()));
     let jobs = JobSequence::new();
     clock.0.store(budget.until().as_nanos(), Ordering::Release);
@@ -215,7 +215,7 @@ fn original_specs_use_shared_nonreused_ids_and_exact_owner_reservations() -> Tes
     let client = executor.client();
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
     let budget = EntrySetupBudget::new(Moment::from_nanos(0))?;
-    let mut authority = CoordinatorAuthority::new(budget)?;
+    let mut authority = CoordinatorAuthority::new(budget, None)?;
     authority.association = Some((scope.owner_id(), scope.id()));
     let jobs = JobSequence::new();
     let other = jobs.clone();
@@ -247,7 +247,7 @@ fn genuine_scope_cancellation_vetoes_new_spec_before_job_identity() -> TestResul
     let client = executor.client();
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
     let budget = EntrySetupBudget::new(Moment::from_nanos(0))?;
-    let mut authority = CoordinatorAuthority::new(budget)?;
+    let mut authority = CoordinatorAuthority::new(budget, None)?;
     authority.association = Some((scope.owner_id(), scope.id()));
     let jobs = JobSequence::new();
     scope.cancel();

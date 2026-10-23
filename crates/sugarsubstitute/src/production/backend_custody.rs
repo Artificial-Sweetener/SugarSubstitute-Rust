@@ -5,6 +5,8 @@
 mod capture;
 #[path = "backend_custody/cleanup.rs"]
 mod cleanup;
+#[path = "backend_custody/installation.rs"]
+mod installation;
 #[path = "backend_custody/lifetime.rs"]
 mod lifetime;
 #[path = "backend_custody/role.rs"]

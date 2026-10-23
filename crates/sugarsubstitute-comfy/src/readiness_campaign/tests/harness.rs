@@ -20,7 +20,8 @@ use sugarsubstitute_contracts::execution::{
 };
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner};
 use sugarsubstitute_supervision::installed_frontend::{
-    FRONTEND_SOURCE_BYTES, InstalledFrontendLease, InstalledFrontendOwner, boundary_fixture,
+    FRONTEND_SOURCE_BYTES, FRONTEND_SOURCE_CLOSE_BYTES, InstalledFrontendLease,
+    InstalledFrontendOwner, boundary_fixture,
 };
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -261,7 +262,7 @@ impl Harness {
             self.completion()?;
         }
         let mut spec = self.spec(Moment::from_nanos(self.now().as_nanos() + 15_000_000_000))?;
-        spec.reservation_bytes = FRONTEND_SOURCE_BYTES;
+        spec.reservation_bytes = FRONTEND_SOURCE_CLOSE_BYTES;
         let mut close = self.source.submit_close(&self.client, &self.cleanup, spec)?;
         let completion = self.wake.until(&self.client, |_| Ok(close.try_take_completion()))?;
         if !matches!(

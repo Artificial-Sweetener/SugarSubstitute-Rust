@@ -122,6 +122,7 @@ impl CompletionWake for QuietWake {
 fn runner() -> Result<EntryRunner<RetainedChild>, Box<dyn Error>> {
     let invalid = PathBuf::from("relative-installation");
     let command = ProductionCommand {
+        launch_selection: None,
         diagnostics: Default::default(),
         installation: invalid.clone(),
         options: super::super::super::options::ProductionEntryOptions {

@@ -9,10 +9,14 @@ mod initialization;
 mod lifecycle;
 #[path = "entry_runner/normal_idle.rs"]
 mod normal_idle;
+#[path = "entry_runner/post_exit.rs"]
+mod post_exit;
 #[path = "entry_runner/routing.rs"]
 mod routing;
 #[path = "entry_runner/scope_sequence.rs"]
 mod scope_sequence;
+#[path = "entry_runner/updates.rs"]
+mod updates;
 pub(crate) use scope_sequence::ScopeSequence;
 #[cfg(test)]
 #[path = "entry_runner/tests.rs"]
@@ -295,6 +299,9 @@ pub(crate) struct EntryRunner<C: EntryActivation> {
     authority: Option<CoordinatorAuthority>,
     intake: Option<ProductionEntryIntake>,
     bootstrap: Option<EntryBootstrap>,
+    updater: Option<crate::updates::parent::Parent>,
+    update_attempted: bool,
+    post_exit: Option<post_exit::Deadline>,
     command: Option<ProductionCommand>,
     executable: PathBuf,
     installation: PathBuf,
@@ -345,6 +352,9 @@ impl<C: EntryActivation> EntryRunner<C> {
             authority: None,
             intake: None,
             bootstrap: None,
+            updater: None,
+            update_attempted: false,
+            post_exit: None,
             command: Some(command),
             executable,
             installation,

@@ -76,6 +76,12 @@ pub enum MainAuthorizationObservation {
         /// Must equal the original actual controller observation.
         browser_process_id: NonZeroU32,
     },
+    /// Native desktop reports its ready frontend and revealed main after browser authorization.
+    /// The host authenticates this observation; it is not a page-supplied readiness claim.
+    MainRevealed {
+        /// Exact current main attempt.
+        identity: MainIdentity,
+    },
     /// Authenticated exact native main retirement; finite proof jobs remain separate.
     MainRetired {
         /// Exact current main attempt.
@@ -99,6 +105,7 @@ impl MainAuthorizationObservation {
             | Self::ControllerObserved { identity, .. }
             | Self::BrowserVerified { identity, .. }
             | Self::BrowserAuthorizationIssued { identity, .. }
+            | Self::MainRevealed { identity }
             | Self::MainRetired { identity }
             | Self::Failed { identity, .. } => *identity,
         }
@@ -155,6 +162,8 @@ pub struct MainAuthorizationSnapshot {
     pub failure_code: Option<LifecycleFailureCode>,
     /// Sticky cause-observed fence survives transferring the first original cause.
     pub failure_observed: bool,
+    /// An authenticated reveal was observed for this attempt; native custody remains host-owned.
+    pub reveal_observed: bool,
     /// Highest admitted actual request ID; zero denotes none.
     pub request_highwater: u64,
 }

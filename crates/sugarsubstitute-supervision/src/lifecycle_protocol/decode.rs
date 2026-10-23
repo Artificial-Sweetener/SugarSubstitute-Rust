@@ -122,6 +122,7 @@ pub(super) fn frame(source: &[u8]) -> Result<DecodedFrame<'_>, ProtocolError> {
             identity: main_fields::read_identity(&mut input, run)?,
             acquisition: RequestId::new(input.u64()?).map_err(|_| ProtocolError::Identity)?,
         },
+        21 => DecodedPayload::MainRevealed(main_fields::read_identity(&mut input, run)?),
         20 => DecodedPayload::RetryBackend {
             identity: main_fields::read_identity(&mut input, run)?,
             failed: lease(&mut input)?,

@@ -192,7 +192,11 @@ impl SectionOwner {
             crate::windows_lifecycle_pipe::captured::codec::decode(bytes, original, kind)?;
         Ok((facts, data))
     }
+    /// A live authenticated borrow delays retirement; only a failed native effect is an error.
     pub(crate) fn retire(&mut self, pinned: bool) -> Result<bool, LifecyclePipeFailure> {
+        if self.view != 0 && self.startup.as_ref().is_some_and(|owner| !owner.can_unmap()) {
+            return Ok(false);
+        }
         self.unmap()?;
         self.master.close("pipe_close_bootstrap_master")?;
         if pinned {

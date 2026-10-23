@@ -41,7 +41,8 @@ pub(crate) enum DirectoryDisposition {
 pub(crate) struct OpenedDirectory {
     pub(crate) index: usize,
     pub(super) identity: [u8; 24],
-    pub(super) disposition: DirectoryDisposition,
+    /// Exact checked native creation outcome, including for installation cache admission.
+    pub(crate) disposition: DirectoryDisposition,
 }
 fn disposition(mode: Mode, status: i32, information: usize) -> Option<DirectoryDisposition> {
     match (mode, status, information) {

@@ -103,9 +103,10 @@ pub(crate) fn reviewed_sources(
         })?;
     for relative in sources {
         require(
-            resolve(root, relative)?.starts_with(root.join(&entry.root)),
+            entry.roots().any(|owned| root.join(relative).starts_with(root.join(owned))),
             format!("catalog: {relative} must belong to {owner}"),
         )?;
+        resolve(root, relative)?;
     }
     require(
         fingerprint(root, sources)? == expected,

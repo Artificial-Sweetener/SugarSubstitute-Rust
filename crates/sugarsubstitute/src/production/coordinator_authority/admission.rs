@@ -31,6 +31,17 @@ impl CoordinatorAuthority {
             self.fail(Failure::Entry(cause));
             return Err(AuthorityIssue::Adapter);
         }
+        let spec = self.spec(
+            client,
+            scope,
+            jobs,
+            sugarsubstitute_supervision::setup_storage::LAUNCH_RESERVATION_BYTES,
+            self.original.until(),
+        )?;
+        if let Err(cause) = self.installation.start(client, scope, spec, installation.clone()) {
+            self.fail(Failure::InstallationAdmission(cause));
+            return Err(AuthorityIssue::Adapter);
+        }
         let spec = self.spec(client, scope, jobs, CLAIM_POOL_BYTES, self.original.until())?;
         match self.claims.submit_initialize(client, scope, spec, installation) {
             Ok(id) => self.initialization = Some(id),

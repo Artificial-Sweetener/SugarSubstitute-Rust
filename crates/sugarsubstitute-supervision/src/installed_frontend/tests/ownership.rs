@@ -151,13 +151,20 @@ impl Harness {
                 .is_some_and(|job| matches!(job.status().phase, JobPhase::Terminal(_)))
         })
     }
+    /// Admit closure while the original inspection continues to fund retained native custody.
+    fn close_spec(id: u64, deadline: u64) -> Result<JobSpec, Box<dyn std::error::Error>> {
+        let mut spec = Self::spec(id, deadline)?;
+        spec.reservation_bytes = FRONTEND_SOURCE_CLOSE_BYTES;
+        Ok(spec)
+    }
     fn close(
         &self,
     ) -> Result<
         sugarsubstitute_contracts::execution::JobCompletion<(), FrontendSourceError>,
         Box<dyn std::error::Error>,
     > {
-        let mut job = self.owner.submit_close(&self.client, &self.scope, Self::spec(2, 2000)?)?;
+        let mut job =
+            self.owner.submit_close(&self.client, &self.scope, Self::close_spec(2, 2000)?)?;
         self.wake.until(&self.client, || matches!(job.status().phase, JobPhase::Terminal(_)))?;
         job.try_take_completion().ok_or_else(|| "Missing typed cleanup".into())
     }
@@ -195,7 +202,7 @@ fn rejected_valid_close_request_permanently_retires_without_releasing_custody() 
     assert!(
         harness
             .owner
-            .submit_close(&harness.client, &harness.scope, Harness::spec(2, 2000)?)
+            .submit_close(&harness.client, &harness.scope, Harness::close_spec(2, 2000)?)
             .is_err()
     );
     assert!(lease.validate_live().is_err());
@@ -203,7 +210,8 @@ fn rejected_valid_close_request_permanently_retires_without_releasing_custody() 
     assert!(harness.scope.snapshot().reserved_bytes >= FRONTEND_SOURCE_BYTES);
     let cleanup =
         harness.client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?;
-    let mut job = harness.owner.submit_close(&harness.client, &cleanup, Harness::spec(3, 2000)?)?;
+    let mut job =
+        harness.owner.submit_close(&harness.client, &cleanup, Harness::close_spec(3, 2000)?)?;
     harness.wake.until(&harness.client, || matches!(job.status().phase, JobPhase::Terminal(_)))?;
     assert!(matches!(
         job.try_take_completion().ok_or("Missing cleanup")?.outcome,
@@ -276,7 +284,7 @@ fn completed_source_lease_survives_elapsed_preparation_until_actual_explicit_clo
     let mut job = harness.owner.submit_close(
         &harness.client,
         &harness.scope,
-        Harness::spec(2, 615_000_000_000)?,
+        Harness::close_spec(2, 615_000_000_000)?,
     )?;
     assert!(lease.validate_live().is_err());
     harness.wake.until(&harness.client, || matches!(job.status().phase, JobPhase::Terminal(_)))?;
@@ -312,8 +320,11 @@ fn completed_snapshot_releases_inspection_before_delivery_and_final_close_is_ide
     assert!(lease.validate_live().is_err());
     assert!(crate::registry::lock(&harness.owner.shared.retained).is_none());
     assert_eq!(harness.boundary.releases.load(Ordering::Acquire), 2);
-    let mut again =
-        harness.owner.submit_close(&harness.client, &harness.scope, Harness::spec(3, 2000)?)?;
+    let mut again = harness.owner.submit_close(
+        &harness.client,
+        &harness.scope,
+        Harness::close_spec(3, 2000)?,
+    )?;
     harness
         .wake
         .until(&harness.client, || matches!(again.status().phase, JobPhase::Terminal(_)))?;
@@ -326,6 +337,8 @@ fn completed_snapshot_releases_inspection_before_delivery_and_final_close_is_ide
 }
 
 mod native_snapshot;
+
+mod cleanup_memory;
 
 #[path = "ownership/reload.rs"]
 mod reload;

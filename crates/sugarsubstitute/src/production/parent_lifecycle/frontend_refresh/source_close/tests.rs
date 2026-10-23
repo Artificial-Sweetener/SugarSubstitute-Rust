@@ -21,7 +21,7 @@ fn spec(id: u64, bytes: u64) -> TestResult<JobSpec> {
 #[test]
 fn successful_original_source_close_returns_credit_before_http_cleanup_admission() -> TestResult {
     let mut fixture = Fixture::new()?;
-    let pressure = fixture.memory_bytes - 2 * FRONTEND_SOURCE_BYTES - 8 * 1024 * 1024;
+    let pressure = fixture.memory_bytes - FRONTEND_SOURCE_BYTES - READINESS_TRANSPORT_BYTES;
     let mut pressure_job =
         fixture.client.submit_blocking(&fixture.scope, spec(1, pressure)?, move |context| {
             context.memory().claim(pressure)
@@ -35,7 +35,12 @@ fn successful_original_source_close_returns_credit_before_http_cleanup_admission
     fixture.terminal(JobId::new(2)?)?;
     let lease = source.take_inspection()?.ok_or("Actual inspection absent")?;
     let mut close = SourceClose::default();
-    close.submit(&source, &fixture.client, &fixture.scope, spec(3, FRONTEND_SOURCE_BYTES)?)?;
+    close.submit(
+        &source,
+        &fixture.client,
+        &fixture.scope,
+        spec(3, FRONTEND_SOURCE_CLOSE_BYTES)?,
+    )?;
     assert!(close.awaiting_source());
     let rejected =
         fixture.client.submit_blocking(&fixture.scope, spec(4, READINESS_TRANSPORT_BYTES)?, |_| {
@@ -73,7 +78,12 @@ fn foreign_source_completion_retains_credit_and_cannot_admit_a_second_close() ->
     fixture.terminal(JobId::new(1)?)?;
     let lease = source.take_inspection()?.ok_or("Actual inspection absent")?;
     let mut close = SourceClose::default();
-    close.submit(&source, &fixture.client, &fixture.scope, spec(2, FRONTEND_SOURCE_BYTES)?)?;
+    close.submit(
+        &source,
+        &fixture.client,
+        &fixture.scope,
+        spec(2, FRONTEND_SOURCE_CLOSE_BYTES)?,
+    )?;
     fixture.terminal(JobId::new(2)?)?;
     // Corrupt only external completion identity on an actually admitted terminal.
     let job = close.job.as_mut().ok_or("Original close absent")?;
@@ -82,7 +92,12 @@ fn foreign_source_completion_retains_credit_and_cannot_admit_a_second_close() ->
     assert!(close.accept_terminal(terminal).is_err());
     assert!(close.consume().is_err());
     assert!(!close.closed() && !close.awaiting_source());
-    close.submit(&source, &fixture.client, &fixture.scope, spec(3, FRONTEND_SOURCE_BYTES)?)?;
+    close.submit(
+        &source,
+        &fixture.client,
+        &fixture.scope,
+        spec(3, FRONTEND_SOURCE_CLOSE_BYTES)?,
+    )?;
     assert!(close.job.is_none() && close.terminal.is_some());
     drop(close);
     drop(lease);

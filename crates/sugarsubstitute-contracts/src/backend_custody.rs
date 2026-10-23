@@ -7,7 +7,7 @@ mod codec;
 mod profile;
 pub use codec::{
     BACKEND_CUSTODY_FRAME_BYTES, BackendCustodyCommand, BackendCustodyFrame, BackendCustodyReceipt,
-    BackendCustodyWireError,
+    BackendCustodyWireError, InstallationTrialCustody,
 };
 pub use profile::{ProfileCustodyIdentity, ProfileCustodyKey};
 

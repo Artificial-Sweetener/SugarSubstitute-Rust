@@ -3,7 +3,7 @@
 //! Preserve the sole actual size/hash/identity and bounded read algorithms.
 use super::*;
 use crate::protected_storage::native_phase::NativePhase;
-use sha2::{Digest, Sha256};
+use ring::digest::{Context, SHA256};
 use windows::Win32::Storage::FileSystem::*;
 impl NativeFile {
     /// Stream whole-file SHA256 under retained native and original context custody.
@@ -49,7 +49,7 @@ impl NativeFile {
             return Err(phase.invalid("diagnostic_size_bound"));
         }
         let hash_allocation = phase.hash_destination()?;
-        let mut hash = Sha256::new();
+        let mut hash = Context::new(&SHA256);
         let mut buffer = Vec::new();
         buffer.try_reserve_exact(DIAGNOSTIC_IO_BYTES).map_err(|cause| {
             phase.error("diagnostic_read_buffer", BoundedNativeCause::Reserve(cause))
@@ -70,7 +70,8 @@ impl NativeFile {
             remaining -= count as u64;
         }
         drop(buffer);
-        let sha256 = hash.finalize().into();
+        let mut sha256 = [0; 32];
+        sha256.copy_from_slice(hash.finish().as_ref());
         drop(hash_allocation);
         paths::validate_regular(handle, Some(bytes as i64), &mut phase)?;
         if paths::file_identity(handle, &mut phase)? != identity {

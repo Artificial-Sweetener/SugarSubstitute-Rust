@@ -1,0 +1,32 @@
+diff --git a/src/main/sources/standalone/install.ts b/src/main/sources/standalone/install.ts
+index 15703590..0465eb04 100644
+--- a/src/main/sources/standalone/install.ts
++++ b/src/main/sources/standalone/install.ts
+@@ -299,10 +299,7 @@ export async function postInstall(
+       if (!latestTag && !pickedTag) {
+         // A network flake must not masquerade as "up to date" — that stranded
+         // first installs on the bundled version.
+-        sendProgress('update', {
+-          percent: 100,
+-          status: `Skipped — could not verify ${channelLabel}`
+-        })
++        throw new Error(`Could not verify ${channelLabel}`)
+       } else if (pickedTag ? onPickedTag : onLatestTag) {
+         sendProgress('update', { percent: 100, status: 'Already up to date' })
+       } else {
+@@ -333,13 +330,11 @@ export async function postInstall(
+         if (result.ok) {
+           sendProgress('update', { percent: 100, status: 'Up to date' })
+         } else {
+-          sendProgress('update', { percent: 100, status: 'Skipped (update failed)' })
++          throw new Error(result.message || 'ComfyUI dependency reconciliation failed')
+         }
+       }
+     } catch (err) {
+-      if ((err as Error).message === 'Cancelled') throw err
+-      console.warn(`Auto-update to ${channel} failed:`, err)
+-      sendProgress('update', { percent: 100, status: 'Skipped' })
++      throw err
+     }
+   }
+   // NOTE: starter-template model downloads no longer run here. They start in the

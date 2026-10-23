@@ -42,7 +42,8 @@ impl ProductionActivation {
         if !admission_closed
             && record.attach.is_none()
             && record.start.is_none()
-            && record.projected.is_some()
+            && let Some(JobCompletion { outcome: JobOutcome::Success(projected), .. }) =
+                record.projected.as_ref()
             && capture.capture.snapshot().state
                 == sugarsubstitute_contracts::crash::CaptureState::Registered
         {
@@ -50,6 +51,7 @@ impl ProductionActivation {
                 capture
                     .attach(
                         sugarsubstitute_contracts::crash::CaptureTarget::Desktop(record.run),
+                        projected.until,
                         resources.client,
                         resources.native,
                         resources.jobs,

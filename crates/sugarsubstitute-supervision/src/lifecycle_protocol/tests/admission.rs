@@ -94,7 +94,7 @@ fn payload_header_full_run_mismatch_leaves_storage_unchanged() -> TestResult {
 #[test]
 fn wire_versions_and_stage_discriminators_and_zero_main_facts_reject() -> TestResult {
     let source = encoded(WirePayload::MainFailed(failure()?))?;
-    for version in [1u16, 2, u16::MAX] {
+    for version in [1u16, 2, 9, u16::MAX] {
         let mut invalid = source.clone();
         invalid[4..6].copy_from_slice(&version.to_le_bytes());
         assert!(matches!(FrameCodec::decode(&invalid), Err(ProtocolError::Schema)));

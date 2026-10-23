@@ -120,7 +120,7 @@ impl InstalledFrontendOwner {
         scope: &Scope,
         spec: JobSpec,
     ) -> Result<JobId, AdmissionError> {
-        validate_spec(scope, spec)?;
+        validate_spec(scope, spec, FRONTEND_SOURCE_BYTES)?;
         if self.submitted.is_some() {
             return Err(invalid_spec("Inspection already admitted"));
         }
@@ -218,6 +218,7 @@ impl InstalledFrontendOwner {
     }
     /// Retire leases before admitting explicit closure on the original execution owner.
     /// A valid close request permanently retires this generation even if queue admission fails.
+    /// Requires `FRONTEND_SOURCE_CLOSE_BYTES`; retained inventory funds its own native closure.
     /// # Errors
     /// Rejects an invalid or foreign finite specification before native closure.
     pub fn submit_close(
@@ -226,7 +227,7 @@ impl InstalledFrontendOwner {
         scope: &Scope,
         spec: JobSpec,
     ) -> Result<OwnedJob<(), FrontendSourceError>, AdmissionError> {
-        validate_spec(scope, spec)?;
+        validate_spec(scope, spec, FRONTEND_SOURCE_CLOSE_BYTES)?;
         if self.pending.is_some() || self.execution != Some(scope.owner_id()) {
             return Err(invalid_spec("Inspection pending or foreign execution owner"));
         }
@@ -288,14 +289,15 @@ fn effective_deadline(scope: &Scope, spec: JobSpec) -> Result<Moment, AdmissionE
         (None, None) => Err(AdmissionError::DeadlineRequired),
     }
 }
-fn validate_spec(scope: &Scope, spec: JobSpec) -> Result<(), AdmissionError> {
+/// Check the finite operation and its owner-selected memory allowance before admission.
+fn validate_spec(scope: &Scope, spec: JobSpec, bytes: u64) -> Result<(), AdmissionError> {
     effective_deadline(scope, spec)?;
     if spec.operation != Operation::Readiness
         || spec.class != JobClass::InfrastructureLifecycle
-        || spec.reservation_bytes != FRONTEND_SOURCE_BYTES
+        || spec.reservation_bytes != bytes
         || spec.replacement.is_some()
     {
-        return Err(invalid_spec("Invalid source inspection specification"));
+        return Err(invalid_spec("Invalid frontend source job specification"));
     }
     Ok(())
 }

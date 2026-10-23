@@ -1,0 +1,46 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Artificial Sweetener and contributors
+//! Probe correlation remains bounded data with strict native trial identities.
+use super::*;
+use crate::installation::{Generation, GenerationId, InstallationId, PackageDigest};
+
+/// Build a valid opaque attempt without filesystem or process authority.
+fn attempt() -> Result<Trial, crate::installation::Rejection> {
+    Ok(Trial {
+        installation: InstallationId::new("1".repeat(32))?,
+        generation: Generation {
+            id: GenerationId::new("2".repeat(32))?,
+            package: PackageDigest::new("3".repeat(64))?,
+        },
+        revision: 7,
+    })
+}
+
+#[test]
+fn probe_correlation_round_trips_the_exact_attempt() -> Result<(), Box<dyn std::error::Error>> {
+    let expected = attempt()?;
+    let encoded = ProbeRequest::new(expected.clone())?.encode()?;
+    assert!(encoded.len() <= MAX_PROBE_BYTES);
+    assert_eq!(ProbeRequest::decode(encoded.as_bytes())?.attempt(), &expected);
+    Ok(())
+}
+
+#[test]
+fn malformed_oversized_duplicate_and_zero_revision_correlations_are_rejected()
+-> Result<(), Box<dyn std::error::Error>> {
+    let encoded = ProbeRequest::new(attempt()?)?.encode()?;
+    for text in [
+        "{}".to_owned(),
+        " ".repeat(MAX_PROBE_BYTES + 1),
+        encoded.replace("\"revision\":7", "\"revision\":0"),
+        encoded.replace("\"revision\":7", "\"revision\":7,\"revision\":8"),
+        encoded.replace("\"revision\":7", "\"revision\":7,\"repository\":\"foreign\""),
+        encoded.replace(&"2".repeat(32), "../foreign"),
+    ] {
+        assert!(ProbeRequest::decode(text.as_bytes()).is_err());
+    }
+    let mut zero = attempt()?;
+    zero.revision = 0;
+    assert!(ProbeRequest::new(zero).is_err());
+    Ok(())
+}

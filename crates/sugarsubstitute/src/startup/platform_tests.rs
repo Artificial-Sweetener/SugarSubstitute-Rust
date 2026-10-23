@@ -28,6 +28,7 @@ struct Platform {
     retired: bool,
     finished: bool,
     effects: Vec<&'static str>,
+    revealed: Vec<MainIdentity>,
 }
 impl StartupBackend for Platform {
     type Prepared = Prepared;
@@ -56,6 +57,14 @@ impl StartupBackend for Platform {
         observation: DesktopStartupObservation,
         prepared: Option<&Prepared>,
     ) -> BackendResult<()> {
+        if let DesktopStartupObservation::MainRevealed(identity) = observation {
+            if prepared.is_none_or(|value| value.session.phase() != StartupPhase::Running) {
+                return Err(
+                    "reveal reached backend before shared startup policy accepted it".into()
+                );
+            }
+            self.revealed.push(identity);
+        }
         if matches!(observation, DesktopStartupObservation::NativeRetired(_)) {
             if prepared.is_some_and(|value| !value.released) {
                 return Err("native source loan still held".into());
@@ -132,6 +141,53 @@ impl StartupBackend for Platform {
     fn accept_preview_observation(&mut self, _: &mut Option<DesktopStartupObservation>) -> bool {
         false
     }
+}
+
+#[test]
+fn host_reports_main_reveal_only_after_frontend_readiness_and_never_after_close()
+-> BackendResult<()> {
+    for closing in [false, true] {
+        let mut host = host()?;
+        let launch = host.launch_id();
+        let mut session = StartupSession::new(
+            launch,
+            Generation::new(1)?,
+            StartupConfiguration::new(
+                ConnectionConfiguration::Attach(LoopbackOrigin::parse(
+                    "http://127.0.0.1:8188",
+                    8188,
+                )?),
+                ProfileId::new("reveal-test".into())?,
+                Presentation::new("en", Theme::Dark, true)?,
+            ),
+        );
+        host.startup = Some(Prepared { session, released: false });
+        let identity = host.main_identity().ok_or("Main identity absent")?;
+        assert!(host.observe(DesktopStartupObservation::MainRevealed(identity)).is_err());
+        assert!(host.child.revealed.is_empty());
+        session = host.startup.take().ok_or("Startup absent")?.session;
+        let origin = LoopbackOrigin::parse("http://127.0.0.1:8188", 8188)?;
+        for observation in [
+            StartupObservation::SplashPresented,
+            StartupObservation::ConnectionReady(origin),
+            StartupObservation::FrontendNavigationStarted(identity.navigation),
+        ] {
+            session.observe(StartupEvent::new(launch, observation))?;
+        }
+        let receipt = ReadinessReceipt::parse(br#"{"schema_version":1,"launch_id":1,"navigation_generation":1,"outcome":{"status":"ready","evidence":{"frontend_version":"1.0.0","sugarcubes_version":"1.0.0","app_graph_ready":true,"canvas_connected":true,"loading_finished":true,"sugarcubes_registered":true,"sugarcubes_ready":true}}}"#)?;
+        session.observe(StartupEvent::new(launch, StartupObservation::FrontendReceipt(receipt)))?;
+        session.observe(StartupEvent::new(launch, StartupObservation::SplashRetired))?;
+        host.startup = Some(Prepared { session, released: false });
+        if closing {
+            host.request_shutdown()?;
+        }
+        host.observe(DesktopStartupObservation::MainRevealed(identity))?;
+        assert_eq!(host.child.revealed, if closing { vec![] } else { vec![identity] });
+        host.request_shutdown()?;
+        host.observe(DesktopStartupObservation::NativeRetired(host.run_key()))?;
+        host.finish_shutdown()?;
+    }
+    Ok(())
 }
 fn host() -> BackendResult<StartupHost<Platform>> {
     let run = policy::tests::test_run()?;

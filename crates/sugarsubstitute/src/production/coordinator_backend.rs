@@ -80,8 +80,8 @@ use sugarsubstitute_supervision::{
     CLAIM_OPERATION_BYTES, ClaimLaunchJobs, ClaimObservation, ClaimTarget, LaunchEnvironment,
     LaunchTicket, RegistryObservation, ResolutionTicket,
     installed_frontend::{
-        FRONTEND_SOURCE_BYTES, FrontendInstallationInput, FrontendSourceError,
-        InstalledFrontendLease, InstalledFrontendOwner,
+        FRONTEND_SOURCE_BYTES, FRONTEND_SOURCE_CLOSE_BYTES, FrontendInstallationInput,
+        FrontendSourceError, InstalledFrontendLease, InstalledFrontendOwner,
     },
 };
 

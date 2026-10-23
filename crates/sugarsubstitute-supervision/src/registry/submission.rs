@@ -6,6 +6,33 @@ use sugarsubstitute_contracts::execution::{JobClass, Operation, ScopeSpec};
 use sugarsubstitute_execution::windows::NativeCorrelation;
 
 impl WindowsProcessRegistry {
+    /// Admit this coordinator's preparation helper while retaining rejected file custody.
+    /// Errors leave `input` populated unless actual creation admission transferred it.
+    /// The caller retires a rejected image on an admitted worker, and observes any reserved
+    /// root-watch cancellation through this registry before releasing the registry itself.
+    /// # Errors
+    /// Rejects missing/foreign image ownership, conflicting roles, duplicates or capacity.
+    #[allow(clippy::too_many_arguments)]
+    pub fn submit_preparation_launch(
+        &mut self,
+        execution: &ExecutionClient,
+        creation_scope: &Scope,
+        native_scope_spec: ScopeSpec,
+        creation: JobSpec,
+        root_watch: JobSpec,
+        input: &mut Option<WindowsLaunchInput>,
+    ) -> Result<LaunchTicket, RegistryAdmissionError> {
+        self.submit_owned(
+            execution,
+            creation_scope,
+            native_scope_spec,
+            creation,
+            root_watch,
+            FamilyBinding::Preparation(self.owner),
+            input,
+        )
+    }
+
     /// Reserve root observation, then admit finite creation before any native effect.
     /// The registry creates/retains an independent native scope from the supplied
     /// no-deadline specification, with no parent. Job IDs increase in
@@ -74,69 +101,7 @@ impl WindowsProcessRegistry {
         input: &mut Option<WindowsLaunchInput>,
     ) -> Result<LaunchTicket, RegistryAdmissionError> {
         let original = input.as_ref().ok_or(RegistryAdmissionError::InvalidSpecification)?;
-        if original.recovery_carrier.is_some()
-            || original
-                .profile_custody
-                .as_ref()
-                .is_some_and(|profile| profile.value.recovery_grant.is_some())
-        {
-            return Err(RegistryAdmissionError::InvalidSpecification);
-        }
-        if let Some(profile) = &original.profile_custody
-            && (binding!=FamilyBinding::Desktop(profile.value.key.run()) || !profile.value.identity.same_as(&self.identity)
-                || original.managed_custody.is_some() || original.backend_custody.is_some()
-                || original.diagnostic.is_some() || profile.value.published_ack.as_ref().is_none_or(|ack|
-                    ack.receipt()!=sugarsubstitute_contracts::backend_custody::BackendCustodyReceipt::ProfilePublished(profile.value.key))) {
-                return Err(RegistryAdmissionError::InvalidSpecification);
-        }
-        if let Some(source) = &original.managed_custody
-            && binding != FamilyBinding::Managed(source.resource())
-        {
-            return Err(RegistryAdmissionError::InvalidSpecification);
-        }
-        if let FamilyBinding::BackendCustody(key) = binding {
-            if original.backend_custody.as_ref().is_none_or(|launch| !launch.validates(key))
-                || original.diagnostic.is_some()
-                || original.lifecycle.is_some()
-                || original.output.is_some()
-                || original.fixture_events.is_some()
-            {
-                return Err(RegistryAdmissionError::InvalidSpecification);
-            }
-        } else if original.backend_custody.is_some() {
-            return Err(RegistryAdmissionError::InvalidSpecification);
-        }
-        if let FamilyBinding::Diagnostic(key) = binding {
-            if original.diagnostic.as_ref().is_none_or(|launch| !launch.validates(key))
-                || original.lifecycle.is_some()
-                || original.output.is_some()
-                || original.fixture_events.is_some()
-            {
-                return Err(RegistryAdmissionError::InvalidSpecification);
-            }
-        } else if original.diagnostic.is_some() {
-            return Err(RegistryAdmissionError::InvalidSpecification);
-        }
-        if binding.owner() != self.owner {
-            return Err(RegistryAdmissionError::ForeignOwner);
-        }
-        if original
-            .output
-            .as_ref()
-            .is_some_and(|output| !output.validates(binding) || original.fixture_events.is_some())
-        {
-            return Err(RegistryAdmissionError::InvalidSpecification);
-        }
-        if let Some(launch) = &original.lifecycle
-            && (binding != FamilyBinding::Desktop(launch.run)
-                || original.fixture_events.is_some()
-                || launch
-                    .enrollment
-                    .as_ref()
-                    .is_none_or(|enrollment| !launch.bootstrap.matches_enrollment(enrollment)))
-        {
-            return Err(RegistryAdmissionError::InvalidSpecification);
-        }
+        self.validate_input(binding, original)?;
         if !self.launch_open {
             return Err(RegistryAdmissionError::Closed);
         }
@@ -190,6 +155,7 @@ impl WindowsProcessRegistry {
                 (FamilyBinding::BackendCustody(old), FamilyBinding::BackendCustody(new)) => {
                     old.owner() == new.owner()
                 }
+                (FamilyBinding::Preparation(old), FamilyBinding::Preparation(new)) => old == new,
                 _ => false,
             }
         }) {
@@ -298,7 +264,7 @@ impl WindowsProcessRegistry {
                         .pending_input
                         .take()
                         .ok_or_else(|| RegistryError::invalid("creation_input_owner"))?;
-                    create(shared, input, context, ticket)
+                    super::creation::create(shared, input, context, ticket)
                 })
                 .map(CreationJob::Blocking)
         };
@@ -339,106 +305,4 @@ pub(super) fn validate_watch(spec: JobSpec) -> Result<(), RegistryAdmissionError
         return Err(RegistryAdmissionError::InvalidSpecification);
     }
     Ok(())
-}
-struct ChargedInput {
-    input: WindowsLaunchInput,
-    _claim: sugarsubstitute_contracts::execution::MemoryClaim,
-}
-fn create(
-    shared: SharedOwner,
-    input: WindowsLaunchInput,
-    context: JobContext,
-    ticket: LaunchTicket,
-) -> Result<(), RegistryError> {
-    let bytes = input.required_reservation_bytes() - crate::registry_input::FAMILY_STORAGE_BYTES;
-    let claim =
-        context.memory().claim(bytes).map_err(|cause| RegistryError::new("input_memory", cause))?;
-    let mut charged = ChargedInput { input, _claim: claim };
-    let family = Family::allocate_owned(context.memory())?;
-    let mut unwind = CreationOutputGuard { shared: shared.clone(), armed: true };
-    let mut state = lock(&shared.native);
-    state.family = Some(family);
-    let result = create_owned(&shared, &mut state, &mut charged.input, &context, ticket);
-    if let Err(cause) = &result {
-        state.failure = Some(cause.clone());
-        if let Some(family) = &state.family {
-            family.request_output_close();
-        }
-    }
-    unwind.armed = false;
-    result
-}
-fn create_owned(
-    shared: &Shared,
-    state: &mut NativeState,
-    input: &mut WindowsLaunchInput,
-    context: &JobContext,
-    ticket: LaunchTicket,
-) -> Result<(), RegistryError> {
-    if stopped(context) || shared.admission.load(Ordering::Acquire) == CLOSED {
-        return Err(RegistryError::invalid("creation_canceled_before_effect"));
-    }
-    let family = state.family.as_mut().ok_or_else(|| RegistryError::invalid("creation_owner"))?;
-    family.adopt_fixture_events(input)?;
-    family.adopt_lifecycle(input)?;
-    family.adopt_diagnostic(input)?;
-    family.adopt_backend_custody(input)?;
-    family.adopt_output(input, ticket.binding)?;
-    family.prepare_inheritance()?;
-    let root = shared.port.create(family, input)?;
-    state.creation = Some(CreationFacts { root, resumed: false });
-    let duplicate = shared.port.duplicate(family, 0)?;
-    let permit = lock(&shared.permit)
-        .take()
-        .ok_or_else(|| RegistryError::invalid("root_watch_reservation"))?;
-    state.watch = bind(permit, duplicate);
-    match ticket.binding {
-        FamilyBinding::Desktop(run) => shared.port.enroll_desktop(family, run, ticket.process)?,
-        FamilyBinding::Diagnostic(key) => {
-            shared.port.enroll_diagnostic(family, key, ticket.process)?
-        }
-        FamilyBinding::BackendCustody(key) => {
-            shared.port.enroll_backend_custody(family, key, ticket.process)?
-        }
-        FamilyBinding::Managed(_) => {}
-    }
-    family.validate_output_for_resume()?;
-    if stopped(context)
-        || shared
-            .admission
-            .compare_exchange(OPEN, RESUME_COMMITTED, Ordering::AcqRel, Ordering::Acquire)
-            .is_err()
-    {
-        shared.admission.store(CLOSED, Ordering::Release);
-        return Err(RegistryError::invalid("creation_canceled_contained"));
-    }
-    // The CAS is the linearization point for already-admitted resume. A later stop
-    // closes future work while retaining this finite committed native operation.
-    let resumed = shared.port.resume(family);
-    state.creation = Some(CreationFacts { root, resumed: family.resumed });
-    resumed
-}
-pub(super) fn bind(permit: ProcessWatchPermit, input: WatchInput) -> Option<WatchJob> {
-    match input {
-        WatchInput::Native(handle) => Some(permit.bind(handle)),
-        #[cfg(test)]
-        WatchInput::Simulated => Some(permit.cancel_unbound()),
-    }
-}
-fn stopped(context: &JobContext) -> bool {
-    context.cancellation_requested()
-        || context.deadline().is_some_and(|deadline| context.now() >= deadline)
-}
-struct CreationOutputGuard {
-    shared: SharedOwner,
-    armed: bool,
-}
-impl Drop for CreationOutputGuard {
-    fn drop(&mut self) {
-        if self.armed
-            && let Some(family) = &lock(&self.shared.native).family
-        {
-            family.request_output_close();
-        }
-    }
 }

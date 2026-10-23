@@ -31,6 +31,8 @@ mod main;
 mod native_retirement;
 #[path = "parent_lifecycle/normal_close.rs"]
 mod normal_close;
+#[path = "parent_lifecycle/readiness.rs"]
+mod readiness;
 pub(crate) use normal_close::DesktopCloseRequest;
 #[path = "parent_lifecycle/output.rs"]
 mod output;

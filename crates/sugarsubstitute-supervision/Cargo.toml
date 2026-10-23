@@ -16,13 +16,20 @@ k1-native-qualification = ["sugarsubstitute-execution/k1-native-qualification"]
 [target.'cfg(windows)'.dependencies]
 sugarsubstitute-contracts = { path = "../sugarsubstitute-contracts" }
 sugarsubstitute-execution = { path = "../sugarsubstitute-execution" }
+sugarsubstitute-update = { path = "../sugarsubstitute-update" }
 tracing.workspace = true
 sha2.workspace = true
+ring.workspace = true
+flate2.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 toml.workspace = true
-windows = { workspace = true, features = ["Win32_System_Console", "Win32_System_RestartManager", "Win32_System_Diagnostics_ToolHelp", "Wdk_Foundation", "Wdk_Storage_FileSystem", "Win32_System_IO", "Win32_Globalization", "Win32_NetworkManagement_IpHelper", "Win32_Networking_WinSock", "Win32_Security", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_JobObjects", "Win32_System_LibraryLoader", "Win32_UI_Shell"] }
+windows = { workspace = true, features = ["Win32_System_Console", "Win32_System_RestartManager", "Win32_System_Diagnostics_ToolHelp", "Wdk_Foundation", "Wdk_Storage_FileSystem", "Win32_System_IO", "Win32_Globalization", "Win32_NetworkManagement_IpHelper", "Win32_Networking_WinSock", "Win32_Networking_WinHttp", "Win32_Security", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_JobObjects", "Win32_System_LibraryLoader", "Win32_UI_Shell"] }
 
 [target.'cfg(windows)'.dev-dependencies]
 sugarsubstitute-execution = { path = "../sugarsubstitute-execution", features = ["boundary-fixtures"] }
+sugarsubstitute-update = { path = "../sugarsubstitute-update", features = ["boundary-fixtures"] }
+tempfile.workspace = true
 
 [lints]
 workspace = true

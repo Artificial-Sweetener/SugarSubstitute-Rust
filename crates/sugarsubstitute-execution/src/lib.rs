@@ -7,6 +7,11 @@ mod admission_liveness;
 mod admission_timing;
 mod blocking;
 mod blocking_input;
+#[cfg(feature = "boundary-fixtures")]
+#[doc(hidden)]
+pub mod http_fixture;
+/// Bounded transport for the owned upstream provisioning worker.
+pub mod provisioning_transport;
 pub use blocking_input::{BlockingInputError, ChargedBlockingInput};
 mod entry_preparation;
 #[cfg(windows)]

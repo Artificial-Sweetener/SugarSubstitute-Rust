@@ -2,6 +2,18 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Define finite backend/profile custody operations and correlated receipts.
 use super::*;
+/// Matching facts for the two actual installation-trial outputs in the authenticated helper.
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub struct InstallationTrialCustody {
+    /// Destination duplicate of the continuously owned installation run exclusion.
+    pub run: u64,
+    /// Destination duplicate of the protected immutable original trial snapshot.
+    pub snapshot: u64,
+    /// Original establishment cutoff in Windows performance-counter ticks.
+    pub until_ticks: i64,
+    /// Original performance-counter ticks per second.
+    pub frequency: i64,
+}
 /// Bounded commands exchanged only through the purpose-specific authenticated session.
 /// Handle integers are destination-process matching facts. They confer no control
 /// until the native owner adopts their actual output cells and validates type,
@@ -70,6 +82,8 @@ pub enum BackendCustodyCommand {
         birth: u64,
         /// Destination duplicate of this helper's actual containment Job.
         containment: u64,
+        /// Installation custody must be validated before acknowledging establishment.
+        trial: Option<InstallationTrialCustody>,
     },
     /// Adopt a prepared Job before any backend process creation.
     Prepare {

@@ -470,3 +470,6 @@ fn held_managed_preparation_timeout_publishes_finite_failure_without_admitting_b
 
 #[path = "acquisition_lifetime/reload.rs"]
 mod reload;
+
+#[path = "acquisition_lifetime/readiness.rs"]
+mod readiness;

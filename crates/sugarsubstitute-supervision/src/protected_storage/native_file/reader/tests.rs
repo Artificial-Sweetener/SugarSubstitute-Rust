@@ -3,6 +3,7 @@
 //! Exercise the actual counted same-inode reader under original symbol admission.
 use super::*;
 use crate::native_claims::files::test_support::{TestResult, admitted};
+use sha2::{Digest, Sha256};
 use std::sync::{
     Arc,
     atomic::{AtomicU64, Ordering},
@@ -21,8 +22,11 @@ fn original_counted_read_view_keeps_same_inode_and_credit_through_range_failure(
         ));
         std::fs::create_dir(&directory).map_err(|e| ClaimError::new("fixture_directory", e))?;
         let path = directory.join("selected.bin");
-        let contents = b"same copied inode";
-        std::fs::write(&path, contents).map_err(|e| ClaimError::new("fixture_contents", e))?;
+        let prefix = b"same copied inode";
+        let mut contents: Vec<u8> = (0..131_073).map(|index| (index % 251) as u8).collect();
+        contents[..prefix.len()].copy_from_slice(prefix);
+        let expected_digest: [u8; 32] = Sha256::digest(&contents).into();
+        std::fs::write(&path, &contents).map_err(|e| ClaimError::new("fixture_contents", e))?;
         let path =
             std::fs::canonicalize(path).map_err(|e| ClaimError::new("fixture_canonical", e))?;
         let lease =
@@ -38,7 +42,7 @@ fn original_counted_read_view_keeps_same_inode_and_credit_through_range_failure(
         );
         let mut file = NativeFile::reserve(
             1,
-            1024,
+            contents.len() as u64,
             FileGrant::ReadOnly,
             &mut Some((
                 crate::protected_storage::native_name::NativeName::Ordinary(path.clone()),
@@ -58,6 +62,7 @@ fn original_counted_read_view_keeps_same_inode_and_credit_through_range_failure(
             file.open(None, &context, &context, &mut phase)?;
             let unobserved = file.reader(&mut phase).err().map(|error| error.operation());
             let facts = file.observe(None, &context, &mut phase)?;
+            assert_eq!(facts.sha256, expected_digest);
             file.fields_mut()?.facts = Some(facts);
             let raw = file.fields()?.handle.raw();
             let mut view = file.reader(&mut phase)?;
@@ -88,7 +93,7 @@ fn original_counted_read_view_keeps_same_inode_and_credit_through_range_failure(
         assert_eq!(unopened, Some("native_read_grant"));
         assert_eq!(unobserved, Some("native_read_unobserved"));
         assert_eq!(length, contents.len() as u64);
-        assert_eq!(&copied, contents);
+        assert_eq!(&copied, prefix);
         assert_eq!(range.err().map(|error| error.operation()), Some("diagnostic_read_range"));
         assert!(retained && sharing_rejected);
         assert_eq!(custody, 1);

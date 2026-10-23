@@ -264,6 +264,7 @@ mod lifecycle;
 mod observation_retirement;
 mod output;
 mod panics;
+mod preparation;
 mod profile_prepared;
 mod retirement;
 

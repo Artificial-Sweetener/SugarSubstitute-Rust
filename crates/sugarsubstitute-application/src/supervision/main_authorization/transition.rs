@@ -24,6 +24,7 @@ impl MainAuthorizationSession {
                 Fingerprint::Controller(*browser_process_id)
             }
             Observation::MainRetired { .. } => Fingerprint::Retired,
+            Observation::MainRevealed { .. } => Fingerprint::Revealed,
             Observation::Failed { failure, .. } => {
                 if self.failure_seen || self.stage == Stage::Retired {
                     return Err(Rejection::WrongPhase.into());
@@ -77,6 +78,13 @@ impl MainAuthorizationSession {
                 self.browser_pid = Some(*browser_process_id);
                 self.browser_request = Some(request);
                 Some(Effect::ValidateBrowser { identity, browser_process_id: *browser_process_id })
+            }
+            Observation::MainRevealed { .. } => {
+                if self.stage != Stage::Authorized || self.reveal_observed {
+                    return Err(Rejection::WrongPhase.into());
+                }
+                self.reveal_observed = true;
+                None
             }
             Observation::MainRetired { .. } => {
                 if self.stage != Stage::Retiring {

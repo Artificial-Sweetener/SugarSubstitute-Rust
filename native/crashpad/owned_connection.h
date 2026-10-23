@@ -66,7 +66,8 @@ struct OwnedConnection {
   bool FailErrno(int cause);
   void RecordCleanup(DWORD cause);
   void RecordCleanupStatus(int32_t status);
-  // Flooring preserves the exact original QPC deadline, including sub-ms tails.
+  // Floor the original QPC interval, including sub-ms tails; saturate at the
+  // largest finite Windows wait without changing or renewing the cutoff.
   DWORD Remaining();
   bool CheckDeadline();
   bool ProcessBirth(HANDLE process, uint64_t* birth);

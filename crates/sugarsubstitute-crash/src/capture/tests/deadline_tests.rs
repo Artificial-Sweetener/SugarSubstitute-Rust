@@ -4,6 +4,42 @@
 use super::*;
 
 #[test]
+fn slow_registration_uses_setup_cutoff_and_rejects_completion_at_that_cutoff() -> TestResult {
+    for elapsed in [120, 3600] {
+        let rig = Rig::new()?;
+        let port = Arc::new(FakePort::default());
+        port.healthy.store(1, Ordering::Release);
+        let mut capture = WindowsCrashCapture::with_port(coordinator()?, port.clone());
+        let setup = sugarsubstitute_contracts::coordinator_entry::EntrySetupBudget::new(
+            Moment::from_nanos(0),
+        )?;
+        let budget = CaptureBudget::registration(setup.started(), setup.until())?;
+        capture
+            .submit_start(
+                &rig.client,
+                &rig.scope,
+                work_spec(2, budget.until())?,
+                budget,
+                rig.watch(1)?,
+                input()?,
+            )
+            .map_err(|_| "Start rejected")?;
+        port.entered.wait()?;
+        rig.clock.0.store(elapsed * 1_000_000_000, Ordering::Release);
+        port.release.open();
+        rig.observe_until(&mut capture, |owner| owner.start.is_none() && owner.watch.is_none())?;
+        let shared = capture.shared.as_ref().ok_or("Registration owner absent")?;
+        assert_eq!(lock(&shared.native).registered, elapsed < 3600);
+        assert_eq!(lock(&shared.native).deadline, Some(setup.until()));
+        assert_eq!(capture.start_budget, Some(budget));
+        let close_until = Moment::from_nanos((elapsed + 15) * 1_000_000_000);
+        capture.submit_close(&rig.client, &rig.scope, close_spec(3, close_until)?)?;
+        rig.observe_until(&mut capture, |owner| owner.snapshot().state == CaptureState::Closed)?;
+    }
+    Ok(())
+}
+
+#[test]
 fn foreign_or_registration_bounded_watch_rejects_before_native_effects() -> TestResult {
     let rig = Rig::new()?;
     let foreign = Rig::new()?;

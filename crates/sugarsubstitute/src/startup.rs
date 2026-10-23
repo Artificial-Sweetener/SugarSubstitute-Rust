@@ -303,7 +303,6 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
             }
             observation.ok_or("Ordinary native observation custody missing")?
         };
-        #[cfg(feature = "k1-native-qualification")]
         let revealed = match &observation {
             DesktopStartupObservation::MainRevealed(identity) => Some(*identity),
             _ => None,
@@ -312,10 +311,14 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
         let session = self.startup.as_mut().map(PreparedStartup::session_mut);
         let route = self.policy.native(observation, session)?;
         self.route(route)?;
-        #[cfg(feature = "k1-native-qualification")]
         if let Some(identity) = revealed
             && let Some(startup) = &self.startup
+            && !self.policy.closing()
+            && startup.session().phase()
+                == sugarsubstitute_application::startup::StartupPhase::Running
         {
+            self.child.observe(DesktopStartupObservation::MainRevealed(identity), Some(startup))?;
+            #[cfg(feature = "k1-native-qualification")]
             self.child.preview_after_main_revealed(identity, startup.session());
         }
         self.invalidate(phase != self.startup.as_ref().map(|startup| startup.session().phase()));

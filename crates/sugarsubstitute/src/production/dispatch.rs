@@ -11,6 +11,8 @@ use sugarsubstitute_contracts::configuration::LaunchConfiguration;
 
 /// Retain inert launch inputs; actual namespace discovery checks installed identity.
 pub(crate) struct ProductionCommand {
+    pub(crate) launch_selection:
+        Option<sugarsubstitute_supervision::setup_storage::InheritedLaunch>,
     pub(crate) installation: PathBuf,
     pub(crate) diagnostics:
         sugarsubstitute_supervision::coordinator_entry::DiagnosticStorageLocation,
@@ -60,6 +62,7 @@ pub(crate) fn parse<I: IntoIterator<Item = OsString>>(
     };
     let options = ProductionEntryOptions::parse(arguments)?;
     Ok(Dispatch::Production(Box::new(ProductionCommand {
+        launch_selection: None,
         installation,
         diagnostics,
         options: options.into(),
@@ -67,11 +70,12 @@ pub(crate) fn parse<I: IntoIterator<Item = OsString>>(
 }
 
 /// Build inert installed paths without disk IO before the first splash frame.
-fn installed_command(executable: PathBuf) -> Result<ProductionCommand, Box<dyn Error>> {
+pub(super) fn installed_command(executable: PathBuf) -> Result<ProductionCommand, Box<dyn Error>> {
     let installation =
         executable.parent().ok_or("Installed executable has no directory")?.to_path_buf();
     LaunchConfiguration::validate_path(&installation)?;
     Ok(ProductionCommand {
+        launch_selection: None,
         diagnostics:
             sugarsubstitute_supervision::coordinator_entry::DiagnosticStorageLocation::Account,
         options: ConfigurationSource::Installed(

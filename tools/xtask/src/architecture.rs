@@ -32,12 +32,23 @@ pub(crate) fn check(root: &Path, policy: &Architecture, workspace: &Workspace) -
         packages == owners && policy.owners.len() == owners.len(),
         "architecture: register each workspace package exactly once; remove stale owners",
     )?;
+    let mut registered_roots: Vec<std::path::PathBuf> = Vec::new();
     for owner in &policy.owners {
         require(
             !owner.concern.trim().is_empty() && policy.layers.contains(&owner.layer),
             format!("architecture: {} needs a concern and a declared layer", owner.package),
         )?;
-        resolve(root, &owner.root)?;
+        for relative in owner.roots() {
+            let path = resolve(root, relative)?;
+            require(
+                path.is_dir()
+                    && registered_roots
+                        .iter()
+                        .all(|other| !path.starts_with(other) && !other.starts_with(&path)),
+                format!("architecture: overlapping or non-directory owner root {relative}"),
+            )?;
+            registered_roots.push(path);
+        }
     }
     for package in &workspace.packages {
         let owner =
@@ -77,7 +88,7 @@ pub(crate) fn check(root: &Path, policy: &Architecture, workspace: &Workspace) -
             let matching = policy
                 .owners
                 .iter()
-                .filter(|owner| path.starts_with(root.join(&owner.root)))
+                .filter(|owner| owner.roots().any(|relative| path.starts_with(root.join(relative))))
                 .count();
             require(
                 matching == 1,
@@ -86,10 +97,12 @@ pub(crate) fn check(root: &Path, policy: &Architecture, workspace: &Workspace) -
         }
     }
     for owner in &policy.owners {
-        require(
-            rust_files(&resolve(root, &owner.root)?)?.iter().all(|path| seen.contains(path)),
-            format!("{}: source files fall outside architecture scope", owner.package),
-        )?;
+        for relative in owner.roots() {
+            require(
+                rust_files(&resolve(root, relative)?)?.iter().all(|path| seen.contains(path)),
+                format!("{}: source files fall outside architecture scope", owner.package),
+            )?;
+        }
     }
     Ok(())
 }
@@ -121,6 +134,25 @@ pub(crate) fn check_edge(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Auxiliary sources require unique custody and retain authored Rust scope checks.
+    #[test]
+    fn auxiliary_roots_cannot_overlap_escape_or_hide_rust() -> Result<()> {
+        let mut fixture = crate::fixtures::Repository::new()?;
+        crate::fixtures::write(fixture.root(), "installer/worker/main.ts", "export {}")?;
+        fixture.architecture.owners[0].auxiliary_roots.push("installer/worker".into());
+        check(fixture.root(), &fixture.architecture, &fixture.workspace)?;
+        fixture.architecture.owners[0].auxiliary_roots.push("installer".into());
+        assert!(check(fixture.root(), &fixture.architecture, &fixture.workspace).is_err());
+        assert!(fixture.architecture.owners[0].auxiliary_roots.pop().is_some());
+        fixture.architecture.owners[0].auxiliary_roots.push("../outside".into());
+        assert!(check(fixture.root(), &fixture.architecture, &fixture.workspace).is_err());
+        assert!(fixture.architecture.owners[0].auxiliary_roots.pop().is_some());
+        crate::fixtures::write(fixture.root(), "installer/worker/hidden.rs", "fn hidden() {}")?;
+        assert!(check(fixture.root(), &fixture.architecture, &fixture.workspace).is_err());
+        fixture.architecture.source_roots.push("installer/worker".into());
+        check(fixture.root(), &fixture.architecture, &fixture.workspace)
+    }
 
     /// Reject orphan Rust files and missing/duplicate crate owners in real trees.
     #[test]
@@ -166,6 +198,7 @@ mod tests {
         let owner = |layer: &str| Owner {
             package: layer.into(),
             root: layer.into(),
+            auxiliary_roots: Vec::new(),
             layer: layer.into(),
             concern: layer.into(),
         };

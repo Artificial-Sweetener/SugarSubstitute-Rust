@@ -33,6 +33,23 @@ class RetainedProcessIdentityTests(unittest.TestCase):
         native.kernel.GetProcessTimes.side_effect = timestamps
         return native
 
+    def test_exit_wait_requires_real_signal_on_original_handle(self):
+        native = self.native()
+        for status, exited in ((0, True), (0x102, False)):
+            native.kernel.WaitForSingleObject.return_value = status
+            self.assertEqual(native.wait_exited(7, 100), exited)
+            native.kernel.WaitForSingleObject.assert_called_with(7, 100)
+        native.kernel.WaitForSingleObject.return_value = 0xFFFFFFFF
+        with self.assertRaisesRegex(RuntimeError, "wait status"):
+            native.wait_exited(7, 100)
+
+    def test_exit_wait_rejects_unbounded_or_malformed_timeouts_before_native_call(self):
+        native = self.native()
+        for timeout in (-1, 2001, 0xFFFFFFFF, True, 100.0, None):
+            with self.subTest(timeout=timeout), self.assertRaises(ValueError):
+                native.wait_exited(7, timeout)
+        native.kernel.WaitForSingleObject.assert_not_called()
+
     def test_retained_lifetime_reads_pid_and_creation_without_live_image_query(self):
         native = self.native()
         native.kernel.QueryFullProcessImageNameW.side_effect = OSError("image query unavailable after exit")
@@ -92,6 +109,58 @@ class RetainedProcessIdentityTests(unittest.TestCase):
             self.assertIs(caught.exception, cause)
 
 
+class ProcessSuspensionTests(unittest.TestCase):
+    """Fault injection adds suspend permission only after matching retained native identity."""
+
+    def setUp(self):
+        self.processes = object.__new__(ReferenceProcesses)
+        self.processes.kernel = Mock()
+        self.processes.native = Mock()
+        self.processes.kernel.OpenProcess.return_value = 9
+        self.processes.kernel.CloseHandle.return_value = True
+        self.processes.native.NtSuspendProcess.return_value = 0
+        self.processes.lifetime_identity = Mock(side_effect=[(42, 100), (42, 100)])
+
+    def test_suspend_uses_verified_permission_handle_and_releases_only_that_handle(self):
+        self.processes.suspend(7)
+        self.processes.kernel.OpenProcess.assert_called_once_with(0x1800, False, 42)
+        self.assertEqual(self.processes.lifetime_identity.call_args_list,
+                         [unittest.mock.call(7), unittest.mock.call(9)])
+        self.processes.native.NtSuspendProcess.assert_called_once_with(9)
+        self.processes.kernel.CloseHandle.assert_called_once_with(9)
+        self.processes.kernel.TerminateProcess.assert_not_called()
+
+    def test_changed_identity_never_receives_suspend_and_new_handle_is_closed(self):
+        self.processes.lifetime_identity.side_effect = [(42, 100), (42, 101)]
+        with self.assertRaisesRegex(RuntimeError, "differs from retained custody"):
+            self.processes.suspend(7)
+        self.processes.native.NtSuspendProcess.assert_not_called()
+        self.processes.kernel.CloseHandle.assert_called_once_with(9)
+
+    def test_native_suspend_failure_remains_observable_and_releases_new_handle(self):
+        self.processes.native.NtSuspendProcess.return_value = -0x3FFFFFDE
+        with self.assertRaisesRegex(RuntimeError, "-0x3fffffde"):
+            self.processes.suspend(7)
+        self.processes.kernel.CloseHandle.assert_called_once_with(9)
+
+    def test_permission_failure_does_not_fault_or_close_original_process(self):
+        self.processes.kernel.OpenProcess.return_value = 0
+        cause = OSError("Suspend permission denied")
+        with patch("tools.splash_parity.startup_windows.ctypes.WinError", return_value=cause):
+            with self.assertRaises(OSError) as caught:
+                self.processes.suspend(7)
+        self.assertIs(caught.exception, cause)
+        self.processes.native.NtSuspendProcess.assert_not_called()
+        self.processes.kernel.CloseHandle.assert_not_called()
+
+    def test_unverifiable_original_never_opens_or_suspends_a_process(self):
+        self.processes.lifetime_identity.side_effect = OSError("Identity unavailable")
+        with self.assertRaises(OSError):
+            self.processes.suspend(7)
+        self.processes.kernel.OpenProcess.assert_not_called()
+        self.processes.native.NtSuspendProcess.assert_not_called()
+
+
 class ReferenceOwnershipTests(unittest.TestCase):
     """Fake only ancestry and retained process handles, enforcing the production interpreter contract."""
 
@@ -108,7 +177,7 @@ class ReferenceOwnershipTests(unittest.TestCase):
         self.processes = Mock()
         self.identities = {7: (42, self.launcher, 100), 9: (83, self.base, 110), 10: (84, self.base, 120)}
         self.processes.identity.side_effect = lambda handle: self.identities[handle]
-        self.processes.children.return_value = [(11, "conhost.exe"), (83, "base.exe")]
+        self.processes.ancestry.return_value = {42: [(11, "conhost.exe"), (83, "base.exe")]}
         self.processes.open.return_value = 9
         self.processes.alive.return_value = True
 
@@ -141,7 +210,7 @@ class ReferenceOwnershipTests(unittest.TestCase):
                     owner.bind(float("inf"))
                 self.assertIsNone(owner.handle)
         self.identities[9] = (83, self.base, 110)
-        self.processes.children.return_value = [(83, "base.exe"), (84, "base.exe")]
+        self.processes.ancestry.return_value = {42: [(83, "base.exe"), (84, "base.exe")]}
         self.processes.open.side_effect = [9, 10]
         with self.assertRaisesRegex(RuntimeError, "multiple matching"):
             self.owner().bind(float("inf"))
@@ -150,7 +219,7 @@ class ReferenceOwnershipTests(unittest.TestCase):
 
     def test_missing_child_and_dead_launcher_fail_with_original_deadline(self) -> None:
         """A conhost-only tree or terminated redirector cannot produce an accepted window owner."""
-        self.processes.children.return_value = [(11, "conhost.exe")]
+        self.processes.ancestry.return_value = {42: [(11, "conhost.exe")]}
         with patch("tools.splash_parity.startup_windows.time.perf_counter", side_effect=[0, 2]), \
                 patch("tools.splash_parity.startup_windows.time.sleep"):
             with self.assertRaisesRegex(RuntimeError, "launch deadline"):

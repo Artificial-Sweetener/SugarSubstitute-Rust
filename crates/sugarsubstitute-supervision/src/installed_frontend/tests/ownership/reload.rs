@@ -46,7 +46,8 @@ fn fresh_snapshot_observes_edits_without_retiring_original_client_or_copying_old
     assert_ne!(original.manifest().assets()[0].sha256(), edited.manifest().assets()[0].sha256());
     original.validate_live()?;
     edited.validate_live()?;
-    let mut close = rig.owner.submit_close(&rig.client, &rig.scope, Harness::spec(3, 2000)?)?;
+    let mut close =
+        rig.owner.submit_close(&rig.client, &rig.scope, Harness::close_spec(3, 2000)?)?;
     rig.wake.until(&rig.client, || matches!(close.status().phase, JobPhase::Terminal(_)))?;
     assert!(matches!(
         close.try_take_completion().ok_or("Original close absent")?.outcome,
@@ -54,7 +55,7 @@ fn fresh_snapshot_observes_edits_without_retiring_original_client_or_copying_old
     ));
     assert!(original.validate_live().is_err());
     edited.validate_live()?;
-    let mut close = fresh.submit_close(&rig.client, &rig.scope, Harness::spec(4, 2000)?)?;
+    let mut close = fresh.submit_close(&rig.client, &rig.scope, Harness::close_spec(4, 2000)?)?;
     rig.wake.until(&rig.client, || matches!(close.status().phase, JobPhase::Terminal(_)))?;
     assert!(matches!(
         close.try_take_completion().ok_or("Fresh close absent")?.outcome,

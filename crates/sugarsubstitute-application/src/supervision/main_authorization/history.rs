@@ -11,6 +11,7 @@ pub(super) enum Fingerprint {
     Environment,
     Controller(NonZeroU32),
     Retired,
+    Revealed,
     Failure(LifecycleFailureCode),
 }
 #[derive(Clone, Copy)]

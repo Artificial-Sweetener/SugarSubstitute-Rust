@@ -176,7 +176,7 @@ impl ProcessCreationDriver for Driver {
                     .ok_or_else(|| RegistryError::invalid("recovery_child_watch_permit"))?;
                 let wake = {
                     let mut state = lock(&self.shared.state);
-                    state.watch = submission::bind(permit, duplicate);
+                    state.watch = creation::bind(permit, duplicate);
                     state.wake.clone()
                 };
                 if let Some(wake) = wake {

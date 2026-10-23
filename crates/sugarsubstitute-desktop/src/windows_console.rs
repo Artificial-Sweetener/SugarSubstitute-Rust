@@ -30,7 +30,7 @@ pub(crate) use render_proxy::diagnostic_code;
 mod text;
 use native::{Library, Peer, Port};
 /// No native child can outlive its original document funding or callback custody.
-pub(super) struct Console {
+pub(crate) struct Console {
     creation: Creation<Library, Peer>,
     callback: Rc<callback::Callback>,
     documents: Option<Documents>,
@@ -41,7 +41,7 @@ pub(super) struct Console {
 }
 impl Console {
     /// Claim/copy first; the containing Controls slot adopts this inert owner before initialize.
-    pub(super) fn new(
+    pub(crate) fn new(
         proxy: EventLoopProxy<NativeAction>,
         timings: Option<crate::timing::TimingObserver>,
         frame: &PreparedFrame,
@@ -64,7 +64,7 @@ impl Console {
         })
     }
     /// Each partial native return is retained by the existing Creation transaction.
-    pub(super) fn initialize(
+    pub(crate) fn initialize(
         &mut self,
         window: &Window,
         view: &ConsoleView<'_>,
@@ -81,7 +81,7 @@ impl Console {
         Ok(())
     }
     /// Publish current data only after complete copying, formatting and selection restoration.
-    pub(super) fn present(
+    pub(crate) fn present(
         &mut self,
         window: &Window,
         frame: &PreparedFrame,
@@ -178,7 +178,7 @@ impl Console {
         self.visible.then(|| self.bounds.map(|(bounds, _)| bounds.y)).flatten()
     }
     /// Close actions before native teardown; failed closes keep both document claims.
-    pub(super) fn shutdown(&mut self, window: &Window) -> Result<(), DesktopError> {
+    pub(crate) fn shutdown(&mut self, window: &Window) -> Result<(), DesktopError> {
         self.callback.active.set(false);
         let mut port = Port {
             window,
@@ -190,8 +190,17 @@ impl Console {
         self.creation.shutdown(&mut port)?;
         Ok(())
     }
-    pub(super) fn retired(&self) -> bool {
+    pub(crate) fn retired(&self) -> bool {
         self.creation.retired(Rc::strong_count(&self.callback) == 1)
+    }
+    /// Raise the original console above a sibling webview without replacing its text peer.
+    pub(crate) fn raise(&self) -> Result<(), DesktopError> {
+        if let Some(peer) = self.creation.peers.first() {
+            peer.value.live()?;
+            super::stacking::raise(peer.value.hwnd)?;
+            peer.value.live()?;
+        }
+        Ok(())
     }
 }
 impl Drop for Console {

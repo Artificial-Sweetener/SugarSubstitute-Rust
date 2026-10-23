@@ -82,7 +82,7 @@ pub struct CaptureAttachExpectation {
     attach: CaptureBudget,
 }
 impl CaptureAttachExpectation {
-    /// Bind the actual capture lifetime to exact build/process facts and original60s budget.
+    /// Bind the actual capture lifetime to exact build/process facts and original setup budget.
     /// Healthy attachment does not start a shutdown budget.
     /// # Errors
     /// Rejects foreign capture targets, equal PIDs and invalid build annotation spelling.
