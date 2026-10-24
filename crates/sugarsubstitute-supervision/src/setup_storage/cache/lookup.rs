@@ -32,15 +32,15 @@ impl RuntimeCache {
                 let directory = Directory::open(&parent.path().join(&key), false)?;
                 // Unpublished replacements must not hide the last complete generation, including
                 // while their producer retains its exclusive native lease. Recheck after pinning.
-                if record::load(&directory, namespace, &key, protection)?.staged {
+                if record::load(&directory, namespace, &key, protection, context)?.staged {
                     return Ok(None);
                 }
                 let pin = if writable {
-                    record::exclusion(&directory, protection)?
+                    record::exclusion(&directory, protection, context)?
                 } else {
-                    record::reader(&directory, protection)?
+                    record::reader(&directory, protection, context)?
                 };
-                let record = record::load(&directory, namespace, &key, protection)?;
+                let record = record::load(&directory, namespace, &key, protection, context)?;
                 if record.staged
                     || record.deleting
                     || (!writable && record.producer.is_some())

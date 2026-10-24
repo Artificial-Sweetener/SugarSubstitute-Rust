@@ -2,7 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain admitted directory ancestry and original controls through lazy native enumeration.
 use super::Directory;
-use crate::durable_storage::check;
+#[cfg(test)]
+use crate::durable_storage::control::InterruptedEffect;
+use crate::durable_storage::control::effect;
 use std::{ffi::OsString, fs, io, path::PathBuf};
 use sugarsubstitute_contracts::execution::JobContext;
 
@@ -73,35 +75,6 @@ impl Entry<'_> {
     /// Reobserve current metadata without following the final link, under original controls.
     pub(crate) fn current_metadata(&self) -> io::Result<fs::Metadata> {
         effect(self.context, || fs::symlink_metadata(self.path()))
-    }
-}
-
-/// Observe controls around an actual native boundary without discarding a simultaneous failure.
-fn effect<T>(context: &JobContext, operation: impl FnOnce() -> io::Result<T>) -> io::Result<T> {
-    check(context)?;
-    let result = operation();
-    match (result, check(context)) {
-        (Ok(value), Ok(())) => Ok(value),
-        (Err(cause), Ok(())) | (Ok(_), Err(cause)) => Err(cause),
-        (Err(source), Err(control)) => {
-            Err(io::Error::new(control.kind(), InterruptedEffect { source, control }))
-        }
-    }
-}
-/// Retain the original I/O cause and the control that ended the same effect.
-#[derive(Debug)]
-struct InterruptedEffect {
-    source: io::Error,
-    control: io::Error,
-}
-impl std::fmt::Display for InterruptedEffect {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(formatter, "{}; native storage effect failed: {}", self.control, self.source)
-    }
-}
-impl std::error::Error for InterruptedEffect {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(&self.source)
     }
 }
 

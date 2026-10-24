@@ -6,8 +6,12 @@ mod child;
 mod entries;
 #[allow(unsafe_code)]
 mod identity;
+mod ordinary;
 use super::invalid;
 pub(crate) use identity::{file_identity, single_link};
+pub(crate) use ordinary::{
+    ExistingAccess, FileExclusion, length, modified, read_admitted, set_modified,
+};
 use std::{
     fs::{File, OpenOptions},
     io::{self, Write},

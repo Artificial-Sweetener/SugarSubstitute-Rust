@@ -2,11 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 /** Headless upstream worker. The Rust host owns its process family and visible window. */
 import { app } from 'electron'
-import fs from 'node:fs'
 import { format } from 'node:util'
 import { createConnection, type Socket } from 'node:net'
 import { Decoder, VERSION } from './protocol.mjs'
-import { configDir } from './paths'
 import { options } from './selection'
 import { inspect, provision } from './provision'
 import { integrate } from './integration'
@@ -62,9 +60,9 @@ for (const level of ['log', 'info', 'warn', 'error', 'debug'] as const) {
     send(active?.id ?? null, 'diagnostic', { level, message: format(...args).slice(-8192) })
   }
 }
-fs.mkdirSync(configDir(), { recursive: true })
-app.setPath('userData', configDir())
-app.setPath('sessionData', argument('cache-runtime'))
+const runtimeProfile = argument('cache-runtime')
+app.setPath('userData', runtimeProfile)
+app.setPath('sessionData', runtimeProfile)
 app.commandLine.appendSwitch('disk-cache-size', String(64 * 1024 * 1024))
 app.disableHardwareAcceleration()
 observe((event, properties) => send(active?.id ?? null, 'diagnostic', { event, properties }))

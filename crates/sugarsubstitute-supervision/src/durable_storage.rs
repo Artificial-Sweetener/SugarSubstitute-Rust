@@ -8,6 +8,7 @@
 //! authorization, migration, recovery and the decision to replace existing state.
 //! Paths borrowed from a retained object are observations, never authority grants.
 
+mod control;
 pub(crate) mod files;
 pub(crate) mod input;
 pub(crate) mod payload;

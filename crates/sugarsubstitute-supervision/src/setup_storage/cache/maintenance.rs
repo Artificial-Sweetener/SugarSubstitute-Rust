@@ -116,13 +116,14 @@ impl RuntimeCache {
                 }
                 let loaded = protection::with(context, |protection| {
                     let mut record = if retiring {
-                        journal(&parent, namespace, &key, protection)?
+                        journal(&parent, namespace, &key, protection, context)?
                     } else {
                         record::load(
                             &Directory::open(&parent.path().join(&key), false)?,
                             namespace,
                             &key,
                             protection,
+                            context,
                         )?
                     };
                     let directory = match Directory::open(&parent.path().join(&key), false) {
@@ -137,12 +138,13 @@ impl RuntimeCache {
                     if directory.identity()? != record.identity {
                         return Err(invalid("Cache cleanup native directory identity changed"));
                     }
-                    let _exclusion = match record::exclusion(&directory, protection) {
+                    let _exclusion = match record::exclusion(&directory, protection, context) {
                         Ok(exclusion) => exclusion,
                         Err(cause) if record::busy(&cause) => {
-                            let charge = match record::reader(&directory, protection) {
+                            let charge = match record::reader(&directory, protection, context) {
                                 Ok(reader) => {
-                                    record.touched = record.touched.max(record::last_use(&reader)?);
+                                    record.touched =
+                                        record.touched.max(record::last_use(&reader, context)?);
                                     tree::inspect(&directory, &record, context)?.bytes
                                 }
                                 Err(cause) if record::busy(&cause) => record.reserved,
@@ -166,7 +168,7 @@ impl RuntimeCache {
                         )?);
                         return Ok((record, charged, true, false));
                     }
-                    record.touched = record.touched.max(record::last_use(&_exclusion)?);
+                    record.touched = record.touched.max(record::last_use(&_exclusion, context)?);
                     match tree::inspect(&directory, &record, context) {
                         Ok(inventory) => Ok((record, inventory.bytes, false, false)),
                         Err(cause) if record::busy(&cause) => {

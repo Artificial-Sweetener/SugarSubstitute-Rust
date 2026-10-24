@@ -20,7 +20,7 @@ use admission::Admission;
 pub use candidate::PreparedCandidate;
 use serde::{Deserialize, Serialize};
 use std::{
-    fs::{File, OpenOptions},
+    fs::File,
     io,
     path::{Path, PathBuf},
     sync::Arc,

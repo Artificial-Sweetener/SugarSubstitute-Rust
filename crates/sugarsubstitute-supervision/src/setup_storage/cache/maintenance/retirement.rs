@@ -22,7 +22,7 @@ impl RuntimeCache {
         };
         if let Some(directory) = directory {
             let exclusion = match protection::with(context, |protection| {
-                record::exclusion(&directory, protection)
+                record::exclusion(&directory, protection, context)
             }) {
                 Ok(exclusion) => Some(exclusion),
                 Err(cause) if record::busy(&cause) => return Ok(Removal::Busy),
@@ -35,9 +35,15 @@ impl RuntimeCache {
             };
             let mut record = protection::with(context, |protection| {
                 if candidate.retiring {
-                    journal(&parent, candidate.namespace, &candidate.key, protection)
+                    journal(&parent, candidate.namespace, &candidate.key, protection, context)
                 } else {
-                    record::load(&directory, candidate.namespace, &candidate.key, protection)
+                    record::load(
+                        &directory,
+                        candidate.namespace,
+                        &candidate.key,
+                        protection,
+                        context,
+                    )
                 }
             })?;
             if directory.identity()? != record.identity {
@@ -50,7 +56,7 @@ impl RuntimeCache {
                 && let Some(now) = expiry_now
             {
                 let touched = match &exclusion {
-                    Some(file) => record.touched.max(record::last_use(file)?),
+                    Some(file) => record.touched.max(record::last_use(file, context)?),
                     None => record.touched,
                 };
                 if now.checked_sub(touched).is_none_or(|age| age < candidate.namespace.retention())
@@ -91,10 +97,12 @@ pub(super) fn journal(
     namespace: Namespace,
     key: &str,
     protection: &Protection,
+    context: &JobContext,
 ) -> io::Result<record::Record> {
     let mut file = parent.read(&format!("{key}.retiring"))?;
     protection.verify_file(&file)?;
-    let record: record::Record = serde_json::from_slice(&record::read_metadata(&mut file)?)?;
+    let record: record::Record =
+        serde_json::from_slice(&files::read_admitted(&mut file, MAX_RECORD, context)?)?;
     record.validate(namespace, key)?;
     if !record.deleting {
         return Err(invalid("Cache deletion journal is not retired"));

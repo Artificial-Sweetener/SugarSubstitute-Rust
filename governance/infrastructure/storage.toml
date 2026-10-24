@@ -10,7 +10,7 @@ implementation_root = "crates/sugarsubstitute-supervision/src/durable_storage"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/files.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:7c42ffff9c421a8733a2785deef8d935d885090f70f9fa43bd4ae90629b92a45"
+source_sha256 = "sha256:c2e9538854f6feb5be976ba48bb1f0c3caf15a2779cd9692722a475609cc5f7e"
 disposition = "implementation"
 rationale = "Retained filesystem publication or identity-checked retirement mechanics; feature authorization remains with the caller."
 

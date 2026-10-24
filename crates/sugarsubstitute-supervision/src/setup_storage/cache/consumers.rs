@@ -38,7 +38,7 @@ impl CacheLease {
             let CacheLease { directory, _data, record, writable: _, _exclusion, _cache, _memory } =
                 self;
             drop(_exclusion);
-            let exclusion = record::reader(&directory, protection)?;
+            let exclusion = record::reader(&directory, protection, context)?;
             Ok(Self {
                 directory,
                 _data,

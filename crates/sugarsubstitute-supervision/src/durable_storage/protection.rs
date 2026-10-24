@@ -29,6 +29,7 @@ use windows::Win32::{Foundation::HANDLE, Storage::FileSystem::*};
 mod exclusion;
 mod outcome;
 mod publication;
+mod retirement;
 pub(crate) use outcome::{DomainFailure, with_domain};
 pub(crate) use publication::Publication;
 

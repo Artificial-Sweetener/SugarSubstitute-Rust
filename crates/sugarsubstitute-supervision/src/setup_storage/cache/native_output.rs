@@ -89,8 +89,8 @@ impl PendingEntries {
         for key in self.keys.by_ref() {
             let opened = protection::with(context, |protection| {
                 let directory = Directory::open(&parent.path().join(&key), false)?;
-                let exclusion = record::exclusion(&directory, protection)?;
-                let record = record::load(&directory, namespace, &key, protection)?;
+                let exclusion = record::exclusion(&directory, protection, context)?;
+                let record = record::load(&directory, namespace, &key, protection, context)?;
                 if record.producer.is_none()
                     || record.deleting
                     || parent.path().join(format!("{key}.retiring")).exists()

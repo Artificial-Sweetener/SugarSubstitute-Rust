@@ -106,8 +106,8 @@ impl CacheLease {
     /// Preserves cancellation and failed metadata publication without releasing custody.
     pub fn touch(&mut self, now: u64, context: &JobContext) -> io::Result<()> {
         check(context)?;
-        record::touch(&self._exclusion, now)?;
-        self.record.touched = self.record.touched.max(record::last_use(&self._exclusion)?);
+        record::touch(&self._exclusion, now, context)?;
+        self.record.touched = self.record.touched.max(record::last_use(&self._exclusion, context)?);
         Ok(())
     }
     /// Open a declared regular cache file; feature owners must verify its content before use.

@@ -4,10 +4,7 @@
 use super::*;
 mod names;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::BTreeSet,
-    io::{Read, Write},
-};
+use std::collections::BTreeSet;
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -81,29 +78,18 @@ pub(super) fn load(
     namespace: Namespace,
     key: &str,
     protection: &Protection,
+    context: &JobContext,
 ) -> io::Result<Record> {
-    let mut file = metadata_record(directory)?;
+    let mut file =
+        directory.open_existing("record", files::ExistingAccess::ReplaceableRead, context)?;
     protection.verify_file(&file)?;
-    let record: Record = serde_json::from_slice(&read_metadata(&mut file)?)?;
+    let record: Record =
+        serde_json::from_slice(&files::read_admitted(&mut file, MAX_RECORD, context)?)?;
     record.validate(namespace, key)?;
     if directory.identity()? != record.identity {
         return Err(invalid("Cache entry native identity changed"));
     }
     Ok(record)
-}
-/// Read fixed-size metadata without geometric buffer growth; native opens exclude writers.
-/// The extra-byte probe still rejects a changed length before any record is accepted.
-pub(super) fn read_metadata(file: &mut File) -> io::Result<Vec<u8>> {
-    let length = usize::try_from(file.metadata()?.len()).map_err(io::Error::other)?;
-    if length > MAX_RECORD {
-        return Err(invalid("Cache metadata exceeds its byte bound"));
-    }
-    let mut bytes = vec![0; length];
-    file.read_exact(&mut bytes)?;
-    if file.read(&mut [0])? != 0 {
-        return Err(invalid("Cache metadata changed length"));
-    }
-    Ok(bytes)
 }
 /// Flush a replacement before atomically publishing its complete inventory.
 pub(super) fn save(directory: &Directory, record: &Record, context: &JobContext) -> io::Result<()> {
@@ -137,118 +123,70 @@ pub(super) fn publish(
     replace: bool,
     context: &JobContext,
 ) -> io::Result<()> {
-    use std::{
-        fs::OpenOptions,
-        os::windows::fs::{MetadataExt, OpenOptionsExt},
-    };
-    if bytes.len() > MAX_RECORD {
-        return Err(invalid("Cache metadata exceeds its byte bound"));
-    }
-    let staged = directory.path().join(format!("{name}.next"));
-    protection::with(context, |protection| {
-        let mut file = match OpenOptions::new()
-            .read(true)
-            .write(true)
-            .share_mode(0)
-            .custom_flags(0x0020_0000)
-            .open(&staged)
-        {
-            Ok(file) => file,
-            Err(cause) if cause.kind() == io::ErrorKind::NotFound => {
-                protection.file(&staged, context)?
-            }
-            Err(cause) => return Err(cause),
-        };
-        let metadata = file.metadata()?;
-        if !metadata.is_file() || metadata.file_attributes() & 0x400 != 0 {
-            return Err(invalid("Cache scratch storage is not a regular file"));
-        }
-        protection.verify_file(&file)?;
-        files::single_link(&file)?;
-        file.set_len(0)?;
-        file.write_all(bytes)?;
-        file.sync_all()?;
-        let identity = files::file_identity(&file)?;
-        drop(file);
-        protection.publish(
-            &staged,
-            &directory.path().join(name),
-            identity,
-            protection::Publication::File { replace },
-            context,
-        )
-    })
+    crate::durable_storage::records::publish_reusable(
+        directory,
+        name,
+        &format!("{name}.next"),
+        bytes,
+        MAX_RECORD,
+        replace,
+        context,
+    )
 }
 
 /// Acquire an existing OS exclusion without creating or repairing an unknown rendezvous.
-pub(super) fn exclusion(directory: &Directory, protection: &Protection) -> io::Result<File> {
-    pin(directory, protection, true)
+pub(super) fn exclusion(
+    directory: &Directory,
+    protection: &Protection,
+    context: &JobContext,
+) -> io::Result<File> {
+    pin(directory, protection, true, context)
 }
 /// Retain a shared reader pin that conflicts with writers and cleanup across processes.
-pub(super) fn reader(directory: &Directory, protection: &Protection) -> io::Result<File> {
-    pin(directory, protection, false)
+pub(super) fn reader(
+    directory: &Directory,
+    protection: &Protection,
+    context: &JobContext,
+) -> io::Result<File> {
+    pin(directory, protection, false, context)
 }
-/// Open one validated empty lease with explicit data sharing and metadata update rights.
-fn pin(directory: &Directory, protection: &Protection, writable: bool) -> io::Result<File> {
-    use std::{
-        fs::OpenOptions,
-        os::windows::fs::{MetadataExt, OpenOptionsExt},
-    };
-    use windows::Win32::Storage::FileSystem::{
-        FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_WRITE_ATTRIBUTES,
-    };
+/// Cache policy requires an empty protected lease; storage owns actual access and sharing.
+fn pin(
+    directory: &Directory,
+    protection: &Protection,
+    writable: bool,
+    context: &JobContext,
+) -> io::Result<File> {
     let access = if writable {
-        (FILE_GENERIC_READ | FILE_GENERIC_WRITE).0
+        files::ExistingAccess::Exclusive
     } else {
-        (FILE_GENERIC_READ | FILE_WRITE_ATTRIBUTES).0
+        files::ExistingAccess::SharedMetadata
     };
-    let file = OpenOptions::new()
-        .access_mode(access)
-        .share_mode(if writable { 0 } else { 1 })
-        .custom_flags(0x0020_0000)
-        .open(directory.path().join("lease"))?;
-    let metadata = file.metadata()?;
-    if !metadata.is_file() || metadata.file_attributes() & 0x400 != 0 || metadata.len() != 0 {
-        return Err(invalid("Cache lease must be an empty regular file"));
+    let file = directory.open_existing("lease", access, context)?;
+    if files::length(&file, context)? != 0 {
+        return Err(invalid("Cache lease must be empty"));
     }
     protection.verify_file(&file)?;
-    Ok(file)
-}
-/// Permit atomic record replacement while retaining immutable bytes from the opened generation.
-fn metadata_record(directory: &Directory) -> io::Result<File> {
-    use std::{
-        fs::OpenOptions,
-        os::windows::fs::{MetadataExt, OpenOptionsExt},
-    };
-    let file = OpenOptions::new()
-        .read(true)
-        .share_mode(5)
-        .custom_flags(0x0020_0000)
-        .open(directory.path().join("record"))?;
-    let metadata = file.metadata()?;
-    if !metadata.is_file() || metadata.file_attributes() & 0x400 != 0 {
-        return Err(invalid("Cache metadata must be a regular file"));
-    }
+    check(context)?;
     Ok(file)
 }
 /// Initialize filesystem retention metadata from the same injected UTC clock as its record.
-pub(super) fn initialize_time(file: &File, now: u64) -> io::Result<()> {
+pub(super) fn initialize_time(file: &File, now: u64, context: &JobContext) -> io::Result<()> {
     let time = std::time::UNIX_EPOCH
         .checked_add(std::time::Duration::from_secs(now))
         .ok_or_else(|| invalid("Cache access time exceeded its supported range"))?;
-    file.set_times(std::fs::FileTimes::new().set_modified(time))
+    files::set_modified(file, time, context)
 }
 /// Read native retention metadata. It never grants package or installation authority.
-pub(super) fn last_use(file: &File) -> io::Result<u64> {
-    file.metadata()?
-        .modified()?
+pub(super) fn last_use(file: &File, context: &JobContext) -> io::Result<u64> {
+    files::modified(file, context)?
         .duration_since(std::time::UNIX_EPOCH)
         .map(|time| time.as_secs())
         .map_err(io::Error::other)
 }
 /// Clamp single-observation clock regression before updating cache-only native timestamps.
-pub(super) fn touch(file: &File, now: u64) -> io::Result<()> {
-    initialize_time(file, now.max(last_use(file)?))
+pub(super) fn touch(file: &File, now: u64, context: &JobContext) -> io::Result<()> {
+    initialize_time(file, now.max(last_use(file, context)?), context)
 }
 /// Recognize original Windows sharing contention through retained error causes.
 pub(super) fn busy(cause: &io::Error) -> bool {

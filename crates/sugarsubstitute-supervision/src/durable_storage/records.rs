@@ -2,11 +2,13 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain selected ordinary record ancestry without granting raw handles or cleanup authority.
 mod publication;
+mod reusable;
 use super::{
     check,
     files::{self, Directory},
     invalid,
 };
+pub(crate) use reusable::publish_reusable;
 use std::{
     fs::ReadDir,
     io,

@@ -33,8 +33,8 @@ impl RuntimeCache {
         else {
             return Ok(None);
         };
-        record::touch(&exclusion, now)?;
-        record.touched = record.touched.max(record::last_use(&exclusion)?);
+        record::touch(&exclusion, now, context)?;
+        record.touched = record.touched.max(record::last_use(&exclusion, context)?);
         let data = Directory::open(&directory.path().join("data"), false)?;
         Ok(Some(CacheLease {
             directory,
@@ -109,8 +109,9 @@ impl RuntimeCache {
                     let parent = self.namespace(namespace)?;
                     let directory =
                         create(&parent, namespace, &physical, maximum, now, fresh, context)?;
-                    let exclusion = record::exclusion(&directory, protection)?;
-                    let record = record::load(&directory, namespace, &physical, protection)?;
+                    let exclusion = record::exclusion(&directory, protection, context)?;
+                    let record =
+                        record::load(&directory, namespace, &physical, protection, context)?;
                     (directory, exclusion, record)
                 }
             };
@@ -124,8 +125,8 @@ impl RuntimeCache {
                 return Err(invalid("Cache reservation differs from its semantic identity"));
             }
             self.reclaim(Some((namespace, 0)), now, context)?;
-            record::touch(&exclusion, now)?;
-            record.touched = record.touched.max(record::last_use(&exclusion)?);
+            record::touch(&exclusion, now, context)?;
+            record.touched = record.touched.max(record::last_use(&exclusion, context)?);
             let data = Directory::open(&directory.path().join("data"), false)?;
             Ok((directory, data, exclusion, record))
         })
@@ -158,7 +159,7 @@ fn create(
         let directory = Directory::open(&staged, false)?;
         protection.directory(&staged.join("data"), Mode::CreateNew, context)?;
         let lease = protection.file(&staged.join("lease"), context)?;
-        record::initialize_time(&lease, now)?;
+        record::initialize_time(&lease, now, context)?;
         lease.sync_all()?;
         let consumers = super::consumers::initialize(&directory, protection, context)?;
         let record = record::Record {

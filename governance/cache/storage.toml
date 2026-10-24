@@ -6,13 +6,6 @@ registry_source = "crates/sugarsubstitute-supervision/src/setup_storage/cache/po
 source_roots = ["crates", "tools", "native", "installer"]
 
 [[script_boundaries]]
-path = "installer/worker/main.ts"
-owner = "sugarsubstitute"
-source_sha256 = "sha256:7d3926ca3c4e8ee377ed8530eda8ea04f8f0270651fb6f809ccccbfc48899883"
-rationale = "Private headless Electron startup creates its configuration directory; cached payloads use prepared native grants."
-role = "external_runtime"
-
-[[script_boundaries]]
 path = "installer/worker/provision.ts"
 owner = "sugarsubstitute"
 source_sha256 = "sha256:cd4e77aef993eba60104226e8aa17b714db61de0f3cc8f760d1c18feb9cd300e"
@@ -71,7 +64,7 @@ role = "fixture"
 [[script_boundaries]]
 path = "installer/tests/worker.test.mjs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:1ee2f11e788dfc5bd5ce68eb317a216557726ddb5bf5202d64b27789a3b04a57"
+source_sha256 = "sha256:8700fe5541520988751df99dd7eda4575fa85ec18291a9d992cb9fd740c5a672"
 rationale = "Owned temporary worker arguments and actual headless Electron verify private startup, protocol rejection and host closure."
 role = "fixture"
 
