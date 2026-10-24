@@ -1,4 +1,4 @@
-import { canvasInputSourceKey } from '../../core/embedded/CanvasRuntime.js';
+import { InputPreviewContent } from '../application/InputPreviewContent.js';
 import { InputPreviewSurface } from './InputPreviewSurface.js';
 import { InputPreviewResolutionObserver } from './InputPreviewResolutionObserver.js';
 import { readPluginMode } from '../../core/PluginMode.js';
@@ -36,7 +36,7 @@ export class InputPreviewRows {
             this.#empty.frame(canvas.width, canvas.height);
         for (const [id, row] of this.#entries)
             if (!ids.has(id)) {
-                row.stop();
+                row.content?.dispose();
                 row.resolution.dispose();
                 row.surface.element.remove();
                 this.#entries.delete(id);
@@ -52,14 +52,16 @@ export class InputPreviewRows {
             if (destination !== row.surface.element)
                 this.element.insertBefore(row.surface.element, destination);
             const document = this.binding.context?.document;
-            if (document && (entry.source.kind === 'canvas' || !entry.source.file))
+            if (document &&
+                ((this.binding.loader.kind === 'mask' &&
+                    this.binding.context?.targets.includes('composition')) ||
+                    entry.source.kind === 'canvas' ||
+                    !entry.source.file))
                 row.surface.frame(document.width, document.height);
             if (this.binding.busy || this.binding.error) {
-                row.stop();
-                row.stop = () => { };
+                row.content?.dispose();
+                row.content = null;
                 row.reference = '';
-                row.raw = null;
-                row.paintSerial++;
                 if (this.binding.error)
                     row.surface.unavailable('Source unavailable');
                 else
@@ -69,22 +71,16 @@ export class InputPreviewRows {
             const size = row.resolution.resolution;
             if (!size)
                 continue;
-            const reference = canvasInputSourceKey(entry.source) +
-                ':' +
-                String(size) +
-                (entry.source.kind === 'file' ? ':' + JSON.stringify(this.binding.preview.settings) : '');
+            const reference = InputPreviewContent.reference(this.binding, entry, size);
             if (row.reference !== reference) {
-                const stop = row.stop;
-                row.stop = () => { };
+                const previous = row.content;
                 row.reference = reference;
-                row.raw = null;
-                row.paintSerial++;
                 row.surface.loading();
-                this.#observe(entry, row);
-                stop();
+                row.content = this.#content(entry, row, size);
+                previous?.dispose();
             }
-            else if (row.raw)
-                this.#interpret(row, row.raw);
+            else
+                row.content?.refresh();
         }
     }
     /** Explain a rejected source intent within its existing selected preview. */
@@ -95,7 +91,7 @@ export class InputPreviewRows {
     dispose() {
         this.#alive = false;
         for (const row of this.#entries.values()) {
-            row.stop();
+            row.content?.dispose();
             row.resolution.dispose();
         }
         this.#entries.clear();
@@ -109,10 +105,7 @@ export class InputPreviewRows {
             surface,
             resolution: new InputPreviewResolutionObserver(surface.frameElement, () => this.refresh()),
             reference: '',
-            raw: null,
-            interpretation: '',
-            paintSerial: 0,
-            stop: () => { },
+            content: null,
         };
     }
     /** Preserve ordinary browser entry selection without attaching actions to plugin previews. */
@@ -124,84 +117,26 @@ export class InputPreviewRows {
             this.report(error);
         }
     }
-    /** Read file masks from their loader or subscribe to raw canvas data without per-edit uploads. */
-    #observe(entry, row) {
-        if (entry.source.kind === 'canvas') {
-            row.stop = this.previews.observe(entry.source, (value) => {
-                if (value.kind === 'pixels') {
-                    row.raw = value.pixels;
-                    row.interpretation = '';
-                    this.#interpret(row, value.pixels);
+    /** Keep interpretation and capture lifetimes outside the persistent preview's geometry owner. */
+    #content(entry, row, size) {
+        return new InputPreviewContent(this.binding, this.previews, entry, size, (value) => {
+            if (!this.#alive)
+                return;
+            if (value.kind === 'loading')
+                row.surface.loading();
+            else if (value.kind === 'error')
+                row.surface.unavailable(value.message);
+            else {
+                try {
+                    row.surface.paint(value.pixels, entry.source.kind === 'canvas' || value.composition
+                        ? (this.binding.context?.document ?? null)
+                        : null, value.composition);
                 }
-                else {
-                    row.raw = null;
-                    row.interpretation = '';
-                    row.paintSerial++;
-                    if (value.kind === 'error')
-                        row.surface.unavailable(value.unavailable ? value.message : 'Preview unavailable');
-                    else
-                        row.surface.loading();
+                catch (error) {
+                    row.surface.unavailable('Preview unavailable');
+                    this.report(error);
                 }
-            }, this.binding.preview.captureSize(row.resolution.resolution), this.binding.loader.kind === 'image' ? 'image' : 'raw');
-            return;
-        }
-        if (!entry.source.file) {
-            row.surface.unavailable('Choose a file');
-            return;
-        }
-        let alive = true;
-        row.stop = () => {
-            alive = false;
-        };
-        void this.binding.preview
-            .file(entry.source.file, row.resolution.resolution)
-            .then((pixels) => {
-            if (alive && this.#alive)
-                this.#paint(row, pixels);
-        })
-            .catch((error) => {
-            if (alive && this.#alive) {
-                row.surface.unavailable('Preview unavailable');
-                this.report(error);
             }
-        });
-    }
-    /** Fence asynchronous native interpretation so superseded settings and retired rows never repaint. */
-    #interpret(row, pixels) {
-        const settings = JSON.stringify([this.binding.preview.settings, row.resolution.resolution]);
-        if (settings === row.interpretation)
-            return;
-        row.interpretation = settings;
-        const serial = ++row.paintSerial;
-        row.surface.loading();
-        void this.binding.preview
-            .canvas(pixels, row.resolution.resolution)
-            .then((mask) => {
-            if (this.#alive &&
-                row.paintSerial === serial &&
-                row.raw === pixels &&
-                this.#entries.has(row.surface.element.dataset.inputEntry ?? ''))
-                this.#paint(row, mask);
-        })
-            .catch((error) => {
-            if (this.#alive &&
-                row.paintSerial === serial &&
-                row.raw === pixels &&
-                this.#entries.get(row.surface.element.dataset.inputEntry ?? '') === row) {
-                row.surface.unavailable('Preview unavailable');
-                this.report(error);
-            }
-        });
-    }
-    /** Paint the consumer representation in its full source frame without changing captured pixels. */
-    #paint(row, pixels) {
-        try {
-            const entry = this.binding.state.entries.find((entry) => entry.id === row.surface.element.dataset.inputEntry);
-            row.surface.paint(pixels, entry?.source.kind === 'canvas' ? (this.binding.context?.document ?? null) : null);
-        }
-        catch (error) {
-            row.surface.unavailable('Preview unavailable');
-            this.report(error);
-        }
+        }, this.report);
     }
 }

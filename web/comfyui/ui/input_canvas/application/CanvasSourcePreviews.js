@@ -130,7 +130,12 @@ export class CanvasSourcePreviews {
                             const snapshot = snapshots.get(request.key);
                             if (!snapshot)
                                 throw new Error('Missing canvas source preview.');
-                            this.#publish(request, { kind: 'pixels', pixels: snapshot.pixels });
+                            this.#publish(request, {
+                                kind: 'pixels',
+                                pixels: snapshot.pixels,
+                                document: snapshot.document,
+                                revision: snapshot.revision,
+                            });
                         }
                     }
                     catch (error) {
