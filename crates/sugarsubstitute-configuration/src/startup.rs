@@ -161,5 +161,5 @@ struct Attach {
 }
 
 #[cfg(test)]
-#[path = "configuration_tests.rs"]
+#[path = "startup_tests.rs"]
 mod tests;

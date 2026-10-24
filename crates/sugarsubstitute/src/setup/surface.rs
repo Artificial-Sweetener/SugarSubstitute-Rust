@@ -4,7 +4,11 @@
 use std::{error::Error, path::Path};
 use sugarsubstitute_contracts::localization::{self, installer};
 
+/// Compose capability-free presentation from canonical copy and an inert location suggestion.
+/// # Errors
+/// Rejects non-Unicode locations and malformed embedded assets before publishing HTML.
 pub(super) fn html(locale: &str, install_root: &Path) -> Result<String, Box<dyn Error>> {
+    let install_root = install_root.to_str().ok_or("Installer location is not valid Unicode")?;
     let locales: Vec<_> = localization::LOCALES
         .iter()
         .map(|locale| {
@@ -49,6 +53,15 @@ pub(super) fn html(locale: &str, install_root: &Path) -> Result<String, Box<dyn 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(windows)]
+    #[test]
+    fn malformed_native_location_returns_an_error_before_json_construction() {
+        use std::os::windows::ffi::OsStringExt;
+        let location =
+            std::path::PathBuf::from(std::ffi::OsString::from_wide(&[69, 58, 92, 0xdfff]));
+        let failure = html("en", &location).err().map(|cause| cause.to_string());
+        assert_eq!(failure.as_deref(), Some("Installer location is not valid Unicode"));
+    }
     #[test]
     fn original_identity_is_embedded_and_all_owned_copy_is_localized() -> Result<(), Box<dyn Error>>
     {

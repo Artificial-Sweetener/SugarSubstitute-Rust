@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Recover unambiguous saved configuration without selecting or executing an old payload.
 use super::*;
-use std::collections::BTreeMap;
 
 const MAX_ENTRIES: usize = 1024;
 
@@ -79,19 +78,10 @@ pub(super) fn discover(
 /// Ignore only the checked generation-local configuration path and argument ordering.
 /// User-authored startup bytes and every other launch/Comfy selection remain exact.
 fn equivalent(left: &ExistingInstallation, right: &ExistingInstallation) -> bool {
-    fn arguments(existing: &ExistingInstallation) -> BTreeMap<&str, &str> {
-        existing
-            .descriptor
-            .arguments
-            .chunks_exact(2)
-            .filter(|pair| pair[0] != "--startup-config")
-            .map(|pair| (pair[0].as_str(), pair[1].as_str()))
-            .collect()
-    }
     left.startup == right.startup
         && left.runtime == right.runtime
         && left.summary.selection == right.summary.selection
-        && arguments(left) == arguments(right)
+        && left.descriptor.same_external_inputs(&right.descriptor)
 }
 
 #[cfg(test)]

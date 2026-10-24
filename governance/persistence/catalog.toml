@@ -128,9 +128,9 @@ migrations = []
 
 [[formats]]
 id = "startup-configuration"
-owner = "sugarsubstitute-comfy"
-sources = ["crates/sugarsubstitute-comfy/src/configuration.rs"]
-source_sha256 = "sha256:e8e6b32be9c11f0430725f3dffb97925e6b10e83dd7c596bef033df58816b0c7"
+owner = "sugarsubstitute-configuration"
+sources = ["crates/sugarsubstitute-configuration/src/startup.rs", "crates/sugarsubstitute-configuration/src/initial.rs"]
+source_sha256 = "sha256:0b29a24eded87cd592d909ad61d1b5d6df46f6b59d8cb683d876bd5f6afd2b9f"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 1
@@ -669,9 +669,9 @@ migrations = []
 
 [[formats]]
 id = "installed-launch-descriptor"
-owner = "sugarsubstitute"
-sources = ["crates/sugarsubstitute/src/production/configuration/installed.rs", "crates/sugarsubstitute/src/production/options.rs", "crates/sugarsubstitute/src/production/dispatch.rs"]
-source_sha256 = "sha256:835d1711504b148b842c60e355c47cc77376efdd1f2f74d9ea327f1d9b353ae6"
+owner = "sugarsubstitute-configuration"
+sources = ["crates/sugarsubstitute-configuration/src/descriptor.rs", "crates/sugarsubstitute-configuration/src/paths.rs"]
+source_sha256 = "sha256:94b63b55bde3e040a4173f0d7ef76cd8bd5a572c1926d9689c4429e095e1d57f"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 1
@@ -707,7 +707,7 @@ migrations = []
 id = "setup-installation-records"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/setup_storage/transaction/generation.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/reservation.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/session.rs", "crates/sugarsubstitute-supervision/src/setup_storage/existing.rs", "crates/sugarsubstitute-supervision/src/setup_storage/ownership.rs", "crates/sugarsubstitute-supervision/src/durable_storage/protection.rs", "crates/sugarsubstitute-supervision/src/durable_storage/staging.rs", "crates/sugarsubstitute-supervision/src/setup_storage/identity.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/admission.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/records.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/activation.rs", "crates/sugarsubstitute-supervision/src/setup_storage/existing/recovery.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/candidate.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/resume.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/trial.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files.rs", "crates/sugarsubstitute-supervision/src/setup_storage/existing/accepted.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/activation.rs", "crates/sugarsubstitute-supervision/src/durable_storage/protection/exclusion.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/installed/publication.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/candidate/reopen.rs", "crates/sugarsubstitute-supervision/src/durable_storage/record_read.rs", "crates/sugarsubstitute-supervision/src/durable_storage/record_read/tests.rs"]
-source_sha256 = "sha256:900634c3be0aa8ecec505a31956591c5f4e1d83ed7b4ee7f49331a8b0ac1b67b"
+source_sha256 = "sha256:e17b8ae00f791d5a6d21a0f904b071516a856e2929f8a506083908cf2cef04c1"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 1
@@ -1093,7 +1093,7 @@ migrations = []
 id = "setup-worker-authenticated-framing"
 owner = "sugarsubstitute-execution"
 sources = ["crates/sugarsubstitute-execution/src/provisioning_transport.rs", "crates/sugarsubstitute-execution/src/provisioning_transport/wire.rs", "crates/sugarsubstitute-execution/src/provisioning_transport/memory.rs", "crates/sugarsubstitute-execution/src/provisioning_transport/tests.rs"]
-source_sha256 = "sha256:142d0533355e90855e0ffabf849a05e2d23232493010a5d00d4fabb3299dae48"
+source_sha256 = "sha256:bc77186aaecca831d4b7e15e67569c96ce860056296165980c3ad5063fb07aaa"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1

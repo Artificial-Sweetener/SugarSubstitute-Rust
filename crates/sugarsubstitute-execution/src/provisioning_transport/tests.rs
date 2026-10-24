@@ -4,11 +4,13 @@
 use super::*;
 use crate::runtime_test_support::{Rig, TestResult, spec};
 use std::{
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, Write},
+    net::{Shutdown, TcpStream},
     sync::{
         Arc,
         atomic::{AtomicU64, Ordering},
     },
+    time::Duration,
 };
 use sugarsubstitute_contracts::execution::{
     ExecutionPort, JobClass, JobOutcome, MemoryLease, MemoryRelease, OwnedJob,
@@ -139,7 +141,9 @@ fn queued_commands_keep_original_credit_until_port_retirement() -> TestResult {
 }
 
 /// Start the production async job and observe its actual bound listener without polling sleeps.
-fn listening(rig: &Rig) -> TestResult<(Transport, OwnedJob<(), io::Error>, TcpStream, String)> {
+pub(super) fn listening(
+    rig: &Rig,
+) -> TestResult<(Transport, OwnedJob<(), io::Error>, TcpStream, String)> {
     let (transport, runner) = Transport::pair();
     let job = rig.client.submit_async(
         &rig.scope,
@@ -167,7 +171,7 @@ fn burst(peer: &mut TcpStream, token: &str) -> io::Result<()> {
 }
 
 /// Receive exactly one actual event; the timeout only guards a failed synchronization.
-fn receive(transport: &Transport) -> TestResult<Frame> {
+pub(super) fn receive(transport: &Transport) -> TestResult<Frame> {
     match transport.events.recv_timeout(Duration::from_secs(10))? {
         TransportEvent::Frame(frame) => Ok(frame),
         _ => Err("Unexpected duplicate listener".into()),

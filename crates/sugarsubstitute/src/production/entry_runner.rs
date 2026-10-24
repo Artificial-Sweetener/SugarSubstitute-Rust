@@ -229,7 +229,7 @@ impl fmt::Debug for FailureDisplay<'_> {
                 fmt::Display::fmt(current, f)?;
             }
             if current
-                .downcast_ref::<sugarsubstitute_comfy::configuration::StartupConfigurationError>()
+                .downcast_ref::<sugarsubstitute_configuration::startup::StartupConfigurationError>()
                 .is_some()
             {
                 return Ok(());

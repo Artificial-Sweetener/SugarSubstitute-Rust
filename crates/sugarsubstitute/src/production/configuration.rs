@@ -2,12 +2,13 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Prepare bounded configuration and actual environment under one original owned job.
 
-use super::options::{ConfigurationSource, ProductionEntryOptions};
+use super::options::ConfigurationSource;
+use sugarsubstitute_configuration::paths::StartupPaths;
 #[path = "configuration/installed.rs"]
 mod installed;
 use crate::job_sequence::JobSequence;
 use std::{error::Error, fmt};
-use sugarsubstitute_comfy::configuration::{
+use sugarsubstitute_configuration::startup::{
     MAX_STARTUP_CONFIGURATION_BYTES, StartupConfigurationError, parse_startup_configuration,
 };
 use sugarsubstitute_contracts::{
@@ -45,7 +46,7 @@ pub(crate) const CONFIGURATION_RESERVATION_BYTES: u64 = 4 * 1024 * 1024;
 
 /// Private intermediate never escapes independently of the actual preparation owner.
 struct LoadedConfiguration {
-    options: ProductionEntryOptions,
+    options: StartupPaths,
     configuration: StartupConfiguration,
 }
 
@@ -130,15 +131,9 @@ pub(crate) fn submit(
                 load_configuration(&context, options)?;
             let captured =
                 context.capture_environment().map_err(ConfigurationCause::Environment)?;
+            let [_, package, metadata, cubes, script, profile] = options.into_paths();
             captured
-                .into_request(
-                    configuration,
-                    options.package,
-                    options.metadata,
-                    options.cubes,
-                    options.script,
-                    options.profile,
-                )
+                .into_request(configuration, package, metadata, cubes, script, profile)
                 .map_err(ConfigurationCause::Environment)
         })
         .map_err(|rejected| Box::new(rejected.error) as Box<dyn Error>)
@@ -146,10 +141,10 @@ pub(crate) fn submit(
 
 fn load_configuration(
     context: &EntryPreparationContext,
-    options: ProductionEntryOptions,
+    options: StartupPaths,
 ) -> Result<LoadedConfiguration, ConfigurationCause> {
     let bytes =
-        read_preparation_file(context, &options.configuration, MAX_STARTUP_CONFIGURATION_BYTES)
+        read_preparation_file(context, options.configuration(), MAX_STARTUP_CONFIGURATION_BYTES)
             .map_err(ConfigurationCause::read)?;
     context.check().map_err(ConfigurationCause::Control)?;
     let parsed = parse_startup_configuration(&bytes);

@@ -37,12 +37,9 @@ struct ReadyRecord {
     runtime: RuntimePaths,
 }
 
-#[derive(Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct LaunchDescriptor {
-    schema_version: u32,
-    arguments: Vec<String>,
-}
+use sugarsubstitute_configuration::{
+    descriptor::LaunchDescriptor, startup::MAX_STARTUP_CONFIGURATION_BYTES,
+};
 
 /// Saved configuration and launch inputs retained unchanged while a replacement is prepared.
 pub(super) struct ExistingInstallation {
@@ -50,7 +47,6 @@ pub(super) struct ExistingInstallation {
     pub(super) runtime: RuntimePaths,
     startup: Vec<u8>,
     descriptor: LaunchDescriptor,
-    configuration_index: usize,
     accepted: Option<Generation>,
     _directory: Directory,
     _inputs: Vec<File>,
@@ -142,19 +138,21 @@ impl ExistingInstallation {
             files::lexical(path)?;
         }
         let mut startup_file = directory.read("startup.local.toml")?;
-        let startup = files::read_bounded(&mut startup_file, 65536)?;
-        let value: toml::Value = std::str::from_utf8(&startup)
-            .map_err(io::Error::other)?
-            .parse()
-            .map_err(io::Error::other)?;
-        if value.get("schema_version").and_then(toml::Value::as_integer) != Some(1) {
-            return Err(invalid("Saved startup configuration requires a compatible installer"));
-        }
+        let startup = files::read_bounded(&mut startup_file, MAX_STARTUP_CONFIGURATION_BYTES)?;
+        sugarsubstitute_configuration::initial::validate_preserved(&startup)?;
         let mut descriptor_file = directory.read("sugarsubstitute-launch.local.json")?;
-        let descriptor: LaunchDescriptor =
-            serde_json::from_slice(&files::read_bounded(&mut descriptor_file, 65536)?)
-                .map_err(io::Error::other)?;
-        let configuration_index = descriptor.validate(&directory)?;
+        let descriptor = LaunchDescriptor::parse(&files::read_bounded(
+            &mut descriptor_file,
+            MAX_STARTUP_CONFIGURATION_BYTES,
+        )?)?;
+        descriptor.validate_maintenance_paths(files::lexical)?;
+        if std::fs::canonicalize(descriptor.maintenance_configuration()?)?
+            != std::fs::canonicalize(directory.path().join("startup.local.toml"))?
+        {
+            return Err(invalid(
+                "Saved launch configuration is outside its installation generation",
+            ));
+        }
         let executable_missing = match directory.read("sugarsubstitute.exe") {
             Ok(_) => false,
             Err(cause) if cause.kind() == io::ErrorKind::NotFound => true,
@@ -169,7 +167,6 @@ impl ExistingInstallation {
             runtime: record.runtime,
             startup,
             descriptor,
-            configuration_index,
             accepted: accepted.cloned(),
             _directory: directory,
             _inputs: vec![marker, record_file, startup_file, descriptor_file],
@@ -188,8 +185,7 @@ impl ExistingInstallation {
         files::write_immutable(&configuration, &self.startup, files::create_new)?;
         files::write_immutable(
             &destination.join("sugarsubstitute-launch.local.json"),
-            &serde_json::to_vec(&self.relocated_descriptor(destination)?)
-                .map_err(io::Error::other)?,
+            &self.relocated_descriptor(destination)?.bytes()?,
             files::create_new,
         )
     }
@@ -212,7 +208,7 @@ impl ExistingInstallation {
         if candidate.summary.selection != self.summary.selection
             || candidate.runtime != self.runtime
             || candidate.startup != self.startup
-            || candidate.descriptor.arguments != self.relocated_descriptor(&path)?.arguments
+            || !candidate.descriptor.same_arguments(&self.relocated_descriptor(&path)?)
             || accepted::generation(root.path(), context)? != self.accepted
         {
             return Err(invalid("Prepared candidate differs from saved installation choices"));
@@ -223,55 +219,9 @@ impl ExistingInstallation {
 
     /// Relocate only the generation-local configuration argument for both writing and validation.
     fn relocated_descriptor(&self, destination: &Path) -> io::Result<LaunchDescriptor> {
-        let mut descriptor =
-            LaunchDescriptor { schema_version: 1, arguments: self.descriptor.arguments.clone() };
-        descriptor.arguments[self.configuration_index] = destination
-            .join("startup.local.toml")
-            .to_str()
-            .ok_or_else(|| invalid("Installed configuration path is not Unicode"))?
-            .to_owned();
-        Ok(descriptor)
+        self.descriptor.relocated(&destination.join("startup.local.toml"))
     }
 }
-impl LaunchDescriptor {
-    /// Check the supported argument contract and return its configuration-value index.
-    fn validate(&self, directory: &Directory) -> io::Result<usize> {
-        let expected = [
-            "--startup-config",
-            "--frontend-package",
-            "--frontend-metadata",
-            "--sugarcubes-root",
-            "--backend-script",
-            "--profile-directory",
-        ];
-        if self.schema_version != 1 || self.arguments.len() != expected.len() * 2 {
-            return Err(invalid("Saved launch descriptor requires a compatible installer"));
-        }
-        let mut seen = std::collections::BTreeSet::new();
-        let mut configuration = None;
-        for (index, pair) in self.arguments.chunks_exact(2).enumerate() {
-            if !expected.contains(&pair[0].as_str())
-                || !seen.insert(&pair[0])
-                || pair[1].len() > 4096
-            {
-                return Err(invalid("Saved launch descriptor contains unsupported options"));
-            }
-            files::lexical(Path::new(&pair[1]))?;
-            if pair[0] == "--startup-config" {
-                if std::fs::canonicalize(&pair[1])?
-                    != std::fs::canonicalize(directory.path().join("startup.local.toml"))?
-                {
-                    return Err(invalid(
-                        "Saved launch configuration is outside its installation generation",
-                    ));
-                }
-                configuration = Some(index * 2 + 1);
-            }
-        }
-        configuration.ok_or_else(|| invalid("Saved launch configuration is absent"))
-    }
-}
-
 #[cfg(test)]
 mod tests;
 

@@ -119,19 +119,19 @@ mod tests {
 
     /// Start real execution without admitting any filesystem or process owner.
     fn runner() -> Result<Fixture, Box<dyn Error>> {
-        let root = PathBuf::from("unopened-installation");
+        let root = PathBuf::from(r"E:\unopened-installation");
         let command = ProductionCommand {
             launch_selection: None,
             diagnostics: Default::default(),
             installation: root.clone(),
-            options: crate::production::options::ProductionEntryOptions {
-                configuration: root.clone(),
-                package: root.clone(),
-                metadata: root.clone(),
-                cubes: root.clone(),
-                script: root.clone(),
-                profile: root.clone(),
-            }
+            options: sugarsubstitute_configuration::paths::StartupPaths::new([
+                root.clone(),
+                root.clone(),
+                root.clone(),
+                root.clone(),
+                root.clone(),
+                root.clone(),
+            ])?
             .into(),
         };
         let mut runner = EntryRunner::new(

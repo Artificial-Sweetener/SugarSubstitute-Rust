@@ -67,8 +67,8 @@ impl Wake {
     }
 }
 
-fn options() -> Result<ProductionEntryOptions, Box<dyn Error>> {
-    Ok(ProductionEntryOptions::parse(
+fn options() -> Result<StartupPaths, Box<dyn Error>> {
+    Ok(StartupPaths::parse(
         [
             "--startup-config",
             r"E:\inert\absent.toml",
@@ -114,9 +114,10 @@ fn real_schema_failure_preserves_redaction_and_original_whole_claim() -> TestRes
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
     let directory = temporary_directory("failure")?;
     let result = (|| {
-        let mut input = options()?;
-        input.configuration = directory.join("original.toml");
-        std::fs::write(&input.configuration, b"secret-token = broken")?;
+        let mut paths = options()?.into_paths();
+        paths[0] = directory.join("original.toml");
+        let input = StartupPaths::new(paths)?;
+        std::fs::write(input.configuration(), b"secret-token = broken")?;
         let mut job = submit(
             &client,
             &scope,
@@ -235,10 +236,11 @@ fn real_parser_success_is_borrowed_under_same_preparation_claim_without_native_g
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
     let directory = temporary_directory("success")?;
     let result = (|| {
-        let mut input = options()?;
-        input.configuration = directory.join("original.toml");
+        let mut paths = options()?.into_paths();
+        paths[0] = directory.join("original.toml");
+        let input = StartupPaths::new(paths)?;
         std::fs::write(
-            &input.configuration,
+            input.configuration(),
             br#"schema_version=1
 mode="attach"
 port=8188
@@ -250,7 +252,7 @@ reduced_motion=false
 origin="http://localhost:8188"
 "#,
         )?;
-        let expected = input.configuration.clone();
+        let expected = input.configuration().to_path_buf();
         let setup = EntrySetupBudget::new(Moment::from_nanos(0))?;
         let spec = JobSpec {
             id: JobSequence::new().allocate()?,
@@ -270,7 +272,7 @@ origin="http://localhost:8188"
         let JobOutcome::Success(prepared) = completion.outcome else {
             return Err("Expected parser success".into());
         };
-        assert_eq!(prepared.value().options.configuration, expected);
+        assert_eq!(prepared.value().options.configuration(), expected);
         assert!(matches!(
             prepared.value().configuration.connection(),
             sugarsubstitute_contracts::configuration::ConnectionConfiguration::Attach(_)

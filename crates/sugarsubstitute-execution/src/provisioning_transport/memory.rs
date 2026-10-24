@@ -17,6 +17,8 @@ pub(super) struct Budget(Option<Arc<State>>);
 struct State {
     closed: AtomicBool,
     frames: AtomicUsize,
+    native_pending: AtomicUsize,
+    changed: tokio::sync::Notify,
     claim: OnceLock<MemoryClaim>,
 }
 
@@ -26,6 +28,8 @@ impl Budget {
         Self(Some(Arc::new(State {
             closed: AtomicBool::new(false),
             frames: AtomicUsize::new(0),
+            native_pending: AtomicUsize::new(0),
+            changed: tokio::sync::Notify::new(),
             claim: OnceLock::new(),
         })))
     }
@@ -45,6 +49,7 @@ impl Budget {
     pub(super) fn close(&self) {
         if let Some(state) = &self.0 {
             state.closed.store(true, Ordering::Release);
+            state.changed.notify_waiters();
         }
     }
 
@@ -68,6 +73,36 @@ impl Budget {
             })
             .map_err(|_| io::Error::new(io::ErrorKind::WouldBlock, "Worker frames retained"))?;
         Ok(Permit(self.clone()))
+    }
+
+    /// Wake only the transport's private capacity wait; no scheduler handle escapes.
+    pub(super) fn signal(&self) {
+        if let Some(state) = &self.0 {
+            state.changed.notify_waiters();
+        }
+    }
+
+    /// Register before checking capacity to avoid losing a concurrent retirement notification.
+    pub(super) fn notified(&self) -> io::Result<tokio::sync::futures::Notified<'_>> {
+        Ok(self.state()?.changed.notified())
+    }
+
+    /// Count frames offered to the native storage receiver, including an in-progress handoff.
+    pub(super) fn native_offered(&self) -> io::Result<()> {
+        self.state()?.native_pending.fetch_add(1, Ordering::AcqRel);
+        Ok(())
+    }
+
+    /// Account exactly one received or rejected handoff without granting another frame permit.
+    pub(super) fn native_taken(&self) {
+        if let Some(state) = &self.0 {
+            state.native_pending.fetch_sub(1, Ordering::AcqRel);
+        }
+    }
+
+    /// Advisory queue state; only receiving a frame establishes ownership of a request.
+    pub(super) fn native_pending(&self) -> bool {
+        self.0.as_ref().is_some_and(|state| state.native_pending.load(Ordering::Acquire) != 0)
     }
 
     /// Keep rejected-frame allocations and original causes charged through escaped errors.
@@ -125,6 +160,7 @@ impl Drop for Permit {
     fn drop(&mut self) {
         if let Some(state) = &self.0.0 {
             state.frames.fetch_sub(1, Ordering::AcqRel);
+            state.changed.notify_waiters();
         }
     }
 }

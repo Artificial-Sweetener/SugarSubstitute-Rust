@@ -16,6 +16,7 @@ k1-native-qualification = ["sugarsubstitute-execution/k1-native-qualification", 
 
 [dependencies]
 sugarsubstitute-contracts = { path = "../sugarsubstitute-contracts" }
+sugarsubstitute-configuration = { path = "../sugarsubstitute-configuration" }
 sugarsubstitute-application = { path = "../sugarsubstitute-application" }
 sugarsubstitute-comfy = { path = "../sugarsubstitute-comfy" }
 sugarsubstitute-execution = { path = "../sugarsubstitute-execution" }

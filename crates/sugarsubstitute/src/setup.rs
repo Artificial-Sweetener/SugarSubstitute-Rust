@@ -78,12 +78,10 @@ fn run_inner(distribution: &'static [u8]) -> Result<(), Box<dyn Error>> {
     {
         return Err("Maintenance qualification requires only a native installation target".into());
     }
-    let local = std::env::var_os("LOCALAPPDATA")
-        .map(PathBuf::from)
-        .ok_or("Local application data is unavailable")?;
-    let workspace = workspace.unwrap_or_else(|| local.join("SugarSubstitute").join("setup"));
-    let default_install = local.join("Programs").join("SugarSubstitute");
-    let html = surface::html("en", &default_install)?;
+    let locations =
+        sugarsubstitute_configuration::installer::InstallerLocations::capture(workspace)?;
+    let workspace = locations.workspace().to_path_buf();
+    let html = surface::html("en", locations.install_root())?;
     if let Some(export) = export {
         std::fs::write(export, html)?;
         return Ok(());

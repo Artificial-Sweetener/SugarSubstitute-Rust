@@ -125,15 +125,7 @@ fn runner() -> Result<EntryRunner<RetainedChild>, Box<dyn Error>> {
         launch_selection: None,
         diagnostics: Default::default(),
         installation: invalid.clone(),
-        options: super::super::super::options::ProductionEntryOptions {
-            configuration: invalid.clone(),
-            package: invalid.clone(),
-            metadata: invalid.clone(),
-            cubes: invalid.clone(),
-            script: invalid.clone(),
-            profile: invalid.clone(),
-        }
-        .into(),
+        options: super::unopened_paths()?.into(),
     };
     let identity = Arc::new(());
     let child = RetainedChild {

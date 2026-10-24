@@ -54,12 +54,9 @@ pub(crate) fn source_files(directory: &Path, extensions: &[&str]) -> Result<Vec<
                 "keep build outputs outside governed source roots",
             )?;
             paths.extend(source_files(&entry.path(), extensions)?);
-        } else if entry
-            .path()
-            .extension()
-            .and_then(|extension| extension.to_str())
-            .is_some_and(|extension| extensions.contains(&extension))
-        {
+        } else if entry.path().extension().and_then(|extension| extension.to_str()).is_some_and(
+            |extension| extensions.iter().any(|known| extension.eq_ignore_ascii_case(known)),
+        ) {
             paths.push(entry.path());
         }
     }
@@ -88,6 +85,19 @@ pub(crate) fn fingerprint(root: &Path, sources: &[String]) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn source_discovery_keeps_language_coverage_across_extension_case() -> Result<()> {
+        let temporary =
+            tempfile::tempdir().map_err(|cause| Failure::external("create fixture", cause))?;
+        for name in ["lower.rs", "upper.RS", "mixed.Rs", "script.Ts", "unrelated.txt"] {
+            std::fs::write(temporary.path().join(name), "fixture")
+                .map_err(|cause| Failure::external("write fixture", cause))?;
+        }
+        assert_eq!(rust_files(temporary.path())?.len(), 3);
+        assert_eq!(source_files(temporary.path(), &["rs", "ts"])?.len(), 4);
+        Ok(())
+    }
 
     /// Reject path spellings that escape or change meaning across platforms.
     #[test]

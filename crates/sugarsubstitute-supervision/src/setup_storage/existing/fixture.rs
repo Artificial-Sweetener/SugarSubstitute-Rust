@@ -38,20 +38,18 @@ pub(in crate::setup_storage) fn installed(
             "schema_version": 1, "bundle_sha256": "a".repeat(64), "selection": selection, "runtime": runtime,
         }))?,
     )?;
-    let arguments = [
-        ("--startup-config", generation.join("startup.local.toml")),
-        ("--frontend-package", runtime.frontend),
-        ("--frontend-metadata", runtime.metadata),
-        ("--sugarcubes-root", root.path().join("custom cube")),
-        ("--backend-script", runtime.directory.join("main.py")),
-        ("--profile-directory", root.path().join("custom profile")),
-    ]
-    .into_iter()
-    .flat_map(|(flag, path)| [flag.to_owned(), path.to_string_lossy().into_owned()])
-    .collect();
+    let paths = sugarsubstitute_configuration::paths::StartupPaths::new([
+        generation.join("startup.local.toml"),
+        runtime.frontend,
+        runtime.metadata,
+        root.path().join("custom cube"),
+        runtime.directory.join("main.py"),
+        root.path().join("custom profile"),
+    ])
+    .map_err(io::Error::other)?;
     files::write_new(
         &generation.join("sugarsubstitute-launch.local.json"),
-        &serde_json::to_vec(&LaunchDescriptor { schema_version: 1, arguments })?,
+        &LaunchDescriptor::encode(paths)?,
     )?;
     entrypoint::stage(&generation)?;
     entrypoint::publish(root, &generation, context)?;

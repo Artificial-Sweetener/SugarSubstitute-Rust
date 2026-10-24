@@ -36,15 +36,7 @@ fn only_accepted_normal_shutdown_suppresses_a_nested_failure_dialog() -> Result<
             launch_selection: None,
             installation: path.clone(),
             diagnostics: Default::default(),
-            options: super::super::super::options::ProductionEntryOptions {
-                configuration: path.clone(),
-                package: path.clone(),
-                metadata: path.clone(),
-                cubes: path.clone(),
-                script: path.clone(),
-                profile: path.clone(),
-            }
-            .into(),
+            options: super::super::tests::unopened_paths()?.into(),
         };
         let mut lifetime = Box::new(EntryRunner::new(
             command,

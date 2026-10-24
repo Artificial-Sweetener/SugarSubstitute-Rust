@@ -23,7 +23,7 @@ concern = "Acknowledged startup, settled retry, readiness, frame publication and
 package = "sugarsubstitute-comfy"
 root = "crates/sugarsubstitute-comfy"
 layer = "adapter"
-concern = "ComfyUI startup configuration and connection boundaries"
+concern = "ComfyUI managed launch and connection boundaries"
 
 [[owners]]
 package = "sugarsubstitute"
@@ -74,3 +74,9 @@ package = "sugarsubstitute-update"
 root = "crates/sugarsubstitute-update"
 layer = "adapter"
 concern = "Portable distribution inventory, update metadata authentication, HTTP destination/framing policy and streaming target verification"
+
+[[owners]]
+package = "sugarsubstitute-configuration"
+root = "crates/sugarsubstitute-configuration"
+layer = "adapter"
+concern = "Desktop startup documents, validated input selection, initial defaults and exact saved configuration preservation"

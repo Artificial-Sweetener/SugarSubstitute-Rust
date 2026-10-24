@@ -15,6 +15,7 @@ k1-native-qualification = ["sugarsubstitute-execution/k1-native-qualification"]
 
 [target.'cfg(windows)'.dependencies]
 sugarsubstitute-contracts = { path = "../sugarsubstitute-contracts" }
+sugarsubstitute-configuration = { path = "../sugarsubstitute-configuration" }
 sugarsubstitute-execution = { path = "../sugarsubstitute-execution" }
 sugarsubstitute-update = { path = "../sugarsubstitute-update" }
 tracing.workspace = true

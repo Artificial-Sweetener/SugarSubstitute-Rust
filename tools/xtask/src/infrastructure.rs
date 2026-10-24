@@ -126,7 +126,11 @@ pub(crate) fn check(
                     .to_string_lossy()
                     .replace('\\', "/");
                 let source = read(&path)?;
-                let findings = if path.extension().is_some_and(|extension| extension == "rs") {
+                let findings = if path
+                    .extension()
+                    .and_then(|extension| extension.to_str())
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("rs"))
+                {
                     capability_source::findings(
                         &source,
                         publication_path,

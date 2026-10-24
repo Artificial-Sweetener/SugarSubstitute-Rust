@@ -17,13 +17,15 @@ minimum_tests = 222
 package = "sugarsubstitute-comfy"
 root = "crates/sugarsubstitute-comfy"
 concern = "Bounded startup schema, effective managed argv and observed ComfyUI response contracts; Bounded fixed WinHTTP requests, installed runtime asset hash verification, deterministic readiness-owner custody and feature-gated external boundary fixtures; cancellable readiness campaigns, finite HTTP phases and typed native retry classification"
-minimum_tests = 115
+minimum_tests = 109
 
 [[owners]]
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
 concern = "Private worker record framing, original native snapshots, bounded uploads and immutable host-selected write authority; Original admitted startup file input, installed descriptor and Unicode input pairing, retained primary/post-control causes and whole preparation custody; Localized native recovery decisions preserve their original diagnostics; Early installer folder inspection waits for package verification without provisioning; Same-profile successor joins authenticated native release and domain settlement with unchanged cutoff; Fresh subordinate recovery composition with unchanged Root authority, admission before ACK, independent real receiving and checked cleanup; Production desktop startup and retirement through actual execution, authenticated parent/child transport, shared backends, profiles and native window adapters; retained failures, captured startup, bounded console rendering and isolated qualification roles; contained headless backend witness invocation and original-budget Finish lifecycle; genuine boxed incident construction and bounded original terminal/cause diagnostics; unique heap activation ownership outside the persistent native pump frame; original launched-profile release consumption and precise Finish request status; actual Desktop probe formatter and sole bounded Root stderr diagnostic decoding"
-minimum_tests = 1092
+# Six input-grammar tests moved to the configuration owner. Installed descriptor
+# decoding is covered by that owner's public contract suite and admitted native reads.
+minimum_tests = 1085
 
 [[owners]]
 package = "sugarsubstitute-execution"
@@ -35,7 +37,7 @@ minimum_tests = 645
 package = "sugarsubstitute-xtask"
 root = "tools/xtask"
 concern = "Governance rejection behavior and verification orchestration, including shared-host checks and tests with the Windows composition excluded"
-minimum_tests = 67
+minimum_tests = 77
 
 [[owners]]
 package = "sugarsubstitute-supervision"
@@ -66,3 +68,9 @@ package = "sugarsubstitute-update"
 root = "crates/sugarsubstitute-update"
 concern = "Persisted publication sequence identities across channels, components and platforms; Portable package inventory, path and aggregate expansion bounds; HTTPS destination policy, hostile framing rejection; Real TUF signatures, root rotation, durable rollback floors, expiration and streamed package authentication"
 minimum_tests = 39
+
+[[owners]]
+package = "sugarsubstitute-configuration"
+root = "crates/sugarsubstitute-configuration"
+concern = "Bounded startup schema, initial defaults, exact Unicode arguments and saved configuration preservation"
+minimum_tests = 24
