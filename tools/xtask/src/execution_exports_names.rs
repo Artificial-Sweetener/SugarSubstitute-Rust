@@ -52,6 +52,9 @@ impl Names {
         visited: &mut BTreeSet<Vec<String>>,
     ) -> BTreeSet<Vec<String>> {
         let mut found = BTreeSet::new();
+        if paths.raw_pointer {
+            found.insert(vec!["<raw-pointer>".into()]);
+        }
         for path in paths.type_macros {
             found.insert(vec!["<type-macro>".into(), path]);
         }
@@ -224,8 +227,14 @@ struct Paths {
     paths: Vec<syn::Path>,
     type_macros: Vec<String>,
     projections: Vec<syn::TypePath>,
+    raw_pointer: bool,
 }
 impl<'ast> Visit<'ast> for Paths {
+    /// Preserve raw capability shape through private aliases and associated-type projections.
+    fn visit_type_ptr(&mut self, item: &'ast syn::TypePtr) {
+        self.raw_pointer = true;
+        syn::visit::visit_type_ptr(self, item);
+    }
     /// Retain explicitly qualified associated types for matching authored implementation lookup.
     fn visit_type_path(&mut self, item: &'ast syn::TypePath) {
         if item.qself.is_some() {

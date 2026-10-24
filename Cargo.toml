@@ -1,8 +1,8 @@
 [workspace]
-members = ["crates/sugarsubstitute", "crates/sugarsubstitute-contracts", "crates/sugarsubstitute-application", "crates/sugarsubstitute-comfy", "crates/sugarsubstitute-execution", "crates/sugarsubstitute-supervision", "crates/sugarsubstitute-splash", "crates/sugarsubstitute-desktop", "crates/sugarsubstitute-crash", "crates/sugarsubstitute-update", "tools/xtask"]
+members = ["crates/sugarsubstitute-networking", "crates/sugarsubstitute", "crates/sugarsubstitute-contracts", "crates/sugarsubstitute-application", "crates/sugarsubstitute-comfy", "crates/sugarsubstitute-execution", "crates/sugarsubstitute-supervision", "crates/sugarsubstitute-splash", "crates/sugarsubstitute-desktop", "crates/sugarsubstitute-crash", "crates/sugarsubstitute-update", "tools/xtask"]
 exclude = ["third_party/wry"]
 
-default-members = ["crates/sugarsubstitute"]
+default-members = ["crates/sugarsubstitute-networking", "crates/sugarsubstitute"]
 resolver = "3"
 
 [workspace.package]
@@ -27,7 +27,7 @@ syn = { version = "=2.0.114", features = ["full", "visit"] }
 tempfile = "=3.24.0"
 time = { version = "=0.3.45", features = ["parsing", "formatting"] }
 toml = "=0.8.23"
-tokio = { version = "=1.53.2", features = ["rt-multi-thread", "sync", "time", "macros"] }
+tokio = { version = "=1.53.2", features = ["rt-multi-thread", "sync", "time", "macros", "net"] }
 tiny-skia = "=0.12.0"
 png = "=0.18.1"
 cosmic-text = { version = "=0.19.0", default-features = false, features = ["std", "swash"] }

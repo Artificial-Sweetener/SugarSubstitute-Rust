@@ -14,9 +14,9 @@ use sugarsubstitute_contracts::execution::{
 };
 use sugarsubstitute_execution::ExecutionClient;
 pub(super) struct Transaction {
-    pub(super) session: usize,
-    pub(super) connect: usize,
-    pub(super) request: usize,
+    pub(super) http: sugarsubstitute_networking::Transport,
+    #[cfg(test)]
+    pub(super) fixture_slots: [usize; 3],
     pub(super) tcp: sugarsubstitute_supervision::backend_listener::TcpOwnerWorkspace,
     pub(super) deadline: Moment,
     pub(super) peer: Option<sugarsubstitute_supervision::backend_listener::BackendPeerIdentity>,
@@ -26,6 +26,16 @@ pub(super) struct Transaction {
     candidate_assets: usize,
     /// Final metadata confirmation applies to the complete retained cohort.
     candidate_complete: bool,
+}
+impl Transaction {
+    /// Test boundary custody participates in the same production lifetime checks.
+    fn empty(&self) -> bool {
+        #[cfg(test)]
+        if self.fixture_slots != [0; 3] {
+            return false;
+        }
+        self.http.empty()
+    }
 }
 pub(super) struct FundedTransaction {
     pub(super) value: Box<Transaction>,
@@ -38,7 +48,7 @@ impl Drop for Shared {
     fn drop(&mut self) {
         let state = self.transaction.get_mut().unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(value) = state.take() {
-            if value.value.session == 0 && value.value.connect == 0 && value.value.request == 0 {
+            if value.value.empty() {
                 drop(value);
             } else {
                 std::mem::forget(value);
@@ -174,9 +184,9 @@ impl ReadinessProbeOwner {
                         })?;
                 *guard = Some(FundedTransaction {
                     value: Box::new(Transaction {
-                        session: 0,
-                        connect: 0,
-                        request: 0,
+                        http: sugarsubstitute_networking::Transport::default(),
+                        #[cfg(test)]
+                        fixture_slots: [0; 3],
                         tcp,
                         deadline: context
                             .deadline()
@@ -195,7 +205,7 @@ impl ReadinessProbeOwner {
             let body = state._claim.clone();
             let state = &mut state.value;
             let result = (|| {
-                if state.session != 0 || state.connect != 0 || state.request != 0 {
+                if !state.empty() {
                     return Err(ReadinessTransportError::invalid("attempt_unsettled_predecessor"));
                 }
                 state.deadline = context
@@ -262,7 +272,7 @@ impl ReadinessProbeOwner {
                 .as_mut()
                 .ok_or_else(|| ReadinessTransportError::invalid("attempt_no_custody"))?;
             let state = &mut state.value;
-            if state.request != 0 || state.connect != 0 || state.session != 0 {
+            if !state.empty() {
                 return Err(ReadinessTransportError::invalid("attempt_retirement_incomplete"));
             }
             if now >= state.deadline {

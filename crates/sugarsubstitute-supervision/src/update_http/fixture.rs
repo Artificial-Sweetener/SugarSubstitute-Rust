@@ -109,6 +109,7 @@ pub(crate) fn exchange(
         range: range.map(str::to_owned),
         response,
         await_client_close: false,
+        cancel_client: None,
     }
 }
 pub(crate) fn complete(path: &str, body: &[u8]) -> Exchange {

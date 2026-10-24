@@ -16,8 +16,8 @@ recovery = "Missing records are observable cache misses. Invalid, expired, revok
 [[caches]]
 id = "native-update-downloads"
 owner = "sugarsubstitute-supervision"
-sources = ["crates/sugarsubstitute-supervision/src/setup_storage/cache/payload/tests.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/payload.rs", "crates/sugarsubstitute-supervision/src/setup_storage/download/local.rs", "crates/sugarsubstitute-supervision/src/setup_storage/download.rs", "crates/sugarsubstitute-supervision/src/setup_storage/download/custody.rs", "crates/sugarsubstitute-supervision/src/setup_storage/download/failure.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/identity.rs", "crates/sugarsubstitute-supervision/src/durable_storage/payload.rs", "crates/sugarsubstitute-supervision/src/durable_storage/payload/tests.rs"]
-source_sha256 = "sha256:c6f6746858b59ec5d4da71fff7c81eb2974237a19f1676d9bd3071941b439a21"
+sources = ["crates/sugarsubstitute-supervision/src/setup_storage/cache/payload/tests.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache/payload.rs", "crates/sugarsubstitute-supervision/src/setup_storage/download/local.rs", "crates/sugarsubstitute-supervision/src/setup_storage/download.rs", "crates/sugarsubstitute-supervision/src/setup_storage/download/custody.rs", "crates/sugarsubstitute-supervision/src/setup_storage/download/failure.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/identity.rs", "crates/sugarsubstitute-supervision/src/durable_storage/payload.rs", "crates/sugarsubstitute-supervision/src/durable_storage/payload/tests.rs", "crates/sugarsubstitute-supervision/src/durable_storage/payload/stream_tests.rs"]
+source_sha256 = "sha256:5209aa7248fbd111df0d6ff1370f16efc746ed2f583fa7a3e9f6bb7338c79919"
 namespace = "update-downloads-v1"
 storage_schema = 1
 compatibility_epoch = 1

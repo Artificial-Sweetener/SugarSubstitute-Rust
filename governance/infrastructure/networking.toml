@@ -1,0 +1,179 @@
+schema_version = 1
+owner = "sugarsubstitute-networking"
+source_roots = ["crates", "tools", "native", "installer"]
+
+[[dependencies]]
+package = "sugarsubstitute-execution"
+identity = "tokio"
+rationale = "Execution owns authenticated IPC readiness and isolated native HTTP fixtures, including its runtime and socket lifecycle."
+
+[[records]]
+path = "crates/sugarsubstitute-networking/src/native.rs"
+owner = "sugarsubstitute-networking"
+source_sha256 = "sha256:1dbba00d108aac8f2010ec49d73511edc3f7046a89c0b15285a4ebecb4fd42f0"
+boundary = "implementation"
+rationale = "Exclusive synchronous WinHTTP construction, fixed request controls and checked child-before-parent handle retirement."
+
+[[records]]
+path = "crates/sugarsubstitute-networking/src/native/io.rs"
+owner = "sugarsubstitute-networking"
+source_sha256 = "sha256:a85eea34f8f4204caa683fabe0fda15243acb55e551d7a88bb8fdf6e22ab5962"
+boundary = "implementation"
+rationale = "Bounded WinHTTP headers/body reads, original finite phase deadlines and exact connected loopback tuple observations."
+
+[[records]]
+path = "crates/sugarsubstitute-execution/src/http_fixture.rs"
+owner = "sugarsubstitute-execution"
+source_sha256 = "sha256:4375051f99dd1c051af5ae6cf2ded46798783d25acb80b89ed673549d9d93558"
+boundary = "fixture"
+rationale = "Execution-owned isolated HTTP server qualifies real native requests, hostile responses and actual client socket closure."
+
+[[records]]
+path = "crates/sugarsubstitute-execution/src/provisioning_transport/socket.rs"
+owner = "sugarsubstitute-execution"
+source_sha256 = "sha256:e4f69b8810796decaf3b4178efb42cc88365d9ce86926d0b5db5e3db15e9a9b0"
+boundary = "execution_ipc"
+rationale = "Execution owns authenticated finite loopback IPC, readiness, queue admission, cancellation and actual socket shutdown; this is not an HTTP downloader."
+
+[[records]]
+path = "crates/sugarsubstitute-execution/src/provisioning_transport/tests.rs"
+owner = "sugarsubstitute-execution"
+source_sha256 = "sha256:2ecbac1ad39031a6b6ef1574787744245a3496e3ce4d4230bf212a962aa3d6e5"
+boundary = "fixture"
+rationale = "Real loopback peers test execution-owned authentication, bounds and actual socket closure."
+
+[[records]]
+path = "crates/sugarsubstitute-execution/src/provisioning_transport/native_tests.rs"
+owner = "sugarsubstitute-execution"
+source_sha256 = "sha256:b40d708b3fa38dfc2316e814a402e4ae3be259235c78590749d32b18ea3278b7"
+boundary = "fixture"
+rationale = "Native storage-lane tests preserve original execution memory and explicitly shut down actual fixture peers."
+
+[[records]]
+path = "crates/sugarsubstitute-desktop/src/main_actor/render_preview/downloads.js"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:a8e58e09e542d0a315fdcae488c7486f50ea5db50452fb8ac7bf7e24bc3808fc"
+boundary = "browser"
+rationale = "Isolated installed-ComfyUI browser qualification uses its supported export/download APIs and same-origin bounded PNG read with original cutoff and AbortController teardown."
+
+[[records]]
+path = "installer/prepare-runtime.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:21cd6fbd87ec8211416da47a3c9a29de9235e8a9b493ad41905a1964b16ac531"
+boundary = "upstream"
+rationale = "Packaging delegates pinned Electron runtime retrieval and checksum validation to @electron/get; package-manager transport remains upstream-owned."
+
+[[records]]
+path = "installer/qualify-worker.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:27a75ccba48292c47481e25bfa7436f50d70377bbcbbff7648d10ea036ef51a4"
+boundary = "fixture"
+rationale = "Isolated real Electron worker qualification owns only the authenticated protocol peer and checked process/socket shutdown."
+
+[[records]]
+path = "installer/tests/download-cache.test.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:8b2677a45d56d7e532108ab73b72468baef7776072a7019e69ed75c4072d4cf3"
+boundary = "fixture"
+rationale = "Pure Electron net boundary fake qualifies patched upstream download storage without introducing host networking."
+
+[[records]]
+path = "installer/tests/metadata.test.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:0124cd19fb73ece50ad4ed4bb23280be666aae0bb902d0342dad1fd7d78b0079"
+boundary = "fixture"
+rationale = "Pure metadata port and fetch boundary fakes qualify native record storage; no production network authority."
+
+[[records]]
+path = "installer/tests/worker.test.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:2360d42fbf91b7a36c3677734652aa7513e1a6a2f58c2e10037cd02dca5e5166"
+boundary = "fixture"
+rationale = "Isolated worker protocol peers exercise authentication and bounded lifecycle using ephemeral loopback ports."
+
+[[records]]
+path = "installer/worker/main.ts"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:3943f7cb13ab624cb1d16480005e525861a7639632949e7759ee45946e171f53"
+boundary = "execution_ipc"
+rationale = "Worker connects only to the execution-owned authenticated loopback IPC; scheduling and host-side socket custody remain with sugarsubstitute-execution."
+
+[[records]]
+path = "installer/worker/provision.ts"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:af479794e6a0a371a3853ac03b5ef568a8ca33b73d59627a66a6a032bedf0daa"
+boundary = "upstream"
+rationale = "Provisioning consumes the registered Comfy Desktop installer/download APIs. Electron net HTTP and package-manager/server networking remain with upstream; native download storage is a separate owner."
+
+[[records]]
+path = "crates/sugarsubstitute-networking/src/native/tests/qualification.rs"
+owner = "sugarsubstitute-networking"
+source_sha256 = "sha256:44731fd1ab6c53a8d41aec13d44a53c0a46ab5eb7cba4f3c526bdf0da5b18d54"
+boundary = "implementation"
+rationale = "Actual native policy queries qualify closed transport controls and cancellation retirement inside admitted execution lifetimes."
+
+[[records]]
+path = "installer/patches/0001-provisioning-entry.patch"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:331f22e06361f22ac3316203c5f46f97b0fdd912f2b201821cf9d77d47e813cd"
+boundary = "upstream"
+rationale = "Registered Comfy Desktop derivative consumes its existing Electron HTTP APIs; authored changes adapt storage and provisioning rather than implementing another transport."
+
+[[records]]
+path = "installer/patches/0003-shared-cache-grants.patch"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:1dadf2143184f6cd217d03295d42143e4c5be73c3e217952d346425a58e46154"
+boundary = "upstream"
+rationale = "Registered Comfy Desktop derivative consumes its existing Electron HTTP APIs; authored changes adapt storage and provisioning rather than implementing another transport."
+
+[[records]]
+path = "installer/patches/0004-native-metadata.patch"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:a7d58a182a99142c7ee2bcc8d5e79af1dc2e970f0380ad6c08fe1cc5c0376e4f"
+boundary = "upstream"
+rationale = "Registered Comfy Desktop derivative consumes its existing Electron HTTP APIs; authored changes adapt storage and provisioning rather than implementing another transport."
+
+
+[[records]]
+path = "tools/xtask/src/networking/access.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:990d18512d7439446fd44053e648a1b5db79a29be1a70a6ba168068a11a1b16f"
+boundary = "inspection"
+rationale = "Parsed network capability classification data contains literal native symbol names; this disposition permits no direct transport effects."
+
+[[records]]
+path = "tools/xtask/src/networking/tests.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:79b597256f10eba4816a8670090dbd05da7ebafffd86cd53efae0abffa2d00d0"
+boundary = "fixture"
+rationale = "Deliberately invalid embedded JavaScript and native-symbol literals prove rejection across macro, wrapper, alias and inactive-target cases."
+
+
+[[records]]
+path = "tools/xtask/src/networking/external/tests.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:278c21d3f5b8182b4ce98128965f950dcf70c6feb7f42195490ee237e6ba59da"
+boundary = "fixture"
+rationale = "Pure external-source fixtures deliberately contain Electron HTTP calls to verify missing, stale and foreign component rejection."
+
+
+[[records]]
+path = "tools/xtask/src/networking.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:cec6ef90960153fafe970e05abbcc4a95e32890b8223d9ec37fb8ce6e5b8fe43"
+boundary = "inspection"
+rationale = "Boundary-category classification data includes literal network module identifiers; direct transport construction remains forbidden in inspection sources."
+
+[[script_manifests]]
+path = "installer/package.json"
+lockfile = "installer/package-lock.json"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:535dc07de2bb73a188db2a4e05ccee0ae04cba0496410ce5b190a7f65d0fef2c"
+network_dependencies = ["electron"]
+rationale = "Pinned Electron supplies upstream provisioning HTTP and the isolated worker runtime; authored worker networking is limited to authenticated execution IPC."
+
+[[external_boundaries]]
+component = "comfy-desktop-provisioning"
+sources = ["third_party/comfy-desktop/src/main/lib/download.ts", "third_party/comfy-desktop/src/main/lib/fetch.ts"]
+source_sha256 = "sha256:d70903ea41932c1377ac1c2139da40012315ce05e468ee3d334cb582a3404096"
+rationale = "The consumed upstream Electron net.request implementations own provisioning downloads and metadata HTTP. Native worker storage remains a separate consumer; Git, pip and ComfyUI server networking retain their upstream package/server owners."

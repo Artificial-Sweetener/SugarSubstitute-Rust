@@ -12,6 +12,7 @@ use sugarsubstitute_contracts::execution::JobContext;
 use windows::core::{Error, HRESULT};
 
 /// Observe cancellation and original deadline before interpreting returned native I/O.
+#[cfg(test)]
 pub(in crate::readiness_transport) fn complete(
     result: windows::core::Result<()>,
     stage: &'static str,
@@ -20,6 +21,29 @@ pub(in crate::readiness_transport) fn complete(
 ) -> Result<(), ReadinessTransportError> {
     super::checkpoint(context)?;
     result.map_err(|cause| request_failure(stage, cause, peer_observed))
+}
+
+/// Preserve exact native retry semantics after shared transport's cancellation check.
+pub(in crate::readiness_transport) fn transport(
+    cause: sugarsubstitute_networking::Failure,
+    peer_observed: bool,
+    context: &JobContext,
+) -> ReadinessTransportError {
+    let (stage, cause) = cause.into_parts();
+    if matches!(stage, "http_send" | "http_receive" | "http_body_read" | "http_checkpoint")
+        && let Err(cause) = super::checkpoint(context)
+    {
+        return cause;
+    }
+    match cause {
+        sugarsubstitute_networking::Cause::Native(cause) => {
+            request_failure(stage, cause, peer_observed)
+        }
+        sugarsubstitute_networking::Cause::Io(cause) if stage == "http_submillisecond_deadline" => {
+            ReadinessTransportError::elapsed(stage, cause)
+        }
+        sugarsubstitute_networking::Cause::Io(cause) => ReadinessTransportError::new(stage, cause),
+    }
 }
 
 /// Preserve the original native cause under a closed operation/code classification.

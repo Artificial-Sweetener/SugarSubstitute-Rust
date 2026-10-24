@@ -137,12 +137,18 @@ impl HttpPort for FixtureHttp {
                 std::io::Error::from(std::io::ErrorKind::ConnectionRefused),
             ));
         }
-        state.session = 1;
-        state.connect = 2;
-        state.request = 3;
+        state.fixture_slots[0] = 1;
+        state.fixture_slots[1] = 2;
+        state.fixture_slots[2] = 3;
         self.phase("begin", context);
         if matches!(self.behavior, Behavior::SubmillisecondBudget) {
-            super::native::timeout_milliseconds(context.deadline(), context.now())?;
+            sugarsubstitute_networking::milliseconds(context.deadline(), context.now(), None)
+                .map_err(|cause| {
+                    ReadinessTransportError::elapsed(
+                        "http_submillisecond_deadline",
+                        std::io::Error::new(std::io::ErrorKind::TimedOut, cause),
+                    )
+                })?;
             return Err(ReadinessTransportError::invalid("fixture_expected_submillisecond_budget"));
         }
         if matches!(self.behavior, Behavior::Panicked) {
@@ -212,7 +218,7 @@ impl HttpPort for FixtureHttp {
         context: &JobContext,
     ) -> Result<(), ReadinessTransportError> {
         self.phase("close", context);
-        for slot in [&mut state.request, &mut state.connect, &mut state.session] {
+        for slot in state.fixture_slots.iter_mut().rev() {
             if *slot != 0 {
                 lock(&self.closed).push(*slot);
                 *slot = 0;

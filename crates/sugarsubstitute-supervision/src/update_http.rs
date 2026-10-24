@@ -2,16 +2,14 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Own finite synchronous update HTTP calls and observe native retirement before delivery.
 mod failure;
-#[allow(unsafe_code)]
-mod native;
 use crate::setup_storage::Download;
 pub use failure::Failure;
-use native::{Body, Handles};
 use std::{
     io::{self, Read},
     time::Duration,
 };
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
+use sugarsubstitute_networking::Transport;
 use sugarsubstitute_update::{
     MAX_METADATA_BYTES,
     http::{Endpoint, Headers, Policy},
@@ -25,7 +23,7 @@ pub const RESERVATION_BYTES: u64 = 4 * 1024 * 1024;
 /// run on admitted workers; exclusive borrowing prevents concurrent access to synchronous handles.
 #[derive(Default)]
 pub struct Http {
-    handles: Handles,
+    handles: Transport,
     memory: Option<MemoryClaim>,
 }
 impl Http {
@@ -41,7 +39,7 @@ impl Http {
     /// # Errors
     /// Retains each unresolved handle and its claim for another explicit retirement attempt.
     pub fn retire(&mut self) -> io::Result<()> {
-        self.handles.close()?;
+        self.handles.close().map_err(io::Error::from)?;
         self.memory = None;
         Ok(())
     }
@@ -102,12 +100,23 @@ impl Http {
             return Err(invalid("Previous update HTTP custody is unresolved").into());
         }
         check(context)?;
-        native::milliseconds(context, idle)?;
+        idle_milliseconds(context, idle)?;
         self.memory = Some(context.memory().claim(RESERVATION_BYTES).map_err(io::Error::other)?);
         let outcome = (|| {
             for redirects in 0..=5 {
                 policy.admits(&endpoint)?;
-                let headers = native::open(&mut self.handles, &endpoint, offset, idle, context)?;
+                let idle_ms = idle_milliseconds(context, idle)?;
+                self.handles
+                    .update(
+                        &transport_request(&endpoint, &endpoint.request_target())?,
+                        idle_ms,
+                        context,
+                    )
+                    .map_err(io::Error::from)?;
+                self.handles.send_update(offset, context).map_err(io::Error::from)?;
+                self.handles.receive(context).map_err(io::Error::from)?;
+                let response = self.handles.response(context).map_err(io::Error::from)?;
+                let headers = Headers::parse(response.status, &response.headers)?;
                 if matches!(headers.status(), 301 | 302 | 303 | 307 | 308) {
                     if redirects == 5 {
                         return Err(invalid("Update redirect limit reached").into());
@@ -118,10 +127,10 @@ impl Http {
                             .location()
                             .ok_or_else(|| invalid("Update redirect has no location"))?,
                     )?;
-                    self.handles.close()?;
+                    self.handles.close().map_err(io::Error::from)?;
                     continue;
                 }
-                return consume(&headers, &mut Body::new(&self.handles, idle, context));
+                return consume(&headers, &mut Body { handles: &mut self.handles, context });
             }
             Err(invalid("Update redirect state invalid").into())
         })();
@@ -171,3 +180,59 @@ fn invalid(message: &'static str) -> io::Error {
 pub(crate) mod fixture;
 #[cfg(test)]
 mod tests;
+
+/// Bound idle policy separately from the original job deadline before memory admission.
+fn idle_milliseconds(context: &JobContext, idle: Duration) -> io::Result<u32> {
+    check(context)?;
+    if idle < Duration::from_millis(1) || idle > Duration::from_secs(120) {
+        return Err(invalid("HTTP idle timeout outside supported bounds"));
+    }
+    sugarsubstitute_networking::milliseconds(
+        context.deadline(),
+        context.now(),
+        Some(idle.as_millis() as u32),
+    )
+    .map_err(|cause| io::Error::new(io::ErrorKind::TimedOut, cause))?;
+    Ok(idle.as_millis() as u32)
+}
+/// The body borrow cannot outlive retained native custody or the original admitted context.
+struct Body<'a> {
+    handles: &'a mut Transport,
+    context: &'a JobContext,
+}
+impl Read for Body<'_> {
+    fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
+        self.handles.read(bytes, self.context).map_err(io::Error::from)
+    }
+}
+
+/// Adapt only this feature's already origin-authorized endpoint to closed transport controls.
+fn transport_request<'a>(
+    endpoint: &'a Endpoint,
+    target: &'a str,
+) -> io::Result<sugarsubstitute_networking::UpdateRequest<'a>> {
+    if endpoint.secure() {
+        sugarsubstitute_networking::UpdateRequest::https(
+            endpoint.host().map_err(io::Error::other)?,
+            endpoint.port().map_err(io::Error::other)?,
+            target,
+        )
+        .map_err(io::Error::other)
+    } else {
+        #[cfg(any(test, feature = "boundary-fixtures"))]
+        {
+            if endpoint.host().map_err(io::Error::other)? != "127.0.0.1" {
+                return Err(invalid("Update HTTP fixture must be literal loopback"));
+            }
+            sugarsubstitute_networking::UpdateRequest::loopback(
+                endpoint.port().map_err(io::Error::other)?,
+                target,
+            )
+            .map_err(io::Error::other)
+        }
+        #[cfg(not(any(test, feature = "boundary-fixtures")))]
+        {
+            Err(invalid("Update transport requires HTTPS"))
+        }
+    }
+}

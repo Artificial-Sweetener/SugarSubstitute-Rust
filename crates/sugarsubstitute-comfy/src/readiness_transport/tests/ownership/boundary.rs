@@ -75,12 +75,12 @@ impl HttpPort for Boundary {
         context: &JobContext,
     ) -> Result<(), ReadinessTransportError> {
         self.phase("begin", context);
-        state.session = 1;
+        state.fixture_slots[0] = 1;
         if self.slots != 1 {
-            state.connect = 2;
+            state.fixture_slots[1] = 2;
         }
         if !matches!(self.slots, 1 | 2) {
-            state.request = 3;
+            state.fixture_slots[2] = 3;
         }
         if self.gated {
             let mut guard = lock(&self.gate);
@@ -129,7 +129,7 @@ impl HttpPort for Boundary {
         context: &JobContext,
     ) -> Result<(), ReadinessTransportError> {
         self.phase("close", context);
-        for slot in [&mut state.request, &mut state.connect, &mut state.session] {
+        for slot in state.fixture_slots.iter_mut().rev() {
             if *slot != 0 {
                 lock(&self.closed).push(*slot);
                 *slot = 0;

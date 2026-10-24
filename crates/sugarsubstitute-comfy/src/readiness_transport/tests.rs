@@ -80,3 +80,45 @@ fn unexpected_encoding_and_non_utf8_json_content_type_are_rejected() {
         );
     }
 }
+
+#[test]
+fn asset_response_length_uses_the_pinned_source_bound_independently_of_json_limits() -> TestResult {
+    let maximum = crate::readiness::MAX_SYSTEM_STATS_BYTES as u64 + 1;
+    let endpoint = Endpoint::Asset(super::probe::ExpectedAsset {
+        path: "/assets/served.bin",
+        bytes: maximum,
+        hash: [0; 32],
+    });
+    let headers = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {maximum}\r\n\r\n"
+    );
+    assert_eq!(parse_headers(&headers, endpoint)?, Some(maximum));
+    assert!(
+        parse_headers(
+            &headers.replace("application/octet-stream", "application/json"),
+            Endpoint::Stats
+        )
+        .is_err()
+    );
+    assert!(
+        parse_headers(&headers.replace(&maximum.to_string(), &(maximum + 1).to_string()), endpoint)
+            .is_err()
+    );
+    Ok(())
+}
+#[test]
+fn binary_asset_responses_reject_decompression_and_ambiguous_framing_before_body_consumption() {
+    let endpoint = Endpoint::Asset(super::probe::ExpectedAsset {
+        path: "/assets/served.bin",
+        bytes: 4,
+        hash: [0; 32],
+    });
+    for fields in [
+        "Content-Encoding: gzip\r\nContent-Length: 4",
+        "Content-Length: 4\r\nTransfer-Encoding: chunked",
+        "Content-Length: 4\r\nContent-Length: 4",
+        "Transfer-Encoding: gzip, chunked",
+    ] {
+        assert!(parse_headers(&format!("HTTP/1.1 200 OK\r\n{fields}\r\n\r\n"), endpoint).is_err());
+    }
+}

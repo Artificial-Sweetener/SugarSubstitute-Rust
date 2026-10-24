@@ -1092,8 +1092,8 @@ migrations = []
 [[formats]]
 id = "setup-worker-authenticated-framing"
 owner = "sugarsubstitute-execution"
-sources = ["crates/sugarsubstitute-execution/src/provisioning_transport.rs", "crates/sugarsubstitute-execution/src/provisioning_transport/wire.rs", "crates/sugarsubstitute-execution/src/provisioning_transport/memory.rs", "crates/sugarsubstitute-execution/src/provisioning_transport/tests.rs"]
-source_sha256 = "sha256:142d0533355e90855e0ffabf849a05e2d23232493010a5d00d4fabb3299dae48"
+sources = ["crates/sugarsubstitute-execution/src/provisioning_transport.rs", "crates/sugarsubstitute-execution/src/provisioning_transport/wire.rs", "crates/sugarsubstitute-execution/src/provisioning_transport/memory.rs", "crates/sugarsubstitute-execution/src/provisioning_transport/tests.rs", "crates/sugarsubstitute-execution/src/provisioning_transport/native.rs", "crates/sugarsubstitute-execution/src/provisioning_transport/native_tests.rs", "crates/sugarsubstitute-execution/src/provisioning_transport/socket.rs", "crates/sugarsubstitute-execution/src/provisioning_transport/socket/tests.rs"]
+source_sha256 = "sha256:61a651310102c7c7b67a39f271ca84d8bc5cf949d84d7db8baff006697c6a31a"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1

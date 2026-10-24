@@ -130,6 +130,30 @@ impl Payload {
     pub(crate) fn flush(&self) -> io::Result<()> {
         self.file.sync_all()
     }
+    /// Append one borrowed chunk at the actual physical end, within the original byte grant.
+    /// The current admitted caller owns the input allocation, bounded to 256 KiB. This method
+    /// neither buffers it nor flushes each chunk. The transfer owner must flush on every terminal
+    /// path, including cancellation, before releasing this capability for native consumers.
+    /// Offset mismatches, excess chunks and expired controls reject before any file mutation.
+    pub(crate) fn append(
+        &mut self,
+        offset: u64,
+        bytes: &[u8],
+        context: &JobContext,
+    ) -> Result<(), TransferFailure> {
+        check(context)?;
+        if bytes.len() > CHUNK
+            || offset.checked_add(bytes.len() as u64).is_none_or(|end| end > self.maximum)
+            || self.length()? != offset
+        {
+            return Err(TransferFailure::Extent);
+        }
+        self.file.seek(SeekFrom::Start(offset))?;
+        check(context)?;
+        self.file.write_all(bytes)?;
+        check(context)?;
+        Ok(())
+    }
     /// Copy an exact admitted interval, probing one extra source byte before success.
     /// Offset zero restarts this payload. Other offsets must match its actual physical end.
     /// The caller supplies bounded source I/O; this method creates no tasks or transport.
@@ -174,7 +198,6 @@ impl Payload {
         if offset == 0 {
             self.file.set_len(0)?;
         }
-        self.file.seek(SeekFrom::Start(offset))?;
         let mut copied = 0;
         loop {
             check(context)?;
@@ -187,7 +210,7 @@ impl Payload {
             if count > maximum || count as u64 > length - copied {
                 return Err(TransferFailure::Length);
             }
-            self.file.write_all(&scratch[..count])?;
+            self.append(offset + copied, &scratch[..count], context)?;
             copied += count as u64;
             check(context)?;
         }
@@ -208,5 +231,7 @@ impl Seek for Payload {
     }
 }
 
+#[cfg(test)]
+mod stream_tests;
 #[cfg(test)]
 mod tests;

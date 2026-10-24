@@ -27,6 +27,7 @@ mod fixtures;
 mod governance;
 mod infrastructure;
 mod metrics;
+mod networking;
 mod policy;
 mod source;
 mod structure;

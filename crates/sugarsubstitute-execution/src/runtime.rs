@@ -122,6 +122,7 @@ impl ExecutionOwner {
             .max_blocking_threads(2)
             .thread_name("sugarsubstitute-async")
             .enable_time()
+            .enable_io()
             .build()
             .map_err(error)?;
         let cpu = CpuPool::start(core.clone(), cpu_workers)?;

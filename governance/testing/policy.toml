@@ -16,7 +16,7 @@ minimum_tests = 222
 [[owners]]
 package = "sugarsubstitute-comfy"
 root = "crates/sugarsubstitute-comfy"
-concern = "Bounded startup schema, effective managed argv and observed ComfyUI response contracts; Bounded fixed WinHTTP requests, installed runtime asset hash verification, deterministic readiness-owner custody and feature-gated external boundary fixtures; cancellable readiness campaigns, finite HTTP phases and typed native retry classification"
+concern = "Bounded startup schema, effective managed argv and observed ComfyUI response contracts; Bounded fixed requests through the network adapter, installed runtime asset hash verification, deterministic readiness-owner custody and feature-gated external boundary fixtures; cancellable readiness campaigns, finite HTTP phases and typed native retry classification"
 minimum_tests = 115
 
 [[owners]]
@@ -35,7 +35,7 @@ minimum_tests = 645
 package = "sugarsubstitute-xtask"
 root = "tools/xtask"
 concern = "Governance rejection behavior and verification orchestration, including shared-host checks and tests with the Windows composition excluded"
-minimum_tests = 67
+minimum_tests = 83
 
 [[owners]]
 package = "sugarsubstitute-supervision"
@@ -66,3 +66,9 @@ package = "sugarsubstitute-update"
 root = "crates/sugarsubstitute-update"
 concern = "Persisted publication sequence identities across channels, components and platforms; Portable package inventory, path and aggregate expansion bounds; HTTPS destination policy, hostile framing rejection; Real TUF signatures, root rotation, durable rollback floors, expiration and streamed package authentication"
 minimum_tests = 39
+
+[[owners]]
+package = "sugarsubstitute-networking"
+root = "crates/sugarsubstitute-networking"
+concern = "Original finite deadline conversion, closed HTTPS request validation, native policy queries, original-job confinement, active cancellation, peer-observed socket closure and checked child-before-parent retirement"
+minimum_tests = 10

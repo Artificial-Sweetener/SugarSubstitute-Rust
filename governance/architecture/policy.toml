@@ -74,3 +74,9 @@ package = "sugarsubstitute-update"
 root = "crates/sugarsubstitute-update"
 layer = "adapter"
 concern = "Portable distribution inventory, update metadata authentication, HTTP destination/framing policy and streaming target verification"
+
+[[owners]]
+package = "sugarsubstitute-networking"
+root = "crates/sugarsubstitute-networking"
+layer = "adapter"
+concern = "Bounded native HTTP transport and checked handle custody"

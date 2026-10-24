@@ -8,7 +8,7 @@ use std::path::Path;
 use crate::{
     architecture, cache_storage, catalog,
     error::{Failure, Result, read, require},
-    execution, infrastructure,
+    execution, infrastructure, networking,
     policy::{self, Architecture, Debt, Records, Testing, Waiver},
     structure, testing, vendor,
     workspace::Workspace,
@@ -30,6 +30,9 @@ pub(crate) fn check(root: &Path) -> Result<()> {
         &infrastructure,
         time::OffsetDateTime::now_utc().date(),
     )?;
+    let networking: networking::Policy =
+        policy::load(root, "governance/infrastructure/networking.toml")?;
+    networking::check(root, &architecture, &workspace, &networking)?;
     let debt: Records<Debt> = policy::load(root, "governance/architecture/debt.toml")?;
     let waivers: Records<Waiver> = policy::load(root, "governance/architecture/waivers.toml")?;
     structure::check(root, &architecture, &debt, &waivers, time::OffsetDateTime::now_utc().date())?;
