@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own persistent preview geometry and passive plugin presentation independently of source acquisition. */
 import { decodeCanvasRaster, type CanvasPixelRaster } from '../../core/embedded/CanvasRuntime.js';
+import { maskPreviewPixels } from './MaskPreviewWash.js';
 
 /** Keep the same raster and frame mounted while source identity, interpretation and availability change. */
 export class InputPreviewSurface {
@@ -104,28 +105,33 @@ export class InputPreviewSurface {
     this.#frame.setAttribute('aria-busy', 'false');
   }
 
-  /** Paint interpreted pixels atomically without removing the containing preview surface. */
+  /** Paint interpreted pixels with one optional composition wash, retaining the mounted preview surface. */
   paint(
     pixels: CanvasPixelRaster,
     frame: { readonly width: number; readonly height: number } | null,
+    composition: CanvasPixelRaster | null = null,
   ): void {
-    const bytes = decodeCanvasRaster(pixels),
+    const raster = composition ?? pixels,
       canvas = this.canvas;
     const context = canvas.getContext('2d');
     if (!context) throw new Error('Source preview rendering is unavailable.');
-    const image = context.createImageData(pixels.width, pixels.height);
-    if (pixels.format === 'rgba8') image.data.set(bytes);
-    else
-      for (let index = 0; index < bytes.length; index++) {
-        const offset = index * 4,
-          value = bytes[index] ?? 0;
-        image.data[offset] = image.data[offset + 1] = image.data[offset + 2] = value;
-        image.data[offset + 3] = 255;
-      }
-    if (canvas.width !== pixels.width) canvas.width = pixels.width;
-    if (canvas.height !== pixels.height) canvas.height = pixels.height;
+    const image = context.createImageData(raster.width, raster.height);
+    if (composition) image.data.set(maskPreviewPixels(pixels, composition));
+    else {
+      const bytes = decodeCanvasRaster(pixels);
+      if (pixels.format === 'rgba8') image.data.set(bytes);
+      else
+        for (let index = 0; index < bytes.length; index++) {
+          const offset = index * 4,
+            value = bytes[index] ?? 0;
+          image.data[offset] = image.data[offset + 1] = image.data[offset + 2] = value;
+          image.data[offset + 3] = 255;
+        }
+    }
+    if (canvas.width !== raster.width) canvas.width = raster.width;
+    if (canvas.height !== raster.height) canvas.height = raster.height;
     context.putImageData(image, 0, 0);
-    this.frame(frame?.width ?? pixels.width, frame?.height ?? pixels.height);
+    this.frame(frame?.width ?? raster.width, frame?.height ?? raster.height);
     this.#painted = true;
     canvas.hidden = false;
     this.#placeholder.hidden = true;
