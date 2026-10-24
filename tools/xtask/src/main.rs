@@ -26,6 +26,7 @@ mod execution_tests;
 mod fixtures;
 mod governance;
 mod infrastructure;
+mod localization;
 mod metrics;
 mod policy;
 mod source;

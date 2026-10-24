@@ -27,6 +27,16 @@
   });
   void (async () => {
     await until(() => sourceReady, 'authenticated source readiness', 90000);
+    for (const locale of window.setupBootstrap.locales) {
+      const selector = document.getElementById('locale');
+      selector.value = locale.id;
+      selector.dispatchEvent(new Event('change'));
+      await until(() => !selector.disabled && document.documentElement.lang === locale.id, 'localized native title');
+      if (!document.querySelector('[data-text=languageTitle]').textContent)
+        throw new Error('Selected installer locale has no language heading');
+      if (document.querySelector('#brand svg desc').textContent.includes('__'))
+        throw new Error('Selected installer locale has no wordmark description');
+    }
     const primary = document.getElementById('primary');
     primary.click();
     await until(() => !document.getElementById('location').hidden, 'location');

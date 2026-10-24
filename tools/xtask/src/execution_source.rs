@@ -12,6 +12,7 @@ pub(crate) fn restricted_crate(name: &str) -> bool {
     matches!(
         name,
         "tokio"
+            | "mio"
             | "tokio_util"
             | "rayon"
             | "rayon_core"

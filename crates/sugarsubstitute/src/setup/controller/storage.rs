@@ -112,7 +112,8 @@ impl Controller {
                         io::Error::other(
                             sugarsubstitute_contracts::localization::installer::messages(
                                 &self.locale,
-                            )["setupFailed"],
+                            )
+                            .setup_failed,
                         )
                     });
                     if self.closing || self.unavailable {
@@ -255,6 +256,11 @@ impl Controller {
         if id.is_none() && self.bundle.is_none() {
             self.worker_failed(Box::new(cause))?;
         } else {
+            self.reply(
+                None,
+                "diagnostic",
+                json!({"message":crate::failure_details::Details(&cause).to_string()}),
+            )?;
             self.reply(
                 id.as_deref(),
                 "failed",

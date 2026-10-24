@@ -12,8 +12,9 @@ import { getActivePythonPath } from '@upstream/lib/pythonEnv'
 import { cacheGrants } from './cache-policy'
 import { consumePlan } from './selection'
 import { reserve, record, ready } from './ownership'
+import { ProductFailure, type ProgressSink } from './product-messages'
 
-type Send = (event: string, data: unknown) => void
+type Send = ProgressSink
 
 export async function provision(
   input: { directory: string; selectionToken: string }, signal: AbortSignal, send: Send
@@ -36,7 +37,7 @@ export async function provision(
     name: 'SugarSubstitute ComfyUI', installPath: reservation.directory,
   }
   const sendProgress = (phase: string, data: { percent: number; status: string }) => {
-    send('progress', { phase, ...data })
+    send('progress', { phase, ...data, textOwner: 'comfy-desktop' })
   }
   try {
     await standalone.install!(installation, {
@@ -84,7 +85,7 @@ export async function inspect(
     const environment = await checkPython(python, comfy, signal)
     return { directory: comfy, python, ...environment }
   }
-  throw new Error('Select the Python executable used by this ComfyUI installation')
+  throw new ProductFailure('selectPython', 'Select the Python executable used by this ComfyUI installation')
 }
 
 /** Revalidate the actual runtime before reusing a completed provisioning attempt. */
@@ -101,7 +102,7 @@ async function verifyManaged(
   }
   const comfy = path.join(directory, 'ComfyUI')
   await fs.access(path.join(comfy, 'main.py'))
-  send('progress', { phase: 'verify', percent: -1, status: 'Checking the Python environment' })
+  send('progress', { phase: 'verify', percent: -1, statusCode: 'checkingPython' })
   const environment = await checkPython(python, comfy, signal)
   return { directory: comfy, python, ...environment }
 }

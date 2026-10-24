@@ -179,6 +179,17 @@ impl ProfileComponent {
     }
 }
 impl EntryActivation for ProfileComponent {
+    fn presentation_locale(&self) -> Option<sugarsubstitute_contracts::configuration::LocaleId> {
+        let projection = self
+            .campaign
+            .as_ref()
+            .map(|campaign| &campaign.projection)
+            .or(self.projected.as_ref())?;
+        match &projection.outcome {
+            JobOutcome::Success(value) => Some(value.locale),
+            _ => None,
+        }
+    }
     fn enter_activation(
         &mut self,
         request: &mut Option<AuthenticatedEntryLaunch>,

@@ -34,6 +34,9 @@ impl RetainedChild {
     }
 }
 impl EntryActivation for RetainedChild {
+    fn presentation_locale(&self) -> Option<sugarsubstitute_contracts::configuration::LocaleId> {
+        None
+    }
     fn enter_activation(
         &mut self,
         _: &mut Option<AuthenticatedEntryLaunch>,

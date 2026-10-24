@@ -3,20 +3,6 @@
 //! Report a failed application entry after its original cleanup lifetime.
 use super::entry_runner::EntryActivation;
 use std::error::Error;
-use std::fmt;
-
-/// Present actionable profile contention while retaining full diagnostics for other failures.
-struct FailureDetails<'a>(&'a (dyn Error + 'static));
-
-impl fmt::Display for FailureDetails<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if sugarsubstitute_supervision::profiles::ProfileInUse::in_error_chain(self.0) {
-            f.write_str(sugarsubstitute_contracts::localization::messages("en").profile_in_use)
-        } else {
-            write!(f, "{:?}", super::entry_runner::FailureDisplay(self.0))
-        }
-    }
-}
 
 /// Present only this user-facing Root's failed lifetime, retaining its exact original error.
 pub(super) fn report_failure<C: EntryActivation + 'static, E: Error>(
@@ -29,10 +15,17 @@ pub(super) fn report_failure<C: EntryActivation + 'static, E: Error>(
             "User-requested shutdown finished with retained cleanup errors");
         return cause;
     }
+    let copy = super::entry_runner::presentation::locale::<C>(cause.as_ref());
+    let summary =
+        if sugarsubstitute_supervision::profiles::ProfileInUse::in_error_chain(cause.as_ref()) {
+            copy.profile_in_use
+        } else {
+            copy.report.startup_failed
+        };
     if let Err(secondary) = show(
         sugarsubstitute::APPLICATION_NAME,
-        sugarsubstitute_contracts::localization::messages("en").report.startup_failed,
-        format_args!("{}", FailureDetails(cause.as_ref())),
+        summary,
+        format_args!("{:?}", super::entry_runner::FailureDisplay(cause.as_ref())),
     ) {
         tracing::error!(operation="startup_failure_presentation",cause=?secondary,
             "Native startup failure presentation failed while its original application cause remains retained");

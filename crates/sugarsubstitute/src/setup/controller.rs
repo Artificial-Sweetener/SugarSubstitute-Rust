@@ -108,6 +108,10 @@ impl Controller {
             locale: "en".into(),
         }
     }
+    /// Borrow the current validated language after native shutdown for terminal feedback.
+    pub(super) fn locale(&self) -> &str {
+        &self.locale
+    }
     fn reply(&mut self, id: Option<&str>, event: &str, data: Value) -> Result<()> {
         if matches!(event, "progress" | "diagnostic" | "unavailable" | "failed")
             && let Some(console) = &mut self.console

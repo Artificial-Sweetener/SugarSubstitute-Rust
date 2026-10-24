@@ -41,3 +41,4 @@ if (diagnostics.length) {
   }))
   process.exitCode = 1
 } else console.log('Provisioning adapter and consumed upstream types passed strict TypeScript checks')
+await import('./typecheck-surface.mjs')

@@ -16,6 +16,7 @@ import { argument } from './arguments'
 import { Events } from './events.mjs'
 import { NativeRecords, NativeRecordError, bindNativeRecords } from './records'
 import { NativeMetadata, MetadataError, bindNativeMetadata, metadataRoot } from './metadata'
+import { ProductFailure } from './product-messages'
 
 declare const UPSTREAM_REVISION: string
 let transport: Socket | undefined
@@ -104,7 +105,7 @@ async function dispatch(command: ReturnType<Decoder['push']>[number]): Promise<v
   } catch (cause) {
     send(command.id, control.signal.aborted ? 'cancelled' : 'failed', {
       message: cause instanceof Error ? cause.message : String(cause),
-      ...(cause instanceof CacheStorageError || cause instanceof NativeRecordError || cause instanceof MetadataError ? { statusCode: cause.statusCode } : {}),
+      ...(cause instanceof CacheStorageError || cause instanceof NativeRecordError || cause instanceof MetadataError || cause instanceof ProductFailure ? { statusCode: cause.statusCode } : {}),
     })
   } finally {
     await metadata.drain()
@@ -126,7 +127,7 @@ void app.whenReady().then(() => {
   const decoder = new Decoder()
   socket.on('connect', () => {
     socket.write(JSON.stringify({ version: VERSION, event: 'authenticate', token }) + '\n')
-    send(null, 'ready', { cacheProtocol: 1, storageProtocol: 1, metadataProtocol: 1, upstreamRevision: UPSTREAM_REVISION, operations: ['options', 'inspect', 'provision', 'integrate', 'cancel'] })
+    send(null, 'ready', { cacheProtocol: 1, storageProtocol: 1, metadataProtocol: 1, textProtocol: 1, upstreamRevision: UPSTREAM_REVISION, operations: ['options', 'inspect', 'provision', 'integrate', 'cancel'] })
   })
   socket.on('data', (chunk: Buffer) => {
     try {

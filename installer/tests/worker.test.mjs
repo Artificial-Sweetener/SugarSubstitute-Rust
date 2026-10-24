@@ -96,6 +96,7 @@ test('real headless worker rejects unsafe requests and exits on host closure', {
   assert.equal(ready.data.cacheProtocol, 1)
   assert.equal(ready.data.storageProtocol, 1)
   assert.equal(ready.data.metadataProtocol, 1)
+  assert.equal(ready.data.textProtocol, 1)
   assert.match(ready.data.upstreamRevision, /^[a-f0-9]{40}$/)
   assert.deepEqual(ready.data.operations, ['options', 'inspect', 'provision', 'integrate', 'cancel'])
   socket.write(JSON.stringify({

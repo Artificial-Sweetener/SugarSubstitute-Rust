@@ -22,6 +22,9 @@ fn declared_public_scheduler_capabilities_are_rejected() -> Result<()> {
     for source in [
         "pub use tokio::runtime::Runtime;",
         "pub use tokio;",
+        "pub use mio as readiness;",
+        "pub type Poller = mio::Poll;",
+        "use mio::Registry as Events; pub fn events() -> Events { loop {} }",
         "pub use tokio::runtime as scheduler;",
         "pub use tokio::runtime::*;",
         "pub use std::sync::*;",

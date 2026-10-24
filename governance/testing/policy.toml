@@ -4,7 +4,7 @@ platforms = ["windows", "macos", "linux"]
 [[owners]]
 package = "sugarsubstitute-contracts"
 root = "crates/sugarsubstitute-contracts"
-concern = "Native installation selection, exact health-attempt correlation, interrupted trial reconciliation and failed-package suppression; Closed recovery correlation, physical generation identity, summary migration steps and localized capture degradation and unknown exit text; Owned contracts, localization, memory claims, immutable frames, scoped lifecycle and bounded transcript facts; bounded incident evidence, durable acknowledgment facts and namespace eviction ledger; bounded coordinator-entry identity, launch input and setup deadlines; sole five-locale native incident report messages and complete consent disclosure; fixed authenticated backend custody framing and exact purpose/session matching; authoritative capture target and domain-separated helper Supervisor subject"
+concern = "Native installation selection, exact health-attempt correlation, interrupted trial reconciliation and failed-package suppression; Closed recovery correlation, physical generation identity, summary migration steps and localized capture degradation and unknown exit text; Required complete installer records, exact serialized placeholder contracts, closed worker product codes and canonical locale names; Owned contracts, localization, memory claims, immutable frames, scoped lifecycle and bounded transcript facts; bounded incident evidence, durable acknowledgment facts and namespace eviction ledger; bounded coordinator-entry identity, launch input and setup deadlines; sole five-locale native incident report messages and complete consent disclosure; fixed authenticated backend custody framing and exact purpose/session matching; authoritative capture target and domain-separated helper Supervisor subject"
 minimum_tests = 172
 
 [[owners]]
@@ -34,7 +34,7 @@ minimum_tests = 645
 [[owners]]
 package = "sugarsubstitute-xtask"
 root = "tools/xtask"
-concern = "Governance rejection behavior and verification orchestration, including shared-host checks and tests with the Windows composition excluded"
+concern = "Localization alias/macro/registry, dependency identity and auxiliary-language rejection; Governance rejection behavior and verification orchestration, including shared-host checks and tests with the Windows composition excluded"
 minimum_tests = 67
 
 [[owners]]

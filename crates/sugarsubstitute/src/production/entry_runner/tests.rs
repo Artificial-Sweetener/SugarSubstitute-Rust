@@ -4,7 +4,7 @@
 use super::*;
 use std::sync::atomic::{AtomicU64, Ordering};
 static NEXT: AtomicU64 = AtomicU64::new(1);
-pub(crate) struct NoChild;
+pub(crate) struct NoChild(pub(crate) Option<sugarsubstitute_contracts::configuration::LocaleId>);
 
 #[test]
 fn original_cleanup_wake_is_consumed_before_unsettled_owner_returns() -> Result<(), Box<dyn Error>>
@@ -27,7 +27,7 @@ fn original_cleanup_wake_is_consumed_before_unsettled_owner_returns() -> Result<
     let mut owner = EntryRunner::new(
         command,
         installation.join("unopened.exe"),
-        Box::new(NoChild),
+        Box::new(NoChild(None)),
         crate::diagnostics::DiagnosticHealth::fixture(),
     );
     let issued = ShutdownBudget::new(sugarsubstitute_contracts::execution::Moment::from_nanos(0))?;
@@ -142,6 +142,9 @@ fn child_factory_failure_preserves_cause_before_native_pump_or_configuration()
     Ok(())
 }
 impl EntryActivation for NoChild {
+    fn presentation_locale(&self) -> Option<sugarsubstitute_contracts::configuration::LocaleId> {
+        self.0
+    }
     fn enter_activation(
         &mut self,
         _: &mut Option<AuthenticatedEntryLaunch>,

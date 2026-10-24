@@ -8,9 +8,10 @@ import { standalone } from '@upstream/sources/standalone/index'
 import { getActiveUvPath } from '@upstream/lib/pythonEnv'
 import { inspectProgram } from './dependency-inspection.mjs'
 import { configureModelRoot } from './model-root.mjs'
+import type { ProgressSink } from './product-messages'
 
 type Runtime = { directory: string; python: string; frontend: string; metadata: string }
-type Send = (event: string, data: unknown) => void
+type Send = ProgressSink
 
 /** Preserve failed package operations as failures; cancellation waits for the child exit callback. */
 function run(command: string, args: string[], cwd: string, signal: AbortSignal): Promise<string> {

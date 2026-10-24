@@ -10,10 +10,7 @@ pub(super) fn html(locale: &str, install_root: &Path) -> Result<String, Box<dyn 
         .map(|locale| {
             serde_json::json!({
                 "id": locale.id,
-                "label": match locale.id {
-                    "en" => "English", "zh-Hans" => "简体中文", "ja" => "日本語",
-                    "ko" => "한국어", "es" => "Español", id => id,
-                },
+                "label": locale.name,
             })
         })
         .collect();
@@ -27,7 +24,10 @@ pub(super) fn html(locale: &str, install_root: &Path) -> Result<String, Box<dyn 
     let svg = mark.find("<svg").ok_or("Installer wordmark SVG is absent")?;
     let mut document = include_str!("../../../../installer/surface/index.html")
         .replace("__STYLE__", include_str!("../../../../installer/surface/style.css"))
+        .replace("__LOCALE__", localization::messages(locale).id)
+        .replace("__TITLE__", installer::messages(locale).title)
         .replace("__WORDMARK__", &mark[svg..])
+        .replace("__WORDMARK_DESCRIPTION__", installer::messages(locale).wordmark_description)
         .replace("__BOOTSTRAP__", &bootstrap)
         .replace("__SCRIPT__", include_str!("../../../../installer/surface/controller.js"));
     for (name, source) in [
@@ -54,12 +54,21 @@ mod tests {
     {
         for locale in localization::LOCALES {
             let html = html(locale.id, Path::new(r"E:\Substitute"))?;
-            assert!(html.contains("Sugar Substitute logo"));
+            assert!(html.contains("<title id=\"title\">SugarSubstitute</title>"));
+            assert!(html.contains("id=\"main-lettering\""));
+            assert!(html.contains(&format!(
+                "<desc id=\"desc\" data-text=\"wordmarkDescription\">{}</desc>",
+                installer::messages(locale.id).wordmark_description,
+            )));
+            assert!(!html.contains("__WORDMARK_DESCRIPTION__"));
             assert!(!html.contains("__BOOTSTRAP__"));
             assert!(!html.contains("__WORDMARK__"));
             assert!(!html.contains("__ICON_"));
             assert!(html.contains("connect-src 'none'"));
-            assert!(html.contains(installer::messages(locale.id)["languageTitle"]));
+            assert!(html.contains(installer::messages(locale.id).language_title));
+            assert!(html.contains(&format!("<html lang=\"{}\">", locale.id)));
+            assert!(html.contains(&format!("<title>{}</title>", locale.installer.title)));
+            assert!(html.contains(locale.name));
         }
         Ok(())
     }

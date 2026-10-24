@@ -14,8 +14,18 @@ pub mod startup;
 /// Localized native main-window controls.
 pub mod window;
 
-/// Bind one supported locale to every user-facing splash message.
+/// Bind one supported locale to every owned product surface.
+/// Catalog construction belongs to this owner, including access through renamed imports.
+/// ```compile_fail
+/// use sugarsubstitute_contracts::localization::{Messages as Copy, messages};
+/// let replacement = Copy { ..*messages("en") };
+/// ```
+#[non_exhaustive]
 pub struct Messages {
+    /// Native self-name displayed by language selection.
+    pub name: &'static str,
+    /// Complete installer copy.
+    pub installer: &'static installer::InstallerMessages,
     /// Native profile-conflict controls and feedback.
     pub conflict: &'static conflict::ConflictMessages,
     /// Startup operation and long-wait labels.
@@ -58,6 +68,8 @@ pub struct Messages {
 pub static LOCALES: &[Messages] = &[
     Messages {
         id: "en",
+        name: "English",
+        installer: &installer::EN,
         startup: &startup::EN,
         loading: "Loading...",
         loading_long: "This is taking longer than usual...",
@@ -78,6 +90,8 @@ pub static LOCALES: &[Messages] = &[
     },
     Messages {
         id: "zh-Hans",
+        name: "简体中文",
+        installer: &installer::ZH_HANS,
         startup: &startup::ZH_HANS,
         loading: "正在加载...",
         loading_long: "加载时间比平时稍长...",
@@ -98,6 +112,8 @@ pub static LOCALES: &[Messages] = &[
     },
     Messages {
         id: "ja",
+        name: "日本語",
+        installer: &installer::JA,
         startup: &startup::JA,
         loading: "読み込み中...",
         loading_long: "通常より時間がかかっています...",
@@ -118,6 +134,8 @@ pub static LOCALES: &[Messages] = &[
     },
     Messages {
         id: "ko",
+        name: "한국어",
+        installer: &installer::KO,
         startup: &startup::KO,
         loading: "불러오는 중...",
         loading_long: "평소보다 시간이 오래 걸리고 있습니다...",
@@ -138,6 +156,8 @@ pub static LOCALES: &[Messages] = &[
     },
     Messages {
         id: "es",
+        name: "Español",
+        installer: &installer::ES,
         startup: &startup::ES,
         loading: "Cargando...",
         loading_long: "Esto está tardando más de lo habitual...",
@@ -190,11 +210,13 @@ mod tests {
                     locale.profile_in_use
                 ]
                 .into_iter()
+                .chain([locale.name])
+                .chain(locale.installer.labels())
                 .chain(locale.report.labels())
                 .chain(locale.conflict.labels())
                 .chain(locale.window.labels())
                 .chain(locale.startup.labels())
-                .all(|text| !text.is_empty() && !text.contains('\0'))
+                .all(|text| !text.trim().is_empty() && !text.contains('\0'))
             );
         }
         assert_eq!(messages("unrecognized").id, "en");

@@ -8,7 +8,7 @@ use std::path::Path;
 use crate::{
     architecture, cache_storage, catalog,
     error::{Failure, Result, read, require},
-    execution, infrastructure,
+    execution, infrastructure, localization,
     policy::{self, Architecture, Debt, Records, Testing, Waiver},
     structure, testing, vendor,
     workspace::Workspace,
@@ -20,6 +20,9 @@ pub(crate) fn check(root: &Path) -> Result<()> {
     let architecture: Architecture = policy::load(root, "governance/architecture/policy.toml")?;
     let workspace = Workspace::load(root)?;
     architecture::check(root, &architecture, &workspace)?;
+    let localization: localization::Policy =
+        policy::load(root, "governance/infrastructure/localization.toml")?;
+    localization::check(root, &architecture, &workspace, &localization)?;
     let execution: execution::Policy = policy::load(root, "governance/execution/policy.toml")?;
     execution::check(root, &execution, &architecture, &workspace)?;
     let infrastructure: infrastructure::Policy =

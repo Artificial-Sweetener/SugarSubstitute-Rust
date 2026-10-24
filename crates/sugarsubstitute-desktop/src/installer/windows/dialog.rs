@@ -12,10 +12,14 @@ use windows::{
             FileOpenDialog, IFileOpenDialog, SIGDN_FILESYSPATH,
         },
     },
-    core::HRESULT,
+    core::{HRESULT, PCWSTR},
 };
 
-pub(super) fn choose(window: &Window, field: &str) -> Result<Option<String>, Box<dyn Error>> {
+pub(super) fn choose(
+    window: &Window,
+    field: &str,
+    copy: &sugarsubstitute_contracts::localization::installer::InstallerMessages,
+) -> Result<Option<String>, Box<dyn Error>> {
     if !matches!(field, "installRoot" | "comfyRoot" | "models" | "outputs" | "python") {
         return Err("Unsupported installer path picker".into());
     }
@@ -25,6 +29,19 @@ pub(super) fn choose(window: &Window, field: &str) -> Result<Option<String>, Box
         let dialog: IFileOpenDialog =
             CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER)?;
         let kind = if field == "python" { FOS_FILEMUSTEXIST } else { FOS_PICKFOLDERS };
+        let title = match field {
+            "installRoot" => copy.install_folder,
+            "comfyRoot" => copy.comfy_folder,
+            "models" => copy.models,
+            "outputs" => copy.outputs,
+            _ => copy.python,
+        }
+        .encode_utf16()
+        .chain(Some(0))
+        .collect::<Vec<_>>();
+        let select = copy.select.encode_utf16().chain(Some(0)).collect::<Vec<_>>();
+        dialog.SetTitle(PCWSTR(title.as_ptr()))?;
+        dialog.SetOkButtonLabel(PCWSTR(select.as_ptr()))?;
         dialog.SetOptions(FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | kind)?;
         match dialog.Show(Some(HWND(window.hwnd() as *mut _))) {
             Ok(()) => {}

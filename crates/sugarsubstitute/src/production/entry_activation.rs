@@ -104,6 +104,7 @@ use record::{PendingProjection, Record, RetainedRecord};
 /// Own bounded retained records and the process's one actual capture registration.
 /// No constructor grants native effects, trust, serving state or child readiness.
 pub(crate) struct ProductionActivation {
+    selected_locale: Option<sugarsubstitute_contracts::configuration::LocaleId>,
     #[cfg(any(test, feature = "k1-native-qualification"))]
     idle_gate: std::cell::Cell<Option<normal_idle::qualification::IdleGate>>,
     incidents: incident_flow::IncidentFlow,
@@ -143,6 +144,7 @@ impl ProductionActivation {
         Ok(Box::new(Self {
             #[cfg(any(test, feature = "k1-native-qualification"))]
             idle_gate: std::cell::Cell::new(None),
+            selected_locale: None,
             incidents: incident_flow::IncidentFlow::new(),
             qualification: None,
             executable,
@@ -255,6 +257,24 @@ impl ProductionActivation {
     }
 }
 impl EntryActivation for ProductionActivation {
+    fn presentation_locale(&self) -> Option<sugarsubstitute_contracts::configuration::LocaleId> {
+        self.records
+            .iter()
+            .flatten()
+            .filter(|held| Some(held.record.run) == self.failure_run)
+            .find_map(|held| {
+                let projection = held
+                    .record
+                    .projected
+                    .as_ref()
+                    .or_else(|| held.record.start.as_ref().map(|start| &start.projection))?;
+                match &projection.outcome {
+                    JobOutcome::Success(value) => Some(value.locale),
+                    _ => None,
+                }
+            })
+            .or(self.selected_locale)
+    }
     fn enter_activation(
         &mut self,
         request: &mut Option<AuthenticatedEntryLaunch>,

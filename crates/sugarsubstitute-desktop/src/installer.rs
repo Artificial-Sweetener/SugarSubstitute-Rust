@@ -55,6 +55,10 @@ pub enum BrowserRetirement {
 
 /// Application state owner polled by the native event loop without blocking it.
 pub trait InstallerLifetime {
+    /// Borrow copy for the current validated selection without introducing locale persistence.
+    fn messages(
+        &self,
+    ) -> &'static sugarsubstitute_contracts::localization::installer::InstallerMessages;
     /// Select GUI profile initialization before starting execution-owned preparation.
     fn prepare_browser(&mut self);
     /// Borrow the current storage-owned profile path after its grant is durable.

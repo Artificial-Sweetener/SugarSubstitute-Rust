@@ -60,7 +60,7 @@ pub(in crate::setup) fn run(
     let result = sugarsubstitute_desktop::installer::run(
         InstallerWindow {
             visible: false,
-            title: "SugarSubstitute installer qualification".into(),
+            title: sugarsubstitute_contracts::localization::installer::messages("en").title.into(),
             html,
         },
         &mut fixture,
@@ -94,7 +94,11 @@ pub(in crate::setup) fn run(
         || fixture.released_profiles == 0
         || fixture.unproven_live_profiles != 0
     {
-        return Err("Native installer qualification did not complete every assertion".into());
+        return Err(format!(
+            "Native installer qualification incomplete: document={}, console={}, records={}, released_profiles={}, unproven_live_profiles={}",
+            fixture.passed, fixture.native_console, fixture.lines,
+            fixture.released_profiles, fixture.unproven_live_profiles,
+        ).into());
     }
     Ok(json!({"schema_version":1,"passed":true,"hidden_native_window":true,
         "shared_native_console":true,"duplicate_dom_scrollbars":false,
@@ -118,6 +122,11 @@ struct Fixture {
     source_ready_sent: bool,
 }
 impl InstallerLifetime for Fixture {
+    fn messages(
+        &self,
+    ) -> &'static sugarsubstitute_contracts::localization::installer::InstallerMessages {
+        self.controller.messages()
+    }
     fn prepare_browser(&mut self) {
         self.controller.prepare_browser();
     }

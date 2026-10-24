@@ -137,7 +137,7 @@ mod tests {
         let mut runner = EntryRunner::new(
             command,
             root,
-            Box::new(super::super::tests::NoChild),
+            Box::new(super::super::tests::NoChild(None)),
             crate::diagnostics::DiagnosticHealth::fixture(),
         );
         let clock = Arc::new(Manual::default());

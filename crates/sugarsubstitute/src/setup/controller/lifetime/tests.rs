@@ -135,8 +135,22 @@ fn cleanup_uses_native_creation_fact_instead_of_the_discarded_worker_outcome() -
             messages.extend(controller.advance()?);
             Ok(controller.relaunch.is_none())
         })?;
-        assert_eq!(messages.len(), 1);
-        let message: serde_json::Value = serde_json::from_str(&messages[0])?;
+        let messages: Vec<serde_json::Value> = messages
+            .iter()
+            .map(|message| serde_json::from_str(message))
+            .collect::<std::result::Result<_, _>>()?;
+        let product: Vec<_> =
+            messages.iter().filter(|message| message["event"] != "diagnostic").collect();
+        assert_eq!(product.len(), 1);
+        assert_eq!(
+            messages.iter().filter(|message| message["event"] == "diagnostic").count(),
+            usize::from(creation != CreationOutcome::Created)
+        );
+        if creation != CreationOutcome::Created {
+            assert_eq!(messages[0]["event"], "diagnostic");
+            assert_eq!(messages[0]["data"]["message"], "original worker outcome");
+        }
+        let message = product[0];
         assert_eq!(
             message["event"],
             match creation {
@@ -206,9 +220,16 @@ fn recovery_failure_retains_the_original_open_request_until_cleanup_succeeds() -
     observe(&wake, || {
         for message in controller.advance()? {
             let message: serde_json::Value = serde_json::from_str(&message)?;
+            if message["event"] == "diagnostic" {
+                assert_eq!(message["data"]["message"], "original launch failure");
+                continue;
+            }
             assert_eq!(message["id"], "open");
             assert_eq!(message["event"], "failed");
-            assert_eq!(message["data"]["message"], "original launch failure");
+            assert_eq!(
+                message["data"]["message"],
+                sugarsubstitute_contracts::localization::installer::messages("en").setup_failed
+            );
             reports += 1;
         }
         Ok(controller.relaunch.is_none())

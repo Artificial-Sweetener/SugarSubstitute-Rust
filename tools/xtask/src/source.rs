@@ -35,7 +35,7 @@ pub(crate) fn rust_files(directory: &Path) -> Result<Vec<PathBuf>> {
     source_files(directory, &["rs"])
 }
 
-/// Discover selected authored languages with identical path and link checks.
+/// Discover selected authored languages with case-insensitive extensions and identical link checks.
 pub(crate) fn source_files(directory: &Path, extensions: &[&str]) -> Result<Vec<PathBuf>> {
     let entries = std::fs::read_dir(directory)
         .map_err(|error| Failure::external(format!("scan {}", directory.display()), error))?;
@@ -54,12 +54,9 @@ pub(crate) fn source_files(directory: &Path, extensions: &[&str]) -> Result<Vec<
                 "keep build outputs outside governed source roots",
             )?;
             paths.extend(source_files(&entry.path(), extensions)?);
-        } else if entry
-            .path()
-            .extension()
-            .and_then(|extension| extension.to_str())
-            .is_some_and(|extension| extensions.contains(&extension))
-        {
+        } else if entry.path().extension().and_then(|extension| extension.to_str()).is_some_and(
+            |extension| extensions.iter().any(|known| extension.eq_ignore_ascii_case(known)),
+        ) {
             paths.push(entry.path());
         }
     }
@@ -88,6 +85,20 @@ pub(crate) fn fingerprint(root: &Path, sources: &[String]) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Extension spelling cannot hide authored code or presentation assets from their owner gate.
+    #[test]
+    fn source_discovery_includes_mixed_case_extensions() -> Result<()> {
+        let temporary =
+            tempfile::tempdir().map_err(|cause| Failure::external("create fixture", cause))?;
+        for name in ["fixture.Rs", "fixture.Js", "fixture.SvG", "ignored.txt"] {
+            std::fs::write(temporary.path().join(name), "")
+                .map_err(|cause| Failure::external("write fixture", cause))?;
+        }
+        assert_eq!(source_files(temporary.path(), &["rs", "js", "svg"])?.len(), 3);
+        assert_eq!(rust_files(temporary.path())?.len(), 1);
+        Ok(())
+    }
 
     /// Reject path spellings that escape or change meaning across platforms.
     #[test]

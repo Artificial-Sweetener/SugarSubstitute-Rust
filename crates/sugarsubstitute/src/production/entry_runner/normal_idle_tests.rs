@@ -49,7 +49,7 @@ fn only_accepted_normal_shutdown_suppresses_a_nested_failure_dialog() -> Result<
         let mut lifetime = Box::new(EntryRunner::new(
             command,
             path,
-            Box::new(super::super::tests::NoChild),
+            Box::new(super::super::tests::NoChild(None)),
             crate::diagnostics::DiagnosticHealth::fixture(),
         ));
         lifetime.normal_shutdown = normal;

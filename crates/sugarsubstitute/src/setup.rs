@@ -30,18 +30,17 @@ pub fn run(distribution: &'static [u8]) -> Result<(), Box<dyn Error>> {
             )
         )
     });
-    failure::report(
-        run_inner(distribution),
-        interactive,
-        sugarsubstitute_desktop::show_startup_failure,
-    )
+    let mut locale = String::from("en");
+    let result = run_inner(distribution, &mut locale);
+    failure::report(result, &locale, interactive, sugarsubstitute_desktop::show_startup_failure)
 }
 
-fn run_inner(distribution: &'static [u8]) -> Result<(), Box<dyn Error>> {
+fn run_inner(distribution: &'static [u8], locale: &mut String) -> Result<(), Box<dyn Error>> {
     let mut arguments = std::env::args_os().skip(1);
     let mut bundle = std::env::current_exe()?;
     let mut workspace = None;
     let mut export = None;
+    let mut export_locale = None;
     let mut qualification = None;
     let mut qualify_window = false;
     let mut qualify_managed = None;
@@ -54,6 +53,11 @@ fn run_inner(distribution: &'static [u8]) -> Result<(), Box<dyn Error>> {
             Some("--bundle") => bundle = PathBuf::from(value),
             Some("--workspace") => workspace = Some(PathBuf::from(value)),
             Some("--export-surface") => export = Some(PathBuf::from(value)),
+            Some("--export-locale") => {
+                let value = value.to_str().ok_or("Surface export locale must be Unicode")?;
+                export_locale =
+                    Some(sugarsubstitute_contracts::configuration::LocaleId::new(value)?);
+            }
             Some("--qualify-lifecycle") => qualification = Some(PathBuf::from(value)),
             Some("--qualify-maintenance") => {
                 qualification = Some(PathBuf::from(value));
@@ -83,11 +87,16 @@ fn run_inner(distribution: &'static [u8]) -> Result<(), Box<dyn Error>> {
         .ok_or("Local application data is unavailable")?;
     let workspace = workspace.unwrap_or_else(|| local.join("SugarSubstitute").join("setup"));
     let default_install = local.join("Programs").join("SugarSubstitute");
-    let html = surface::html("en", &default_install)?;
     if let Some(export) = export {
+        let html =
+            surface::html(export_locale.map_or("en", |locale| locale.as_str()), &default_install)?;
         std::fs::write(export, html)?;
         return Ok(());
     }
+    if export_locale.is_some() {
+        return Err("Export locale requires a surface export destination".into());
+    }
+    let html = surface::html("en", &default_install)?;
     if !bundle.is_absolute() || !workspace.is_absolute() {
         return Err("Installer paths must be absolute".into());
     }
@@ -127,13 +136,14 @@ fn run_inner(distribution: &'static [u8]) -> Result<(), Box<dyn Error>> {
     }
     let diagnostics = crate::diagnostics::Diagnostics::initialize()?;
     let mut controller = controller::Controller::new(bundle, workspace.clone(), distribution);
-    diagnostics.finish(sugarsubstitute_desktop::installer::run(
+    let result = diagnostics.finish(sugarsubstitute_desktop::installer::run(
         sugarsubstitute_desktop::installer::InstallerWindow {
             visible: true,
-            title: sugarsubstitute_contracts::localization::installer::messages("en")["title"]
-                .into(),
+            title: sugarsubstitute_contracts::localization::installer::messages("en").title.into(),
             html,
         },
         &mut controller,
-    ))
+    ));
+    *locale = controller.locale().to_owned();
+    result
 }

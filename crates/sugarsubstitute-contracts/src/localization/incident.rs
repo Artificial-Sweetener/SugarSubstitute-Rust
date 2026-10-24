@@ -14,6 +14,7 @@ mod es;
 pub use es::ES;
 
 /// Bind localized native report controls, status and evidence labels.
+#[non_exhaustive]
 pub struct ReportMessages {
     /// Native incident window title.
     pub title: &'static str,

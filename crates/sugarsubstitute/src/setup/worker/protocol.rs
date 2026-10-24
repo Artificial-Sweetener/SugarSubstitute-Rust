@@ -20,11 +20,12 @@ pub(super) fn cache_event(value: &serde_json::Value) -> Result<CacheEvent> {
         Some("ready")
             if value["data"]["cacheProtocol"] == 1
                 && value["data"]["storageProtocol"] == 1
-                && value["data"]["metadataProtocol"] == 1 =>
+                && value["data"]["metadataProtocol"] == 1
+                && value["data"]["textProtocol"] == 1 =>
         {
             Ok(CacheEvent::Ready)
         }
-        Some("ready") => Err("Unsupported provisioning storage/cache protocol".into()),
+        Some("ready") => Err("Unsupported provisioning storage/cache/text protocol".into()),
         Some("cache_pressure") => match value["data"]["namespace"].as_str() {
             Some("downloads") => Ok(CacheEvent::DownloadsFull),
             Some("metadata") => Ok(CacheEvent::MetadataFull),
@@ -50,6 +51,10 @@ mod tests {
             json!({"cacheProtocol":1,"storageProtocol":"1"}),
             json!({"cacheProtocol":1,"storageProtocol":1}),
             json!({"cacheProtocol":1,"storageProtocol":1,"metadataProtocol":2}),
+            json!({"cacheProtocol":1,"storageProtocol":1,"metadataProtocol":1}),
+            json!({"cacheProtocol":1,"storageProtocol":1,"metadataProtocol":1,"textProtocol":0}),
+            json!({"cacheProtocol":1,"storageProtocol":1,"metadataProtocol":1,"textProtocol":2}),
+            json!({"cacheProtocol":1,"storageProtocol":1,"metadataProtocol":1,"textProtocol":"1"}),
         ] {
             assert!(cache_event(&json!({"version":1,"event":"ready","data":data})).is_err());
         }
@@ -58,7 +63,7 @@ mod tests {
     fn current_native_grant_protocol_admits_the_matching_worker() -> Result<()> {
         assert_eq!(
             cache_event(
-                &json!({"version":1,"event":"ready","data":{"cacheProtocol":1,"storageProtocol":1,"metadataProtocol":1}})
+                &json!({"version":1,"event":"ready","data":{"cacheProtocol":1,"storageProtocol":1,"metadataProtocol":1,"textProtocol":1}})
             )?,
             CacheEvent::Ready
         );
