@@ -18,11 +18,13 @@ import { PanelClientSession } from './PanelRuntime.js';
 import type { EmbeddedPresentation } from './EmbeddedPresentation.js';
 import { createUxpPanelTransport, type BrowserPanelTransport } from './UxpPanelTransport.js';
 import { EmbeddedPanelLayout } from './EmbeddedPanelLayout.js';
+import type { EmbeddedCanvasConnection } from './EmbeddedCanvasConnection.js';
 
 /** Supply the browser lifetime without introducing another connection or preference owner. */
 export interface EmbeddedPanelOptions {
   readonly window: Window;
   readonly presentation: EmbeddedPresentation;
+  readonly canvas?: EmbeddedCanvasConnection;
   connected(): boolean;
   report(error: unknown): void;
 }
@@ -49,6 +51,7 @@ export class EmbeddedPanelHost {
       apply: (presentation) => {
         this.#layout.apply(presentation.resizeCornerSize);
         this.options.presentation.set(presentation);
+        this.options.canvas?.connect(this.transport, this.options.window, this.options.report);
         return true;
       },
       connected: this.options.connected,
@@ -81,6 +84,7 @@ export class EmbeddedPanelHost {
     this.#timer = null;
     this.options.window.removeEventListener('pagehide', this.dispose);
     this.options.presentation.set(null);
+    this.options.canvas?.dispose();
     this.#layout.dispose();
   };
 }

@@ -22,6 +22,7 @@ import { CanvasSourceInventory } from '../application/CanvasSourceInventory.js';
 import { CanvasSelectionController } from '../application/CanvasSelectionController.js';
 import { CanvasInspectionStore } from '../application/CanvasInspectionStore.js';
 import { CanvasImageAllowances } from '../application/CanvasImageAllowances.js';
+import { WebCanvasAdapter } from '../application/WebCanvasAdapter.js';
 import { CanvasSessionCoordinator } from '../application/CanvasSessionCoordinator.js';
 import { windowId } from '../domain/CanvasIdentity.js';
 import { isRecord } from '../../types/common.js';
@@ -61,6 +62,7 @@ export interface ComfyCanvasHostOptions {
 /** Keep source, selection, resource, frame, settings, and execution ownership explicit in a thin composition. */
 export class ComfyCanvasHost {
   readonly #sources: ComfyCanvasSourceInventory;
+  readonly #adapter: WebCanvasAdapter<Blob>;
   readonly #coordinator: CanvasSessionCoordinator;
   readonly #preferences: ComfyCanvasPreferences;
   readonly #workspace: ComfyCanvasWorkspaceHost;
@@ -135,9 +137,13 @@ export class ComfyCanvasHost {
           { document, subscribe: (listener) => this.#sources.subscribe(listener) },
         )
       : null;
+    this.#adapter = new WebCanvasAdapter({
+      wants: (frame) => this.#primary.wants(frame.source),
+      receive: (frame) => this.#primary.receive(frame.preview, frame.bytes),
+    });
     this.#coordinator = new CanvasSessionCoordinator(
       execution.sessions,
-      execution.results,
+      this.#adapter,
       inventory,
       views,
       selection,
@@ -263,6 +269,7 @@ export class ComfyCanvasHost {
     try {
       this.#preferences.setup();
       this.#sources.install();
+      this.#stops.push(this.options.execution.canvases.register(this.#adapter.adapter));
       this.#coordinator.install();
       this.#started = true;
       void this.#transfers.refresh().catch(this.options.report);
@@ -278,10 +285,7 @@ export class ComfyCanvasHost {
       this.#toolbar.setup();
       this.#imageActions.setup();
       this.#saving?.setup();
-      this.#stops.push(
-        this.options.execution.previews.subscribe(this.#primary),
-        this.options.execution.subscribeConnection(() => this.#primary.reconcile()),
-      );
+      this.#stops.push(this.options.execution.subscribeConnection(() => this.#primary.reconcile()));
       this.options.document.defaultView?.addEventListener('pagehide', this.#pagehide);
     } catch (error: unknown) {
       this.dispose();
@@ -323,6 +327,7 @@ export class ComfyCanvasHost {
     this.#toolbar.dispose();
     this.#coordinator.dispose();
     for (const stop of this.#stops.splice(0)) stop();
+    this.#adapter.dispose();
     this.#sources.dispose();
     this.#preferences.dispose();
     this.#transfers.dispose();

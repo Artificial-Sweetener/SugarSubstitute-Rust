@@ -20,7 +20,7 @@ import type { WorkflowSessionContext } from '../../execution/domain/WorkflowSess
 import type { WorkflowResultSession } from '../../execution/domain/WorkflowResultSession.js';
 import type { WorkflowOutputSource } from '../../execution/domain/WorkflowOutput.js';
 import type { WorkflowSessionStore } from '../../execution/application/WorkflowSessionStore.js';
-import type { WorkflowResultStore } from '../../execution/application/WorkflowResultStore.js';
+import type { WorkflowCanvasResults } from '../../execution/domain/WorkflowCanvas.js';
 import type { CanvasCatalogSnapshot } from '../domain/CanvasCatalog.js';
 import { canvasSessionId, type CanvasViewId } from '../domain/CanvasIdentity.js';
 import type { CanvasViewRegistry } from './CanvasViewRegistry.js';
@@ -51,7 +51,7 @@ export class CanvasSessionCoordinator {
   /** Inject authoritative execution and view owners with one metadata change boundary. */
   constructor(
     private readonly sessions: WorkflowSessionStore,
-    private readonly results: WorkflowResultStore,
+    private readonly results: WorkflowCanvasResults,
     private readonly sources: CanvasSourceInventory,
     private readonly views: CanvasViewRegistry,
     private readonly selection: CanvasSelectionController,

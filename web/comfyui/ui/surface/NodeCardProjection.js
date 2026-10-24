@@ -5,8 +5,16 @@ import { cubeFaceCardColumnSpan, findCubeFacePromptWidget } from './CubeFaceProm
 /** Keep exposed controls, prompt spans and reading order identical across both surfaces. */
 export function projectNodeCards(nodes, state, graph, cube) {
     const sources = new Map(nodes.map((node) => [node, cube ? resolveCubeCardWidgetSources(cube, node) : []]));
-    const additionalControlNodes = new Set(nodes.filter((node) => (sources.get(node)?.length ?? 0) > 0));
-    return resolveCubeFaceCardPresentation(nodes, state, graph, additionalControlNodes).cards.map((card) => {
+    const additionalControls = new Map(nodes
+        .filter((node) => (sources.get(node)?.length ?? 0) > 0)
+        .map((node) => [
+        node,
+        (sources.get(node) ?? []).flatMap((source) => {
+            const widget = source.node.widgets?.find((widget) => widget.name === source.name);
+            return widget ? [widget] : [];
+        }),
+    ]));
+    return resolveCubeFaceCardPresentation(nodes, state, graph, additionalControls).cards.map((card) => {
         const widgetSources = sources.get(card.node) ?? [];
         const presentedNode = presentCubeCardNode(card.node, widgetSources);
         return {

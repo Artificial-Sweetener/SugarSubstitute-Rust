@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Mount Comfy's real Nodes 2.0 component as a Cube-face sub-card. */
+import { withNativePresentationWidgets } from './NativePresentationWidgets.js';
 import { scopeNativeVueMountContext } from './NativeVueMountContext.js';
 import { isNativeWidgetPresented } from './NativeWidgetPresentation.js';
 import { isRecord } from '../types/common.js';
@@ -69,7 +70,14 @@ export class ComfyVueNodeCardRenderer {
         let pending = null;
         /** Prepare one current native projection for both geometry admission and rendering. */
         const prepareCard = () => {
-            const nodeData = createCubeFaceNodeData(this.#runtime.extractVueNodeData(node), node, renderCard, options.allowCollapse);
+            const nodeData = createCubeFaceNodeData(withNativePresentationWidgets(node, () => {
+                const data = this.#runtime.extractVueNodeData(node);
+                // Comfy's safe widget list is reactive; materialize it while the presentation scope is active.
+                return {
+                    ...data,
+                    widgets: Array.isArray(data.widgets) ? [...data.widgets] : data.widgets,
+                };
+            }), node, renderCard, options.allowCollapse);
             nodeData.widgets = projectNativeWidgetEdits(node, nodeData.widgets);
             for (const source of options.widgetSources ?? []) {
                 const ownerData = createCubeFaceNodeData(this.#runtime.extractVueNodeData(source.node), source.node);

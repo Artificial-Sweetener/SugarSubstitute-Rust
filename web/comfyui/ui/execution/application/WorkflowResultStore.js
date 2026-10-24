@@ -60,6 +60,10 @@ export class WorkflowResultStore {
     read(sessionId) {
         return this.#sessions.get(sessionId)?.snapshot ?? null;
     }
+    /** Enumerate current lightweight states for newly attached view-capable canvases. */
+    snapshots() {
+        return [...this.#sessions.values()].map((session) => session.snapshot);
+    }
     /** Read one source's revision for exact-history compare-and-set reconciliation. */
     sourceRevision(sessionId, sourceId) {
         return this.#sessions.get(sessionId)?.outputs.get(sourceId)?.output.provenance.revision ?? 0;
@@ -243,20 +247,20 @@ export class WorkflowResultStore {
             preview: preview?.sourceId === source.id && completedPreviewRunOrder >= preview.runOrder
                 ? null
                 : preview,
-        });
+        }, provenance.kind === 'execution' ? 'output' : 'restore');
     }
     /** Increment one coherent session snapshot revision before notifying its subscribers. */
-    #publish(session, snapshot) {
+    #publish(session, snapshot, reason = 'state') {
         session.snapshot = Object.freeze({
             ...snapshot,
             context: Object.freeze({ ...snapshot.context }),
             revision: session.snapshot.revision + 1,
         });
-        this.#notify(snapshot.context.sessionId);
+        this.#notify(snapshot.context.sessionId, reason);
     }
     /** Identify the affected workflow so consumers can update only mounted surfaces. */
-    #notify(sessionId) {
+    #notify(sessionId, reason = 'state') {
         for (const listener of this.#listeners)
-            listener(sessionId);
+            listener(sessionId, reason);
     }
 }

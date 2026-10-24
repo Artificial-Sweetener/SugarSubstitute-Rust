@@ -18,13 +18,15 @@
 export class ComfyWorkflowPreviewDelivery {
     results;
     logger;
+    canvasPreview;
     #consumers = new Set();
     #sequence = 0;
     #disposed = false;
     /** Bind metadata ownership and diagnostics without borrowing Comfy's shared object URLs. */
-    constructor(results, logger) {
+    constructor(results, logger, canvasPreview = () => { }) {
         this.results = results;
         this.logger = logger;
+        this.canvasPreview = canvasPreview;
     }
     /** Subscribe one explicit renderer interest; inactive surfaces refuse bytes before admission. */
     subscribe(consumer) {
@@ -52,6 +54,7 @@ export class ComfyWorkflowPreviewDelivery {
         });
         if (!this.results.publishPreview(preview))
             return;
+        this.canvasPreview({ source, preview, bytes: blob });
         for (const consumer of this.#consumers) {
             try {
                 if (consumer.wants(source))

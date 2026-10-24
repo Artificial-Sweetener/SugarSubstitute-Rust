@@ -21,6 +21,96 @@ import { workflowFixture, WorkflowHostFixture } from '../support/workflow_host.j
 import { WorkflowEventApi, WorkflowTestClock } from '../support/workflow_results.js';
 import { buildCubeOutputExecutionId } from '../../../frontend/comfyui/ui/cube/execution/CubeOutputExecutionIdentity.js';
 import { WorkflowHistoryApi, settleWorkflowHistory } from '../support/workflow_history.js';
+import { documentCanvasAdapter } from '../../../frontend/comfyui/ui/execution/infrastructure/DocumentCanvasAdapter.js';
+import { WebCanvasAdapter } from '../../../frontend/comfyui/ui/output_canvas/application/WebCanvasAdapter.js';
+import type {
+  CanvasInsertImage,
+  CanvasContext,
+} from '../../../integrations/contracts/CanvasProtocol.generated.js';
+
+test('routes finished node output directly to its canvas adapter before the job completes', async () => {
+  const f = fixture(['editor', 'web']);
+  const inserted: CanvasInsertImage[] = [];
+  const context: CanvasContext = {
+    canvas: {
+      id: 'editor',
+      label: 'Editor',
+      capabilities: { displayOutput: false, insertImageLayer: true },
+    },
+    document: { id: 'captured', geometryRevision: 'geometry', width: 512, height: 384 },
+  };
+  const delivery = f.runtime.canvases;
+  const unregister = delivery.register(
+    documentCanvasAdapter(
+      'editor',
+      {
+        readCanvas: () => context.canvas,
+        readContext: async () => context,
+        insertImage: async (image) => {
+          inserted.push(image);
+          return {
+            status: 'inserted',
+            documentId: image.document.id,
+            layerId: 'layer',
+            left: -128,
+            top: -64,
+            width: 768,
+            height: 512,
+          };
+        },
+      },
+      { load: async () => ({ format: 'png', encoding: 'base64', data: 'native-bytes' }) },
+      (error) => {
+        f.errors.push(error);
+      },
+    ),
+  );
+  const frames: Blob[] = [];
+  const web = new WebCanvasAdapter<Blob>({
+    wants: () => true,
+    receive: (frame) => {
+      frames.push(frame.bytes);
+    },
+  });
+  const unregisterWeb = delivery.register(web.adapter);
+  f.runtime.install();
+  f.bridge.install();
+  const session = f.runtime.sessions.read().active!;
+  await f.api.queuePrompt(0, await f.host.graphToPrompt());
+  const frame = new Blob(['live-frame']);
+  f.api.emit('b_preview_with_metadata', { jobId: 'job-1', nodeId: '42:23', blob: frame });
+  expect(frames).toEqual([frame]);
+  expect(f.runtime.results.read(session.sessionId)?.preview?.promptId).toBe('prompt:job-1');
+  await f.host.loadGraphData({}, true, true, f.b);
+  f.api.emit('executed', {
+    prompt_id: 'job-1',
+    node: '42:23',
+    output: { images: [{ filename: 'generation.png' }] },
+  });
+  await delivery.idle();
+  expect(inserted).toHaveLength(1);
+  expect(inserted[0]).toMatchObject({ document: context.document, layerName: 'generation.png' });
+  expect(f.api.history.requests).toHaveLength(0);
+  const result = web.read(session.sessionId);
+  expect(
+    result?.outputs.flatMap((output) => output.items.map((item) => item.file.filename)),
+  ).toContain('generation.png');
+  expect(result?.preview).toBeNull();
+  expect(f.runtime.sessions.read().active?.sessionId).not.toBe(session.sessionId);
+  f.api.emit('execution_success', { prompt_id: 'job-1' });
+  f.api.history
+    .request(0)
+    .respond({ 'job-1': { outputs: { '42:23': { images: [{ filename: 'generation.png' }] } } } });
+  await settleWorkflowHistory();
+  await delivery.idle();
+  expect(inserted).toHaveLength(1);
+  f.bridge.dispose();
+  f.runtime.dispose();
+  unregister();
+  unregisterWeb();
+  web.dispose();
+  expect(f.errors).toEqual([]);
+});
 
 /** Capture a host prompt at entry, independently of later graph or tab changes. */
 class ExecutionHost extends WorkflowHostFixture {
@@ -60,7 +150,7 @@ class ExecutionApi extends WorkflowEventApi {
 }
 
 /** Compose real owners around two host objects with colliding serialized and numeric IDs. */
-function fixture() {
+function fixture(targets: readonly string[] = ['web']) {
   const a = workflowFixture('same');
   const b = workflowFixture('same');
   const host = new ExecutionHost(a);
@@ -75,6 +165,7 @@ function fixture() {
   const runtime = new ComfyWorkflowExecutionRuntime({
     app: host,
     api,
+    canvasTargets: () => targets,
     logger: {
       error: (...args: unknown[]) => {
         errors.push(args);

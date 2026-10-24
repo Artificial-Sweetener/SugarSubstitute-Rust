@@ -21,6 +21,9 @@ import {
   type CubeNode,
 } from '../cube/node/ComfyCubeNodeFactory.js';
 import { buildCubeCardVisibilitySignature } from './CubeCardVisibilitySignature.js';
+import { projectNodeCards } from './NodeCardProjection.js';
+import { parseCubeSurfaceState } from './CubeSurfaceState.js';
+import { nativeGraphWidgets } from './NativePresentationWidgets.js';
 import { cubeFaceVisibleWidgets } from './CubeFaceWidgetPolicy.js';
 
 /** Describe internal node identity and the widget ownership that shapes its face card. */
@@ -29,12 +32,14 @@ export function buildCubeSurfaceTopologySignature(node: CubeNode): string {
     node.subgraph._nodes.map((innerNode) => [
       String(innerNode.id ?? ''),
       innerNode.type ?? '',
-      cubeFaceVisibleWidgets(innerNode).map((widget) => widget.name),
+      cubeFaceVisibleWidgets(innerNode)
+        .filter((widget) => nativeGraphWidgets(innerNode).includes(widget))
+        .map((widget) => widget.name),
     ]),
   );
 }
 
-/** Detect titlebar identity and persistence changes without unrelated graph state. */
+/** Detect identity and actual card visibility changes while retaining semantic field discovery. */
 export function buildCubeSurfacePresentationSignature(node: CubeNode): string {
   const identity = requireCubeIdentity(node);
   return JSON.stringify([
@@ -46,6 +51,14 @@ export function buildCubeSurfacePresentationSignature(node: CubeNode): string {
     identity.has_saveable_changes ?? false,
     identity.icon ?? null,
     buildCubeCardVisibilitySignature(requireCubeSurface(node)),
+    projectNodeCards(
+      node.subgraph._nodes,
+      parseCubeSurfaceState(requireCubeSurface(node)),
+      node.subgraph,
+      node,
+    )
+      .filter((card) => card.visible)
+      .map((card) => card.id),
   ]);
 }
 

@@ -39,6 +39,7 @@ export class EmbeddedPanelHost {
             apply: (presentation) => {
                 this.#layout.apply(presentation.resizeCornerSize);
                 this.options.presentation.set(presentation);
+                this.options.canvas?.connect(this.transport, this.options.window, this.options.report);
                 return true;
             },
             connected: this.options.connected,
@@ -73,6 +74,7 @@ export class EmbeddedPanelHost {
         this.#timer = null;
         this.options.window.removeEventListener('pagehide', this.dispose);
         this.options.presentation.set(null);
+        this.options.canvas?.dispose();
         this.#layout.dispose();
     };
 }

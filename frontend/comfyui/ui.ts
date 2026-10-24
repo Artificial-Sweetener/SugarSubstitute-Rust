@@ -24,11 +24,10 @@ import { createEditorActionsRuntime } from './ui/editor_actions/EditorActionsCom
 import { createComfyCubeRuntime, type ComfyCubeRuntime } from './ui/cube/ComfyCubeRuntime.js';
 import { CubeGraphApi } from './ui/workflow/infrastructure/CubeGraphApi.js';
 import { ComfyCubeRuntimeLifecycle } from './ui/cube/ComfyCubeRuntimeLifecycle.js';
-import { createComfyWorkflowExecutionRuntime } from './ui/execution/infrastructure/ComfyWorkflowExecutionRuntime.js';
 import { projectCubeProximityPreviewLinks } from './ui/surface/CubeProximityPreviewLinks.js';
 import { CubeAuthoringHostCommands } from './ui/cube/CubeAuthoringHostCommands.js';
 import { createCubeHostExecution } from './ui/cube/execution/CubeHostExecutionComposition.js';
-import { createWorkflowFieldHost } from './ui/relations/WorkflowFieldComposition.js';
+import { createWorkflowCanvasComposition } from './ui/relations/WorkflowCanvasComposition.js';
 import { ComfyCanvasHistoryAdapter } from './ui/surface/ComfyCanvasHistoryAdapter.js';
 import { proximityWorkflowConnections } from './ui/overlays/proximity/ProximityWorkflowConnections.js';
 import { NativeSubgraphBoundaryResolver } from './ui/cube/graph/NativeSubgraphBoundaryResolver.js';
@@ -107,18 +106,16 @@ const hostFeedback = new CubeHostFeedback({
 });
 
 const cubePreconfiguration = ui.workflowPreconfiguration;
-const workflowExecution = createComfyWorkflowExecutionRuntime({ app: appRef, api, logger });
+
 const cubeRuntimeLifecycle = new ComfyCubeRuntimeLifecycle(createCubeRuntime);
-const { appearance, relations, frame, setupPresentation } = createWorkflowFieldHost({
+const { workflowExecution, workflowFields, canvasInputs } = createWorkflowCanvasComposition({
+  api,
+  notifyCanvas: (message) => pushToastMessage('error', 'Canvas delivery failed', message),
   app: appRef,
   document: documentRef ?? document,
   getLiteGraph: () => adapter.getLiteGraph?.(),
-  seeds: workflowExecution.seeds,
-  activity: workflowExecution.activity,
-  progress: workflowExecution.progress,
-  connected: () => workflowExecution.connected,
+
   stackControls: () => workflowWorkspace.masonry.stackControls(),
-  sessions: workflowExecution.sessions,
   getCardState: () => cubeRuntimeLifecycle.current()?.cardState ?? null,
   getConnections: (graph) => proximityWorkflowConnections(overlayManager.proximity, graph),
   logger,
@@ -131,6 +128,8 @@ const { appearance, relations, frame, setupPresentation } = createWorkflowFieldH
     pushToastMessage('error', 'Shared field unavailable', readErrorMessage(error));
   },
 });
+
+const { appearance, relations, frame, setupPresentation } = workflowFields;
 
 const cubePicker = createComfyCubePickerIntegration({
   appearance: appearance.state,
@@ -162,6 +161,7 @@ const promptQueueBridge = createCubeHostExecution({
   getProximityMatches: () =>
     overlayManager.proximity.resolveExecutionMatches(appRef?.canvas?.graph ?? appRef?.graph),
   applyProximity: (payload) => overlayManager.proximity.applyProximityToPrompt(payload),
+  prepareCanvasInputs: (payload) => canvasInputs.preparation.prepare(payload),
   prepareRelations: (payload) => {
     try {
       workflowExecution.assertCurrentPrompt(payload);
@@ -474,6 +474,7 @@ export const sugarCubesExtension: SugarCubesExtension = {
     },
   ],
   addCustomNodeDefs(definitions) {
+    canvasInputs.loaders.define(definitions);
     return cubePicker.contribute(definitions);
   },
   beforeRegisterVueAppNodeDefs(definitions) {
@@ -481,6 +482,9 @@ export const sugarCubesExtension: SugarCubesExtension = {
   },
   registerCustomNodes() {
     cubePicker.activate();
+  },
+  loadedGraphNode(node) {
+    canvasInputs.bindings.loaded(node);
   },
   refreshComboInNodes() {
     refreshNativeNodeCards(documentRef ?? document, { kind: 'reset', reason: 'native-choices' });
@@ -500,6 +504,7 @@ export const sugarCubesExtension: SugarCubesExtension = {
     scrollSurfaceInput.setup();
     setupPresentation();
     modelPickers.setup();
+    canvasInputs.masonry.setup();
     await editorActions.setup();
     modelLibrarySettings.setup();
     modelUpdateSettings.setup(appRef);
@@ -508,6 +513,7 @@ export const sugarCubesExtension: SugarCubesExtension = {
     modelUpdateLifecycle.start();
   },
   beforeConfigureGraph(graphData?: unknown) {
+    canvasInputs.beforeConfigureGraph();
     promptEditors.beforeConfigureGraph();
     workflowHistory.setConfiguring(true);
     relations.beforeConfigureGraph();
@@ -516,11 +522,12 @@ export const sugarCubesExtension: SugarCubesExtension = {
     cubePicker.closeAddMenu();
     graphConfigurationLifecycle.beforeConfigureGraph(graphData);
   },
-  afterConfigureGraph(missingNodeTypes: unknown[], comfyApp) {
+  async afterConfigureGraph(missingNodeTypes: unknown[], comfyApp) {
     graphConfigurationLifecycle.afterConfigureGraph(missingNodeTypes, comfyApp);
     workflowWorkspace.canvas.afterConfigureGraph();
     workflowWorkspace.masonry.afterConfigureGraph();
     relations.afterConfigureGraph();
+    await canvasInputs.bindings.ready();
     workflowHistory.setConfiguring(false);
   },
 };

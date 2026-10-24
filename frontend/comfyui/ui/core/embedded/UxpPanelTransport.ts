@@ -16,11 +16,12 @@
 /** Adapt UXP WebView messaging into an explicitly identified browser transport. */
 import { isRecord } from '../../types/common.js';
 import type { PanelMessage } from './PanelRuntime.js';
+import type { CanvasMessage, CanvasMaskMessage } from './CanvasRuntime.js';
 
 /** Expose validated envelope delivery without importing native editor APIs. */
 export interface BrowserPanelTransport {
   readonly session: string;
-  send(message: PanelMessage): void;
+  send(message: PanelMessage | CanvasMessage | CanvasMaskMessage): void;
   subscribe(receive: (value: unknown) => void): () => void;
 }
 

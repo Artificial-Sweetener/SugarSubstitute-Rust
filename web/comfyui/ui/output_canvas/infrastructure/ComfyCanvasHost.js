@@ -20,6 +20,7 @@ import { CanvasSourceInventory } from '../application/CanvasSourceInventory.js';
 import { CanvasSelectionController } from '../application/CanvasSelectionController.js';
 import { CanvasInspectionStore } from '../application/CanvasInspectionStore.js';
 import { CanvasImageAllowances } from '../application/CanvasImageAllowances.js';
+import { WebCanvasAdapter } from '../application/WebCanvasAdapter.js';
 import { CanvasSessionCoordinator } from '../application/CanvasSessionCoordinator.js';
 import { windowId } from '../domain/CanvasIdentity.js';
 import { isRecord } from '../../types/common.js';
@@ -46,6 +47,7 @@ import { BrowserCanvasPosterRenderer } from './BrowserCanvasPosterRenderer.js';
 export class ComfyCanvasHost {
     options;
     #sources;
+    #adapter;
     #coordinator;
     #preferences;
     #workspace;
@@ -103,7 +105,11 @@ export class ComfyCanvasHost {
                 sources: () => this.#sources.savingSources(),
             }, report, { document, subscribe: (listener) => this.#sources.subscribe(listener) })
             : null;
-        this.#coordinator = new CanvasSessionCoordinator(execution.sessions, execution.results, inventory, views, selection, this.#sources);
+        this.#adapter = new WebCanvasAdapter({
+            wants: (frame) => this.#primary.wants(frame.source),
+            receive: (frame) => this.#primary.receive(frame.preview, frame.bytes),
+        });
+        this.#coordinator = new CanvasSessionCoordinator(execution.sessions, this.#adapter, inventory, views, selection, this.#sources);
         this.#stops.push(this.#coordinator.onRetired((view) => {
             inspections.remove(view);
             allowances.remove(view);
@@ -207,6 +213,7 @@ export class ComfyCanvasHost {
         try {
             this.#preferences.setup();
             this.#sources.install();
+            this.#stops.push(this.options.execution.canvases.register(this.#adapter.adapter));
             this.#coordinator.install();
             this.#started = true;
             void this.#transfers.refresh().catch(this.options.report);
@@ -220,7 +227,7 @@ export class ComfyCanvasHost {
             this.#toolbar.setup();
             this.#imageActions.setup();
             this.#saving?.setup();
-            this.#stops.push(this.options.execution.previews.subscribe(this.#primary), this.options.execution.subscribeConnection(() => this.#primary.reconcile()));
+            this.#stops.push(this.options.execution.subscribeConnection(() => this.#primary.reconcile()));
             this.options.document.defaultView?.addEventListener('pagehide', this.#pagehide);
         }
         catch (error) {
@@ -261,6 +268,7 @@ export class ComfyCanvasHost {
         this.#coordinator.dispose();
         for (const stop of this.#stops.splice(0))
             stop();
+        this.#adapter.dispose();
         this.#sources.dispose();
         this.#preferences.dispose();
         this.#transfers.dispose();

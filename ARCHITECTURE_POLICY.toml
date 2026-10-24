@@ -84,6 +84,16 @@ forbidden_typescript_paths = [
 ]
 
 [[dependency]]
+name = "TYPESCRIPT_INPUT_CANVAS_DOMAIN"
+paths = ["frontend/comfyui/ui/input_canvas/domain/*.ts"]
+forbidden_typescript_paths = ["frontend/comfyui/ui/input_canvas/application", "frontend/comfyui/ui/input_canvas/infrastructure", "frontend/comfyui/ui/input_canvas/presentation", "frontend/comfyui/ui/surface", "frontend/comfyui/ui/types/graph", "types/comfyui", "/scripts", "node_modules"]
+
+[[dependency]]
+name = "TYPESCRIPT_INPUT_CANVAS_APPLICATION"
+paths = ["frontend/comfyui/ui/input_canvas/application/*.ts"]
+forbidden_typescript_paths = ["frontend/comfyui/ui/input_canvas/infrastructure", "frontend/comfyui/ui/input_canvas/presentation", "frontend/comfyui/ui/surface", "frontend/comfyui/ui/types/graph", "types/comfyui", "/scripts", "node_modules"]
+
+[[dependency]]
 name = "TYPESCRIPT_EXECUTION_DOMAIN"
 paths = ["frontend/comfyui/ui/execution/domain/*.ts"]
 forbidden_typescript_paths = [

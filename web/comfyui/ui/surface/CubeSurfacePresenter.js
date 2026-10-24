@@ -22,7 +22,7 @@ import { ensureCubeSurfaceStyles } from './CubeSurfaceStyles.js';
 import { CubeSurfaceView } from './CubeSurfaceView.js';
 import { parseCubeSurfaceState, serializeCubeSurfaceState } from './CubeSurfaceState.js';
 import { buildCubeSurfaceMountAttemptSignature, buildCubeSurfacePresentationSignature, buildCubeSurfaceTopologySignature, } from './CubeSurfaceSignatures.js';
-import { NativeSubgraphChangeObserver } from './NativeSubgraphChangeObserver.js';
+import { CubeSurfaceChangeObserver } from './CubeSurfaceChangeObserver.js';
 import { ComfyLiteGraphCubeNodeHost, } from './ComfyLiteGraphCubeNodeHost.js';
 import { CUBE_INPUT_GUTTER_WIDTH } from './CubePortGutterLayout.js';
 import { replaceCubeSurfaceRecord, resolveCubeVueContentWidth, } from './CubeSurfaceRecordHelpers.js';
@@ -353,7 +353,7 @@ export class CubeSurfacePresenter {
                 layoutWidth: Number.NaN,
             });
             this.#observers.get(node)?.dispose();
-            this.#observers.set(node, new NativeSubgraphChangeObserver(node.subgraph, () => this.#sync()));
+            this.#observers.set(node, new CubeSurfaceChangeObserver(this.#document, node, () => this.#sync()));
             this.#layoutMountedView(node);
             if (this.#previewCatalog) {
                 const externalInterface = resolveCubeExternalInterface(node);

@@ -53,6 +53,7 @@ export class ComfyPromptSubmissionObserver {
                 active = false;
                 const id = isRecord(response) ? response.prompt_id : null;
                 if (typeof id !== 'string' || !id.trim() || id.length > 4096) {
+                    this.options.rejected?.(submission);
                     this.logger.warn('SugarCubes cannot associate a queue response without a valid prompt ID.', {
                         sessionId: context.session.sessionId,
                     });
@@ -72,9 +73,13 @@ export class ComfyPromptSubmissionObserver {
                 this.options.accepted(context, promptId(id));
             },
             rejected: () => {
+                if (active)
+                    this.options.rejected?.(submission);
                 active = false;
             },
             cancelled: () => {
+                if (active)
+                    this.options.rejected?.(submission);
                 active = false;
             },
         };

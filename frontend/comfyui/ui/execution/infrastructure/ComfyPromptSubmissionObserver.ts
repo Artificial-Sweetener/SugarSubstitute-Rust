@@ -33,6 +33,7 @@ export interface ComfyPromptSubmissionObserverOptions {
   readonly seeds?: WorkflowSeedHistory;
   submitting(context: WorkflowSubmissionContext): WorkflowOrderedSubmission;
   accepted(context: WorkflowOrderedSubmission, id: PromptId): void;
+  rejected?(context: WorkflowOrderedSubmission): void;
 }
 
 /** Resolve only observed or explicitly associated prompts and contain diagnostic failures in the bridge. */
@@ -65,6 +66,7 @@ export class ComfyPromptSubmissionObserver implements PromptQueueObserver {
         active = false;
         const id = isRecord(response) ? response.prompt_id : null;
         if (typeof id !== 'string' || !id.trim() || id.length > 4096) {
+          this.options.rejected?.(submission);
           this.logger.warn(
             'SugarCubes cannot associate a queue response without a valid prompt ID.',
             {
@@ -92,9 +94,11 @@ export class ComfyPromptSubmissionObserver implements PromptQueueObserver {
         this.options.accepted(context, promptId(id));
       },
       rejected: () => {
+        if (active) this.options.rejected?.(submission);
         active = false;
       },
       cancelled: () => {
+        if (active) this.options.rejected?.(submission);
         active = false;
       },
     };

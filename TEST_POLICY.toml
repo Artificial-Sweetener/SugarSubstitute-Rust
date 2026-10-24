@@ -445,7 +445,7 @@ groups = ["editor_actions/integration", "editor_actions/unit"]
 
 [[subscription]]
 boundary = "native_card_presentation"
-groups = ["frontend_core/integration", "model_library/integration", "editor_actions/integration", "relations/integration", "masonry_search/integration", "graph/unit", "output_canvas/integration", "prompt_editor/integration"]
+groups = ["frontend_core/integration", "model_library/integration", "editor_actions/integration", "relations/integration", "masonry_search/integration", "graph/unit", "output_canvas/integration", "prompt_editor/integration", "input_canvas/integration"]
 
 [[subscription]]
 boundary = "cube_document"
@@ -505,6 +505,7 @@ groups = [
   "browser/integration",
   "cube/integration",
   "surface/integration",
+  "input_canvas/integration",
 ]
 
 [[subscription]]
@@ -514,6 +515,8 @@ groups = [
   "cube/integration",
   "execution/integration",
   "surface/integration",
+  "input_canvas/unit",
+  "input_canvas/integration",
 ]
 
 [[subscription]]
@@ -526,7 +529,7 @@ area = "execution"
 
 [[subscription]]
 boundary = "workflow_execution_results"
-groups = ["surface/integration", "surface/unit", "model_library/unit", "output_canvas/integration"]
+groups = ["surface/integration", "surface/unit", "model_library/unit", "output_canvas/integration", "input_canvas/integration"]
 
 [[boundary]]
 name = "canvas_view"
@@ -559,6 +562,19 @@ sources = ["integrations/AGENTS.md", "integrations/.eslintrc.json", "integration
 proofs = ["contract"]
 
 [[area]]
+name = "input_canvas"
+sources = ["sugarcubes/input_canvas/**", "frontend/comfyui/ui/input_canvas/**", "web/comfyui/ui/input_canvas/**"]
+proofs = ["unit", "integration"]
+
+[[boundary]]
+name = "canvas_mask_inputs"
+area = "input_canvas"
+
+[[subscription]]
+boundary = "canvas_mask_inputs"
+groups = ["execution/unit", "execution/integration", "surface/integration", "photoshop/contract", "frontend_core/unit", "frontend_core/integration", "relations/unit", "relations/integration"]
+
+[[area]]
 name = "photoshop"
 sources = ["integrations/photoshop/**", "scripts/photoshop/**", "tsconfig.photoshop.json"]
 proofs = ["contract"]
@@ -569,4 +585,4 @@ area = "editor_integrations"
 
 [[subscription]]
 boundary = "editor_adapter_contract"
-groups = ["photoshop/contract", "frontend_core/unit", "frontend_core/integration", "surface/unit", "surface/integration", "relations/unit"]
+groups = ["photoshop/contract", "frontend_core/unit", "frontend_core/integration", "surface/unit", "surface/integration", "relations/unit", "execution/unit", "execution/contract", "execution/integration", "output_canvas/unit", "output_canvas/contract", "output_canvas/integration", "input_canvas/unit", "input_canvas/integration"]

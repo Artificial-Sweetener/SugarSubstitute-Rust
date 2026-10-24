@@ -137,15 +137,16 @@ async function main(): Promise<void> {
   }
   rmSync(path.join(generatedRoot, 'frontend'), { recursive: true, force: true });
   rmSync(path.join(generatedRoot, 'integrations'), { recursive: true, force: true });
-  await build({
-    entryPoints: [path.join(repositoryRoot, 'frontend/comfyui/ui/core/embedded/PanelRuntime.ts')],
-    outfile: path.join(generatedRoot, 'comfyui/ui/core/embedded/PanelRuntime.js'),
-    bundle: true,
-    format: 'esm',
-    platform: 'browser',
-    target: 'es2022',
-    legalComments: 'inline',
-  });
+  for (const runtime of ['PanelRuntime', 'CanvasRuntime'])
+    await build({
+      entryPoints: [path.join(repositoryRoot, `frontend/comfyui/ui/core/embedded/${runtime}.ts`)],
+      outfile: path.join(generatedRoot, `comfyui/ui/core/embedded/${runtime}.js`),
+      bundle: true,
+      format: 'esm',
+      platform: 'browser',
+      target: 'es2022',
+      legalComments: 'inline',
+    });
   await build({
     ...browserDependencyResolution,
     entryPoints: [

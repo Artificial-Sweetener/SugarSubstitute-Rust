@@ -27,6 +27,8 @@ import {
   readCubeFaceCardState,
   CubeFaceCardStateService,
 } from '../../../frontend/comfyui/ui/surface/CubeFaceCardStateService.js';
+import { NativeWidgetPresentation } from '../../../frontend/comfyui/ui/surface/NativeWidgetPresentation.js';
+import { buildCubeSurfacePresentationSignature } from '../../../frontend/comfyui/ui/surface/CubeSurfaceSignatures.js';
 import { CubeNodeCatalog } from '../../../frontend/comfyui/ui/cube/node/CubeNodeCatalog.js';
 
 describe('workflow masonry sections', () => {
@@ -91,6 +93,7 @@ describe('workflow masonry sections', () => {
     member.inputs = [{ name: 'text', widget: { name: 'text' }, link: 5 }];
     const cube = cubeNode('cube', [member], 0);
     cube.inputs = [{ name: 'prompt', widget: { name: 'prompt' }, link: null }];
+    cube.widgets = [{ name: 'prompt', type: 'customtext', value: 'boundary prompt' }];
     cube.subgraph.inputNode.id = -10;
     cube.subgraph.getLink = () => ({ origin_id: -10, origin_slot: 0 });
     expect(resolveCubeCardWidgetSources(cube, member)).toEqual([
@@ -124,6 +127,30 @@ describe('workflow masonry sections', () => {
     cube.subgraph.getLink = () => ({ origin_id: 'other-node', origin_slot: 0 });
     expect(resolveCubeCardWidgetSources(cube, member)).toEqual([]);
   });
+  test('hides an exposed boundary card while its exact source field is represented globally and restores it when released', () => {
+    const member = node('style', 0),
+      cube = cubeNode('cube', [member], 0);
+    member.type = 'SimpleSyrup.PromptEncodeStyle';
+    member.widgets = [{ name: 'encode_style', type: 'combo', value: 'standard' }];
+    member.inputs = [{ name: 'encode_style', widget: { name: 'encode_style' }, link: 5 }];
+    cube.inputs = [{ name: 'encode_style', widget: { name: 'encode_style' }, link: null }];
+    cube.widgets = [{ name: 'encode_style', type: 'combo', value: 'standard' }];
+    cube.subgraph.inputNode.id = -10;
+    cube.subgraph.getLink = () => ({ origin_id: -10, origin_slot: 0 });
+    const state = readCubeFaceCardState(cube),
+      visibility = new NativeWidgetPresentation();
+    const cards = () => projectNodeCards([member], state, cube.subgraph, cube);
+    const signature = buildCubeSurfacePresentationSignature(cube);
+    expect(cards()[0]?.visible).toBe(true);
+    visibility.reconcile(new Set([cube.widgets[0]!, member.widgets[0]!]));
+    expect(cards()).toEqual([expect.objectContaining({ visible: false })]);
+    expect(buildCubeSurfacePresentationSignature(cube)).not.toBe(signature);
+    expect(projectWorkflowMasonry({ _nodes: [cube] }, [cube])[0]?.cards[0]?.visible).toBe(false);
+    visibility.dispose();
+    expect(cards()[0]?.visible).toBe(true);
+    expect(buildCubeSurfacePresentationSignature(cube)).toBe(signature);
+  });
+
   test('restarts below the tallest column and retains one shared width and span policy', () => {
     const result = computeWorkflowMasonry(
       [

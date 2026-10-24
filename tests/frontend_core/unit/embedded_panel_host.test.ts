@@ -50,6 +50,7 @@ import {
 } from '../../../frontend/comfyui/ui/core/embedded/EmbeddedPanelHost.js';
 import { createUxpPanelTransport } from '../../../frontend/comfyui/ui/core/embedded/UxpPanelTransport.js';
 import type { PanelMessage } from '../../../frontend/comfyui/ui/core/embedded/PanelRuntime.js';
+import type { CanvasMessage } from '../../../frontend/comfyui/ui/core/embedded/CanvasRuntime.js';
 
 const session = '00000000-0000-4000-8000-000000000001';
 const hostId = 'fixture.editor.panel';
@@ -152,14 +153,18 @@ test('filters plugin origin and source before delivering unknown payloads', () =
 test('retries readiness, acknowledges applied presentation, reports connectivity and releases its lifetime', () => {
   jest.useFakeTimers();
   const presentation = new EmbeddedPresentation();
-  const messages: PanelMessage[] = [];
+  const messages: (PanelMessage | CanvasMessage)[] = [];
   let receive: ((value: unknown) => void) | null = null;
   const stop = jest.fn();
   const host = new EmbeddedPanelHost(
     { window, presentation, connected: () => false, report: jest.fn() },
     {
       session,
-      send: (value) => messages.push(value),
+      send: (value) => {
+        if (value.protocol === 'sugarcubes.canvas.masks')
+          throw new Error('Unexpected mask operation during presentation negotiation.');
+        messages.push(value);
+      },
       subscribe: (listener) => {
         receive = listener;
         return stop;
@@ -212,4 +217,53 @@ test('retries readiness, acknowledges applied presentation, reports connectivity
   expect(document.documentElement.style.getPropertyValue('--sc-panel-resize-corner')).toBe('');
   expect(stop).toHaveBeenCalledTimes(1);
   expect(jest.getTimerCount()).toBe(0);
+});
+
+test('discovers a native canvas after configuration and releases correlated requests on teardown', async () => {
+  const { EmbeddedCanvasConnection } = await import(
+    '../../../frontend/comfyui/ui/core/embedded/EmbeddedCanvasConnection.js'
+  );
+  const listeners = new Set<(value: unknown) => void>();
+  const sent: (PanelMessage | CanvasMessage)[] = [];
+  const canvas = new EmbeddedCanvasConnection();
+  const transport = {
+    session,
+    send: (message: PanelMessage | CanvasMessage) => {
+      sent.push(message);
+      if (message.protocol === 'sugarcubes.canvas' && message.type === 'context.request')
+        for (const receive of listeners)
+          receive({
+            ...message,
+            type: 'context.reply',
+            context: {
+              canvas: {
+                id: 'fixture',
+                label: 'Fixture editor',
+                capabilities: { displayOutput: false, insertImageLayer: true },
+              },
+              document: null,
+            },
+          });
+    },
+    subscribe: (receive: (value: unknown) => void) => {
+      listeners.add(receive);
+      return () => {
+        listeners.delete(receive);
+      };
+    },
+  };
+  expect(canvas.readCanvas()).toBeNull();
+  canvas.connect(transport, window, (error) => {
+    throw error;
+  });
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(canvas.readCanvas()?.label).toBe('Fixture editor');
+  canvas.connect(transport, window, (error) => {
+    throw error;
+  });
+  expect(sent.filter((message) => message.type === 'context.request')).toHaveLength(1);
+  canvas.dispose();
+  expect(listeners.size).toBe(0);
+  expect(canvas.readCanvas()).toBeNull();
 });

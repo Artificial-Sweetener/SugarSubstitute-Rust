@@ -16,10 +16,12 @@
 /** Resolve renderer-neutral Cube-face card visibility and activation controls. */
 import { cubeFaceNodeHasVisibleWidgets } from './CubeFaceNodePresentationPolicy.js';
 import { cubeFaceNodeAllowsActivationControl, inferCubeFaceTransformSignals, isHardHiddenCubeFaceNode, } from './CubeFaceNodeSemantics.js';
+import { cubeFaceVisibleWidgets } from './CubeFaceWidgetPolicy.js';
+import { isNativeWidgetLocallyRepresented } from './NativeWidgetPresentation.js';
 import { resolveCubeFaceRevealDecision } from './CubeFaceRevealPolicy.js';
 import { cubeFaceCardColumnSpan, cubeFaceCardMasonryPriority } from './CubeFacePromptPolicy.js';
-/** Resolve the exact cards and menu entries consumed by either Comfy renderer. */
-export function resolveCubeFaceCardPresentation(nodes, state, graph, additionalControlNodes = new Set()) {
+/** Preserve discoverable cards while rendering only locally presented fields or independent actions. */
+export function resolveCubeFaceCardPresentation(nodes, state, graph, additionalControls = new Map()) {
     const cards = [];
     const menuEntries = [];
     nodes.forEach((node, index) => {
@@ -31,11 +33,14 @@ export function resolveCubeFaceCardPresentation(nodes, state, graph, additionalC
         const showActivationControl = cubeFaceNodeAllowsActivationControl(node) &&
             (reveal.revealable || inferCubeFaceTransformSignals(node).size > 0);
         const eligible = cubeFaceNodeHasVisibleWidgets(node) ||
-            additionalControlNodes.has(node) ||
+            additionalControls.has(node) ||
             showActivationControl ||
             reveal.revealable;
         if (!eligible)
             return;
+        const hasLocalControls = cubeFaceVisibleWidgets(node).some(isNativeWidgetLocallyRepresented) ||
+            (additionalControls.get(node)?.some(isNativeWidgetLocallyRepresented) ?? false) ||
+            showActivationControl;
         const label = node.title?.trim() || node.type?.trim() || `Node ${String(index + 1)}`;
         if (reveal.revealable) {
             menuEntries.push({ id, label, revealed: reveal.revealed });
@@ -44,7 +49,7 @@ export function resolveCubeFaceCardPresentation(nodes, state, graph, additionalC
             id,
             node,
             label,
-            visible: reveal.visible,
+            visible: reveal.visible && hasLocalControls,
             enabled: reveal.enabled,
             showActivationControl,
             columnSpan: cubeFaceCardColumnSpan(node),
