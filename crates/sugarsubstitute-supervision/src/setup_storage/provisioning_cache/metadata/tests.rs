@@ -133,21 +133,70 @@ fn expired_context_cannot_publish_a_completed_stage_or_create_another() -> TestR
         Ok(())
     })
 }
+/// Exercise both real inventory bounds with fixture I/O separated from owner admission checks.
 #[test]
 fn legacy_inventory_limits_reject_new_stages_without_effects_or_cleanup() -> TestResult {
-    worker::run_reserved(32 * 1024 * 1024, |context, _| {
-        for (count, prefix) in [(8192, "item".to_owned()), (3000, "a".repeat(200))] {
+    let mut pipeline = Pipeline::new()?;
+    for (count, prefix, expected) in [
+        (8192, "item".to_owned(), "Metadata staging inventory is full"),
+        (3000, "a".repeat(200), "Metadata inventory names exceed their bound"),
+    ] {
+        let (root, access, directory) = pipeline.run(32 * 1024 * 1024, |context| {
             let root = tempfile::tempdir()?;
-            let access = access(root.path(), 1024, context)?;
+            let access = access(root.path(), 1024, &context)?;
             let directory = access.path()?;
-            for index in 0..count {
-                std::fs::write(directory.join(format!("{prefix}-{index:04}")), b"")?;
+            Ok((root, access, directory))
+        })?;
+        inventory_files(&mut pipeline, &directory, &prefix, count, |file| {
+            std::fs::write(file, b"")
+        })?;
+        let (root, access, directory) = pipeline.run(10 * 1024 * 1024, move |context| {
+            let cause = access
+                .write(MetadataRecord::Fetch, 1, &context)
+                .err()
+                .ok_or("Metadata stage exceeded its inventory admission")?;
+            assert_eq!(cause.kind(), io::ErrorKind::InvalidInput);
+            assert_eq!(cause.to_string(), expected);
+            let actual = std::fs::read_dir(&directory)?.try_fold(0, |count, entry| {
+                entry?;
+                Ok::<_, io::Error>(count + 1)
+            })?;
+            assert_eq!(actual, count);
+            Ok((root, access, directory))
+        })?;
+        inventory_files(&mut pipeline, &directory, &prefix, count, |file| {
+            std::fs::remove_file(file)
+        })?;
+        pipeline.run(1024 * 1024, move |_| {
+            drop(access);
+            root.close()?;
+            Ok(())
+        })?;
+    }
+    Ok(())
+}
+
+/// Bound fixture construction and disposal separately from the actual owner assertion.
+/// Every filesystem effect remains on admitted workers under the unchanged observer limit.
+fn inventory_files(
+    pipeline: &mut Pipeline,
+    directory: &std::path::Path,
+    prefix: &str,
+    count: usize,
+    effect: fn(&std::path::Path) -> io::Result<()>,
+) -> TestResult {
+    const FILES_PER_JOB: usize = 256;
+    for start in (0..count).step_by(FILES_PER_JOB) {
+        let directory = directory.to_owned();
+        let prefix = prefix.to_owned();
+        pipeline.run(1024 * 1024, move |_| {
+            for index in start..(start + FILES_PER_JOB).min(count) {
+                effect(&directory.join(format!("{prefix}-{index:04}")))?;
             }
-            assert!(access.write(MetadataRecord::Fetch, 1, context).is_err());
-            assert_eq!(std::fs::read_dir(directory)?.count(), count);
-        }
-        Ok(())
-    })
+            Ok(())
+        })?;
+    }
+    Ok(())
 }
 #[test]
 fn protected_metadata_streams_publish_replace_and_read_beyond_legacy_win32_path_lengths()

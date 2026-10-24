@@ -19,7 +19,7 @@ review_until = "2026-11-23"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/files.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:b43f5f6c1aa06332a79290e8489c672f2c562c38ef90c4206d22fa1c424574ee"
+source_sha256 = "sha256:ffd0d2263023d066153b10b9d06edde1916c7c7058465604b445d19336c4b12d"
 disposition = "implementation"
 rationale = "Retained filesystem publication or identity-checked retirement mechanics; feature authorization remains with the caller."
 

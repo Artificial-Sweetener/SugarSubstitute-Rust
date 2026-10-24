@@ -135,9 +135,9 @@ fn malformed_installer_ranges_preserve_partial_cache() -> TestResult {
             let mut cached =
                 Download::open(storage(root.path(), context)?, signed(&archive)?, context)?;
             assert_eq!(cached.offset()?, 5);
-            cached.custody.file.seek(SeekFrom::Start(0))?;
+            cached.custody.payload.seek(SeekFrom::Start(0))?;
             let mut prefix = Vec::new();
-            cached.custody.file.read_to_end(&mut prefix)?;
+            cached.custody.payload.read_to_end(&mut prefix)?;
             assert_eq!(prefix, archive[..5]);
             assert_eq!(std::fs::read(&source)?, bytes);
         }

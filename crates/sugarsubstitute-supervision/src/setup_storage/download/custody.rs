@@ -5,6 +5,7 @@ use super::DownloadFailure;
 use crate::{
     durable_storage::{
         files::{self, Directory},
+        payload::Payload,
         protection,
     },
     setup_storage::{
@@ -14,16 +15,15 @@ use crate::{
     },
 };
 use std::{
-    fs::{File, OpenOptions},
+    fs::File,
     io::{self, Write},
-    os::windows::fs::{MetadataExt, OpenOptionsExt},
 };
 use sugarsubstitute_contracts::execution::JobContext;
 use sugarsubstitute_update::Target;
 
 /// Verified download custody retains its shared-cache pin through extraction and native consumers.
 pub(super) struct Custody {
-    pub(super) file: File,
+    pub(super) payload: Payload,
     _entry: Directory,
     _parent: Directory,
     _installation_owner: File,
@@ -63,7 +63,7 @@ impl Custody {
         )?;
         cache.declare(["owner".into(), "payload".into()], context)?;
         let entry = Directory::open(&cache.path(), false)?;
-        let (entry_owner, file) = protection::with(context, |protection| {
+        let entry_owner = protection::with(context, |protection| {
             let entry_owner = match entry.read("owner") {
                 Ok(owner) => owner,
                 Err(cause) if cause.kind() == io::ErrorKind::NotFound => {
@@ -83,31 +83,12 @@ impl Custody {
             if files::read_bounded(&mut entry_owner, declaration.len())? != declaration {
                 return Err(invalid("Download entry ownership is damaged or belongs elsewhere"));
             }
-            let payload = entry.path().join("payload");
-            let file = match OpenOptions::new()
-                .read(true)
-                .write(true)
-                .share_mode(0)
-                .custom_flags(0x0020_0000)
-                .open(&payload)
-            {
-                Ok(file) => file,
-                Err(cause) if cause.kind() == io::ErrorKind::NotFound => {
-                    protection.file(&payload, context)?
-                }
-                Err(cause) => return Err(cause),
-            };
-            let metadata = file.metadata()?;
-            if !metadata.is_file() || metadata.file_attributes() & 0x400 != 0 {
-                return Err(invalid("Download payload must be a regular file"));
-            }
-            protection.verify_file(&file)?;
-            files::single_link(&file)?;
             check(context)?;
-            Ok((entry_owner, file))
+            Ok(entry_owner)
         })?;
+        let payload = cache.payload("payload", target.length(), context)?;
         Ok(Self {
-            file,
+            payload,
             _entry: entry,
             _cache: cache,
             _parent: parent,

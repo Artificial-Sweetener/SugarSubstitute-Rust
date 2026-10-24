@@ -10,6 +10,7 @@
 
 pub(crate) mod files;
 pub(crate) mod input;
+pub(crate) mod payload;
 #[allow(unsafe_code)]
 pub(crate) mod protected;
 #[allow(unsafe_code)]

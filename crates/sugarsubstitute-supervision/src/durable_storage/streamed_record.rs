@@ -44,9 +44,9 @@ impl StreamRead {
         context: &JobContext,
     ) -> io::Result<Self> {
         check(context)?;
-        leaf(name)?;
+        files::flat_leaf(name)?;
         let memory = context.memory().claim(128 * 1024).map_err(io::Error::other)?;
-        let retained = pin(parent)?;
+        let retained = parent.retained()?;
         let file = retained.read(name)?;
         files::single_link(&file)?;
         protection::with(context, |protection| protection.verify_file(&file))?;
@@ -70,7 +70,7 @@ impl<'a> StreamStage<'a> {
         context: &JobContext,
     ) -> io::Result<Self> {
         check(context)?;
-        leaf(name)?;
+        files::flat_leaf(name)?;
         Ok(Self {
             parent,
             name: name.into(),
@@ -89,7 +89,7 @@ impl<'a> StreamStage<'a> {
     pub(crate) fn create(self, context: &JobContext) -> io::Result<StreamWrite> {
         check(context)?;
         let memory = context.memory().claim(128 * 1024).map_err(io::Error::other)?;
-        let parent = pin(self.parent)?;
+        let parent = self.parent.retained()?;
         match parent.read(&self.name) {
             Ok(file) => {
                 files::single_link(&file)?;
@@ -109,22 +109,6 @@ impl<'a> StreamStage<'a> {
             _memory: memory,
         })
     }
-}
-/// Retain an independently owned actual directory instead of borrowing a caller's path lifetime.
-fn pin(parent: &Directory) -> io::Result<Directory> {
-    let retained = Directory::open(parent.path(), false)?;
-    if retained.identity()? != parent.identity()? {
-        return Err(invalid("Record stream parent changed"));
-    }
-    Ok(retained)
-}
-/// Streams publish a single record in the retained parent, never a nested path or alternate stream.
-fn leaf(name: &str) -> io::Result<()> {
-    files::relative(name)?;
-    if name.contains('/') {
-        return Err(invalid("Record stream requires one flat leaf"));
-    }
-    Ok(())
 }
 impl StreamRead {
     /// Read at most 8 KiB on the current admitted worker; unexpected shortening is observable.

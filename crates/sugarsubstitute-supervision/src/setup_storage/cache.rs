@@ -16,6 +16,7 @@ mod lookup;
 mod maintenance;
 mod native_output;
 pub use native_output::PendingEntries;
+mod payload;
 mod policy;
 mod reader;
 mod record;

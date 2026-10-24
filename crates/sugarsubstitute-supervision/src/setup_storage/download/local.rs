@@ -90,7 +90,7 @@ impl Download {
         let offset = download.offset()?;
         source.seek(SeekFrom::Start(range.start + offset))?;
         let mut remaining = (&mut source).take(length - offset);
-        download.receive_interval(offset, length - offset, &mut remaining, context)?;
+        download.custody.payload.receive_exact(offset, length - offset, &mut remaining, context)?;
         download.finish(utc_seconds, context)
     }
 }

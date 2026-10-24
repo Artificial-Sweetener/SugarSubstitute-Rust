@@ -54,6 +54,15 @@ impl Directory {
         &self.path
     }
 
+    /// Retain this exact native parent independently of its current borrow or originating job.
+    pub(crate) fn retained(&self) -> io::Result<Self> {
+        let retained = Self::open(self.path(), false)?;
+        if retained.identity()? != self.identity()? {
+            return Err(invalid("Retained directory identity changed"));
+        }
+        Ok(retained)
+    }
+
     /// Pin and validate each component before traversing its children. Existing directories
     /// need only read access; creation is attempted after an actual missing-component result.
     pub(crate) fn open(path: &Path, create: bool) -> io::Result<Self> {
@@ -89,10 +98,7 @@ impl Directory {
     pub(crate) fn read(&self, leaf: &str) -> io::Result<File> {
         let _operation =
             tracing::trace_span!(target: "sugarsubstitute::storage", "file_open_read").entered();
-        relative(leaf)?;
-        if leaf.contains('/') {
-            return Err(invalid("File access requires one child of its retained parent"));
-        }
+        flat_leaf(leaf)?;
         let file = OpenOptions::new()
             .read(true)
             .share_mode(1)
@@ -158,6 +164,15 @@ pub(crate) fn lexical(path: &Path) -> io::Result<()> {
 /// Apply the supported Windows-safe package component rules to relative names.
 pub(crate) fn relative(value: &str) -> io::Result<()> {
     sugarsubstitute_update::package::relative_path(value).map_err(io::Error::other)
+}
+
+/// Validate one Windows-safe child without granting nested traversal or alternate streams.
+pub(crate) fn flat_leaf(value: &str) -> io::Result<()> {
+    relative(value)?;
+    if value.contains('/') {
+        return Err(invalid("Storage access requires one child of its retained parent"));
+    }
+    Ok(())
 }
 
 /// Bound the retained record read, reserving one sentinel byte to detect concurrent growth.
