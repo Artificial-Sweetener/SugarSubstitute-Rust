@@ -3,7 +3,7 @@
 
 //! Resolve execution API names within their declaring modules and Cargo dependency identities.
 
-use crate::{execution_exports_modules::Module, execution_source};
+use crate::execution_exports_modules::Module;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::PathBuf,
@@ -13,6 +13,8 @@ use syn::visit::Visit;
 /// Index authored modules without compiling, evaluating platform conditions or expanding macros.
 #[derive(Default)]
 pub(crate) struct Names {
+    pub(crate) restricted_path: Option<fn(&[String]) -> bool>,
+    pub(crate) restricted_crate: Option<fn(&str) -> bool>,
     pub(crate) modules: BTreeMap<Vec<String>, Module>,
     pub(crate) externs: BTreeMap<String, String>,
     pub(crate) loaded: BTreeSet<PathBuf>,
@@ -125,6 +127,14 @@ impl Names {
             return BTreeSet::new();
         }
         let Some(scope) = self.modules.get(&location) else { return BTreeSet::from([identity]) };
+        // Rust permits a module and a re-exported function to share a spelling. A qualified
+        // prefix selects that module; expanding its value import first would grow the path forever.
+        let mut qualified_child = location.clone();
+        qualified_child.push(name.clone());
+        if parts.len() > 1 && self.modules.contains_key(&qualified_child) {
+            visited.remove(&identity);
+            return self.expand(&qualified_child, parts[1..].to_vec(), parameters, visited);
+        }
         let mut alternatives = BTreeSet::new();
         if let Some(bindings) = scope.bindings.get(&name) {
             for binding in bindings {
@@ -178,7 +188,7 @@ impl Names {
                 return BTreeSet::from([parts]);
             }
             if matches!(first.as_str(), "std" | "core" | "alloc")
-                || execution_source::restricted_crate(&first)
+                || self.restricted_crate.is_some_and(|restricted| restricted(&first))
             {
                 return BTreeSet::from([parts]);
             }
@@ -187,7 +197,7 @@ impl Names {
         for glob in &scope.globs {
             for mut prefix in self.expand(&location, glob.clone(), parameters, &mut visited.clone())
             {
-                if execution_source::restricted_path(&prefix) {
+                if self.restricted_path.is_some_and(|restricted| restricted(&prefix)) {
                     prefix.push("*".into());
                     prefix.extend(parts.clone());
                     found.insert(prefix);

@@ -25,8 +25,17 @@ pub(crate) struct Module {
 
 impl Names {
     /// Seed canonical dependency identities and visit every authored source root.
-    pub(crate) fn load(root: &Path, dependencies: &[Dependency]) -> Result<Self> {
-        let mut index = Self::default();
+    pub(crate) fn load(
+        root: &Path,
+        dependencies: &[Dependency],
+        restricted_path: fn(&[String]) -> bool,
+        restricted_crate: fn(&str) -> bool,
+    ) -> Result<Self> {
+        let mut index = Self {
+            restricted_path: Some(restricted_path),
+            restricted_crate: Some(restricted_crate),
+            ..Self::default()
+        };
         for dependency in dependencies {
             let canonical = dependency.name.replace('-', "_");
             let binding =

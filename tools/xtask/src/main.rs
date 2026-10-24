@@ -8,6 +8,7 @@ mod cache_storage;
 mod capability_source;
 mod catalog;
 mod command;
+mod diagnostics_gate;
 mod error;
 mod execution;
 mod execution_exports;

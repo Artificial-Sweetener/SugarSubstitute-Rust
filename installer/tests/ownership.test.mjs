@@ -10,10 +10,12 @@ import { recordHost } from './record-host.mjs'
 const build = process.env.SUBSTITUTE_INSTALLER_BUILD
 if (!build || !path.isAbsolute(build)) throw new Error('Explicit test artifact directory required')
 async function module(name) {
-  const { outputFiles } = await bundle({ stdin: { contents: `export * from './${name}'; ${name === 'ownership' ? "export * from './records'" : ''}`, resolveDir: new URL('../worker', import.meta.url).pathname.replace(/^\/([A-Z]:)/i, '$1'), loader: 'ts' }, bundle: true, write: false, platform: 'node', format: 'esm', target: 'node22' })
+  const { outputFiles } = await bundle({ stdin: { contents: `export * from './${name}'; ${name === 'ownership' ? "export * from './records'; export { bindDiagnostics } from './diagnostics.mjs'" : ''}`, resolveDir: new URL('../worker', import.meta.url).pathname.replace(/^\/([A-Z]:)/i, '$1'), loader: 'ts' }, bundle: true, write: false, platform: 'node', format: 'esm', target: 'node22' })
   return import(`data:text/javascript;base64,${Buffer.from(outputFiles[0].text).toString('base64')}`)
 }
-const { reserve, record, ready, NativeRecords, bindNativeRecords } = await module('ownership')
+const { reserve, record, ready, NativeRecords, bindNativeRecords, bindDiagnostics } = await module('ownership')
+const diagnostics = []
+bindDiagnostics((level, message) => diagnostics.push({ level, message }))
 const { downloadCache } = await module('cache')
 const { CacheGrant } = await module('cache-policy')
 

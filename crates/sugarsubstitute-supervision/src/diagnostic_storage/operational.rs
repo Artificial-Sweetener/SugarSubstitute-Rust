@@ -1,0 +1,221 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Artificial Sweetener and contributors
+//! Bound operational history separately from authoritative incident records.
+//!
+//! Calls run on finite admitted execution workers. Shared durable storage owns
+//! account discovery, protection, native identity pins, staging and publication.
+//! Only recognized schema-one pages rotate. Unknown entries and incident stores
+//! remain intact. No native handle or storage lease escapes a call.
+#[cfg(any(test, feature = "boundary-fixtures"))]
+use crate::durable_storage::protected::directories::Mode;
+use crate::durable_storage::{
+    check,
+    files::Directory,
+    invalid, protection,
+    streamed_record::{StreamRead, StreamStage},
+};
+use serde::{Deserialize, Serialize};
+use std::{io, path::Path};
+use sugarsubstitute_contracts::diagnostics::{
+    DIAGNOSTIC_BATCH_EVENTS, DIAGNOSTIC_EVENT_BYTES, DIAGNOSTIC_HISTORY_PAGES,
+    DIAGNOSTIC_PAGE_BYTES, OPERATIONAL_DIAGNOSTIC_SCHEMA,
+};
+use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
+mod contention;
+#[cfg(feature = "boundary-fixtures")]
+#[doc(hidden)]
+pub mod fixture;
+
+const MARKER: &[u8] = b"SugarSubstitute.operational-diagnostics.v1\n";
+const DIRECTORY: &str = "operational-v1";
+const PAGE_BYTES: usize = DIAGNOSTIC_PAGE_BYTES;
+const PAGES: usize = DIAGNOSTIC_HISTORY_PAGES;
+/// Maximum UTF-8 bytes in one routed event, including its producer and correlation fields.
+pub const OPERATIONAL_EVENT_BYTES: usize = DIAGNOSTIC_EVENT_BYTES;
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct Page {
+    schema: u32,
+    sequence: u64,
+    omitted: u64,
+    events: Vec<String>,
+}
+/// Bounded UTF-8 export retaining its original admitted memory until the last byte is dropped.
+pub struct OperationalDiagnosticExport {
+    bytes: Vec<u8>,
+    _memory: MemoryClaim,
+}
+impl OperationalDiagnosticExport {
+    /// Borrow the chronological redacted copy without gaining mutation or filesystem authority.
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+}
+/// Recognize only this owner's failed native writer admission, preserving its original cause.
+/// Other sharing, permission, publication or protection failures remain terminal.
+pub fn writer_busy(cause: &io::Error) -> bool {
+    contention::is_busy(cause)
+}
+/// Publish up to three pre-redacted host events under actual account storage.
+///
+/// # Errors
+/// Preserves original I/O and native retirement causes. Rejects overload,
+/// unknown schemas/content, foreign protection, writer contention and controls.
+pub fn append(events: &[String], omitted: u64, context: &JobContext) -> io::Result<()> {
+    protection::with(context, |protection| {
+        let path = protection.runtime_storage(DIRECTORY, true, context)?;
+        append_at(&path, events, omitted, protection, context)
+    })
+}
+/// Export only recognized operational pages, without dumps, incident content or paths.
+///
+/// # Errors
+/// Missing history, unknown entries, invalid pages, writer contention, original
+/// native retirement and controls remain observable. This grants no export destination.
+pub fn export(context: &JobContext) -> io::Result<OperationalDiagnosticExport> {
+    protection::with(context, |protection| {
+        let path = protection.runtime_storage(DIRECTORY, false, context)?;
+        export_at(&path, protection, context)
+    })
+}
+/// Validate admitted events before protected exclusive publication in the selected namespace.
+fn append_at(
+    path: &Path,
+    events: &[String],
+    omitted: u64,
+    protection: &mut protection::Protection,
+    context: &JobContext,
+) -> io::Result<()> {
+    if events.len() > DIAGNOSTIC_BATCH_EVENTS || events.iter().any(|event| !valid_event(event)) {
+        return Err(invalid("Operational event batch exceeds admission"));
+    }
+    let _memory = context.memory().claim(2 * 1024 * 1024).map_err(io::Error::other)?;
+    let root = Directory::open(path, false)?.resolved()?;
+    let _writer = contention::acquire(protection, &root.path().join("writer"), context)?;
+    let entries = inventory(&root, context)?;
+    match read(&root, "owner", context) {
+        Ok(bytes) if bytes == MARKER => {}
+        Ok(_) => return Err(invalid("Operational diagnostic owner changed")),
+        Err(cause) if cause.kind() == io::ErrorKind::NotFound && entries == 1 => {
+            write(&root, "owner", MARKER, context)?
+        }
+        Err(cause) => return Err(cause),
+    }
+    let pages = pages(&root, context)?;
+    let sequence = pages
+        .iter()
+        .map(|(_, page)| page.sequence)
+        .max()
+        .unwrap_or(0)
+        .checked_add(1)
+        .ok_or_else(|| invalid("Operational sequence exhausted"))?;
+    let slot = (0..PAGES)
+        .find(|slot| !pages.iter().any(|(index, _)| index == slot))
+        .or_else(|| pages.iter().min_by_key(|(_, page)| page.sequence).map(|(slot, _)| *slot))
+        .ok_or_else(|| invalid("Operational rotation has no slot"))?;
+    let bytes = serde_json::to_vec(&Page {
+        schema: OPERATIONAL_DIAGNOSTIC_SCHEMA,
+        sequence,
+        omitted,
+        events: events.to_vec(),
+    })
+    .map_err(io::Error::other)?;
+    write(&root, &format!("page-{slot}.json"), &bytes, context)
+}
+/// Retain export allocation through chronological projection of recognized pages only.
+fn export_at(
+    path: &Path,
+    protection: &mut protection::Protection,
+    context: &JobContext,
+) -> io::Result<OperationalDiagnosticExport> {
+    let memory = context.memory().claim(2 * 1024 * 1024).map_err(io::Error::other)?;
+    let root = Directory::open(path, false)?.resolved()?;
+    let _writer = contention::acquire(protection, &root.path().join("writer"), context)?;
+    inventory(&root, context)?;
+    if read(&root, "owner", context)? != MARKER {
+        return Err(invalid("Operational diagnostic owner changed"));
+    }
+    let mut pages = pages(&root, context)?;
+    pages.sort_by_key(|(_, page)| page.sequence);
+    let mut bytes = Vec::with_capacity(PAGES * PAGE_BYTES);
+    for (_, page) in pages {
+        if page.omitted != 0 {
+            bytes.extend_from_slice(format!("omitted_events={}\n", page.omitted).as_bytes());
+        }
+        for event in page.events {
+            bytes.extend_from_slice(event.as_bytes());
+            if !event.ends_with('\n') {
+                bytes.push(b'\n');
+            }
+        }
+    }
+    check(context)?;
+    Ok(OperationalDiagnosticExport { bytes, _memory: memory })
+}
+
+/// Refuse unknown siblings before publication; interrupted stages are preserved and observable.
+fn inventory(root: &Directory, context: &JobContext) -> io::Result<usize> {
+    let mut inventory = crate::RecordDirectory::open(root.path(), false, false, context)?;
+    let entries = inventory.page(true, context)?;
+    if entries.len() > PAGES + 2
+        || entries.iter().any(|entry| {
+            entry.directory
+                || entry.name != "owner"
+                    && entry.name != "writer"
+                    && !(0..PAGES).any(|slot| entry.name == format!("page-{slot}.json"))
+        })
+    {
+        return Err(invalid("Unrecognized operational diagnostic storage is preserved"));
+    }
+    Ok(entries.len())
+}
+/// Reject future schemas, duplicate sequences and invalid events without changing original bytes.
+fn pages(root: &Directory, context: &JobContext) -> io::Result<Vec<(usize, Page)>> {
+    let mut pages = Vec::with_capacity(PAGES);
+    for slot in 0..PAGES {
+        let bytes = match read(root, &format!("page-{slot}.json"), context) {
+            Ok(bytes) => bytes,
+            Err(cause) if cause.kind() == io::ErrorKind::NotFound => continue,
+            Err(cause) => return Err(cause),
+        };
+        let page: Page = serde_json::from_slice(&bytes).map_err(io::Error::other)?;
+        if page.schema != OPERATIONAL_DIAGNOSTIC_SCHEMA
+            || page.sequence == 0
+            || page.events.len() > DIAGNOSTIC_BATCH_EVENTS
+            || page.events.iter().any(|event| !valid_event(event))
+            || pages.iter().any(|(_, old): &(usize, Page)| old.sequence == page.sequence)
+        {
+            return Err(invalid("Operational diagnostic page is incompatible"));
+        }
+        pages.push((slot, page));
+    }
+    Ok(pages)
+}
+/// Keep JSON expansion bounded and allow only the newline framing produced by the route.
+fn valid_event(event: &str) -> bool {
+    event.len() <= OPERATIONAL_EVENT_BYTES && !event.chars().any(|ch| ch.is_control() && ch != '\n')
+}
+/// Stream one page under the original execution context and strict page admission.
+fn read(root: &Directory, leaf: &str, context: &JobContext) -> io::Result<Vec<u8>> {
+    let mut source = StreamRead::open(root, leaf, PAGE_BYTES as u64, context)?;
+    let mut bytes = Vec::new();
+    while !source.done() {
+        bytes.extend_from_slice(&source.next(context)?);
+    }
+    Ok(bytes)
+}
+/// Publish through the shared retained staging mechanism after validating exact byte admission.
+fn write(root: &Directory, leaf: &str, bytes: &[u8], context: &JobContext) -> io::Result<()> {
+    if bytes.len() > PAGE_BYTES {
+        return Err(invalid("Operational page exceeds admission"));
+    }
+    let mut staged = StreamStage::plan(root, leaf, bytes.len() as u64, context)?.create(context)?;
+    for chunk in bytes.chunks(8192) {
+        staged.append(chunk, context)?;
+    }
+    staged.commit(context)
+}
+
+#[cfg(test)]
+mod tests;

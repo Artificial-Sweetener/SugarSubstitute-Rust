@@ -11,24 +11,25 @@ use sugarsubstitute_supervision::setup_storage::InheritedUpdaterProbe;
 /// Arguments select preparation or a probe with local correlation. Feed authority is compiled in.
 /// The parent owns containment and observes failure; this internal worker creates no dialogs.
 pub fn entry(probe: io::Result<Option<InheritedUpdaterProbe>>) -> ExitCode {
-    let result = (|| {
-        let probe = probe?.map(Arc::new);
-        let diagnostics = crate::diagnostics::Diagnostics::initialize()?;
-        let result = arguments(std::env::args_os().skip(1)).and_then(|(role, arguments)| {
-            match (role, &probe) {
-                (Role::Preparation, None) => super::run(arguments),
-                (Role::Probe, Some(probe)) => super::probe::run(Arc::clone(probe)),
-                _ => Err("Updater entry and inherited custody differ".into()),
-            }
-        });
-        diagnostics.finish(result)
-    })();
+    let result = crate::diagnostics::Diagnostics::run(|_health| {
+        let result = (|| {
+            let probe = probe?.map(Arc::new);
+            arguments(std::env::args_os().skip(1)).and_then(|(role, arguments)| {
+                match (role, &probe) {
+                    (Role::Preparation, None) => super::run(arguments),
+                    (Role::Probe, Some(probe)) => super::probe::run(Arc::clone(probe)),
+                    _ => Err("Updater entry and inherited custody differ".into()),
+                }
+            })
+        })();
+        if let Err(cause) = &result {
+            tracing::error!(operation="updater_entry_failed",cause=%crate::failure_details::Details(cause.as_ref()),"Update worker failed");
+        }
+        result
+    });
     match result {
         Ok(()) => ExitCode::SUCCESS,
-        Err(cause) => {
-            tracing::error!(operation="updater_entry_failed",cause=%crate::failure_details::Details(cause.as_ref()),"Update worker failed");
-            ExitCode::FAILURE
-        }
+        Err(_retained) => ExitCode::FAILURE,
     }
 }
 

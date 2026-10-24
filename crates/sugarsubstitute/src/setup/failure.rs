@@ -5,7 +5,7 @@ use crate::failure_details::Details;
 use std::{error::Error, fmt};
 
 /// Qualification and surface exports remain off-screen; interactive failures retain their cause.
-pub(super) fn report<E: Error>(
+pub(super) fn report<E: Error + 'static>(
     result: Result<(), Box<dyn Error>>,
     interactive: bool,
     show: impl FnOnce(&str, &str, fmt::Arguments<'_>) -> Result<(), E>,
@@ -21,6 +21,7 @@ pub(super) fn report<E: Error>(
         {
             tracing::error!(operation="installer_failure_presentation", cause=?secondary,
                 "Native setup failure presentation failed; retaining the original failure");
+            return Err(crate::failure_details::retain_presentation(cause, secondary));
         }
     }
     Err(cause)

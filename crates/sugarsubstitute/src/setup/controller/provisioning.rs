@@ -68,7 +68,10 @@ impl Controller {
             );
         }
         let event = value["event"].as_str().ok_or("Worker event missing")?;
-        tracing::debug!(operation="installer_worker_event", event, request_id=?value["id"].as_str(), "Received provisioning event");
+        crate::diagnostics::worker::observe(
+            event,
+            self.pending.as_ref().map(|pending| pending.id.as_str()),
+        )?;
         if value["data"]["statusCode"] == "cacheFull" {
             let message = sugarsubstitute_contracts::localization::installer::messages(
                 &self.locale,
@@ -79,7 +82,7 @@ impl Controller {
             return Err("Provisioning worker failed".into());
         }
         if event == "diagnostic" {
-            return self.reply(None, event, value["data"].clone());
+            return self.reply(None, event, crate::diagnostics::worker::project(&value["data"]));
         }
         let Some(pending) = self.pending.as_ref() else {
             return Err("Worker returned an unsolicited operation result".into());

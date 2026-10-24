@@ -30,7 +30,7 @@ package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
 auxiliary_roots = ["installer/worker", "installer/surface"]
 layer = "host"
-concern = "Platform-independent startup and conflict controllers, retained native adapter contracts, platform host composition and application identity"
+concern = "Platform-independent startup and conflict controllers, supported operational diagnostic routing and lifecycle, retained native adapter contracts, platform host composition and application identity"
 
 [[owners]]
 package = "sugarsubstitute-execution"
@@ -49,7 +49,7 @@ concern = "Repository governance and verification"
 package = "sugarsubstitute-supervision"
 root = "crates/sugarsubstitute-supervision"
 layer = "adapter"
-concern = "Windows process and claim custody, shared retained durable filesystem mechanics, admitted preparation input reads, selected worker records and report receiving files, disposable runtime cache storage, protected native installation/update storage, authenticated update preparation and create-only native preview artifacts"
+concern = "Windows process and claim custody, shared retained durable filesystem mechanics, bounded operational diagnostic history and export, admitted preparation input reads, selected worker records and report receiving files, disposable runtime cache storage, protected native installation/update storage, authenticated update preparation and create-only native preview artifacts"
 
 [[owners]]
 package = "sugarsubstitute-splash"
@@ -66,6 +66,7 @@ concern = "Native window, headless event loop and CPU surface lifetime"
 [[owners]]
 package = "sugarsubstitute-crash"
 root = "crates/sugarsubstitute-crash"
+auxiliary_roots = ["native/crashpad"]
 layer = "adapter"
 concern = "Retained Windows capture, exact physical origin opening, native retirement, bounded symbol/report effects and restart-safe historical capture publication"
 

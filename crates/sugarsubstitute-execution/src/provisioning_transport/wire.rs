@@ -3,6 +3,17 @@
 //! Frame a bounded UTF-8 worker stream without trusting chunk or Unicode boundaries.
 use std::io;
 
+/// Classify only the supported event tag, skipping payload syntax without building a value tree.
+pub(super) fn is_download(frame: &str) -> io::Result<bool> {
+    /// Inspect routing without constructing a second full message tree.
+    #[derive(serde::Deserialize)]
+    struct Header {
+        event: String,
+    }
+    let header: Header = serde_json::from_str(frame).map_err(io::Error::other)?;
+    Ok(header.event == "downloads")
+}
+
 /// Parse only authentication fields; unknown fields never build an arbitrary JSON value tree.
 pub(super) fn authenticate(frame: &str, token: &str) -> io::Result<()> {
     /// Supported credential envelope; unrelated fields are skipped by the deserializer.

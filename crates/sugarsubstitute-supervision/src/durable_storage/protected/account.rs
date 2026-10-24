@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Resolve actual primary-account and pinned installation namespace authority.
 mod diagnostic_root;
-mod namespace_directory;
+pub(crate) mod local_storage;
+pub(crate) mod namespace_directory;
 use super::{
     native_name::{NativeSid, NativeSidDestination},
     native_phase::NativePhase,
@@ -20,11 +21,7 @@ use sugarsubstitute_contracts::lifecycle::NamespaceId;
 use windows::Win32::{
     Foundation::HANDLE,
     Security::*,
-    System::{
-        Com::CoTaskMemFree,
-        Threading::{GetCurrentProcess, OpenProcessToken},
-    },
-    UI::Shell::*,
+    System::Threading::{GetCurrentProcess, OpenProcessToken},
 };
 
 /// Preserve the minimum primary-token rights required by the actual consumer.
@@ -180,59 +177,15 @@ pub(crate) fn resolve_namespace(
     if budget.expected_namespace().is_some_and(|expected| expected != namespace) {
         return Err(ClaimError::invalid("custody_installation_namespace"));
     }
-    // SAFETY: Retained QUERY|IMPERSONATE token and static known-folder GUID remain valid.
-    let raw =
-        unsafe { SHGetKnownFolderPath(&FOLDERID_LocalAppData, KNOWN_FOLDER_FLAG(0), Some(token)) }
-            .map_err(|e| ClaimError::new("account_storage", e))?;
-    // SAFETY: Successful Shell output is a valid bounded NUL-terminated allocation.
-    let known = unsafe { paths::read_native_path(raw, 32767) };
-    // SAFETY: This exact Shell allocation is released once with its documented allocator.
-    unsafe { CoTaskMemFree(Some(raw.0.cast())) };
-    let known = known?;
-    let known_handle = paths::open_retained(
-        &known,
+    let directory = local_storage::resolve(token, handles, budget.clone())?;
+    let (directory, directory_slot, directory_identity) = namespace_directory::resolve(
+        directory,
+        namespace_directory::Namespace::Claims,
         true,
-        false,
-        budget.clone(),
+        account.sid.bytes()?,
+        budget,
         handles,
-        &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
-            &(budget.clone()),
-        )?,
     )?;
-    let directory = paths::final_path(
-        &handles[known_handle],
-        &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
-            &handles[known_handle].budget(),
-        )?,
-        crate::durable_storage::protected::native_name::NativeNameDestination::Ordinary,
-    )
-    .and_then(crate::durable_storage::protected::native_name::NativeName::into_ordinary)?;
-    let known_identity = paths::file_identity(
-        &handles[known_handle],
-        &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
-            &handles[known_handle].budget(),
-        )?,
-    )?;
-    paths::pin_ancestors(
-        &directory,
-        handles,
-        budget.clone(),
-        &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
-            &(budget.clone()),
-        )?,
-    )?;
-    paths::verify_pinned(
-        &directory,
-        known_identity,
-        handles,
-        true,
-        budget.clone(),
-        &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
-            &(budget.clone()),
-        )?,
-    )?;
-    let (directory, directory_slot, directory_identity) =
-        namespace_directory::resolve(directory, account.sid.bytes()?, budget, handles)?;
     Ok(ResolvedNamespace {
         namespace,
         account_sid: account.sid.into_ordinary()?,

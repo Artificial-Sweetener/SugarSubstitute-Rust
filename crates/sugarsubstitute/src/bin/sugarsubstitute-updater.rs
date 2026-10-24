@@ -17,6 +17,6 @@ fn main() -> std::process::ExitCode {
     }
     #[cfg(not(all(windows, feature = "windows-native-host")))]
     {
-        std::process::ExitCode::FAILURE
+        sugarsubstitute::unavailable_native_entry(sugarsubstitute::NativeEntry::Updater)
     }
 }

@@ -19,7 +19,7 @@ review_until = "2026-11-23"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/files.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:ffd0d2263023d066153b10b9d06edde1916c7c7058465604b445d19336c4b12d"
+source_sha256 = "sha256:46afd040f74051de9b4cd129e4a250e8acc575df9f4a71ad1244b472d42491b9"
 disposition = "implementation"
 rationale = "Retained filesystem publication or identity-checked retirement mechanics; feature authorization remains with the caller."
 
@@ -204,3 +204,25 @@ owner = "sugarsubstitute-supervision"
 source_sha256 = "sha256:32b5299f18d5d41d4b216cb581cf581b9c7f2cc4e55476c733ee1bcaf01ada36"
 disposition = "implementation"
 rationale = "The storage owner's unit qualification source attempts to rename retained selected directories and proves native-sharing rejection; exact registration covers this adversarial access."
+
+[[records]]
+path = "native/crashpad/finished_io.cc"
+owner = "sugarsubstitute-crash"
+source_sha256 = "sha256:acc021dd83936959b05d21ad8bc54f3cd95b73c004eab9a94ff2474073b3045a"
+disposition = "native_boundary"
+external_contract = "native-crashpad-database-file-port-v1"
+rationale = "The retained Crashpad database ABI owns its bounded native metadata, finished-report staging and exact-handle disposition. This external record port preserves upstream database contracts; host operational logs and consented exports use shared Rust durable storage."
+
+[[records]]
+path = "crates/sugarsubstitute/src/diagnostics/service/tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:8d2c42ba06dd3dcc0465e4612c66ee465a96b331c201d3cb3dfaf9d8d48ba0c8"
+disposition = "fixture"
+rationale = "Isolated native diagnostic qualification renames its owned temporary log directory only after actual execution and native sink retirement, proving that no directory pin escaped."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/durable_storage/files/lexical_tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:4a68c5c13172dad828483b7078dac6fb5747bcaf611a54ad6ea787b0e228d88f"
+disposition = "implementation"
+rationale = "Native canonical-directory qualification proves original identity, retained pins and rename only after actual retirement in an owned private fixture."

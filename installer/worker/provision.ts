@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 /** Invoke upstream install and post-install with an owned destination and explicit progress. */
+import { diagnostic } from './diagnostics.mjs'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { execFile } from 'node:child_process'
@@ -26,7 +27,7 @@ export async function provision(
       return await verifyManaged(reusable.installation, reusable.directory, signal, send)
     } catch (cause) {
       signal.throwIfAborted()
-      console.warn('Preserving an environment that did not pass verification; provisioning a fresh attempt', cause)
+      diagnostic('warn', 'Preserving an environment that did not pass verification; provisioning a fresh attempt', cause)
     }
   }
   const reservation = await reserve(input.directory)

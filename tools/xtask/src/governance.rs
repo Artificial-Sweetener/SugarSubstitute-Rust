@@ -6,7 +6,7 @@
 use std::path::Path;
 
 use crate::{
-    architecture, cache_storage, catalog,
+    architecture, cache_storage, catalog, diagnostics_gate,
     error::{Failure, Result, read, require},
     execution, infrastructure,
     policy::{self, Architecture, Debt, Records, Testing, Waiver},
@@ -22,6 +22,9 @@ pub(crate) fn check(root: &Path) -> Result<()> {
     architecture::check(root, &architecture, &workspace)?;
     let execution: execution::Policy = policy::load(root, "governance/execution/policy.toml")?;
     execution::check(root, &execution, &architecture, &workspace)?;
+    let diagnostics: diagnostics_gate::Policy =
+        policy::load(root, "governance/infrastructure/diagnostics.toml")?;
+    diagnostics_gate::check(root, &architecture, &workspace, &diagnostics)?;
     let infrastructure: infrastructure::Policy =
         policy::load(root, "governance/infrastructure/storage.toml")?;
     infrastructure::check(

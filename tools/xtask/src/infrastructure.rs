@@ -44,6 +44,7 @@ pub(crate) struct Record {
     pub(crate) rationale: String,
     pub(crate) next_extraction: Option<String>,
     pub(crate) review_until: Option<String>,
+    pub(crate) external_contract: Option<String>,
 }
 
 /// Implementation, adversarial test input, and finite outstanding migration are distinct.
@@ -53,6 +54,7 @@ pub(crate) enum Disposition {
     Implementation,
     Fixture,
     Migration,
+    NativeBoundary,
 }
 
 /// Inspect all architecture roots, auxiliary languages, tests and inactive platform targets.
@@ -103,6 +105,34 @@ pub(crate) fn check(
                 == path.starts_with(&implementation),
             format!("infrastructure: {} has an invalid implementation disposition", record.path),
         )?;
+        if record.disposition == Disposition::NativeBoundary {
+            let contract = record.external_contract.as_ref().ok_or_else(|| {
+                Failure::Policy(
+                    "infrastructure: native boundary requires its preserved external protocol"
+                        .into(),
+                )
+            })?;
+            require(
+                matching[0].layer == "adapter"
+                    && record.path.starts_with("native/")
+                    && matching[0]
+                        .auxiliary_roots
+                        .iter()
+                        .any(|relative| path.starts_with(root.join(relative))),
+                "infrastructure: native boundary requires its registered native adapter root",
+            )?;
+            let persistence: crate::catalog::Persistence =
+                crate::policy::load(root, "governance/persistence/catalog.toml")?;
+            require(
+                persistence.preserves_source(contract, &record.owner, &record.path),
+                "infrastructure: native boundary must belong to its preserved reviewed protocol",
+            )?;
+        } else {
+            require(
+                record.external_contract.is_none(),
+                "infrastructure: only native protocol boundaries declare an external contract",
+            )?;
+        }
         if record.disposition == Disposition::Migration {
             require(
                 record.next_extraction.as_ref().is_some_and(|value| !value.trim().is_empty()),

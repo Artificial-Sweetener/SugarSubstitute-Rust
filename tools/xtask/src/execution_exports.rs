@@ -15,7 +15,12 @@ use syn::visit::Visit;
 
 /// Inspect all declared public boundaries while retaining private scheduler implementations.
 pub(crate) fn findings(root: &Path, dependencies: &[Dependency]) -> Result<Vec<String>> {
-    let names = Names::load(root, dependencies)?;
+    let names = Names::load(
+        root,
+        dependencies,
+        execution_source::restricted_path,
+        execution_source::restricted_crate,
+    )?;
     let mut found = BTreeSet::new();
     for (key, module) in &names.modules {
         let mut audit = Audit {

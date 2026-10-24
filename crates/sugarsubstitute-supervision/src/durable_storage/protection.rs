@@ -27,6 +27,7 @@ use sugarsubstitute_contracts::execution::JobContext;
 use windows::Win32::{Foundation::HANDLE, Storage::FileSystem::*};
 
 mod exclusion;
+mod local_storage;
 mod outcome;
 mod publication;
 pub(crate) use outcome::{DomainFailure, with_domain};

@@ -5,6 +5,8 @@ mod canonical;
 mod child;
 #[allow(unsafe_code)]
 mod identity;
+#[cfg(test)]
+mod lexical_tests;
 use super::invalid;
 pub(crate) use identity::{file_identity, single_link};
 use std::{
@@ -143,13 +145,14 @@ fn open_component(
 }
 
 /// Reject nonlocal, unbounded or ambiguous ancestry before native traversal.
+/// Native account discovery supplies verbatim local drive paths; retain their original spelling.
 pub(crate) fn lexical(path: &Path) -> io::Result<()> {
     if !path.is_absolute()
         || path.as_os_str().len() > 4096
         || path.parent().is_none()
         || path.components().any(|part| matches!(part, Component::ParentDir | Component::CurDir))
         || path.to_string_lossy().split(['\\', '/']).any(|part| part == "." || part == "..")
-        || path.to_string_lossy().starts_with(r"\\")
+        || !matches!(path.components().next(),Some(Component::Prefix(prefix)) if matches!(prefix.kind(),Prefix::Disk(_)|Prefix::VerbatimDisk(_)))
     {
         return Err(invalid("Select an absolute local folder below a drive root"));
     }

@@ -19,7 +19,7 @@ impl fmt::Display for FailureDetails<'_> {
 }
 
 /// Present only this user-facing Root's failed lifetime, retaining its exact original error.
-pub(super) fn report_failure<C: EntryActivation + 'static, E: Error>(
+pub(super) fn report_failure<C: EntryActivation + 'static, E: Error + 'static>(
     cause: Box<dyn Error>,
     show: impl FnOnce(&str, &str, std::fmt::Arguments<'_>) -> Result<(), E>,
 ) -> Box<dyn Error> {
@@ -36,6 +36,7 @@ pub(super) fn report_failure<C: EntryActivation + 'static, E: Error>(
     ) {
         tracing::error!(operation="startup_failure_presentation",cause=?secondary,
             "Native startup failure presentation failed while its original application cause remains retained");
+        return crate::failure_details::retain_presentation(cause, secondary);
     }
     cause
 }

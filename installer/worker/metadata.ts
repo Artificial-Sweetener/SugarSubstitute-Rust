@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 /** Native metadata streams and synchronous snapshots for the upstream schema owners. */
+import { diagnostic } from './diagnostics.mjs'
 import path from 'node:path'
 import { argument } from './arguments'
 import { NativeExchange, type Data } from './native-exchange'
@@ -37,7 +38,7 @@ export class NativeMetadata {
     if (this.loaded) return
     for (const name of NAMES) {
       try { this.snapshots.set(name, await this.read(name)) }
-      catch (cause) { console.warn('Native metadata cache miss', name, cause) }
+      catch (cause) { diagnostic('warn', 'Native metadata cache miss', name, cause) }
     }
     this.loaded = true
   }

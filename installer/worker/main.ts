@@ -3,7 +3,7 @@
 /** Headless upstream worker. The Rust host owns its process family and visible window. */
 import { app } from 'electron'
 import fs from 'node:fs'
-import { format } from 'node:util'
+import { diagnosticMessage, diagnostic, bindDiagnostics } from './diagnostics.mjs'
 import { createConnection, type Socket } from 'node:net'
 import { Decoder, VERSION } from './protocol.mjs'
 import { configDir } from './paths'
@@ -40,6 +40,7 @@ const metadata = new NativeMetadata((id, data) => write(id, 'metadata', data), m
 bindNativeMetadata(metadata)
 const events = new Events(write)
 const send = (id: string | null, event: string, data: unknown) => events.send(id, event, data)
+bindDiagnostics((level: string, message: string) => send(active?.id ?? null, 'diagnostic', { level, message }))
 const flushing = setInterval(() => events.flush(), 100)
 app.on('will-quit', () => clearInterval(flushing))
 // Electron's default uncaught-error handler opens a native dialog. This worker
@@ -58,7 +59,7 @@ process.on('unhandledRejection', fatal)
 
 for (const level of ['log', 'info', 'warn', 'error', 'debug'] as const) {
   console[level] = (...args: unknown[]) => {
-    send(active?.id ?? null, 'diagnostic', { level, message: format(...args).slice(-8192) })
+    send(active?.id ?? null, 'diagnostic', { level, message: diagnosticMessage(args) })
   }
 }
 fs.mkdirSync(configDir(), { recursive: true })
@@ -66,7 +67,7 @@ app.setPath('userData', configDir())
 app.setPath('sessionData', argument('cache-runtime'))
 app.commandLine.appendSwitch('disk-cache-size', String(64 * 1024 * 1024))
 app.disableHardwareAcceleration()
-observe((event, properties) => send(active?.id ?? null, 'diagnostic', { event, properties }))
+observe(event => send(active?.id ?? null, 'diagnostic', { message: diagnosticMessage([event]) }))
 
 async function dispatch(command: ReturnType<Decoder['push']>[number]): Promise<void> {
   if (command.operation === 'metadata_reply') { metadata.accept(command); return }
@@ -151,7 +152,7 @@ void app.whenReady().then(() => {
   socket.on('error', cause => {
     metadata.close(cause)
     records.close(cause)
-    console.error('Provisioning connection failed', cause.message)
+    diagnostic('error', 'Provisioning connection failed', cause.message)
     active?.control.abort()
     if (!active) app.exit(1)
   })

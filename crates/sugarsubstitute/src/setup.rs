@@ -30,11 +30,13 @@ pub fn run(distribution: &'static [u8]) -> Result<(), Box<dyn Error>> {
             )
         )
     });
-    failure::report(
-        run_inner(distribution),
-        interactive,
-        sugarsubstitute_desktop::show_startup_failure,
-    )
+    crate::diagnostics::Diagnostics::run(|_health| {
+        failure::report(
+            run_inner(distribution),
+            interactive,
+            sugarsubstitute_desktop::show_startup_failure,
+        )
+    })
 }
 
 fn run_inner(distribution: &'static [u8]) -> Result<(), Box<dyn Error>> {
@@ -92,8 +94,7 @@ fn run_inner(distribution: &'static [u8]) -> Result<(), Box<dyn Error>> {
         return Err("Installer paths must be absolute".into());
     }
     if let Some(output) = qualification {
-        let diagnostics = crate::diagnostics::Diagnostics::initialize()?;
-        let result = diagnostics.finish(if let Some(cancel) = qualify_managed {
+        let result = if let Some(cancel) = qualify_managed {
             controller::managed_qualification::run(bundle, workspace, cancel, distribution)
         } else if qualify_window {
             controller::window_qualification::run(bundle, workspace, distribution)
@@ -105,7 +106,7 @@ fn run_inner(distribution: &'static [u8]) -> Result<(), Box<dyn Error>> {
                 native_installation,
                 distribution,
             )
-        });
+        };
         let receipt = match &result {
             Ok(value) => value.clone(),
             Err(cause) => {
@@ -125,9 +126,8 @@ fn run_inner(distribution: &'static [u8]) -> Result<(), Box<dyn Error>> {
         result?;
         return Ok(());
     }
-    let diagnostics = crate::diagnostics::Diagnostics::initialize()?;
     let mut controller = controller::Controller::new(bundle, workspace.clone(), distribution);
-    diagnostics.finish(sugarsubstitute_desktop::installer::run(
+    sugarsubstitute_desktop::installer::run(
         sugarsubstitute_desktop::installer::InstallerWindow {
             visible: true,
             title: sugarsubstitute_contracts::localization::installer::messages("en")["title"]
@@ -135,5 +135,5 @@ fn run_inner(distribution: &'static [u8]) -> Result<(), Box<dyn Error>> {
             html,
         },
         &mut controller,
-    ))
+    )
 }
