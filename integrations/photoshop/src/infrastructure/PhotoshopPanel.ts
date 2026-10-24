@@ -21,6 +21,8 @@ import manifest from '../../manifest.json' with { type: 'json' };
 import { PanelController } from '../application/PanelController.js';
 import { panelFeedback } from '../presentation/PanelFeedback.js';
 import type { PanelMessage } from '../../../contracts/PanelProtocol.generated.js';
+import { PhotoshopCanvasBridge } from './PhotoshopCanvasBridge.js';
+import { PhotoshopMaskSession } from './PhotoshopMaskSession.js';
 
 /** Supply the documented UXP globals omitted by the pinned declarations, scoped to this adapter. */
 declare const window: {
@@ -101,12 +103,24 @@ export function registerPhotoshopPanel(): void {
       throw new Error('The Photoshop host does not expose the SugarCubes WebView transport.');
     // UXP declares WebView separately from the common native element interface.
     const nativeWebView = webview as unknown as HTMLWebViewElement;
+    const canvas = new PhotoshopCanvasBridge(
+      (value) => {
+        nativeWebView.postMessage(value, ORIGIN, undefined);
+      },
+      (error) => {
+        console.error('SugarCubes Photoshop canvas failed', { error });
+      },
+      new PhotoshopMaskSession((error) => {
+        console.error('SugarCubes Photoshop mask association failed', { error });
+      }),
+    );
     let expectedUrl = '';
     const active = new PanelController(
       {
         newSession: () => crypto.randomUUID(),
         now: () => Date.now(),
         open: (session) => {
+          canvas.start(session);
           expectedUrl = `${ORIGIN}/?sc-panel-host=${encodeURIComponent(PLUGIN_ID)}&sc-panel-session=${encodeURIComponent(session)}`;
           nativeWebView.src = expectedUrl;
         },
@@ -142,9 +156,13 @@ export function registerPhotoshopPanel(): void {
         !('data' in event)
       )
         return;
-      if (isComfyOrigin(event.origin) && event.source === webview) active.receive(event.data);
+      if (isComfyOrigin(event.origin) && event.source === webview) {
+        active.receive(event.data);
+        canvas.receive(event.data);
+      }
     };
     const failed = (): void => {
+      canvas.dispose();
       active.fail(new Error('ComfyUI WebView navigation failed.'));
     };
     const navigating = (event: unknown): void => {
@@ -156,6 +174,7 @@ export function registerPhotoshopPanel(): void {
         (event.url !== 'about:blank' && event.url.split('#')[0] !== expectedUrl)
       ) {
         active.fail(new Error('The panel left its configured ComfyUI navigation.'));
+        canvas.dispose();
       }
     };
     const reload = (): void => {
@@ -181,6 +200,7 @@ export function registerPhotoshopPanel(): void {
       });
     dispose = () => {
       stopTheme();
+      canvas.dispose();
       active.dispose();
       window.removeEventListener('message', receive);
       webview.removeEventListener('loaderror', failed);

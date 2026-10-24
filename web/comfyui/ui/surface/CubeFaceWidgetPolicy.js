@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own effective widget visibility for projected Cube-face node cards. */
+import { nativePresentationWidgets } from './NativePresentationWidgets.js';
 import { isNativeWidgetPresented } from './NativeWidgetPresentation.js';
 /** Resolve rendered fields while retaining their underlying editing capabilities for discovery. */
 export function cubeFacePresentedWidgets(node) {
@@ -29,7 +30,7 @@ export function cubeFaceVisibleWidgets(node) {
     if (flags?.collapsed === true)
         node.flags = { ...flags, collapsed: false };
     try {
-        return (node.widgets ?? []).filter((widget) => !isCubeFaceWidgetConsumed(node, widget) &&
+        return nativePresentationWidgets(node).filter((widget) => !isCubeFaceWidgetConsumed(node, widget) &&
             (typeof isWidgetVisible !== 'function' || isWidgetVisible.call(node, widget) !== false));
     }
     finally {
@@ -58,7 +59,7 @@ export function cubeFaceRevealableWidgets(node) {
 }
 /** Return widgets whose values remain owned by the node regardless of host visibility. */
 export function cubeFaceUnconsumedWidgets(node) {
-    return (node.widgets ?? []).filter((widget) => !isCubeFaceWidgetConsumed(node, widget));
+    return nativePresentationWidgets(node).filter((widget) => !isCubeFaceWidgetConsumed(node, widget));
 }
 /** Return whether an incoming graph connection owns one widget's effective value. */
 export function isCubeFaceWidgetConsumed(node, widget) {

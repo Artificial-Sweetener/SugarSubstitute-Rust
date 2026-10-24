@@ -25,6 +25,8 @@ import type { WorkflowRun } from '../domain/WorkflowRun.js';
 import type { WorkflowOutputSource } from '../domain/WorkflowOutput.js';
 import type { WorkflowRunRegistry } from './WorkflowRunRegistry.js';
 import type { WorkflowResultStore } from './WorkflowResultStore.js';
+import type { WorkflowGenerationEvents } from './WorkflowGenerationEvents.js';
+import { freezeWorkflowMedia } from '../domain/WorkflowMedia.js';
 
 interface EarlyJob {
   readonly expires: number;
@@ -37,6 +39,7 @@ export interface WorkflowExecutionIngestorOptions {
   readonly results: WorkflowResultStore;
   readonly clock: ExecutionClock;
   readonly logger: Pick<Console, 'warn'>;
+  readonly generation?: WorkflowGenerationEvents;
   recover(promptId: PromptId): void;
   imageAccepted?(sessionId: WorkflowSessionId): void;
 }
@@ -58,7 +61,9 @@ export class WorkflowExecutionIngestor {
   /** Capture submission order while leaving its authoritative sequence with the run registry. */
   submitting(context: WorkflowSubmissionContext): WorkflowOrderedSubmission {
     if (this.#disposed) throw new Error('Workflow execution ingestion is disposed.');
-    return this.options.runs.reserve(context);
+    const submission = this.options.runs.reserve(context);
+    this.options.generation?.publish({ type: 'submitted', submission });
+    return submission;
   }
 
   /** Publish acceptance and replay attributable early finals before terminal recovery is requested. */
@@ -66,12 +71,14 @@ export class WorkflowExecutionIngestor {
     if (this.#disposed) return;
     const current = this.options.results.read(context.session.sessionId);
     if (!current || current.context.generation !== context.session.generation) {
+      this.rejected(context);
       this.options.runs.discard(promptId);
       if (this.#early.get(promptId)?.terminal) this.options.runs.retire(promptId);
       this.#removeEarly(promptId);
       return;
     }
     const run = this.options.runs.accept(context, promptId);
+    this.options.generation?.publish({ type: 'accepted', submission: context, run });
     this.options.results.updateRun(run);
     this.#expire();
     const early = this.#early.get(promptId);
@@ -136,6 +143,14 @@ export class WorkflowExecutionIngestor {
     });
     if (retained && event.containsImages)
       this.options.imageAccepted?.(attributed.run.session.sessionId);
+    if (retained || expectedRevision === undefined)
+      this.options.generation?.publish({
+        type: 'output',
+        run: attributed.run,
+        source: attributed.source,
+        payload: freezeWorkflowMedia(event.payload),
+        retained,
+      });
     return retained;
   }
 
@@ -171,9 +186,12 @@ export class WorkflowExecutionIngestor {
     }
     if (['complete', 'cancelled', 'error'].includes(current.status)) return;
     const run = this.options.runs.setStatus(promptId, status);
-    if (run) this.options.results.updateRun(run);
+    if (run) {
+      this.options.results.updateRun(run);
+      this.options.generation?.publish({ type: 'terminal', run });
+    }
     if (status === 'complete') this.options.recover(promptId);
-    else this.options.runs.retire(promptId);
+    else this.retire(promptId);
   }
 
   /** Recover cached output nodes without treating global history as a workflow association. */
@@ -188,6 +206,18 @@ export class WorkflowExecutionIngestor {
     const run = this.options.runs.setStatus(promptId, status);
     if (!run) return;
     this.options.results.updateRun(run);
+    this.options.generation?.publish({ type: 'terminal', run });
+    this.retire(promptId);
+  }
+
+  /** Release submission-owned destinations when preparation or queue acceptance fails. */
+  rejected(submission: WorkflowOrderedSubmission): void {
+    this.options.generation?.publish({ type: 'rejected', submission });
+  }
+
+  /** Retire exact recovery ownership only after its final output transitions have been published. */
+  retire(promptId: PromptId): void {
+    this.options.generation?.publish({ type: 'settled', promptId });
     this.options.runs.retire(promptId);
   }
 
@@ -199,6 +229,7 @@ export class WorkflowExecutionIngestor {
 
   /** Drop closed workflow metadata while retaining minimal outstanding late-event rejection identities. */
   closeSession(sessionId: WorkflowSessionId): void {
+    this.options.generation?.publish({ type: 'closed', sessionId });
     this.options.runs.closeSession(sessionId);
   }
 

@@ -25,6 +25,7 @@ import type { CubeStackFrameControls } from '../surface/stack/CubeStackHost.js';
 import { SettingsWorkspaceHost } from '../settings/SettingsWorkspaceHost.js';
 import { EmbeddedPresentation } from '../core/embedded/EmbeddedPresentation.js';
 import { startEmbeddedPanel } from '../core/embedded/EmbeddedPanelHost.js';
+import { EmbeddedCanvasConnection } from '../core/embedded/EmbeddedCanvasConnection.js';
 
 export interface WorkflowFieldHostOptions
   extends Omit<RelationHostOptions, 'reportError' | 'appearance'> {
@@ -41,9 +42,11 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
   appearance: AppearanceHost;
   relations: RelationHostLifecycle;
   frame: SubstituteFrameHost;
+  canvas: EmbeddedCanvasConnection;
   setupPresentation(): void;
 } {
   const embedded = new EmbeddedPresentation();
+  const canvas = new EmbeddedCanvasConnection();
   const relations: RelationHostLifecycle = new RelationHostLifecycle({
     ...options,
     reportError: options.reportRelationError,
@@ -95,9 +98,10 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
       startEmbeddedPanel({
         window: windowRef,
         presentation: embedded,
+        canvas,
         connected: options.connected,
         report: options.reportPresentationError,
       });
   }
-  return { appearance, relations, frame, setupPresentation };
+  return { appearance, relations, frame, canvas, setupPresentation };
 }

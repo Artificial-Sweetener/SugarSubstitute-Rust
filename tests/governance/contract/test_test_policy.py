@@ -26,6 +26,7 @@ import pytest
 from tools.testing import runner as test_runner
 from tools.testing.model import TestArea as _TestArea
 from tools.testing.model import TestPolicy as _TestPolicy
+from tools.testing.model import TestSelection as _TestSelection
 from tools.testing.policy import load_test_policy
 from tools.testing.selection import (
     TestSelectionError as _TestSelectionError,
@@ -314,3 +315,54 @@ def test_isolated_gate_runs_each_group_in_a_fresh_process(
     assert test_runner.run_isolated_groups(tmp_path, policy) == 0
     assert len(commands) == 2
     assert commands[0] != commands[1]
+
+
+def test_large_selection_preserves_every_file_within_windows_command_limits(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Run large selected inventories without exceeding CreateProcess's argument budget."""
+
+    area = _TestArea(
+        name="feature",
+        sources=("src/**",),
+        proofs=("unit",),
+        isolated_proofs=frozenset(),
+    )
+    policy = _TestPolicy(
+        schema=1,
+        test_root="tests",
+        areas=(area,),
+        boundaries=(),
+        subscriptions=(),
+    )
+    files = tuple(
+        tmp_path
+        / "tests"
+        / "feature"
+        / "unit"
+        / (f"long_behavior_{index:04d}_" + "x" * 100 + ".test.ts")
+        for index in range(400)
+    )
+    commands: list[list[str]] = []
+
+    def capture(
+        _root: Path, command: list[str], *, environment: Mapping[str, str] | None = None
+    ) -> int:
+        """Capture exact subprocess arguments without starting a test runner."""
+
+        commands.append(command)
+        return 0
+
+    monkeypatch.setattr(test_runner, "group_test_files", lambda *_args: files)
+    monkeypatch.setattr(test_runner, "_run", capture)
+    assert (
+        test_runner.run_selection(
+            tmp_path, policy, _TestSelection(groups=policy.groups, reasons=())
+        )
+        == 0
+    )
+    assert len(commands) > 1
+    assert all(len(subprocess.list2cmdline(command)) < 30000 for command in commands)
+    assert [item for command in commands for item in command[4:]] == [
+        str(path.relative_to(tmp_path)) for path in files
+    ]

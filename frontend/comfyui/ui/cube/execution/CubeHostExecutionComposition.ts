@@ -36,6 +36,7 @@ export interface CubeHostExecutionOptions {
   applyProximity(payload: unknown): unknown;
   prepareRelations(payload: unknown): unknown;
   preflight(): void;
+  prepareCanvasInputs?(payload: unknown): Promise<unknown>;
 }
 
 /** Preserve existing execution sequencing while adding a common relation boundary for both queue paths. */
@@ -53,6 +54,7 @@ export function createCubeHostExecution(options: CubeHostExecutionOptions): Comf
     logger: options.logger,
     getGraph: options.getGraph,
     getProximityMatches: options.getProximityMatches,
+    ...(options.prepareCanvasInputs ? { prepareInputs: options.prepareCanvasInputs } : {}),
   });
   const transport = new ComfyDirectPromptTransport({ api: options.api });
   const queue = new ComfyPromptQueueBridge({
@@ -60,7 +62,10 @@ export function createCubeHostExecution(options: CubeHostExecutionOptions): Comf
     observer: options.observer,
     preflight: options.preflight,
     prepare: options.prepareRelations,
-    transform: (payload) => pipeline.transform(payload),
+    transform: async (payload) => {
+      const candidate = await pipeline.transform(payload);
+      return options.prepareCanvasInputs ? await options.prepareCanvasInputs(candidate) : candidate;
+    },
     executeDirect: (position, payload, queueOptions, submit) =>
       transport.queue(payload, () => direct.queue(position, payload, queueOptions), submit),
     shouldExecuteDirect: (payload) => direct.owns(payload),

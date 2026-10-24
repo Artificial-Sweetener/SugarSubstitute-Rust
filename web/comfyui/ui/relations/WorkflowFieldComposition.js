@@ -22,9 +22,11 @@ import { SubstituteFrameHost } from '../surface/frame/SubstituteFrameHost.js';
 import { SettingsWorkspaceHost } from '../settings/SettingsWorkspaceHost.js';
 import { EmbeddedPresentation } from '../core/embedded/EmbeddedPresentation.js';
 import { startEmbeddedPanel } from '../core/embedded/EmbeddedPanelHost.js';
+import { EmbeddedCanvasConnection } from '../core/embedded/EmbeddedCanvasConnection.js';
 /** Share seed reuse across actual native field mounts and the override toolbar. */
 export function createWorkflowFieldHost(options) {
     const embedded = new EmbeddedPresentation();
+    const canvas = new EmbeddedCanvasConnection();
     const relations = new RelationHostLifecycle({
         ...options,
         reportError: options.reportRelationError,
@@ -76,9 +78,10 @@ export function createWorkflowFieldHost(options) {
             startEmbeddedPanel({
                 window: windowRef,
                 presentation: embedded,
+                canvas,
                 connected: options.connected,
                 report: options.reportPresentationError,
             });
     }
-    return { appearance, relations, frame, setupPresentation };
+    return { appearance, relations, frame, canvas, setupPresentation };
 }

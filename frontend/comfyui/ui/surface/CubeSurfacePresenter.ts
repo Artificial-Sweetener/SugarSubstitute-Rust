@@ -38,7 +38,7 @@ import {
 } from './CubeSurfaceSignatures.js';
 import type { NativeNodeCardRenderer } from './NativeNodeCardRenderer.js';
 import type { CubePreviewCatalog } from './CubePreviewModel.js';
-import { NativeSubgraphChangeObserver } from './NativeSubgraphChangeObserver.js';
+import { CubeSurfaceChangeObserver } from './CubeSurfaceChangeObserver.js';
 import {
   ComfyLiteGraphCubeNodeHost,
   type LiteGraphCubeNodeCanvas,
@@ -127,7 +127,7 @@ export class CubeSurfacePresenter {
   readonly #renderers: CubeSurfaceRendererLifecycle;
   readonly #previews: CubeSurfacePreviewCoordinator;
   readonly #views = new Map<CubeNode, MountedCubeSurface>();
-  readonly #observers = new Map<CubeNode, NativeSubgraphChangeObserver>();
+  readonly #observers = new Map<CubeNode, CubeSurfaceChangeObserver>();
   readonly #unsubscribeNodes: () => void;
   readonly #unsubscribeGraphChanges: () => void;
   readonly #unsubscribeRendererChanges: () => void;
@@ -429,7 +429,7 @@ export class CubeSurfacePresenter {
       this.#observers.get(node)?.dispose();
       this.#observers.set(
         node,
-        new NativeSubgraphChangeObserver(node.subgraph, () => this.#sync()),
+        new CubeSurfaceChangeObserver(this.#document, node, () => this.#sync()),
       );
       this.#layoutMountedView(node);
       if (this.#previewCatalog) {

@@ -16,6 +16,7 @@
 /** Render exact Nodes 1.0 cards through Comfy's active LiteGraph canvas renderer. */
 import { measureCubeFaceNodeBodyHeight } from './CubeFaceNodeMeasurement.js';
 import { withCubeFaceNodePresentation } from './CubeFaceNodePresentationPolicy.js';
+import { withNativeNodeMediaPresentation } from './NativeNodeMediaPresentation.js';
 /** Own exact legacy canvas draws and the narrow Cube-face presentation boundary. */
 export class ComfyLiteGraphNodeCardRenderer {
     #document;
@@ -48,7 +49,7 @@ export class ComfyLiteGraphNodeCardRenderer {
             if (disposed)
                 return;
             const width = Math.max(1, Number(node.size?.[0]) || 200);
-            const height = measureCubeFaceNodeBodyHeight(node);
+            const height = withNativeNodeMediaPresentation(target, node, () => measureCubeFaceNodeBodyHeight(node));
             const titleHeight = this.#titleHeight;
             logicalWidth = width;
             logicalHeight = height + titleHeight;
@@ -64,10 +65,10 @@ export class ComfyLiteGraphNodeCardRenderer {
             context.clearRect(0, 0, width, height + titleHeight);
             context.save();
             context.translate(0, titleHeight);
-            drawNativeLiteGraphCubeCard(this.#canvasRenderer, node, context, {
+            withNativeNodeMediaPresentation(target, node, () => drawNativeLiteGraphCubeCard(this.#canvasRenderer, node, context, {
                 normalizeRendererScale: true,
                 presentationHeight: height,
-            });
+            }));
             context.restore();
         };
         draw();

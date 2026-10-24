@@ -23,9 +23,18 @@ export function isNativeWidgetPresented(widget: ComfyWidget): boolean {
   return !hiddenWidgets.has(widget);
 }
 
+/** Count a locally replaced native field as content while its replacement controls mount or retire. */
+export function isNativeWidgetLocallyRepresented(widget: ComfyWidget): boolean {
+  const owner = hiddenWidgets.get(widget);
+  return !owner || owner.disposition === 'replacement';
+}
+
 /** Own one scope of widget visibility leases without altering serialization or native controls. */
 export class NativeWidgetPresentation {
   readonly #hidden = new Set<ComfyWidget>();
+
+  /** Distinguish fields moved elsewhere from fields whose local replacement retains their card. */
+  constructor(readonly disposition: 'external' | 'replacement' = 'external') {}
 
   /** Apply the next resolved presentation and return whether native layout needs refreshing. */
   reconcile(widgets: ReadonlySet<ComfyWidget>): boolean {

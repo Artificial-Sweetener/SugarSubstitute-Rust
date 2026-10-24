@@ -227,7 +227,7 @@ export class ComfyWorkflowHistoryAdapter {
       clearTimeout(timeout);
       controller.signal.removeEventListener('abort', onAbort);
       if (job.terminalAtStart && this.options.runs.read(job.run.promptId)?.status === 'complete')
-        this.options.runs.retire(job.run.promptId);
+        this.options.ingestor.retire(job.run.promptId);
     }
   }
 

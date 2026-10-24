@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Deliver ephemeral preview bytes to interested renderers without retaining a background pixel cache. */
 
+import type { WorkflowCanvasPreview } from '../domain/WorkflowCanvas.js';
 import type { WorkflowPreview } from '../domain/WorkflowPreview.js';
 import type { WorkflowResultStore } from '../application/WorkflowResultStore.js';
 import type { AttributedWorkflowSource } from '../application/WorkflowExecutionIngestor.js';
@@ -34,6 +35,7 @@ export class ComfyWorkflowPreviewDelivery {
   constructor(
     private readonly results: WorkflowResultStore,
     private readonly logger: Pick<Console, 'error'>,
+    private readonly canvasPreview: (frame: WorkflowCanvasPreview<Blob>) => void = () => {},
   ) {}
 
   /** Subscribe one explicit renderer interest; inactive surfaces refuse bytes before admission. */
@@ -60,6 +62,7 @@ export class ComfyWorkflowPreviewDelivery {
       dimensions: null,
     });
     if (!this.results.publishPreview(preview)) return;
+    this.canvasPreview({ source, preview, bytes: blob });
     for (const consumer of this.#consumers) {
       try {
         if (consumer.wants(source)) consumer.receive(preview, blob);

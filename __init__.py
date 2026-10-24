@@ -43,6 +43,7 @@ from .sugarcubes.host_api import set_active_backend_services
 from .sugarcubes.runtime import queue_observer_registry
 from .sugarcubes.model_library.integration import install_model_library
 from .sugarcubes.output_saving.integration import install_output_saving
+from .sugarcubes.input_canvas.infrastructure.http_routes import install_input_previews
 
 WEB_DIRECTORY = "web"
 __version__ = "0.15.3"
@@ -62,6 +63,7 @@ if PromptServer is not None:
         if comfy_execution is None:
             raise RuntimeError("Comfy execution module is unavailable")
         _output_saving_runtime = install_output_saving(PromptServer)
+        install_input_previews(PromptServer)
         _backend_services = build_backend_services(
             _EXTENSION_ROOT,
             execution_port=DirectComfyExecutionPort(

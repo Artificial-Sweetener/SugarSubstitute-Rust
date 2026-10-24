@@ -24,6 +24,7 @@ import type {
 import { measureCubeFaceNodeBodyHeight } from './CubeFaceNodeMeasurement.js';
 import { withCubeFaceNodePresentation } from './CubeFaceNodePresentationPolicy.js';
 import type { CubeNodeColorTheme } from './CubeNodeColorTheme.js';
+import { withNativeNodeMediaPresentation } from './NativeNodeMediaPresentation.js';
 
 interface LiteGraphNodeRenderer {
   ds?: {
@@ -96,7 +97,9 @@ export class ComfyLiteGraphNodeCardRenderer implements NativeNodeCardRenderer {
     const draw = (): void => {
       if (disposed) return;
       const width = Math.max(1, Number(node.size?.[0]) || 200);
-      const height = measureCubeFaceNodeBodyHeight(node);
+      const height = withNativeNodeMediaPresentation(target, node, () =>
+        measureCubeFaceNodeBodyHeight(node),
+      );
       const titleHeight = this.#titleHeight;
       logicalWidth = width;
       logicalHeight = height + titleHeight;
@@ -112,10 +115,12 @@ export class ComfyLiteGraphNodeCardRenderer implements NativeNodeCardRenderer {
       context.clearRect(0, 0, width, height + titleHeight);
       context.save();
       context.translate(0, titleHeight);
-      drawNativeLiteGraphCubeCard(this.#canvasRenderer, node, context, {
-        normalizeRendererScale: true,
-        presentationHeight: height,
-      });
+      withNativeNodeMediaPresentation(target, node, () =>
+        drawNativeLiteGraphCubeCard(this.#canvasRenderer, node, context, {
+          normalizeRendererScale: true,
+          presentationHeight: height,
+        }),
+      );
       context.restore();
     };
     draw();

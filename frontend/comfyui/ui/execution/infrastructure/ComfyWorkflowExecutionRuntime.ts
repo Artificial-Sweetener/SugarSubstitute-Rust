@@ -24,6 +24,10 @@ import { WorkflowProgressStore } from '../application/WorkflowProgressStore.js';
 import { WorkflowSubmissionContexts } from '../application/WorkflowSubmissionContexts.js';
 import { WorkflowExecutionIngestor } from '../application/WorkflowExecutionIngestor.js';
 import { WorkflowResultLifecycle } from '../application/WorkflowResultLifecycle.js';
+import { WorkflowGenerationEvents } from '../application/WorkflowGenerationEvents.js';
+import { ComfyDocumentCanvasHost } from './ComfyDocumentCanvasHost.js';
+import { WorkflowCanvasCoordinator } from '../application/WorkflowCanvasCoordinator.js';
+import type { CanvasLayerHost } from '../../core/embedded/CanvasRuntime.js';
 import { ComfyWorkflowSessionAdapter } from './ComfyWorkflowSessionAdapter.js';
 import { ComfyWorkflowEventAdapter } from './ComfyWorkflowEventAdapter.js';
 import { ComfyWorkflowHistoryAdapter } from './ComfyWorkflowHistoryAdapter.js';
@@ -50,6 +54,7 @@ export interface ComfyWorkflowExecutionRuntimeOptions {
   readonly logger: Pick<Console, 'error' | 'warn'>;
   readonly nextKey: () => string;
   readonly clock: ExecutionClock;
+  readonly canvasTargets?: () => readonly string[];
   readonly previewUrls: CubePreviewUrlPort;
   readonly previewVisibility: CubePreviewVisibilityPort;
 }
@@ -64,6 +69,8 @@ export class ComfyWorkflowExecutionRuntime {
   readonly previews: ComfyWorkflowPreviewDelivery;
   readonly outputs: ComfyWorkflowOutputProjection;
   readonly submissionObserver: ComfyPromptSubmissionObserver;
+  readonly canvases: WorkflowCanvasCoordinator<Blob>;
+  readonly #generation: WorkflowGenerationEvents;
   readonly #cubePreviews: ComfyCubeLivePreview;
   readonly #runs = new WorkflowRunRegistry();
   readonly #contexts = new WorkflowSubmissionContexts();
@@ -76,18 +83,30 @@ export class ComfyWorkflowExecutionRuntime {
   #loads: ReturnType<typeof createComfyWorkflowLoadObserver> | null = null;
   #construction: ReturnType<typeof createComfyPromptConstructionObserver> | null = null;
   #lifecycle: WorkflowResultLifecycle | null = null;
+  #canvasDelivery: ComfyDocumentCanvasHost | null = null;
   #installed = false;
   #disposed = false;
   #connected = true;
 
   /** Construct pure owners immediately and defer public-host capability access until extension setup. */
   constructor(private readonly options: ComfyWorkflowExecutionRuntimeOptions) {
+    this.#generation = new WorkflowGenerationEvents((error) =>
+      options.logger.error('SugarCubes generation lifecycle consumer failed.', { error }),
+    );
+    this.canvases = new WorkflowCanvasCoordinator(
+      this.#generation,
+      this.results,
+      (error) => options.logger.error('SugarCubes canvas coordination failed.', { error }),
+      options.canvasTargets ??
+        (() => (this.#canvasDelivery?.available ? ['embedded-document'] : ['web'])),
+    );
     this.#stopSeeds = this.sessions.subscribe((snapshot) => {
       this.seeds.synchronize(snapshot);
       this.activity.synchronize(snapshot);
     });
     this.#ingestor = new WorkflowExecutionIngestor({
       runs: this.#runs,
+      generation: this.#generation,
       results: this.results,
       clock: options.clock,
       logger: options.logger,
@@ -101,12 +120,15 @@ export class ComfyWorkflowExecutionRuntime {
       logger: options.logger,
       seeds: this.seeds,
       submitting: (context) => this.#ingestor.submitting(context),
+      rejected: (context) => this.#ingestor.rejected(context),
       accepted: (context, id) => {
         this.#ingestor.accepted(context, id);
         this.progress.refresh();
       },
     });
-    this.previews = new ComfyWorkflowPreviewDelivery(this.results, options.logger);
+    this.previews = new ComfyWorkflowPreviewDelivery(this.results, options.logger, (frame) =>
+      this.canvases.preview(frame),
+    );
     this.#cubePreviews = new ComfyCubeLivePreview(
       this.sessions,
       this.results,
@@ -187,6 +209,19 @@ export class ComfyWorkflowExecutionRuntime {
     return this.#connected;
   }
 
+  /** Bind a supported canvas directly to generation without acquiring any output-viewer authority. */
+  bindCanvas(canvas: CanvasLayerHost, window: Window, notify: (message: string) => void): void {
+    if (this.#disposed || this.#canvasDelivery)
+      throw new Error('Canvas delivery is already bound or disposed.');
+    this.#canvasDelivery = new ComfyDocumentCanvasHost(
+      this.canvases,
+      canvas,
+      window,
+      this.options.logger,
+      notify,
+    );
+  }
+
   /** Read submission intent through the shared run registry, including outstanding queue receipts. */
   latestSubmissionOrder(session: WorkflowSessionId): number {
     return this.#runs.latestOrder(session);
@@ -232,6 +267,9 @@ export class ComfyWorkflowExecutionRuntime {
     this.#cubePreviews.dispose();
     this.previews.dispose();
     this.#ingestor.dispose();
+    this.#canvasDelivery?.dispose();
+    this.canvases.dispose();
+    this.#generation.dispose();
     this.#contexts.dispose();
     this.#runs.dispose();
     this.results.dispose();

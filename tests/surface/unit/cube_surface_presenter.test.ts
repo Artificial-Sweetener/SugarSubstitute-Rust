@@ -21,6 +21,13 @@ import { CubePortPresentationController } from '../../../frontend/comfyui/ui/cub
 import type { CubeNode } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 import { CubeNodeCatalog } from '../../../frontend/comfyui/ui/cube/node/CubeNodeCatalog.js';
 import { CubeFaceCardStateService } from '../../../frontend/comfyui/ui/surface/CubeFaceCardStateService.js';
+import {
+  registerNativePresentationWidget,
+  withNativePresentationWidgets,
+} from '../../../frontend/comfyui/ui/surface/NativePresentationWidgets.js';
+import { buildCubeSurfaceTopologySignature } from '../../../frontend/comfyui/ui/surface/CubeSurfaceSignatures.js';
+import { NativeWidgetPresentation } from '../../../frontend/comfyui/ui/surface/NativeWidgetPresentation.js';
+import { refreshNativeNodeCards } from '../../../frontend/comfyui/ui/surface/NativeNodeCardRefresh.js';
 import { CubeSurfacePresenter } from '../../../frontend/comfyui/ui/surface/CubeSurfacePresenter.js';
 import type {
   NativeNodeCardMount,
@@ -61,6 +68,109 @@ describe('CubeSurfacePresenter', () => {
     presenter.dispose();
     await Promise.resolve();
     expect(renderer.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  test('reconciles empty-card visibility on exact field refreshes while ignoring unrelated owners', async () => {
+    const pane = createTransformPane(),
+      shell = createNativeNodeShell('9');
+    pane.append(shell.root);
+    const member = nativeNode('style', 'SimpleSyrup.PromptEncodeStyle');
+    member.widgets = [{ name: 'encode_style' }];
+    member.inputs = [];
+    member.outputs = [];
+    const node = cubeNode(9, 'cube-visibility', [member]),
+      nodes = new CubeNodeCatalog();
+    nodes.add(node);
+    const mount = jest.fn<NativeNodeCardRenderer['mount']>((target) => {
+      const row = document.createElement('div');
+      row.dataset.nativeCard = '';
+      target.append(row);
+      return {
+        refresh() {},
+        unmount() {
+          row.remove();
+        },
+      };
+    });
+    const rootGraph = {};
+    const presenter = new CubeSurfacePresenter({
+      document,
+      openEditor: jest.fn(),
+      rootGraph,
+      getCurrentGraph: () => rootGraph,
+      nodes,
+      logger: console,
+      renderer: { mount, dispose() {} },
+      requestSlotLayoutSync: () => undefined,
+    });
+    await flushMount();
+    expect(shell.root.querySelector('[data-native-card]')).not.toBeNull();
+    const visibility = new NativeWidgetPresentation();
+    visibility.reconcile(new Set(member.widgets));
+    refreshNativeNodeCards(document, { kind: 'nodes', nodes: [nativeNode('other', 'Other')] });
+    await flushMount();
+    expect(shell.root.querySelector('[data-native-card]')).not.toBeNull();
+    refreshNativeNodeCards(document, { kind: 'nodes', nodes: [member] });
+    await flushMount();
+    expect(shell.root.querySelector('[data-native-card]')).toBeNull();
+    visibility.dispose();
+    refreshNativeNodeCards(document, { kind: 'nodes', nodes: [member] });
+    await flushMount();
+    expect(shell.root.querySelector('[data-native-card]')).not.toBeNull();
+    presenter.dispose();
+    const calls = mount.mock.calls.length;
+    refreshNativeNodeCards(document, { kind: 'nodes', nodes: [member] });
+    await flushMount();
+    expect(mount).toHaveBeenCalledTimes(calls);
+  });
+
+  test('does not treat local source controls as graph topology or remount their owner on field refresh', async () => {
+    const pane = createTransformPane(),
+      shell = createNativeNodeShell('9');
+    pane.append(shell.root);
+    const member = nativeNode('image', 'LoadImage');
+    member.widgets = [{ name: 'image' }];
+    const cube = cubeNode(9, 'local-loader', [member]),
+      nodes = new CubeNodeCatalog();
+    nodes.add(cube);
+    const rootGraph = {},
+      visibility = new NativeWidgetPresentation('replacement');
+    visibility.reconcile(new Set(member.widgets));
+    const mount = jest.fn<NativeNodeCardRenderer['mount']>(() => ({ refresh() {}, unmount() {} }));
+    const presenter = new CubeSurfacePresenter({
+      document,
+      openEditor: jest.fn(),
+      rootGraph,
+      getCurrentGraph: () => rootGraph,
+      nodes,
+      logger: console,
+      renderer: { mount, dispose() {} },
+      requestSlotLayoutSync: () => undefined,
+    });
+    await flushMount();
+    const mounted = mount.mock.calls.length,
+      signature = buildCubeSurfaceTopologySignature(cube);
+    const source = {
+        name: '__sugarcubes_presentation:canvas-input:image:Source',
+        type: 'combo',
+        value: 'composition',
+      },
+      release = registerNativePresentationWidget(member, source);
+    expect(buildCubeSurfaceTopologySignature(cube)).toBe(signature);
+    withNativePresentationWidgets(member, () =>
+      expect(buildCubeSurfaceTopologySignature(cube)).toBe(signature),
+    );
+    for (let turn = 0; turn < 5; turn++) {
+      refreshNativeNodeCards(document, { kind: 'nodes', nodes: [member] });
+      await flushMount();
+      expect(mount).toHaveBeenCalledTimes(mounted);
+    }
+    release();
+    refreshNativeNodeCards(document, { kind: 'nodes', nodes: [member] });
+    await flushMount();
+    expect(mount).toHaveBeenCalledTimes(mounted);
+    presenter.dispose();
+    visibility.dispose();
   });
 
   test('mounts the custom face inside the real node while preserving shell edges and controls', async () => {

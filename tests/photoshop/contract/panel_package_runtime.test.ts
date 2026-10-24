@@ -103,6 +103,7 @@ test('packaged entrypoint filters messages, acknowledges presentation, preserves
   const errors: unknown[] = [];
   const grippers: unknown[] = [];
   const themeListeners = new Set<() => void>();
+  const storedValues = new Map<string, string>();
   let nativeTheme = 'darkest';
   let nextSession = 0;
   let nextTimer = 0;
@@ -146,6 +147,11 @@ test('packaged entrypoint filters messages, acknowledges presentation, preserves
         },
       },
       window: nativeWindow,
+      localStorage: {
+        getItem: (key: string) => storedValues.get(key) ?? null,
+        setItem: (key: string, value: string) => storedValues.set(key, value),
+        removeItem: (key: string) => storedValues.delete(key),
+      },
       crypto: {
         randomUUID: () => `00000000-0000-4000-8000-${String(++nextSession).padStart(12, '0')}`,
       },

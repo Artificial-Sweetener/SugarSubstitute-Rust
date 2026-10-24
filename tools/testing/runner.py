@@ -50,23 +50,24 @@ def run_selection(
             str(path.relative_to(root)) for path in files if path.suffix == ".ts"
         )
     if ordinary_python:
-        status = _run(
+        status = _run_paths(
             root,
-            [sys.executable, "-m", "pytest", "-q", *ordinary_python],
+            [sys.executable, "-m", "pytest", "-q"],
+            ordinary_python,
             environment=environment,
         )
         if status:
             return status
     if ordinary_typescript:
-        status = _run(
+        status = _run_paths(
             root,
             [
                 "node",
                 "--experimental-vm-modules",
                 "node_modules/jest/bin/jest.js",
                 "--runTestsByPath",
-                *ordinary_typescript,
             ],
+            ordinary_typescript,
             environment=environment,
         )
         if status:
@@ -137,6 +138,36 @@ def _run(
         command, cwd=root, check=False, env=environment
     )  # noqa: S603
     return completed.returncode
+
+
+def _run_paths(
+    root: Path,
+    prefix: list[str],
+    paths: list[str],
+    *,
+    environment: Mapping[str, str] | None = None,
+) -> int:
+    """Preserve selected paths while keeping each command below Windows' CreateProcess limit."""
+
+    command = prefix.copy()
+    for path in paths:
+        candidate = [*command, path]
+        if len(subprocess.list2cmdline(candidate)) >= 30000:
+            if len(command) == len(prefix):
+                raise ValueError(
+                    "A selected test path exceeds the subprocess argument budget."
+                )
+            status = _run(root, command, environment=environment)
+            if status:
+                return status
+            command = [*prefix, path]
+        else:
+            command = candidate
+    return (
+        _run(root, command, environment=environment)
+        if len(command) > len(prefix)
+        else 0
+    )
 
 
 __all__ = ["group_test_files", "run_isolated_groups", "run_selection"]

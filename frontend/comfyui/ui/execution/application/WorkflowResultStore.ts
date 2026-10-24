@@ -34,6 +34,8 @@ import type {
   WorkflowOutputItem,
 } from '../domain/WorkflowOutput.js';
 
+export type WorkflowResultChange = 'state' | 'output' | 'restore';
+
 interface RetainedOutput {
   readonly output: WorkflowOutputSet;
   readonly payload: WorkflowMediaPayload;
@@ -58,7 +60,9 @@ export interface WorkflowResultUpdate {
 /** Retain bounded source descriptors and a monotonic visual handoff for each workflow. */
 export class WorkflowResultStore {
   readonly #sessions = new Map<WorkflowSessionId, ResultSession>();
-  readonly #listeners = new Set<(sessionId: WorkflowSessionId) => void>();
+  readonly #listeners = new Set<
+    (sessionId: WorkflowSessionId, reason: WorkflowResultChange) => void
+  >();
 
   /** Synchronize open bindings and invalidate results when the graph generation changes. */
   synchronize(contexts: readonly WorkflowSessionContext[]): readonly WorkflowSessionId[] {
@@ -102,6 +106,11 @@ export class WorkflowResultStore {
   /** Read immutable final references and transient metadata for one explicit workflow. */
   read(sessionId: WorkflowSessionId): WorkflowResultSession | null {
     return this.#sessions.get(sessionId)?.snapshot ?? null;
+  }
+
+  /** Enumerate current lightweight states for newly attached view-capable canvases. */
+  snapshots(): readonly WorkflowResultSession[] {
+    return [...this.#sessions.values()].map((session) => session.snapshot);
   }
 
   /** Read one source's revision for exact-history compare-and-set reconciliation. */
@@ -265,7 +274,9 @@ export class WorkflowResultStore {
   }
 
   /** Subscribe to affected workflow identities rather than unscoped card or graph refresh requests. */
-  subscribe(listener: (sessionId: WorkflowSessionId) => void): () => void {
+  subscribe(
+    listener: (sessionId: WorkflowSessionId, reason: WorkflowResultChange) => void,
+  ): () => void {
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);
   }
@@ -340,33 +351,41 @@ export class WorkflowResultStore {
         .sort((a, b) => a.source.order - b.source.order),
     );
     const preview = session.snapshot.preview;
-    this.#publish(session, {
-      ...session.snapshot,
-      outputs,
-      presentedRunOrder: items.reduce(
-        (latest, item) =>
-          item.file.type === 'input' ? latest : Math.max(latest, item.provenance.runOrder),
-        session.snapshot.presentedRunOrder,
-      ),
-      preview:
-        preview?.sourceId === source.id && completedPreviewRunOrder >= preview.runOrder
-          ? null
-          : preview,
-    });
+    this.#publish(
+      session,
+      {
+        ...session.snapshot,
+        outputs,
+        presentedRunOrder: items.reduce(
+          (latest, item) =>
+            item.file.type === 'input' ? latest : Math.max(latest, item.provenance.runOrder),
+          session.snapshot.presentedRunOrder,
+        ),
+        preview:
+          preview?.sourceId === source.id && completedPreviewRunOrder >= preview.runOrder
+            ? null
+            : preview,
+      },
+      provenance.kind === 'execution' ? 'output' : 'restore',
+    );
   }
 
   /** Increment one coherent session snapshot revision before notifying its subscribers. */
-  #publish(session: ResultSession, snapshot: WorkflowResultSession): void {
+  #publish(
+    session: ResultSession,
+    snapshot: WorkflowResultSession,
+    reason: WorkflowResultChange = 'state',
+  ): void {
     session.snapshot = Object.freeze({
       ...snapshot,
       context: Object.freeze({ ...snapshot.context }),
       revision: session.snapshot.revision + 1,
     });
-    this.#notify(snapshot.context.sessionId);
+    this.#notify(snapshot.context.sessionId, reason);
   }
 
   /** Identify the affected workflow so consumers can update only mounted surfaces. */
-  #notify(sessionId: WorkflowSessionId): void {
-    for (const listener of this.#listeners) listener(sessionId);
+  #notify(sessionId: WorkflowSessionId, reason: WorkflowResultChange = 'state'): void {
+    for (const listener of this.#listeners) listener(sessionId, reason);
   }
 }

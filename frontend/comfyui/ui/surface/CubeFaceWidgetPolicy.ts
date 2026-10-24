@@ -16,6 +16,7 @@
 /** Own effective widget visibility for projected Cube-face node cards. */
 
 import type { ComfyInput, ComfyNode, ComfyWidget } from '../types/graph.js';
+import { nativePresentationWidgets } from './NativePresentationWidgets.js';
 import { isNativeWidgetPresented } from './NativeWidgetPresentation.js';
 
 /** Resolve rendered fields while retaining their underlying editing capabilities for discovery. */
@@ -32,7 +33,7 @@ export function cubeFaceVisibleWidgets(node: ComfyNode): ComfyWidget[] {
   // capability synchronously, retaining native hidden/advanced/custom rules.
   if (flags?.collapsed === true) node.flags = { ...flags, collapsed: false };
   try {
-    return (node.widgets ?? []).filter(
+    return nativePresentationWidgets(node).filter(
       (widget) =>
         !isCubeFaceWidgetConsumed(node, widget) &&
         (typeof isWidgetVisible !== 'function' || isWidgetVisible.call(node, widget) !== false),
@@ -60,7 +61,9 @@ export function cubeFaceRevealableWidgets(node: ComfyNode): ComfyWidget[] {
 
 /** Return widgets whose values remain owned by the node regardless of host visibility. */
 export function cubeFaceUnconsumedWidgets(node: ComfyNode): ComfyWidget[] {
-  return (node.widgets ?? []).filter((widget) => !isCubeFaceWidgetConsumed(node, widget));
+  return nativePresentationWidgets(node).filter(
+    (widget) => !isCubeFaceWidgetConsumed(node, widget),
+  );
 }
 
 /** Return whether an incoming graph connection owns one widget's effective value. */

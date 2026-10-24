@@ -1,0 +1,191 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Capture reusable canvas targets coherently without knowing how consumers interpret their pixels. */
+import {
+  CanvasSourceUnavailable,
+  canvasSourceUnavailable,
+} from '../domain/CanvasSourceAvailability.js';
+import { canvasSelectionImage } from '../domain/CanvasSelectionImage.js';
+import type { CanvasSourceHost } from '../../../../../integrations/contracts/CanvasSources.js';
+import type {
+  CanvasInputSource,
+  CanvasSourceContext,
+  CanvasSourceSnapshot,
+} from '../../../../../integrations/contracts/CanvasProtocol.generated.js';
+import {
+  decodeCanvasRaster,
+  canvasRasterByteLength,
+  MAX_CANVAS_RASTER_BYTES,
+} from '../../core/embedded/CanvasRuntime.js';
+import {
+  canvasSourceTargetKey,
+  sameCanvasSourceDocument,
+} from '../../core/embedded/CanvasRuntime.js';
+
+/** Associate caller-owned identity with a portable source independently of mask or image semantics. */
+export interface CanvasSourceEntry {
+  readonly representation?: 'raw' | 'image';
+  readonly key: string;
+  readonly source: Exclude<CanvasInputSource, { kind: 'file' }>;
+}
+
+/** Report the consumer representation explicitly while retaining the native source identity and revision. */
+export interface CapturedCanvasSource extends CanvasSourceSnapshot {
+  readonly representation: 'raw' | 'image';
+}
+
+/** Own exact context validation and one native capture per canvas for previews and execution. */
+export class CanvasSourceCapture {
+  /** Resolve capability by canvas identity rather than editor-specific globals. */
+  constructor(private readonly host: (canvasId: string) => CanvasSourceHost | null) {}
+
+  /** Require explicit source support before exposing document or layer choices. */
+  async context(canvasId: string): Promise<CanvasSourceContext> {
+    const host = this.host(canvasId);
+    if (!canvasId || !host || host.canvasId !== canvasId)
+      throw new CanvasSourceUnavailable('Canvas unavailable');
+    const result = await host.execute({ type: 'context' });
+    if (result.kind === 'failure') {
+      if (
+        result.status === 'unavailable' ||
+        result.status === 'stale' ||
+        result.status === 'unsupported'
+      )
+        throw new CanvasSourceUnavailable('Source unavailable');
+      throw new Error(result.message);
+    }
+    if (result.kind !== 'context' || !result.supported)
+      throw new CanvasSourceUnavailable('Source unavailable');
+    return result;
+  }
+
+  /** Freeze each requested source against one document revision before returning any captured pixels. */
+  async capture(
+    entries: readonly CanvasSourceEntry[],
+    maximumSize: number,
+  ): Promise<ReadonlyMap<string, CapturedCanvasSource>> {
+    if (!Number.isSafeInteger(maximumSize) || maximumSize < 0 || maximumSize > 1024)
+      throw new Error('Invalid canvas source preview size.');
+    const groups = new Map<string, CanvasSourceEntry[]>();
+    for (const entry of entries) {
+      const group = groups.get(entry.source.canvasId) ?? [];
+      group.push(entry);
+      groups.set(entry.source.canvasId, group);
+    }
+    const captured = new Map<string, CapturedCanvasSource>();
+    for (const [canvasId, group] of groups) {
+      const context = await this.context(canvasId),
+        document = context.document;
+      for (const { source } of group) {
+        const reason = canvasSourceUnavailable(source, context);
+        if (reason) throw new CanvasSourceUnavailable(reason, source);
+      }
+      if (!document) throw new CanvasSourceUnavailable('Open a document');
+      const targets = [
+        ...new Map(
+          group.flatMap(({ source, representation }) => {
+            const requested = [source.target];
+            if (representation === 'image' && source.target.kind === 'selection') {
+              if (!context.targets.includes('composition'))
+                throw new Error('This canvas cannot supply selected image content.');
+              requested.push({ kind: 'composition' });
+            }
+            return requested.map((target) => [canvasSourceTargetKey(target), target] as const);
+          }),
+        ).values(),
+      ];
+      if (targets.length > 64) throw new Error('A canvas capture supports at most 64 targets.');
+      const host = this.host(canvasId);
+      if (!host) throw new CanvasSourceUnavailable('Canvas unavailable');
+      const result = await host.execute({ type: 'capture', document, targets, maximumSize });
+      if (result.kind === 'failure') {
+        if (
+          result.status === 'unavailable' ||
+          result.status === 'stale' ||
+          result.status === 'unsupported'
+        )
+          throw new CanvasSourceUnavailable('Source unavailable');
+        throw new Error(result.message);
+      }
+      if (result.kind !== 'captured' || result.snapshots.length !== targets.length)
+        throw new Error('The canvas returned an incomplete source capture.');
+      if (new Set(result.snapshots.map((snapshot) => snapshot.revision)).size > 1)
+        throw new Error('The canvas revision changed during source capture.');
+      const scale = maximumSize
+        ? Math.min(1, maximumSize / Math.max(document.width, document.height))
+        : 1;
+      const width = Math.max(1, Math.round(document.width * scale)),
+        height = Math.max(1, Math.round(document.height * scale));
+      let transferred = 0;
+      for (const snapshot of result.snapshots) {
+        transferred += canvasRasterByteLength(
+          snapshot.pixels.width,
+          snapshot.pixels.height,
+          snapshot.pixels.format,
+        );
+        if (transferred > MAX_CANVAS_RASTER_BYTES)
+          throw new Error('The canvas source collection exceeds its transfer budget.');
+      }
+      const represented = new Map<string, CapturedCanvasSource>();
+      for (const entry of group) {
+        const matching = result.snapshots.filter(
+          (snapshot) =>
+            canvasSourceTargetKey(snapshot.target) === canvasSourceTargetKey(entry.source.target),
+        );
+        const snapshot = matching[0];
+        if (
+          matching.length !== 1 ||
+          !snapshot ||
+          !sameCanvasSourceDocument(snapshot.document, document) ||
+          snapshot.pixels.width !== width ||
+          snapshot.pixels.height !== height
+        )
+          throw new Error('The canvas source identity or dimensions changed.');
+        if (
+          snapshot.pixels.format !== (snapshot.target.kind === 'selection' ? 'coverage8' : 'rgba8')
+        )
+          throw new Error('The canvas source returned an invalid pixel representation.');
+        decodeCanvasRaster(snapshot.pixels);
+        const representation = entry.representation ?? 'raw';
+        const representationKey = JSON.stringify([
+          canvasSourceTargetKey(entry.source.target),
+          representation,
+        ]);
+        const previous = represented.get(representationKey);
+        if (previous) {
+          captured.set(entry.key, previous);
+          continue;
+        }
+        let pixels = snapshot.pixels;
+        if (representation === 'image') {
+          if (entry.source.target.kind === 'selection') {
+            const image = result.snapshots.find(
+              (snapshot) => snapshot.target.kind === 'composition',
+            );
+            if (!image || !sameCanvasSourceDocument(image.document, document))
+              throw new Error('Missing coherent selection image content.');
+            pixels = canvasSelectionImage(image.pixels, pixels);
+          } else if (pixels.format !== 'rgba8')
+            throw new Error('The canvas image source did not return image pixels.');
+        }
+        const value = { ...snapshot, pixels, representation };
+        represented.set(representationKey, value);
+        captured.set(entry.key, value);
+      }
+    }
+    return captured;
+  }
+}
