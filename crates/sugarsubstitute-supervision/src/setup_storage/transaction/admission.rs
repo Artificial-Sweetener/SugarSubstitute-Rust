@@ -13,11 +13,17 @@ pub(in crate::setup_storage) struct Admission {
 }
 impl Admission {
     /// Adopt only an empty directory when requested; otherwise require verified ownership.
-    pub(in crate::setup_storage) fn open(path: &Path, create: bool) -> io::Result<Self> {
+    /// Original job controls cover empty-folder inspection and exclusion acquisition.
+    pub(in crate::setup_storage) fn open(
+        path: &Path,
+        create: bool,
+        context: &JobContext,
+    ) -> io::Result<Self> {
+        check(context)?;
         let root = Directory::open(path, create)?;
         let marker_path = root.path().join(ownership::MARKER);
         if create && !marker_path.try_exists()? {
-            if std::fs::read_dir(root.path())?.next().is_some() {
+            if root.entries(context)?.next().transpose()?.is_some() {
                 return Err(invalid("This folder contains files from an unknown installation"));
             }
             files::write_new(&marker_path, ownership::CONTENT)?;
@@ -36,6 +42,7 @@ impl Admission {
             return Err(invalid("Installation exclusion must be a regular file"));
         }
         lock.try_lock().map_err(io::Error::from)?;
+        check(context)?;
         Ok(Self { root, _marker: marker, _lock: lock })
     }
 }

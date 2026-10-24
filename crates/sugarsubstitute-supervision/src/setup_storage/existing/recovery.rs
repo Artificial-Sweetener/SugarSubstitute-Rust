@@ -39,7 +39,7 @@ pub(super) fn discover(
     };
     let mut recovered: Option<ExistingInstallation> = None;
     let mut occupied = false;
-    for (index, entry) in std::fs::read_dir(directory.path())?.enumerate() {
+    for (index, entry) in directory.entries(context)?.enumerate() {
         check(context)?;
         if index >= MAX_ENTRIES {
             return Err(io::Error::other(RecoveryFailure::InventoryBound));

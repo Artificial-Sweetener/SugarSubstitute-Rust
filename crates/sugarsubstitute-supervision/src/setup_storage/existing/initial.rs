@@ -29,7 +29,7 @@ pub(super) fn incomplete_candidate(root: &Directory, context: &JobContext) -> io
         Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(true),
         Err(cause) => return Err(cause),
     };
-    for (index, entry) in std::fs::read_dir(releases.path())?.enumerate() {
+    for (index, entry) in releases.entries(context)?.enumerate() {
         check(context)?;
         if index >= 1024 {
             return Err(invalid("Initial generation inventory exceeds its bound"));

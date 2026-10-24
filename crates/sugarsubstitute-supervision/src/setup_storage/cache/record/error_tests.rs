@@ -4,6 +4,25 @@
 use super::*;
 use crate::{ClaimError, durable_storage::payload::TransferFailure};
 
+/// An observed control outcome cannot become recoverable pressure or contention via its cause.
+#[test]
+fn original_control_keeps_priority_over_simultaneous_native_pressure_and_contention()
+-> io::Result<()> {
+    for control in [io::ErrorKind::Interrupted, io::ErrorKind::TimedOut] {
+        for native in [32, 112] {
+            let exposed =
+                public_error(io::Error::new(control, io::Error::from_raw_os_error(native)));
+            assert_eq!(exposed.kind(), control);
+            let retained = exposed
+                .get_ref()
+                .and_then(|source| source.downcast_ref::<io::Error>())
+                .ok_or_else(|| io::Error::other("Original native cause lost"))?;
+            assert_eq!(retained.raw_os_error(), Some(native));
+        }
+    }
+    Ok(())
+}
+
 /// Physical disk pressure remains pressure after the shared payload wraps the original I/O cause.
 #[test]
 fn wrapped_disk_full_retains_original_payload_cause_and_storage_category() -> io::Result<()> {

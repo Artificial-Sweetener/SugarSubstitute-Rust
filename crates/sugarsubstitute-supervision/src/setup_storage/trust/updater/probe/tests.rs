@@ -57,7 +57,7 @@ fn exact_probe_is_read_only_and_independent_of_application_and_preparation_owner
         let selection = Arc::new(storage::SelectionStore::open(root.path(), context)?);
         let app = selection.load(context)?;
         let _run = storage::InstallationRun::acquire(Arc::clone(&selection), context)?;
-        let _setup = storage::transaction::admission::Admission::open(root.path(), false)?;
+        let _setup = storage::transaction::admission::Admission::open(root.path(), false, context)?;
         let before = [SELECTION, MARKER, "checkpoint", "releases"]
             .map(|name| std::fs::read(trust.root.path().join(name)))
             .into_iter()

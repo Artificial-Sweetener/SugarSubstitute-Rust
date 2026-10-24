@@ -204,7 +204,7 @@ fn staged_engine_survives_restart_and_resumes_without_changing_application_selec
         let app = Arc::new(storage::SelectionStore::open(root.path(), context)?);
         let original = app.load(context)?;
         let _run = storage::InstallationRun::acquire(app.clone(), context)?;
-        let _setup = storage::transaction::admission::Admission::open(root.path(), false)?;
+        let _setup = storage::transaction::admission::Admission::open(root.path(), false, context)?;
         let prepared = imported(root.path(), workspace.path(), context)?.stage(|| NOW, context)?;
         let generation = prepared.generation().clone();
         let trust = TrustStore::open(root.path(), [92; 32], context)?;

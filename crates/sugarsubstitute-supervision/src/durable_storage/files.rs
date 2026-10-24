@@ -3,6 +3,7 @@
 //! Pin each resolved directory against replacement and reject reparse-point traversal.
 mod canonical;
 mod child;
+mod entries;
 #[allow(unsafe_code)]
 mod identity;
 use super::invalid;

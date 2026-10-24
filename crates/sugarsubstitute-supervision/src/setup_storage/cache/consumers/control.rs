@@ -61,7 +61,7 @@ pub(super) fn inspect(
             }
         }
         Err(cause) if record.deleting && record::kind(&cause) == io::ErrorKind::NotFound => {
-            if std::fs::read_dir(slot.path())?.next().is_some() {
+            if slot.entries(context)?.next().transpose()?.is_some() {
                 return Err(invalid("Cache consumer ownership was removed before its references"));
             }
         }
@@ -69,7 +69,7 @@ pub(super) fn inspect(
     }
     let mut references = Vec::new();
     let mut children = 0;
-    for child in std::fs::read_dir(slot.path())? {
+    for child in slot.entries(context)? {
         check(context)?;
         let name = child?
             .file_name()

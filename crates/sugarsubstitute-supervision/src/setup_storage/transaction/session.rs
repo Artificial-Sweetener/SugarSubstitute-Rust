@@ -22,7 +22,7 @@ impl InstallationSession {
     pub fn create(selection: Selection, context: &JobContext) -> io::Result<Self> {
         check(context)?;
         selection.validate()?;
-        let admission = Admission::open(&selection.install_root, true)?;
+        let admission = Admission::open(&selection.install_root, true, context)?;
         if ExistingInstallation::read(&admission.root, context)?.is_some() {
             return Err(invalid("Use update or repair for this existing installation"));
         }
@@ -36,7 +36,7 @@ impl InstallationSession {
     /// Rejects unknown installations, damaged saved state and competing setup owners.
     pub fn maintain(root: &Path, context: &JobContext) -> io::Result<Self> {
         check(context)?;
-        let admission = Admission::open(root, false)?;
+        let admission = Admission::open(root, false, context)?;
         let existing = ExistingInstallation::read(&admission.root, context)?
             .ok_or_else(|| invalid("No selected native installation is available to update"))?;
         let selection = existing.summary.selection.clone();

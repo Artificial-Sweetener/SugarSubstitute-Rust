@@ -67,15 +67,14 @@ fn measure_directory(
     depth: usize,
 ) -> io::Result<u64> {
     let mut bytes = 0u64;
-    for entry in std::fs::read_dir(directory.path())? {
+    for entry in directory.entries(context)? {
         check(context)?;
         let entry = entry?;
         *count += 1;
         if *count > MAX_OBJECTS || depth + 1 > MAX_DEPTH {
             return Err(invalid("Preserved cache inspection capacity exceeded"));
         }
-        let path = entry.path();
-        let metadata = std::fs::symlink_metadata(&path)?;
+        let metadata = entry.current_metadata()?;
         if metadata.file_attributes() & 0x400 != 0 {
             return Err(invalid("Preserved cache contains a link"));
         }

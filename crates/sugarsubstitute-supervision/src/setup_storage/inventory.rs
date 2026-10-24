@@ -131,10 +131,12 @@ fn require_application(manifest: &sugarsubstitute_update::package::Manifest) -> 
     Ok(())
 }
 
+/// Verify declared names through pinned directories under the original admitted job controls.
+/// Features retain the canonical inventory; enumeration grants no payload or deletion authority.
 pub(super) fn verify(
     root: &Path,
     files: &BTreeSet<String>,
-    mut check: impl FnMut() -> io::Result<()>,
+    context: &sugarsubstitute_contracts::execution::JobContext,
 ) -> io::Result<()> {
     let mut directories = BTreeSet::new();
     for file in files {
@@ -148,10 +150,10 @@ pub(super) fn verify(
     let mut observed = BTreeSet::new();
     let mut observed_directories = BTreeSet::new();
     while let Some(relative) = pending.pop() {
-        check()?;
+        super::check(context)?;
         let directory = Directory::open(&root.join(&relative), false)?;
-        for entry in std::fs::read_dir(directory.path())? {
-            check()?;
+        for entry in directory.entries(context)? {
+            super::check(context)?;
             let entry = entry?;
             let leaf =
                 entry.file_name().into_string().map_err(|_| invalid("Non-Unicode bundle entry"))?;
@@ -265,20 +267,23 @@ mod tests {
         Ok(())
     }
     #[test]
-    fn undeclared_libraries_and_empty_load_directories_are_rejected() -> io::Result<()> {
-        let root = tempfile::tempdir()?;
-        std::fs::create_dir(root.path().join("worker"))?;
-        std::fs::write(root.path().join("setup-manifest.json"), b"manifest")?;
-        std::fs::write(root.path().join("worker/main.cjs"), b"declared")?;
-        let names = BTreeSet::from(["worker/main.cjs".to_owned()]);
-        verify(root.path(), &names, || Ok(()))?;
-        let extra = root.path().join("worker/unexpected.dll");
-        std::fs::write(&extra, b"untrusted")?;
-        assert!(verify(root.path(), &names, || Ok(())).is_err());
-        std::fs::remove_file(&extra)?;
-        std::fs::create_dir(root.path().join("worker/undeclared"))?;
-        assert!(verify(root.path(), &names, || Ok(())).is_err());
-        assert_eq!(std::fs::read(root.path().join("worker/main.cjs"))?, b"declared");
-        Ok(())
+    fn undeclared_libraries_and_empty_load_directories_are_rejected()
+    -> crate::setup_storage::test_worker::TestResult {
+        crate::setup_storage::test_worker::run_reserved(4 * 1024 * 1024, |context, _| {
+            let root = tempfile::tempdir()?;
+            std::fs::create_dir(root.path().join("worker"))?;
+            std::fs::write(root.path().join("setup-manifest.json"), b"manifest")?;
+            std::fs::write(root.path().join("worker/main.cjs"), b"declared")?;
+            let names = BTreeSet::from(["worker/main.cjs".to_owned()]);
+            verify(root.path(), &names, context)?;
+            let extra = root.path().join("worker/unexpected.dll");
+            std::fs::write(&extra, b"untrusted")?;
+            assert!(verify(root.path(), &names, context).is_err());
+            std::fs::remove_file(&extra)?;
+            std::fs::create_dir(root.path().join("worker/undeclared"))?;
+            assert!(verify(root.path(), &names, context).is_err());
+            assert_eq!(std::fs::read(root.path().join("worker/main.cjs"))?, b"declared");
+            Ok(())
+        })
     }
 }

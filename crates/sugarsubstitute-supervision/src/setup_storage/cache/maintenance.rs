@@ -59,7 +59,7 @@ impl RuntimeCache {
         context: &JobContext,
     ) -> io::Result<Maintenance> {
         let mut outcome = Maintenance::default();
-        for entry in std::fs::read_dir(self.scope.root.path())? {
+        for entry in self.scope.root.entries(context)? {
             check(context)?;
             let entry = entry?;
             let name = entry.file_name();
@@ -85,7 +85,7 @@ impl RuntimeCache {
         for namespace in Namespace::ALL {
             let parent = self.namespace(namespace)?;
             let mut entries = BTreeMap::new();
-            for entry in std::fs::read_dir(parent.path())? {
+            for entry in parent.entries(context)? {
                 check(context)?;
                 let entry = entry?;
                 let name = entry.file_name().to_string_lossy().into_owned();

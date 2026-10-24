@@ -50,7 +50,7 @@ fn updater_import_pins_exact_files_without_application_or_setup_lease_collision(
         let workspace = tempfile::tempdir()?;
         let store = Arc::new(storage::SelectionStore::open(root.path(), context)?);
         let _run = storage::InstallationRun::acquire(store, context)?;
-        let _setup = storage::transaction::admission::Admission::open(root.path(), false)?;
+        let _setup = storage::transaction::admission::Admission::open(root.path(), false, context)?;
         let (bytes, digest) = archive(
             sugarsubstitute_contracts::application_launch::updater::CURRENT_UPDATER_CONTRACT,
         )?;

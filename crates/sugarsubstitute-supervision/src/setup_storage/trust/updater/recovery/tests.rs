@@ -98,7 +98,7 @@ fn recovery_preserves_history_user_files_and_damaged_candidate_without_applicati
         let app = Arc::new(storage::SelectionStore::open(root.path(), context)?);
         let app_before = app.load(context)?;
         let _run = storage::InstallationRun::acquire(app.clone(), context)?;
-        let _setup = storage::transaction::admission::Admission::open(root.path(), false)?;
+        let _setup = storage::transaction::admission::Admission::open(root.path(), false, context)?;
         let recovered = trust.recover_updater_trial(context)?;
         assert_eq!(recovered.accepted(), history.accepted());
         assert_eq!(recovered.retained(), history.retained());

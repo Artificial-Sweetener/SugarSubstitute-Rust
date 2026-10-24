@@ -255,7 +255,12 @@ pub(super) fn busy(cause: &io::Error) -> bool {
     native_code(cause).is_some_and(|code| matches!(code, 32 | 33))
 }
 /// Preserve original native causes while exposing actionable storage and control categories.
+/// Original control outcomes take priority over simultaneous native pressure or contention.
 pub(in crate::setup_storage) fn public_error(cause: io::Error) -> io::Error {
+    let control = kind(&cause);
+    if matches!(control, io::ErrorKind::Interrupted | io::ErrorKind::TimedOut) {
+        return if control == cause.kind() { cause } else { io::Error::new(control, cause) };
+    }
     let category = if busy(&cause) {
         io::ErrorKind::WouldBlock
     } else {

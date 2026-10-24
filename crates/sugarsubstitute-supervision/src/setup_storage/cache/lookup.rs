@@ -16,7 +16,7 @@ impl RuntimeCache {
         let parent = self.namespace(namespace)?;
         let prefix = format!("{semantic}-");
         let mut keys = BTreeSet::new();
-        for entry in std::fs::read_dir(parent.path())? {
+        for entry in parent.entries(context)? {
             check(context)?;
             let entry = entry?;
             let name = entry.file_name().to_string_lossy().into_owned();
@@ -75,7 +75,8 @@ impl RuntimeCache {
         let mut highest = 0u64;
         let mut keys = BTreeSet::new();
         for namespace in Namespace::ALL {
-            for entry in std::fs::read_dir(self.namespace(namespace)?.path())? {
+            let parent = self.namespace(namespace)?;
+            for entry in parent.entries(context)? {
                 check(context)?;
                 let name = entry?.file_name().to_string_lossy().into_owned();
                 let key = name

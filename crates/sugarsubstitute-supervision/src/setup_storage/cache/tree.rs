@@ -37,11 +37,11 @@ pub(super) fn inspect(
     record: &record::Record,
     context: &JobContext,
 ) -> io::Result<Inventory> {
-    for entry in std::fs::read_dir(directory.path())? {
+    for entry in directory.entries(context)? {
         check(context)?;
         let entry = entry?;
         if ["record", "record.next", "lease"].iter().any(|name| entry.file_name() == *name) {
-            let metadata = std::fs::symlink_metadata(entry.path())?;
+            let metadata = entry.current_metadata()?;
             let maximum = if entry.file_name() == "lease" { 0 } else { MAX_RECORD as u64 };
             if !metadata.is_file()
                 || metadata.file_attributes() & 0x400 != 0
@@ -85,7 +85,7 @@ fn visit(
     context: &JobContext,
 ) -> io::Result<()> {
     let mut children = 0usize;
-    for entry in std::fs::read_dir(directory.path())? {
+    for entry in directory.entries(context)? {
         check(context)?;
         let entry = entry?;
         children += 1;
@@ -113,7 +113,7 @@ fn visit(
         let metadata = if active.is_some_and(|active| active.contains_key(&relative)) {
             entry.metadata()?
         } else {
-            std::fs::symlink_metadata(&path)?
+            entry.current_metadata()?
         };
         if metadata.file_attributes() & 0x400 != 0 {
             return Err(invalid("Cache tree contains a link or junction"));
@@ -214,13 +214,14 @@ fn remove_children(
     context: &JobContext,
     count: &mut usize,
 ) -> io::Result<()> {
-    for entry in std::fs::read_dir(directory.path())? {
+    for entry in directory.entries(context)? {
         check(context)?;
-        let path = entry?.path();
+        let entry = entry?;
+        let path = entry.path();
         *count += 1;
         let relative =
             path.strip_prefix(root).map_err(io::Error::other)?.to_string_lossy().replace('\\', "/");
-        let metadata = std::fs::symlink_metadata(&path)?;
+        let metadata = entry.current_metadata()?;
         if *count > MAX_OBJECTS
             || relative.split('/').count() > MAX_DEPTH
             || !metadata.is_dir()

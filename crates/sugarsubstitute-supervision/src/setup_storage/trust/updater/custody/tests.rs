@@ -52,7 +52,7 @@ fn last_duplicate_owns_exclusion_after_original_file_and_store_retire() -> TestR
         })?;
         let selection = Arc::new(storage::SelectionStore::open(root.path(), context)?);
         let _application = storage::InstallationRun::acquire(selection, context)?;
-        let _setup = storage::transaction::admission::Admission::open(root.path(), false)?;
+        let _setup = storage::transaction::admission::Admission::open(root.path(), false, context)?;
         assert!(reopened.claim_updater_preparation(context).is_err());
         drop(final_holder);
         let successor = reopened.claim_updater_preparation(context)?;
@@ -109,7 +109,7 @@ fn unknown_rendezvous_contents_are_preserved_and_do_not_claim_application_owners
         assert_eq!(std::fs::read(trust.root.path().join("checkpoint"))?, checkpoint);
         let selection = Arc::new(storage::SelectionStore::open(root.path(), context)?);
         let _application = storage::InstallationRun::acquire(selection, context)?;
-        let _setup = storage::transaction::admission::Admission::open(root.path(), false)?;
+        let _setup = storage::transaction::admission::Admission::open(root.path(), false, context)?;
         Ok(())
     })
 }

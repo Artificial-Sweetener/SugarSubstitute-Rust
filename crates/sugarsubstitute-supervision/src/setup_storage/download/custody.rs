@@ -67,7 +67,7 @@ impl Custody {
             let entry_owner = match entry.read("owner") {
                 Ok(owner) => owner,
                 Err(cause) if cause.kind() == io::ErrorKind::NotFound => {
-                    if std::fs::read_dir(entry.path())?.next().is_some() {
+                    if entry.entries(context)?.next().transpose()?.is_some() {
                         return Err(invalid("Download cache contains unowned bytes"));
                     }
                     let mut marker = protection.file(&entry.path().join("owner"), context)?;

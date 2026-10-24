@@ -237,7 +237,7 @@ fn engine_trial_pins_bytes_and_owns_only_engine_exclusion_until_retirement() -> 
         let selection = Arc::new(storage::SelectionStore::open(root.path(), context)?);
         let before = selection.load(context)?;
         let _run = storage::InstallationRun::acquire(Arc::clone(&selection), context)?;
-        let _setup = storage::transaction::admission::Admission::open(root.path(), false)?;
+        let _setup = storage::transaction::admission::Admission::open(root.path(), false, context)?;
         let image = trial
             .prepared
             .source

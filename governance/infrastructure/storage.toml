@@ -10,7 +10,7 @@ implementation_root = "crates/sugarsubstitute-supervision/src/durable_storage"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/files.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:ffd0d2263023d066153b10b9d06edde1916c7c7058465604b445d19336c4b12d"
+source_sha256 = "sha256:7c42ffff9c421a8733a2785deef8d935d885090f70f9fa43bd4ae90629b92a45"
 disposition = "implementation"
 rationale = "Retained filesystem publication or identity-checked retirement mechanics; feature authorization remains with the caller."
 
@@ -52,7 +52,7 @@ rationale = "Native adversarial fixture deliberately renames retained or substit
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/updater_package/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:94ddf4507ffd6d26bd58c96985cafc00f64324f07b7d80a7f9c045791e20bcfe"
+source_sha256 = "sha256:eb7d57820eb843046a822a5c851105d467c5a893b93ef5609fbdff092a107fe3"
 disposition = "fixture"
 rationale = "Native adversarial fixture deliberately renames retained or substituted objects to verify preservation and sharing exclusions."
 

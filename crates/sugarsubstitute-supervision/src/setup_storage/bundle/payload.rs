@@ -139,7 +139,7 @@ impl Payload {
             compatibility.inspect_verified(entry.path(), &mut file)?;
             inputs.push(Input { file, _parent: parent });
         }
-        super::super::inventory::verify(&root, &names, || check(context))?;
+        super::super::inventory::verify(&root, &names, context)?;
         match component {
             sugarsubstitute_contracts::update::Component::Application => {
                 compatibility.validate_pair()?

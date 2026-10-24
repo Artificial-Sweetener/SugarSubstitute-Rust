@@ -160,8 +160,11 @@ fn launcher_publication_requires_setup_custody_and_respects_cancellation() -> Te
         let root = Directory::open(temporary.path(), false)?;
         let application = prepare(&root, context)?;
         let before = std::fs::read(root.path().join(LINK))?;
-        let admission =
-            crate::setup_storage::transaction::admission::Admission::open(root.path(), false)?;
+        let admission = crate::setup_storage::transaction::admission::Admission::open(
+            root.path(),
+            false,
+            context,
+        )?;
         assert!(application.repair_launch_entry(context).is_err());
         drop(admission);
         assert!(!root.path().join(OWNERSHIP).exists());

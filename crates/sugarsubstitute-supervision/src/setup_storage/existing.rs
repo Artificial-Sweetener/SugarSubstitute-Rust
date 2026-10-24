@@ -72,7 +72,7 @@ pub fn inspect_installation(
     }
     let root = Directory::open(path, false)?;
     if !root.path().join(".substitute-installation.json").try_exists()? {
-        return if std::fs::read_dir(path)?.next().is_none() {
+        return if root.entries(context)?.next().transpose()?.is_none() {
             Ok(None)
         } else {
             Err(invalid("This folder contains files from an unknown installation"))

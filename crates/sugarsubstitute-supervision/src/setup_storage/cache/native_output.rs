@@ -56,7 +56,7 @@ impl RuntimeCache {
         let memory = context.memory().claim(256 * 1024).map_err(io::Error::other)?;
         let parent = self.namespace(namespace)?;
         let mut keys = BTreeSet::new();
-        for entry in std::fs::read_dir(parent.path())? {
+        for entry in parent.entries(context)? {
             check(context)?;
             let name = entry?.file_name().to_string_lossy().into_owned();
             if record::valid_entry_key(&name) {

@@ -26,7 +26,7 @@ impl GeneratedFiles {
         if self.index.charge(&name)?.is_none() {
             match self.parent(&name, false, context) {
                 Ok(parent) => {
-                    if std::fs::read_dir(parent.path())?.next().transpose()?.is_some() {
+                    if parent.entries(context)?.next().transpose()?.is_some() {
                         return Err(invalid("Generated directory contains unowned files"));
                     }
                 }

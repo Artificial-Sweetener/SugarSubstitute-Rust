@@ -79,8 +79,11 @@ fn repair_requires_mutation_exclusion_and_recovers_when_maintenance_finishes() -
         let InstallationLaunch::Application(application) = run.select_launch(None, context)? else {
             return Err("Accepted launch absent".into());
         };
-        let maintenance =
-            crate::setup_storage::transaction::admission::Admission::open(root.path(), false)?;
+        let maintenance = crate::setup_storage::transaction::admission::Admission::open(
+            root.path(),
+            false,
+            context,
+        )?;
         assert!(application.repair_launch_entry(context).is_err());
         assert_eq!(std::fs::read(&link)?, old);
         drop(maintenance);
