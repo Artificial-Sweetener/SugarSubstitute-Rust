@@ -13,6 +13,7 @@
 #[doc(hidden)]
 pub mod boundary_fixture;
 mod manifest;
+pub(crate) use manifest::cube_version as validate_cube_metadata;
 #[allow(unsafe_code)]
 mod native;
 mod progress;
@@ -27,6 +28,8 @@ pub use types::{
 
 /// Peak known installation custody, including fixed inventories and native-path scratch.
 pub const FRONTEND_SOURCE_BYTES: u64 = 32 * 1024 * 1024;
+/// Additional admission for final closure; inventory and native handles retain their inspection charge.
+pub const FRONTEND_SOURCE_CLOSE_BYTES: u64 = 4096;
 /// Maximum served runtime assets across the frontend and SugarCubes directories.
 pub const MAX_FRONTEND_ASSETS: usize = 4096;
 /// Maximum individual runtime asset bytes; source maps are excluded from this cohort.

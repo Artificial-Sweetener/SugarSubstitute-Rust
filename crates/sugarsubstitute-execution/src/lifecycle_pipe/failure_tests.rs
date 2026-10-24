@@ -2,6 +2,16 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain original failures, command deadlines and caller-owned allocations at fault boundaries.
 use super::*;
+
+#[test]
+fn pipe_failure_identifies_the_native_operation_without_formatting_private_payload() {
+    let cause = LifecyclePipeFailure::native(NativeObservationError::new(
+        "pipe_unmap_bootstrap",
+        std::io::Error::other("private native payload"),
+    ));
+    assert_eq!(cause.to_string(), "Lifecycle pipe native operation failed at pipe_unmap_bootstrap");
+}
+
 pub(super) fn completion(
     rig: &Rig,
     session: &mut LifecyclePipeSession,

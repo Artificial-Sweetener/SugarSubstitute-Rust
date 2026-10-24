@@ -17,6 +17,9 @@ impl CoordinatorAuthority {
         if batch.notifications.len() > 32 {
             return Err(AuthorityIssue::Identity);
         }
+        if let Err(cause) = self.installation.consume(batch) {
+            self.fail(Failure::Installation(cause));
+        }
         if self.close_attempt == CloseAttempt::WaitingCapacity && !batch.notifications.is_empty() {
             self.close_attempt = CloseAttempt::Unissued;
         }
@@ -85,7 +88,7 @@ impl CoordinatorAuthority {
         if self.initialization_finished && self.key.is_some() {
             self.construct_registry(client, scope, jobs, self.original.until())?;
         }
-        if !self.serving && self.registry().is_some() {
+        if !self.serving && self.registry().is_some() && self.installation.ready() {
             let registry =
                 match &self.registry_completion.as_ref().ok_or(AuthorityIssue::Pending)?.outcome {
                     JobOutcome::Success(registry) => registry,
@@ -105,6 +108,9 @@ impl CoordinatorAuthority {
                 return Err(AuthorityIssue::Adapter);
             }
             self.serving = true;
+        }
+        if self.serving() {
+            self.installation.publish_shell(client, scope, jobs);
         }
         Ok(self.serving())
     }

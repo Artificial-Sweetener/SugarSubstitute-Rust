@@ -178,6 +178,7 @@ fn registered_owner_does_not_exempt_other_runtime_crates() -> Result<()> {
     fixture.architecture.owners.push(crate::policy::Owner {
         package: "execution".into(),
         root: "crates/execution".into(),
+        auxiliary_roots: Vec::new(),
         layer: "adapter".into(),
         concern: "Application execution and task lifetime".into(),
     });

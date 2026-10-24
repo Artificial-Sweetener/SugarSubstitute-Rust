@@ -7,6 +7,8 @@
 pub mod conflict;
 /// Localized native incident reporting copy.
 pub mod incident;
+/// Localized installer screens and actions.
+pub mod installer;
 /// Localized operation-specific startup feedback.
 pub mod startup;
 /// Localized native main-window controls.

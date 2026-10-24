@@ -24,6 +24,15 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
         self.drain(max)
     }
     fn next_deadline(&self) -> Option<Instant> {
+        if let Some(post_exit) = &self.post_exit {
+            let helper =
+                self.updater.as_ref().and_then(crate::updates::parent::Parent::next_deadline);
+            return if self.deadline_reported {
+                helper
+            } else {
+                Some(helper.map_or(post_exit.wake_at, |wake| wake.min(post_exit.wake_at)))
+            };
+        }
         let own = if self.closing {
             (!self.deadline_reported).then_some(self.cleanup_deadline).flatten()
         } else if !self.initial_completed {
@@ -31,7 +40,14 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
         } else {
             None
         };
-        match (own, self.child.next_deadline()) {
+        let child = match (
+            self.child.next_deadline(),
+            self.updater.as_ref().and_then(crate::updates::parent::Parent::next_deadline),
+        ) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        };
+        match (own, child) {
             (Some(a), Some(b)) => Some(a.min(b)),
             (a, b) => a.or(b),
         }
@@ -96,6 +112,9 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
         if self.execution.is_none() {
             return Ok(true);
         }
+        if self.post_exit.is_some() {
+            return self.poll_post_exit();
+        }
         if let Some(original) = self.shutdown {
             let tightened = tighten(original, self.child.shutdown_budget());
             if tightened.settle_until < original.settle_until
@@ -154,9 +173,7 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
         let budget = self.shutdown.ok_or("Original production shutdown budget missing")?;
         let client = self.client.as_ref().ok_or("Production cleanup client missing")?;
         let cleanup = self.cleanup.as_ref().ok_or("Production cleanup scope missing")?;
-        if let Some(authority) = &mut self.authority
-            && !authority.settled()
-        {
+        if let Some(authority) = &mut self.authority {
             match authority.submit_close(client, cleanup, &self.jobs, budget.settle_until) {
                 Ok(()) | Err(super::super::coordinator_authority::AuthorityIssue::Pending) => {}
                 Err(cause) => return Err(Box::new(cause)),
@@ -168,6 +185,20 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
         if let Some(bootstrap) = &mut self.bootstrap
             && !bootstrap.retire(cleanup, &self.jobs, budget.settle_until)?
         {
+            return Ok(false);
+        }
+        if self.updater.as_ref().is_some_and(crate::updates::parent::Parent::borrows_application) {
+            return Ok(false);
+        }
+        if let Some(authority) = &mut self.authority
+            && !authority.retire_installation(client, cleanup, &self.jobs)?
+        {
+            return Ok(false);
+        }
+        if self.updater.as_ref().is_some_and(|updater| !updater.settled()) {
+            if self.enter_post_exit()? {
+                return self.poll_post_exit();
+            }
             return Ok(false);
         }
         let execution = self.execution.as_mut().ok_or("Production execution missing")?;

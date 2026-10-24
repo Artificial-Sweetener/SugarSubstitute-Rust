@@ -68,7 +68,7 @@ pub(super) fn unadmitted_policy() -> Result<RetainedBackend> {
 fn inert_authority_cannot_construct_backend_driver() -> Result<()> {
     let original =
         sugarsubstitute_contracts::coordinator_entry::EntrySetupBudget::new(Moment::from_nanos(0))?;
-    let authority = CoordinatorAuthority::new(original)?;
+    let authority = CoordinatorAuthority::new(original, None)?;
     let storage = storage_tests::claim(RetainedBackend::required_storage_bytes())?;
     let mut credit = Some(super::super::entry_activation::funding::test_policy_credit(
         storage_tests::claim(64 * 1024)?,
@@ -189,6 +189,7 @@ fn unavailable_authority_preserves_input_and_both_identity_sequences() -> Result
     let jobs = JobSequence::new();
     let mut authority = CoordinatorAuthority::new(
         sugarsubstitute_contracts::coordinator_entry::EntrySetupBudget::new(Moment::from_nanos(0))?,
+        None,
     )?;
     let mut retained = unadmitted_policy()?;
     let owner = retained.backend.as_mut();
@@ -329,6 +330,7 @@ fn partial_backend_cleanup_keeps_actual_parent_budget_across_later_clock_and_rep
     let jobs = JobSequence::new();
     let mut authority = CoordinatorAuthority::new(
         sugarsubstitute_contracts::coordinator_entry::EntrySetupBudget::new(Moment::from_nanos(0))?,
+        None,
     )?;
     let mut retained = unadmitted_policy()?;
     let owner = retained.backend.as_mut();

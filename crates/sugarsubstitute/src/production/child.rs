@@ -33,6 +33,8 @@ mod profile_transaction;
 #[cfg(feature = "k1-native-qualification")]
 #[path = "child/qualification.rs"]
 mod qualification;
+#[path = "child/readiness.rs"]
+mod readiness;
 #[path = "child/reload.rs"]
 mod reload;
 #[path = "child/requests.rs"]
@@ -79,6 +81,7 @@ pub(in crate::production) struct ChildInputs {
 /// Keep all partial admissions, original frames, completions and permanent capture together.
 /// This owner creates no executor and uses only the application's shared job sequence.
 pub(crate) struct ProductionChild {
+    readiness: Option<readiness::Readiness>,
     diagnostics: crate::diagnostics::DiagnosticHealth,
     bootstrap: ChildBootstrap,
     run: RunKey,
@@ -172,6 +175,7 @@ impl ProductionChild {
             permanent: None,
             prepared: false,
             phase: None,
+            readiness: None,
             probe_queued: false,
             finished: false,
         }
@@ -383,6 +387,10 @@ impl ProductionChild {
                 .and_then(backend::RunningBackendBinding::retry_deadline)
                 .filter(|_| !self.shutdown.closing() && !self.output.replacement_stopped()),
             self.shutdown.deadline(),
+            self.readiness
+                .as_ref()
+                .filter(|_| !self.shutdown.closing())
+                .and_then(readiness::Readiness::deadline),
             self.reload
                 .as_ref()
                 .filter(|_| !self.shutdown.closing())

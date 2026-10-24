@@ -44,6 +44,7 @@ fn new_main_payloads_have_exact_stable_kinds_and_full_identity_shapes() -> TestR
         (WirePayload::EnvironmentPrepared(fragment), 13, 36),
         (WirePayload::ControllerPrepared { identity, browser_process_id: pid }, 14, 20),
         (WirePayload::MainRetired(identity), 15, 16),
+        (WirePayload::MainRevealed(identity), 21, 16),
         (
             WirePayload::NativeActivity {
                 revision: NonZeroU64::new(59).ok_or("zero revision")?,
@@ -70,7 +71,9 @@ fn new_main_payloads_have_exact_stable_kinds_and_full_identity_shapes() -> TestR
                 assert_eq!(actual, identity);
                 assert_eq!(browser_process_id, pid);
             }
-            DecodedPayload::MainRetired(actual) => assert_eq!(actual, identity),
+            DecodedPayload::MainRetired(actual) | DecodedPayload::MainRevealed(actual) => {
+                assert_eq!(actual, identity)
+            }
             DecodedPayload::NativeActivity { revision, activity } => {
                 assert_eq!(revision.get(), 59);
                 assert_eq!(activity, UiWatchdogActivity::Suspended);
@@ -295,7 +298,7 @@ fn settlement_wire_preserves_original_acquisition_and_rejects_zero_foreign_or_ch
     let acquisition = sugarsubstitute_contracts::lifecycle::RequestId::new(71)?;
     let source = encoded(WirePayload::SettleAttempt { identity, acquisition })?;
     assert_eq!(source.len(), HEADER_BYTES + 24);
-    assert_eq!(&source[4..6], &9u16.to_le_bytes());
+    assert_eq!(&source[4..6], &10u16.to_le_bytes());
     assert!(
         matches!(FrameCodec::decode(&source)?.payload, DecodedPayload::SettleAttempt { identity: actual, acquisition: original } if actual == identity && original == acquisition)
     );

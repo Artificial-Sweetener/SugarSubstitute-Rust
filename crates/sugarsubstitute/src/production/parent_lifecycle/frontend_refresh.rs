@@ -20,7 +20,8 @@ use sugarsubstitute_contracts::{
     startup::MainIdentity,
 };
 use sugarsubstitute_supervision::installed_frontend::{
-    FRONTEND_SOURCE_BYTES, FrontendSourceError, InstalledFrontendLease, InstalledFrontendOwner,
+    FRONTEND_SOURCE_BYTES, FRONTEND_SOURCE_CLOSE_BYTES, FrontendSourceError,
+    InstalledFrontendLease, InstalledFrontendOwner,
 };
 
 /// Preserve both original cleanup failures when independent retirements reject together.
@@ -125,7 +126,7 @@ impl FrontendRefresh {
         if !self.inspecting && self.source_close.needs_submission() {
             let spec = Self::spec(
                 resources.execution,
-                FRONTEND_SOURCE_BYTES,
+                FRONTEND_SOURCE_CLOSE_BYTES,
                 self.shutdown.ok_or(ParentError::WrongPhase)?.settle_until,
             )?;
             self.source_close.submit(

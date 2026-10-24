@@ -216,6 +216,11 @@ impl DesktopOutput {
                                 "Observed closed actual frontend probe custody");
                         }
                     }
+                    diagnostic::Observation::Readiness(record) => {
+                        tracing::info!(operation="startup_readiness_acknowledged",run=?self.run,
+                            launch=record.launch.get(),navigation=record.navigation.get(),
+                            "Observed desktop consumption of its authenticated readiness reply");
+                    }
                     diagnostic::Observation::Close(close) => {
                         diagnostic::close::relay(self.run, close);
                     }

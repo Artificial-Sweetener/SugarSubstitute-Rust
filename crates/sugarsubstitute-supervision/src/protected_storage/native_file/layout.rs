@@ -21,7 +21,8 @@ impl NativeFile {
             native_claims::files::{NativeLayoutFailure, NativeRoleLayout},
         };
         let controls = size_of::<Vec<u8>>()
-            .checked_add(size_of::<sha2::Sha256>())
+            .checked_add(size_of::<ring::digest::Context>())
+            .and_then(|value| value.checked_add(size_of::<ring::digest::Digest>()))
             .and_then(|value| value.checked_add(size_of::<DiagnosticNativeScratchLoan>()))
             .ok_or(NativeLayoutFailure::Overflow)?;
         let peak =

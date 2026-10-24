@@ -138,6 +138,7 @@ fn existing_shared_join_and_replay_emit_no_fresh_creator_preparation() -> Result
     )?;
     let mut authority = CoordinatorAuthority::new(
         sugarsubstitute_contracts::coordinator_entry::EntrySetupBudget::new(Moment::from_nanos(0))?,
+        None,
     )?;
     let mut retained = tests::unadmitted_policy()?;
     let backend = retained.backend.as_mut();

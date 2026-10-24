@@ -49,6 +49,7 @@ pub trait StartupBackend {
     /// Apply the shared policy effect against the retained configuration and original attempt.
     fn apply(&mut self, effect: StartupEffect, prepared: &mut Self::Prepared) -> BackendResult<()>;
     /// Adopt the original desktop observation before any fallible native handling.
+    /// MainRevealed is delivered only after shared policy accepts frontend readiness and reveal.
     fn observe(
         &mut self,
         observation: DesktopStartupObservation,

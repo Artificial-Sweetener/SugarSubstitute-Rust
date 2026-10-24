@@ -18,9 +18,11 @@ use sugarsubstitute_execution::backend_custody::{
 pub struct BackendCustodySource {
     owner: Option<Arc<Mutex<Option<Box<State>>>>>,
     memory: BackendCustodyMemory,
+    installation: super::installation::Control,
 }
 pub(super) struct State {
     pub(super) installation: PathBuf,
+    pub(super) trial: super::installation::Control,
     pub(super) directory: PathBuf,
     pub(super) sid: Vec<u8>,
     pub(super) handles: Vec<Handle>,
@@ -34,6 +36,7 @@ pub(super) struct State {
     pub(super) initialized: bool,
     pub(super) established: bool,
     pub(super) stopping: bool,
+    pub(super) finish_authorized: bool,
     pub(super) stop_until: Option<sugarsubstitute_contracts::execution::Moment>,
     pub(super) settled: bool,
     pub(super) failed: bool,
@@ -50,6 +53,7 @@ impl BackendCustodySource {
     pub fn new(
         memory: &BackendCustodyMemory,
         installation: PathBuf,
+        wake: Arc<dyn sugarsubstitute_contracts::execution::CompletionWake>,
     ) -> Result<Self, BackendCustodyFailure> {
         memory.begin_source().map_err(|cause| BackendCustodyFailure {
             cause: FailureCause::Admission(cause),
@@ -60,11 +64,18 @@ impl BackendCustodySource {
                 .map_err(ClaimError::invalid)?;
             let storage = size_of::<State>() + 2 * size_of::<usize>() + size_of::<Mutex<Option<Box<State>>>>()
                 + sugarsubstitute_execution::backend_custody::BackendCustodyWorkerStart::control_storage_bytes()
-                + 256 * size_of::<Handle>() + 512 * 1024;
+                + 256 * size_of::<Handle>() + 512 * 1024
+                + super::installation::Control::storage_bytes(&installation);
             if storage > memory.bytes() as usize {
                 return Err(ClaimError::invalid("custody_source_capacity"));
             }
             let pool = WitnessPool::new(memory)?;
+            let control = WitnessControl::new(memory);
+            let trial = super::installation::Control::new(
+                crate::native_claims::files::Budget::CustodyCore(control.clone()),
+                installation.clone(),
+                wake,
+            );
             let mut handles = Vec::new();
             handles
                 .try_reserve_exact(256)
@@ -72,6 +83,7 @@ impl BackendCustodySource {
             Ok(Self {
                 owner: Some(Arc::new(Mutex::new(Some(Box::new(State {
                     installation,
+                    trial: trial.clone(),
                     directory: PathBuf::new(),
                     sid: Vec::new(),
                     handles,
@@ -85,6 +97,7 @@ impl BackendCustodySource {
                     initialized: false,
                     established: false,
                     stopping: false,
+                    finish_authorized: false,
                     stop_until: None,
                     settled: false,
                     failed: false,
@@ -92,9 +105,10 @@ impl BackendCustodySource {
                     secondary: std::array::from_fn(|_| None),
                     omissions: 0,
                     pool,
-                    control: WitnessControl::new(memory),
+                    control,
                 }))))),
                 memory: memory.clone(),
+                installation: trial,
             })
         };
         construct().map_err(|cause| BackendCustodyFailure {
@@ -113,6 +127,14 @@ impl BackendCustodySource {
     }
     pub(super) fn memory(&self) -> &BackendCustodyMemory {
         &self.memory
+    }
+    /// Transfer the sole storage-job observer to the helper lifetime before binding its driver.
+    /// # Errors
+    /// Rejects repeated acquisition; the source retains all native request and witness custody.
+    pub fn take_installation_worker(
+        &self,
+    ) -> Result<super::BackendCustodyInstallation, ClaimError> {
+        self.installation.worker()
     }
     /// Clone the retained first actual cause without another cause allocation or effect.
     /// The same original outside metadata guards every escaped observation.
@@ -148,9 +170,9 @@ impl BackendCustodySource {
             .min()
     }
     /// Return only the actual helper control's first post-capture containment cutoff.
+    /// In-flight native callbacks cannot hide this published observation.
     pub fn retirement_until(&self) -> Option<sugarsubstitute_contracts::execution::Moment> {
-        let owner = self.owner.as_ref()?;
-        super::super::lock(owner).as_ref()?.control.cleanup_until()
+        self.memory.cleanup_until()
     }
     /// Observe only actual cached unresolved custody; it grants no Released authority.
     pub fn unresolved(&self) -> bool {
@@ -161,7 +183,11 @@ impl BackendCustodySource {
 }
 impl Clone for BackendCustodySource {
     fn clone(&self) -> Self {
-        Self { owner: self.owner.clone(), memory: self.memory.clone() }
+        Self {
+            owner: self.owner.clone(),
+            memory: self.memory.clone(),
+            installation: self.installation.clone(),
+        }
     }
 }
 impl Drop for BackendCustodySource {

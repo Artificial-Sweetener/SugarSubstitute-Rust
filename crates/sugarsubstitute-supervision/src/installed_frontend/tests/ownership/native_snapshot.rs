@@ -121,8 +121,11 @@ fn close_native(
     sugarsubstitute_contracts::execution::JobCompletion<(), FrontendSourceError>,
     Box<dyn std::error::Error>,
 > {
-    let mut job =
-        harness.owner.submit_close(&harness.client, &harness.scope, Harness::spec(4, 2000)?)?;
+    let mut job = harness.owner.submit_close(
+        &harness.client,
+        &harness.scope,
+        Harness::close_spec(4, 2000)?,
+    )?;
     harness.wake.until(&harness.client, || matches!(job.status().phase, JobPhase::Terminal(_)))?;
     job.try_take_completion().ok_or_else(|| "Missing actual native source cleanup".into())
 }

@@ -12,6 +12,9 @@ use sugarsubstitute_supervision::coordinator_entry::EntryPhase;
 
 impl<C: EntryActivation> EntryRunner<C> {
     pub(super) fn route(&mut self, batch: &CompletionBatch) -> Result<(), Box<dyn Error>> {
+        if self.post_exit.is_some() {
+            return self.advance_updates(batch);
+        }
         let mut activation_attempted = false;
         let client = self.client()?.clone();
         let bootstrap_error = self
@@ -110,6 +113,7 @@ impl<C: EntryActivation> EntryRunner<C> {
             }
         }
         self.observe_transport_completions(&mut activation_attempted)?;
+        self.advance_updates(batch)?;
         if self.closing {
             if let Some(budget) = self.shutdown {
                 let (child, resources) = self.parts_optional()?;

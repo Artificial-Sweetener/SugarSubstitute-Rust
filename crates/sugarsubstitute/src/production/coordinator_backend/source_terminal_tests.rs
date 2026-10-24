@@ -112,6 +112,7 @@ fn exercise_source_stop(
     let jobs = JobSequence::new();
     let mut authority = CoordinatorAuthority::new(
         sugarsubstitute_contracts::coordinator_entry::EntrySetupBudget::new(Moment::from_nanos(0))?,
+        None,
     )?;
     let mut held = backend_tests::unadmitted_policy()?;
     let backend = held.backend.as_mut();
@@ -275,6 +276,16 @@ fn exercise_source_stop(
     assert!(!backend.attempt_settled(key));
     backend.cleanup(0, &mut resources)?;
     assert!(!backend.record(key)?.source_closed);
+    assert_eq!(
+        backend
+            .record(key)?
+            .source_close
+            .as_ref()
+            .ok_or("Source cleanup absent")?
+            .spec()
+            .reservation_bytes,
+        FRONTEND_SOURCE_CLOSE_BYTES,
+    );
     wake.until(&client, || {
         backend.records[0].as_ref().and_then(|record| record.source_close.as_ref()).is_some_and(
             |job| {

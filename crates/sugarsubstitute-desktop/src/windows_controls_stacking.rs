@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Keep original native caption peers above the full-window browser container.
+//! Keep original native controls above a sibling browser container.
 
 use super::*;
 use windows::Win32::UI::WindowsAndMessaging::{HWND_TOP, IsWindow, SWP_NOMOVE, SWP_NOSIZE};
@@ -48,12 +48,12 @@ impl Controls {
 }
 
 /// Reorder a retained child without activating, moving, resizing, or recreating it.
-fn raise(hwnd: HWND) -> Result<(), DesktopError> {
+pub(super) fn raise(hwnd: HWND) -> Result<(), DesktopError> {
     // SAFETY: The caller retains the original child on its creating UI thread.
     unsafe {
         SetWindowPos(hwnd, Some(HWND_TOP), 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE)
     }
-    .map_err(|cause| DesktopError::new("raise_main_caption", cause))
+    .map_err(|cause| DesktopError::new("raise_native_control", cause))
 }
 
 #[cfg(test)]

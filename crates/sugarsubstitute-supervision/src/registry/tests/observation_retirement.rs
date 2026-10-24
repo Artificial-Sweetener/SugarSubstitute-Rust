@@ -6,7 +6,7 @@ use super::*;
 use sugarsubstitute_contracts::execution::{CompletionNotification, TerminalKind};
 
 /// Forward the actual creation notice while retaining the watch notice at its owner.
-fn created_with_deferred_watch(
+pub(super) fn created_with_deferred_watch(
     h: &mut Harness,
     key: ProcessKey,
 ) -> Result<CompletionBatch, Box<dyn Error>> {

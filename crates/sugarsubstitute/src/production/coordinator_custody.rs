@@ -188,8 +188,10 @@ impl CoordinatorCustody {
                 .ok_or("Custody registry absent")?
                 .backend_custody_launch_pending(ticket.process(), parent.key())?;
             if started && parent.authenticated() && !self.establishment_issued {
+                let application = resources.authority.running_installation();
+                let bytes = sugarsubstitute_supervision::WindowsProcessRegistry::backend_custody_establishment_bytes(application.as_deref());
                 let job =
-                    spec(resources, JobClass::InfrastructureLifecycle, 131_072, Some(self.until))?;
+                    spec(resources, JobClass::InfrastructureLifecycle, bytes, Some(self.until))?;
                 resources
                     .authority
                     .registry_mut()
@@ -200,6 +202,7 @@ impl CoordinatorCustody {
                         job,
                         &parent,
                         ticket,
+                        application,
                     )?;
                 self.establishment_issued = true;
             }

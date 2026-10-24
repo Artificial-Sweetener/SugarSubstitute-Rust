@@ -154,9 +154,11 @@ impl Fixture {
             && self.evidence.complete()
             && snapshot.state == CaptureState::Closed
             && snapshot.handler_exit == Some(1)
-            && snapshot.callback_pin_bytes == 64 * 1024
-            && snapshot.callback_pin_reservation_bytes == 2 * 1024 * 1024
-            && self.retained_bytes_at_finish == Some(2 * 1024 * 1024)
+            && state::registration_retention_matches(
+                snapshot.callback_pin_bytes,
+                snapshot.callback_pin_reservation_bytes,
+                self.retained_bytes_at_finish,
+            )
             && self.workers.is_some_and(|w| w.async_finished && w.cpu_finished && w.native_finished)
     }
 }

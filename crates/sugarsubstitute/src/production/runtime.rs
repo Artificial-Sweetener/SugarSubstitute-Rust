@@ -15,6 +15,33 @@ use sugarsubstitute_contracts::{
 use sugarsubstitute_desktop::{DesktopOptions, MainCaptionLabels, MainWindowSettings};
 use sugarsubstitute_execution::MonotonicClock;
 
+/// Start the accepted or trial image using custody captured at the executable entry boundary.
+/// The actual coordinator worker validates its identity; forwarding keeps it through retirement.
+pub(crate) fn execute_inherited(
+    selection: std::io::Result<sugarsubstitute_supervision::setup_storage::InheritedLaunch>,
+    diagnostics: crate::diagnostics::DiagnosticHealth,
+) -> Result<(), Box<dyn Error>> {
+    let selection = selection.map_err(|cause| {
+        super::entry_failure::report_failure::<ProductionActivation, _>(
+            Box::new(cause),
+            sugarsubstitute_desktop::show_startup_failure,
+        )
+    })?;
+    let mut command = super::dispatch::installed_command(std::env::current_exe()?)?;
+    command.launch_selection = Some(selection);
+    super::entry_runner::run_application(
+        command,
+        |command| {
+            ProductionActivation::new(
+                std::env::current_exe()?,
+                command.installation.clone(),
+                command.installation.join("capture"),
+            )
+        },
+        diagnostics,
+    )
+}
+
 /// Execute a dedicated real role, preserving every legacy argument on fallback.
 /// Inherited role spelling grants no authority; the captured native transport verifies it.
 /// # Errors
@@ -24,6 +51,13 @@ pub(crate) fn execute<I: IntoIterator<Item = OsString>>(
     diagnostics: crate::diagnostics::DiagnosticHealth,
 ) -> Result<Option<impl Iterator<Item = OsString>>, Box<dyn Error>> {
     let mut arguments = arguments.into_iter().peekable();
+    if arguments.peek().is_some_and(|value| {
+        value == sugarsubstitute_contracts::application_launch::updater::PREPARATION_ARGUMENT
+    }) {
+        arguments.next();
+        crate::updates::run(arguments)?;
+        return Ok(None);
+    }
     if arguments.peek().is_some_and(|value| value == "--internal-profile-custody-component") {
         arguments.next();
         let command = super::entry_activation::ProfileComponent::command(arguments)?;

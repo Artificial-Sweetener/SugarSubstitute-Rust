@@ -145,6 +145,7 @@ pub(in crate::production) fn close(
     let scopes = ScopeSequence::new();
     let mut authority = CoordinatorAuthority::new(
         sugarsubstitute_contracts::coordinator_entry::EntrySetupBudget::new(client.now()?)?,
+        None,
     )?;
     let original = ShutdownBudget::new(client.now()?)?;
     let mut resources = BackendResources {

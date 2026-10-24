@@ -111,7 +111,7 @@ impl BackendCustodyParent {
             + size_of::<Mutex<Option<Box<State>>>>()
             + 2 * size_of::<usize>()
             + BackendCustodyParentStorage::producer_storage_bytes()
-            + 65 * crate::native_process::custody_transfer::CustodyDestination::storage_bytes()
+            + 66 * crate::native_process::custody_transfer::CustodyDestination::storage_bytes()
             + crate::registry::custody_establishment_storage_bytes();
         let required = required
             + size_of::<BackendCustodyParentStorage>()

@@ -13,7 +13,7 @@ import win32con
 import win32gui
 import win32process
 
-from tools.splash_parity.startup_windows import ReferenceProcesses
+from tools.splash_parity.offscreen_processes import ProcessFamily, declare, require
 
 
 class StartupInfo(ctypes.Structure):
@@ -42,26 +42,11 @@ class ProcessInfo(ctypes.Structure):
                 ("pid", wintypes.DWORD), ("tid", wintypes.DWORD)]
 
 
-def declare(library, name, arguments, result):
-    function = getattr(library, name)
-    function.argtypes, function.restype = arguments, result
-    return function
-
-
-def require(result):
-    if not result:
-        raise ctypes.WinError(ctypes.get_last_error())
-    return result
-
-
-class PrivateDesktop:
+class PrivateDesktop(ProcessFamily):
     """Never request switch rights or operate on the user's input desktop."""
     def __init__(self):
         self.user = ctypes.WinDLL("user32", use_last_error=True)
-        self.kernel = ctypes.WinDLL("kernel32", use_last_error=True)
-        self.processes = ReferenceProcesses()
-        self.handles = {}
-        self.creations = {}
+        super().__init__()
         self.callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
         self.create_desktop = declare(self.user, "CreateDesktopW", [wintypes.LPCWSTR,
             wintypes.LPCWSTR, ctypes.c_void_p, wintypes.DWORD, wintypes.DWORD,
@@ -119,46 +104,6 @@ class PrivateDesktop:
                 self.delete_attributes(storage)
             self.processes.close(parent)
 
-    def discover(self):
-        """Retain descendant handles before parents exit; handle ownership prevents PID reuse."""
-        queue = list(self.handles)
-        for parent in queue:
-            if len(self.handles) > 256:
-                raise RuntimeError("Test process family exceeded 256 retained processes")
-            for pid, _ in self.processes.children(parent):
-                if pid in self.handles:
-                    continue
-                try:
-                    handle = self.processes.open(pid)
-                except OSError as cause:
-                    if cause.winerror == 87:  # A snapshot child has already exited.
-                        continue
-                    raise
-                actual, creation = self.processes.lifetime_identity(handle)
-                if actual != pid:
-                    self.processes.close(handle)
-                    raise RuntimeError("Descendant process identity changed during admission")
-                if creation < self.creations[parent]:
-                    # An older unrelated orphan can retain a reused numeric parent PID.
-                    self.processes.close(handle)
-                    continue
-                self.handles[pid], self.creations[pid] = handle, creation
-                queue.append(pid)
-
-    def alive(self):
-        return [pid for pid, handle in self.handles.items() if self.processes.alive(handle)]
-
-    def stop(self, pid):
-        """Fault only a process whose original native handle belongs to this test."""
-        self.processes.stop(self.handles[pid])
-
-    def suspend(self, pid):
-        """Freeze a root created by this fixture to exercise its real watchdog."""
-        native = ctypes.WinDLL("ntdll")
-        suspend = declare(native, "NtSuspendProcess", [wintypes.HANDLE], wintypes.LONG)
-        status = suspend(self.handles[pid])
-        if status != 0:
-            raise RuntimeError(f"Owned root suspension failed: {status:#x}")
 
     def windows(self):
         """Read only this desktop's application windows; keep callback errors observable."""
@@ -224,16 +169,6 @@ class PrivateDesktop:
                      3, 1000, ctypes.byref(result)))
         return buffer.value[-8192:]
 
-    def exit_codes(self):
-        """Read original process objects, including terminal status after window retirement."""
-        get = declare(self.kernel, "GetExitCodeProcess", [wintypes.HANDLE,
-            ctypes.POINTER(wintypes.DWORD)], wintypes.BOOL)
-        result = {}
-        for pid, handle in self.handles.items():
-            code = wintypes.DWORD()
-            require(get(handle, ctypes.byref(code)))
-            result[pid] = code.value
-        return result
 
     def caption_hits(self, hwnd):
         """Probe native titlebar hit testing on owned descendants without mouse input."""
@@ -277,25 +212,8 @@ class PrivateDesktop:
         return texts
 
     def close(self):
-        """Failure cleanup stays on retained process handles; success requires prior natural exit."""
-        failures = []
+        """Retire process custody before releasing the fixture's inactive desktop."""
         try:
-            try:
-                self.discover()
-            except Exception as cause:
-                failures.append(cause)
-            for handle in reversed(list(self.handles.values())):
-                try:
-                    self.processes.stop(handle)
-                except Exception as cause:
-                    failures.append(cause)
+            super().close()
         finally:
-            for handle in self.handles.values():
-                try:
-                    self.processes.close(handle)
-                except Exception as cause:
-                    failures.append(cause)
-            self.handles.clear()
             require(self.close_desktop(self.desktop))
-        if failures:
-            raise RuntimeError(f"Offscreen fixture cleanup encountered {len(failures)} failures") from failures[0]

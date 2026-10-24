@@ -63,12 +63,7 @@ impl ProtectedStorageRoot {
             return Err(phase.invalid("diagnostic_rename_source_parent"));
         }
         drop(actual_source);
-        record_file::native::rename(
-            source,
-            record_file::native::RenameTarget::SameDirectory(target),
-            replace,
-            phase,
-        )
+        native_rename::rename(source, native_rename::Target::SameDirectory(target), replace, phase)
     }
 
     /// Revalidate the copied root against the same actual retained namespace pin.

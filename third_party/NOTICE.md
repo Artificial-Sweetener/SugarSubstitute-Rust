@@ -1,4 +1,14 @@
-# Bundled splash material
+# Bundled material
+
+The installer uses provisioning source from
+[Comfy Desktop](https://github.com/Comfy-Org/Comfy-Desktop), pinned by the
+`third_party/comfy-desktop` Git submodule. The build applies the reviewed patches
+in `installer/patches` to an isolated source snapshot. This integration uses
+the upstream AGPL-3.0-or-later license option. Its source inventory and license
+text are recorded in `third_party/manifest.toml`.
+
+The installer wordmark is preserved from SugarSubstitute's
+`docs/readme/sugarsubstitute-logo.svg` under GPL-3.0-or-later.
 
 The original SugarSubstitute splash character images are preserved from
 [SugarSubstitute](https://github.com/Artificial-Sweetener/SugarSubstitute).
@@ -65,3 +75,8 @@ derive from the same pinned Crashpad and mini-chromium sources. The native
 client exposes separately named version-one capture/source operations and
 version-two attachment operations. Maintained adaptations and test extraction
 are copyright Artificial Sweetener and contributors (2026), GPL-3.0-or-later.
+
+The installer uses the original Fluent icon SVGs from PyQt-Fluent-Widgets,
+Copyright zhiyiYo and contributors, under GPL-3.0. The manifest pins their source
+revision and lists each embedded asset; the license is preserved in
+`licenses/qfluentwidgets.GPL-3.0.txt`.

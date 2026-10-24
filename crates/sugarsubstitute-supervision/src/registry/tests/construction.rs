@@ -75,14 +75,18 @@ fn actual_table_capacity_and_identity_pin_retain_original_constructor_charge() -
                         + family_guards
                         + custody_owners
                         + profile_carrier
-                        + recovery_carrier) as u64
+                        + recovery_carrier
+                        + size_of::<
+                            Option<Box<crate::registry_input::preparation::PreparationLaunch>>,
+                        >()) as u64
         );
-        assert_eq!(WindowsProcessRegistry::storage_bytes(), 368_024);
+        assert_eq!(WindowsProcessRegistry::storage_bytes(), 369_072);
         assert!(WindowsProcessRegistry::storage_bytes() <= bytes);
         assert_eq!(bytes, 370_120);
         // The boxed native family's own identity growth remains covered by its
         // original fixed claim and actual production capacity preflight.
         let family_peak = size_of::<Family>()
+            + crate::registry_input::preparation::PreparationLaunch::storage_bytes()
             + family_shared_storage_bytes()
             + (2048 + native_process::MAX_MEMBERS + 2) * size_of::<usize>();
         assert!(family_peak as u64 <= crate::registry_input::FAMILY_STORAGE_BYTES);

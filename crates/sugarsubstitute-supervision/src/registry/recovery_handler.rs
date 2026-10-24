@@ -119,7 +119,7 @@ impl RecoveryHandlerWatch {
                 .permit
                 .take()
                 .ok_or_else(|| RegistryError::invalid("recovery_handler_consumed"))?;
-            self.watch = submission::bind(permit, input);
+            self.watch = creation::bind(permit, input);
             if self.watch.is_none() {
                 return Err(RegistryError::invalid("recovery_handler_binding"));
             }

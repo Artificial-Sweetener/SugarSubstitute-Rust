@@ -52,6 +52,7 @@ impl Attachment {
         }
         let job = capture.attach(
             CaptureTarget::BackendCustody(key),
+            until,
             resources.client,
             resources.native,
             resources.jobs,

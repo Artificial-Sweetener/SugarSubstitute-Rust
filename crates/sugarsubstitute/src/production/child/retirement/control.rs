@@ -19,6 +19,7 @@ impl Control {
 }
 impl ProductionChild {
     pub(in super::super) fn advance_control(&mut self) -> Result<()> {
+        self.advance_readiness()?;
         self.retire_reload_reply()?;
         if !self.bootstrap.channel_mut().admitted() {
             return Ok(());

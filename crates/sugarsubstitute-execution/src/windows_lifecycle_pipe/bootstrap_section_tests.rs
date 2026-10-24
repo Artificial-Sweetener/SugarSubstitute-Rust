@@ -6,6 +6,47 @@ use super::*;
 use crate::{runtime_test_support::TestResult, symbol_test_support::LiveSymbol};
 
 #[test]
+fn retirement_waits_for_capture_borrow_without_reporting_a_native_failure() -> TestResult {
+    let rig = crate::runtime_test_support::Rig::new()?;
+    let (_scope, context) = crate::runtime_test_support::admitted_context(&rig, 2, 1)?;
+    let mut section = SectionOwner::new();
+    // SAFETY: this private mapping is immediately adopted by its physical owner.
+    let raw = unsafe {
+        CreateFileMappingW(
+            INVALID_HANDLE_VALUE,
+            None,
+            PAGE_READWRITE,
+            0,
+            BOOTSTRAP_BYTES as u32,
+            None,
+        )
+    }?;
+    adopt(&mut section.master, raw, "fixture_section_create")?;
+    section.map(FILE_MAP_READ, "fixture_section_map")?;
+    let original_view = section.view;
+    let original_handle = section.master.value();
+    let mut mapping = crate::windows_lifecycle_pipe::startup_mapping::StartupMapping::new(
+        context.memory().claim(4096)?,
+        Signal::new(&rig.client.core),
+    );
+    // SAFETY: Section owns the actual immutable view until the last borrow returns.
+    unsafe { mapping.adopt(section.view, BOOTSTRAP_BYTES) }?;
+    let capture = mapping.loan(0..16)?.into_retention();
+    section.startup = Some(mapping);
+    let waiting = section.retire(false);
+    assert_eq!(section.view, original_view);
+    assert_eq!(section.master.value(), original_handle);
+    // Return the real borrow before assertions can unwind the native map owner.
+    drop(capture);
+    assert!(section.retire(false)?);
+    assert!(matches!(waiting, Ok(false)), "{waiting:?}");
+    assert_eq!(section.view, 0);
+    assert_eq!(section.master.value(), 0);
+    assert!(section.retire(false)?);
+    Ok(())
+}
+
+#[test]
 fn symbol_post_map_cancel_retains_actual_view_and_handle_until_checked_retirement() -> TestResult {
     let live = LiveSymbol::new()?;
     let reservation = live.transport()?;

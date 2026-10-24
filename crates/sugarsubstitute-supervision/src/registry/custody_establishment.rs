@@ -2,7 +2,11 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Establish the actual independent helper through finite owned native preparation.
 use super::*;
+use crate::setup_storage::{
+    RunningApplication, TRIAL_WITNESS_RESERVATION_BYTES, TrialWitnessTransfer,
+};
 use crate::{BackendCustodyParent, native_process::custody_transfer::CustodyDestination};
+use std::os::windows::io::AsRawHandle;
 use sugarsubstitute_contracts::{
     backend_custody::{BackendCustodyCommand, BackendCustodyReceipt},
     execution::{JobOutcome, Moment},
@@ -13,11 +17,23 @@ pub(super) struct Establishment {
     until: Moment,
     nonce: Option<u64>,
     complete: bool,
+    trial: Option<TrialEstablishment>,
+}
+struct TrialEstablishment {
+    transfer: TrialWitnessTransfer,
+    destination: CustodyDestination,
 }
 pub(super) struct EstablishmentResult;
 impl Establishment {
     pub(super) fn close_after_exit(&mut self) -> Result<(), RegistryError> {
-        if self.destination.close_after_exit()? {
+        if self.destination.close_after_exit()?
+            && self
+                .trial
+                .as_mut()
+                .map(|trial| trial.destination.close_after_exit())
+                .transpose()?
+                .unwrap_or(true)
+        {
             Ok(())
         } else {
             Err(RegistryError::invalid("custody_establishment_target_live"))
@@ -25,6 +41,15 @@ impl Establishment {
     }
 }
 impl WindowsProcessRegistry {
+    /// Account for independent protected snapshot work only when this coordinator owns a trial.
+    pub fn backend_custody_establishment_bytes(application: Option<&RunningApplication>) -> u64 {
+        crate::registry_input::FAMILY_STORAGE_BYTES
+            + if matches!(application, Some(RunningApplication::Trial(_))) {
+                TRIAL_WITNESS_RESERVATION_BYTES
+            } else {
+                0
+            }
+    }
     /// Prepare exact parent/self-Job duplicates after authenticating this actual helper.
     /// The original finite specification and helper quota are preserved.
     /// # Errors
@@ -36,10 +61,12 @@ impl WindowsProcessRegistry {
         spec: JobSpec,
         parent: &BackendCustodyParent,
         ticket: LaunchTicket,
+        application: Option<Arc<RunningApplication>>,
     ) -> Result<(), RegistryAdmissionError> {
         validate_blocking(spec)?;
         let until = spec.deadline.ok_or(RegistryAdmissionError::InvalidSpecification)?;
-        if spec.reservation_bytes != crate::registry_input::FAMILY_STORAGE_BYTES
+        if spec.reservation_bytes
+            != Self::backend_custody_establishment_bytes(application.as_deref())
             || ticket.binding != FamilyBinding::BackendCustody(parent.key())
             || !parent.matches_execution(execution)
         {
@@ -58,6 +85,7 @@ impl WindowsProcessRegistry {
         }
         let shared = record.shared.clone();
         let original = parent.clone();
+        let client = execution.clone();
         let job = execution
             .submit_blocking(scope, spec, move |context| {
                 let _scratch = context
@@ -98,6 +126,7 @@ impl WindowsProcessRegistry {
                     until,
                     nonce: None,
                     complete: false,
+                    trial: None,
                 }));
                 let data = loan
                     .data
@@ -106,11 +135,44 @@ impl WindowsProcessRegistry {
                 data.destination.open()?;
                 let (parent_handle, identity) = data.destination.duplicate_current_parent()?;
                 let containment = data.destination.duplicate(job)?;
+                let trial =
+                    if let Some(RunningApplication::Trial(application)) = application.as_deref() {
+                        data.trial = Some(TrialEstablishment {
+                            transfer: application.prepare_witness(&context).map_err(|cause| {
+                                RegistryError::new("custody_trial_snapshot", cause)
+                            })?,
+                            destination: CustodyDestination::new(&original),
+                        });
+                        let trial = data
+                            .trial
+                            .as_mut()
+                            .ok_or_else(|| RegistryError::invalid("custody_trial_owner"))?;
+                        trial.destination.open()?;
+                        let handles = trial.transfer.handles();
+                        let run = trial.destination.duplicate(
+                            windows::Win32::Foundation::HANDLE(handles[0].as_raw_handle()),
+                        )?;
+                        let snapshot = trial.destination.duplicate(
+                            windows::Win32::Foundation::HANDLE(handles[1].as_raw_handle()),
+                        )?;
+                        let counter = client
+                            .encode_lifecycle_deadline(until)
+                            .map_err(|cause| RegistryError::new("custody_trial_counter", cause))?;
+                        Some(sugarsubstitute_contracts::backend_custody::InstallationTrialCustody {
+                            run,
+                            snapshot,
+                            until_ticks: counter.ticks(),
+                            frequency: counter.frequency(),
+                        })
+                    } else {
+                        None
+                    };
                 data.command = Some(BackendCustodyCommand::Establish {
                     parent: parent_handle,
                     pid: identity.pid,
                     birth: identity.birth,
                     containment,
+                    trial,
                 });
                 Ok(EstablishmentResult)
             })
@@ -172,6 +234,9 @@ impl WindowsProcessRegistry {
                 .map_err(|cause| RegistryError::new("custody_establishment_command", cause))?;
             if let Some(nonce) = data.nonce {
                 data.destination.bind_nonce(nonce)?;
+                if let Some(trial) = &mut data.trial {
+                    trial.destination.bind_nonce(nonce)?;
+                }
             }
         }
         if let Some(nonce) = data.nonce
@@ -181,6 +246,9 @@ impl WindowsProcessRegistry {
                 return Err(RegistryError::invalid("custody_establishment_receipt"));
             }
             data.destination.acknowledge_metadata(&ack)?;
+            if let Some(trial) = &mut data.trial {
+                trial.destination.acknowledge_metadata(&ack)?;
+            }
             data.complete = true;
         }
         Ok(data.complete)

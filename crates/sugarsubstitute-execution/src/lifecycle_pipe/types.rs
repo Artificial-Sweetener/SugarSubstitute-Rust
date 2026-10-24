@@ -255,7 +255,7 @@ impl fmt::Debug for LifecyclePipeFailure {
 }
 impl fmt::Display for LifecyclePipeFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Lifecycle pipe native operation failed")
+        write!(f, "Lifecycle pipe native operation failed at {}", self.cause.stage())
     }
 }
 impl std::error::Error for LifecyclePipeFailure {

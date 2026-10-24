@@ -77,11 +77,13 @@ DWORD OwnedConnection::Remaining() {
   if (now.QuadPart >= deadline_counter) return 0;
   const uint64_t ticks = deadline_counter - now.QuadPart;
   const uint64_t rate = frequency;
-  if (ticks / rate > 60) { Fail(ERROR_INVALID_DATA); return 0; }
-  const uint64_t milliseconds = (ticks / rate) * 1000 +
+  constexpr uint64_t maximum_wait = std::numeric_limits<DWORD>::max() - 1;
+  const uint64_t seconds = ticks / rate;
+  // Clamp before multiplication; INFINITE must never replace the caller's cutoff.
+  if (seconds > maximum_wait / 1000) return static_cast<DWORD>(maximum_wait);
+  const uint64_t milliseconds = seconds * 1000 +
       ((ticks % rate) * 1000) / rate;
-  return static_cast<DWORD>(std::min<uint64_t>(
-      milliseconds, std::numeric_limits<DWORD>::max() - 1));
+  return static_cast<DWORD>(std::min(milliseconds, maximum_wait));
 }
 bool OwnedConnection::CheckDeadline() {
   if (error) return false;

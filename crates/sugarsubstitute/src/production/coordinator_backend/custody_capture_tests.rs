@@ -21,7 +21,8 @@ fn custody_requires_original_registered_capture_before_transport_or_process_admi
     let cleanup =
         client.create_scope(ScopeSpec { id: scopes.allocate()?, deadline: None }, None)?;
     let jobs = JobSequence::new();
-    let mut authority = CoordinatorAuthority::new(EntrySetupBudget::new(Moment::from_nanos(0))?)?;
+    let mut authority =
+        CoordinatorAuthority::new(EntrySetupBudget::new(Moment::from_nanos(0))?, None)?;
     let mut resources = BackendResources {
         client: &client,
         native: &native,

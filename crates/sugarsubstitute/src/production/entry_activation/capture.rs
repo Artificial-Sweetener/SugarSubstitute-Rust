@@ -60,7 +60,7 @@ impl CaptureRegistration {
         if now >= source_until {
             return Err("Original entry expired before capture registration".into());
         }
-        let budget = CaptureBudget::new(now)?;
+        let budget = CaptureBudget::registration(now, source_until)?;
         let watch_id = resources.jobs.allocate()?;
         let creation_id = resources.jobs.allocate()?;
         let watch = resources.client.reserve_process_watch(
@@ -135,6 +135,7 @@ impl CaptureRegistration {
     pub(in crate::production) fn attach(
         &self,
         target: CaptureTarget,
+        source_until: Moment,
         client: &ExecutionClient,
         native: &Scope,
         jobs: &JobSequence,
@@ -154,7 +155,7 @@ impl CaptureRegistration {
             self.capture.creator_process().ok_or("Actual retained creator identity missing")?;
         let handler = self.capture.snapshot().handler.ok_or("Actual retained handler missing")?;
         let handler = CaptureProcessFacts::new(handler.process_id, handler.creation_time_100ns)?;
-        let budget = CaptureBudget::new(client.now()?)?;
+        let budget = CaptureBudget::registration(client.now()?, source_until)?;
         let expected = CaptureAttachExpectation::new(
             target.owner(),
             target,

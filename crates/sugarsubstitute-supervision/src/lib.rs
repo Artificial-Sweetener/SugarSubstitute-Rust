@@ -12,6 +12,14 @@ pub mod backend_listener;
 pub mod installed_frontend;
 #[cfg(windows)]
 pub mod installed_release;
+#[cfg(windows)]
+pub mod setup_storage;
+#[cfg(windows)]
+pub mod update_http;
+#[cfg(windows)]
+pub mod update_preparation;
+#[cfg(windows)]
+pub mod update_repository;
 
 mod arguments;
 mod command;
@@ -32,7 +40,7 @@ mod claims;
 pub use claims::boundary_fixture as claim_boundary_fixture;
 #[cfg(windows)]
 #[allow(unsafe_code)]
-pub mod application_relaunch;
+pub mod application_launch;
 #[cfg(windows)]
 pub mod committed_reader;
 #[cfg(windows)]
@@ -101,10 +109,10 @@ pub use managed_output::RejectedManagedOutputLaunch;
 #[cfg(windows)]
 pub use native_claims::backend_custody::{
     BackendCustodyDriverInputError, BackendCustodyExitDiagnostic, BackendCustodyFailure,
-    BackendCustodySource,
+    BackendCustodyInstallation, BackendCustodySource,
 };
 #[cfg(windows)]
-pub use registry::{SettledRegistryFailure, WindowsProcessRegistry};
+pub use registry::{SettledRegistryFailure, SettledUpdaterProbe, WindowsProcessRegistry};
 #[cfg(windows)]
 pub use registry_error::{RegistryAdmissionError, RegistryError, RegistryInputError};
 #[cfg(windows)]

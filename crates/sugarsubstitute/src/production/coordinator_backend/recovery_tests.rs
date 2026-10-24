@@ -105,6 +105,7 @@ impl Fixture {
                 sugarsubstitute_contracts::coordinator_entry::EntrySetupBudget::new(
                     Moment::from_nanos(0),
                 )?,
+                None,
             )?,
             leases,
             process,

@@ -48,6 +48,8 @@ pub use headless_contract::{HeadlessLifetime, HeadlessStep};
 pub use qualified_preview::{
     CapturedMainPreview, MainDownloadFixture, MainPreviewSnapshot, MainPreviewViewport,
 };
+/// Stable native setup window and its application-owned installation lifecycle.
+pub mod installer;
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "macos")]

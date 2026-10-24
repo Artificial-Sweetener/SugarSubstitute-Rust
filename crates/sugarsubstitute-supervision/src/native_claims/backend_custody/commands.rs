@@ -95,7 +95,7 @@ impl State {
             | Command::ProfileStop { .. } => {
                 return self.apply_profile(frame, memory, wake, context);
             }
-            Command::Establish { parent, pid, birth, containment } => {
+            Command::Establish { parent, pid, birth, containment, trial } => {
                 if self.parent.is_some() || self.containment.is_some() {
                     return Err(ClaimError::invalid("custody_establish_repeated"));
                 }
@@ -113,12 +113,29 @@ impl State {
                     .ok_or_else(|| ClaimError::invalid("custody_parent_owner"))?
                     .activate(wake.clone())
                     .map_err(|cause| ClaimError::new("custody_parent_observation", cause))?;
-                self.established = true;
                 self.parent
                     .as_mut()
                     .ok_or_else(|| ClaimError::invalid("custody_parent_owner"))?
                     .observe_parent_progress()
                     .map_err(|cause| ClaimError::new("custody_parent_progress", cause))?;
+                if let Some(trial) = trial {
+                    self.adopt_transfer(0, trial.run)?;
+                    self.adopt_transfer(1, trial.snapshot)?;
+                    let counter = CounterDeadline::new(trial.until_ticks, trial.frequency)
+                        .map_err(|cause| ClaimError::new("installation_witness_counter", cause))?;
+                    let until = memory
+                        .decode_counter(counter, false)
+                        .map_err(|cause| ClaimError::new("installation_witness_cutoff", cause))?;
+                    let handles = [self.transfer(0)?, self.transfer(1)?];
+                    self.trial.admit(
+                        handles,
+                        until,
+                        std::sync::Arc::new(super::installation::NativeWake(wake.clone())),
+                    )?;
+                    self.reply_until = Some(until);
+                    return Ok(None);
+                }
+                self.established = true;
                 Receipt::Established
             }
             Command::Prepare { resource, job, until_ticks, frequency, .. } => {
@@ -223,6 +240,7 @@ impl State {
                     .map_err(|cause| ClaimError::new("custody_finish_cutoff", cause))?;
                 self.stop(until)?;
                 self.reply_until = Some(self.control.cleanup(until)?.until());
+                self.finish_authorized = true;
                 return Ok(None);
             }
             Command::Hello { .. } | Command::Receipt(_) => {

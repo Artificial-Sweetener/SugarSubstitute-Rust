@@ -26,7 +26,7 @@ use sugarsubstitute_contracts::instance_conflict::{
 #[derive(Clone)]
 pub struct ConflictSession {
     native: Arc<Mutex<native::Native>>,
-    relaunch: Arc<Mutex<Option<crate::application_relaunch::ApplicationRelaunch>>>,
+    relaunch: Arc<Mutex<Option<crate::application_launch::ApplicationLaunch>>>,
 }
 impl ConflictSession {
     /// Construct inert state. Native operations must run in an admitted blocking job.
@@ -54,19 +54,19 @@ impl ConflictBackend for ConflictSession {
         use std::os::windows::ffi::OsStrExt;
         let mut retained = crate::native_claims::lock(&self.relaunch);
         if retained.is_some() {
-            return Err(ClaimError::invalid("application_relaunch_duplicate"));
+            return Err(ClaimError::invalid("application_launch_duplicate"));
         }
         let executable = std::env::current_exe()
-            .map_err(|cause| ClaimError::new("application_relaunch_executable", cause))?;
+            .map_err(|cause| ClaimError::new("application_launch_executable", cause))?;
         let directory = std::env::current_dir()
-            .map_err(|cause| ClaimError::new("application_relaunch_directory", cause))?;
+            .map_err(|cause| ClaimError::new("application_launch_directory", cause))?;
         let command = crate::WindowsLaunchCommand::from_utf16(
             &executable.as_os_str().encode_wide().collect::<Vec<_>>(),
             &directory.as_os_str().encode_wide().collect::<Vec<_>>(),
             &std::env::args_os().skip(1).map(|arg| arg.encode_wide().collect()).collect::<Vec<_>>(),
         )
-        .map_err(|cause| ClaimError::new("application_relaunch_command", cause))?;
-        let launch = crate::application_relaunch::ApplicationRelaunch::new(command);
+        .map_err(|cause| ClaimError::new("application_launch_command", cause))?;
+        let launch = crate::application_launch::ApplicationLaunch::new(command);
         *retained = Some(launch.clone());
         launch.launch(context)
     }

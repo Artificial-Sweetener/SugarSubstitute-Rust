@@ -22,12 +22,16 @@ use std::sync::{
     atomic::{AtomicU8, Ordering},
 };
 pub(crate) use submission::validate_blocking;
+mod creation;
 mod creation_job;
 mod custodied_creation;
 mod custody_establishment;
 mod custody_retirement;
+mod input_validation;
 mod record;
 mod settled_failure;
+mod updater_probe;
+pub use updater_probe::SettledUpdaterProbe;
 mod shared_owner;
 use creation_job::CreationJob;
 pub use settled_failure::SettledRegistryFailure;
@@ -119,6 +123,7 @@ struct Record {
     shared: SharedOwner,
     native_scope: Scope,
     rejected_launch: bool,
+    stopped_before_exit: bool,
     creation: Option<CreationJob>,
     root_spec: (sugarsubstitute_contracts::execution::ScopeId, JobId),
     root_watch: Option<WatchJob>,
@@ -199,7 +204,8 @@ impl WindowsProcessRegistry {
     /// Already-linearized resume/native work remains owned and requires actual cleanup.
     pub fn close_launch_admission(&mut self) {
         self.launch_open = false;
-        for record in self.records.iter().flatten() {
+        for record in self.records.iter_mut().flatten() {
+            record.stopped_before_exit |= record.root_exit.is_none();
             record.shared.admission.store(CLOSED, Ordering::Release);
         }
     }
@@ -238,6 +244,7 @@ impl WindowsProcessRegistry {
             };
         }
         record.shared.admission.store(CLOSED, Ordering::Release);
+        record.stopped_before_exit |= record.root_exit.is_none();
         record.stop = Some((shutdown, budget));
         Ok(())
     }
@@ -296,6 +303,9 @@ impl WindowsProcessRegistry {
         let record = self.records[index].as_ref().ok_or(RegistryAdmissionError::Stale)?;
         if !record.settled
             || record.unread.iter().any(|unread| *unread)
+            || lock(&record.shared.native).family.as_ref().is_some_and(|family| {
+                family.preparation_image.as_ref().and_then(|launch| launch.probe()).is_some()
+            })
             || record.cleanup.is_some()
             || record.establishment_job.is_some()
             || lock(&record.shared.native).custody_destination.is_some()

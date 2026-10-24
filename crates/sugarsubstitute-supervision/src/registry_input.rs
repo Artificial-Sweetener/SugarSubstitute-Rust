@@ -8,6 +8,7 @@ pub(crate) mod backend_custody;
 mod diagnostic;
 mod lifecycle;
 pub(crate) mod output;
+pub(crate) mod preparation;
 pub(crate) mod recovery;
 use diagnostic::DiagnosticLaunch;
 use lifecycle::DesktopLaunch;
@@ -19,6 +20,7 @@ pub(crate) const FAMILY_STORAGE_BYTES: u64 = 131_072;
 /// Own explicit executable/cwd/argv/environment for one admitted creation operation.
 /// Values establish input shape only; a trusted native caller supplies ownership.
 pub struct WindowsLaunchInput {
+    pub(crate) preparation: Option<Box<preparation::PreparationLaunch>>,
     pub(crate) recovery_carrier: Option<Box<recovery::RecoveryCarrierLaunch>>,
     pub(crate) profile_custody: Option<crate::registry::profile::prepared::PreparedDesktopCarrier>,
     pub(crate) managed_custody: Option<crate::claims::managed_custody::ManagedCustodySource>,
@@ -58,6 +60,7 @@ impl WindowsLaunchInput {
             .checked_add(environment.allocated_bytes().map_err(RegistryInputError::Environment)?)
             .ok_or(RegistryInputError::Capacity)?;
         Ok(Self {
+            preparation: None,
             recovery_carrier: None,
             profile_custody: None,
             managed_custody: None,

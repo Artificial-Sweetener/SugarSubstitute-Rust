@@ -2,7 +2,11 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Encode bounded, untrusted lifecycle messages independently of native authentication.
 //!
-//! Wire version 9 uses little-endian integers and a fixed 104-byte header. Managed
+//! Wire version 10 uses little-endian integers and a fixed 104-byte header. Kind21
+//! reports the policy-accepted native main reveal after frontend readiness. The parent
+//! rechecks its retained profile/browser authorization before accepting that observation.
+//! Earlier wire versions are rejected; all processes in a launch use the same distribution.
+//! Managed
 //! Acquire/Retry headers bound admission; accepted requests await the owned backend
 //! until Ready, cancellation or exit. Every native transfer remains finite. Frames
 //! contain at most 65536 bytes including that header. Claimed identities, secrets
@@ -106,7 +110,7 @@ pub use target::{BorrowedBackendTarget, DecodedTarget, ManagedTargetRef};
 pub use utf16::{ArgumentRefs, Utf16Text};
 
 /// Exact supported wire version; unknown versions reject without negotiation.
-pub const WIRE_VERSION: u16 = 9;
+pub const WIRE_VERSION: u16 = 10;
 /// Exact header byte count, including the whole claimed run and deadline.
 pub const HEADER_BYTES: usize = 104;
 /// Maximum complete control frame, including header and payload.

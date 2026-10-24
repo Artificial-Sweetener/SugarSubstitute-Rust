@@ -7,6 +7,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 publish.workspace = true
+default-run = "sugarsubstitute"
 
 [features]
 default = ["windows-native-host"]
@@ -34,6 +35,10 @@ sugarsubstitute-supervision = { path = "../sugarsubstitute-supervision" }
 sugarsubstitute-execution = { path = "../sugarsubstitute-execution", features = ["boundary-fixtures"] }
 sugarsubstitute-desktop = { path = "../sugarsubstitute-desktop", features = ["boundary-fixtures"] }
 sugarsubstitute-supervision = { path = "../sugarsubstitute-supervision", features = ["boundary-fixtures"] }
+
+[build-dependencies]
+sugarsubstitute-contracts = { path = "../sugarsubstitute-contracts" }
+sugarsubstitute-update = { path = "../sugarsubstitute-update" }
 
 [lints]
 workspace = true

@@ -65,8 +65,11 @@ fn close_partial(harness: &Harness, scope_id: u64, job_id: u64) -> TestResult {
     let cleanup = harness
         .client
         .create_scope(ScopeSpec { id: ScopeId::new(scope_id)?, deadline: None }, None)?;
-    let mut job =
-        harness.owner.submit_close(&harness.client, &cleanup, Harness::spec(job_id, 2000)?)?;
+    let mut job = harness.owner.submit_close(
+        &harness.client,
+        &cleanup,
+        Harness::close_spec(job_id, 2000)?,
+    )?;
     harness.wake.until(&harness.client, || matches!(job.status().phase, JobPhase::Terminal(_)))?;
     assert!(matches!(
         job.try_take_completion().ok_or("Missing genuine source close")?.outcome,

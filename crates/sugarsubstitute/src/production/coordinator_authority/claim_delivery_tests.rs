@@ -16,6 +16,72 @@ use sugarsubstitute_supervision::{
     claim_boundary_fixture::{self, Control},
 };
 
+#[test]
+fn installation_worker_completion_is_required_even_when_close_precedes_claims() -> TestResult {
+    let mut rig = Rig::new()?;
+    let mut authority =
+        CoordinatorAuthority::new(EntrySetupBudget::new(Moment::from_nanos(0))?, None)?;
+    let spec = rig.spec(sugarsubstitute_supervision::setup_storage::LAUNCH_RESERVATION_BYTES)?;
+    authority.installation.start(&rig.client, &rig.scope, spec, r"E:\unopened-source".into())?;
+    assert!(authority.pending());
+    assert!(!authority.installation.ready());
+    authority.request_close();
+    assert!(!authority.settled());
+    let batch = rig.wait_batch(spec.id)?;
+    let mut entry = inert_entry(authority.original)?;
+    assert!(!authority.consume(
+        &mut entry,
+        &rig.client,
+        &rig.scope,
+        &JobSequence::new(),
+        &batch
+    )?);
+    assert!(authority.installation.ready());
+    assert!(!authority.pending());
+    assert!(authority.settled());
+    assert!(!authority.serving());
+    Ok(())
+}
+
+#[test]
+fn installation_failure_preserves_native_cause_and_never_admits_children() -> TestResult {
+    let mut rig = Rig::new()?;
+    let mut authority =
+        CoordinatorAuthority::new(EntrySetupBudget::new(Moment::from_nanos(0))?, None)?;
+    let spec = rig.spec(sugarsubstitute_supervision::setup_storage::LAUNCH_RESERVATION_BYTES)?;
+    authority.installation.start(&rig.client, &rig.scope, spec, "relative-generation".into())?;
+    let batch = rig.wait_batch(spec.id)?;
+    let mut entry = inert_entry(authority.original)?;
+    assert!(
+        authority
+            .consume(&mut entry, &rig.client, &rig.scope, &JobSequence::new(), &batch)
+            .is_err()
+    );
+    assert!(!authority.installation.ready());
+    assert!(!authority.serving());
+    assert!(authority.settled());
+    assert_eq!(
+        authority.failure_source().ok_or("Cause absent")?.to_string(),
+        "Select an absolute local folder below a drive root"
+    );
+    assert!(authority.registry().is_none());
+    Ok(())
+}
+
+#[test]
+fn cancelled_scope_cannot_start_installation_validation_or_claim_readiness() -> TestResult {
+    let mut rig = Rig::new()?;
+    let mut installation = installation::Ownership::new(None);
+    let scope =
+        rig.client.create_scope(ScopeSpec { id: ScopeId::new(99)?, deadline: None }, None)?;
+    scope.cancel();
+    let spec = rig.spec(sugarsubstitute_supervision::setup_storage::LAUNCH_RESERVATION_BYTES)?;
+    assert!(installation.start(&rig.client, &scope, spec, r"E:\unopened-source".into()).is_err());
+    assert!(!installation.pending());
+    assert!(!installation.ready());
+    Ok(())
+}
+
 /// Observe real executor publications without introducing another scheduler or channel.
 #[derive(Default)]
 struct RevisionWake {
@@ -70,7 +136,7 @@ impl Rig {
         };
         let (claims, control) = claim_boundary_fixture::owner(key)?;
         let mut authority =
-            CoordinatorAuthority::new(EntrySetupBudget::new(Moment::from_nanos(0))?)?;
+            CoordinatorAuthority::new(EntrySetupBudget::new(Moment::from_nanos(0))?, None)?;
         authority.claims = claims;
         let mut rig =
             Self { authority, control, scope, client, wake, _executor: executor, next: 1 };

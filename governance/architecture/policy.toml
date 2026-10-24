@@ -28,6 +28,7 @@ concern = "ComfyUI startup configuration and connection boundaries"
 [[owners]]
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
+auxiliary_roots = ["installer/worker", "installer/surface"]
 layer = "host"
 concern = "Platform-independent startup and conflict controllers, retained native adapter contracts, platform host composition and application identity"
 
@@ -40,6 +41,7 @@ concern = "Application execution and task lifetime"
 [[owners]]
 package = "sugarsubstitute-xtask"
 root = "tools/xtask"
+auxiliary_roots = ["installer/release"]
 layer = "tooling"
 concern = "Repository governance and verification"
 
@@ -47,7 +49,7 @@ concern = "Repository governance and verification"
 package = "sugarsubstitute-supervision"
 root = "crates/sugarsubstitute-supervision"
 layer = "adapter"
-concern = "Bounded Windows launch inputs, retained contained process families and authenticated create-only native preview artifacts"
+concern = "Windows process and claim custody, protected native installation/update storage, authenticated update preparation and create-only native preview artifacts"
 
 [[owners]]
 package = "sugarsubstitute-splash"
@@ -66,3 +68,9 @@ package = "sugarsubstitute-crash"
 root = "crates/sugarsubstitute-crash"
 layer = "adapter"
 concern = "Retained Windows capture, exact physical origin opening, native retirement, bounded symbol/report effects and restart-safe historical capture publication"
+
+[[owners]]
+package = "sugarsubstitute-update"
+root = "crates/sugarsubstitute-update"
+layer = "adapter"
+concern = "Portable distribution inventory, update metadata authentication, HTTP destination/framing policy and streaming target verification"

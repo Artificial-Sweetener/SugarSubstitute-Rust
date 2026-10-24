@@ -16,6 +16,7 @@ impl Record {
             shared,
             native_scope,
             rejected_launch: false,
+            stopped_before_exit: false,
             creation: None,
             root_spec,
             root_watch: None,

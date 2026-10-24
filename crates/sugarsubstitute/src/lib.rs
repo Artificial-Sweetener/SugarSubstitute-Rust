@@ -5,6 +5,8 @@
 
 extern crate self as sugarsubstitute;
 
+#[cfg(all(windows, feature = "windows-native-host"))]
+mod authority_clock;
 mod capture;
 #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
 mod capture_fixture;
@@ -16,6 +18,8 @@ mod demo;
 #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
 mod descendant_fixture;
 mod diagnostics;
+#[cfg(all(windows, feature = "windows-native-host"))]
+mod failure_details;
 #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
 mod forwarding_root;
 #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
@@ -38,9 +42,19 @@ mod production;
 #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
 mod production_output;
 mod render_transfer;
+/// Branded installer composition and off-screen surface qualification.
+#[cfg(all(windows, feature = "windows-native-host"))]
+pub mod setup;
+/// Stable installed launch composition; the selected application's Desktop owns presentation.
+#[cfg(all(windows, feature = "windows-native-host"))]
+pub mod stable_launcher;
 pub mod startup;
 mod timing_receipt;
 mod transcript_snapshot;
+#[cfg(all(windows, feature = "windows-native-host"))]
+pub mod updates;
+#[cfg(all(windows, feature = "windows-native-host"))]
+mod worker_environment;
 pub use transcript_snapshot::{OutputSnapshot, SourceCustody};
 
 use std::{error::Error, process::ExitCode, time::Instant};
@@ -49,8 +63,17 @@ use sugarsubstitute_desktop::{DesktopOptions, run as run_desktop};
 use sugarsubstitute_splash::Theme;
 
 /// Dispatch actual production roles or isolated native/off-screen qualification.
-fn execute(health: diagnostics::DiagnosticHealth) -> Result<(), Box<dyn Error>> {
+fn execute(
+    health: diagnostics::DiagnosticHealth,
+    #[cfg(all(windows, feature = "windows-native-host"))] inherited: std::io::Result<
+        Option<sugarsubstitute_supervision::setup_storage::InheritedLaunch>,
+    >,
+) -> Result<(), Box<dyn Error>> {
     health.check()?;
+    #[cfg(all(windows, feature = "windows-native-host"))]
+    if let Some(selection) = inherited.transpose() {
+        return production::execute_inherited(selection, health);
+    }
     let started = Instant::now();
     #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
     let invocation = {
@@ -234,16 +257,30 @@ fn execute(health: diagnostics::DiagnosticHealth) -> Result<(), Box<dyn Error>> 
 
 /// Run the selected native application role and preserve errors in structured diagnostics.
 /// Must be called on the platform UI thread exactly once per process.
-pub fn run() -> ExitCode {
-    match run_application() {
+pub fn run(
+    #[cfg(all(windows, feature = "windows-native-host"))] inherited: std::io::Result<
+        Option<sugarsubstitute_supervision::setup_storage::InheritedLaunch>,
+    >,
+) -> ExitCode {
+    match run_application(
+        #[cfg(all(windows, feature = "windows-native-host"))]
+        inherited,
+    ) {
         Ok(()) => ExitCode::SUCCESS,
         Err(_retained) => ExitCode::FAILURE,
     }
 }
 
 /// Observe original diagnostic health after the actual application lifetime and its final event.
-fn run_application() -> Result<(), Box<dyn Error>> {
+fn run_application(
+    #[cfg(all(windows, feature = "windows-native-host"))] inherited: std::io::Result<
+        Option<sugarsubstitute_supervision::setup_storage::InheritedLaunch>,
+    >,
+) -> Result<(), Box<dyn Error>> {
     let diagnostics = diagnostics::Diagnostics::initialize()?;
+    #[cfg(all(windows, feature = "windows-native-host"))]
+    let result = execute(diagnostics.health(), inherited);
+    #[cfg(not(all(windows, feature = "windows-native-host")))]
     let result = execute(diagnostics.health());
     if let Err(error) = &result {
         tracing::error!(operation="application_startup",cause=%error,"SugarSubstitute could not complete its application lifetime");

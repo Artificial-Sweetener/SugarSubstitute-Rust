@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Borrow one closed admitted native scratch session across its actual buffers.
 mod buffers;
+#[cfg(test)]
+mod tests;
 use super::native_name::{NativeNameDestination, NativeSidDestination};
 use super::{native_file::NativeCauseDestinations, paths, security};
 use crate::{
@@ -419,15 +421,18 @@ impl<'origin> NativePhase<'origin> {
             BoundedNativeCause::RawIo(std::io::Error::from(std::io::ErrorKind::InvalidData)),
         )
     }
-    /// Check cancellation and the existing actual job deadline before each effect.
+    /// Check cancellation and the admitted deadline before each effect. Installation storage
+    /// permits cancellable payload jobs without a cutoff; other native origins require one.
     pub(crate) fn context(&mut self, context: &JobContext) -> Result<(), ClaimError> {
         self.check()?;
         if matches!(self, Self::Selected { .. }) {
             return Ok(());
         }
-        if context.cancellation_requested()
-            || context.deadline().is_none_or(|limit| context.now() >= limit)
-        {
+        let expired = match context.deadline() {
+            Some(limit) => context.now() >= limit,
+            None => !matches!(self, Self::Ordinary { budget: Budget::Protected(_) }),
+        };
+        if context.cancellation_requested() || expired {
             return Err(self.invalid("storage_context_expired"));
         }
         Ok(())

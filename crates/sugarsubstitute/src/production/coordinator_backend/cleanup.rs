@@ -93,7 +93,7 @@ impl CoordinatorBackend {
                 resources,
                 Operation::Readiness,
                 JobClass::InfrastructureLifecycle,
-                FRONTEND_SOURCE_BYTES,
+                FRONTEND_SOURCE_CLOSE_BYTES,
                 Some(budget.settle_until),
             )?;
             record.source_close =

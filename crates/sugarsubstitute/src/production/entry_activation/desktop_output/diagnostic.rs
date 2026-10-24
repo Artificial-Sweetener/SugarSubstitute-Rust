@@ -67,6 +67,7 @@ pub(super) enum Observation {
     MainFailure(MainFailure),
     Transport(crate::production::child_transport_diagnostic::Record),
     Probe(sugarsubstitute_desktop::frontend_probe_diagnostic::Record),
+    Readiness(crate::production::startup_readiness_diagnostic::Record),
     #[cfg(feature = "k1-native-qualification")]
     Qualification(qualification::Qualification),
 }
@@ -150,6 +151,15 @@ impl Diagnostic {
                         } else if !timeout && self.probe_emitted < 16 {
                             self.probe_emitted += 1;
                             emit(Observation::Probe(probe));
+                        }
+                    } else if let Some(readiness) =
+                        crate::production::startup_readiness_diagnostic::Record::parse(
+                            &self.bytes[..self.length],
+                        )
+                    {
+                        if self.emitted < 30 {
+                            self.emitted += 1;
+                            emit(Observation::Readiness(readiness));
                         }
                     } else if let Some(close) = close::parse(&self.bytes[..self.length]) {
                         if self.emitted < 30 {
@@ -338,6 +348,9 @@ fn boolean(field: &str, prefix: &str) -> Option<bool> {
         _ => None,
     }
 }
+#[cfg(test)]
+#[path = "diagnostic/readiness_tests.rs"]
+mod readiness_tests;
 #[cfg(test)]
 #[path = "tests.rs"]
 pub(super) mod tests;

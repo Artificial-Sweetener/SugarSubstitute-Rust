@@ -21,6 +21,8 @@ pub enum FamilyBinding {
     Diagnostic(DiagnosticKey),
     /// Authenticated dedicated backend-custody helper session; shares the helper quota.
     BackendCustody(sugarsubstitute_contracts::backend_custody::BackendCustodyKey),
+    /// Bounded update preparation owned by this coordinator; no application or backend lease.
+    Preparation(CoordinatorKey),
 }
 impl FamilyBinding {
     pub(crate) const fn owner(self) -> CoordinatorKey {
@@ -29,6 +31,7 @@ impl FamilyBinding {
             Self::Managed(resource) => resource.owner,
             Self::Diagnostic(key) => key.owner(),
             Self::BackendCustody(key) => key.owner(),
+            Self::Preparation(owner) => owner,
         }
     }
     /// Select the independently bounded retained family table partition.
@@ -36,7 +39,9 @@ impl FamilyBinding {
         match self {
             Self::Desktop(_) => FamilyKind::Desktop,
             Self::Managed(_) => FamilyKind::Managed,
-            Self::Diagnostic(_) | Self::BackendCustody(_) => FamilyKind::Helper,
+            Self::Diagnostic(_) | Self::BackendCustody(_) | Self::Preparation(_) => {
+                FamilyKind::Helper
+            }
         }
     }
 }

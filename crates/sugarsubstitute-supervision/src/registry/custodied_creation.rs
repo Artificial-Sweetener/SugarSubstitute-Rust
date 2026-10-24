@@ -265,7 +265,7 @@ impl Driver {
         let permit = lock(&self.shared.permit)
             .take()
             .ok_or_else(|| RegistryError::invalid("custodied_root_watch"))?;
-        let watch = submission::bind(permit, duplicate);
+        let watch = creation::bind(permit, duplicate);
         lock(&self.shared.native).watch = watch;
         if let Source::Profile { key, .. } = &self.source {
             self.shared.port.enroll_desktop(family, key.run(), self.ticket.process)?;

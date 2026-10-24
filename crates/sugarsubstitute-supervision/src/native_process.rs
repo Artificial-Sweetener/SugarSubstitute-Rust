@@ -36,6 +36,8 @@ pub(crate) struct Member {
     pub(crate) exited: bool,
 }
 pub(crate) struct Family {
+    pub(crate) preparation_image:
+        Option<Box<crate::registry_input::preparation::PreparationLaunch>>,
     pub(crate) job: Option<usize>,
     pub(crate) thread: Option<usize>,
     pub(crate) watch_duplicate: Option<usize>,
@@ -110,6 +112,7 @@ impl Family {
             .map_err(|cause| RegistryError::new("inventory_storage", cause))?;
         query.resize(MAX_MEMBERS + 2, 0);
         let actual = std::mem::size_of::<Self>()
+            + crate::registry_input::preparation::PreparationLaunch::storage_bytes()
             + crate::registry::family_shared_storage_bytes()
             + (attributes.capacity() + query.capacity()) * std::mem::size_of::<usize>();
         if actual as u64 > crate::registry_input::FAMILY_STORAGE_BYTES {
@@ -117,6 +120,7 @@ impl Family {
         }
         Ok(FamilyStorage {
             family: Box::new(Self {
+                preparation_image: None,
                 job: None,
                 thread: None,
                 watch_duplicate: None,
@@ -170,7 +174,7 @@ impl Family {
     }
     /// Count native Family storage before the same original fixed allocation.
     pub(crate) const fn storage_bytes() -> usize {
-        size_of::<Self>()+2048*size_of::<usize>()+(MAX_MEMBERS+2)*size_of::<usize>()+size_of::<FamilyStorage>()
+        size_of::<Self>()+crate::registry_input::preparation::PreparationLaunch::storage_bytes()+2048*size_of::<usize>()+(MAX_MEMBERS+2)*size_of::<usize>()+size_of::<FamilyStorage>()
             + sugarsubstitute_execution::process_creation::ProcessCreationMemory::control_storage_bytes()
     }
     /// End fresh creation checks only after actual resumed-family ownership transfers.

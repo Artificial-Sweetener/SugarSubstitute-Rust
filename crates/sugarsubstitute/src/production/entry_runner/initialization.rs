@@ -51,7 +51,7 @@ impl<C: EntryActivation> EntryRunner<C> {
             self.executable.clone(),
             original,
         )?);
-        self.authority = Some(CoordinatorAuthority::new(original)?);
+        self.authority = Some(CoordinatorAuthority::new(original, command.launch_selection)?);
         let source = self.source.take().ok_or("Original source scope missing")?;
         self.bootstrap
             .as_mut()

@@ -47,6 +47,7 @@ pub struct MainAuthorizationSession {
     browser_request: Option<RequestId>,
     browser_pid: Option<NonZeroU32>,
     retirement_observed: bool,
+    reveal_observed: bool,
     failure_seen: bool,
     failure: Option<LifecycleFailure>,
 }
@@ -67,6 +68,7 @@ impl MainAuthorizationSession {
             browser_request: None,
             browser_pid: None,
             retirement_observed: false,
+            reveal_observed: false,
             failure_seen: false,
             failure: None,
         }
@@ -109,6 +111,7 @@ impl MainAuthorizationSession {
         self.environment_request = None;
         self.browser_request = None;
         self.browser_pid = None;
+        self.reveal_observed = false;
         self.retirement_observed = false;
         self.failure_seen = false;
         Ok(())
@@ -122,8 +125,9 @@ impl MainAuthorizationSession {
     /// monotonic epoch as `frontend_until`, in nanoseconds.
     /// # Errors
     /// Returns the unchanged observation, including owned cause, on wrong binding,
-    /// stage, duplicate, expired ordinary work or clock regression. Retirement and
-    /// failure can arrive after frontend expiry; they still check clock ordering.
+    /// stage, duplicate, expired authorization work or clock regression. A reveal after
+    /// completed authorization uses the host's finite acknowledgement transaction rather
+    /// than restarting frontend preparation. Retirement and failure retain clock ordering.
     pub fn accept(
         &mut self,
         binding: ClientBinding,
@@ -172,7 +176,9 @@ impl MainAuthorizationSession {
             ) {
                 return Err(LifecycleRejection::WrongPhase.into());
             }
-            if self.until.is_none_or(|until| now >= until) {
+            if !matches!(observation, MainAuthorizationObservation::MainRevealed { .. })
+                && self.until.is_none_or(|until| now >= until)
+            {
                 return Err(MainAuthorizationError::Deadline);
             }
         }
@@ -227,6 +233,7 @@ impl MainAuthorizationSession {
             requested_offset_units: self.folder_offset,
             browser_process_id: self.browser_pid,
             retirement_observed: self.retirement_observed,
+            reveal_observed: self.reveal_observed,
             failure_code: self.failure.as_ref().map(LifecycleFailure::code),
             failure_observed: self.failure_seen,
             request_highwater: self.history.highwater(),

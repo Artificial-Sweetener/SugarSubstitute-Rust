@@ -3,6 +3,19 @@
 //! Keep typed evidence, immutable alarms and coalesced cleanup demand separate.
 use super::*;
 use sugarsubstitute_contracts::crash::CaptureHandlerIdentity;
+
+/// The callback retains 64 KiB and its authenticated bundle retains 2 MiB in the
+/// original 4 MiB registration reservation. All other claims must retire before success.
+pub(super) const fn registration_retention_matches(
+    pinned: u64,
+    reserved: u64,
+    retained_scope: Option<u64>,
+) -> bool {
+    pinned == 64 * 1024 + 2 * 1024 * 1024
+        && reserved == 4 * 1024 * 1024
+        && matches!(retained_scope, Some(4_194_304))
+}
+
 /// Preserve matched actual facts even when normal registration was unsuccessful.
 pub(super) struct Evidence {
     owner: CoordinatorKey,

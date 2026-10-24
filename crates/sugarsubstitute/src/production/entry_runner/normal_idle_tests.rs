@@ -33,6 +33,7 @@ fn only_accepted_normal_shutdown_suppresses_a_nested_failure_dialog() -> Result<
     for normal in [false, true] {
         let path = PathBuf::from("unopened-relative-input");
         let command = ProductionCommand {
+            launch_selection: None,
             installation: path.clone(),
             diagnostics: Default::default(),
             options: super::super::super::options::ProductionEntryOptions {

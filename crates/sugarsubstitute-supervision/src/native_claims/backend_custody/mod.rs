@@ -5,6 +5,8 @@ mod commands;
 pub(crate) mod control;
 mod driver;
 mod entry;
+mod installation;
+pub use installation::BackendCustodyInstallation;
 mod exit;
 mod exit_diagnostic;
 pub use exit_diagnostic::BackendCustodyExitDiagnostic;

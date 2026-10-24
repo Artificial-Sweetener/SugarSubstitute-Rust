@@ -39,7 +39,7 @@ fn validate_version(value: &str) -> Result<String, FrontendSourceError> {
     Ok(value.to_owned())
 }
 
-pub(super) fn cube_version(bytes: &[u8]) -> Result<String, FrontendSourceError> {
+pub(crate) fn cube_version(bytes: &[u8]) -> Result<String, FrontendSourceError> {
     let text = std::str::from_utf8(bytes)
         .map_err(|e| FrontendSourceError::new("cube_metadata_utf8", e))?;
     let value = text

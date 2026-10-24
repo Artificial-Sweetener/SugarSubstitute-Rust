@@ -269,3 +269,86 @@ files = [
   "native/crashpad/owned_connection.h",
   "native/crashpad/owned_registration_tests.cc",
 ]
+
+[[components]]
+id = "comfy-desktop-provisioning"
+source_url = "https://github.com/Comfy-Org/Comfy-Desktop/tree/195ae80ae06ac5cf9e9c3b2978ea5e0b73f1f464"
+license = "AGPL-3.0-or-later"
+license_file = "third_party/licenses/comfy-desktop.AGPL-3.0.txt"
+files = [
+  "installer/patches/0001-provisioning-entry.patch",
+  "installer/patches/0002-require-complete-provisioning.patch",
+  "third_party/comfy-desktop/lib/git_operations.py",
+  "third_party/comfy-desktop/lib/pygit2_compat.py",
+  "third_party/comfy-desktop/lib/update_comfyui.py",
+  "third_party/comfy-desktop/locales/drafts/README.md",
+  "third_party/comfy-desktop/locales/en.json",
+  "third_party/comfy-desktop/locales/zh.json",
+  "third_party/comfy-desktop/src/main/lib/cache.ts",
+  "third_party/comfy-desktop/src/main/lib/cnr.ts",
+  "third_party/comfy-desktop/src/main/lib/comfyui-releases.ts",
+  "third_party/comfy-desktop/src/main/lib/copy.ts",
+  "third_party/comfy-desktop/src/main/lib/download.ts",
+  "third_party/comfy-desktop/src/main/lib/extract.ts",
+  "third_party/comfy-desktop/src/main/lib/fetch.ts",
+  "third_party/comfy-desktop/src/main/lib/git.ts",
+  "third_party/comfy-desktop/src/main/lib/github-mirror.ts",
+  "third_party/comfy-desktop/src/main/lib/gpu.ts",
+  "third_party/comfy-desktop/src/main/lib/i18n.ts",
+  "third_party/comfy-desktop/src/main/lib/installer.ts",
+  "third_party/comfy-desktop/src/main/lib/logged-process.ts",
+  "third_party/comfy-desktop/src/main/lib/nodes.ts",
+  "third_party/comfy-desktop/src/main/lib/opMarker.ts",
+  "third_party/comfy-desktop/src/main/lib/pip.ts",
+  "third_party/comfy-desktop/src/main/lib/process.ts",
+  "third_party/comfy-desktop/src/main/lib/processIdentity.ts",
+  "third_party/comfy-desktop/src/main/lib/pythonEnv.ts",
+  "third_party/comfy-desktop/src/main/lib/r2Mirror.ts",
+  "third_party/comfy-desktop/src/main/lib/safe-file.ts",
+  "third_party/comfy-desktop/src/main/lib/snapshots/diff.ts",
+  "third_party/comfy-desktop/src/main/lib/snapshots/exportImport.ts",
+  "third_party/comfy-desktop/src/main/lib/snapshots/index.ts",
+  "third_party/comfy-desktop/src/main/lib/snapshots/restore.ts",
+  "third_party/comfy-desktop/src/main/lib/snapshots/store.ts",
+  "third_party/comfy-desktop/src/main/lib/snapshots/tabData.ts",
+  "third_party/comfy-desktop/src/main/lib/stderrTail.ts",
+  "third_party/comfy-desktop/src/main/lib/util.ts",
+  "third_party/comfy-desktop/src/main/lib/version-resolve.ts",
+  "third_party/comfy-desktop/src/main/lib/version.ts",
+  "third_party/comfy-desktop/src/main/sources/common/nestedRoot.ts",
+  "third_party/comfy-desktop/src/main/sources/standalone/envPaths.ts",
+  "third_party/comfy-desktop/src/main/sources/standalone/index.ts",
+  "third_party/comfy-desktop/src/main/sources/standalone/install.ts",
+  "third_party/comfy-desktop/src/main/sources/standalone/macRepair.ts",
+  "third_party/comfy-desktop/src/main/sources/standalone/r2Catalog.ts",
+  "third_party/comfy-desktop/src/main/sources/standalone/torchIndexManifest.ts",
+  "third_party/comfy-desktop/src/main/sources/standalone/torchStackCatalog.ts",
+  "third_party/comfy-desktop/src/main/sources/standalone/torchStackTypes.ts",
+  "third_party/comfy-desktop/src/main/sources/standalone/updateOrchestrator.ts",
+  "third_party/comfy-desktop/src/shared/errorBucket.ts",
+  "third_party/comfy-desktop/src/shared/errorEvent.ts",
+  "third_party/comfy-desktop/src/shared/piiScrub.ts",
+]
+
+[[components]]
+id = "legacy-installer-wordmark"
+source_url = "https://github.com/Artificial-Sweetener/SugarSubstitute/blob/main/docs/readme/sugarsubstitute-logo.svg"
+license = "GPL-3.0-or-later"
+license_file = "third_party/licenses/splash-characters.GPL-3.0.txt"
+files = ["installer/surface/wordmark.svg"]
+
+[[components]]
+id = "installer-fluent-icons"
+source_url = "https://github.com/zhiyiYo/PyQt-Fluent-Widgets/tree/d90c008c534b2b0079ce7981d19b2bc957b354a5/qfluentwidgets/_rc/images/icons"
+license = "GPL-3.0-only"
+license_file = "third_party/licenses/qfluentwidgets.GPL-3.0.txt"
+files = [
+  "installer/surface/icons/Accept.svg",
+  "installer/surface/icons/ChevronDown.svg",
+  "installer/surface/icons/Close.svg",
+  "installer/surface/icons/Folder.svg",
+  "installer/surface/icons/Home.svg",
+  "installer/surface/icons/Language.svg",
+  "installer/surface/icons/Link.svg",
+  "installer/surface/icons/Sync.svg",
+]

@@ -5,6 +5,8 @@
 mod admission;
 #[path = "coordinator_authority/completion.rs"]
 mod completion;
+#[path = "coordinator_authority/installation.rs"]
+mod installation;
 #[path = "coordinator_authority/retirement.rs"]
 mod retirement;
 #[cfg(test)]
@@ -55,6 +57,8 @@ impl fmt::Display for AuthorityIssue {
 impl Error for AuthorityIssue {}
 
 enum Failure {
+    Installation(AuthorityIssue),
+    InstallationAdmission(sugarsubstitute_contracts::execution::AdmissionError),
     Entry(EntryAdmissionError),
     ClaimsAdmission(ClaimAdmissionError),
     Claims(ClaimError),
@@ -73,6 +77,8 @@ enum CloseAttempt {
 impl Failure {
     fn source(&self) -> &(dyn Error + 'static) {
         match self {
+            Self::Installation(cause) => cause,
+            Self::InstallationAdmission(cause) => cause,
             Self::Entry(cause) => cause,
             Self::ClaimsAdmission(cause) => cause,
             Self::Claims(cause) => cause,
@@ -88,6 +94,7 @@ impl Failure {
 /// The headless application thread owns this value. It borrows its existing scope;
 /// its composing lifetime keeps that nonclone scope until the sole executor joins.
 pub(crate) struct CoordinatorAuthority {
+    installation: installation::Ownership,
     claims: WindowsResourceClaims,
     registry_job: Option<OwnedJob<WindowsProcessRegistry, RegistryError>>,
     registry_completion: Option<JobCompletion<WindowsProcessRegistry, RegistryError>>,
@@ -117,8 +124,12 @@ pub(crate) struct CoordinatorAuthority {
 }
 impl CoordinatorAuthority {
     /// Allocate native-free adapter state; no key, registry or serving proof exists.
-    pub(crate) fn new(original: EntrySetupBudget) -> Result<Self, ClaimError> {
+    pub(crate) fn new(
+        original: EntrySetupBudget,
+        inherited: Option<sugarsubstitute_supervision::setup_storage::InheritedLaunch>,
+    ) -> Result<Self, ClaimError> {
         Ok(Self {
+            installation: installation::Ownership::new(inherited),
             claims: WindowsResourceClaims::new()?,
             registry_job: None,
             registry_completion: None,
@@ -188,7 +199,10 @@ impl CoordinatorAuthority {
     }
     /// Initialization or actual registry construction still owns pending work.
     pub(crate) fn pending(&self) -> bool {
-        self.initialization.is_some() || self.registry_job.is_some() || self.close_job.is_some()
+        self.installation.pending()
+            || self.initialization.is_some()
+            || self.registry_job.is_some()
+            || self.close_job.is_some()
     }
     /// Borrow the original cause without copying or erasing native/entry custody.
     pub(crate) fn failure_source(&self) -> Option<&(dyn Error + 'static)> {
@@ -199,6 +213,9 @@ impl CoordinatorAuthority {
             };
         }
         if let Some(failure) = &self.failure {
+            if matches!(failure, Failure::Installation(_)) {
+                return self.installation.failure_source().or_else(|| Some(failure.source()));
+            }
             return Some(failure.source());
         }
         let original = self.failed_registry.as_ref().or(self.registry_completion.as_ref())?;
@@ -209,7 +226,10 @@ impl CoordinatorAuthority {
     }
     /// Preserve cleanup failure independently from the initial startup cause.
     pub(crate) fn cleanup_failure(&self) -> Option<&(dyn Error + 'static)> {
-        self.cleanup_failure.as_ref().map(Failure::source)
+        self.cleanup_failure
+            .as_ref()
+            .map(Failure::source)
+            .or_else(|| self.installation.release_failure())
     }
     /// Borrow the complete actual constructor terminal outcome, including panic and its guard.
     pub(crate) fn registry_completion(

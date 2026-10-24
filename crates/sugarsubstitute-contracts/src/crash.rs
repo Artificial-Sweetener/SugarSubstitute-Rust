@@ -101,29 +101,40 @@ pub enum CaptureObservation {
     },
 }
 
-/// One original 60-second capture-operation budget in an execution-clock epoch.
-/// Registration and later fatal capture use separate original budget instances;
-/// neither replaces the normal 15-second shutdown budget.
+/// One immutable capture-operation interval in an execution-clock epoch.
+/// Registration inherits its caller's setup cutoff; fatal capture has sixty seconds.
+/// Neither replaces the normal shutdown budget or renews an existing operation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CaptureBudget {
     /// Original moment in the caller's execution-clock epoch.
     started: Moment,
-    /// The original operation deadline, exactly 60 seconds later.
+    /// The original operation deadline.
     until: Moment,
 }
 impl CaptureBudget {
-    /// Retain one original deadline without resetting it on retries.
+    /// Give a fatal capture sixty seconds without resetting it on retries.
     ///
     /// # Errors
     /// Returns `TimeError::Overflow` before constructing an invalid budget.
     pub fn new(started: Moment) -> Result<Self, TimeError> {
         Ok(Self { started, until: started.checked_add(Duration::from_secs(60))? })
     }
+    /// Retain the caller's setup cutoff for registration and child attachment.
+    /// File verification, handler preparation and attachment share that original
+    /// cutoff. Calling this later does not grant additional setup time. An equal
+    /// cutoff remains expired and is rejected by operation admission.
+    ///
+    /// # Errors
+    /// Rejects a cutoff earlier than the registration start in the same clock.
+    pub fn registration(started: Moment, until: Moment) -> Result<Self, TimeError> {
+        until.checked_duration_since(started)?;
+        Ok(Self { started, until })
+    }
     /// Return the original start in the owning execution clock's nanosecond epoch.
     pub const fn started(self) -> Moment {
         self.started
     }
-    /// Return the immutable checked 60-second deadline in that same epoch.
+    /// Return the immutable operation deadline in that same epoch.
     pub const fn until(self) -> Moment {
         self.until
     }
@@ -138,6 +149,24 @@ mod tests {
         assert_eq!(budget.started.as_nanos(), 17);
         assert_eq!(budget.until.as_nanos(), 60_000_000_017);
         assert_eq!(CaptureBudget::new(Moment::from_nanos(u64::MAX)), Err(TimeError::Overflow));
+        Ok(())
+    }
+
+    #[test]
+    fn registration_preserves_setup_cutoff_after_fatal_capture_interval() -> Result<(), TimeError> {
+        let setup = crate::coordinator_entry::EntrySetupBudget::new(Moment::from_nanos(17))?;
+        let started = setup.started().checked_add(Duration::from_secs(120))?;
+        let registration = CaptureBudget::registration(started, setup.until())?;
+        assert_eq!(registration.started(), started);
+        assert_eq!(registration.until(), setup.until());
+        assert!(registration.until() > CaptureBudget::new(started)?.until());
+        let later = started.checked_add(Duration::from_secs(120))?;
+        assert_eq!(CaptureBudget::registration(later, setup.until())?.until(), setup.until());
+        assert_eq!(
+            CaptureBudget::registration(setup.until(), setup.until())?.until(),
+            setup.until()
+        );
+        assert_eq!(CaptureBudget::registration(later, started), Err(TimeError::Regression));
         Ok(())
     }
 }

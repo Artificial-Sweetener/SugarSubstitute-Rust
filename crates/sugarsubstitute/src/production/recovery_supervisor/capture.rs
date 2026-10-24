@@ -65,7 +65,7 @@ impl Capture {
         }
     }
     /// Select the actual current installed release and protected derived generation once.
-    /// The exact original30-second grant bounds registration even though native capture has60s.
+    /// The exact original recovery grant bounds all registration work.
     pub(super) fn start(
         &mut self,
         client: &ExecutionClient,
@@ -81,7 +81,7 @@ impl Capture {
             self.origin.clone(),
             InstalledReleaseOwner::new().capture_selection(),
         )?;
-        let budget = CaptureBudget::new(client.now()?)?;
+        let budget = CaptureBudget::registration(client.now()?, self.origin.original_until())?;
         let watch_id = jobs.allocate()?;
         let watch = client.reserve_process_watch(
             native,

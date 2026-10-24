@@ -102,6 +102,8 @@ pub enum WirePayload<'a> {
     },
     /// Tag15: claimed checked main retirement, authenticated separately by its native owner.
     MainRetired(MainIdentity),
+    /// Tag21: native ready-frontend/main-reveal acknowledgement for this exact attempt.
+    MainRevealed(MainIdentity),
     /// Tag16: native eligibility claim; page state cannot establish its provenance.
     NativeActivity {
         /// Positive monotonic observation revision, admitted separately by the root.
@@ -157,6 +159,7 @@ impl WirePayload<'_> {
             Self::MainFailed(_) => 18,
             Self::SettleAttempt { .. } => 19,
             Self::RetryBackend { .. } => 20,
+            Self::MainRevealed(_) => 21,
         }
     }
 }
@@ -218,6 +221,8 @@ pub enum DecodedPayload<'a> {
     },
     /// Claimed complete native main retirement, admitted only after authenticated provenance.
     MainRetired(MainIdentity),
+    /// Ready frontend and revealed native main claim, requiring authenticated desktop provenance.
+    MainRevealed(MainIdentity),
     /// Native activity matching data, not acknowledged OS authority on its own.
     NativeActivity {
         /// Claimed monotonic native activity revision.

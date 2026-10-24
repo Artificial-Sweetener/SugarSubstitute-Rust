@@ -168,25 +168,20 @@ pub(super) fn ingress(
     file.read(0, output, &context, &mut phase)?;
     Ok(())
 }
-/// Match whole-file hashes and actual same-inode PE/RSDS and PDB GUID/age.
-pub(super) fn verify_pair(
+/// Authenticate executable bytes and their signed PE identity without opening symbol files.
+pub(super) fn verify_image(
     fields: &mut Fields,
     origin: &AllocationOrigin,
     pe: usize,
-    pdb: usize,
     pair: &Pair<'_>,
     kind: image::PeKind,
 ) -> Result<(), ClaimError> {
     let causes = fields.causes[3].as_mut().ok_or_else(missing)?;
     let mut phase = phase(origin, &mut fields.scratch, causes);
-    for (slot, length, hash) in
-        [(pe, pair.pe_length, pair.pe_sha256), (pdb, pair.pdb_length, pair.pdb_sha256)]
-    {
-        let facts =
-            fields.files[slot].as_ref().ok_or_else(missing)?.fields()?.facts.ok_or_else(missing)?;
-        if facts.bytes != length || facts.sha256 != hash {
-            return Err(phase.invalid("selected_signed_file_mismatch"));
-        }
+    let facts =
+        fields.files[pe].as_ref().ok_or_else(missing)?.fields()?.facts.ok_or_else(missing)?;
+    if facts.bytes != pair.pe_length || facts.sha256 != pair.pe_sha256 {
+        return Err(phase.invalid("selected_signed_file_mismatch"));
     }
     let file = fields.files[pe].as_mut().ok_or_else(missing)?;
     let mut reader = file.reader(&mut phase)?;
@@ -204,7 +199,26 @@ pub(super) fn verify_pair(
     {
         return Err(phase.invalid("selected_pe_association"));
     }
+    Ok(())
+}
+
+/// Match authenticated executable and symbol bytes before admitting a symbol consumer.
+pub(super) fn verify_pair(
+    fields: &mut Fields,
+    origin: &AllocationOrigin,
+    pe: usize,
+    pdb: usize,
+    pair: &Pair<'_>,
+    kind: image::PeKind,
+) -> Result<(), ClaimError> {
+    verify_image(fields, origin, pe, pair, kind)?;
+    let causes = fields.causes[3].as_mut().ok_or_else(missing)?;
+    let mut phase = phase(origin, &mut fields.scratch, causes);
     let file = fields.files[pdb].as_mut().ok_or_else(missing)?;
+    let facts = file.fields()?.facts.ok_or_else(missing)?;
+    if facts.bytes != pair.pdb_length || facts.sha256 != pair.pdb_sha256 {
+        return Err(phase.invalid("selected_signed_file_mismatch"));
+    }
     let mut reader = file.reader(&mut phase)?;
     let actual = match image::read_pdb(&mut reader) {
         Ok(actual) => actual,

@@ -4,6 +4,7 @@
 use super::*;
 #[derive(Default)]
 pub(super) struct Fake {
+    pub(super) fail_before_create: AtomicBool,
     pub(super) creates: AtomicUsize,
     pub(super) resumes: AtomicUsize,
     pub(super) seals: AtomicUsize,
@@ -93,6 +94,9 @@ impl NativePort for Fake {
         family: &mut Family,
         _: &mut WindowsLaunchInput,
     ) -> Result<Identity, RegistryError> {
+        if self.fail_before_create.load(Ordering::Acquire) {
+            return Err(RegistryError::invalid("fake_creation_before_process"));
+        }
         self.creates.fetch_add(1, Ordering::AcqRel);
         *lock(&self.creation_order) = [1, 0, 0, 0];
         family.job = Some(10);

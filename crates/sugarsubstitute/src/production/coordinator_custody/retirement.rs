@@ -201,6 +201,8 @@ impl CoordinatorCustody {
         };
         let now = resources.client.now()?;
         let key = parent.key();
+        let dependents_retired =
+            dependents_retired && resources.authority.installation_writers_retired();
         let mut port = native::Native {
             parent,
             ticket: &mut self.ticket,

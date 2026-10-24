@@ -49,6 +49,7 @@ impl Repository {
             owners: vec![Owner {
                 package: "host".into(),
                 root: "crates/host".into(),
+                auxiliary_roots: Vec::new(),
                 layer: "host".into(),
                 concern: "fixture host".into(),
             }],
