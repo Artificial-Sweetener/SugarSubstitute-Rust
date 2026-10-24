@@ -105,7 +105,8 @@ impl SelectionStore {
         let installation = Directory::open(root, false)?;
         let ownership = super::ownership::read(&installation)?;
         for earlier in [RECORD, LOCK] {
-            match std::fs::symlink_metadata(installation.path().join(earlier)) {
+            match crate::durable_storage::files::inspect(installation.path().join(earlier), context)
+            {
                 Ok(_) => {
                     return Err(
                         super::invalid("Unprotected selection requires verified recovery").into()
@@ -237,7 +238,7 @@ impl SelectionStore {
         let staged = staging::unique_path(&self.root, ".selection-stage")?;
         let mut file = protection.file(&staged, context)?;
         file.write_all(&bytes)?;
-        file.sync_all()?;
+        files::sync(&file, context)?;
         drop(file);
         check(context)?;
         staging::replace_record(&staged, &self.root.path().join(RECORD))?;

@@ -2,37 +2,51 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Reject new publication routes, stale dispositions and gaps in auxiliary source coverage.
 use super::*;
-use crate::fixtures::{self, Repository};
+use crate::{
+    capability_source,
+    fixtures::{self, Repository},
+};
 
 /// Keep migration review tests independent of the workstation clock.
-fn check(root: &Path, architecture: &Architecture, policy: &Policy) -> Result<()> {
+pub(super) fn check(root: &Path, architecture: &Architecture, policy: &Policy) -> Result<()> {
     let today = time::Date::from_calendar_date(2026, time::Month::October, 23)
         .map_err(|cause| Failure::external("construct policy test date", cause))?;
-    super::check(root, architecture, policy, today)
+    let owners: Vec<_> = architecture.owners.iter().map(|owner| serde_json::json!({"name": owner.package, "id": owner.package, "manifest_path": root.join(&owner.root).join("Cargo.toml"), "dependencies": []})).collect();
+    let workspace: Workspace = serde_json::from_value(serde_json::json!({"workspace_members": architecture.owners.iter().map(|owner| &owner.package).collect::<Vec<_>>(), "packages": owners}))
+        .map_err(|cause| Failure::external("construct storage fixture workspace", cause))?;
+    super::check(root, architecture, policy, &workspace, today)
 }
 
-fn fixture() -> Result<(Repository, Policy)> {
+pub(super) fn fixture() -> Result<(Repository, Policy)> {
     let mut repository = Repository::new()?;
     repository.architecture.owners[0].layer = "adapter".into();
-    repository.architecture.owners[0].auxiliary_roots.push("worker".into());
-    fixtures::write(repository.root(), "worker/main.ts", "export const ready = true")?;
+    repository.architecture.owners[0].auxiliary_roots.push("installer/worker".into());
+    fixtures::write(repository.root(), "installer/worker/main.ts", "export const ready = true")?;
     fixtures::write(
         repository.root(),
         "crates/host/src/storage/native.rs",
         "fn publish() { std::fs::rename(a, b); }",
     )?;
+    for directory in ["tools", "native"] {
+        fixtures::write(repository.root(), &format!("{directory}/.keep"), "")?;
+    }
     let path = "crates/host/src/storage/native.rs".to_owned();
     let source_sha256 = fingerprint(repository.root(), std::slice::from_ref(&path))?;
     let policy = Policy {
         schema_version: 1,
         owner: "host".into(),
         implementation_root: "crates/host/src/storage".into(),
+        source_roots: ["crates", "tools", "native", "installer"].map(String::from).into(),
+        dependencies: Vec::new(),
         records: vec![Record {
             path,
             owner: "host".into(),
             source_sha256,
             disposition: Disposition::Implementation,
             rationale: "Retained storage publication boundary".into(),
+            capabilities: vec!["std::fs::rename".into()],
+            boundary: None,
+            consumer: None,
             next_extraction: None,
             review_until: None,
         }],
@@ -74,7 +88,7 @@ fn rust_aliases_macros_native_linker_names_and_inactive_targets_cannot_hide_publ
 fn ordinary_rust_fields_and_literals_do_not_grant_native_publication_access() -> Result<()> {
     let source = "struct Alias { rename: String } fn f(value: Alias) { let rename = value.rename; let diagnostic = \"std::fs::rename\"; }";
     assert!(
-        capability_source::findings(source, publication_path, publication_fragments, |_| false)?
+        capability_source::findings(source, access::restricted, access::fragments, |_| false)?
             .is_empty()
     );
     Ok(())
@@ -84,14 +98,24 @@ fn ordinary_rust_fields_and_literals_do_not_grant_native_publication_access() ->
 fn every_supported_auxiliary_language_rejects_aliased_and_quoted_publication_routes() -> Result<()>
 {
     for extension in EXTENSIONS.iter().filter(|extension| **extension != "rs") {
-        for source in [
-            "import { rename as harmless } from 'node:fs/promises'; harmless(a,b)",
-            "const { renameSync: harmless } = fs; harmless(a,b)",
-            "fs['rename'](source, target)",
-            "MoveFileExW(source, target, flags)",
-        ] {
+        let mut sources = vec!["MoveFileExW(source, target, flags)"];
+        if matches!(
+            *extension,
+            "js" | "jsx" | "mjs" | "cjs" | "ts" | "tsx" | "mts" | "cts" | "html" | "patch"
+        ) {
+            sources.extend([
+                "import { rename as harmless } from 'node:fs/promises'; harmless(a,b)",
+                "const { renameSync: harmless } = fs; harmless(a,b)",
+                "fs['rename'](source, target)",
+            ]);
+        }
+        for source in sources {
             let (repository, policy) = fixture()?;
-            fixtures::write(repository.root(), &format!("worker/bypass.{extension}"), source)?;
+            fixtures::write(
+                repository.root(),
+                &format!("installer/worker/bypass.{extension}"),
+                source,
+            )?;
             assert!(
                 check(repository.root(), &repository.architecture, &policy).is_err(),
                 "accepted {extension}: {source}"
@@ -115,7 +139,7 @@ fn exact_dispositions_reject_unknown_owners_stale_bytes_and_unsupported_schemas(
             5 => policy.records[0].disposition = Disposition::Fixture,
             6 => policy.records[0].next_extraction = Some("irrelevant".into()),
             7 => fixtures::write(repository.root(), &policy.records[0].path, "fn unused() {}")?,
-            8 => policy.implementation_root = "worker".into(),
+            8 => policy.implementation_root = "installer/worker".into(),
             9 => {
                 let (_, mut duplicate) = fixture()?;
                 policy.records.push(duplicate.records.remove(0));
@@ -131,7 +155,7 @@ fn exact_dispositions_reject_unknown_owners_stale_bytes_and_unsupported_schemas(
 #[test]
 fn migration_records_require_finite_review_extraction_and_live_restricted_access() -> Result<()> {
     let (repository, mut policy) = fixture()?;
-    let path = "worker/publication.ts".to_owned();
+    let path = "installer/worker/publication.ts".to_owned();
     fixtures::write(repository.root(), &path, "fs.rename(source, target)")?;
     policy.records.push(Record {
         source_sha256: fingerprint(repository.root(), std::slice::from_ref(&path))?,
@@ -139,6 +163,9 @@ fn migration_records_require_finite_review_extraction_and_live_restricted_access
         owner: "host".into(),
         disposition: Disposition::Migration,
         rationale: "Migrate existing worker publication".into(),
+        capabilities: access::script("fs.rename(source, target)", "ts"),
+        boundary: None,
+        consumer: None,
         next_extraction: Some("Route worker writes through retained storage".into()),
         review_until: Some("2099-01-01".into()),
     });

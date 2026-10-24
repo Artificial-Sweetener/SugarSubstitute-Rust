@@ -89,7 +89,7 @@ fn downloaded_candidate_case(missing: bool, missing_entry: bool) -> TestResult {
         let runtime = prepared.maintenance_runtime().ok_or("Maintenance runtime absent")?.clone();
         prepared.stage(context)?;
         assert_eq!(
-            entrypoint::selected(&root)?.map(|directory| directory.path().to_path_buf()),
+            entrypoint::selected(&root, context)?.map(|directory| directory.path().to_path_buf()),
             if missing_entry { None } else { Some(original.clone()) }
         );
         assert!(prepared.activate(&runtime, context).is_err());
@@ -101,7 +101,7 @@ fn downloaded_candidate_case(missing: bool, missing_entry: bool) -> TestResult {
         assert_eq!(std::fs::read(original.join("startup.local.toml"))?, saved);
         assert_eq!(std::fs::read(root.path().join("user-document"))?, b"authored data");
         assert_eq!(
-            entrypoint::selected(&root)?.map(|directory| directory.path().to_path_buf()),
+            entrypoint::selected(&root, context)?.map(|directory| directory.path().to_path_buf()),
             if missing_entry { None } else { Some(original.clone()) }
         );
         let store = crate::setup_storage::SelectionStore::open(root.path(), context)?;

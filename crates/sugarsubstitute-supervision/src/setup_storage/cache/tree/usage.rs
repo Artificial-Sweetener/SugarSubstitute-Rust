@@ -46,7 +46,7 @@ fn measure(path: &Path, context: &JobContext, count: &mut usize, depth: usize) -
     if *count > MAX_OBJECTS || depth > MAX_DEPTH {
         return Err(invalid("Preserved cache inspection capacity exceeded"));
     }
-    let metadata = std::fs::symlink_metadata(path)?;
+    let metadata = crate::durable_storage::files::inspect(path, context)?;
     if metadata.file_attributes() & 0x400 != 0 {
         return Err(invalid("Preserved cache contains a link"));
     }

@@ -71,7 +71,7 @@ pub fn retain_running_generation(
                 return Err(invalid("Inherited launch installation ownership is missing"));
             }
             for leaf in [".selection-state", super::selection::NAMESPACE_MARKER] {
-                match std::fs::symlink_metadata(root.join(leaf)) {
+                match crate::durable_storage::files::inspect(root.join(leaf), context) {
                     Err(missing) if missing.kind() == io::ErrorKind::NotFound => {}
                     Err(cause) => return Err(cause),
                     Ok(_) => return Err(invalid("Installation ownership marker is missing")),

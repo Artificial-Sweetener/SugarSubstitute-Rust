@@ -131,7 +131,7 @@ impl Payload {
                 .and_then(|value| value.to_str())
                 .ok_or_else(|| invalid("Payload leaf absent"))?;
             let mut file = parent.read(leaf)?;
-            if file.metadata()?.len() != entry.bytes()
+            if files::length(&file, context)? != entry.bytes()
                 || hash(&mut file, context)? != entry.digest()
             {
                 return Err(invalid("Installer payload verification failed"));
@@ -199,7 +199,7 @@ impl Payload {
                 .ok_or_else(|| invalid("Payload leaf absent"))?;
             match parent.read(leaf) {
                 Ok(mut original) => {
-                    if original.metadata()?.len() != entry.bytes()
+                    if files::length(&original, context)? != entry.bytes()
                         || hash(&mut original, context)? != entry.digest()
                     {
                         return Err(invalid("Existing copied payload differs from its package"));
@@ -225,7 +225,7 @@ impl Payload {
             if offset != entry.bytes() {
                 return Err(invalid("Payload length changed while copying"));
             }
-            destination.sync_all()?;
+            files::sync(&destination, context)?;
             drop(destination);
             check(context)?;
             crate::durable_storage::staging::publish(&staged, &output)?;

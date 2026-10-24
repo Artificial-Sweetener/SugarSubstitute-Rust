@@ -213,7 +213,7 @@ fn unpack(
         file.seek(SeekFrom::Start(archive.offset))?;
         let mut stream =
             GzDecoder::new(BufReader::with_capacity(65536, file.take(archive.compressed)));
-        extract::extract(&mut stream, &package, &destination, || check(context))?;
+        extract::extract(&mut stream, &package, &destination, context, || check(context))?;
         let compressed = stream.into_inner();
         if compressed.get_ref().limit() != 0 || !compressed.buffer().is_empty() {
             return Err(invalid("Unexpected data follows the compressed package"));

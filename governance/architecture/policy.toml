@@ -41,9 +41,28 @@ concern = "Application execution and task lifetime"
 [[owners]]
 package = "sugarsubstitute-xtask"
 root = "tools/xtask"
-auxiliary_roots = ["installer/release"]
+auxiliary_roots = ["installer/release", "installer/patches", "tools/crashpad", "tools/local_k1", "tools/splash_parity", "tools/native_dxgi"]
+auxiliary_files = [
+    "installer/attach-package.mjs",
+    "installer/attach-package.test.mjs",
+    "installer/build.mjs",
+    "installer/check-upstream.mjs",
+    "installer/package-inventory.mjs",
+    "installer/package-inventory.test.mjs",
+    "installer/package-lock.json",
+    "installer/package.json",
+    "installer/package.mjs",
+    "installer/package.test.mjs",
+    "installer/prepare-runtime.mjs",
+    "installer/qualify-model-root.mjs",
+    "installer/qualify-surface.mjs",
+    "installer/qualify-worker.mjs",
+    "installer/seal.mjs",
+    "installer/seal.test.mjs",
+    "installer/typecheck.mjs",
+]
 layer = "tooling"
-concern = "Repository governance and verification"
+concern = "Repository governance, native build/release helpers and qualification tooling"
 
 [[owners]]
 package = "sugarsubstitute-supervision"
@@ -66,6 +85,7 @@ concern = "Native window, headless event loop and CPU surface lifetime"
 [[owners]]
 package = "sugarsubstitute-crash"
 root = "crates/sugarsubstitute-crash"
+auxiliary_roots = ["native/crashpad"]
 layer = "adapter"
 concern = "Retained Windows capture, exact physical origin opening, native retirement, bounded symbol/report effects and restart-safe historical capture publication"
 

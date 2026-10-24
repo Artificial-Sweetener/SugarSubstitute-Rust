@@ -35,7 +35,7 @@ impl Record {
         let record = Self {
             schema_version: 1,
             source: application.generation.clone(),
-            bytes: source.metadata()?.len(),
+            bytes: files::length(&source, context)?,
             sha256: payload::hash(&mut source, context)?,
             contract,
         };
@@ -58,11 +58,16 @@ impl Record {
 }
 
 /// Missing state permits first publication; invalid state is retained for explicit recovery.
-pub(super) fn read(state: &Directory, protection: &Protection) -> io::Result<Option<Record>> {
+pub(super) fn read(
+    state: &Directory,
+    protection: &Protection,
+    context: &JobContext,
+) -> io::Result<Option<Record>> {
+    check(context)?;
     let mut file = match state.read(RECORD) {
         Ok(file) => file,
         Err(cause) if cause.kind() == io::ErrorKind::NotFound => {
-            return match std::fs::symlink_metadata(state.path().join(NAME)) {
+            return match crate::durable_storage::files::inspect(state.path().join(NAME), context) {
                 Ok(_) => Err(invalid(
                     "Stable launcher ownership is missing; existing shell state has been preserved",
                 )),

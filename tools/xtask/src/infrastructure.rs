@@ -1,18 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Enforce exact ownership of supported storage publication routes across authored targets.
+//! Enforce reviewed filesystem construction, methods, dependencies and raw public capabilities.
 //!
 //! Rust uses parsed imports and macro tokens. Script and native source use conservative
 //! identifier inspection, including quoted property names. This does not prove arbitrary
 //! computed calls or semantic equivalence; behavioral and native tests remain necessary.
+use crate::workspace::Workspace;
 use crate::{
-    capability_source,
-    error::{Failure, Result, read, require},
+    error::{Failure, Result, require},
     policy::Architecture,
-    source::{fingerprint, resolve, source_files},
+    source::{fingerprint, resolve},
     structure::check_review,
 };
 use serde::Deserialize;
+mod access;
+mod dependencies;
+mod inventory;
+pub(crate) use inventory::collect as inventory;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
@@ -20,7 +24,7 @@ use std::{
 
 const EXTENSIONS: &[&str] = &[
     "rs", "ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs", "c", "cc", "cpp", "cxx", "h",
-    "hpp", "hxx", "m", "mm", "html",
+    "hpp", "hxx", "m", "mm", "html", "py", "ps1", "patch", "cs", "cmake", "gn", "gni", "css",
 ];
 
 /// Require one implementation and exact finite dispositions for existing publication routes.
@@ -31,6 +35,8 @@ pub(crate) struct Policy {
     pub(crate) owner: String,
     pub(crate) implementation_root: String,
     pub(crate) records: Vec<Record>,
+    pub(crate) source_roots: Vec<String>,
+    pub(crate) dependencies: Vec<dependencies::Review>,
 }
 
 /// Bind each permitted low-level source to its actual architecture owner and current bytes.
@@ -42,6 +48,9 @@ pub(crate) struct Record {
     pub(crate) source_sha256: String,
     pub(crate) disposition: Disposition,
     pub(crate) rationale: String,
+    pub(crate) capabilities: Vec<String>,
+    pub(crate) boundary: Option<Boundary>,
+    pub(crate) consumer: Option<Consumer>,
     pub(crate) next_extraction: Option<String>,
     pub(crate) review_until: Option<String>,
 }
@@ -52,7 +61,32 @@ pub(crate) struct Record {
 pub(crate) enum Disposition {
     Implementation,
     Fixture,
+    Tooling,
+    Boundary,
+    Consumer,
     Migration,
+}
+
+/// Reviewed external security/lifecycle contexts retain their own native authority.
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum Boundary {
+    NativeCustody,
+    NativeIpc,
+    Entropy,
+    ExternalRuntime,
+    NativeInjection,
+    Build,
+}
+
+/// Method names shared with filesystem APIs require an exact reviewed typed receiver contract.
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum Consumer {
+    ExecutionMetadata,
+    StorageEntries,
+    MemoryMetadata,
+    ProtocolMetadata,
 }
 
 /// Inspect all architecture roots, auxiliary languages, tests and inactive platform targets.
@@ -60,6 +94,7 @@ pub(crate) fn check(
     root: &Path,
     architecture: &Architecture,
     policy: &Policy,
+    workspace: &Workspace,
     today: time::Date,
 ) -> Result<()> {
     require(policy.schema_version == 1, "infrastructure: unsupported policy schema")?;
@@ -85,11 +120,8 @@ pub(crate) fn check(
             "infrastructure: disposition needs a rationale",
         )?;
         let path = resolve(root, &record.path)?;
-        let matching = architecture
-            .owners
-            .iter()
-            .filter(|owner| owner.roots().any(|relative| path.starts_with(root.join(relative))))
-            .collect::<Vec<_>>();
+        let matching =
+            architecture.owners.iter().filter(|owner| owner.owns(root, &path)).collect::<Vec<_>>();
         require(
             matching.len() == 1 && matching[0].package == record.owner,
             format!("infrastructure: {} has foreign or missing ownership", record.path),
@@ -103,6 +135,70 @@ pub(crate) fn check(
                 == path.starts_with(&implementation),
             format!("infrastructure: {} has an invalid implementation disposition", record.path),
         )?;
+        require(
+            !record.capabilities.is_empty()
+                && record.capabilities.iter().collect::<BTreeSet<_>>().len()
+                    == record.capabilities.len(),
+            "storage: source review needs distinct actual capability identities",
+        )?;
+        require(
+            (record.disposition == Disposition::Boundary) == record.boundary.is_some(),
+            "storage: only an external boundary has a native security/lifecycle classification",
+        )?;
+        require(
+            (record.disposition == Disposition::Consumer) == record.consumer.is_some(),
+            "storage: only a typed consumer review names a receiver contract",
+        )?;
+        if let Some(consumer) = &record.consumer {
+            let allowed = match consumer {
+                Consumer::ExecutionMetadata
+                | Consumer::StorageEntries
+                | Consumer::MemoryMetadata
+                | Consumer::ProtocolMetadata => "method metadata",
+            };
+            require(
+                record.capabilities.iter().all(|capability| capability == allowed),
+                "storage: a typed metadata consumer cannot grant raw filesystem construction",
+            )?;
+        }
+        if record.disposition == Disposition::Tooling {
+            require(
+                matching[0].layer == "tooling",
+                "storage: tooling review cannot exempt runtime source",
+            )?;
+        }
+        if matches!(record.boundary, Some(Boundary::NativeInjection)) {
+            require(
+                record
+                    .capabilities
+                    .iter()
+                    .all(|capability| matches!(capability.as_str(), "readFile" | "writeFile")),
+                "storage: native injection cannot acquire an independent filesystem implementation",
+            )?;
+        }
+        if let Some(boundary) = &record.boundary {
+            let layer = matching[0].layer.as_str();
+            let permitted = match boundary {
+                Boundary::NativeCustody | Boundary::NativeIpc | Boundary::Entropy => {
+                    layer == "adapter"
+                }
+                Boundary::NativeInjection | Boundary::ExternalRuntime => {
+                    matches!(layer, "host" | "adapter")
+                }
+                Boundary::Build => {
+                    layer == "tooling"
+                        || path.file_name().is_some_and(|name| name == "build.rs")
+                        || path
+                            .extension()
+                            .and_then(|name| name.to_str())
+                            .is_some_and(|name| matches!(name, "gn" | "gni" | "cmake"))
+                        || path
+                            .strip_prefix(root.join(&matching[0].root))
+                            .is_ok_and(|relative| relative.starts_with("build"))
+                }
+            };
+            require(permitted, "storage: external boundary has foreign lifecycle ownership")?;
+        }
         if record.disposition == Disposition::Migration {
             require(
                 record.next_extraction.as_ref().is_some_and(|value| !value.trim().is_empty()),
@@ -116,93 +212,51 @@ pub(crate) fn check(
             )?;
         }
     }
-    let mut used = BTreeSet::new();
-    for owner in &architecture.owners {
-        for relative in owner.roots() {
-            for path in source_files(&resolve(root, relative)?, EXTENSIONS)? {
-                let relative = path
-                    .strip_prefix(root)
-                    .map_err(|cause| Failure::external("resolve infrastructure source", cause))?
-                    .to_string_lossy()
-                    .replace('\\', "/");
-                let source = read(&path)?;
-                let findings = if path.extension().is_some_and(|extension| extension == "rs") {
-                    capability_source::findings(
-                        &source,
-                        publication_path,
-                        publication_fragments,
-                        |_| false,
-                    )?
-                } else {
-                    lexical_findings(&source)
-                };
-                if !findings.is_empty() {
-                    require(
-                        records.contains_key(relative.as_str()),
-                        format!(
-                            "infrastructure: {relative} bypasses storage publication ownership: {}",
-                            findings.join(", ")
-                        ),
-                    )?;
-                    used.insert(relative);
-                }
-            }
+    let actual = inventory(root, architecture, workspace, &policy.source_roots)?;
+    dependencies::check(&actual.dependencies, &policy.dependencies)?;
+    require(
+        actual.sources.len() == records.len(),
+        "storage: source reviews must match actual restricted access; remove stale reviews",
+    )?;
+    for source in actual.sources {
+        let record = records.get(source.path.as_str()).ok_or_else(|| {
+            Failure::Policy(format!(
+                "storage: {} bypasses filesystem ownership: {}",
+                source.path,
+                source.capabilities.iter().cloned().collect::<Vec<_>>().join(", ")
+            ))
+        })?;
+        require(
+            source.owner == record.owner
+                && source.source_sha256 == record.source_sha256
+                && source.capabilities == record.capabilities.iter().cloned().collect(),
+            format!("storage: {} has stale or expanded restricted capabilities", source.path),
+        )?;
+        if source.capabilities.iter().any(|capability| capability.starts_with("export ")) {
+            let native_interop =
+                matches!(&record.boundary, Some(Boundary::NativeCustody | Boundary::NativeIpc))
+                    && source
+                        .capabilities
+                        .iter()
+                        .filter(|capability| capability.starts_with("export "))
+                        .all(|capability| {
+                            ["::OwnedHandle", "::BorrowedHandle", "::OwnedFd", "::BorrowedFd"]
+                                .iter()
+                                .any(|name| capability.ends_with(name))
+                        });
+            require(
+                matches!(record.disposition, Disposition::Migration | Disposition::Fixture)
+                    || native_interop,
+                format!("storage: {} exports an unretired raw filesystem capability", source.path),
+            )?;
         }
     }
-    require(
-        used.iter().map(String::as_str).collect::<BTreeSet<_>>()
-            == records.keys().copied().collect(),
-        "infrastructure: remove stale dispositions without restricted source access",
-    )
+    Ok(())
 }
 
-/// Inspect canonical standard-library paths and native linker identities, even after aliasing.
-fn publication_path(path: &[String]) -> bool {
-    path.starts_with(&["std".into(), "fs".into()])
-        && path.last().is_some_and(|part| part == "rename" || part == "*")
-        || path.first().is_some_and(|part| part == "libc" || part == "link_name")
-            && path.last().is_some_and(|part| part == "rename")
-        || path.last().is_some_and(|part| native_publication(part))
-}
-
-/// Split declarative macro path fragments cannot conceal these native/standard operations.
-fn publication_fragments(names: &BTreeSet<String>) -> bool {
-    names.iter().any(|name| native_publication(name))
-        || ["fs", "rename"].iter().all(|name| names.contains(*name))
-        || ["libc", "rename"].iter().all(|name| names.contains(*name))
-}
-
-/// Known native rename/replace and handle-based publication/deletion entry points.
-fn native_publication(name: &str) -> bool {
-    matches!(
-        name,
-        "MoveFileA"
-            | "MoveFileW"
-            | "MoveFileExA"
-            | "MoveFileExW"
-            | "MoveFileWithProgressA"
-            | "MoveFileWithProgressW"
-            | "ReplaceFileA"
-            | "ReplaceFileW"
-            | "SetFileInformationByHandle"
-            | "NtSetInformationFile"
-            | "renameat"
-            | "renameat2"
-    )
-}
-
-/// Conservative script/native tokens cover aliases, destructuring and quoted properties.
-fn lexical_findings(source: &str) -> Vec<String> {
-    source
-        .split(|character: char| {
-            !character.is_alphanumeric() && character != '_' && character != '$'
-        })
-        .filter(|name| native_publication(name) || matches!(*name, "rename" | "renameSync"))
-        .map(str::to_owned)
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .collect()
-}
-
+#[cfg(test)]
+mod access_tests;
+#[cfg(test)]
+mod dependency_tests;
 #[cfg(test)]
 mod tests;

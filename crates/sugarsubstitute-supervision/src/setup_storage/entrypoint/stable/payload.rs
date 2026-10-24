@@ -40,7 +40,7 @@ pub(super) fn ensure(
         }
         output.write_all(&buffer[..count])?;
     }
-    output.sync_all()?;
+    files::sync(&output, context)?;
     drop(output);
     let identity = {
         let leaf = staged
@@ -68,7 +68,7 @@ pub(super) fn ensure(
 
 /// Match the retained handle to protected ownership without reopening its path.
 fn verify(file: &mut File, record: &record::Record, context: &JobContext) -> io::Result<()> {
-    if file.metadata()?.len() != record.bytes || hash(file, context)? != record.sha256 {
+    if files::length(file, context)? != record.bytes || hash(file, context)? != record.sha256 {
         return Err(invalid(
             "Stable launcher bytes differ from protected ownership; existing files have been preserved",
         ));

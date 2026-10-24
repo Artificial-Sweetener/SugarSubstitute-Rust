@@ -6,11 +6,13 @@ mod child;
 mod entries;
 #[allow(unsafe_code)]
 mod identity;
+mod observations;
 mod ordinary;
 use super::invalid;
 pub(crate) use identity::{file_identity, single_link};
+pub(crate) use observations::{canonical_path, exists, inspect};
 pub(crate) use ordinary::{
-    ExistingAccess, FileExclusion, length, modified, read_admitted, set_modified,
+    ExistingAccess, FileExclusion, length, modified, read_admitted, set_modified, sync,
 };
 use std::{
     fs::{File, OpenOptions},

@@ -12,16 +12,19 @@ impl Names {
         &self,
         module: &[String],
         ty: &syn::TypePath,
+        visited: &mut BTreeSet<Vec<String>>,
     ) -> Vec<(Vec<String>, syn::Type)> {
         let Some(qself) = &ty.qself else { return Vec::new() };
         let syn::Type::Path(self_ty) = qself.ty.as_ref() else { return Vec::new() };
         if qself.position == 0 {
             return Vec::new();
         }
-        let self_names = self.resolve(module, &self_ty.path, &BTreeSet::new());
+        let self_names =
+            self.resolve_with(module, &self_ty.path, &BTreeSet::new(), &mut visited.clone());
         let mut trait_path = ty.path.clone();
         trait_path.segments = trait_path.segments.into_iter().take(qself.position).collect();
-        let trait_names = self.resolve(module, &trait_path, &BTreeSet::new());
+        let trait_names =
+            self.resolve_with(module, &trait_path, &BTreeSet::new(), &mut visited.clone());
         let Some(associated) = ty.path.segments.last() else { return Vec::new() };
         let mut found = Vec::new();
         for (key, scope) in &self.modules {
@@ -30,8 +33,12 @@ impl Names {
                 let Some((_, path, _)) = &item.trait_ else { continue };
                 let syn::Type::Path(candidate) = item.self_ty.as_ref() else { continue };
                 let parameters = generic_names(&item.generics);
-                if self.resolve(key, &candidate.path, &parameters).is_disjoint(&self_names)
-                    || self.resolve(key, path, &parameters).is_disjoint(&trait_names)
+                if self
+                    .resolve_with(key, &candidate.path, &parameters, &mut visited.clone())
+                    .is_disjoint(&self_names)
+                    || self
+                        .resolve_with(key, path, &parameters, &mut visited.clone())
+                        .is_disjoint(&trait_names)
                 {
                     continue;
                 }

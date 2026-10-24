@@ -28,7 +28,7 @@ pub(in crate::setup_storage::cache) fn initialize(
     let identity = slot.identity()?;
     let mut owner = protection.file(&path.join("owner"), context)?;
     owner.write_all(&owner_record(directory.identity()?, identity))?;
-    owner.sync_all()?;
+    files::sync(&owner, context)?;
     Ok(identity)
 }
 /// Validate controls under the caller's existing protection budget. Read-only lookup may skip
@@ -96,7 +96,7 @@ pub(super) fn inspect(
         };
         protection.verify_file(&file)?;
         files::single_link(&file)?;
-        if file.metadata()?.len() > REFERENCE_BYTES as u64 {
+        if files::length(&file, context)? > REFERENCE_BYTES as u64 {
             return Err(invalid("Cache consumer control exceeds its schema bound"));
         }
         if !pending

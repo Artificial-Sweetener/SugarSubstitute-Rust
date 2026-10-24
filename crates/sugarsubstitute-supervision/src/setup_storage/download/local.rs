@@ -2,7 +2,10 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Feed offline distribution bytes through the same retained cache and signed target verifier.
 use super::*;
-use crate::{durable_storage::files::Directory, setup_storage::invalid};
+use crate::{
+    durable_storage::files::{self, Directory},
+    setup_storage::invalid,
+};
 
 /// Source layout is selected locally; untrusted footer bytes never grant target authority.
 enum Layout {
@@ -77,7 +80,7 @@ impl Download {
             .ok_or_else(|| invalid("Local package filename is invalid"))?;
         let mut source = parent.read(leaf)?;
         let range = match layout {
-            Layout::Bare => 0..source.metadata()?.len(),
+            Layout::Bare => 0..files::length(&source, context)?,
             Layout::Installer => crate::setup_storage::packed::embedded_range(&mut source)?,
         };
         let length = target.length();

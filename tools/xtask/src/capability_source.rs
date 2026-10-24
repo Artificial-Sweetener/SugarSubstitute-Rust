@@ -12,9 +12,19 @@ struct Imports {
     aliases: BTreeMap<String, BTreeSet<Vec<String>>>,
     paths: Vec<Vec<String>>,
     macros: Vec<(String, BTreeSet<String>)>,
+    capture_literals: bool,
+    literals: Vec<String>,
 }
 
 impl<'ast> Visit<'ast> for Imports {
+    /// Decode Rust string/byte literals only for owners which inspect embedded capabilities.
+    fn visit_expr_lit(&mut self, expression: &'ast syn::ExprLit) {
+        if self.capture_literals {
+            literal_value(&expression.lit, &mut self.literals);
+        }
+        syn::visit::visit_expr_lit(self, expression);
+    }
+
     /// Flatten grouped imports so aliases and wildcard imports cannot conceal capability access.
     fn visit_item_use(&mut self, item: &'ast syn::ItemUse) {
         self.collect(&item.tree, Vec::new());
@@ -32,6 +42,9 @@ impl<'ast> Visit<'ast> for Imports {
     /// Inspect literal imports emitted by declarative macros before expanding their aliases.
     fn visit_macro(&mut self, item: &'ast syn::Macro) {
         self.collect_macro_imports(item.tokens.clone());
+        if self.capture_literals {
+            collect_literals(item.tokens.clone(), &mut self.literals);
+        }
         let mut identifiers = BTreeSet::new();
         macro_identifiers(item.tokens.clone(), &mut identifiers);
         self.macros.push((
@@ -154,8 +167,40 @@ impl Imports {
     }
 }
 
+/// Preserve decoded literals inside macro arguments and transcribers without expanding code.
+fn collect_literals(tokens: TokenStream, output: &mut Vec<String>) {
+    for token in tokens {
+        match token {
+            TokenTree::Group(group) => collect_literals(group.stream(), output),
+            TokenTree::Literal(literal) => {
+                if let Ok(literal) = syn::parse_str::<syn::Lit>(&literal.to_string()) {
+                    literal_value(&literal, output);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+/// Attribute strings are interpreted separately by the linker-name contract.
+fn literal_value(literal: &syn::Lit, output: &mut Vec<String>) {
+    match literal {
+        syn::Lit::Str(value) => output.push(value.value()),
+        syn::Lit::CStr(value) => {
+            if let Ok(value) = value.value().into_string() {
+                output.push(value);
+            }
+        }
+        syn::Lit::ByteStr(value) => {
+            if let Ok(value) = String::from_utf8(value.value()) {
+                output.push(value);
+            }
+        }
+        _ => {}
+    }
+}
+
 /// Inspect macro identifiers across groups without treating string arguments as executable paths.
-fn macro_identifiers(tokens: TokenStream, identifiers: &mut BTreeSet<String>) {
+pub(crate) fn macro_identifiers(tokens: TokenStream, identifiers: &mut BTreeSet<String>) {
     for token in tokens {
         match token {
             TokenTree::Ident(name) => {
@@ -230,11 +275,30 @@ pub(crate) fn findings(
     fragments: fn(&BTreeSet<String>) -> bool,
     ignore_bare: fn(&str) -> bool,
 ) -> Result<Vec<String>> {
+    findings_with_literals(source, restricted, fragments, ignore_bare, None, &[])
+}
+/// Additionally classify decoded embedded script/native-symbol literals under an explicit owner.
+pub(crate) fn findings_with_literals(
+    source: &str,
+    restricted: fn(&[String]) -> bool,
+    fragments: fn(&BTreeSet<String>) -> bool,
+    ignore_bare: fn(&str) -> bool,
+    literal: Option<fn(&str) -> bool>,
+    external_bindings: &[(String, String)],
+) -> Result<Vec<String>> {
     let parsed = syn::parse_file(source)
         .map_err(|error| Failure::external("parse capability access", error))?;
-    let mut imports = Imports::default();
+    let mut imports = Imports { capture_literals: literal.is_some(), ..Imports::default() };
+    for (binding, identity) in external_bindings {
+        imports.aliases.entry(binding.clone()).or_default().insert(vec![identity.clone()]);
+    }
     imports.visit_file(&parsed);
     let mut found = BTreeSet::new();
+    if let Some(literal) = literal
+        && imports.literals.iter().any(|value| literal(value))
+    {
+        found.insert("literal restricted capability".into());
+    }
     for (name, identifiers) in &imports.macros {
         let expanded: BTreeSet<_> = identifiers
             .iter()

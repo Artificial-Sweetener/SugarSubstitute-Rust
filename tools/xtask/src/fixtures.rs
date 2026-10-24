@@ -50,6 +50,7 @@ impl Repository {
                 package: "host".into(),
                 root: "crates/host".into(),
                 auxiliary_roots: Vec::new(),
+                auxiliary_files: Vec::new(),
                 layer: "host".into(),
                 concern: "fixture host".into(),
             }],

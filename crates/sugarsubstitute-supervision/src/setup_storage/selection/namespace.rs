@@ -54,7 +54,7 @@ pub(super) fn publish_marker(
     let staged = staging::unique_path(root, ".selection-enable-stage")?;
     let mut file = protection.file(&staged, context)?;
     file.write_all(CONTENT)?;
-    file.sync_all()?;
+    files::sync(&file, context)?;
     drop(file);
     check(context)?;
     staging::publish(&staged, &installation.path().join(NAMESPACE_MARKER))?;

@@ -146,7 +146,7 @@ fn visit(
                 if output.worker_records {
                     files::single_link(&file)?;
                 }
-                file.metadata()?.len()
+                files::length(&file, context)?
             };
             output.bytes = output
                 .bytes

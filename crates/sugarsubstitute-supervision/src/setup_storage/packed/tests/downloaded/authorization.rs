@@ -19,7 +19,7 @@ struct Case<'a> {
 impl Case<'_> {
     fn preserved(&self) -> TestResult {
         assert_eq!(
-            entrypoint::selected(self.directory)?.ok_or("Selection lost")?.path(),
+            entrypoint::selected(self.directory, self.context)?.ok_or("Selection lost")?.path(),
             self.original
         );
         assert_eq!(
@@ -331,7 +331,7 @@ fn trust_writer_remains_held_through_final_check_and_candidate_preparation() -> 
         )?;
         assert_eq!(checks, 4);
         assert_eq!(
-            entrypoint::selected(case.directory)?.ok_or("Selection absent")?.path(),
+            entrypoint::selected(case.directory, case.context)?.ok_or("Selection absent")?.path(),
             case.original
         );
         let store =

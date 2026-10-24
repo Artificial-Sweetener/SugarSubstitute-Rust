@@ -33,7 +33,7 @@ impl TrustStore {
         let staged = staging::unique_path(&self.root, "record-pending")?;
         let mut file = protection.file(&staged, context)?;
         file.write_all(&bytes)?;
-        file.sync_all()?;
+        files::sync(&file, context)?;
         drop(file);
         check(context)?;
         staging::replace_record(&staged, &self.root.path().join(name))?;

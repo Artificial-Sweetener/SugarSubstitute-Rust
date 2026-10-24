@@ -74,7 +74,12 @@ pub(crate) fn check(
     let module_prefix = format!("{module}/");
     forbidden.extend(["cache-v1".into(), "webview-v1".into()]);
     scripts::check(root, architecture, &storage.script_boundaries)?;
-    let paths = coverage::sources(root, architecture, &storage.source_roots)?;
+    let paths = crate::authored_sources::sources(
+        root,
+        architecture,
+        &storage.source_roots,
+        scripts::EXTENSIONS,
+    )?;
     let mut reviews = coverage::reviews(root, architecture, &storage.namespace_reviews)?;
     for path in paths {
         let relative = path

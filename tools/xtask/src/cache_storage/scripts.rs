@@ -5,7 +5,7 @@
 //! Conservative tokens include import/require aliases and quoted property names. They do not
 //! establish arbitrary computed-call equivalence; native behavior and consumer tests remain required.
 use super::*;
-use crate::source::fingerprint;
+use crate::{source::fingerprint, source_tokens::tokens};
 use std::collections::BTreeMap;
 
 pub(super) const EXTENSIONS: &[&str] = &[
@@ -50,10 +50,7 @@ pub(super) fn check(
         let owners: Vec<_> = architecture
             .owners
             .iter()
-            .filter(|owner| {
-                owner.layer != "tooling"
-                    && owner.roots().any(|relative| path.starts_with(root.join(relative)))
-            })
+            .filter(|owner| owner.layer != "tooling" && owner.owns(root, &path))
             .collect();
         require(
             owners.len() == 1 && owners[0].package == boundary.owner,
@@ -152,95 +149,6 @@ pub(super) fn namespace_bypass(source: &str, namespaces: &BTreeSet<String>) -> b
     tokens(source).iter().any(|token| {
         token.split(['/', '\\']).any(|part| known_namespace(part.as_bytes(), namespaces))
     })
-}
-
-/// Ignore comments, decode quoted escapes and retain identifiers and computed string properties.
-fn tokens(source: &str) -> Vec<String> {
-    let mut chars = source.chars().peekable();
-    let mut output = Vec::new();
-    while let Some(character) = chars.next() {
-        if character == '/' && chars.peek() == Some(&'/') {
-            for character in chars.by_ref() {
-                if character == '\n' {
-                    break;
-                }
-            }
-        } else if character == '/' && chars.peek() == Some(&'*') {
-            chars.next();
-            while let Some(character) = chars.next() {
-                if character == '*' && chars.peek() == Some(&'/') {
-                    chars.next();
-                    break;
-                }
-            }
-        } else if matches!(character, '\'' | '"' | '`') {
-            let quote = character;
-            let mut value = String::new();
-            while let Some(character) = chars.next() {
-                if character == quote {
-                    break;
-                }
-                if character != '\\' {
-                    value.push(character);
-                    continue;
-                }
-                let Some(escape) = chars.next() else {
-                    break;
-                };
-                if let Some(decoded) = escaped(escape, &mut chars) {
-                    value.push(decoded);
-                }
-            }
-            if quote == '`' && value.contains("${") {
-                output.extend(tokens(&value));
-            }
-            output.push(value);
-        } else if character.is_alphanumeric() || matches!(character, '_' | '$' | '\\') {
-            let mut value = String::new();
-            let mut next = Some(character);
-            while let Some(character) = next {
-                if character == '\\' {
-                    if let Some(escape) = chars.next()
-                        && let Some(decoded) = escaped(escape, &mut chars)
-                    {
-                        value.push(decoded);
-                    }
-                } else {
-                    value.push(character);
-                }
-                next = if chars.peek().is_some_and(|character| {
-                    character.is_alphanumeric() || matches!(character, '_' | '$' | '\\')
-                }) {
-                    chars.next()
-                } else {
-                    None
-                };
-            }
-            output.push(value);
-        }
-    }
-    output
-}
-
-/// Decode the same JavaScript Unicode syntax in quoted properties and escaped identifiers.
-fn escaped(escape: char, chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Option<char> {
-    if !matches!(escape, 'x' | 'u') {
-        return Some(escape);
-    }
-    let digits = if escape == 'u' && chars.peek() == Some(&'{') {
-        chars.next();
-        let mut digits = String::new();
-        for digit in chars.by_ref() {
-            if digit == '}' {
-                break;
-            }
-            digits.push(digit);
-        }
-        digits
-    } else {
-        chars.by_ref().take(if escape == 'x' { 2 } else { 4 }).collect()
-    };
-    u32::from_str_radix(&digits, 16).ok().and_then(char::from_u32)
 }
 
 #[cfg(test)]

@@ -195,6 +195,7 @@ fn namespace_data_reviews_are_exact_tooling_owned_used_and_cannot_authorize_runt
         package: "checker".into(),
         root: "tools".into(),
         auxiliary_roots: Vec::new(),
+        auxiliary_files: Vec::new(),
         layer: "tooling".into(),
         concern: "Literal rejection input".into(),
     });

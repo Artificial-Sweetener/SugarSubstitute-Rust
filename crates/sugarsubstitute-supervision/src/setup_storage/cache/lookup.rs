@@ -44,7 +44,7 @@ impl RuntimeCache {
                 if record.staged
                     || record.deleting
                     || (!writable && record.producer.is_some())
-                    || parent.path().join(format!("{key}.retiring")).exists()
+                    || files::exists(parent.path().join(format!("{key}.retiring")), context)?
                 {
                     return Ok(None);
                 }

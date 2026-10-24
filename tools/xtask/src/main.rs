@@ -4,6 +4,9 @@
 //! Provide the same portable verification entry point for local work, hooks and CI.
 
 mod architecture;
+#[cfg(test)]
+mod architecture_source_tests;
+mod authored_sources;
 mod cache_storage;
 mod capability_source;
 mod catalog;
@@ -29,6 +32,7 @@ mod infrastructure;
 mod metrics;
 mod policy;
 mod source;
+mod source_tokens;
 mod structure;
 mod testing;
 mod vendor;
@@ -58,7 +62,7 @@ fn run() -> Result<()> {
     let task = select_task(&arguments)?;
     if task == "help" {
         eprintln!(
-            "cargo xtask governance | check | verify | help\ngovernance: repository policies\ncheck: policies, formatting and strict Clippy\nverify: check plus tests and warning-free Rustdoc"
+            "cargo xtask governance | check | verify | storage-inventory | help\ngovernance: repository policies\ncheck: policies, formatting and strict Clippy\nverify: check plus tests and warning-free Rustdoc"
         );
         return Ok(());
     }
@@ -70,6 +74,16 @@ fn run() -> Result<()> {
         .map_err(|error| Failure::external("read verification working directory", error))?;
     let root = invocation_root(root, &invocation)?;
     let root = root.as_path();
+    if task == "storage-inventory" {
+        let architecture = policy::load(root, "governance/architecture/policy.toml")?;
+        let workspace = workspace::Workspace::load(root)?;
+        let roots = ["crates", "tools", "native", "installer"].map(String::from);
+        let inventory = infrastructure::inventory(root, &architecture, &workspace, &roots)?;
+        let json = serde_json::to_string_pretty(&inventory)
+            .map_err(|cause| Failure::external("encode storage inventory", cause))?;
+        println!("{json}");
+        return Ok(());
+    }
     governance::check(root)?;
     if task == "governance" {
         return Ok(());
@@ -141,9 +155,9 @@ fn select_task(arguments: &[String]) -> Result<&str> {
     match arguments {
         [] => Ok("help"),
         [task] if matches!(task.as_str(), "help" | "--help" | "-h") => Ok("help"),
-        [task] if matches!(task.as_str(), "governance" | "check" | "verify") => Ok(task),
+        [task] if matches!(task.as_str(), "governance" | "check" | "verify" | "storage-inventory") => Ok(task),
         _ => Err(Failure::Policy(
-            "use cargo xtask governance, check, verify or help; extra arguments are rejected"
+            "use cargo xtask governance, check, verify, storage-inventory or help; extra arguments are rejected"
                 .into(),
         )),
     }

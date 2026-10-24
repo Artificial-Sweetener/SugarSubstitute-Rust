@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain selected ordinary record ancestry without granting raw handles or cleanup authority.
+mod commit;
 mod publication;
 mod reusable;
 use super::{
@@ -8,6 +9,7 @@ use super::{
     files::{self, Directory},
     invalid,
 };
+pub(crate) use commit::PreparedCommit;
 pub(crate) use reusable::publish_reusable;
 use std::{
     fs::ReadDir,

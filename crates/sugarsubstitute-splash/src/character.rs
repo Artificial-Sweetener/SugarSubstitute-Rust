@@ -193,12 +193,12 @@ impl CharacterLibrary {
     /// Return a geometry, pose-index, PNG-decoding, packaged-image-size, or allocation error.
     pub fn render(
         &mut self,
-        target: &mut Pixmap,
+        target: &mut crate::Raster,
         bounds: Bounds,
         frame: AnimationFrame,
     ) -> Result<(), CharacterError> {
         let mut cursor = CharacterRender::new(target.width(), target.height(), bounds, frame)?;
-        while !cursor.step(self, target)? {}
+        while !cursor.step(self, &mut target.pixels)? {}
         Ok(())
     }
 

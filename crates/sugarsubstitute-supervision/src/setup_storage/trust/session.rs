@@ -23,7 +23,7 @@ impl InstallationSession {
     ) -> Result<TrustStore, TrustFailure> {
         check(context)?;
         let root = self.directory();
-        if TrustStore::has_state(root)? {
+        if TrustStore::has_state(root, context)? {
             return TrustStore::open(root, repository, context);
         }
         let _work = context.memory().claim(WORK_BYTES).map_err(io::Error::other)?;

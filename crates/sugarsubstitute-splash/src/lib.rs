@@ -13,6 +13,7 @@ mod layout;
 mod packaged_png;
 mod progress;
 mod projection;
+mod raster;
 mod render;
 mod shapes;
 mod text;
@@ -23,6 +24,7 @@ pub use character::{CharacterError, CharacterLibrary, PoseAsset};
 pub use layout::{Appearance, Control, LOGICAL_SIZE, StartupStatus};
 pub use progress::ProgressFrame;
 pub use projection::{Bounds, Point, projected_quad};
+pub use raster::Raster;
 pub use render::{
     PreparationError, RenderError, SPLASH_CACHE_RESERVATION_BYTES, SplashInitializationTask,
     SplashPreparationResult, SplashRenderRequest, SplashRenderTask, SplashRenderer, TranscriptView,

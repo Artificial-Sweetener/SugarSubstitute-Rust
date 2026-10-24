@@ -9,6 +9,7 @@ pub(super) fn extract(
     reader: &mut impl Read,
     package: &Manifest,
     root: &Path,
+    context: &JobContext,
     cancellation: impl Fn() -> io::Result<()>,
 ) -> io::Result<()> {
     for entry in package.entries() {
@@ -27,7 +28,7 @@ pub(super) fn extract(
                 .in_scope(|| files::create_new(&path))?;
         copy(reader, entry, &mut output, &cancellation)?;
         tracing::trace_span!(target: "sugarsubstitute::storage", "archive_file_flush")
-            .in_scope(|| output.sync_all())?;
+            .in_scope(|| files::sync(&output, context))?;
     }
     if reader.read(&mut [0])? != 0 {
         return Err(invalid("Unexpected installer payload data"));

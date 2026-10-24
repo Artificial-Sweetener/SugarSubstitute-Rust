@@ -188,6 +188,7 @@ fn registered_owner_does_not_exempt_other_runtime_crates() -> Result<()> {
         package: "execution".into(),
         root: "crates/execution".into(),
         auxiliary_roots: Vec::new(),
+        auxiliary_files: Vec::new(),
         layer: "adapter".into(),
         concern: "Application execution and task lifetime".into(),
     });

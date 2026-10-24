@@ -62,7 +62,7 @@ fn missing_executable_is_repairable_without_running_or_reprovisioning_comfy() ->
         entrypoint::stage(replacement.path())?;
         entrypoint::publish(&root, replacement.path(), context)?;
         assert_eq!(
-            entrypoint::selected(&root)?.ok_or("Missing selection")?.path(),
+            entrypoint::selected(&root, context)?.ok_or("Missing selection")?.path(),
             replacement.path()
         );
         Ok(())

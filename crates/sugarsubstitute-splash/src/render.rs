@@ -165,7 +165,7 @@ impl SplashRenderer {
         appearance: Appearance,
         character: AnimationFrame,
         feedback: ProgressFrame,
-    ) -> Result<Pixmap, RenderError> {
+    ) -> Result<crate::Raster, RenderError> {
         self.render_frame(RenderFrame {
             width,
             height,
@@ -175,6 +175,7 @@ impl SplashRenderer {
             feedback,
             status: true,
         })
+        .map(|pixels| crate::Raster { pixels })
     }
 
     /// Paint the first packaged pose and controls before discovering status fonts.
@@ -193,7 +194,7 @@ impl SplashRenderer {
         scale: f64,
         appearance: Appearance,
         feedback: ProgressFrame,
-    ) -> Result<Pixmap, RenderError> {
+    ) -> Result<crate::Raster, RenderError> {
         self.render_frame(RenderFrame {
             width,
             height,
@@ -203,6 +204,7 @@ impl SplashRenderer {
             feedback,
             status: false,
         })
+        .map(|pixels| crate::Raster { pixels })
     }
 
     /// Validate and compose one frame while retaining this view's prepared resources.

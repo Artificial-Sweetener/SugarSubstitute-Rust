@@ -30,22 +30,29 @@ fn archive_validation_rejects_traversal_aliases_and_duplicate_names() -> io::Res
 }
 
 #[test]
-fn extraction_checks_bytes_cancellation_and_create_only_publication() -> io::Result<()> {
-    let temporary = tempfile::tempdir()?;
-    extract(&mut &b"valid"[..], &package(b"valid")?, temporary.path(), || Ok(()))?;
-    assert_eq!(std::fs::read(temporary.path().join("app/file"))?, b"valid");
-    assert!(extract(&mut &b"other"[..], &package(b"other")?, temporary.path(), || Ok(())).is_err());
-    let other = temporary.path().join("other");
-    assert!(extract(&mut &b"wrong"[..], &package(b"valid")?, &other, || Ok(())).is_err());
-    let cancelled = temporary.path().join("cancelled");
-    assert!(
-        extract(&mut &b"valid"[..], &package(b"valid")?, &cancelled, || Err(
-            io::ErrorKind::Interrupted.into()
-        ))
-        .is_err()
-    );
-    assert!(!cancelled.exists());
-    Ok(())
+fn extraction_checks_bytes_cancellation_and_create_only_publication() -> TestResult {
+    worker::run(|context, _| {
+        let temporary = tempfile::tempdir()?;
+        extract(&mut &b"valid"[..], &package(b"valid")?, temporary.path(), context, || Ok(()))?;
+        assert_eq!(std::fs::read(temporary.path().join("app/file"))?, b"valid");
+        assert!(
+            extract(&mut &b"other"[..], &package(b"other")?, temporary.path(), context, || Ok(()))
+                .is_err()
+        );
+        let other = temporary.path().join("other");
+        assert!(
+            extract(&mut &b"wrong"[..], &package(b"valid")?, &other, context, || Ok(())).is_err()
+        );
+        let cancelled = temporary.path().join("cancelled");
+        assert!(
+            extract(&mut &b"valid"[..], &package(b"valid")?, &cancelled, context, || Err(
+                io::ErrorKind::Interrupted.into()
+            ))
+            .is_err()
+        );
+        assert!(!cancelled.exists());
+        Ok(())
+    })
 }
 
 #[test]

@@ -72,7 +72,7 @@ impl Custody {
                     }
                     let mut marker = protection.file(&entry.path().join("owner"), context)?;
                     marker.write_all(&declaration)?;
-                    marker.sync_all()?;
+                    files::sync(&marker, context)?;
                     drop(marker);
                     entry.read("owner")?
                 }

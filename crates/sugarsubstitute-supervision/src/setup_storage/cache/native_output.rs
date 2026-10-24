@@ -93,7 +93,7 @@ impl PendingEntries {
                 let record = record::load(&directory, namespace, &key, protection, context)?;
                 if record.producer.is_none()
                     || record.deleting
-                    || parent.path().join(format!("{key}.retiring")).exists()
+                    || files::exists(parent.path().join(format!("{key}.retiring")), context)?
                 {
                     return Ok(None);
                 }

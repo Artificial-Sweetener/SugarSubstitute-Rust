@@ -23,7 +23,7 @@ fn accepted_application_repairs_stale_and_missing_links_without_repository_or_ca
         let repaired = std::fs::read(&link)?;
         assert_ne!(repaired, old);
         assert_eq!(
-            entrypoint::selected(&root)?.ok_or("Repaired entry absent")?.path(),
+            entrypoint::selected(&root, context)?.ok_or("Repaired entry absent")?.path(),
             root.path().join("releases").join(generation.id.as_str())
         );
         application.repair_launch_entry(context)?;
@@ -89,7 +89,7 @@ fn repair_requires_mutation_exclusion_and_recovers_when_maintenance_finishes() -
         drop(maintenance);
         application.repair_launch_entry(context)?;
         assert_eq!(
-            entrypoint::selected(&root)?.ok_or("Repair absent")?.path(),
+            entrypoint::selected(&root, context)?.ok_or("Repair absent")?.path(),
             application.directory()
         );
         Ok(())

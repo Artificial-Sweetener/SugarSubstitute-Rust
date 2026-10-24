@@ -3,7 +3,7 @@
 
 //! Inspect public declarative expansions as paths rather than arbitrary identifier bags.
 
-use crate::{execution_exports_names::Names, execution_source};
+use crate::execution_exports_names::Names;
 use proc_macro2::{Delimiter, TokenStream, TokenTree};
 use std::collections::BTreeSet;
 
@@ -15,8 +15,13 @@ pub(crate) struct Findings {
 }
 
 /// Check exported definitions and re-exports at their actual lexical scopes.
-pub(crate) fn findings(names: &Names, module: &[String], items: &[syn::Item]) -> Findings {
-    let mut scanner = Scanner::new(names);
+pub(crate) fn findings(
+    names: &Names,
+    module: &[String],
+    items: &[syn::Item],
+    restricted: fn(&[String]) -> bool,
+) -> Findings {
+    let mut scanner = Scanner::new(names, restricted);
     for item in items {
         match item {
             syn::Item::Macro(item) if exported(&item.attrs) => {
@@ -40,8 +45,13 @@ pub(crate) fn findings(names: &Names, module: &[String], items: &[syn::Item]) ->
 }
 
 /// Inspect initializer arguments and statically resolved local declarative expansions.
-pub(crate) fn invocation(names: &Names, module: &[String], item: &syn::Macro) -> Findings {
-    let mut scanner = Scanner::new(names);
+pub(crate) fn invocation(
+    names: &Names,
+    module: &[String],
+    item: &syn::Macro,
+    restricted: fn(&[String]) -> bool,
+) -> Findings {
+    let mut scanner = Scanner::new(names, restricted);
     for resolved in names.resolve(module, &item.path, &BTreeSet::new()) {
         scanner.path(&resolved);
         scanner.local_definition(&resolved);
@@ -60,14 +70,15 @@ pub(crate) fn exported(attrs: &[syn::Attribute]) -> bool {
 /// Guard recursive expansions while retaining scheduler paths and callable identities.
 struct Scanner<'a> {
     names: &'a Names,
+    restricted: fn(&[String]) -> bool,
     found: Findings,
     visiting: BTreeSet<Vec<String>>,
 }
 
 impl<'a> Scanner<'a> {
     /// Start one audit without cross-expansion scope leakage.
-    fn new(names: &'a Names) -> Self {
-        Self { names, found: Findings::default(), visiting: BTreeSet::new() }
+    fn new(names: &'a Names, restricted: fn(&[String]) -> bool) -> Self {
+        Self { names, restricted, found: Findings::default(), visiting: BTreeSet::new() }
     }
 
     /// Expand every local platform alternative once on the current recursion path.
@@ -109,7 +120,7 @@ impl<'a> Scanner<'a> {
                         && punctuation(&tokens[index - 1], ':')
                         && punctuation(&tokens[index - 2], ':')))
             {
-                self.found.messages.insert("exported macro assembles a caller-selected path; expose an owned execution operation explicitly".into());
+                self.found.messages.insert("exported macro assembles a caller-selected path; expose an owned operation explicitly".into());
             }
             let TokenTree::Ident(name) = token else { continue };
             let mut parts = vec![name.to_string()];
@@ -150,9 +161,9 @@ impl<'a> Scanner<'a> {
 
     /// Classify canonical paths with the same rule as ordinary source access.
     fn path(&mut self, resolved: &[String]) {
-        if execution_source::restricted_path(resolved) {
+        if (self.restricted)(resolved) {
             self.found.messages.insert(format!(
-                "exported macro exposes scheduler capability {}",
+                "exported macro exposes restricted capability {}",
                 resolved.join("::")
             ));
         }

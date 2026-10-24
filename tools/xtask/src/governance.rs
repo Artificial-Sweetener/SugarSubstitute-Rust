@@ -28,6 +28,7 @@ pub(crate) fn check(root: &Path) -> Result<()> {
         root,
         &architecture,
         &infrastructure,
+        &workspace,
         time::OffsetDateTime::now_utc().date(),
     )?;
     let debt: Records<Debt> = policy::load(root, "governance/architecture/debt.toml")?;

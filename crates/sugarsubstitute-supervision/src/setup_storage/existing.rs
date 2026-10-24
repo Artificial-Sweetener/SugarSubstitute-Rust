@@ -67,11 +67,11 @@ pub fn inspect_installation(
 ) -> io::Result<Option<InstallationSummary>> {
     check(context)?;
     files::lexical(path)?;
-    if !path.try_exists()? {
+    if !files::exists(path, context)? {
         return Ok(None);
     }
     let root = Directory::open(path, false)?;
-    if !root.path().join(".substitute-installation.json").try_exists()? {
+    if !files::exists(root.path().join(".substitute-installation.json"), context)? {
         return if root.entries(context)?.next().transpose()?.is_none() {
             Ok(None)
         } else {
@@ -96,8 +96,10 @@ impl ExistingInstallation {
         let existing = if let Some(generation) = &selected {
             Some(accepted::read(root, marker, generation, context)?)
         } else {
-            match entrypoint::selected(root)? {
-                Some(directory) => Some(Self::from_directory(root, directory, marker, None)?),
+            match entrypoint::selected(root, context)? {
+                Some(directory) => {
+                    Some(Self::from_directory(root, directory, marker, None, context)?)
+                }
                 None => recovery::discover(root, marker, context)?,
             }
         };
@@ -113,7 +115,9 @@ impl ExistingInstallation {
         directory: Directory,
         marker: File,
         accepted: Option<&Generation>,
+        context: &JobContext,
     ) -> io::Result<Self> {
+        check(context)?;
         let mut record_file = directory.read("installation-ready.json")?;
         let record: ReadyRecord =
             serde_json::from_slice(&files::read_bounded(&mut record_file, 1024 * 1024)?)
@@ -128,8 +132,8 @@ impl ExistingInstallation {
             return Err(invalid("Saved configuration differs from the accepted package identity"));
         }
         record.selection.validate()?;
-        if std::fs::canonicalize(&record.selection.install_root)?
-            != std::fs::canonicalize(root.path())?
+        if crate::durable_storage::files::canonical_path(&record.selection.install_root, context)?
+            != crate::durable_storage::files::canonical_path(root.path(), context)?
         {
             return Err(invalid("Saved installation choices belong to another folder"));
         }
@@ -154,7 +158,7 @@ impl ExistingInstallation {
         let descriptor: LaunchDescriptor =
             serde_json::from_slice(&files::read_bounded(&mut descriptor_file, 65536)?)
                 .map_err(io::Error::other)?;
-        let configuration_index = descriptor.validate(&directory)?;
+        let configuration_index = descriptor.validate(&directory, context)?;
         let executable_missing = match directory.read("sugarsubstitute.exe") {
             Ok(_) => false,
             Err(cause) if cause.kind() == io::ErrorKind::NotFound => true,
@@ -208,6 +212,7 @@ impl ExistingInstallation {
             Directory::open(&path, false)?,
             super::ownership::read(root)?,
             Some(generation),
+            context,
         )?;
         if candidate.summary.selection != self.summary.selection
             || candidate.runtime != self.runtime
@@ -235,7 +240,7 @@ impl ExistingInstallation {
 }
 impl LaunchDescriptor {
     /// Check the supported argument contract and return its configuration-value index.
-    fn validate(&self, directory: &Directory) -> io::Result<usize> {
+    fn validate(&self, directory: &Directory, context: &JobContext) -> io::Result<usize> {
         let expected = [
             "--startup-config",
             "--frontend-package",
@@ -258,8 +263,11 @@ impl LaunchDescriptor {
             }
             files::lexical(Path::new(&pair[1]))?;
             if pair[0] == "--startup-config" {
-                if std::fs::canonicalize(&pair[1])?
-                    != std::fs::canonicalize(directory.path().join("startup.local.toml"))?
+                if crate::durable_storage::files::canonical_path(&pair[1], context)?
+                    != crate::durable_storage::files::canonical_path(
+                        directory.path().join("startup.local.toml"),
+                        context,
+                    )?
                 {
                     return Err(invalid(
                         "Saved launch configuration is outside its installation generation",

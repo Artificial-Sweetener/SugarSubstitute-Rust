@@ -86,7 +86,7 @@ pub(super) fn create(
         let mut file = protection.file(&stage.join("setup-generation.json"), context)?;
         use std::io::Write;
         file.write_all(&bytes)?;
-        file.sync_all()?;
+        files::sync(&file, context)?;
         check(context)?;
         Ok((stage, directory.identity()?))
     })?;

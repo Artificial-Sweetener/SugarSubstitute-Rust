@@ -25,15 +25,15 @@ pub(in crate::setup_storage) fn repair(
     context: &JobContext,
 ) -> io::Result<bool> {
     check(context)?;
-    let existing = record::read(state, protection)?;
+    let existing = record::read(state, protection, context)?;
     if existing.is_none() && !application.payload.compatibility.has_launcher() {
         return Ok(false);
     }
-    validate_link(root, state, protection)?;
+    validate_link(root, state, protection, context)?;
     let record = match existing {
         Some(record) => record,
         None => {
-            match std::fs::symlink_metadata(root.path().join(EXECUTABLE)) {
+            match crate::durable_storage::files::inspect(root.path().join(EXECUTABLE), context) {
                 Ok(_) => {
                     return Err(invalid(
                         "The stable launcher path contains an unowned file; it has been preserved",
@@ -53,14 +53,14 @@ pub(in crate::setup_storage) fn repair(
     let _executable = payload::ensure(root, &record, protection, context)?;
     let bytes = retained_link(root, state, protection, context)?;
     check(context)?;
-    let replace = validate_link(root, state, protection)?;
+    let replace = validate_link(root, state, protection, context)?;
     if replace && files::read_bounded(&mut root.read(NAME)?, 65536)? == bytes {
         return Ok(true);
     }
     let stage = staging::unique_path(root, ".launcher-link-stage")?;
     let mut output = protection.file(&stage, context)?;
     std::io::Write::write_all(&mut output, &bytes)?;
-    output.sync_all()?;
+    files::sync(&output, context)?;
     let identity = files::file_identity(&output)?;
     drop(output);
     check(context)?;
@@ -79,8 +79,9 @@ pub(in crate::setup_storage) fn require_compatible(
     state: &Directory,
     compatibility: &crate::setup_storage::compatibility::Compatibility,
     protection: &Protection,
+    context: &JobContext,
 ) -> io::Result<()> {
-    if let Some(record) = record::read(state, protection)? {
+    if let Some(record) = record::read(state, protection, context)? {
         compatibility.require_launcher(
             &LauncherContract::decode(record.contract.as_bytes()).map_err(io::Error::other)?,
         )?;
@@ -116,7 +117,13 @@ fn retained_link(
 }
 
 /// Validate before mutation and again before replacement; unknown links are never adopted.
-fn validate_link(root: &Directory, state: &Directory, protection: &Protection) -> io::Result<bool> {
+fn validate_link(
+    root: &Directory,
+    state: &Directory,
+    protection: &Protection,
+    context: &JobContext,
+) -> io::Result<bool> {
+    check(context)?;
     let mut file = match root.read(NAME) {
         Ok(file) => file,
         Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(false),
@@ -131,7 +138,7 @@ fn validate_link(root: &Directory, state: &Directory, protection: &Protection) -
             ));
         }
     } else {
-        selected(root)?.ok_or_else(|| invalid("Earlier shell entry disappeared"))?;
+        selected(root, context)?.ok_or_else(|| invalid("Earlier shell entry disappeared"))?;
     }
     Ok(true)
 }

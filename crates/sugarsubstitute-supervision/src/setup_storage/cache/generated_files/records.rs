@@ -56,7 +56,7 @@ impl GeneratedFiles {
         };
         files::single_link(&file)?;
         protection::with(context, |protection| protection.verify_file(&file))?;
-        let length = file.metadata()?.len();
+        let length = files::length(&file, context)?;
         self.index.admit(name, false, charge.max(length))?;
         check(context)?;
         Ok(Some(length))
@@ -137,7 +137,7 @@ impl GeneratedFiles {
                 Ok(mut file) => {
                     use std::io::Write;
                     file.write_all(bytes)?;
-                    file.sync_all()?;
+                    files::sync(&file, context)?;
                     check(context)
                 }
                 Err(cause) if record::collision(&cause) => {

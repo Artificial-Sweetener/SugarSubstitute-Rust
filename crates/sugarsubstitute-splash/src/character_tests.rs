@@ -11,8 +11,8 @@ use std::error::Error;
 use tiny_skia::Pixmap;
 
 /// Allocate a test target through the same fallible API used by the renderer.
-fn target() -> Result<Pixmap, Box<dyn Error>> {
-    Pixmap::new(386, 386).ok_or_else(|| "Cannot allocate test raster".into())
+fn target() -> Result<crate::Raster, Box<dyn Error>> {
+    crate::Raster::new(386, 386).ok_or_else(|| "Cannot allocate test raster".into())
 }
 
 /// Keep native reference color ties stable through airborne and landing shears.
@@ -23,7 +23,7 @@ fn transformed_sampling_retains_native_fixed_point_ties() -> Result<(), Box<dyn 
         (1.75, (83.0, 7.0), 0.25, 0, (344, 353), [207, 97, 99, 255]),
         (2.0, (85.0, 86.0), 0.94, 1, (366, 513), [5, 0, 0, 36]),
     ] {
-        let mut target = Pixmap::new(1116, 1116).ok_or("Cannot allocate sampling target")?;
+        let mut target = crate::Raster::new(1116, 1116).ok_or("Cannot allocate sampling target")?;
         library.render(
             &mut target,
             Bounds {
@@ -60,7 +60,7 @@ fn bootstrap_preserves_identity_pixels_and_decodes_one_pose() -> Result<(), Box<
 #[test]
 fn front_facing_odd_width_slot_snaps_without_blurring() -> Result<(), Box<dyn Error>> {
     let mut library = CharacterLibrary::new(POSE_ASSETS)?;
-    let mut target = Pixmap::new(558, 558).ok_or("Cannot allocate test raster")?;
+    let mut target = crate::Raster::new(558, 558).ok_or("Cannot allocate test raster")?;
     library.render(
         &mut target,
         Bounds { x: 83.0, y: 7.0, width: 387.0, height: 386.0 },
@@ -99,12 +99,12 @@ fn all_packaged_poses_decode_lazily_at_source_size() -> Result<(), Box<dyn Error
 fn all_poses_remain_bounded_through_sheared_edge_and_landing_frames() -> Result<(), Box<dyn Error>>
 {
     let mut library = CharacterLibrary::new(POSE_ASSETS)?;
-    let mut target = Pixmap::new(209, 209).ok_or("Cannot allocate test raster")?;
+    let mut target = crate::Raster::new(209, 209).ok_or("Cannot allocate test raster")?;
     let bounds = Bounds { x: 8.0, y: 8.0, width: 193.0, height: 193.0 };
     for pose in 0..40 {
         for direction in [-1, 1] {
             for progress in [0.25, 0.5, 0.875] {
-                target.fill(tiny_skia::Color::TRANSPARENT);
+                target.clear();
                 library.render(
                     &mut target,
                     bounds,

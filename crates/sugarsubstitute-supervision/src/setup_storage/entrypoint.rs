@@ -52,7 +52,8 @@ fn link_bytes(directory: &Directory, executable: &Path) -> io::Result<Vec<u8>> {
 }
 
 /// Unknown or edited links are preserved; only exact retained setup output is replaceable.
-pub(super) fn selected(root: &Directory) -> io::Result<Option<Directory>> {
+pub(super) fn selected(root: &Directory, context: &JobContext) -> io::Result<Option<Directory>> {
+    super::check(context)?;
     let mut existing = match root.read(NAME) {
         Ok(file) => file,
         Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(None),
@@ -64,9 +65,13 @@ pub(super) fn selected(root: &Directory) -> io::Result<Option<Directory>> {
     let generation = target.parent().ok_or_else(|| invalid("Shell entry target is absent"))?;
     let directory = Directory::open(generation, false)?;
     if target.file_name().and_then(|name| name.to_str()) != Some("sugarsubstitute.exe")
-        || std::fs::canonicalize(
+        || crate::durable_storage::files::canonical_path(
             generation.parent().ok_or_else(|| invalid("Shell entry generation is absent"))?,
-        )? != std::fs::canonicalize(root.path().join("releases"))?
+            context,
+        )? != crate::durable_storage::files::canonical_path(
+            root.path().join("releases"),
+            context,
+        )?
     {
         return Err(invalid("The existing shell entry belongs to another installation"));
     }
@@ -81,29 +86,30 @@ pub(super) fn selected(root: &Directory) -> io::Result<Option<Directory>> {
 /// Earlier installer publication is allowed only before protected selection is enabled.
 /// Hold the first-enablement lock through publication, alongside the caller's setup exclusion.
 pub(super) fn publish(root: &Directory, generation: &Path, context: &JobContext) -> io::Result<()> {
-    super::selection::publication::legacy(root, context, || replace(root, generation))
+    super::selection::publication::legacy(root, context, || replace(root, generation, context))
 }
 
 /// Restore a verified accepted application's shell entry under its run, setup and writer guards.
 /// Validate the old entry before staging anything; edited or unknown links remain untouched.
 pub(super) fn repair(root: &Directory, generation: &Path, context: &JobContext) -> io::Result<()> {
-    selected(root)?;
+    selected(root, context)?;
     let directory = Directory::open(generation, false)?;
     ready(&directory)?;
     stage(generation)?;
     super::check(context)?;
-    replace(root, generation)
+    replace(root, generation, context)
 }
 
 /// Atomic same-volume publication leaves either the previous complete link or the new one.
 /// Callers retain publication authority and installation mutation exclusion until it returns.
-fn replace(root: &Directory, generation: &Path) -> io::Result<()> {
+fn replace(root: &Directory, generation: &Path, context: &JobContext) -> io::Result<()> {
+    super::check(context)?;
     let directory = Directory::open(generation, false)?;
     ready(&directory)?;
     let bytes = files::read_bounded(&mut directory.read(NAME)?, 65536)?;
     let source = staging::unique_path(root, ".setup-entry-stage")?;
     files::write_new(&source, &bytes)?;
-    let replace = selected(root)?.is_some();
+    let replace = selected(root, context)?.is_some();
     if replace {
         staging::replace_record(&source, &root.path().join(NAME))
     } else {
@@ -176,7 +182,7 @@ mod tests {
                 second.join("sugarsubstitute.exe")
             );
             assert_eq!(std::fs::read(first.join(NAME))?, old);
-            assert!(selected(&root)?.is_some());
+            assert!(selected(&root, context)?.is_some());
             Ok(())
         })
     }

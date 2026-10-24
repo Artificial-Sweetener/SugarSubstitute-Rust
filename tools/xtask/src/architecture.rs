@@ -50,6 +50,30 @@ pub(crate) fn check(root: &Path, policy: &Architecture, workspace: &Workspace) -
             registered_roots.push(path);
         }
     }
+    let mut registered_files = BTreeSet::new();
+    for owner in &policy.owners {
+        for relative in &owner.auxiliary_files {
+            let path = resolve(root, relative)?;
+            require(
+                path.is_file()
+                    && !path
+                        .symlink_metadata()
+                        .map_err(|cause| {
+                            crate::error::Failure::external("inspect auxiliary source", cause)
+                        })?
+                        .is_symlink()
+                    && !path
+                        .extension()
+                        .and_then(|value| value.to_str())
+                        .is_some_and(|value| value.eq_ignore_ascii_case("rs"))
+                    && registered_roots.iter().all(|directory| !path.starts_with(directory))
+                    && registered_files.insert(path),
+                format!(
+                    "architecture: auxiliary file {relative} is missing, linked, Rust, or overlaps an owner"
+                ),
+            )?;
+        }
+    }
     for package in &workspace.packages {
         let owner =
             policy.owners.iter().find(|owner| owner.package == package.name).ok_or_else(|| {
@@ -85,11 +109,7 @@ pub(crate) fn check(root: &Path, policy: &Architecture, workspace: &Workspace) -
                 seen.insert(path.clone()),
                 format!("architecture: overlapping source roots at {}", path.display()),
             )?;
-            let matching = policy
-                .owners
-                .iter()
-                .filter(|owner| owner.roots().any(|relative| path.starts_with(root.join(relative))))
-                .count();
+            let matching = policy.owners.iter().filter(|owner| owner.owns(root, &path)).count();
             require(
                 matching == 1,
                 format!("{}: authored Rust source needs exactly one crate owner", path.display()),
@@ -199,6 +219,7 @@ mod tests {
             package: layer.into(),
             root: layer.into(),
             auxiliary_roots: Vec::new(),
+            auxiliary_files: Vec::new(),
             layer: layer.into(),
             concern: layer.into(),
         };

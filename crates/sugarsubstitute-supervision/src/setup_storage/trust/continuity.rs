@@ -26,7 +26,7 @@ pub(super) fn ensure(
     let staged = staging::unique_path(&store._installation_root, ".update-trust-enable-stage")?;
     let mut file = protection.file(&staged, context)?;
     file.write_all(&bytes)?;
-    file.sync_all()?;
+    files::sync(&file, context)?;
     drop(file);
     check(context)?;
     staging::publish(&staged, &store._installation_root.path().join(MARKER))?;

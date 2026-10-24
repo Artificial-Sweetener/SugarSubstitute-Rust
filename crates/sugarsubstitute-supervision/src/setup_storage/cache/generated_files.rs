@@ -49,7 +49,7 @@ impl GeneratedFiles {
                     .ok_or_else(|| invalid("File name absent"))?,
             )?;
             files::single_link(&file)?;
-            index.admit(&name, false, file.metadata()?.len())?;
+            index.admit(&name, false, files::length(&file, context)?)?;
         }
         Ok(Self { payloads: BTreeMap::new(), index, lease, _memory: memory })
     }

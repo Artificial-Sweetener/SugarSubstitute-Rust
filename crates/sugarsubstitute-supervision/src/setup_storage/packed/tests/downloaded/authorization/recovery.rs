@@ -41,7 +41,7 @@ impl Recovery<'_> {
     }
     fn preserved(&self) -> TestResult {
         assert_eq!(
-            entrypoint::selected(self.directory)?.ok_or("Shell lost")?.path(),
+            entrypoint::selected(self.directory, self.context)?.ok_or("Shell lost")?.path(),
             self.original
         );
         assert!(!self.directory.path().join("external-comfy").exists());

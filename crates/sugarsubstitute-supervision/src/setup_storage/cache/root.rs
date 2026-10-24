@@ -26,8 +26,8 @@ pub(super) fn open(
                 let directory = Directory::open(&staged, false)?;
                 let mut owner = protection.file(&staged.join("owner"), context)?;
                 owner.write_all(expected.as_bytes())?;
-                owner.sync_all()?;
-                protection.file(&staged.join("writer"), context)?.sync_all()?;
+                files::sync(&owner, context)?;
+                files::sync(&protection.file(&staged.join("writer"), context)?, context)?;
                 for namespace in Namespace::ALL {
                     protection.directory(
                         &staged.join(namespace.directory()),

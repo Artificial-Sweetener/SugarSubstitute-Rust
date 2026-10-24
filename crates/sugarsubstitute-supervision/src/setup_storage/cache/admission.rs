@@ -160,7 +160,7 @@ fn create(
         protection.directory(&staged.join("data"), Mode::CreateNew, context)?;
         let lease = protection.file(&staged.join("lease"), context)?;
         record::initialize_time(&lease, now, context)?;
-        lease.sync_all()?;
+        files::sync(&lease, context)?;
         let consumers = super::consumers::initialize(&directory, protection, context)?;
         let record = record::Record {
             schema: 1,
@@ -178,7 +178,7 @@ fn create(
         };
         let mut file = protection.file(&staged.join("record"), context)?;
         file.write_all(&serde_json::to_vec(&record)?)?;
-        file.sync_all()?;
+        files::sync(&file, context)?;
         directory.identity()
     })?;
     let path = parent.path().join(key);

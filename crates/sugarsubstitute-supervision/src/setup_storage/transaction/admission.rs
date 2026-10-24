@@ -21,7 +21,7 @@ impl Admission {
         check(context)?;
         let root = Directory::open(path, create)?;
         let marker_path = root.path().join(ownership::MARKER);
-        if create && !marker_path.try_exists()? {
+        if create && !files::exists(&marker_path, context)? {
             if root.entries(context)?.next().transpose()?.is_some() {
                 return Err(invalid("This folder contains files from an unknown installation"));
             }

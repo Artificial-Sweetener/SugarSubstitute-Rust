@@ -85,13 +85,13 @@ role = "fixture"
 [[namespace_reviews]]
 path = "tools/xtask/src/cache_storage.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:67c251043210363727aac2941b5c1a1ab381f5095676f7fc9fea085f52687582"
+source_sha256 = "sha256:af5613da96d552f1bf9db9a84f276caa4491235c2e4f8f74da8f323746cd81ea"
 rationale = "Authoritative checker names and literal negative-test inputs; no runtime storage implementation."
 
 [[namespace_reviews]]
 path = "tools/xtask/src/cache_storage/tests.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:d19de0ee39ad6d5060b1a73334e934583b314530445e5e9d38fbfdee890d564d"
+source_sha256 = "sha256:72ec3daf78a0fc5427f552645988c4ccb53c93d336fffc788b8a63097e9e17a4"
 rationale = "Isolated repository fixtures deliberately contain registered and adversarial namespace spellings."
 
 [[namespace_reviews]]

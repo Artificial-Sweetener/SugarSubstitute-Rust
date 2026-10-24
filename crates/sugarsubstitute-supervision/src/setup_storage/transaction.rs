@@ -170,7 +170,7 @@ impl PreparedInstallation {
         let _frontend = Directory::open(&runtime.frontend, false)?;
         let nodes = Directory::open(&runtime.directory.join("custom_nodes"), true)?;
         let cube = nodes.path().join("SugarCubes");
-        if !cube.try_exists()? {
+        if !files::exists(&cube, context)? {
             let stage =
                 crate::durable_storage::staging::directory(&_comfy, ".substitute-node-stage")?;
             self.bundle.payload.copy("sugarcubes/", &stage, context, files::create_new)?;

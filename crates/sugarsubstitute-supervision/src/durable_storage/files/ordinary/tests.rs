@@ -89,6 +89,14 @@ fn original_deadline_prevents_every_ordinary_file_effect() -> TestResult {
         let original = reader.metadata()?.modified()?;
         clock.expire();
         assert_eq!(
+            sync(&reader, context).err().ok_or("Expired file flushed")?.kind(),
+            io::ErrorKind::TimedOut
+        );
+        assert_eq!(
+            length(&reader, context).err().ok_or("Expired length observed")?.kind(),
+            io::ErrorKind::TimedOut
+        );
+        assert_eq!(
             parent.lock("absent", context).err().ok_or("Expired exclusion acquired")?.kind(),
             io::ErrorKind::TimedOut
         );

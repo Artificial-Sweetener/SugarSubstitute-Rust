@@ -4,7 +4,7 @@
 use super::super::check;
 use super::super::invalid;
 use super::payload::{Input, hash};
-use crate::durable_storage::files::Directory;
+use crate::durable_storage::files::{self, Directory};
 use std::{io, path::Path};
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
 use sugarsubstitute_update::package::Manifest;
@@ -44,7 +44,7 @@ impl VerifiedCopy {
                     .and_then(|value| value.to_str())
                     .ok_or_else(|| invalid("Prepared payload leaf absent"))?,
             )?;
-            if file.metadata()?.len() != entry.bytes()
+            if files::length(&file, context)? != entry.bytes()
                 || hash(&mut file, context)? != entry.digest()
             {
                 return Err(invalid("Prepared application payload verification failed"));

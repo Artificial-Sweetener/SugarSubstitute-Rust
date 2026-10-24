@@ -139,6 +139,12 @@ pub(crate) fn length(file: &File, context: &JobContext) -> io::Result<u64> {
     effect(context, || Ok(file.metadata()?.len()))
 }
 
+/// Flush the retained file's contents and metadata under the original job controls.
+/// Native completion is observed before returning, including when controls end during the flush.
+pub(crate) fn sync(file: &File, context: &JobContext) -> io::Result<()> {
+    effect(context, || file.sync_all())
+}
+
 /// Update only metadata through the retained handle and original current job controls.
 pub(crate) fn set_modified(
     file: &File,

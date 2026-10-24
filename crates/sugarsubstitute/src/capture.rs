@@ -131,7 +131,7 @@ pub(crate) fn export(scenarios: &Path, output: &Path) -> Result<(), Box<dyn Erro
             character,
             feedback,
         )?;
-        frame.save_png(output.join(format!("{}.png", scenario.name)))?;
+        fs::write(output.join(format!("{}.png", scenario.name)), frame.encode_png()?)?;
         if scenario.raw {
             fs::write(output.join(format!("{}.raw", scenario.name)), frame.data())?;
         }

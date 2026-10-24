@@ -11,6 +11,23 @@ use crate::{
     fixtures::{Repository, write},
 };
 
+/// A module and re-exported function may share a name without growing alias paths forever.
+#[test]
+fn module_function_name_collisions_preserve_finite_public_resolution() -> Result<()> {
+    let repository = Repository::new()?;
+    write(repository.root(), "crates/host/src/lib.rs", "mod entry; pub use entry::entry;")?;
+    write(repository.root(), "crates/host/src/entry.rs", "pub fn entry() {}")?;
+    let root = repository.root().join("crates/host");
+    assert!(findings(&root, &[])?.is_empty());
+    write(
+        repository.root(),
+        "crates/host/src/entry.rs",
+        "pub fn entry()->tokio::runtime::Runtime {loop{}}",
+    )?;
+    assert!(!findings(&root, &[])?.is_empty());
+    Ok(())
+}
+
 /// Private aliases and nested public exports resolve back to the original capability.
 #[test]
 fn aliases_and_scheduler_globs_cannot_hide_public_types() -> Result<()> {

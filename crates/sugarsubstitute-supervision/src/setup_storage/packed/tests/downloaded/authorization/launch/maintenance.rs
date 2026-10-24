@@ -57,7 +57,7 @@ fn identical_embedded_installer_repairs_access_to_the_accepted_generation() -> T
             assert_eq!(installed.directory, accepted);
             assert_eq!(installed.executable, accepted.join("sugarsubstitute.exe"));
             assert_eq!(
-                entrypoint::selected(&root)?.ok_or("Repaired entry absent")?.path(),
+                entrypoint::selected(&root, context)?.ok_or("Repaired entry absent")?.path(),
                 accepted
             );
             assert_eq!(store.load(context)?, before);
@@ -148,7 +148,7 @@ fn maintenance_uses_accepted_configuration_and_can_repair_its_missing_executable
         let link = root.path().join("SugarSubstitute.lnk");
         let old_link = std::fs::read(&link)?;
         assert_ne!(
-            entrypoint::selected(&root)?.ok_or("Old shell selection absent")?.path(),
+            entrypoint::selected(&root, context)?.ok_or("Old shell selection absent")?.path(),
             accepted
         );
         std::fs::remove_file(accepted.join("sugarsubstitute.exe"))?;
@@ -205,7 +205,7 @@ fn damaged_accepted_configuration_does_not_fall_back_to_the_old_shell_target() -
                 b"broken saved configuration".to_vec()
             };
             std::fs::write(&path, &bytes)?;
-            assert!(entrypoint::selected(&root)?.is_some());
+            assert!(entrypoint::selected(&root, context)?.is_some());
             assert!(inspect_installation(root.path(), context).is_err());
             assert_eq!(std::fs::read(&path)?, bytes);
         }
@@ -226,7 +226,7 @@ fn damaged_or_missing_selection_never_becomes_legacy_shortcut_recovery() -> Test
         std::fs::remove_file(&path)?;
         assert!(inspect_installation(root.path(), context).is_err());
         assert!(!path.exists());
-        assert!(entrypoint::selected(&root)?.is_some());
+        assert!(entrypoint::selected(&root, context)?.is_some());
         Ok(())
     })
 }

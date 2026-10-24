@@ -56,8 +56,13 @@ pub(super) fn discover(
             Err(cause) if cause.kind() == io::ErrorKind::NotFound => continue,
             Err(cause) => return Err(cause),
         }
-        let mut candidate =
-            ExistingInstallation::from_directory(root, generation, marker.try_clone()?, None)?;
+        let mut candidate = ExistingInstallation::from_directory(
+            root,
+            generation,
+            marker.try_clone()?,
+            None,
+            context,
+        )?;
         candidate.summary.launch_entry_missing = true;
         if let Some(previous) = &recovered {
             if !equivalent(previous, &candidate) {
