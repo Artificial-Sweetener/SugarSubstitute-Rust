@@ -76,3 +76,17 @@ fn malformed_launcher_declarations_cannot_claim_capabilities() {
         Some(Rejection::Format)
     );
 }
+
+#[test]
+fn launcher_replacement_preserves_reader_and_produced_entry() -> Result<(), Rejection> {
+    let previous = LauncherContract::decode(CURRENT_LAUNCHER_CONTRACT)?;
+    previous.require_replacement_of(&previous, 1)?;
+    for (schemas, protocol, expected) in
+        [(json!([2]), 1, Rejection::InstallationSchema), (json!([1]), 2, Rejection::Unsupported)]
+    {
+        let declaration = json!({"schema_version":1,"installation_schemas":schemas,"installed_launch_protocol":protocol}).to_string();
+        let next = LauncherContract::decode(declaration.as_bytes())?;
+        assert_eq!(next.require_replacement_of(&previous, 1), Err(expected));
+    }
+    Ok(())
+}

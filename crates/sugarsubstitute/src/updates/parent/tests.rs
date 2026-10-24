@@ -9,6 +9,7 @@ use sugarsubstitute_contracts::{
     lifecycle::{CoordinatorEpoch, NamespaceId},
 };
 use sugarsubstitute_execution::ExecutionOwner;
+mod prepared;
 type TestResult = std::result::Result<(), Box<dyn Error>>;
 
 /// Model the point before an image is supplied; all subsequent registry and execution work is real.
@@ -37,6 +38,10 @@ fn partial(client: ExecutionClient, clock: &Manual) -> Result<Parent> {
         stop_issued: false,
         retired: false,
         failure: None,
+        probe: false,
+        probe_custody: None,
+        successful_exit: false,
+        completion_taken: false,
     })
 }
 

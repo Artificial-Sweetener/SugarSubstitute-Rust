@@ -2301,12 +2301,14 @@ dependencies = [
  "sha2",
  "sugarsubstitute-application",
  "sugarsubstitute-comfy",
+ "sugarsubstitute-configuration",
  "sugarsubstitute-contracts",
  "sugarsubstitute-crash",
  "sugarsubstitute-desktop",
  "sugarsubstitute-execution",
  "sugarsubstitute-splash",
  "sugarsubstitute-supervision",
+ "sugarsubstitute-update",
  "tempfile",
  "tracing",
  "tracing-subscriber",
@@ -2330,10 +2332,20 @@ dependencies = [
  "sugarsubstitute-application",
  "sugarsubstitute-contracts",
  "sugarsubstitute-execution",
+ "sugarsubstitute-networking",
  "sugarsubstitute-supervision",
- "toml",
  "tracing",
  "windows",
+]
+
+[[package]]
+name = "sugarsubstitute-configuration"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sugarsubstitute-contracts",
+ "toml",
 ]
 
 [[package]]
@@ -2395,6 +2407,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sugarsubstitute-networking"
+version = "0.1.0"
+dependencies = [
+ "sugarsubstitute-contracts",
+ "sugarsubstitute-execution",
+ "url",
+ "windows",
+]
+
+[[package]]
 name = "sugarsubstitute-splash"
 version = "0.1.0"
 dependencies = [
@@ -2418,8 +2440,10 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "sugarsubstitute-configuration",
  "sugarsubstitute-contracts",
  "sugarsubstitute-execution",
+ "sugarsubstitute-networking",
  "sugarsubstitute-update",
  "tempfile",
  "toml",

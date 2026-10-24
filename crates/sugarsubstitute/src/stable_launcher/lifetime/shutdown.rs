@@ -25,6 +25,9 @@ impl Launcher {
         self.wake_at =
             Instant::now().checked_add(until.checked_duration_since(now).unwrap_or_default());
         self.closing = true;
+        self.selection_wait = None;
+        self.activation_after = None;
+        self.activation_wake = None;
         if let Some(job) = &self.job {
             job.job.cancel();
         }
@@ -54,9 +57,31 @@ impl Launcher {
         if self.job.is_some() || self.cached.is_some() {
             return Ok(false);
         }
-        if let Some(launch) = self.launch.clone() {
+        if self.activation.is_some() {
+            if self.activation_due() {
+                self.observe_activation(true)?;
+            }
+            return Ok(false);
+        }
+        if self.launch.is_some() || self.engine.is_some() || self.source.is_some() {
+            if !self.activation_due() {
+                return Ok(false);
+            }
+            let launch = self.launch.clone();
+            let engine = self.engine.clone();
+            let source = self.source.clone();
             self.submit(Task::Retire, move |context| {
-                launch.recover_and_retire(&context).map_err(io::Error::other)?;
+                if let Some(source) = source
+                    && !source.retire(&context)?
+                {
+                    return Ok(Work::Retiring);
+                }
+                if let Some(launch) = launch {
+                    launch.recover_and_retire(&context).map_err(io::Error::other)?;
+                }
+                if let Some(engine) = engine {
+                    engine.retire();
+                }
                 Ok(Work::Retired)
             })?;
             return Ok(false);
@@ -77,7 +102,12 @@ impl Launcher {
     fn observe_join(&mut self, expired: bool) -> Result<bool> {
         let actual = self.owner.as_ref().map(ExecutionOwner::poll_shutdown).transpose()?;
         let settled = actual.as_ref().is_none_or(|progress| progress.settled);
-        let uncertain = self.job.is_some() || self.launch.is_some() || self.cached.is_some();
+        let uncertain = self.job.is_some()
+            || self.launch.is_some()
+            || self.cached.is_some()
+            || self.activation.is_some()
+            || self.engine.is_some();
+        let uncertain = uncertain || self.source.is_some();
         if !self.cutoff_reported
             && ((expired && uncertain)
                 || (!settled && actual.is_some_and(|progress| progress.deadline_expired)))

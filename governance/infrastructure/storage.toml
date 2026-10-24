@@ -11,7 +11,7 @@ owner = "sugarsubstitute"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:2f617e2f9edff7c4a8155b519edc92b95a08381a9c2123c150b05c28f9a01290"
+source_sha256 = "sha256:a20d5de82619e18d569ad714a330ae021afe7575bead113b8d420aa887ba02a2"
 rationale = "Isolated test fixture directories for sugarsubstitute; each authored acquisition still requires an exact source review."
 
 [[dependencies]]
@@ -19,7 +19,7 @@ owner = "sugarsubstitute-comfy"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:8dccd682f036556396d95bbb9c4a5a47946a1f602a0b016dd8006815ea1f0945"
+source_sha256 = "sha256:078993517313d7058ae687ebd64101a837c6d1a5362cf12f4df394add4838c7c"
 rationale = "Native OS adapter bindings for sugarsubstitute-comfy; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -27,7 +27,7 @@ owner = "sugarsubstitute-crash"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:23fd9a7af57dfe95d165100d44997fcffa2d54cd99939849b2780ed6fa466978"
+source_sha256 = "sha256:4dbba6b5727f4992741b3f7f447558dd89702db818c79bbe3fc5c07c02d30f39"
 rationale = "Native OS adapter bindings for sugarsubstitute-crash; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -35,7 +35,7 @@ owner = "sugarsubstitute-desktop"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:68f5782a08a7242b39c02aa0495511796137414654d3bcaf31c5a8ddbc3e60f0"
+source_sha256 = "sha256:32788b409d2307d6962b0467fa7533d5083ffdc7a5e7312a13f6061a19ebed37"
 rationale = "Native OS adapter bindings for sugarsubstitute-desktop; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -43,7 +43,7 @@ owner = "sugarsubstitute-execution"
 identity = "tokio"
 binding = "tokio"
 kind = "normal"
-source_sha256 = "sha256:c9605f6eebe6c4c7e9b3bd778768dcf51a121fe21f052160a86aa6f3fa199ffb"
+source_sha256 = "sha256:54314fff0c4003e617525d316543d565c27d6612ac49e279feb23afc4720d475"
 rationale = "Execution-owned async runtime and network integration; filesystem APIs remain restricted by authored source reviews."
 
 [[dependencies]]
@@ -51,15 +51,23 @@ owner = "sugarsubstitute-execution"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:c9605f6eebe6c4c7e9b3bd778768dcf51a121fe21f052160a86aa6f3fa199ffb"
+source_sha256 = "sha256:54314fff0c4003e617525d316543d565c27d6612ac49e279feb23afc4720d475"
 rationale = "Native OS adapter bindings for sugarsubstitute-execution; the dependency grants no independent source exemption for file entry points."
+
+[[dependencies]]
+owner = "sugarsubstitute-networking"
+identity = "windows"
+binding = "windows"
+kind = "normal"
+source_sha256 = "sha256:a6e5b45eba3765ba20ef6d1b10af6b46856355c12a1b831b7034e792073b721b"
+rationale = "Native OS adapter bindings for sugarsubstitute-networking; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
 owner = "sugarsubstitute-splash"
 identity = "tiny-skia"
 binding = "tiny-skia"
 kind = "normal"
-source_sha256 = "sha256:d635942afccaefefa34771d7a7988a6765f94856507434641ed64800ba9ca94d"
+source_sha256 = "sha256:93c6b1a2417b48f6e5c8cdf5ca86a402dda95d41847456977c98242f89fcd7f1"
 rationale = "CPU raster composition and in-memory PNG encoding; public path-capable backing raster values must remain private."
 
 [[dependencies]]
@@ -67,7 +75,7 @@ owner = "sugarsubstitute-splash"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:d635942afccaefefa34771d7a7988a6765f94856507434641ed64800ba9ca94d"
+source_sha256 = "sha256:93c6b1a2417b48f6e5c8cdf5ca86a402dda95d41847456977c98242f89fcd7f1"
 rationale = "Native OS adapter bindings for sugarsubstitute-splash; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -75,7 +83,7 @@ owner = "sugarsubstitute-supervision"
 identity = "libc"
 binding = "libc"
 kind = "normal"
-source_sha256 = "sha256:0c6b5f1373903d45b3d898e63e73593396f037a0baf1eee6ac0a20539f9fa212"
+source_sha256 = "sha256:e9ff8821988bdb4fc52b0cf8de4229f647337f01ba6ae5a044322264af0b6bbd"
 rationale = "Unix durable-storage descriptor acquisition, relative atomic publication and checked close; exact authored access remains governed."
 
 [[dependencies]]
@@ -83,7 +91,7 @@ owner = "sugarsubstitute-supervision"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:0c6b5f1373903d45b3d898e63e73593396f037a0baf1eee6ac0a20539f9fa212"
+source_sha256 = "sha256:e9ff8821988bdb4fc52b0cf8de4229f647337f01ba6ae5a044322264af0b6bbd"
 rationale = "Isolated test fixture directories for sugarsubstitute-supervision; each authored acquisition still requires an exact source review."
 
 [[dependencies]]
@@ -91,7 +99,7 @@ owner = "sugarsubstitute-supervision"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:0c6b5f1373903d45b3d898e63e73593396f037a0baf1eee6ac0a20539f9fa212"
+source_sha256 = "sha256:e9ff8821988bdb4fc52b0cf8de4229f647337f01ba6ae5a044322264af0b6bbd"
 rationale = "Native OS adapter bindings for sugarsubstitute-supervision; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -107,7 +115,7 @@ owner = "sugarsubstitute-xtask"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:0d5ba97edd2772babf276c0082a88e75b2f9fb91e3564e714b266b94d78f8b07"
+source_sha256 = "sha256:d66bbc83845d74350ef1e25f539bcf6a83f8407e45ac357786e77bc1d7e2271c"
 rationale = "Isolated test fixture directories for sugarsubstitute-xtask; each authored acquisition still requires an exact source review."
 
 [[records]]
@@ -126,6 +134,15 @@ source_sha256 = "sha256:1469cb588760a96259a905f753cc61834f795143d5b4b4fdcd5669ae
 capabilities = ["TemporaryDirectory", "pathlib", "read_text", "tempfile", "write_text"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: test managed The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
+path = "crates/sugarsubstitute-contracts/build.rs"
+owner = "sugarsubstitute-contracts"
+source_sha256 = "sha256:58b7d2668d9a333c46a5e9a7662500775edd5ece233d5bcedf973ef644e01cdf"
+capabilities = ["std::fs::write"]
+disposition = "boundary"
+rationale = "Build-time inputs and generated outputs for sugarsubstitute-contracts; execution occurs in the package build, before runtime composition."
+boundary = "build"
 
 [[records]]
 path = "crates/sugarsubstitute-crash/src/native/bridge.rs"
@@ -266,6 +283,33 @@ disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: frontend startup probe The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
+path = "crates/sugarsubstitute-execution/src/activation_channel/native.rs"
+owner = "sugarsubstitute-execution"
+source_sha256 = "sha256:9c2dc4d4e2b4f82a94c3a936f4ef668dd79d26b54378af4841893dd9e1e93a5e"
+capabilities = ["CreateFileW", "GetFileType", "NtQueryInformationFile", "windows::Wdk::Storage::FileSystem", "windows::Wdk::Storage::FileSystem::NtQueryInformationFile", "windows::Win32::Storage::FileSystem", "windows::Win32::Storage::FileSystem::CreateFileW", "windows::Win32::Storage::FileSystem::GetFileType"]
+disposition = "boundary"
+rationale = "Execution-owned native pipe, shared section, process or handle lifetime: Create and validate exact connected asynchronous pipe endpoints before issuing any I/O. Native object custody and original queue, memory and shutdown limits remain with the execution owner."
+boundary = "native_ipc"
+
+[[records]]
+path = "crates/sugarsubstitute-execution/src/activation_channel/operation.rs"
+owner = "sugarsubstitute-execution"
+source_sha256 = "sha256:ac828940d038712ac53b1a31a43d7db097e76092a341bffa2451ad994bb69312"
+capabilities = ["ReadFile", "WriteFile", "windows::Win32::Storage::FileSystem", "windows::Win32::Storage::FileSystem::ReadFile", "windows::Win32::Storage::FileSystem::WriteFile"]
+disposition = "boundary"
+rationale = "Execution-owned native pipe, shared section, process or handle lifetime: Stable overlapped storage survives issue, partial completion, cancellation and checked retirement. Native object custody and original queue, memory and shutdown limits remain with the execution owner."
+boundary = "native_ipc"
+
+[[records]]
+path = "crates/sugarsubstitute-execution/src/activation_channel/pair.rs"
+owner = "sugarsubstitute-execution"
+source_sha256 = "sha256:4d71e13f4492a763afebef3b17f7bfcf66cf01fe3a045fddf4cc93fa8838c873"
+capabilities = ["export public restricted capability std::os::windows::io::BorrowedHandle"]
+disposition = "boundary"
+rationale = "Execution-owned native pipe, shared section, process or handle lifetime: Explicit child inheritance and once-only early capture retain private connection identity. Native object custody and original queue, memory and shutdown limits remain with the execution owner."
+boundary = "native_ipc"
+
+[[records]]
 path = "crates/sugarsubstitute-execution/src/admission_submit.rs"
 owner = "sugarsubstitute-execution"
 source_sha256 = "sha256:83766454357f355c67ad8a9433d677639db7e87f2cd6563a14fdc2d72e738bf8"
@@ -277,7 +321,7 @@ consumer = "execution_metadata"
 [[records]]
 path = "crates/sugarsubstitute-execution/src/backend_custody/memory.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:a9f2168cf79318f9da19f53b89a7c4ad84b4094acf2093e3bc36b2a65c6de7ad"
+source_sha256 = "sha256:8fcdaac273dd3e9c251d547362624a32b020a008893827bb0d757c3fe392dfb0"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Execution clock, admitted memory or retained task metadata for: Keep the original fixed custody metadata charge through final control deallocation. This receiver does not inspect filesystem state."
@@ -513,7 +557,7 @@ consumer = "execution_metadata"
 [[records]]
 path = "crates/sugarsubstitute-execution/src/lifecycle_pipe/backend_custody/recovery_retirement_tests.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:0a95e31541bb305f45548bc10fa147ba7daf2d704982dc7ba7c6c316e820a67a"
+source_sha256 = "sha256:51233308e46e7431d4c0d87f4624cb48d593e09bad3d3671b9bc8819141cda62"
 capabilities = ["method metadata"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Observe capture and containment on the actual admitted custody worker and timer. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -936,12 +980,70 @@ rationale = "Prepared glyph shaping metadata selected by index; no filesystem ob
 consumer = "memory_metadata"
 
 [[records]]
+path = "crates/sugarsubstitute-supervision/src/application_launch/broker/receiver/native.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:e8608f017e118fc27de059db2ee4b7db560f3101ef14ee27fa7de91144aaafa2"
+capabilities = ["GetFileType", "windows::Win32::Storage::FileSystem", "windows::Win32::Storage::FileSystem::GetFileType"]
+disposition = "boundary"
+rationale = "Duplicate only retained source-process disk handles from the authenticated private launch channel; adopt produced duplicates before validating type and preserve checked receiver retirement."
+boundary = "native_custody"
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/application_launch/broker/receiver/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:4b84fe3bdbe3040cdd134326160d17d719e1e0ed9fc4bf69dcb095264978a0fe"
+capabilities = ["assert! restricted capability fragments", "std::fs::File", "std::fs::OpenOptions", "std::fs::OpenOptions::new", "std::fs::write", "tempfile::TempDir", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: Real file-object duplication, explicit inheritance, partial failure and retained creation facts. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/application_launch/broker/source.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:0faf54f0074eb4d89bc2d9471982824dfdc99f08c47d0bd23d0b607c7c4aef33"
+capabilities = ["std::fs::File"]
+disposition = "boundary"
+rationale = "Lend storage-owner-acquired verified file pins to the bounded authenticated launch-transfer frame. Original source slots and memory stay retained until the correlated native creation outcome."
+boundary = "native_custody"
+
+[[records]]
 path = "crates/sugarsubstitute-supervision/src/application_launch/tests/containment.rs"
 owner = "sugarsubstitute-supervision"
 source_sha256 = "sha256:346677dcffac892346cdfd1005811b3b701e0a7d74899f2e30000a051b5dcb60"
 capabilities = ["std::fs::OpenOptions::new", "std::fs::read", "tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Actual hidden fixture processes qualify Windows job lifetime and nested creation semantics. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/application_launch/updater/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:2c77d2bc22387772a040660706853b6b5d0eab1e7e40da8c72ea3a16cdd4d3d9"
+capabilities = ["assert! restricted capability fragments", "std::fs::OpenOptions::new", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: Retained real engine custody survives failed creation without launching inert fixture bytes. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/application_launch/updater/tests/cleanup.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:32ad7f9653e77b8d6afa4ffae07f4a69c7b61b34c3afb32cfe893230ae70d736"
+capabilities = ["assert! restricted capability fragments", "std::fs::OpenOptions::new"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: Preserve completed channel retirement when process closure moves to independent cleanup. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/application_launch/updater/tests/fixture.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:a8c9796249c3ab48f32bd12fae8cc16221f4dc0b70dab319374ab9c490714834"
+capabilities = ["tempfile::TempDir", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: Authenticated inert images and exact offscreen process observations for activation tests. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/application_launch/updater/tests/native_lifetime.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:b1d94c7ca19ff63e2f20dae9e01b14cf036627b2012eaea95be04b8574cc0b6e"
+capabilities = ["assert! restricted capability fragments", "std::fs::OpenOptions::new"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: Actual Windows creation, containment, failure and durable transfer qualification. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/committed_reader/tests/native_prepare.rs"
@@ -976,6 +1078,23 @@ capabilities = ["export public restricted capability std::os::windows::io::Borro
 disposition = "boundary"
 rationale = "Original native object identity, admitted buffers, sharing and retirement contract for: Own genuine capture generation directory leases under the same finite store operation. This source retains its explicit native security boundary and qualification."
 boundary = "native_custody"
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/diagnostic_storage/operational/contention.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:a5cbd5a607e08f08dd5c7da2ea47d9f42acada97a178cca6952f500fabb40cf0"
+capabilities = ["std::fs::File"]
+disposition = "boundary"
+rationale = "Classify actual protected writer-rendezvous contention while retaining its storage-owner-acquired file. This module has no filesystem constructor and preserves unexpected native causes."
+boundary = "native_custody"
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/diagnostic_storage/operational/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:6a4c2432d0251d22b58964e77586d048dd7ba3ad1e42d7147c91ac1160eb5c70"
+capabilities = ["assert_eq! restricted capability fragments", "std::fs::read", "std::fs::read_dir", "std::fs::write", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: Qualify actual protected rollover, restart, export and preservation on admitted native workers. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/diagnostic_storage/tests/namespace_writer.rs"
@@ -1020,7 +1139,7 @@ rationale = "Durable filesystem owner: Retain Windows artifact ancestry and obse
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/files.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:33715fcbe1129233ee4ce401997e9042808e0f4a1bf4a8f59b0f0822c523a7ff"
+source_sha256 = "sha256:0413c38d73772648e0bf73b06dfa2e74fa40681655172b3a9e18d0f9b9dc50b4"
 capabilities = ["assert! restricted capability fragments", "method metadata", "method sync_all", "std::fs::File", "std::fs::OpenOptions", "std::fs::OpenOptions::new", "std::fs::create_dir", "std::fs::read", "std::fs::rename", "std::fs::write", "tempfile::tempdir"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Pin each resolved directory against replacement and reject reparse-point traversal. Native access and its adversarial qualification remain within this owner."
@@ -1064,6 +1183,14 @@ source_sha256 = "sha256:3263f24ebb190df1e3e177c622a066b3d9922bf2691ae8baa81a3ac1
 capabilities = ["GetFileInformationByHandle", "std::fs::File", "windows::Win32::Storage::FileSystem", "windows::Win32::Storage::FileSystem::GetFileInformationByHandle"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Compare pinned directories by actual filesystem identity rather than caller path spelling. Native access and its adversarial qualification remain within this owner."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/durable_storage/files/lexical_tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:4a68c5c13172dad828483b7078dac6fb5747bcaf611a54ad6ea787b0e228d88f"
+capabilities = ["assert! restricted capability fragments", "std::fs::canonicalize", "std::fs::create_dir", "std::fs::rename", "tempfile::tempdir"]
+disposition = "implementation"
+rationale = "Durable filesystem owner: Qualify native canonical intake without admitting remote, device or ambiguous filesystem names. Native access and its adversarial qualification remain within this owner."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/files/observations.rs"
@@ -1186,6 +1313,14 @@ disposition = "implementation"
 rationale = "Durable filesystem owner: Exercise the actual counted same-inode reader under original symbol admission. Native access and its adversarial qualification remain within this owner."
 
 [[records]]
+path = "crates/sugarsubstitute-supervision/src/durable_storage/protected/native_phase/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:2e1bc98cf97ae23925264243b8cde6d1e727ccd832e2a1549b8032b2e017a695"
+capabilities = ["std::fs::write", "tempfile::tempdir"]
+disposition = "implementation"
+rationale = "Durable filesystem owner: Exercise required finite installation deadlines through actual execution and native storage. Native access and its adversarial qualification remain within this owner."
+
+[[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/protected/native_rename.rs"
 owner = "sugarsubstitute-supervision"
 source_sha256 = "sha256:ddb5fbb19dbfde5b8c7e32ca29bd07918e76320ee069948aea68642d73940f6a"
@@ -1268,7 +1403,7 @@ rationale = "Durable filesystem owner: Settle exact activation and by-handle dis
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/protection.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:258942bb7070d49f2b9888692a470559809fdf181406fa166feb22f5e5550920"
+source_sha256 = "sha256:42302be87827903d5b01dfc08af06404f3421b0518f5e44e9663d6974329796a"
 capabilities = ["CreateFileW", "assert! restricted capability fragments", "method metadata", "std::fs::File", "std::fs::File::from_raw_handle", "std::fs::create_dir", "std::fs::read", "std::fs::read_dir", "tempfile::tempdir", "windows::Win32::Storage::FileSystem::*"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Create desktop release inputs through the existing protected-storage security policy. Native access and its adversarial qualification remain within this owner."
@@ -1280,6 +1415,14 @@ source_sha256 = "sha256:53c17ff7357d0ae194a22de20d682853c3badc056d5dbb6edce90b6a
 capabilities = ["CreateFileW", "method metadata", "std::fs::read", "tempfile::tempdir"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Authenticate inherited exclusion against the pinned rendezvous without reopening its data. Native access and its adversarial qualification remain within this owner."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/durable_storage/protection/local_storage/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:bd209d3b8e28c7518cc0141f4441b8fce433c7c67f0c80dcc1d0b0cefc5a95f2"
+capabilities = ["assert! restricted capability fragments", "assert_eq! restricted capability fragments", "std::fs::create_dir", "std::fs::read", "std::fs::read_dir", "std::fs::symlink_metadata", "std::fs::write", "tempfile::tempdir"]
+disposition = "implementation"
+rationale = "Durable filesystem owner: Exercise actual account discovery and protected account namespace custody. Native access and its adversarial qualification remain within this owner."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/protection/publication.rs"
@@ -1296,6 +1439,14 @@ source_sha256 = "sha256:0461e9680ca5995fb45f9e9e380b7407fac563ac374155f971138342
 capabilities = ["method sync_all", "std::fs::read", "tempfile::tempdir"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Observe ordinary file closure before publication, retaining failed handles through cleanup. Native access and its adversarial qualification remain within this owner."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/durable_storage/protection/stage.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:65a05a8f38c3a1d0edfa00743434a95d0f74cf4b41223c5dfa0d18ed298d7f50"
+capabilities = ["DeleteFile", "GetFileInformationByHandle", "SetFileInformationByHandle", "std::fs::OpenOptions", "std::fs::OpenOptions::new"]
+disposition = "implementation"
+rationale = "Durable filesystem owner: Retire exact staged objects and make journaled temporary handles durable. Native access and its adversarial qualification remain within this owner."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/receiving.rs"
@@ -1487,7 +1638,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Exe
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/registry/tests/preparation.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:118271af3657dc2c27b226085899b8bcb5433398123873a169c1d8f73c72915c"
+source_sha256 = "sha256:7c261e0e50cdf3ff57237d7cf98f5645a0e54ee44eae124752ad87efdb515cab"
 capabilities = ["std::fs::OpenOptions::new"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Real signed image custody follows the registry; only process effects use the native boundary fake. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -1495,7 +1646,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Rea
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/registry/tests/preparation/probe_tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:c8dc0a4b2fb18c140af4468e27fec4d70e854e52e65d5f21d24c5ca10ed54e93"
+source_sha256 = "sha256:4ab860b884b6ada760ba2ca7d7778fc03b094895409f030f7e88575c7db3cf85"
 capabilities = ["std::fs::File::open", "std::fs::read", "tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Signed inert payloads exercise real custody and journals with process effects at the fake boundary. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -1520,25 +1671,60 @@ consumer = "memory_metadata"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/application.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:2a5bc5ced0b1c56c41d4254803ae21eb2d53b07d1c54a6494cefac630d7b1313"
+source_sha256 = "sha256:be88668b9b3643d5be9030092b5d61d15845e702f45b337860ac37b6c0cf6cd4"
 capabilities = ["std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: Verify one protected generation's retained manifest and pin every executable payload. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
 boundary = "native_custody"
 
 [[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/bundle/manifest.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:6d0406a9ce0e4c24563cb3ba3276c467477735d667c0723b537d9c5552c266ae"
+capabilities = ["std::fs::File"]
+disposition = "boundary"
+rationale = "Retain or lend storage-owner-acquired verified file custody for: Authenticate a retained package inventory before either complete-copy or runtime admission. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
+boundary = "native_custody"
+
+[[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/bundle/payload.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:3fffc49f4947b7af6605a5fc482effe90fc13002cc052e7444cf5775afe183a2"
+source_sha256 = "sha256:55e3e1d67e4f5a0dcba79cbb5ace6e76fd9a2e4fcdce54d1abd8f5377c493ca8"
 capabilities = ["std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: Retain exact distribution files authenticated by the installer or a verified update archive. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
 boundary = "native_custody"
 
 [[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/bundle/prepared.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:fb68f4e0f69ba8281766f567309ee0919e590884bc4a9a05a12776f0ae377892"
+capabilities = ["std::fs::File"]
+disposition = "boundary"
+rationale = "Retain or lend storage-owner-acquired verified file custody for: Rehash and pin staged application payloads against their retained authenticated manifest. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
+boundary = "native_custody"
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/bundle/prepared/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:cfbf4567e98cc7ef42214ef776543fc016be6fdcb4aae0b39c67441f9bf21938"
+capabilities = ["assert! restricted capability fragments", "std::fs::create_dir_all", "std::fs::read", "std::fs::remove_file", "std::fs::write", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: Exercise real destination reads and pins for copy completion and launch admission. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/bundle/runtime.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:6d1c05c94e7f89493412e8fe9cae56e3486483b4490d726ec317f0242259a1b2"
+capabilities = ["std::fs::File"]
+disposition = "boundary"
+rationale = "Retain or lend storage-owner-acquired verified file custody for: Retain accepted updater execution inputs independently of diagnostic symbol availability. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
+boundary = "native_custody"
+
+[[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/bundle/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:ed11689cbec2235737a77c877404d794b2c20216cfa927edee0cc89ce733ccbb"
+source_sha256 = "sha256:f46d30f72ec9dbbe13a76eb9e23a55888872e22a2b2d37323b77df4705979808"
 capabilities = ["method sync_all", "std::fs::read", "std::fs::read_dir", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Interrupted payload writes never become final generation files. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -1546,7 +1732,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Int
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/bundle/tests/launcher.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:e84e8c1300a94a7785993f04696af724f7f536aaf46df2d7bdc68c90a09c589d"
+source_sha256 = "sha256:79e5c1266a7f0007bc471a6c844e5576feaae72fb5f77bc57af84c037baf22ce"
 capabilities = ["assert! restricted capability fragments", "std::fs::read", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Authenticate and retain paired launch payloads through actual archive and copy boundaries. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -1644,7 +1830,7 @@ consumer = "storage_entries"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/compatibility.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:6f9d8b58e590a37bcb9b22c376c4ab55a29c1942c5dc732903e35dcaa2afda04"
+source_sha256 = "sha256:5b615983b41c1133c9d1a4b7753e3dfb6b6546ce2243ac9a39ac2d7f3c6866a8"
 capabilities = ["std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: Read application entry compatibility only from payload bytes already hashed and pinned. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
@@ -1703,7 +1889,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Off
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/entrypoint.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:4d4c027157cf0dd927c0a0ea67b56b9d63f3b5ce9a4dfb6743e22f809e9c9ede"
+source_sha256 = "sha256:a45fd8f5ed68b1dbcfdb5ac9ec8a24110dcf9d2bb0496a664977f8bdc5b2c6bc"
 capabilities = ["std::fs::OpenOptions::new", "std::fs::read", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Publish a stable shell entry only after its complete desktop generation is ready. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -1711,7 +1897,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Pub
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/entrypoint/native.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:4c39fc2c6918ae82b87967f0896d630994b8b89594a2da31aa1908ea92b52bc9"
+source_sha256 = "sha256:6f01aead1bd8393400d4fba9d0442c1cd7ec98e606782aa9204108ba1519f689"
 capabilities = ["IPersistFile", "windows::Win32::System::Com::IPersistFile"]
 disposition = "boundary"
 rationale = "Load and publish an OS Shell Link through IPersistFile under the existing entrypoint ownership and authorization checks."
@@ -1720,24 +1906,40 @@ boundary = "external_runtime"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/entrypoint/native/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:b592de6b4644a893b247f6ce67cb4356518656c7d1ecfd031864244b4d0c6291"
-capabilities = ["IPersistFile", "std::fs::read", "std::fs::write", "tempfile::tempdir"]
+source_sha256 = "sha256:ce833bb90db469ab018b0108fea52462c321ab03064daf66a89a1d32752dc8e4"
+capabilities = ["IPersistFile", "assert! restricted capability fragments", "std::fs::read", "std::fs::read_dir", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Verify actual shell-link launch properties before reusing retained setup output. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/entrypoint/stable/payload.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:d9e835ec2b683b57342c9b84330741226405b90f99d65b0356d5e1a18a06a07b"
+source_sha256 = "sha256:1daa8ebf9673f7a29fc3e384efc96644f6f1d3f23f681ac5e977fbc7320996c4"
 capabilities = ["std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: Copy and verify the independently owned root executable without replacing unknown bytes. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
 boundary = "native_custody"
 
 [[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/entrypoint/stable/transition/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:007000461c145c9a0bcbad0ae5a43082b17a9e19567c80cbe116f41b8ecedc16"
+capabilities = ["std::fs::read", "std::fs::write", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: Interrupt real native replacement at each durable boundary without executing fixture bytes. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/entrypoint/stable/transition/tests/supersession.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:b151bdc779549092b1d69e0a868e8f2dc343d41ff6771dd6cee744d27ed136e5"
+capabilities = ["std::fs::read", "std::fs::remove_file", "std::fs::write", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: Rescue interrupted launcher replacement without depending on either obsolete repair source. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/existing.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:b7bccfcc9ab8012aac2892731a2875f93f0fdcd1f3986ee8fe6f4455d9eb5219"
+source_sha256 = "sha256:57b1ab6e7c8721c001b45eac9bcfbe9955561e1d49c86a2d40b0fd41ee418b70"
 capabilities = ["std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: Inspect a selected native installation and preserve its actual saved launch inputs. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
@@ -1754,7 +1956,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Sav
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/existing/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:ca7c4b93e587d967967be7eaedd11f7364114af8e8bdfd3fc5aee657437a5479"
+source_sha256 = "sha256:97cd71f0541c6bf71d5b25ab4a37d6e15ffc81747b7ad977cca78a30651dac28"
 capabilities = ["assert! restricted capability fragments", "std::fs::read", "std::fs::remove_file", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Preserve real native installation inputs across a maintenance generation. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -1762,7 +1964,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Pre
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/inventory.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:728396563afe234c6f4d3f76c1ebddf246d93cf5b86136202d30e4d80db33645"
+source_sha256 = "sha256:cd9364045f2531151ea9cb92a09b45b093ff526c4f796fe492314614874717a7"
 capabilities = ["std::fs::create_dir", "std::fs::read", "std::fs::remove_file", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Reject undeclared package files before any worker or library can load from the bundle. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -1795,7 +1997,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Aut
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests/downloaded/authorization.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:b19826a47c26eca7cce7af72ab8cb3706d26cefaa1c4d5980500e90aa0ebe543"
+source_sha256 = "sha256:e423de328311e4a2391508ca148a27c43a877e5087cad091723eeb7db22d49c2"
 capabilities = ["method metadata", "std::fs::read", "std::fs::read_dir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Hostile authorization changes exercise the actual downloaded installation publication path. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -1811,10 +2013,18 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Rea
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests/downloaded/authorization/launch.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:f77a12c5e468d8b3198552232d2ef5d1aff076b0c1fd08f1120b3c331fb1735f"
+source_sha256 = "sha256:3e9a976acb74550f4063ee24248cea906c86a1af2ddc31d270c40f46a14de432"
 capabilities = ["assert! restricted capability fragments", "method metadata", "std::fs::read", "std::fs::rename", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Accepted launch admission uses actual protected storage and pinned inert payloads, without cache. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests/downloaded/authorization/launch/broker.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:ba949c40f9cc08b75f798ad534ff6ae3b3dbd98b330685dbe5a5fd9b7a8eb03c"
+capabilities = ["assert! restricted capability fragments", "std::fs::OpenOptions::new", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: Actual accepted-payload custody survives offered, published and correlated broker outcomes. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests/downloaded/authorization/launch/compatibility.rs"
@@ -1891,18 +2101,18 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Sta
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests/downloaded/authorization/launch/stable_entry.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:c2f2f3f93ac1ae874ec75d17978c5998ae141cc6b76b46f9d0ec23587fe22bc9"
-capabilities = ["std::fs::OpenOptions::new", "std::fs::read", "std::fs::remove_file", "std::fs::write", "tempfile::tempdir", "windows::Win32::Storage::FileSystem"]
+source_sha256 = "sha256:34dfcd25c3cfb2f06c312d247d2b238b6e7c6c5f706af6253540a16cf6b2b8fa"
+capabilities = ["std::fs::OpenOptions::new", "std::fs::read", "std::fs::read_dir", "std::fs::remove_file", "std::fs::write", "tempfile::tempdir", "windows::Win32::Storage::FileSystem"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Real filesystem and shell-link publication, using inert accepted launcher payloads. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests/downloaded/authorization/launch/stable_entry/updates.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:d3332ce937a4e8855ccd7b4af8ffd63d4c627418021b75ea0f2794940e6f7e7f"
-capabilities = ["method metadata", "std::fs::read", "std::fs::write", "tempfile::tempdir"]
+source_sha256 = "sha256:2e716277b921cbea5a5e21ee4c106de52c2908fa6135c7911bdc5c29c5e44f95"
+capabilities = ["method metadata", "std::fs::read", "std::fs::remove_file", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
-rationale = "Native fixture setup, deliberate corruption or observation for: App updates retain and recheck the independently installed launcher. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+rationale = "Native fixture setup, deliberate corruption or observation for: Authenticated preparation refreshes launcher recovery authority while trial admission rechecks it. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests/downloaded/authorization/local.rs"
@@ -1977,9 +2187,34 @@ disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Exercise delegated cache recovery against actual retained native containment and original admission. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/publication.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:613276ad87ef5e031a591a9bda7bb569c8ee8a98c69fe790b9a7dd96ee334d02"
+capabilities = ["std::fs::File"]
+disposition = "boundary"
+rationale = "Retain or lend storage-owner-acquired verified file custody for: Journal exact file identities before making temporary publication inputs durable. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
+boundary = "native_custody"
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/publication/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:51e336f177cf016faa2bed38d7a76fb8b10d1a1fbd6cb4d0b526252ff1a1d011"
+capabilities = ["assert_eq! restricted capability fragments", "method sync_all", "std::fs::read", "std::fs::read_dir", "std::fs::write", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: Exercise journal recovery with real Windows file identities, protection and publication. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/publication/tests/preservation.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:15e4eaa33d249bcdef845bf070de21e007b8d6f3ed58e13ebe30a45fc676237e"
+capabilities = ["std::fs::hard_link", "std::fs::read", "std::fs::rename", "std::fs::write", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: Foreign names, changed identities, linked objects and unsupported journals never grant deletion. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/selection.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:1d58f9f84def1b4e46d97b4d736e2f4be61eb55b366aced754b719f11c70dda9"
+source_sha256 = "sha256:c63b2bca339acd5e60c695f4aecb59f28ccd167e46e2a949c1483198763bf8e8"
 capabilities = ["std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: Protected selection publication and independent OS-backed application-run ownership. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
@@ -1988,7 +2223,7 @@ boundary = "native_custody"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/selection/inheritance.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:4069ca2bb4c6c87a89f74bc8c11ada0c584c1daa98becb47667a4b5b30f7d3ee"
+source_sha256 = "sha256:46aa1d900023acfe3432523d540ee8ed020cc5d35aae9efe835c4435c957b6af"
 capabilities = ["export public restricted capability std::os::windows::io::BorrowedHandle", "std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: Carry a selection read pin across native process creation without borrowing the run lock. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
@@ -2029,7 +2264,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Exe
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/selection/run.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:adb7a9952e571bac8ac3a6ac39c196187f898e331f25b9e9fdf00a729dc0bebe"
+source_sha256 = "sha256:b49b206bc9090f31eb1a63347d5c01b5cb479500226e8709eee91f0a3d61aa34"
 capabilities = ["std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: Bind activation to live OS custody and a non-serializable current-attempt token. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
@@ -2062,8 +2297,8 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Rea
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/selection/run/transfer.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:61c6540e1d85b766fe7c409878f009bec1002e76e9a99c2befc983e7a688d765"
-capabilities = ["export public restricted capability std::os::windows::io::BorrowedHandle"]
+source_sha256 = "sha256:1eb0b399f0c07bdaea93b816533f2a2badbfb7d68e2d7d3374e7aa7fedbd01a6"
+capabilities = ["export public restricted capability std::os::windows::io::BorrowedHandle", "std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: Transfer an admitted trial's live ownership and protected snapshot across native process entry. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
 boundary = "native_custody"
@@ -2104,7 +2339,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Qua
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/selection/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:7126732e9c303ff6bd57f5287a0b352c26602738023951e16259eb94caf63e7f"
+source_sha256 = "sha256:c8ef13b0d6ab07ba77c7cc552f8a52353c3c42853515648974bd15d177d72e1d"
 capabilities = ["assert! restricted capability fragments", "std::fs::create_dir", "std::fs::read", "std::fs::remove_file", "std::fs::write", "tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Real Windows file exclusion and publication, executed through the production job owner. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2112,15 +2347,23 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Rea
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/distribution/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:e78e32948af427dd4d385e8e6fb578f149b32fadf70061d46511821b4ca523dd"
+source_sha256 = "sha256:df26d4f0b4c95467176acec3f38225837053c8f291f568bc3930559000b4fb14"
 capabilities = ["assert_eq! restricted capability fragments", "std::fs::read", "std::fs::read_dir", "std::fs::write", "tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Embedded distribution parsing reaches the real signed installer verifier and native journal. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/distribution/tests/reuse.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:64ef044e2e3080f14089c0e314a143a84e4e6be3f426d935557d86a58e02ef5a"
+capabilities = ["assert! restricted capability fragments", "assert_eq! restricted capability fragments", "std::fs::read", "std::fs::read_dir", "std::fs::write", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: Reuse immutable preview custody only after current signed archive authentication. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:9ba9b81ed8a53c766e1ebaa37172197278a520a075ff9313905f6d2a1d886f03"
+source_sha256 = "sha256:9f8f41a5ddcd9f8910b2b4d8f4069219e58cab211c480ab7a457f0c333802555"
 capabilities = ["assert! restricted capability fragments", "assert_eq! restricted capability fragments", "method metadata", "std::fs::read", "std::fs::read_dir", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Qualify the composed offline path with real signatures, archive extraction and native custody. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2134,12 +2377,60 @@ disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Retry native creation with the same pinned candidate after exact unstarted recovery. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/entrypoint.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:dfd070a805ffd4359b83ae1c015beb70e201529549877d1f15efea54ee6aa455"
+capabilities = ["std::fs::read", "std::fs::remove_file", "std::fs::write"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: Signed maintenance restores established launcher ownership before an optional application run. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/fresh.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:ecd1c3d265489777d1a6655316e39917924f3a4ac9715c7a82396903a3349d46"
+source_sha256 = "sha256:fd437fcd444541dd2752f9f3b6b077973c3e088417022098dd72d71f9cb7a3df"
 capabilities = ["assert_eq! restricted capability fragments", "method exists", "method metadata", "std::fs::create_dir", "std::fs::create_dir_all", "std::fs::read", "std::fs::read_dir", "std::fs::read_to_string", "std::fs::remove_file", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Fresh setup retries retain the recorded candidate and explicit provisioning choices. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/fresh/installed.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:a643ab06473b751c5366012f90daa68cff29b236a24a422075fd60b181df8b32"
+capabilities = ["std::fs::read", "std::fs::remove_file", "std::fs::write", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: Durable explicit choices survive restart while automatic candidates retain live trust checks. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/fresh/installed/forwarding.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:ae60f343b896d40ce705caeac8080d7344988f661b41f946d6931293d11da1ab"
+capabilities = ["std::fs::read", "std::fs::read_dir", "std::fs::write", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: A duplicate trial invocation can forward without acquiring run authority or blocking health. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/fresh/installed/publication.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:434c2fa0ac55377044e8dfe536ea20d95c68599c461e60369141227c2472ad44"
+capabilities = ["std::fs::read", "std::fs::remove_file", "std::fs::write", "tempfile::TempDir", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: First-launch publication releases setup custody and recovers exact owned interruption points. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/fresh/installed/rescue.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:b2b124a68142cac4d53c2f981a3ed021f7ac476d90e9336486b6a6ada267f62c"
+capabilities = ["std::fs::create_dir", "std::fs::read", "std::fs::remove_file", "std::fs::write", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: Recover saved first-install settings after a lost trial without reauthorizing its failed payload. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/fresh/maintenance.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:90645db4478fa2cb707562656402c9d2d2f02a58be7762be05d76b2334aff5ab"
+capabilities = ["std::fs::read", "std::fs::remove_file", "std::fs::write", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: Repair completed first-install candidates through signed maintenance without rewriting settings. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/fresh/reservation.rs"
@@ -2152,7 +2443,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Ini
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/fresh/supersession.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:d5a1dd860e9750f233545a436752f871d4138130d2699c59af65a0ad6b6c1ee2"
+source_sha256 = "sha256:124ef0438b43e17b3151bf7f4bc0d69fdbbfd82bf96d4bdfd8bd0a7c9ba1a3d8"
 capabilities = ["method exists", "method metadata", "std::fs::read", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Superseded unfinished first installations remain retryable without discarding earlier files. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2174,9 +2465,17 @@ disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: First installation survives interruption after replacement reservation and before allocation. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/launch_recovery/broker.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:3b2a418c6bb91b3c2ec719c7f84d6615be3820ae3ffe5c2f65175d40fe5f45c0"
+capabilities = ["assert! restricted capability fragments", "std::fs::write"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: Broker outcomes control recovery of the real authenticated trial and its native exclusion. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/online.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:f5fc7ad045453ae91231e8d4b400199a4fef5da3bc780efe06cdd138f5903f7b"
+source_sha256 = "sha256:4c2b1440063ddd485bb3acbf6caa29e698f063f975823494544108f8a33c74b3"
 capabilities = ["assert! restricted capability fragments", "assert_eq! restricted capability fragments", "method metadata", "std::fs::read_dir", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Join real HTTP delivery and offline delivery to identical retained preparation custody. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2192,7 +2491,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Act
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/supersession.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:639bfa2466a24281aadc50ec53cd49648c8cdb018c2ae18bc0ca81ea4ba8a63d"
+source_sha256 = "sha256:ee59ea7c821ec9e2d052e6f0e8da204dd900bbd58845b05a9b1c0c29acc2029d"
 capabilities = ["std::fs::read", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Replace obsolete pending releases through real signatures, setup custody and native publication. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2208,7 +2507,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: A p
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/transfer_recovery.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:c92324585384327e335c08c7ab759c41dd38adbe4034c9caf997886c7b938ee7"
+source_sha256 = "sha256:b9cd89377a045d28ce9a687b03cf39019d0e47495b15405178645b7aa196f7ae"
 capabilities = ["std::fs::read", "std::fs::read_dir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Expire actual transfer workers at durable boundaries while keeping creator custody outside them. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2216,7 +2515,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Exp
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/test_package/maintenance.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:414aff5398355c347d94b77bf40a343302f6100d4ff3b74c07b5d0353f24bfea"
+source_sha256 = "sha256:5ca5100036a47daf6a4305014ce7734a87776eb30308b95dd4264628a6624081"
 capabilities = ["method metadata", "std::fs::read", "std::fs::write", "tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Shared inert native installation for signed installer and preparation-worker qualification. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2232,7 +2531,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Gen
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/test_package/trial.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:d40893f908e2d9926d65e1cfa0433adaa7b465951fe4a00bbb99f6203c2dab77"
+source_sha256 = "sha256:ffe49f866b9f611175ecd58a4e10863f3ab67b079d17bfc1d8e625b01a5b4d91"
 capabilities = ["method metadata", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Admit an inert signed trial through the production installer pipeline for native tests. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2271,6 +2570,14 @@ rationale = "Retain or lend storage-owner-acquired verified file custody for: Ke
 boundary = "native_custody"
 
 [[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/transaction/records/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:aee2040418d253c756e9550e89b2fdce9ec654030b2a5ca29d916015e0374a4f"
+capabilities = ["tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: Reopen published Unicode startup documents through their authoritative configuration owner. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/transaction/session/tests.rs"
 owner = "sugarsubstitute-supervision"
 source_sha256 = "sha256:b74f37711378ad7e7bf1c75e5d85f24ca76c48405f62841fd8bb32756d63442d"
@@ -2281,7 +2588,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Acq
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/trust.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:03e00ce6778e8e722598748e635d34139ca0ec62ddfe0379e14f4c4f55003cfe"
+source_sha256 = "sha256:b507341f0410d5b9f04387fc9c53e55f1f1c4ddb62fe8f49b9089020faa484a8"
 capabilities = ["std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: Persist update trust under independent exclusion before returning authenticated offers. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
@@ -2327,6 +2634,14 @@ capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Borrow signed repository metadata bytes for feature-owned trust verification."
 consumer = "protocol_metadata"
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/trust/opening/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:693b131b893ff9d1c3694d9cad2b17250622ca6daf20137e9ec51269c3c8116a"
+capabilities = ["method metadata", "std::fs::read", "std::fs::remove_file", "std::fs::write"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: Exercise protected offline authority, continuity and verification floors through real jobs. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/trust/session/tests.rs"
@@ -2387,10 +2702,18 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Rec
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/trust/updater/request/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:4710233f3c4b25f6d46fe06a55a77cc909d7e9cc9553dd7a478a4e79de863bb4"
+source_sha256 = "sha256:ac1302f71ce3d195ac7f275de896b6d85776b0698208bc8e53a279716cce4457"
 capabilities = ["assert! restricted capability fragments", "std::fs::OpenOptions::new", "std::fs::read", "std::fs::remove_file", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Installed engine facts remain distinct from running capabilities and live preparation custody. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/trust/updater/running/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:028dcdfbeef9ebf76ce52fd07765eaf55f264d6962820ba2157044c36479876c"
+capabilities = ["assert! restricted capability fragments", "std::fs::OpenOptions::new", "std::fs::copy", "std::fs::read", "std::fs::remove_file", "std::fs::write", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: Real signed storage and file pins qualify the receiving engine without executing fixture bytes. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/trust/updater/tests.rs"
@@ -2403,7 +2726,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Qua
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/updater_package/stage.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:649e5fbc23e86ce2ad5135e141e9008801404320690a37907c98721b07239dd2"
+source_sha256 = "sha256:856cb03af1e60838bceec3f9739190acd44e2d2da852e37b12f7148a053c55dd"
 capabilities = ["std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: Stage a complete updater generation before publishing preparation; application selection stays separate. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
@@ -2420,7 +2743,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Exe
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/updater_package/stage/trial/transfer.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:fcd30d4634c38a14784bd1bedc84e37a79dc4c4f1444ec19bdd4221814a0a8c0"
+source_sha256 = "sha256:c772871ca25ec027969120dfe539546c442b8aab91ead99cf693f88f7c032498"
 capabilities = ["export public restricted capability std::os::windows::io::BorrowedHandle"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: Retain the published updater trial and one explicit inherited exclusion handle for native creation. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
@@ -2454,7 +2777,7 @@ boundary = "native_custody"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/update_http.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:223baba286bc181ab483049f36cef769e21beffae4c8672a0c4cbf5a020e5cb4"
+source_sha256 = "sha256:4099938646ba30ef53d8a3bda6e785a5d853c33da18ac030e7f79ff96651ccc4"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Decode bounded HTTP metadata framing from the received response headers."
@@ -2463,7 +2786,7 @@ consumer = "protocol_metadata"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/update_http/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:0abb3f6600cab6c65aef41033a2c65befa0e6e9c21abdb48a09706249ea51b0b"
+source_sha256 = "sha256:63c879d7a6519a8ac6c5ac2ee2ae8cfd5528e5cde8c15a5585d585656ec26637"
 capabilities = ["method metadata"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Actual WinHTTP requests against isolated execution-owned loopback sockets. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2479,7 +2802,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Rea
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/update_preparation/tests/cancellation.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:5cd432187b09b7281e2b82165b03eda7fbc5a420686f500aaf8627ca8df88db2"
+source_sha256 = "sha256:d2d1e1e796627d26d4a215026162cc7a43f02614e9086b47a025fcdea62eb040"
 capabilities = ["assert! restricted capability fragments", "std::fs::read_dir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Cancellation and admission faults retain custody until actual cleanup observation. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2487,23 +2810,39 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Can
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/update_preparation/tests/engine.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:1d91ed7ceccf8e5ae9063c45eee86bbe536b549522ff7b31494b699b2e4baa31"
+source_sha256 = "sha256:5426264524c8826d3d7d998bb82062d97d5c74240cab387c16b3c245d7813e2d"
 capabilities = ["assert! restricted capability fragments", "std::fs::OpenOptions::new"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Signed application requirements drive real local engine discovery, staging and owned transfer. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
+path = "crates/sugarsubstitute-supervision/src/update_preparation/tests/engine/startup.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:a9497b03039756048e2a61d01e51dc805266c34661ab18bc0154cb30930606f8"
+capabilities = ["assert! restricted capability fragments", "method metadata", "std::fs::OpenOptions::new"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: Cached engine delegation authenticates local evidence and never requests a network download. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
 path = "crates/sugarsubstitute-supervision/src/update_preparation/tests/exclusion.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:1cf09f4dff65e2833e10bb69666c9208706b7aa9306086e59d989b860318e210"
+source_sha256 = "sha256:76f87e369eeb1e2fa9bad9e4117e2827a51b71673996068c739cf28af5f05452"
 capabilities = ["std::fs::read", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Competing campaigns use native exclusion without borrowing application or trust-writer locks. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
+path = "crates/sugarsubstitute-supervision/src/update_preparation/tests/online_reopen.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:cac4bf14313d9b89d3b6cfe3e363bed6fb32d38a103b2f3b13330cba94692099"
+capabilities = ["std::fs::OpenOptions::new", "std::fs::read", "std::fs::write"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: Online reauthorization reuses completed native files and refreshes offline evidence. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
 path = "crates/sugarsubstitute-supervision/src/update_preparation/tests/reopen.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:6663a36211828d78f908f3e9af72603ab2335b3a86e397c840ed044d77c950b6"
+source_sha256 = "sha256:acf9364ac411c6941f889a43caf77eb9fee8c6caa0cad59dff7a22204aac0a6b"
 capabilities = ["assert! restricted capability fragments", "std::fs::OpenOptions::new", "std::fs::read", "std::fs::remove_file", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Completed preparation starts from protected native files independently of provisioning caches. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2511,7 +2850,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Com
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/update_preparation/tests/restart.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:07baddef3587d9a6a21b6cab8e041997d189aff5af818e420a538aa4ddf3b385"
+source_sha256 = "sha256:29a174dd541e2e92c00289550e719680ec68124ca129bb933db07f04bf362f96"
 capabilities = ["std::fs::read", "std::fs::remove_file", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Recreate the campaign and execution owner after all earlier preparation custody has retired. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2519,7 +2858,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Rec
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/update_preparation/tests/supersession.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:dbe46eb414fdf21c4dcc936081f9dad4c2ac6cc5379b7e82f865fd5cd129559f"
+source_sha256 = "sha256:b42fcf763e8c633707b1b032fb6d5c652179a42251d8fbc29a6d60d4f4e572c7"
 capabilities = ["std::fs::read", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: New HTTP publication supersedes pending selection and survives a fully offline restart. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2600,7 +2939,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Thr
 [[records]]
 path = "crates/sugarsubstitute/build.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:b747d1c448c97d5b3cd7bfe474cc028560c0cfd78b8d77f3ac296b345c4e53a1"
+source_sha256 = "sha256:04ce4d2b879b2059197a795ca52ca9de69370caad213f9c73e563537da825a81"
 capabilities = ["method canonicalize", "method metadata", "std::fs::File::open", "std::fs::remove_file", "std::fs::write"]
 disposition = "boundary"
 rationale = "Build-time inputs and generated outputs for sugarsubstitute; execution occurs in the package build, before runtime composition."
@@ -2615,9 +2954,17 @@ disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Admit finite artifact setup and bounded diagnostic reads through real execution. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
+path = "crates/sugarsubstitute/src/diagnostics/service/tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:8d2c42ba06dd3dcc0465e4612c66ee465a96b331c201d3cb3dfaf9d8d48ba0c8"
+capabilities = ["std::fs::read", "std::fs::read_dir", "std::fs::rename", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: Qualify routing, overload, original memory custody and actual native sink retirement. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
 path = "crates/sugarsubstitute/src/production/backend_custody/lifetime.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:ce178871931ee7da105ee76ffddcda68d0cbbe4d95dccede38d7eed407402a31"
+source_sha256 = "sha256:52921d5a72c29b237c9a924399763bc9eab9dd10dce9c6466f486361c6422b23"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Execution clock, admitted memory or retained task metadata for: Retain the one real execution and custody source through authenticated pumping. This receiver does not inspect filesystem state."
@@ -2626,7 +2973,7 @@ consumer = "execution_metadata"
 [[records]]
 path = "crates/sugarsubstitute/src/production/configuration/tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:1a6630166c86fa67243b0a241838e88e01149c55989dbadf5397ecaef9051a37"
+source_sha256 = "sha256:c16cb51ddded8de91e41588f92bf5c9b8cf196ef2c56b46120b20acf34b589f2"
 capabilities = ["std::fs::create_dir", "std::fs::remove_dir", "std::fs::remove_file", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Verify actual preparation/opaque failure custody without reading process environment. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2634,7 +2981,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Ver
 [[records]]
 path = "crates/sugarsubstitute/src/production/configuration/tests/input.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:fdd2f67e28ae0f345ff8c87661c80914a4a8d99388def49856f384be98e486ad"
+source_sha256 = "sha256:e7d848f478e24f859af77bbe39fad930f8f4508abf984e4a3d3f6637d653263c"
 capabilities = ["std::fs::metadata", "std::fs::remove_dir", "std::fs::remove_file", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Qualify startup file consumers through genuine original execution admission. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2651,7 +2998,7 @@ consumer = "execution_metadata"
 [[records]]
 path = "crates/sugarsubstitute/src/production/entry_bootstrap/test_support.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:e08b25af3e5c5fa28144d01bcd00638ce179d7e91cc290a1c2493347dbd63ac4"
+source_sha256 = "sha256:09811f3685abe7473642a6f43dbc0868530b80c33bea90f23a9e7c81fe700b25"
 capabilities = ["std::fs::create_dir", "std::fs::remove_dir", "std::fs::remove_file", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Own isolated files and synchronize actual terminal publication without sleeps. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2659,7 +3006,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Own
 [[records]]
 path = "crates/sugarsubstitute/src/production/entry_runner/tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:a5c3117678f90fc6dc42f9d0ad979a2c3d46fa6f3daa567b56dc39bf22471b66"
+source_sha256 = "sha256:63a98f14f4520199eb9aed54fa6daebe4decf1f653c30004d1fb793806e6f58e"
 capabilities = ["std::fs::create_dir", "std::fs::remove_dir", "std::fs::remove_file", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Fail configuration before any environment capture and observe real runner joins. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2676,7 +3023,7 @@ consumer = "execution_metadata"
 [[records]]
 path = "crates/sugarsubstitute/src/setup/controller/lifetime/tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:61899fbc8bc3bf56fd319931672bd366bd4613135ce99f5359426375ad71a9ae"
+source_sha256 = "sha256:4291011ef048210d761dde49760befe6c7fe9f7aea80c3c6dd1fb8d0fad12e2e"
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Observe real cleanup jobs through repeated close and failed recovery completion. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2756,7 +3103,7 @@ rationale = "Repository tooling package-inventory.test.mjs: package-inventory.te
 [[records]]
 path = "installer/package.test.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:89f2f0eefa8600b2b72550ec67eb2aae8c400e0d9722b50579f12e1761cc6e93"
+source_sha256 = "sha256:8c64e898639965a8dfd773e0c880acc62641187ae5124d8beeae7884e9389413"
 capabilities = ["copyFile", "fs", "mkdir", "mkdtemp", "node:fs/promises", "readFile", "unlink", "writeFile"]
 disposition = "tooling"
 rationale = "Repository tooling package.test.mjs: package.test Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -2828,7 +3175,7 @@ rationale = "Repository tooling qualify-worker.mjs: qualify-worker Reads declare
 [[records]]
 path = "installer/release/application-artifacts.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:be5803a79ee1710b9905fb5b613d285d945e7c8355c1dd36b22176b158816cd0"
+source_sha256 = "sha256:573fcc70309d426434fcf5f47854bac0bf52dac3f9d6d214b399d7246d941d0d"
 capabilities = ["fs", "node:fs/promises", "writeFile"]
 disposition = "tooling"
 rationale = "Repository tooling application-artifacts.mjs: application-artifacts Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -2836,7 +3183,7 @@ rationale = "Repository tooling application-artifacts.mjs: application-artifacts
 [[records]]
 path = "installer/release/application-artifacts.test.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:55109fdad6b45e9b8e02c1a778bfb721f527d8fd0274aae9a663c71cf271ec9b"
+source_sha256 = "sha256:87a378d077571153e308fc9bd03d99c818d335c4ef504aaf5586e261992c6a60"
 capabilities = ["fs", "mkdir", "mkdtemp", "node:fs/promises", "readFile", "unlink", "writeFile"]
 disposition = "tooling"
 rationale = "Repository tooling application-artifacts.test.mjs: application-artifacts.test Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -2844,7 +3191,7 @@ rationale = "Repository tooling application-artifacts.test.mjs: application-arti
 [[records]]
 path = "installer/release/application-package.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:62ab1d75571fe09c8ebff2f600fa4b79934979b015eabc353dac3f8b2a00387b"
+source_sha256 = "sha256:cc530232139ea3adc0382e036ca3af2fa98c69d81859b018ab007a3e8cdcd5f7"
 capabilities = ["copyFile", "fs", "mkdir", "node:fs/promises"]
 disposition = "tooling"
 rationale = "Repository tooling application-package.mjs: application-package Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -2860,10 +3207,26 @@ rationale = "Repository tooling artifact-files.mjs: artifact-files Reads declare
 [[records]]
 path = "installer/release/build-updater.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:2c50206323601a7ed4883d47a0c9dfcbc0faab2ce15be005a6ef6b290c60adf9"
+source_sha256 = "sha256:6a762fedc9a8ae2900ae21a5d573a558e3b0bd270f7f329d25f0d47631268cf5"
 capabilities = ["fs", "node:fs/promises", "writeFile"]
 disposition = "tooling"
 rationale = "Repository tooling build-updater.mjs: build-updater Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
+
+[[records]]
+path = "installer/release/engine-identity.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:1f3ffdd31831c7b7778ca71175e03c122cbe04cf6598721e6023e5c3ef064e3f"
+capabilities = ["fs", "node:fs/promises"]
+disposition = "tooling"
+rationale = "Repository tooling engine-identity.mjs: engine-identity Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
+
+[[records]]
+path = "installer/release/engine-identity.test.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:30238fb775bc62ce00d129161868e912d2da8a782690de6ea5dc9ea136a6b3ba"
+capabilities = ["fs", "mkdtemp", "node:fs/promises", "writeFile"]
+disposition = "tooling"
+rationale = "Repository tooling engine-identity.test.mjs: engine-identity.test Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
 
 [[records]]
 path = "installer/release/installer-distribution.mjs"
@@ -2884,7 +3247,7 @@ rationale = "Repository tooling installer-distribution.test.mjs: installer-distr
 [[records]]
 path = "installer/release/native-configuration.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:24207c3f5ed8be22092c87ba89725355185cb49a69a8f745dad14ad878108276"
+source_sha256 = "sha256:adeb84c25566195393935479a5be843948d9796d14f2231ad012249a5d19759c"
 capabilities = ["createReadStream", "fs", "node:fs", "node:fs/promises", "readFile", "writeFile"]
 disposition = "tooling"
 rationale = "Repository tooling native-configuration.mjs: native-configuration Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -2892,15 +3255,15 @@ rationale = "Repository tooling native-configuration.mjs: native-configuration R
 [[records]]
 path = "installer/release/native-configuration.test.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:7ee8dd69ed73dce5ab9fe13d1291309dc89b22437d042c42b1b224173feecb48"
-capabilities = ["fs", "mkdir", "mkdtemp", "node:fs/promises", "readFile", "writeFile"]
+source_sha256 = "sha256:c1891ab5bf49061eee7378cb2747d4c1e35f0e0f08a290df4915583430363b67"
+capabilities = ["copyFile", "fs", "mkdir", "mkdtemp", "node:fs/promises", "readFile", "writeFile"]
 disposition = "tooling"
 rationale = "Repository tooling native-configuration.test.mjs: native-configuration.test Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
 
 [[records]]
 path = "installer/release/updater-package.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:0867d88eee21d44d258cb1ee46da66b26280f8a55efcee91afc8c5358244e47a"
+source_sha256 = "sha256:cf5e083f19e10ef403b6da4376bc726d336b8ee71a6725b43be6c63d7f854460"
 capabilities = ["fs", "mkdir", "node:fs/promises"]
 disposition = "tooling"
 rationale = "Repository tooling updater-package.mjs: updater-package Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -2908,8 +3271,8 @@ rationale = "Repository tooling updater-package.mjs: updater-package Reads decla
 [[records]]
 path = "installer/release/updater-package.test.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:f90f9f4b82b64f5798716f48343a677bb894191b1a2bb1e98a6927da89daaa88"
-capabilities = ["fs", "mkdir", "mkdtemp", "node:fs/promises", "readFile", "writeFile"]
+source_sha256 = "sha256:f8a22577a99277d45771fb0d8f7e7211154e65c07c9ecfa5166d418fec88c420"
+capabilities = ["fs", "mkdir", "mkdtemp", "node:fs/promises", "readFile", "unlink", "writeFile"]
 disposition = "tooling"
 rationale = "Repository tooling updater-package.test.mjs: updater-package.test Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
 
@@ -2954,6 +3317,14 @@ disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: downloads.test The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
+path = "installer/tests/localization.test.mjs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:169a7ad569afe9fafe1fe6effb5a6166cdd29975670df49ca2937c8511ae9263"
+capabilities = ["fs", "node:fs/promises", "readFile"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: localization.test The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
 path = "installer/tests/maintenance.ps1"
 owner = "sugarsubstitute"
 source_sha256 = "sha256:8cfbd5bd9dee60e192e06371e6493bba2ce623aa9e0f227cc8e1ed136f197cdb"
@@ -2964,7 +3335,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: mai
 [[records]]
 path = "installer/tests/metadata.test.mjs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:0124cd19fb73ece50ad4ed4bb23280be666aae0bb902d0342dad1fd7d78b0079"
+source_sha256 = "sha256:1dacc4147ceb9f5bc8ec7180a70d77d3f79a9e8c9e033eb1960cc3a1a5cc7449"
 capabilities = ["fs", "node:fs", "readFile", "readFileSync", "writeFile"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: metadata.test The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2972,7 +3343,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: met
 [[records]]
 path = "installer/tests/ownership.test.mjs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:5f5ca03e775ab46166410c38a1e79c846579c3546a53482f5cf1b8a08c35e85c"
+source_sha256 = "sha256:0c1a330e6993e30c0bcecae4f5975b47e0461048694a9abf64359f4dba27c630"
 capabilities = ["fs", "mkdtemp", "node:fs/promises"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: ownership.test The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2980,7 +3351,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: own
 [[records]]
 path = "installer/tests/surface-runner.cjs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:6640f16496ed3a2bd6141dfd9e733c208209f5cc1bcda5433b4b722ba7172aab"
+source_sha256 = "sha256:0746a5de092ff894bc1d688e82055001527e00f596fd46b2bfa8df10021b2ad9"
 capabilities = ["fs", "node:fs/promises", "writeFile"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: surface-runner The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2988,15 +3359,23 @@ rationale = "Native fixture setup, deliberate corruption or observation for: sur
 [[records]]
 path = "installer/tests/worker.test.mjs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:8700fe5541520988751df99dd7eda4575fa85ec18291a9d992cb9fd740c5a672"
+source_sha256 = "sha256:8d53f5bf223029ce648f65ebec1b166efb59a4d5955c71228953f79e8f2b8276"
 capabilities = ["fs", "mkdir", "mkdtemp", "node:fs", "node:fs/promises", "readFile", "writeFile", "writeFileSync"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: worker.test The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
+path = "installer/typecheck-surface.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:a08786d08c2be7133701af7915642dcde190d9fb7bc45936706146d70839786b"
+capabilities = ["fs", "node:fs", "readFileSync"]
+disposition = "tooling"
+rationale = "Repository tooling typecheck-surface.mjs: typecheck-surface Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
+
+[[records]]
 path = "installer/typecheck.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:31c9476e4d908d2ca34ec1923f0f6c370b06c12467e9a690ed45102c408c8aed"
+source_sha256 = "sha256:bff9944d61155045995d361ed44cc0b1404a11be9dc869947065d0708330d9e8"
 capabilities = ["fs", "node:fs", "readFileSync"]
 disposition = "tooling"
 rationale = "Repository tooling typecheck.mjs: typecheck Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -3022,7 +3401,7 @@ boundary = "native_injection"
 [[records]]
 path = "installer/worker/integration.ts"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:dfa4014158654969e9e7416c0ce932060da7d5d61fb8cc8657f45024a35ceded"
+source_sha256 = "sha256:031855f513876ca2a06e9f44711c6d5ecb9792ea2b6c19b59e8f61effce0a202"
 capabilities = ["fs", "node:fs/promises"]
 disposition = "boundary"
 rationale = "Probe the external SugarCubes requirements file before invoking its installed Python owner."
@@ -3031,7 +3410,7 @@ boundary = "external_runtime"
 [[records]]
 path = "installer/worker/metadata.ts"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:a752ea4dd79209e0c6eb4bdd4ed6055b7db7950115b11d5dab3ce84b1a684355"
+source_sha256 = "sha256:7df538b25bb12a5b35c1d9c40afc5891fab83c85596fdfe5d6ac96e96bd4533d"
 capabilities = ["readFile", "writeFile"]
 disposition = "boundary"
 rationale = "Consume readFile/writeFile on the prepared native download or metadata capability; no Node filesystem implementation is acquired."
@@ -3040,7 +3419,7 @@ boundary = "native_injection"
 [[records]]
 path = "installer/worker/provision.ts"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:cd4e77aef993eba60104226e8aa17b714db61de0f3cc8f760d1c18feb9cd300e"
+source_sha256 = "sha256:200e9625132af274695e393280baa0b1c61f3ddae85e822d3f76be383e47ec9d"
 capabilities = ["fs", "node:fs/promises"]
 disposition = "boundary"
 rationale = "Inspect existing managed or attached ComfyUI and Python paths; download storage is delegated to native capability consumers."
@@ -3060,8 +3439,9 @@ owner = "sugarsubstitute-crash"
 source_sha256 = "sha256:acc021dd83936959b05d21ad8bc54f3cd95b73c004eab9a94ff2474073b3045a"
 capabilities = ["FlushFileBuffers", "GetFileInformationByHandleEx", "GetFileSizeEx", "NtCreateFile", "ReadFile", "SetEndOfFile", "SetFileInformationByHandle", "SetFilePointerEx", "WriteFile"]
 disposition = "boundary"
-rationale = "Crashpad finished-report native I/O retains its original create-only protected files, exact identity checks, admitted buffers and observed flush/close publication."
-boundary = "native_custody"
+rationale = "Crashpad database file-port I/O implements the preserved native crash database protocol; exact protected creation, native identity, bounded buffers and observed flush/close stay with this protocol boundary."
+boundary = "native_protocol"
+external_contract = "native-crashpad-database-file-port-v1"
 
 [[records]]
 path = "native/crashpad/finished_windows_tests.cc"
@@ -3101,7 +3481,7 @@ rationale = "Repository tooling build_native.py: build native Reads declared bui
 path = "tools/crashpad/prepare_source.py"
 owner = "sugarsubstitute-xtask"
 source_sha256 = "sha256:3114bfd26ba10b4a1ca3c9702350f30471dacdf5c1793d78c57e0a967e415c7f"
-capabilities = ["open", "pathlib", "read_bytes", "read_text", "replace", "shutil", "write_bytes", "write_text"]
+capabilities = ["iterdir", "open", "pathlib", "read_bytes", "read_text", "replace", "shutil", "write_bytes", "write_text"]
 disposition = "tooling"
 rationale = "Repository tooling prepare_source.py: prepare source Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
 
@@ -3149,7 +3529,7 @@ rationale = "Repository tooling test_verify_source.py: test verify source Reads 
 path = "tools/crashpad/verify_source.py"
 owner = "sugarsubstitute-xtask"
 source_sha256 = "sha256:7583d2962d2cab87d54c860fadd0b844e411e6ac5e10c8fd1753dafe39a218d3"
-capabilities = ["lstat", "open", "pathlib", "write_text"]
+capabilities = ["iterdir", "lstat", "open", "pathlib", "write_text"]
 disposition = "tooling"
 rationale = "Repository tooling verify_source.py: verify source Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
 
@@ -3188,7 +3568,7 @@ rationale = "Repository tooling private_files.cs: private files Reads declared b
 [[records]]
 path = "tools/local_k1/provision_release.ps1"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:a7dcef2aa49f44a21a98206bff9278b51ec9d4568b2e155e44a99e0a3410e1d3"
+source_sha256 = "sha256:e0c8632b9bdfa3e50c59039d4468862083e27f8bb37d0cc1a732424c375cefef"
 capabilities = ["Directory", "test-path"]
 disposition = "tooling"
 rationale = "Repository tooling provision_release.ps1: provision release Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -3244,7 +3624,7 @@ rationale = "Repository tooling test_manifest.py: test manifest Reads declared b
 [[records]]
 path = "tools/local_k1/test_provision_release.ps1"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:2ff49848945a7011aa10ae2dace1423ff70b0a899871c767b6799a93cde97003"
+source_sha256 = "sha256:42168d26c07bffc0d2c7830186ca8165e599e6127da7b49109973501247a8bb3"
 capabilities = ["CreateDirectory", "Directory", "File", "ReadAllBytes", "WriteAllBytes", "directory", "test-path"]
 disposition = "tooling"
 rationale = "Repository tooling test_provision_release.ps1: test provision release Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -3404,10 +3784,18 @@ rationale = "Repository tooling offscreen_lifecycle.py: offscreen lifecycle Read
 [[records]]
 path = "tools/splash_parity/offscreen_native.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:30e7b0cf02cab9c7b1fe99989b82375695231d73e7071bba523fc1b94cb736a4"
-capabilities = ["open", "pathlib"]
+source_sha256 = "sha256:b385674360f18f4e409ef223d5751ebe032990fcc4b347747a51def6bf65ed03"
+capabilities = ["pathlib"]
 disposition = "tooling"
 rationale = "Repository tooling offscreen_native.py: offscreen native Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
+
+[[records]]
+path = "tools/splash_parity/offscreen_processes.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:a38187cf4ad9ea52c3023dccf8c4b66d5722cfa675ca6e0c400113d02af100c7"
+capabilities = ["open"]
+disposition = "tooling"
+rationale = "Repository tooling offscreen_processes.py: offscreen processes Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
 
 [[records]]
 path = "tools/splash_parity/offscreen_responsiveness.py"
@@ -3461,7 +3849,7 @@ rationale = "Repository tooling test_acceptance.py: test acceptance Reads declar
 path = "tools/splash_parity/test_caption_entry_windows.py"
 owner = "sugarsubstitute-xtask"
 source_sha256 = "sha256:ab65557129cb95e93626e4e3eae162548bed6b83351e179aa9502aa0231ff144"
-capabilities = ["TemporaryDirectory", "pathlib", "read_bytes", "read_text", "tempfile", "write_bytes"]
+capabilities = ["TemporaryDirectory", "iterdir", "pathlib", "read_bytes", "read_text", "tempfile", "write_bytes"]
 disposition = "tooling"
 rationale = "Repository tooling test_caption_entry_windows.py: test caption entry windows Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
 
@@ -3524,7 +3912,7 @@ rationale = "Repository tooling test_native_timing.py: test native timing Reads 
 [[records]]
 path = "tools/splash_parity/test_offscreen_native.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:58f5c257a18b9536dd29beaad697b087f223dadb4ff45494eacbd38087c395bc"
+source_sha256 = "sha256:7da18cdd81bfdf5ad61c8bc90b32293b3b125b08a7cb3d1859cfa085caf84ba1"
 capabilities = ["open", "pathlib"]
 disposition = "tooling"
 rationale = "Repository tooling test_offscreen_native.py: test offscreen native Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -3546,6 +3934,54 @@ disposition = "tooling"
 rationale = "Repository tooling test_startup_windows.py: test startup windows Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
 
 [[records]]
+path = "tools/test_updater_feed_fixture.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:7cf839f1d8d52e7c412bf2156ff77514d4ddf6661ea6ab744ddb55440f1e4ea1"
+capabilities = ["TemporaryDirectory", "pathlib", "tempfile", "unlink", "write_bytes"]
+disposition = "tooling"
+rationale = "Repository tooling test_updater_feed_fixture.py: test updater feed fixture Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
+
+[[records]]
+path = "tools/test_updater_qualification.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:cc23458d26a2a168e479720aa31e61d4ea93f3e116fab1d052646904ff1027af"
+capabilities = ["TemporaryDirectory", "open", "pathlib", "read_bytes", "read_text", "replace", "stat", "tempfile", "unlink", "write_bytes", "write_text"]
+disposition = "tooling"
+rationale = "Isolated publication and retirement harness fixtures own their temporary files, fake only native metadata boundaries, and replace text in TOML rejection inputs; actual cache generations and unknown legacy bytes are checked through the production observer."
+
+[[records]]
+path = "tools/updater_feed_fixture.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:67b0ba2bd20011f376ecbfe7ac1977e05f49358baaf385e5ecf1641c8cc1f124"
+capabilities = ["open", "pathlib", "read_text", "stat", "write_text"]
+disposition = "tooling"
+rationale = "Repository tooling updater_feed_fixture.py: updater feed fixture Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
+
+[[records]]
+path = "tools/updater_native_support.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:f4689656bf437fd4cd83a091a81b267fcab21418d82b9e253d5852b1abad5503"
+capabilities = ["CreateFileW", "glob", "pathlib", "read_text", "rename", "write_text"]
+disposition = "tooling"
+rationale = "Repository tooling updater_native_support.py: updater native support Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
+
+[[records]]
+path = "tools/updater_publication_qualification.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:0fc7b697eb5efa48924f8833063b3ef8703c53abf114de28673ecd2cd8ae198d"
+capabilities = ["glob", "iterdir", "open", "pathlib", "read_text", "rename", "stat", "write_text"]
+disposition = "tooling"
+rationale = "The isolated publication observer reads its registered shared cache namespace and native directory identities, preserves unknown content, and restores only its digest-verified original launcher after a failed campaign; evidence is written outside the installation workspace."
+
+[[records]]
+path = "tools/updater_qualification.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:1959bba67010ea44062e55c7e0a966bb64ff0018f617bacb014a332d4b338c19"
+capabilities = ["CreateFileW", "ReadFile", "open", "pathlib", "read_text", "write_text"]
+disposition = "tooling"
+rationale = "Repository tooling updater_qualification.py: updater qualification Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
+
+[[records]]
 path = "tools/xtask/src/architecture.rs"
 owner = "sugarsubstitute-xtask"
 source_sha256 = "sha256:8a1d7ec1db24058d32b058ed5d013997e4724b90a612ab14fc383f5d8c6d9ee1"
@@ -3564,7 +4000,7 @@ rationale = "Repository tooling authored_sources.rs: Discover authored sources i
 [[records]]
 path = "tools/xtask/src/cache_storage/scripts.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:add965c7880d865d7cfb7735fa0f00f8af24fb452349d2ee6e159114b182a74c"
+source_sha256 = "sha256:b2e0fd070e725fb3337c03cbd95c29ec2eaea31dac126d8c914ff0e90809cb2a"
 capabilities = ["literal restricted capability"]
 disposition = "tooling"
 rationale = "Repository tooling scripts.rs: Restrict script filesystem acquisition and upstream storage routes to exact reviewed boundaries. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -3580,10 +4016,26 @@ rationale = "Repository tooling tests.rs: Prove known filesystem acquisition rou
 [[records]]
 path = "tools/xtask/src/cache_storage/tests.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:72ec3daf78a0fc5427f552645988c4ccb53c93d336fffc788b8a63097e9e17a4"
+source_sha256 = "sha256:661af1e7c41a588f07c4087be624b00c5c0c654fbb17e6cace7e01d33fb909ea"
 capabilities = ["std::fs::create_dir", "std::fs::remove_dir"]
 disposition = "tooling"
 rationale = "Repository tooling tests.rs: Invalid repositories demonstrate cache ownership, registry parity and source-bypass rejection. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
+
+[[records]]
+path = "tools/xtask/src/configuration/tests.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:94dab47fc0167ed37ef4864b1f50982c3812531d4b7b7661ff22e56226c965a8"
+capabilities = ["literal restricted capability"]
+disposition = "tooling"
+rationale = "Repository tooling tests.rs: Adversarial configuration access and strict review integrity fixtures. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
+
+[[records]]
+path = "tools/xtask/src/diagnostics_gate/tests.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:21604c2d7ba52d7047dddca7858481fdd978c15e17dd5ee8a287c5c4ae4de2d2"
+capabilities = ["literal restricted capability", "std::fs::remove_file"]
+disposition = "tooling"
+rationale = "Repository tooling tests.rs: Adversarial fixtures qualify source bypass, exact boundary review and missing coverage rejection. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
 
 [[records]]
 path = "tools/xtask/src/error.rs"
@@ -3604,7 +4056,7 @@ rationale = "Repository tooling imports.rs: Reject cross-parent module imports o
 [[records]]
 path = "tools/xtask/src/execution_exports_modules.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:92516b0d361214c80daf2021fb882ce1db49927a2b203ac826d0b6bbffe12c71"
+source_sha256 = "sha256:2f8171543fdbdc55d8f17abbc53b6be08437bed1c21d95ca1cba50d84c16c4b2"
 capabilities = ["method canonicalize"]
 disposition = "tooling"
 rationale = "Repository tooling execution_exports_modules.rs: Load execution-owner modules and preserve lexical declarations and imports. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -3636,7 +4088,7 @@ rationale = "Repository tooling native.rs: Recognize native filesystem and dynam
 [[records]]
 path = "tools/xtask/src/infrastructure/access/scripts.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:3ec0f540fe8d26bb08017afd3cc01d3af3bdef4176950a55fe57330f6cce4d3e"
+source_sha256 = "sha256:e7828ac04074e0d74b07d87c8cee0f83e9ad009494dff3e6e8442ddc2c67ed80"
 capabilities = ["literal restricted capability"]
 disposition = "tooling"
 rationale = "Repository tooling scripts.rs: Classify decoded script, native, C# and build-language filesystem access. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -3644,7 +4096,7 @@ rationale = "Repository tooling scripts.rs: Classify decoded script, native, C# 
 [[records]]
 path = "tools/xtask/src/infrastructure/access_tests.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:dc8803619a11b4671aa9ab0dc2b60b725701d71c0d8616bd4f3b7d5402f43e67"
+source_sha256 = "sha256:e0004f9da2fd3d1888b5eef6f895375193cb3abb2ef2e3e08f117d3a39da34d9"
 capabilities = ["literal restricted capability"]
 disposition = "tooling"
 rationale = "Repository tooling access_tests.rs: Reject unreviewed construction, method effects, cross-language routes and raw public exports. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -3660,18 +4112,42 @@ rationale = "Repository tooling dependencies.rs: Bind filesystem-capable Cargo/n
 [[records]]
 path = "tools/xtask/src/infrastructure/tests.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:3a48b09ca6fc162e4377e0e278712de5d8e6ca4c57b283d9d59ded98345d235f"
+source_sha256 = "sha256:155af17febef4bb1bc5f957ea19feeb9591fd728335a595b9741e84e06d9e246"
 capabilities = ["literal restricted capability"]
 disposition = "tooling"
 rationale = "Repository tooling tests.rs: Reject new publication routes, stale dispositions and gaps in auxiliary source coverage. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
 
 [[records]]
+path = "tools/xtask/src/localization.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:61eed617546ede18584e03e88fb361506cd6391bd0f52f1479739c49be0abadd"
+capabilities = ["literal restricted capability"]
+disposition = "tooling"
+rationale = "Repository tooling localization.rs: Gate known presentation capabilities and single-owner catalog construction. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
+
+[[records]]
+path = "tools/xtask/src/localization/tests.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:eaa03c62f7e902fc8983f48854311e61e1f29ca683a57477f163e051b5cb11cd"
+capabilities = ["std::fs::create_dir_all"]
+disposition = "tooling"
+rationale = "Repository tooling tests.rs: Adversarial capability, copy-provenance, registry and coverage rejection fixtures. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
+
+[[records]]
 path = "tools/xtask/src/main.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:31de09d3a6e5e2f908f0b31f28ca91a278def5c22f4430dc2f78cd7be1aa90e9"
+source_sha256 = "sha256:6b500b52d4a8ea40ca88d31f1caf26154f17a6441c31443504b3937be7e08041"
 capabilities = ["method canonicalize"]
 disposition = "tooling"
 rationale = "Repository tooling main.rs: Provide the same portable verification entry point for local work, hooks and CI. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
+
+[[records]]
+path = "tools/xtask/src/networking/external.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:00a51f36223ec76c82aa879700211a94e89017325f7a5e055bd9986e88a6b5ad"
+capabilities = ["method exists"]
+disposition = "tooling"
+rationale = "Repository tooling external.rs: Bind the consumed upstream Electron HTTP implementations to their registered component. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
 
 [[records]]
 path = "tools/xtask/src/policy.rs"

@@ -2,6 +2,12 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain each launcher job through terminal consumption and execution shutdown.
 mod cached;
+mod contention;
+mod delegation;
+mod engine;
+mod installation;
+mod jobs;
+mod publication;
 mod selection;
 mod shutdown;
 #[cfg(test)]
@@ -19,27 +25,44 @@ use sugarsubstitute_contracts::{
 use sugarsubstitute_desktop::{HeadlessLifetime, HeadlessStep, StartupPreparationStep};
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner, MonotonicClock};
 use sugarsubstitute_supervision::{
-    application_launch::{ApplicationLaunch, CreationOutcome},
+    application_launch::{ActivationLaunch, ActivationOutcome, ApplicationLaunch, CreationOutcome},
     setup_storage::{self, ReservedLaunch},
     update_preparation::Worker,
 };
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 enum Work {
-    Cache(Option<Worker>),
+    Installation(Option<ApplicationLaunch>),
+    Cache(Worker),
     Prepared(ApplicationLaunch),
     TrialPrepared,
+    EngineOpened,
+    EngineVerified,
+    EnginePrepared,
+    EngineStarted,
+    EngineObserved(ActivationOutcome),
+    Offered,
+    OfferObserved(Option<CreationOutcome>),
     Launched,
     Recovered(CreationOutcome),
     Retired,
+    Retiring,
 }
 
 /// The exact admitted operation controls memory, cleanup scope and optional-update fallback.
 #[derive(Clone, Copy)]
 enum Task {
+    Installation,
     Cache,
     Select,
     Trial,
-    Create { trial: bool },
+    OpenEngine,
+    VerifyEngine,
+    PrepareEngine,
+    CreateEngine,
+    ObserveEngine,
+    ObserveOffer,
+    StopEngine,
+    Create { optional: bool },
     Recover,
     Retire,
 }
@@ -50,10 +73,18 @@ struct Pending {
 
 /// One next action, changed only after an observed outcome or rejected admission.
 enum Choice {
+    Installation,
+    OpenEngine,
+    VerifyEngine,
+    PrepareEngine,
+    CreateEngine,
+    ObserveEngine,
+    ObserveOffer,
+    StopEngine,
     Cache,
     Accepted,
     Trial,
-    Create { trial: bool },
+    Create { optional: bool },
     Recover,
     Complete,
 }
@@ -69,7 +100,14 @@ pub(super) struct Launcher {
     job: Option<Pending>,
     launch: Option<ApplicationLaunch>,
     cached: Option<cached::Cached>,
+    engine: Option<Arc<engine::Guard>>,
+    activation: Option<ActivationLaunch>,
+    source: Option<Arc<sugarsubstitute_supervision::application_launch::broker::ActivationSender>>,
+    creator_reply: Option<CreationOutcome>,
+    activation_after: Option<Moment>,
+    activation_wake: Option<Instant>,
     choice: Choice,
+    selection_wait: Option<contention::Wait>,
     recovery_until: Option<Moment>,
     recovery_wake: Option<Instant>,
     update_failure: Option<Box<dyn Error>>,
@@ -97,7 +135,14 @@ impl Launcher {
             job: None,
             launch: None,
             cached: None,
-            choice: Choice::Cache,
+            engine: None,
+            activation: None,
+            source: None,
+            creator_reply: None,
+            activation_after: None,
+            activation_wake: None,
+            choice: Choice::Installation,
+            selection_wait: None,
             recovery_until: None,
             recovery_wake: None,
             update_failure: None,
@@ -112,53 +157,6 @@ impl Launcher {
             finished: false,
         }
     }
-    fn submit(
-        &mut self,
-        task: Task,
-        body: impl FnOnce(JobContext) -> io::Result<Work> + Send + 'static,
-    ) -> Result<()> {
-        let cleanup = matches!(task, Task::Retire | Task::Recover);
-        if self.job.is_some() || (self.closing && !matches!(task, Task::Retire)) {
-            return Err("Launcher admission is closed or occupied".into());
-        }
-        let client = self.client.as_ref().ok_or("Launcher execution absent")?;
-        let scope = if cleanup { self.cleanup_scope.as_ref() } else { self.work_scope.as_ref() }
-            .ok_or("Launcher scope absent")?;
-        let deadline = if matches!(task, Task::Recover) {
-            self.recovery_until.ok_or("Launcher trial recovery cutoff absent")?
-        } else if cleanup {
-            self.cleanup_until.ok_or("Launcher cleanup cutoff absent")?
-        } else {
-            self.until.ok_or("Launcher cutoff absent")?
-        };
-        if client.now()? >= deadline {
-            return Err("Launcher admission reached its original cutoff".into());
-        }
-        let job = client.submit_blocking(
-            scope,
-            JobSpec {
-                id: self.jobs.allocate()?,
-                operation: Operation::NativeLifecycle,
-                class: JobClass::InfrastructureLifecycle,
-                deadline: Some(deadline),
-                reservation_bytes: match task {
-                    Task::Cache => 1024 * 1024,
-                    Task::Trial => setup_storage::SIGNED_TRANSFER_RESERVATION_BYTES,
-                    Task::Create { .. } => {
-                        sugarsubstitute_supervision::application_launch::CREATION_RESERVATION_BYTES
-                    }
-                    Task::Recover | Task::Retire => {
-                        sugarsubstitute_supervision::application_launch::RECOVERY_RESERVATION_BYTES
-                    }
-                    Task::Select => setup_storage::LAUNCH_RESERVATION_BYTES,
-                },
-                replacement: None,
-            },
-            body,
-        )?;
-        self.job = Some(Pending { task, job });
-        Ok(())
-    }
     fn advance(&mut self, max: NonZeroUsize) -> Result<HeadlessStep> {
         if let Some(client) = &self.client {
             client.drain_completions(max)?;
@@ -169,25 +167,41 @@ impl Launcher {
             let task = pending.task;
             self.job = None;
             match completion.outcome {
+                JobOutcome::Success(Work::Installation(launch)) => {
+                    self.installed(launch);
+                }
                 JobOutcome::Success(Work::Cache(worker)) => {
-                    self.cached = worker.map(cached::Cached::new);
-                    if self.cached.is_none() {
-                        self.choice = Choice::Accepted;
-                    }
+                    self.cached = Some(cached::Cached::new(worker));
                 }
                 JobOutcome::Success(Work::Prepared(launch)) => {
                     self.launch = Some(launch);
-                    self.choice = Choice::Create { trial: false };
+                    self.choice = Choice::Create { optional: false };
                 }
                 JobOutcome::Success(Work::TrialPrepared) => {
-                    self.choice = Choice::Create { trial: true }
+                    self.choice = Choice::Create { optional: true }
+                }
+                JobOutcome::Success(Work::EngineOpened) => self.choice = Choice::VerifyEngine,
+                JobOutcome::Success(Work::EngineVerified) => self.choice = Choice::Installation,
+                JobOutcome::Success(Work::EnginePrepared) => self.choice = Choice::CreateEngine,
+                JobOutcome::Success(Work::EngineStarted) => self.choice = Choice::ObserveEngine,
+                JobOutcome::Success(Work::EngineObserved(outcome)) => {
+                    self.activation_observed(outcome)?
+                }
+                JobOutcome::Success(Work::Offered) => self.choice = Choice::ObserveOffer,
+                JobOutcome::Success(Work::OfferObserved(outcome)) => {
+                    self.offer_observed(outcome)?
                 }
                 JobOutcome::Success(Work::Launched) => {
                     self.completed = true;
                     self.choice = Choice::Complete;
                 }
                 JobOutcome::Success(Work::Recovered(outcome)) => self.recovered(outcome)?,
-                JobOutcome::Success(Work::Retired) => self.launch = None,
+                JobOutcome::Success(Work::Retired) => {
+                    self.launch = None;
+                    self.engine = None;
+                    self.source = None;
+                }
+                JobOutcome::Success(Work::Retiring) => self.pace_activation()?,
                 JobOutcome::Cancelled if self.closing => {}
                 JobOutcome::Failure(cause) => self.failed(task, cause.into())?,
                 other => self.failed(
@@ -204,7 +218,10 @@ impl Launcher {
             && !self.completed
             && self.until.is_some_and(|until| self.clock.now() >= until)
         {
-            return Err("Launcher startup reached its original cutoff".into());
+            return Err(self.selection_wait.take().map_or_else(
+                || "Launcher startup reached its original cutoff".into(),
+                |wait| wait.cause,
+            ));
         }
         if !self.closing && !self.completed && self.job.is_none() {
             self.select_next()?;
@@ -230,9 +247,6 @@ impl HeadlessLifetime for Launcher {
         self.cleanup_scope =
             Some(client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?);
         self.client = Some(client);
-        if !crate::updates::configured() {
-            self.choice = Choice::Accepted;
-        }
         self.select_next()
     }
     fn prepare_native_runtime(&mut self, max: NonZeroUsize) -> Result<StartupPreparationStep> {
@@ -251,6 +265,8 @@ impl HeadlessLifetime for Launcher {
         [
             self.wake_at,
             self.recovery_wake,
+            self.activation_wake,
+            self.selection_wait.as_ref().map(|wait| wait.wake_at),
             self.cached.as_ref().and_then(cached::Cached::next_deadline),
         ]
         .into_iter()
@@ -273,6 +289,9 @@ impl HeadlessLifetime for Launcher {
         if self.job.is_some()
             || self.launch.is_some()
             || self.cached.is_some()
+            || self.engine.is_some()
+            || self.activation.is_some()
+            || self.source.is_some()
             || self.cutoff_reported
         {
             return Err("Launcher custody did not retire before its original cutoff".into());

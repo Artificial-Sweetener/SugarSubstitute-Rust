@@ -6,9 +6,9 @@
 use std::path::Path;
 
 use crate::{
-    architecture, cache_storage, catalog,
+    architecture, cache_storage, catalog, configuration, diagnostics_gate,
     error::{Failure, Result, read, require},
-    execution, infrastructure,
+    execution, infrastructure, localization, networking,
     policy::{self, Architecture, Debt, Records, Testing, Waiver},
     structure, testing, vendor,
     workspace::Workspace,
@@ -20,8 +20,17 @@ pub(crate) fn check(root: &Path) -> Result<()> {
     let architecture: Architecture = policy::load(root, "governance/architecture/policy.toml")?;
     let workspace = Workspace::load(root)?;
     architecture::check(root, &architecture, &workspace)?;
+    let configuration: configuration::Policy =
+        policy::load(root, "governance/infrastructure/configuration.toml")?;
+    configuration::check(root, &architecture, &workspace, &configuration)?;
+    let localization: localization::Policy =
+        policy::load(root, "governance/infrastructure/localization.toml")?;
+    localization::check(root, &architecture, &workspace, &localization)?;
     let execution: execution::Policy = policy::load(root, "governance/execution/policy.toml")?;
     execution::check(root, &execution, &architecture, &workspace)?;
+    let diagnostics: diagnostics_gate::Policy =
+        policy::load(root, "governance/infrastructure/diagnostics.toml")?;
+    diagnostics_gate::check(root, &architecture, &workspace, &diagnostics)?;
     let infrastructure: infrastructure::Policy =
         policy::load(root, "governance/infrastructure/storage.toml")?;
     infrastructure::check(
@@ -31,6 +40,9 @@ pub(crate) fn check(root: &Path) -> Result<()> {
         &workspace,
         time::OffsetDateTime::now_utc().date(),
     )?;
+    let networking: networking::Policy =
+        policy::load(root, "governance/infrastructure/networking.toml")?;
+    networking::check(root, &architecture, &workspace, &networking)?;
     let debt: Records<Debt> = policy::load(root, "governance/architecture/debt.toml")?;
     let waivers: Records<Waiver> = policy::load(root, "governance/architecture/waivers.toml")?;
     structure::check(root, &architecture, &debt, &waivers, time::OffsetDateTime::now_utc().date())?;

@@ -7,7 +7,8 @@ use sugarsubstitute_contracts::application_launch::TRIAL_LAUNCH_ARGUMENT;
 
 /// Actual once-captured native entry custody, validated by the elected coordinator's worker.
 pub enum InheritedLaunch {
-    /// Accepted-only startup with a protected selection reservation.
+    /// Protected selection reference for accepted startup or forwarding to a live trial owner.
+    /// It never grants permission to admit an unaccepted generation as an elected coordinator.
     Selection(InheritedSelection),
     /// Candidate startup with live installation exclusion and its protected trial snapshot.
     Trial(InheritedTrial),

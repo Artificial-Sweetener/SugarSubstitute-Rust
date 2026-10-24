@@ -2,15 +2,15 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Reopen completed native preparation without extracting its provisioning distribution again.
 use super::*;
-use crate::setup_storage::{TrustFailure, TrustStore, UpdateAuthorization};
+use crate::setup_storage::{AuthenticatedOffer, TrustFailure, TrustStore};
 
 impl PreparedCandidate {
     /// Retain destination and configuration pins before reauthorizing the exact prepared snapshot.
-    /// Missing preparation returns `None`; invalid evidence remains an error and is preserved.
+    /// Missing or different release preparation returns `None`; invalid evidence is preserved.
     pub(in crate::setup_storage) fn reopen(
         session: &InstallationSession,
         trust: &TrustStore,
-        authorization: &UpdateAuthorization<'_>,
+        offer: &AuthenticatedOffer,
         now: impl FnMut() -> i64,
         context: &JobContext,
     ) -> Result<Option<(Arc<Self>, ExistingInstallation)>, TrustFailure> {
@@ -28,6 +28,10 @@ impl PreparedCandidate {
         let Some(publication) = trust.published_release(&generation, context)? else {
             return Ok(None);
         };
+        let authorization = offer.authorization(trust);
+        if !publication.matches(authorization.request, offer.offer()) {
+            return Ok(None);
+        }
         let path = session.directory().join("releases").join(generation.id.as_str());
         let (_, marker) =
             super::super::generation::open(&path, generation.package.as_str(), context)?;
@@ -45,34 +49,29 @@ impl PreparedCandidate {
         application.require_installed_launch()?;
         application.payload.compatibility.require_trial_launch()?;
         let installation = Directory::open(session.directory(), false)?;
-        authorization.publish_prepared(
-            &installation,
-            &publication,
-            now,
-            context,
-            |_, recheck| {
-                store
-                    .require_launcher(&application.payload.compatibility, context)
-                    .map_err(io::Error::other)?;
-                recheck()?;
-                if store.load(context).map_err(io::Error::other)?.as_ref() != Some(&snapshot) {
-                    return Err(io::Error::other(crate::setup_storage::SelectionFailure::Changed));
-                }
-                recheck()
-            },
-        )?;
-        let candidate = Self {
+        let candidate = Arc::new(Self {
             generation: application.generation,
             directory: application.directory,
             installation,
-            snapshot: std::sync::Mutex::new(snapshot),
+            snapshot: std::sync::Mutex::new(snapshot.clone()),
             _payload: application.payload,
             evidence: Evidence::Published {
                 publication: Box::new(publication),
                 _inventory: application.inventory,
                 _marker: marker,
             },
-        };
-        Ok(Some((Arc::new(candidate), configuration)))
+        });
+        candidate.authorize(&authorization, now, context, |_, recheck| {
+            store.require_launcher(candidate.compatibility(), context).map_err(io::Error::other)?;
+            recheck()?;
+            if store.load(context).map_err(io::Error::other)?.as_ref() != Some(&snapshot) {
+                return Err(io::Error::other(crate::setup_storage::SelectionFailure::Changed));
+            }
+            store
+                .prepare_launcher(&session.admission, &candidate, context)
+                .map_err(io::Error::other)?;
+            recheck()
+        })?;
+        Ok(Some((candidate, configuration)))
     }
 }

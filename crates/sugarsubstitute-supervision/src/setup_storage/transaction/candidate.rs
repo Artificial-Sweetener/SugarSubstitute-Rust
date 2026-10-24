@@ -5,6 +5,7 @@ use super::*;
 use sugarsubstitute_contracts::installation::{
     Candidate, Generation, GenerationId, InstallationRecord, PackageDigest,
 };
+mod installation;
 mod reopen;
 
 /// Preparation retains its source; restart retains protected publication and inventory instead.
@@ -15,11 +16,16 @@ enum Evidence {
         _inventory: File,
         _marker: File,
     },
+    Installed {
+        _inventory: File,
+        _marker: File,
+    },
 }
 
-/// Complete candidate files and their current durable prepared selection identity.
+/// Prepared candidate runtime and its current durable selection identity.
 /// Only recovery under the original unstarted creator custody may advance this revision.
-/// Retained directory and payload custody prevent replacement while the caller arranges a trial.
+/// Retained directory and runtime custody prevent replacement while the caller arranges a trial.
+/// Initial preparation verifies every copied file; diagnostic consumption authenticates symbols.
 /// This object proves preparation only. Launch admission must recheck current repository trust;
 /// accepting a trial requires authenticated application health and the live installation owner.
 pub struct PreparedCandidate {
@@ -27,10 +33,18 @@ pub struct PreparedCandidate {
     directory: Directory,
     pub(super) installation: Directory,
     pub(super) snapshot: std::sync::Mutex<InstallationRecord>,
-    _payload: super::super::bundle::VerifiedCopy,
+    _payload: super::super::bundle::VerifiedRuntime,
     evidence: Evidence,
 }
 impl PreparedCandidate {
+    /// Native launch transfer retains the actual candidate files and all pinned ancestors.
+    pub(super) fn launch_pins(&self) -> impl Iterator<Item = &File> {
+        self.directory
+            .native_pins()
+            .chain(self.installation.native_pins())
+            .chain(self._payload.launch_pins())
+    }
+
     /// Exact generation recorded as prepared, with its verified manifest digest.
     pub fn generation(&self) -> &Generation {
         &self.generation
@@ -47,7 +61,9 @@ impl PreparedCandidate {
     }
 
     /// Compatibility is derived from the verified destination in both preparation and restart.
-    pub(super) fn compatibility(&self) -> &super::super::compatibility::Compatibility {
+    pub(in crate::setup_storage) fn compatibility(
+        &self,
+    ) -> &super::super::compatibility::Compatibility {
         &self._payload.compatibility
     }
 
@@ -63,6 +79,10 @@ impl PreparedCandidate {
         ) -> io::Result<T>,
     ) -> Result<T, super::super::TrustFailure> {
         match &self.evidence {
+            Evidence::Installed { .. } => {
+                Err(invalid("Installed authorization requires its retained installation choice")
+                    .into())
+            }
             Evidence::Archive(bundle) => {
                 let bytes = bundle
                     .download_identity()
@@ -84,8 +104,9 @@ impl PreparedInstallation {
     /// Prepare a downloaded distribution under current signed repository authority.
     /// The returned shared owner pins immutable files across launch retries; it grants no run
     /// authority and each trial must independently recheck the recorded preparation and trust.
-    /// Leaves the accepted selection and existing shell entry unchanged. A persisted staging
-    /// record precedes configuration; a prepared record follows the final authority check.
+    /// Preserves accepted selection and restores any established launcher ownership.
+    /// A persisted staging record precedes configuration; a prepared record follows the
+    /// final authority check. Launcher restoration requires no application run lease.
     /// `now` supplies Unix UTC seconds from the execution adapter's clock boundary.
     /// Reserve `SIGNED_PREPARATION_RESERVATION_BYTES` alongside retained package/trust custody.
     /// # Errors
@@ -150,7 +171,7 @@ impl PreparedInstallation {
                     }
                 };
                 self.stage(context)?;
-                let payload = super::super::bundle::VerifiedCopy::open(
+                let payload = super::super::bundle::VerifiedRuntime::verify_copy(
                     &self.bundle.payload.inventory,
                     &self.generation,
                     context,
@@ -173,14 +194,19 @@ impl PreparedInstallation {
                     }
                     staging
                 };
-                Ok(Arc::new(PreparedCandidate {
+                let candidate = Arc::new(PreparedCandidate {
                     generation,
                     directory,
                     installation,
                     snapshot: std::sync::Mutex::new(prepared),
                     _payload: payload,
                     evidence: Evidence::Archive(Arc::clone(&self.bundle)),
-                }))
+                });
+                store
+                    .prepare_launcher(&self.session.admission, &candidate, context)
+                    .map_err(io::Error::other)?;
+                recheck()?;
+                Ok(candidate)
             },
         )
     }

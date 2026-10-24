@@ -8,6 +8,7 @@
 mod checkpoint;
 pub mod delivery;
 pub mod distribution;
+mod engine;
 mod error;
 #[cfg(any(test, feature = "boundary-fixtures"))]
 #[doc(hidden)]
@@ -18,16 +19,12 @@ pub mod package;
 mod releases;
 mod target;
 mod trust;
+pub use engine::{ENGINE_PROTOCOL, ENGINE_RELEASE};
 pub use error::Error;
 pub use offer::VerifiedOffer;
 pub use releases::{MAX_RELEASE_HISTORY_BYTES, ReleaseHistory};
 pub use target::{Target, TargetVerifier, VerifiedBytes};
 pub use trust::{MetadataSet, RepositoryTrust};
-
-/// Monotonic release identity of this installation engine.
-pub const ENGINE_RELEASE: u64 = 1;
-/// Update protocol implemented by this engine.
-pub const ENGINE_PROTOCOL: u32 = 1;
 
 /// Maximum encoded bytes for one untrusted metadata role.
 pub const MAX_METADATA_BYTES: usize = 1024 * 1024;

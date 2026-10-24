@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Read healthy engine identity and independently pin its authenticated preparation image.
 use super::*;
-use crate::setup_storage::{PreparationImage, bundle::Payload};
+use crate::setup_storage::{PreparationImage, bundle::RuntimePackage};
 use sugarsubstitute_contracts::update::Channel;
 
 impl TrustStore {
@@ -35,11 +35,11 @@ impl TrustStore {
     }
 
     /// Pin an accepted engine that meets this subscription's required release, without retaining
-    /// trust, preparation or application locks in the returned image. All payload bytes and entry
+    /// trust, preparation or application locks in the returned image. Runtime bytes and entry
     /// compatibility are rechecked under the selection writer. No network freshness is required
     /// to reuse a healthy installed engine. Reserve payload plus trust-operation capacity.
     /// # Errors
-    /// Rejects corrupt continuity/receipts, modified payloads, unsafe paths and cancellation.
+    /// Rejects corrupt continuity/receipts, modified runtime files, unsafe paths and cancellation.
     /// Returns `None` when no accepted engine on this channel meets `minimum_release`.
     pub fn pin_updater(
         &self,
@@ -55,20 +55,28 @@ impl TrustStore {
             if receipt.channel != channel || receipt.sequence < minimum_release {
                 return Ok(None);
             }
-            let path = self.updater_path(generation);
-            protection::with(context, |payload_protection| {
-                payload_protection.directory(&path, Mode::Existing, context)?;
-                payload_protection.directory(&path.join("app"), Mode::Existing, context)?;
-                let payload =
-                    Payload::open(&path, generation.package.as_str(), Component::Updater, context)?;
-                payload.require_protected(payload_protection)?;
-                payload.compatibility.require_updater()?;
-                let installation = Directory::open(self._installation_root.path(), false)?;
-                check(context)?;
-                Ok(Some(PreparationImage::updater(generation.clone(), payload, installation)))
-            })
-            .map_err(TrustFailure::from)
+            self.pin_updater_generation(generation, context).map(Some)
         })
+    }
+
+    /// Pin the generation whose accepted selection and receipt the caller checked under the
+    /// retained trust writer. This shares payload verification without sharing admission policy.
+    pub(super) fn pin_updater_generation(
+        &self,
+        generation: &Generation,
+        context: &JobContext,
+    ) -> Result<PreparationImage, TrustFailure> {
+        let path = self.updater_path(generation);
+        protection::with(context, |payload_protection| {
+            payload_protection.directory(&path, Mode::Existing, context)?;
+            payload_protection.directory(&path.join("app"), Mode::Existing, context)?;
+            let payload = RuntimePackage::open(&path, generation.package.as_str(), context)?;
+            payload.require_protected(payload_protection)?;
+            let installation = Directory::open(self._installation_root.path(), false)?;
+            check(context)?;
+            Ok(PreparationImage::updater(generation.clone(), payload, installation))
+        })
+        .map_err(TrustFailure::from)
     }
 }
 

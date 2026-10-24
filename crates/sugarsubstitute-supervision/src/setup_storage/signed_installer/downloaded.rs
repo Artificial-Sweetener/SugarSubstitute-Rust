@@ -8,7 +8,9 @@ impl InstallationSession {
     /// Obtain this session after downloading so network work holds no setup exclusion. Existing
     /// application run custody is independent and may remain held throughout preparation.
     /// The repository identity and local subscription remain those used for discovery. Current
-    /// trust, release floors and expiry are checked before extraction and again before returning.
+    /// trust, release floors and expiry are checked before payload binding and before returning.
+    /// Retained sources share already verified immutable files only after exact inventory matching;
+    /// extraction sources materialize and verify a new payload in their workspace.
     /// This starts no process, publishes no candidate and grants no activation or cleanup rights.
     /// `now` supplies current Unix UTC seconds. Reserve `SIGNED_PREPARATION_RESERVATION_BYTES`
     /// for this worker in addition to the trust, offer and download custody already retained.
@@ -21,7 +23,7 @@ impl InstallationSession {
         trust: TrustStore,
         offer: AuthenticatedOffer,
         download: VerifiedDownload,
-        workspace: &Path,
+        payload: BundleSource<'_>,
         mut now: impl FnMut() -> i64,
         context: &JobContext,
     ) -> Result<SignedInstallation, TrustFailure> {
@@ -34,8 +36,7 @@ impl InstallationSession {
             started,
             context,
         )?;
-        let cache = trust.workspace_cache(workspace, context)?;
-        let bundle = Arc::new(VerifiedBundle::from_download(download, &cache, context)?);
+        let bundle = Arc::new(payload.bind(download, &trust, context)?);
         let finished = now();
         if finished < started {
             return Err(sugarsubstitute_update::Error::ClockRollback.into());

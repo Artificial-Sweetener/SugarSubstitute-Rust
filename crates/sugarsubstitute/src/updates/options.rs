@@ -12,12 +12,7 @@ impl Options {
     pub(super) fn parse(arguments: impl IntoIterator<Item = OsString>) -> io::Result<Self> {
         let mut args = arguments.into_iter();
         let mut path = || -> io::Result<PathBuf> {
-            let value = PathBuf::from(args.next().ok_or_else(|| invalid("Update path missing"))?);
-            LaunchConfiguration::validate_path(&value).map_err(io::Error::other)?;
-            if value.capacity() > 256 * 1024 {
-                return Err(invalid("Update path capacity exceeded"));
-            }
-            Ok(value)
+            path(args.next().ok_or_else(|| invalid("Update path missing"))?)
         };
         let installation = path()?;
         let workspace = path()?;
@@ -26,6 +21,16 @@ impl Options {
         }
         Ok(Self { installation, workspace })
     }
+}
+
+/// Share bounded native path grammar across preparation and activation entries.
+pub(super) fn path(value: OsString) -> io::Result<PathBuf> {
+    let value = PathBuf::from(value);
+    LaunchConfiguration::validate_path(&value).map_err(io::Error::other)?;
+    if value.capacity() > 256 * 1024 {
+        return Err(invalid("Update path capacity exceeded"));
+    }
+    Ok(value)
 }
 fn invalid(message: &'static str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidInput, message)

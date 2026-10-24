@@ -44,11 +44,13 @@ test('real headless worker rejects unsafe requests and exits on host closure', {
   })
   const closed = once(child, 'close')
   let stderr = ''
+  let phase = 'worker connection'
   child.stderr.on('data', chunk => { stderr = (stderr + chunk).slice(-8192) })
   child.stdout.resume()
   let socket, lines
   t.after(async () => {
     if (t.signal.aborted) t.diagnostic(JSON.stringify({ observed, stderr }))
+    if (phase !== 'complete') t.diagnostic(`Worker stopped during ${phase}; stderr: ${stderr}`)
     if (child.exitCode === null && child.signalCode === null) child.kill()
     socket?.destroy()
     server.close()
@@ -64,6 +66,7 @@ test('real headless worker rejects unsafe requests and exits on host closure', {
   ])
   observed.push('connected')
   server.close()
+  phase = 'authentication'
   lines = readline.createInterface({ input: socket, signal: t.signal })
   const iterator = lines[Symbol.asyncIterator]()
   async function nextTerminal(event) {
@@ -92,13 +95,16 @@ test('real headless worker rejects unsafe requests and exits on host closure', {
   }
   const authentication = await iterator.next()
   assert.equal(JSON.parse(authentication.value).token, token)
+  phase = 'readiness'
   const ready = await nextTerminal('ready')
   assert.equal(ready.data.cacheProtocol, 2)
   assert.equal(ready.data.storageProtocol, 1)
   assert.equal(ready.data.metadataProtocol, 1)
   assert.equal(ready.data.downloadsProtocol, 1)
+  assert.equal(ready.data.textProtocol, 1)
   assert.match(ready.data.upstreamRevision, /^[a-f0-9]{40}$/)
   assert.deepEqual(ready.data.operations, ['options', 'inspect', 'provision', 'integrate', 'cancel'])
+  phase = 'unissued provisioning request rejection'
   socket.write(JSON.stringify({
     version: 1, id: 'stale', operation: 'provision',
     input: { directory: path.join(workspace, 'must-not-exist'), selectionToken: 'unissued' },
@@ -118,13 +124,16 @@ test('real headless worker rejects unsafe requests and exits on host closure', {
   } }) + '\n')
   assert.equal((await nextTerminal('failed')).id, 'inspect-records')
   await assert.rejects(fs.access(selected))
+  phase = 'unsupported operation rejection'
   socket.write(JSON.stringify({
     version: 1, id: 'templates', operation: 'options', input: { field: 'bundledTemplate' },
   }) + '\n')
   await nextTerminal('protocol_error')
+  phase = 'host closure and worker retirement'
   socket.end()
   const [code] = await closed
   assert.equal(code, 2, stderr)
+  phase = 'complete'
 })
 
 test('real Electron profile paths use the prepared runtime grant and preserve workspace files', { timeout: 30000 }, async t => {

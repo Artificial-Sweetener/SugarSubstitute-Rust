@@ -35,6 +35,7 @@ pub(super) fn read(
     })?;
     let mut existing =
         ExistingInstallation::from_directory(root, directory, marker, Some(generation), context)?;
+    existing.accepted = Some(generation.clone());
     existing.summary.launch_entry_missing = match root.read("SugarSubstitute.lnk") {
         Ok(_) => false,
         Err(cause) if cause.kind() == io::ErrorKind::NotFound => true,

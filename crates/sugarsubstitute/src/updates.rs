@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compose preparation from producing-build feed bytes and locally selected installation paths.
+mod activation;
+pub(crate) mod admission;
+mod engine;
 mod entry;
 mod options;
 mod probe;
@@ -10,7 +13,9 @@ mod session;
 #[cfg(test)]
 pub(crate) mod test_support;
 use std::{io, path::PathBuf, time::Duration};
-use sugarsubstitute_supervision::update_preparation::{Configuration, Distribution, Worker};
+use sugarsubstitute_supervision::update_preparation::{
+    CachedConfiguration, Configuration, Distribution, Worker,
+};
 
 const EMBEDDED: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/update-distribution.json"));
 const CAMPAIGN: Duration = Duration::from_secs(15 * 60);
@@ -36,13 +41,11 @@ pub fn preparation(
     configuration(EMBEDDED, installation, workspace, idle)?.map(Worker::new).transpose()
 }
 
-/// Reauthenticate locally prepared bytes at installed startup without issuing network requests.
-/// Producing-build policy is identical to background preparation; an unconfigured build skips it.
-pub(crate) fn cached_preparation(installation: PathBuf) -> io::Result<Option<Worker>> {
+/// Reauthenticate prepared bytes using established installation authority, without HTTP.
+/// Producing-build network configuration does not control offline activation.
+pub(crate) fn cached_preparation(installation: PathBuf) -> io::Result<Worker> {
     let workspace = installation.join(".update-workspace");
-    configuration(EMBEDDED, installation, workspace, Duration::from_secs(30))?
-        .map(Worker::resume_cached)
-        .transpose()
+    Worker::resume_cached(CachedConfiguration { installation, workspace })
 }
 
 /// Share the exact producing-byte boundary with off-screen qualification without runtime overrides.
@@ -117,6 +120,18 @@ mod tests {
                 sugarsubstitute_supervision::update_preparation::Progress::Opening
             );
         }
+        Ok(())
+    }
+
+    #[test]
+    fn offline_startup_constructs_without_feed_bytes_or_network_policy() -> Result {
+        let (installation, _) = paths();
+        let worker = cached_preparation(installation)?;
+        assert!(!worker.pending());
+        assert_eq!(
+            worker.progress(),
+            sugarsubstitute_supervision::update_preparation::Progress::Opening
+        );
         Ok(())
     }
 

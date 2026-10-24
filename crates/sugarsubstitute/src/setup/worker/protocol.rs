@@ -22,11 +22,12 @@ pub(super) fn cache_event(value: &serde_json::Value) -> Result<CacheEvent> {
             if value["data"]["cacheProtocol"] == 2
                 && value["data"]["storageProtocol"] == 1
                 && value["data"]["metadataProtocol"] == 1
-                && value["data"]["downloadsProtocol"] == 1 =>
+                && value["data"]["downloadsProtocol"] == 1
+                && value["data"]["textProtocol"] == 1 =>
         {
             Ok(CacheEvent::Ready)
         }
-        Some("ready") => Err("Unsupported provisioning storage/cache protocol".into()),
+        Some("ready") => Err("Unsupported provisioning storage/cache/text protocol".into()),
         Some("cache_pressure") => match value["data"]["namespace"].as_str() {
             Some("downloads") => Ok(CacheEvent::DownloadsFull),
             Some("metadata") => Ok(CacheEvent::MetadataFull),
@@ -41,30 +42,44 @@ mod tests {
     use serde_json::json;
     #[test]
     fn legacy_and_unknown_cache_protocols_are_rejected_before_worker_readiness() {
-        for data in [
-            json!({}),
-            json!({"cacheProtocol":0}),
-            json!({"cacheProtocol":1}),
-            json!({"cacheProtocol":3}),
-            json!({"cacheProtocol":"2"}),
-            json!({"cacheProtocol":2}),
-            json!({"cacheProtocol":2,"storageProtocol":0}),
-            json!({"cacheProtocol":2,"storageProtocol":2}),
-            json!({"cacheProtocol":2,"storageProtocol":"1"}),
-            json!({"cacheProtocol":2,"storageProtocol":1}),
-            json!({"cacheProtocol":2,"storageProtocol":1,"metadataProtocol":2}),
-            json!({"cacheProtocol":2,"storageProtocol":1,"metadataProtocol":1}),
-            json!({"cacheProtocol":2,"storageProtocol":1,"metadataProtocol":1,"downloadsProtocol":2}),
-            json!({"cacheProtocol":1,"storageProtocol":1,"metadataProtocol":1,"downloadsProtocol":1}),
+        let valid = json!({"cacheProtocol":2,"storageProtocol":1,"metadataProtocol":1,"downloadsProtocol":1,"textProtocol":1});
+        for (field, version) in [
+            ("cacheProtocol", 2),
+            ("storageProtocol", 1),
+            ("metadataProtocol", 1),
+            ("downloadsProtocol", 1),
+            ("textProtocol", 1),
         ] {
-            assert!(cache_event(&json!({"version":1,"event":"ready","data":data})).is_err());
+            let mut missing = valid.clone();
+            assert!(missing.as_object_mut().is_some_and(|object| object.remove(field).is_some()));
+            assert!(
+                cache_event(&json!({"version":1,"event":"ready","data":missing})).is_err(),
+                "accepted missing {field}"
+            );
+            for invalid in [
+                json!(0),
+                json!(version + 1),
+                json!(version.to_string()),
+                json!(false),
+                json!(null),
+            ] {
+                let mut data = valid.clone();
+                data[field] = invalid;
+                assert!(
+                    cache_event(&json!({"version":1,"event":"ready","data":data})).is_err(),
+                    "accepted invalid {field}"
+                );
+            }
         }
+        let mut legacy = valid;
+        legacy["cacheProtocol"] = json!(1);
+        assert!(cache_event(&json!({"version":1,"event":"ready","data":legacy})).is_err());
     }
     #[test]
     fn current_native_grant_protocol_admits_the_matching_worker() -> Result<()> {
         assert_eq!(
             cache_event(
-                &json!({"version":1,"event":"ready","data":{"cacheProtocol":2,"storageProtocol":1,"metadataProtocol":1,"downloadsProtocol":1}})
+                &json!({"version":1,"event":"ready","data":{"cacheProtocol":2,"storageProtocol":1,"metadataProtocol":1,"downloadsProtocol":1,"textProtocol":1}})
             )?,
             CacheEvent::Ready
         );

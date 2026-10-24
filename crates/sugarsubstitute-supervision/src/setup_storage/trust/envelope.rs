@@ -106,18 +106,32 @@ pub(super) fn decode<'a>(
     repository: &[u8; 32],
     bytes: &'a [u8],
 ) -> io::Result<&'a [u8]> {
+    let (bound, payload) = decode_binding(kind, installation, bytes)?;
+    if &bound != repository {
+        return Err(invalid());
+    }
+    Ok(payload)
+}
+
+/// Read repository identity only after the caller verifies native record protection.
+/// Domain, installation, size and damage checks precede any use of the returned identity.
+pub(super) fn decode_binding<'a>(
+    kind: Kind,
+    installation: &InstallationId,
+    bytes: &'a [u8],
+) -> io::Result<([u8; 32], &'a [u8])> {
     if bytes.len() <= HEADER + DIGEST || bytes.len() > kind.limit() {
         return Err(invalid());
     }
     let end = bytes.len() - DIGEST;
     if &bytes[..8] != kind.magic()
         || &bytes[8..40] != installation.as_str().as_bytes()
-        || &bytes[40..HEADER] != repository
         || Sha256::digest(&bytes[..end])[..] != bytes[end..]
     {
         return Err(invalid());
     }
-    Ok(&bytes[HEADER..end])
+    let repository = bytes[40..HEADER].try_into().map_err(|_| invalid())?;
+    Ok((repository, &bytes[HEADER..end]))
 }
 
 /// Preserve untrusted bytes and require explicit repair rather than resetting security state.

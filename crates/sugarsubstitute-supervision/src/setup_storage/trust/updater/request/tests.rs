@@ -64,12 +64,98 @@ fn accepted_engine_reuse_rechecks_payload_and_preserves_damage() -> TestResult {
         let trust = TrustStore::open(root.path(), [92; 32], context)?;
         let image =
             trust.pin_updater(Channel::Release, 2, context)?.ok_or("Healthy image absent")?;
-        let executable = image.executable();
+        let directory = image.directory().to_owned();
         drop(image);
-        std::fs::write(&executable, b"damaged engine")?;
-        assert!(trust.pin_updater(Channel::Release, 2, context).is_err());
-        assert_eq!(std::fs::read(executable)?, b"damaged engine");
+        for role in
+            ["sugarsubstitute-updater.exe", "vcruntime140.dll", "sugarsubstitute-updater.json"]
+        {
+            let path = directory.join("app").join(role);
+            let original = std::fs::read(&path)?;
+            std::fs::write(&path, b"damaged engine")?;
+            assert!(trust.pin_updater(Channel::Release, 2, context).is_err(), "accepted {role}");
+            assert_eq!(std::fs::read(&path)?, b"damaged engine");
+            std::fs::write(path, original)?;
+        }
         assert_eq!(trust.updater_request(Channel::Release, context)?.sequence_floor, 2);
+        Ok(())
+    })
+}
+
+#[test]
+fn accepted_engine_reuse_never_opens_symbols_but_complete_verification_requires_them() -> TestResult
+{
+    use std::os::windows::fs::OpenOptionsExt;
+    run(|context| {
+        let root = worker::installation(174, context)?;
+        let workspace = tempfile::tempdir()?;
+        accept_prepared(prepared(root.path(), workspace.path(), context)?, context)?;
+        let trust = TrustStore::open(root.path(), [92; 32], context)?;
+        let image =
+            trust.pin_updater(Channel::Release, 2, context)?.ok_or("Healthy image absent")?;
+        let directory = image.directory().to_owned();
+        let generation = image.generation().clone();
+        drop(image);
+        let symbols = directory.join("app/sugarsubstitute_updater.pdb");
+        let exclusive =
+            std::fs::OpenOptions::new().read(true).write(true).share_mode(0).open(&symbols)?;
+        assert!(trust.pin_updater(Channel::Release, 2, context)?.is_some());
+        assert!(
+            crate::setup_storage::bundle::Payload::open(
+                &directory,
+                generation.package.as_str(),
+                Component::Updater,
+                context
+            )
+            .is_err()
+        );
+        drop(exclusive);
+        std::fs::remove_file(&symbols)?;
+        assert!(trust.pin_updater(Channel::Release, 2, context)?.is_some());
+        assert!(
+            crate::setup_storage::bundle::Payload::open(
+                &directory,
+                generation.package.as_str(),
+                Component::Updater,
+                context
+            )
+            .is_err()
+        );
+        std::fs::write(&symbols, b"damaged symbols")?;
+        assert!(trust.pin_updater(Channel::Release, 2, context)?.is_some());
+        assert!(
+            crate::setup_storage::bundle::Payload::open(
+                &directory,
+                generation.package.as_str(),
+                Component::Updater,
+                context
+            )
+            .is_err()
+        );
+        assert_eq!(std::fs::read(symbols)?, b"damaged symbols");
+        Ok(())
+    })
+}
+
+#[test]
+fn accepted_engine_runtime_rejects_unknown_libraries_and_changed_inventory() -> TestResult {
+    run(|context| {
+        let root = worker::installation(175, context)?;
+        let workspace = tempfile::tempdir()?;
+        accept_prepared(prepared(root.path(), workspace.path(), context)?, context)?;
+        let trust = TrustStore::open(root.path(), [92; 32], context)?;
+        let image =
+            trust.pin_updater(Channel::Release, 2, context)?.ok_or("Healthy image absent")?;
+        let directory = image.directory().to_owned();
+        drop(image);
+        let extra = directory.join("app/unexpected.dll");
+        std::fs::write(&extra, b"unknown runtime")?;
+        assert!(trust.pin_updater(Channel::Release, 2, context).is_err());
+        assert_eq!(std::fs::read(&extra)?, b"unknown runtime");
+        std::fs::remove_file(extra)?;
+        let inventory = directory.join("setup-manifest.json");
+        std::fs::write(&inventory, b"changed inventory")?;
+        assert!(trust.pin_updater(Channel::Release, 2, context).is_err());
+        assert_eq!(std::fs::read(inventory)?, b"changed inventory");
         Ok(())
     })
 }

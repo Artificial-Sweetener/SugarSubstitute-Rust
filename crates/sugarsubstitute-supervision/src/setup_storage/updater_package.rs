@@ -16,6 +16,7 @@ pub use stage::{
 /// Import does not select or execute an updater, and dropping this owner never deletes files.
 pub struct UpdaterPackage {
     payload: Payload,
+    download: VerifiedDownload,
     trust: TrustStore,
     offer: AuthenticatedOffer,
 }
@@ -32,7 +33,7 @@ impl UpdaterPackage {
         installation: &Path,
         trust: TrustStore,
         offer: AuthenticatedOffer,
-        download: VerifiedDownload,
+        mut download: VerifiedDownload,
         workspace: &Path,
         mut now: impl FnMut() -> i64,
         context: &JobContext,
@@ -47,12 +48,12 @@ impl UpdaterPackage {
             context,
         )?;
         let cache = trust.workspace_cache(workspace, context)?;
-        let payload = Payload::from_download(download, &cache, Component::Updater, context)?;
+        let payload = Payload::from_download(&mut download, &cache, Component::Updater, context)?;
         let finished = now();
         if finished < started {
             return Err(sugarsubstitute_update::Error::ClockRollback.into());
         }
-        let package = Self { payload, trust, offer };
+        let package = Self { payload, download, trust, offer };
         package.verify_current(installation, finished, context)?;
         check(context)?;
         Ok(package)
@@ -70,9 +71,7 @@ impl UpdaterPackage {
     ) -> Result<(), TrustFailure> {
         self.offer.authorization(&self.trust).verify_delivery(
             installation,
-            self.payload
-                .download_identity()
-                .ok_or_else(|| invalid("Updater archive custody absent"))?,
+            self.download.identity(),
             Component::Updater,
             now,
             context,

@@ -154,3 +154,45 @@ fn late_recovery_capture_observation_cannot_renew_expired_containment() -> TestR
     drop((proof, turn, slot));
     finish(fixture)
 }
+
+#[test]
+fn helper_cleanup_notifies_before_worker_terminal_and_only_publishes_once() -> TestResult {
+    let mut fixture = fixture()?;
+    assert_eq!(fixture.memory.cleanup_until(), None);
+    fixture.rig.client.drain_completions(NonZeroUsize::MAX)?;
+    let before = fixture.rig.wake.count();
+    let until = Moment::from_nanos(12 * SECOND);
+    let proof = fixture.memory.begin_cleanup(until)?;
+    assert_eq!(proof.until(), until);
+    assert_eq!(fixture.memory.cleanup_until(), Some(until));
+    assert!(fixture.worker.try_take_completion().is_none());
+    assert!(fixture.rig.wake.count() > before, "Cleanup must wake the helper before worker exit");
+    let batch = fixture.rig.client.drain_completions(NonZeroUsize::MAX)?;
+    assert!(batch.notifications.is_empty());
+    let published = fixture.rig.wake.count();
+    assert_eq!(fixture.memory.begin_cleanup(Moment::from_nanos(200 * SECOND))?.until(), until);
+    assert_eq!(fixture.memory.cleanup_until(), Some(until));
+    assert_eq!(fixture.rig.wake.count(), published);
+    drop(proof);
+    finish(fixture)
+}
+
+#[test]
+fn helper_cleanup_wake_failure_preserves_published_cutoff_and_original_error() -> TestResult {
+    let fixture = fixture()?;
+    fixture.rig.client.drain_completions(NonZeroUsize::MAX)?;
+    fixture.rig.wake.fail.store(true, Ordering::Release);
+    let until = Moment::from_nanos(12 * SECOND);
+    let proof = fixture.memory.begin_cleanup(until)?;
+    fixture.rig.wake.fail.store(false, Ordering::Release);
+    assert_eq!(fixture.memory.cleanup_until(), Some(until));
+    let error = fixture
+        .rig
+        .client
+        .drain_completions(NonZeroUsize::MAX)
+        .err()
+        .ok_or("Cleanup wake failure was lost")?;
+    assert!(error.to_string().contains("Owned wake fixture failed"));
+    drop(proof);
+    finish(fixture)
+}

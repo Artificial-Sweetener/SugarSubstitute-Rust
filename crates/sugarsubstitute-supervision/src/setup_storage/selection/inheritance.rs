@@ -15,13 +15,24 @@ use sugarsubstitute_contracts::application_launch::INSTALLED_LAUNCH_ARGUMENT as 
 
 /// Parent-owned preparation for an explicit native HANDLE_LIST containing this one file.
 /// Keep this owner until process creation returns. The duplicate preserves the same Windows
-/// sharing exclusion in the child even if the parent exits before coordinator admission.
+/// sharing rights in the child even if the parent exits before coordinator admission.
+/// A trial forwarding snapshot permits health publication and grants only an independent
+/// invocation; the original run transfer remains necessary for trial admission.
 /// It grants neither application-run authority nor permission to accept a trial.
 pub struct LaunchInheritance {
     application: ReservedApplication,
     selection: File,
 }
 impl LaunchInheritance {
+    /// Retain the authenticated payload, inventory and ancestry across a native launch broker.
+    /// Selection ownership travels separately as the installed-entry inheritance handle.
+    pub(crate) fn launch_pins(&self) -> impl Iterator<Item = &File> {
+        let application = &self.application.application;
+        std::iter::once(&application.inventory)
+            .chain(application.directory.native_pins())
+            .chain(application.payload.launch_pins())
+    }
+
     /// Verified payload retained through the actual process-creation call.
     pub fn application(&self) -> &ReservedApplication {
         &self.application

@@ -3,7 +3,7 @@
 //! Publish complete initial generation custody before exposing its canonical directory.
 use super::*;
 use crate::durable_storage::{protected::directories::Mode, protection, staging};
-use sugarsubstitute_contracts::installation::PackageDigest;
+use sugarsubstitute_contracts::installation::{Generation, GenerationId, PackageDigest};
 
 pub(in crate::setup_storage) const INITIAL_PREFIX: &str = ".generation-init-";
 
@@ -21,7 +21,23 @@ pub(super) fn open(
     digest: &str,
     context: &JobContext,
 ) -> io::Result<(Directory, File)> {
-    inspect(path, Some(digest), context)
+    let (directory, marker, _) = inspect(path, Some(digest), context)?;
+    Ok((directory, marker))
+}
+
+/// Pin protected generation identity for saved-data recovery without admitting executable bytes.
+/// The completed configuration must independently match this package before being preserved.
+pub(in crate::setup_storage) fn configuration(
+    path: &Path,
+    context: &JobContext,
+) -> io::Result<(Directory, File, Generation)> {
+    let id = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| invalid("Configuration generation identity is absent"))?;
+    let id = GenerationId::new(id.to_owned()).map_err(io::Error::other)?;
+    let (directory, marker, package) = inspect(path, None, context)?;
+    Ok((directory, marker, Generation { id, package }))
 }
 
 /// Inspect a protected generation without granting publication, execution or cleanup authority.
@@ -31,7 +47,7 @@ fn inspect(
     path: &Path,
     digest: Option<&str>,
     context: &JobContext,
-) -> io::Result<(Directory, File)> {
+) -> io::Result<(Directory, File, PackageDigest)> {
     protection::with(context, |protection| {
         protection.directory(path, Mode::Existing, context)?;
         let directory = Directory::open(path, false)?;
@@ -45,7 +61,7 @@ fn inspect(
         {
             return Err(invalid("Candidate generation metadata differs from its package"));
         }
-        Ok((directory, marker))
+        Ok((directory, marker, record.bundle_sha256))
     })
 }
 
@@ -56,7 +72,7 @@ pub(in crate::setup_storage) fn unconfigured(
     digest: Option<&str>,
     context: &JobContext,
 ) -> io::Result<bool> {
-    let (directory, _marker) = inspect(path, digest, context)?;
+    let (directory, _marker, _) = inspect(path, digest, context)?;
     check(context)?;
     match directory.read("installation-ready.json") {
         Ok(_) => Ok(false),

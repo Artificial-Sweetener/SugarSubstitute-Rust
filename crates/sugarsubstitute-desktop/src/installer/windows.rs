@@ -26,6 +26,7 @@ use wry::{
 mod bridge;
 mod browser;
 mod dialog;
+mod title;
 
 pub(super) fn run(
     options: InstallerWindow,
@@ -35,9 +36,10 @@ pub(super) fn run(
     let mut events = EventLoopBuilder::<NativeAction>::with_user_event().build();
     let proxy = events.create_proxy();
     let wake_lifetime = WakeLifetime::new();
+    let mut title = options.title;
     let window = Rc::new(
         WindowBuilder::new()
-            .with_title(options.title)
+            .with_title(&title)
             .with_inner_size(LogicalSize::new(1180, 760))
             .with_min_inner_size(LogicalSize::new(720, 560))
             .with_max_inner_size(tao::dpi::PhysicalSize::new(4096, 4096))
@@ -48,6 +50,7 @@ pub(super) fn run(
             .build(&events)?,
     );
     let presenter = Presenter::new_main(window.clone(), true)?;
+    title::verify(window.as_ref(), &title)?;
     let mut browser = browser::Browser::default();
     let mut bridge: Option<bridge::Bridge> = None;
     let mut console: Option<Console> = None;
@@ -111,10 +114,14 @@ pub(super) fn run(
                             visible: input["visible"].as_bool().ok_or("Console visibility missing")?,
                         })?;
                     } else if value["operation"] == "browse" {
-                        let result = dialog::choose(window.as_ref(), value["input"]["field"].as_str().unwrap_or_default());
+                        let copy = lifetime.messages();
+                        let result = dialog::choose(window.as_ref(), value["input"]["field"].as_str().unwrap_or_default(), copy);
                         let message = match result {
                             Ok(path) => serde_json::json!({"event":"completed","id":value["id"],"data":path}),
-                            Err(cause) => serde_json::json!({"event":"failed","id":value["id"],"data":{"message":cause.to_string()}}),
+                            Err(cause) => {
+                                tracing::error!(operation="installer_path_picker_failed", cause=%cause, "Installer path selection failed");
+                                serde_json::json!({"event":"failed","id":value["id"],"data":{"message":copy.setup_failed}})
+                            },
                         };
                         if outbound.len() >= 32 { return Err("Installer document queue exceeded".into()); }
                         outbound.push_back(message.to_string());
@@ -125,6 +132,11 @@ pub(super) fn run(
                     } else {
                         lifetime.request(&body)?;
                     }
+                    }
+                    if title != lifetime.messages().title {
+                        title = lifetime.messages().title.into();
+                        window.set_title(&title);
+                        title::verify(window.as_ref(), &title)?;
                     }
                     if failure.is_some() { closing = true; }
                     if closing && !closed {

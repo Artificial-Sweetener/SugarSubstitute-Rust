@@ -19,6 +19,8 @@ mod demo;
 #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
 mod descendant_fixture;
 mod diagnostics;
+mod native_entry;
+pub use native_entry::{NativeEntry, unavailable_native_entry};
 #[cfg(all(windows, feature = "windows-native-host"))]
 mod failure_details;
 #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
@@ -69,18 +71,18 @@ fn execute(
     #[cfg(all(windows, feature = "windows-native-host"))] inherited: std::io::Result<
         Option<sugarsubstitute_supervision::setup_storage::InheritedLaunch>,
     >,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<Option<i32>, Box<dyn Error>> {
     health.check()?;
     #[cfg(all(windows, feature = "windows-native-host"))]
     if let Some(selection) = inherited.transpose() {
-        return production::execute_inherited(selection, health);
+        return production::execute_inherited(selection, health).map(|()| None);
     }
     let started = Instant::now();
     #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
     let invocation = {
         let Some(arguments) = production::execute(std::env::args_os().skip(1), health.clone())?
         else {
-            return Ok(());
+            return Ok(None);
         };
         invocation::Invocation::parse_arguments(arguments)
     };
@@ -91,70 +93,71 @@ fn execute(
         #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         Ok(invocation::Invocation::NativeCaptureFixture(options)) => {
             return capture_fixture::run(options)?
-                .finish_with(|path, bytes| artifact_job::write_bytes(path, bytes, false));
+                .finish_with(|path, bytes| artifact_job::write_bytes(path, bytes, false))
+                .map(|()| None);
         }
         #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         Ok(invocation::Invocation::NativeExitFixture(code)) => std::process::exit(code),
         #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         Ok(invocation::Invocation::NativeOutputChild(options)) => {
-            std::process::exit(output_fixture::run_child(options, health.clone())?);
+            return Ok(Some(output_fixture::run_child(options, health.clone())?));
         }
         #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         Ok(invocation::Invocation::NativeOutputFixture(path)) => {
             let receipt = output_fixture::run()?;
             artifact_job::write_json(path, receipt, false)?;
-            return Ok(());
+            return Ok(None);
         }
         #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         Ok(invocation::Invocation::NativeForwardingRoot(options)) => {
-            std::process::exit(forwarding_root::run(options)?);
+            return Ok(Some(forwarding_root::run(options)?));
         }
         #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         Ok(invocation::Invocation::NativeDescendantFixture(path)) => {
             let receipt = descendant_fixture::run()?;
             artifact_job::write_json(path, receipt, false)?;
-            return Ok(());
+            return Ok(None);
         }
         #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         Ok(invocation::Invocation::NativeClaimFixture(options)) => {
             let path = options.receipt.clone();
             let receipt = claim_fixture::run(options)?;
             artifact_job::write_json(path, receipt, false)?;
-            return Ok(());
+            return Ok(None);
         }
         #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         Ok(invocation::Invocation::NativeClaimChild(options)) => {
             let result = claim_fixture::run_child(options)?;
             artifact_job::write_json(result.path, result.receipt, false)?;
-            std::process::exit(result.exit_code);
+            return Ok(Some(result.exit_code));
         }
         #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         Ok(invocation::Invocation::NativeHeldChild(options)) => {
             let code = held_child::run(options)?;
-            std::process::exit(code);
+            return Ok(Some(code));
         }
         #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         Ok(invocation::Invocation::NativeRegistryFixture(path)) => {
             let receipt = process_fixture::run()?;
             artifact_job::write_json(path, receipt, true)?;
-            return Ok(());
+            return Ok(None);
         }
         #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         Ok(invocation::Invocation::NativeHeldRegistryFixture(path)) => {
             let receipt = held_fixture::run()?;
             artifact_job::write_json(path, receipt, true)?;
-            return Ok(());
+            return Ok(None);
         }
         #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         Ok(invocation::Invocation::NativePipeChild(options)) => {
             let code = pipe_fixture::run_child(options)?;
-            std::process::exit(code);
+            return Ok(Some(code));
         }
         #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         Ok(invocation::Invocation::NativePipeFixture(path)) => {
             let receipt = pipe_fixture::run()?;
             artifact_job::write_json(path, receipt, true)?;
-            return Ok(());
+            return Ok(None);
         }
         Err(error) => {
             return Err(error);
@@ -162,7 +165,7 @@ fn execute(
     };
     if let (Some(scenarios), Some(output)) = (&options.scenarios, &options.output) {
         capture::export(scenarios, output)?;
-        return Ok(());
+        return Ok(None);
     }
     let content =
         demo::SplashDemo::new(&options.locale, options.appearance, options.reduced_motion)?;
@@ -236,7 +239,7 @@ fn execute(
         });
         artifact_job::write_json(path, data, true)?;
     }
-    Ok(())
+    Ok(None)
 }
 
 /// Run the selected native application role and preserve errors in structured diagnostics.
@@ -250,7 +253,8 @@ pub fn run(
         #[cfg(all(windows, feature = "windows-native-host"))]
         inherited,
     ) {
-        Ok(()) => ExitCode::SUCCESS,
+        Ok(None) => ExitCode::SUCCESS,
+        Ok(Some(code)) => std::process::exit(code),
         Err(_retained) => ExitCode::FAILURE,
     }
 }
@@ -260,16 +264,17 @@ fn run_application(
     #[cfg(all(windows, feature = "windows-native-host"))] inherited: std::io::Result<
         Option<sugarsubstitute_supervision::setup_storage::InheritedLaunch>,
     >,
-) -> Result<(), Box<dyn Error>> {
-    let diagnostics = diagnostics::Diagnostics::initialize()?;
-    #[cfg(all(windows, feature = "windows-native-host"))]
-    let result = execute(diagnostics.health(), inherited);
-    #[cfg(not(all(windows, feature = "windows-native-host")))]
-    let result = execute(diagnostics.health());
-    if let Err(error) = &result {
-        tracing::error!(operation="application_startup",cause=%error,"SugarSubstitute could not complete its application lifetime");
-    }
-    diagnostics.finish(result)
+) -> Result<Option<i32>, Box<dyn Error>> {
+    diagnostics::Diagnostics::run(|health| {
+        #[cfg(all(windows, feature = "windows-native-host"))]
+        let result = execute(health, inherited);
+        #[cfg(not(all(windows, feature = "windows-native-host")))]
+        let result = execute(health);
+        if let Err(error) = &result {
+            tracing::error!(operation="application_startup",cause=%error,"SugarSubstitute could not complete its application lifetime");
+        }
+        result
+    })
 }
 
 /// Product identity shared by every platform and packaging adapter.

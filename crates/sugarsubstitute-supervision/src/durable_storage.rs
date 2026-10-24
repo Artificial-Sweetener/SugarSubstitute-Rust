@@ -42,7 +42,7 @@ use std::io;
 use sugarsubstitute_contracts::execution::JobContext;
 
 /// Check the active finite operation before entering ordinary storage mechanics.
-fn check(context: &JobContext) -> io::Result<()> {
+pub(crate) fn check(context: &JobContext) -> io::Result<()> {
     if context.cancellation_requested() {
         return Err(io::Error::new(io::ErrorKind::Interrupted, "Storage operation cancelled"));
     }
@@ -53,6 +53,6 @@ fn check(context: &JobContext) -> io::Result<()> {
 }
 
 /// Reject an invalid storage request without dropping its originating I/O cause.
-fn invalid(message: &'static str) -> io::Error {
+pub(crate) fn invalid(message: &'static str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidInput, message)
 }

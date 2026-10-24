@@ -13,6 +13,7 @@ use syn::visit::Visit;
 /// Index authored modules without compiling, evaluating platform conditions or expanding macros.
 #[derive(Default)]
 pub(crate) struct Names {
+    pub(crate) restricted_path: Option<fn(&[String]) -> bool>,
     pub(crate) modules: BTreeMap<Vec<String>, Module>,
     pub(crate) externs: BTreeMap<String, String>,
     pub(crate) loaded: BTreeSet<PathBuf>,
@@ -207,6 +208,9 @@ impl Names {
             }
             if matches!(first.as_str(), "std" | "core" | "alloc")
                 || execution_source::restricted_crate(&first)
+                || self
+                    .restricted_path
+                    .is_some_and(|restricted| restricted(std::slice::from_ref(&first)))
             {
                 return BTreeSet::from([parts]);
             }
@@ -215,7 +219,11 @@ impl Names {
         for glob in &scope.globs {
             for mut prefix in self.expand(&location, glob.clone(), parameters, &mut visited.clone())
             {
-                if self.modules.contains_key(&prefix) {
+                if self.restricted_path.is_some_and(|restricted| restricted(&prefix)) {
+                    prefix.push("*".into());
+                    prefix.extend(parts.clone());
+                    found.insert(prefix);
+                } else if self.modules.contains_key(&prefix) {
                     found.extend(self.expand(
                         &prefix,
                         parts.clone(),

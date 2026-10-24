@@ -35,7 +35,10 @@ pub(super) fn ensure(
 }
 
 /// Retain the exact protected marker after checking its version, namespace and identity binding.
-fn read(store: &TrustStore, protection: &Protection) -> Result<Option<File>, TrustFailure> {
+pub(super) fn read(
+    store: &TrustStore,
+    protection: &Protection,
+) -> Result<Option<File>, TrustFailure> {
     let mut file = match store._installation_root.read(MARKER) {
         Ok(file) => file,
         Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(None),

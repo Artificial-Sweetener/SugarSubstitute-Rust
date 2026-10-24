@@ -37,6 +37,16 @@ pub(crate) fn distribution_with_roles(
     launcher: Option<&[u8]>,
     updater: Option<&[u8]>,
 ) -> io::Result<(Vec<u8>, Vec<u8>)> {
+    distribution_with_installation(contract, launcher, updater, None)
+}
+
+/// Add durable-choice capabilities explicitly; historical role fixtures keep their old metadata.
+pub(crate) fn distribution_with_installation(
+    contract: Option<&[u8]>,
+    launcher: Option<&[u8]>,
+    updater: Option<&[u8]>,
+    installation: Option<&[u8]>,
+) -> io::Result<(Vec<u8>, Vec<u8>)> {
     let mut entries = Vec::new();
     let mut gzip = GzEncoder::new(Vec::new(), Compression::fast());
     for name in [
@@ -88,6 +98,13 @@ pub(crate) fn distribution_with_roles(
             }));
             gzip.write_all(bytes)?;
         }
+    }
+    if let Some(bytes) = installation {
+        entries.push(serde_json::json!({
+            "path":format!("app/{}",sugarsubstitute_contracts::application_launch::installation::CONTRACT_FILE),
+            "bytes":bytes.len(),"sha256":format!("{:x}",Sha256::digest(bytes)),
+        }));
+        gzip.write_all(bytes)?;
     }
     let manifest = serde_json::to_vec(
         &serde_json::json!({"schema_version":1,"release_id":"local-package","files":entries}),

@@ -16,6 +16,7 @@ param(
     [string]$LauncherExecutable,
     [string]$LauncherPdb,
     [string]$LauncherContract,
+    [string]$InstallationActivationContract,
     [string]$UpdaterExecutable,
     [string]$UpdaterPdb,
     [string]$UpdaterContract
@@ -40,11 +41,11 @@ if ($ApplicationContract) {
     $labels += 'sugarsubstitute-application.json'
     $sources += $ApplicationContract
 }
-$launcherInputs = @($LauncherExecutable, $LauncherPdb, $LauncherContract | Where-Object { $_ })
+$launcherInputs = @($LauncherExecutable, $LauncherPdb, $LauncherContract, $InstallationActivationContract | Where-Object { $_ })
 if ($launcherInputs.Count -gt 0) {
-    if ($launcherInputs.Count -ne 3 -or -not $ApplicationContract) { throw 'Launcher requires its executable, symbols and both producing launch contracts.' }
-    $labels += @('sugarsubstitute-launcher.exe', 'sugarsubstitute_launcher.pdb', 'sugarsubstitute-launcher.json')
-    $sources += @($LauncherExecutable, $LauncherPdb, $LauncherContract)
+    if ($launcherInputs.Count -ne 4 -or -not $ApplicationContract) { throw 'Launcher requires its executable, symbols and producing application, launcher and installation activation contracts.' }
+    $labels += @('sugarsubstitute-launcher.exe', 'sugarsubstitute_launcher.pdb', 'sugarsubstitute-launcher.json', 'sugarsubstitute-installation-activation.json')
+    $sources += @($LauncherExecutable, $LauncherPdb, $LauncherContract, $InstallationActivationContract)
 }
 $updaterInputs = @($UpdaterExecutable, $UpdaterPdb, $UpdaterContract | Where-Object { $_ })
 if ($updaterInputs.Count -gt 0) {
@@ -71,7 +72,7 @@ try {
         $file=[LocalK1PrivateFiles]::OpenRead($path);$pins.Add($file);$opened.Add($file)
     }
     for ($index=0;$index -lt $labels.Count;$index++) {
-        if ($labels[$index] -in @('sugarsubstitute-application.json','sugarsubstitute-launcher.json','sugarsubstitute-updater.json') -and
+        if ($labels[$index] -in @('sugarsubstitute-application.json','sugarsubstitute-launcher.json','sugarsubstitute-updater.json','sugarsubstitute-installation-activation.json') -and
             ($opened[$index].Stream.Length -le 0 -or $opened[$index].Stream.Length -gt 4096)) {
             throw 'Launch contract exceeds its native bound.'
         }

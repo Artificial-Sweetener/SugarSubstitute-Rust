@@ -122,7 +122,10 @@ fn known_path_bypasses_in_auxiliary_roots_and_macro_arguments_are_rejected() -> 
 
 #[test]
 fn script_and_native_cache_namespaces_cannot_bypass_the_registered_owner() -> Result<()> {
-    for extension in ["ts", "mjs", "cjs", "html", "cpp", "h", "RS", "TS", "CPP"] {
+    for extension in [
+        "ts", "mjs", "cjs", "html", "cpp", "h", "py", "ps1", "svg", "cs", "cmake", "gn", "gni",
+        "css", "RS", "TS", "CPP", "CS", "CMAKE",
+    ] {
         for literal in [
             "runtime-cache-v1",
             "alpha-v1",
@@ -144,6 +147,14 @@ fn script_and_native_cache_namespaces_cannot_bypass_the_registered_owner() -> Re
             );
         }
     }
+    let (mut repository, caches, storage) = fixture()?;
+    repository.architecture.owners[0].auxiliary_roots.push("native".into());
+    fixtures::write(
+        repository.root(),
+        "native/CMakeLists.txt",
+        "set(STORAGE_ROOT \"runtime-cache-v1\")",
+    )?;
+    assert!(check(repository.root(), &repository.architecture, &caches, &storage).is_err());
     Ok(())
 }
 

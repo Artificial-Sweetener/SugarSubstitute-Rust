@@ -177,9 +177,9 @@ impl Harness {
         let guard = lock(&self.owner.shared.transaction);
         guard.as_ref().map_or((0, 0, 0, 0, 0), |state| {
             (
-                state.value.session,
-                state.value.connect,
-                state.value.request,
+                state.value.fixture_slots[0],
+                state.value.fixture_slots[1],
+                state.value.fixture_slots[2],
                 state._claim.bytes(),
                 state.value.deadline.as_nanos(),
             )

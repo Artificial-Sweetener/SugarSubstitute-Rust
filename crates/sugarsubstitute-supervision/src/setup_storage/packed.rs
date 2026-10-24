@@ -14,6 +14,7 @@ use sha2::{Digest, Sha256};
 use std::{
     io::{self, BufReader, Read, Seek, SeekFrom},
     path::Path,
+    sync::Arc,
 };
 use sugarsubstitute_contracts::execution::JobContext;
 use sugarsubstitute_contracts::update::Component;
@@ -53,7 +54,15 @@ pub fn materialize(
     let mut file = parent.read(leaf)?;
     let archive = inventory(&mut file, expected)?;
     Ok(super::VerifiedBundle {
-        payload: unpack(&mut file, archive, cache, expected, Component::Application, context)?,
+        payload: Arc::new(unpack(
+            &mut file,
+            archive,
+            cache,
+            expected,
+            Component::Application,
+            context,
+        )?),
+        download: None,
     })
 }
 
@@ -73,6 +82,26 @@ pub(super) fn downloaded(
     }
     let digest = format!("{:x}", Sha256::digest(&archive.manifest));
     unpack(source, archive, cache, &digest, component, context)
+}
+
+/// Bind an authenticated bare archive to an already verified, immutably pinned inventory.
+/// Reuse needs no decompression: every retained payload byte was verified against these exact
+/// manifest bytes. The caller retains the newly authenticated archive and all original pins.
+pub(super) fn require_manifest(
+    source: &mut VerifiedDownload,
+    expected: &[u8],
+    context: &JobContext,
+) -> io::Result<()> {
+    check(context)?;
+    let _memory = context.memory().claim(super::RESERVATION_BYTES).map_err(io::Error::other)?;
+    let archive = read_inventory(source)?;
+    if archive.offset != 0
+        || archive.end != source.identity().length()
+        || archive.manifest != expected
+    {
+        return Err(invalid("Retained payload inventory differs from the authenticated archive"));
+    }
+    check(context)
 }
 
 /// Exact bounded sections; this structural description grants no authenticity on its own.

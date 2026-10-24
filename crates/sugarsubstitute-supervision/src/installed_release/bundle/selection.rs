@@ -149,15 +149,22 @@ pub(super) fn select(
         let symbol = SymbolRegistrationFacts::new(manifest.build, host)?;
         (Record::copy(host)?, (capture, symbol))
     };
-    files::open(
-        fields,
-        origin,
-        3,
-        CapturePathRole::CurrentPdb,
-        Some(host.pdb()?),
-        host.facts.pdb_length,
-    )?;
-    files::verify_pair(fields, origin, 0, 3, &host.facts, PeKind::Executable)?;
+    match purpose {
+        BundlePurpose::Capture => {
+            files::verify_image(fields, origin, 0, &host.facts, PeKind::Executable)?;
+        }
+        BundlePurpose::Symbol => {
+            files::open(
+                fields,
+                origin,
+                3,
+                CapturePathRole::CurrentPdb,
+                Some(host.pdb()?),
+                host.facts.pdb_length,
+            )?;
+            files::verify_pair(fields, origin, 0, 3, &host.facts, PeKind::Executable)?;
+        }
+    }
     if let Some((client, handler, _)) = &capture.0 {
         files::open(
             fields,
@@ -167,15 +174,7 @@ pub(super) fn select(
             Some(client.pe()?),
             client.facts.pe_length,
         )?;
-        files::open(
-            fields,
-            origin,
-            5,
-            CapturePathRole::ClientPdb,
-            Some(client.pdb()?),
-            client.facts.pdb_length,
-        )?;
-        files::verify_pair(fields, origin, 4, 5, &client.facts, PeKind::Library)?;
+        files::verify_image(fields, origin, 4, &client.facts, PeKind::Library)?;
         files::open(
             fields,
             origin,
@@ -184,15 +183,7 @@ pub(super) fn select(
             Some(handler.pe()?),
             handler.facts.pe_length,
         )?;
-        files::open(
-            fields,
-            origin,
-            7,
-            CapturePathRole::HandlerPdb,
-            Some(handler.pdb()?),
-            handler.facts.pdb_length,
-        )?;
-        files::verify_pair(fields, origin, 6, 7, &handler.facts, PeKind::Executable)?;
+        files::verify_image(fields, origin, 6, &handler.facts, PeKind::Executable)?;
     }
     files::ancestors(fields, origin, true)?;
     origin.original().check_effect().map_err(|cause| {

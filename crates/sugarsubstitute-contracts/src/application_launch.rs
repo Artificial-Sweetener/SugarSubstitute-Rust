@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Advertise native application entry protocols inside the authenticated package inventory.
 use serde::Deserialize;
+pub mod installation;
 mod launcher;
 pub mod updater;
 pub use launcher::{CURRENT_LAUNCHER_CONTRACT, LAUNCHER_CONTRACT_FILE, LauncherContract};

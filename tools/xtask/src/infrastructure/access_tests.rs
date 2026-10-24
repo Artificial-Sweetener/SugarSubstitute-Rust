@@ -90,6 +90,7 @@ fn script_native_python_powershell_and_csharp_routes_require_reviews() -> Result
         ("ts", r"const {readFile: harmless}=await import('node:fs/promises')"),
         ("py", "from pathlib import Path as Data; Data(p).write_bytes(b)"),
         ("py", "from tempfile import TemporaryDirectory as Scope; Scope()"),
+        ("py", "entries = supplied_directory.iterdir()"),
         ("ps1", "gEt`-cOn`TeNt -LiteralPath $p"),
         ("ps1", "[System.IO.File]::WriteAllBytes($p,$bytes)"),
         ("ps1", "[system.io.file]::writealltext($p,$bytes)"),
@@ -217,6 +218,7 @@ fn native_interop_review_cannot_authorize_public_file_or_builder_exports() -> Re
         rationale: "Fixture borrows a caller-owned platform object; no file construction".into(),
         next_extraction: None,
         review_until: None,
+        external_contract: None,
     });
     check(repository.root(), &repository.architecture, &policy)?;
     fixtures::write(repository.root(), path, "pub fn acquire()->std::fs::File{loop{}}")?;
@@ -261,6 +263,7 @@ fn runtime_sources_cannot_claim_tooling_or_typed_metadata_permissions() -> Resul
             rationale: "Deliberately invalid source-role claim".into(),
             next_extraction: None,
             review_until: None,
+            external_contract: None,
         });
         let failure = check(repository.root(), &repository.architecture, &policy)
             .err()
@@ -304,6 +307,7 @@ fn native_injection_permissions_reject_rust_and_node_filesystem_construction() -
             rationale: "Exercise the exact native file-port permission boundary".into(),
             next_extraction: None,
             review_until: None,
+            external_contract: None,
         });
         let result = check(repository.root(), &repository.architecture, &policy);
         if allowed {

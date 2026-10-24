@@ -7,6 +7,23 @@ use sugarsubstitute_contracts::{
     crash::CaptureHandlerIdentity,
     lifecycle::{CoordinatorEpoch, NamespaceId},
 };
+
+#[test]
+fn registration_retention_requires_current_bundle_and_exact_original_reservation() {
+    let pinned = 64 * 1024 + 2 * 1024 * 1024;
+    let reserved = 4 * 1024 * 1024;
+    assert!(state::registration_retention_matches(pinned, reserved, Some(reserved)));
+    for (bytes, reservation, scope) in [
+        (64 * 1024, 2 * 1024 * 1024, Some(2 * 1024 * 1024)),
+        (pinned + 1, reserved, Some(reserved)),
+        (pinned - 1, reserved, Some(reserved)),
+        (pinned, reserved + 1, Some(reserved)),
+        (pinned, reserved, Some(reserved + 1)),
+        (pinned, reserved, None),
+    ] {
+        assert!(!state::registration_retention_matches(bytes, reservation, scope));
+    }
+}
 #[test]
 fn native_failure_diagnostic_preserves_only_the_numeric_os_code() {
     let cause = std::io::Error::from_raw_os_error(5);

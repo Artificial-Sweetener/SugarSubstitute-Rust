@@ -38,7 +38,7 @@ fn download_and_import_jobs_share_retained_capacity_without_reserving_a_second_p
             trust,
             offer,
             download,
-            &workspace,
+            BundleSource::Extract(&workspace),
             || NOW,
             &context,
         )?)
@@ -138,7 +138,14 @@ fn http_delivery_enters_shared_preparation_while_application_run_exclusion_remai
         assert!(repository.settled());
         server.finish()?;
         let imported = InstallationSession::maintain(fixture.installation.path(), context)?
-            .import_download(trust, *offer, *download, fixture.workspace.path(), || NOW, context)?;
+            .import_download(
+                trust,
+                *offer,
+                *download,
+                BundleSource::Extract(fixture.workspace.path()),
+                || NOW,
+                context,
+            )?;
         assert_eq!(store.load(context)?, before);
         let prepared = imported.prepare(|| NOW, context)?;
         let runtime = prepared.maintenance_runtime().ok_or("Saved runtime absent")?.clone();
@@ -166,7 +173,14 @@ fn foreign_installation_trust_is_rejected_before_extraction_or_selection_changes
         let extraction = tempfile::tempdir()?;
         assert!(
             InstallationSession::maintain(destination.installation.path(), context)?
-                .import_download(trust, offer, download, extraction.path(), || NOW, context,)
+                .import_download(
+                    trust,
+                    offer,
+                    download,
+                    BundleSource::Extract(extraction.path()),
+                    || NOW,
+                    context,
+                )
                 .is_err()
         );
         assert_eq!(std::fs::read_dir(extraction.path())?.count(), 0);
@@ -193,7 +207,14 @@ fn verified_bytes_for_another_signed_package_cannot_enter_the_imported_offer() -
             Download::import_file(trust.runtime_cache(context)?, target, &source, || NOW, context)?;
         let extraction = tempfile::tempdir()?;
         let result = InstallationSession::maintain(fixture.installation.path(), context)?
-            .import_download(trust, offer, download, extraction.path(), || NOW, context);
+            .import_download(
+                trust,
+                offer,
+                download,
+                BundleSource::Extract(extraction.path()),
+                || NOW,
+                context,
+            );
         assert!(matches!(result, Err(TrustFailure::Verification(Verification::Digest))));
         assert_eq!(std::fs::read_dir(extraction.path())?.count(), 0);
         fixture.preserved()
@@ -207,7 +228,14 @@ fn expired_delivery_is_rejected_before_archive_extraction() -> TestResult {
         let (trust, offer, download) = delivered(&fixture, context)?;
         let extraction = tempfile::tempdir()?;
         let result = InstallationSession::maintain(fixture.installation.path(), context)?
-            .import_download(trust, offer, download, extraction.path(), || EXPIRES, context);
+            .import_download(
+                trust,
+                offer,
+                download,
+                BundleSource::Extract(extraction.path()),
+                || EXPIRES,
+                context,
+            );
         assert!(matches!(result, Err(TrustFailure::Verification(Verification::Expired))));
         assert_eq!(std::fs::read_dir(extraction.path())?.count(), 0);
         fixture.preserved()
@@ -229,7 +257,7 @@ fn extraction_cannot_outlive_authority_or_roll_the_clock_back() -> TestResult {
                     trust,
                     offer,
                     download,
-                    extraction.path(),
+                    BundleSource::Extract(extraction.path()),
                     || {
                         samples += 1;
                         if samples == 1 { NOW } else { after }

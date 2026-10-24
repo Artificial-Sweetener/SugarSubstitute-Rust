@@ -16,6 +16,7 @@ k1-native-qualification = ["sugarsubstitute-execution/k1-native-qualification", 
 
 [dependencies]
 sugarsubstitute-contracts = { path = "../sugarsubstitute-contracts" }
+sugarsubstitute-configuration = { path = "../sugarsubstitute-configuration" }
 sugarsubstitute-application = { path = "../sugarsubstitute-application" }
 sugarsubstitute-comfy = { path = "../sugarsubstitute-comfy" }
 sugarsubstitute-execution = { path = "../sugarsubstitute-execution" }
@@ -36,6 +37,10 @@ tempfile.workspace = true
 sugarsubstitute-execution = { path = "../sugarsubstitute-execution", features = ["boundary-fixtures"] }
 sugarsubstitute-desktop = { path = "../sugarsubstitute-desktop", features = ["boundary-fixtures"] }
 sugarsubstitute-supervision = { path = "../sugarsubstitute-supervision", features = ["boundary-fixtures"] }
+
+[build-dependencies]
+sugarsubstitute-contracts = { path = "../sugarsubstitute-contracts" }
+sugarsubstitute-update = { path = "../sugarsubstitute-update" }
 
 [lints]
 workspace = true

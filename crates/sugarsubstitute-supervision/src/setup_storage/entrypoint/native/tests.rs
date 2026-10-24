@@ -14,7 +14,7 @@ fn custom_arguments_working_directory_visibility_and_elevation_are_preserved_and
         std::fs::write(&executable, b"inert, never executed")?;
         for mode in 0..4 {
             let path = temporary.path().join(format!("custom-{mode}.lnk"));
-            create(&path, &executable, temporary.path())?;
+            std::fs::write(&path, encode(&executable)?)?;
             assert_eq!(target(&path)?, executable);
             let _apartment = Apartment::enter()?;
             // SAFETY: The fixture's local COM interfaces and strings outlive synchronous
@@ -45,33 +45,50 @@ fn custom_arguments_working_directory_visibility_and_elevation_are_preserved_and
 }
 
 #[test]
-fn expandable_icon_metadata_keeps_the_absolute_launch_target_and_original_link_bytes() -> TestResult
-{
+fn shell_serialization_creates_no_files_and_round_trips_unicode_targets() -> TestResult {
+    worker::run(|_, _| {
+        let temporary = tempfile::tempdir()?;
+        let executable = temporary.path().join("第二 糖.exe");
+        let bytes = encode(&executable)?;
+        assert!(std::fs::read_dir(temporary.path())?.next().is_none());
+        assert!(bytes.len() <= 65536);
+        let path = temporary.path().join("SugarSubstitute.lnk");
+        std::fs::write(&path, &bytes)?;
+        assert_eq!(target(&path)?, executable);
+        assert_eq!(std::fs::read(path)?, bytes);
+        Ok(())
+    })
+}
+
+#[test]
+fn expanded_icon_metadata_preserves_the_same_launch_contract() -> TestResult {
     worker::run(|_, _| {
         let temporary = tempfile::tempdir()?;
         let executable = temporary.path().join("sugarsubstitute.exe");
         std::fs::write(&executable, b"inert, never executed")?;
-        let path = temporary.path().join("owned.lnk");
-        create(&path, &executable, temporary.path())?;
-        {
-            let _apartment = Apartment::enter()?;
-            // SAFETY: These local COM interfaces and strings remain live through synchronous
-            // native calls and retire before the same-thread apartment guard.
-            unsafe {
-                let link: IShellLinkW = CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER)?;
-                let storage: IPersistFile = link.cast()?;
-                storage.Load(&HSTRING::from(path.as_os_str()), STGM_READ)?;
-                link.SetIconLocation(&HSTRING::from(r"%SystemRoot%\System32\shell32.dll"), 0)?;
-                let data: IShellLinkDataList = link.cast()?;
-                data.SetFlags(data.GetFlags()? | SLDF_HAS_EXP_ICON_SZ.0 as u32)?;
-                storage.Save(&HSTRING::from(path.as_os_str()), true)?;
-                storage.Load(&HSTRING::from(path.as_os_str()), STGM_READ)?;
-                assert_ne!(data.GetFlags()? & SLDF_HAS_EXP_ICON_SZ.0 as u32, 0);
-            }
+        let path = temporary.path().join("icon.lnk");
+        std::fs::write(&path, encode(&executable)?)?;
+        let _apartment = Apartment::enter()?;
+        // SAFETY: The fixture retains its local shell interfaces and input strings on this worker.
+        unsafe {
+            let link: IShellLinkW = CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER)?;
+            let storage: IPersistFile = link.cast()?;
+            storage.Load(&HSTRING::from(path.as_os_str()), STGM_READ)?;
+            let windows = std::path::PathBuf::from(
+                std::env::var_os("SystemRoot").ok_or("Windows system root absent")?,
+            );
+            link.SetIconLocation(
+                &HSTRING::from(windows.join("System32/shell32.dll").as_os_str()),
+                0,
+            )?;
+            storage.Save(&HSTRING::from(path.as_os_str()), true)?;
+            storage.Load(&HSTRING::from(path.as_os_str()), STGM_READ)?;
+            let data: IShellLinkDataList = link.cast()?;
+            assert_ne!(data.GetFlags()? & SLDF_HAS_EXP_ICON_SZ.0 as u32, 0);
         }
-        let bytes = std::fs::read(&path)?;
+        let before = std::fs::read(&path)?;
         assert_eq!(target(&path)?, executable);
-        assert_eq!(std::fs::read(&path)?, bytes);
+        assert_eq!(std::fs::read(path)?, before);
         Ok(())
     })
 }

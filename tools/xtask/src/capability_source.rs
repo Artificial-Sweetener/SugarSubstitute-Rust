@@ -268,6 +268,21 @@ fn inspect(
     }
 }
 
+/// Resolve selected public signature paths through the same import and type-alias inventory.
+pub(crate) fn resolved_paths_match(
+    text: &str,
+    paths: &[Vec<String>],
+    restricted: impl Fn(&[String]) -> bool,
+) -> Result<bool> {
+    let file = syn::parse_file(text)
+        .map_err(|cause| Failure::external("parse selected capability paths", cause))?;
+    let mut imports = Imports::default();
+    imports.visit_file(&file);
+    Ok(paths
+        .iter()
+        .any(|path| imports.expand(path.clone()).iter().any(|resolved| restricted(resolved))))
+}
+
 /// Return deterministic findings across all syntax, including inactive targets and macro tokens.
 pub(crate) fn findings(
     source: &str,

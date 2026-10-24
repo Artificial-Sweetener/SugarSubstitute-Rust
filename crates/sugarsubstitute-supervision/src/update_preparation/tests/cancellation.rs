@@ -25,10 +25,10 @@ fn retained_preparation_cannot_move_to_another_execution_owners_memory_ledger() 
 
 #[test]
 fn cancellation_at_each_preparation_boundary_releases_setup_and_memory_custody() -> TestResult {
-    for completed in 2..=4 {
+    for completed in 2..=5 {
         let mut pipeline = Pipeline::new()?;
         let (fixture, signed) = initialized(&mut pipeline)?;
-        let (mut worker, server) = campaign(&mut pipeline, &fixture, signed, completed >= 3)?;
+        let (mut worker, server) = campaign(&mut pipeline, &fixture, signed, completed >= 4)?;
         for _ in 0..completed {
             step(&mut pipeline, &mut worker)?;
         }
@@ -157,7 +157,7 @@ fn cancellation_after_extraction_releases_live_setup_custody_without_publishing_
     let mut pipeline = Pipeline::new()?;
     let (fixture, signed) = initialized(&mut pipeline)?;
     let (mut worker, server) = campaign(&mut pipeline, &fixture, signed, true)?;
-    for _ in 0..3 {
+    for _ in 0..4 {
         step(&mut pipeline, &mut worker)?;
     }
     server.finish()?;

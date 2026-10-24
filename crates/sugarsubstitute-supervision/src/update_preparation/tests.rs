@@ -6,6 +6,7 @@ mod capacity;
 mod engine;
 mod exclusion;
 mod harness;
+mod online_reopen;
 mod reopen;
 mod restart;
 mod resumption;
@@ -23,7 +24,7 @@ type Failure = Box<dyn std::error::Error + Send + Sync>;
 use crate::{
     setup_storage::test_worker::pipeline::Pipeline,
     update_http::fixture::{Running, complete, exchange},
-    update_preparation::{Configuration, Observation, Progress, Worker},
+    update_preparation::{CachedConfiguration, Configuration, Observation, Progress, Worker},
 };
 use harness::*;
 use sha2::{Digest, Sha256};
@@ -47,6 +48,7 @@ fn worker_stages_real_delivery_without_claiming_the_application_run_lock() -> Te
     })?;
     for expected in [
         Progress::Checking,
+        Progress::Reopening,
         Progress::Downloading { received: 0, total: fixture.archive.len() as u64 },
         Progress::Preparing,
         Progress::Ready,

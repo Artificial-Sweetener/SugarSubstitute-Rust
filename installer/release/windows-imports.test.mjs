@@ -3,10 +3,19 @@
 /** Decode the pinned inspector's regular, delayed and forwarded dependency formats. */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseImage, libraryName } from './windows-imports.mjs'
+import { parseImage, libraryName, requireBootstrapDependencies } from './windows-imports.mjs'
 
 const header = 'Format: COFF-x86-64\nImageFileHeader {\n  Machine: IMAGE_FILE_MACHINE_AMD64 (0x8664)\n}\nImageOptionalHeader {\n  ExportTableRVA: 0x3000\n  ImportTableRVA: 0x1000\n  DelayImportDescriptorRVA: 0x2000\n}\n'
 const imports = 'Import {\n  Name: KERNEL32.dll\n  Symbol: CloseHandle (1)\n}\nDelayImport {\n  Name: runtime.dll\n  Import {\n    Symbol: DeferredCall (0)\n  }\n}\nExport {\n  Ordinal: 1\n  Name: Forwarded\n  ForwardedTo: OtherLibrary.Function\n}\n'
+
+test('setup bootstrap accepts the Windows socket library and rejects external runtimes and lookalikes', () => {
+  const socketHeader = header.replace('0x2000', '0x0').replace('0x3000', '0x0')
+  const image = name => ({ name: 'sugarsubstitute-setup.exe', ...parseImage(socketHeader + `Import {\n  Name: ${name}\n  Symbol: WSAStartup (1)\n}\n`, 'windows-x86_64') })
+  assert.doesNotThrow(() => requireBootstrapDependencies([image('WS2_32.dll')]))
+  for (const name of ['vcruntime140.dll', 'ws2_32_helper.dll', 'winsock-custom.dll']) {
+    assert.throws(() => requireBootstrapDependencies([image(name)]), /separately installed library/)
+  }
+})
 
 test('ordinary imports, delayed symbols and forwarded exports all contribute dependencies', () => {
   assert.deepEqual(parseImage(header + imports, 'windows-x86_64').imports.map(value => value.library).sort(), ['kernel32.dll', 'otherlibrary.dll', 'runtime.dll'])

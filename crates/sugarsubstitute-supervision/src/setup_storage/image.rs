@@ -3,7 +3,7 @@
 //! Retain authenticated application or updater helper files independently of application-run ownership.
 use super::RunningApplication;
 use super::application::VerifiedApplication;
-use super::bundle::Payload;
+use super::bundle::RuntimePackage;
 use super::check;
 use super::invalid;
 use crate::durable_storage::files::Directory;
@@ -26,7 +26,7 @@ pub struct PreparationImage {
 /// Each component keeps its authoritative inventory and all verified native file pins.
 enum ImageSource {
     Application(Box<VerifiedApplication>),
-    Updater { generation: Generation, payload: Box<Payload> },
+    Updater { generation: Generation, payload: Box<RuntimePackage> },
 }
 
 impl PreparationImage {
@@ -47,7 +47,7 @@ impl PreparationImage {
     pub fn directory(&self) -> &Path {
         match &self.source {
             ImageSource::Application(application) => application.directory.path(),
-            ImageSource::Updater { payload, .. } => &payload.root,
+            ImageSource::Updater { payload, .. } => payload.directory(),
         }
     }
 
@@ -56,10 +56,44 @@ impl PreparationImage {
         self.directory().join(self.executable)
     }
 
+    /// Require startup activation from the accepted engine's already authenticated declaration.
+    /// This pure check performs no I/O and does not authorize a candidate or choose a command.
+    /// # Errors
+    /// Rejects application-role helpers and engines without this activation entry.
+    pub fn require_activation(&self) -> io::Result<()> {
+        match &self.source {
+            ImageSource::Updater { payload, .. } => {
+                payload.runtime.compatibility.require_updater_activation()
+            }
+            ImageSource::Application(_) => {
+                Err(invalid("Application helper is not an accepted update engine"))
+            }
+        }
+    }
+
+    /// Match the caller's actual process image to the exact pinned file, including native
+    /// directory identity. Equal names or identical bytes in another directory do not qualify.
+    pub(in crate::setup_storage) fn require_executable(&self, executable: &Path) -> io::Result<()> {
+        let expected = self.executable();
+        if executable.file_name() != expected.file_name() {
+            return Err(invalid("Running updater has a different executable role"));
+        }
+        let parent = |path: &Path| {
+            Directory::open(
+                path.parent().ok_or_else(|| invalid("Updater executable parent absent"))?,
+                false,
+            )
+        };
+        if parent(executable)?.identity()? != parent(&expected)?.identity()? {
+            return Err(invalid("Running updater is outside the accepted generation"));
+        }
+        Ok(())
+    }
+
     /// Compose already-authenticated updater custody while its selection writer is still held.
     pub(in crate::setup_storage) fn updater(
         generation: Generation,
-        payload: Payload,
+        payload: RuntimePackage,
         installation: Directory,
     ) -> Self {
         Self {

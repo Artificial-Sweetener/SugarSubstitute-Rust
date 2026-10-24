@@ -20,8 +20,7 @@ impl SignedCandidate {
         context: &JobContext,
     ) -> Result<CachedCandidate, TrustFailure> {
         let session = InstallationSession::maintain(installation, context)?;
-        let reopened =
-            PreparedCandidate::reopen(&session, &trust, &offer.authorization(&trust), now, context);
+        let reopened = PreparedCandidate::reopen(&session, &trust, &offer, now, context);
         match reopened {
             Ok(Some((candidate, configuration))) => Ok(CachedCandidate::Ready(Box::new(Self {
                 candidate,

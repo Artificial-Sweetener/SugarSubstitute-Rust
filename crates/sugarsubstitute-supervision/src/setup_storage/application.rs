@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Verify one protected generation's retained manifest and pin every executable payload.
-use super::bundle::VerifiedCopy;
+use super::bundle::VerifiedRuntime;
 use super::check;
 use super::inventory;
 use crate::durable_storage::{
@@ -16,12 +16,12 @@ use sugarsubstitute_update::package::{MAX_MANIFEST_BYTES, Manifest};
 /// Worker reservation for bounded inventory parsing, payload custody and native security queries.
 pub const LAUNCH_RESERVATION_BYTES: u64 = 34 * 1024 * 1024;
 
-/// Authenticated installed bytes without any application-run or trial authority.
+/// Authenticated installed runtime bytes without application-run, trial or symbol authority.
 pub(super) struct VerifiedApplication {
     pub(super) generation: Generation,
     pub(super) directory: Directory,
     pub(super) inventory: File,
-    pub(super) payload: VerifiedCopy,
+    pub(super) payload: VerifiedRuntime,
 }
 impl VerifiedApplication {
     /// Admit the inherited selection protocol only when the verified payload advertises it.
@@ -55,7 +55,7 @@ impl VerifiedApplication {
             }
             let manifest = Manifest::decode(&bytes).map_err(io::Error::other)?;
             inventory::require_complete(&manifest)?;
-            let payload = VerifiedCopy::open(&manifest, &path, context)?;
+            let payload = VerifiedRuntime::open(&manifest, &path, context)?;
             Ok((directory, file, payload))
         })
         .map_err(protection::DomainFailure::into_io)?;

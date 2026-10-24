@@ -5,10 +5,12 @@ use super::*;
 use crate::setup_storage::application::VerifiedApplication;
 use std::{path::PathBuf, sync::Arc};
 use sugarsubstitute_contracts::installation::{Generation, StartupSelection, Trial};
+mod forwarding;
 
 /// A launcher's verified next action without any claim to an application process lifetime.
 pub enum ReservedLaunch {
-    /// Exact accepted selection and application bytes pinned through launch admission.
+    /// Verified selection and application bytes for accepted startup or an active trial's
+    /// independent invocation. Only the original transferred run can admit that trial.
     Application(ReservedApplication),
     /// Installation has not yet accepted an application.
     NeedsInstallation,
@@ -19,16 +21,18 @@ pub enum ReservedLaunch {
 /// Short-lived selection and executable custody for the stable launcher's startup transfer.
 /// This is not application-run ownership, health evidence or process-settlement authority.
 /// The elected coordinator can acquire its run lock while this reservation exists.
-/// Selection writes are excluded until the last reservation releases its record handle.
-/// Retain custody through transfer to the elected coordinator; dropping it before transfer
-/// permits selection to change. Do not retain it for the running application's lifetime.
+/// Accepted-selection writes are excluded until its record handle releases. Trial forwarding
+/// retains immutable snapshot bytes while permitting the original owner to publish health.
+/// Retain custody through native transfer. A forwarding snapshot never grants primary admission;
+/// its native identity differs from the current-selection record. Do not retain either form
+/// for the running application's lifetime.
 pub struct ReservedApplication {
     pub(super) application: VerifiedApplication,
     pub(super) _selection: File,
     pub(super) _store: Arc<SelectionStore>,
 }
 impl ReservedApplication {
-    /// Exact accepted identity covered by the retained selection and manifest.
+    /// Exact selected identity covered by the retained snapshot and verified manifest.
     pub fn generation(&self) -> &Generation {
         &self.application.generation
     }
@@ -98,6 +102,8 @@ impl SelectionStore {
 /// Resolve an existing installed selection for the stable launcher without creating state.
 /// Offline accepted selection is sufficient. Abandoned trials are quarantined under exclusive
 /// run ownership before pinning the accepted selection. No payloads or user files are retired.
+/// A live trial supplies a verified invocation for coordinator forwarding without transferring
+/// its run custody or claiming health. Its snapshot permits the original owner's publication.
 /// # Errors
 /// Preserves native ownership, record, cancellation and payload verification failures.
 /// Run on a finite worker with `LAUNCH_RESERVATION_BYTES` available.
@@ -108,7 +114,11 @@ pub fn reserve_installed_launch(
     match SelectionStore::existing(root, context)? {
         Some(store) => {
             let store = Arc::new(store);
-            store.load_recovered(context)?;
+            match store.load_recovered(context) {
+                Ok(_) => {}
+                Err(SelectionFailure::RunBusy(_)) => return store.reserve_forwarding(context),
+                Err(cause) => return Err(cause),
+            }
             store.reserve_launch(context)
         }
         None => Ok(ReservedLaunch::NeedsInstallation),

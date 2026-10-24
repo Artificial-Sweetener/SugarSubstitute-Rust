@@ -17,7 +17,10 @@ let install
 let inspection
 let opening
 let failure
+let copy
 let maintenance = false
+let invalidLocaleReply = false
+const rendererDiagnostics = []
 const iconMeasurements = []
 async function evaluate(code) { return window.webContents.executeJavaScript(code) }
 async function elapsed(milliseconds) {
@@ -206,6 +209,11 @@ ipcMain.on('setup-command', (_event, serialized) => {
     const command = JSON.parse(serialized)
     commands.push(command.operation)
     let data = {}
+    if (command.operation === 'rendererDiagnostic') {
+      rendererDiagnostics.push(command.input.message)
+      await evaluate("document.body.dataset.rendererDiagnostic = 'true'")
+      return
+    }
     if (command.operation === 'ready' || command.operation === 'console') return
     if (command.operation === 'open') {
       opening = command.id
@@ -216,7 +224,7 @@ ipcMain.on('setup-command', (_event, serialized) => {
       await evaluate("document.body.dataset.closeRequested = 'true'")
       return
     }
-    if (command.operation === 'locale') data = await evaluate('window.setupBootstrap.messages')
+    if (command.operation === 'locale') data = invalidLocaleReply ? {} : await evaluate('window.setupBootstrap.messages')
     if (command.operation === 'location') data = { comfyRoot: 'D:\\Test\\ComfyUI', models: 'D:\\Test\\models', outputs: 'D:\\Test\\outputs' }
     if (command.operation === 'location' && maintenance) data.existing = {
       selection: { installRoot: command.input.directory, comfyRoot: 'D:\\Saved\\ComfyUI' }, executableMissing: maintenance === true, launchEntryMissing: maintenance === 'missing-entry',
@@ -242,9 +250,21 @@ void app.whenReady().then(async () => {
     webPreferences: { offscreen: true, contextIsolation: true, nodeIntegration: false, preload: path.join(__dirname, 'surface-preload.cjs') },
   })
   await window.loadFile(source)
+  copy = await evaluate('window.setupBootstrap.messages')
+  assert.equal(await evaluate('document.documentElement.lang'), await evaluate('window.setupBootstrap.locale'))
+  assert.equal(await evaluate('document.title'), copy.title)
+  assert.equal(await evaluate("document.querySelector('#brand svg desc').textContent"), copy.wordmarkDescription)
   // Match the Python offscreen capture's opaque backing beneath the native-material surface.
   await evaluate("document.documentElement.style.background = '#181818'")
   await until("!document.getElementById('language').hidden")
+  invalidLocaleReply = true
+  await evaluate("document.getElementById('locale').dispatchEvent(new Event('change'))")
+  await until("document.body.dataset.rendererDiagnostic === 'true' && !document.getElementById('error').hidden")
+  assert.deepEqual(rendererDiagnostics, ['Error: Invalid localized installer contract'])
+  assert.equal(await evaluate("document.getElementById('error').textContent"), copy.setupFailed)
+  invalidLocaleReply = false
+  await evaluate("document.getElementById('locale').dispatchEvent(new Event('change'))")
+  await until("!document.getElementById('locale').disabled && document.getElementById('error').hidden")
   assert.equal(await evaluate('document.querySelector(".wordmark svg") !== null'), true)
   assert.equal(await evaluate("document.querySelector('#language .hero-icon svg') !== null"), true)
   const languageGeometry = await evaluate(`(() => {
@@ -270,7 +290,7 @@ void app.whenReady().then(async () => {
   assert.equal(commands.filter(value => value === 'options').length, 0)
   await capture('runtime')
   await evaluate("document.querySelector('input[name=mode][value=attached]').click()")
-  assert.equal(await evaluate("document.querySelector('[data-choice-label=attached]').textContent"), 'Selected')
+  assert.equal(await evaluate("document.querySelector('[data-choice-label=attached]').textContent"), copy.selected)
   await evaluate('document.getElementById("primary").click()')
   await until("!document.getElementById('configuration').hidden")
   assert.equal(await evaluate("document.getElementById('attached').hidden"), false)
@@ -304,7 +324,7 @@ void app.whenReady().then(async () => {
   await evaluate('document.getElementById("primary").click()')
   await until("!document.getElementById('progress').hidden")
   assert.ok(install)
-  assert.equal(await evaluate("document.getElementById('status').textContent"), 'Preparing installation')
+  assert.equal(await evaluate("document.getElementById('status').textContent"), copy.preparingInstallation)
   await verifyContentHierarchy('progress-initial')
   await evaluate("document.getElementById('installRoot').value = 'D:\\\\Unsubmitted'")
   await deliver({ event: 'progress', data: { status: 'Installing Python dependencies', overall: 42 } })
@@ -316,7 +336,7 @@ void app.whenReady().then(async () => {
   await paint()
   assert.equal(await evaluate("document.getElementById('console').textContent"), '')
   assert.equal(await evaluate("document.getElementById('console').tagName"), 'DIV')
-  assert.equal(await evaluate("document.querySelector('#details summary').textContent"), 'Hide details')
+  assert.equal(await evaluate("document.querySelector('#details summary').textContent"), copy.hideDetails)
   await deliver({ event: 'progress', data: { status: 'Latest final output', overall: 62 } })
   await paint()
   await deliver({ event: 'progress', data: { status: 'Next phase', overall: 2 } })
@@ -347,6 +367,9 @@ void app.whenReady().then(async () => {
   const freshCommands = commands.length
   maintenance = true
   await window.loadFile(source)
+  copy = await evaluate('window.setupBootstrap.messages')
+  assert.equal(await evaluate('document.documentElement.lang'), await evaluate('window.setupBootstrap.locale'))
+  assert.equal(await evaluate('document.title'), copy.title)
   await until("!document.getElementById('language').hidden")
   await evaluate('document.getElementById("primary").click()')
   await until("!document.getElementById('location').hidden")
@@ -356,7 +379,7 @@ void app.whenReady().then(async () => {
   assert.equal(await evaluate("document.getElementById('journey').max"), 5)
   assert.equal(await evaluate("document.getElementById('maintenanceComfy').textContent"), 'D:\\Saved\\ComfyUI')
   assert.equal(await evaluate("document.getElementById('maintenanceNotice').textContent"),
-    'The application executable is missing. Setup can restore it using your saved configuration.')
+    copy.maintenanceMissing)
   await capture('maintenance')
   await evaluate('document.getElementById("back").click()')
   await until("!document.getElementById('location').hidden")
@@ -383,10 +406,10 @@ void app.whenReady().then(async () => {
   assert.equal(await evaluate('document.getElementById("primary").disabled'), true)
   await evaluate('document.getElementById("primary").click()')
   assert.equal(commands.slice(beforeLaunch).filter(value => value === 'open').length, 1)
-  await deliver({ id: firstOpen, event: 'failed', data: { message: 'The application is still running.' } })
+  await deliver({ id: firstOpen, event: 'failed', data: { message: copy.setupFailed } })
   await until('!document.getElementById("primary").disabled && !document.getElementById("error").hidden')
   assert.equal(await evaluate('document.getElementById("complete").hidden'), false)
-  assert.equal(await evaluate('document.getElementById("error").textContent'), 'The application is still running.')
+  assert.equal(await evaluate('document.getElementById("error").textContent'), copy.setupFailed)
   assert.equal(commands.slice(beforeLaunch).includes('close'), false)
   await evaluate('document.getElementById("primary").click()')
   await until(`document.body.dataset.launchRequest !== ${JSON.stringify(firstOpen)}`)
@@ -400,13 +423,16 @@ void app.whenReady().then(async () => {
   maintenance = 'missing-entry'
   const beforeRecovery = commands.length
   await window.loadFile(source)
+  copy = await evaluate('window.setupBootstrap.messages')
+  assert.equal(await evaluate('document.documentElement.lang'), await evaluate('window.setupBootstrap.locale'))
+  assert.equal(await evaluate('document.title'), copy.title)
   await until("!document.getElementById('language').hidden")
   await evaluate('document.getElementById("primary").click()')
   await until("!document.getElementById('location').hidden")
   await evaluate('document.getElementById("primary").click()')
   await until("!document.getElementById('maintenance').hidden")
   assert.equal(await evaluate("document.getElementById('maintenanceNotice').textContent"),
-    'The launch entry is missing. Setup can recreate it using your saved configuration.')
+    copy.maintenanceLaunchMissing)
   await capture('maintenance-recovery')
   await evaluate('document.getElementById("primary").click()')
   await until("!document.getElementById('progress').hidden")
@@ -418,8 +444,9 @@ void app.whenReady().then(async () => {
     testedSizes: [[720,560],[1180,760]], progressMonotonic: true, slowInspectionAndInstallationFeedback: true,
     compactCenteredLanguage: languageGeometry, separateChoiceAndConfiguration: true,
     inspectedModes: inspections.map(input => input.mode),
-    maintenanceBypassesProvisioning: true, missingEntryRecovery: true, maintenanceRetryPreservesRoute: true,
+    locale: await evaluate('window.setupBootstrap.locale'), localizedTitle: copy.title, maintenanceBypassesProvisioning: true, missingEntryRecovery: true, maintenanceRetryPreservesRoute: true,
     launchRetryKeepsCompletionPage: true, duplicateOpenSuppressed: true, closeFollowsSuccessfulOpen: true,
+    unexpectedRendererFailureUsesHostDiagnostics: true,
     iconMeasurements,
     contentHierarchy: { uniqueDecorativeIcons: true, singlePageHeading: true, completionShowsSubmittedFolder: true },
   }, null, 2))

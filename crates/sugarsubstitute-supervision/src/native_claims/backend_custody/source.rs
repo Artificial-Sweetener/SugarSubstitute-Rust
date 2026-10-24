@@ -170,9 +170,9 @@ impl BackendCustodySource {
             .min()
     }
     /// Return only the actual helper control's first post-capture containment cutoff.
+    /// In-flight native callbacks cannot hide this published observation.
     pub fn retirement_until(&self) -> Option<sugarsubstitute_contracts::execution::Moment> {
-        let owner = self.owner.as_ref()?;
-        super::super::lock(owner).as_ref()?.control.cleanup_until()
+        self.memory.cleanup_until()
     }
     /// Observe only actual cached unresolved custody; it grants no Released authority.
     pub fn unresolved(&self) -> bool {

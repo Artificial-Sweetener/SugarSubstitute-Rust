@@ -24,7 +24,7 @@ fn saved_canary_preference_drives_real_signed_discovery_and_preparation() -> Tes
         EXPIRES,
     )?;
     let (mut worker, server) = campaign(&mut pipeline, &fixture, signed, true)?;
-    for _ in 0..4 {
+    for _ in 0..5 {
         step(&mut pipeline, &mut worker)?;
     }
     assert_eq!(worker.progress(), Progress::Ready);
@@ -65,6 +65,7 @@ fn changed_preference_stops_authenticated_download_before_requesting_package() -
     let (fixture, signed) = initialized(&mut pipeline)?;
     let (mut worker, server) = campaign(&mut pipeline, &fixture, signed, false)?;
     step(&mut pipeline, &mut worker)?;
+    assert_eq!(step(&mut pipeline, &mut worker)?.progress, Progress::Reopening);
     assert!(matches!(step(&mut pipeline, &mut worker)?.progress, Progress::Downloading { .. }));
     server.finish()?;
     select_subscription(&fixture, Channel::Canary)?;
@@ -78,10 +79,7 @@ fn changed_preference_stops_authenticated_download_before_requesting_package() -
 fn prepared_candidate_cannot_activate_after_subscription_change() -> TestResult {
     let (fixture, _) = restart::prepared()?;
     let mut pipeline = Pipeline::new()?;
-    let mut worker = Worker::resume_cached(configuration(
-        &fixture,
-        sugarsubstitute_update::http::Policy::loopback(1)?,
-    ))?;
+    let mut worker = Worker::resume_cached(cached_configuration(&fixture))?;
     for _ in 0..3 {
         step(&mut pipeline, &mut worker)?;
     }

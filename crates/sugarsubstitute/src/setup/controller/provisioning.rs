@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Coordinate the upstream worker and translate its progress into installer events.
 use super::*;
+mod presentation;
 
 impl Controller {
     pub(super) fn worker_failed(&mut self, cause: Box<dyn Error>) -> Result<()> {
@@ -20,7 +21,12 @@ impl Controller {
             storage.cancel_preparation();
         }
         self.prepared = None;
-        self.reply(None, "unavailable", json!({"message":cause.to_string()}))
+        self.reply(
+            None,
+            "diagnostic",
+            json!({"message":crate::failure_details::Details(cause.as_ref()).to_string()}),
+        )?;
+        self.reply(None, "unavailable", json!({"message":sugarsubstitute_contracts::localization::installer::messages(&self.locale).worker_stopped}))
     }
     /// Start the scoped upstream worker on demand; native maintenance needs no worker process.
     pub(super) fn start_worker(&mut self) -> Result<()> {
@@ -62,24 +68,31 @@ impl Controller {
         Ok(())
     }
     pub(super) fn worker_event(&mut self, mut value: Value) -> Result<()> {
-        if value["data"]["statusCode"] == "setupFailed" {
-            value["data"]["message"] = json!(
-                sugarsubstitute_contracts::localization::installer::messages(&self.locale)["setupFailed"]
-            );
-        }
-        let event = value["event"].as_str().ok_or("Worker event missing")?;
-        tracing::debug!(operation="installer_worker_event", event, request_id=?value["id"].as_str(), "Received provisioning event");
+        let event = value["event"].as_str().ok_or("Worker event missing")?.to_owned();
+        crate::diagnostics::worker::observe(
+            &event,
+            self.pending.as_ref().map(|pending| pending.id.as_str()),
+        )?;
         if value["data"]["statusCode"] == "cacheFull" {
-            let message = sugarsubstitute_contracts::localization::installer::messages(
-                &self.locale,
-            )["cacheFull"];
-            return self.worker_failed(message.into());
+            self.worker_failed(
+                value["data"]["message"]
+                    .as_str()
+                    .unwrap_or("Worker cache admission failed")
+                    .to_owned()
+                    .into(),
+            )?;
+            return self.reply(None, "failed", json!({"message":sugarsubstitute_contracts::localization::installer::messages(&self.locale).cache_full}));
         }
-        if matches!(event, "fatal" | "protocol_error") {
-            return Err("Provisioning worker failed".into());
+        if matches!(event.as_str(), "fatal" | "protocol_error") {
+            self.reply(None, "diagnostic", value["data"].clone())?;
+            return Err(value["data"]["message"]
+                .as_str()
+                .unwrap_or("Provisioning worker failed without diagnostic evidence")
+                .to_owned()
+                .into());
         }
         if event == "diagnostic" {
-            return self.reply(None, event, value["data"].clone());
+            return self.reply(None, &event, crate::diagnostics::worker::project(&value["data"]));
         }
         let Some(pending) = self.pending.as_ref() else {
             return Err("Worker returned an unsolicited operation result".into());
@@ -89,22 +102,20 @@ impl Controller {
         }
         if event == "progress" {
             let mut data = value["data"].clone();
-            if let Some(code) = data["statusCode"].as_str() {
-                let copy =
-                    sugarsubstitute_contracts::localization::installer::messages(&self.locale);
-                data["status"] = json!(copy.get(code).ok_or("Unknown installer progress message")?);
-            }
+            presentation::progress(&mut data, &self.locale)?;
             data["overall"] = json!(progress(&data));
-            return self.reply(None, event, data);
+            return self.reply(None, &event, data);
         }
         let pending = self.pending.take().ok_or("Worker request missing")?;
-        if !matches!(event, "completed" | "failed" | "cancelled") {
+        if !matches!(event.as_str(), "completed" | "failed" | "cancelled") {
             return Err("Unknown worker result".into());
         }
         if event != "completed" {
             self.install_id = None;
             self.prepared = None;
-            return self.reply(Some(&pending.id), event, value["data"].clone());
+            self.reply(None, "diagnostic", value["data"].clone())?;
+            presentation::failure(&mut value["data"], &self.locale, event == "cancelled")?;
+            return self.reply(Some(&pending.id), &event, value["data"].clone());
         }
         if matches!(pending.purpose, Purpose::Provision) {
             let runtime: RuntimePaths = serde_json::from_value(value["data"].clone())?;
@@ -117,7 +128,7 @@ impl Controller {
             let prepared = self.prepared.take().ok_or("Prepared installation missing")?;
             self.complete_candidate(prepared, runtime)
         } else {
-            self.reply(Some(&pending.id), event, value["data"].clone())
+            self.reply(Some(&pending.id), &event, value["data"].clone())
         }
     }
 }

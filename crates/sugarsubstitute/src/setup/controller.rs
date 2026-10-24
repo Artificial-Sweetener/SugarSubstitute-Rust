@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Coordinate one installer transaction through admitted storage jobs and the retained worker.
+mod completion;
 mod lifetime;
 mod profiles;
 mod provisioning;
@@ -22,7 +23,8 @@ use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner, MonotonicClock}
 use sugarsubstitute_supervision::{
     application_launch::{ApplicationLaunch, CreationOutcome},
     setup_storage::{
-        self, RuntimePaths, Selection, SignedCandidate, SignedPreparation, VerifiedBundle,
+        self, CompletedInstallation, RuntimePaths, Selection, SignedCandidate, SignedPreparation,
+        VerifiedBundle,
     },
 };
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
@@ -51,7 +53,7 @@ pub(super) struct Controller {
     bundle: Option<Arc<VerifiedBundle>>,
     cache: Option<setup_storage::cache::RuntimeCache>,
     prepared: Option<Box<SignedPreparation>>,
-    installed: Option<Arc<SignedCandidate>>,
+    installed: Option<CompletedInstallation>,
     relaunch: Option<ApplicationLaunch>,
     launch_failure: Option<io::Error>,
     worker: Option<Worker>,
@@ -107,6 +109,10 @@ impl Controller {
             payload_started: false,
             locale: "en".into(),
         }
+    }
+    /// Borrow the current validated language after native shutdown for terminal feedback.
+    pub(super) fn locale(&self) -> &str {
+        &self.locale
     }
     fn reply(&mut self, id: Option<&str>, event: &str, data: Value) -> Result<()> {
         if matches!(event, "progress" | "diagnostic" | "unavailable" | "failed")

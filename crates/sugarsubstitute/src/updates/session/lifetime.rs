@@ -45,6 +45,9 @@ impl HeadlessLifetime for Session {
     }
     fn next_deadline(&self) -> Option<Instant> {
         self.wake_at
+            .into_iter()
+            .chain(self.engine.as_ref().and_then(super::super::engine::Engine::next_deadline))
+            .min()
     }
     fn request_shutdown(&mut self) -> Result<()> {
         if self.closing {
@@ -60,9 +63,13 @@ impl HeadlessLifetime for Session {
         if let Some(work) = &self.work {
             work.cancel();
         }
-        self.cleanup_until = Some(self.clock.now().checked_add(CLEANUP)?);
+        let budget = sugarsubstitute_contracts::lifecycle::ShutdownBudget::new(self.clock.now())?;
+        self.cleanup_until = Some(budget.settle_until);
         self.wake_at =
             Some(Instant::now().checked_add(CLEANUP).ok_or("Update cleanup deadline overflow")?);
+        if let Some(engine) = &mut self.engine {
+            engine.close(budget)?;
+        }
         Ok(())
     }
     fn poll_shutdown(&mut self) -> Result<bool> {
@@ -79,6 +86,11 @@ impl HeadlessLifetime for Session {
             if !worker.pending() {
                 self.submit(true)?;
             }
+            return self.unsettled();
+        }
+        if let Some(engine) = &self.engine
+            && !engine.settled()?
+        {
             return self.unsettled();
         }
         let Some(owner) = &mut self.owner else {
@@ -98,6 +110,7 @@ impl HeadlessLifetime for Session {
             owner.finish_shutdown()?;
         }
         self.worker = None;
+        self.engine = None;
         self.work = None;
         self.cleanup = None;
         self.client = None;

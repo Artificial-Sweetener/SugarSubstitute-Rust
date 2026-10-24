@@ -1,0 +1,967 @@
+schema_version = 1
+owner = "sugarsubstitute"
+routing_entry = "crates/sugarsubstitute/src/diagnostics.rs"
+storage_owner = "sugarsubstitute-supervision"
+storage_entry = "crates/sugarsubstitute-supervision/src/diagnostic_storage/operational.rs"
+worker_entry = "installer/worker/main.ts"
+required_roots = ["native/crashpad", "installer/worker", "installer/surface"]
+script_manifests = ["installer/package.json"]
+
+[[records]]
+path = "crates/sugarsubstitute/src/diagnostics.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:496b92d7f8fd9953652fff6a8782e3af151a6a02dce4674eaeb2dd0b9a849058"
+disposition = "routing"
+rationale = "Process-global supported subscriber and original diagnostic failure health."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/diagnostic_storage/operational.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:78bd879a24cce44d1f215fc80ec0383f35dd53387493956811cbc43636c6f22f"
+disposition = "storage"
+rationale = "Bounded operational pages and export through shared protected durable storage, separate from preserved incident records."
+
+[[records]]
+path = "installer/worker/main.ts"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:259fd6748897d3054e425d1faefd5fb6d2fb78eff7791120c00c2d83b606948b"
+disposition = "routing"
+rationale = "Upstream console bridge routes untrusted worker output through bounded local projection and authenticated framing."
+
+[[records]]
+path = "crates/sugarsubstitute-contracts/build.rs"
+owner = "sugarsubstitute-contracts"
+source_sha256 = "sha256:58b7d2668d9a333c46a5e9a7662500775edd5ece233d5bcedf973ef644e01cdf"
+disposition = "developer"
+rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
+
+[[records]]
+path = "crates/sugarsubstitute-comfy/src/readiness_transport/memory.rs"
+owner = "sugarsubstitute-comfy"
+source_sha256 = "sha256:56e68cb5732ab3be85a83d5b64709018d9cb80fe1d44908108be81edc07414a6"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute/build.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:04ce4d2b879b2059197a795ca52ca9de69370caad213f9c73e563537da825a81"
+disposition = "developer"
+rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
+
+[[records]]
+path = "crates/sugarsubstitute/src/diagnostics/fields.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:7746fa276daf6ccda8baa6551f9977231292ca9f17db8e73e592e7391a815418"
+disposition = "routing"
+rationale = "Supported bounded field formatter applies the shared contract before redacted output."
+
+[[records]]
+path = "crates/sugarsubstitute/src/diagnostics/service/batches.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:b6e41293285f6f2e19c4bbd863c269ae96979d334c66425e221c0f3d08870f63"
+disposition = "routing"
+rationale = "Native sink calls suppress recursive executor events within source-preserving bounded publication attempts."
+
+[[records]]
+path = "crates/sugarsubstitute/src/diagnostics/service/tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:8d2c42ba06dd3dcc0465e4612c66ee465a96b331c201d3cb3dfaf9d8d48ba0c8"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute/src/diagnostics/service.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:2035b515aae632c6768bc430bb767c2ecb7c54eda12738b52b7f02da52fc9151"
+disposition = "routing"
+rationale = "Host lifetime composes the existing execution adapter with the protected operational storage port."
+
+[[records]]
+path = "crates/sugarsubstitute/src/diagnostics/tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:1947d3385fca19709aecc598c1c89f503052d8b4db72c241b16cc3e2f85714e2"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute/src/output_fixture/writers.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:b2ca4a07b8fa6847c7c3c5e829d2fb8f8c90596ed29aeae1d097084e81d5a8cd"
+disposition = "capture"
+rationale = "Fixed output fixture emits only its authenticated captured process protocol; it never constructs an application logger."
+
+[[records]]
+path = "crates/sugarsubstitute/src/production/child/preview/deadline_tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:786ee5e050fa946a47a4aa56ebb28cd398201c49123f55d8b9483d2dcacf4e94"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute/src/production/child/preview/tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:9f0a5237f05da7130c2c8513bcd58ce7e0ae147c8ade313e92de5154eee81cb6"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute/src/production/child/preview_hooks_tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:17d0de1f1f80c9809fd43dd172b0ee4f2cf081740621d2b41d071c426c678a56"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute/src/production/child/tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:2bfaec99e2d76f5fe2dd6978d2313b201d8f4d3962a4cad811145f5659121b23"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute/src/production/child_transport_diagnostic.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:6994d0b4217ab0cb2d91d8badb8ec368601c7317234699743504a3b98352f47a"
+disposition = "fixture"
+rationale = "Only the inline test module selects a local supported formatter to qualify the closed captured child protocol."
+
+[[records]]
+path = "crates/sugarsubstitute/src/production/diagnostic_helper/reporting/tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:609ed1fe09d44716ba6a065e082813046b35d5bb1b58813765267060f3a7d99d"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute/src/production/diagnostic_helper/service/seed_failure_tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:e35c14b22c7824f5e45379e9d433412979136599eb18b2f434873c15c7ae3a29"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute/src/production/entry_activation/desktop_output/qualification_tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:71e96c8bc8d3391eed8c921d265cddb08265d81e093787976987dcf98781849a"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute/src/production/entry_activation/desktop_output/tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:94e9ecb22ed0cc8ca86995338602cfcafb803a7133df324187f70711b2d57f24"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute/src/production/entry_activation/incident_reporting/tests/receiving_failure.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:17be065ff215b460919369b4efb98e4906a1067d5fe457cd3b29b1edc6fa83b2"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute/src/production/incident_host/tests/diagnostics.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:1a2cd5b79d96c94977f8b148b57e96671c933ac563f86962a0b17b6d224a5529"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute/src/production/parent_lifecycle/retirement_trace.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:b9ff4b49075ff90292f4643cc70bbca34f1eb12194df62949f7e0890567f317a"
+disposition = "fixture"
+rationale = "Test-only trace collector asserts actual retirement ordering without changing production routing."
+
+[[records]]
+path = "crates/sugarsubstitute/src/production/startup_readiness_diagnostic/tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:8b2e6bd04354772a423f392c45a3432e13d0c2084bb4e72509448d57668e79d1"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute/src/startup/shutdown.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:956548359285eb937227a1ec6d7afa402f95857af314adffc97625f0f401aa31"
+disposition = "fixture"
+rationale = "Only the inline test module constructs a local subscriber to assert shutdown state transition observations."
+
+[[records]]
+path = "installer/worker/dependency-inspection.mjs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:1fe50165ec6d561350e24f414d0b857ae51aaab9df06753f62c3cd7cbcf7dda7"
+disposition = "capture"
+rationale = "Bounded Python metadata subprocess returns structured stdout to its authenticated provisioning adapter."
+
+[[records]]
+path = "installer/worker/integration.ts"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:031855f513876ca2a06e9f44711c6d5ecb9792ea2b6c19b59e8f61effce0a202"
+disposition = "capture"
+rationale = "Upstream subprocess stdout and stderr are consumed as untrusted progress through the supported worker diagnostic lane."
+
+[[records]]
+path = "installer/worker/provision.ts"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:200e9625132af274695e393280baa0b1c61f3ddae85e822d3f76be383e47ec9d"
+disposition = "capture"
+rationale = "Provisioning subprocess output feeds bounded worker presentation; authored observations use the supported diagnostic lane."
+
+[[records]]
+path = "crates/sugarsubstitute-execution/src/coordinator_entry/startup_snapshot/tests.rs"
+owner = "sugarsubstitute-execution"
+source_sha256 = "sha256:589683a49b8308e964243cc4644a8ec2884ed45cd096bf6ce986dbad65689cfa"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute-execution/src/native_pipe/handle_custody_tests.rs"
+owner = "sugarsubstitute-execution"
+source_sha256 = "sha256:88f95b92fc3b1b9448512f1340dd4526e9ac4b76d5a83a533ea4666757f420a1"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute-execution/src/preview_arming/capture_tests.rs"
+owner = "sugarsubstitute-execution"
+source_sha256 = "sha256:31866b7cc4f101b8843f7f6288951c4475a4e86c264151131cddae98020b11d4"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "tools/xtask/src/command.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:f9bcc8294eee606a724222451b6e59e79728e71edd12e6a01f8bf4a491e231a2"
+disposition = "developer"
+rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
+
+[[records]]
+path = "tools/xtask/src/diagnostics_gate/source.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:56a4dadcfc4499a761a32f920837366d0ae7e5c15e421aa5e92404f8ee52b7ac"
+disposition = "developer"
+rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
+
+[[records]]
+path = "tools/xtask/src/governance.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:3ee42883e45f9799d0054207b9724592a62a1e06342dc489a6ce1e9f987dbca1"
+disposition = "developer"
+rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
+
+[[records]]
+path = "tools/xtask/src/main.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:6b500b52d4a8ea40ca88d31f1caf26154f17a6441c31443504b3937be7e08041"
+disposition = "developer"
+rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
+
+[[records]]
+path = "tools/xtask/src/structure.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:471bdd2d412c17f05d5cdf085213a560b326b9c178c0cb06f967be94bbbf5e79"
+disposition = "developer"
+rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
+
+[[records]]
+path = "tools/xtask/src/testing.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:2827118fea6b40dc1a5a76c9ce8ccb881dd35b62c3835cf8524d5944b005fb2b"
+disposition = "developer"
+rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
+
+[[records]]
+path = "installer/release/build-application.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:6575a504a9a7822e7deac3e1cfef3c1dfb1a36ef4bbe3259c6d8144d986c5671"
+disposition = "developer"
+rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
+
+[[records]]
+path = "installer/release/build-updater.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:6a762fedc9a8ae2900ae21a5d573a558e3b0bd270f7f329d25f0d47631268cf5"
+disposition = "developer"
+rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
+
+[[records]]
+path = "installer/release/installer-distribution.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:2d31044b03ab8a3ec36a37e797d445174b830569ba63233d28406c3c977b98ed"
+disposition = "developer"
+rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
+
+[[records]]
+path = "installer/release/native-build.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:18235031af3f7920423b469089309e4c25a30613f4c346fcb751a29a2fbaf0e2"
+disposition = "developer"
+rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
+
+[[records]]
+path = "installer/release/updater-package.test.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:f8a22577a99277d45771fb0d8f7e7211154e65c07c9ecfa5166d418fec88c420"
+disposition = "developer"
+rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
+
+[[records]]
+path = "installer/release/windows-imports.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:a05084b6ef7db63b4d63b2895c7402709766a7cd96d5153a1e78564d788a2b2f"
+disposition = "developer"
+rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/command/directory.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:c2344092b1f7836944d536e9112a5696e22b54d711698a9b7ea2125317fcf3be"
+disposition = "capture"
+rationale = "Child launch path validation recognizes DOS console-device names as forbidden normalization targets; it does not open them."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/diagnostic_storage/allocation/tests/native_owner.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:39f14a02197afeea2f95de42289a54fae45b4bdd5d0f99424e68cbdbe9ad1fd7"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/fixture_descendant/stdio.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:732608eb657d35f6e2236221fc5323c0875d411f9f686891342a89b83f67a230"
+disposition = "capture"
+rationale = "Authenticated fixed-role subprocess fixture duplicates validated inherited standard handles under existing native custody."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/installed_frontend/tests/ownership/progress.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:007b90f4e33a61cb4bdfad5147ce788accc112248561b63024b7259d94ea6b9a"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/lifecycle_protocol/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:4e1d66f9e33e6519bdbd2f907c549fb0a13fe6d1a5ddb3a26aaa789db4338e96"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/native_process/recovery_child.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:0295e31cafbca3f21f9c936a321d86439752378f29a7b865aa5b0be3c6cf62e9"
+disposition = "capture"
+rationale = "Recovery child validates borrowed standard-handle identities for authenticated process handoff without constructing a logger."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/profiles/storage/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:a9bcb0776e95b6749551fbf087b2b851aa04374813652840ad7d9782e6e506b1"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/registry/tests/preparation.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:7c261e0e50cdf3ff57237d7cf98f5645a0e54ee44eae124752ad87efdb515cab"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/disk_inheritance.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:c576d08916b84e457b01f0de2454fd3c713eed6ee9097ae240afc9187b5b93e2"
+disposition = "capture"
+rationale = "Inherited storage custody rejects aliasing with standard process handles; queried handles remain borrowed."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/test_worker/trace.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:b97bec4284398506e8763c703c6e4b92facbc6d47b48503fd577b5c7ca1844df"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/test_worker.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:9bb9972923f3cf033bc5786a8a620f7edc1315651651adb6cdd88e18753d3892"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/tests/command_directory.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:4e8745425b0e742d70966590964bff6df4ecacb74524d83d6775f194eac8a769"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute-desktop/build.rs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:17d298163bb066562e23e1f9c4d0f0826ffcb23e9bdb4bff30ca299445de62a5"
+disposition = "developer"
+rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
+
+[[records]]
+path = "crates/sugarsubstitute-desktop/src/desktop_failure_diagnostic/console_tests.rs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:3015498bed0cc7f03c9ff4b8b6bf7fe901913be4fc24b05b60043a4b11d51a4d"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute-desktop/src/desktop_failure_diagnostic/tests.rs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:4fc3a9aaf60a78133379c0ea6357aedd4995527e3717d6525dea33344f4af28e"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute-desktop/src/main_readiness_trace_tests.rs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:d2cd56421d83319ee25bc40947617b90b482a28296fbead252d13e1a3751b924"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute-desktop/src/windows_console/text/performance_tests.rs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:f4dde0f4f8d7556c852bd1db61053f9420a1733194b5c5ca3bc64bee19f9c95b"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute-crash/build.rs"
+owner = "sugarsubstitute-crash"
+source_sha256 = "sha256:3285093eac9945e76666d3bb129f98352c4ff785f20d993ddd8f59c17443d397"
+disposition = "developer"
+rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
+
+[[records]]
+path = "crates/sugarsubstitute-crash/src/incident/tests/allocation_layout.rs"
+owner = "sugarsubstitute-crash"
+source_sha256 = "sha256:1b253670020c5114dfbe0d3a0298bb35e8b753b334da79ede7597b5996e59014"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute-crash/src/native/finished_report/state/tests.rs"
+owner = "sugarsubstitute-crash"
+source_sha256 = "sha256:d05b756a115d6811a8143aaab896e24511645f667c0cb43b0e91b265a8730794"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute-crash/src/native/finished_report/token/tests.rs"
+owner = "sugarsubstitute-crash"
+source_sha256 = "sha256:64877ab01de9d20735a7aa482382299f29c67abd4e042fee3f9c8a31a0863fb8"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "native/crashpad/bounded_metadata_tests.cc"
+owner = "sugarsubstitute-crash"
+source_sha256 = "sha256:f9eb930ae342923c1d6b6a14b34dbbcae168418dfcf33dcdbaab67d00334c1d6"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "native/crashpad/capture_attach_boundary_tests.cc"
+owner = "sugarsubstitute-crash"
+source_sha256 = "sha256:19d3ce35d0421d5d3a585478e19b33d701d25d58d0b1acf5f481271a7405bf89"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "native/crashpad/capture_attach_validation_tests.cc"
+owner = "sugarsubstitute-crash"
+source_sha256 = "sha256:7bfc4abc56f84064218d043df9373636cc1e1fd9148dae449c43a5862f33ba45"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "native/crashpad/capture_event_tests.cc"
+owner = "sugarsubstitute-crash"
+source_sha256 = "sha256:7bb0c01a548c3b4ab16159d5a5d5104a65a5f2cc7fe27925bb04ce3809019fd1"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "native/crashpad/capture_runtime_tests.cc"
+owner = "sugarsubstitute-crash"
+source_sha256 = "sha256:6b076c35eea8d0f79df75c5026200f863ea64448bf1d964eb3987668f532fc8e"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "native/crashpad/capture_source_tests.cc"
+owner = "sugarsubstitute-crash"
+source_sha256 = "sha256:d35a2c73d20403b34f544d0d57d30eeb17fa8619bc5ca292f7d495cb7e9c40b0"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "native/crashpad/finished_report_tests.cc"
+owner = "sugarsubstitute-crash"
+source_sha256 = "sha256:2c06483c2cf6d0a237d335208fb22bc207960a5a266444b0333a871bd6781eaa"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "native/crashpad/finished_windows_tests.cc"
+owner = "sugarsubstitute-crash"
+source_sha256 = "sha256:e3e2be7a55ba7bd5f145dd1277321a1b726ac349f9e4f95aaaa3781068a5632e"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "native/crashpad/incident_bridge_tests.cc"
+owner = "sugarsubstitute-crash"
+source_sha256 = "sha256:502cc078f5915150631dfb40d9376ac5cbca73aaf3de1b1b018a31773bf80098"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "native/crashpad/owned_attach_tests.cc"
+owner = "sugarsubstitute-crash"
+source_sha256 = "sha256:fc4d4f4c0d8fed63380336c210997836285a436a849a4ebea028f18ec0c363e2"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "native/crashpad/owned_registration_tests.cc"
+owner = "sugarsubstitute-crash"
+source_sha256 = "sha256:5d2f2ace4cf4345ec910cfa05816fd10c8bbfe2700423dbb094528528b896138"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute-update/src/package/tests.rs"
+owner = "sugarsubstitute-update"
+source_sha256 = "sha256:7f170405e4991aaaf9cab432ec12a7ecb38ee2d4734b37dc10e411bdb134da37"
+disposition = "fixture"
+rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
+
+[[records]]
+path = "crates/sugarsubstitute-comfy/src/launch/test_managed.py"
+owner = "sugarsubstitute-comfy"
+source_sha256 = "sha256:1469cb588760a96259a905f753cc61834f795143d5b4b4fdcd5669ae28bc4577"
+disposition = "fixture"
+rationale = "The managed-launch test child prints readiness and cleanup markers into captured pipes so the harness can prove owned process termination."
+
+[[records]]
+path = "installer/attach-package.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:626f6a7c6249f5f8cb60fdc8f316d35edcb692f268f494f631543cb387fdaf0d"
+disposition = "developer"
+rationale = "The producing tool streams an application package archive through create-only output; the stream contains package bytes rather than diagnostic records."
+
+[[records]]
+path = "installer/build.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:9495d787320e98d7c2cb9fee4965207152c1129e1ae41eeffdd9f98cae3b668a"
+disposition = "developer"
+rationale = "The worker build command reports its pinned upstream revision and completed artifact destination to the developer console."
+
+[[records]]
+path = "installer/check-upstream.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:99f36ec5ca5b6dab7fb99768e7a91ebb22e014effc0b912b07f13dfdad72c96d"
+disposition = "developer"
+rationale = "Upstream compatibility tooling prints the location of its generated review report."
+
+[[records]]
+path = "installer/package-inventory.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:e4bae8c8e0c8bfaf003b368549914e86752a7eb849bc6bd3d0cd339cf4c68730"
+disposition = "developer"
+rationale = "The package-path validator recognizes Windows CONOUT$ aliases to reject device destinations; it opens no diagnostic sink."
+
+[[records]]
+path = "installer/package.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:273765d0320f12fa58659d4a401ed1db9f6c71a1e69b9f63b5a965b59d7fadcb"
+disposition = "developer"
+rationale = "The package CLI reports its producing-platform and completed assembly result as developer JSON output."
+
+[[records]]
+path = "installer/package.test.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:8c64e898639965a8dfd773e0c880acc62641187ae5124d8beeae7884e9389413"
+disposition = "fixture"
+rationale = "Packaging CLI tests inspect captured stderr to verify invalid invocation rejection."
+
+[[records]]
+path = "installer/patches/0001-provisioning-entry.patch"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:331f22e06361f22ac3316203c5f46f97b0fdd912f2b201821cf9d77d47e813cd"
+disposition = "upstream"
+rationale = "The registered upstream derivative removes an interactive migration console warning while installing the supported provisioning entry."
+
+[[records]]
+path = "installer/patches/0002-require-complete-provisioning.patch"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:1f374255b8b185c5278e385b5ae22676d434a4dc0a9d2489bb70e3b5a14c05a3"
+disposition = "upstream"
+rationale = "The upstream derivative replaces a swallowed console warning with a propagated provisioning failure consumed by the worker bridge."
+
+[[records]]
+path = "installer/patches/0003-shared-cache-grants.patch"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:1dadf2143184f6cd217d03295d42143e4c5be73c3e217952d346425a58e46154"
+disposition = "upstream"
+rationale = "This intermediate upstream derivative routes original console warnings through the worker console bridge and supplies granted download streams before later native-storage patches replace them."
+
+[[records]]
+path = "installer/patches/0004-native-metadata.patch"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:a7d58a182a99142c7ee2bcc8d5e79af1dc2e970f0380ad6c08fe1cc5c0376e4f"
+disposition = "upstream"
+rationale = "Original upstream metadata warnings remain captured by the worker console bridge; native metadata publication is owned by the host storage port."
+
+[[records]]
+path = "installer/prepare-runtime.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:21cd6fbd87ec8211416da47a3c9a29de9235e8a9b493ad41905a1964b16ac531"
+disposition = "developer"
+rationale = "Pinned Electron preparation reports the completed runtime version and producing artifact location."
+
+[[records]]
+path = "installer/qualify-model-root.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:beffef1f8e5ac2103affd6aa29821ec8c5aca843b47ae5d0d8d1b8fb94f08bc9"
+disposition = "developer"
+rationale = "The model-root qualification CLI prints acceptance after exercising the actual SugarCubes API."
+
+[[records]]
+path = "installer/qualify-surface.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:05d52ea3e10d3285114cdec7d8a79b452d05d3ad5e1db2f4e311d1a80fa5b654"
+disposition = "developer"
+rationale = "Offscreen qualification retains a bounded Electron stderr tail and prints its surface acceptance receipt."
+
+[[records]]
+path = "installer/qualify-worker.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:27a75ccba48292c47481e25bfa7436f50d70377bbcbbff7648d10ea036ef51a4"
+disposition = "developer"
+rationale = "Worker qualification captures its child stderr and prints the verified authenticated worker result."
+
+[[records]]
+path = "installer/release/build-setup.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:f6ce374e0e02eceefe67ff9203e9a28263a3d497e95eadedfca84fd46e891cd6"
+disposition = "developer"
+rationale = "The installer build CLI prints the completed producing build report."
+
+[[records]]
+path = "installer/seal.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:137daed78b67a8fcece5342199e012ffbf9d4a9308e981cf27728569a39b9193"
+disposition = "developer"
+rationale = "The sealing CLI streams executable package bytes and prints producing evidence, without creating an application diagnostic logger."
+
+[[records]]
+path = "installer/seal.test.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:f219c0445923def2b92d95a1a64b0007fd19075d86bbb9c882af3fdaeec61340"
+disposition = "fixture"
+rationale = "Sealing rejection tests inspect child stdout and stderr for explicit invalid-command status."
+
+[[records]]
+path = "installer/tests/dependency-inspection.test.mjs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:b25c001432a32140fddaa772707c3a2d1538b92df742248e4f5b73eedcea6167"
+disposition = "fixture"
+rationale = "Dependency-inspection tests decode the isolated Python child's stdout package inventory."
+
+[[records]]
+path = "installer/tests/worker.test.mjs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:8d53f5bf223029ce648f65ebec1b166efb59a4d5955c71228953f79e8f2b8276"
+disposition = "fixture"
+rationale = "Worker lifecycle tests retain a bounded stderr tail and consume child stdout while checking authenticated events and actual family retirement."
+
+[[records]]
+path = "installer/typecheck-surface.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:a08786d08c2be7133701af7915642dcde190d9fb7bc45936706146d70839786b"
+disposition = "developer"
+rationale = "Strict renderer type qualification prints TypeScript diagnostics and its Rust-catalog key count."
+
+[[records]]
+path = "installer/typecheck.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:bff9944d61155045995d361ed44cc0b1404a11be9dc869947065d0708330d9e8"
+disposition = "developer"
+rationale = "The worker type-check command reports TypeScript compiler diagnostics to the developer console."
+
+[[records]]
+path = "tools/crashpad/build_native.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:05cbc7fecc5de69fbfb62ac0e76fc6812719fe40800832f0fc7f74dc6a053971"
+disposition = "developer"
+rationale = "The selected native build redirects each compiler command's stdout and stderr into its explicit per-step build artifact log."
+
+[[records]]
+path = "tools/crashpad/prepare_source.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:3114bfd26ba10b4a1ca3c9702350f30471dacdf5c1793d78c57e0a967e415c7f"
+disposition = "developer"
+rationale = "The registered source transformation preserves external Crashpad standard-handle setup only for the non-owned bootstrap branch and clears it for owned startup."
+
+[[records]]
+path = "tools/local_k1/build_manifest.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:5f6a980f4834257424a128dde9989f238be95e1a4da2bb869b471f772b140f5b"
+disposition = "developer"
+rationale = "The build-manifest tool prints completion after validating matched producing PE and PDB identities."
+
+[[records]]
+path = "tools/local_k1/derive_build.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:1264bfcbd1d9b9195655c2d2ddb7878685b2190f25f45374191a06802051fdc3"
+disposition = "developer"
+rationale = "Build identity derivation captures Git metadata and prints the completed public producing-identity artifact."
+
+[[records]]
+path = "tools/native_dxgi/build.ps1"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:2e5f4b0eb338f34dac423c5be91ae918d9b258af32f2e1f0aea3d04ad77df380"
+disposition = "developer"
+rationale = "The native observer build records its selected-toolchain transcript and captures observer test output in explicit build artifacts."
+
+[[records]]
+path = "tools/native_dxgi/color_fixture.cpp"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:5f17e8c47f2f7414fc3ce72196071f8067612fe14301f09b43a9cfaaa99dce42"
+disposition = "developer"
+rationale = "The standalone known-color fixture emits paint synchronization records and explicit native failures to its harness pipes."
+
+[[records]]
+path = "tools/native_dxgi/descriptor_probe.cpp"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:0f6e69333c0378c519b017d5007f165af6809b624c50d00eed344c2ca513ba2f"
+disposition = "developer"
+rationale = "The descriptor observer emits bounded acquisition and readiness JSON records consumed by the qualification harness."
+
+[[records]]
+path = "tools/native_dxgi/descriptor_readiness_tests.cpp"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:2f9b9425dbc0ceef0305e59cf790267fe38a79ebc2aa040c980f25f3d64b22a6"
+disposition = "developer"
+rationale = "Readiness tests redirect and restore stdout to prove native observation failures and flushed protocol behavior."
+
+[[records]]
+path = "tools/native_dxgi/desktop_identity.cpp"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:0833c576217dc414408b619136591d0fb9f00f42fa7293c5b12afa49ae43d9d7"
+disposition = "developer"
+rationale = "The metadata observer prints actual desktop and session identities; its console identifier denotes the active OS console session."
+
+[[records]]
+path = "tools/native_dxgi/format_acquisition.cpp"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:519d14e13932902c68ff913a9087957b2502d0dd76102a92bf9eb1c504d2ba44"
+disposition = "developer"
+rationale = "The acquisition observer emits per-format native enrollment and acquisition status fields into its caller's JSON report."
+
+[[records]]
+path = "tools/native_dxgi/native_gpu.cpp"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:80115de52b93a9a1c119646674b5841d4d1c784029771e03256379b5e0273573"
+disposition = "developer"
+rationale = "The native observer reports a failed DXGI construction-event cleanup to its explicit harness stderr."
+
+[[records]]
+path = "tools/native_dxgi/observer_native_tests.cpp"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:e66f70a7f5c11b21c46729701f681b24d3742095089800104ebfafab28cff76a"
+disposition = "developer"
+rationale = "Native enrollment tests print observed HRESULT and device facts and report explicit native qualification failures."
+
+[[records]]
+path = "tools/native_dxgi/observer_tests.cpp"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:5caf207a1209932a368db8409c698a13a3ae57ce4d16f456f637be9750924644"
+disposition = "developer"
+rationale = "The standalone observer test executable prints its observed test inventory and reports failed owner assertions."
+
+[[records]]
+path = "tools/splash_parity/caption_entry_windows.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:83a0f45c9ab080b923eea1f51721da37ef1badc6cb3ce32f3fd2a26312ae1e95"
+disposition = "developer"
+rationale = "Caption-entry qualification captures its owned child's stdout and stderr to verify actual exit and cleanup."
+
+[[records]]
+path = "tools/splash_parity/compare.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:ce5e10cf04002e9865bdc7b641908731ca6e8ad6e7e0034744580153b04afce1"
+disposition = "developer"
+rationale = "The rendering comparison CLI prints its computed image acceptance summary."
+
+[[records]]
+path = "tools/splash_parity/contention_worker.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:61a83cf4aaa1a5dacd90fc6287f2585d1067227f2aa528698510e2e286192018"
+disposition = "developer"
+rationale = "The isolated load worker prints its actual PID, affinity and stop-token observation to the harness."
+
+[[records]]
+path = "tools/splash_parity/dxgi_known_color.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:a79350f2c1b3505ae54632f76772ba52d19f797d7f6ab3155066f9da87ddd795"
+disposition = "developer"
+rationale = "Known-color qualification captures the fixture's paint records and stderr and rejects incomplete or failed native observations."
+
+[[records]]
+path = "tools/splash_parity/dxgi_pointer_probe.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:35a87ffade18517107ec2d07e4eb55b5ac35c58c5fa65cb5e77f58509c493c51"
+disposition = "developer"
+rationale = "The pointer probe reads bounded observer stdout and retains explicit wire artifacts for native acquisition qualification."
+
+[[records]]
+path = "tools/splash_parity/icon_assets.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:74c6a333cba8b8b18361b7558dab4891b32efe64de038b3ca40e35aa5f0cb87d"
+disposition = "developer"
+rationale = "Icon capture prints the produced glyph count; console names identify the original disclosure control."
+
+[[records]]
+path = "tools/splash_parity/m0_windows.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:93a756a6d96526dbe308d96c52ccae4c38f670f0c15ebc7fbc4442553d904292"
+disposition = "developer"
+rationale = "Native timing qualification captures its owned child pipes while observing input and presentation."
+
+[[records]]
+path = "tools/splash_parity/native_windows.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:f93d5213fe6a271cac817b9b3f3541e6eea7796dc16de321a4e8541a0b5b7e66"
+disposition = "developer"
+rationale = "Owned-window qualification captures native observer failures and reads the application's actual console control as acceptance evidence."
+
+[[records]]
+path = "tools/splash_parity/offscreen_child.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:c492ed0db3a0dc862717131da0dc936867dc8a47868ec8365fa9bfbc1a9ebc57"
+disposition = "developer"
+rationale = "The private-desktop wrapper redirects its owned fixture output into explicit harness artifacts and preserves helper failures separately."
+
+[[records]]
+path = "tools/splash_parity/offscreen_lifecycle.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:8f94216edbc8828ccec725eb8ed8cc68f94b278a2cb8a48e8c8a5e0ecc030a86"
+disposition = "developer"
+rationale = "Lifecycle qualification prints actual native closure evidence; console observations refer to the tested disclosure control."
+
+[[records]]
+path = "tools/splash_parity/offscreen_native.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:b385674360f18f4e409ef223d5751ebe032990fcc4b347747a51def6bf65ed03"
+disposition = "developer"
+rationale = "The private-desktop adapter controls explicit child standard handles and reads native console controls for the harness."
+
+[[records]]
+path = "tools/splash_parity/offscreen_responsiveness.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:d27e26460a19bb50b08f105641966a08190262aced2f0afc1ce4ffeffd56e1ab"
+disposition = "developer"
+rationale = "Responsiveness qualification reports measured native input and console evidence in a developer receipt."
+
+[[records]]
+path = "tools/splash_parity/operational_windows.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:7f8e75f1664ec8eb80642c6c4ea3767ca2aa7ea09b670decdbd584b5acc167c2"
+disposition = "developer"
+rationale = "Operational qualification captures owned child output, retains bounded failure tails and reports actual input and retirement evidence."
+
+[[records]]
+path = "tools/splash_parity/reference.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:ce7c211aeba7df702c06ce63435efed4d8151d9fa900a63a0ff5afcc37e5ace3"
+disposition = "developer"
+rationale = "The reference capture CLI prints the completed render count; console keys identify original widget geometry."
+
+[[records]]
+path = "tools/splash_parity/startup_windows.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:653ac8c6749dbd59c8655266231dc5d2ae2f4f9a4bf73b38ee6fd244a3dbe06a"
+disposition = "developer"
+rationale = "Startup qualification captures child-only bounded stdout and stderr tails and prints the observed timing receipt."
+
+[[records]]
+path = "tools/splash_parity/test_dxgi_known_color.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:c167148ad60142cb5d2746645639d14035611d7d455f143bf9f7db8cea3a9351"
+disposition = "developer"
+rationale = "Known-color harness fixtures supply captured paint and stderr bytes to prove native observation rejection."
+
+[[records]]
+path = "tools/splash_parity/test_dxgi_pointer_probe.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:9ec6147fc19d64476baed495a10d633fd5a00dac82d598e89b283d43a77dca8c"
+disposition = "developer"
+rationale = "Pointer-probe rejection fixtures supply bounded stdout streams and verify preserved wire artifacts."
+
+[[records]]
+path = "tools/splash_parity/test_native_timing.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:f6f6a3baf2b0e29fae537a93004ebd35d425f623a172f93a9cae2c29b23ac63b"
+disposition = "developer"
+rationale = "Timing rejection fixtures replace stderr to inspect the harness's explicit failure path."
+
+[[records]]
+path = "tools/splash_parity/test_operational_windows.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:73a09f6fe7adf9f22874d8b470a3a208a23e7a2a754f224584b0904386a53122"
+disposition = "developer"
+rationale = "Operational-harness tests verify exact bounded child-output preservation and rejection of partial native traces."
+
+[[records]]
+path = "tools/splash_parity/test_startup_windows.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:c39f61935cbb3f346a9dbf496c6a9a0b4d004dda8c3feb2e04d6e2703b8a6558"
+disposition = "developer"
+rationale = "Startup harness fixtures verify output-tail bounds, truncation and exact native failure evidence."
+
+[[records]]
+path = "tools/test_updater_qualification.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:cc23458d26a2a168e479720aa31e61d4ea93f3e116fab1d052646904ff1027af"
+disposition = "developer"
+rationale = "Updater harness tests model actual console visibility and assert failure evidence is read before native closure."
+
+[[records]]
+path = "tools/updater_feed_fixture.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:67b0ba2bd20011f376ecbfe7ac1977e05f49358baaf385e5ecf1641c8cc1f124"
+disposition = "developer"
+rationale = "The isolated HTTP feed overrides request logging to suppress incidental server output while preserving deterministic response accounting."
+
+[[records]]
+path = "tools/updater_native_support.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:f4689656bf437fd4cd83a091a81b267fcab21418d82b9e253d5852b1abad5503"
+disposition = "developer"
+rationale = "Updater native qualification reads the actual failed application's console before requesting its closure."
+
+[[records]]
+path = "tools/updater_publication_qualification.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:0fc7b697eb5efa48924f8833063b3ef8703c53abf114de28673ecd2cd8ae198d"
+disposition = "developer"
+rationale = "Publication qualification captures each owned phase's stdout and stderr to explicit case artifacts and prints its checked recovery report."
+
+[[records]]
+path = "tools/updater_qualification.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:1959bba67010ea44062e55c7e0a966bb64ff0018f617bacb014a332d4b338c19"
+disposition = "developer"
+rationale = "Updater qualification retains owned-child output and helper failures under its explicit case directory and prints observed native acceptance facts."

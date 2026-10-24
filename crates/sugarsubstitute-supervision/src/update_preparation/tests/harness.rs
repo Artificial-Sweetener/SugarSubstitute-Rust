@@ -31,6 +31,14 @@ pub(super) fn initialized(pipeline: &mut Pipeline) -> Result<(Fixture, SignedPac
     })
 }
 
+/// Configure cached startup using local paths and no transport capability.
+pub(super) fn cached_configuration(fixture: &Fixture) -> CachedConfiguration {
+    CachedConfiguration {
+        installation: fixture.installation.path().to_owned(),
+        workspace: fixture.workspace.path().to_owned(),
+    }
+}
+
 pub(super) fn configuration(fixture: &Fixture, policy: Policy) -> Configuration {
     Configuration {
         installation: fixture.installation.path().to_owned(),
@@ -123,15 +131,8 @@ pub(super) fn discovery(
     ])
 }
 
-pub(super) fn submit_once(pipeline: &mut Pipeline, worker: &mut Worker) -> TestResult {
-    pipeline.admit(|client, scope, id| {
-        Ok(worker.submit(client, scope, id, Moment::from_nanos(2_000_000_000), || NOW)?)
-    })
-}
-
-/// Expected-success phases await the original executor's actual capacity notification.
 pub(super) fn submit(pipeline: &mut Pipeline, worker: &mut Worker) -> TestResult {
-    pipeline.admit_when_ready(|client, scope, id| {
+    pipeline.admit_available(|client, scope, id| {
         worker.submit(client, scope, id, Moment::from_nanos(2_000_000_000), || NOW)
     })
 }

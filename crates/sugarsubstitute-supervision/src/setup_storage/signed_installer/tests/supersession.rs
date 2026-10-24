@@ -35,31 +35,43 @@ fn change_package(fixture: &mut Fixture) -> Result<(), Failure> {
 fn obsolete_staging_and_completed_releases_are_superseded_without_changing_health_or_files()
 -> TestResult {
     for completed in [false, true] {
-        worker::run_reserved(SIGNED_INSTALLER_RESERVATION_BYTES, move |context, _| {
-            let mut fixture = Fixture::new(context)?;
-            drop(complete(&fixture, 1, context)?);
-            accept_pending(fixture.installation.path(), context)?;
-            if completed {
-                drop(complete(&fixture, 2, context)?);
-            } else {
-                drop(
-                    fixture
-                        .import(SignedPackage::new(&fixture.archive, 2)?, context)?
-                        .prepare(|| NOW, context)?,
-                );
-            }
-            let store = SelectionStore::open(fixture.installation.path(), context)?;
-            let before = store.load(context)?.ok_or("Selection absent")?;
+        let mut pipeline = worker::pipeline::Pipeline::new()?;
+        let fixture = pipeline.run(SIGNED_INSTALLER_RESERVATION_BYTES, |context| {
+            let fixture = Fixture::new(&context)?;
+            drop(complete(&fixture, 1, &context)?);
+            accept_pending(fixture.installation.path(), &context)?;
+            Ok(fixture)
+        })?;
+        let (mut fixture, before, previous_path, unknown, receipt) =
+            pipeline.run(SIGNED_INSTALLER_RESERVATION_BYTES, move |context| {
+                let context = &context;
+                if completed {
+                    drop(complete(&fixture, 2, context)?);
+                } else {
+                    drop(
+                        fixture
+                            .import(SignedPackage::new(&fixture.archive, 2)?, context)?
+                            .prepare(|| NOW, context)?,
+                    );
+                }
+                let store = SelectionStore::open(fixture.installation.path(), context)?;
+                let before = store.load(context)?.ok_or("Selection absent")?;
+                let previous = before.candidate().ok_or("Candidate absent")?.generation();
+                let previous_path =
+                    fixture.installation.path().join("releases").join(previous.id.as_str());
+                let unknown = previous_path.join("user-note.txt");
+                std::fs::write(&unknown, b"preserve previous generation")?;
+                let receipt = if completed {
+                    Some(std::fs::read(previous_path.join("application-update-v1.record"))?)
+                } else {
+                    None
+                };
+                Ok((fixture, before, previous_path, unknown, receipt))
+            })?;
+        pipeline.run(SIGNED_INSTALLER_RESERVATION_BYTES, move |context| {
+            let context = &context;
             let previous = before.candidate().ok_or("Candidate absent")?.generation();
-            let previous_path =
-                fixture.installation.path().join("releases").join(previous.id.as_str());
-            let unknown = previous_path.join("user-note.txt");
-            std::fs::write(&unknown, b"preserve previous generation")?;
-            let receipt = if completed {
-                Some(std::fs::read(previous_path.join("application-update-v1.record"))?)
-            } else {
-                None
-            };
+            let store = SelectionStore::open(fixture.installation.path(), context)?;
             if !completed {
                 change_package(&mut fixture)?;
             }

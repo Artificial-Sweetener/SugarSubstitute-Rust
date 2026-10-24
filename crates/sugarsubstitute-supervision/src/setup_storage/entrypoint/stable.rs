@@ -3,20 +3,35 @@
 //! Publish a stable root launcher independently of subsequent accepted application generations.
 mod payload;
 mod record;
+mod transition;
 use super::*;
 use crate::{
-    durable_storage::protection::{Protection, Publication},
-    setup_storage::{application::VerifiedApplication, check},
+    durable_storage::protection::Protection,
+    setup_storage::{application::VerifiedApplication, check, publication},
 };
 use sugarsubstitute_contracts::application_launch::LauncherContract;
 
 pub(in crate::setup_storage) const EXECUTABLE: &str = "sugarsubstitute-launcher.exe";
 const RECORD: &str = ".launcher-generation.json";
 
-/// Called only under accepted application, setup and selection-writer custody.
-/// Persist complete ownership before exposing an executable, and expose the shortcut last.
-/// Retain the original launcher across application changes when its protocol still fits.
-/// Returns false only for an older installation with neither launcher state nor payload.
+/// Recognize protected stable entry ownership for settings recovery independently of payload health.
+/// Missing owned links are repairable. Unknown formats and edited links remain errors.
+/// The launcher source is not configuration selection or application launch authority.
+pub(in crate::setup_storage) fn owned_entry(
+    root: &Directory,
+    state: &Directory,
+    protection: &Protection,
+    context: &JobContext,
+) -> io::Result<Option<bool>> {
+    if record::read(state, protection, context)?.is_none() {
+        return Ok(None);
+    }
+    validate_link(root, state, protection, context).map(Some)
+}
+
+/// Restore the independently selected launcher under accepted application, setup and writer custody.
+/// Application acceptance never rolls back a launcher selected by a newer authenticated update.
+/// Returns false for a historical installation with neither launcher ownership nor payload.
 pub(in crate::setup_storage) fn repair(
     root: &Directory,
     state: &Directory,
@@ -24,7 +39,7 @@ pub(in crate::setup_storage) fn repair(
     protection: &mut Protection,
     context: &JobContext,
 ) -> io::Result<bool> {
-    check(context)?;
+    recover(root, state, protection, context)?;
     let existing = record::read(state, protection, context)?;
     if existing.is_none() && !application.payload.compatibility.has_launcher() {
         return Ok(false);
@@ -32,46 +47,140 @@ pub(in crate::setup_storage) fn repair(
     validate_link(root, state, protection, context)?;
     let record = match existing {
         Some(record) => record,
-        None => {
-            match crate::durable_storage::files::inspect(root.path().join(EXECUTABLE), context) {
-                Ok(_) => {
-                    return Err(invalid(
-                        "The stable launcher path contains an unowned file; it has been preserved",
-                    ));
-                }
-                Err(cause) if cause.kind() == io::ErrorKind::NotFound => {}
-                Err(cause) => return Err(cause),
-            }
-            let record = record::Record::from_application(application, context)?;
-            record::publish(state, &record, protection, context)?;
-            record
-        }
+        None => initialize(
+            root,
+            state,
+            record::Record::from_source(&application.generation, &application.directory, context)?,
+            protection,
+            context,
+        )?,
     };
     application.payload.compatibility.require_launcher(
         &LauncherContract::decode(record.contract.as_bytes()).map_err(io::Error::other)?,
     )?;
-    let _executable = payload::ensure(root, &record, protection, context)?;
+    publish_owned(root, state, &record, protection, context)?;
+    Ok(true)
+}
+
+/// Publish first-launch entries only for an explicitly authorized prepared installation.
+/// Established ownership uses the same recoverable replacement transaction as signed updates.
+pub(in crate::setup_storage) fn install(
+    root: &Directory,
+    state: &Directory,
+    candidate: &crate::setup_storage::PreparedCandidate,
+    protection: &mut Protection,
+    context: &JobContext,
+) -> io::Result<()> {
+    recover_publications(root, state, protection, context)?;
+    if record::read(state, protection, context)?.is_some() {
+        return prepare(root, state, candidate, protection, context);
+    }
+    transition::recover(root, state, protection, context)?;
+    validate_link(root, state, protection, context)?;
+    let directory = Directory::open(candidate.directory(), false)?;
+    let record = record::Record::from_source(candidate.generation(), &directory, context)?;
+    candidate.compatibility().require_launcher(
+        &LauncherContract::decode(record.contract.as_bytes()).map_err(io::Error::other)?,
+    )?;
+    let record = initialize(root, state, record, protection, context)?;
+    publish_owned(root, state, &record, protection, context)
+}
+
+/// Establish create-only ownership before copying any executable; preserve unknown root files.
+fn initialize(
+    root: &Directory,
+    state: &Directory,
+    record: record::Record,
+    protection: &mut Protection,
+    context: &JobContext,
+) -> io::Result<record::Record> {
+    match files::inspect(root.path().join(EXECUTABLE), context) {
+        Ok(_) => {
+            return Err(invalid(
+                "The stable launcher path contains an unowned file; it has been preserved",
+            ));
+        }
+        Err(cause) if cause.kind() == io::ErrorKind::NotFound => {}
+        Err(cause) => return Err(cause),
+    }
+    record::publish(state, &record, protection, context)?;
+    Ok(record)
+}
+
+/// Advance established launcher ownership using a completed candidate under current signed authority.
+/// Retain the previous executable until the replacement intent is durable. Missing original source
+/// files do not prevent rescue from the authenticated candidate; unknown root files remain intact.
+pub(in crate::setup_storage) fn prepare(
+    root: &Directory,
+    state: &Directory,
+    candidate: &crate::setup_storage::PreparedCandidate,
+    protection: &mut Protection,
+    context: &JobContext,
+) -> io::Result<()> {
+    recover_publications(root, state, protection, context)?;
+    if !candidate.compatibility().has_launcher()
+        || record::read(state, protection, context)?.is_none()
+    {
+        transition::recover(root, state, protection, context)?;
+        let Some(record) = record::read(state, protection, context)? else { return Ok(()) };
+        validate_link(root, state, protection, context)?;
+        return publish_owned(root, state, &record, protection, context);
+    }
+    validate_link(root, state, protection, context)?;
+    let directory = Directory::open(candidate.directory(), false)?;
+    let next = record::Record::from_source(candidate.generation(), &directory, context)?;
+    candidate.compatibility().require_launcher(
+        &LauncherContract::decode(next.contract.as_bytes()).map_err(io::Error::other)?,
+    )?;
+    let record = transition::supersede(root, state, next, protection, context)?;
+    publish_owned(root, state, &record, protection, context)
+}
+
+/// Recover publication temporaries before resuming a durable launcher transition.
+fn recover(
+    root: &Directory,
+    state: &Directory,
+    protection: &mut Protection,
+    context: &JobContext,
+) -> io::Result<()> {
+    recover_publications(root, state, protection, context)?;
+    transition::recover(root, state, protection, context)?;
+    Ok(())
+}
+
+/// Settle atomic-file publication before inspecting either ordinary or superseding intent.
+fn recover_publications(
+    root: &Directory,
+    state: &Directory,
+    protection: &mut Protection,
+    context: &JobContext,
+) -> io::Result<()> {
+    check(context)?;
+    publication::recover(root, protection, context)?;
+    publication::recover(state, protection, context)?;
+    Ok(())
+}
+
+/// Publish the exact recorded executable and retained shortcut without changing ownership.
+fn publish_owned(
+    root: &Directory,
+    state: &Directory,
+    record: &record::Record,
+    protection: &mut Protection,
+    context: &JobContext,
+) -> io::Result<()> {
+    let _executable = payload::ensure(root, record, protection, context)?;
     let bytes = retained_link(root, state, protection, context)?;
     check(context)?;
     let replace = validate_link(root, state, protection, context)?;
     if replace && files::read_bounded(&mut root.read(NAME)?, 65536)? == bytes {
-        return Ok(true);
+        return Ok(());
     }
-    let stage = staging::unique_path(root, ".launcher-link-stage")?;
-    let mut output = protection.file(&stage, context)?;
-    std::io::Write::write_all(&mut output, &bytes)?;
-    files::sync(&output, context)?;
-    let identity = files::file_identity(&output)?;
-    drop(output);
+    let mut stage = publication::Stage::create(root, protection, context)?;
+    std::io::Write::write_all(stage.file(), &bytes)?;
     check(context)?;
-    protection.publish(
-        &stage,
-        &root.path().join(NAME),
-        identity,
-        Publication::File { replace },
-        context,
-    )?;
-    Ok(true)
+    stage.publish(&root.path().join(NAME), replace, protection, context)?;
+    Ok(())
 }
 
 /// Require the currently installed launcher, independently of any launcher bundled in an offer.
@@ -93,7 +202,7 @@ pub(in crate::setup_storage) fn require_compatible(
 fn retained_link(
     root: &Directory,
     state: &Directory,
-    protection: &Protection,
+    protection: &mut Protection,
     context: &JobContext,
 ) -> io::Result<Vec<u8>> {
     match state.read(NAME) {
@@ -105,11 +214,9 @@ fn retained_link(
             files::read_bounded(&mut file, 65536)
         }
         Err(cause) if cause.kind() == io::ErrorKind::NotFound => {
-            let bytes = link_bytes(state, &root.path().join(EXECUTABLE))?;
+            let bytes = native::encode(&root.path().join(EXECUTABLE))?;
             check(context)?;
-            files::write_immutable(&state.path().join(NAME), &bytes, |path| {
-                protection.file(path, context)
-            })?;
+            publication::write_immutable(state, NAME, &bytes, protection, context)?;
             Ok(bytes)
         }
         Err(cause) => Err(cause),
@@ -117,7 +224,7 @@ fn retained_link(
 }
 
 /// Validate before mutation and again before replacement; unknown links are never adopted.
-fn validate_link(
+pub(in crate::setup_storage) fn validate_link(
     root: &Directory,
     state: &Directory,
     protection: &Protection,

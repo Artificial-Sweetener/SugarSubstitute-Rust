@@ -93,11 +93,13 @@ impl InstallerDistribution {
     /// # Errors
     /// Preserves installed authority on signature/rotation/expiry failures; rejects archive or
     /// inventory disagreement before any candidate reservation. This method starts no process.
+    /// A retained initial preview avoids extracting the same payload a second time; authentication
+    /// still uses the installation's current trust and the complete signed archive bytes.
     pub fn import(
         self,
         session: InstallationSession,
         executable: &Path,
-        workspace: &Path,
+        payload: BundleSource<'_>,
         now: impl FnMut() -> i64,
         context: &JobContext,
     ) -> Result<SignedInstallation, TrustFailure> {
@@ -124,7 +126,7 @@ impl InstallerDistribution {
                 intent: PreparationIntent::Repair,
                 ..UpdateAuthorization::local_request(configuration.channel)?
             },
-            workspace,
+            payload,
             now,
             context,
         )?;

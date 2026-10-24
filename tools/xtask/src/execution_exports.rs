@@ -24,7 +24,7 @@ pub(crate) fn findings_with(
     dependencies: &[Dependency],
     restricted: fn(&[String]) -> bool,
 ) -> Result<Vec<String>> {
-    let names = Names::load(root, dependencies)?;
+    let names = Names::load(root, dependencies, restricted)?;
     let mut found = BTreeSet::new();
     for (key, module) in &names.modules {
         let mut audit = Audit {

@@ -54,11 +54,17 @@ impl Parent {
                 .ok_or("Update registry absent")?;
             let snapshot = registry.snapshot(process)?;
             if snapshot.settled {
-                self.retained
+                let registry = self
+                    .retained
                     .as_mut()
                     .and_then(|held| held.registry.as_mut())
-                    .ok_or("Update registry absent")?
-                    .retire_settled(process)?;
+                    .ok_or("Update registry absent")?;
+                if self.probe && self.probe_custody.is_none() {
+                    self.probe_custody = Some(ProbeCustody::Settled(Box::new(
+                        registry.take_settled_updater_probe(process)?,
+                    )));
+                }
+                registry.retire_settled(process)?;
                 self.process = None;
             } else if snapshot.cleanup_step_due(now) {
                 let watch = if snapshot.member_watch_required {
@@ -89,6 +95,11 @@ impl Parent {
             return Ok(());
         }
         if self.retained.is_some() {
+            if self.probe
+                && let Some(input) = self.retained.as_mut().and_then(|held| held.input.take())
+            {
+                self.probe_custody = Some(ProbeCustody::Unstarted(Box::new(input)));
+            }
             let spec = self.spec(
                 jobs,
                 JobClass::InfrastructureLifecycle,

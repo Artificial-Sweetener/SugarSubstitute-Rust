@@ -83,7 +83,8 @@ fn interrupted_copy_retains_only_temporary_bytes_and_retry_completes_exact_paylo
             let orphan =
                 std::fs::read_dir(&destination)?.next().ok_or("Interrupted file missing")??.path();
             bundle.payload.copy("app/", &destination, context, files::create_new)?;
-            let _verified = VerifiedCopy::open(&bundle.payload.inventory, &destination, context)?;
+            let _verified =
+                VerifiedRuntime::verify_copy(&bundle.payload.inventory, &destination, context)?;
             assert_eq!(std::fs::read(orphan)?, b"partial write");
             Ok(())
         },

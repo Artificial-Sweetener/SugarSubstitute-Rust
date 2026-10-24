@@ -34,6 +34,7 @@ pub use running::{RunningApplication, retain_running_generation};
 mod ownership;
 mod packed;
 mod profile;
+mod publication;
 pub use packed::{MATERIALIZATION_RESERVATION_BYTES, materialize};
 pub use profile::InstallerProfile;
 mod selection;
@@ -41,7 +42,7 @@ pub(crate) use selection::UnstartedTrial;
 mod transaction;
 mod trust;
 mod updater_package;
-pub use bundle::VerifiedBundle;
+pub use bundle::{BundleSource, VerifiedBundle};
 pub use selection::{
     AcceptedApplication, InheritedSelection, InstallationLaunch, InstallationRun,
     LaunchInheritance, OwnedTrial, ReservedApplication, ReservedLaunch, SelectionFailure,
@@ -74,9 +75,10 @@ pub use updater_package::{
 mod signed_installer;
 pub(crate) use signed_installer::CachedCandidate;
 pub use signed_installer::{
-    InstallerDistribution, InstallerSource, MAX_DISTRIBUTION_BYTES,
-    SIGNED_INSTALLER_RESERVATION_BYTES, SIGNED_PREPARATION_RESERVATION_BYTES,
-    SIGNED_TRANSFER_RESERVATION_BYTES, SignedCandidate, SignedInstallation, SignedPreparation,
+    CompletedInstallation, InstalledCandidate, InstallerDistribution, InstallerSource,
+    MAX_DISTRIBUTION_BYTES, SIGNED_INSTALLER_RESERVATION_BYTES,
+    SIGNED_PREPARATION_RESERVATION_BYTES, SIGNED_TRANSFER_RESERVATION_BYTES, SignedCandidate,
+    SignedInstallation, SignedPreparation,
 };
 
 /// Memory reserved for bounded manifests, streaming copies and retained filesystem custody.

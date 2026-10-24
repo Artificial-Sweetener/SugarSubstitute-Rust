@@ -86,6 +86,9 @@ impl ProductionActivation {
                 replied,
                 pending.restart,
             );
+            if let JobOutcome::Success(value) = &projected.outcome {
+                self.selected_locale.get_or_insert(value.locale);
+            }
             record.projected = Some(projected);
             let mut successor = RetainedRecord { record: Box::new(record), _storage: storage };
             if let Some(previous) = self.records[at].as_mut() {

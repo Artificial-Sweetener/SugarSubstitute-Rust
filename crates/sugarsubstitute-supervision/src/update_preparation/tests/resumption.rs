@@ -43,6 +43,7 @@ fn disconnected_worker_retires_and_a_new_worker_resumes_then_prepares_the_same_p
     let mut failed = Worker::new(configuration(&fixture, policy))?;
     step(&mut pipeline, &mut failed)?;
     step(&mut pipeline, &mut failed)?;
+    step(&mut pipeline, &mut failed)?;
     submit(&mut pipeline, &mut failed)?;
     let observed = pipeline.observe(|| failed.poll())?;
     assert_eq!(observed.progress, Progress::Failed);
@@ -56,6 +57,7 @@ fn disconnected_worker_retires_and_a_new_worker_resumes_then_prepares_the_same_p
         &fixture,
         sugarsubstitute_update::http::Policy::loopback(port)?,
     ))?;
+    step(&mut pipeline, &mut resumed)?;
     step(&mut pipeline, &mut resumed)?;
     step(&mut pipeline, &mut resumed)?;
     assert_eq!(

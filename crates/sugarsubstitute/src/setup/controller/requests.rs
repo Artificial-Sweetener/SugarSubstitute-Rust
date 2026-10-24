@@ -3,6 +3,7 @@
 //! Admit explicit installer requests; rendering state grants no native authority.
 use super::*;
 use serde::Deserialize;
+mod input;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -11,6 +12,13 @@ struct Request {
     id: String,
     operation: String,
     input: Value,
+}
+
+/// Untrusted renderer evidence enters the host's bounded, redacted diagnostic route.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RendererDiagnostic {
+    message: String,
 }
 
 impl Controller {
@@ -28,7 +36,17 @@ impl Controller {
         }
         let id = request.id.clone();
         if let Err(cause) = self.dispatch(request) {
-            self.reply(Some(&id), "failed", json!({"message":cause.to_string()}))?;
+            tracing::error!(operation="installer_request_failed", request_id=%id, cause=%crate::failure_details::Details(cause.as_ref()), "Installer request failed");
+            self.reply(
+                None,
+                "diagnostic",
+                json!({"message":crate::failure_details::Details(cause.as_ref()).to_string()}),
+            )?;
+            self.reply(
+                Some(&id),
+                "failed",
+                json!({"message":input::message(cause.as_ref(), &self.locale)}),
+            )?;
         }
         Ok(())
     }
@@ -56,14 +74,21 @@ impl Controller {
             return Ok(());
         }
         match operation.as_str() {
+            "rendererDiagnostic" => {
+                let diagnostic: RendererDiagnostic = serde_json::from_value(input)?;
+                if diagnostic.message.is_empty()
+                    || diagnostic.message.len() > 4096
+                    || diagnostic.message.contains('\0')
+                {
+                    return Err("Invalid renderer diagnostic evidence".into());
+                }
+                tracing::error!(operation="installer_renderer_failed", request_id=%id,
+                    cause=%diagnostic.message, "Installer renderer failed");
+                Ok(())
+            }
             "locale" => {
                 let locale = input["locale"].as_str().ok_or("Locale missing")?;
-                if !sugarsubstitute_contracts::localization::LOCALES
-                    .iter()
-                    .any(|entry| entry.id == locale)
-                {
-                    return Err("Unsupported locale".into());
-                }
+                sugarsubstitute_contracts::configuration::LocaleId::new(locale)?;
                 self.locale = locale.to_owned();
                 self.reply(
                     Some(&id),
@@ -76,7 +101,7 @@ impl Controller {
                     input["directory"].as_str().ok_or("Installation folder missing")?,
                 );
                 if !root.is_absolute() {
-                    return Err("Choose an absolute installation folder".into());
+                    return Err(input::InputFailure::absolute().into());
                 }
                 if self.inspection_id.is_some() || self.install_id.is_some() {
                     return Err("An installation operation is already active".into());
@@ -94,7 +119,7 @@ impl Controller {
             "options" => self.forward(id, "options", input, Purpose::Options),
             "runtime" | "validate" => {
                 let selection: Selection = serde_json::from_value(input)?;
-                selection.validate()?;
+                selection.validate().map_err(input::InputFailure::selection)?;
                 if operation == "runtime" && selection.mode == "attached" {
                     let mut input = json!({"directory":selection.comfy_root});
                     if !selection.python.is_empty() {
@@ -109,9 +134,9 @@ impl Controller {
                 if self.install_id.is_some() || self.pending.is_some() || self.installed.is_some() {
                     return Err("An installation transaction is already active".into());
                 }
-                self.bundle.as_ref().ok_or("Installer package is not ready")?;
+                let bundle =
+                    Arc::clone(self.bundle.as_ref().ok_or("Installer package is not ready")?);
                 let source = self.bundle_root.clone();
-                let workspace = self.workspace.clone();
                 let distribution = self.distribution;
                 let maintenance_root = if operation == "maintain" {
                     Some(PathBuf::from(
@@ -122,7 +147,7 @@ impl Controller {
                 };
                 let selection = if maintenance_root.is_none() {
                     let selection: Selection = serde_json::from_value(input)?;
-                    selection.validate()?;
+                    selection.validate().map_err(input::InputFailure::selection)?;
                     Some(selection)
                 } else {
                     None
@@ -142,14 +167,20 @@ impl Controller {
                         )?
                     };
                     crate::authority_clock::authorize(|now| {
-                        distribution.import(session, &source, &workspace, now, &context)
+                        distribution.import(
+                            session,
+                            &source,
+                            setup_storage::BundleSource::Retained(bundle),
+                            now,
+                            &context,
+                        )
                     })
                     .map(|imported| StorageResult::Imported(Box::new(imported)))
                 }) {
                     self.install_id = None;
                     return Err(cause);
                 }
-                self.reply(Some(&id), "progress", json!({"overall":0,"status":sugarsubstitute_contracts::localization::installer::messages(&self.locale)["preparingInstallation"]}))
+                self.reply(Some(&id), "progress", json!({"overall":0,"status":sugarsubstitute_contracts::localization::installer::messages(&self.locale).preparing_installation}))
             }
             "open" => {
                 if self.install_id.is_some() || self.storage.is_some() || self.relaunch.is_some() {
@@ -157,15 +188,9 @@ impl Controller {
                 }
                 let installed =
                     self.installed.as_ref().ok_or("Installation is not complete")?.clone();
-                let launch = ApplicationLaunch::trial(installed);
-                self.relaunch = Some(launch.clone());
                 self.install_id = Some(id);
-                if let Err(cause) = self.submit(StorageWork::Transfer, move |context| {
-                    crate::authority_clock::authorize(|now| launch.prepare_trial(now, &context))
-                        .map(|()| StorageResult::Transferred)
-                }) {
+                if let Err(cause) = self.open_installation(installed) {
                     self.install_id = None;
-                    self.relaunch = None;
                     return Err(cause);
                 }
                 Ok(())
@@ -179,6 +204,37 @@ impl Controller {
 mod tests {
     use super::*;
     use sugarsubstitute_desktop::installer::InstallerLifetime;
+
+    #[test]
+    fn renderer_diagnostics_are_bounded_and_create_no_provisioning_or_reply() -> Result<()> {
+        let mut controller =
+            Controller::new(PathBuf::from(r"E:\bundle"), PathBuf::from(r"E:\work"), &[]);
+        let request = |input| Request {
+            version: 1,
+            id: "renderer_1".into(),
+            operation: "rendererDiagnostic".into(),
+            input,
+        };
+        controller.dispatch(request(json!({"message":"Original renderer cause 日本語 😀"})))?;
+        controller.dispatch(request(json!({"message":"x".repeat(4096)})))?;
+        for input in [
+            json!({"message":""}),
+            json!({"message":"x".repeat(4097)}),
+            json!({"message":"😀".repeat(1025)}),
+            json!({"message":"invalid\0cause"}),
+            json!({"message":"cause", "path":"untrusted destination"}),
+            json!({"message":42}),
+        ] {
+            assert!(controller.dispatch(request(input)).is_err());
+        }
+        assert!(controller.output.is_empty());
+        assert!(controller.waiting.is_none());
+        assert!(controller.worker.is_none());
+        assert!(controller.owner.is_none());
+        controller.close()?;
+        assert!(controller.dispatch(request(json!({"message":"late"}))).is_err());
+        Ok(())
+    }
 
     #[test]
     fn early_location_request_waits_for_package_verification_without_starting_provisioning()
@@ -195,10 +251,18 @@ mod tests {
         assert!(controller.worker.is_none());
         assert_eq!(controller.waiting.as_ref().ok_or("Request was not retained")?["id"], "first");
         controller.request_value(&request("second"))?;
+        let diagnostic =
+            controller.output.pop_front().ok_or("Original rejection diagnostic absent")?;
+        assert_eq!(diagnostic["event"], "diagnostic");
+        assert_eq!(diagnostic["data"]["message"], "Provisioning is still preparing");
         let rejection =
             controller.output.pop_front().ok_or("Competing request was not rejected")?;
         assert_eq!(rejection["id"], "second");
         assert_eq!(rejection["event"], "failed");
+        assert_eq!(
+            rejection["data"]["message"],
+            sugarsubstitute_contracts::localization::installer::messages("en").setup_failed
+        );
         assert_eq!(controller.waiting.as_ref().ok_or("First request was replaced")?["id"], "first");
         controller.close()?;
         assert!(controller.waiting.is_none());

@@ -6,6 +6,7 @@ import path from 'node:path'
 import { copyArtifact, newArtifactDirectory } from './artifact-files.mjs'
 import { completeNativeClosure } from './native-closure.mjs'
 import { writeInventory } from '../package-inventory.mjs'
+import { readEngineIdentity } from './engine-identity.mjs'
 
 const roles = ['sugarsubstitute-updater.exe', 'sugarsubstitute_updater.pdb', 'sugarsubstitute-updater.json']
 
@@ -16,6 +17,7 @@ const roles = ['sugarsubstitute-updater.exe', 'sugarsubstitute_updater.pdb', 'su
 export async function packageUpdater(selection, runtimeFiles, output, release, inspect) {
   if (!path.isAbsolute(output) || !/^[a-zA-Z0-9_-]{1,64}$/.test(release)) throw new Error('Invalid updater package destination or release identity')
   if (selection.component !== 'updater' || selection.files.size !== roles.length || roles.some(name => !selection.files.has(name))) throw new Error('Updater requires exactly its producing executable, symbols and contract')
+  const engine = await readEngineIdentity(selection.engineBuild)
   await newArtifactDirectory(output)
   await fs.mkdir(path.join(output, 'app'))
   const files = []
@@ -27,5 +29,5 @@ export async function packageUpdater(selection, runtimeFiles, output, release, i
   for (const name of roles) await copy(name, selection.files.get(name))
   const dependencies = await completeNativeClosure(path.join(output, 'app'), ['sugarsubstitute-updater.exe'], runtimeFiles, inspect, copy)
   const manifestSha256 = await writeInventory(output, release, files)
-  return { manifestSha256, dependencies, files }
+  return { engine, manifestSha256, dependencies, files }
 }

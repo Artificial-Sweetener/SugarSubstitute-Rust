@@ -10,10 +10,12 @@ import { recordHost } from './record-host.mjs'
 const build = process.env.SUBSTITUTE_INSTALLER_BUILD
 if (!build || !path.isAbsolute(build)) throw new Error('Explicit test artifact directory required')
 async function module(name) {
-  const { outputFiles } = await bundle({ stdin: { contents: `export * from './${name}'; ${name === 'ownership' ? "export * from './records'" : name === 'cache' ? "export * from './downloads'" : ''}`, resolveDir: new URL('../worker', import.meta.url).pathname.replace(/^\/([A-Z]:)/i, '$1'), loader: 'ts' }, bundle: true, write: false, platform: 'node', format: 'esm', target: 'node22' })
+  const { outputFiles } = await bundle({ stdin: { contents: `export * from './${name}'; ${name === 'ownership' ? "export * from './records'; export { bindDiagnostics } from './diagnostics.mjs'" : name === 'cache' ? "export * from './downloads'" : ''}`, resolveDir: new URL('../worker', import.meta.url).pathname.replace(/^\/([A-Z]:)/i, '$1'), loader: 'ts' }, bundle: true, write: false, platform: 'node', format: 'esm', target: 'node22' })
   return import(`data:text/javascript;base64,${Buffer.from(outputFiles[0].text).toString('base64')}`)
 }
-const { reserve, record, ready, NativeRecords, bindNativeRecords } = await module('ownership')
+const { reserve, record, ready, NativeRecords, bindNativeRecords, bindDiagnostics } = await module('ownership')
+const diagnostics = []
+bindDiagnostics((level, message) => diagnostics.push({ level, message }))
 const { downloadCache, NativeDownloads, bindNativeDownloads } = await module('cache')
 
 function fixture(name) {
@@ -70,6 +72,7 @@ test('completed schemas reuse only the matching plan and preserve unreadable att
   host.files.set(marker, '{')
   assert.equal((await ready(host.target)).directory, second.directory)
   assert.equal(host.files.get(marker), '{')
+  assert.ok(diagnostics.some(event => event.level === 'warn' && event.message.includes('Preserving unreadable provisioning attempt')))
   await record(second, 'failed', installation(second, 'two', '2026-01-02T00:00:00Z'))
   assert.equal((await ready(host.target)).directory, first.directory)
 })

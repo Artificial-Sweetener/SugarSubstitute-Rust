@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Own isolated files and synchronize actual terminal publication without sleeps.
 use super::*;
-use crate::production::options::ProductionEntryOptions;
 use std::{
     num::NonZeroUsize,
     sync::{
@@ -11,6 +10,7 @@ use std::{
     },
     time::{Duration, Instant},
 };
+use sugarsubstitute_configuration::paths::StartupPaths;
 use sugarsubstitute_contracts::execution::{
     Clock, CompletionWake, ExecutionError, ExecutionPort, ScopeId, ScopeSpec, WaitFuture,
 };
@@ -31,14 +31,14 @@ impl Files {
     }
     pub(super) fn bootstrap(&self) -> Result<EntryBootstrap, Box<dyn Error>> {
         Ok(EntryBootstrap::new(
-            ProductionEntryOptions {
-                configuration: self.directory.join("startup.toml"),
-                package: self.directory.join("frontend"),
-                metadata: self.directory.join("METADATA"),
-                cubes: self.directory.join("SugarCubes"),
-                script: self.directory.join("main.py"),
-                profile: self.directory.join("profile"),
-            }
+            StartupPaths::new([
+                self.directory.join("startup.toml"),
+                self.directory.join("frontend"),
+                self.directory.join("METADATA"),
+                self.directory.join("SugarCubes"),
+                self.directory.join("main.py"),
+                self.directory.join("profile"),
+            ])?
             .into(),
             self.directory.clone(),
             sugarsubstitute_supervision::coordinator_entry::DiagnosticStorageLocation::Account,

@@ -13,10 +13,18 @@ fn main() -> std::process::ExitCode {
                 std::env::args_os().skip(1),
             )
         };
-        sugarsubstitute::updates::entry(probe)
+        #[allow(unsafe_code)]
+        // SAFETY: the mutually exclusive probe parser captures nothing for activation entry;
+        // diagnostics and workers have not started, so the inherited channel has no local owner.
+        let activation = unsafe {
+            sugarsubstitute_supervision::application_launch::broker::capture_activation(
+                std::env::args_os().skip(1),
+            )
+        };
+        sugarsubstitute::updates::entry(probe, activation)
     }
     #[cfg(not(all(windows, feature = "windows-native-host")))]
     {
-        std::process::ExitCode::FAILURE
+        sugarsubstitute::unavailable_native_entry(sugarsubstitute::NativeEntry::Updater)
     }
 }

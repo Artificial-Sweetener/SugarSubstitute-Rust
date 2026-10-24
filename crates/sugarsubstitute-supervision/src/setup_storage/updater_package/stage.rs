@@ -49,10 +49,7 @@ impl UpdaterPackage {
         check(context)?;
         let preparation = self.trust.claim_updater_preparation(context)?;
         let authorization = self.offer.authorization(&self.trust);
-        let bytes = self
-            .payload
-            .download_identity()
-            .ok_or_else(|| invalid("Updater archive custody absent"))?;
+        let bytes = self.download.identity();
         let generation =
             authorization.publish_updater(bytes, &mut now, context, |offer, recheck| {
                 recheck()?;

@@ -18,6 +18,43 @@ def owner_type():
 
 
 class CustodyTests(unittest.TestCase):
+    def test_root_retention_requires_the_callers_original_native_lifetime(self):
+        native_owner = owner_type()
+        owner = native_owner.__new__(native_owner)
+        owner.handles, owner.creations = {}, {}
+        owner.processes = Mock()
+        owner.processes.open.return_value = 70
+        owner.processes.lifetime_identity.return_value = (7, 100)
+        self.assertEqual(owner.retain_root(60), 7)
+        self.assertEqual(owner.handles, {7: 70})
+        self.assertEqual(owner.creations, {7: 100})
+        with self.assertRaisesRegex(RuntimeError, 'already retained'):
+            owner.retain_root(60)
+
+    def test_changed_root_lifetime_closes_the_unadmitted_handle(self):
+        native_owner = owner_type()
+        owner = native_owner.__new__(native_owner)
+        owner.handles, owner.creations = {}, {}
+        owner.processes = Mock()
+        owner.processes.open.return_value = 70
+        owner.processes.lifetime_identity.side_effect = [(7, 100), (7, 101)]
+        with self.assertRaisesRegex(RuntimeError, 'lifetime changed'):
+            owner.retain_root(60)
+        owner.processes.close.assert_called_once_with(70)
+        self.assertEqual(owner.handles, {})
+
+    def test_root_query_failure_closes_the_unadmitted_handle(self):
+        native_owner = owner_type()
+        owner = native_owner.__new__(native_owner)
+        owner.handles, owner.creations = {}, {}
+        owner.processes = Mock()
+        owner.processes.open.return_value = 70
+        owner.processes.lifetime_identity.side_effect = [(7, 100), OSError('Query failed')]
+        with self.assertRaisesRegex(OSError, 'Query failed'):
+            owner.retain_root(60)
+        owner.processes.close.assert_called_once_with(70)
+        self.assertEqual(owner.handles, {})
+
     def test_suspend_requires_existing_fixture_custody(self):
         native_owner = owner_type()
         owner = native_owner.__new__(native_owner)
@@ -53,6 +90,7 @@ class CustodyTests(unittest.TestCase):
         native_owner = owner_type()
         owner = native_owner.__new__(native_owner)
         owner.handles, owner.creations = {10: 10}, {10: 20}
+        owner.parents = {}
         closed = []
         owner.processes = types.SimpleNamespace(
             ancestry=lambda: {10: [(21, "old"), (22, "actual")]},
@@ -63,11 +101,27 @@ class CustodyTests(unittest.TestCase):
         owner.discover()
         self.assertEqual(owner.handles, {10: 10, 22: 22})
         self.assertEqual(closed, [21])
+        self.assertEqual(owner.descendants(10), {22})
+
+    def test_descendant_query_failure_releases_only_the_unadmitted_child(self):
+        native_owner = owner_type()
+        owner = native_owner.__new__(native_owner)
+        owner.handles, owner.creations, owner.parents = {10: 10}, {10: 20}, {}
+        owner.processes = Mock()
+        owner.processes.ancestry.return_value = {10: [(22, 'child')]}
+        owner.processes.open.return_value = 22
+        owner.processes.lifetime_identity.side_effect = OSError('Query failed')
+        with self.assertRaisesRegex(OSError, 'Query failed'):
+            owner.discover()
+        owner.processes.close.assert_called_once_with(22)
+        self.assertEqual(owner.handles, {10: 10})
+        self.assertEqual(owner.parents, {})
 
     def test_one_snapshot_admits_all_descendants_and_excludes_unrelated_processes(self):
         native_owner = owner_type()
         owner = native_owner.__new__(native_owner)
         owner.handles, owner.creations = {10: 10}, {10: 10}
+        owner.parents = {}
         snapshots = []
         def ancestry():
             snapshots.append(True)
@@ -81,6 +135,72 @@ class CustodyTests(unittest.TestCase):
         owner.discover()
         self.assertEqual(owner.handles, {10: 10, 20: 20, 30: 30})
         self.assertEqual(len(snapshots), 1)
+        self.assertEqual(owner.descendants(10), {20, 30})
+        self.assertEqual(owner.descendants(20), {30})
+        self.assertEqual(owner.descendants(999), set())
+
+
+class CreatorTransferTests(unittest.TestCase):
+    def setUp(self):
+        native_owner = owner_type()
+        self.owner = native_owner.__new__(native_owner)
+        self.owner.handles, self.owner.creations, self.owner.parents = {10: 100}, {10: 20}, {}
+        self.owner.processes = Mock()
+        self.owner.processes.lifetime_identity.return_value = (22, 30)
+        self.owner.duplicate_handle = Mock(return_value=220)
+        self.report = {'creator_pid': 10, 'entry_pid': 22, 'alive': [22],
+            'handles': {'22': 200}, 'process_creation_filetimes': {'22': 30}, 'parents': {}}
+
+    def test_transfer_uses_creator_capability_and_validates_original_lifetime(self):
+        self.owner.import_family(self.report, 10, 22)
+        self.owner.duplicate_handle.assert_called_once_with(100, 200)
+        self.owner.processes.open.assert_not_called()
+        self.assertEqual(self.owner.handles, {10: 100, 22: 220})
+        self.assertEqual(self.owner.parents, {22: 10})
+        self.owner.import_family(self.report, 10, 22)
+        self.owner.duplicate_handle.assert_called_once()
+
+    def test_foreign_creator_and_entry_never_transfer_handles(self):
+        for key in ('creator_pid', 'entry_pid'):
+            with self.subTest(key=key):
+                report = dict(self.report, **{key: 999})
+                with self.assertRaisesRegex(RuntimeError, 'retained creator'):
+                    self.owner.import_family(report, 10, 22)
+        self.owner.duplicate_handle.assert_not_called()
+
+    def test_changed_native_lifetime_closes_unadmitted_transfer(self):
+        self.owner.processes.lifetime_identity.return_value = (22, 31)
+        with self.assertRaisesRegex(RuntimeError, 'differs from its receipt'):
+            self.owner.import_family(self.report, 10, 22)
+        self.owner.processes.close.assert_called_once_with(220)
+        self.assertEqual(self.owner.handles, {10: 100})
+
+    def test_stale_capability_does_not_admit_a_process_or_prove_completion(self):
+        for code in (6, 87):
+            cause = OSError('Creator retired its handle')
+            cause.winerror = code
+            self.owner.duplicate_handle.side_effect = cause
+            self.owner.import_family(self.report, 10, 22)
+            self.assertEqual(self.owner.handles, {10: 100})
+            self.assertNotIn('completed', self.report)
+
+    def test_access_failure_is_not_mistaken_for_retirement(self):
+        cause = OSError('Access denied')
+        cause.winerror = 5
+        self.owner.duplicate_handle.side_effect = cause
+        with self.assertRaises(OSError):
+            self.owner.import_family(self.report, 10, 22)
+
+    def test_old_lifetime_and_pseudo_handles_are_rejected(self):
+        self.report['process_creation_filetimes']['22'] = 19
+        with self.assertRaisesRegex(RuntimeError, 'predates'):
+            self.owner.import_family(self.report, 10, 22)
+        self.report['process_creation_filetimes']['22'] = 30
+        for raw in (0, -1, True, '200'):
+            self.report['handles']['22'] = raw
+            with self.assertRaisesRegex(RuntimeError, 'capability is invalid'):
+                self.owner.import_family(self.report, 10, 22)
+        self.owner.duplicate_handle.assert_not_called()
 
 
 class ImageObservationTests(unittest.TestCase):

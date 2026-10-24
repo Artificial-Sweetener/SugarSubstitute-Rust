@@ -12,6 +12,11 @@ pub struct AdmittedCandidate {
     trial: OwnedTrial,
 }
 impl AdmittedCandidate {
+    /// Borrow destination custody without transferring repository locks or granting new authority.
+    pub(in crate::setup_storage) fn launch_pins(&self) -> impl Iterator<Item = &File> {
+        self.prepared.launch_pins()
+    }
+
     /// Require trial entry before a native adapter can prepare inherited launch handles.
     pub(in crate::setup_storage) fn require_trial_launch(&self) -> io::Result<()> {
         self.prepared.compatibility().require_trial_launch()
@@ -28,6 +33,24 @@ impl AdmittedCandidate {
 }
 
 impl PreparedCandidate {
+    /// Admit a durable explicit installation choice; application health remains a separate step.
+    pub(in crate::setup_storage) fn begin_installed_trial(
+        self: Arc<Self>,
+        run: &mut InstallationRun,
+        authorization: &crate::setup_storage::selection::InstallationAuthorization,
+        context: &JobContext,
+    ) -> Result<AdmittedCandidate, crate::setup_storage::SelectionFailure> {
+        self.compatibility().require_installed_launch()?;
+        self.compatibility().require_trial_launch()?;
+        let trial = {
+            let snapshot = crate::native_claims::lock(&self.snapshot);
+            self.require_installation_authorization(authorization, &snapshot)?;
+            run.validate_installation(&self.installation)?;
+            run.require_launcher(self.compatibility(), context)?;
+            run.begin_trial(&snapshot, context)?
+        };
+        Ok(AdmittedCandidate { prepared: self, trial })
+    }
     /// Retain the prepared snapshot and original run before trial publication can occur.
     pub(in crate::setup_storage) fn reserve_unstarted(
         &self,
@@ -39,7 +62,7 @@ impl PreparedCandidate {
     }
 
     /// Restore the exact unstarted attempt and bind subsequent retries to its durable revision.
-    pub(in crate::setup_storage) fn restore_unstarted(
+    pub(crate) fn restore_unstarted(
         &self,
         recovery: &crate::setup_storage::UnstartedTrial,
         context: &JobContext,

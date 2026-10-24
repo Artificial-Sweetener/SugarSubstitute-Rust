@@ -16,6 +16,7 @@ impl Launcher {
             jobs: &self.jobs,
             until: self.until.ok_or("Launcher startup cutoff absent")?,
             shutdown: if self.closing { self.cleanup_until } else { None },
+            delegate: self.engine.is_none(),
         })?;
         match outcome {
             cached::Outcome::Pending => {}
@@ -28,21 +29,74 @@ impl Launcher {
                 self.cached = None;
                 self.choice = Choice::Trial;
             }
+            cached::Outcome::Engine(image) => {
+                self.activation = Some(ActivationLaunch::new(image));
+                self.cached = None;
+                self.choice = Choice::PrepareEngine;
+            }
         }
         Ok(())
     }
 
     /// Creation is admitted only after exact selection or trial transfer was observed successful.
     pub(super) fn select_next(&mut self) -> Result<()> {
+        if !self.selection_due() {
+            return Ok(());
+        }
+        if matches!(self.choice, Choice::ObserveEngine | Choice::StopEngine | Choice::ObserveOffer)
+            && !self.activation_due()
+        {
+            return Ok(());
+        }
         let task = match self.choice {
+            Choice::Installation => Task::Installation,
+            Choice::OpenEngine => Task::OpenEngine,
+            Choice::VerifyEngine => Task::VerifyEngine,
+            Choice::PrepareEngine => Task::PrepareEngine,
+            Choice::CreateEngine => Task::CreateEngine,
+            Choice::ObserveEngine => Task::ObserveEngine,
+            Choice::ObserveOffer => Task::ObserveOffer,
+            Choice::StopEngine => Task::StopEngine,
             Choice::Cache => Task::Cache,
             Choice::Accepted => Task::Select,
             Choice::Trial => Task::Trial,
-            Choice::Create { trial } => Task::Create { trial },
+            Choice::Create { optional } => Task::Create { optional },
             Choice::Recover => Task::Recover,
             Choice::Complete => return Ok(()),
         };
         let submitted = match self.choice {
+            Choice::Installation => self.reopen_installation(),
+            Choice::OpenEngine => {
+                let guard = self.engine.as_ref().ok_or("Receiving engine identity absent")?.clone();
+                self.submit(Task::OpenEngine, move |context| {
+                    guard.open(&context)?;
+                    Ok(Work::EngineOpened)
+                })
+            }
+            Choice::VerifyEngine => {
+                let guard = self.engine.as_ref().ok_or("Receiving engine identity absent")?.clone();
+                self.submit(Task::VerifyEngine, move |context| {
+                    guard.verify(&context)?;
+                    Ok(Work::EngineVerified)
+                })
+            }
+            Choice::PrepareEngine => {
+                let launch = self.activation.as_ref().ok_or("Engine creator absent")?.clone();
+                self.submit(Task::PrepareEngine, move |context| {
+                    launch.prepare(&context).map_err(io::Error::other)?;
+                    Ok(Work::EnginePrepared)
+                })
+            }
+            Choice::CreateEngine => {
+                let launch = self.activation.as_ref().ok_or("Engine creator absent")?.clone();
+                self.submit(Task::CreateEngine, move |context| {
+                    launch.launch(&context).map_err(io::Error::other)?;
+                    Ok(Work::EngineStarted)
+                })
+            }
+            Choice::ObserveEngine => self.observe_activation(false),
+            Choice::ObserveOffer => self.observe_offer(),
+            Choice::StopEngine => self.observe_activation(true),
             Choice::Cache if self.cached.is_none() => {
                 let root = self.root.clone();
                 self.submit(Task::Cache, move |_| {
@@ -79,9 +133,14 @@ impl Launcher {
                     Ok(Work::TrialPrepared)
                 })
             }
-            Choice::Create { trial } => {
+            Choice::Create { optional } => {
                 let launch = self.launch.as_ref().ok_or("Application creator absent")?.clone();
-                self.submit(Task::Create { trial }, move |context| {
+                let source = self.source.clone();
+                self.submit(Task::Create { optional }, move |context| {
+                    if let Some(source) = source {
+                        source.offer(&launch, &context)?;
+                        return Ok(Work::Offered);
+                    }
                     launch.launch(&context).map_err(io::Error::other)?;
                     Ok(Work::Launched)
                 })
@@ -112,12 +171,31 @@ impl Launcher {
         if self.closing {
             return Err(cause);
         }
-        if !matches!(task, Task::Cache | Task::Trial | Task::Create { trial: true }) {
+        if matches!(task, Task::Installation | Task::Select)
+            && contention::writer_busy(cause.as_ref())
+        {
+            self.selection_wait = Some(contention::Wait::new(
+                self.clock.now(),
+                self.until.ok_or("Launcher startup cutoff absent")?,
+                cause,
+            )?);
+            return Ok(());
+        }
+        if self.source.is_some() && matches!(task, Task::Create { .. } | Task::ObserveOffer) {
+            return Err(cause);
+        }
+        if matches!(task, Task::PrepareEngine | Task::CreateEngine | Task::ObserveEngine) {
+            return self.activation_failed(cause);
+        }
+        if !matches!(
+            task,
+            Task::Installation | Task::Cache | Task::Trial | Task::Create { optional: true }
+        ) {
             return Err(cause);
         }
         tracing::warn!(operation="startup_update_skipped", cause=%crate::failure_details::Details(cause.as_ref()), "Prepared update could not start; recovering creator custody");
         self.update_failure.get_or_insert(cause);
-        if matches!(task, Task::Cache) {
+        if matches!(task, Task::Installation | Task::Cache) {
             self.choice = Choice::Accepted;
         } else {
             let now = self.client.as_ref().ok_or("Launcher client absent")?.now()?;
@@ -138,6 +216,12 @@ impl Launcher {
         self.recovery_until = None;
         self.recovery_wake = None;
         match outcome {
+            CreationOutcome::NotCreated
+                if self.creator_reply == Some(CreationOutcome::NotCreated) =>
+            {
+                self.completed = true;
+                self.choice = Choice::Complete;
+            }
             CreationOutcome::NotCreated => self.choice = Choice::Accepted,
             CreationOutcome::Created => {
                 self.completed = true;

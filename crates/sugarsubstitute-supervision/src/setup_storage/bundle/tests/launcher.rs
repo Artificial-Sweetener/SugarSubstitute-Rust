@@ -31,7 +31,8 @@ fn launcher_payload_survives_authenticated_extraction_and_destination_verificati
         let bundle = extracted;
         let destination = temporary.path().join("candidate");
         bundle.payload.copy("app/", &destination, context, files::create_new)?;
-        let pinned = VerifiedCopy::open(&bundle.payload.inventory, &destination, context)?;
+        let pinned =
+            VerifiedRuntime::verify_copy(&bundle.payload.inventory, &destination, context)?;
         pinned.require_installed_launch()?;
         for name in [
             "sugarsubstitute-launcher.exe",
@@ -47,7 +48,9 @@ fn launcher_payload_survives_authenticated_extraction_and_destination_verificati
         }
         drop(pinned);
         std::fs::write(destination.join("sugarsubstitute-launcher.json"), b"changed contract")?;
-        assert!(VerifiedCopy::open(&bundle.payload.inventory, &destination, context).is_err());
+        assert!(
+            VerifiedRuntime::verify_copy(&bundle.payload.inventory, &destination, context).is_err()
+        );
         Ok(())
     })
 }

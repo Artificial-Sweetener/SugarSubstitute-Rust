@@ -67,6 +67,12 @@ impl PreparationLaunch {
 }
 
 impl WindowsLaunchInput {
+    /// Whether this input retains an updater trial that requires explicit withdrawal if unused.
+    /// This describes owned custody; it grants no launch or process-health authority.
+    pub fn is_updater_probe(&self) -> bool {
+        self.preparation.as_deref().and_then(PreparationLaunch::probe).is_some()
+    }
+
     /// Compose one preparation helper from this coordinator's verified running generation.
     /// No handles, run locks, application leases or transport authority are inherited.
     /// The caller supplies the environment and locally selected workspace.

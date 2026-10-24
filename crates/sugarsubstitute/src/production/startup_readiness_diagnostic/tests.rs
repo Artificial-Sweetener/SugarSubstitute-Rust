@@ -34,11 +34,7 @@ fn actual_readiness_formatter_roundtrips_within_the_original_line_bound()
     let record = Record::new(identity);
     let sink = Sink::default();
     let writer = sink.clone();
-    let subscriber = tracing_subscriber::fmt()
-        .with_ansi(false)
-        .without_time()
-        .with_writer(move || writer.clone())
-        .finish();
+    let subscriber = crate::diagnostics::fixture_subscriber(move || writer.clone());
     tracing::subscriber::with_default(subscriber, || record.emit());
     let bytes = sink.0.lock().map_err(|_| "Fixture sink poisoned")?;
     let line = std::str::from_utf8(&bytes)?.trim_end_matches('\n');

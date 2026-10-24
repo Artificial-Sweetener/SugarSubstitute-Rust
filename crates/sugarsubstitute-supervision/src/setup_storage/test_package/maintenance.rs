@@ -74,7 +74,7 @@ impl Fixture {
                 executable: &self.source,
             },
             signed.request,
-            self.workspace.path(),
+            crate::setup_storage::BundleSource::Extract(self.workspace.path()),
             || NOW,
             context,
         )

@@ -28,6 +28,15 @@ pub struct Configuration {
     pub idle: Duration,
 }
 
+/// Local startup inputs. Repository authority comes from protected installation state;
+/// this configuration cannot supply a transport or initialize new trust.
+pub struct CachedConfiguration {
+    /// Existing native installation with established trust continuity.
+    pub installation: PathBuf,
+    /// Owned extraction workspace for repairing authenticated cached preparation.
+    pub workspace: PathBuf,
+}
+
 /// Authenticated engine custody for the process owner; preparation alone never proves health.
 pub enum EngineUpdate {
     /// Newly staged engine requiring a supervised probe before acceptance or use.
@@ -51,6 +60,8 @@ pub enum Progress {
     Restoring,
     /// Verify a completed generation's protected publication, payloads and saved configuration.
     Reopening,
+    /// Save newly authenticated restart evidence after completed candidate custody is retained.
+    Remembering,
     /// Authenticate complete archive bytes needed to repair unfinished or missing preparation.
     RestoringArchive,
     /// Request another package interval, retaining already flushed bytes on disk.
@@ -68,6 +79,8 @@ pub enum Progress {
     Ready,
     /// Engine custody is ready to transfer to its probe or preparation process owner.
     EngineReady,
+    /// Cache-only startup has pinned an accepted engine with an explicit activation entry.
+    ActivationReady,
     /// Another native preparation owner is live; this campaign did not start network work.
     /// This is a terminal coalescing result, not an up-to-date or completed-update assertion.
     AlreadyPreparing,
@@ -115,6 +128,10 @@ impl Progress {
             Self::Reopening => {
                 setup_storage::LAUNCH_RESERVATION_BYTES
                     + setup_storage::TRUST_OPERATION_RESERVATION_BYTES
+            }
+            Self::Remembering => {
+                setup_storage::TRUST_OPERATION_RESERVATION_BYTES
+                    + setup_storage::OFFER_PUBLICATION_RESERVATION_BYTES
             }
             Self::RestoringArchive => {
                 setup_storage::DOWNLOAD_RESERVATION_BYTES

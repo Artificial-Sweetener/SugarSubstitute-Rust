@@ -9,6 +9,7 @@ use sugarsubstitute_contracts::{
     update::{Channel, Component},
 };
 mod feed;
+mod startup;
 use feed::{Feed, campaign, seed_accepted};
 
 #[test]

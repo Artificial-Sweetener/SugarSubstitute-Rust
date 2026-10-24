@@ -7,6 +7,8 @@ use sugarsubstitute_supervision::{
     setup_storage::SignedCandidate,
     update_preparation::{Progress, Worker},
 };
+#[cfg(test)]
+mod tests;
 
 /// Borrow the launcher's original executor and scopes; preparation creates no scheduler or process.
 pub(super) struct Resources<'a> {
@@ -16,12 +18,14 @@ pub(super) struct Resources<'a> {
     pub jobs: &'a crate::job_sequence::JobSequence,
     pub until: Moment,
     pub shutdown: Option<Moment>,
+    pub delegate: bool,
 }
 
 /// Candidate custody transfers only after the actual verification completion has been observed.
 pub(super) enum Outcome {
     Pending,
     Candidate(Box<SignedCandidate>),
+    Engine(Box<setup_storage::PreparationImage>),
     Unavailable,
 }
 
@@ -108,6 +112,10 @@ impl Cached {
                         .map(Outcome::Candidate)
                         .map_err(Into::into);
                 }
+                Progress::ActivationReady if self.cleanup_until.is_none() && resources.delegate => {
+                    return self.worker.take_activation().map(Outcome::Engine).map_err(Into::into);
+                }
+                Progress::ActivationReady => self.close(now, resources.shutdown)?,
                 Progress::Unavailable | Progress::AlreadyPreparing | Progress::Decision(_) => {
                     self.close(now, resources.shutdown)?
                 }
@@ -133,17 +141,14 @@ impl Cached {
 
     /// Admission owns the UTC receipt only after the original executor accepts this exact job.
     fn submit(&mut self, resources: &Resources<'_>) -> io::Result<()> {
-        let receipt = Receipt::default();
-        let sample = receipt.clone();
         let scope = if self.cleanup_until.is_some() { resources.cleanup } else { resources.work };
-        self.worker.submit(
+        self.receipt = crate::updates::admission::submit(
+            &mut self.worker,
             resources.client,
             scope,
             resources.jobs.allocate().map_err(io::Error::other)?,
             self.cleanup_until.unwrap_or(resources.until),
-            move || sample.now(),
         )?;
-        self.receipt = Some(receipt);
         Ok(())
     }
 }

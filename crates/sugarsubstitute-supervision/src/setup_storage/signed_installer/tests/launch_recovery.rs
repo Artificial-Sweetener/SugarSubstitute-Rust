@@ -5,6 +5,7 @@ use super::*;
 use crate::{
     application_launch::ApplicationLaunch, setup_storage::test_worker::pipeline::Pipeline,
 };
+mod broker;
 
 fn pending(context: &JobContext) -> Result<(Fixture, PathBuf, ApplicationLaunch), Failure> {
     let fixture = Fixture::new(context)?;

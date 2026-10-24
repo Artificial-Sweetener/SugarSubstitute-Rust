@@ -11,8 +11,10 @@ use sugarsubstitute_update::{MAX_METADATA_BYTES, MetadataSet};
 mod cached;
 mod distribution;
 mod downloaded;
+mod installed;
 pub(crate) use cached::CachedCandidate;
 pub use distribution::{InstallerDistribution, MAX_DISTRIBUTION_BYTES};
+pub use installed::{CompletedInstallation, InstalledCandidate};
 
 /// Storage-job budget covering trust verification, metadata, download and both source/destination
 /// payload custody. Source and verified candidate files remain retained together through transfer.
@@ -61,6 +63,8 @@ impl InstallationSession {
     /// Import a signed installer through the online updater's verifier and protected package cache.
     /// Retains this session's original exclusion. No application lease, process or network work
     /// is started. `now` supplies Unix UTC seconds; reserve `SIGNED_INSTALLER_RESERVATION_BYTES`.
+    /// Retained payloads must match the newly authenticated archive inventory exactly; other
+    /// inputs are extracted into the selected workspace. Both paths retain current archive custody.
     /// # Errors
     /// Rejects invalid roots, signatures, rollback, archive bytes and cancellation. Preserves
     /// accepted signing floors, installation data and partial cache bytes for a subsequent attempt.
@@ -68,7 +72,7 @@ impl InstallationSession {
         self,
         source: InstallerSource<'_>,
         request: Request,
-        workspace: &Path,
+        payload: BundleSource<'_>,
         mut now: impl FnMut() -> i64,
         context: &JobContext,
     ) -> Result<SignedInstallation, TrustFailure> {
@@ -117,10 +121,26 @@ impl InstallationSession {
             context,
         )
         .map_err(io::Error::other)?;
-        self.import_download(trust, offer, download, workspace, now, context)
+        self.import_download(trust, offer, download, payload, now, context)
     }
 }
 impl SignedInstallation {
+    /// Require a self-contained first-launch reader before explicit setup starts provisioning.
+    /// Reserve `SIGNED_PREPARATION_RESERVATION_BYTES`; `now` supplies Unix UTC seconds.
+    /// # Errors
+    /// Rejects incompatible bundled launchers/engines before generation staging or ComfyUI setup,
+    /// then applies the same signed preparation and ownership checks as update preparation.
+    pub fn prepare_installation(
+        self,
+        now: impl FnMut() -> i64,
+        context: &JobContext,
+    ) -> Result<SignedPreparation, TrustFailure> {
+        self.bundle.payload.compatibility.require_installation_activation(
+            self.offer.offer().offer().minimum_updater_release(),
+        )?;
+        self.prepare(now, context)
+    }
+
     /// Verified provisioning executable and package directory, retained by this owner.
     pub fn worker_paths(&self) -> (PathBuf, PathBuf) {
         self.bundle.worker_paths()
@@ -224,13 +244,10 @@ impl SignedCandidate {
         self.candidate.directory()
     }
 
-    /// Restore an unstarted creator's exact revision while retaining pinned files and current trust.
-    pub(crate) fn restore_unstarted(
-        &self,
-        recovery: &UnstartedTrial,
-        context: &JobContext,
-    ) -> Result<(), SelectionFailure> {
-        self.candidate.restore_unstarted(recovery, context)
+    /// Retained payload and revision custody survives retirement of signature-verification storage.
+    /// This proves preparation only; `transfer` still authorizes the exact trial before launch.
+    pub(crate) fn prepared(&self) -> &Arc<PreparedCandidate> {
+        &self.candidate
     }
 
     /// Reauthorize this candidate under independent run custody and prepare explicit handle transfer.

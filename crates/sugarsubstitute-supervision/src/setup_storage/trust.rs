@@ -14,6 +14,7 @@ mod envelope;
 mod failure;
 mod initialize;
 mod installed;
+mod opening;
 pub(in crate::setup_storage) use installed::PublishedRelease;
 mod offer_cache;
 pub(crate) mod offered;
@@ -82,31 +83,7 @@ impl TrustStore {
         repository: [u8; 32],
         context: &JobContext,
     ) -> Result<Self, TrustFailure> {
-        check(context)?;
-        let selection = Self::selection(installation_root, context)?;
-        let memory = context.memory().claim(1024 * 1024).map_err(io::Error::other)?;
-        let parent = Directory::open(installation_root, false)?;
-        let ownership = ownership::read(&parent)?;
-        let mut store = Self {
-            cache: std::sync::Mutex::new(None),
-            preparation: None,
-            root: Directory::open(&parent.path().join(DIRECTORY), false)?,
-            _installation_root: parent,
-            _ownership: ownership,
-            _continuity: None,
-            _memory: memory,
-            workspace: context.memory().clone(),
-            installation: selection.installation().clone(),
-            repository,
-        };
-        let marker = store.protected(context, |protection| {
-            let _writer = store.writer(protection)?;
-            store.read(protection)?;
-            store.read_releases(protection)?;
-            continuity::ensure(&store, protection, context)
-        })?;
-        store._continuity = Some(marker);
-        Ok(store)
+        Self::open_bound(installation_root, Some(repository), context)
     }
 
     /// Persist a validated successor root before any caller can use its authority.

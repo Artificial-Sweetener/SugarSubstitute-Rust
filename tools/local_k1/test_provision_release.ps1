@@ -48,6 +48,8 @@ $pairedRelease = Join-Path $root 'paired'
 $launcherContract = Join-Path $root 'sugarsubstitute-launcher.json'
 $launcherBytes = [Text.Encoding]::UTF8.GetBytes('{"schema_version":1,"installation_schemas":[1],"installed_launch_protocol":1}')
 [IO.File]::WriteAllBytes($launcherContract, $launcherBytes)
+$activationContract = Join-Path $root 'sugarsubstitute-installation-activation.json'
+[IO.File]::WriteAllBytes($activationContract, [Text.Encoding]::UTF8.GetBytes('{"schema_version":1,"authorization_schemas":[1],"engine_release":"1","engine_protocol":1}'))
 $updaterContract = Join-Path $root 'sugarsubstitute-updater.json'
 [IO.File]::WriteAllBytes($updaterContract, [Text.Encoding]::UTF8.GetBytes('{"schema_version":1,"preparation_protocols":[1],"installation_schemas":[1]}'))
 $pairedArguments = @{
@@ -55,14 +57,16 @@ $pairedArguments = @{
     HostExecutable=$sources[0]; HostPdb=$sources[1]; ClientDll=$sources[2]; ClientPdb=$sources[3];
     HandlerExecutable=$sources[4]; HandlerPdb=$sources[5]; ApplicationContract=$contract;
     LauncherExecutable=$sources[0]; LauncherPdb=$sources[1]; LauncherContract=$launcherContract;
+    InstallationActivationContract=$activationContract;
     UpdaterExecutable=$sources[0]; UpdaterPdb=$sources[1]; UpdaterContract=$updaterContract
 }
 $paired = & (Join-Path $PSScriptRoot 'provision_release.ps1') @pairedArguments
-if ($paired.files -ne 13) { throw 'Paired release copy count.' }
+if ($paired.files -ne 14) { throw 'Paired release copy count.' }
 foreach ($item in @(
     @('sugarsubstitute-launcher.exe', $sources[0]),
     @('sugarsubstitute_launcher.pdb', $sources[1]),
     @('sugarsubstitute-launcher.json', $launcherContract),
+    @('sugarsubstitute-installation-activation.json', $activationContract),
     @('sugarsubstitute-updater.exe', $sources[0]),
     @('sugarsubstitute_updater.pdb', $sources[1]),
     @('sugarsubstitute-updater.json', $updaterContract)
@@ -70,7 +74,7 @@ foreach ($item in @(
     if ([Convert]::ToHexString([IO.File]::ReadAllBytes((Join-Path $pairedRelease $item[0]))) -cne
         [Convert]::ToHexString([IO.File]::ReadAllBytes($item[1]))) { throw 'Launcher payload copy changed.' }
 }
-foreach ($missing in @('LauncherExecutable','LauncherPdb','LauncherContract','ApplicationContract','UpdaterExecutable','UpdaterPdb','UpdaterContract')) {
+foreach ($missing in @('LauncherExecutable','LauncherPdb','LauncherContract','InstallationActivationContract','ApplicationContract','UpdaterExecutable','UpdaterPdb','UpdaterContract')) {
     $incomplete = $pairedArguments.Clone()
     $incomplete.Remove($missing)
     $incomplete.ReleaseRoot = Join-Path $root "missing-$missing"
@@ -79,7 +83,7 @@ foreach ($missing in @('LauncherExecutable','LauncherPdb','LauncherContract','Ap
     catch { $failed = $_.Exception.Message -match '(Launcher|Updater) requires' }
     if (-not $failed -or (Test-Path -LiteralPath $incomplete.ReleaseRoot)) { throw 'Incomplete executable role reached publication.' }
 }
-foreach ($name in @('ApplicationContract', 'LauncherContract', 'UpdaterContract')) {
+foreach ($name in @('ApplicationContract', 'LauncherContract', 'UpdaterContract', 'InstallationActivationContract')) {
     $invalid = $pairedArguments.Clone()
     $invalid[$name] = $oversized
     $invalid.ReleaseRoot = Join-Path $root "oversized-$name"
@@ -118,7 +122,7 @@ $expected=[Security.AccessControl.RawSecurityDescriptor]::new((New-ReleaseDescri
 $labels=@('fixture.exe','fixture.pdb','sugarsubstitute_crashpad_client.dll',
     'sugarsubstitute_crashpad_client.pdb','crashpad_handler.exe','crashpad_handler.pdb')
 $checked=0
-foreach ($path in @($release)+@($labels | ForEach-Object { Join-Path $release $_ })+@($declaredRelease,(Join-Path $declaredRelease 'sugarsubstitute-application.json'))+@($pairedRelease)+@('sugarsubstitute-launcher.exe','sugarsubstitute_launcher.pdb','sugarsubstitute-launcher.json','sugarsubstitute-updater.exe','sugarsubstitute_updater.pdb','sugarsubstitute-updater.json' | ForEach-Object { Join-Path $pairedRelease $_ })) {
+foreach ($path in @($release)+@($labels | ForEach-Object { Join-Path $release $_ })+@($declaredRelease,(Join-Path $declaredRelease 'sugarsubstitute-application.json'))+@($pairedRelease)+@('sugarsubstitute-launcher.exe','sugarsubstitute_launcher.pdb','sugarsubstitute-launcher.json','sugarsubstitute-installation-activation.json','sugarsubstitute-updater.exe','sugarsubstitute_updater.pdb','sugarsubstitute-updater.json' | ForEach-Object { Join-Path $pairedRelease $_ })) {
     $pin=$null;$cause=$null
     try {
         if ($path -in @($release,$declaredRelease,$pairedRelease)) { $pin=[LocalK1PrivateFiles]::Pin($path);$handle=$null }
@@ -150,5 +154,5 @@ try { & (Join-Path $PSScriptRoot 'provision_release.ps1') -ReleaseRoot $release 
     -ClientPdb $sources[3] -HandlerExecutable $sources[4] -HandlerPdb $sources[5] | Out-Null }
 catch { $rejected=$_.Exception.Message -like '*already exists*' }
 if (-not $rejected) { throw 'Existing root was not rejected.' }
-[pscustomobject]@{protected_native_objects=$checked;exact_copies=6;application_contract_exact_copy=$true;launcher_exact_copies=3;updater_exact_copies=3;incomplete_updater_rejected=$true;incomplete_launcher_rejected=$true;oversized_contract_rejected=$true;existing_root_rejected=$true;private_key_effects=0}
+[pscustomobject]@{protected_native_objects=$checked;exact_copies=6;application_contract_exact_copy=$true;launcher_exact_copies=3;installation_activation_exact_copy=$true;updater_exact_copies=3;incomplete_updater_rejected=$true;incomplete_launcher_rejected=$true;oversized_contract_rejected=$true;existing_root_rejected=$true;private_key_effects=0}
 } finally { $env:TEMP=$oldTemp;$env:TMP=$oldTmp }

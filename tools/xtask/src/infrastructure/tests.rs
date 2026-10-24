@@ -49,6 +49,7 @@ pub(super) fn fixture() -> Result<(Repository, Policy)> {
             consumer: None,
             next_extraction: None,
             review_until: None,
+            external_contract: None,
         }],
     };
     Ok((repository, policy))
@@ -168,6 +169,7 @@ fn migration_records_require_finite_review_extraction_and_live_restricted_access
         consumer: None,
         next_extraction: Some("Route worker writes through retained storage".into()),
         review_until: Some("2099-01-01".into()),
+        external_contract: None,
     });
     check(repository.root(), &repository.architecture, &policy)?;
     policy.records[1].next_extraction = None;
@@ -195,5 +197,52 @@ fn strict_policy_loading_rejects_unknown_fields_and_missing_required_source_cove
         fixtures::write(repository.root(), "policy.toml", source)?;
         assert!(crate::policy::load::<Policy>(repository.root(), "policy.toml").is_err());
     }
+    Ok(())
+}
+
+#[test]
+fn native_protocol_boundary_requires_its_exact_adapter_source_and_preserved_contract() -> Result<()>
+{
+    let (mut repository, mut policy) = fixture()?;
+    repository.architecture.owners[0].auxiliary_roots.push("native/capture".into());
+    let path = "native/capture/database.cc".to_owned();
+    fixtures::write(
+        repository.root(),
+        &path,
+        "void dispose() { SetFileInformationByHandle(file, info); }",
+    )?;
+    let source_sha256 = fingerprint(repository.root(), std::slice::from_ref(&path))?;
+    policy.records.push(Record {
+        path: path.clone(),
+        owner: "host".into(),
+        source_sha256: source_sha256.clone(),
+        disposition: Disposition::Boundary,
+        capabilities: access::script("SetFileInformationByHandle(file, info)", "cc"),
+        boundary: Some(Boundary::NativeProtocol),
+        consumer: None,
+        rationale: "Native SDK database port preserves the external record contract".into(),
+        next_extraction: None,
+        review_until: None,
+        external_contract: Some("capture-database".into()),
+    });
+    let catalog = format!(
+        "schema_version=1\n[[formats]]\nid='capture-database'\nowner='host'\nsources=['{path}']\nsource_sha256='{source_sha256}'\nclassification='protocol'\npreservation='must_preserve'\ncurrent_version=1\naccepted_versions=[1]\ncompatibility='reject'\nmigrations=[]\n"
+    );
+    fixtures::write(repository.root(), "governance/persistence/catalog.toml", &catalog)?;
+    check(repository.root(), &repository.architecture, &policy)?;
+    policy.records[1].external_contract = None;
+    assert!(check(repository.root(), &repository.architecture, &policy).is_err());
+    policy.records[1].external_contract = Some("foreign-database".into());
+    assert!(check(repository.root(), &repository.architecture, &policy).is_err());
+    policy.records[1].external_contract = Some("capture-database".into());
+    repository.architecture.owners[0].layer = "host".into();
+    assert!(check(repository.root(), &repository.architecture, &policy).is_err());
+    repository.architecture.owners[0].layer = "adapter".into();
+    fixtures::write(
+        repository.root(),
+        "governance/persistence/catalog.toml",
+        &catalog.replace("classification='protocol'", "classification='authoritative_state'"),
+    )?;
+    assert!(check(repository.root(), &repository.architecture, &policy).is_err());
     Ok(())
 }

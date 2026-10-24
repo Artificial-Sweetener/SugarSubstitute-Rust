@@ -51,6 +51,7 @@ fn probe(h: &mut Harness) -> Result<(ProbeFixture, WindowsLaunchInput), Box<dyn 
                 &mut Some(transfer),
                 crate::LaunchEnvironment::from_snapshot_utf16(&[0, 0], &[])?,
             )?;
+            assert!(input.is_updater_probe());
             Ok((ProbeFixture { root, _workspace: workspace, executable }, input))
         },
     )

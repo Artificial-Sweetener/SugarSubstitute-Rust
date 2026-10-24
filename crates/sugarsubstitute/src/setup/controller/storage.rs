@@ -9,7 +9,9 @@ pub(super) enum StorageResult {
     Imported(Box<setup_storage::SignedInstallation>),
     Prepared(Box<SignedPreparation>),
     Staged(Box<SignedPreparation>),
-    Installed(Arc<SignedCandidate>),
+    Completed(Box<SignedCandidate>),
+    Installed(CompletedInstallation),
+    Opened(completion::OpenedLaunch),
     Transferred,
     Launched,
     Retired(CreationOutcome),
@@ -19,6 +21,8 @@ pub(super) enum StorageWork {
     Payload,
     Import,
     Prepare,
+    Publish,
+    Open,
     Transfer,
     Launch,
     Retire,
@@ -31,7 +35,10 @@ pub(super) struct StorageJob {
 impl StorageJob {
     /// Transfer, creation and recovery must deliver their actual outcome even after setup closes.
     pub(super) fn cancel_preparation(&self) {
-        if !matches!(self.work, StorageWork::Transfer | StorageWork::Launch | StorageWork::Retire) {
+        if !matches!(
+            self.work,
+            StorageWork::Open | StorageWork::Transfer | StorageWork::Launch | StorageWork::Retire
+        ) {
             self.job.cancel();
         }
     }
@@ -48,7 +55,7 @@ impl Controller {
         }
         let client = self.client.as_ref().ok_or("Installer execution is absent")?;
         let deadline = match work {
-            StorageWork::Metadata | StorageWork::Transfer => {
+            StorageWork::Metadata | StorageWork::Open | StorageWork::Transfer => {
                 Some(client.now()?.checked_add(std::time::Duration::from_secs(60))?)
             }
             StorageWork::Launch | StorageWork::Retire => {
@@ -56,7 +63,10 @@ impl Controller {
             }
             // Protected native effects require a finite phase, including large local archives.
             // Streamed copies still observe cancellation between blocks.
-            StorageWork::Payload | StorageWork::Import | StorageWork::Prepare => {
+            StorageWork::Payload
+            | StorageWork::Import
+            | StorageWork::Prepare
+            | StorageWork::Publish => {
                 Some(client.now()?.checked_add(std::time::Duration::from_secs(30 * 60))?)
             }
         };
@@ -76,6 +86,8 @@ impl Controller {
                     StorageWork::Import => setup_storage::SIGNED_INSTALLER_RESERVATION_BYTES,
                     StorageWork::Prepare => setup_storage::SIGNED_PREPARATION_RESERVATION_BYTES,
                     StorageWork::Transfer => setup_storage::SIGNED_TRANSFER_RESERVATION_BYTES,
+                    StorageWork::Publish => setup_storage::SIGNED_TRANSFER_RESERVATION_BYTES,
+                    StorageWork::Open => setup_storage::LAUNCH_RESERVATION_BYTES,
                     StorageWork::Launch => {
                         sugarsubstitute_supervision::application_launch::CREATION_RESERVATION_BYTES
                     }
@@ -112,7 +124,8 @@ impl Controller {
                         io::Error::other(
                             sugarsubstitute_contracts::localization::installer::messages(
                                 &self.locale,
-                            )["setupFailed"],
+                            )
+                            .setup_failed,
                         )
                     });
                     if self.closing || self.unavailable {
@@ -138,6 +151,9 @@ impl Controller {
         }
         if self.closing || self.unavailable {
             match completion.outcome {
+                JobOutcome::Success(StorageResult::Opened(opened)) => {
+                    self.relaunch = Some(opened.into_launch());
+                }
                 JobOutcome::Failure(cause) => return Err(cause.into()),
                 JobOutcome::Success(_) | JobOutcome::Cancelled => {}
                 _ => return Err("Installer storage operation ended without a result".into()),
@@ -163,8 +179,10 @@ impl Controller {
             }
             JobOutcome::Success(StorageResult::Imported(imported)) => {
                 self.submit(StorageWork::Prepare, move |context| {
-                    crate::authority_clock::authorize(|now| imported.prepare(now, &context))
-                        .map(|prepared| StorageResult::Prepared(Box::new(prepared)))
+                    crate::authority_clock::authorize(|now| {
+                        imported.prepare_installation(now, &context)
+                    })
+                    .map(|prepared| StorageResult::Prepared(Box::new(prepared)))
                 })?;
             }
             JobOutcome::Success(StorageResult::Prepared(prepared)) => {
@@ -197,6 +215,12 @@ impl Controller {
                 self.installed = Some(installed);
                 let id = self.install_id.take().ok_or("Installation request absent")?;
                 self.reply(Some(&id), "completed", json!({"ready":true}))?;
+            }
+            JobOutcome::Success(StorageResult::Completed(candidate)) => {
+                self.publish_installation(*candidate)?;
+            }
+            JobOutcome::Success(StorageResult::Opened(opened)) => {
+                self.opened_installation(opened)?
             }
             JobOutcome::Success(StorageResult::Transferred) => {
                 let launch = self.relaunch.as_ref().ok_or("Trial creator absent")?.clone();
@@ -256,6 +280,11 @@ impl Controller {
             self.worker_failed(Box::new(cause))?;
         } else {
             self.reply(
+                None,
+                "diagnostic",
+                json!({"message":crate::failure_details::Details(&cause).to_string()}),
+            )?;
+            self.reply(
                 id.as_deref(),
                 "failed",
                 json!({"message":super::super::failure::storage_message(&cause, &self.locale)}),
@@ -273,7 +302,7 @@ impl Controller {
     ) -> Result<()> {
         self.submit(StorageWork::Prepare, move |context| {
             crate::authority_clock::authorize(|now| prepared.complete(&runtime, now, &context))
-                .map(|candidate| StorageResult::Installed(Arc::new(candidate)))
+                .map(|candidate| StorageResult::Completed(Box::new(candidate)))
         })
     }
 }

@@ -25,7 +25,7 @@ fn native_status_distinguishes_no_process_from_success_and_uncertain_outputs() {
 }
 
 /// Observe this test's actual child through its owned handle, then retire any failed fixture.
-fn settle_fixture(handle: HANDLE) -> Result<(), ClaimError> {
+pub(in crate::application_launch) fn settle_fixture(handle: HANDLE) -> Result<(), ClaimError> {
     // SAFETY: the caller retains the uniquely owned process handle under its state lock.
     unsafe { SetHandleInformation(handle, HANDLE_FLAG_PROTECT_FROM_CLOSE.0, HANDLE_FLAGS(0)) }
         .map_err(|cause| ClaimError::new("fixture_unprotect_process", cause))?;

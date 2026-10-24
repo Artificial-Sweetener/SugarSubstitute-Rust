@@ -69,7 +69,9 @@ impl InstallationRun {
         context: &JobContext,
     ) -> Result<Self, SelectionFailure> {
         let lock = store.protected(context, |protection| {
-            let lock = protection.exclusive_rendezvous(&store.root.path().join(LOCK), context)?;
+            let lock = protection
+                .exclusive_rendezvous(&store.root.path().join(LOCK), context)
+                .map_err(classify_run_open)?;
             let _writer = super::writer(&store.root, protection, context)?;
             store.read(protection)?.ok_or(SelectionFailure::Missing)?;
             Ok(lock)
@@ -146,6 +148,23 @@ impl InstallationRun {
             return Err(SelectionFailure::RunOwnership);
         }
         Ok(())
+    }
+}
+
+/// Classify sharing contention only at this exact run-rendezvous open. Protection retirement,
+/// malformed files, access denial and other storage failures preserve their original meaning.
+fn classify_run_open(cause: std::io::Error) -> SelectionFailure {
+    if cause.get_ref().and_then(|cause| cause.downcast_ref::<windows::core::Error>()).is_some_and(
+        |cause| {
+            cause.code()
+                == windows::core::HRESULT::from_win32(
+                    windows::Win32::Foundation::ERROR_SHARING_VIOLATION.0,
+                )
+        },
+    ) {
+        SelectionFailure::RunBusy(cause)
+    } else {
+        SelectionFailure::Storage(cause)
     }
 }
 

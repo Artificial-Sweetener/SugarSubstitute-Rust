@@ -137,8 +137,8 @@ impl Fixture {
                             .installed
                             .as_ref()
                             .ok_or("Installed result absent")?
-                            .directory()
-                            .join("sugarsubstitute.exe"),
+                            .root()
+                            .join("sugarsubstitute-launcher.exe"),
                     );
                     return Ok(HeadlessStep::Shutdown);
                 }

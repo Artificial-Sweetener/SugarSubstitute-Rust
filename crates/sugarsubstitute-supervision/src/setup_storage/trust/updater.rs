@@ -16,6 +16,7 @@ mod custody;
 mod probe;
 mod recovery;
 mod request;
+mod running;
 mod trial;
 
 /// Only preparation may initialize a missing engine journal; probes and trials require continuity.

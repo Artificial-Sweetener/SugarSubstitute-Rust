@@ -27,25 +27,29 @@ pub fn run(distribution: &'static [u8]) -> Result<(), Box<dyn Error>> {
                     | "--qualify-managed"
                     | "--qualify-cancel"
                     | "--qualify-maintenance"
+                    | "--qualify-launch"
+                    | "--qualify-maintenance-launch"
             )
         )
     });
-    failure::report(
-        run_inner(distribution),
-        interactive,
-        sugarsubstitute_desktop::show_startup_failure,
-    )
+    crate::diagnostics::Diagnostics::run(|_health| {
+        let mut locale = String::from("en");
+        let result = run_inner(distribution, &mut locale);
+        failure::report(result, &locale, interactive, sugarsubstitute_desktop::show_startup_failure)
+    })
 }
 
-fn run_inner(distribution: &'static [u8]) -> Result<(), Box<dyn Error>> {
+fn run_inner(distribution: &'static [u8], locale: &mut String) -> Result<(), Box<dyn Error>> {
     let mut arguments = std::env::args_os().skip(1);
     let mut bundle = std::env::current_exe()?;
     let mut workspace = None;
     let mut export = None;
+    let mut export_locale = None;
     let mut qualification = None;
     let mut qualify_window = false;
     let mut qualify_managed = None;
     let mut qualify_maintenance = false;
+    let mut qualify_launch = false;
     let mut existing = None;
     let mut native_installation = None;
     while let Some(argument) = arguments.next() {
@@ -54,10 +58,20 @@ fn run_inner(distribution: &'static [u8]) -> Result<(), Box<dyn Error>> {
             Some("--bundle") => bundle = PathBuf::from(value),
             Some("--workspace") => workspace = Some(PathBuf::from(value)),
             Some("--export-surface") => export = Some(PathBuf::from(value)),
+            Some("--export-locale") => {
+                let value = value.to_str().ok_or("Surface export locale must be Unicode")?;
+                export_locale =
+                    Some(sugarsubstitute_contracts::configuration::LocaleId::new(value)?);
+            }
             Some("--qualify-lifecycle") => qualification = Some(PathBuf::from(value)),
-            Some("--qualify-maintenance") => {
+            Some("--qualify-launch") => {
+                qualification = Some(PathBuf::from(value));
+                qualify_launch = true;
+            }
+            Some("--qualify-maintenance" | "--qualify-maintenance-launch") => {
                 qualification = Some(PathBuf::from(value));
                 qualify_maintenance = true;
+                qualify_launch = argument == "--qualify-maintenance-launch";
             }
             Some("--qualify-window") => {
                 qualification = Some(PathBuf::from(value));
@@ -73,27 +87,33 @@ fn run_inner(distribution: &'static [u8]) -> Result<(), Box<dyn Error>> {
         }
     }
     if qualify_maintenance != native_installation.is_some()
+        || (qualify_launch && (qualify_window || qualify_managed.is_some() || export.is_some()))
+        || (qualify_launch && !qualify_maintenance && existing.is_none())
         || (qualify_maintenance
             && (qualify_window || qualify_managed.is_some() || existing.is_some()))
     {
         return Err("Maintenance qualification requires only a native installation target".into());
     }
-    let local = std::env::var_os("LOCALAPPDATA")
-        .map(PathBuf::from)
-        .ok_or("Local application data is unavailable")?;
-    let workspace = workspace.unwrap_or_else(|| local.join("SugarSubstitute").join("setup"));
-    let default_install = local.join("Programs").join("SugarSubstitute");
-    let html = surface::html("en", &default_install)?;
+    let locations =
+        sugarsubstitute_configuration::installer::InstallerLocations::capture(workspace)?;
+    let workspace = locations.workspace().to_path_buf();
     if let Some(export) = export {
+        let html = surface::html(
+            export_locale.map_or("en", |locale| locale.as_str()),
+            locations.install_root(),
+        )?;
         crate::artifact_job::write_bytes(export, html.into_bytes(), false)?;
         return Ok(());
     }
+    if export_locale.is_some() {
+        return Err("Export locale requires a surface export destination".into());
+    }
+    let html = surface::html("en", locations.install_root())?;
     if !bundle.is_absolute() || !workspace.is_absolute() {
         return Err("Installer paths must be absolute".into());
     }
     if let Some(output) = qualification {
-        let diagnostics = crate::diagnostics::Diagnostics::initialize()?;
-        let result = diagnostics.finish(if let Some(cancel) = qualify_managed {
+        let result = if let Some(cancel) = qualify_managed {
             controller::managed_qualification::run(bundle, workspace, cancel, distribution)
         } else if qualify_window {
             controller::window_qualification::run(bundle, workspace, distribution)
@@ -103,9 +123,10 @@ fn run_inner(distribution: &'static [u8]) -> Result<(), Box<dyn Error>> {
                 workspace,
                 existing,
                 native_installation,
+                qualify_launch,
                 distribution,
             )
-        });
+        };
         let receipt = match &result {
             Ok(value) => value.clone(),
             Err(cause) => {
@@ -125,15 +146,15 @@ fn run_inner(distribution: &'static [u8]) -> Result<(), Box<dyn Error>> {
         result?;
         return Ok(());
     }
-    let diagnostics = crate::diagnostics::Diagnostics::initialize()?;
     let mut controller = controller::Controller::new(bundle, workspace.clone(), distribution);
-    diagnostics.finish(sugarsubstitute_desktop::installer::run(
+    let result = sugarsubstitute_desktop::installer::run(
         sugarsubstitute_desktop::installer::InstallerWindow {
             visible: true,
-            title: sugarsubstitute_contracts::localization::installer::messages("en")["title"]
-                .into(),
+            title: sugarsubstitute_contracts::localization::installer::messages("en").title.into(),
             html,
         },
         &mut controller,
-    ))
+    );
+    *locale = controller.locale().to_owned();
+    result
 }

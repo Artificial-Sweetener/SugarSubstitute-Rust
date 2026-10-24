@@ -64,10 +64,7 @@ impl UnstartedUpdaterTrial {
             return Err(invalid("Updater creation admission is closed").into());
         }
         let source = &self.prepared.source;
-        let bytes = source
-            .payload
-            .download_identity()
-            .ok_or_else(|| invalid("Updater archive custody absent"))?;
+        let bytes = source.download.identity();
         source.offer.authorization(&source.trust).publish_updater(
             bytes,
             now,

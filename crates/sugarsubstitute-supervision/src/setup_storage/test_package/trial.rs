@@ -41,7 +41,7 @@ pub(crate) fn trial_transfer(
             executable: &executable,
         },
         signed.request,
-        workspace.path(),
+        crate::setup_storage::BundleSource::Extract(workspace.path()),
         || NOW,
         context,
     )?;

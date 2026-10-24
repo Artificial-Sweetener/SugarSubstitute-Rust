@@ -63,9 +63,10 @@ fn startup_file_over_bound_rejects_before_schema_parsing() -> TestResult {
     let client = owner.client();
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
     let directory = temporary_directory("input-bound")?;
-    let mut input = options()?;
-    input.configuration = directory.join("oversized.toml");
-    std::fs::write(&input.configuration, vec![b'x'; MAX_STARTUP_CONFIGURATION_BYTES + 1])?;
+    let mut paths = options()?.into_paths();
+    paths[0] = directory.join("oversized.toml");
+    let input = StartupPaths::new(paths)?;
+    std::fs::write(input.configuration(), vec![b'x'; MAX_STARTUP_CONFIGURATION_BYTES + 1])?;
     let original = EntrySetupBudget::new(Moment::from_nanos(0))?;
     let mut job = client
         .submit_entry_preparation(
@@ -106,10 +107,11 @@ fn installed_descriptor_and_unicode_startup_input_share_original_preparation() -
     let client = owner.client();
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
     let directory = temporary_directory("input-pair")?;
-    let mut input = options()?;
-    input.configuration = directory.join("糖😀.toml");
+    let mut paths = options()?.into_paths();
+    paths[0] = directory.join("糖😀.toml");
+    let input = StartupPaths::new(paths)?;
     std::fs::write(
-        &input.configuration,
+        input.configuration(),
         br#"schema_version=1
 mode="attach"
 port=8188
@@ -121,23 +123,12 @@ reduced_motion=false
 origin="http://localhost:8188"
 "#,
     )?;
-    let arguments: Vec<_> = [
-        ("--startup-config", &input.configuration),
-        ("--frontend-package", &input.package),
-        ("--frontend-metadata", &input.metadata),
-        ("--sugarcubes-root", &input.cubes),
-        ("--backend-script", &input.script),
-        ("--profile-directory", &input.profile),
-    ]
-    .into_iter()
-    .flat_map(|(flag, path)| [flag.to_owned(), path.to_string_lossy().into_owned()])
-    .collect();
     let descriptor = directory.join("launch.json");
+    let expected = input.configuration().to_path_buf();
     std::fs::write(
         &descriptor,
-        serde_json::to_vec(&serde_json::json!({"schema_version":1,"arguments":arguments}))?,
+        sugarsubstitute_configuration::descriptor::LaunchDescriptor::encode(input)?,
     )?;
-    let expected = input.configuration;
     let original = EntrySetupBudget::new(Moment::from_nanos(0))?;
     let mut job = client
         .submit_entry_preparation(
@@ -163,7 +154,7 @@ origin="http://localhost:8188"
     let JobOutcome::Success(prepared) = completion.outcome else {
         return Err("Installed input pair did not complete".into());
     };
-    assert_eq!(prepared.value().options.configuration, expected);
+    assert_eq!(prepared.value().options.configuration(), expected);
     assert!(memory.claim(1).is_err());
     drop(prepared);
     assert_eq!(

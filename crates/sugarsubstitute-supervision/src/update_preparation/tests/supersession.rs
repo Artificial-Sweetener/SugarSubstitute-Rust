@@ -16,6 +16,7 @@ fn newer_remote_release_replaces_pending_publication_and_offline_restart_selects
     let (mut worker, server) = campaign(&mut pipeline, &fixture, signed, false)?;
     for expected in [
         Progress::Checking,
+        Progress::Reopening,
         Progress::Downloading { received: 0, total: fixture.archive.len() as u64 },
         Progress::Preparing,
         Progress::Ready,
@@ -33,10 +34,7 @@ fn newer_remote_release_replaces_pending_publication_and_offline_restart_selects
     assert_unlocked(&mut pipeline, &fixture)?;
     drop((worker, pipeline));
     let mut pipeline = Pipeline::new()?;
-    let mut resumed = Worker::resume_cached(configuration(
-        &fixture,
-        sugarsubstitute_update::http::Policy::loopback(1)?,
-    ))?;
+    let mut resumed = Worker::resume_cached(cached_configuration(&fixture))?;
     for expected in [Progress::Restoring, Progress::Reopening, Progress::Ready] {
         assert_eq!(step(&mut pipeline, &mut resumed)?.progress, expected);
     }

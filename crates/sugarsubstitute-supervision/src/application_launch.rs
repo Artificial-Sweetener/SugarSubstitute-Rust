@@ -1,16 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Transfer startup to a fresh, independently owned application Root.
+pub mod broker;
 mod creation;
 #[cfg(test)]
 mod tests;
 mod trial;
+mod updater;
 use crate::{
     ClaimError, WindowsLaunchBuffers, WindowsLaunchCommand,
     native_claims::files::{self, Budget, Handle},
 };
 use std::sync::{Arc, Mutex};
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
+pub use updater::{ACTIVATION_RESERVATION_BYTES, ActivationLaunch, ActivationOutcome};
 use windows::Win32::System::Threading::PROCESS_INFORMATION;
 
 /// Native creation of an already prepared command needs bounded handles and attributes only.
@@ -29,7 +32,8 @@ pub enum CreationOutcome {
     NotCreated,
     /// Windows confirmed creation. Never restore this attempt or automatically repeat it.
     Created,
-    /// Native creation failed but returned an output; process absence has not been proved.
+    /// Partial native output or an unanswered launch transfer leaves creation uncertain.
+    /// Process absence has not been proved, so automatic fallback is prohibited.
     Indeterminate,
 }
 impl CreationOutcome {
@@ -53,6 +57,7 @@ pub struct ApplicationLaunch(Arc<Mutex<State>>);
 enum LaunchCustody {
     Selected(Box<crate::setup_storage::LaunchInheritance>),
     Trial(Box<trial::TrialLaunch>),
+    Broker(Box<broker::CapturedPins>),
 }
 struct State {
     command: Option<WindowsLaunchBuffers>,
@@ -62,6 +67,21 @@ struct State {
     handles: Vec<Handle>,
     memory: Option<Arc<MemoryClaim>>,
     custody: Option<LaunchCustody>,
+    transfer: Option<broker::source::Transfer>,
+}
+impl Drop for State {
+    fn drop(&mut self) {
+        if self.transfer.as_ref().is_some_and(broker::source::Transfer::pending) {
+            // A live receiver may still duplicate these source-process handle numbers. Keep
+            // their original objects until this dedicated engine exits; never permit slot reuse.
+            tracing::error!(
+                operation = "launch_transfer_unanswered_retained",
+                "Unanswered launch custody remains retained until engine exit"
+            );
+            std::mem::forget(self.custody.take());
+            std::mem::forget(self.memory.take());
+        }
+    }
 }
 impl ApplicationLaunch {
     /// Retain inert, already bounded executable/cwd/argv buffers. Performs no native work.
@@ -80,6 +100,7 @@ impl ApplicationLaunch {
             handles: Vec::new(),
             memory: None,
             custody: None,
+            transfer: None,
         })))
     }
     /// Keep verified installation custody until the exact inherited-handle launch is created.
@@ -195,6 +216,9 @@ impl ApplicationLaunch {
 }
 impl State {
     fn retire(&mut self) -> Result<(), ClaimError> {
+        if self.transfer.as_ref().is_some_and(broker::source::Transfer::pending) {
+            return Err(ClaimError::invalid("launch_transfer_receiver_unsettled"));
+        }
         if self.creation == CreationOutcome::NotCreated
             && !self.trial_restored
             && matches!(self.custody, Some(LaunchCustody::Trial(_)))
@@ -202,9 +226,15 @@ impl State {
             return Err(ClaimError::invalid("application_launch_trial_requires_recovery"));
         }
         files::close_all(&mut self.handles)?;
+        if let Some(LaunchCustody::Broker(pins)) = &mut self.custody {
+            pins.retire()?;
+        }
         self.memory = None;
         self.command = None;
         self.custody = None;
+        if let Some(transfer) = &mut self.transfer {
+            transfer.closed = true;
+        }
         Ok(())
     }
 }

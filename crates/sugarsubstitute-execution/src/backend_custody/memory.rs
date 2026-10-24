@@ -17,6 +17,7 @@ struct Metadata {
     issued: AtomicUsize,
     source_issued: std::sync::atomic::AtomicBool,
     cleanup: std::sync::Mutex<Option<Moment>>,
+    cleanup_published: std::sync::atomic::AtomicBool,
     key: sugarsubstitute_contracts::backend_custody::BackendCustodyKey,
     parent: (u32, u64),
     source: crate::lifecycle_pipe::SharedRef,
@@ -114,6 +115,7 @@ impl BackendCustodyMemory {
             issued: AtomicUsize::new(0),
             source_issued: std::sync::atomic::AtomicBool::new(false),
             cleanup: std::sync::Mutex::new(None),
+            cleanup_published: std::sync::atomic::AtomicBool::new(false),
             key,
             parent,
             source,
@@ -166,7 +168,21 @@ impl BackendCustodyMemory {
         let owner = self.0.as_ref().ok_or(AdmissionError::ShuttingDown)?;
         let until = latch(&owner.cleanup, now, original_until)?;
         self.arm_cleanup(64, until)?;
+        let core = owner.core.upgrade().ok_or(AdmissionError::ShuttingDown)?;
+        if !owner.cleanup_published.swap(true, Ordering::AcqRel) && core.mailbox.signal_capacity() {
+            core.mailbox.deliver_wake();
+        }
         Ok(BackendCustodyCleanup { metadata: self.clone(), slot: None, until })
+    }
+    /// Read the first armed helper cleanup cutoff independently of native driver access.
+    /// Publication wakes the application observer before worker completion so it can
+    /// release capture loans needed by transport retirement. This grants no native authority.
+    pub fn cleanup_until(&self) -> Option<Moment> {
+        let owner = self.0.as_ref()?;
+        if !owner.cleanup_published.load(Ordering::Acquire) {
+            return None;
+        }
+        *crate::scope::lock(&owner.cleanup)
     }
     /// Observe only the actual queued cutoff fact for this original helper.
     pub fn cleanup_due(&self) -> bool {

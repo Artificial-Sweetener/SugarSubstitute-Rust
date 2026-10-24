@@ -10,8 +10,8 @@ import { artifactDirectory, newArtifactDirectory, regularArtifact } from './arti
 const targets = { 'windows-x86_64': 'x86_64-pc-windows-msvc', 'windows-aarch64': 'aarch64-pc-windows-msvc' }
 const marker = '.substitute-native-build.json'
 
-/** Never repurpose a prior target tree. Cargo profiles/features may coexist within a tree,
- * but its target, Rust pin, linker image and CRT linkage must retain the recorded identity.
+/** Never repurpose a prior target tree. Cargo profiles/features may coexist within one checkout,
+ * but its source checkout, target, Rust pin, linker image and CRT linkage retain recorded identity.
  * The caller initializes its selected Visual Studio environment and supplies an explicit linker.
  */
 export async function nativeConfiguration(directory, platform, workspace, environment) {
@@ -27,7 +27,7 @@ export async function nativeConfiguration(directory, platform, workspace, enviro
   await regularArtifact(linker)
   const digest = createHash('sha256')
   for await (const bytes of createReadStream(linker)) digest.update(bytes)
-  const configuration = { schema_version: 1, target, rust_toolchain: await fs.readFile(path.join(workspace, 'rust-toolchain.toml'), 'utf8'), linker: { path: linker, sha256: digest.digest('hex') }, crt: 'static' }
+  const configuration = { schema_version: 2, workspace: await fs.realpath(workspace), target, rust_toolchain: await fs.readFile(path.join(workspace, 'rust-toolchain.toml'), 'utf8'), linker: { path: linker, sha256: digest.digest('hex') }, crt: 'static' }
   const record = path.join(directory, marker)
   try { await artifactDirectory(directory) } catch (cause) {
     if (cause.code !== 'ENOENT') throw cause

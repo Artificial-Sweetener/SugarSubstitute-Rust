@@ -27,7 +27,9 @@ fn same_ledger_cannot_admit_discovery_alongside_coordinator_minimum_custody() ->
     let mut worker =
         Worker::new(configuration(&fixture, sugarsubstitute_update::http::Policy::loopback(1)?))?;
     assert_eq!(step(&mut pipeline, &mut worker)?.progress, Progress::Checking);
-    let Err(rejected) = submit_once(&mut pipeline, &mut worker) else {
+    let Err(rejected) = pipeline.admit(|client, scope, id| {
+        Ok(worker.submit(client, scope, id, Moment::from_nanos(2_000_000_000), || NOW)?)
+    }) else {
         return Err("Discovery exceeded coordinator capacity".into());
     };
     let Some(cause) = rejected
@@ -72,6 +74,7 @@ fn isolated_ledger_prepares_while_coordinator_capacity_and_native_run_remain_own
     let (mut worker, server) = campaign(&mut helper, &fixture, signed, true)?;
     for expected in [
         Progress::Checking,
+        Progress::Reopening,
         Progress::Downloading { received: 0, total: fixture.archive.len() as u64 },
         Progress::Preparing,
         Progress::Ready,

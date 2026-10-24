@@ -24,6 +24,24 @@ struct Wire {
     installed_launch_protocol: u32,
 }
 impl LauncherContract {
+    /// Preserve the installed launch protocol and selection reader during executable replacement.
+    /// This keeps previously accepted applications launchable without inspecting damaged files.
+    /// # Errors
+    /// Rejects a different produced protocol or an unsupported current installation schema.
+    pub fn require_replacement_of(
+        &self,
+        previous: &Self,
+        installation_schema: u32,
+    ) -> Result<(), Rejection> {
+        if !self.installation_schemas.contains(&installation_schema) {
+            return Err(Rejection::InstallationSchema);
+        }
+        if self.installed_launch_protocol != previous.installed_launch_protocol {
+            return Err(Rejection::Unsupported);
+        }
+        Ok(())
+    }
+
     /// Decode a bounded declaration without interpreting release numbers as capabilities.
     /// # Errors
     /// Rejects malformed, oversized, unknown, ambiguous or zero-valued declarations.

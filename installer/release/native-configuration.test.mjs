@@ -57,6 +57,27 @@ test('unowned build trees and changed compiler bytes or Rust pins are preserved 
   assert.deepEqual(await fs.readFile(marker), original)
 })
 
+test('another checkout cannot reuse compiled artifacts even with identical toolchain inputs', async t => {
+  const f = await fixture(t)
+  await nativeConfiguration(f.target, 'windows-x86_64', f.root, f.environment)
+  const marker = path.join(f.target, '.substitute-native-build.json')
+  const original = await fs.readFile(marker)
+  const compiled = path.join(f.target, 'compiled-file')
+  await fs.writeFile(compiled, 'original checkout output')
+  const other = path.join(f.root, 'other-checkout')
+  await fs.mkdir(other)
+  await fs.copyFile(path.join(f.root, 'rust-toolchain.toml'), path.join(other, 'rust-toolchain.toml'))
+  await assert.rejects(nativeConfiguration(f.target, 'windows-x86_64', other, f.environment), /configuration changed/)
+  assert.deepEqual(await fs.readFile(marker), original)
+  assert.equal(await fs.readFile(compiled, 'utf8'), 'original checkout output')
+  const legacy = JSON.parse(original)
+  legacy.schema_version = 1
+  delete legacy.workspace
+  await fs.writeFile(marker, JSON.stringify(legacy))
+  await assert.rejects(nativeConfiguration(f.target, 'windows-x86_64', f.root, f.environment), /configuration changed/)
+  assert.deepEqual(JSON.parse(await fs.readFile(marker)), legacy)
+})
+
 test('ambient flag overrides and missing explicit toolchain fail before creating outputs', async t => {
   const f = await fixture(t)
   for (const name of ['RUSTFLAGS', 'CARGO_ENCODED_RUSTFLAGS', 'CARGO_BUILD_RUSTFLAGS', 'RUSTUP_TOOLCHAIN']) {

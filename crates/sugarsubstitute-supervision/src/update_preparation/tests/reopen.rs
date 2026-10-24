@@ -5,12 +5,9 @@ use super::*;
 use std::os::windows::fs::OpenOptionsExt;
 use sugarsubstitute_update::fixture::{EXPIRES, key, root};
 
-/// Construct the real cache-only worker against an unavailable loopback endpoint.
+/// Construct the real cache-only worker without a network configuration.
 fn cached(fixture: &Fixture) -> Result<Worker, Failure> {
-    Ok(Worker::resume_cached(configuration(
-        fixture,
-        sugarsubstitute_update::http::Policy::loopback(1)?,
-    ))?)
+    Ok(Worker::resume_cached(cached_configuration(fixture))?)
 }
 
 #[test]
@@ -27,7 +24,7 @@ fn completed_candidate_reopens_with_inaccessible_archive_and_unusable_extraction
     assert!(std::fs::read(&archive).is_err());
     let workspace = fixture.workspace.path().join("reserved-user-file");
     std::fs::write(&workspace, b"preserve this file")?;
-    let mut config = configuration(&fixture, sugarsubstitute_update::http::Policy::loopback(1)?);
+    let mut config = cached_configuration(&fixture);
     config.workspace = workspace.clone();
     let mut worker = Worker::resume_cached(config)?;
     let mut pipeline = Pipeline::new()?;

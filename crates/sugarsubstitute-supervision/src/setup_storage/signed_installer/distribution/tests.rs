@@ -14,6 +14,7 @@ use crate::{
 use sha2::{Digest, Sha256};
 use sugarsubstitute_update::fixture::{EXPIRES, NOW};
 type Failure = Box<dyn std::error::Error + Send + Sync>;
+mod reuse;
 
 #[test]
 fn retained_preview_and_signed_import_complete_on_the_same_execution_ledger() -> TestResult {
@@ -38,11 +39,32 @@ fn retained_preview_and_signed_import_complete_on_the_same_execution_ledger() ->
                 &digest,
                 &context,
             )?;
-            let preview = root;
+            let preview = Arc::new(root);
             Ok((fixture, preview))
         })?;
+    let retained = Arc::clone(&preview);
     let (fixture, imported) = pipeline.run(SIGNED_INSTALLER_RESERVATION_BYTES, move |context| {
-        let imported = fixture.import(NOW, &context)?;
+        let distribution =
+            InstallerDistribution::decode(&serde_json::to_vec(&fixture.configuration)?, &context)?;
+        let imported = distribution.import(
+            InstallationSession::maintain(fixture.root.path(), &context)?,
+            &fixture.executable,
+            BundleSource::Retained(retained),
+            || NOW,
+            &context,
+        )?;
+        assert_eq!(
+            std::fs::read_dir(
+                fixture
+                    .workspace
+                    .path()
+                    .join(crate::setup_storage::cache::DIRECTORY)
+                    .join(crate::setup_storage::cache::Namespace::PackedPayloads.directory())
+            )?
+            .count(),
+            1,
+            "Signed import must reuse the retained verified preview"
+        );
         Ok((fixture, imported))
     })?;
     let prepared = pipeline.run(SIGNED_PREPARATION_RESERVATION_BYTES, move |context| {
@@ -98,7 +120,7 @@ impl Fixture {
         Ok(distribution.import(
             InstallationSession::maintain(self.root.path(), context)?,
             &self.executable,
-            self.workspace.path(),
+            BundleSource::Extract(self.workspace.path()),
             || now,
             context,
         )?)

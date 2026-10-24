@@ -8,6 +8,7 @@ pub mod configuration;
 /// Bound independent invocation facts without native coordinator authority.
 pub mod coordinator_entry;
 pub mod crash;
+pub mod diagnostics;
 pub mod execution;
 pub mod incident;
 pub mod installation;

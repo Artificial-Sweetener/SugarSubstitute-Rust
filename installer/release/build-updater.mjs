@@ -10,18 +10,19 @@ import { assembleArtifacts } from './application-artifacts.mjs'
 import { packageUpdater } from './updater-package.mjs'
 import { windowsInspector } from './windows-imports.mjs'
 import { newArtifactDirectory } from './artifact-files.mjs'
+import { engineBuildFile } from './engine-identity.mjs'
 
 const [output, profile, platform, release, reader, ...extra] = process.argv.slice(2)
-const qualification = extra.at(-1) === '--local-k1' ? extra.pop() : undefined
+const qualification = ['--local-k1', '--local-updates'].includes(extra.at(-1)) ? extra.pop() : undefined
 if (process.platform !== 'win32' || !output || !path.isAbsolute(output) || !['dev', 'release'].includes(profile) || !release || !reader) {
-  throw new Error('Usage on Windows: node installer/release/build-updater.mjs <new-absolute-output> <dev|release> <windows-x86_64|windows-aarch64> <release-id> <llvm-readobj> [absolute-runtime-dll ...] [--local-k1]')
+  throw new Error('Usage on Windows: node installer/release/build-updater.mjs <new-absolute-output> <dev|release> <windows-x86_64|windows-aarch64> <release-id> <llvm-readobj> [absolute-runtime-dll ...] [--local-k1|--local-updates]')
 }
 const inspect = await windowsInspector(reader, platform)
 await newArtifactDirectory(output)
 const selection = await buildNative('updater', profile, qualification, platform, inspect)
 const build = await assembleArtifacts(selection, path.join(output, 'build'))
 const bundle = path.join(output, 'package')
-const copied = { ...selection, files: new Map([...selection.files.keys()].map(name => [name, path.join(output, 'build', name)])) }
+const copied = { ...selection, engineBuild: path.join(output, 'build', engineBuildFile), files: new Map([...selection.files.keys()].map(name => [name, path.join(output, 'build', name)])) }
 const payload = await packageUpdater(copied, extra, bundle, release, inspect)
 const archive = path.join(output, 'updater.ssupdate')
 const sealed = spawnSync(process.execPath, [fileURLToPath(new URL('../seal.mjs', import.meta.url)), '--update', bundle, archive], { encoding: 'utf8', windowsHide: true, timeout: 15 * 60 * 1000, maxBuffer: 1024 ** 2 })

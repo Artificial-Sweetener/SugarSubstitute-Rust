@@ -2,6 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Fresh setup retries retain the recorded candidate and explicit provisioning choices.
 use super::*;
+use sugarsubstitute_contracts::installation::PreparationIntent;
+mod installed;
+mod maintenance;
 mod reservation;
 mod supersession;
 
@@ -39,14 +42,36 @@ fn runtime(path: &Path) -> Result<RuntimePaths, Failure> {
 }
 
 fn import(path: &Path, context: &JobContext) -> Result<SignedInstallation, Failure> {
+    let session = InstallationSession::create(choices(path), context)?;
+    import_session(path, session, PreparationIntent::Automatic, context)
+}
+
+/// Reuse the exact signed package with independently acquired fresh or maintenance custody.
+fn import_session(
+    path: &Path,
+    session: InstallationSession,
+    intent: PreparationIntent,
+    context: &JobContext,
+) -> Result<SignedInstallation, Failure> {
     let (manifest, compressed) = test_package::distribution()?;
+    import_distribution(path, session, intent, (manifest, compressed), context)
+}
+
+/// Keep archive authentication and custody identical for historical and explicitly capable fixtures.
+fn import_distribution(
+    path: &Path,
+    session: InstallationSession,
+    intent: PreparationIntent,
+    (manifest, compressed): (Vec<u8>, Vec<u8>),
+    context: &JobContext,
+) -> Result<SignedInstallation, Failure> {
     let archive = test_package::seal(&manifest, &compressed);
-    let signed = SignedPackage::new(&archive, 1)?;
+    let mut signed = SignedPackage::new(&archive, 1)?;
+    signed.request.intent = intent;
     let source = path.join("setup.exe");
     if !source.exists() {
         std::fs::write(&source, [b"inert prefix".as_slice(), &archive].concat())?;
     }
-    let session = InstallationSession::create(choices(path), context)?;
     Ok(session.import_installer(
         InstallerSource {
             repository: [92; 32],
@@ -57,7 +82,7 @@ fn import(path: &Path, context: &JobContext) -> Result<SignedInstallation, Failu
             executable: &source,
         },
         signed.request,
-        &path.join("workspace"),
+        BundleSource::Extract(&path.join("workspace")),
         || NOW,
         context,
     )?)

@@ -8,7 +8,7 @@ pub(super) fn prepared() -> Result<(Fixture, std::path::PathBuf), Failure> {
     let mut pipeline = Pipeline::new()?;
     let (fixture, signed) = initialized(&mut pipeline)?;
     let (mut worker, server) = campaign(&mut pipeline, &fixture, signed, true)?;
-    for _ in 0..4 {
+    for _ in 0..5 {
         step(&mut pipeline, &mut worker)?;
     }
     server.finish()?;
@@ -28,10 +28,7 @@ fn offline_restart_reauthenticates_publication_and_resumes_the_same_prepared_gen
 -> TestResult {
     let (fixture, original) = prepared()?;
     let mut pipeline = Pipeline::new()?;
-    let mut worker = Worker::resume_cached(configuration(
-        &fixture,
-        sugarsubstitute_update::http::Policy::loopback(1)?,
-    ))?;
+    let mut worker = Worker::resume_cached(cached_configuration(&fixture))?;
     for expected in [Progress::Restoring, Progress::Reopening, Progress::Ready] {
         assert_eq!(step(&mut pipeline, &mut worker)?.progress, expected);
     }
@@ -57,10 +54,7 @@ fn cached_restart_preserves_modified_payload_and_configuration_without_publishin
         let bytes = b"modified staged data must remain intact";
         std::fs::write(&changed, bytes)?;
         let mut pipeline = Pipeline::new()?;
-        let mut worker = Worker::resume_cached(configuration(
-            &fixture,
-            sugarsubstitute_update::http::Policy::loopback(1)?,
-        ))?;
+        let mut worker = Worker::resume_cached(cached_configuration(&fixture))?;
         for expected in [Progress::Restoring, Progress::Reopening] {
             assert_eq!(step(&mut pipeline, &mut worker)?.progress, expected);
         }
@@ -90,10 +84,7 @@ fn cached_restart_repairs_missing_payload_in_place_and_preserves_unknown_files()
     let unknown = generation.join(".payload-stage-interrupted");
     std::fs::write(&unknown, b"unrecognized partial output")?;
     let mut pipeline = Pipeline::new()?;
-    let mut worker = Worker::resume_cached(configuration(
-        &fixture,
-        sugarsubstitute_update::http::Policy::loopback(1)?,
-    ))?;
+    let mut worker = Worker::resume_cached(cached_configuration(&fixture))?;
     for expected in [
         Progress::Restoring,
         Progress::Reopening,
@@ -120,10 +111,7 @@ fn cached_restart_repairs_missing_payload_in_place_and_preserves_unknown_files()
 fn offline_check_reads_acceptance_after_the_worker_has_opened_trust() -> TestResult {
     let (fixture, _) = prepared()?;
     let mut pipeline = Pipeline::new()?;
-    let mut worker = Worker::resume_cached(configuration(
-        &fixture,
-        sugarsubstitute_update::http::Policy::loopback(1)?,
-    ))?;
+    let mut worker = Worker::resume_cached(cached_configuration(&fixture))?;
     assert_eq!(step(&mut pipeline, &mut worker)?.progress, Progress::Restoring);
     accept_pending(&mut pipeline, &fixture)?;
     assert_eq!(step(&mut pipeline, &mut worker)?.progress, Progress::Decision(Admission::Current));
@@ -142,7 +130,11 @@ fn malformed_accepted_identity_stops_online_and_offline_checks_without_claiming_
     std::fs::write(&receipt, b"damaged receipt")?;
     for cached in [false, true] {
         let config = configuration(&fixture, sugarsubstitute_update::http::Policy::loopback(1)?);
-        let mut worker = if cached { Worker::resume_cached(config)? } else { Worker::new(config)? };
+        let mut worker = if cached {
+            Worker::resume_cached(cached_configuration(&fixture))?
+        } else {
+            Worker::new(config)?
+        };
         step(&mut pipeline, &mut worker)?;
         submit(&mut pipeline, &mut worker)?;
         let observed = pipeline.observe(|| worker.poll())?;
@@ -170,10 +162,7 @@ fn changing_subscription_does_not_reuse_other_channels_cached_release_or_current
     let mut pipeline = Pipeline::new()?;
     accept_pending(&mut pipeline, &fixture)?;
     select_subscription(&fixture, sugarsubstitute_contracts::update::Channel::Canary)?;
-    let mut worker = Worker::resume_cached(configuration(
-        &fixture,
-        sugarsubstitute_update::http::Policy::loopback(1)?,
-    ))?;
+    let mut worker = Worker::resume_cached(cached_configuration(&fixture))?;
     step(&mut pipeline, &mut worker)?;
     assert_eq!(step(&mut pipeline, &mut worker)?.progress, Progress::Unavailable);
     retire(&mut pipeline, &mut worker)?;
@@ -184,10 +173,7 @@ fn changing_subscription_does_not_reuse_other_channels_cached_release_or_current
 fn missing_and_partial_offline_evidence_never_asserts_current_or_downloads() -> TestResult {
     let mut pipeline = Pipeline::new()?;
     let (fixture, _) = initialized(&mut pipeline)?;
-    let mut missing = Worker::resume_cached(configuration(
-        &fixture,
-        sugarsubstitute_update::http::Policy::loopback(1)?,
-    ))?;
+    let mut missing = Worker::resume_cached(cached_configuration(&fixture))?;
     step(&mut pipeline, &mut missing)?;
     assert_eq!(step(&mut pipeline, &mut missing)?.progress, Progress::Unavailable);
     assert!(submit(&mut pipeline, &mut missing).is_err());
@@ -203,10 +189,7 @@ fn missing_and_partial_offline_evidence_never_asserts_current_or_downloads() -> 
     std::fs::write(&payload, &fixture.archive[..7])?;
     std::fs::remove_file(generation.join("sugarsubstitute.exe"))?;
     let mut pipeline = Pipeline::new()?;
-    let mut partial = Worker::resume_cached(configuration(
-        &fixture,
-        sugarsubstitute_update::http::Policy::loopback(1)?,
-    ))?;
+    let mut partial = Worker::resume_cached(cached_configuration(&fixture))?;
     step(&mut pipeline, &mut partial)?;
     assert_eq!(step(&mut pipeline, &mut partial)?.progress, Progress::Reopening);
     assert_eq!(step(&mut pipeline, &mut partial)?.progress, Progress::RestoringArchive);
@@ -221,10 +204,7 @@ fn missing_and_partial_offline_evidence_never_asserts_current_or_downloads() -> 
 fn offline_restart_rejects_expired_authority_and_corrupt_repair_archive() -> TestResult {
     let (fixture, _) = prepared()?;
     let mut pipeline = Pipeline::new()?;
-    let mut expired = Worker::resume_cached(configuration(
-        &fixture,
-        sugarsubstitute_update::http::Policy::loopback(1)?,
-    ))?;
+    let mut expired = Worker::resume_cached(cached_configuration(&fixture))?;
     step(&mut pipeline, &mut expired)?;
     pipeline.admit(|client, scope, id| {
         Ok(expired.submit(client, scope, id, Moment::from_nanos(2_000_000_000), || {
@@ -249,10 +229,7 @@ fn offline_restart_rejects_expired_authority_and_corrupt_repair_archive() -> Tes
     std::fs::write(&payload, damaged)?;
     std::fs::remove_file(generation.join("sugarsubstitute.exe"))?;
     let mut pipeline = Pipeline::new()?;
-    let mut corrupt = Worker::resume_cached(configuration(
-        &fixture,
-        sugarsubstitute_update::http::Policy::loopback(1)?,
-    ))?;
+    let mut corrupt = Worker::resume_cached(cached_configuration(&fixture))?;
     step(&mut pipeline, &mut corrupt)?;
     assert_eq!(step(&mut pipeline, &mut corrupt)?.progress, Progress::Reopening);
     assert_eq!(step(&mut pipeline, &mut corrupt)?.progress, Progress::RestoringArchive);

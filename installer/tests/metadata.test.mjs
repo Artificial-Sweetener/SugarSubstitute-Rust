@@ -7,8 +7,10 @@ import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
 import { parseCommand } from '../worker/protocol.mjs'
-const { outputFiles } = await build({ entryPoints: [fileURLToPath(new URL('../worker/metadata.ts', import.meta.url))], bundle: true, write: false, platform: 'node', format: 'esm' })
-const { NativeMetadata, readFileSafe } = await import('data:text/javascript;base64,' + Buffer.from(outputFiles[0].text).toString('base64'))
+const { outputFiles } = await build({ stdin: { contents: "export * from './metadata'; export { bindDiagnostics } from './diagnostics.mjs';", resolveDir: fileURLToPath(new URL('../worker', import.meta.url)), loader: 'ts' }, bundle: true, write: false, platform: 'node', format: 'esm' })
+const { NativeMetadata, readFileSafe, bindDiagnostics } = await import('data:text/javascript;base64,' + Buffer.from(outputFiles[0].text).toString('base64'))
+const diagnostics = []
+bindDiagnostics((level, message) => diagnostics.push({ level, message }))
 const root = path.join(process.env.SUBSTITUTE_INSTALLER_BUILD, 'native-metadata')
 /** Pure external native-port fake; actual file, grant and retirement mechanics are tested in Rust. */
 function host(initial = {}) {

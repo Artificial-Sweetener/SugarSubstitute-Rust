@@ -69,6 +69,7 @@ pub(in super::super) fn classify(source: &str, extension: &str) -> Vec<String> {
                         | "write_bytes"
                         | "write_text"
                         | "scandir"
+                        | "iterdir"
                         | "listdir"
                         | "makedirs"
                         | "rmdir"

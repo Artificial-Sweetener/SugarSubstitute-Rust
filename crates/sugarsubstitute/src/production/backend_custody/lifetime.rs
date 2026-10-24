@@ -223,9 +223,7 @@ impl Lifetime {
     }
     /// Keep unresolved native custody observable; only its authenticated self owner can exit.
     fn observe(&mut self) -> Result<HeadlessStep, Box<dyn Error>> {
-        if self.source.as_ref().is_some_and(|source| {
-            source.retirement_until().is_some() && !source.recovery_capture_pending()
-        }) {
+        if self.source.as_ref().is_some_and(|source| source.retirement_until().is_some()) {
             // Capture retains a loan from the pipe's bootstrap mapping. Return that
             // temporary loan during custody retirement, before waiting for the pipe
             // worker's terminal; permanent crash registration stays with this process.

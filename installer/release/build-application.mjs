@@ -7,8 +7,8 @@ import { buildNative } from './native-build.mjs'
 import { windowsInspector } from './windows-imports.mjs'
 
 const [output, profile, platform, reader, qualification, ...extra] = process.argv.slice(2)
-if (process.platform !== 'win32' || !output || !path.isAbsolute(output) || !reader || !['dev', 'release'].includes(profile) || extra.length || (qualification !== undefined && qualification !== '--local-k1')) {
-  throw new Error('Usage on Windows: node installer/release/build-application.mjs <new-absolute-output> <dev|release> <windows-x86_64|windows-aarch64> <llvm-readobj> [--local-k1]')
+if (process.platform !== 'win32' || !output || !path.isAbsolute(output) || !reader || !['dev', 'release'].includes(profile) || extra.length) {
+  throw new Error('Usage on Windows: node installer/release/build-application.mjs <new-absolute-output> <dev|release> <windows-x86_64|windows-aarch64> <llvm-readobj> [--local-k1|--local-updates]')
 }
 const inspect = await windowsInspector(reader, platform)
 const receipt = await assembleArtifacts(await buildNative('application', profile, qualification, platform, inspect), output)

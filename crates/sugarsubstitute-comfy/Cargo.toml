@@ -12,15 +12,15 @@ publish.workspace = true
 sugarsubstitute-contracts = { path = "../sugarsubstitute-contracts" }
 serde.workspace = true
 serde_json.workspace = true
-toml.workspace = true
 
 [target.'cfg(windows)'.dependencies]
+sugarsubstitute-networking = { path = "../sugarsubstitute-networking" }
 sugarsubstitute-application = { path = "../sugarsubstitute-application" }
 sugarsubstitute-execution = { path = "../sugarsubstitute-execution" }
 sugarsubstitute-supervision = { path = "../sugarsubstitute-supervision" }
 sha2.workspace = true
 tracing.workspace = true
-windows = { workspace = true, features = ["Win32_Networking_WinHttp", "Win32_Networking_WinSock"] }
+windows.workspace = true
 
 [target.'cfg(windows)'.dev-dependencies]
 sugarsubstitute-supervision = { path = "../sugarsubstitute-supervision", features = ["boundary-fixtures"] }

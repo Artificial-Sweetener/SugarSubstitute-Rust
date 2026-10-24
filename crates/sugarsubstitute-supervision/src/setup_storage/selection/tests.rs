@@ -99,16 +99,12 @@ fn writer_exclusion_is_os_backed_and_a_leftover_lock_file_is_not_a_lockout() -> 
         let root = root()?;
         let first = SelectionStore::initialize(root.path(), &initial()?, context)?;
         let second = SelectionStore::open(root.path(), context)?;
-        let held = first.protected(context, |p| {
-            writer(&first.root, p, context).map_err(SelectionFailure::from)
-        })?;
-        assert!(
-            second
-                .protected(context, |p| writer(&second.root, p, context)
-                    .map_err(SelectionFailure::from))
-                .is_err()
-        );
-        assert!(second.load(context).is_err());
+        let held = first.protected(context, |p| writer(&first.root, p, context))?;
+        assert!(matches!(
+            second.protected(context, |p| writer(&second.root, p, context)),
+            Err(SelectionFailure::WriterBusy)
+        ));
+        assert!(matches!(second.load(context), Err(SelectionFailure::WriterBusy)));
         drop(held);
         assert_eq!(second.load(context)?, Some(initial()?));
         assert!(root.path().join(DIRECTORY).join(LOCK).exists());

@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain authenticated phase custody outside execution results, including cancelled results.
+mod source;
 use super::*;
 use crate::{
     setup_storage::{
         AuthenticatedOffer, CachedCandidate, Download, InstallationSession, TrustStore,
         UpdaterPackage, VerifiedDownload,
     },
-    update_repository::{Check, Failure, Preparation, Repository},
+    update_repository::{Check, Failure, Preparation},
 };
+pub(super) use source::Source;
 use std::{io, sync::Arc};
 use sugarsubstitute_contracts::execution::JobContext;
 use sugarsubstitute_contracts::update::Component;
@@ -25,8 +27,10 @@ pub(super) enum Phase {
     Download(Box<TrustStore>, Box<AuthenticatedOffer>),
     Import(Box<TrustStore>, Box<AuthenticatedOffer>, Box<VerifiedDownload>),
     ImportEngine(Box<TrustStore>, Box<AuthenticatedOffer>, Box<VerifiedDownload>),
+    Remember(Box<SignedCandidate>),
     Ready(Box<SignedCandidate>),
     EngineReady(EngineUpdate),
+    ActivationReady(Box<PreparationImage>),
     Empty,
 }
 
@@ -34,10 +38,8 @@ pub(super) enum Phase {
 pub(super) struct State {
     pub(super) installation: PathBuf,
     pub(super) workspace: PathBuf,
-    pub(super) repository_id: [u8; 32],
     pub(super) subscription: Option<Subscription>,
-    pub(super) cached: bool,
-    pub(super) repository: Repository,
+    pub(super) source: Source,
     pub(super) phase: Phase,
     pub(super) progress: Progress,
     pub(super) failure: Option<Arc<Failure>>,
@@ -75,8 +77,7 @@ impl State {
         }
         let (next, progress) = match phase {
             Phase::Open => {
-                let mut trust =
-                    Box::new(TrustStore::open(&self.installation, self.repository_id, context)?);
+                let mut trust = Box::new(self.source.open(&self.installation, context)?);
                 self.subscription = Some(trust.subscription(context)?);
                 match trust.acquire_preparation(context) {
                     Err(crate::setup_storage::TrustFailure::Storage(cause))
@@ -85,7 +86,7 @@ impl State {
                         (Phase::Empty, Progress::AlreadyPreparing)
                     }
                     Err(cause) => return Err(cause.into()),
-                    Ok(()) if self.cached => (Phase::Restore(trust), Progress::Restoring),
+                    Ok(()) if self.source.cached() => (Phase::Restore(trust), Progress::Restoring),
                     Ok(()) => (Phase::Discover(trust), Progress::Checking),
                 }
             }
@@ -93,6 +94,10 @@ impl State {
                 let request = trust.application_request(self.channel(&trust, context)?, context)?;
                 match trust.cached_offer(request, now(), context)? {
                     None => (Phase::Empty, Progress::Unavailable),
+                    Some(offer) if offer.offer().admission() == Admission::UpdateEngine => (
+                        Phase::SelectEngine(trust, offer.offer().offer().minimum_updater_release()),
+                        Progress::SelectingEngine,
+                    ),
                     Some(offer) if offer.offer().admission() != Admission::Prepare => {
                         (Phase::Empty, Progress::Decision(offer.offer().admission()))
                     }
@@ -107,11 +112,26 @@ impl State {
                     &mut now,
                     context,
                 )? {
+                    CachedCandidate::Ready(candidate) if !self.source.cached() => {
+                        (Phase::Remember(candidate), Progress::Remembering)
+                    }
                     CachedCandidate::Ready(candidate) => (Phase::Ready(candidate), Progress::Ready),
-                    CachedCandidate::Missing(trust, offer) => {
+                    CachedCandidate::Missing(trust, offer) if self.source.cached() => {
                         (Phase::RestoreArchive(trust, offer), Progress::RestoringArchive)
                     }
+                    CachedCandidate::Missing(trust, offer) => {
+                        let total = offer.offer().offer().package_bytes();
+                        (
+                            Phase::Download(trust, offer),
+                            Progress::Downloading { received: 0, total },
+                        )
+                    }
                 }
+            }
+            Phase::Remember(candidate) => {
+                // Metadata buffers retire before launch instead of sharing retained file custody.
+                candidate.save_restart_evidence(context)?;
+                (Phase::Ready(candidate), Progress::Ready)
             }
             Phase::RestoreArchive(trust, offer) => {
                 let authorization = offer.authorization(&trust);
@@ -135,16 +155,12 @@ impl State {
             }
             Phase::Discover(trust) => {
                 let request = trust.application_request(self.channel(&trust, context)?, context)?;
-                match self.repository.discover(&trust, request, &mut now, context)? {
+                match self.source.network()?.discover(&trust, request, &mut now, context)? {
                     Check::MoreRoots => (Phase::Discover(trust), Progress::Checking),
                     Check::Offer(offer) => {
                         let admission = offer.offer().admission();
                         if admission == Admission::Prepare {
-                            let total = offer.offer().offer().package_bytes();
-                            (
-                                Phase::Download(trust, offer),
-                                Progress::Downloading { received: 0, total },
-                            )
+                            (Phase::Reopen(trust, offer), Progress::Reopening)
                         } else if admission == Admission::UpdateEngine {
                             (
                                 Phase::SelectEngine(
@@ -161,16 +177,21 @@ impl State {
             }
             Phase::SelectEngine(trust, minimum) => {
                 match trust.pin_updater(self.channel(&trust, context)?, minimum, context)? {
+                    Some(image) if self.source.cached() => {
+                        image.require_activation()?;
+                        (Phase::ActivationReady(Box::new(image)), Progress::ActivationReady)
+                    }
                     Some(image) => (
                         Phase::EngineReady(EngineUpdate::Accepted(Box::new(image))),
                         Progress::EngineReady,
                     ),
+                    None if self.source.cached() => (Phase::Empty, Progress::Unavailable),
                     None => (Phase::DiscoverEngine(trust, minimum), Progress::CheckingEngine),
                 }
             }
             Phase::DiscoverEngine(trust, minimum) => {
                 let request = trust.updater_request(self.channel(&trust, context)?, context)?;
-                match self.repository.discover(&trust, request, &mut now, context)? {
+                match self.source.network()?.discover(&trust, request, &mut now, context)? {
                     Check::MoreRoots => {
                         (Phase::DiscoverEngine(trust, minimum), Progress::CheckingEngine)
                     }
@@ -196,7 +217,7 @@ impl State {
                     }
                 }
             }
-            Phase::Download(trust, offer) => match self.repository.prepare(
+            Phase::Download(trust, offer) => match self.source.network()?.prepare(
                 &offer,
                 &trust,
                 &self.installation,
@@ -238,7 +259,7 @@ impl State {
                         *trust,
                         *offer,
                         *download,
-                        &self.workspace,
+                        setup_storage::BundleSource::Extract(&self.workspace),
                         &mut now,
                         context,
                     )?;
@@ -268,7 +289,7 @@ impl State {
 
     /// Close HTTP custody before dropping storage owners on this admitted cleanup worker.
     pub(super) fn retire(&mut self) -> Result<(), Failure> {
-        self.repository.retire()?;
+        self.source.retire()?;
         self.phase = Phase::Empty;
         self.progress = Progress::Closed;
         self.retirement_failure = None;

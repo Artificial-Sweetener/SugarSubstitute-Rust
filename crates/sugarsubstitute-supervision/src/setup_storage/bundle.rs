@@ -1,23 +1,31 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Admit complete application distributions using shared verified payload custody.
+mod manifest;
 mod payload;
 mod prepared;
+mod runtime;
+mod source;
+pub use source::BundleSource;
 #[cfg(test)]
 mod tests;
 use crate::durable_storage::files::{self, Directory};
 pub(super) use payload::Payload;
-pub(super) use prepared::VerifiedCopy;
+pub(super) use prepared::VerifiedRuntime;
+pub(super) use runtime::RuntimePackage;
 use std::{
     io,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 use sugarsubstitute_contracts::{execution::JobContext, update::Component};
 
 /// Complete application distribution with authenticated and pinned source files.
 /// Updater-only packages have a distinct owner and cannot enter application provisioning.
+/// Imports may share immutable payload custody; each signed import retains its own archive.
 pub struct VerifiedBundle {
-    pub(super) payload: Payload,
+    pub(super) payload: Arc<Payload>,
+    pub(super) download: Option<super::VerifiedDownload>,
 }
 impl VerifiedBundle {
     /// Bind the immutable source to native creation before any worker can read its files.
@@ -34,12 +42,18 @@ impl VerifiedBundle {
     /// # Errors
     /// Rejects incomplete application packages, altered bytes, unsafe paths and cancellation.
     pub fn from_download(
-        source: super::VerifiedDownload,
+        mut source: super::VerifiedDownload,
         cache: &super::cache::RuntimeCache,
         context: &JobContext,
     ) -> io::Result<Self> {
         Ok(Self {
-            payload: Payload::from_download(source, cache, Component::Application, context)?,
+            payload: Arc::new(Payload::from_download(
+                &mut source,
+                cache,
+                Component::Application,
+                context,
+            )?),
+            download: Some(source),
         })
     }
     /// Verify a full distribution against the manifest hash compiled into its trusted installer.
@@ -47,11 +61,14 @@ impl VerifiedBundle {
     /// # Errors
     /// Rejects malformed manifests, incomplete distributions, changed bytes and unsafe paths.
     pub fn open(root: &Path, expected: &str, context: &JobContext) -> io::Result<Self> {
-        Ok(Self { payload: Payload::open(root, expected, Component::Application, context)? })
+        Ok(Self {
+            payload: Arc::new(Payload::open(root, expected, Component::Application, context)?),
+            download: None,
+        })
     }
     /// Original authenticated archive identity; this does not grant activation authority.
     pub fn download_identity(&self) -> Option<&sugarsubstitute_update::VerifiedBytes> {
-        self.payload.download_identity()
+        self.download.as_ref().map(super::VerifiedDownload::identity)
     }
     /// Exact provisioning paths retained under this distribution's filesystem custody.
     pub fn worker_paths(&self) -> (PathBuf, PathBuf) {

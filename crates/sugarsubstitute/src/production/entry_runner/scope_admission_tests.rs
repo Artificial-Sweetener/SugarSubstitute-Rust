@@ -82,20 +82,12 @@ fn mailbox_wake_failure_retains_original_and_runner_observes_cleanup_after_admis
         launch_selection: None,
         diagnostics: Default::default(),
         installation: invalid.clone(),
-        options: super::super::super::options::ProductionEntryOptions {
-            configuration: invalid.clone(),
-            package: invalid.clone(),
-            metadata: invalid.clone(),
-            cubes: invalid.clone(),
-            script: invalid.clone(),
-            profile: invalid.clone(),
-        }
-        .into(),
+        options: super::unopened_paths()?.into(),
     };
     let mut runner = EntryRunner::new(
         command,
         invalid,
-        Box::new(NoChild),
+        Box::new(NoChild(None)),
         crate::diagnostics::DiagnosticHealth::fixture(),
     );
     let identity = Arc::new(());
@@ -195,20 +187,12 @@ fn actual_runner_native_rejects_finite_box_and_real_finite_scope_preserves_origi
         launch_selection: None,
         diagnostics: Default::default(),
         installation: invalid.clone(),
-        options: super::super::super::options::ProductionEntryOptions {
-            configuration: invalid.clone(),
-            package: invalid.clone(),
-            metadata: invalid.clone(),
-            cubes: invalid.clone(),
-            script: invalid.clone(),
-            profile: invalid.clone(),
-        }
-        .into(),
+        options: super::unopened_paths()?.into(),
     };
     let mut runner = EntryRunner::new(
         command,
         invalid,
-        Box::new(NoChild),
+        Box::new(NoChild(None)),
         crate::diagnostics::DiagnosticHealth::fixture(),
     );
     let wake = Arc::new(ScopeWake::default());

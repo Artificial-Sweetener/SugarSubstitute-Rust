@@ -2,9 +2,14 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Recover unambiguous saved configuration without selecting or executing an old payload.
 use super::*;
-use std::collections::BTreeMap;
 
 const MAX_ENTRIES: usize = 1024;
+
+/// Stable-entry installations recover protected generations; historical setups retain their format.
+pub(super) enum Sources {
+    Historical,
+    Protected,
+}
 
 /// Saved-data recovery needs a decision that automatic inspection cannot safely make.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -23,12 +28,13 @@ impl std::fmt::Display for RecoveryFailure {
 }
 impl std::error::Error for RecoveryFailure {}
 
-/// A missing entry permits bounded data recovery, never a guessed "newest" executable.
+/// Recover bounded saved data, never a guessed "newest" executable.
 /// Incomplete generations and unrelated files remain untouched. Every completed record must
 /// agree on saved configuration before the installer can offer automatic repair.
 pub(super) fn discover(
     root: &Directory,
     marker: File,
+    sources: Sources,
     context: &JobContext,
 ) -> io::Result<Option<ExistingInstallation>> {
     let releases = root.path().join("releases");
@@ -50,19 +56,44 @@ pub(super) fn discover(
         if kind.is_file() {
             continue;
         }
+        if matches!(sources, Sources::Protected)
+            && entry.file_name().to_str().is_none_or(|name| {
+                sugarsubstitute_contracts::installation::GenerationId::new(name.to_owned()).is_err()
+            })
+        {
+            continue;
+        }
         let generation = Directory::open(&entry.path(), false)?;
         match generation.read("installation-ready.json") {
             Ok(_) => {}
             Err(cause) if cause.kind() == io::ErrorKind::NotFound => continue,
             Err(cause) => return Err(cause),
         }
-        let mut candidate = ExistingInstallation::from_directory(
-            root,
-            generation,
-            marker.try_clone()?,
-            None,
-            context,
-        )?;
+        let mut candidate = match sources {
+            Sources::Historical => ExistingInstallation::from_directory(
+                root,
+                generation,
+                marker.try_clone()?,
+                None,
+                context,
+            )?,
+            Sources::Protected => {
+                let (generation, custody, identity) =
+                    crate::setup_storage::transaction::generation::configuration(
+                        &entry.path(),
+                        context,
+                    )?;
+                let mut candidate = ExistingInstallation::from_directory(
+                    root,
+                    generation,
+                    marker.try_clone()?,
+                    Some(&identity),
+                    context,
+                )?;
+                candidate._inputs.push(custody);
+                candidate
+            }
+        };
         candidate.summary.launch_entry_missing = true;
         if let Some(previous) = &recovered {
             if !equivalent(previous, &candidate) {
@@ -84,19 +115,10 @@ pub(super) fn discover(
 /// Ignore only the checked generation-local configuration path and argument ordering.
 /// User-authored startup bytes and every other launch/Comfy selection remain exact.
 fn equivalent(left: &ExistingInstallation, right: &ExistingInstallation) -> bool {
-    fn arguments(existing: &ExistingInstallation) -> BTreeMap<&str, &str> {
-        existing
-            .descriptor
-            .arguments
-            .chunks_exact(2)
-            .filter(|pair| pair[0] != "--startup-config")
-            .map(|pair| (pair[0].as_str(), pair[1].as_str()))
-            .collect()
-    }
     left.startup == right.startup
         && left.runtime == right.runtime
         && left.summary.selection == right.summary.selection
-        && arguments(left) == arguments(right)
+        && left.descriptor.same_external_inputs(&right.descriptor)
 }
 
 #[cfg(test)]

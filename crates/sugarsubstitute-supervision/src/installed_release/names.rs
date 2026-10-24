@@ -18,7 +18,6 @@ pub(crate) enum CapturePathRole {
     ClientImage,
     ClientPdb,
     HandlerImage,
-    HandlerPdb,
 }
 impl CapturePathRole {
     const fn slot(self) -> u8 {

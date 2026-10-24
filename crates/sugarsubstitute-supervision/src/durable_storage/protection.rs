@@ -27,9 +27,11 @@ use sugarsubstitute_contracts::execution::JobContext;
 use windows::Win32::{Foundation::HANDLE, Storage::FileSystem::*};
 
 mod exclusion;
+mod local_storage;
 mod outcome;
 mod publication;
 mod retirement;
+mod stage;
 pub(crate) use outcome::{DomainFailure, with_domain};
 pub(crate) use publication::Publication;
 

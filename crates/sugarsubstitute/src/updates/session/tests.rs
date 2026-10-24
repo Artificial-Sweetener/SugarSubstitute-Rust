@@ -4,6 +4,7 @@
 use super::super::test_support::{Manual, Wake, observe};
 use super::*;
 use std::sync::atomic::{AtomicU64, Ordering};
+mod capacity;
 fn finish(session: &mut Session, wake: &Wake) -> Result<()> {
     session.request_shutdown()?;
     observe(wake, || session.poll_shutdown())?;

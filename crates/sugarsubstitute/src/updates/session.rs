@@ -35,6 +35,7 @@ pub(super) struct Session {
     jobs: JobSequence,
     initializing: Option<OwnedJob<Option<Worker>, io::Error>>,
     worker: Option<Worker>,
+    engine: Option<super::engine::Engine>,
     receipt: Option<Receipt>,
     until: Option<Moment>,
     cleanup_until: Option<Moment>,
@@ -60,6 +61,7 @@ impl Session {
             jobs: JobSequence::new(),
             initializing: None,
             worker: None,
+            engine: None,
             receipt: None,
             until: None,
             cleanup_until: None,
@@ -74,9 +76,10 @@ impl Session {
 
     /// Consume terminal values before admitting another phase; never block on worker storage.
     fn advance(&mut self, maximum: NonZeroUsize) -> Result<HeadlessStep> {
-        if let Some(client) = &self.client {
-            client.drain_completions(maximum)?;
-        }
+        let batch = match &self.client {
+            Some(client) => client.drain_completions(maximum)?,
+            None => CompletionBatch { notifications: Vec::new(), remaining: 0 },
+        };
         if let Some(job) = &mut self.initializing
             && let Some(done) = job.try_take_completion()
         {
@@ -122,17 +125,41 @@ impl Session {
                     return Err(stopped("Update preparation", other));
                 }
             }
-            if !self.closing
+            if !self.closing && observed.progress == Progress::EngineReady {
+                let client = self.client.as_ref().ok_or("Update execution absent")?.clone();
+                let until = self.until.ok_or("Update campaign cutoff absent")?;
+                let work = client.create_scope(
+                    ScopeSpec { id: ScopeId::new(3)?, deadline: Some(until) },
+                    Some(self.work.as_ref().ok_or("Update scope absent")?),
+                )?;
+                let cleanup = client.create_scope(
+                    ScopeSpec { id: ScopeId::new(4)?, deadline: None },
+                    Some(self.cleanup.as_ref().ok_or("Update cleanup scope absent")?),
+                )?;
+                self.engine = Some(super::engine::Engine::new(
+                    worker.take_engine()?,
+                    client,
+                    work,
+                    cleanup,
+                    until,
+                ));
+            } else if !self.closing
                 && matches!(
                     observed.progress,
                     Progress::Ready
-                        | Progress::EngineReady
                         | Progress::AlreadyPreparing
                         | Progress::Decision(_)
                         | Progress::Unavailable
                 )
             {
                 self.result = Some(observed.progress);
+            }
+        }
+        if let Some(engine) = &mut self.engine {
+            engine.advance(&batch, &self.jobs)?;
+            if engine.succeeded() && !self.closing {
+                // Child exit proves retirement, not that a particular application update is ready.
+                self.result = Some(Progress::Closed);
             }
         }
         if self.closing || self.result.is_some() || (self.initialized && self.worker.is_none()) {
@@ -145,7 +172,7 @@ impl Session {
             )
             .into());
         }
-        if self.worker.as_ref().is_some_and(|worker| !worker.pending()) {
+        if self.engine.is_none() && self.worker.as_ref().is_some_and(|worker| !worker.pending()) {
             self.submit(false)?;
         }
         Ok(HeadlessStep::Active)
@@ -168,22 +195,19 @@ impl Session {
             .ok_or("Update scope absent")?;
         let until = if cleanup { self.cleanup_until } else { self.until }
             .ok_or("Update deadline absent")?;
-        let receipt = Receipt::default();
-        let sample = receipt.clone();
-        self.worker.as_mut().ok_or("Update worker absent")?.submit(
+        self.receipt = super::admission::submit(
+            self.worker.as_mut().ok_or("Update worker absent")?,
             client,
             scope,
             self.jobs.allocate()?,
             until,
-            move || sample.now(),
         )?;
-        self.receipt = Some(receipt);
         Ok(())
     }
 }
 
 /// Preserve bounded panic diagnostics and replacement identity after actual worker termination.
-fn stopped<T, E>(stage: &'static str, outcome: JobOutcome<T, E>) -> Box<dyn Error> {
+pub(super) fn stopped<T, E>(stage: &'static str, outcome: JobOutcome<T, E>) -> Box<dyn Error> {
     match outcome {
         JobOutcome::Panicked(cause) => format!("{stage} panicked: {}", cause.as_str()).into(),
         JobOutcome::Coalesced { replacement } => {

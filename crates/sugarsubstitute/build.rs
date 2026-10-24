@@ -3,9 +3,11 @@
 //! Emit native launch compatibility and embed Windows activation, privilege and DPI policy.
 
 use std::{error::Error, io::Read, path::PathBuf};
+use sugarsubstitute_update::{ENGINE_PROTOCOL, ENGINE_RELEASE};
 
 /// Emit the producing build's contract and apply its native manifest with the selected linker.
 fn main() -> Result<(), Box<dyn Error>> {
+    emit_engine_identity()?;
     emit_launch_contracts()?;
     for (variable, name, limit) in [
         ("SUGARSUBSTITUTE_SETUP_DISTRIBUTION", "installer-distribution.json", 4 * 1024 * 1024),
@@ -26,6 +28,22 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!("cargo::rustc-link-arg=/MANIFEST:EMBED");
         println!("cargo::rustc-link-arg=/MANIFESTINPUT:{}", manifest.display());
     }
+    Ok(())
+}
+
+/// Record the exact declarations compiled into the updater, separately from entry compatibility.
+/// Decimal text preserves the entire release range in JavaScript release tooling.
+fn emit_engine_identity() -> Result<(), Box<dyn Error>> {
+    let output = PathBuf::from(std::env::var_os("OUT_DIR").ok_or("Cargo output directory absent")?);
+    let release = ENGINE_RELEASE;
+    let protocol = ENGINE_PROTOCOL;
+    if release == 0 || protocol == 0 {
+        return Err("Producing engine identity must be positive".into());
+    }
+    std::fs::write(
+        output.join("sugarsubstitute-engine-build.json"),
+        format!("{{\"schema_version\":1,\"release\":\"{release}\",\"protocol\":{protocol}}}\n"),
+    )?;
     Ok(())
 }
 
@@ -61,7 +79,13 @@ fn emit_launch_contracts() -> Result<(), Box<dyn Error>> {
     let output = PathBuf::from(std::env::var_os("OUT_DIR").ok_or("Cargo output directory absent")?);
     let native = std::env::var("CARGO_CFG_TARGET_OS")? == "windows"
         && std::env::var_os("CARGO_FEATURE_WINDOWS_NATIVE_HOST").is_some();
+    let activation = sugarsubstitute_contracts::application_launch::installation::InstallationActivationContract::produced(ENGINE_RELEASE, ENGINE_PROTOCOL)?;
     for (source, name, bytes) in [
+        (
+            "installation.rs",
+            sugarsubstitute_contracts::application_launch::installation::CONTRACT_FILE,
+            activation.as_slice(),
+        ),
         (
             "current.json",
             "sugarsubstitute-application.json",

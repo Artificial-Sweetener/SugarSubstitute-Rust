@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 /** Preserve provisioning schemas and recovery decisions over the retained native record owner. */
+import { diagnostic } from './diagnostics.mjs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { nativeRecords } from './records'
@@ -54,7 +55,7 @@ export async function ready(
     const candidate = path.join(resolved, entry.name)
     let current: Record<string, unknown>
     try { current = (await readRecord(entry.name)).value } catch (cause) {
-      console.warn('Preserving unreadable provisioning attempt', entry.name, (cause as Error).name)
+      diagnostic('warn', 'Preserving unreadable provisioning attempt', entry.name, (cause as Error).name)
       continue
     }
     const installation = current.installation

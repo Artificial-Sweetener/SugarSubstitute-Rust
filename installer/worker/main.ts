@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 /** Headless upstream worker. The Rust host owns its process family and visible window. */
 import { app } from 'electron'
-import { format } from 'node:util'
+import { diagnosticMessage, diagnostic, bindDiagnostics } from './diagnostics.mjs'
 import { createConnection, type Socket } from 'node:net'
 import { Decoder, VERSION } from './protocol.mjs'
 import { options } from './selection'
@@ -14,6 +14,7 @@ import { Events } from './events.mjs'
 import { NativeRecords, NativeRecordError, bindNativeRecords } from './records'
 import { NativeMetadata, MetadataError, bindNativeMetadata, metadataRoot } from './metadata'
 import { NativeDownloads, DownloadStorageError, bindNativeDownloads, downloadsRoot } from './downloads'
+import { ProductFailure } from './product-messages'
 
 declare const UPSTREAM_REVISION: string
 let transport: Socket | undefined
@@ -39,6 +40,7 @@ const downloads = new NativeDownloads((id, data) => write(id, 'downloads', data)
 bindNativeDownloads(downloads)
 const events = new Events(write)
 const send = (id: string | null, event: string, data: unknown) => events.send(id, event, data)
+bindDiagnostics((level: string, message: string) => send(active?.id ?? null, 'diagnostic', { level, message }))
 const flushing = setInterval(() => events.flush(), 100)
 app.on('will-quit', () => clearInterval(flushing))
 // Electron's default uncaught-error handler opens a native dialog. This worker
@@ -57,7 +59,7 @@ process.on('unhandledRejection', fatal)
 
 for (const level of ['log', 'info', 'warn', 'error', 'debug'] as const) {
   console[level] = (...args: unknown[]) => {
-    send(active?.id ?? null, 'diagnostic', { level, message: format(...args).slice(-8192) })
+    send(active?.id ?? null, 'diagnostic', { level, message: diagnosticMessage(args) })
   }
 }
 const runtimeProfile = argument('cache-runtime')
@@ -65,7 +67,7 @@ app.setPath('userData', runtimeProfile)
 app.setPath('sessionData', runtimeProfile)
 app.commandLine.appendSwitch('disk-cache-size', String(64 * 1024 * 1024))
 app.disableHardwareAcceleration()
-observe((event, properties) => send(active?.id ?? null, 'diagnostic', { event, properties }))
+observe(event => send(active?.id ?? null, 'diagnostic', { message: diagnosticMessage([event]) }))
 
 async function dispatch(command: ReturnType<Decoder['push']>[number]): Promise<void> {
   if (command.operation === 'downloads_reply') { downloads.accept(command); return }
@@ -107,7 +109,7 @@ async function dispatch(command: ReturnType<Decoder['push']>[number]): Promise<v
     await downloads.drain()
     send(command.id, control.signal.aborted ? 'cancelled' : 'failed', {
       message: cause instanceof Error ? cause.message : String(cause),
-      ...(cause instanceof NativeRecordError || cause instanceof MetadataError || cause instanceof DownloadStorageError ? { statusCode: cause.statusCode } : {}),
+      ...(cause instanceof NativeRecordError || cause instanceof MetadataError || cause instanceof DownloadStorageError || cause instanceof ProductFailure ? { statusCode: cause.statusCode } : {}),
     })
   } finally {
     await downloads.drain()
@@ -132,7 +134,7 @@ void app.whenReady().then(() => {
   const decoder = new Decoder()
   socket.on('connect', () => {
     socket.write(JSON.stringify({ version: VERSION, event: 'authenticate', token }) + '\n')
-    send(null, 'ready', { cacheProtocol: 2, storageProtocol: 1, metadataProtocol: 1, downloadsProtocol: 1, upstreamRevision: UPSTREAM_REVISION, operations: ['options', 'inspect', 'provision', 'integrate', 'cancel'] })
+    send(null, 'ready', { cacheProtocol: 2, storageProtocol: 1, metadataProtocol: 1, downloadsProtocol: 1, textProtocol: 1, upstreamRevision: UPSTREAM_REVISION, operations: ['options', 'inspect', 'provision', 'integrate', 'cancel'] })
   })
   socket.on('data', (chunk: Buffer) => {
     try {
@@ -160,7 +162,7 @@ void app.whenReady().then(() => {
     downloads.close(cause)
     metadata.close(cause)
     records.close(cause)
-    console.error('Provisioning connection failed', cause.message)
+    diagnostic('error', 'Provisioning connection failed', cause.message)
     active?.control.abort()
     if (!active) app.exit(1)
   })

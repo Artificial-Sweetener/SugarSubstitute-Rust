@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "event_bytes": 8192,
+  "field_bytes": 2048,
+  "queue_events": 64,
+  "batch_events": 3,
+  "page_bytes": 65536,
+  "history_pages": 8,
+  "worker_line_bytes": 4096,
+  "worker_lines": 8,
+  "identity_bytes": 80,
+  "operation_bytes": 128,
+  "sensitive_field_patterns": ["token", "password", "secret", "credential", "authorization", "cookie", "key", "headers", "environment", "arguments", "argv", "input", "payload", "body", "path", "directory"],
+  "sensitive_field_names": ["cause", "error", "details", "secondary", "primary", "failure", "stderr", "stdout", "url"],
+  "sensitive_text": ["bearer ", "password", "token", "secret", "credential", "api_key", "authorization", "cookie", ":\\", ":/", "http://", "https://", "file://", "\\\\", "/home/", "/users/", "/tmp/"],
+  "closed_code_fields": ["operation", "native_stage"]
+}

@@ -72,6 +72,16 @@ fn accepted_launcher_and_shortcut_publish_under_captured_directory_pin() -> Test
         assert_eq!(std::fs::read(root.path().join(LINK))?, stable);
         assert_eq!(std::fs::read(root.path().join(OWNERSHIP))?, record);
         assert_eq!(std::fs::read(selection)?, before);
+        for directory in [root.path(), &root.path().join(".selection-state")] {
+            for entry in std::fs::read_dir(directory)? {
+                let name = entry?.file_name();
+                let name = name.to_string_lossy();
+                assert!(!name.starts_with(".substitute-publication-"));
+                assert!(!name.starts_with(".launcher-image-stage"));
+                assert!(!name.starts_with(".launcher-link-stage"));
+                assert!(!name.starts_with(".setup-link-stage"));
+            }
+        }
         assert_eq!(
             std::fs::read(root.path().join("releases/installed/SugarSubstitute.lnk"))?,
             old_link

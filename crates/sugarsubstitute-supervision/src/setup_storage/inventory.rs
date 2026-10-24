@@ -95,6 +95,7 @@ fn require_application(manifest: &sugarsubstitute_update::package::Manifest) -> 
         if [
             INSTALLED_MANIFEST,
             "application-update-v1.record",
+            "installation-authorization-v1.record",
             "setup-generation.json",
             "installation-ready.json",
             "startup.local.toml",
@@ -138,6 +139,43 @@ pub(super) fn verify(
     files: &BTreeSet<String>,
     context: &sugarsubstitute_contracts::execution::JobContext,
 ) -> io::Result<()> {
+    verify_inventory(root, files, &BTreeSet::new(), context)
+}
+
+/// Runtime admission permits absent known symbols while rejecting undeclared loadable content.
+pub(super) fn verify_runtime(
+    root: &Path,
+    manifest: &sugarsubstitute_update::package::Manifest,
+    context: &sugarsubstitute_contracts::execution::JobContext,
+) -> io::Result<()> {
+    let files = manifest.names();
+    let optional = files
+        .iter()
+        .filter(|name| name.strip_prefix("app/").is_some_and(is_diagnostic_file))
+        .cloned()
+        .collect();
+    verify_inventory(root, &files, &optional, context)
+}
+
+/// Only fixed native diagnostic roles are deferred; arbitrary extensions remain runtime inputs.
+pub(super) fn is_diagnostic_file(relative: &str) -> bool {
+    matches!(
+        relative,
+        "sugarsubstitute.pdb"
+            | "sugarsubstitute_launcher.pdb"
+            | "sugarsubstitute_updater.pdb"
+            | "crashpad_handler.pdb"
+            | "sugarsubstitute_crashpad_client.pdb"
+    )
+}
+
+/// Preserve canonical enumeration and alias rejection for both complete and runtime admission.
+fn verify_inventory(
+    root: &Path,
+    files: &BTreeSet<String>,
+    optional: &BTreeSet<String>,
+    context: &sugarsubstitute_contracts::execution::JobContext,
+) -> io::Result<()> {
     let mut directories = BTreeSet::new();
     for file in files {
         let mut parent = Path::new(file).parent();
@@ -175,7 +213,7 @@ pub(super) fn verify(
             }
         }
     }
-    if !files.iter().all(|name| observed.contains(name))
+    if !files.iter().all(|name| observed.contains(name) || optional.contains(name))
         || !observed.contains("setup-manifest.json")
     {
         return Err(invalid("Installer package files disappeared during verification"));
@@ -233,6 +271,7 @@ mod tests {
         for path in [
             "app/application-package.json",
             "app/APPLICATION-UPDATE-V1.RECORD",
+            "app/INSTALLATION-AUTHORIZATION-V1.RECORD",
             "app/STARTUP.LOCAL.TOML",
             "app/setup-generation.json/child",
             "app/capture/report",

@@ -8,14 +8,14 @@ source_roots = ["crates", "tools", "native", "installer"]
 [[script_boundaries]]
 path = "installer/worker/provision.ts"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:cd4e77aef993eba60104226e8aa17b714db61de0f3cc8f760d1c18feb9cd300e"
+source_sha256 = "sha256:200e9625132af274695e393280baa0b1c61f3ddae85e822d3f76be383e47ec9d"
 rationale = "Inspect existing managed or attached ComfyUI and Python paths; download storage is delegated to native capability consumers."
 role = "external_runtime"
 
 [[script_boundaries]]
 path = "installer/worker/integration.ts"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:dfa4014158654969e9e7416c0ce932060da7d5d61fb8cc8657f45024a35ceded"
+source_sha256 = "sha256:031855f513876ca2a06e9f44711c6d5ecb9792ea2b6c19b59e8f61effce0a202"
 rationale = "Probe the external SugarCubes requirements file before invoking its installed Python owner."
 role = "external_runtime"
 
@@ -50,28 +50,28 @@ role = "fixture"
 [[script_boundaries]]
 path = "installer/tests/metadata.test.mjs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:0124cd19fb73ece50ad4ed4bb23280be666aae0bb902d0342dad1fd7d78b0079"
+source_sha256 = "sha256:1dacc4147ceb9f5bc8ec7180a70d77d3f79a9e8c9e033eb1960cc3a1a5cc7449"
 rationale = "Owned build-receipt input and external reply actors verify native metadata streams."
 role = "fixture"
 
 [[script_boundaries]]
 path = "installer/tests/ownership.test.mjs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:5f5ca03e775ab46166410c38a1e79c846579c3546a53482f5cf1b8a08c35e85c"
+source_sha256 = "sha256:0c1a330e6993e30c0bcecae4f5975b47e0461048694a9abf64359f4dba27c630"
 rationale = "Owned fixtures and native record reply actors verify managed environment preservation and cache delegation."
 role = "fixture"
 
 [[script_boundaries]]
 path = "installer/tests/worker.test.mjs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:8700fe5541520988751df99dd7eda4575fa85ec18291a9d992cb9fd740c5a672"
+source_sha256 = "sha256:8d53f5bf223029ce648f65ebec1b166efb59a4d5955c71228953f79e8f2b8276"
 rationale = "Owned temporary worker arguments and actual headless Electron verify private startup, protocol rejection and host closure."
 role = "fixture"
 
 [[script_boundaries]]
 path = "installer/tests/surface-runner.cjs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:6640f16496ed3a2bd6141dfd9e733c208209f5cc1bcda5433b4b722ba7172aab"
+source_sha256 = "sha256:0746a5de092ff894bc1d688e82055001527e00f596fd46b2bfa8df10021b2ad9"
 rationale = "Native Electron qualification records observed installer surfaces under its explicit artifact destination."
 role = "fixture"
 
@@ -91,7 +91,7 @@ rationale = "Authoritative checker names and literal negative-test inputs; no ru
 [[namespace_reviews]]
 path = "tools/xtask/src/cache_storage/tests.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:72ec3daf78a0fc5427f552645988c4ccb53c93d336fffc788b8a63097e9e17a4"
+source_sha256 = "sha256:661af1e7c41a588f07c4087be624b00c5c0c654fbb17e6cace7e01d33fb909ea"
 rationale = "Isolated repository fixtures deliberately contain registered and adversarial namespace spellings."
 
 [[namespace_reviews]]
@@ -99,3 +99,16 @@ path = "tools/xtask/src/cache_storage/registry.rs"
 owner = "sugarsubstitute-xtask"
 source_sha256 = "sha256:3ad2b5343eb02de7f0449c47ac48cbebd1ae4f4f65990fab6f3c21d19290704c"
 rationale = "Registry parser rejection fixtures and exact expected scope-directory data."
+
+[[namespace_reviews]]
+path = "tools/test_updater_qualification.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:cc23458d26a2a168e479720aa31e61d4ea93f3e116fab1d052646904ff1027af"
+rationale = "The isolated publication observer regression deliberately creates legacy payload namespace bytes to prove that only registered shared generations count and unrelated original content is preserved."
+
+[[script_boundaries]]
+path = "installer/tests/localization.test.mjs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:169a7ad569afe9fafe1fe6effb5a6166cdd29975670df49ca2937c8511ae9263"
+rationale = "The isolated localization contract tests read the owned TypeScript progress/failure module into a virtual compiler and reject invented copy and message codes; they perform no runtime cache acquisition."
+role = "fixture"

@@ -9,6 +9,8 @@ const machines = { 'windows-x86_64': 'IMAGE_FILE_MACHINE_AMD64', 'windows-aarch6
 const systemLibraries = new Set([
   'advapi32.dll', 'ntdll.dll', 'kernel32.dll', 'bcryptprimitives.dll', 'user32.dll',
   'ole32.dll', 'oleaut32.dll', 'winhttp.dll',
+  // Windows Sockets: https://learn.microsoft.com/windows/win32/api/winsock/nf-winsock-wsastartup
+  'ws2_32.dll',
   'dwmapi.dll', 'comdlg32.dll', 'gdi32.dll', 'winmm.dll', 'uxtheme.dll', 'comctl32.dll',
   'combase.dll', 'uiautomationcore.dll', 'dwrite.dll', 'imm32.dll', 'd2d1.dll',
   'shell32.dll', 'shlwapi.dll', 'rstrtmgr.dll', 'iphlpapi.dll', 'bcrypt.dll',

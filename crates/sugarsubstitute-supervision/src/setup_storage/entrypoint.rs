@@ -32,23 +32,8 @@ pub(super) fn stage(generation: &Path) -> io::Result<()> {
         Err(cause) if cause.kind() == io::ErrorKind::NotFound => {}
         Err(cause) => return Err(cause),
     }
-    let bytes = link_bytes(&directory, &generation.join("sugarsubstitute.exe"))?;
+    let bytes = native::encode(&generation.join("sugarsubstitute.exe"))?;
     files::write_immutable(&destination, &bytes, files::create_new)
-}
-
-/// Generate complete shell bytes on the storage worker; the caller owns final publication.
-fn link_bytes(directory: &Directory, executable: &Path) -> io::Result<Vec<u8>> {
-    let staged = staging::unique_path(directory, ".setup-link-stage")?;
-    native::create(
-        &staged,
-        executable,
-        executable.parent().ok_or_else(|| invalid("Shell target parent absent"))?,
-    )?;
-    let leaf = staged
-        .file_name()
-        .and_then(|value| value.to_str())
-        .ok_or_else(|| invalid("Staged shell entry name is invalid"))?;
-    files::read_bounded(&mut directory.read(leaf)?, 65536)
 }
 
 /// Unknown or edited links are preserved; only exact retained setup output is replaceable.

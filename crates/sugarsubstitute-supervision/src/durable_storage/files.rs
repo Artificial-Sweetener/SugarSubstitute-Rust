@@ -6,6 +6,8 @@ mod child;
 mod entries;
 #[allow(unsafe_code)]
 mod identity;
+#[cfg(test)]
+mod lexical_tests;
 mod observations;
 mod ordinary;
 mod retirement;
@@ -60,6 +62,12 @@ impl Directory {
     /// Borrow the observed location without allowing callers to detach it from its native pins.
     pub(crate) fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Lend original ancestry pins to the authenticated native launch transfer.
+    /// Callers retain this directory through receiver duplication; paths grant no equivalent custody.
+    pub(crate) fn native_pins(&self) -> impl Iterator<Item = &File> {
+        self._pins.iter()
     }
 
     /// Retain this exact native parent independently of its current borrow or originating job.
@@ -151,13 +159,14 @@ fn open_component(
 }
 
 /// Reject nonlocal, unbounded or ambiguous ancestry before native traversal.
+/// Native account discovery supplies verbatim local drive paths; retain their original spelling.
 pub(crate) fn lexical(path: &Path) -> io::Result<()> {
     if !path.is_absolute()
         || path.as_os_str().len() > 4096
         || path.parent().is_none()
         || path.components().any(|part| matches!(part, Component::ParentDir | Component::CurDir))
         || path.to_string_lossy().split(['\\', '/']).any(|part| part == "." || part == "..")
-        || path.to_string_lossy().starts_with(r"\\")
+        || !matches!(path.components().next(),Some(Component::Prefix(prefix)) if matches!(prefix.kind(),Prefix::Disk(_)|Prefix::VerbatimDisk(_)))
     {
         return Err(invalid("Select an absolute local folder below a drive root"));
     }

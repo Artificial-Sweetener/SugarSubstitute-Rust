@@ -112,23 +112,24 @@ impl Pipeline {
         submit(&self.client, &self.scope, JobId::new(self.next)?)
     }
 
-    /// Wait for signalled retiring capacity before an expected-success production submission.
-    /// Immediate rejection assertions continue to use `admit` with the same original ledger.
-    pub(crate) fn admit_when_ready<T>(
+    /// Admit a phase after actual capacity notifications retire earlier reservations. Keep one
+    /// job identity and the original observer bound; permanent or non-memory rejection is final.
+    pub(crate) fn admit_available<T>(
         &mut self,
         mut submit: impl FnMut(&ExecutionClient, &Scope, JobId) -> io::Result<T>,
     ) -> Result<T, Failure> {
         let id = self.admit(|_, _, id| Ok(id))?;
         self.observe(|| match submit(&self.client, &self.scope, id) {
+            Ok(value) => Some(Ok(value)),
             Err(cause)
                 if matches!(
-                    cause.get_ref().and_then(|inner| inner.downcast_ref::<AdmissionError>()),
+                    cause.get_ref().and_then(|cause| cause.downcast_ref::<AdmissionError>()),
                     Some(AdmissionError::MemorySaturated { .. })
                 ) =>
             {
                 None
             }
-            result => Some(result),
+            Err(cause) => Some(Err(cause)),
         })?
         .map_err(|cause| Box::new(cause) as Failure)
     }
@@ -161,6 +162,41 @@ impl Pipeline {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn phase_admission_observes_actual_capacity_release_before_reusing_its_job_id() -> TestResult {
+        let mut pipeline = Pipeline::new()?;
+        let mut retained =
+            Some(pipeline.run_once(240 * 1024 * 1024, |context| Ok(context.memory().clone()))?);
+        let mut attempts = 0;
+        let mut job = pipeline.admit_available(|client, scope, id| {
+            attempts += 1;
+            let result = client.submit_blocking(
+                scope,
+                JobSpec {
+                    id,
+                    operation: Operation::Infrastructure,
+                    class: JobClass::InfrastructureLifecycle,
+                    deadline: Some(Moment::from_nanos(2_000_000_000)),
+                    reservation_bytes: 32 * 1024 * 1024,
+                    replacement: None,
+                },
+                |_| Ok::<_, io::Error>(7),
+            );
+            if matches!(&result, Err(AdmissionError::MemorySaturated { .. })) {
+                drop(retained.take());
+            }
+            result.map_err(io::Error::other)
+        })?;
+        assert!(attempts >= 2);
+        assert_eq!(job.spec().id.get(), 2);
+        assert_eq!(job.spec().reservation_bytes, 32 * 1024 * 1024);
+        assert!(matches!(
+            pipeline.observe(|| job.try_take_completion())?.outcome,
+            JobOutcome::Success(7)
+        ));
+        Ok(())
+    }
 
     #[test]
     fn single_attempt_reports_retained_memory_rejection_without_running_the_factory() -> TestResult
@@ -201,30 +237,6 @@ mod tests {
         })?;
         assert_eq!(attempts, 2);
         assert_eq!(value, 136);
-        Ok(())
-    }
-    #[test]
-    fn production_submission_keeps_identity_and_waits_for_signalled_capacity() -> TestResult {
-        let mut pipeline = Pipeline::new()?;
-        let wake = pipeline.wake.clone();
-        let mut identity = None;
-        let mut attempts = 0;
-        let value = pipeline.admit_when_ready(|_, _, id| {
-            assert!(identity.is_none_or(|first| first == id));
-            identity = Some(id);
-            attempts += 1;
-            if attempts == 1 {
-                wake.wake().map_err(io::Error::other)?;
-                Err(io::Error::other(AdmissionError::MemorySaturated {
-                    requested_bytes: 136,
-                    available_bytes: 72,
-                }))
-            } else {
-                Ok(136)
-            }
-        })?;
-        assert_eq!(value, 136);
-        assert_eq!(attempts, 2);
         Ok(())
     }
 }

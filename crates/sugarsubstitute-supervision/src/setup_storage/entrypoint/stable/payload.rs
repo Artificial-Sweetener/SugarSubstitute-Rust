@@ -25,12 +25,23 @@ pub(super) fn ensure(
         Err(cause) if cause.kind() == io::ErrorKind::NotFound => {}
         Err(cause) => return Err(cause),
     }
+    replace(root, record, false, protection, context)
+}
+
+/// Copy a verified source and atomically publish it after the caller establishes replacement authority.
+pub(super) fn replace(
+    root: &Directory,
+    record: &record::Record,
+    replacing: bool,
+    protection: &mut Protection,
+    context: &JobContext,
+) -> io::Result<File> {
     let source =
         Directory::open(&root.path().join("releases").join(record.source.id.as_str()), false)?;
     let mut input = source.read(EXECUTABLE)?;
     verify(&mut input, record, context)?;
-    let staged = staging::unique_path(root, ".launcher-image-stage")?;
-    let mut output = protection.file(&staged, context)?;
+    let mut stage = publication::Stage::create(root, protection, context)?;
+    let output = stage.file();
     let mut buffer = [0; 65536];
     loop {
         check(context)?;
@@ -40,26 +51,10 @@ pub(super) fn ensure(
         }
         output.write_all(&buffer[..count])?;
     }
-    files::sync(&output, context)?;
-    drop(output);
-    let identity = {
-        let leaf = staged
-            .file_name()
-            .and_then(|name| name.to_str())
-            .ok_or_else(|| invalid("Launcher stage leaf absent"))?;
-        let mut copied = root.read(leaf)?;
-        protection.verify_file(&copied)?;
-        verify(&mut copied, record, context)?;
-        files::file_identity(&copied)?
-    };
+    files::sync(output, context)?;
+    verify(output, record, context)?;
     check(context)?;
-    protection.publish(
-        &staged,
-        &root.path().join(EXECUTABLE),
-        identity,
-        Publication::File { replace: false },
-        context,
-    )?;
+    stage.publish(&root.path().join(EXECUTABLE), replacing, protection, context)?;
     let mut file = root.read(EXECUTABLE)?;
     protection.verify_file(&file)?;
     verify(&mut file, record, context)?;
@@ -67,7 +62,11 @@ pub(super) fn ensure(
 }
 
 /// Match the retained handle to protected ownership without reopening its path.
-fn verify(file: &mut File, record: &record::Record, context: &JobContext) -> io::Result<()> {
+pub(super) fn verify(
+    file: &mut File,
+    record: &record::Record,
+    context: &JobContext,
+) -> io::Result<()> {
     if files::length(file, context)? != record.bytes || hash(file, context)? != record.sha256 {
         return Err(invalid(
             "Stable launcher bytes differ from protected ownership; existing files have been preserved",

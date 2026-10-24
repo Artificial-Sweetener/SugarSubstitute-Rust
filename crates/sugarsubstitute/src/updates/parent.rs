@@ -4,7 +4,9 @@
 mod cleanup;
 mod continuation;
 mod launch;
+mod prepared;
 use crate::job_sequence::JobSequence;
+pub(super) use prepared::{LaunchScope, ProbeCustody};
 use std::{error::Error, io, sync::Arc, time::Instant};
 use sugarsubstitute_contracts::{
     execution::{
@@ -50,6 +52,10 @@ pub(crate) struct Parent {
     stop_issued: bool,
     retired: bool,
     failure: Option<Failure>,
+    probe: bool,
+    probe_custody: Option<ProbeCustody>,
+    successful_exit: bool,
+    completion_taken: bool,
 }
 impl Parent {
     /// Construct inert ownership after authenticated application readiness; admission happens in advance.
@@ -64,28 +70,12 @@ impl Parent {
         let until = client.now()?.checked_add(super::CAMPAIGN)?;
         let wake_at =
             Instant::now().checked_add(super::CAMPAIGN).ok_or("Update campaign overflow")?;
-        Ok(Self {
+        Ok(Self::owned(
             client,
-            work,
-            cleanup,
-            native,
-            key,
-            retained: Some(Retained { source: Some(source), input: None, registry: None }),
-            constructing: None,
-            preparing: None,
-            retiring: None,
-            retiring_application: false,
-            process: None,
-            until,
+            LaunchScope { work, cleanup, native, key, until },
+            Retained { source: Some(source), input: None, registry: None },
             wake_at,
-            shutdown: None,
-            continuation: None,
-            grace_wake: None,
-            settle_wake: None,
-            stop_issued: false,
-            retired: false,
-            failure: None,
-        })
+        ))
     }
 
     /// Consume real worker/process observations. Optional update failures close only this owner.
@@ -158,7 +148,7 @@ impl Parent {
 
     /// Complete only after native settlement and observed destruction of all preparation custody.
     pub(crate) fn settled(&self) -> bool {
-        self.retired
+        self.retired && self.probe_custody.is_none()
     }
 
     /// File verification may borrow a run guard; the running helper itself retains only image files.
@@ -257,6 +247,7 @@ impl Parent {
                     }
                 }
                 if exited.is_some() {
+                    self.successful_exit = exited == Some(0) && self.shutdown.is_none();
                     self.close(None)?;
                 }
                 if let Some(cause) = failure {

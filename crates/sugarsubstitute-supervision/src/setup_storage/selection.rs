@@ -8,10 +8,13 @@
 mod entry;
 mod failure;
 pub use entry::{InheritedLaunch, capture_launch};
+mod completion;
+mod configuration;
 #[allow(unsafe_code)]
 mod inheritance;
 mod initialize;
 mod launcher;
+pub(in crate::setup_storage) use completion::InstallationAuthorization;
 pub use inheritance::{InheritedSelection, LaunchInheritance, capture_launch_selection};
 mod namespace;
 pub(super) mod publication;
@@ -247,9 +250,16 @@ impl SelectionStore {
 }
 
 /// Serialize selection publication and its one-time continuity marker with the same OS lock.
-fn writer(root: &Directory, protection: &Protection, context: &JobContext) -> io::Result<File> {
+fn writer(
+    root: &Directory,
+    protection: &Protection,
+    context: &JobContext,
+) -> Result<File, SelectionFailure> {
     let lock = protection.rendezvous(&root.path().join(LOCK), context)?;
-    lock.try_lock().map_err(io::Error::from)?;
+    lock.try_lock().map_err(|cause| match cause {
+        std::fs::TryLockError::WouldBlock => SelectionFailure::WriterBusy,
+        std::fs::TryLockError::Error(cause) => SelectionFailure::Storage(cause),
+    })?;
     Ok(lock)
 }
 

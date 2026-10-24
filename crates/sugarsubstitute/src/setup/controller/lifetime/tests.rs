@@ -135,8 +135,22 @@ fn cleanup_uses_native_creation_fact_instead_of_the_discarded_worker_outcome() -
             messages.extend(controller.advance()?);
             Ok(controller.relaunch.is_none())
         })?;
-        assert_eq!(messages.len(), 1);
-        let message: serde_json::Value = serde_json::from_str(&messages[0])?;
+        let messages: Vec<serde_json::Value> = messages
+            .iter()
+            .map(|message| serde_json::from_str(message))
+            .collect::<std::result::Result<_, _>>()?;
+        let product: Vec<_> =
+            messages.iter().filter(|message| message["event"] != "diagnostic").collect();
+        assert_eq!(product.len(), 1);
+        assert_eq!(
+            messages.iter().filter(|message| message["event"] == "diagnostic").count(),
+            usize::from(creation != CreationOutcome::Created)
+        );
+        if creation != CreationOutcome::Created {
+            assert_eq!(messages[0]["event"], "diagnostic");
+            assert_eq!(messages[0]["data"]["message"], "original worker outcome");
+        }
+        let message = product[0];
         assert_eq!(
             message["event"],
             match creation {
@@ -206,9 +220,16 @@ fn recovery_failure_retains_the_original_open_request_until_cleanup_succeeds() -
     observe(&wake, || {
         for message in controller.advance()? {
             let message: serde_json::Value = serde_json::from_str(&message)?;
+            if message["event"] == "diagnostic" {
+                assert_eq!(message["data"]["message"], "original launch failure");
+                continue;
+            }
             assert_eq!(message["id"], "open");
             assert_eq!(message["event"], "failed");
-            assert_eq!(message["data"]["message"], "original launch failure");
+            assert_eq!(
+                message["data"]["message"],
+                sugarsubstitute_contracts::localization::installer::messages("en").setup_failed
+            );
             reports += 1;
         }
         Ok(controller.relaunch.is_none())
@@ -261,6 +282,8 @@ fn closing_cancels_preparation_but_observes_transfer_and_creation_without_discar
 -> Result<()> {
     for (work, cancel) in [
         (StorageWork::Metadata, true),
+        (StorageWork::Publish, true),
+        (StorageWork::Open, false),
         (StorageWork::Transfer, false),
         (StorageWork::Launch, false),
     ] {
@@ -303,10 +326,13 @@ fn production_payload_import_and_preparation_jobs_authorize_protected_cache_crea
 {
     let (mut controller, wake) = fixture()?;
     controller.relaunch = None;
-    for work in [StorageWork::Payload, StorageWork::Import, StorageWork::Prepare] {
+    for work in
+        [StorageWork::Payload, StorageWork::Import, StorageWork::Prepare, StorageWork::Publish]
+    {
         let root = tempfile::tempdir()?;
         let path = root.path().to_owned();
         controller.submit(work, move |context| {
+            assert!(context.deadline().is_some());
             let cache = setup_storage::cache::RuntimeCache::open(
                 &path,
                 setup_storage::cache::CachePolicy::default(),
@@ -340,4 +366,50 @@ fn production_payload_import_and_preparation_jobs_authorize_protected_cache_crea
         controller.settled()
     })?;
     controller.finish()
+}
+
+#[test]
+fn close_during_open_retains_returned_creator_until_observed_retirement() -> Result<()> {
+    let (mut controller, wake) = fixture()?;
+    let launch = controller.relaunch.take().ok_or("Creator absent")?;
+    controller.install_id = Some("open".into());
+    let boundary = Arc::new((Mutex::new(Boundary::default()), Condvar::new()));
+    let worker_boundary = boundary.clone();
+    let worker_wake = wake.clone();
+    controller.submit(StorageWork::Open, move |_| {
+        let mut state =
+            worker_boundary.0.lock().map_err(|_| io::Error::other("Boundary poisoned"))?;
+        state.entered = true;
+        worker_wake.wake().map_err(io::Error::other)?;
+        let (_state, timeout) = worker_boundary
+            .1
+            .wait_timeout_while(state, Duration::from_secs(10), |state| !state.release)
+            .map_err(|_| io::Error::other("Boundary poisoned"))?;
+        if timeout.timed_out() {
+            return Err(io::Error::other("Boundary observer expired"));
+        }
+        Ok(StorageResult::Opened(super::super::completion::OpenedLaunch::Installed(launch)))
+    })?;
+    observe(&wake, || Ok(boundary.0.lock().map_err(|_| "Boundary poisoned")?.entered))?;
+    controller.close()?;
+    assert!(controller.relaunch.is_none());
+    boundary.0.lock().map_err(|_| "Boundary poisoned")?.release = true;
+    boundary.1.notify_all();
+    observe(&wake, || {
+        controller.poll_storage()?;
+        Ok(controller.storage.is_none())
+    })?;
+    assert!(controller.relaunch.is_some());
+    assert!(!controller.settled()?);
+    assert!(matches!(
+        controller.storage.as_ref().ok_or("Recovery absent")?.work,
+        StorageWork::Retire
+    ));
+    observe(&wake, || {
+        assert!(controller.advance()?.is_empty());
+        controller.settled()
+    })?;
+    assert!(controller.relaunch.is_none());
+    controller.finish()?;
+    Ok(())
 }

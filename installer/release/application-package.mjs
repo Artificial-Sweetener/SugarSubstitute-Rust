@@ -16,6 +16,7 @@ const nativeRoles = [
   'sugarsubstitute-application.json',
   'sugarsubstitute-updater.exe', 'sugarsubstitute_updater.pdb', 'sugarsubstitute-updater.json',
   'sugarsubstitute-launcher.exe', 'sugarsubstitute_launcher.pdb', 'sugarsubstitute-launcher.json',
+  'sugarsubstitute-installation-activation.json',
 ]
 
 /** Inspect actual copied host, launcher, updater and crash-handler images before publishing

@@ -27,6 +27,7 @@ async function fixture() {
     }
   }
   await fs.writeFile(path.join(app, 'sugarsubstitute-updater.json'), '{"schema_version":1,"preparation_protocols":[1],"installation_schemas":[1]}\n')
+  await fs.writeFile(path.join(app, 'sugarsubstitute-installation-activation.json'), '{"schema_version":1,"authorization_schemas":[1],"engine_release":"1","engine_protocol":1}\n')
   const runtime = path.join(root, 'vcruntime140.dll')
   await fs.writeFile(runtime, 'inert runtime fixture')
   return { root, app, cubes, build, runtimeFiles: [runtime] }
@@ -60,7 +61,7 @@ test('packaging authenticates the producer declaration byte-for-byte, including 
   const entry = manifest.files.find(file => file.path === 'app/sugarsubstitute-application.json')
   assert.deepEqual(entry, { path: 'app/sugarsubstitute-application.json', bytes: declaration.length, sha256: hash(declaration) })
   assert.deepEqual(await fs.readFile(path.join(output, entry.path)), declaration)
-  for (const name of ['sugarsubstitute-launcher.exe', 'sugarsubstitute_launcher.pdb', 'sugarsubstitute-launcher.json', 'sugarsubstitute-updater.exe', 'sugarsubstitute_updater.pdb', 'sugarsubstitute-updater.json']) {
+  for (const name of ['sugarsubstitute-launcher.exe', 'sugarsubstitute_launcher.pdb', 'sugarsubstitute-launcher.json', 'sugarsubstitute-updater.exe', 'sugarsubstitute_updater.pdb', 'sugarsubstitute-updater.json', 'sugarsubstitute-installation-activation.json']) {
     const bytes = await fs.readFile(path.join(f.app, name))
     const item = manifest.files.find(file => file.path === `app/${name}`)
     assert.deepEqual(item, { path: `app/${name}`, bytes: bytes.length, sha256: hash(bytes) })
@@ -69,7 +70,7 @@ test('packaging authenticates the producer declaration byte-for-byte, including 
 })
 
 test('packaging requires each producing launcher and updater executable, symbols and declaration', async () => {
-  for (const name of ['sugarsubstitute-launcher.exe', 'sugarsubstitute_launcher.pdb', 'sugarsubstitute-launcher.json', 'sugarsubstitute-updater.exe', 'sugarsubstitute_updater.pdb', 'sugarsubstitute-updater.json']) {
+  for (const name of ['sugarsubstitute-launcher.exe', 'sugarsubstitute_launcher.pdb', 'sugarsubstitute-launcher.json', 'sugarsubstitute-updater.exe', 'sugarsubstitute_updater.pdb', 'sugarsubstitute-updater.json', 'sugarsubstitute-installation-activation.json']) {
     const f = await fixture(), output = path.join(f.root, 'output')
     await fs.writeFile(path.join(f.app, 'sugarsubstitute-application.json'), '{"schema_version":1,"installed_launch_protocols":[1]}')
     await fs.writeFile(path.join(f.app, 'sugarsubstitute-launcher.json'), '{"schema_version":1,"installation_schemas":[1],"installed_launch_protocol":1}')

@@ -46,7 +46,7 @@ pub(super) fn publish_marker(
     protection: &Protection,
     context: &JobContext,
 ) -> io::Result<File> {
-    let _writer = writer(root, protection, context)?;
+    let _writer = writer(root, protection, context).map_err(io::Error::other)?;
     verify_record(root, protection)?;
     if let Some(marker) = read_marker(installation, protection)? {
         return Ok(marker);

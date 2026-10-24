@@ -47,7 +47,17 @@ impl Worker {
     /// # Errors
     /// Rejects relative paths and zero idle bounds. Required engines are prepared independently.
     pub fn new(configuration: Configuration) -> io::Result<Self> {
-        Self::configured(configuration, false)
+        if configuration.idle.is_zero() {
+            return Err(invalid("Invalid automatic preparation idle timeout"));
+        }
+        Self::configured(
+            configuration.installation,
+            configuration.workspace,
+            super::state::Source::Distribution {
+                identity: configuration.repository,
+                repository: Box::new(Repository::new(configuration.policy, configuration.idle)),
+            },
+        )
     }
 
     /// Reopen a verified completed candidate without issuing HTTP or extracting provisioning files.
@@ -55,25 +65,28 @@ impl Worker {
     /// use authenticated archive repair; absent repair bytes yield `Unavailable`. Invalid, expired
     /// or revoked evidence remains an observed error.
     /// # Errors
-    /// Applies the same inert configuration validation as online preparation.
-    pub fn resume_cached(configuration: Configuration) -> io::Result<Self> {
-        Self::configured(configuration, true)
+    /// Rejects relative installation/workspace paths without accessing files or HTTP.
+    pub fn resume_cached(configuration: CachedConfiguration) -> io::Result<Self> {
+        Self::configured(
+            configuration.installation,
+            configuration.workspace,
+            super::state::Source::Installed,
+        )
     }
 
     /// Keep online and restart campaigns under the same admission and retirement contract.
-    fn configured(configuration: Configuration, cached: bool) -> io::Result<Self> {
-        if !configuration.installation.is_absolute()
-            || !configuration.workspace.is_absolute()
-            || configuration.idle.is_zero()
-        {
+    fn configured(
+        installation: PathBuf,
+        workspace: PathBuf,
+        source: super::state::Source,
+    ) -> io::Result<Self> {
+        if !installation.is_absolute() || !workspace.is_absolute() {
             return Err(invalid("Invalid automatic preparation configuration"));
         }
         let state = State {
-            repository: Repository::new(configuration.policy, configuration.idle),
-            installation: configuration.installation,
-            workspace: configuration.workspace,
-            repository_id: configuration.repository,
-            cached,
+            installation,
+            workspace,
+            source,
             subscription: None,
             phase: Phase::Open,
             progress: Progress::Opening,
@@ -125,6 +138,7 @@ impl Worker {
                         self.progress,
                         Progress::Ready
                             | Progress::EngineReady
+                            | Progress::ActivationReady
                             | Progress::AlreadyPreparing
                             | Progress::Decision(_)
                             | Progress::Unavailable
@@ -226,6 +240,16 @@ impl Worker {
         }
     }
 
+    /// Transfer a fully observed, accepted startup engine from cache-only preparation.
+    /// # Errors
+    /// Rejects pending, failed or cancelled work and every non-activation phase.
+    pub fn take_activation(&mut self) -> io::Result<Box<PreparationImage>> {
+        match self.transfer(Progress::ActivationReady)? {
+            Phase::ActivationReady(image) => Ok(image),
+            _ => Err(invalid("Activation image custody is absent")),
+        }
+    }
+
     /// Release a ready phase only after typed completion and actual HTTP retirement.
     fn transfer(&mut self, expected: Progress) -> io::Result<Phase> {
         if self.pending() || self.closing || self.halted || self.progress != expected {
@@ -236,12 +260,14 @@ impl Worker {
             Err(TryLockError::Poisoned(cause)) => cause.into_inner(),
             Err(TryLockError::WouldBlock) => return Err(invalid("Update worker still owns state")),
         };
-        if !state.repository.settled() {
+        if !state.source.settled() {
             return Err(invalid("Update HTTP custody remains"));
         }
         if !matches!(
             (&state.phase, expected),
-            (Phase::Ready(_), Progress::Ready) | (Phase::EngineReady(_), Progress::EngineReady)
+            (Phase::Ready(_), Progress::Ready)
+                | (Phase::EngineReady(_), Progress::EngineReady)
+                | (Phase::ActivationReady(_), Progress::ActivationReady)
         ) {
             return Err(invalid("Prepared update custody is absent"));
         }

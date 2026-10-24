@@ -110,8 +110,8 @@ fn creator_recovery_is_idempotent_and_cannot_undo_health_acceptance() -> TestRes
             || NOW,
             context,
         )?;
-        candidate.restore_unstarted(&recovery, context)?;
-        candidate.restore_unstarted(&recovery, context)?;
+        candidate.prepared().restore_unstarted(&recovery, context)?;
+        candidate.prepared().restore_unstarted(&recovery, context)?;
         let restored = store.load(context)?.ok_or("Selection absent")?;
         drop(admitted);
         drop(run);
@@ -122,7 +122,7 @@ fn creator_recovery_is_idempotent_and_cannot_undo_health_acceptance() -> TestRes
         let recovery = later.reserve_unstarted(&restored, context)?;
         let trial = later.begin_trial(&restored, context)?;
         let accepted = later.accept(&trial, context)?;
-        assert!(candidate.restore_unstarted(&recovery, context).is_err());
+        assert!(candidate.prepared().restore_unstarted(&recovery, context).is_err());
         assert_eq!(store.load(context)?, Some(accepted));
         fixture.preserved()?;
         Ok(())

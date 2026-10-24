@@ -2,6 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Own bounded application scheduling, cancellation, result delivery and worker teardown.
 
+#[cfg(windows)]
+#[allow(unsafe_code)]
+pub mod activation_channel;
 mod admission;
 mod admission_liveness;
 mod admission_timing;

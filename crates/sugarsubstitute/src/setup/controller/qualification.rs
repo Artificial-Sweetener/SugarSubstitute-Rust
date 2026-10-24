@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Qualify the actual installer controller and worker family without creating an application window.
+//! Qualify installer preparation and optional actual application creation on an offscreen desktop.
 use super::*;
 use std::{
     num::NonZeroUsize,
@@ -16,6 +16,7 @@ pub(in crate::setup) fn run(
     workspace: PathBuf,
     existing: Option<PathBuf>,
     native_installation: Option<PathBuf>,
+    launch: bool,
     distribution: &'static [u8],
 ) -> Result<Value> {
     let mut fixture = Fixture {
@@ -27,6 +28,8 @@ pub(in crate::setup) fn run(
         rejected_invalid: false,
         inspected: false,
         installed: None,
+        launch,
+        launched: false,
         deadline: Instant::now() + Duration::from_secs(300),
     };
     sugarsubstitute_desktop::run_headless(&mut fixture)?;
@@ -36,14 +39,16 @@ pub(in crate::setup) fn run(
         fixture.rejected_invalid
             && (fixture.existing.is_none() || (fixture.inspected && fixture.installed.is_some()))
     };
-    if !passed {
+    if !passed || (fixture.launch && !fixture.launched) {
         return Err("Installer qualification did not observe every required result".into());
     }
     Ok(json!({
         "schema_version":1, "passed":true, "invalid_environment_rejected":fixture.rejected_invalid,
         "existing_environment_inspected":fixture.inspected,
         "installed_executable":fixture.installed, "process_family_and_execution_settled":true,
+        "settlement_scope":"installer_workers",
         "native_maintenance":fixture.native_installation.is_some(),
+        "application_creation_observed":fixture.launched,
     }))
 }
 
@@ -56,9 +61,29 @@ struct Fixture {
     rejected_invalid: bool,
     inspected: bool,
     installed: Option<PathBuf>,
+    launch: bool,
+    launched: bool,
     deadline: Instant,
 }
 impl Fixture {
+    /// Exercise the same Open command as the surface; creation is not application health.
+    fn prepared(&mut self) -> Result<HeadlessStep> {
+        self.installed = Some(
+            self.controller
+                .installed
+                .as_ref()
+                .ok_or("Installation result missing")?
+                .root()
+                .join("sugarsubstitute-launcher.exe"),
+        );
+        if self.launch {
+            self.phase = 4;
+            self.request("open", "open", json!({}))?;
+            Ok(HeadlessStep::Active)
+        } else {
+            Ok(HeadlessStep::Shutdown)
+        }
+    }
     fn selection(&self, root: &std::path::Path) -> Value {
         json!({
             "locale":"en","installRoot":self.workspace.join("installed"),
@@ -95,15 +120,7 @@ impl Fixture {
                     if self.controller.worker.is_some() {
                         return Err("Native maintenance started a provisioning worker".into());
                     }
-                    self.installed = Some(
-                        self.controller
-                            .installed
-                            .as_ref()
-                            .ok_or("Maintenance result missing")?
-                            .directory()
-                            .join("sugarsubstitute.exe"),
-                    );
-                    return Ok(HeadlessStep::Shutdown);
+                    return self.prepared();
                 }
                 (1, Some("invalid"), Some("failed")) => {
                     self.rejected_invalid = true;
@@ -123,14 +140,10 @@ impl Fixture {
                     self.request("install", "install", selection)?;
                 }
                 (3, Some("install"), Some("completed")) => {
-                    self.installed = Some(
-                        self.controller
-                            .installed
-                            .as_ref()
-                            .ok_or("Installed result missing")?
-                            .directory()
-                            .join("sugarsubstitute.exe"),
-                    );
+                    return self.prepared();
+                }
+                (4, Some("open"), Some("completed")) => {
+                    self.launched = true;
                     return Ok(HeadlessStep::Shutdown);
                 }
                 _ => {
@@ -188,5 +201,53 @@ impl HeadlessLifetime for Fixture {
     }
     fn finish_shutdown(&mut self) -> Result<()> {
         self.controller.finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A controller reply alone proves only the creation outcome that Open actually reports.
+    #[test]
+    fn launch_qualification_waits_for_open_completion() -> Result<()> {
+        let mut fixture = awaiting_open();
+        assert!(matches!(fixture.progress()?, HeadlessStep::Active));
+        assert!(!fixture.launched);
+        fixture.controller.reply(Some("open"), "progress", json!({}))?;
+        assert!(matches!(fixture.progress()?, HeadlessStep::Active));
+        assert!(!fixture.launched);
+        fixture.controller.reply(Some("open"), "completed", json!({}))?;
+        assert!(matches!(fixture.progress()?, HeadlessStep::Shutdown));
+        assert!(fixture.launched);
+        Ok(())
+    }
+
+    #[test]
+    fn launch_qualification_rejects_failed_or_unrelated_completion() -> Result<()> {
+        for (id, event) in [("open", "failed"), ("maintain", "completed")] {
+            let mut fixture = awaiting_open();
+            fixture.controller.reply(Some(id), event, json!({}))?;
+            assert!(fixture.progress().is_err());
+            assert!(!fixture.launched);
+        }
+        Ok(())
+    }
+
+    /// No native resources are opened; production controller output drives the observer.
+    fn awaiting_open() -> Fixture {
+        Fixture {
+            controller: Controller::new(PathBuf::new(), PathBuf::new(), &[]),
+            workspace: PathBuf::new(),
+            existing: None,
+            native_installation: None,
+            phase: 4,
+            rejected_invalid: false,
+            inspected: false,
+            installed: None,
+            launch: true,
+            launched: false,
+            deadline: Instant::now() + Duration::from_secs(300),
+        }
     }
 }

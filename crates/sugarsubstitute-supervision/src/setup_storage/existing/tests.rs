@@ -8,6 +8,32 @@ use crate::setup_storage::test_worker::{self, TestResult};
 use super::fixture::installed as fixture;
 
 #[test]
+fn maintenance_retains_native_path_policy_for_every_saved_input() -> TestResult {
+    test_worker::run(|context, _| {
+        let temporary = tempfile::tempdir()?;
+        let root = Directory::open(temporary.path(), false)?;
+        let original = fixture(&root, context)?;
+        let path = original.join("sugarsubstitute-launch.local.json");
+        let bytes = std::fs::read(&path)?;
+        for index in [1, 3, 5, 7, 9, 11] {
+            for invalid in
+                [r"\\server\share\foreign", r"E:\", r"E:\folder\alternate:stream", "relative"]
+            {
+                let mut value: serde_json::Value = serde_json::from_slice(&bytes)?;
+                value["arguments"][index] = serde_json::json!(invalid);
+                let changed = serde_json::to_vec(&value)?;
+                std::fs::write(&path, &changed)?;
+                assert!(ExistingInstallation::read(&root, context).is_err());
+                assert_eq!(std::fs::read(&path)?, changed);
+            }
+        }
+        std::fs::write(&path, bytes)?;
+        assert!(ExistingInstallation::read(&root, context)?.is_some());
+        Ok(())
+    })
+}
+
+#[test]
 fn maintenance_preserves_exact_config_and_external_launch_paths() -> TestResult {
     test_worker::run(|context, _| {
         let temporary = tempfile::tempdir()?;
@@ -24,14 +50,16 @@ fn maintenance_preserves_exact_config_and_external_launch_paths() -> TestResult 
             std::fs::read(original.join("startup.local.toml"))?,
             std::fs::read(replacement.path().join("startup.local.toml"))?
         );
-        let descriptor: LaunchDescriptor = serde_json::from_slice(&std::fs::read(
+        let descriptor = LaunchDescriptor::parse(&std::fs::read(
             replacement.path().join("sugarsubstitute-launch.local.json"),
         )?)?;
         assert_eq!(
-            Path::new(&descriptor.arguments[1]),
+            descriptor.maintenance_configuration()?,
             replacement.path().join("startup.local.toml")
         );
-        assert_eq!(&descriptor.arguments[2..], &existing.descriptor.arguments[2..]);
+        assert!(descriptor.same_arguments(
+            &existing.descriptor.relocated(&replacement.path().join("startup.local.toml"))?
+        ));
         assert!(!root.path().join("external-comfy").exists());
         assert!(!root.path().join("models").exists());
         assert!(!root.path().join("outputs").exists());
@@ -99,10 +127,10 @@ fn damaged_or_redirected_launch_configuration_is_preserved_and_rejected() -> Tes
         let root = Directory::open(temporary.path(), false)?;
         let original = fixture(&root, context)?;
         let path = original.join("sugarsubstitute-launch.local.json");
-        let mut descriptor: LaunchDescriptor = serde_json::from_slice(&std::fs::read(&path)?)?;
+        let mut descriptor: serde_json::Value = serde_json::from_slice(&std::fs::read(&path)?)?;
         let external = root.path().join("user.toml");
         std::fs::write(&external, b"schema_version=1")?;
-        descriptor.arguments[1] = external.to_string_lossy().into_owned();
+        descriptor["arguments"][1] = serde_json::json!(external);
         let bytes = serde_json::to_vec(&descriptor)?;
         std::fs::write(&path, &bytes)?;
         assert!(inspect_installation(root.path(), context).is_err());

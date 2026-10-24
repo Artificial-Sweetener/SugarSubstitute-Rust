@@ -31,7 +31,7 @@ fn real_subscriber_failed_sink_is_nonrecursive_and_keeps_original_source_until_l
     let dropped = Arc::new(AtomicUsize::new(0));
     let health = DiagnosticHealth::fixture();
     let sink = dropped.clone();
-    let sub = subscriber(health.clone(), move || Fail(sink.clone()), "info".into());
+    let sub = subscriber(health.clone(), move || Fail(sink.clone()), "info".into(), None);
     tracing::subscriber::with_default(sub, || {
         tracing::info!(operation = "diagnostic_fixture", "actual fmt write");
     });
@@ -77,6 +77,40 @@ fn application_failure_and_write_failure_keep_both_independent_sources()
     assert_eq!(owned.diagnostic.0.native_error(), Some(109));
     assert!(resolve(Ok(()), &DiagnosticHealth::fixture()).is_ok());
     Ok(())
+}
+
+#[test]
+fn sensitive_fields_never_invoke_arbitrary_error_formatters() {
+    struct Untrusted(Arc<AtomicUsize>);
+    impl fmt::Debug for Untrusted {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            self.0.fetch_add(1, Ordering::AcqRel);
+            f.write_str("secret")
+        }
+    }
+    let calls = Arc::new(AtomicUsize::new(0));
+    let health = DiagnosticHealth::fixture();
+    let subscriber = subscriber(health.clone(), std::io::sink, "trace".into(), None);
+    tracing::subscriber::with_default(
+        subscriber,
+        || tracing::error!(operation="verify_primary_token",error=?Untrusted(calls.clone())),
+    );
+    assert!(health.check().is_ok());
+    assert_eq!(calls.load(Ordering::Acquire), 0);
+}
+
+#[test]
+fn drained_batches_observe_the_original_shared_stop_cutoff_without_extension() {
+    use sugarsubstitute_contracts::execution::Moment;
+    let queue = queue::Queue::new();
+    let drained = queue.take();
+    assert!(drained.frames.is_empty());
+    assert_eq!(drained.omitted, 0);
+    assert!(!drained.finished);
+    queue.stop(Moment::from_nanos(42));
+    queue.stop(Moment::from_nanos(999));
+    assert_eq!(drained.cutoff.load(Ordering::Acquire), 42);
+    assert_eq!(queue.take().cutoff.load(Ordering::Acquire), 42);
 }
 
 struct Scripted {
@@ -154,6 +188,97 @@ fn write_all_partial_then_terminal_error_keeps_original_full_source() -> Result<
             .is_some_and(|e| e.is::<Cause>())
     );
     drop(writer);
+    drop(health);
+    assert_eq!(dropped.load(Ordering::Acquire), 0);
+    drop(failure);
+    assert_eq!(dropped.load(Ordering::Acquire), 1);
+    Ok(())
+}
+
+#[test]
+fn routed_write_all_preserves_short_and_interrupted_success_without_duplicate_frames()
+-> Result<(), Box<dyn Error>> {
+    let health = DiagnosticHealth::fixture();
+    let mut routed = queue::Routed {
+        sink: Writer {
+            sink: Scripted {
+                steps: [Err(io::ErrorKind::Interrupted.into()), Ok(1), Ok(2)].into(),
+                calls: 0,
+            },
+            health: health.clone(),
+        },
+        queue: Some(queue::Queue::new()),
+        frame: Vec::new(),
+        oversized: false,
+        written: 0,
+        failed: false,
+    };
+    routed.write_all(b"abc")?;
+    assert_eq!(routed.frame, b"abc");
+    assert_eq!(routed.sink.sink.calls, 3);
+    assert!(!routed.failed);
+    assert!(health.check().is_ok());
+    routed.sink.sink.steps = [Ok(1)].into();
+    assert_eq!(routed.write(b"xy")?, 1);
+    assert_eq!(routed.frame, b"abcx");
+    Ok(())
+}
+#[test]
+fn complete_event_admission_includes_context_and_omission_without_poisoning_sink_health()
+-> Result<(), Box<dyn Error>> {
+    let health = DiagnosticHealth::fixture();
+    let mut routed = queue::Routed {
+        sink: Writer { sink: Vec::new(), health: health.clone() },
+        queue: None,
+        frame: Vec::new(),
+        oversized: false,
+        written: 0,
+        failed: false,
+    };
+    for _ in 0..20 {
+        if routed.write_all(&vec![b'x'; 1024]).is_err() {
+            break;
+        }
+    }
+    assert!(routed.oversized);
+    assert!(routed.sink.sink.len() <= queue::EVENT_BYTES);
+    assert!(routed.sink.sink.ends_with(b"omitted_events=1\n"));
+    assert!(routed.write_all(b"later").is_err());
+    assert!(!routed.failed);
+    health.check()?;
+    Ok(())
+}
+#[test]
+fn routed_partial_terminal_failure_marks_incomplete_data_and_preserves_the_original_cause()
+-> Result<(), Box<dyn Error>> {
+    let dropped = Arc::new(AtomicUsize::new(0));
+    let health = DiagnosticHealth::fixture();
+    let mut routed = queue::Routed {
+        sink: Writer {
+            sink: Scripted {
+                steps: [Ok(1), Err(io::Error::other(Cause(dropped.clone())))].into(),
+                calls: 0,
+            },
+            health: health.clone(),
+        },
+        queue: Some(queue::Queue::new()),
+        frame: Vec::new(),
+        oversized: false,
+        written: 0,
+        failed: false,
+    };
+    assert!(routed.write_all(b"abc").is_err());
+    assert!(routed.failed);
+    assert!(routed.frame.is_empty());
+    let failure = health.check().err().ok_or("Original routed failure absent")?;
+    assert!(
+        failure
+            .source()
+            .and_then(|cause| cause.downcast_ref::<io::Error>())
+            .and_then(io::Error::get_ref)
+            .is_some_and(|cause| cause.is::<Cause>())
+    );
+    drop(routed);
     drop(health);
     assert_eq!(dropped.load(Ordering::Acquire), 0);
     drop(failure);

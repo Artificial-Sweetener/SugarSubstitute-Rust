@@ -12,7 +12,7 @@ const MAX_RECORD_BYTES: usize = 32 * 1024;
 
 /// Retain the exact admitted launcher and its repair source independently of app selection.
 /// The recorded source generation is an owned recovery input.
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Record {
     schema_version: u32,
@@ -22,19 +22,20 @@ pub(super) struct Record {
     pub(super) contract: String,
 }
 impl Record {
-    /// Only a verified accepted payload may establish initial launcher ownership.
-    pub(super) fn from_application(
-        application: &VerifiedApplication,
+    /// Callers supply a verified accepted application or an authenticated completed candidate.
+    pub(super) fn from_source(
+        generation: &Generation,
+        directory: &Directory,
         context: &JobContext,
     ) -> io::Result<Self> {
-        let mut source = application.directory.read(EXECUTABLE)?;
-        let mut declaration = application.directory.read(LAUNCHER_CONTRACT_FILE)?;
+        let mut source = directory.read(EXECUTABLE)?;
+        let mut declaration = directory.read(LAUNCHER_CONTRACT_FILE)?;
         let contract =
             String::from_utf8(files::read_bounded(&mut declaration, MAX_CONTRACT_BYTES)?)
                 .map_err(io::Error::other)?;
         let record = Self {
             schema_version: 1,
-            source: application.generation.clone(),
+            source: generation.clone(),
             bytes: files::length(&source, context)?,
             sha256: payload::hash(&mut source, context)?,
             contract,
@@ -43,7 +44,7 @@ impl Record {
         Ok(record)
     }
     /// Bound persisted fields before using them for native copying or protocol admission.
-    fn validate(&self) -> io::Result<()> {
+    pub(super) fn validate(&self) -> io::Result<()> {
         if self.schema_version != 1
             || self.bytes == 0
             || self.bytes > 2 * 1024 * 1024 * 1024
@@ -55,6 +56,27 @@ impl Record {
         LauncherContract::decode(self.contract.as_bytes()).map_err(io::Error::other)?;
         Ok(())
     }
+}
+
+/// Replace only the ownership record whose exact value the caller verified under its writer.
+pub(super) fn replace(
+    state: &Directory,
+    previous: &Record,
+    next: &Record,
+    protection: &mut Protection,
+    context: &JobContext,
+) -> io::Result<()> {
+    if read(state, protection, context)?.as_ref() != Some(previous) {
+        return Err(invalid("Launcher ownership changed during replacement"));
+    }
+    next.validate()?;
+    let bytes = serde_json::to_vec(next).map_err(io::Error::other)?;
+    if bytes.len() > MAX_RECORD_BYTES {
+        return Err(invalid("Stable launcher ownership exceeds its bound"));
+    }
+    let mut stage = publication::Stage::create(state, protection, context)?;
+    std::io::Write::write_all(stage.file(), &bytes)?;
+    stage.publish(&state.path().join(RECORD), true, protection, context)
 }
 
 /// Missing state permits first publication; invalid state is retained for explicit recovery.
@@ -88,7 +110,7 @@ pub(super) fn read(
 pub(super) fn publish(
     state: &Directory,
     record: &Record,
-    protection: &Protection,
+    protection: &mut Protection,
     context: &JobContext,
 ) -> io::Result<()> {
     record.validate()?;
@@ -97,7 +119,5 @@ pub(super) fn publish(
         return Err(invalid("Stable launcher ownership exceeds its bound"));
     }
     check(context)?;
-    files::write_immutable(&state.path().join(RECORD), &bytes, |path| {
-        protection.file(path, context)
-    })
+    publication::write_immutable(state, RECORD, &bytes, protection, context)
 }

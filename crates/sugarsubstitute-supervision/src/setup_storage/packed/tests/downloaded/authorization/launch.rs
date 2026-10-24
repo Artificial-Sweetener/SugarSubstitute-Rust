@@ -6,6 +6,7 @@ use crate::setup_storage::{InstallationLaunch, InstallationRun, SelectionStore};
 use sugarsubstitute_contracts::installation::{
     Generation, GenerationId, PackageDigest, PreparationIntent,
 };
+mod broker;
 mod compatibility;
 mod inheritance;
 mod maintenance;

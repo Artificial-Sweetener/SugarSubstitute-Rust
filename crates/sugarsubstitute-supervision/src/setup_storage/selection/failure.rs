@@ -8,6 +8,10 @@ use sugarsubstitute_contracts::installation::Rejection;
 /// Preserve storage and domain causes while distinguishing stale writers from corruption.
 #[derive(Debug)]
 pub enum SelectionFailure {
+    /// A short selection writer owns the OS lock; retry selection within the caller's budget.
+    WriterBusy,
+    /// Another native owner holds installation-run exclusion; this grants no trial authority.
+    RunBusy(io::Error),
     /// Native storage, cancellation, or exclusion failure.
     Storage(io::Error),
     /// Malformed or unsupported state; the original bytes remain intact.
@@ -31,6 +35,8 @@ pub enum SelectionFailure {
 impl fmt::Display for SelectionFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
+            Self::WriterBusy => "Installation selection is being updated",
+            Self::RunBusy(_) => "Another application invocation owns this installation",
             Self::Storage(_) => "Installation selection storage failed",
             Self::Record(_) => "Installation selection record rejected",
             Self::Changed => "Installation selection changed before publication",
@@ -44,9 +50,13 @@ impl fmt::Display for SelectionFailure {
 impl Error for SelectionFailure {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            Self::Storage(cause) => Some(cause),
+            Self::Storage(cause) | Self::RunBusy(cause) => Some(cause),
             Self::Record(cause) => Some(cause),
-            Self::Changed | Self::Missing | Self::Revision | Self::RunOwnership => None,
+            Self::WriterBusy
+            | Self::Changed
+            | Self::Missing
+            | Self::Revision
+            | Self::RunOwnership => None,
             Self::Retirement { operation, .. } => Some(operation.as_ref()),
         }
     }

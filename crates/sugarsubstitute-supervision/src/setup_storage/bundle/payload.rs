@@ -3,8 +3,8 @@
 //! Retain exact distribution files authenticated by the installer or a verified update archive.
 use super::super::check;
 use super::super::invalid;
+use super::manifest::AuthenticatedManifest;
 use crate::durable_storage::files::{self, Directory};
-use sha2::{Digest, Sha256};
 use std::os::windows::fs::FileExt;
 use std::{
     fs::File,
@@ -28,7 +28,6 @@ pub(in crate::setup_storage) struct Payload {
     digest: String,
     pub(in crate::setup_storage) inventory: Manifest,
     pub(super) manifest_bytes: Vec<u8>,
-    download: Option<super::super::VerifiedDownload>,
     inputs: Vec<Input>,
     _manifest: File,
     _root: Directory,
@@ -47,27 +46,20 @@ impl Payload {
 
     /// Extract a signed update using the installer's package contract and retain all verified files.
     /// The source is the original exclusively held download, never a caller-supplied path/hash.
+    /// The caller retains that archive independently of these verified payload handles.
     /// Reserve `RESERVATION_BYTES` in addition to the retained download's storage claim.
     /// # Errors
     /// Rejects unsafe archives, incomplete distributions, altered files and cancellation.
     /// Failed attempts retain their files; retry creates a separate extraction generation.
     pub(in crate::setup_storage) fn from_download(
-        mut source: super::super::VerifiedDownload,
+        source: &mut super::super::VerifiedDownload,
         cache: &super::super::cache::RuntimeCache,
         component: sugarsubstitute_contracts::update::Component,
         context: &JobContext,
     ) -> io::Result<Self> {
-        let mut bundle = super::super::packed::downloaded(&mut source, cache, component, context)?;
+        let bundle = super::super::packed::downloaded(source, cache, component, context)?;
         check(context)?;
-        bundle.download = Some(source);
         Ok(bundle)
-    }
-    /// Authenticated archive identity when this bundle came from an update repository.
-    /// The bundle retains the exact source file; this identity alone is not activation authority.
-    pub(in crate::setup_storage) fn download_identity(
-        &self,
-    ) -> Option<&sugarsubstitute_update::VerifiedBytes> {
-        self.download.as_ref().map(super::super::VerifiedDownload::identity)
     }
     /// Verify every package byte before starting its provisioning worker.
     /// `expected` must be compiled into the trusted installer, never read from its directory.
@@ -108,14 +100,9 @@ impl Payload {
             unmanaged_payload(directory)?
         };
         let root = directory.path().to_path_buf();
-        let mut source = directory.read("setup-manifest.json")?;
-        let bytes = files::read_bounded(&mut source, 1024 * 1024)?;
-        let digest = format!("{:x}", Sha256::digest(&bytes));
-        if digest != expected {
-            return Err(invalid("Installer package authentication failed"));
-        }
-        let manifest = Manifest::decode(&bytes).map_err(io::Error::other)?;
-        super::super::inventory::require_component(&manifest, component)?;
+        let authenticated =
+            AuthenticatedManifest::open_directory(directory, expected, component, context)?;
+        let manifest = authenticated.inventory;
         let names = manifest.names();
         let mut inputs = Vec::new();
         let mut compatibility = super::super::compatibility::Compatibility::default();
@@ -151,13 +138,12 @@ impl Payload {
         Ok(Self {
             compatibility,
             root,
-            digest,
+            digest: authenticated.digest,
             inventory: manifest,
-            manifest_bytes: bytes,
-            download: None,
+            manifest_bytes: authenticated.bytes,
             inputs,
-            _manifest: source,
-            _root: directory,
+            _manifest: authenticated.file,
+            _root: authenticated.directory,
             _memory: memory,
             cache,
         })

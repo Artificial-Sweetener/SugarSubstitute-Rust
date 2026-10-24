@@ -9,6 +9,7 @@ use crate::setup_storage::{
 use sugarsubstitute_update::fixture::{EXPIRES, NOW, Set, key, root};
 type Failure = Box<dyn std::error::Error + Send + Sync>;
 mod creation_retry;
+mod entrypoint;
 mod fresh;
 mod launch_recovery;
 mod online;
@@ -214,7 +215,7 @@ fn offline_root_chain_advances_existing_trust_without_resetting_its_identity() -
                     executable: &fixture.source,
                 },
                 signed.request,
-                fixture.workspace.path(),
+                BundleSource::Extract(fixture.workspace.path()),
                 || NOW,
                 context,
             )?;

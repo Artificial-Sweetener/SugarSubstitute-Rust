@@ -46,7 +46,7 @@ fn prepared_candidate_retains_exclusion_until_its_actual_disposal() -> TestResul
     let mut first = Pipeline::new()?;
     let (fixture, signed) = initialized(&mut first)?;
     let (mut original, server) = campaign(&mut first, &fixture, signed, true)?;
-    for _ in 0..4 {
+    for _ in 0..5 {
         step(&mut first, &mut original)?;
     }
     server.finish()?;

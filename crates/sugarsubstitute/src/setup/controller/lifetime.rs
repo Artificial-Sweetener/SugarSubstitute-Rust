@@ -9,6 +9,11 @@ use sugarsubstitute_contracts::execution::{
 use sugarsubstitute_desktop::installer::InstallerLifetime;
 
 impl InstallerLifetime for Controller {
+    fn messages(
+        &self,
+    ) -> &'static sugarsubstitute_contracts::localization::installer::InstallerMessages {
+        sugarsubstitute_contracts::localization::installer::messages(&self.locale)
+    }
     fn prepare_browser(&mut self) {
         self.profiles.request();
     }
@@ -38,7 +43,7 @@ impl InstallerLifetime for Controller {
     }
     fn console(&self) -> Option<sugarsubstitute_desktop::installer::InstallerConsole<'_>> {
         self.console.as_ref()?.view(
-            sugarsubstitute_contracts::localization::installer::messages(&self.locale)["details"],
+            sugarsubstitute_contracts::localization::installer::messages(&self.locale).details,
         )
     }
     fn start(&mut self, wake: Arc<dyn CompletionWake>) -> Result<()> {

@@ -329,7 +329,7 @@ fn trust_writer_remains_held_through_final_check_and_candidate_preparation() -> 
             },
             case.context,
         )?;
-        assert_eq!(checks, 4);
+        assert_eq!(checks, 5);
         assert_eq!(
             entrypoint::selected(case.directory, case.context)?.ok_or("Selection absent")?.path(),
             case.original

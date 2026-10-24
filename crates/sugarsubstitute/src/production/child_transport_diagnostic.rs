@@ -233,11 +233,7 @@ mod tests {
     fn actual_formatter_transport_record_is_closed_and_bounded() -> Result<(), Box<dyn Error>> {
         let bytes = Arc::new(Mutex::new(Vec::new()));
         let output = bytes.clone();
-        let subscriber = tracing_subscriber::fmt()
-            .without_time()
-            .with_ansi(false)
-            .with_writer(move || Writer(output.clone()))
-            .finish();
+        let subscriber = crate::diagnostics::fixture_subscriber(move || Writer(output.clone()));
         let cause = NativeObservationError::new(
             "captured_parent_peer_mismatch",
             io::Error::from_raw_os_error(109),

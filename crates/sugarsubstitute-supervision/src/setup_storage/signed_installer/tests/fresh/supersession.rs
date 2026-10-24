@@ -36,7 +36,7 @@ fn import_version(
             executable: &source,
         },
         signed.request,
-        &path.join("workspace"),
+        BundleSource::Extract(&path.join("workspace")),
         || NOW,
         context,
     )?)

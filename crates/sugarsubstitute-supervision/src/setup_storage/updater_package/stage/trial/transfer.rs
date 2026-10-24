@@ -154,10 +154,7 @@ impl UpdaterProbeTransfer {
         .map_err(io::Error::other)?;
         let source = &self.trial.prepared.source;
         if matches!(disposition, UpdaterProbeDisposition::Accepted) {
-            let bytes = source
-                .payload
-                .download_identity()
-                .ok_or_else(|| invalid("Updater archive custody absent"))?;
+            let bytes = source.download.identity();
             source.offer.authorization(&source.trust).publish_updater(
                 bytes,
                 now,

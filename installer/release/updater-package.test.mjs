@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url'
 import { gunzipSync } from 'node:zlib'
 import { packageUpdater } from './updater-package.mjs'
 import { parseImage } from './windows-imports.mjs'
+import { engineBuildFile } from './engine-identity.mjs'
 
 const digest = bytes => createHash('sha256').update(bytes).digest('hex')
 const platform = 'windows-x86_64'
@@ -37,7 +38,9 @@ async function fixture(t) {
   const runtime = path.join(root, 'runtime.dll'), extra = path.join(root, 'extra.dll')
   await fs.writeFile(runtime, image(['extra.dll']))
   await fs.writeFile(extra, image(['kernel32.dll', 'runtime.dll']))
-  return { root, runtime, extra, selection: { component: 'updater', files }, output: path.join(root, 'package') }
+  const engineBuild = path.join(root, engineBuildFile)
+  await fs.writeFile(engineBuild, '{"schema_version":1,"release":"2","protocol":1}\n')
+  return { root, runtime, extra, selection: { component: 'updater', files, engineBuild }, output: path.join(root, 'package') }
 }
 
 test('engine assembly closes recursive imports and cycles and seals the exact shared package format', async t => {
@@ -45,6 +48,7 @@ test('engine assembly closes recursive imports and cycles and seals the exact sh
   await fs.writeFile(f.selection.files.get('sugarsubstitute-updater.exe'), image(['runtime.dll']).replace('  Name: runtime.dll\n', '  Name: runtime.dll\n  Symbol: RequiredFunction (0)\n  Symbol:  (7)\n'))
   await fs.writeFile(f.runtime, image(['extra.dll']).replace('ExportTableRVA: 0x0', 'ExportTableRVA: 0x3000') + 'Export {\n  Name: RequiredFunction\n  Ordinal: 1\n}\nExport {\n  Name: \n  Ordinal: 7\n}\n')
   const report = await packageUpdater(f.selection, [f.runtime, f.extra], f.output, 'engine-1', inspect)
+  assert.deepEqual(report.engine, { schema_version: 1, release: '2', protocol: 1 })
   const manifest = await fs.readFile(path.join(f.output, 'setup-manifest.json'))
   assert.equal(report.manifestSha256, digest(manifest))
   assert.deepEqual(report.dependencies.map(item => item.name).sort(), ['extra.dll', 'runtime.dll', 'sugarsubstitute-updater.exe'])
@@ -102,6 +106,13 @@ test('application roles cannot be smuggled into an independent engine package', 
     await assert.rejects(packageUpdater(f.selection, [f.runtime, f.extra], f.output, 'engine-1', inspect))
     await assert.rejects(fs.stat(path.join(f.output, 'setup-manifest.json')), { code: 'ENOENT' })
   }
+})
+
+test('absent producing engine identity cannot publish an updater inventory', async t => {
+  const f = await fixture(t)
+  await fs.unlink(f.selection.engineBuild)
+  await assert.rejects(packageUpdater(f.selection, [f.runtime, f.extra], f.output, 'engine-1', inspect), { code: 'ENOENT' })
+  await assert.rejects(fs.stat(f.output), { code: 'ENOENT' })
 })
 
 test('linked output ancestry is rejected before creating package content', async t => {

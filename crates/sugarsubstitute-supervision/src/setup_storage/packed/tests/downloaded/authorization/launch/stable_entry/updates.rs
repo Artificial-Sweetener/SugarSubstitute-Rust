@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! App updates retain and recheck the independently installed launcher.
+//! Authenticated preparation refreshes launcher recovery authority while trial admission rechecks it.
 use super::*;
 
 /// Prepare the next authenticated offer against the same actual installation and trust store.
@@ -90,7 +90,8 @@ fn preparation_and_trial_admission_recheck_the_installed_launcher() -> TestResul
 }
 
 #[test]
-fn accepting_another_application_retains_original_launcher_ownership_and_image() -> TestResult {
+fn prepared_application_refreshes_launcher_source_without_replacing_identical_bytes() -> TestResult
+{
     worker::run_reserved(TRUST_RESERVATION_BYTES + 64 * 1024 * 1024, |context, _| {
         let temporary = tempfile::tempdir()?;
         let workspace = tempfile::tempdir()?;
@@ -123,9 +124,77 @@ fn accepting_another_application_retains_original_launcher_ownership_and_image()
         };
         let installed = next.repair_launch_entry(context)?;
         assert_eq!(installed.executable, root.path().join(LAUNCHER));
-        assert_eq!(std::fs::read(root.path().join(OWNERSHIP))?, ownership);
+        let next_ownership = std::fs::read(root.path().join(OWNERSHIP))?;
+        assert_ne!(next_ownership, ownership);
+        let next_record: serde_json::Value = serde_json::from_slice(&next_ownership)?;
+        assert_eq!(next_record["source"]["id"], next.generation().id.as_str());
         assert_eq!(crate::durable_storage::files::file_identity(&root.read(LAUNCHER)?)?, identity);
         assert!(root.path().join("releases").join(first.id.as_str()).join(LAUNCHER).exists());
+        Ok(())
+    })
+}
+
+#[test]
+fn signed_preparation_rescues_missing_launcher_with_obsolete_pending_source() -> TestResult {
+    worker::run_reserved(TRUST_RESERVATION_BYTES + 64 * 1024 * 1024, |context, _| {
+        let temporary = tempfile::tempdir()?;
+        let workspace = tempfile::tempdir()?;
+        let root = Directory::open(temporary.path(), false)?;
+        let application = prepare(&root, context)?;
+        application.repair_launch_entry(context)?;
+        let accepted = application.generation().clone();
+        let source = application.directory().to_path_buf();
+        drop(application);
+        let original: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(root.path().join(OWNERSHIP))?)?;
+        let mut obsolete = original.clone();
+        obsolete["source"]["id"] = "b".repeat(32).into();
+        obsolete["source"]["package"] = "b".repeat(64).into();
+        let journal = serde_json::to_vec(&serde_json::json!({
+            "schema_version": 1,
+            "installation_directory": root.identity()?,
+            "previous": original,
+            "next": obsolete,
+        }))?;
+        let state = Directory::open(&root.path().join(".selection-state"), false)?;
+        crate::durable_storage::protection::with(context, |protection| {
+            crate::setup_storage::publication::write_immutable(
+                &state,
+                ".launcher-transition-v1.json",
+                &journal,
+                protection,
+                context,
+            )
+        })?;
+        std::fs::remove_file(root.path().join(LAUNCHER))?;
+        std::fs::remove_file(source.join(LAUNCHER))?;
+        std::fs::write(root.path().join("user-document.txt"), b"preserve user work")?;
+        let link = std::fs::read(root.path().join(LINK))?;
+        let (prepared, signed, trust) = next_package(&root, workspace.path(), context)?;
+        let store = Arc::new(SelectionStore::open(root.path(), context)?);
+        // Application run custody remains available to the live app during signed repair.
+        let _run = InstallationRun::acquire(store.clone(), context)?;
+        let candidate = prepared.prepare_update(
+            prepared.maintenance_runtime().ok_or("Runtime absent")?,
+            &signed.authorization(&trust),
+            || NOW,
+            context,
+        )?;
+        assert_eq!(store.load(context)?.ok_or("Selection absent")?.accepted(), Some(&accepted));
+        let owner: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(root.path().join(OWNERSHIP))?)?;
+        assert_eq!(owner["source"]["id"], candidate.generation().id.as_str());
+        assert_eq!(
+            std::fs::read(root.path().join(LAUNCHER))?,
+            std::fs::read(candidate.directory().join(LAUNCHER))?
+        );
+        assert_eq!(std::fs::read(root.path().join(LINK))?, link);
+        assert_eq!(
+            entrypoint::native::target(&root.path().join(LINK))?,
+            root.path().join(LAUNCHER)
+        );
+        assert_eq!(std::fs::read(root.path().join("user-document.txt"))?, b"preserve user work");
+        assert!(!state.path().join(".launcher-transition-v1.json").exists());
         Ok(())
     })
 }

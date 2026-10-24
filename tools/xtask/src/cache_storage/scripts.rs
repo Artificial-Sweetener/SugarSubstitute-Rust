@@ -10,7 +10,8 @@ use std::collections::BTreeMap;
 
 pub(super) const EXTENSIONS: &[&str] = &[
     "rs", "ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs", "c", "cc", "cpp", "cxx", "h",
-    "hpp", "hxx", "m", "mm", "html", "py", "ps1", "patch",
+    "hpp", "hxx", "m", "mm", "html", "py", "ps1", "patch", "svg", "cs", "cmake", "gn", "gni",
+    "css",
 ];
 
 /// Exact source review for an external filesystem concern or the native cache injection boundary.

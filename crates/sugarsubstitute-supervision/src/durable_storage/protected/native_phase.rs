@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Borrow one closed admitted native scratch session across its actual buffers.
 mod buffers;
+#[cfg(test)]
+mod tests;
 use super::native_name::{NativeNameDestination, NativeSidDestination};
 use super::{native_file::NativeCauseDestinations, paths, security};
 use crate::{
@@ -419,7 +421,7 @@ impl<'origin> NativePhase<'origin> {
             BoundedNativeCause::RawIo(std::io::Error::from(std::io::ErrorKind::InvalidData)),
         )
     }
-    /// Check cancellation and the existing actual job deadline before each effect.
+    /// Check cancellation and the original finite admitted deadline before each effect.
     pub(crate) fn context(&mut self, context: &JobContext) -> Result<(), ClaimError> {
         self.check()?;
         if matches!(self, Self::Selected { .. }) {

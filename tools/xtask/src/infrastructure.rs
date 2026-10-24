@@ -16,6 +16,7 @@ use serde::Deserialize;
 mod access;
 mod dependencies;
 mod inventory;
+mod native_contract;
 pub(crate) use inventory::collect as inventory;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -53,6 +54,7 @@ pub(crate) struct Record {
     pub(crate) consumer: Option<Consumer>,
     pub(crate) next_extraction: Option<String>,
     pub(crate) review_until: Option<String>,
+    pub(crate) external_contract: Option<String>,
 }
 
 /// Implementation, adversarial test input, and finite outstanding migration are distinct.
@@ -72,6 +74,7 @@ pub(crate) enum Disposition {
 #[serde(rename_all = "snake_case")]
 pub(crate) enum Boundary {
     NativeCustody,
+    NativeProtocol,
     NativeIpc,
     Entropy,
     ExternalRuntime,
@@ -179,9 +182,10 @@ pub(crate) fn check(
         if let Some(boundary) = &record.boundary {
             let layer = matching[0].layer.as_str();
             let permitted = match boundary {
-                Boundary::NativeCustody | Boundary::NativeIpc | Boundary::Entropy => {
-                    layer == "adapter"
-                }
+                Boundary::NativeCustody
+                | Boundary::NativeIpc
+                | Boundary::Entropy
+                | Boundary::NativeProtocol => layer == "adapter",
                 Boundary::NativeInjection | Boundary::ExternalRuntime => {
                     matches!(layer, "host" | "adapter")
                 }
@@ -199,6 +203,7 @@ pub(crate) fn check(
             };
             require(permitted, "storage: external boundary has foreign lifecycle ownership")?;
         }
+        native_contract::check(root, record, matching[0], &path)?;
         if record.disposition == Disposition::Migration {
             require(
                 record.next_extraction.as_ref().is_some_and(|value| !value.trim().is_empty()),
