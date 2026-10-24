@@ -112,6 +112,9 @@ pub use timing::{
 mod windows;
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
+mod windows_alpha;
+#[cfg(target_os = "windows")]
+#[allow(unsafe_code)]
 mod windows_callbacks;
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
@@ -124,7 +127,13 @@ mod windows_drag;
 mod windows_move_state;
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
+mod windows_scroll;
+#[cfg(target_os = "windows")]
+#[allow(unsafe_code)]
 mod windows_subclass;
+#[cfg(target_os = "windows")]
+#[allow(unsafe_code)]
+mod windows_text;
 
 pub use contract::{
     AccessibleControl, ControlBounds, DesktopError, DesktopOptions, DesktopReceipt,
@@ -132,6 +141,9 @@ pub use contract::{
     PointerAction, WindowContent,
 };
 pub use runtime::run;
+
+#[cfg(any(test, feature = "boundary-fixtures"))]
+pub mod pixel_capture;
 
 pub use host_contract::{
     DesktopStartupCommand, DesktopStartupObservation, MainBackendState, MainCaptionLabels,
@@ -147,3 +159,19 @@ pub use main_environment::{MainEnvironmentError, MainEnvironmentFacts};
 mod startup_conflict;
 #[cfg(target_os = "windows")]
 pub use startup_conflict::show_startup_conflict;
+
+#[cfg(all(any(test, feature = "boundary-fixtures"), target_os = "windows"))]
+#[allow(unsafe_code)]
+mod windows_test_desktop;
+
+/// Run one host libtest body on an owned private desktop and prove child-process termination.
+/// Available only to explicit boundary qualification builds; never switches the input desktop.
+/// # Errors
+/// Preserves wrong test identity, native setup, child failure and checked retirement failures.
+#[cfg(all(windows, feature = "boundary-fixtures"))]
+pub fn qualify_installer_test(
+    name: &'static str,
+    body: fn() -> Result<(), Box<dyn std::error::Error>>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    windows_test_desktop::host(name, body)
+}

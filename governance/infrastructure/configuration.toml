@@ -289,15 +289,8 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute/src/setup.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:2cba3bb4f2dbfe4e0a3ea6f1cc207be11e719bb47d2554304fbd6b9d859f0be7"
+source_sha256 = "sha256:fc00eb56da3c30ff8cefea283891fa7f98e647d579699790096ea523d06ea1de"
 capabilities = ["arguments"]
-rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
-
-[[records]]
-path = "crates/sugarsubstitute/src/setup/controller/window_qualification.rs"
-owner = "sugarsubstitute"
-source_sha256 = "sha256:e195a4c321fc6c728032e306d3f6ebe03024f8805d462719cafe12da4b96f98a"
-capabilities = ["environment"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
 [[records]]
@@ -450,14 +443,14 @@ rationale = "Tooling build, source inspection or isolated qualification input; n
 [[records]]
 path = "tools/xtask/src/governance.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:3ee42883e45f9799d0054207b9724592a62a1e06342dc489a6ce1e9f987dbca1"
+source_sha256 = "sha256:f7e112236172eb7cce83e410d75116ca5fcdc86edb9de269b0bf565021c33186"
 capabilities = ["codec"]
 rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
 
 [[records]]
 path = "tools/xtask/src/main.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:6b500b52d4a8ea40ca88d31f1caf26154f17a6441c31443504b3937be7e08041"
+source_sha256 = "sha256:fe42c2b8fda8fdcc79312022b289ad7e3e1be737dc5a75e7862713bae3130605"
 capabilities = ["arguments"]
 rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
 
@@ -581,13 +574,6 @@ capabilities = ["arguments", "external"]
 rationale = "Qualification accepts explicit SugarCubes, Python and workspace paths and consumes the actual SugarCubes-owned model-root configuration API."
 
 [[records]]
-path = "installer/qualify-surface.mjs"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:05d52ea3e10d3285114cdec7d8a79b452d05d3ad5e1db2f4e311d1a80fa5b654"
-capabilities = ["environment", "arguments"]
-rationale = "Offscreen qualification consumes document, output, scale and built runtime selections and sanitizes its owned Electron child environment."
-
-[[records]]
 path = "installer/qualify-worker.mjs"
 owner = "sugarsubstitute-xtask"
 source_sha256 = "sha256:27a75ccba48292c47481e25bfa7436f50d70377bbcbbff7648d10ea036ef51a4"
@@ -644,13 +630,6 @@ capabilities = ["environment"]
 rationale = "Native record-port tests select their explicit artifact root and fake only the external native reply boundary."
 
 [[records]]
-path = "installer/tests/surface-runner.cjs"
-owner = "sugarsubstitute"
-source_sha256 = "sha256:0746a5de092ff894bc1d688e82055001527e00f596fd46b2bfa8df10021b2ad9"
-capabilities = ["arguments", "external"]
-rationale = "The offscreen Electron harness accepts an exported document, output and scale; Electron owns its isolated test userData profile."
-
-[[records]]
 path = "installer/tests/worker.test.mjs"
 owner = "sugarsubstitute"
 source_sha256 = "sha256:8d53f5bf223029ce648f65ebec1b166efb59a4d5955c71228953f79e8f2b8276"
@@ -660,7 +639,7 @@ rationale = "Real headless Electron tests select the built worker, sanitize chil
 [[records]]
 path = "installer/typecheck.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:bff9944d61155045995d361ed44cc0b1404a11be9dc869947065d0708330d9e8"
+source_sha256 = "sha256:31c9476e4d908d2ca34ec1923f0f6c370b06c12467e9a690ed45102c408c8aed"
 capabilities = ["environment"]
 rationale = "Type qualification selects the explicit worker build receipt and checks the real consumed upstream and renderer types."
 
@@ -887,3 +866,17 @@ owner = "sugarsubstitute-xtask"
 source_sha256 = "sha256:0fc7b697eb5efa48924f8833063b3ef8703c53abf114de28673ecd2cd8ae198d"
 capabilities = ["codec"]
 rationale = "Publication-recovery qualification reads the authoritative cache catalog to locate its shared payload namespace; it creates no application preferences or independent cache-path registry."
+
+[[records]]
+path = "tools/xtask/src/ui/tests.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:96a7cbd49fae094cb6329b0e46d51d4ce4cd4504c79498dcfba7dc4244118e96"
+capabilities = ["codec"]
+rationale = "Construct isolated malformed UI policy documents to verify unknown-schema, duplicate, stale-review and dependency-identity rejection through the real governance checker."
+
+[[records]]
+path = "crates/sugarsubstitute-desktop/src/windows_test_desktop.rs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:7f8ffcbd82e682233c69970b10566a638535387c1c4262487c14e096713a48fe"
+capabilities = ["environment"]
+rationale = "Read only the exact per-test private-desktop and target environment selectors; the parent retains the actual child process and desktop through checked process termination without reading or writing product settings."

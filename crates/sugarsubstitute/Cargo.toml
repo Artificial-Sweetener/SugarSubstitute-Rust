@@ -15,6 +15,7 @@ windows-native-host = []
 k1-native-qualification = ["sugarsubstitute-execution/k1-native-qualification", "sugarsubstitute-desktop/k1-native-qualification", "sugarsubstitute-supervision/k1-native-qualification"]
 
 [dependencies]
+sugarsubstitute-ui = { path = "../sugarsubstitute-ui" }
 sugarsubstitute-contracts = { path = "../sugarsubstitute-contracts" }
 sugarsubstitute-configuration = { path = "../sugarsubstitute-configuration" }
 sugarsubstitute-application = { path = "../sugarsubstitute-application" }

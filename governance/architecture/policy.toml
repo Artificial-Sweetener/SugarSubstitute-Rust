@@ -17,7 +17,7 @@ concern = "Runtime-independent application contracts and product localization"
 package = "sugarsubstitute-application"
 root = "crates/sugarsubstitute-application"
 layer = "application"
-concern = "Acknowledged startup, settled retry, readiness, frame publication and supervision policy"
+concern = "Acknowledged startup, settled retry, readiness, frame publication, supervision and typed native installation navigation policy"
 
 [[owners]]
 package = "sugarsubstitute-comfy"
@@ -28,7 +28,7 @@ concern = "ComfyUI managed launch and connection boundaries"
 [[owners]]
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
-auxiliary_roots = ["installer/worker", "installer/surface", "installer/tests"]
+auxiliary_roots = ["installer/worker", "installer/tests"]
 layer = "host"
 concern = "Platform-independent startup and conflict controllers, supported operational diagnostic routing and lifecycle, retained native adapter contracts, platform host composition and application identity"
 
@@ -55,13 +55,11 @@ auxiliary_files = [
     "installer/package.test.mjs",
     "installer/prepare-runtime.mjs",
     "installer/qualify-model-root.mjs",
-    "installer/qualify-surface.mjs",
-    "installer/qualify-worker.mjs",
+      "installer/qualify-worker.mjs",
     "installer/seal.mjs",
     "installer/seal.test.mjs",
     "installer/typecheck.mjs",
-    "installer/typecheck-surface.mjs",
-    "tools/test_updater_feed_fixture.py",
+      "tools/test_updater_feed_fixture.py",
     "tools/test_updater_qualification.py",
     "tools/updater_feed_fixture.py",
     "tools/updater_native_support.py",
@@ -113,3 +111,9 @@ package = "sugarsubstitute-configuration"
 root = "crates/sugarsubstitute-configuration"
 layer = "adapter"
 concern = "Desktop startup documents, validated input selection, initial defaults and exact saved configuration preservation"
+
+[[owners]]
+package = "sugarsubstitute-ui"
+root = "crates/sugarsubstitute-ui"
+layer = "adapter"
+concern = "Shared native widget rendering and interaction rules"

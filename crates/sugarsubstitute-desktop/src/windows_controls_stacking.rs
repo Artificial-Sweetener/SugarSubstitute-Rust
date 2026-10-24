@@ -25,7 +25,7 @@ impl Controls {
     }
 
     /// Require the original parent and child subclass lifetimes before trusting a raw HWND.
-    fn original_peer(&self, peer: &Peer) -> Result<(), DesktopError> {
+    pub(super) fn original_peer(&self, peer: &Peer) -> Result<(), DesktopError> {
         if !self.creation.writable()
             || self
                 .creation

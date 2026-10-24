@@ -10,7 +10,7 @@ use crate::{
     error::{Failure, Result, read, require},
     execution, infrastructure, localization, networking,
     policy::{self, Architecture, Debt, Records, Testing, Waiver},
-    structure, testing, vendor,
+    structure, testing, ui, vendor,
     workspace::Workspace,
 };
 
@@ -26,6 +26,8 @@ pub(crate) fn check(root: &Path) -> Result<()> {
     let localization: localization::Policy =
         policy::load(root, "governance/infrastructure/localization.toml")?;
     localization::check(root, &architecture, &workspace, &localization)?;
+    let ui: ui::Policy = policy::load(root, "governance/ui/policy.toml")?;
+    ui::check(root, &ui, &architecture, &workspace)?;
     let execution: execution::Policy = policy::load(root, "governance/execution/policy.toml")?;
     execution::check(root, &execution, &architecture, &workspace)?;
     let diagnostics: diagnostics_gate::Policy =

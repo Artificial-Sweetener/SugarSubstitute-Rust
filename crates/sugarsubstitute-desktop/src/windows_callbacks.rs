@@ -14,6 +14,8 @@ use crate::{
 use std::cell::{Cell, RefCell};
 #[path = "windows_caption.rs"]
 pub(crate) mod caption;
+#[path = "windows_selection.rs"]
+mod selection;
 #[path = "timing_native_callback.rs"]
 pub(crate) mod timing;
 use crate::timing::{NativeCallbackKind, TimingObserver};
@@ -32,11 +34,29 @@ use windows::Win32::{
     },
 };
 
+/// Actual input owner behind a prepared native peer.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum InputKind {
+    Prepared,
+    Text,
+    Select,
+}
+
+/// Stable child identity and the current typed action retained by its parent callback.
+struct Registration {
+    hwnd: HWND,
+    id: u16,
+    action: Option<NativeAction>,
+    input: InputKind,
+    selection: sugarsubstitute_ui::form::selection::SelectionGesture,
+}
+
 /// Keep immutable peer identities and the UI-only wake proxy behind stable reference ownership.
 pub(crate) struct Callback {
     proxy: EventLoopProxy<NativeAction>,
     timings: Option<TimingObserver>,
-    controls: RefCell<Vec<(HWND, u16, Option<NativeAction>)>>,
+    controls: RefCell<Vec<Registration>>,
+    failure: RefCell<Option<DesktopError>>,
     paint_mode: crate::windows_controls::PaintMode,
     pub(crate) caption: Cell<Option<caption::Caption>>,
     pub(crate) hovered: Cell<HWND>,
@@ -64,6 +84,7 @@ impl Callback {
             proxy,
             timings,
             controls: RefCell::new(controls),
+            failure: RefCell::new(None),
             paint_mode,
             caption: Cell::new(None),
             hovered: Cell::new(HWND::default()),
@@ -85,6 +106,7 @@ impl Callback {
         hwnd: HWND,
         id: u16,
         action: Option<NativeAction>,
+        input: InputKind,
     ) -> Result<(), DesktopError> {
         let mut controls = self
             .controls
@@ -96,14 +118,14 @@ impl Callback {
                 "identity capacity exhausted",
             ));
         }
-        controls.push((hwnd, id, action));
+        controls.push(Registration { hwnd, id, action, input, selection: Default::default() });
         Ok(())
     }
 
-    /// Account the largest immutable action tuple before any native registration.
+    /// Account retained child identities before any native registration.
     pub(crate) fn storage_bytes(count: usize) -> Option<usize> {
         count
-            .checked_mul(size_of::<(HWND, u16, Option<NativeAction>)>())?
+            .checked_mul(size_of::<Registration>())?
             .checked_add(size_of::<Self>() + 2 * size_of::<usize>())
     }
     /// Replace one already-registered peer mapping; no borrow crosses a native call.
@@ -117,13 +139,10 @@ impl Callback {
             .controls
             .try_borrow_mut()
             .map_err(|cause| DesktopError::new("update_native_action", cause))?;
-        let slot = controls
-            .iter_mut()
-            .find(|(peer, registered, _)| *peer == hwnd && *registered == id)
-            .ok_or_else(|| {
-                DesktopError::message("update_native_action", "retained peer missing")
-            })?;
-        slot.2 = action;
+        let slot = controls.iter_mut().find(|peer| peer.hwnd == hwnd && peer.id == id).ok_or_else(
+            || DesktopError::message("update_native_action", "retained peer missing"),
+        )?;
+        slot.action = action;
         Ok(())
     }
 
@@ -132,12 +151,24 @@ impl Callback {
         match self.controls.try_borrow() {
             Ok(controls) => controls
                 .iter()
-                .find(|(peer, registered, _)| {
-                    *peer == hwnd && id.is_none_or(|id| id == *registered)
-                })
-                .and_then(|(_, _, action)| *action),
+                .find(|peer| peer.hwnd == hwnd && id.is_none_or(|id| id == peer.id))
+                .and_then(|peer| peer.action),
             Err(error) => {
                 tracing::error!(operation = "resolve_accessible_identity", cause = %error, "Native identity inventory was unexpectedly borrowed");
+                None
+            }
+        }
+    }
+
+    /// Resolve only a registered child's actual native input implementation.
+    fn input(&self, hwnd: HWND, id: Option<u16>) -> Option<InputKind> {
+        match self.controls.try_borrow() {
+            Ok(controls) => controls
+                .iter()
+                .find(|peer| peer.hwnd == hwnd && id.is_none_or(|id| id == peer.id))
+                .map(|peer| peer.input),
+            Err(cause) => {
+                tracing::error!(operation = "native_control_input", cause = %cause, "Native input inventory was borrowed");
                 None
             }
         }
@@ -180,6 +211,16 @@ pub(crate) unsafe extern "system" fn parent_proc(
         if let Some(result) = caption::parent(callback, hwnd, message, wparam, lparam) {
             return result;
         }
+        if message == windows::Win32::UI::WindowsAndMessaging::WM_CTLCOLORLISTBOX {
+            match callback.popup_colors(
+                HWND(lparam.0 as *mut std::ffi::c_void),
+                windows::Win32::Graphics::Gdi::HDC(wparam.0 as *mut std::ffi::c_void),
+            ) {
+                Ok(Some(brush)) => return LRESULT(brush.0 as isize),
+                Ok(None) => {}
+                Err(cause) => callback.fail(cause),
+            }
+        }
         if message == WM_COMMAND
             && lparam.0 != 0
             && (wparam.0 >> 16) == 0
@@ -188,6 +229,32 @@ pub(crate) unsafe extern "system" fn parent_proc(
         {
             callback.send(action);
             return LRESULT(0);
+        }
+        if message == WM_COMMAND && lparam.0 != 0 {
+            use windows::Win32::UI::WindowsAndMessaging::EN_CHANGE;
+            let peer = HWND(lparam.0 as *mut std::ffi::c_void);
+            let id = (wparam.0 & 0xffff) as u16;
+            if callback.input(peer, Some(id)) == Some(InputKind::Select) {
+                match selection::notification(callback, peer, wparam.0 >> 16) {
+                    Ok(Some(commit)) => {
+                        if commit && let Some(action) = callback.action(peer, Some(id)) {
+                            callback.send(action);
+                        }
+                        return LRESULT(0);
+                    }
+                    Ok(None) => {}
+                    Err(cause) => {
+                        callback.fail(cause);
+                        return LRESULT(0);
+                    }
+                }
+            } else if callback.input(peer, Some(id)) == Some(InputKind::Text)
+                && wparam.0 >> 16 == EN_CHANGE as usize
+                && let Some(action) = callback.action(peer, Some(id))
+            {
+                callback.send(action);
+                return LRESULT(0);
+            }
         }
         if let Some(phase) = move_trace_phase(message, wparam) {
             tracing::info!(
@@ -250,8 +317,18 @@ pub(crate) unsafe extern "system" fn child_proc(
             };
         }
         match message {
+            windows::Win32::UI::WindowsAndMessaging::WM_CHAR
+                if callback.input(hwnd, None) == Some(InputKind::Text)
+                    && matches!(wparam.0, 9 | 13 | 27) =>
+            {
+                return LRESULT(0);
+            }
+            WM_NCHITTEST if callback.input(hwnd, None) == Some(InputKind::Text) => {
+                return LRESULT(windows::Win32::UI::WindowsAndMessaging::HTCLIENT as isize);
+            }
             WM_NCHITTEST
-                if callback.paint_mode == crate::windows_controls::PaintMode::PreparedPixels =>
+                if callback.prepared_pixels()
+                    && callback.input(hwnd, None) == Some(InputKind::Prepared) =>
             {
                 return LRESULT(HTTRANSPARENT as isize);
             }
@@ -259,7 +336,8 @@ pub(crate) unsafe extern "system" fn child_proc(
                 return LRESULT(1);
             }
             WM_PAINT
-                if callback.paint_mode == crate::windows_controls::PaintMode::PreparedPixels =>
+                if callback.prepared_pixels()
+                    && callback.input(hwnd, None) != Some(InputKind::Text) =>
             {
                 // SAFETY: Validate this child while the content paints its control rectangle.
                 if !unsafe { ValidateRect(Some(hwnd), None) }.as_bool() {
@@ -274,6 +352,33 @@ pub(crate) unsafe extern "system" fn child_proc(
                 callback.send(NativeAction::FocusChanged)
             }
             WM_KEYDOWN if callback.prepared_pixels() && callback.action(hwnd, None).is_some() => {
+                if callback.input(hwnd, None) == Some(InputKind::Prepared)
+                    && let Some(key) =
+                        sugarsubstitute_ui::windows::scroll_port::ScrollKey::from_virtual_key(
+                            wparam.0,
+                        )
+                {
+                    callback.send(NativeAction::ScrollPage(key));
+                    return LRESULT(0);
+                }
+                if callback.input(hwnd, None) == Some(InputKind::Select)
+                    && matches!(wparam.0, 0x1b | 0x0d)
+                {
+                    // SAFETY: Query only this retained native combo box's actual popup state.
+                    let expanded = unsafe {
+                        windows::Win32::UI::WindowsAndMessaging::SendMessageW(
+                            hwnd,
+                            windows::Win32::UI::WindowsAndMessaging::CB_GETDROPPEDSTATE,
+                            Some(WPARAM(0)),
+                            Some(LPARAM(0)),
+                        )
+                    }
+                    .0 != 0;
+                    if expanded {
+                        // SAFETY: Let the original combo box close/accept its own popup.
+                        return unsafe { DefSubclassProc(hwnd, message, wparam, lparam) };
+                    }
+                }
                 match wparam.0 {
                     0x1b => {
                         callback.send(NativeAction::Close);
@@ -285,7 +390,9 @@ pub(crate) unsafe extern "system" fn child_proc(
                         ));
                         return LRESULT(0);
                     }
-                    0x0d if lparam.0 & (1 << 30) == 0 => {
+                    0x0d if lparam.0 & (1 << 30) == 0
+                        && callback.input(hwnd, None) == Some(InputKind::Prepared) =>
+                    {
                         if let Some(action) = callback.action(hwnd, None) {
                             callback.send(action);
                         }
@@ -296,7 +403,7 @@ pub(crate) unsafe extern "system" fn child_proc(
             }
             _ => {}
         }
-        // SAFETY: Preserve WM_GETOBJECT, BM_CLICK and OS-managed focused/pressed button state.
+        // SAFETY: Preserve the original text engine, accessibility and native button procedures.
         unsafe { DefSubclassProc(hwnd, message, wparam, lparam) }
     })();
     observation.finish();

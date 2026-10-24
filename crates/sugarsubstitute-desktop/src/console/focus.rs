@@ -14,10 +14,14 @@ fn ordered(
 ) -> impl Iterator<Item = Target> {
     let before = controls
         .clone()
-        .filter(move |control| control.visible && console_y.is_none_or(|y| control.bounds.y < y))
+        .filter(move |control| {
+            control.availability().actionable() && console_y.is_none_or(|y| control.bounds.y < y)
+        })
         .map(|control| Target::Control(control.id));
     let after = controls
-        .filter(move |control| control.visible && console_y.is_some_and(|y| control.bounds.y >= y))
+        .filter(move |control| {
+            control.availability().actionable() && console_y.is_some_and(|y| control.bounds.y >= y)
+        })
         .map(|control| Target::Control(control.id));
     before.chain(console_y.map(|_| Target::Console)).chain(after)
 }

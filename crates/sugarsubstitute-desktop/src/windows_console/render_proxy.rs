@@ -57,7 +57,7 @@ pub(super) const MAX_PAINT_COLORS: usize = 2 * MAX_STYLE_RUNS + 4;
 ///
 /// Includes maximum vector capacity and this proxy's COM/Rc metadata; native document and
 /// pixel-target allocations belong to their separately admitted authoritative owners.
-pub(super) const PAINT_STORAGE_BYTES: u64 = (MAX_PAINT_COLORS * size_of::<PaintColor>()
+pub(crate) const PAINT_STORAGE_BYTES: u64 = (MAX_PAINT_COLORS * size_of::<PaintColor>()
     + size_of::<Shared>()
     + size_of::<Bridge_Impl>()
     + size_of::<Proxy>()

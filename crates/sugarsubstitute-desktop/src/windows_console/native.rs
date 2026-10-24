@@ -2,17 +2,17 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Implement only the checked Win32 boundary behind the retained Creation owner.
 use super::*;
+pub(super) use crate::windows_text::library::Library;
 use crate::{
     AccessibleControl,
     control_geometry::physical_bounds,
     windows_subclass::{Registration, install, remove},
 };
-use std::{cell::Cell, ffi::c_void};
+use std::ffi::c_void;
 use tao::platform::windows::WindowExtWindows;
 use windows::{
     Win32::{
-        Foundation::{FreeLibrary, HMODULE, HWND, LPARAM, WPARAM},
-        System::LibraryLoader::{LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExW},
+        Foundation::{HMODULE, HWND, LPARAM, WPARAM},
         UI::Controls::RichEdit::{EM_AUTOURLDETECT, EM_EXLIMITTEXT},
         UI::{
             Input::KeyboardAndMouse::{EnableWindow, GetFocus, IsWindowEnabled},
@@ -25,20 +25,10 @@ use windows::{
 pub(super) fn peer_style() -> WINDOW_STYLE {
     WS_CHILD | WS_TABSTOP
 }
-/// A loaded system module stays retained before any following COM/child effect.
-pub(super) struct Library {
-    module: Cell<Option<HMODULE>>,
-}
-impl Library {
-    /// Borrow the exact system module whose retained owner outlives every text engine.
-    pub(super) fn module(&self) -> Option<HMODULE> {
-        self.module.get()
-    }
-}
 pub(super) struct Peer {
     pub(super) hwnd: HWND,
     registration: Option<Registration<callback::Callback>>,
-    pub(super) engine: Rc<super::engine::Engine>,
+    pub(super) engine: Rc<crate::windows_text::Engine>,
     module: HMODULE,
     parent: HWND,
 }
@@ -85,14 +75,10 @@ impl NativePort for Port<'_> {
     type Parent = Library;
     type Peer = Peer;
     fn parent(&mut self) -> Result<Library, DesktopError> {
-        Ok(Library { module: Cell::new(None) })
+        Ok(Library::default())
     }
     fn install_parent(&mut self, parent: &Library) -> Result<(), DesktopError> {
-        // SAFETY: Load only the OS-supplied RichEdit library, never a working-directory DLL.
-        let module =
-            unsafe { LoadLibraryExW(w!("Msftedit.dll"), None, LOAD_LIBRARY_SEARCH_SYSTEM32) }
-                .map_err(|e| DesktopError::new("console_library_load", e))?;
-        parent.module.set(Some(module));
+        let module = parent.load()?;
         self.module = Some(module);
         Ok(())
     }
@@ -101,7 +87,14 @@ impl NativePort for Port<'_> {
             DesktopError::message("console_create_bounds", "creation geometry absent")
         })?;
         let rect = physical_bounds(
-            &AccessibleControl { id: 4, label: self.label, bounds, close: false, visible: false },
+            &AccessibleControl {
+                enabled: true,
+                id: crate::ConsoleView::CONTROL_ID,
+                label: self.label,
+                bounds,
+                close: false,
+                visible: false,
+            },
             self.window.scale_factor(),
         )?;
         let module = self.module.ok_or_else(|| {
@@ -119,7 +112,7 @@ impl NativePort for Port<'_> {
                 rect.right - rect.left,
                 rect.bottom - rect.top,
                 Some(HWND(self.window.hwnd() as *mut c_void)),
-                Some(HMENU(4usize as *mut c_void)),
+                Some(HMENU(usize::from(crate::ConsoleView::CONTROL_ID) as *mut c_void)),
                 None,
                 None,
             )
@@ -128,7 +121,10 @@ impl NativePort for Port<'_> {
         Ok(Peer {
             hwnd,
             registration: Some(Registration::new(self.callback)),
-            engine: super::engine::Engine::new(hwnd),
+            engine: crate::windows_text::Engine::new(
+                hwnd,
+                sugarsubstitute_ui::windows::text_style::TextStyle::Transcript,
+            ),
             module,
             parent: HWND(self.window.hwnd() as *mut c_void),
         })
@@ -192,14 +188,9 @@ impl NativePort for Port<'_> {
             .map_err(|e| DesktopError::new("console_window_destroy", e))
     }
     fn retire_parent(&mut self, parent: &Library) -> Result<(), DesktopError> {
-        if let Some(module) = parent.module.get() {
-            // SAFETY: Every original child and callback retired before unloading its class module.
-            unsafe { FreeLibrary(module) }
-                .map_err(|e| DesktopError::new("console_library_free", e))?;
-            parent.module.set(None);
-        }
-        Ok(())
+        parent.close()
     }
+
     fn callbacks_retired(&self) -> bool {
         Rc::strong_count(self.callback) == 1
     }

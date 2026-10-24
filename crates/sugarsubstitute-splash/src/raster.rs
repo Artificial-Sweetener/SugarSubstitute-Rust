@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Keep renderer pixels and in-memory image encoding independent of filesystem acquisition.
-use tiny_skia::{Pixmap, PremultipliedColorU8};
+use sugarsubstitute_ui::bitmap::Bitmap;
+use tiny_skia::PremultipliedColorU8;
 
 /// Own tightly packed, top-row-first premultiplied RGBA8 device pixels.
 /// Painting stays with the character and splash owners. Borrowed pixels cannot outlive this
 /// raster; encoded PNG bytes transfer to the caller's output-storage owner.
 pub struct Raster {
-    pub(crate) pixels: Pixmap,
+    pub(crate) pixels: Bitmap,
 }
 
 impl Raster {
@@ -17,7 +18,7 @@ impl Raster {
         if width > 4096 || height > 4096 {
             return None;
         }
-        Pixmap::new(width, height).map(|pixels| Self { pixels })
+        Bitmap::new(width, height).map(|pixels| Self { pixels })
     }
 
     /// Return the device-pixel width.
@@ -94,7 +95,7 @@ mod tests {
     #[test]
     fn streamed_png_preserves_original_variable_alpha_bytes_and_writer_failures()
     -> Result<(), Box<dyn std::error::Error>> {
-        let mut source = Pixmap::new(17, 17).ok_or("Raster allocation failed")?;
+        let mut source = Bitmap::new(17, 17).ok_or("Raster allocation failed")?;
         for (index, pixel) in source.data_mut().chunks_exact_mut(4).enumerate() {
             let alpha = (index % 256) as u8;
             pixel.copy_from_slice(&[alpha / 2, alpha / 3, alpha / 4, alpha]);
@@ -145,7 +146,7 @@ mod tests {
     #[test]
     fn raster_preserves_pixels_and_png_encoding_without_exporting_the_backing_library()
     -> Result<(), Box<dyn std::error::Error>> {
-        let mut source = Pixmap::new(3, 2).ok_or("Raster allocation failed")?;
+        let mut source = Bitmap::new(3, 2).ok_or("Raster allocation failed")?;
         source.fill(tiny_skia::Color::from_rgba8(211, 89, 37, 173));
         let mut raster = Raster { pixels: source.clone() };
         assert_eq!((raster.width(), raster.height()), (3, 2));
@@ -154,7 +155,7 @@ mod tests {
         assert_eq!(raster.pixel(3, 0), None);
         assert_eq!(raster.pixel(0, 2), None);
         assert_eq!(raster.encode_png()?, source.encode_png()?);
-        let decoded = Pixmap::decode_png(&raster.encode_png()?)?;
+        let decoded = Bitmap::decode_png(&raster.encode_png()?)?;
         assert_eq!((decoded.width(), decoded.height()), (3, 2));
         raster.clear();
         assert!(raster.data().iter().all(|byte| *byte == 0));

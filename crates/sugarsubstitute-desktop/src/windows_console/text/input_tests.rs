@@ -7,8 +7,6 @@ use windows::Win32::{
     Graphics::Gdi::ClientToScreen,
     UI::WindowsAndMessaging::{HTCLIENT, SendMessageW, WM_NCHITTEST},
 };
-#[path = "input_desktop.rs"]
-mod input_desktop;
 
 /// Observe actual glyph coordinates, independently of the tail-follow predicate.
 fn character_point(hwnd: windows::Win32::Foundation::HWND, character: i32) -> POINT {
@@ -32,16 +30,25 @@ fn packed(point: POINT) -> LPARAM {
 /// Exercise the native input procedure with real layout, focus, capture and continuing publication.
 #[test]
 fn native_console_pointer_scroll_selection_survives_continuing_output() -> TestResult {
+    crate::windows_test_desktop::run(
+        concat!(
+            module_path!(),
+            "::native_console_pointer_scroll_selection_survives_continuing_output"
+        ),
+        qualify_input,
+    )
+}
+
+fn qualify_input() -> TestResult {
     use super::super::{observe, publish};
     use crate::{
-        console::update::Documents,
-        windows_controls::console::{engine, messages::Messages},
+        console::update::Documents, windows_controls::console::messages::Messages,
+        windows_text as engine,
     };
     use windows::Win32::{
         Foundation::WPARAM,
         UI::{Input::KeyboardAndMouse::GetFocus, WindowsAndMessaging::*},
     };
-    let mut desktop = input_desktop::Desktop::new()?;
     let mut apartment = UiApartment::enter()?;
     let rows: Vec<_> =
         (1..=110).map(|id| (id, format!("Record {id:03} readable output"))).collect();
@@ -59,7 +66,7 @@ fn native_console_pointer_scroll_selection_survives_continuing_output() -> TestR
     let mut paint = |documents: &Documents| -> TestResult {
         engine.prepare(
             &paint_frame,
-            documents.shared().ok_or("shared document absent")?,
+            Some(documents.shared().ok_or("shared document absent")?),
             windows::Win32::Foundation::RECT { left: 25, top: 20, right: 325, bottom: 140 },
             true,
             1.0,
@@ -179,7 +186,6 @@ fn native_console_pointer_scroll_selection_survives_continuing_output() -> TestR
     drop((owner, documents, engine, paint_frame));
     // SAFETY: Every fixture window, native document and callback has retired.
     unsafe { apartment.release_after_teardown() }?;
-    desktop.close()?;
     Ok(())
 }
 

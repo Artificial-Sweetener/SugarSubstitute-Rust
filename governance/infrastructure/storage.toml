@@ -11,7 +11,7 @@ owner = "sugarsubstitute"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:a20d5de82619e18d569ad714a330ae021afe7575bead113b8d420aa887ba02a2"
+source_sha256 = "sha256:748af2d197153f73bf7715182733cdc79655ae85ed4a0345f4084a2069b59244"
 rationale = "Isolated test fixture directories for sugarsubstitute; each authored acquisition still requires an exact source review."
 
 [[dependencies]]
@@ -19,7 +19,7 @@ owner = "sugarsubstitute-comfy"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:078993517313d7058ae687ebd64101a837c6d1a5362cf12f4df394add4838c7c"
+source_sha256 = "sha256:6503eda3990c4af071651a5598e7e8ab853c625f07e757ef8be9b10e7f5eab85"
 rationale = "Native OS adapter bindings for sugarsubstitute-comfy; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -27,7 +27,7 @@ owner = "sugarsubstitute-crash"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:4dbba6b5727f4992741b3f7f447558dd89702db818c79bbe3fc5c07c02d30f39"
+source_sha256 = "sha256:46c48dc80ed21a88240d3356f12a926af654157c560eac495d705e393c6016bd"
 rationale = "Native OS adapter bindings for sugarsubstitute-crash; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -35,7 +35,7 @@ owner = "sugarsubstitute-desktop"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:32788b409d2307d6962b0467fa7533d5083ffdc7a5e7312a13f6061a19ebed37"
+source_sha256 = "sha256:922a2b9b82e7f85f4cea04cd65c70c7e538264bc07fced50ca9cef869b0c60dc"
 rationale = "Native OS adapter bindings for sugarsubstitute-desktop; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -43,7 +43,7 @@ owner = "sugarsubstitute-execution"
 identity = "tokio"
 binding = "tokio"
 kind = "normal"
-source_sha256 = "sha256:54314fff0c4003e617525d316543d565c27d6612ac49e279feb23afc4720d475"
+source_sha256 = "sha256:d364a9c33fc32f748b4fd7e582fce8ed4166d6cfc30e37aac176283fe16de0d9"
 rationale = "Execution-owned async runtime and network integration; filesystem APIs remain restricted by authored source reviews."
 
 [[dependencies]]
@@ -51,7 +51,7 @@ owner = "sugarsubstitute-execution"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:54314fff0c4003e617525d316543d565c27d6612ac49e279feb23afc4720d475"
+source_sha256 = "sha256:d364a9c33fc32f748b4fd7e582fce8ed4166d6cfc30e37aac176283fe16de0d9"
 rationale = "Native OS adapter bindings for sugarsubstitute-execution; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -59,7 +59,7 @@ owner = "sugarsubstitute-networking"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:a6e5b45eba3765ba20ef6d1b10af6b46856355c12a1b831b7034e792073b721b"
+source_sha256 = "sha256:6a6f6ee08bf98d52f71140ffab245d0c8333574aab581868f4eb9b15dd56c842"
 rationale = "Native OS adapter bindings for sugarsubstitute-networking; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -67,23 +67,15 @@ owner = "sugarsubstitute-splash"
 identity = "tiny-skia"
 binding = "tiny-skia"
 kind = "normal"
-source_sha256 = "sha256:93c6b1a2417b48f6e5c8cdf5ca86a402dda95d41847456977c98242f89fcd7f1"
+source_sha256 = "sha256:73a38895e2b60111b9d9af10ed8ce9ac2a4c4395ee93e324963f90bb16009232"
 rationale = "CPU raster composition and in-memory PNG encoding; public path-capable backing raster values must remain private."
-
-[[dependencies]]
-owner = "sugarsubstitute-splash"
-identity = "windows"
-binding = "windows"
-kind = "normal"
-source_sha256 = "sha256:93c6b1a2417b48f6e5c8cdf5ca86a402dda95d41847456977c98242f89fcd7f1"
-rationale = "Native OS adapter bindings for sugarsubstitute-splash; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
 owner = "sugarsubstitute-supervision"
 identity = "libc"
 binding = "libc"
 kind = "normal"
-source_sha256 = "sha256:e9ff8821988bdb4fc52b0cf8de4229f647337f01ba6ae5a044322264af0b6bbd"
+source_sha256 = "sha256:785c3704e4e226d44795c04567d8e0f6c02afc042b54ea7009a2187d80754933"
 rationale = "Unix durable-storage descriptor acquisition, relative atomic publication and checked close; exact authored access remains governed."
 
 [[dependencies]]
@@ -91,7 +83,7 @@ owner = "sugarsubstitute-supervision"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:e9ff8821988bdb4fc52b0cf8de4229f647337f01ba6ae5a044322264af0b6bbd"
+source_sha256 = "sha256:785c3704e4e226d44795c04567d8e0f6c02afc042b54ea7009a2187d80754933"
 rationale = "Isolated test fixture directories for sugarsubstitute-supervision; each authored acquisition still requires an exact source review."
 
 [[dependencies]]
@@ -99,7 +91,7 @@ owner = "sugarsubstitute-supervision"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:e9ff8821988bdb4fc52b0cf8de4229f647337f01ba6ae5a044322264af0b6bbd"
+source_sha256 = "sha256:785c3704e4e226d44795c04567d8e0f6c02afc042b54ea7009a2187d80754933"
 rationale = "Native OS adapter bindings for sugarsubstitute-supervision; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -115,7 +107,7 @@ owner = "sugarsubstitute-xtask"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:d66bbc83845d74350ef1e25f539bcf6a83f8407e45ac357786e77bc1d7e2271c"
+source_sha256 = "sha256:b1148c51fc8c180aabb23c6d63d1408d19b4e1ee4aa7eb8cfc1c084add26dff3"
 rationale = "Isolated test fixture directories for sugarsubstitute-xtask; each authored acquisition still requires an exact source review."
 
 [[records]]
@@ -223,53 +215,9 @@ rationale = "Prepared desktop frame stream metadata; no filesystem observation."
 consumer = "memory_metadata"
 
 [[records]]
-path = "crates/sugarsubstitute-desktop/src/windows_console/accessibility.rs"
-owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:cfd6187d61085bc0586c5dd7a67ce099ca0c49e8c2110ab394060e83133a374f"
-capabilities = ["GetProcAddress", "windows::Win32::System::LibraryLoader::GetProcAddress"]
-disposition = "boundary"
-rationale = "Load and retire the selected native crash/symbol or desktop text component through its original OS lifecycle: A single document's native UIA provider is guarded through every escaping COM interface."
-boundary = "external_runtime"
-
-[[records]]
-path = "crates/sugarsubstitute-desktop/src/windows_console/accessibility/tests.rs"
-owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:8e0942564dd9a38771b9a2257abb334bc555c6cba517ebe2afdd1f2e0e4866fe"
-capabilities = ["LoadLibraryExW", "windows::Win32::System::LibraryLoader::LoadLibraryExW"]
-disposition = "fixture"
-rationale = "Native fixture setup, deliberate corruption or observation for: Exercise real system RichEdit patterns and retained ranges without capture or visible windows. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
-
-[[records]]
-path = "crates/sugarsubstitute-desktop/src/windows_console/engine.rs"
-owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:4e5c25570a4f36defa1acca5630ebdddd094cc126e5b4b6c9453da65506252cb"
-capabilities = ["GetProcAddress", "windows::Win32::System::LibraryLoader::GetProcAddress"]
-disposition = "boundary"
-rationale = "Load and retire the selected native crash/symbol or desktop text component through its original OS lifecycle: Own one system RichEdit document behind an affine native input window."
-boundary = "external_runtime"
-
-[[records]]
-path = "crates/sugarsubstitute-desktop/src/windows_console/engine/retirement.rs"
-owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:49e971f2c04eb17aa4cb037395d5e23a91fac325dbd4d92a9c8f23c85588055e"
-capabilities = ["GetProcAddress", "windows::Win32::System::LibraryLoader::GetProcAddress"]
-disposition = "boundary"
-rationale = "Load and retire the selected native crash/symbol or desktop text component through its original OS lifecycle: Retire native clipboard/document references and acquire the Windows application color scheme."
-boundary = "external_runtime"
-
-[[records]]
-path = "crates/sugarsubstitute-desktop/src/windows_console/native.rs"
-owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:82c88fcb04c8a205c8e161cf8121233f8819a41531e4bd6e2298640c5e8151ee"
-capabilities = ["LoadLibraryExW", "windows::Win32::System::LibraryLoader::LoadLibraryExW"]
-disposition = "boundary"
-rationale = "Load and retire the selected native crash/symbol or desktop text component through its original OS lifecycle: Implement only the checked Win32 boundary behind the retained Creation owner."
-boundary = "external_runtime"
-
-[[records]]
 path = "crates/sugarsubstitute-desktop/src/windows_console/text/native_fixture.rs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:bfdaa790f4922165276557b6b9866f3d2d313871b0666917db218e8aee100075"
+source_sha256 = "sha256:10fbcd488d736fb856f1485a87bf71c6efe3f39b5ed361db48d4b548d63d275a"
 capabilities = ["LoadLibraryExW", "windows::Win32::System::LibraryLoader::LoadLibraryExW"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Own hidden RichEdit resources and the outer qualification's MTA cookie on one STA. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -969,15 +917,6 @@ capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Execution clock, admitted memory or retained task metadata for: Transfer genuine read-only Root bootstrap custody through the recovery carrier inheritance list. This receiver does not inspect filesystem state."
 consumer = "execution_metadata"
-
-[[records]]
-path = "crates/sugarsubstitute-splash/src/text_portable_console.rs"
-owner = "sugarsubstitute-splash"
-source_sha256 = "sha256:87d1297211ad39c1127e011d4b3fae874a8352a5c53e95ec24310f0ff16c12da"
-capabilities = ["method metadata"]
-disposition = "consumer"
-rationale = "Prepared glyph shaping metadata selected by index; no filesystem observation."
-consumer = "memory_metadata"
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/application_launch/broker/receiver/native.rs"
@@ -3021,14 +2960,6 @@ rationale = "Execution clock, admitted memory or retained task metadata for: Ret
 consumer = "execution_metadata"
 
 [[records]]
-path = "crates/sugarsubstitute/src/setup/controller/lifetime/tests.rs"
-owner = "sugarsubstitute"
-source_sha256 = "sha256:4291011ef048210d761dde49760befe6c7fe9f7aea80c3c6dd1fb8d0fad12e2e"
-capabilities = ["tempfile::tempdir"]
-disposition = "fixture"
-rationale = "Native fixture setup, deliberate corruption or observation for: Observe real cleanup jobs through repeated close and failed recovery completion. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
-
-[[records]]
 path = "crates/sugarsubstitute/src/setup/worker/downloads/native_tests.rs"
 owner = "sugarsubstitute"
 source_sha256 = "sha256:c6623a1b3c2de070331ba8e9c1678fea710a312453b40a0d52fa8b89e273a046"
@@ -3155,14 +3086,6 @@ source_sha256 = "sha256:beffef1f8e5ac2103affd6aa29821ec8c5aca843b47ae5d0d8d1b8fb
 capabilities = ["fs", "mkdir", "node:fs/promises", "readFile", "writeFile"]
 disposition = "tooling"
 rationale = "Repository tooling qualify-model-root.mjs: qualify-model-root Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "installer/qualify-surface.mjs"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:05d52ea3e10d3285114cdec7d8a79b452d05d3ad5e1db2f4e311d1a80fa5b654"
-capabilities = ["fs", "mkdir", "node:fs/promises", "readFile"]
-disposition = "tooling"
-rationale = "Repository tooling qualify-surface.mjs: qualify-surface Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
 
 [[records]]
 path = "installer/qualify-worker.mjs"
@@ -3349,14 +3272,6 @@ disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: ownership.test The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
-path = "installer/tests/surface-runner.cjs"
-owner = "sugarsubstitute"
-source_sha256 = "sha256:0746a5de092ff894bc1d688e82055001527e00f596fd46b2bfa8df10021b2ad9"
-capabilities = ["fs", "node:fs/promises", "writeFile"]
-disposition = "fixture"
-rationale = "Native fixture setup, deliberate corruption or observation for: surface-runner The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
-
-[[records]]
 path = "installer/tests/worker.test.mjs"
 owner = "sugarsubstitute"
 source_sha256 = "sha256:8d53f5bf223029ce648f65ebec1b166efb59a4d5955c71228953f79e8f2b8276"
@@ -3365,17 +3280,9 @@ disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: worker.test The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
-path = "installer/typecheck-surface.mjs"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:a08786d08c2be7133701af7915642dcde190d9fb7bc45936706146d70839786b"
-capabilities = ["fs", "node:fs", "readFileSync"]
-disposition = "tooling"
-rationale = "Repository tooling typecheck-surface.mjs: typecheck-surface Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
 path = "installer/typecheck.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:bff9944d61155045995d361ed44cc0b1404a11be9dc869947065d0708330d9e8"
+source_sha256 = "sha256:31c9476e4d908d2ca34ec1923f0f6c370b06c12467e9a690ed45102c408c8aed"
 capabilities = ["fs", "node:fs", "readFileSync"]
 disposition = "tooling"
 rationale = "Repository tooling typecheck.mjs: typecheck Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -4072,7 +3979,7 @@ rationale = "Repository tooling fixtures.rs: Build isolated synthetic repositori
 [[records]]
 path = "tools/xtask/src/infrastructure/access.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:f855be37914fe359c889cbf1b63e7d5e771bc84154086531c446d36d048c6921"
+source_sha256 = "sha256:83b1fc4a90da1ae71a121d3c36c454a1e7e8583147cd9621da6516feb7a39caa"
 capabilities = ["library path-based raster I/O", "literal restricted capability"]
 disposition = "tooling"
 rationale = "Repository tooling access.rs: Classify supported filesystem construction, native entry points and raw exported capabilities. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -4096,7 +4003,7 @@ rationale = "Repository tooling scripts.rs: Classify decoded script, native, C# 
 [[records]]
 path = "tools/xtask/src/infrastructure/access_tests.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:e0004f9da2fd3d1888b5eef6f895375193cb3abb2ef2e3e08f117d3a39da34d9"
+source_sha256 = "sha256:2a12d8f104473fa8e010fb30d37247e7c36e4281988a05701eeff1d79c9e2878"
 capabilities = ["literal restricted capability"]
 disposition = "tooling"
 rationale = "Repository tooling access_tests.rs: Reject unreviewed construction, method effects, cross-language routes and raw public exports. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -4136,7 +4043,7 @@ rationale = "Repository tooling tests.rs: Adversarial capability, copy-provenanc
 [[records]]
 path = "tools/xtask/src/main.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:6b500b52d4a8ea40ca88d31f1caf26154f17a6441c31443504b3937be7e08041"
+source_sha256 = "sha256:fe42c2b8fda8fdcc79312022b289ad7e3e1be737dc5a75e7862713bae3130605"
 capabilities = ["method canonicalize"]
 disposition = "tooling"
 rationale = "Repository tooling main.rs: Provide the same portable verification entry point for local work, hooks and CI. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -4164,3 +4071,80 @@ source_sha256 = "sha256:87fc57da92f44444e136639693979b168b06cd90f49fee9d7eaf0cd7
 capabilities = ["method canonicalize", "std::fs::read_dir", "std::fs::write", "tempfile::tempdir"]
 disposition = "tooling"
 rationale = "Repository tooling source.rs: Own portable source discovery, safe policy paths, and exact review fingerprints. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
+
+[[records]]
+path = "crates/sugarsubstitute-desktop/src/windows_text.rs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:d17c7bb73b0a1fb34267f5b002a7c8a73635293076f78dd7cfd7e2a024a58734"
+capabilities = ["GetProcAddress", "windows::Win32::System::LibraryLoader::GetProcAddress"]
+disposition = "boundary"
+rationale = "Resolve the original system RichEdit interface through its retained module; the affine desktop owner adopts and retires the resulting text service."
+boundary = "external_runtime"
+
+[[records]]
+path = "crates/sugarsubstitute-desktop/src/windows_text/accessibility.rs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:59fd8dc71aff89f1f88f0e5b8bbf2a8a90ad96e9cb21e745d5b1678939a24ae6"
+capabilities = ["GetProcAddress", "windows::Win32::System::LibraryLoader::GetProcAddress"]
+disposition = "boundary"
+rationale = "Resolve the original native accessibility entry from the retained system text module. Provider and document references remain pinned until checked native disconnection."
+boundary = "external_runtime"
+
+[[records]]
+path = "crates/sugarsubstitute-desktop/src/windows_text/accessibility/qualification.rs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:24d776daad947f2fc7a733ee6a578169fc8ad4d4ef4929f340b8d6d6e71b6b9f"
+capabilities = ["LoadLibraryExW", "windows::Win32::System::LibraryLoader::LoadLibraryExW"]
+disposition = "fixture"
+rationale = "Exercise the actual system RichEdit accessibility interface on an isolated native test window, with retained ranges and explicit checked release."
+
+[[records]]
+path = "crates/sugarsubstitute-desktop/src/windows_text/field_tests.rs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:1d9f4c609df8adfb0aaf511c252d8bfd6d61bbfc432c9c95a96b32394f4c3a96"
+capabilities = ["LoadLibraryExW", "windows::Win32::System::LibraryLoader::LoadLibraryExW"]
+disposition = "fixture"
+rationale = "Load the system text implementation for real isolated editable-field focus, Unicode, input and teardown regression tests."
+
+[[records]]
+path = "crates/sugarsubstitute-desktop/src/windows_text/library.rs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:9cc15b4e832daad366e90bbad8705fc85fbfefbaaebc6e668bd517c009e49cd6"
+capabilities = ["LoadLibraryExW", "windows::Win32::System::LibraryLoader::LoadLibraryExW"]
+disposition = "boundary"
+rationale = "Load only Msftedit.dll with LOAD_LIBRARY_SEARCH_SYSTEM32 and retain the module until every owned text service and callback has retired."
+boundary = "external_runtime"
+
+[[records]]
+path = "crates/sugarsubstitute-desktop/src/windows_text/retirement.rs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:c97517bc3dab74d302c54b9febcd281308ee4a554218a83996edd539f06fb73b"
+capabilities = ["GetProcAddress", "windows::Win32::System::LibraryLoader::GetProcAddress"]
+disposition = "boundary"
+rationale = "Retire the original clipboard/document references through their retained system text module; preserve unresolved native references rather than unloading their implementation."
+boundary = "external_runtime"
+
+[[records]]
+path = "crates/sugarsubstitute-ui/src/text_portable_console.rs"
+owner = "sugarsubstitute-ui"
+source_sha256 = "sha256:b93e498c50b9f36628ef4557ced46ca3e3c98620f5d1d1dfe7ffe0ec42ff63bd"
+capabilities = ["method metadata"]
+disposition = "consumer"
+rationale = "Read and assign cosmic-text glyph style metadata within admitted text preparation; this receiver carries in-memory style indices and performs no filesystem observation."
+consumer = "memory_metadata"
+
+[[dependencies]]
+owner = "sugarsubstitute-ui"
+identity = "tiny-skia"
+binding = "tiny-skia"
+kind = "normal"
+source_sha256 = "sha256:b442b0da41d37cd2d13ac6378a01b8b311f99a9a6e8908da576ec7f7474797c1"
+rationale = "Shared pixel preparation uses private raster backing and fixed system UI APIs; public bitmap and mask values expose only data and supported painting, while source-level construction remains independently checked."
+
+[[dependencies]]
+owner = "sugarsubstitute-ui"
+identity = "windows"
+binding = "windows"
+kind = "normal"
+source_sha256 = "sha256:b442b0da41d37cd2d13ac6378a01b8b311f99a9a6e8908da576ec7f7474797c1"
+rationale = "Shared pixel preparation uses private raster backing and fixed system UI APIs; public bitmap and mask values expose only data and supported painting, while source-level construction remains independently checked."

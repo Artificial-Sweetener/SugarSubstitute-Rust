@@ -6,6 +6,7 @@
 use std::{error::Error, fmt};
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryClaimError, MemoryLease};
 use sugarsubstitute_contracts::presentation::FrameError;
+use sugarsubstitute_ui::text::FontOwner;
 #[path = "render_task.rs"]
 mod preparation;
 #[path = "render_stages.rs"]
@@ -15,12 +16,13 @@ pub use preparation::{
     SplashPreparationResult, SplashRenderRequest, SplashRenderTask, TranscriptView,
 };
 use sugarsubstitute_contracts::localization::messages;
-use tiny_skia::Pixmap;
+use sugarsubstitute_ui::bitmap::Bitmap;
 
 use crate::{
-    AnimationFrame, Appearance, CharacterError, CharacterLibrary, IconError, ProgressFrame,
-    assets::POSE_ASSETS, caption_icons::CaptionIcons, text::FontOwner,
+    AnimationFrame, Appearance, CharacterError, CharacterLibrary, IconError, assets::POSE_ASSETS,
+    caption_icons::CaptionIcons,
 };
+use sugarsubstitute_ui::progress::ProgressFrame;
 
 /// Preserve errors at the rendering boundary without turning them into startup policy.
 #[derive(Debug)]
@@ -87,9 +89,9 @@ impl Error for RenderError {
     }
 }
 
-impl From<crate::shapes::AllocationError> for RenderError {
+impl From<sugarsubstitute_ui::shapes::AllocationError> for RenderError {
     /// Retain paint-owner allocation causes across the public render boundary.
-    fn from(error: crate::shapes::AllocationError) -> Self {
+    fn from(error: sugarsubstitute_ui::shapes::AllocationError) -> Self {
         Self::RasterAllocation(std::io::Error::other(error))
     }
 }
@@ -208,7 +210,7 @@ impl SplashRenderer {
     }
 
     /// Validate and compose one frame while retaining this view's prepared resources.
-    fn render_frame(&mut self, frame: RenderFrame) -> Result<Pixmap, RenderError> {
+    fn render_frame(&mut self, frame: RenderFrame) -> Result<Bitmap, RenderError> {
         let mut stages = stages::RenderStages::new(frame)?;
         while !stages.step(self)? {}
         stages.finish()
@@ -222,17 +224,19 @@ mod disclosure_tests;
 #[cfg(test)]
 mod tests {
     use super::SplashRenderer;
-    use crate::{AnimationFrame, Appearance, ProgressFrame};
+    use crate::{AnimationFrame, Appearance};
+    use sugarsubstitute_ui::progress::ProgressFrame;
 
     /// Preserve a real rejected coverage reservation through the public render error.
     #[test]
     fn coverage_allocator_cause_survives_the_render_boundary()
     -> Result<(), Box<dyn std::error::Error>> {
-        let path = crate::shapes::rounded(0.0, 0.0, 1.0, 4.0, 2.0, 1.0)
+        let path = sugarsubstitute_ui::shapes::rounded(0.0, 0.0, 1.0, 4.0, 2.0, 1.0)
             .ok_or("Cannot construct coverage failure fixture")?;
-        let failure = crate::shapes::coverage(&path, u32::MAX, u32::MAX)
-            .err()
-            .ok_or("Oversized coverage allocation unexpectedly succeeded")?;
+        let failure =
+            sugarsubstitute_ui::shapes::CoverageRaster::new(&path, u32::MAX, u32::MAX, true)
+                .err()
+                .ok_or("Oversized coverage allocation unexpectedly succeeded")?;
         let error = super::RenderError::from(failure);
         let mut cause: Option<&(dyn std::error::Error + 'static)> = Some(&error);
         while let Some(current) = cause {

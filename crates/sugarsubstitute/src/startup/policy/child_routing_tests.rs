@@ -24,7 +24,8 @@ fn native_activity_preserves_completed_splash_publication() -> TestResult {
         presentation::{ConsolePresentation, FrameShape},
     };
     use sugarsubstitute_desktop::StartupWindowContent;
-    use sugarsubstitute_splash::{AnimationFrame, Appearance, ProgressFrame};
+    use sugarsubstitute_splash::{AnimationFrame, Appearance};
+    use sugarsubstitute_ui::progress::ProgressFrame;
     let run = test_support::run()?;
     let (child, mut owner, _) = test_support::child()?;
     let client = owner.client();

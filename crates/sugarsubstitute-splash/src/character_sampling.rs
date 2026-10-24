@@ -5,7 +5,8 @@
 
 use super::CharacterError;
 use crate::projection::{Bounds, Point};
-use tiny_skia::{PathBuilder, Pixmap};
+use sugarsubstitute_ui::bitmap::Bitmap;
+use tiny_skia::PathBuilder;
 
 #[path = "character_transform.rs"]
 mod transform;
@@ -17,7 +18,7 @@ use sample::{multiply, over, paint_span};
 
 /// Integrate a vertical round-capped edge directly instead of snapping a narrow vector stroke.
 pub(super) fn paper_edge(
-    target: &mut Pixmap,
+    target: &mut Bitmap,
     top: Point,
     bottom: Point,
     thickness: f64,
@@ -103,8 +104,8 @@ pub(super) struct SamplingCursor {
     row: usize,
     bottom: usize,
     span_count: usize,
-    raster: Option<crate::shapes::CoverageRaster>,
-    coverage: Option<tiny_skia::Mask>,
+    raster: Option<sugarsubstitute_ui::shapes::CoverageRaster>,
+    coverage: Option<sugarsubstitute_ui::bitmap::CoverageMask>,
 }
 impl SamplingCursor {
     /// Capture bounded card geometry without initializing the full coverage plane.
@@ -157,8 +158,13 @@ impl SamplingCursor {
         }
         outline.close();
         let path = outline.finish().ok_or(CharacterError::InvalidBounds)?;
-        let raster = crate::shapes::CoverageRaster::new(&path, width as u32, height as u32, true)
-            .map_err(coverage_error)?;
+        let raster = sugarsubstitute_ui::shapes::CoverageRaster::new(
+            &path,
+            width as u32,
+            height as u32,
+            true,
+        )
+        .map_err(coverage_error)?;
         Ok(Self {
             inverse,
             width,
@@ -174,8 +180,8 @@ impl SamplingCursor {
     /// Initialize/integrate at most 32768 coverage pixels or sample at most eight rows.
     pub(super) fn step(
         &mut self,
-        target: &mut Pixmap,
-        source: &Pixmap,
+        target: &mut Bitmap,
+        source: &Bitmap,
     ) -> Result<bool, CharacterError> {
         if let Some(raster) = &mut self.raster {
             if raster.step(32768) {
@@ -247,14 +253,14 @@ impl SamplingCursor {
     }
 }
 /// Preserve the allocation owner cause across character preparation.
-fn coverage_error(source: crate::shapes::AllocationError) -> CharacterError {
+fn coverage_error(source: sugarsubstitute_ui::shapes::AllocationError) -> CharacterError {
     CharacterError::Coverage { source: Box::new(source) }
 }
 /// Drive the same bounded card stages for supported synchronous qualification callers.
 #[cfg(test)]
 pub(super) fn paint(
-    target: &mut Pixmap,
-    source: &Pixmap,
+    target: &mut Bitmap,
+    source: &Bitmap,
     quad: [Point; 4],
     bounds: Bounds,
     mapping: DeviceTransform,

@@ -152,8 +152,20 @@ pub struct AccessibleControl {
     pub bounds: ControlBounds,
     /// Route activation to the surface's native close operation.
     pub close: bool,
-    /// Expose this stable peer and enable its callback action; false hides and disables it.
+    /// Expose this stable peer; false hides and disables it.
     pub visible: bool,
+    /// Enable input and accessible activation while visible. Hidden peers remain inactive.
+    pub enabled: bool,
+}
+
+impl AccessibleControl {
+    /// Shared availability semantics used by native input, focus and accessibility peers.
+    pub fn availability(self) -> sugarsubstitute_ui::availability::Availability {
+        sugarsubstitute_ui::availability::Availability {
+            visible: self.visible,
+            enabled: self.enabled,
+        }
+    }
 }
 
 /// Bound an accessible control to its painted logical client rectangle.
@@ -339,6 +351,14 @@ impl Error for DesktopError {
     /// Preserve the original external error for diagnostics.
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(self.cause.as_ref())
+    }
+}
+
+#[cfg(target_os = "windows")]
+impl From<sugarsubstitute_ui::windows::NativeUiError> for DesktopError {
+    /// Preserve the shared native widget's operation and original error chain.
+    fn from(cause: sugarsubstitute_ui::windows::NativeUiError) -> Self {
+        Self::new(cause.operation(), cause)
     }
 }
 

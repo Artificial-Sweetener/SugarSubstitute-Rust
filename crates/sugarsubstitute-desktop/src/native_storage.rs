@@ -125,10 +125,25 @@ impl Dib {
         retained: &'a mut Option<Self>,
         frame: &PreparedFrame,
     ) -> Result<&'a mut Self, DesktopError> {
+        Self::for_shape(retained, frame, frame.shape())
+    }
+
+    /// Allocate only the requested native region using the retained frame's admitted storage.
+    pub(crate) fn for_shape<'a>(
+        retained: &'a mut Option<Self>,
+        frame: &PreparedFrame,
+        shape: FrameShape,
+    ) -> Result<&'a mut Self, DesktopError> {
+        if shape.width() > frame.width() || shape.height() > frame.height() {
+            return Err(DesktopError::message(
+                "allocate_dib_region",
+                "native region exceeds its source frame",
+            ));
+        }
         if retained.as_ref().is_none_or(|dib| {
-            !dib.live() || dib.width() != frame.width() || dib.height() != frame.height()
+            !dib.live() || dib.width() != shape.width() || dib.height() != shape.height()
         }) {
-            let replacement = Self::new(frame)?;
+            let replacement = Self::new(frame, shape)?;
             if let Some(old) = retained {
                 old.close()?;
             }
@@ -140,8 +155,7 @@ impl Dib {
     }
 
     /// Claim the complete physical pixel storage before the first native allocation.
-    fn new(frame: &PreparedFrame) -> Result<Self, DesktopError> {
-        let shape = frame.shape();
+    fn new(frame: &PreparedFrame, shape: FrameShape) -> Result<Self, DesktopError> {
         let claim = frame
             .claim_storage(shape.byte_len() as u64)
             .map_err(|error| DesktopError::new("claim_dib_storage", error))?;

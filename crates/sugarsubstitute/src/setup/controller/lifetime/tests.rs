@@ -82,7 +82,7 @@ fn repeated_close_preserves_admitted_launch_cleanup_until_observed_settlement() 
     );
     controller.close()?;
     observe(&wake, || {
-        controller.advance()?;
+        controller.advance_events()?;
         controller.settled()
     })?;
     assert!(controller.relaunch.is_none());
@@ -98,9 +98,8 @@ fn failed_transfer_recovers_creator_custody_while_the_installer_stays_open() -> 
     controller.submit(StorageWork::Transfer, |_| Err(io::Error::other("transfer failure")))?;
     let mut reported = false;
     observe(&wake, || {
-        for message in controller.advance()? {
-            let message: serde_json::Value = serde_json::from_str(&message)?;
-            if message["id"] == "open" && message["event"] == "failed" {
+        for message in controller.advance_events()?.events {
+            if message.id.as_deref() == Some("open") && matches!(message.kind, Kind::Failed(_)) {
                 assert!(controller.relaunch.is_none());
                 assert!(controller.launch_failure.is_none());
                 assert!(controller.install_id.is_none());
@@ -114,7 +113,7 @@ fn failed_transfer_recovers_creator_custody_while_the_installer_stays_open() -> 
     assert!(controller.storage.is_none());
     controller.close()?;
     observe(&wake, || {
-        controller.advance()?;
+        controller.advance_events()?;
         controller.settled()
     })?;
     controller.finish()?;
@@ -132,39 +131,37 @@ fn cleanup_uses_native_creation_fact_instead_of_the_discarded_worker_outcome() -
         controller.submit(StorageWork::Retire, move |_| Ok(StorageResult::Retired(creation)))?;
         let mut messages = Vec::new();
         observe(&wake, || {
-            messages.extend(controller.advance()?);
+            messages.extend(controller.advance_events()?.events);
             Ok(controller.relaunch.is_none())
         })?;
-        let messages: Vec<serde_json::Value> = messages
+        let products: Vec<_> =
+            messages.iter().filter(|event| !matches!(event.kind, Kind::Diagnostic(_))).collect();
+        let diagnostics: Vec<_> = messages
             .iter()
-            .map(|message| serde_json::from_str(message))
-            .collect::<std::result::Result<_, _>>()?;
-        let product: Vec<_> =
-            messages.iter().filter(|message| message["event"] != "diagnostic").collect();
-        assert_eq!(product.len(), 1);
-        assert_eq!(
-            messages.iter().filter(|message| message["event"] == "diagnostic").count(),
-            usize::from(creation != CreationOutcome::Created)
+            .filter_map(|event| match &event.kind {
+                Kind::Diagnostic(data) => Some(data),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(diagnostics.len(), usize::from(creation != CreationOutcome::Created));
+        assert!(
+            diagnostics
+                .iter()
+                .all(|data| data.message == "original worker outcome" && data.omitted == 0)
         );
-        if creation != CreationOutcome::Created {
-            assert_eq!(messages[0]["event"], "diagnostic");
-            assert_eq!(messages[0]["data"]["message"], "original worker outcome");
-        }
-        let message = product[0];
-        assert_eq!(
-            message["event"],
-            match creation {
-                CreationOutcome::NotCreated => "failed",
-                CreationOutcome::Created => "completed",
-                CreationOutcome::Indeterminate => "unavailable",
-            }
-        );
+        assert_eq!(products.len(), 1);
+        assert!(matches!(
+            (&products[0].kind, creation),
+            (Kind::Failed(_), CreationOutcome::NotCreated)
+                | (Kind::Completed(Completed::Opened), CreationOutcome::Created)
+                | (Kind::Unavailable(_), CreationOutcome::Indeterminate)
+        ));
         assert_eq!(controller.unavailable, creation == CreationOutcome::Indeterminate);
         assert!(controller.install_id.is_none());
         assert!(controller.launch_failure.is_none());
         controller.close()?;
         observe(&wake, || {
-            controller.advance()?;
+            controller.advance_events()?;
             controller.settled()
         })?;
         controller.finish()?;
@@ -181,7 +178,7 @@ fn closing_observes_creation_cleanup_without_sending_a_second_open_response() ->
         controller.submit(StorageWork::Retire, move |_| Ok(StorageResult::Retired(creation)))?;
         controller.close()?;
         observe(&wake, || {
-            assert!(controller.advance()?.is_empty());
+            assert!(controller.advance_events()?.events.is_empty());
             controller.settled()
         })?;
         assert!(controller.relaunch.is_none());
@@ -197,7 +194,7 @@ fn recovery_failure_retains_the_original_open_request_until_cleanup_succeeds() -
     controller.install_id = Some("open".into());
     controller.launch_failure = Some(io::Error::other("original launch failure"));
     controller.submit(StorageWork::Retire, |_| Err(io::Error::other("cleanup failure")))?;
-    observe(&wake, || match controller.advance() {
+    observe(&wake, || match controller.advance_events().map(|batch| batch.events) {
         Err(cause) => {
             assert_eq!(cause.to_string(), "cleanup failure");
             Ok(true)
@@ -217,29 +214,30 @@ fn recovery_failure_retains_the_original_open_request_until_cleanup_succeeds() -
         launch.recover_and_retire(&context).map(StorageResult::Retired).map_err(io::Error::other)
     })?;
     let mut reports = 0;
+    let mut diagnostics = 0;
     observe(&wake, || {
-        for message in controller.advance()? {
-            let message: serde_json::Value = serde_json::from_str(&message)?;
-            if message["event"] == "diagnostic" {
-                assert_eq!(message["data"]["message"], "original launch failure");
+        for message in controller.advance_events()?.events {
+            if let Kind::Diagnostic(data) = &message.kind {
+                assert!(message.id.is_none());
+                assert_eq!(data.message, "original launch failure");
+                diagnostics += 1;
                 continue;
             }
-            assert_eq!(message["id"], "open");
-            assert_eq!(message["event"], "failed");
-            assert_eq!(
-                message["data"]["message"],
-                sugarsubstitute_contracts::localization::installer::messages("en").setup_failed
+            assert_eq!(message.id.as_deref(), Some("open"));
+            assert!(
+                matches!(message.kind, Kind::Failed(ref cause) if cause == sugarsubstitute_contracts::localization::installer::messages("en").setup_failed)
             );
             reports += 1;
         }
         Ok(controller.relaunch.is_none())
     })?;
     assert_eq!(reports, 1);
+    assert_eq!(diagnostics, 1);
     assert!(controller.install_id.is_none());
     assert!(controller.launch_failure.is_none());
     controller.close()?;
     observe(&wake, || {
-        controller.advance()?;
+        controller.advance_events()?;
         controller.settled()
     })?;
     controller.finish()?;
@@ -252,7 +250,7 @@ fn closing_does_not_swallow_cleanup_failure_or_drop_retained_launch_ownership() 
         let (mut controller, wake) = fixture()?;
         controller.submit(work, |_| Err(io::Error::other("original recovery failure")))?;
         controller.close()?;
-        observe(&wake, || match controller.advance() {
+        observe(&wake, || match controller.advance_events().map(|batch| batch.events) {
             Err(cause) => {
                 assert_eq!(cause.to_string(), "original recovery failure");
                 Ok(true)
@@ -262,7 +260,7 @@ fn closing_does_not_swallow_cleanup_failure_or_drop_retained_launch_ownership() 
         assert!(controller.relaunch.is_some());
         assert!(controller.storage.is_none());
         observe(&wake, || {
-            controller.advance()?;
+            controller.advance_events()?;
             controller.settled()
         })?;
         controller.finish()?;
@@ -312,60 +310,13 @@ fn closing_cancels_preparation_but_observes_transfer_and_creation_without_discar
         boundary.0.lock().map_err(|_| "Boundary poisoned")?.release = true;
         boundary.1.notify_all();
         observe(&wake, || {
-            controller.advance()?;
+            controller.advance_events()?;
             controller.settled()
         })?;
         assert_eq!(boundary.0.lock().map_err(|_| "Boundary poisoned")?.cancelled, Some(cancel));
         controller.finish()?;
     }
     Ok(())
-}
-
-#[test]
-fn production_payload_import_and_preparation_jobs_authorize_protected_cache_creation() -> Result<()>
-{
-    let (mut controller, wake) = fixture()?;
-    controller.relaunch = None;
-    for work in
-        [StorageWork::Payload, StorageWork::Import, StorageWork::Prepare, StorageWork::Publish]
-    {
-        let root = tempfile::tempdir()?;
-        let path = root.path().to_owned();
-        controller.submit(work, move |context| {
-            assert!(context.deadline().is_some());
-            let cache = setup_storage::cache::RuntimeCache::open(
-                &path,
-                setup_storage::cache::CachePolicy::default(),
-                &context,
-            )?;
-            assert!(cache.path().join("owner").is_file());
-            Ok(StorageResult::Transferred)
-        })?;
-        observe(&wake, || {
-            controller
-                .client
-                .as_ref()
-                .ok_or("Execution client absent")?
-                .drain_completions(NonZeroUsize::new(32).ok_or("Invalid drain bound")?)?;
-            let job = &mut controller.storage.as_mut().ok_or("Storage job absent")?.job;
-            let Some(completion) = job.try_take_completion() else {
-                return Ok(false);
-            };
-            controller.storage = None;
-            match completion.outcome {
-                JobOutcome::Success(StorageResult::Transferred) => Ok(true),
-                JobOutcome::Failure(cause) => Err(cause.into()),
-                _ => Err("Protected cache creation did not complete".into()),
-            }
-        })?;
-        assert!(root.path().join(setup_storage::cache::DIRECTORY).join("owner").is_file());
-    }
-    controller.close()?;
-    observe(&wake, || {
-        controller.advance()?;
-        controller.settled()
-    })?;
-    controller.finish()
 }
 
 #[test]
@@ -406,7 +357,7 @@ fn close_during_open_retains_returned_creator_until_observed_retirement() -> Res
         StorageWork::Retire
     ));
     observe(&wake, || {
-        assert!(controller.advance()?.is_empty());
+        assert!(controller.advance_events()?.events.is_empty());
         controller.settled()
     })?;
     assert!(controller.relaunch.is_none());

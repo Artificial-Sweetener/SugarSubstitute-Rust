@@ -5,7 +5,8 @@
 
 use super::{ASSETS, CaptionIcon, CaptionIcons, IconError};
 use crate::packaged_png::{PngError, PngRows};
-use tiny_skia::{FilterQuality, IntSize, Pixmap, PixmapPaint, Transform};
+use sugarsubstitute_ui::bitmap::Bitmap;
+use tiny_skia::{FilterQuality, IntSize, PixmapPaint, Transform};
 
 /// Capture icon selection without decoding, cloning or tinting on the submitting thread.
 pub(crate) struct CaptionCursor {
@@ -14,9 +15,9 @@ pub(crate) struct CaptionCursor {
     tint: [u8; 3],
     scale: f64,
     decoder: Option<PngRows>,
-    pair: Vec<Pixmap>,
+    pair: Vec<Bitmap>,
     initialized: bool,
-    glyph: Option<Pixmap>,
+    glyph: Option<Bitmap>,
     painted: bool,
 }
 impl CaptionCursor {
@@ -46,7 +47,7 @@ impl CaptionCursor {
     pub(crate) fn step(
         &mut self,
         cache: &mut CaptionIcons,
-        target: &mut Pixmap,
+        target: &mut Bitmap,
     ) -> Result<bool, IconError> {
         if self.painted {
             return Ok(true);
@@ -92,17 +93,17 @@ impl CaptionCursor {
             for pixel in bytes.chunks_exact_mut(4) {
                 let alpha = pixel[3];
                 for (channel, tint) in pixel[..3].iter_mut().zip(self.tint) {
-                    *channel = crate::shapes::byte_product(tint, alpha);
+                    *channel = sugarsubstitute_ui::shapes::byte_product(tint, alpha);
                 }
             }
             let size =
                 IntSize::from_wh(source.width(), source.height()).ok_or(IconError::InvalidScale)?;
-            self.glyph = Some(Pixmap::from_vec(bytes, size).ok_or(IconError::InvalidScale)?);
+            self.glyph = Some(Bitmap::from_vec(bytes, size).ok_or(IconError::InvalidScale)?);
             return Ok(false);
         }
         let glyph = self.glyph.as_ref().ok_or(IconError::InvalidScale)?;
         let ratio = (self.scale / ASSETS[self.index].0) as f32;
-        target.draw_pixmap(
+        target.draw_bitmap(
             0,
             0,
             glyph.as_ref(),

@@ -175,6 +175,7 @@ pub(crate) fn caption_controls(
         retry.label,
     ];
     std::array::from_fn(|index| crate::AccessibleControl {
+        enabled: true,
         id: index as u16 + 1,
         label: names[index],
         bounds: crate::ControlBounds {

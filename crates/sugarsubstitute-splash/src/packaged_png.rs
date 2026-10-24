@@ -4,7 +4,8 @@
 //! Decode one reviewed noninterlaced RGBA PNG through bounded row operations.
 
 use std::{error::Error, fmt, io::Cursor};
-use tiny_skia::{IntSize, Pixmap};
+use sugarsubstitute_ui::bitmap::Bitmap;
+use tiny_skia::IntSize;
 
 /// Bound packaged input/decoder scratch independently of retained decoded cache pixels.
 pub(crate) const DECODER_LIMIT: usize = 1024 * 1024;
@@ -98,7 +99,7 @@ impl PngRows {
             for pixel in self.pixels[start..].chunks_exact_mut(4) {
                 let alpha = pixel[3];
                 for channel in &mut pixel[..3] {
-                    *channel = crate::shapes::byte_product(*channel, alpha);
+                    *channel = sugarsubstitute_ui::shapes::byte_product(*channel, alpha);
                 }
             }
             self.row += 1;
@@ -112,11 +113,11 @@ impl PngRows {
     }
 
     /// Move fully decoded pixels into a pixmap without allocating, copying or rescanning.
-    pub(crate) fn finish(self) -> Result<Pixmap, PngError> {
+    pub(crate) fn finish(self) -> Result<Bitmap, PngError> {
         if !self.finished || self.row != self.size.height() {
             return Err(PngError::Incomplete);
         }
-        Pixmap::from_vec(self.pixels, self.size).ok_or(PngError::Format)
+        Bitmap::from_vec(self.pixels, self.size).ok_or(PngError::Format)
     }
 }
 

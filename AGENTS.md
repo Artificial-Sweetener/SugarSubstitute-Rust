@@ -78,6 +78,12 @@ implementation plans, or workstation configuration.
 
 ## Host and native surface contracts
 
+- Shared native widgets belong to `sugarsubstitute-ui`. Surfaces own content and
+  layout; the desktop adapter owns OS windows, event loops and native peer lifetimes.
+  `governance/ui/policy.toml` registers toolkit dependencies and exact reviewed
+  platform/composition sources. The UI gate rejects unregistered construction,
+  changed boundary sources and stale records, including aliases and macro uses.
+  Add reusable widgets to the shared owner rather than drawing ad-hoc controls.
 - The desktop embeds the actual ComfyUI frontend with SugarCubes installed.
   Preserve ComfyUI's supported extension lifecycle and server behavior.
 - Version public host contracts and document their compatibility requirements.

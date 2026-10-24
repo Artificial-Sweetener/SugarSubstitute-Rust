@@ -7,7 +7,6 @@ mod clipboard;
 mod controls;
 mod copy;
 mod dispatch;
-mod font;
 mod modal;
 mod save_dialog;
 mod session;

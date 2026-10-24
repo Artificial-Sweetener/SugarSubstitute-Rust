@@ -164,14 +164,7 @@ impl Controller {
             JobOutcome::Success(StorageResult::Inspected(root, existing)) => {
                 let id =
                     self.inspection_id.take().ok_or("Installation inspection identity absent")?;
-                self.reply(
-                    Some(&id),
-                    "completed",
-                    json!({
-                        "existing":existing, "comfyRoot":root.join("ComfyUI"),
-                        "models":root.join("models"), "outputs":root.join("outputs"),
-                    }),
-                )?;
+                self.emit(Some(id), Kind::Completed(Completed::Location { root, existing }))?;
             }
             JobOutcome::Success(StorageResult::Bundle(bundle, cache)) => {
                 self.bundle = Some(bundle);
@@ -214,7 +207,7 @@ impl Controller {
             JobOutcome::Success(StorageResult::Installed(installed)) => {
                 self.installed = Some(installed);
                 let id = self.install_id.take().ok_or("Installation request absent")?;
-                self.reply(Some(&id), "completed", json!({"ready":true}))?;
+                self.emit(Some(id), Kind::Completed(Completed::Installed))?;
             }
             JobOutcome::Success(StorageResult::Completed(candidate)) => {
                 self.publish_installation(*candidate)?;
@@ -258,7 +251,7 @@ impl Controller {
         self.launch_failure = None;
         let id = self.install_id.take();
         if !self.closing && !self.unavailable {
-            self.reply(id.as_deref(), "completed", json!({}))?;
+            self.emit(id, Kind::Completed(Completed::Opened))?;
         }
         Ok(())
     }
@@ -279,15 +272,10 @@ impl Controller {
         if id.is_none() && self.bundle.is_none() {
             self.worker_failed(Box::new(cause))?;
         } else {
-            self.reply(
-                None,
-                "diagnostic",
-                json!({"message":crate::failure_details::Details(&cause).to_string()}),
-            )?;
-            self.reply(
-                id.as_deref(),
-                "failed",
-                json!({"message":super::super::failure::storage_message(&cause, &self.locale)}),
+            self.diagnostic(crate::failure_details::Details(&cause).to_string())?;
+            self.emit(
+                id,
+                Kind::Failed(super::super::failure::storage_message(&cause, &self.locale)),
             )?;
         }
         self.prepared = None;

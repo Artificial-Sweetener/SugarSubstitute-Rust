@@ -88,7 +88,7 @@ pub fn run(
     let mut controls = crate::windows_controls::Controls::new(
         Rc::clone(&window),
         event_loop.create_proxy(),
-        content.accessible_controls(),
+        &crate::windows_controls::Specification::buttons(content.accessible_controls()),
         crate::windows_controls::PaintMode::PreparedPixels,
         timings.clone(),
     )?;

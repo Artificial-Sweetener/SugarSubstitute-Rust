@@ -7,9 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 use sugarsubstitute_contracts::execution::CompletionWake;
-use sugarsubstitute_desktop::{
-    HeadlessLifetime, HeadlessStep, StartupPreparationStep, installer::InstallerLifetime,
-};
+use sugarsubstitute_desktop::{HeadlessLifetime, HeadlessStep, StartupPreparationStep};
 
 pub(in crate::setup) fn run(
     bundle: PathBuf,
@@ -19,18 +17,34 @@ pub(in crate::setup) fn run(
     launch: bool,
     distribution: &'static [u8],
 ) -> Result<Value> {
+    let install_root = native_installation.clone().unwrap_or_else(|| workspace.join("installed"));
     let mut fixture = Fixture {
         controller: Controller::new(bundle, workspace.clone(), distribution),
+        session: session::Session::new(
+            events::path_text(install_root)?,
+            crate::setup::presentation::View {
+                surface: sugarsubstitute_ui::text::PaintSpec {
+                    width: 1180,
+                    height: 760,
+                    scale: 1.0,
+                    theme: sugarsubstitute_contracts::configuration::Theme::Dark,
+                },
+                scroll: 0.0,
+                now: Duration::ZERO,
+                interaction: crate::setup::presentation::Interaction::default(),
+                text_revisions: [0; 5],
+            },
+        )?,
         workspace,
         existing,
         native_installation,
-        phase: 0,
+        phase: Phase::Preparing,
         rejected_invalid: false,
         inspected: false,
         installed: None,
         launch,
         launched: false,
-        deadline: Instant::now() + Duration::from_secs(300),
+        started: Instant::now(),
     };
     sugarsubstitute_desktop::run_headless(&mut fixture)?;
     let passed = if fixture.native_installation.is_some() {
@@ -52,130 +66,160 @@ pub(in crate::setup) fn run(
     }))
 }
 
+/// Boundary rejection is qualified before the real native navigation admits installation.
+enum Phase {
+    Preparing,
+    Invalid,
+    Native,
+}
 struct Fixture {
     controller: Controller,
+    session: session::Session,
     workspace: PathBuf,
     existing: Option<PathBuf>,
     native_installation: Option<PathBuf>,
-    phase: u8,
+    phase: Phase,
     rejected_invalid: bool,
     inspected: bool,
     installed: Option<PathBuf>,
     launch: bool,
     launched: bool,
-    deadline: Instant,
+    started: Instant,
 }
 impl Fixture {
-    /// Exercise the same Open command as the surface; creation is not application health.
-    fn prepared(&mut self) -> Result<HeadlessStep> {
-        self.installed = Some(
-            self.controller
-                .installed
-                .as_ref()
-                .ok_or("Installation result missing")?
-                .root()
-                .join("sugarsubstitute-launcher.exe"),
-        );
-        if self.launch {
-            self.phase = 4;
-            self.request("open", "open", json!({}))?;
-            Ok(HeadlessStep::Active)
-        } else {
-            Ok(HeadlessStep::Shutdown)
-        }
-    }
-    fn selection(&self, root: &std::path::Path) -> Value {
-        json!({
-            "locale":"en","installRoot":self.workspace.join("installed"),
-            "mode":"attached","comfyRoot":root,"python":"",
-            "models":self.workspace.join("models"),"outputs":self.workspace.join("outputs"),
-        })
-    }
-    fn request(&mut self, id: &str, operation: &str, input: Value) -> Result<()> {
-        self.controller
-            .request(&json!({"version":1,"id":id,"operation":operation,"input":input}).to_string())
-    }
+    /// Use the native flow's commands and result correlation throughout the installation route.
     fn progress(&mut self) -> Result<HeadlessStep> {
-        for message in self.controller.advance()? {
-            let value: Value = serde_json::from_str(&message)?;
-            if value["event"] == "diagnostic" || value["event"] == "progress" {
-                continue;
-            }
-            match (self.phase, value["id"].as_str(), value["event"].as_str()) {
-                (10, Some("location"), Some("completed")) => {
-                    if value["data"]["existing"].is_null() || self.controller.worker.is_some() {
-                        return Err(
-                            "Native maintenance failed to inspect without provisioning".into()
-                        );
+        if self.controller.closing {
+            self.session.advance(&mut self.controller, self.started.elapsed())?;
+            return Ok(HeadlessStep::Shutdown);
+        }
+        if self.started.elapsed() >= Duration::from_secs(300) {
+            return Err("Installer qualification exceeded five minutes".into());
+        }
+        match self.phase {
+            Phase::Preparing => {
+                for event in self.controller.advance_events()?.events {
+                    if !matches!(event.kind, Kind::Diagnostic(_)) {
+                        return Err("Installer preparation failed before native navigation".into());
                     }
-                    self.inspected = true;
-                    self.phase = 11;
-                    self.request(
-                        "maintain",
-                        "maintain",
-                        json!({"directory":self.native_installation}),
-                    )?;
                 }
-                (11, Some("maintain"), Some("completed")) => {
-                    if self.controller.worker.is_some() {
-                        return Err("Native maintenance started a provisioning worker".into());
-                    }
-                    return self.prepared();
-                }
-                (1, Some("invalid"), Some("failed")) => {
-                    self.rejected_invalid = true;
-                    if let Some(existing) = &self.existing {
-                        let selection = self.selection(existing);
-                        self.phase = 2;
-                        self.request("inspect", "runtime", selection)?;
+                if self.controller.bundle.is_some() {
+                    if self.native_installation.is_some() {
+                        self.phase = Phase::Native;
                     } else {
-                        return Ok(HeadlessStep::Shutdown);
+                        let mut choices = self.session.navigation.flow.choices().clone();
+                        choices.mode =
+                            sugarsubstitute_application::setup_flow::RuntimeMode::Attached;
+                        choices.comfy_root =
+                            events::path_text(self.workspace.join("missing-comfy"))?;
+                        choices.models = events::path_text(self.workspace.join("models"))?;
+                        choices.outputs = events::path_text(self.workspace.join("outputs"))?;
+                        self.controller.accept(requests::Request {
+                            id: "invalid".into(),
+                            command: sugarsubstitute_application::setup_flow::Operation::Runtime(
+                                choices,
+                            ),
+                        })?;
+                        self.phase = Phase::Invalid;
                     }
                 }
-                (2, Some("inspect"), Some("completed")) => {
-                    self.inspected = true;
-                    self.phase = 3;
-                    let selection = self
-                        .selection(self.existing.as_ref().ok_or("Fixture environment missing")?);
-                    self.request("install", "install", selection)?;
+            }
+            Phase::Invalid => {
+                for event in self.controller.advance_events()?.events {
+                    match event.kind {
+                        Kind::Diagnostic(_) | Kind::Progress(_) => {}
+                        Kind::Failed(_) if event.id.as_deref() == Some("invalid") => {
+                            self.rejected_invalid = true;
+                            if self.existing.is_none() {
+                                return Ok(HeadlessStep::Shutdown);
+                            }
+                            self.phase = Phase::Native;
+                        }
+                        _ => {
+                            return Err(
+                                "Invalid environment qualification received an unexpected result"
+                                    .into(),
+                            );
+                        }
+                    }
                 }
-                (3, Some("install"), Some("completed")) => {
-                    return self.prepared();
+            }
+            Phase::Native => {
+                if !self.session.started() {
+                    self.session.start(&self.controller)?;
                 }
-                (4, Some("open"), Some("completed")) => {
+                self.session.advance(&mut self.controller, self.started.elapsed())?;
+                if self.session.ready() {
+                    return self.navigate();
+                }
+            }
+        }
+        Ok(HeadlessStep::Active)
+    }
+
+    /// Exercise page intent without native handles; backend storage/process ownership is real.
+    fn navigate(&mut self) -> Result<HeadlessStep> {
+        use sugarsubstitute_application::setup_flow::{Page, PathField, RuntimeMode};
+        if self.session.navigation.flow.busy() {
+            return Ok(HeadlessStep::Active);
+        }
+        if self.session.navigation.flow.page() != Page::Progress {
+            self.session.invalidate()?;
+        }
+        let flow = &mut self.session.navigation.flow;
+        if let Some(failure) = flow.failure() {
+            return Err(format!("Native installer qualification failed: {failure:?}").into());
+        }
+        match flow.page() {
+            Page::Language | Page::Location => {}
+            Page::Runtime => flow.set_mode(RuntimeMode::Attached)?,
+            Page::Configuration => {
+                let root = self.existing.as_ref().ok_or("Fixture environment missing")?;
+                flow.set_path(PathField::Comfy, events::path_text(root.clone())?)?;
+            }
+            Page::Folders => {
+                self.inspected = true;
+                flow.set_path(
+                    PathField::Models,
+                    events::path_text(self.workspace.join("models"))?,
+                )?;
+                flow.set_path(
+                    PathField::Outputs,
+                    events::path_text(self.workspace.join("outputs"))?,
+                )?;
+            }
+            Page::Maintenance => {
+                if self.native_installation.is_none() || self.controller.worker.is_some() {
+                    return Err("Native maintenance failed to inspect without provisioning".into());
+                }
+                self.inspected = true;
+            }
+            Page::Progress => return Ok(HeadlessStep::Active),
+            Page::Complete => {
+                if self.installed.is_none() {
+                    self.installed = Some(
+                        self.controller
+                            .installed
+                            .as_ref()
+                            .ok_or("Installation result missing")?
+                            .root()
+                            .join("sugarsubstitute-launcher.exe"),
+                    );
+                }
+                if self.native_installation.is_some() && self.controller.worker.is_some() {
+                    return Err("Native maintenance started a provisioning worker".into());
+                }
+                if !self.launch {
+                    return Ok(HeadlessStep::Shutdown);
+                }
+                if flow.close_requested() {
                     self.launched = true;
                     return Ok(HeadlessStep::Shutdown);
                 }
-                _ => {
-                    return Err(format!(
-                        "Installer qualification observed unexpected result: {value}"
-                    )
-                    .into());
-                }
             }
         }
-        if self.controller.closing {
-            return Ok(HeadlessStep::Shutdown);
-        }
-        if Instant::now() >= self.deadline {
-            return Err("Installer qualification exceeded five minutes".into());
-        }
-        if self.phase == 0 && self.controller.bundle.is_some() {
-            if self.native_installation.is_some() {
-                self.phase = 10;
-                self.request(
-                    "location",
-                    "location",
-                    json!({"directory":self.native_installation}),
-                )?;
-                return Ok(HeadlessStep::Active);
-            }
-            self.phase = 1;
-            self.request(
-                "invalid",
-                "runtime",
-                self.selection(&self.workspace.join("missing-comfy")),
-            )?;
+        if let Some(request) = flow.primary(self.started.elapsed())? {
+            self.session.navigation.submit(&mut self.controller, request)?;
         }
         Ok(HeadlessStep::Active)
     }
@@ -194,60 +238,17 @@ impl HeadlessLifetime for Fixture {
         Some(Instant::now() + Duration::from_millis(20))
     }
     fn request_shutdown(&mut self) -> Result<()> {
+        self.session.close()?;
         self.controller.close()
     }
     fn poll_shutdown(&mut self) -> Result<bool> {
+        if !self.session.settled() {
+            return Ok(false);
+        }
         self.controller.settled()
     }
     fn finish_shutdown(&mut self) -> Result<()> {
+        self.session.finish()?;
         self.controller.finish()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// A controller reply alone proves only the creation outcome that Open actually reports.
-    #[test]
-    fn launch_qualification_waits_for_open_completion() -> Result<()> {
-        let mut fixture = awaiting_open();
-        assert!(matches!(fixture.progress()?, HeadlessStep::Active));
-        assert!(!fixture.launched);
-        fixture.controller.reply(Some("open"), "progress", json!({}))?;
-        assert!(matches!(fixture.progress()?, HeadlessStep::Active));
-        assert!(!fixture.launched);
-        fixture.controller.reply(Some("open"), "completed", json!({}))?;
-        assert!(matches!(fixture.progress()?, HeadlessStep::Shutdown));
-        assert!(fixture.launched);
-        Ok(())
-    }
-
-    #[test]
-    fn launch_qualification_rejects_failed_or_unrelated_completion() -> Result<()> {
-        for (id, event) in [("open", "failed"), ("maintain", "completed")] {
-            let mut fixture = awaiting_open();
-            fixture.controller.reply(Some(id), event, json!({}))?;
-            assert!(fixture.progress().is_err());
-            assert!(!fixture.launched);
-        }
-        Ok(())
-    }
-
-    /// No native resources are opened; production controller output drives the observer.
-    fn awaiting_open() -> Fixture {
-        Fixture {
-            controller: Controller::new(PathBuf::new(), PathBuf::new(), &[]),
-            workspace: PathBuf::new(),
-            existing: None,
-            native_installation: None,
-            phase: 4,
-            rejected_invalid: false,
-            inspected: false,
-            installed: None,
-            launch: true,
-            launched: false,
-            deadline: Instant::now() + Duration::from_secs(300),
-        }
     }
 }

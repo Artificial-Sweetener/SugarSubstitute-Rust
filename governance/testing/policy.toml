@@ -35,7 +35,7 @@ minimum_tests = 648
 package = "sugarsubstitute-xtask"
 root = "tools/xtask"
 concern = "Architecture, execution, filesystem, cache, networking, diagnostics, configuration and localization owner boundaries; exact reviewed source and dependency identities across authored languages, alias-safe public contracts, adversarial rejection fixtures and verification orchestration."
-minimum_tests = 154
+minimum_tests = 162
 
 [[owners]]
 package = "sugarsubstitute-supervision"
@@ -46,8 +46,8 @@ minimum_tests = 1251
 [[owners]]
 package = "sugarsubstitute-splash"
 root = "crates/sugarsubstitute-splash"
-concern = "Character animation, bounded admitted raster and glyph preparation with immutable output; bounded styled console projection, actual task/result pin custody and clipped composition"
-minimum_tests = 84
+concern = "Mascot animation, admitted splash composition, styled console placement, and clipped frame publication; shared widget, glyph, progress and scrollbar behavior is verified at sugarsubstitute-ui."
+minimum_tests = 64
 
 [[owners]]
 package = "sugarsubstitute-desktop"
@@ -78,3 +78,9 @@ package = "sugarsubstitute-configuration"
 root = "crates/sugarsubstitute-configuration"
 concern = "Bounded startup schema, initial defaults, exact Unicode arguments and saved configuration preservation"
 minimum_tests = 24
+
+[[owners]]
+package = "sugarsubstitute-ui"
+root = "crates/sugarsubstitute-ui"
+concern = "Admitted layered surface clipping, fractional coverage, cancellation and validated pixel publication; shared form peer identities and text limits, shaped measurement/paint agreement; shared native availability and activation fencing, bounded raster, progress and scrollbar widgets; native and portable label shaping, geometry, memory custody, clipping and styled console text"
+minimum_tests = 78

@@ -5,14 +5,14 @@ mod console;
 mod controller;
 mod distribution;
 mod failure;
-mod surface;
+pub mod presentation;
 mod worker;
 use std::{error::Error, path::PathBuf};
 
-/// Run the installer entry point, or export its exact authored surface for off-screen qualification.
+/// Run the native installer entry point or its off-screen qualification.
 ///
-/// The bundle directory contains the pinned worker and application payload. Surface exports
-/// write the authored document; qualification modes exercise owned off-screen lifetimes.
+/// The bundle directory contains the pinned worker and application payload. Qualification modes
+/// exercise owned off-screen lifetimes.
 /// `distribution` must be the authenticated producing installer's compiled configuration bytes.
 /// # Errors
 /// Preserves invalid command, filesystem, native UI and installation failures.
@@ -21,8 +21,7 @@ pub fn run(distribution: &'static [u8]) -> Result<(), Box<dyn Error>> {
         matches!(
             value.to_str(),
             Some(
-                "--export-surface"
-                    | "--qualify-lifecycle"
+                "--qualify-lifecycle"
                     | "--qualify-window"
                     | "--qualify-managed"
                     | "--qualify-cancel"
@@ -43,8 +42,6 @@ fn run_inner(distribution: &'static [u8], locale: &mut String) -> Result<(), Box
     let mut arguments = std::env::args_os().skip(1);
     let mut bundle = std::env::current_exe()?;
     let mut workspace = None;
-    let mut export = None;
-    let mut export_locale = None;
     let mut qualification = None;
     let mut qualify_window = false;
     let mut qualify_managed = None;
@@ -57,12 +54,6 @@ fn run_inner(distribution: &'static [u8], locale: &mut String) -> Result<(), Box
         match argument.to_str() {
             Some("--bundle") => bundle = PathBuf::from(value),
             Some("--workspace") => workspace = Some(PathBuf::from(value)),
-            Some("--export-surface") => export = Some(PathBuf::from(value)),
-            Some("--export-locale") => {
-                let value = value.to_str().ok_or("Surface export locale must be Unicode")?;
-                export_locale =
-                    Some(sugarsubstitute_contracts::configuration::LocaleId::new(value)?);
-            }
             Some("--qualify-lifecycle") => qualification = Some(PathBuf::from(value)),
             Some("--qualify-launch") => {
                 qualification = Some(PathBuf::from(value));
@@ -87,7 +78,7 @@ fn run_inner(distribution: &'static [u8], locale: &mut String) -> Result<(), Box
         }
     }
     if qualify_maintenance != native_installation.is_some()
-        || (qualify_launch && (qualify_window || qualify_managed.is_some() || export.is_some()))
+        || (qualify_launch && (qualify_window || qualify_managed.is_some()))
         || (qualify_launch && !qualify_maintenance && existing.is_none())
         || (qualify_maintenance
             && (qualify_window || qualify_managed.is_some() || existing.is_some()))
@@ -97,18 +88,6 @@ fn run_inner(distribution: &'static [u8], locale: &mut String) -> Result<(), Box
     let locations =
         sugarsubstitute_configuration::installer::InstallerLocations::capture(workspace)?;
     let workspace = locations.workspace().to_path_buf();
-    if let Some(export) = export {
-        let html = surface::html(
-            export_locale.map_or("en", |locale| locale.as_str()),
-            locations.install_root(),
-        )?;
-        crate::artifact_job::write_bytes(export, html.into_bytes(), false)?;
-        return Ok(());
-    }
-    if export_locale.is_some() {
-        return Err("Export locale requires a surface export destination".into());
-    }
-    let html = surface::html("en", locations.install_root())?;
     if !bundle.is_absolute() || !workspace.is_absolute() {
         return Err("Installer paths must be absolute".into());
     }
@@ -146,12 +125,21 @@ fn run_inner(distribution: &'static [u8], locale: &mut String) -> Result<(), Box
         result?;
         return Ok(());
     }
-    let mut controller = controller::Controller::new(bundle, workspace.clone(), distribution);
-    let result = sugarsubstitute_desktop::installer::run(
-        sugarsubstitute_desktop::installer::InstallerWindow {
+    let mut controller = controller::Native::new(
+        bundle,
+        workspace,
+        distribution,
+        locations
+            .install_root()
+            .to_str()
+            .ok_or("Installation directory is not Unicode")?
+            .to_owned(),
+    )?;
+    let result = sugarsubstitute_desktop::installer::native::run(
+        sugarsubstitute_desktop::installer::native::Window {
             visible: true,
             title: sugarsubstitute_contracts::localization::installer::messages("en").title.into(),
-            html,
+            close: presentation::Action::Close.id(),
         },
         &mut controller,
     );

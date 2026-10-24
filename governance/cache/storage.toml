@@ -69,13 +69,6 @@ rationale = "Owned temporary worker arguments and actual headless Electron verif
 role = "fixture"
 
 [[script_boundaries]]
-path = "installer/tests/surface-runner.cjs"
-owner = "sugarsubstitute"
-source_sha256 = "sha256:0746a5de092ff894bc1d688e82055001527e00f596fd46b2bfa8df10021b2ad9"
-rationale = "Native Electron qualification records observed installer surfaces under its explicit artifact destination."
-role = "fixture"
-
-[[script_boundaries]]
 path = "crates/sugarsubstitute-desktop/tests/frontend_startup_probe.mjs"
 owner = "sugarsubstitute-desktop"
 source_sha256 = "sha256:c04ed29ef32a12cb52a0638839b004278f23d37e1a74a8e5b63f9dae3096485c"

@@ -4,12 +4,12 @@
 //! Preserve the reference sampler integer arithmetic within a bounded row.
 
 use super::DeviceTransform;
-use tiny_skia::Pixmap;
+use sugarsubstitute_ui::bitmap::Bitmap;
 const FIXED: f64 = 65_536.0;
 /// Sample adjacent coverage spans together until the native 256-span callback buffer flushes.
 pub(super) fn paint_span(
     pixels: &mut [u8],
-    source: &Pixmap,
+    source: &Bitmap,
     inverse: DeviceTransform,
     width: usize,
     y: usize,
@@ -69,7 +69,7 @@ pub(super) fn bounded_count(start: i64, step: i64, extent: usize) -> usize {
 }
 
 /// Interpolate either coarse combined weights or precise vertical-then-horizontal weights.
-pub(super) fn sample(source: &Pixmap, fx: i64, fy: i64, coarse: bool) -> [u8; 4] {
+pub(super) fn sample(source: &Bitmap, fx: i64, fy: i64, coarse: bool) -> [u8; 4] {
     let ix = fx >> 16;
     let iy = fy >> 16;
     let x0 = ix.clamp(0, i64::from(source.width()) - 1) as usize;

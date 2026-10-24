@@ -3,17 +3,15 @@
 //! Apply one preallocated native retry peer without lending callback borrows across Win32 reentry.
 use super::*;
 use crate::main_backend::{RetryAction, RetryPresentation};
-use windows::Win32::Foundation::{ERROR_SUCCESS, GetLastError, SetLastError};
-use windows::Win32::UI::{
-    Input::KeyboardAndMouse::{EnableWindow, IsWindowEnabled},
-    WindowsAndMessaging::{
-        GWL_STYLE, GetWindowLongPtrW, IsWindow, SWP_HIDEWINDOW, SWP_NOMOVE, SWP_NOSIZE,
-        SWP_SHOWWINDOW,
-    },
-};
+use windows::Win32::UI::WindowsAndMessaging::IsWindow;
 
 /// Hidden snapshots and the Main retry peer begin as disabled, nonvisible children.
-pub(super) fn initial_style(mode: PaintMode, id: u16, visible: bool) -> WINDOW_STYLE {
+pub(super) fn initial_style(
+    mode: PaintMode,
+    id: u16,
+    availability: sugarsubstitute_ui::availability::Availability,
+) -> WINDOW_STYLE {
+    let visible = availability.visible && !(matches!(mode, PaintMode::NativeButtons(_)) && id == 4);
     WS_CHILD
         | WS_TABSTOP
         | WINDOW_STYLE(if matches!(mode, PaintMode::NativeButtons(_)) {
@@ -21,11 +19,8 @@ pub(super) fn initial_style(mode: PaintMode, id: u16, visible: bool) -> WINDOW_S
         } else {
             BS_PUSHBUTTON as u32
         })
-        | if !visible || matches!(mode, PaintMode::NativeButtons(_)) && id == 4 {
-            WS_DISABLED
-        } else {
-            WS_VISIBLE
-        }
+        | if visible { WS_VISIBLE } else { WINDOW_STYLE::default() }
+        | if visible && availability.enabled { WINDOW_STYLE::default() } else { WS_DISABLED }
 }
 
 /// External native effects only; the production transition and ordering stay in apply.
@@ -125,15 +120,8 @@ impl RetryPort for WindowRetry<'_> {
         self.callback.set_action(self.peer.hwnd, 4, action.map(NativeAction::MainBackendRetry))
     }
     fn enabled(&mut self, enabled: bool) -> Result<(), DesktopError> {
-        // SAFETY: Owner retains this thread-affine peer and registrations. The return
-        // describes previous enabled state, not success; query current state afterward.
-        let _previous = unsafe { EnableWindow(self.peer.hwnd, enabled) };
-        self.live()?;
-        // SAFETY: Revalidated original peer; observation never grants backend authority.
-        if unsafe { IsWindowEnabled(self.peer.hwnd) }.as_bool() != enabled {
-            return Err(DesktopError::message("enable_retry", "native enabled state differs"));
-        }
-        Ok(())
+        sugarsubstitute_ui::windows::availability::set_enabled(self.peer.hwnd, enabled)?;
+        self.live()
     }
     fn label(&mut self, label: &'static str) -> Result<(), DesktopError> {
         let mut text = [0_u16; 129];
@@ -148,41 +136,8 @@ impl RetryPort for WindowRetry<'_> {
             .map_err(|cause| DesktopError::new("label_retry", cause))
     }
     fn visible(&mut self, visible: bool) -> Result<(), DesktopError> {
-        let visibility = if visible { SWP_SHOWWINDOW } else { SWP_HIDEWINDOW };
-        // SAFETY: Creating thread retains the original peer; no focus, reorder or geometry change.
-        unsafe {
-            SetWindowPos(
-                self.peer.hwnd,
-                None,
-                0,
-                0,
-                0,
-                0,
-                SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOMOVE | SWP_NOSIZE | visibility,
-            )
-        }
-        .map_err(|cause| DesktopError::new("show_retry", cause))?;
-        self.live()?;
-        // SAFETY: Retained owned BUTTON always has a nonzero child style. Observe its
-        // own WS_VISIBLE bit; a hidden parent must not be mistaken for a hidden peer.
-        let (style, code) = unsafe {
-            SetLastError(ERROR_SUCCESS);
-            let style = GetWindowLongPtrW(self.peer.hwnd, GWL_STYLE) as u32;
-            (style, GetLastError())
-        };
-        if style == 0 && code != ERROR_SUCCESS {
-            return Err(DesktopError::new(
-                "query_retry_visibility",
-                windows::core::Error::from(windows::core::HRESULT::from_win32(code.0)),
-            ));
-        }
-        if (style & WS_VISIBLE.0 != 0) != visible || style & WS_CHILD.0 == 0 {
-            return Err(DesktopError::message(
-                "show_retry",
-                "native visibility or child style differs",
-            ));
-        }
-        Ok(())
+        sugarsubstitute_ui::windows::availability::set_visible(self.peer.hwnd, visible)?;
+        self.live()
     }
 }
 #[cfg(test)]

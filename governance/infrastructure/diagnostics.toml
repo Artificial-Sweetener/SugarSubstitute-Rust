@@ -4,7 +4,7 @@ routing_entry = "crates/sugarsubstitute/src/diagnostics.rs"
 storage_owner = "sugarsubstitute-supervision"
 storage_entry = "crates/sugarsubstitute-supervision/src/diagnostic_storage/operational.rs"
 worker_entry = "installer/worker/main.ts"
-required_roots = ["native/crashpad", "installer/worker", "installer/surface"]
+required_roots = ["native/crashpad", "installer/worker", "crates/sugarsubstitute-desktop/src/installer", "crates/sugarsubstitute-ui/src"]
 script_manifests = ["installer/package.json"]
 
 [[records]]
@@ -248,14 +248,14 @@ rationale = "Repository build or verification diagnostics remain developer outpu
 [[records]]
 path = "tools/xtask/src/governance.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:3ee42883e45f9799d0054207b9724592a62a1e06342dc489a6ce1e9f987dbca1"
+source_sha256 = "sha256:f7e112236172eb7cce83e410d75116ca5fcdc86edb9de269b0bf565021c33186"
 disposition = "developer"
 rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
 
 [[records]]
 path = "tools/xtask/src/main.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:6b500b52d4a8ea40ca88d31f1caf26154f17a6441c31443504b3937be7e08041"
+source_sha256 = "sha256:fe42c2b8fda8fdcc79312022b289ad7e3e1be737dc5a75e7862713bae3130605"
 disposition = "developer"
 rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
 
@@ -430,7 +430,7 @@ rationale = "Isolated behavioral or native qualification captures test output to
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/windows_console/text/performance_tests.rs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:f4dde0f4f8d7556c852bd1db61053f9420a1733194b5c5ca3bc64bee19f9c95b"
+source_sha256 = "sha256:2d7075180789a74b382491a4712c37d5fe435e0e2ae6ac3c377b13983fbb4fa6"
 disposition = "fixture"
 rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
 
@@ -638,13 +638,6 @@ disposition = "developer"
 rationale = "The model-root qualification CLI prints acceptance after exercising the actual SugarCubes API."
 
 [[records]]
-path = "installer/qualify-surface.mjs"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:05d52ea3e10d3285114cdec7d8a79b452d05d3ad5e1db2f4e311d1a80fa5b654"
-disposition = "developer"
-rationale = "Offscreen qualification retains a bounded Electron stderr tail and prints its surface acceptance receipt."
-
-[[records]]
 path = "installer/qualify-worker.mjs"
 owner = "sugarsubstitute-xtask"
 source_sha256 = "sha256:27a75ccba48292c47481e25bfa7436f50d70377bbcbbff7648d10ea036ef51a4"
@@ -687,16 +680,9 @@ disposition = "fixture"
 rationale = "Worker lifecycle tests retain a bounded stderr tail and consume child stdout while checking authenticated events and actual family retirement."
 
 [[records]]
-path = "installer/typecheck-surface.mjs"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:a08786d08c2be7133701af7915642dcde190d9fb7bc45936706146d70839786b"
-disposition = "developer"
-rationale = "Strict renderer type qualification prints TypeScript diagnostics and its Rust-catalog key count."
-
-[[records]]
 path = "installer/typecheck.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:bff9944d61155045995d361ed44cc0b1404a11be9dc869947065d0708330d9e8"
+source_sha256 = "sha256:31c9476e4d908d2ca34ec1923f0f6c370b06c12467e9a690ed45102c408c8aed"
 disposition = "developer"
 rationale = "The worker type-check command reports TypeScript compiler diagnostics to the developer console."
 

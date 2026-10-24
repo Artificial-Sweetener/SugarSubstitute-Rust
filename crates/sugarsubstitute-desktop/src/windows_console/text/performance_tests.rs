@@ -32,7 +32,7 @@ fn native_console_every_viewport_height_preserves_semantic_paint() -> TestResult
         let crop = RECT { left: 25, top: 20, right: 525, bottom: 20 + height };
         engine.prepare(
             &frame,
-            documents.shared().ok_or("Shared document absent")?,
+            Some(documents.shared().ok_or("Shared document absent")?),
             crop,
             true,
             1.0,
@@ -120,7 +120,7 @@ fn native_console_rolling_mixed_styles_and_wrapping_keeps_every_draw_semantic() 
         publish(hwnd, &mut documents, true)?;
         engine.prepare(
             &frame,
-            documents.shared().ok_or("Shared document absent")?,
+            Some(documents.shared().ok_or("Shared document absent")?),
             CROP,
             true,
             1.0,
@@ -181,7 +181,7 @@ fn native_console_burst_publication_and_cached_exposure() -> TestResult {
         publication.push(start.elapsed().as_secs_f64() * 1000.0);
         engine.prepare(
             &frame,
-            documents.shared().ok_or("Shared document absent")?,
+            Some(documents.shared().ok_or("Shared document absent")?),
             CROP,
             true,
             1.0,

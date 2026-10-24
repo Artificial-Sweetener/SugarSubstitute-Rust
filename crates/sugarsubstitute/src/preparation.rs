@@ -23,9 +23,9 @@ use sugarsubstitute_contracts::{
 };
 use sugarsubstitute_execution::ExecutionClient;
 use sugarsubstitute_splash::{
-    AnimationFrame, Appearance, ProgressFrame, SPLASH_CACHE_RESERVATION_BYTES, SplashRenderRequest,
-    SplashRenderer,
+    AnimationFrame, Appearance, SPLASH_CACHE_RESERVATION_BYTES, SplashRenderRequest, SplashRenderer,
 };
+use sugarsubstitute_ui::progress::ProgressFrame;
 
 /// Select the first accepted raster's owned presentation coverage.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

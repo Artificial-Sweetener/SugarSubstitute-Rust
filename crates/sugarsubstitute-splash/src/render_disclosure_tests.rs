@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Qualify actual disclosure pixels, status suppression and animation geometry offscreen.
-use crate::{AnimationFrame, Appearance, ProgressFrame, SplashRenderer, StartupStatus, Theme};
+use crate::{AnimationFrame, Appearance, SplashRenderer, StartupStatus, Theme};
 use std::error::Error;
+use sugarsubstitute_ui::progress::ProgressFrame;
 
 #[test]
 fn disclosed_and_transitioning_frames_hide_status_without_hiding_progress()

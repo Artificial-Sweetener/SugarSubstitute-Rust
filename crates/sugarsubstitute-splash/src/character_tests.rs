@@ -8,7 +8,7 @@ use crate::animation::AnimationFrame;
 use crate::assets::POSE_ASSETS;
 use crate::projection::Bounds;
 use std::error::Error;
-use tiny_skia::Pixmap;
+use sugarsubstitute_ui::bitmap::Bitmap;
 
 /// Allocate a test target through the same fallible API used by the renderer.
 fn target() -> Result<crate::Raster, Box<dyn Error>> {
@@ -48,7 +48,7 @@ fn bootstrap_preserves_identity_pixels_and_decodes_one_pose() -> Result<(), Box<
     let mut target = target()?;
     let bounds = Bounds { x: 0.0, y: 0.0, width: 386.0, height: 386.0 };
     library.render(&mut target, bounds, AnimationFrame::bootstrap())?;
-    let source = Pixmap::decode_png(POSE_ASSETS[0].bytes)?;
+    let source = Bitmap::decode_png(POSE_ASSETS[0].bytes)?;
     assert_eq!(target.data(), source.data());
     assert_eq!(library.decoded_count(), 1);
     library.render(&mut target, bounds, AnimationFrame::bootstrap())?;
@@ -66,7 +66,7 @@ fn front_facing_odd_width_slot_snaps_without_blurring() -> Result<(), Box<dyn Er
         Bounds { x: 83.0, y: 7.0, width: 387.0, height: 386.0 },
         AnimationFrame::bootstrap(),
     )?;
-    let source = Pixmap::decode_png(POSE_ASSETS[0].bytes)?;
+    let source = Bitmap::decode_png(POSE_ASSETS[0].bytes)?;
     for row in 0..386 {
         let start = ((row + 7) * 558 + 84) * 4;
         assert_eq!(

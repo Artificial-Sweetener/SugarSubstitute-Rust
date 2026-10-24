@@ -76,8 +76,11 @@ impl Presentations {
             presenter.present(frame)?;
             #[cfg(target_os = "windows")]
             {
-                controls.update(content.accessible_controls())?;
-                controls.present_console(frame, console)?;
+                controls.update(&crate::windows_controls::Specification::buttons(
+                    content.accessible_controls(),
+                ))?;
+                controls.present_fields(frame, window.theme() == tao::window::Theme::Dark)?;
+                controls.present_console(frame, console, Some(1))?;
                 controls.draw_focus()?;
             }
             let startup_timings = timings.filter(|_| !self.visibility.ever_shown());

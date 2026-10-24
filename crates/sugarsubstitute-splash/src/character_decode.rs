@@ -5,7 +5,7 @@
 
 use super::{CharacterError, POSE_SIZE, PoseAsset};
 use crate::packaged_png::{PngError, PngRows};
-use tiny_skia::Pixmap;
+use sugarsubstitute_ui::bitmap::Bitmap;
 
 /// Preserve the asset identity while retaining at most one PNG decoder.
 pub(super) struct PoseDecoder {
@@ -24,7 +24,7 @@ impl PoseDecoder {
         self.rows.step().map_err(|error| map(self.asset, error))
     }
     /// Move the reviewed premultiplied raster into its persistent cache slot.
-    pub(super) fn finish(self) -> Result<Pixmap, CharacterError> {
+    pub(super) fn finish(self) -> Result<Bitmap, CharacterError> {
         self.rows.finish().map_err(|error| map(self.asset, error))
     }
 }

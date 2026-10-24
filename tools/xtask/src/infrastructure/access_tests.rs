@@ -133,6 +133,8 @@ fn raw_public_filesystem_capabilities_remain_restricted_through_aliases_and_trai
         "pub struct Owner; impl std::ops::Deref for Owner{type Target=std::fs::OpenOptions;fn deref(&self)->&Self::Target{loop{}}}",
         "struct Source; trait Project{type Output;} impl Project for Source{type Output=std::fs::File;} pub type Escape=<Source as Project>::Output;",
         "pub fn render()->tiny_skia::Pixmap{loop{}}",
+        "pub fn render()->tiny_skia::Mask{loop{}}",
+        "pub fn render()->tiny_skia::PixmapMut<'static>{loop{}}",
         "#[macro_export] macro_rules! expose {()=>{pub type Escape=std::fs::File;}}",
         "#[macro_export] macro_rules! expose {($root:ident,$kind:ident)=>{pub type Escape=$root::fs::$kind;}}",
     ] {

@@ -78,3 +78,10 @@ impl fmt::Display for PanicCause {
     }
 }
 impl Error for PanicCause {}
+
+#[cfg(windows)]
+impl From<sugarsubstitute_ui::windows::NativeUiError> for ReportSurfaceError {
+    fn from(cause: sugarsubstitute_ui::windows::NativeUiError) -> Self {
+        Self::new("report_native_ui", cause)
+    }
+}

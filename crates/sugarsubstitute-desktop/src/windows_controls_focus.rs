@@ -22,6 +22,21 @@ pub(crate) fn focus_window(hwnd: HWND) -> Result<(), DesktopError> {
     Ok(())
 }
 impl Controls {
+    /// Pointer activation focuses only the original currently actionable native peer.
+    pub(crate) fn focus(&self, id: u16) -> Result<(), DesktopError> {
+        let Some(peer) = self
+            .creation
+            .peers
+            .iter()
+            .map(|slot| &slot.value)
+            .find(|peer| peer.snapshot.id == id && peer.snapshot.availability().actionable())
+        else {
+            return Ok(());
+        };
+        self.original_peer(peer)?;
+        focus_window(peer.hwnd)
+    }
+
     /// Tab and Shift+Tab wrap among current visible native peers without activation.
     pub(crate) fn focus_next(&self, backward: bool) -> Result<(), DesktopError> {
         if !self.creation.writable() || self.paint_mode != PaintMode::PreparedPixels {
@@ -38,7 +53,7 @@ impl Controls {
                 .peers
                 .iter()
                 .map(|slot| &slot.value)
-                .find(|peer| peer.hwnd == current && peer.snapshot.visible)
+                .find(|peer| peer.hwnd == current && peer.snapshot.availability().actionable())
                 .map(|peer| Target::Control(peer.snapshot.id))
         };
         let order = self.console.as_ref().and_then(console::Console::order_y);
@@ -56,7 +71,7 @@ impl Controls {
                 .peers
                 .iter()
                 .map(|slot| &slot.value)
-                .find(|peer| peer.snapshot.id == id && peer.snapshot.visible)
+                .find(|peer| peer.snapshot.id == id && peer.snapshot.availability().actionable())
                 .map(|peer| peer.hwnd),
         }
         .ok_or_else(|| DesktopError::message("splash_focus", "retained focus target absent"))?;

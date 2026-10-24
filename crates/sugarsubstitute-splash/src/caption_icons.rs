@@ -3,7 +3,7 @@
 //! Paint bundled caption glyph alpha with the production device-pixel phase.
 
 use std::{error::Error, fmt};
-use tiny_skia::Pixmap;
+use sugarsubstitute_ui::bitmap::Bitmap;
 #[path = "caption_render.rs"]
 mod raster;
 pub(crate) use raster::CaptionCursor;
@@ -49,7 +49,7 @@ pub(crate) enum CaptionIcon {
 /// Retain only the selected resource pair as process-lifetime presentation data.
 #[derive(Default)]
 pub(crate) struct CaptionIcons {
-    decoded: Option<(usize, [Pixmap; 2])>,
+    decoded: Option<(usize, [Bitmap; 2])>,
 }
 impl CaptionIcons {
     /// Defer PNG decoding until the first caption paint.
@@ -64,7 +64,7 @@ impl CaptionIcons {
     #[cfg(test)]
     pub(crate) fn draw(
         &mut self,
-        target: &mut Pixmap,
+        target: &mut Bitmap,
         scale: f64,
         kind: CaptionIcon,
         tint: [u8; 3],

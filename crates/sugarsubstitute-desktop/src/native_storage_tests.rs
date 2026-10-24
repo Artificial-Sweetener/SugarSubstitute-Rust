@@ -136,7 +136,7 @@ fn bitmap_live(dib: &Dib) -> bool {
 #[test]
 fn native_dib_drop_releases_bitmap_after_restoring_selection() -> Result<(), Box<dyn Error>> {
     let (source, released) = frame(2, 2, 32)?;
-    let dib = Dib::new(&source)?;
+    let dib = Dib::new(&source, source.shape())?;
     let handle = dib.bitmap.into();
     let mut bitmap = BITMAP::default();
     // SAFETY: The owned bitmap is live and the output buffer has its documented size.
@@ -222,7 +222,7 @@ fn native_dib_resize_rejection_preserves_old_allocation_and_success_releases_it(
 fn native_dib_explicit_close_is_idempotent_and_returns_claim_only_after_release()
 -> Result<(), Box<dyn Error>> {
     let (source, released) = frame(2, 2, 32)?;
-    let mut dib = Dib::new(&source)?;
+    let mut dib = Dib::new(&source, source.shape())?;
     dib.close()?;
     assert!(dib.bitmap.is_invalid());
     assert!(dib.dc.is_invalid());
@@ -246,7 +246,7 @@ fn native_dib_explicit_close_is_idempotent_and_returns_claim_only_after_release(
 fn native_dib_failed_selection_recovery_preserves_cause_and_deletes_storage()
 -> Result<(), Box<dyn Error>> {
     let (source, released) = frame(2, 2, 32)?;
-    let mut dib = Dib::new(&source)?;
+    let mut dib = Dib::new(&source, source.shape())?;
     let bitmap = dib.bitmap.into();
     // Only this fixture's owned DC is affected; SelectObject rejects an invalid opaque object.
     dib.previous = HGDIOBJ(std::ptr::dangling_mut::<std::ffi::c_void>());
@@ -320,5 +320,29 @@ fn copied_image_new_identity_replaces_and_failed_copy_preserves_old_source()
     assert_eq!(next_release.calls.load(Ordering::SeqCst), 0);
     drop(retained);
     assert_eq!(next_release.calls.load(Ordering::SeqCst), 1);
+    Ok(())
+}
+
+/// Region admission spends only physical viewport pixels and rejects oversized geometry atomically.
+#[cfg(target_os = "windows")]
+#[test]
+fn native_dib_viewport_uses_exact_credit_and_rejects_outside_source() -> Result<(), Box<dyn Error>>
+{
+    let (source, released) = frame(8, 8, 272)?;
+    let mut retained = None;
+    let shape = FrameShape::new(2, 2, 1.0)?;
+    let dib = Dib::for_shape(&mut retained, &source, shape)?;
+    let handle = dib.bitmap;
+    assert_eq!((dib.width(), dib.height(), dib.pixels_mut()?.len()), (2, 2, 16));
+    assert!(source.claim_storage(1).is_err());
+    assert!(Dib::for_shape(&mut retained, &source, FrameShape::new(9, 1, 1.0)?).is_err());
+    let dib = retained.as_mut().ok_or("original viewport lost")?;
+    assert_eq!(dib.bitmap, handle);
+    assert!(bitmap_live(dib));
+    dib.close()?;
+    drop(retained);
+    drop(source);
+    assert_eq!(released.calls.load(Ordering::SeqCst), 1);
+    assert_eq!(released.bytes.load(Ordering::SeqCst), 272);
     Ok(())
 }

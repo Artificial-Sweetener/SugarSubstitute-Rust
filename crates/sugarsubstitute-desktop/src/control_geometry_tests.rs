@@ -9,6 +9,7 @@ use crate::ControlBounds;
 #[test]
 fn native_controls_validate_identity_labels_and_fractional_geometry() -> Result<(), DesktopError> {
     let control = AccessibleControl {
+        enabled: true,
         id: 1,
         label: "Show Comfy output",
         bounds: ControlBounds { x: 466.0, y: 0.0, width: 46.0, height: 32.0 },

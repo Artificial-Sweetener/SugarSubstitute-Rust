@@ -7,10 +7,9 @@ use serde::Deserialize;
 use std::{error::Error, path::Path};
 use sugarsubstitute_contracts::execution::JobContext;
 use sugarsubstitute_contracts::localization::LOCALES;
-use sugarsubstitute_splash::{
-    AnimationFrame, Appearance, Control, ProgressFrame, SplashRenderer, Theme,
-};
+use sugarsubstitute_splash::{AnimationFrame, Appearance, Control, SplashRenderer, Theme};
 use sugarsubstitute_supervision::{ArtifactPublication, read_artifact, write_artifact};
+use sugarsubstitute_ui::progress::ProgressFrame;
 
 /// Read a parity scenario emitted by the production PySide reference harness.
 #[derive(Deserialize)]

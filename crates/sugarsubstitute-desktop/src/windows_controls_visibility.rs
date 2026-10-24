@@ -1,18 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Apply prepared-control availability to the original retained HWND and callback mapping.
-use super::state::VisibilityPort;
 use super::*;
-use windows::Win32::{
-    Foundation::{ERROR_SUCCESS, GetLastError, SetLastError},
-    UI::{
-        Input::KeyboardAndMouse::{EnableWindow, IsWindowEnabled},
-        WindowsAndMessaging::{
-            GWL_STYLE, GetWindowLongPtrW, IsWindow, SWP_HIDEWINDOW, SWP_NOMOVE, SWP_NOSIZE,
-            SWP_SHOWWINDOW,
-        },
-    },
-};
+use sugarsubstitute_ui::availability::{AvailabilityPort, reconcile};
+use windows::Win32::UI::WindowsAndMessaging::IsWindow;
 
 /// Borrow one validated peer without changing its native identity or allocating storage.
 pub(super) fn update(
@@ -22,9 +13,9 @@ pub(super) fn update(
     mode: PaintMode,
     control: AccessibleControl,
 ) -> Result<(), DesktopError> {
-    super::state::update_visibility(
-        peer.snapshot,
-        control,
+    reconcile(
+        peer.snapshot.availability(),
+        control.availability(),
         &mut Visibility { callback, parent, peer, mode, control },
     )
 }
@@ -37,7 +28,8 @@ struct Visibility<'a> {
     mode: PaintMode,
     control: AccessibleControl,
 }
-impl VisibilityPort for Visibility<'_> {
+impl AvailabilityPort for Visibility<'_> {
+    type Error = DesktopError;
     fn live(&self) -> Result<(), DesktopError> {
         if self.parent.is_none_or(|parent| !parent.installed() || parent.destroyed())
             || self
@@ -68,52 +60,11 @@ impl VisibilityPort for Visibility<'_> {
         )
     }
     fn enabled(&mut self, enabled: bool) -> Result<(), DesktopError> {
-        // SAFETY: This thread retains the original child. The return is previous state.
-        let _previous = unsafe { EnableWindow(self.peer.hwnd, enabled) };
-        self.live()?;
-        // SAFETY: The exact original child was revalidated after native reentry.
-        if unsafe { IsWindowEnabled(self.peer.hwnd) }.as_bool() != enabled {
-            return Err(DesktopError::message(
-                "update_accessible_enabled",
-                "native enabled state differs",
-            ));
-        }
-        Ok(())
+        sugarsubstitute_ui::windows::availability::set_enabled(self.peer.hwnd, enabled)?;
+        self.live()
     }
     fn visible(&mut self, visible: bool) -> Result<(), DesktopError> {
-        let flag = if visible { SWP_SHOWWINDOW } else { SWP_HIDEWINDOW };
-        // SAFETY: The original retained child stays on its creating UI thread; no focus or geometry change.
-        unsafe {
-            SetWindowPos(
-                self.peer.hwnd,
-                None,
-                0,
-                0,
-                0,
-                0,
-                SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOMOVE | SWP_NOSIZE | flag,
-            )
-        }
-        .map_err(|cause| DesktopError::new("update_accessible_visibility", cause))?;
-        self.live()?;
-        // SAFETY: Observe the original child style after reentry. A hidden parent is independent.
-        let (style, code) = unsafe {
-            SetLastError(ERROR_SUCCESS);
-            let style = GetWindowLongPtrW(self.peer.hwnd, GWL_STYLE) as u32;
-            (style, GetLastError())
-        };
-        if style == 0 && code != ERROR_SUCCESS {
-            return Err(DesktopError::new(
-                "query_accessible_visibility",
-                windows::core::Error::from(windows::core::HRESULT::from_win32(code.0)),
-            ));
-        }
-        if style & WS_CHILD.0 == 0 || (style & WS_VISIBLE.0 != 0) != visible {
-            return Err(DesktopError::message(
-                "update_accessible_visibility",
-                "native child visibility differs",
-            ));
-        }
-        Ok(())
+        sugarsubstitute_ui::windows::availability::set_visible(self.peer.hwnd, visible)?;
+        self.live()
     }
 }

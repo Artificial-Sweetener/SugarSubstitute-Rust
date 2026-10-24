@@ -4,6 +4,8 @@
 //! Complete typed installer copy serialized into the local presentation document.
 
 use serde::Serialize;
+mod text;
+pub use text::InstallerText;
 mod status;
 pub use status::{FailureMessage, ProgressMessage};
 mod en;

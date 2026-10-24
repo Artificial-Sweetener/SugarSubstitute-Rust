@@ -4,7 +4,7 @@ schema_version = 1
 id = "splash-qualification-rgba"
 owner = "sugarsubstitute"
 sources = ["crates/sugarsubstitute/src/capture.rs", "crates/sugarsubstitute/src/artifact_job/outputs.rs"]
-source_sha256 = "sha256:24627f6ff3080746b7ea37fe8f62d8d19aa49e33fde3abd67c5b09892619aab7"
+source_sha256 = "sha256:00a0e78a3d7c3a1da55a7716577e81211b74ad6c414d5b8f229418fa9043558c"
 classification = "authored_document"
 preservation = "must_preserve"
 current_version = 1
@@ -16,7 +16,7 @@ migrations = []
 id = "splash-reference-scenarios"
 owner = "sugarsubstitute"
 sources = ["crates/sugarsubstitute/src/capture.rs"]
-source_sha256 = "sha256:2799e6357c18bf6f083545faf865e24e187112ee41900332ca5cf62fa658b5a6"
+source_sha256 = "sha256:9a532a0878b4a20cb9efd27563df09ea9bd37685ce489db6bcab6022ff72a7ee"
 classification = "authored_document"
 preservation = "must_preserve"
 current_version = 1
@@ -28,7 +28,7 @@ migrations = []
 id = "splash-reference-png"
 owner = "sugarsubstitute-splash"
 sources = ["crates/sugarsubstitute-splash/src/raster.rs"]
-source_sha256 = "sha256:026bbd348516847b59b162c52688f3c0d39be3f55c62fc3a328506b926204f27"
+source_sha256 = "sha256:7b48214728ab9f4c20891f51f9885e6ef953ef005a1b178563f24698102337a1"
 classification = "authored_document"
 preservation = "must_preserve"
 current_version = 1
@@ -670,7 +670,7 @@ migrations = []
 id = "child-console-first-failure-diagnostic"
 owner = "sugarsubstitute-desktop"
 sources = ["crates/sugarsubstitute-desktop/src/console_failure_diagnostic.rs", "crates/sugarsubstitute-desktop/src/desktop_failure_diagnostic/console.rs"]
-source_sha256 = "sha256:0972d0f3a9c151ce97ca5fc062c79e407a858ec94c842005681404ffa44e3732"
+source_sha256 = "sha256:683afbe018a8691bc9991d138fb0cef9954cc44f6270bfd1e7f183342b0a2b4a"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1
@@ -766,20 +766,14 @@ migrations = []
 [[formats]]
 id = "setup-provisioning-protocol"
 owner = "sugarsubstitute"
-sources = ["installer/worker/protocol.mjs", "installer/worker/main.ts"]
-source_sha256 = "sha256:6a95e0412cc9486601272bb7c696b2e0e9729375921fcaa89d6c84fade6ada35"
-classification = "protocol"
-preservation = "must_preserve"
-current_version = 1
-accepted_versions = [1]
-compatibility = "reject"
-migrations = []
-
-[[formats]]
-id = "setup-document-protocol"
-owner = "sugarsubstitute"
-sources = ["crates/sugarsubstitute/src/setup/controller/requests.rs", "installer/surface/controller.js", "crates/sugarsubstitute/src/setup/controller/requests/input.rs", "crates/sugarsubstitute/src/setup/controller/storage.rs", "crates/sugarsubstitute/src/setup/controller/completion.rs"]
-source_sha256 = "sha256:cb4892c30b0072769103232dde7be132a45ee160d59e3d5d41fdf1abfa9c9627"
+sources = [
+  "installer/worker/protocol.mjs",
+  "installer/worker/main.ts",
+  "crates/sugarsubstitute/src/setup/controller/provisioning.rs",
+  "crates/sugarsubstitute/src/setup/controller/events.rs",
+  "crates/sugarsubstitute/src/setup/controller/events/wire.rs",
+]
+source_sha256 = "sha256:ac58c3c24bc51c2f1e616cdf646ed34e51974ac77f5195d05e9952834eaeafe3"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1
@@ -790,8 +784,8 @@ migrations = []
 [[formats]]
 id = "setup-qualification-receipt"
 owner = "sugarsubstitute"
-sources = ["crates/sugarsubstitute/src/setup/controller/managed_qualification.rs", "crates/sugarsubstitute/src/setup/controller/qualification.rs", "crates/sugarsubstitute/src/setup/controller/window_qualification.rs"]
-source_sha256 = "sha256:1de1a361092bedefa8a2ef246c6363abadadcda57515fd26f653eae6de9d6154"
+sources = ["crates/sugarsubstitute/src/setup/controller/managed_qualification.rs", "crates/sugarsubstitute/src/setup/controller/qualification.rs", "crates/sugarsubstitute/src/setup/controller/native/qualification.rs"]
+source_sha256 = "sha256:7c3bf070b43f7707f42f81d4e8fd2c7f83ff3acd0872c3c06b0b10df54c46e16"
 classification = "authored_document"
 preservation = "must_preserve"
 current_version = 1
@@ -1126,7 +1120,7 @@ migrations = []
 id = "setup-cache-grant-protocol"
 owner = "sugarsubstitute"
 sources = ["installer/worker/arguments.ts", "installer/worker/main.ts", "crates/sugarsubstitute/src/setup/worker.rs", "crates/sugarsubstitute/src/setup/worker/protocol.rs", "crates/sugarsubstitute/src/setup/controller/provisioning.rs", "installer/worker/cache.ts", "installer/worker/downloads.ts", "installer/worker/download-stream.ts", "installer/worker/downloader.ts", "installer/worker/provision.ts"]
-source_sha256 = "sha256:7079bc3e89baca6d3d26b251456a862608102df2b396b79c95a63191328494f0"
+source_sha256 = "sha256:0558b6b494b1a53d5ad51d139d571dc026662b8514696560fe50197528339bab"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 2
@@ -1234,7 +1228,7 @@ migrations = []
 id = "setup-worker-product-text-protocol"
 owner = "sugarsubstitute"
 sources = ["crates/sugarsubstitute/src/setup/worker/protocol.rs", "crates/sugarsubstitute/src/setup/controller/provisioning.rs", "crates/sugarsubstitute/src/setup/controller/provisioning/presentation.rs", "installer/worker/product-messages.ts", "installer/worker/main.ts", "installer/worker/provision.ts", "installer/worker/integration.ts"]
-source_sha256 = "sha256:ffe3eee8ecd5fd52a04be7d79299795c9c48eb1bb68b6a61c6449916c16c63d1"
+source_sha256 = "sha256:80f1e3291cd29c8cfc6aee7bf890512bfcc228277b29cd0ce6467926f0e0a95f"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1

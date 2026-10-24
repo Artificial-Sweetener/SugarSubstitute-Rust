@@ -81,9 +81,9 @@ pub(super) fn exported(path: &[String]) -> bool {
                 }))
         || path.first().is_some_and(|name| name == "tiny_skia")
             && (path.len() == 1
-                || path
-                    .last()
-                    .is_some_and(|name| matches!(name.as_str(), "Pixmap" | "PixmapRef" | "*")))
+                || path.last().is_some_and(|name| {
+                    matches!(name.as_str(), "Pixmap" | "PixmapRef" | "PixmapMut" | "Mask" | "*")
+                }))
         || path.starts_with(&["std".into(), "os".into()])
             && (path.len() <= 3
                 || path.last().is_some_and(|name| {

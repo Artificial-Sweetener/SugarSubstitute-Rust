@@ -1,0 +1,290 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Artificial Sweetener and contributors
+//! Exercise native page publication against the real backend and its single execution mailbox.
+use super::*;
+use crate::setup::presentation::{Action, Interaction};
+use std::{
+    sync::{Condvar, Mutex},
+    time::Instant,
+};
+use sugarsubstitute_application::setup_flow::{Page, PathField};
+use sugarsubstitute_contracts::execution::{CompletionWake, ExecutionError};
+use sugarsubstitute_ui::{form::Role, text::PaintSpec};
+
+#[derive(Default)]
+struct Wake(Mutex<u64>, Condvar);
+impl CompletionWake for Wake {
+    fn wake(&self) -> std::result::Result<(), ExecutionError> {
+        let mut revision = self.0.lock().map_err(|_| {
+            ExecutionError::new(
+                Operation::Infrastructure,
+                Box::new(io::Error::other("Native session observer poisoned")),
+            )
+        })?;
+        *revision += 1;
+        self.1.notify_all();
+        Ok(())
+    }
+}
+impl Wake {
+    /// Bound test failure observation without advancing application time or sleeping between polls.
+    fn observe(&self, mut poll: impl FnMut() -> Result<bool>) -> Result<()> {
+        let until = Instant::now() + Duration::from_secs(20);
+        loop {
+            let revision = *self.0.lock().map_err(|_| "Native session observer poisoned")?;
+            if poll()? {
+                return Ok(());
+            }
+            let remaining = until
+                .checked_duration_since(Instant::now())
+                .ok_or("Native session observer expired")?;
+            let (guard, timeout) = self
+                .1
+                .wait_timeout_while(
+                    self.0.lock().map_err(|_| "Native session observer poisoned")?,
+                    remaining,
+                    |current| *current == revision,
+                )
+                .map_err(|_| "Native session observer poisoned")?;
+            drop(guard);
+            if timeout.timed_out() {
+                return if poll()? {
+                    Ok(())
+                } else {
+                    Err("Native session observer expired".into())
+                };
+            }
+        }
+    }
+}
+struct Fixture {
+    controller: Controller,
+    session: Session,
+    wake: Arc<Wake>,
+}
+impl Fixture {
+    /// Supply only the package/storage boundary; navigation, execution and rendering remain real.
+    fn new() -> Result<Self> {
+        let wake = Arc::new(Wake::default());
+        let mut controller = Controller::new(PathBuf::new(), PathBuf::new(), &[]);
+        let owner = ExecutionOwner::new(controller.clock.clone(), wake.clone())?;
+        let client = owner.client();
+        controller.scope =
+            Some(client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?);
+        controller.client = Some(client);
+        controller.owner = Some(owner);
+        let mut session = Session::new(
+            r"E:\用户\Substitute".into(),
+            View {
+                surface: PaintSpec {
+                    width: 720,
+                    height: 560,
+                    scale: 1.0,
+                    theme: sugarsubstitute_contracts::configuration::Theme::Dark,
+                },
+                now: Duration::ZERO,
+                scroll: 0.0,
+                interaction: Interaction::default(),
+                text_revisions: [0; 5],
+            },
+        )?;
+        session.start(&controller)?;
+        Ok(Self { controller, session, wake })
+    }
+    /// Wait for a page matching current application input through real completion wakes.
+    fn frame(&mut self, now: Duration) -> Result<()> {
+        self.wake.clone().observe(|| {
+            self.session.advance(&mut self.controller, now)?;
+            Ok(self.session.ready())
+        })
+    }
+    /// Route the flow-owned primary intent after invalidating its previous frame.
+    fn primary(&mut self) -> Result<()> {
+        self.session.invalidate()?;
+        if let Some(request) = self.session.navigation.flow.primary(Duration::ZERO)? {
+            self.session.navigation.submit(&mut self.controller, request)?;
+        }
+        Ok(())
+    }
+    /// Drain render and backend custody before the original execution owner joins.
+    fn finish(&mut self) -> Result<()> {
+        self.session.close()?;
+        self.controller.close()?;
+        self.wake.clone().observe(|| {
+            self.session.advance(&mut self.controller, Duration::ZERO)?;
+            assert!(!self.session.ready());
+            if !self.session.settled() {
+                return Ok(false);
+            }
+            self.controller.settled()
+        })?;
+        self.session.finish()?;
+        self.controller.finish()?;
+        Ok(())
+    }
+}
+
+#[test]
+fn native_session_applies_backend_navigation_before_accepting_rendered_pages() -> Result<()> {
+    let mut f = Fixture::new()?;
+    assert!(f.session.start(&f.controller).is_err());
+    f.frame(Duration::ZERO)?;
+    let original = f.session.prepared.as_ref().ok_or("Initial page absent")?.frame.identity();
+    // An already admitted repaint must not win against the immediate backend Locale result.
+    f.session.invalidate()?;
+    f.session.advance(&mut f.controller, Duration::ZERO)?;
+    f.primary()?;
+    assert!(!f.session.ready());
+    f.frame(Duration::ZERO)?;
+    assert_eq!(f.session.navigation.flow.page(), Page::Location);
+    let prepared = f.session.prepared.as_ref().ok_or("Location page absent")?;
+    assert_ne!(prepared.frame.identity(), original);
+    assert_eq!(prepared.frame.identity().surface.get(), 2);
+    let field = prepared
+        .layout
+        .page_controls
+        .iter()
+        .find(|control| control.id == Action::Path(PathField::Installation).id())
+        .ok_or("Native installation field absent")?;
+    assert_eq!(field.role, Role::TextField(r"E:\用户\Substitute".into()));
+    assert!(f.controller.output.is_empty());
+    assert_eq!(f.session.view.scroll, 0.0);
+    assert!(!f.session.settled());
+    assert!(f.session.finish().is_err());
+    f.finish()
+}
+
+#[test]
+fn native_session_wait_feedback_does_not_cancel_backend_and_close_drains_actual_rendering()
+-> Result<()> {
+    let mut f = Fixture::new()?;
+    f.frame(Duration::ZERO)?;
+    f.primary()?;
+    f.frame(Duration::ZERO)?;
+    f.primary()?; // Package inspection remains pending at the unmaterialized package boundary.
+    f.frame(Duration::ZERO)?;
+    let before = f.session.prepared.as_ref().ok_or("Busy page absent")?.frame.clone();
+    let pending = f.controller.waiting.as_ref().ok_or("Inspection missing")?.id.clone();
+    f.session.advance(&mut f.controller, Duration::from_secs(120))?;
+    assert!(!f.session.ready());
+    f.frame(Duration::from_secs(120))?;
+    assert!(f.session.waiting && f.session.navigation.flow.busy());
+    assert_eq!(f.controller.waiting.as_ref().ok_or("Inspection was cancelled")?.id, pending);
+    assert_ne!(
+        before.pixels(),
+        f.session.prepared.as_ref().ok_or("Wait page absent")?.frame.pixels()
+    );
+    f.session.invalidate()?;
+    f.session.advance(&mut f.controller, Duration::from_secs(121))?;
+    f.session.close()?;
+    assert!(!f.session.ready());
+    assert!(f.session.finish().is_err());
+    f.finish()?;
+    assert!(f.controller.waiting.is_none() && f.controller.owner.is_none());
+    Ok(())
+}
+
+#[test]
+fn native_session_close_retires_render_when_root_failure_consumed_its_notification() -> Result<()> {
+    let mut f = Fixture::new()?;
+    f.frame(Duration::ZERO)?;
+    f.session.invalidate()?;
+    f.session.advance(&mut f.controller, Duration::ZERO)?;
+    // Model failure after the root's drain but before the batch reaches the renderer.
+    f.wake.clone().observe(|| {
+        let advanced = f.controller.advance_events()?;
+        assert!(advanced.events.is_empty());
+        Ok(!advanced.completions.notifications.is_empty())
+    })?;
+    assert!(!f.session.ready());
+    f.finish()?;
+    assert!(f.session.settled());
+    assert!(f.controller.owner.is_none());
+    Ok(())
+}
+
+/// Rapid edits and clicks remain admitted during hover/text repaint; older document events lose.
+#[test]
+fn native_input_keeps_latest_edits_during_repaint_and_rejects_busy_edits() -> Result<()> {
+    use sugarsubstitute_desktop::installer::native::Event as NativeEvent;
+    use sugarsubstitute_ui::form::Input;
+    let mut f = Fixture::new()?;
+    f.frame(Duration::ZERO)?;
+    f.session.input(
+        &mut f.controller,
+        NativeEvent::Interaction {
+            hovered: Some(Action::Primary.id()),
+            pressed: None,
+            focused: None,
+        },
+    )?;
+    assert!(!f.session.ready());
+    f.session
+        .input(&mut f.controller, NativeEvent::Control(Action::Primary.id(), Input::Invoke))?;
+    f.frame(Duration::ZERO)?;
+    assert_eq!(f.session.navigation.flow.page(), Page::Location);
+    let id = Action::Path(PathField::Installation).id();
+    for (revision, text) in [(1, "First"), (2, "Latest🙂"), (1, "Stale")] {
+        f.session.input(
+            &mut f.controller,
+            NativeEvent::Control(id, Input::Text { value: Some(text.into()), revision }),
+        )?;
+    }
+    assert_eq!(f.session.navigation.flow.choices().install_root, "Latest🙂");
+    assert_eq!(f.session.view.text_revisions[0], 2);
+    f.frame(Duration::ZERO)?;
+    f.session
+        .input(&mut f.controller, NativeEvent::Control(Action::Primary.id(), Input::Invoke))?;
+    f.session.input(
+        &mut f.controller,
+        NativeEvent::Control(id, Input::Text { value: Some("Too late".into()), revision: 3 }),
+    )?;
+    assert_eq!(f.session.navigation.flow.choices().install_root, "Latest🙂");
+    f.finish()
+}
+
+/// Modal results preserve cancellation, reject stale/foreign replies and report recoverable errors.
+#[test]
+fn native_picker_correlation_preserves_current_user_text() -> Result<()> {
+    use sugarsubstitute_desktop::installer::native::Event as NativeEvent;
+    use sugarsubstitute_ui::form::Input;
+    let mut f = Fixture::new()?;
+    f.frame(Duration::ZERO)?;
+    f.primary()?;
+    f.frame(Duration::ZERO)?;
+    let field = Action::Path(PathField::Installation).id();
+    let browse = Action::Browse(PathField::Installation).id();
+    f.session.input(&mut f.controller, NativeEvent::Control(browse, Input::Invoke))?;
+    let first = f.session.picker().ok_or("Native picker absent")?;
+    assert!(f.session.picker().is_none());
+    f.session.input(
+        &mut f.controller,
+        NativeEvent::Control(field, Input::Text { value: Some("User edit".into()), revision: 1 }),
+    )?;
+    f.session
+        .input(&mut f.controller, NativeEvent::Picked(first, Ok(Some("Stale selection".into()))))?;
+    assert_eq!(f.session.navigation.flow.choices().install_root, "User edit");
+    f.frame(Duration::ZERO)?;
+    f.session.input(&mut f.controller, NativeEvent::Control(browse, Input::Invoke))?;
+    let second = f.session.picker().ok_or("Second picker absent")?;
+    f.session.input(
+        &mut f.controller,
+        NativeEvent::Picked(first, Ok(Some("Foreign selection".into()))),
+    )?;
+    f.session.input(&mut f.controller, NativeEvent::Picked(second, Ok(None)))?;
+    assert_eq!(f.session.navigation.flow.choices().install_root, "User edit");
+    f.frame(Duration::ZERO)?;
+    f.session.input(&mut f.controller, NativeEvent::Control(browse, Input::Invoke))?;
+    let third = f.session.picker().ok_or("Third picker absent")?;
+    f.session
+        .input(&mut f.controller, NativeEvent::Picked(third, Err("Picker unavailable".into())))?;
+    assert!(f.session.navigation.flow.failure().is_some());
+    assert_eq!(f.session.navigation.flow.choices().install_root, "User edit");
+    f.frame(Duration::ZERO)?;
+    f.session.input(&mut f.controller, NativeEvent::Control(browse, Input::Invoke))?;
+    let fourth = f.session.picker().ok_or("Fourth picker absent")?;
+    f.session
+        .input(&mut f.controller, NativeEvent::Picked(fourth, Ok(Some("Selected🙂".into()))))?;
+    assert_eq!(f.session.navigation.flow.choices().install_root, "Selected🙂");
+    f.finish()
+}
