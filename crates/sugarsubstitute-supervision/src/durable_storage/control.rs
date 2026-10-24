@@ -11,7 +11,11 @@ pub(super) fn effect<T>(
     operation: impl FnOnce() -> io::Result<T>,
 ) -> io::Result<T> {
     check(context)?;
-    let result = operation();
+    observe(context, operation())
+}
+
+/// Observe controls after an already-adopted native result without re-entering the effect.
+pub(super) fn observe<T>(context: &JobContext, result: io::Result<T>) -> io::Result<T> {
     match (result, check(context)) {
         (Ok(value), Ok(())) => Ok(value),
         (Err(cause), Ok(())) | (Ok(_), Err(cause)) => Err(cause),

@@ -40,17 +40,14 @@ pub(crate) struct FixtureResult {
 impl FixtureResult {
     /// Let the host persist post-teardown evidence while preserving the first cause.
     /// The supplied writer owns filesystem effects; this consumer introduces none.
-    pub(crate) fn finish_with(
-        self,
-        writer: impl FnOnce(&std::path::Path, &[u8]) -> Result,
-    ) -> Result {
+    pub(crate) fn finish_with(self, writer: impl FnOnce(PathBuf, Vec<u8>) -> Result) -> Result {
         let written = serde_json::to_vec_pretty(&self.receipt)
             .map_err(|e| Box::new(e) as Box<dyn Error>)
             .and_then(|bytes| {
                 if bytes.len() > MAX_RECEIPT_BYTES {
                     return Err("Capture receipt bound exceeded".into());
                 }
-                writer(&self.path, &bytes)
+                writer(self.path, bytes)
             });
         failure::combine(self.outcome, written)
     }

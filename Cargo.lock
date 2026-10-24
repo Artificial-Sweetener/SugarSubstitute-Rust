@@ -2413,6 +2413,7 @@ name = "sugarsubstitute-supervision"
 version = "0.1.0"
 dependencies = [
  "flate2",
+ "libc",
  "ring",
  "serde",
  "serde_json",

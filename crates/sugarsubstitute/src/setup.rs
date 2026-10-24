@@ -85,7 +85,7 @@ fn run_inner(distribution: &'static [u8]) -> Result<(), Box<dyn Error>> {
     let default_install = local.join("Programs").join("SugarSubstitute");
     let html = surface::html("en", &default_install)?;
     if let Some(export) = export {
-        std::fs::write(export, html)?;
+        crate::artifact_job::write_bytes(export, html.into_bytes(), false)?;
         return Ok(());
     }
     if !bundle.is_absolute() || !workspace.is_absolute() {
@@ -121,7 +121,7 @@ fn run_inner(distribution: &'static [u8]) -> Result<(), Box<dyn Error>> {
                 serde_json::json!({"schema_version":1,"passed":false,"causes":causes})
             }
         };
-        std::fs::write(output, serde_json::to_vec_pretty(&receipt)?)?;
+        crate::artifact_job::write_json(output, receipt, false)?;
         result?;
         return Ok(());
     }

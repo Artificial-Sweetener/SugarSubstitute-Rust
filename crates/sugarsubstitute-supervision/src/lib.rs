@@ -49,8 +49,12 @@ pub mod committed_reader;
 pub mod coordinator_entry;
 #[cfg(windows)]
 pub mod diagnostic_storage;
-#[cfg(windows)]
+#[cfg(any(windows, unix))]
 mod durable_storage;
+#[cfg(any(windows, unix))]
+pub use durable_storage::artifacts::{
+    ArtifactBytes, ArtifactError, ArtifactPublication, read_artifact, write_artifact,
+};
 #[cfg(windows)]
 mod environment;
 #[cfg(windows)]

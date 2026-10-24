@@ -57,13 +57,89 @@ impl Raster {
     /// # Errors
     /// Preserves PNG encoder failures. The caller owns storage and publication of the result.
     pub fn encode_png(&self) -> Result<Vec<u8>, png::EncodingError> {
-        self.pixels.encode_png()
+        let mut bytes = Vec::new();
+        self.write_png(&mut bytes)?;
+        Ok(bytes)
+    }
+
+    /// Encode PNG bytes into a caller-owned bounded writer without a second encoded buffer.
+    /// # Errors
+    /// Preserves allocation, encoder and destination-write failures. The raster remains owned
+    /// throughout conversion; storage authority and publication stay with the supplied writer.
+    pub fn write_png(
+        &self,
+        output: &mut (impl std::io::Write + ?Sized),
+    ) -> Result<(), png::EncodingError> {
+        let mut rgba = Vec::new();
+        rgba.try_reserve_exact(self.data().len())
+            .map_err(|cause| png::EncodingError::IoError(std::io::Error::other(cause)))?;
+        for pixel in self.pixels() {
+            let color = pixel.demultiply();
+            rgba.extend_from_slice(&[color.red(), color.green(), color.blue(), color.alpha()]);
+        }
+        let mut encoder = png::Encoder::new(output, self.width(), self.height());
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder.write_header()?;
+        writer.write_image_data(&rgba)?;
+        writer.finish()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Streamed artifacts retain the original codec's exact alpha rounding and error chain.
+    #[test]
+    fn streamed_png_preserves_original_variable_alpha_bytes_and_writer_failures()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut source = Pixmap::new(17, 17).ok_or("Raster allocation failed")?;
+        for (index, pixel) in source.data_mut().chunks_exact_mut(4).enumerate() {
+            let alpha = (index % 256) as u8;
+            pixel.copy_from_slice(&[alpha / 2, alpha / 3, alpha / 4, alpha]);
+        }
+        let expected = source.encode_png()?;
+        let raster = Raster { pixels: source };
+        let mut actual = Vec::new();
+        raster.write_png(&mut actual)?;
+        assert_eq!(actual, expected);
+        struct Rejected;
+        impl std::io::Write for Rejected {
+            fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "selected writer rejected",
+                ))
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let cause = raster.write_png(&mut Rejected).err().ok_or("Writer rejection disappeared")?;
+        assert!(
+            matches!(cause, png::EncodingError::IoError(ref source) if source.kind() == std::io::ErrorKind::PermissionDenied)
+        );
+        struct TailRejected(usize);
+        impl std::io::Write for TailRejected {
+            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                if self.0 == 0 {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::WriteZero,
+                        "PNG trailer rejected",
+                    ));
+                }
+                let count = self.0.min(bytes.len());
+                self.0 -= count;
+                Ok(count)
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        assert!(raster.write_png(&mut TailRejected(expected.len() - 1)).is_err());
+        Ok(())
+    }
 
     /// Pixel borrowing, edge rejection and PNG encoding preserve actual native raster bytes.
     #[test]

@@ -8,6 +8,7 @@ mod entries;
 mod identity;
 mod observations;
 mod ordinary;
+mod retirement;
 use super::invalid;
 pub(crate) use identity::{file_identity, single_link};
 pub(crate) use observations::{canonical_path, exists, inspect};

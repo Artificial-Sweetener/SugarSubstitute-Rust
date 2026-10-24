@@ -21,6 +21,7 @@ sugarsubstitute-comfy = { path = "../sugarsubstitute-comfy" }
 sugarsubstitute-execution = { path = "../sugarsubstitute-execution" }
 sugarsubstitute-splash = { path = "../sugarsubstitute-splash" }
 sugarsubstitute-desktop = { path = "../sugarsubstitute-desktop" }
+sugarsubstitute-supervision = { path = "../sugarsubstitute-supervision" }
 tracing.workspace = true
 tracing-subscriber.workspace = true
 serde.workspace = true
@@ -29,7 +30,6 @@ sha2.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 sugarsubstitute-crash = { path = "../sugarsubstitute-crash" }
-sugarsubstitute-supervision = { path = "../sugarsubstitute-supervision" }
 
 [target.'cfg(windows)'.dev-dependencies]
 tempfile.workspace = true

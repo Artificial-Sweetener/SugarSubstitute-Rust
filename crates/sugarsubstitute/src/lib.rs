@@ -4,6 +4,7 @@
 //! Compose production desktop roles, the native splash and isolated qualification fixtures.
 
 extern crate self as sugarsubstitute;
+mod artifact_job;
 
 #[cfg(all(windows, feature = "windows-native-host"))]
 mod authority_clock;
@@ -89,10 +90,8 @@ fn execute(
         Ok(invocation::Invocation::Demo(options)) => options,
         #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         Ok(invocation::Invocation::NativeCaptureFixture(options)) => {
-            return capture_fixture::run(options)?.finish_with(|path, bytes| {
-                std::fs::write(path, bytes)?;
-                Ok(())
-            });
+            return capture_fixture::run(options)?
+                .finish_with(|path, bytes| artifact_job::write_bytes(path, bytes, false));
         }
         #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         Ok(invocation::Invocation::NativeExitFixture(code)) => std::process::exit(code),
@@ -103,7 +102,7 @@ fn execute(
         #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         Ok(invocation::Invocation::NativeOutputFixture(path)) => {
             let receipt = output_fixture::run()?;
-            std::fs::write(path, serde_json::to_vec_pretty(&receipt)?)?;
+            artifact_job::write_json(path, receipt, false)?;
             return Ok(());
         }
         #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
@@ -113,20 +112,20 @@ fn execute(
         #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         Ok(invocation::Invocation::NativeDescendantFixture(path)) => {
             let receipt = descendant_fixture::run()?;
-            std::fs::write(path, serde_json::to_vec_pretty(&receipt)?)?;
+            artifact_job::write_json(path, receipt, false)?;
             return Ok(());
         }
         #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         Ok(invocation::Invocation::NativeClaimFixture(options)) => {
             let path = options.receipt.clone();
             let receipt = claim_fixture::run(options)?;
-            std::fs::write(path, serde_json::to_vec_pretty(&receipt)?)?;
+            artifact_job::write_json(path, receipt, false)?;
             return Ok(());
         }
         #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         Ok(invocation::Invocation::NativeClaimChild(options)) => {
             let result = claim_fixture::run_child(options)?;
-            std::fs::write(result.path, serde_json::to_vec_pretty(&result.receipt)?)?;
+            artifact_job::write_json(result.path, result.receipt, false)?;
             std::process::exit(result.exit_code);
         }
         #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
@@ -137,19 +136,13 @@ fn execute(
         #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         Ok(invocation::Invocation::NativeRegistryFixture(path)) => {
             let receipt = process_fixture::run()?;
-            if let Some(parent) = path.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            std::fs::write(path, serde_json::to_vec_pretty(&receipt)?)?;
+            artifact_job::write_json(path, receipt, true)?;
             return Ok(());
         }
         #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         Ok(invocation::Invocation::NativeHeldRegistryFixture(path)) => {
             let receipt = held_fixture::run()?;
-            if let Some(parent) = path.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            std::fs::write(path, serde_json::to_vec_pretty(&receipt)?)?;
+            artifact_job::write_json(path, receipt, true)?;
             return Ok(());
         }
         #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
@@ -160,10 +153,7 @@ fn execute(
         #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
         Ok(invocation::Invocation::NativePipeFixture(path)) => {
             let receipt = pipe_fixture::run()?;
-            if let Some(parent) = path.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            std::fs::write(path, serde_json::to_vec_pretty(&receipt)?)?;
+            artifact_job::write_json(path, receipt, true)?;
             return Ok(());
         }
         Err(error) => {
@@ -197,16 +187,13 @@ fn execute(
     };
     let (frame_audit, native_move_audit) = match (options.frame_audit, receipt.frame_audit) {
         (Some(path), Some(audit)) => {
-            if let Some(parent) = path.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            std::fs::write(&path, audit.first_frame.pixels())?;
+            let first_frame = artifact_job::write_frame(path.clone(), audit.first_frame)?;
             let frame_audit = serde_json::json!({
-                "width": audit.first_frame.width(),
-                "height": audit.first_frame.height(),
+                "width": first_frame.width(),
+                "height": first_frame.height(),
                 "presented_frames": audit.presented_frames,
                 "content_changes": audit.content_changes,
-                "byte_count": audit.first_frame.pixels().len(),
+                "byte_count": first_frame.pixels().len(),
                 "source_path": path,
             });
             let presentations: Vec<_> = audit
@@ -232,9 +219,6 @@ fn execute(
         _ => return Err("Native frame audit did not match the requested qualification".into()),
     };
     if let Some(path) = options.receipt {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
         let data = serde_json::json!({
             "entry_to_first_submission_ms":(before_native+receipt.first_frame).as_secs_f64()*1000.0,
             "native_entry_to_first_submission_ms":receipt.first_frame.as_secs_f64()*1000.0,
@@ -250,7 +234,7 @@ fn execute(
             "native_timings": native_timings,
             "elapsed_ms":started.elapsed().as_secs_f64()*1000.0
         });
-        std::fs::write(path, serde_json::to_vec_pretty(&data)?)?;
+        artifact_job::write_json(path, data, true)?;
     }
     Ok(())
 }
