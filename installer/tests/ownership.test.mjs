@@ -10,12 +10,11 @@ import { recordHost } from './record-host.mjs'
 const build = process.env.SUBSTITUTE_INSTALLER_BUILD
 if (!build || !path.isAbsolute(build)) throw new Error('Explicit test artifact directory required')
 async function module(name) {
-  const { outputFiles } = await bundle({ stdin: { contents: `export * from './${name}'; ${name === 'ownership' ? "export * from './records'" : ''}`, resolveDir: new URL('../worker', import.meta.url).pathname.replace(/^\/([A-Z]:)/i, '$1'), loader: 'ts' }, bundle: true, write: false, platform: 'node', format: 'esm', target: 'node22' })
+  const { outputFiles } = await bundle({ stdin: { contents: `export * from './${name}'; ${name === 'ownership' ? "export * from './records'" : name === 'cache' ? "export * from './downloads'" : ''}`, resolveDir: new URL('../worker', import.meta.url).pathname.replace(/^\/([A-Z]:)/i, '$1'), loader: 'ts' }, bundle: true, write: false, platform: 'node', format: 'esm', target: 'node22' })
   return import(`data:text/javascript;base64,${Buffer.from(outputFiles[0].text).toString('base64')}`)
 }
 const { reserve, record, ready, NativeRecords, bindNativeRecords } = await module('ownership')
-const { downloadCache } = await module('cache')
-const { CacheGrant } = await module('cache-policy')
+const { downloadCache, NativeDownloads, bindNativeDownloads } = await module('cache')
 
 function fixture(name) {
   const target = path.join(build, name, 'ComfyUI')
@@ -75,19 +74,25 @@ test('completed schemas reuse only the matching plan and preserve unreadable att
   assert.equal((await ready(host.target)).directory, first.directory)
 })
 
-test('download cache reuses identities without evicting unknown files or failed partials', async () => {
+test('download cache delegates identities and facts to the scoped native owner', async () => {
   const workspace = await fs.mkdtemp(path.join(build, 'cache-'))
-  const cache = downloadCache(new CacheGrant(workspace, 16 * 1024 * 1024))
-  const entry = cache.getCachePath('../../upstream-key')
-  assert.equal(path.dirname(entry), workspace)
-  assert.equal(cache.getCachePath('../../upstream-key'), entry)
-  await fs.writeFile(path.join(entry, 'archive.partial'), 'resume')
-  await fs.mkdir(path.join(workspace, 'unknown'))
-  await fs.writeFile(path.join(workspace, 'unknown', 'keep'), 'preserve')
-  cache.evict()
+  const entry = path.join(workspace, 'a'.repeat(64)), operations = []
+  const client = new NativeDownloads((id, data) => {
+    operations.push(data.operation)
+    const result = data.operation.op === 'entry' ? { path: entry } :
+      data.operation.op === 'length' ? { length: 16 } : {}
+    queueMicrotask(() => client.accept({ id, input: { serial: data.serial, index: 0, done: true, result: { ok: true, data: result } } }))
+  }, workspace)
+  client.begin('cache-test')
+  bindNativeDownloads(client)
+  const cache = downloadCache()
+  assert.equal(await cache.getCachePath('../../upstream-key'), entry)
+  assert.equal(await cache.getCachePath('../../upstream-key'), entry)
+  assert.equal(await cache.length(path.join(entry, 'payload')), 16)
+  await cache.touch('../../upstream-key')
+  await cache.evict()
   await cache.cleanPartials(0)
-  assert.equal(await fs.readFile(path.join(entry, 'archive.partial'), 'utf8'), 'resume')
-  assert.equal(await fs.readFile(path.join(workspace, 'unknown', 'keep'), 'utf8'), 'preserve')
-  await fs.writeFile(path.join(entry, '.substitute-cache.json'), '{}')
-  assert.throws(() => cache.getCachePath('../../upstream-key'))
+  assert.deepEqual(operations.map(operation => operation.op), ['entry', 'entry', 'length', 'entry', 'validate', 'validate'])
+  assert.equal(operations[0].key, '../../upstream-key')
+  assert.equal((await fs.readdir(workspace)).length, 0)
 })

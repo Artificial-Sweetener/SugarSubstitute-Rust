@@ -114,4 +114,17 @@ impl WindowsLaunchInput {
             .map(|launch| launch.caches.metadata())
             .ok_or_else(|| io::Error::other("Provisioning metadata role absent"))
     }
+    /// Retain native download access from this exact prepared provisioning family.
+    /// No filesystem work occurs; all clones must retire before actual family finalization.
+    /// # Errors
+    /// Rejects unrelated launch roles; JSON paths and presentation state cannot create this grant.
+    pub fn provisioning_downloads(
+        &self,
+    ) -> io::Result<crate::setup_storage::ProvisioningDownloads> {
+        self.preparation
+            .as_ref()
+            .and_then(|launch| launch.provisioning())
+            .map(|launch| launch.caches.downloads())
+            .ok_or_else(|| io::Error::other("Provisioning download role absent"))
+    }
 }

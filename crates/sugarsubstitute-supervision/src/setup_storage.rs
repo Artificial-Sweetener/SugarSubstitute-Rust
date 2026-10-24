@@ -10,8 +10,9 @@ mod compatibility;
 pub(crate) mod provisioning_cache;
 pub use application::LAUNCH_RESERVATION_BYTES;
 pub use provisioning_cache::{
-    MetadataChunk, MetadataRead, MetadataRecord, MetadataWrite, ProvisioningCachePressure,
-    ProvisioningMetadata, recover_provisioning_cache,
+    DownloadRecord, MetadataChunk, MetadataRead, MetadataRecord, MetadataWrite,
+    ProvisioningCachePressure, ProvisioningDownloads, ProvisioningMetadata,
+    recover_provisioning_cache,
 };
 #[allow(unsafe_code)]
 mod disk_inheritance;

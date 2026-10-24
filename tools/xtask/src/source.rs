@@ -37,11 +37,24 @@ pub(crate) fn rust_files(directory: &Path) -> Result<Vec<PathBuf>> {
 
 /// Discover selected authored languages with identical path and link checks.
 pub(crate) fn source_files(directory: &Path, extensions: &[&str]) -> Result<Vec<PathBuf>> {
+    source_files_excluding(directory, extensions, &[])
+}
+
+/// Exclude only caller-identified installed dependency roots before traversing authored sources.
+/// Normal source discovery supplies no exclusions; similarly named nested paths remain governed.
+pub(crate) fn source_files_excluding(
+    directory: &Path,
+    extensions: &[&str],
+    external: &[PathBuf],
+) -> Result<Vec<PathBuf>> {
     let entries = std::fs::read_dir(directory)
         .map_err(|error| Failure::external(format!("scan {}", directory.display()), error))?;
     let mut paths = Vec::new();
     for entry in entries {
         let entry = entry.map_err(|error| Failure::external("read source entry", error))?;
+        if external.contains(&entry.path()) {
+            continue;
+        }
         let kind =
             entry.file_type().map_err(|error| Failure::external("read source type", error))?;
         require(
@@ -53,13 +66,10 @@ pub(crate) fn source_files(directory: &Path, extensions: &[&str]) -> Result<Vec<
                 entry.file_name() != "target",
                 "keep build outputs outside governed source roots",
             )?;
-            paths.extend(source_files(&entry.path(), extensions)?);
-        } else if entry
-            .path()
-            .extension()
-            .and_then(|extension| extension.to_str())
-            .is_some_and(|extension| extensions.contains(&extension))
-        {
+            paths.extend(source_files_excluding(&entry.path(), extensions, external)?);
+        } else if entry.path().extension().and_then(|extension| extension.to_str()).is_some_and(
+            |extension| extensions.iter().any(|wanted| extension.eq_ignore_ascii_case(wanted)),
+        ) {
             paths.push(entry.path());
         }
     }
@@ -88,6 +98,19 @@ pub(crate) fn fingerprint(root: &Path, sources: &[String]) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Case variants retain governed language identity on Windows and portable checkouts alike.
+    #[test]
+    fn source_discovery_includes_case_variant_language_extensions() -> Result<()> {
+        let temporary =
+            tempfile::tempdir().map_err(|cause| Failure::external("create fixture", cause))?;
+        for name in ["owner.RS", "worker.Ts", "native.CPP"] {
+            std::fs::write(temporary.path().join(name), "")
+                .map_err(|cause| Failure::external("write source fixture", cause))?;
+        }
+        assert_eq!(source_files(temporary.path(), &["rs", "ts", "cpp"])?.len(), 3);
+        Ok(())
+    }
 
     /// Reject path spellings that escape or change meaning across platforms.
     #[test]

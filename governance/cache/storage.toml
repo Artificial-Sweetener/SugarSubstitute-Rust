@@ -3,3 +3,106 @@ owner = "sugarsubstitute-supervision"
 control_cache = "runtime-cache-storage"
 entry_source = "crates/sugarsubstitute-supervision/src/setup_storage/cache.rs"
 registry_source = "crates/sugarsubstitute-supervision/src/setup_storage/cache/policy.rs"
+source_roots = ["crates", "tools", "native", "installer"]
+
+[[script_boundaries]]
+path = "installer/worker/main.ts"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:7d3926ca3c4e8ee377ed8530eda8ea04f8f0270651fb6f809ccccbfc48899883"
+rationale = "Private headless Electron startup creates its configuration directory; cached payloads use prepared native grants."
+role = "external_runtime"
+
+[[script_boundaries]]
+path = "installer/worker/provision.ts"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:cd4e77aef993eba60104226e8aa17b714db61de0f3cc8f760d1c18feb9cd300e"
+rationale = "Inspect existing managed or attached ComfyUI and Python paths; download storage is delegated to native capability consumers."
+role = "external_runtime"
+
+[[script_boundaries]]
+path = "installer/worker/integration.ts"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:dfa4014158654969e9e7416c0ce932060da7d5d61fb8cc8657f45024a35ceded"
+rationale = "Probe the external SugarCubes requirements file before invoking its installed Python owner."
+role = "external_runtime"
+
+[[script_boundaries]]
+path = "installer/worker/downloader.ts"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:6374d6370699c29c98d3369c0602341f576fa70a2c957d1b0ba34d010f5cffbc"
+rationale = "Inject the prepared native capability into the pinned upstream downloader for cache destinations; external authored destinations retain upstream storage ownership."
+role = "native_injection"
+
+[[script_boundaries]]
+path = "installer/worker/cache.ts"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:c6daf9588453e683b901e788550525215838f6d12724c730039b2b669ef6d8e2"
+rationale = "Consume only the upstream cache type; every implemented operation delegates to the prepared native cache capability."
+role = "native_injection"
+
+[[script_boundaries]]
+path = "installer/tests/download-cache.test.mjs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:bef8ce30af648829a3a626adb07061ce255ca596eb27fac8473e2fa8163fc5d9"
+rationale = "Owned fixture destinations and external native/network reply actors verify the actual patched downloader without filesystem fallback."
+role = "fixture"
+
+[[script_boundaries]]
+path = "installer/tests/dependency-inspection.test.mjs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:b25c001432a32140fddaa772707c3a2d1538b92df742248e4f5b73eedcea6167"
+rationale = "Owned temporary Python environment fixtures verify dependency inspection and preserve the selected runtime."
+role = "fixture"
+
+[[script_boundaries]]
+path = "installer/tests/metadata.test.mjs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:0124cd19fb73ece50ad4ed4bb23280be666aae0bb902d0342dad1fd7d78b0079"
+rationale = "Owned build-receipt input and external reply actors verify native metadata streams."
+role = "fixture"
+
+[[script_boundaries]]
+path = "installer/tests/ownership.test.mjs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:5f5ca03e775ab46166410c38a1e79c846579c3546a53482f5cf1b8a08c35e85c"
+rationale = "Owned fixtures and native record reply actors verify managed environment preservation and cache delegation."
+role = "fixture"
+
+[[script_boundaries]]
+path = "installer/tests/worker.test.mjs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:1ee2f11e788dfc5bd5ce68eb317a216557726ddb5bf5202d64b27789a3b04a57"
+rationale = "Owned temporary worker arguments and actual headless Electron verify private startup, protocol rejection and host closure."
+role = "fixture"
+
+[[script_boundaries]]
+path = "installer/tests/surface-runner.cjs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:6640f16496ed3a2bd6141dfd9e733c208209f5cc1bcda5433b4b722ba7172aab"
+rationale = "Native Electron qualification records observed installer surfaces under its explicit artifact destination."
+role = "fixture"
+
+[[script_boundaries]]
+path = "crates/sugarsubstitute-desktop/tests/frontend_startup_probe.mjs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:c04ed29ef32a12cb52a0638839b004278f23d37e1a74a8e5b63f9dae3096485c"
+rationale = "Read the actual Rust frontend readiness sample into an isolated JavaScript VM and exercise it with external document and owner-export fixtures."
+role = "fixture"
+
+[[namespace_reviews]]
+path = "tools/xtask/src/cache_storage.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:67c251043210363727aac2941b5c1a1ab381f5095676f7fc9fea085f52687582"
+rationale = "Authoritative checker names and literal negative-test inputs; no runtime storage implementation."
+
+[[namespace_reviews]]
+path = "tools/xtask/src/cache_storage/tests.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:d19de0ee39ad6d5060b1a73334e934583b314530445e5e9d38fbfdee890d564d"
+rationale = "Isolated repository fixtures deliberately contain registered and adversarial namespace spellings."
+
+[[namespace_reviews]]
+path = "tools/xtask/src/cache_storage/registry.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:3ad2b5343eb02de7f0449c47ac48cbebd1ae4f4f65990fab6f3c21d19290704c"
+rationale = "Registry parser rejection fixtures and exact expected scope-directory data."

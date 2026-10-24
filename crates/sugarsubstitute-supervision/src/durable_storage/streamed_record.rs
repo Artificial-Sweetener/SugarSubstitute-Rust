@@ -71,12 +71,37 @@ impl<'a> StreamStage<'a> {
     ) -> io::Result<Self> {
         check(context)?;
         files::flat_leaf(name)?;
-        Ok(Self {
+        let staged = staging::unique_path(parent, "record-stream")?;
+        Self::named(
             parent,
-            name: name.into(),
-            staged: staging::unique_path(parent, "record-stream")?,
+            name,
+            staged
+                .file_name()
+                .and_then(|name| name.to_str())
+                .ok_or_else(|| invalid("Record stage name absent"))?,
             length,
-        })
+            context,
+        )
+    }
+    /// Select a bounded stage name before its destination directory exists, for aggregate admission.
+    pub(crate) fn unique_name() -> io::Result<String> {
+        Ok(format!("record-stream-{}", staging::identity()?))
+    }
+    /// Bind a pre-admitted sibling name to the actual retained parent without creating any file.
+    pub(crate) fn named(
+        parent: &'a Directory,
+        name: &str,
+        stage: &str,
+        length: u64,
+        context: &JobContext,
+    ) -> io::Result<Self> {
+        check(context)?;
+        files::flat_leaf(name)?;
+        files::flat_leaf(stage)?;
+        if name.eq_ignore_ascii_case(stage) {
+            return Err(invalid("Record stage aliases its target"));
+        }
+        Ok(Self { parent, name: name.into(), staged: parent.path().join(stage), length })
     }
     /// Exact additional flat name for feature admission; this remains an observation, not a handle.
     pub(crate) fn stage_name(&self) -> io::Result<&str> {

@@ -3,7 +3,11 @@
 //! Validate exact inventories while pinning each ancestor; unknown files never become deletion input.
 mod usage;
 use super::*;
-use std::{collections::BTreeSet, os::windows::fs::MetadataExt};
+use crate::durable_storage::payload::Payload;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    os::windows::fs::MetadataExt,
+};
 pub(super) use usage::{preserved_charge, scope_charge};
 
 /// Bound physical usage and exact deletion inputs without authenticating content.
@@ -65,7 +69,7 @@ pub(super) fn inspect(
     };
     let path = directory.path().join("data");
     match Directory::open(&path, false) {
-        Ok(root) => visit(&root, &path, Some(&allowed), &mut inventory, context)?,
+        Ok(root) => visit(&root, &path, Some(&allowed), None, &mut inventory, context)?,
         Err(cause) if record.deleting && cause.kind() == io::ErrorKind::NotFound => {}
         Err(cause) => return Err(cause),
     }
@@ -76,6 +80,7 @@ fn visit(
     directory: &Directory,
     root: &Path,
     allowed: Option<&BTreeSet<String>>,
+    active: Option<&BTreeMap<String, Payload>>,
     output: &mut Inventory,
     context: &JobContext,
 ) -> io::Result<()> {
@@ -105,7 +110,11 @@ fn visit(
         if relative.split('/').count() > MAX_DEPTH {
             return Err(invalid("Cache tree exceeds its directory-depth limit"));
         }
-        let metadata = std::fs::symlink_metadata(&path)?;
+        let metadata = if active.is_some_and(|active| active.contains_key(&relative)) {
+            entry.metadata()?
+        } else {
+            std::fs::symlink_metadata(&path)?
+        };
         if metadata.file_attributes() & 0x400 != 0 {
             return Err(invalid("Cache tree contains a link or junction"));
         }
@@ -119,21 +128,29 @@ fn visit(
                     .to_str()
                     .ok_or_else(|| invalid("Cache directory name is not Unicode"))?,
             )?;
-            visit(&child, root, allowed, output, context)?;
+            visit(&child, root, allowed, active, output, context)?;
         } else if metadata.is_file() {
             if allowed.is_some_and(|allowed| !allowed.contains(&relative)) {
                 return Err(invalid("Cache contains an undeclared file"));
             }
             account_name(output, &relative)?;
-            let file = directory.read(
-                entry
-                    .file_name()
-                    .to_str()
-                    .ok_or_else(|| invalid("Cache filename is not Unicode"))?,
-            )?;
+            let length = if let Some(payload) = active.and_then(|active| active.get(&relative)) {
+                payload.length()?
+            } else {
+                let file = directory.read(
+                    entry
+                        .file_name()
+                        .to_str()
+                        .ok_or_else(|| invalid("Cache filename is not Unicode"))?,
+                )?;
+                if output.worker_records {
+                    files::single_link(&file)?;
+                }
+                file.metadata()?.len()
+            };
             output.bytes = output
                 .bytes
-                .checked_add(file.metadata()?.len())
+                .checked_add(length)
                 .ok_or_else(|| invalid("Cache byte accounting overflowed"))?;
             output.files.push(relative.into_boxed_str().into_string());
         } else {
@@ -271,18 +288,27 @@ pub(super) fn remove_directory(path: &Path, context: &JobContext) -> io::Result<
 
 /// Inventory a fully settled native producer's private output before declaring cleanup ownership.
 pub(super) fn generated(directory: &Directory, context: &JobContext) -> io::Result<Inventory> {
-    generated_with(directory, false, context)
+    generated_with(directory, false, None, context)
 }
 /// Preserve delegated worker admission's 8,192-object and 512-KiB name ceilings during migration.
 pub(super) fn generated_records(
     directory: &Directory,
     context: &JobContext,
 ) -> io::Result<Inventory> {
-    generated_with(directory, true, context)
+    generated_with(directory, true, None, context)
+}
+/// Inspect active generated payloads through retained share-exclusive handles, never reopening them.
+pub(super) fn generated_open_records(
+    directory: &Directory,
+    active: &BTreeMap<String, Payload>,
+    context: &JobContext,
+) -> io::Result<Inventory> {
+    generated_with(directory, true, Some(active), context)
 }
 fn generated_with(
     directory: &Directory,
     worker_records: bool,
+    active: Option<&BTreeMap<String, Payload>>,
     context: &JobContext,
 ) -> io::Result<Inventory> {
     let path = directory.path().join("data");
@@ -295,6 +321,6 @@ fn generated_with(
         objects: 0,
         worker_records,
     };
-    visit(&root, &path, None, &mut inventory, context)?;
+    visit(&root, &path, None, active, &mut inventory, context)?;
     Ok(inventory)
 }

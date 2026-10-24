@@ -29,7 +29,7 @@ async function inspect({ splash = false, extra = [], graphReady = true, setupDon
   registered = true, graphSame = true, connected = true, width = 640,
   complete = true, configuring = false, library = true, apiAfterImport = true,
   earlyExtensionGetter = false, forbidImport = false, appPresent = true,
-  apiBucketPresent = true, forbidDerived = false } = {}) {
+  apiBucketPresent = true, forbidDerived = false, frameApi = true, frame = {} } = {}) {
   const extension = { name: named ? 'SugarCubes.UI' : 'Other' };
   const graph = {};
   const elements = [...extra];
@@ -47,7 +47,15 @@ async function inspect({ splash = false, extra = [], graphReady = true, setupDon
     configuringGraph: configuring,
   };
   const context = createContext({
-    window: { comfyAPI: apiBucketPresent ? { app: { app: appPresent ? app : undefined } } : undefined, SugarCubes: api ? { openLibrary: library ? () => {} : null } : null },
+    window: { comfyAPI: apiBucketPresent ? { app: { app: appPresent ? app : undefined } } : undefined,
+      SugarCubes: api ? {
+        openLibrary: library ? () => {} : null,
+        ...(frameApi ? {
+          configureDesktopFrame: () => assert.fail('Readiness inspection must request host configuration'),
+          readDesktopFrame: () => ({ mounted: true, schemaVersion: 1, captionWidth: 138,
+            titlebarHeight: 34, darkTheme: true, ...frame }),
+        } : {}),
+      } : null },
     document: {
       readyState: complete ? 'complete' : 'loading',
       getElementById: (id) => elements.find((item) => item.id === id) ?? null,
@@ -59,6 +67,7 @@ async function inspect({ splash = false, extra = [], graphReady = true, setupDon
     NAV: 17,
     FRONT: '1.47.11',
     CUBES: '0.15.3',
+    NATIVE_DARK: true,
   });
   if (earlyExtensionGetter) Object.defineProperty(app, 'extensions', {
     get() {
@@ -117,6 +126,21 @@ test('completed startup transfers the actual receipt with current identities and
 
 test('the dedicated ComfyUI startup splash blocks readiness until removed', async () => {
   assert.deepEqual(await inspect({ splash: true }), { incomplete: 2048 });
+});
+
+test('an unmounted desktop frame requests configuration before granting readiness', async () => {
+  assert.deepEqual(await inspect({ frame: { mounted: false } }), { configure_desktop_frame: 1 });
+});
+
+test('missing frame protocol methods reject readiness', async () => {
+  await assert.rejects(inspect({ frameApi: false }), /desktop frame protocol 1 is unavailable/);
+});
+
+test('frame schema, native dimensions and selected theme must match before readiness', async () => {
+  for (const frame of [{ schemaVersion: 2 }, { captionWidth: 137 },
+    { titlebarHeight: 35 }, { darkTheme: false }]) {
+    await assert.rejects(inspect({ frame }), /presentation differs from the native host/);
+  }
 });
 
 test('an unrelated visible PrimeVue progress spinner does not block startup readiness', async () => {

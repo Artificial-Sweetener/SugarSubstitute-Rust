@@ -5,6 +5,10 @@ use super::*;
 impl Worker {
     pub(super) fn launch_input(&mut self, input: WindowsLaunchInput) -> Result<()> {
         let metadata = input.provisioning_metadata()?;
+        self.downloads
+            .as_ref()
+            .ok_or("Native downloads absent")?
+            .bind(input.provisioning_downloads()?)?;
         let watch = self.spec(JobClass::NativeObservation, 4096, None)?;
         let creation = self.spec(
             JobClass::InfrastructureLifecycle,

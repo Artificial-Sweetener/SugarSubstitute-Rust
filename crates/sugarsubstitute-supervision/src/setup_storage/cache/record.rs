@@ -254,9 +254,14 @@ pub(super) fn touch(file: &File, now: u64) -> io::Result<()> {
 pub(super) fn busy(cause: &io::Error) -> bool {
     native_code(cause).is_some_and(|code| matches!(code, 32 | 33))
 }
-/// Preserve the native sharing cause while exposing actionable nonblocking contention.
-pub(super) fn public_error(cause: io::Error) -> io::Error {
-    let category = if busy(&cause) { io::ErrorKind::WouldBlock } else { kind(&cause) };
+/// Preserve original native causes while exposing actionable storage and control categories.
+pub(in crate::setup_storage) fn public_error(cause: io::Error) -> io::Error {
+    let category = if busy(&cause) {
+        io::ErrorKind::WouldBlock
+    } else {
+        native_code(&cause)
+            .map_or_else(|| kind(&cause), |code| io::Error::from_raw_os_error(code).kind())
+    };
     if category == cause.kind() { cause } else { io::Error::new(category, cause) }
 }
 /// Recover the native code without replacing any original storage failure.
@@ -332,3 +337,6 @@ fn bounded_files<'de, D: serde::Deserializer<'de>>(decoder: D) -> Result<Vec<Str
 pub(super) fn collision(cause: &io::Error) -> bool {
     matches!(native_code(cause), Some(80 | 183))
 }
+
+#[cfg(test)]
+mod error_tests;

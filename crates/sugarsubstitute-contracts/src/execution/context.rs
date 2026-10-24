@@ -122,6 +122,18 @@ impl JobContext {
         self.deadline
     }
 
+    /// Narrow this already-admitted job to one finite operation in the same clock epoch.
+    ///
+    /// The effective deadline is the earlier of this bound and every original job/scope bound.
+    /// Identity, original specification, cancellation, native custody and memory admission remain
+    /// shared. This creates no job or scheduler access and cannot extend an existing deadline.
+    /// Storage services may keep their command lifetime while bounding each individual effect.
+    pub fn bounded_until(&self, deadline: Moment) -> Self {
+        let mut bounded = self.clone();
+        bounded.deadline = Some(self.deadline.map_or(deadline, |original| original.min(deadline)));
+        bounded
+    }
+
     /// Observe a cancellation request without claiming the job has stopped.
     pub fn cancellation_requested(&self) -> bool {
         self.cancellation.is_requested()

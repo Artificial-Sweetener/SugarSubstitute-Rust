@@ -1,86 +1,173 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-import {test} from 'node:test'
+import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
-import {build} from 'esbuild'
-import {fileURLToPath} from 'node:url'
-const artifact=process.env.SUBSTITUTE_INSTALLER_BUILD
+import { EventEmitter } from 'node:events'
+import { build } from 'esbuild'
+import { fileURLToPath } from 'node:url'
+
+const artifact = process.env.SUBSTITUTE_INSTALLER_BUILD
 if (!artifact || !path.isAbsolute(artifact)) throw new Error('Explicit test artifact directory required')
-const review=fileURLToPath(new URL('..',import.meta.url))
-const receipt=JSON.parse(fs.readFileSync(path.join(artifact,'worker/build-receipt.json'),'utf8'))
-const entry=receipt.inputs.find(file=>file.endsWith('/src/main/lib/download.ts'))
-async function downloader(queued) {
- const directory=fs.mkdtempSync(path.join(artifact,'download-policy-'))
- const downloads=path.join(directory,'downloads'), metadata=path.join(directory,'metadata')
- fs.mkdirSync(downloads);fs.mkdirSync(metadata)
- const globals={queued, writes:0, request:undefined, response:undefined, chunk:Buffer.alloc(16), headers:16}
- const binding='__cache_download_fixture_'+Math.random().toString(16).slice(2)
- globalThis[binding]=globals
- const {outputFiles}=await build({entryPoints:[entry],bundle:true,write:false,platform:'node',format:'esm',target:'node22',plugins:[{
-  name:'external-boundaries',setup(builder){
-   builder.onResolve({filter:/^electron$/},()=>({path:'electron',namespace:'fixture'}))
-   builder.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:`
-    import {EventEmitter} from 'node:events'
-    const fixture=globalThis[${JSON.stringify(binding)}]
-    export const net={request(){
-      const request=new EventEmitter();fixture.request=request
-      request.setHeader=()=>{};request.abort=()=>{}
-      request.end=()=>queueMicrotask(()=>{
-        const response=new EventEmitter();fixture.response=response
-        response.statusCode=200;response.headers={'content-length':String(fixture.headers)}
-        request.emit('response',response)
-        response.emit('data',fixture.chunk);response.emit('end')
-      });return request
-    }}
-   `,loader:'js'}))
-   builder.onResolve({filter:/^fs$/},()=>({path:'writer',namespace:'fixture-fs'}))
-   builder.onLoad({filter:/.*/,namespace:'fixture-fs'},()=>({contents:`
-    import fs from 'node:fs'
-    import {EventEmitter} from 'node:events'
-    const fixture=globalThis[${JSON.stringify(binding)}]
-    export default {...fs,createWriteStream(file,options){
-      const stream=new EventEmitter();stream.fd=options.fd;stream.writableLength=fixture.queued
-      let closed=false
-      const close=()=>{if(!closed){closed=true;fs.closeSync(stream.fd);stream.emit('close')}}
-      stream.write=chunk=>{fixture.writes++;fs.writeSync(stream.fd,chunk);return true}
-      stream.end=()=>queueMicrotask(close)
-      stream.close=callback=>queueMicrotask(()=>{close();callback?.()})
-      stream.destroy=()=>queueMicrotask(close)
-      return stream
-    }}
-   `,loader:'js'}))
-   builder.onResolve({filter:/settings$/},()=>({path:path.join(review,'worker/settings.ts')}))
-   builder.onResolve({filter:/cache-policy$/},()=>({path:path.join(review,'worker/cache-policy.ts')}))
-   builder.onResolve({filter:/^\.\/arguments$/},()=>({path:'arguments',namespace:'fixture-args'}))
-   builder.onLoad({filter:/.*/,namespace:'fixture-args'},()=>({contents:`
-    const args=${JSON.stringify({'cache-downloads':downloads,'cache-download-bytes':'4096','cache-metadata':metadata,'cache-metadata-bytes':'4096'})}
-    export const argument=name=>args[name]
-   `,loader:'js'}))
+const worker = fileURLToPath(new URL('../worker', import.meta.url))
+const receipt = JSON.parse(fs.readFileSync(path.join(artifact, 'worker/build-receipt.json'), 'utf8'))
+const input = receipt.inputs.find(file => file.endsWith('/src/main/lib/download.ts'))
+const upstream = input.slice(0, input.indexOf('/src/main/'))
+
+/** Real downloader, stream and client; only Electron networking and the external native port are fake. */
+async function fixture(options = {}) {
+  const directory = fs.mkdtempSync(path.join(artifact, 'native-download-'))
+  const root = path.join(directory, 'cache'), destination = path.join(root, 'archive')
+  const operations = [], files = new Map(), held = new Map()
+  if (options.prefix) {
+    files.set('archive', Buffer.from(options.prefix))
+    files.set('archive.dl-meta', Buffer.from(JSON.stringify({ url: 'https://example.test/archive', expectedSize: 7, etag: 'original' })))
   }
- }]})
- const module=await import('data:text/javascript;base64,'+Buffer.from(outputFiles[0].text).toString('base64'))
- return {module,globals,directory,downloads,dispose:()=>delete globalThis[binding]}
+  const state = { chunks: [Buffer.alloc(16)], size: 16, status: 200, end: true, ...options }
+  const request = new EventEmitter(), response = new EventEmitter(), headers = new Map()
+  request.setHeader = (name, value) => headers.set(name, value)
+  request.abort = () => { state.aborted = true }
+  request.end = () => queueMicrotask(() => {
+    response.statusCode = state.status
+    response.headers = { 'content-length': String(state.size), etag: 'original' }
+    request.emit('response', response)
+    for (const chunk of state.chunks) response.emit('data', chunk)
+    if (state.end) response.emit('end')
+  })
+  const binding = '__native_download_' + Math.random().toString(16).slice(2)
+  globalThis[binding] = { request, external: options.external === true }
+  const { outputFiles } = await build({
+    stdin: { contents: "export * from './downloader'; export * from './downloads'", resolveDir: worker, loader: 'ts' },
+    bundle: true, write: false, platform: 'node', format: 'esm', target: 'node22',
+    plugins: [{ name: 'external-boundaries', setup(builder) {
+      builder.onResolve({ filter: /^@upstream\// }, args => ({ path: path.join(upstream, 'src/main', args.path.slice(10) + '.ts') }))
+      builder.onResolve({ filter: /^electron$/ }, () => ({ path: 'electron', namespace: 'network-fixture' }))
+      builder.onLoad({ filter: /.*/, namespace: 'network-fixture' }, () => ({ loader: 'js', contents: `export const net={request(){return globalThis[${JSON.stringify(binding)}].request}}` }))
+      builder.onResolve({ filter: /settings$/ }, () => ({ path: path.join(worker, 'settings.ts') }))
+      builder.onResolve({ filter: /^fs$/ }, () => ({ path: 'fs', namespace: 'forbidden-cache-filesystem' }))
+      builder.onLoad({ filter: /.*/, namespace: 'forbidden-cache-filesystem' }, () => ({ loader: 'js', contents: `
+        import fs from 'node:fs'
+        export default globalThis[${JSON.stringify(binding)}].external ? fs : new Proxy({}, {
+          get(_target,key){throw new Error('Cache filesystem bypass: '+String(key))}
+        })
+      ` }))
+    } }],
+  })
+  const module = await import('data:text/javascript;base64,' + Buffer.from(outputFiles[0].text).toString('base64'))
+  const client = new module.NativeDownloads((id, data) => {
+    const operation = data.operation
+    operations.push(operation)
+    let result = { ok: true, data: {} }
+    const bytes = files.get(operation.name)
+    if (operation.op === 'length') result.data = { length: bytes?.length ?? null }
+    if (operation.op === 'read') result = bytes ? { ok: true, data: { hex: bytes.toString('hex') } } : { ok: false, error: { code: 'ENOENT', osCode: 2 } }
+    if (operation.op === 'write') files.set(operation.name, Buffer.from(operation.hex, 'hex'))
+    if (operation.op === 'remove') files.delete(operation.name)
+    if (operation.op === 'open') { if (!bytes) files.set(operation.name, Buffer.alloc(0)); result.data = { length: bytes?.length ?? 0 } }
+    if (operation.op === 'reset') files.set(operation.name, Buffer.alloc(0))
+    if (operation.op === 'chunk') {
+      assert.equal(operation.offset, bytes.length)
+      files.set(operation.name, Buffer.concat([bytes, Buffer.from(operation.hex, 'hex')]))
+    }
+    const reply = () => client.accept({ id, input: { serial: data.serial, index: 0, done: true, result } })
+    const hold = held.get(operation.op)
+    if (hold) { held.delete(operation.op); hold.reply = reply; hold.entered() }
+    else queueMicrotask(reply)
+  }, root)
+  client.begin('original')
+  module.bindNativeDownloads(client)
+  return { module, operations, files, destination, root, directory, response, request, state, headers,
+    hold(op) {
+      const hold = {}; const entered = new Promise(resolve => { hold.entered = resolve })
+      held.set(op, hold)
+      return { entered, release() { hold.reply() } }
+    }, dispose() { delete globalThis[binding] },
+  }
 }
-test('patched downloader preserves resumable partials when its bounded write queue is saturated',async()=>{
- const fixture=await downloader(1024*1024)
- try {
-  const file=path.join(fixture.downloads,'archive')
-  await assert.rejects(fixture.module.download('https://example.test/archive',file,null),/write queue capacity/)
-  await new Promise(resolve=>setImmediate(resolve))
-  assert.equal(fixture.globals.writes,0)
-  assert.equal(fs.statSync(file).size,0)
-  assert.equal(JSON.parse(fs.readFileSync(file+'.dl-meta','utf8')).expectedSize,16)
- } finally {fixture.dispose()}
+
+test('native cache writes reject source-queue overflow before writes and preserve a resumable sidecar', async () => {
+  const f = await fixture({ chunks: [Buffer.alloc(1024 * 1024), Buffer.alloc(16)], size: 1024 * 1024 + 16 })
+  try {
+    await assert.rejects(f.module.download('https://example.test/archive', f.destination, null), /write queue capacity/)
+    assert.equal(f.operations.filter(op => op.op === 'chunk').length, 0)
+    assert.equal(f.files.get('archive').length, 0)
+    assert.equal(JSON.parse(f.files.get('archive.dl-meta')).expectedSize, 1024 * 1024 + 16)
+    assert.equal(f.operations.at(-1).op, 'close')
+  } finally { f.dispose() }
 })
-test('patched downloader commits a bounded exact body without requiring unsupported response methods',async()=>{
- const fixture=await downloader(0)
- try {
-  const file=path.join(fixture.downloads,'archive')
-  assert.equal(await fixture.module.download('https://example.test/archive',file,null),file)
-  assert.deepEqual(fs.readFileSync(file),fixture.globals.chunk)
-  assert.equal(fs.existsSync(file+'.dl-meta'),false)
-  assert.equal(fixture.globals.response.pause,undefined)
- } finally {fixture.dispose()}
+
+test('the existing downloader commits exact native bytes without unsupported response methods or filesystem access', async () => {
+  const f = await fixture()
+  try {
+    assert.equal(await f.module.download('https://example.test/archive', f.destination, null), f.destination)
+    assert.deepEqual(f.files.get('archive'), f.state.chunks[0])
+    assert.equal(f.files.has('archive.dl-meta'), false)
+    assert.equal(f.response.pause, undefined)
+    assert.equal(fs.existsSync(f.root), false)
+  } finally { f.dispose() }
+})
+
+test('native resume preserves Range and If-Range and appends only after validating the physical prefix', async () => {
+  const f = await fixture({ prefix: 'abc', chunks: [Buffer.from('defg')], size: 4, status: 206 })
+  try {
+    await f.module.download('https://example.test/archive', f.destination, null, { expectedSize: 7 })
+    assert.equal(f.headers.get('Range'), 'bytes=3-')
+    assert.equal(f.headers.get('If-Range'), 'original')
+    assert.equal(f.files.get('archive').toString(), 'abcdefg')
+    assert.equal(f.operations.some(op => op.op === 'reset'), false)
+    assert.equal(f.operations.find(op => op.op === 'chunk').offset, 3)
+  } finally { f.dispose() }
+})
+
+test('a server returning a full body to a range request explicitly resets native bytes', async () => {
+  const f = await fixture({ prefix: 'old', chunks: [Buffer.from('newdata')], size: 7 })
+  try {
+    await f.module.download('https://example.test/archive', f.destination, null)
+    assert.equal(f.files.get('archive').toString(), 'newdata')
+    assert.equal(f.operations.filter(op => op.op === 'reset').length, 1)
+  } finally { f.dispose() }
+})
+
+test('early response bytes remain queued while native opening waits for its acknowledgement', async () => {
+  const f = await fixture(), opening = f.hold('open')
+  try {
+    const downloading = f.module.download('https://example.test/archive', f.destination, null)
+    await opening.entered
+    assert.equal(f.operations.some(op => op.op === 'chunk'), false)
+    opening.release()
+    await downloading
+    assert.equal(f.files.get('archive').length, 16)
+  } finally { f.dispose() }
+})
+
+test('network failure waits for native prefix closure before rejection and retains resumable bytes', async () => {
+  const f = await fixture({ chunks: [Buffer.from('abc')], size: 7, end: false })
+  const writing = f.hold('chunk'), closing = f.hold('close')
+  try {
+    const cause = new Error('Network failed')
+    let failure
+    const downloading = f.module.download('https://example.test/archive', f.destination, null).catch(error => { failure = error })
+    await writing.entered
+    f.response.emit('error', cause)
+    assert.equal(failure, undefined)
+    writing.release()
+    await closing.entered
+    assert.equal(failure, undefined)
+    closing.release()
+    await downloading
+    assert.equal(failure, cause)
+    assert.equal(f.files.get('archive').toString(), 'abc')
+    assert.equal(f.files.has('archive.dl-meta'), true)
+  } finally { f.dispose() }
+})
+
+test('authored destinations retain the upstream filesystem path without native cache operations', async () => {
+  const f = await fixture({ external: true })
+  try {
+    const destination = path.join(f.directory, 'authored', 'model')
+    await f.module.download('https://example.test/model', destination, null)
+    assert.deepEqual(fs.readFileSync(destination), f.state.chunks[0])
+    assert.equal(f.operations.length, 0)
+  } finally { f.dispose() }
 })

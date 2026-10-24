@@ -16,7 +16,7 @@ fn native_provisioning_grants_survive_host_pin_loss_and_recover_on_an_eight_mib_
         let cache = RuntimeCache::open(root.path(), cache::CachePolicy::default(), &context)?;
         let grants = ProvisioningCaches::prepare(&cache, &"a".repeat(64), &context)?;
         let family = CacheFamily::named(grants.family(), &context)?;
-        let path = grants.downloads.path().join("partial");
+        let path = grants.downloads.path()?.join("partial");
         std::fs::write(&path, b"resumable bytes")?;
         drop(grants);
         Ok((root, cache, family, path))
@@ -77,7 +77,7 @@ fn pressure_retires_only_selected_grants_after_native_settlement() -> TestResult
         let cache = RuntimeCache::open(root.path(), cache::CachePolicy::default(), context)?;
         let mut grants = ProvisioningCaches::prepare(&cache, &"b".repeat(64), context)?;
         let mut family = CacheFamily::named(grants.family(), context)?;
-        let download = grants.downloads.path();
+        let download = grants.downloads.path()?;
         let metadata = grants.metadata.path()?;
         let runtime = grants.runtime.path();
         std::fs::write(download.join("partial"), b"reclaim")?;

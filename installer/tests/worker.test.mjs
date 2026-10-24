@@ -93,9 +93,10 @@ test('real headless worker rejects unsafe requests and exits on host closure', {
   const authentication = await iterator.next()
   assert.equal(JSON.parse(authentication.value).token, token)
   const ready = await nextTerminal('ready')
-  assert.equal(ready.data.cacheProtocol, 1)
+  assert.equal(ready.data.cacheProtocol, 2)
   assert.equal(ready.data.storageProtocol, 1)
   assert.equal(ready.data.metadataProtocol, 1)
+  assert.equal(ready.data.downloadsProtocol, 1)
   assert.match(ready.data.upstreamRevision, /^[a-f0-9]{40}$/)
   assert.deepEqual(ready.data.operations, ['options', 'inspect', 'provision', 'integrate', 'cancel'])
   socket.write(JSON.stringify({

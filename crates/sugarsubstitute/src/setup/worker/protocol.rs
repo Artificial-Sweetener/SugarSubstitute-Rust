@@ -11,16 +11,18 @@ pub(super) enum CacheEvent {
     MetadataFull,
     Other,
 }
-/// Older or unknown cache protocols cannot silently start provisioning outside native grants.
+/// Cache protocol two requires native downloads; protocol-one hosts must reject its worker.
+/// The packaged host and worker must agree before any provisioning command can start.
 pub(super) fn cache_event(value: &serde_json::Value) -> Result<CacheEvent> {
     if value["version"] != 1 {
         return Err("Unsupported provisioning response".into());
     }
     match value["event"].as_str() {
         Some("ready")
-            if value["data"]["cacheProtocol"] == 1
+            if value["data"]["cacheProtocol"] == 2
                 && value["data"]["storageProtocol"] == 1
-                && value["data"]["metadataProtocol"] == 1 =>
+                && value["data"]["metadataProtocol"] == 1
+                && value["data"]["downloadsProtocol"] == 1 =>
         {
             Ok(CacheEvent::Ready)
         }
@@ -42,14 +44,18 @@ mod tests {
         for data in [
             json!({}),
             json!({"cacheProtocol":0}),
-            json!({"cacheProtocol":2}),
-            json!({"cacheProtocol":"1"}),
             json!({"cacheProtocol":1}),
-            json!({"cacheProtocol":1,"storageProtocol":0}),
-            json!({"cacheProtocol":1,"storageProtocol":2}),
-            json!({"cacheProtocol":1,"storageProtocol":"1"}),
-            json!({"cacheProtocol":1,"storageProtocol":1}),
-            json!({"cacheProtocol":1,"storageProtocol":1,"metadataProtocol":2}),
+            json!({"cacheProtocol":3}),
+            json!({"cacheProtocol":"2"}),
+            json!({"cacheProtocol":2}),
+            json!({"cacheProtocol":2,"storageProtocol":0}),
+            json!({"cacheProtocol":2,"storageProtocol":2}),
+            json!({"cacheProtocol":2,"storageProtocol":"1"}),
+            json!({"cacheProtocol":2,"storageProtocol":1}),
+            json!({"cacheProtocol":2,"storageProtocol":1,"metadataProtocol":2}),
+            json!({"cacheProtocol":2,"storageProtocol":1,"metadataProtocol":1}),
+            json!({"cacheProtocol":2,"storageProtocol":1,"metadataProtocol":1,"downloadsProtocol":2}),
+            json!({"cacheProtocol":1,"storageProtocol":1,"metadataProtocol":1,"downloadsProtocol":1}),
         ] {
             assert!(cache_event(&json!({"version":1,"event":"ready","data":data})).is_err());
         }
@@ -58,7 +64,7 @@ mod tests {
     fn current_native_grant_protocol_admits_the_matching_worker() -> Result<()> {
         assert_eq!(
             cache_event(
-                &json!({"version":1,"event":"ready","data":{"cacheProtocol":1,"storageProtocol":1,"metadataProtocol":1}})
+                &json!({"version":1,"event":"ready","data":{"cacheProtocol":2,"storageProtocol":1,"metadataProtocol":1,"downloadsProtocol":1}})
             )?,
             CacheEvent::Ready
         );

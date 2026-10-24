@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Bind the provisioning transport to the existing retained Windows process-family owner.
 mod cache_jobs;
+mod downloads;
 mod metadata;
 mod process;
 mod protocol;
@@ -57,6 +58,9 @@ pub(super) struct Worker {
     metadata_scope: Option<metadata::MetadataScope>,
     metadata_state: Option<metadata::session::Session>,
     metadata_io: Option<OwnedJob<metadata::MetadataCompletion, std::io::Error>>,
+    downloads: Option<downloads::Session>,
+    download_io: Option<OwnedJob<downloads::Batch, std::io::Error>>,
+    download_terminal: Option<provisioning_transport::Frame>,
 }
 
 impl Worker {
@@ -85,7 +89,8 @@ impl Worker {
         };
         let creating =
             WindowsProcessRegistry::submit_new(&client, &scope, specification, identity)?;
-        let (transport, runner) = Transport::pair();
+        let (mut transport, runner) = Transport::pair();
+        let downloads = downloads::Session::new(transport.take_downloads()?);
         let transport_job = client.submit_async(
             &scope,
             JobSpec {
@@ -127,6 +132,9 @@ impl Worker {
             metadata_scope: None,
             metadata_state: None,
             metadata_io: None,
+            downloads: Some(downloads),
+            download_io: None,
+            download_terminal: None,
         })
     }
     pub(super) fn ready(&self) -> bool {
@@ -140,6 +148,9 @@ impl Worker {
         let metadata = metadata::command_scope(value)?;
         if value["operation"] != "cancel" && self.metadata_io.is_some() {
             return Err("Native metadata operation is still active".into());
+        }
+        if value["operation"] != "cancel" {
+            self.begin_downloads(value)?;
         }
         self.transport
             .as_ref()
@@ -170,14 +181,25 @@ impl Worker {
         self.poll_cache_jobs()?;
         self.poll_record_job()?;
         self.poll_metadata_io()?;
+        self.poll_download_io()?;
         let mut events = Vec::new();
         for _ in 0..16 {
-            match self.transport.as_ref().and_then(Transport::next_event) {
+            match self.next_worker_event() {
                 Some(TransportEvent::Listening { port, token }) => {
                     self.endpoint = Some((port, token))
                 }
                 Some(TransportEvent::Frame(frame)) => {
                     let mut value: serde_json::Value = serde_json::from_str(frame.as_str())?;
+                    if self.downloads.as_ref().is_some_and(|session| session.terminal(&value)) {
+                        if self.download_terminal.is_some() {
+                            return Err("Duplicate native download terminal result".into());
+                        }
+                        if let Some(session) = &self.downloads {
+                            session.stop();
+                        }
+                        self.download_terminal = Some(frame);
+                        continue;
+                    }
                     if self.metadata_event(&value)? {
                         continue;
                     }
@@ -251,12 +273,26 @@ impl Worker {
     pub(super) fn close(&mut self) -> Result<()> {
         self.closing = true;
         self.ready = false;
+        if let Some(job) = &self.transport_job {
+            job.cancel();
+        }
         self.transport = None;
         self.record_scope = None;
         self.record_state = None;
         self.metadata_access = None;
         self.metadata_scope = None;
         self.metadata_state = None;
+        self.download_terminal = None;
+        if let Some(session) = &self.downloads {
+            session.stop();
+        }
+        if self.download_io.is_none() {
+            if self.downloads.as_ref().is_some_and(|session| session.active()) {
+                self.submit_download_batch()?;
+            } else {
+                self.downloads = None;
+            }
+        }
         if let Some(job) = &self.metadata_io {
             job.cancel();
         }
@@ -264,9 +300,6 @@ impl Worker {
             job.cancel();
         }
         if let Some(job) = &self.preparing {
-            job.cancel();
-        }
-        if let Some(job) = &self.transport_job {
             job.cancel();
         }
         if let Some(registry) = &mut self.registry {
@@ -284,6 +317,8 @@ impl Worker {
             && self.transport_job.is_none()
             && self.record_job.is_none()
             && self.metadata_io.is_none()
+            && self.download_io.is_none()
+            && self.downloads.is_none()
             && self.registry.as_ref().is_none_or(WindowsProcessRegistry::is_empty)
     }
 }

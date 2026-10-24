@@ -28,7 +28,7 @@ concern = "ComfyUI startup configuration and connection boundaries"
 [[owners]]
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
-auxiliary_roots = ["installer/worker", "installer/surface"]
+auxiliary_roots = ["installer/worker", "installer/surface", "installer/tests"]
 layer = "host"
 concern = "Platform-independent startup and conflict controllers, retained native adapter contracts, platform host composition and application identity"
 

@@ -12,7 +12,9 @@ use crate::durable_storage::files::Directory;
 use sha2::{Digest, Sha256};
 use std::{ffi::OsString, io};
 use sugarsubstitute_contracts::execution::JobContext;
+mod downloads;
 mod metadata;
+pub use downloads::{DownloadRecord, ProvisioningDownloads};
 pub use metadata::{
     MetadataChunk, MetadataRead, MetadataRecord, MetadataWrite, ProvisioningMetadata,
 };
@@ -31,7 +33,7 @@ const PREFIX: &str = "setup-worker-v1";
 /// Writable grants remain durably pinned until every native process in this family has retired.
 pub(crate) struct ProvisioningCaches {
     family: CacheFamilyId,
-    downloads: CacheLease,
+    downloads: ProvisioningDownloads,
     metadata: ProvisioningMetadata,
     runtime: CacheLease,
 }
@@ -80,7 +82,12 @@ impl ProvisioningCaches {
         )?;
         runtime
             .begin_generated(&descriptor(&runtime, Namespace::SetupRuntime, family)?, context)?;
-        Ok(Self { family, downloads, metadata: ProvisioningMetadata::new(metadata), runtime })
+        Ok(Self {
+            family,
+            downloads: ProvisioningDownloads::new(downloads, context)?,
+            metadata: ProvisioningMetadata::new(metadata),
+            runtime,
+        })
     }
     /// Matching facts for the native adapter's private named containment job.
     pub(crate) fn family(&self) -> CacheFamilyId {
@@ -90,7 +97,7 @@ impl ProvisioningCaches {
     pub(crate) fn arguments(&self) -> io::Result<[OsString; 10]> {
         Ok([
             "--setup-cache-downloads".into(),
-            self.downloads.path().into_os_string(),
+            self.downloads.path()?.into_os_string(),
             "--setup-cache-download-bytes".into(),
             DOWNLOAD_BYTES.to_string().into(),
             "--setup-cache-metadata".into(),
@@ -105,6 +112,10 @@ impl ProvisioningCaches {
     pub(crate) fn metadata(&self) -> ProvisioningMetadata {
         self.metadata.clone()
     }
+    /// Clone the actual prepared download capability while preserving its original grant and pins.
+    pub(crate) fn downloads(&self) -> ProvisioningDownloads {
+        self.downloads.clone()
+    }
     /// Finalize from the registry's unique actually settled family result. This is called only
     /// after every owned process and observation has retired; supplied exit codes grant nothing.
     /// Startup recovery independently requires native object absence before calling `finalize`.
@@ -114,12 +125,9 @@ impl ProvisioningCaches {
         context: &JobContext,
     ) -> io::Result<()> {
         check(context)?;
-        finalize(&mut self.downloads, context)?;
+        self.downloads.finish(pressure.downloads, context)?;
         self.metadata.finish(pressure.metadata, context)?;
         finalize(&mut self.runtime, context)?;
-        if pressure.downloads {
-            self.downloads.retire(context)?;
-        }
         self.runtime.retire(context)
     }
 }

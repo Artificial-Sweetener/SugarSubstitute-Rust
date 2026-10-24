@@ -8,15 +8,6 @@ implementation_root = "crates/sugarsubstitute-supervision/src/durable_storage"
 # configuration and diagnostic routes require the subsequent owner-specific gates.
 
 [[records]]
-path = "installer/worker/cache-policy.ts"
-owner = "sugarsubstitute"
-source_sha256 = "sha256:da8ba282308f629ee2cd1b105205e86ce563645422a16afdbe2a7448d02acdbc"
-disposition = "migration"
-rationale = "Existing provisioning-worker download sidecar publication; preserve native producer recovery and generation admission."
-next_extraction = "Route worker download sidecar reads and publication through the shared durable-storage boundary without releasing native producer pins."
-review_until = "2026-11-23"
-
-[[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/files.rs"
 owner = "sugarsubstitute-supervision"
 source_sha256 = "sha256:ffd0d2263023d066153b10b9d06edde1916c7c7058465604b445d19336c4b12d"
@@ -204,3 +195,10 @@ owner = "sugarsubstitute-supervision"
 source_sha256 = "sha256:32b5299f18d5d41d4b216cb581cf581b9c7f2cc4e55476c733ee1bcaf01ada36"
 disposition = "implementation"
 rationale = "The storage owner's unit qualification source attempts to rename retained selected directories and proves native-sharing rejection; exact registration covers this adversarial access."
+
+[[records]]
+path = "crates/sugarsubstitute/src/setup/worker/downloads/native_tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:c6623a1b3c2de070331ba8e9c1678fea710a312453b40a0d52fa8b89e273a046"
+disposition = "fixture"
+rationale = "Actual native payload handles must reject rename and replacement while authenticated download work retains custody."

@@ -79,6 +79,8 @@ impl Worker {
             || self.creating.is_some()
             || self.process.is_some()
             || self.metadata_io.is_some()
+            || self.download_io.is_some()
+            || self.downloads.is_some()
         {
             return Ok(());
         }

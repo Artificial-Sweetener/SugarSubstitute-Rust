@@ -7,7 +7,6 @@ import { format } from 'node:util'
 import { createConnection, type Socket } from 'node:net'
 import { Decoder, VERSION } from './protocol.mjs'
 import { configDir } from './paths'
-import { CacheStorageError, observeCachePressure } from './cache-policy'
 import { options } from './selection'
 import { inspect, provision } from './provision'
 import { integrate } from './integration'
@@ -16,6 +15,7 @@ import { argument } from './arguments'
 import { Events } from './events.mjs'
 import { NativeRecords, NativeRecordError, bindNativeRecords } from './records'
 import { NativeMetadata, MetadataError, bindNativeMetadata, metadataRoot } from './metadata'
+import { NativeDownloads, DownloadStorageError, bindNativeDownloads, downloadsRoot } from './downloads'
 
 declare const UPSTREAM_REVISION: string
 let transport: Socket | undefined
@@ -33,11 +33,12 @@ function write(id: string | null, event: string, data: unknown): void {
   }
   transport.write(bytes)
 }
-observeCachePressure(namespace => write(null, 'cache_pressure', { namespace }))
 const records = new NativeRecords((id, data) => write(id, 'storage', data))
 bindNativeRecords(records)
 const metadata = new NativeMetadata((id, data) => write(id, 'metadata', data), metadataRoot())
 bindNativeMetadata(metadata)
+const downloads = new NativeDownloads((id, data) => write(id, 'downloads', data), downloadsRoot())
+bindNativeDownloads(downloads)
 const events = new Events(write)
 const send = (id: string | null, event: string, data: unknown) => events.send(id, event, data)
 const flushing = setInterval(() => events.flush(), 100)
@@ -69,6 +70,7 @@ app.disableHardwareAcceleration()
 observe((event, properties) => send(active?.id ?? null, 'diagnostic', { event, properties }))
 
 async function dispatch(command: ReturnType<Decoder['push']>[number]): Promise<void> {
+  if (command.operation === 'downloads_reply') { downloads.accept(command); return }
   if (command.operation === 'metadata_reply') { metadata.accept(command); return }
   if (command.operation === 'storage_reply') { records.accept(command); return }
   if (command.operation === 'cancel') {
@@ -89,6 +91,7 @@ async function dispatch(command: ReturnType<Decoder['push']>[number]): Promise<v
   try {
     records.begin(command.id, command.input.directory)
     metadata.begin(command.id)
+    downloads.begin(command.id)
     await metadata.load()
     control.signal.throwIfAborted()
     let result: unknown
@@ -99,14 +102,18 @@ async function dispatch(command: ReturnType<Decoder['push']>[number]): Promise<v
     else result = await provision(command.input, control.signal,
       (event, data) => send(command.id, event, data))
     await metadata.drain()
+    await downloads.drain()
     control.signal.throwIfAborted()
     send(command.id, 'completed', result)
   } catch (cause) {
+    await downloads.drain()
     send(command.id, control.signal.aborted ? 'cancelled' : 'failed', {
       message: cause instanceof Error ? cause.message : String(cause),
-      ...(cause instanceof CacheStorageError || cause instanceof NativeRecordError || cause instanceof MetadataError ? { statusCode: cause.statusCode } : {}),
+      ...(cause instanceof NativeRecordError || cause instanceof MetadataError || cause instanceof DownloadStorageError ? { statusCode: cause.statusCode } : {}),
     })
   } finally {
+    await downloads.drain()
+    downloads.close()
     await metadata.drain()
     metadata.close()
     records.close()
@@ -122,11 +129,12 @@ void app.whenReady().then(() => {
     throw new Error('Authenticated provisioning transport is required')
   }
   const socket = createConnection({ host: '127.0.0.1', port })
+  socket.setNoDelay(true)
   transport = socket
   const decoder = new Decoder()
   socket.on('connect', () => {
     socket.write(JSON.stringify({ version: VERSION, event: 'authenticate', token }) + '\n')
-    send(null, 'ready', { cacheProtocol: 1, storageProtocol: 1, metadataProtocol: 1, upstreamRevision: UPSTREAM_REVISION, operations: ['options', 'inspect', 'provision', 'integrate', 'cancel'] })
+    send(null, 'ready', { cacheProtocol: 2, storageProtocol: 1, metadataProtocol: 1, downloadsProtocol: 1, upstreamRevision: UPSTREAM_REVISION, operations: ['options', 'inspect', 'provision', 'integrate', 'cancel'] })
   })
   socket.on('data', (chunk: Buffer) => {
     try {
@@ -134,6 +142,7 @@ void app.whenReady().then(() => {
     } catch (cause) {
       closing = true
       const failure = cause instanceof Error ? cause : new Error(String(cause))
+      downloads.close(failure)
       metadata.close(failure)
       records.close(failure)
       active?.control.abort()
@@ -142,6 +151,7 @@ void app.whenReady().then(() => {
     }
   })
   socket.on('close', () => {
+    downloads.close()
     closing = true
     metadata.close()
     records.close()
@@ -149,6 +159,7 @@ void app.whenReady().then(() => {
     if (!active) app.quit()
   })
   socket.on('error', cause => {
+    downloads.close(cause)
     metadata.close(cause)
     records.close(cause)
     console.error('Provisioning connection failed', cause.message)

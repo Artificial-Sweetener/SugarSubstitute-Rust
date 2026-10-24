@@ -5,11 +5,10 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { execFile } from 'node:child_process'
 import { standalone } from '@upstream/sources/standalone/index'
-import { download } from '@upstream/lib/download'
+import { download } from './downloader'
 import { extract } from '@upstream/lib/extract'
 import { downloadCache } from './cache'
 import { getActivePythonPath } from '@upstream/lib/pythonEnv'
-import { cacheGrants } from './cache-policy'
 import { consumePlan } from './selection'
 import { reserve, record, ready } from './ownership'
 
@@ -40,7 +39,7 @@ export async function provision(
   }
   try {
     await standalone.install!(installation, {
-      signal, sendProgress, download, extract, cache: downloadCache(cacheGrants().downloads),
+      signal, sendProgress, download, extract, cache: downloadCache(),
     })
     await standalone.postInstall!(installation, {
       signal, sendProgress,
