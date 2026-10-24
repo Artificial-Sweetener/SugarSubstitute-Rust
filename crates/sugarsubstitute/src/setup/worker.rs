@@ -177,7 +177,7 @@ impl Worker {
                     self.endpoint = Some((port, token))
                 }
                 Some(TransportEvent::Frame(frame)) => {
-                    let mut value: serde_json::Value = serde_json::from_str(&frame)?;
+                    let mut value: serde_json::Value = serde_json::from_str(frame.as_str())?;
                     if self.metadata_event(&value)? {
                         continue;
                     }
