@@ -347,21 +347,22 @@ test('recovers a transient native asset failure without an unavailable toast or 
 describe('workflow masonry controller', () => {
   test('packs preparation once after host styling rather than reflowing every mount delivery', async () => {
     const setup = fixture();
-    const callbacks: FrameRequestCallback[] = [];
-    jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
-      callbacks.push(callback);
-      return callbacks.length;
-    });
     const layout = jest.spyOn(WorkflowMasonryView.prototype, 'layout');
+    let firstFrame = true;
+    jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      queueMicrotask(() => {
+        if (firstFrame) {
+          expect(layout).not.toHaveBeenCalled();
+          firstFrame = false;
+        }
+        callback(0);
+      });
+      return 0;
+    });
     const pending = setup.controller.toggle();
-    await Promise.resolve();
-    await Promise.resolve();
     expect(layout).not.toHaveBeenCalled();
-    for (let index = 0; index < callbacks.length; index += 1) {
-      callbacks[index]?.(index * 16);
-      await Promise.resolve();
-    }
     await pending;
+    expect(firstFrame).toBe(false);
     expect(layout).toHaveBeenCalledTimes(1);
     setup.controller.leaveImmediately();
   });

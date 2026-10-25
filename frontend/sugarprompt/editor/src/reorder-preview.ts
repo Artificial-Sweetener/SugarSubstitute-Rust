@@ -28,7 +28,6 @@ import type { ReorderApplicationHold } from './reorder-session-application.js';
 import { ReorderWidget } from './reorder-widget.js';
 import { prepareReorderWidgetPlan } from './reorder-widget-plan.js';
 import { nativeReorderRecipe, nativeReorderRecipeDecorations } from './reorder-native-recipe.js';
-import { promptViewport, viewportPromptDecorations } from './prompt-viewport.js';
 import { semanticStructures } from './structure.js';
 import { nativeReorderDisplay } from './reorder-native-display.js';
 import {
@@ -255,7 +254,6 @@ export const reorderPreview = StateField.define<PreviewState>({
   /** Native outer marks wrap existing rich widgets; changed-output replacements use the direct layout facet. */
   provide: (field) => [
     nativeReorderDisplay,
-    promptViewport,
     Prec.highest(
       EditorView.decorations.from(field, (value) =>
         value.native ? Decoration.none : value.decorations,
@@ -263,16 +261,13 @@ export const reorderPreview = StateField.define<PreviewState>({
     ),
     EditorView.outerDecorations.from(field, (value) => value.outer),
     EditorView.outerDecorations.compute(
-      [semanticStructures, field, nativeReorderDisplay, promptViewport],
+      [semanticStructures, field, nativeReorderDisplay],
       (state) => {
         const publication = state.field(field),
           values = state.field(semanticStructures, false)?.native?.nativeValues;
-        return viewportPromptDecorations(
-          state,
-          publication.paint && !publication.native
-            ? nativeReorderRecipeDecorations(values, publication.paint.capture.target.entry)
-            : state.field(nativeReorderDisplay),
-        );
+        return publication.paint && !publication.native
+          ? nativeReorderRecipeDecorations(values, publication.paint.capture.target.entry)
+          : state.field(nativeReorderDisplay);
       },
     ),
   ],

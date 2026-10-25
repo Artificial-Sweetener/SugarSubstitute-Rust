@@ -31,6 +31,8 @@ import {
 
 interface PromptSession {
   creating: boolean;
+  creation: Promise<void>;
+  creationError: unknown;
   readonly binding: PromptWidgetBinding;
   readonly surfaces: Set<PromptEditorSurface>;
   editor: SugarPromptEditor | null;
@@ -94,28 +96,35 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
         active: surface,
         disposed: false,
         creating: false,
+        creation: Promise.resolve(),
+        creationError: null,
       };
       session = created;
       this.#sessions.set(surface.widget, session);
     }
     session.surfaces.add(surface);
-    session.active = surface;
+    if (!session.active || availablePromptSurface(surface)) session.active = surface;
     if (!session.editor && !session.creating) {
       session.creating = true;
-      void this.#create(session, surface)
-        .catch(this.#report)
+      session.creation = this.#create(session, surface)
+        .catch((error: unknown) => {
+          session.creationError = error;
+          this.#report(error);
+        })
         .finally(() => {
           session.creating = false;
         });
     }
-    this.#present(session, surface);
+    if (session.active) this.#present(session, session.active);
     return () => {
       if (session.disposed) return;
       session.surfaces.delete(surface);
       this.#restoreSurfaces.get(surface)?.();
       this.#restoreSurfaces.delete(surface);
       if (session.active === surface) {
-        session.active = [...session.surfaces].at(-1) ?? null;
+        const remaining = [...session.surfaces];
+        session.active =
+          remaining.filter(availablePromptSurface).at(-1) ?? remaining.at(-1) ?? null;
         if (session.active) this.#present(session, session.active);
         else session.editor?.element.remove();
       }
@@ -126,9 +135,30 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
   refresh(surface: PromptEditorSurface): boolean {
     const session = this.#sessions.get(surface.widget);
     if (!session || !session.surfaces.has(surface)) return false;
-    session.editor?.refresh(session.binding.read(), this.#readOnly(surface));
+    session.editor?.refresh(session.binding.read(), this.#readOnly(session.active));
     if (session.active === surface) this.#present(session, surface);
     return true;
+  }
+
+  /** Complete the active prompt components belonging to one identified presentation. */
+  async ready(root: HTMLElement): Promise<void> {
+    await Promise.all(
+      [...this.#sessions.values()]
+        .filter((session) =>
+          [...session.surfaces].some((surface) => root.contains(surface.textarea)),
+        )
+        .map(async (session) => {
+          await session.creation;
+          if (session.disposed) return;
+          if (!session.editor)
+            throw new Error('Prompt component construction failed.', {
+              cause: session.creationError,
+            });
+          await session.editor.whenPresented();
+          if (!session.disposed && root.isConnected && !root.contains(session.editor.element))
+            throw new Error('The prompt component is outside its owning presentation.');
+        }),
+    );
   }
 
   /** Retire native documents before replacing an entire workflow. */
@@ -171,11 +201,16 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
       appearance: this.appearance,
     });
     if (session.active) this.#present(session, session.active);
+    void this.#loadCatalog(session).catch(this.#report);
+  }
+
+  /** Load optional model metadata independently of initial component construction. */
+  async #loadCatalog(session: PromptSession): Promise<void> {
     const snapshot = await this.#catalog.load();
     if (session.disposed) return;
     this.#publishCatalog(snapshot);
     this.#stopCatalog ??= this.#catalog.watch((next) => this.#publishCatalog(next), this.#report);
-    if (this.#loraCatalog) session.editor.setLoraCatalog(this.#loraCatalog);
+    if (this.#loraCatalog) session.editor?.setLoraCatalog(this.#loraCatalog);
   }
 
   /** Refresh installed identities and decoded media from the existing model catalog lifecycle. */
@@ -212,4 +247,13 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
       surface.widget.computedDisabled === true
     );
   }
+}
+
+/** Keep late detached or inert graph preparations from taking a connected interactive editor. */
+function availablePromptSurface(surface: PromptEditorSurface | null): boolean {
+  return (
+    surface !== null &&
+    surface.textarea.isConnected &&
+    !surface.textarea.parentElement?.closest('[inert],[hidden]')
+  );
 }

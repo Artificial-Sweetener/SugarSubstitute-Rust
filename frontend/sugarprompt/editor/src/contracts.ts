@@ -121,6 +121,7 @@ export interface EditorLayoutMetrics {
   readonly verticalPadding: number;
   readonly outerPadding: number;
   readonly viewportHeight: number;
+  readonly viewportWidth: number;
   readonly scaleY: number;
 }
 

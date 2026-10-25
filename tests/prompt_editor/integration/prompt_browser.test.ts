@@ -70,6 +70,70 @@ afterAll(async () => {
 }, 30_000);
 
 test.each(['nodes-1', 'nodes-2'] as const)(
+  '%s paints rich syntax before focus and retains every visible weight through native scrolling',
+  async (renderer) => {
+    const page = await browser.newPage();
+    const longPrompt = Array.from(
+      { length: 180 },
+      (_, index) => `(row-${String(index)}:1.25), detailed portrait, blue eyes, flowing hair`,
+    ).join('\n');
+    try {
+      await page.goto(address);
+      await page.waitForFunction(() => !!window.promptBrowserProof);
+      await page.evaluate(
+        ({ renderer, longPrompt }) => {
+          window.promptBrowserProof.theme('photopro', true);
+          window.promptBrowserProof.mount(renderer, 1, longPrompt);
+        },
+        { renderer, longPrompt },
+      );
+      await page.locator('main .cm-content').waitFor({ state: 'visible' });
+      const observation = await page.evaluate(async () => {
+        const editor = document.querySelector<HTMLElement>('main .cm-editor');
+        const scroller = editor?.querySelector<HTMLElement>('.cm-scroller');
+        if (!editor || !scroller) throw new Error('Missing native prompt');
+        const failures: string[] = [];
+        let inspected = 0;
+        const frame = (): void => {
+          if (editor.getAttribute('data-diagnostic-source') !== 'ready')
+            failures.push('pending syntax');
+          if (editor.contains(document.activeElement)) failures.push('unexpected focus');
+          const viewport = scroller.getBoundingClientRect();
+          for (const line of editor.querySelectorAll('.cm-line')) {
+            const bounds = line.getBoundingClientRect();
+            if (bounds.bottom <= viewport.top || bounds.top >= viewport.bottom) continue;
+            if (!line.textContent?.includes('row-')) continue;
+            inspected++;
+            if (line.querySelectorAll('.sp-emphasis-weight').length !== 1)
+              failures.push(line.textContent);
+          }
+        };
+        frame();
+        for (const fraction of [0.25, 0.5, 0.75, 1, 0.5, 0]) {
+          scroller.scrollTop = fraction * (scroller.scrollHeight - scroller.clientHeight);
+          await new Promise<void>((resolve) =>
+            requestAnimationFrame(() => {
+              frame();
+              requestAnimationFrame(() => {
+                frame();
+                resolve();
+              });
+            }),
+          );
+        }
+        return { failures, inspected, source: window.promptBrowserProof.read().source };
+      });
+      expect(observation.inspected).toBeGreaterThan(30);
+      expect(observation.failures).toEqual([]);
+      expect(observation.source).toBe(longPrompt);
+      expect(await page.evaluate(() => window.promptBrowserProof.read().errors)).toEqual([]);
+    } finally {
+      await page.close();
+    }
+  },
+);
+
+test.each(['nodes-1', 'nodes-2'] as const)(
   '%s restores a retained PhotoPro prompt after workflow editor sessions reset',
   async (renderer) => {
     const page = await browser.newPage();
@@ -97,6 +161,70 @@ test.each(['nodes-1', 'nodes-2'] as const)(
       await page.waitForFunction(
         () => window.promptBrowserProof.read().source === 'retained prompt',
       );
+      expect(await page.evaluate(() => window.promptBrowserProof.read().errors)).toEqual([]);
+    } finally {
+      await page.close();
+    }
+  },
+);
+
+test.each(['nodes-1', 'nodes-2'] as const)(
+  '%s keeps the connected prompt when tab activation later prepares a detached graph projection',
+  async (renderer) => {
+    const page = await browser.newPage();
+    const longPrompt = 'A retained prompt with enough content to wrap across many lines. '.repeat(
+      30,
+    );
+    try {
+      await page.goto(address);
+      await page.waitForFunction(() => !!window.promptBrowserProof);
+      await page.evaluate(
+        ({ renderer, longPrompt }) => {
+          window.promptBrowserProof.theme('photopro', true);
+          window.promptBrowserProof.mount(renderer, 1, longPrompt, true);
+        },
+        { renderer, longPrompt },
+      );
+      await page.locator('main [data-sc-prompt-editor] .cm-content').waitFor({ state: 'visible' });
+      await page
+        .locator('main [data-sc-prompt-editor]')
+        .evaluate((element) => element.setAttribute('data-original-editor', ''));
+      for (const connected of [false, true, false]) {
+        await page.evaluate(
+          (connected) => window.promptBrowserProof.addInactiveProjection(connected),
+          connected,
+        );
+        expect(await page.locator('main [data-original-editor]').count()).toBe(1);
+        expect(
+          await page.locator('.late-native-graph-projection [data-sc-prompt-editor]').count(),
+        ).toBe(0);
+        expect(
+          await page
+            .locator('main textarea:not([data-sp-owned])')
+            .evaluate((element: HTMLTextAreaElement) => element.hidden),
+        ).toBe(true);
+        expect(
+          await page
+            .locator('main [data-sc-prompt-editor]')
+            .evaluate((element) => element.getBoundingClientRect().height),
+        ).toBeGreaterThanOrEqual(128);
+        expect(await page.evaluate(() => window.promptBrowserProof.read().source)).toBe(longPrompt);
+        expect(
+          await page
+            .locator('main .cm-content')
+            .evaluate((element) => (element as HTMLElement).isContentEditable),
+        ).toBe(true);
+        await page.evaluate(() => window.promptBrowserProof.removeDetachedProjection());
+        expect(await page.locator('main [data-original-editor]').count()).toBe(1);
+      }
+      await page.evaluate(() => {
+        window.promptBrowserProof.addInactiveProjection(false);
+        window.promptBrowserProof.releaseVisibleProjection();
+      });
+      expect(
+        await page.locator('.late-native-graph-projection [data-original-editor]').count(),
+      ).toBe(1);
+      expect(await page.evaluate(() => window.promptBrowserProof.read().callbacks)).toBe(0);
       expect(await page.evaluate(() => window.promptBrowserProof.read().errors)).toEqual([]);
     } finally {
       await page.close();
