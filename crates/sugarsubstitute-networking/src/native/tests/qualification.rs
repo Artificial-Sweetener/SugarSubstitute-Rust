@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Query actual native policy and qualify rejection/cancellation without contacting public hosts.
-use super::{
-    super::*,
-    support::{self, TestResult},
-};
+use super::super::*;
 use crate::UpdateRequest;
+use crate::test_support::{self as support, TestResult};
 /// Fixed native option output remains inside this narrow adapter's qualification code.
 fn option_value(handle: usize, key: u32) -> Result<u32, Failure> {
     let mut value = 0u32;

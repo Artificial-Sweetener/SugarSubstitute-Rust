@@ -35,7 +35,7 @@ minimum_tests = 648
 package = "sugarsubstitute-xtask"
 root = "tools/xtask"
 concern = "Architecture, execution, filesystem, cache, networking, diagnostics, configuration and localization owner boundaries; exact reviewed source and dependency identities across authored languages, alias-safe public contracts, adversarial rejection fixtures and verification orchestration."
-minimum_tests = 162
+minimum_tests = 165
 
 [[owners]]
 package = "sugarsubstitute-supervision"
@@ -70,8 +70,8 @@ minimum_tests = 39
 [[owners]]
 package = "sugarsubstitute-networking"
 root = "crates/sugarsubstitute-networking"
-concern = "Original finite deadline conversion, closed HTTPS request validation, native policy queries, original-job confinement, active cancellation, peer-observed socket closure and checked child-before-parent retirement"
-minimum_tests = 10
+concern = "Original finite deadline conversion, closed HTTPS request validation, native policy queries, original-job confinement, active cancellation, peer-observed socket closure and checked child-before-parent retirement; Windows static/PAC route validation, deterministic expiry and final callback retirement; Node transport and proxy protocol qualification"
+minimum_tests = 15
 
 [[owners]]
 package = "sugarsubstitute-configuration"

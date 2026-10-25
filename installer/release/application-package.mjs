@@ -7,6 +7,8 @@ import { artifactDirectory, copyArtifact, newArtifactDirectory } from './artifac
 import { completeNativeClosure } from './native-closure.mjs'
 import { requireBootstrapDependencies } from './windows-imports.mjs'
 import { writeInventory } from '../package-inventory.mjs'
+import { requireWorkerPayload } from '../worker-graph.mjs'
+import { engineBuildFile, readEngineIdentity } from './engine-identity.mjs'
 
 const nativeRoles = [
   'sugarsubstitute.exe', 'sugarsubstitute.pdb',
@@ -28,6 +30,8 @@ export async function packageApplication({ app, cubes, build, output, release, r
     if (!value || !path.isAbsolute(value)) throw new Error('All package paths must be absolute')
   }
   if (!/^[a-zA-Z0-9_-]{1,64}$/.test(release)) throw new Error('Invalid release identity')
+  const engine = await readEngineIdentity(path.join(app, engineBuildFile))
+  if (BigInt(engine.release) < 2n) throw new Error('Node provisioning requires a producing engine release of at least 2')
   await newArtifactDirectory(output)
   const files = []
   async function copyFile(source, relative) {
@@ -56,7 +60,9 @@ export async function packageApplication({ app, cubes, build, output, release, r
     'requirements.txt', 'LICENSE', 'sugarcubes', 'sugarcubes_model_roots', 'web',
   ]) await copyTree(path.join(cubes, leaf), `sugarcubes/${leaf}`)
   await copyTree(path.join(build, 'worker'), 'worker')
-  await copyTree(path.join(build, 'electron'), 'electron')
+  requireWorkerPayload(files.map(file => file.path))
+  const workerDependencies = await inspect(path.join(output, 'worker/runtime/node.exe'))
+  requireBootstrapDependencies([{ name: 'node.exe', ...workerDependencies }])
   const manifestSha256 = await writeInventory(output, release, files)
-  return { manifestSha256, dependencies, files }
+  return { manifestSha256, engine, dependencies, workerDependencies, minimumUpdaterRelease: 2, files }
 }

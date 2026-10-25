@@ -75,7 +75,7 @@ fn retained_preview_and_signed_import_complete_on_the_same_execution_ledger() ->
         let runtime = prepared.maintenance_runtime().ok_or("Saved runtime absent")?.clone();
         Ok(prepared.complete(&runtime, || NOW, &context)?)
     })?;
-    assert!(preview.worker_paths().0.is_file());
+    assert!(preview.worker()?.executable().to_owned().is_file());
     assert!(candidate.directory().join("sugarsubstitute.exe").is_file());
     assert_eq!(
         std::fs::read(candidate.directory().join("startup.local.toml"))?,

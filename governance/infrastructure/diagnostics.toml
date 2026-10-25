@@ -24,7 +24,7 @@ rationale = "Bounded operational pages and export through shared protected durab
 [[records]]
 path = "installer/worker/main.ts"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:259fd6748897d3054e425d1faefd5fb6d2fb78eff7791120c00c2d83b606948b"
+source_sha256 = "sha256:595c2bbbe1fe43d859e25c3501f288a83e80ec6942b2a627766cdc3c05c98814"
 disposition = "routing"
 rationale = "Upstream console bridge routes untrusted worker output through bounded local projection and authenticated framing."
 
@@ -311,7 +311,7 @@ rationale = "Repository build or verification diagnostics remain developer outpu
 [[records]]
 path = "installer/release/windows-imports.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:a05084b6ef7db63b4d63b2895c7402709766a7cd96d5153a1e78564d788a2b2f"
+source_sha256 = "sha256:34a0749ae2523c30a5e4726d01952d34fbdab4aee9e84120ef6a42a23f1d09a6"
 disposition = "developer"
 rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
 
@@ -563,7 +563,7 @@ rationale = "The producing tool streams an application package archive through c
 [[records]]
 path = "installer/build.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:9495d787320e98d7c2cb9fee4965207152c1129e1ae41eeffdd9f98cae3b668a"
+source_sha256 = "sha256:fcfe53d9ef93d6f10ff52fd17658d63883d102673e78ddad47dca1ee3bb836d9"
 disposition = "developer"
 rationale = "The worker build command reports its pinned upstream revision and completed artifact destination to the developer console."
 
@@ -577,7 +577,7 @@ rationale = "Upstream compatibility tooling prints the location of its generated
 [[records]]
 path = "installer/package-inventory.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:e4bae8c8e0c8bfaf003b368549914e86752a7eb849bc6bd3d0cd339cf4c68730"
+source_sha256 = "sha256:58f62169d4566b90152927cdf9ff913e1a9de005dba43a69fa3934df71911017"
 disposition = "developer"
 rationale = "The package-path validator recognizes Windows CONOUT$ aliases to reject device destinations; it opens no diagnostic sink."
 
@@ -591,7 +591,7 @@ rationale = "The package CLI reports its producing-platform and completed assemb
 [[records]]
 path = "installer/package.test.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:8c64e898639965a8dfd773e0c880acc62641187ae5124d8beeae7884e9389413"
+source_sha256 = "sha256:ad9b9c2967740f697bd667a757c5f0bd2185a02c3ff6b3ab444ac1ea34be552d"
 disposition = "fixture"
 rationale = "Packaging CLI tests inspect captured stderr to verify invalid invocation rejection."
 
@@ -626,9 +626,9 @@ rationale = "Original upstream metadata warnings remain captured by the worker c
 [[records]]
 path = "installer/prepare-runtime.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:21cd6fbd87ec8211416da47a3c9a29de9235e8a9b493ad41905a1964b16ac531"
+source_sha256 = "sha256:400561271dcf1e1d407e828b8aa4bd28697cf1ddea6a9451aaf9e85a9f39509e"
 disposition = "developer"
-rationale = "Pinned Electron preparation reports the completed runtime version and producing artifact location."
+rationale = "Pinned Node preparation reports the completed runtime version and producing artifact location."
 
 [[records]]
 path = "installer/qualify-model-root.mjs"
@@ -636,13 +636,6 @@ owner = "sugarsubstitute-xtask"
 source_sha256 = "sha256:beffef1f8e5ac2103affd6aa29821ec8c5aca843b47ae5d0d8d1b8fb94f08bc9"
 disposition = "developer"
 rationale = "The model-root qualification CLI prints acceptance after exercising the actual SugarCubes API."
-
-[[records]]
-path = "installer/qualify-worker.mjs"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:27a75ccba48292c47481e25bfa7436f50d70377bbcbbff7648d10ea036ef51a4"
-disposition = "developer"
-rationale = "Worker qualification captures its child stderr and prints the verified authenticated worker result."
 
 [[records]]
 path = "installer/release/build-setup.mjs"
@@ -654,7 +647,7 @@ rationale = "The installer build CLI prints the completed producing build report
 [[records]]
 path = "installer/seal.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:137daed78b67a8fcece5342199e012ffbf9d4a9308e981cf27728569a39b9193"
+source_sha256 = "sha256:5405425d43ca57608e5497b8ef7740ac272dddec379144a831931ec94ae1a3f9"
 disposition = "developer"
 rationale = "The sealing CLI streams executable package bytes and prints producing evidence, without creating an application diagnostic logger."
 
@@ -675,14 +668,14 @@ rationale = "Dependency-inspection tests decode the isolated Python child's stdo
 [[records]]
 path = "installer/tests/worker.test.mjs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:8d53f5bf223029ce648f65ebec1b166efb59a4d5955c71228953f79e8f2b8276"
+source_sha256 = "sha256:5c18126447bfe6376dd1636a3e0a4fa3e75006d84ca10e28cfcb6f8a604337fb"
 disposition = "fixture"
 rationale = "Worker lifecycle tests retain a bounded stderr tail and consume child stdout while checking authenticated events and actual family retirement."
 
 [[records]]
 path = "installer/typecheck.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:31c9476e4d908d2ca34ec1923f0f6c370b06c12467e9a690ed45102c408c8aed"
+source_sha256 = "sha256:0ba86a3322f9adef45f45ebbcd25d76b2da6befdb7b2fb1a751a84a900fbac3c"
 disposition = "developer"
 rationale = "The worker type-check command reports TypeScript compiler diagnostics to the developer console."
 
@@ -951,3 +944,10 @@ owner = "sugarsubstitute-xtask"
 source_sha256 = "sha256:1959bba67010ea44062e55c7e0a966bb64ff0018f617bacb014a332d4b338c19"
 disposition = "developer"
 rationale = "Updater qualification retains owned-child output and helper failures under its explicit case directory and prints observed native acceptance facts."
+
+[[records]]
+path = "installer/tests/http.test.mjs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:34a7388c4e0cab1bf845fb8dacf33ffb0f1c326af7f9f76ab3aa99da1cfdc84f"
+disposition = "fixture"
+rationale = "The isolated Node transport qualification captures bounded child stdout/stderr and retains its TAP report in the explicit artifact directory; product diagnostics still use the existing authenticated route."

@@ -37,6 +37,10 @@ impl InstallationSession {
             context,
         )?;
         let bundle = Arc::new(payload.bind(download, &trust, context)?);
+        super::super::bundle::worker::require_engine(
+            &bundle.payload.inventory,
+            offer.offer().offer().minimum_updater_release(),
+        )?;
         let finished = now();
         if finished < started {
             return Err(sugarsubstitute_update::Error::ClockRollback.into());

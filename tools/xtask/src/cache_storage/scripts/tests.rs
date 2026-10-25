@@ -123,6 +123,24 @@ fn native_injection_runtime_and_fixture_roles_cannot_disguise_other_capabilities
 }
 
 #[test]
+fn reviewed_http_fixture_does_not_authorize_adjacent_runtime_filesystem_access() -> Result<()> {
+    let repository = fixture("const storage = nativeDownloads()")?;
+    let path = "worker/tests/http-scenarios.mjs".to_owned();
+    fixtures::write(repository.root(), &path, "import disk from 'node:fs/promises'")?;
+    let boundary = Boundary {
+        source_sha256: fingerprint(repository.root(), std::slice::from_ref(&path))?,
+        path,
+        owner: "host".into(),
+        rationale: "Owned HTTP qualification destinations".into(),
+        role: Role::Fixture,
+    };
+    check(repository.root(), &repository.architecture, std::slice::from_ref(&boundary))?;
+    fixtures::write(repository.root(), "worker/http.ts", "import disk from 'node:fs/promises'")?;
+    assert!(check(repository.root(), &repository.architecture, &[boundary]).is_err());
+    Ok(())
+}
+
+#[test]
 fn tests_and_html_surfaces_have_the_same_filesystem_boundary_rule() -> Result<()> {
     for name in [
         "boundary.test.mjs",

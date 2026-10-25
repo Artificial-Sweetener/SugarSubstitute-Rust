@@ -80,3 +80,8 @@ The installer uses the original Fluent icon SVGs from PyQt-Fluent-Widgets,
 Copyright zhiyiYo and contributors, under GPL-3.0. The manifest pins their source
 revision and lists each embedded asset; the license is preserved in
 `licenses/qfluentwidgets.GPL-3.0.txt`.
+
+The provisioning worker uses Node.js 24.22.1, Copyright Node.js contributors.
+The runtime pin identifies each official archive and its SHA-256 digest. The
+complete upstream license and bundled dependency notices are preserved in
+`licenses/nodejs-24.22.1.txt` and travel with the runtime as `worker/runtime/LICENSE`.

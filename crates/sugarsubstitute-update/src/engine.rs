@@ -7,6 +7,6 @@
 //! into the engine; command-line arguments and installed state cannot override them.
 
 /// Monotonic release identity of this installation engine.
-pub const ENGINE_RELEASE: u64 = 1;
+pub const ENGINE_RELEASE: u64 = 2;
 /// Update protocol implemented by this engine.
 pub const ENGINE_PROTOCOL: u32 = 1;

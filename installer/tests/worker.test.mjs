@@ -9,6 +9,7 @@ import { once } from 'node:events'
 import readline from 'node:readline'
 import { createServer } from 'node:net'
 import { randomBytes } from 'node:crypto'
+import { runtimeExecutable, workerArguments } from '../runtime.mjs'
 
 const build = process.env.SUBSTITUTE_INSTALLER_BUILD
 if (!build || !path.isAbsolute(build)) throw new Error('Build the worker and set SUBSTITUTE_INSTALLER_BUILD')
@@ -21,8 +22,6 @@ test('real headless worker rejects unsafe requests and exits on host closure', {
   await fs.mkdir(downloads); await fs.mkdir(metadata)
   const runtime = path.join(workspace, 'runtime')
   await fs.mkdir(runtime)
-  const executable = process.platform === 'win32' ? 'electron.exe' :
-    process.platform === 'darwin' ? 'Electron.app/Contents/MacOS/Electron' : 'electron'
   const server = createServer()
   server.listen(0, '127.0.0.1')
   await once(server, 'listening')
@@ -31,13 +30,12 @@ test('real headless worker rejects unsafe requests and exits on host closure', {
   const env = { ...process.env }
   delete env.ELECTRON_RUN_AS_NODE
   delete env.NODE_OPTIONS
-  const child = spawn(path.join(build, 'electron', executable), [
-    path.join(build, 'worker'), '--setup-workspace', workspace,
+  const child = spawn(runtimeExecutable(build), workerArguments(build, [ '--setup-workspace', workspace,
     '--setup-cache-runtime', runtime,
     '--setup-port', String(server.address().port), '--setup-token', token,
     '--setup-cache-downloads', downloads, '--setup-cache-download-bytes', String(24 * 1024 ** 3),
     '--setup-cache-metadata', metadata, '--setup-cache-metadata-bytes', String(256 * 1024 ** 2),
-  ], {
+  ]), {
     windowsHide: true,
     env,
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -136,21 +134,12 @@ test('real headless worker rejects unsafe requests and exits on host closure', {
   phase = 'complete'
 })
 
-test('real Electron profile paths use the prepared runtime grant and preserve workspace files', { timeout: 30000 }, async t => {
+test('standalone worker preserves authored configuration and leaves its runtime grant empty', { timeout: 30000 }, async t => {
   const workspace = await fs.mkdtemp(path.join(build, 'profile-grant-'))
   const runtime = path.join(workspace, 'runtime')
   const configuration = path.join(workspace, 'configuration')
   for (const leaf of ['downloads', 'metadata', 'runtime', 'configuration']) await fs.mkdir(path.join(workspace, leaf))
   await fs.writeFile(path.join(configuration, 'authored'), 'preserved')
-  const receipt = path.join(workspace, 'observed-profile.json')
-  const bootstrap = path.join(workspace, 'observe-profile.cjs')
-  await fs.writeFile(bootstrap, `// SPDX-License-Identifier: AGPL-3.0-or-later
-const { app } = require('electron')
-require(${JSON.stringify(path.join(build, 'worker/out/main/index.cjs'))})
-require('node:fs').writeFileSync(${JSON.stringify(receipt)}, JSON.stringify({
-  userData: app.getPath('userData'), sessionData: app.getPath('sessionData'), ready: app.isReady(),
-}))
-`)
   const server = createServer()
   server.listen(0, '127.0.0.1')
   await once(server, 'listening')
@@ -159,14 +148,11 @@ require('node:fs').writeFileSync(${JSON.stringify(receipt)}, JSON.stringify({
   const env = { ...process.env }
   delete env.ELECTRON_RUN_AS_NODE
   delete env.NODE_OPTIONS
-  const executable = process.platform === 'win32' ? 'electron.exe' :
-    process.platform === 'darwin' ? 'Electron.app/Contents/MacOS/Electron' : 'electron'
-  const child = spawn(path.join(build, 'electron', executable), [
-    bootstrap, '--setup-workspace', workspace, '--setup-cache-runtime', runtime,
+  const child = spawn(runtimeExecutable(build), workerArguments(build, [ '--setup-workspace', workspace, '--setup-cache-runtime', runtime,
     '--setup-port', String(server.address().port), '--setup-token', token,
     '--setup-cache-downloads', path.join(workspace, 'downloads'), '--setup-cache-download-bytes', String(24 * 1024 ** 3),
     '--setup-cache-metadata', path.join(workspace, 'metadata'), '--setup-cache-metadata-bytes', String(256 * 1024 ** 2),
-  ], { windowsHide: true, env, stdio: ['ignore', 'ignore', 'pipe'] })
+  ]), { windowsHide: true, env, stdio: ['ignore', 'ignore', 'pipe'] })
   const closed = once(child, 'close')
   let stderr = '', socket, lines
   child.stderr.on('data', chunk => { stderr = (stderr + chunk).slice(-8192) })
@@ -200,14 +186,11 @@ require('node:fs').writeFileSync(${JSON.stringify(receipt)}, JSON.stringify({
     } else assert.equal(frame.event, 'diagnostic', JSON.stringify(frame))
   }
   assert.ok(ready, 'Actual worker readiness was not observed')
-  const profiles = JSON.parse(await fs.readFile(receipt, 'utf8'))
-  const normalize = value => process.platform === 'win32' ? path.resolve(value).toLowerCase() : path.resolve(value)
-  assert.equal(normalize(profiles.userData), normalize(runtime))
-  assert.equal(normalize(profiles.sessionData), normalize(runtime))
-  assert.equal(profiles.ready, false, 'Profile selection must precede Electron readiness')
   socket.end()
   const [code] = await closed
   assert.equal(code, 0, stderr)
   assert.equal(await fs.readFile(path.join(configuration, 'authored'), 'utf8'), 'preserved')
   assert.deepEqual(await fs.readdir(configuration), ['authored'])
+  assert.deepEqual(await fs.readdir(runtime), [])
+  assert.deepEqual(await fs.readdir(workspace), ['configuration', 'downloads', 'metadata', 'runtime'])
 })

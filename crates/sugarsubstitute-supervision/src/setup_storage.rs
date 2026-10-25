@@ -40,7 +40,7 @@ pub(crate) use selection::UnstartedTrial;
 mod transaction;
 mod trust;
 mod updater_package;
-pub use bundle::{BundleSource, VerifiedBundle};
+pub use bundle::{BundleSource, ProvisioningWorker, VerifiedBundle};
 pub use selection::{
     AcceptedApplication, InheritedSelection, InstallationLaunch, InstallationRun,
     LaunchInheritance, OwnedTrial, ReservedApplication, ReservedLaunch, SelectionFailure,

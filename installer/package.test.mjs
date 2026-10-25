@@ -19,7 +19,7 @@ async function fixture() {
   for (const [base, files] of [
     [app, ['sugarsubstitute.exe', 'sugarsubstitute.pdb', 'sugarsubstitute_crashpad_client.dll', 'sugarsubstitute_crashpad_client.pdb', 'crashpad_handler.exe', 'crashpad_handler.pdb', 'sugarsubstitute-release-v1.manifest', 'sugarsubstitute-release-v1.sig', 'sugarsubstitute-launcher.exe', 'sugarsubstitute_launcher.pdb', 'sugarsubstitute-updater.exe', 'sugarsubstitute_updater.pdb']],
     [cubes, ['__init__.py', 'prestartup_script.py', 'load_model_roots.py', 'pyproject.toml', 'requirements.txt', 'LICENSE', 'sugarcubes/module.py', 'sugarcubes_model_roots/module.py', 'web/module.js']],
-    [build, ['worker/package.json', 'electron/electron.exe']],
+    [build, ['worker/package.json', 'worker/out/main/index.cjs', 'worker/runtime/node.exe', 'worker/runtime/LICENSE']],
   ]) {
     for (const file of files) {
       await fs.mkdir(path.dirname(path.join(base, file)), { recursive: true })
@@ -27,6 +27,7 @@ async function fixture() {
     }
   }
   await fs.writeFile(path.join(app, 'sugarsubstitute-updater.json'), '{"schema_version":1,"preparation_protocols":[1],"installation_schemas":[1]}\n')
+  await fs.writeFile(path.join(app, 'sugarsubstitute-engine-build.json'), '{"schema_version":1,"release":"2","protocol":1}\n')
   await fs.writeFile(path.join(app, 'sugarsubstitute-installation-activation.json'), '{"schema_version":1,"authorization_schemas":[1],"engine_release":"1","engine_protocol":1}\n')
   const runtime = path.join(root, 'vcruntime140.dll')
   await fs.writeFile(runtime, 'inert runtime fixture')
@@ -35,7 +36,7 @@ async function fixture() {
 async function inspect(file) {
   const name = path.basename(file)
   if (name === 'vcruntime140.dll') return { imports: [], exports: [{ name: 'RuntimeFunction', ordinal: 1 }] }
-  if (['sugarsubstitute.exe', 'sugarsubstitute-launcher.exe', 'sugarsubstitute-updater.exe'].includes(name)) return { imports: [], exports: [] }
+  if (['node.exe', 'sugarsubstitute.exe', 'sugarsubstitute-launcher.exe', 'sugarsubstitute-updater.exe'].includes(name)) return { imports: [], exports: [] }
   const imports = [{ library: 'vcruntime140.dll', symbols: ['RuntimeFunction'], ordinals: [] }]
   if (name === 'crashpad_handler.exe') imports.push({ library: 'sugarsubstitute_crashpad_client.dll', symbols: ['NativeClientFunction'], ordinals: [] })
   return { imports, exports: name === 'sugarsubstitute_crashpad_client.dll' ? [{ name: 'NativeClientFunction', ordinal: 1 }] : [] }
@@ -50,9 +51,14 @@ test('packaging authenticates the producer declaration byte-for-byte, including 
   const launcher = Buffer.from('{"schema_version":1,"installation_schemas":[1,2],"installed_launch_protocol":2}\n')
   await fs.writeFile(path.join(f.app, 'sugarsubstitute-application.json'), declaration)
   await fs.writeFile(path.join(f.app, 'sugarsubstitute-launcher.json'), launcher)
+  await fs.mkdir(path.join(f.build, 'electron'))
+  await fs.writeFile(path.join(f.build, 'electron/electron.exe'), 'stale build output must not be packaged')
   const output = path.join(f.root, 'output')
   const result = await assemble(f, output)
   const manifest = JSON.parse(await fs.readFile(path.join(output, 'setup-manifest.json'), 'utf8'))
+  assert.equal(result.minimumUpdaterRelease, 2)
+  assert.ok(manifest.files.some(file => file.path === 'worker/runtime/node.exe'))
+  assert.ok(manifest.files.every(file => !file.path.toLowerCase().includes('electron')))
   assert.equal(result.dependencies.length, 6)
   assert.equal(result.dependencies.filter(value => value.name === 'vcruntime140.dll').length, 1)
   const runtime = manifest.files.find(file => file.path === 'app/vcruntime140.dll')
@@ -86,11 +92,11 @@ test('packaging refuses to guess launch support when the producing application h
   await assert.rejects(fs.stat(path.join(output, 'setup-manifest.json')), { code: 'ENOENT' })
 })
 
-test('native runtime requirements cannot be satisfied by a missing library or an Electron sibling', async () => {
+test('native runtime requirements cannot be satisfied by a missing library or a provisioning runtime sibling', async () => {
   const f = await fixture(), output = path.join(f.root, 'output')
   await fs.writeFile(path.join(f.app, 'sugarsubstitute-application.json'), '{}')
   await fs.writeFile(path.join(f.app, 'sugarsubstitute-launcher.json'), '{}')
-  await fs.copyFile(f.runtimeFiles[0], path.join(f.build, 'electron', 'vcruntime140.dll'))
+  await fs.copyFile(f.runtimeFiles[0], path.join(f.build, 'worker/runtime', 'vcruntime140.dll'))
   await assert.rejects(assemble({ ...f, runtimeFiles: [] }, output), /Native dependency is missing/)
   await assert.rejects(fs.stat(path.join(output, 'setup-manifest.json')), { code: 'ENOENT' })
 })
@@ -123,4 +129,27 @@ test('bundled runtime DLLs cannot excuse a bootstrap dependency in supplied appl
       : inspect(file)), /Native entry requires a separately installed library/)
     await assert.rejects(fs.stat(path.join(output, 'setup-manifest.json')), { code: 'ENOENT' })
   }
+})
+
+test('packaging rejects a worker that needs an unbundled runtime or carries Electron', async () => {
+  for (const mixed of [false, true]) {
+    const f = await fixture(), output = path.join(f.root, 'output')
+    await fs.writeFile(path.join(f.app, 'sugarsubstitute-application.json'), '{}')
+    await fs.writeFile(path.join(f.app, 'sugarsubstitute-launcher.json'), '{}')
+    if (mixed) {
+      await fs.mkdir(path.join(f.build, 'worker/node_modules/electron'), { recursive: true })
+      await fs.writeFile(path.join(f.build, 'worker/node_modules/electron/index.js'), 'unapproved runtime')
+    }
+    await assert.rejects(assemble(f, output, async file => !mixed && path.basename(file) === 'node.exe'
+      ? { imports: [{ library: 'unbundled-runtime.dll', symbols: [], ordinals: [] }], exports: [] }
+      : inspect(file)), mixed ? /Unapproved provisioning runtime/ : /separately installed library/)
+    await assert.rejects(fs.stat(path.join(output, 'setup-manifest.json')), { code: 'ENOENT' })
+  }
+})
+
+test('standalone provisioning cannot be paired with an engine that only understands Electron packages', async () => {
+  const f = await fixture(), output = path.join(f.root, 'output')
+  await fs.writeFile(path.join(f.app, 'sugarsubstitute-engine-build.json'), '{"schema_version":1,"release":"1","protocol":1}\n')
+  await assert.rejects(assemble(f, output), /producing engine release/)
+  await assert.rejects(fs.stat(output), { code: 'ENOENT' })
 })

@@ -1,0 +1,148 @@
+diff --git a/src/main/lib/download.ts b/src/main/lib/download.ts
+--- a/src/main/lib/download.ts
++++ b/src/main/lib/download.ts
+@@ -1,4 +1,4 @@
+-import { net } from 'electron'
++import { createRequest } from './provisioningTransport'
+ import fs from 'fs'
+ import type { Writable } from 'node:stream'
+ import path from 'path'
+@@ -167,7 +167,7 @@
+ 
+   return new Promise((resolve, reject) => {
+     if (signal?.aborted) { reject(new Error('Download cancelled')); return }
+-    const request = net.request(url)
++    const request = createRequest(url)
+     request.setHeader('User-Agent', 'ComfyUI-Desktop-2')
+     if (resumeFrom > 0 && existingMeta?.etag) {
+       request.setHeader('Range', `bytes=${resumeFrom}-`)
+@@ -229,6 +229,7 @@
+ 
+     const onAbort = (): void => {
+       aborted = true
++      cleanup()
+       request.abort()
+       rejectCancelled()
+     }
+@@ -243,7 +244,9 @@
+     }
+ 
+     request.on('response', (response) => {
+-      if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
++      const status = response.statusCode ?? 0
++      if (status >= 300 && status < 400 && response.headers.location) {
++        response.destroy()
+         cleanup()
+         if (_maxRedirects <= 0) {
+           safeReject(new Error('Download failed: too many redirects'))
+@@ -273,10 +276,11 @@
+         return
+       }
+ 
+-      const isResumed = response.statusCode === 206 && resumeFrom > 0
+-      if (!isResumed && response.statusCode !== 200) {
+-        cleanup()
+-        const err = new Error(`Download failed: HTTP ${response.statusCode}`)
++      const isResumed = status === 206 && resumeFrom > 0
++      if (!isResumed && status !== 200) {
++        response.destroy()
++        cleanup()
++        const err = new Error(`Download failed: HTTP ${status}`)
+         if (resumeFrom === 0 && !_skipMirror) {
+           tryMirror(err).then(safeResolve, safeReject)
+         } else {
+@@ -306,6 +310,7 @@
+ 
+       // Fail fast if caller's expectedSize conflicts with server's Content-Length
+       if (expectedSize && sizeFromHeaders > 0 && expectedSize !== sizeFromHeaders) {
++        response.destroy()
+         cleanup()
+         safeReject(
+           new Error(
+@@ -362,7 +367,10 @@
+             throw new Error('Download write queue capacity exhausted; partial bytes remain resumable')
+           }
+           receivedBytes = next
+-          fileStream!.write(chunk)
++          if (!fileStream!.write(chunk)) {
++            response.pause()
++            fileStream!.once('drain', () => response.resume())
++          }
+         } catch (cause) {
+           cleanup()
+           aborted = true
+diff --git a/src/main/lib/fetch.ts b/src/main/lib/fetch.ts
+--- a/src/main/lib/fetch.ts
++++ b/src/main/lib/fetch.ts
+@@ -1,4 +1,4 @@
+-import { net } from 'electron'
++import { createRequest } from './provisioningTransport'
+ import path from 'path'
+ import { cacheDir } from './paths'
+ import { r2MirrorUrl } from './r2Mirror'
+@@ -77,16 +77,18 @@
+ function fetchJSONOnce(
+   url: string,
+   cached: CacheEntry | undefined,
+-  cacheKey: string | undefined
++  cacheKey: string | undefined,
++  redirects = 5
+ ): Promise<unknown> {
+   return new Promise((resolve, reject) => {
+-    const request = net.request({ url, cache: 'no-cache' })
++    const request = createRequest(url)
++    request.setTimeout(60_000, () => request.destroy(new Error('Metadata request stalled')))
+     request.setHeader('User-Agent', 'ComfyUI-Desktop-2')
+ 
+     const ghToken = process.env.GITHUB_TOKEN
+     if (ghToken) {
+       try {
+-        if (new URL(url).hostname === 'api.github.com') {
++        if (new URL(url).origin === 'https://api.github.com') {
+           request.setHeader('Authorization', `token ${ghToken}`)
+         }
+       } catch {
+@@ -100,7 +102,20 @@
+ 
+     let data = ''
+     request.on('response', (response) => {
+-      response.on('data', (chunk) => (data += chunk.toString()))
++      response.on('error', reject)
++      if (response.statusCode && response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
++        response.destroy()
++        if (redirects === 0) { reject(new Error('Too many metadata redirects')); return }
++        let next: string
++        try { next = new URL(response.headers.location, url).toString() } catch (cause) { reject(cause); return }
++        fetchJSONOnce(next, undefined, cacheKey, redirects - 1).then(resolve, reject)
++        return
++      }
++      response.setEncoding('utf8')
++      response.on('data', (chunk: string) => {
++        data += chunk
++        if (Buffer.byteLength(data) > 8 * 1024 * 1024) response.destroy(new Error('Metadata exceeds its bound'))
++      })
+       response.on('end', async () => {
+         if (response.statusCode === 304 && cached) {
+           resolve(structuredClone(cached.data))
+diff --git a/src/main/lib/git.ts b/src/main/lib/git.ts
+--- a/src/main/lib/git.ts
++++ b/src/main/lib/git.ts
+@@ -2,7 +2,6 @@
+ import { execFile, spawn, type ExecFileException } from 'child_process'
+ import fs from 'fs'
+ import path from 'path'
+-import { app } from 'electron'
+ import { killProcTree } from './process'
+ import { getBundledScriptPath } from './bundledScript'
+ import { removeQuarantine, codesignBinaries } from '../sources/standalone/macRepair'
+@@ -273,9 +272,7 @@
+   const osName =
+     process.platform === 'win32' ? 'win' : process.platform === 'darwin' ? 'mac' : 'linux'
+   const platformDir = `${osName}-${process.arch}`
+-  const bootstrapDir = app.isPackaged
+-    ? path.join(process.resourcesPath, 'bootstrap-python')
+-    : path.join(__dirname, '..', '..', 'bootstrap-python', platformDir)
++  const bootstrapDir = path.join(__dirname, '..', '..', 'bootstrap-python', platformDir)
+   const pythonPath =
+     process.platform === 'win32'
+       ? path.join(bootstrapDir, 'python.exe')

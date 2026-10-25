@@ -2405,6 +2405,7 @@ dependencies = [
  "sugarsubstitute-crash",
  "sugarsubstitute-desktop",
  "sugarsubstitute-execution",
+ "sugarsubstitute-networking",
  "sugarsubstitute-splash",
  "sugarsubstitute-supervision",
  "sugarsubstitute-ui",
@@ -2513,6 +2514,7 @@ version = "0.1.0"
 dependencies = [
  "sugarsubstitute-contracts",
  "sugarsubstitute-execution",
+ "tracing",
  "url",
  "windows",
 ]

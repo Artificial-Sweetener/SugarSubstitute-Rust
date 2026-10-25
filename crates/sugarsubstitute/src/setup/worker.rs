@@ -6,6 +6,7 @@ mod downloads;
 mod metadata;
 mod process;
 mod protocol;
+mod proxy;
 mod records;
 use crate::job_sequence::JobSequence;
 use cache_jobs::CacheFinish;
@@ -40,6 +41,7 @@ pub(super) struct Worker {
     client: ExecutionClient,
     scope: Scope,
     jobs: JobSequence,
+    proxies: proxy::Proxies,
     bundle: Arc<sugarsubstitute_supervision::setup_storage::VerifiedBundle>,
     cache: sugarsubstitute_supervision::setup_storage::cache::RuntimeCache,
     preparing: Option<OwnedJob<WindowsLaunchInput, std::io::Error>>,
@@ -114,6 +116,7 @@ impl Worker {
             client,
             scope,
             jobs,
+            proxies: proxy::Proxies::default(),
             bundle,
             cache,
             preparing: None,
@@ -165,6 +168,7 @@ impl Worker {
         Ok(())
     }
     pub(super) fn advance(&mut self, batch: &CompletionBatch) -> Result<Vec<serde_json::Value>> {
+        self.proxies.advance(&self.client, &self.scope, &self.jobs, self.transport.as_ref())?;
         if let Some(job) = &mut self.creating
             && let Some(completion) = job.try_take_completion()
         {
@@ -219,7 +223,11 @@ impl Worker {
                         protocol::CacheEvent::Ready => self.ready = true,
                         protocol::CacheEvent::DownloadsFull => self.pressure.downloads = true,
                         protocol::CacheEvent::MetadataFull => self.pressure.metadata = true,
-                        protocol::CacheEvent::Other => events.push(value),
+                        protocol::CacheEvent::Other => {
+                            if !self.proxy_event(&value)? {
+                                events.push(value);
+                            }
+                        }
                     }
                 }
                 None => break,
@@ -273,6 +281,7 @@ impl Worker {
     pub(super) fn close(&mut self) -> Result<()> {
         self.closing = true;
         self.ready = false;
+        self.proxies.close();
         if let Some(job) = &self.transport_job {
             job.cancel();
         }
@@ -309,6 +318,7 @@ impl Worker {
     }
     pub(super) fn settled(&self) -> bool {
         self.closing
+            && self.proxies.settled()
             && self.creating.is_none()
             && self.preparing.is_none()
             && self.cache_job.is_none()

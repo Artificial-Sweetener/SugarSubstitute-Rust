@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 /** Headless upstream worker. The Rust host owns its process family and visible window. */
-import { app } from 'electron'
 import { diagnosticMessage, diagnostic, bindDiagnostics } from './diagnostics.mjs'
 import { createConnection, type Socket } from 'node:net'
 import { Decoder, VERSION } from './protocol.mjs'
@@ -15,8 +14,11 @@ import { NativeRecords, NativeRecordError, bindNativeRecords } from './records'
 import { NativeMetadata, MetadataError, bindNativeMetadata, metadataRoot } from './metadata'
 import { NativeDownloads, DownloadStorageError, bindNativeDownloads, downloadsRoot } from './downloads'
 import { ProductFailure } from './product-messages'
+import { connectProxyHost, closeProxyHost, receiveProxyResult } from '../../crates/sugarsubstitute-networking/worker/proxy'
 
 declare const UPSTREAM_REVISION: string
+declare const WORKER_NODE_VERSION: string
+if (process.versions.electron || process.versions.node !== WORKER_NODE_VERSION) throw new Error('The pinned standalone provisioning runtime is required')
 let transport: Socket | undefined
 let sequence = 0
 let active: { id: string; control: AbortController } | undefined
@@ -42,16 +44,23 @@ const events = new Events(write)
 const send = (id: string | null, event: string, data: unknown) => events.send(id, event, data)
 bindDiagnostics((level: string, message: string) => send(active?.id ?? null, 'diagnostic', { level, message }))
 const flushing = setInterval(() => events.flush(), 100)
-app.on('will-quit', () => clearInterval(flushing))
-// Electron's default uncaught-error handler opens a native dialog. This worker
-// reports through its retained transport; its host owns the visible recovery UI.
+flushing.unref()
+/** Retire transport after the active operation observes cancellation and settles. */
+function retire(code = process.exitCode ?? 0): void {
+  closing = true
+  process.exitCode = code
+  clearInterval(flushing)
+  closeProxyHost()
+  events.flush()
+  transport?.end()
+}
 function fatal(cause: unknown): void {
   closing = true
   active?.control.abort()
   try {
     send(null, 'fatal', { message: cause instanceof Error ? cause.message : String(cause) })
   } finally {
-    app.exit(1)
+    retire(1)
   }
 }
 process.on('uncaughtException', fatal)
@@ -62,14 +71,10 @@ for (const level of ['log', 'info', 'warn', 'error', 'debug'] as const) {
     send(active?.id ?? null, 'diagnostic', { level, message: diagnosticMessage(args) })
   }
 }
-const runtimeProfile = argument('cache-runtime')
-app.setPath('userData', runtimeProfile)
-app.setPath('sessionData', runtimeProfile)
-app.commandLine.appendSwitch('disk-cache-size', String(64 * 1024 * 1024))
-app.disableHardwareAcceleration()
 observe(event => send(active?.id ?? null, 'diagnostic', { message: diagnosticMessage([event]) }))
 
 async function dispatch(command: ReturnType<Decoder['push']>[number]): Promise<void> {
+  if (command.operation === 'proxy_result') { receiveProxyResult(command.id, command.input); return }
   if (command.operation === 'downloads_reply') { downloads.accept(command); return }
   if (command.operation === 'metadata_reply') { metadata.accept(command); return }
   if (command.operation === 'storage_reply') { records.accept(command); return }
@@ -118,11 +123,11 @@ async function dispatch(command: ReturnType<Decoder['push']>[number]): Promise<v
     metadata.close()
     records.close()
     active = undefined
-    if (closing) app.quit()
+    if (closing) retire()
   }
 }
 
-void app.whenReady().then(() => {
+async function connect(): Promise<void> {
   const port = Number(argument('port'))
   const token = argument('token')
   if (!Number.isInteger(port) || port < 1 || port > 65535 || !token || !/^[a-f0-9]{64}$/.test(token)) {
@@ -133,6 +138,7 @@ void app.whenReady().then(() => {
   transport = socket
   const decoder = new Decoder()
   socket.on('connect', () => {
+    connectProxyHost(write)
     socket.write(JSON.stringify({ version: VERSION, event: 'authenticate', token }) + '\n')
     send(null, 'ready', { cacheProtocol: 2, storageProtocol: 1, metadataProtocol: 1, downloadsProtocol: 1, textProtocol: 1, upstreamRevision: UPSTREAM_REVISION, operations: ['options', 'inspect', 'provision', 'integrate', 'cancel'] })
   })
@@ -147,26 +153,31 @@ void app.whenReady().then(() => {
       records.close(failure)
       active?.control.abort()
       send(null, 'protocol_error', { message: String(cause) })
-      if (!active) socket.end(() => app.exit(2))
+      process.exitCode = 2
+      if (!active) retire(2)
     }
   })
   socket.on('close', () => {
+    closeProxyHost()
     downloads.close()
     closing = true
     metadata.close()
     records.close()
     active?.control.abort()
-    if (!active) app.quit()
+    if (!active) retire()
   })
   socket.on('error', cause => {
+    closeProxyHost()
     downloads.close(cause)
     metadata.close(cause)
     records.close(cause)
     diagnostic('error', 'Provisioning connection failed', cause.message)
     active?.control.abort()
-    if (!active) app.exit(1)
+    process.exitCode = 1
+    if (!active) retire(1)
   })
-}).catch(cause => {
+}
+void connect().catch(cause => {
   send(null, 'failed', { message: String(cause) })
-  app.exit(1)
+  retire(1)
 })

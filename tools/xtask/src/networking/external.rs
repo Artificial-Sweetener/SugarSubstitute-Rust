@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Bind the consumed upstream Electron HTTP implementations to their registered component.
+//! Bind upstream HTTP sources to the registered component before applying host transport patches.
 use super::*;
 const COMPONENT: &str = "comfy-desktop-provisioning";
 const SOURCES: &[&str] = &[
@@ -44,10 +44,7 @@ pub(super) fn check(root: &Path, records: &[Boundary]) -> Result<()> {
             "networking: unregistered upstream component",
         );
     };
-    require(
-        records.len() == 1,
-        "networking: require the actual upstream Electron network boundary",
-    )?;
+    require(records.len() == 1, "networking: require the actual upstream HTTP source boundary")?;
     let record = &records[0];
     require(
         record.component == COMPONENT && !record.rationale.trim().is_empty(),
@@ -71,7 +68,7 @@ pub(super) fn check(root: &Path, records: &[Boundary]) -> Result<()> {
         let source = read(&resolve(root, path)?)?;
         require(
             access::lexical(&source).iter().any(|name| name == "electron"),
-            "networking: stale external Electron HTTP implementation",
+            "networking: stale upstream HTTP implementation",
         )?;
     }
     require(

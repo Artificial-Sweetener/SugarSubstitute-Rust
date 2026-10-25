@@ -6,18 +6,16 @@ mod payload;
 mod prepared;
 mod runtime;
 mod source;
+pub(in crate::setup_storage) mod worker;
 pub use source::BundleSource;
+pub use worker::ProvisioningWorker;
 #[cfg(test)]
 mod tests;
 use crate::durable_storage::files::{self, Directory};
 pub(super) use payload::Payload;
 pub(super) use prepared::VerifiedRuntime;
 pub(super) use runtime::RuntimePackage;
-use std::{
-    io,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{io, path::Path, sync::Arc};
 use sugarsubstitute_contracts::{execution::JobContext, update::Component};
 
 /// Complete application distribution with authenticated and pinned source files.
@@ -69,10 +67,6 @@ impl VerifiedBundle {
     /// Original authenticated archive identity; this does not grant activation authority.
     pub fn download_identity(&self) -> Option<&sugarsubstitute_update::VerifiedBytes> {
         self.download.as_ref().map(super::VerifiedDownload::identity)
-    }
-    /// Exact provisioning paths retained under this distribution's filesystem custody.
-    pub fn worker_paths(&self) -> (PathBuf, PathBuf) {
-        (self.payload.root.join("electron/electron.exe"), self.payload.root.join("worker"))
     }
     /// Authenticated manifest digest used by installation generation identity.
     pub fn digest(&self) -> &str {

@@ -141,9 +141,11 @@ impl SignedInstallation {
         self.prepare(now, context)
     }
 
-    /// Verified provisioning executable and package directory, retained by this owner.
-    pub fn worker_paths(&self) -> (PathBuf, PathBuf) {
-        self.bundle.worker_paths()
+    /// Verified provisioning launch contract retained by this owner.
+    /// # Errors
+    /// Rejects absent, ambiguous or noncanonical runtime roles.
+    pub fn worker(&self) -> io::Result<ProvisioningWorker> {
+        self.bundle.worker()
     }
 
     /// Journal a fresh generation before allocation, resume an exact pending release, or

@@ -142,14 +142,14 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/inventory.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:cd9364045f2531151ea9cb92a09b45b093ff526c4f796fe492314614874717a7"
+source_sha256 = "sha256:733b87bf95a51bb6137932fa0a19f4ec2b9eb83045ab8f2b55fd4b173c7b36a2"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests/downloaded.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:c4f8ad0e465a612ea71e8886881d4c04db8819812279d24a0439c4c0a8359ba4"
+source_sha256 = "sha256:a91b6932288bb212c4b57fc9613d1e8be94b035ba6603f1856a2202717b06b3f"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -184,14 +184,14 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/distribution/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:df26d4f0b4c95467176acec3f38225837053c8f291f568bc3930559000b4fb14"
+source_sha256 = "sha256:a3aa9747b8fec21dc31c32e70c155419751e13dd9658f9961896a8833050de0d"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:9f8f41a5ddcd9f8910b2b4d8f4069219e58cab211c480ab7a457f0c333802555"
+source_sha256 = "sha256:a431175e0f576baacaf12c0fdde4f1251c33d564017d06fb10fecb329a33d8fc"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -310,7 +310,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute/src/worker_environment.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:27c044499ec36f8d13f208a4ad494dd1fb85d44f80bf0f4c18db306f68e086cf"
+source_sha256 = "sha256:5aee9a63501c77d4fab84cfb5c51a068d5e1734395537d66fc589db95c0bb839"
 capabilities = ["environment"]
 rationale = "Retained process environment snapshot for native launch; original bounds and injection filtering apply. Not a setting override route."
 
@@ -362,13 +362,6 @@ owner = "sugarsubstitute"
 source_sha256 = "sha256:031855f513876ca2a06e9f44711c6d5ecb9792ea2b6c19b59e8f61effce0a202"
 capabilities = ["environment", "external"]
 rationale = "The existing bounded process boundary inherits the filtered worker environment and sets Python bytecode policy; Python/package-manager configuration and SugarCubes model-root persistence remain at their supported owners."
-
-[[records]]
-path = "installer/worker/main.ts"
-owner = "sugarsubstitute"
-source_sha256 = "sha256:259fd6748897d3054e425d1faefd5fb6d2fb78eff7791120c00c2d83b606948b"
-capabilities = ["external"]
-rationale = "Electron owns userData/sessionData runtime semantics. Native-selected workspace and disposable grants compose its supported path APIs; host settings are not stored here."
 
 [[records]]
 path = "installer/worker/model-root.mjs"
@@ -492,7 +485,7 @@ rationale = "Read-only dependency qualification selects its Python test interpre
 [[records]]
 path = "installer/tests/download-cache.test.mjs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:bef8ce30af648829a3a626adb07061ce255ca596eb27fac8473e2fa8163fc5d9"
+source_sha256 = "sha256:fd0c68ae2fc02c8452c443f1796a1ae9edbea3edc7f115085b77f2ddb099b4a9"
 capabilities = ["environment"]
 rationale = "Download qualification selects its explicit build-receipt directory from the test environment. It exercises the real consumed downloader with fake native storage/network boundaries and creates no configuration backend."
 
@@ -534,7 +527,7 @@ rationale = "Startup publication regression reopens Unicode saved documents thro
 [[records]]
 path = "installer/build.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:9495d787320e98d7c2cb9fee4965207152c1129e1ae41eeffdd9f98cae3b668a"
+source_sha256 = "sha256:fcfe53d9ef93d6f10ff52fd17658d63883d102673e78ddad47dca1ee3bb836d9"
 capabilities = ["environment"]
 rationale = "The bundler consumes an explicit build destination and selected immutable upstream revision from its build environment."
 
@@ -555,16 +548,16 @@ rationale = "Release packaging consumes explicit CLI image, component, runtime a
 [[records]]
 path = "installer/package.test.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:8c64e898639965a8dfd773e0c880acc62641187ae5124d8beeae7884e9389413"
+source_sha256 = "sha256:ad9b9c2967740f697bd667a757c5f0bd2185a02c3ff6b3ab444ac1ea34be552d"
 capabilities = ["environment"]
 rationale = "Packaging tests construct a child environment for their isolated worker-build fixture and verify actual producing declarations."
 
 [[records]]
 path = "installer/prepare-runtime.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:21cd6fbd87ec8211416da47a3c9a29de9235e8a9b493ad41905a1964b16ac531"
+source_sha256 = "sha256:400561271dcf1e1d407e828b8aa4bd28697cf1ddea6a9451aaf9e85a9f39509e"
 capabilities = ["environment"]
-rationale = "Pinned Electron runtime preparation consumes the explicit packaging artifact directory; package-manager runtime retrieval remains upstream-owned."
+rationale = "Pinned Node runtime preparation consumes the explicit packaging artifact directory and verifies the declared runtime archive."
 
 [[records]]
 path = "installer/qualify-model-root.mjs"
@@ -572,13 +565,6 @@ owner = "sugarsubstitute-xtask"
 source_sha256 = "sha256:beffef1f8e5ac2103affd6aa29821ec8c5aca843b47ae5d0d8d1b8fb94f08bc9"
 capabilities = ["arguments", "external"]
 rationale = "Qualification accepts explicit SugarCubes, Python and workspace paths and consumes the actual SugarCubes-owned model-root configuration API."
-
-[[records]]
-path = "installer/qualify-worker.mjs"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:27a75ccba48292c47481e25bfa7436f50d70377bbcbbff7648d10ea036ef51a4"
-capabilities = ["environment", "arguments"]
-rationale = "Worker qualification selects its built runtime and optional explicit existing environment and observes the supported worker inspection contract."
 
 [[records]]
 path = "installer/release/build-setup.mjs"
@@ -590,7 +576,7 @@ rationale = "Installer build CLI accepts explicit output, profile, platform, nat
 [[records]]
 path = "installer/seal.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:137daed78b67a8fcece5342199e012ffbf9d4a9308e981cf27728569a39b9193"
+source_sha256 = "sha256:5405425d43ca57608e5497b8ef7740ac272dddec379144a831931ec94ae1a3f9"
 capabilities = ["arguments"]
 rationale = "Sealing consumes explicit executable/archive output selections and the shared native package inventory."
 
@@ -611,7 +597,7 @@ rationale = "Native maintenance qualification hashes saved startup documents and
 [[records]]
 path = "installer/tests/metadata.test.mjs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:1dacc4147ceb9f5bc8ec7180a70d77d3f79a9e8c9e033eb1960cc3a1a5cc7449"
+source_sha256 = "sha256:5e5489dc12df6faef04b9c99ee4b7d3ba085b4e912e58e133fbf35cbd343aa40"
 capabilities = ["environment"]
 rationale = "Metadata-port fixtures select the built worker receipt and isolated artifact directory while testing the consumed upstream client."
 
@@ -632,14 +618,14 @@ rationale = "Native record-port tests select their explicit artifact root and fa
 [[records]]
 path = "installer/tests/worker.test.mjs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:8d53f5bf223029ce648f65ebec1b166efb59a4d5955c71228953f79e8f2b8276"
+source_sha256 = "sha256:5c18126447bfe6376dd1636a3e0a4fa3e75006d84ca10e28cfcb6f8a604337fb"
 capabilities = ["environment"]
-rationale = "Real headless Electron tests select the built worker, sanitize child launch environment and verify the original runtime storage grant."
+rationale = "Packaged Node worker tests select the built worker, sanitize its child launch environment and verify the original runtime storage grant."
 
 [[records]]
 path = "installer/typecheck.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:31c9476e4d908d2ca34ec1923f0f6c370b06c12467e9a690ed45102c408c8aed"
+source_sha256 = "sha256:0ba86a3322f9adef45f45ebbcd25d76b2da6befdb7b2fb1a751a84a900fbac3c"
 capabilities = ["environment"]
 rationale = "Type qualification selects the explicit worker build receipt and checks the real consumed upstream and renderer types."
 
@@ -849,14 +835,14 @@ rationale = "Localization-governance rejection fixtures decode only their own TO
 [[records]]
 path = "tools/xtask/src/networking/external.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:00a51f36223ec76c82aa879700211a94e89017325f7a5e055bd9986e88a6b5ad"
+source_sha256 = "sha256:9ab8b806f1658d068c0ddd149dba7511f7d17bd106fa7d40238e75ea9b148f39"
 capabilities = ["codec"]
 rationale = "Repository tooling decodes the vendored-material TOML manifest to bind the consumed upstream HTTP sources to their registered component."
 
 [[records]]
 path = "tools/xtask/src/networking/tests.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:3bf3e2eb75e80f414c04c1c6135abcf48719fbeb0fd7a54cf27cff94a84e3a04"
+source_sha256 = "sha256:fc97f5e6bb44cf7f2bd384b28d30203c26859de4f008b3baf3541d48254c49f6"
 capabilities = ["codec"]
 rationale = "Networking-governance rejection fixtures decode only their own TOML policy schema and malformed registrations."
 
@@ -880,3 +866,38 @@ owner = "sugarsubstitute-desktop"
 source_sha256 = "sha256:7f8ffcbd82e682233c69970b10566a638535387c1c4262487c14e096713a48fe"
 capabilities = ["environment"]
 rationale = "Read only the exact per-test private-desktop and target environment selectors; the parent retains the actual child process and desktop through checked process termination without reading or writing product settings."
+
+[[records]]
+path = "installer/tests/http-scenarios.mjs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:a4847e7d0cab842cda0e874f3c750a015cd90895e7c17708e53e2833a81ad837"
+capabilities = ["environment", "arguments"]
+rationale = "Real isolated HTTP/TLS/proxy qualification consumes only its explicit artifact/metadata roots and controls proxy/CA environment in owned child processes."
+
+[[records]]
+path = "installer/tests/http.test.mjs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:34a7388c4e0cab1bf845fb8dacf33ffb0f1c326af7f9f76ab3aa99da1cfdc84f"
+capabilities = ["environment"]
+rationale = "The Node transport qualification selects its exact built worker and isolates inherited proxy/test options for its owned child."
+
+[[records]]
+path = "installer/patches/0006-standalone-node-runtime.patch"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:11d35fdab3d10431eea908090e0b037032f93929cd4793ad9ff699074e4596a5"
+capabilities = ["environment"]
+rationale = "Registered upstream derivative retains GitHub-token selection and restricts authorization to the exact HTTPS GitHub API origin on each redirected request."
+
+[[records]]
+path = "installer/runtime.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:cee2d3aa269ca0612299c158f9766e18235800ec171b4a95d8399b3260ef6fcd"
+capabilities = ["environment"]
+rationale = "The packaging adapter selects its fixed checksum-pinned archive from Node platform/architecture metadata; it reads no product preferences."
+
+[[records]]
+path = "crates/sugarsubstitute-networking/worker/http.ts"
+owner = "sugarsubstitute-networking"
+source_sha256 = "sha256:490d46f92124ff84c08635f9b8671da61fd8592537b341cb3a7c15615ddc3037"
+capabilities = ["environment"]
+rationale = "The transport consumes inherited proxy and bypass variables solely through Node proxyEnv; native system/PAC decisions and application configuration keep their authoritative owners."

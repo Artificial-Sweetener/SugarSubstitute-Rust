@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Check direct npm network identities, including npm aliases, against exact reviewed manifests.
 use super::*;
-/// A locked script dependency boundary; external Electron networking remains upstream-owned.
+/// A locked script dependency boundary; provisioning uses the shared Node transport adapter.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Manifest {
@@ -75,8 +75,8 @@ pub(super) fn check(
         require(
             record.path == "installer/package.json"
                 && record.owner == "sugarsubstitute-xtask"
-                && declared == BTreeSet::from(["electron".into()]),
-            "networking: script network dependency lacks the registered upstream Electron boundary",
+                && declared.is_empty(),
+            "networking: provisioning cannot declare an alternate script network client",
         )?;
     }
     require(seen == *paths, "networking: missing required script dependency coverage")
@@ -109,7 +109,7 @@ mod tests {
             crate::fixtures::write(
                 repository.root(),
                 "installer/package.json",
-                r#"{"dependencies":{"electron":"40.4.1"}}"#,
+                r#"{"dependencies":{"semver":"7.7.4"}}"#,
             )?;
             crate::fixtures::write(repository.root(), "installer/package-lock.json", "{}")?;
             let paths = BTreeSet::from(["installer/package.json".into()]);
@@ -121,8 +121,8 @@ mod tests {
                     repository.root(),
                     &["installer/package.json".into(), "installer/package-lock.json".into()],
                 )?,
-                network_dependencies: vec!["electron".into()],
-                rationale: "Actual upstream worker networking".into(),
+                network_dependencies: vec![],
+                rationale: "Worker uses the authoritative Node networking adapter".into(),
             };
             check(
                 repository.root(),
@@ -139,8 +139,8 @@ mod tests {
                 }
                 1 => record.owner = "foreign".into(),
                 2 => record.source_sha256 = "stale".into(),
-                3 => record.network_dependencies.clear(),
-                4 => record.network_dependencies.push("electron".into()),
+                3 => record.network_dependencies.push("electron".into()),
+                4 => record.network_dependencies.extend(["electron".into(), "electron".into()]),
                 5 => record.rationale.clear(),
                 6 => crate::fixtures::write(
                     repository.root(),
@@ -150,6 +150,46 @@ mod tests {
                 _ => record.lockfile = "../foreign".into(),
             }
             assert!(check(repository.root(), &repository.architecture, &[record], &paths).is_err());
+        }
+        Ok(())
+    }
+
+    /// A reviewed dependency list cannot reintroduce a desktop runtime or an alternate client.
+    #[test]
+    fn reviewed_client_identities_cannot_override_the_standalone_worker_boundary() -> Result<()> {
+        for identity in ["electron", "@electron/get", "axios", "undici"] {
+            let mut repository = crate::fixtures::Repository::new()?;
+            repository.architecture.owners[0].package = "sugarsubstitute-xtask".into();
+            crate::fixtures::write(
+                repository.root(),
+                "installer/package.json",
+                &serde_json::json!({"dependencies": {identity: "1.0.0"}}).to_string(),
+            )?;
+            crate::fixtures::write(repository.root(), "installer/package-lock.json", "{}")?;
+            assert_eq!(
+                identities(&read(&repository.root().join("installer/package.json"))?)?,
+                BTreeSet::from([identity.into()])
+            );
+            let record = Manifest {
+                path: "installer/package.json".into(),
+                lockfile: "installer/package-lock.json".into(),
+                owner: "sugarsubstitute-xtask".into(),
+                source_sha256: fingerprint(
+                    repository.root(),
+                    &["installer/package.json".into(), "installer/package-lock.json".into()],
+                )?,
+                network_dependencies: vec![identity.into()],
+                rationale: "Attempted alternate provisioning transport".into(),
+            };
+            assert!(
+                check(
+                    repository.root(),
+                    &repository.architecture,
+                    &[record],
+                    &BTreeSet::from(["installer/package.json".into()]),
+                )
+                .is_err()
+            );
         }
         Ok(())
     }

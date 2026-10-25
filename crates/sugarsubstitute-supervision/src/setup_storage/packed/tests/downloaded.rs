@@ -118,7 +118,7 @@ fn downloaded_candidate_case(missing: bool, missing_entry: bool) -> TestResult {
         assert!(std::fs::rename(installed.directory(), root.path().join("moved")).is_err());
         assert!(!runtime.directory.exists());
         assert!(!runtime.python.exists());
-        assert!(std::fs::write(&bundle.worker_paths().0, b"tampered").is_err());
+        assert!(std::fs::write(bundle.worker()?.executable(), b"tampered").is_err());
         assert!(verified(&archive, source_root.path(), context).is_err());
         Ok(())
     })

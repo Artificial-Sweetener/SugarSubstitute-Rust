@@ -43,7 +43,7 @@ fn imported_payload_keeps_source_files_immutable_after_preview_owner_retires() -
     worker::run_reserved(SIGNED_INSTALLER_RESERVATION_BYTES, |context, _| {
         let fixture = Fixture::new(context)?;
         let preview = preview(&fixture, context)?;
-        let worker = preview.worker_paths().0;
+        let worker = preview.worker()?.executable().to_owned();
         let original = std::fs::read(&worker)?;
         let imported = import(&fixture, preview, NOW, context)?;
         assert!(std::fs::write(&worker, b"changed while retained").is_err());
@@ -173,7 +173,7 @@ fn another_valid_preview_cannot_supply_a_different_signed_inventory() -> TestRes
         )?;
         let preview =
             Arc::new(crate::setup_storage::materialize(&source, &cache, &digest, context)?);
-        let worker = preview.worker_paths().0;
+        let worker = preview.worker()?.executable().to_owned();
         let before = std::fs::read(&worker)?;
         assert!(import(&fixture, preview, NOW, context).is_err());
         assert_eq!(std::fs::read(&worker)?, before);

@@ -6,6 +6,16 @@ import { Decoder, parseCommand, MAX_FRAME_BYTES } from '../worker/protocol.mjs'
 
 const command = (operation, input = {}) => JSON.stringify({ version: 1, id: 'request-1', operation, input })
 
+test('proxy replies preserve ordered routes and reject credentials, authority injection and oversized lists', () => {
+  const routes = [{ kind: 'proxy', url: 'http://proxy.test:8080/' }, { kind: 'direct' }]
+  assert.deepEqual(parseCommand(command('proxy_result', { routes })).input.routes, routes)
+  for (const input of [{}, { routes: [] }, { routes, error: 'ambiguous' }, { routes: Array(17).fill({ kind: 'direct' }) },
+    ...['socks://proxy.test/', 'http://user:secret@proxy.test/', 'http://proxy.test/path', 'https://proxy.test/?secret'].map(url => ({ routes: [{ kind: 'proxy', url }] })),
+    { routes: [{ kind: 'direct', url: 'http://injected.test/' }] }, { routes: [null] }, { error: 'x'.repeat(2049) }]) {
+    assert.throws(() => parseCommand(command('proxy_result', input)))
+  }
+})
+
 test('fragmented UTF-8 frames preserve exact selected paths', () => {
   const wire = Buffer.from(command('inspect', { directory: 'E:\\作品\\ComfyUI' }) + '\n')
   const decoder = new Decoder()

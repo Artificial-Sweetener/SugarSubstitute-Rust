@@ -6,6 +6,9 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
+import semver from 'semver'
+import { runtime } from './runtime.mjs'
+import { requireHeadlessGraph } from './worker-graph.mjs'
 
 const root = path.dirname(fileURLToPath(import.meta.url))
 const source = path.resolve(root, '../third_party/comfy-desktop')
@@ -30,8 +33,7 @@ const archive = path.join(upstream, 'source.tar')
 git('-C', source, 'archive', '--format=tar', `--output=${archive}`, revision, 'src', 'lib', 'locales', 'package.json', 'LICENSE')
 execFileSync('tar', ['-xf', archive, '-C', upstream], { windowsHide: true })
 const upstreamPackage = JSON.parse(await fs.readFile(path.join(upstream, 'package.json'), 'utf8'))
-const adapterPackage = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8'))
-if (upstreamPackage.devDependencies.electron !== adapterPackage.dependencies.electron) {
+if (!semver.satisfies(runtime.version, upstreamPackage.engines.node)) {
   throw new Error('Review and update the worker runtime pin for this upstream revision')
 }
 const patches = (await fs.readdir(path.join(root, 'patches'))).filter(p => p.endsWith('.patch')).sort()
@@ -48,18 +50,20 @@ const aliases = new Map([
   ['src/main/lib/telemetry.ts', 'telemetry.ts'],
   ['src/main/lib/bundledScript.ts', 'bundled-script.ts'],
   ['src/main/lib/native-metadata.ts', 'metadata.ts'],
+  ['src/main/lib/provisioningTransport.ts', '../../crates/sugarsubstitute-networking/worker/http.ts'],
 ])
 const bundle = path.join(output, 'worker/out/main/index.cjs')
 const result = await build({
   entryPoints: [path.join(root, 'worker/main.ts')],
-  outfile: bundle, bundle: true, platform: 'node', target: 'node22',
+  outfile: bundle, bundle: true, platform: 'node', target: 'node24',
   format: 'cjs', metafile: true, sourcemap: true,
-  external: ['electron', '7zip-bin'],
+  external: ['7zip-bin'],
   nodePaths: [path.join(root, 'node_modules')],
-  define: { UPSTREAM_REVISION: JSON.stringify(revision) },
+  define: { UPSTREAM_REVISION: JSON.stringify(revision), WORKER_NODE_VERSION: JSON.stringify(runtime.version) },
   plugins: [{
     name: 'provisioning-boundaries',
     setup(builder) {
+      builder.onResolve({ filter: /^electron(?:\/|$)/ }, () => ({ errors: [{ text: 'Electron is forbidden in the provisioning worker' }] }))
       builder.onResolve({ filter: /^@upstream\// }, args => ({
         path: path.join(upstream, 'src/main', args.path.slice('@upstream/'.length) + '.ts'),
       }))
@@ -74,6 +78,7 @@ const result = await build({
   }],
 })
 if (result.warnings.length) throw new Error('Provisioning build emitted warnings')
+requireHeadlessGraph(result.metafile)
 await fs.cp(path.join(upstream, 'lib'), path.join(output, 'worker/lib'), { recursive: true })
 await fs.cp(path.join(upstream, 'locales'), path.join(output, 'worker/locales'), { recursive: true })
 await fs.writeFile(path.join(output, 'worker/package.json'), JSON.stringify({
@@ -83,6 +88,7 @@ await fs.writeFile(path.join(output, 'worker/package.json'), JSON.stringify({
 await fs.copyFile(path.join(upstream, 'LICENSE'), path.join(output, 'worker/LICENSE'))
 await fs.writeFile(path.join(output, 'worker/build-receipt.json'), JSON.stringify({
   schema_version: 1, upstream_revision: revision, patches: patchHashes,
+  node_version: runtime.version, runtime_pin_sha256: createHash('sha256').update(await fs.readFile(path.join(root, 'runtime.json'))).digest('hex'),
   inputs: Object.keys(result.metafile.inputs).sort(),
 }, null, 2))
 console.log(`Built provisioning worker from ${revision} at ${bundle}`)

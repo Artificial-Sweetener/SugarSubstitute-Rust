@@ -1,20 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Execute real native qualification inside the production admission/lifetime boundary.
+mod clock;
+pub(crate) use clock::TestClock;
 use std::{
     io,
     sync::{Arc, Condvar, Mutex},
     time::{Duration, Instant},
 };
 use sugarsubstitute_contracts::execution::{
-    CompletionWake, ExecutionError, ExecutionPort, JobClass, JobCompletion, JobId, JobOutcome,
-    JobSpec, Operation, OwnedJob, Scope, ScopeId, ScopeSpec,
+    Clock, CompletionWake, ExecutionError, ExecutionPort, JobClass, JobCompletion, JobId,
+    JobOutcome, JobSpec, Operation, OwnedJob, Scope, ScopeId, ScopeSpec,
 };
 use sugarsubstitute_execution::{
     ExecutionClient, ExecutionOwner, MonotonicClock,
     http_fixture::{Exchange, Server},
 };
-pub(super) type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
+pub(crate) type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 #[derive(Default)]
 struct Wake(Mutex<u64>, Condvar);
 impl CompletionWake for Wake {
@@ -27,15 +29,69 @@ impl CompletionWake for Wake {
 fn lock<T>(value: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     value.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
-pub(super) fn run(
+pub(crate) fn run(
     cancelled: bool,
     reservation_bytes: u64,
     body: impl FnOnce(&sugarsubstitute_contracts::execution::JobContext, Arc<Scope>) -> TestResult
     + Send
     + 'static,
 ) -> TestResult {
+    execute(
+        MonotonicClock::new(),
+        cancelled,
+        false,
+        reservation_bytes,
+        Duration::from_secs(10),
+        body,
+    )
+}
+
+/// Execute deterministic proxy qualification through the same admitted worker boundary.
+pub(crate) fn run_reserved(
+    reservation_bytes: u64,
+    body: impl FnOnce(&sugarsubstitute_contracts::execution::JobContext, &TestClock) -> TestResult
+    + Send
+    + 'static,
+) -> TestResult {
+    run_proxy(false, reservation_bytes, body)
+}
+
+/// Observe mandatory native retirement after the original deterministic deadline expires.
+pub(crate) fn run_reserved_expiring(
+    reservation_bytes: u64,
+    body: impl FnOnce(&sugarsubstitute_contracts::execution::JobContext, &TestClock) -> TestResult
+    + Send
+    + 'static,
+) -> TestResult {
+    run_proxy(true, reservation_bytes, body)
+}
+
+fn run_proxy(
+    expired: bool,
+    reservation_bytes: u64,
+    body: impl FnOnce(&sugarsubstitute_contracts::execution::JobContext, &TestClock) -> TestResult
+    + Send
+    + 'static,
+) -> TestResult {
+    let clock = Arc::new(TestClock::default());
+    let worker_clock = clock.clone();
+    execute(clock, false, expired, reservation_bytes, Duration::from_secs(2), move |context, _| {
+        body(context, &worker_clock)
+    })
+}
+
+fn execute(
+    clock: Arc<dyn Clock>,
+    cancelled: bool,
+    expired: bool,
+    reservation_bytes: u64,
+    duration: Duration,
+    body: impl FnOnce(&sugarsubstitute_contracts::execution::JobContext, Arc<Scope>) -> TestResult
+    + Send
+    + 'static,
+) -> TestResult {
     let wake = Arc::new(Wake::default());
-    let executor = ExecutionOwner::new(MonotonicClock::new(), wake.clone())?;
+    let executor = ExecutionOwner::new(clock, wake.clone())?;
     let client = executor.client();
     let scope =
         Arc::new(client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?);
@@ -48,7 +104,7 @@ pub(super) fn run(
             id: JobId::new(1)?,
             operation: Operation::NativeLifecycle,
             class: JobClass::InfrastructureLifecycle,
-            deadline: Some(client.now()?.checked_add(Duration::from_secs(10))?),
+            deadline: Some(client.now()?.checked_add(duration)?),
             reservation_bytes,
             replacement: None,
         },
@@ -60,8 +116,9 @@ pub(super) fn run(
     let completion = completion(&mut job, &client, &wake)?;
     lock(&observed).take().ok_or("Native qualification assertions did not finish")??;
     assert!(
-        matches!(completion.outcome, JobOutcome::Success(()) if !cancelled)
+        matches!(completion.outcome, JobOutcome::Success(()) if !cancelled && !expired)
             || matches!(completion.outcome, JobOutcome::Cancelled if cancelled)
+            || matches!(completion.outcome, JobOutcome::TimedOut if expired)
     );
     drop(job);
     drop(scope);
@@ -97,7 +154,7 @@ fn completion<T, E>(
     }
 }
 /// Own an independent finite HTTP fixture through its actual socket-closing terminal outcome.
-pub(super) struct Running {
+pub(crate) struct Running {
     job: OwnedJob<(), io::Error>,
     client: ExecutionClient,
     wake: Arc<Wake>,
@@ -106,11 +163,11 @@ pub(super) struct Running {
 }
 impl Running {
     /// Bind an ephemeral peer which cancels only the supplied client after actual request receipt.
-    pub(super) fn cancelling(
+    pub(crate) fn cancelling(
         context: &sugarsubstitute_contracts::execution::JobContext,
         client_scope: Arc<Scope>,
     ) -> Result<(Self, u16), Box<dyn std::error::Error + Send + Sync>> {
-        let server = Server::bind(
+        Self::start(
             vec![Exchange {
                 path: "/cancel".into(),
                 range: None,
@@ -119,7 +176,14 @@ impl Running {
                 cancel_client: Some(client_scope),
             }],
             context,
-        )?;
+        )
+    }
+    /// Serve one finite qualification script without introducing a second scheduler.
+    pub(crate) fn start(
+        exchanges: Vec<Exchange>,
+        context: &sugarsubstitute_contracts::execution::JobContext,
+    ) -> Result<(Self, u16), Box<dyn std::error::Error + Send + Sync>> {
+        let server = Server::bind(exchanges, context)?;
         let port = server.port()?;
         let wake = Arc::new(Wake::default());
         let executor = ExecutionOwner::new(MonotonicClock::new(), wake.clone())?;
@@ -141,7 +205,7 @@ impl Running {
         Ok((Self { job, client, wake, _scope: scope, _executor: executor }, port))
     }
     /// Successful completion proves the real peer observed native client socket retirement.
-    pub(super) fn finish(mut self) -> TestResult {
+    pub(crate) fn finish(mut self) -> TestResult {
         match completion(&mut self.job, &self.client, &self.wake)?.outcome {
             JobOutcome::Success(()) => Ok(()),
             JobOutcome::Failure(cause) => Err(cause.into()),

@@ -294,7 +294,7 @@ rationale = "Native boundary: Retain exact process objects and request closure o
 
 [[records]]
 path = "installer/tests/download-cache.test.mjs"
-source_sha256 = "sha256:bef8ce30af648829a3a626adb07061ce255ca596eb27fac8473e2fa8163fc5d9"
+source_sha256 = "sha256:fd0c68ae2fc02c8452c443f1796a1ae9edbea3edc7f115085b77f2ddb099b4a9"
 kind = "fixture"
 rationale = "Behavioral fixture explicitly exercises native presentation, input validation, or original dynamic text; it grants no production text route. "
 
@@ -306,7 +306,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "installer/tests/metadata.test.mjs"
-source_sha256 = "sha256:1dacc4147ceb9f5bc8ec7180a70d77d3f79a9e8c9e033eb1960cc3a1a5cc7449"
+source_sha256 = "sha256:5e5489dc12df6faef04b9c99ee4b7d3ba085b4e912e58e133fbf35cbd343aa40"
 kind = "fixture"
 rationale = "Behavioral fixture explicitly exercises native presentation, input validation, or original dynamic text; it grants no production text route. "
 
@@ -324,7 +324,7 @@ rationale = "SugarCubes dependency preparation emits only the closed checkingSug
 
 [[records]]
 path = "installer/worker/main.ts"
-source_sha256 = "sha256:259fd6748897d3054e425d1faefd5fb6d2fb78eff7791120c00c2d83b606948b"
+source_sha256 = "sha256:595c2bbbe1fe43d859e25c3501f288a83e80ec6942b2a627766cdc3c05c98814"
 kind = "presentation"
 rationale = "Authenticated worker dispatch reports original error evidence and closed failure statusCode. The host validates textProtocol before readiness and resolves product feedback through its catalog."
 
@@ -681,3 +681,9 @@ path = "crates/sugarsubstitute-ui/src/windows/scroll_wheel.rs"
 source_sha256 = "sha256:d19bd2042bc768617f2428faee19c102b71c22a2be9a12468a4f3567618085c7"
 kind = "native"
 rationale = "Affine native text, control or window adapter consumes original bounded labels and shared widget specifications; the presenting owner supplies catalog copy, and external native references retain their checked lifetime."
+
+[[records]]
+path = "installer/patches/0006-standalone-node-runtime.patch"
+source_sha256 = "sha256:11d35fdab3d10431eea908090e0b037032f93929cd4793ad9ff699074e4596a5"
+kind = "external"
+rationale = "The upstream derivative compares numeric HTTP statusCode framing and retains upstream diagnostic errors; owned installer feedback still uses the canonical message catalog."

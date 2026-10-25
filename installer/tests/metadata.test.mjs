@@ -7,53 +7,14 @@ import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
 import { parseCommand } from '../worker/protocol.mjs'
+import { createMetadataHost } from './native-metadata-host.mjs'
 const { outputFiles } = await build({ stdin: { contents: "export * from './metadata'; export { bindDiagnostics } from './diagnostics.mjs';", resolveDir: fileURLToPath(new URL('../worker', import.meta.url)), loader: 'ts' }, bundle: true, write: false, platform: 'node', format: 'esm' })
 const { NativeMetadata, readFileSafe, bindDiagnostics } = await import('data:text/javascript;base64,' + Buffer.from(outputFiles[0].text).toString('base64'))
 const diagnostics = []
 bindDiagnostics((level, message) => diagnostics.push({ level, message }))
 const root = path.join(process.env.SUBSTITUTE_INSTALLER_BUILD, 'native-metadata')
-/** Pure external native-port fake; actual file, grant and retirement mechanics are tested in Rust. */
-function host(initial = {}) {
-  const files = new Map(Object.entries(initial).map(([name, value]) => [name, Buffer.from(value)]))
-  const operations = []
-  let reading, writing, pressure = false, hold = false, release, entered
-  const committing = new Promise(resolve => { entered = resolve })
-  const client = new NativeMetadata((id, data) => {
-    const request = data.operation
-    operations.push(request)
-    let result = { ok: true, data: {} }
-    if (request.op === 'read') {
-      const bytes = files.get(request.name)
-      if (!bytes) result = { ok: false, error: { code: 'ENOENT', osCode: 2 } }
-      else reading = Buffer.from(bytes)
-    }
-    if ((request.op === 'read' && result.ok) || request.op === 'next') {
-      result.data = { hex: reading.subarray(0, 8192).toString('hex'), done: reading.length <= 8192 }
-      reading = reading.subarray(8192)
-    }
-    if (request.op === 'begin') {
-      if (pressure) result = { ok: false, error: { code: 'ENOSPC', osCode: 112 } }
-      else writing = { name: request.name, length: request.length, bytes: Buffer.alloc(0) }
-    }
-    if (request.op === 'chunk') {
-      assert.equal(request.offset, writing.bytes.length)
-      assert.ok(request.hex.length <= 16384)
-      writing.bytes = Buffer.concat([writing.bytes, Buffer.from(request.hex, 'hex')])
-    }
-    if (request.op === 'commit') {
-      assert.equal(writing.bytes.length, writing.length)
-      files.set(writing.name, writing.bytes); writing = undefined
-    }
-    if (request.op === 'abort') { reading = undefined; writing = undefined }
-    const reply = () => client.accept({ id, input: { serial: data.serial, index: 0, done: true, result } })
-    if (hold && request.op === 'commit') { release = reply; entered() }
-    else queueMicrotask(reply)
-  }, root)
-  client.begin('original')
-  return { client, files, operations, pressure: () => { pressure = true }, holdCommit: () => {
-    hold = true; return { entered: committing, release: () => release() }
-  } }
-}
+const host = initial => createMetadataHost(NativeMetadata, root, initial)
+
 test('native metadata preserves multichunk Unicode and synchronous upstream snapshots after publication', async () => {
   const text = '糖😀'.repeat(3000), h = host({ 'fetch-cache.json': text })
   assert.throws(() => h.client.readFile(path.join(root, 'fetch-cache.json')), /not loaded/)
@@ -125,21 +86,22 @@ test('actual patched upstream ETag reads use the native snapshot and refresh wai
   const source = receipt.inputs.find(input => input.endsWith('/src/main/lib/fetch.ts'))
   assert.ok(source)
   const metadata = fileURLToPath(new URL('../worker/metadata.ts', import.meta.url)).replaceAll('\\', '/')
-  const { outputFiles } = await build({ stdin: { contents: `export { fetchJSON } from ${JSON.stringify(source)}; export { bindNativeMetadata } from ${JSON.stringify(metadata)}; export { requests } from 'electron';`, resolveDir: path.dirname(source) }, bundle: true, write: false, platform: 'node', format: 'esm', plugins: [{
+  const { outputFiles } = await build({ stdin: { contents: `export { fetchJSON } from ${JSON.stringify(source)}; export { bindNativeMetadata } from ${JSON.stringify(metadata)}; export { requests } from 'request-fixture';`, resolveDir: path.dirname(source) }, bundle: true, write: false, platform: 'node', format: 'esm', plugins: [{
     name: 'network-boundary', setup(builder) {
-      builder.onResolve({ filter: /^electron$/ }, () => ({ path: 'electron', namespace: 'network-fixture' }))
+      builder.onResolve({ filter: /^(?:request-fixture|\.\/provisioningTransport)$/ }, () => ({ path: 'request', namespace: 'network-fixture' }))
       builder.onLoad({ filter: /.*/, namespace: 'network-fixture' }, () => ({ contents: `
         import { EventEmitter } from 'node:events'; export const requests = [];
-        export const net = { request() {
+        export function createRequest() {
           const request = new EventEmitter(); request.headers = {};
           request.setHeader = (name, value) => request.headers[name] = value;
+          request.setTimeout = () => request;
           request.end = () => queueMicrotask(() => {
             const response = new EventEmitter(); response.statusCode = requests.length === 1 ? 304 : 200;
-            response.headers = { etag: 'updated' }; request.emit('response', response);
+            response.headers = { etag: 'updated' }; response.setEncoding = () => response; request.emit('response', response);
             if (response.statusCode === 200) response.emit('data', Buffer.from('{"updated":true}'));
             response.emit('end');
           }); requests.push(request); return request;
-        } };`, loader: 'js' }))
+        }`, loader: 'js' }))
       builder.onResolve({ filter: /^\.\/paths$/ }, () => ({ path: 'paths', namespace: 'cache-root-fixture' }))
       builder.onLoad({ filter: /.*/, namespace: 'cache-root-fixture' }, () => ({ contents: `export const cacheDir = () => ${JSON.stringify(root)};`, loader: 'js' }))
       builder.onResolve({ filter: /^\.\/r2Mirror$/ }, () => ({ path: 'mirror', namespace: 'mirror-fixture' }))

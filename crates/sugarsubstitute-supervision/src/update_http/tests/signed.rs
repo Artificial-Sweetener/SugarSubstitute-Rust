@@ -121,7 +121,7 @@ fn signed_repository_download_disconnect_reopen_and_resume_reaches_verified_cust
             context,
         )?;
         assert_eq!(bundle.release(), "local-package");
-        assert!(bundle.worker_paths().0.is_file());
+        assert!(bundle.worker()?.executable().is_file());
         server.finish()
     })
 }

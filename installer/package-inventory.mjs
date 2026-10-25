@@ -8,7 +8,7 @@ import { artifactDirectory } from './release/artifact-files.mjs'
 
 /** Mirror the public package-path contract, including Windows aliases on other build hosts. */
 function packagePath(value) {
-  if (typeof value !== 'string' || Buffer.byteLength(value) > 1024 || !/^(app|worker|electron|sugarcubes)\//.test(value) || /[:\\\p{Cc}<>"|?*]/u.test(value)) return false
+  if (typeof value !== 'string' || Buffer.byteLength(value) > 1024 || !/^(app|worker|sugarcubes)\//.test(value) || /[:\\\p{Cc}<>"|?*]/u.test(value)) return false
   return value.split('/').every(part => {
     const stem = part.split('.')[0].replace(/ +$/, '').toUpperCase()
     return part && part !== '.' && part !== '..' && part.length <= 255 && !/[. ]$/.test(part) &&

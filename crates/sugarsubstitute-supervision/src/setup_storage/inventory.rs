@@ -66,6 +66,7 @@ pub(super) fn require_complete(
             "app/sugarsubstitute-updater.json",
         ],
     )?;
+    super::bundle::worker::uses_node(manifest)?;
     require_application(manifest)
 }
 
@@ -114,7 +115,6 @@ fn require_application(manifest: &sugarsubstitute_update::package::Manifest) -> 
         "app/sugarsubstitute-release-v1.sig",
         "app/crashpad_handler.exe",
         "app/sugarsubstitute_crashpad_client.dll",
-        "electron/electron.exe",
         "worker/package.json",
         "worker/out/main/index.cjs",
         "sugarcubes/__init__.py",

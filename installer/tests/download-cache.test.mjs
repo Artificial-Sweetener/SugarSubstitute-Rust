@@ -15,7 +15,7 @@ const receipt = JSON.parse(fs.readFileSync(path.join(artifact, 'worker/build-rec
 const input = receipt.inputs.find(file => file.endsWith('/src/main/lib/download.ts'))
 const upstream = input.slice(0, input.indexOf('/src/main/'))
 
-/** Real downloader, stream and client; only Electron networking and the external native port are fake. */
+/** Real downloader, stream and client; only the Node request adapter and the external native port are fake. */
 async function fixture(options = {}) {
   const directory = fs.mkdtempSync(path.join(artifact, 'native-download-'))
   const root = path.join(directory, 'cache'), destination = path.join(root, 'archive')
@@ -28,6 +28,9 @@ async function fixture(options = {}) {
   const request = new EventEmitter(), response = new EventEmitter(), headers = new Map()
   request.setHeader = (name, value) => headers.set(name, value)
   request.abort = () => { state.aborted = true }
+  response.pause = () => { state.pauses = (state.pauses ?? 0) + 1 }
+  response.resume = () => { state.resumes = (state.resumes ?? 0) + 1 }
+  response.destroy = () => { state.destroyed = true }
   request.end = () => queueMicrotask(() => {
     response.statusCode = state.status
     response.headers = { 'content-length': String(state.size), etag: 'original' }
@@ -42,8 +45,8 @@ async function fixture(options = {}) {
     bundle: true, write: false, platform: 'node', format: 'esm', target: 'node22',
     plugins: [{ name: 'external-boundaries', setup(builder) {
       builder.onResolve({ filter: /^@upstream\// }, args => ({ path: path.join(upstream, 'src/main', args.path.slice(10) + '.ts') }))
-      builder.onResolve({ filter: /^electron$/ }, () => ({ path: 'electron', namespace: 'network-fixture' }))
-      builder.onLoad({ filter: /.*/, namespace: 'network-fixture' }, () => ({ loader: 'js', contents: `export const net={request(){return globalThis[${JSON.stringify(binding)}].request}}` }))
+      builder.onResolve({ filter: /provisioningTransport$/ }, () => ({ path: 'request', namespace: 'network-fixture' }))
+      builder.onLoad({ filter: /.*/, namespace: 'network-fixture' }, () => ({ loader: 'js', contents: `export function createRequest(){return globalThis[${JSON.stringify(binding)}].request}` }))
       builder.onResolve({ filter: /settings$/ }, () => ({ path: path.join(worker, 'settings.ts') }))
       builder.onResolve({ filter: /^fs$/ }, () => ({ path: 'fs', namespace: 'forbidden-cache-filesystem' }))
       builder.onLoad({ filter: /.*/, namespace: 'forbidden-cache-filesystem' }, () => ({ loader: 'js', contents: `
@@ -97,13 +100,13 @@ test('native cache writes reject source-queue overflow before writes and preserv
   } finally { f.dispose() }
 })
 
-test('the existing downloader commits exact native bytes without unsupported response methods or filesystem access', async () => {
+test('the downloader commits exact native bytes through its owned cache port', async () => {
   const f = await fixture()
   try {
     assert.equal(await f.module.download('https://example.test/archive', f.destination, null), f.destination)
     assert.deepEqual(f.files.get('archive'), f.state.chunks[0])
     assert.equal(f.files.has('archive.dl-meta'), false)
-    assert.equal(f.response.pause, undefined)
+    assert.equal(f.state.pauses ?? 0, 0)
     assert.equal(fs.existsSync(f.root), false)
   } finally { f.dispose() }
 })

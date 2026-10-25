@@ -31,6 +31,7 @@ serde_json.workspace = true
 sha2.workspace = true
 
 [target.'cfg(windows)'.dependencies]
+sugarsubstitute-networking = { path = "../sugarsubstitute-networking" }
 sugarsubstitute-crash = { path = "../sugarsubstitute-crash" }
 
 [target.'cfg(windows)'.dev-dependencies]

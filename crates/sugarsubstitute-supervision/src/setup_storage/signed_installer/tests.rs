@@ -24,9 +24,9 @@ fn composed_maintenance_preserves_configuration_and_transfers_only_an_unaccepted
     worker::run_reserved(SIGNED_INSTALLER_RESERVATION_BYTES, |context, _| {
         let fixture = Fixture::new(context)?;
         let imported = fixture.import(SignedPackage::new(&fixture.archive, 1)?, context)?;
-        let (worker, package) = imported.worker_paths();
-        assert!(worker.is_file());
-        assert!(package.is_dir());
+        let worker = imported.worker()?;
+        assert!(worker.executable().is_file());
+        assert!(worker.directory().is_dir());
         assert!(InstallationSession::maintain(fixture.installation.path(), context).is_err());
         let prepared = imported.prepare(|| NOW, context)?;
         let runtime = prepared.maintenance_runtime().ok_or("Saved runtime absent")?.clone();

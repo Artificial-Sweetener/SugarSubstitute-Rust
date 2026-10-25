@@ -336,6 +336,7 @@ files = [
   "third_party/comfy-desktop/src/shared/errorBucket.ts",
   "third_party/comfy-desktop/src/shared/errorEvent.ts",
   "third_party/comfy-desktop/src/shared/piiScrub.ts",
+  "installer/patches/0006-standalone-node-runtime.patch",
 ]
 
 [[components]]
@@ -360,3 +361,10 @@ files = [
   "crates/sugarsubstitute-ui/assets/fluent/Link.svg",
   "crates/sugarsubstitute-ui/assets/fluent/Sync.svg",
 ]
+
+[[components]]
+id = "nodejs-provisioning-runtime"
+source_url = "https://nodejs.org/dist/v24.22.1/"
+license = "MIT AND LicenseRef-Nodejs-Bundled-Dependencies"
+license_file = "third_party/licenses/nodejs-24.22.1.txt"
+files = ["installer/runtime.json"]

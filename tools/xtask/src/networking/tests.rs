@@ -340,5 +340,11 @@ fn browser_upstream_ipc_and_inspection_labels_cannot_authorize_native_http_const
     assert!(category_admits(&policy.records[0], &["@upstream/lib/download".into()]));
     assert!(!category_admits(&policy.records[0], &["@upstream/lib/fetch".into()]));
     assert!(!category_admits(&policy.records[0], &raw));
+    policy.records[0].path = "installer/prepare-runtime.mjs".into();
+    assert!(category_admits(&policy.records[0], &["fetch".into()]));
+    for rejected in ["@electron/get", "downloadArtifact", "node:http", "createConnection"] {
+        assert!(!category_admits(&policy.records[0], &[rejected.into()]));
+    }
+    assert!(!category_admits(&policy.records[0], &raw));
     Ok(())
 }

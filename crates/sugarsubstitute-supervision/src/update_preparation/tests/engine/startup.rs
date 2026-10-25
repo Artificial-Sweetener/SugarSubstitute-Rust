@@ -5,10 +5,10 @@ use super::*;
 
 fn cached(pipeline: &mut Pipeline, fixture: &Fixture) -> Result<Worker, Failure> {
     let mut signed = SignedPackage::new(&fixture.archive, 3)?;
-    requires(&mut signed, &fixture.archive, "minimum_updater_release", 2)?;
+    requires(&mut signed, &fixture.archive, "minimum_updater_release", NEXT_ENGINE)?;
     signed.metadata = sugarsubstitute_update::fixture::Set::targets(
         &sugarsubstitute_update::fixture::key(92)?,
-        [3; 3],
+        [(NEXT_ENGINE + 1).try_into()?; 3],
         &[
             (&signed.request.target_name(), &signed.descriptor),
             (&format!("{:x}.ssupdate", Sha256::digest(&fixture.archive)), &fixture.archive),

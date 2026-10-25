@@ -194,17 +194,7 @@ pub(crate) fn check(
                 "networking: foreign inspection-only classifier data",
             )?,
             Boundary::Fixture => require(
-                record.path.contains("/tests/")
-                    || record.path.ends_with("_tests.rs")
-                    || record.path.ends_with("/tests.rs")
-                    || record.path.ends_with("/http_fixture.rs")
-                    || matches!(
-                        record.path.as_str(),
-                        "tools/updater_feed_fixture.py"
-                            | "tools/test_updater_feed_fixture.py"
-                            | "tools/updater_qualification.py"
-                    )
-                    || record.path.starts_with("installer/qualify-"),
+                fixture_source(&record.path),
                 format!(
                     "networking: {} fixture boundary must be qualification/test source",
                     record.path
@@ -253,6 +243,22 @@ pub(crate) fn check(
         ),
     )
 }
+
+/// Keep root-level graph fixtures distinct from runtime transport implementations.
+fn fixture_source(path: &str) -> bool {
+    path.contains("/tests/")
+        || path.ends_with("_tests.rs")
+        || path.ends_with("/tests.rs")
+        || path.ends_with("/http_fixture.rs")
+        || matches!(
+            path,
+            "tools/updater_feed_fixture.py"
+                | "tools/test_updater_feed_fixture.py"
+                | "tools/updater_qualification.py"
+                | "installer/worker-graph.test.mjs"
+        )
+        || path.starts_with("installer/qualify-")
+}
 /// Boundary labels cannot authorize native HTTP construction outside its sole adapter.
 fn category_admits(record: &Record, findings: &[String]) -> bool {
     match record.boundary {
@@ -280,9 +286,7 @@ fn category_admits(record: &Record, findings: &[String]) -> bool {
                 matches!(finding.as_str(), "@upstream/lib/download" | "@upstream/lib/fetch")
             }
             "installer/worker/downloader.ts" => finding == "@upstream/lib/download",
-            "installer/prepare-runtime.mjs" => {
-                matches!(finding.as_str(), "@electron/get" | "downloadArtifact")
-            }
+            "installer/prepare-runtime.mjs" => finding == "fetch",
             _ => matches!(
                 finding.as_str(),
                 "fetch" | "electron" | "@upstream/lib/download" | "@upstream/lib/fetch"
@@ -291,5 +295,7 @@ fn category_admits(record: &Record, findings: &[String]) -> bool {
     }
 }
 
+#[cfg(test)]
+mod fixture_source_tests;
 #[cfg(test)]
 mod tests;

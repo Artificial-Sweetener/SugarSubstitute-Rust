@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 /** Versioned, bounded host protocol. Selection values carry no download or execution authority. */
 export const VERSION = 1
+// proxy_result is an additive operation supplied by the host paired with the signed Node worker.
 export const MAX_FRAME_BYTES = 65536
 const fields = new Set(['release', 'comfyVersion', 'variant'])
 
@@ -39,6 +40,23 @@ export function parseCommand(bytes) {
         if ('data' in input.result || !['ENOENT', 'EEXIST', 'EACCES', 'EBUSY', 'EINTR', 'ETIMEDOUT', 'EIO', ...(['metadata_reply', 'downloads_reply'].includes(value.operation) ? ['ENOSPC'] : [])].includes(input.result.error.code) ||
             input.result.error.osCode !== null && !Number.isSafeInteger(input.result.error.osCode)) throw new Error('Invalid native storage error')
       } else throw new Error('Invalid native storage outcome')
+      break
+    case 'proxy_result':
+      keys(input, ['routes', 'error'])
+      if (input.error !== undefined) {
+        text(input.error, 'proxy error', 2048)
+        if (input.routes !== undefined) throw new Error('Ambiguous proxy reply')
+      } else {
+        if (!Array.isArray(input.routes) || !input.routes.length || input.routes.length > 16) throw new Error('Invalid proxy routes')
+        for (const route of input.routes) {
+          keys(route, route?.kind === 'direct' ? ['kind'] : ['kind', 'url'])
+          if (route.kind === 'direct') continue
+          if (route.kind !== 'proxy') throw new Error('Unsupported proxy route')
+          text(route.url, 'proxy URL', 2048)
+          const url = new URL(route.url)
+          if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new Error('Invalid proxy URL')
+        }
+      }
       break
     case 'options':
       keys(input, ['field', 'selections', 'mirrors', 'locale'])

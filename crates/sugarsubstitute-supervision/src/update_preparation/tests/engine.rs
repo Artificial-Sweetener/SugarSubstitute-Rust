@@ -12,6 +12,8 @@ mod feed;
 mod startup;
 use feed::{Feed, campaign, seed_accepted};
 
+const NEXT_ENGINE: u64 = sugarsubstitute_update::ENGINE_RELEASE + 1;
+
 #[test]
 fn required_engine_is_staged_through_signed_feed_without_taking_application_ownership() -> TestResult
 {
@@ -98,7 +100,7 @@ fn accepted_engine_is_reused_without_fetching_an_engine_offer_or_retaining_prepa
         let mut trust = TrustStore::open(&root, [92; 32], &context)?;
         trust.acquire_preparation(&context)?;
         let request = trust.updater_request(Channel::Release, &context)?;
-        assert_eq!(request.sequence_floor, 2);
+        assert_eq!(request.sequence_floor, NEXT_ENGINE);
         assert_eq!(request.updater_release, sugarsubstitute_update::ENGINE_RELEASE);
         assert!(std::fs::OpenOptions::new().write(true).open(executable).is_err());
         drop(input);
