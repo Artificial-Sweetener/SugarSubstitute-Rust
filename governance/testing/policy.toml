@@ -2,6 +2,12 @@ schema_version = 1
 platforms = ["windows", "macos", "linux"]
 
 [[owners]]
+package = "sugarsubstitute-image-gpu"
+root = "crates/sugarsubstitute-image-gpu"
+concern = "GPU compatibility, exact device selection and first device-loss cause; native hardware qualification compares every implemented DAG operation, sampling, hidden branches and original allocation retirement"
+minimum_tests = 5
+
+[[owners]]
 package = "sugarsubstitute-canvas"
 root = "crates/sugarsubstitute-canvas"
 concern = "Camera coordinate invariants, exact exposed-edge damage, retained source geometry and reversible document revision publication"
@@ -16,8 +22,8 @@ minimum_tests = 4
 [[owners]]
 package = "sugarsubstitute-image-ops"
 root = "crates/sugarsubstitute-image-ops"
-concern = "Graph identity and validation, pyramid semantics, tiled/reference agreement, vector coverage, dirty dependencies, bounded source access and retained execution memory"
-minimum_tests = 12
+concern = "Graph identity and validation, shared CPU/GPU sampling coefficients and retention, pyramid semantics, tiled/reference agreement, vector coverage, dirty dependencies, bounded source access and retained execution memory"
+minimum_tests = 31
 
 [[owners]]
 package = "sugarsubstitute-contracts"

@@ -856,7 +856,7 @@ rationale = "Publication-recovery qualification reads the authoritative cache ca
 [[records]]
 path = "tools/xtask/src/ui/tests.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:96a7cbd49fae094cb6329b0e46d51d4ce4cd4504c79498dcfba7dc4244118e96"
+source_sha256 = "sha256:7fbda1f501d70322f8825442a52474e4132c539f7edbdc81b2ea692ef287f052"
 capabilities = ["codec"]
 rationale = "Construct isolated malformed UI policy documents to verify unknown-schema, duplicate, stale-review and dependency-identity rejection through the real governance checker."
 
@@ -908,3 +908,10 @@ owner = "sugarsubstitute"
 source_sha256 = "sha256:e933bdac6e609ddc205e5404645af3a6d58c76368c405c855f532887a1acfec5"
 capabilities = ["arguments"]
 rationale = "Standalone viewer entry captures explicit CLI values once and passes typed bounded options to its application lifetime; storage and execution remain with their authoritative owners."
+
+[[records]]
+path = "crates/sugarsubstitute-image-gpu/examples/adapter_qualification.rs"
+owner = "sugarsubstitute-image-gpu"
+source_sha256 = "sha256:2dedb4cfb9fe87eedeaa15f53f27c1b2bcf63479281392e07b172a7c77688faa"
+capabilities = ["arguments"]
+rationale = "Developer hardware qualification accepts explicit backend/vendor/device model selectors; discovery rejects ambiguous model matches rather than using unstable enumeration order."

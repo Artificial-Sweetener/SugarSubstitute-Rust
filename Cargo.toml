@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/sugarsubstitute-networking", "crates/sugarsubstitute", "crates/sugarsubstitute-contracts", "crates/sugarsubstitute-application", "crates/sugarsubstitute-comfy", "crates/sugarsubstitute-execution", "crates/sugarsubstitute-supervision", "crates/sugarsubstitute-splash", "crates/sugarsubstitute-ui", "crates/sugarsubstitute-desktop", "crates/sugarsubstitute-crash", "crates/sugarsubstitute-update", "tools/xtask", "crates/sugarsubstitute-configuration", "crates/sugarsubstitute-image-ops", "crates/sugarsubstitute-canvas", "crates/sugarsubstitute-canvas-render", "crates/sugarsubstitute-image-io"]
+members = ["crates/sugarsubstitute-networking", "crates/sugarsubstitute", "crates/sugarsubstitute-contracts", "crates/sugarsubstitute-application", "crates/sugarsubstitute-comfy", "crates/sugarsubstitute-execution", "crates/sugarsubstitute-supervision", "crates/sugarsubstitute-splash", "crates/sugarsubstitute-ui", "crates/sugarsubstitute-desktop", "crates/sugarsubstitute-crash", "crates/sugarsubstitute-update", "tools/xtask", "crates/sugarsubstitute-configuration", "crates/sugarsubstitute-image-ops", "crates/sugarsubstitute-canvas", "crates/sugarsubstitute-canvas-render", "crates/sugarsubstitute-image-io", "crates/sugarsubstitute-image-gpu"]
 exclude = ["third_party/wry"]
 
 default-members = ["crates/sugarsubstitute-networking", "crates/sugarsubstitute"]
@@ -32,6 +32,7 @@ tokio = { version = "=1.53.2", features = ["rt-multi-thread", "sync", "time", "m
 tiny-skia = "=0.12.0"
 resvg = { version = "=0.48.1", default-features = false }
 png = "=0.18.1"
+wgpu = { version = "=30.0.1", default-features = false, features = ["std", "vulkan", "metal", "wgsl"] }
 cosmic-text = { version = "=0.19.0", default-features = false, features = ["std", "swash"] }
 tao = "=0.37.0"
 softbuffer = { version = "=0.4.8", default-features = false }

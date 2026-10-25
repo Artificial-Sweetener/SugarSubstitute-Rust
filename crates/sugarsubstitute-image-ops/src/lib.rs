@@ -14,8 +14,10 @@ mod error;
 mod evaluate;
 mod geometry;
 mod graph;
+mod kernel;
 mod pixel;
 mod resample;
+mod retention;
 mod sampling;
 mod spatial;
 
@@ -25,7 +27,9 @@ pub use error::ImageError;
 pub use evaluate::{EvaluationStats, Evaluator, RasterSource};
 pub use geometry::{Extent, Region};
 pub use graph::{AssetId, Graph, NodeId, Operation, Pyramid, VectorRectangle};
+pub use kernel::{AxisKernel, MAX_SAMPLING_TAPS, SampleTap, SamplingAxis};
 pub use pixel::Pixel;
+pub use retention::TileRetention;
 pub use sampling::{Filter, Sampling};
 
 #[cfg(test)]

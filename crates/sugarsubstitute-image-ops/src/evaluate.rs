@@ -3,7 +3,7 @@
 //! Bounded demand-driven CPU evaluation with feature-owned process-local tile reuse.
 use crate::{
     AssetId, Graph, ImageError, NodeId, Operation, Pixel, Region, Sampling, TILE_EDGE, Tile,
-    buffer::Buffer,
+    TileRetention, buffer::Buffer,
 };
 use std::sync::Arc;
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim, MemoryLease};
@@ -39,27 +39,15 @@ pub struct EvaluationStats {
     pub resident_tiles: usize,
 }
 
-struct CachedTile {
-    key: [u8; 32],
-    region: Region,
-    used: u64,
-    retention: u8,
-    tile: Arc<Tile>,
-}
-
 /// CPU evaluator with bounded process-local retention and execution-backed allocations.
 /// This is image reuse policy, not a scheduler, memory admission owner or persistent cache.
 /// Move it between owned jobs; native presentation receives immutable tiles only.
 pub struct Evaluator<S> {
     graph: Graph,
     source: S,
-    cache: Vec<CachedTile>,
-    limit: usize,
-    tick: u64,
+    cache: TileRetention<Tile>,
     stats: EvaluationStats,
     memory: MemoryLease,
-    _cache_memory: MemoryClaim,
-    preferred_level: u8,
     evaluation_depth: usize,
 }
 impl<S: RasterSource> Evaluator<S> {
@@ -72,22 +60,13 @@ impl<S: RasterSource> Evaluator<S> {
         maximum_tiles: usize,
         memory: &MemoryLease,
     ) -> Result<Self, ImageError> {
-        if maximum_tiles == 0 || maximum_tiles > 4096 {
-            return Err(ImageError::Invalid("Invalid tile retention limit"));
-        }
-        let claim = memory.claim((maximum_tiles * size_of::<CachedTile>()) as u64)?;
-        let mut cache = Vec::new();
-        cache.try_reserve_exact(maximum_tiles)?;
+        let cache = TileRetention::new(maximum_tiles, memory)?;
         Ok(Self {
             graph,
             source,
             cache,
-            limit: maximum_tiles,
-            tick: 0,
             stats: EvaluationStats::default(),
             memory: memory.clone(),
-            _cache_memory: claim,
-            preferred_level: 0,
             evaluation_depth: 0,
         })
     }
@@ -120,7 +99,7 @@ impl<S: RasterSource> Evaluator<S> {
         y: u32,
         context: &JobContext,
     ) -> Result<Arc<Tile>, ImageError> {
-        let region = crate::spatial::tile_region(self.graph.extent(node)?, x, y)?;
+        let region = self.graph.extent(node)?.tile_region(x, y)?;
         self.region(node, region, context)
     }
     /// Evaluate an exact bounded output region, preserving global sample phase at repair edges.
@@ -135,7 +114,7 @@ impl<S: RasterSource> Evaluator<S> {
         context: &JobContext,
     ) -> Result<Arc<Tile>, ImageError> {
         if self.evaluation_depth == 0 {
-            self.preferred_level = self.graph.requested_pyramid_level(node)?;
+            self.cache.prefer_level(self.graph.requested_pyramid_level(node)?);
         }
         self.evaluation_depth += 1;
         let result = self.compute_region(node, region, context);
@@ -156,13 +135,10 @@ impl<S: RasterSource> Evaluator<S> {
             return Err(ImageError::Invalid("Invalid bounded evaluation region"));
         }
         let key = self.graph.fingerprint(node)?;
-        let retention = self.graph.pyramid_level(node)?.map_or(0, |level| level.saturating_add(1));
-        self.tick = self.tick.saturating_add(1);
-        if let Some(entry) = self.cache.iter_mut().find(|v| v.key == key && v.region == region) {
-            entry.used = self.tick;
-            entry.retention = entry.retention.max(retention);
+        let level = self.graph.pyramid_level(node)?;
+        if let Some(tile) = self.cache.find(key, region, level) {
             self.stats.reused_tiles = self.stats.reused_tiles.saturating_add(1);
-            return Ok(Arc::clone(&entry.tile));
+            return Ok(tile);
         }
         let operation = self.graph.operation(node)?;
         let mut output = self.allocate(region)?;
@@ -175,13 +151,9 @@ impl<S: RasterSource> Evaluator<S> {
             Operation::Rectangle { shape, .. } => {
                 for y in region.y()..region.bottom() {
                     check(context)?;
-                    let vertical = ((f64::from(y + 1).min(shape.bounds[3])
-                        - f64::from(y).max(shape.bounds[1]))
-                    .clamp(0.0, 1.0)) as f32;
+                    let vertical = shape.axis_coverage(crate::SamplingAxis::Vertical, y);
                     for x in region.x()..region.right() {
-                        let horizontal = ((f64::from(x + 1).min(shape.bounds[2])
-                            - f64::from(x).max(shape.bounds[0]))
-                        .clamp(0.0, 1.0)) as f32;
+                        let horizontal = shape.axis_coverage(crate::SamplingAxis::Horizontal, x);
                         let coverage = horizontal * vertical;
                         let index = (y - region.y()) as usize * region.width() as usize
                             + (x - region.x()) as usize;
@@ -276,17 +248,7 @@ impl<S: RasterSource> Evaluator<S> {
         }
         check(context)?;
         let tile = Arc::new(Tile { buffer: output });
-        if self.cache.len() == self.limit {
-            let index = self.victim(false).ok_or(ImageError::Invalid("Empty full tile cache"))?;
-            self.cache.swap_remove(index);
-        }
-        self.cache.push(CachedTile {
-            key,
-            region,
-            used: self.tick,
-            retention,
-            tile: Arc::clone(&tile),
-        });
+        self.cache.insert(key, region, level, Arc::clone(&tile));
         self.stats.computed_tiles = self.stats.computed_tiles.saturating_add(1);
         self.stats.computed_pixels = self.stats.computed_pixels.saturating_add(region.pixels());
         Ok(tile)
@@ -310,7 +272,7 @@ impl<S: RasterSource> Evaluator<S> {
         }
         let x = region.x() / TILE_EDGE;
         let y = region.y() / TILE_EDGE;
-        if crate::spatial::tile_region(self.graph.extent(node)?, x, y)? == region {
+        if self.graph.extent(node)?.tile_region(x, y)? == region {
             return self.tile(node, x, y, context);
         }
         Ok(Arc::new(Tile { buffer: self.input(node, region, context)? }))
@@ -357,51 +319,12 @@ impl<S: RasterSource> Evaluator<S> {
             match self.memory.claim(bytes) {
                 Ok(claim) => return Ok(claim),
                 Err(cause) => {
-                    let oldest = self.victim(true);
-                    let Some(index) = oldest else {
+                    if !self.cache.evict_unpinned(|_| true) {
                         return Err(cause.into());
-                    };
-                    self.cache.swap_remove(index);
+                    }
                 }
             }
         }
-    }
-    /// Share finite retention among active pyramid levels; complete coarse inventories cannot
-    /// displace every fine halo needed to reconstruct their next neighboring tile.
-    fn victim(&self, unpinned: bool) -> Option<usize> {
-        let mut counts = [0_usize; 256];
-        for entry in &self.cache {
-            counts[usize::from(entry.retention)] += 1;
-        }
-        let preferred = usize::from(self.preferred_level) + 1;
-        let capacity = self.cache.len();
-        let target = if preferred == 1 { capacity } else { (capacity / 2).max(1) };
-        let finer = if preferred == 1 {
-            0
-        } else {
-            (capacity - counts[preferred].min(target)) / (preferred - 1)
-        };
-        self.cache
-            .iter()
-            .enumerate()
-            .filter(|(_, entry)| !unpinned || Arc::strong_count(&entry.tile) == 1)
-            .min_by_key(|(_, entry)| {
-                let level = usize::from(entry.retention);
-                let quota = if level == preferred { target } else { finer };
-                let priority = if level == 0 {
-                    0
-                } else if level > preferred {
-                    1
-                } else if counts[level] > quota {
-                    2
-                } else if level == preferred {
-                    4
-                } else {
-                    3
-                };
-                (priority, entry.used)
-            })
-            .map(|(index, _)| index)
     }
 }
 

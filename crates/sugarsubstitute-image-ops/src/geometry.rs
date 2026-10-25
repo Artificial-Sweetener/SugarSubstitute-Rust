@@ -100,3 +100,26 @@ impl Region {
         x >= self.x && x < self.right() && y >= self.y && y < self.bottom()
     }
 }
+
+impl Extent {
+    /// Clip an aligned 128-pixel tile to this image's right and bottom edges.
+    /// # Errors
+    /// Rejects overflowing tile indices or a tile outside the image.
+    pub fn tile_region(self, x: u32, y: u32) -> Result<Region, ImageError> {
+        let left = x
+            .checked_mul(crate::TILE_EDGE)
+            .ok_or(ImageError::Invalid("Tile coordinate overflow"))?;
+        let top = y
+            .checked_mul(crate::TILE_EDGE)
+            .ok_or(ImageError::Invalid("Tile coordinate overflow"))?;
+        if left >= self.width() || top >= self.height() {
+            return Err(ImageError::Invalid("Tile outside image"));
+        }
+        Region::new(
+            left,
+            top,
+            crate::TILE_EDGE.min(self.width() - left),
+            crate::TILE_EDGE.min(self.height() - top),
+        )
+    }
+}

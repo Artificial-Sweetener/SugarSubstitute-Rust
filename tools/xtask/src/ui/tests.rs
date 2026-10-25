@@ -88,6 +88,8 @@ fn source_capabilities_cannot_hide_in_aliases_macros_or_platform_branches() -> R
         "fn run(target: NativeTarget) { target.FillRectangle(); }",
         "use windows::Win32::Graphics::Gdi::SetTextColor as recolor;",
         "macro_rules! palette { () => { SetBkColor(); SetDCBrushColor(); }; }",
+        "#[cfg(target_os=\"macos\")] fn run(){ wgpu::Instance::new(options); }",
+        "macro_rules! gpu { () => { use wgpu as rendering; rendering::Device }; }",
     ] {
         assert!(!ui_source::findings(source, &[])?.is_empty(), "accepted {source}");
     }
@@ -101,19 +103,26 @@ fn source_capabilities_cannot_hide_in_aliases_macros_or_platform_branches() -> R
 /// Toolkit aliases are classified by Cargo identity, not by their local name.
 #[test]
 fn renamed_toolkit_dependency_and_its_source_are_rejected() -> Result<()> {
-    let (mut fixture, policy) = fixture()?;
-    fixture.workspace.packages[1].dependencies.push(crate::workspace::Dependency {
-        name: "tiny-skia".into(),
-        rename: Some("drawing".into()),
-        kind: None,
-        path: None,
-    });
-    let dependencies = &fixture.workspace.packages[1].dependencies;
-    assert_eq!(
-        ui_source::findings("fn run(){ drawing::Pixmap::new(10,10); }", dependencies)?,
-        BTreeSet::from([Capability::Raster])
-    );
-    assert!(check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace).is_err());
+    for name in ["tiny-skia", "wgpu"] {
+        let (mut fixture, policy) = fixture()?;
+        fixture.workspace.packages[1].dependencies.push(crate::workspace::Dependency {
+            name: name.into(),
+            rename: Some("drawing".into()),
+            kind: None,
+            path: None,
+        });
+        let dependencies = &fixture.workspace.packages[1].dependencies;
+        let source = if name == "wgpu" {
+            "fn run(){ drawing::Instance::new(options); }"
+        } else {
+            "fn run(){ drawing::Pixmap::new(10,10); }"
+        };
+        assert_eq!(
+            ui_source::findings(source, dependencies)?,
+            BTreeSet::from([Capability::Raster])
+        );
+        assert!(check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace).is_err());
+    }
     Ok(())
 }
 

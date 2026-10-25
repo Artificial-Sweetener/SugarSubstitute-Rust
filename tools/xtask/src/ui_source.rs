@@ -26,7 +26,7 @@ pub(crate) enum Capability {
 /// Canonical Cargo identities prevent dependency renaming from bypassing ownership.
 pub(crate) fn dependency(name: &str) -> Option<Capability> {
     match name.replace('-', "_").as_str() {
-        "tiny_skia" | "resvg" | "usvg" | "skia_safe" | "softbuffer" | "cairo_rs" => {
+        "tiny_skia" | "resvg" | "usvg" | "skia_safe" | "softbuffer" | "cairo_rs" | "wgpu" => {
             Some(Capability::Raster)
         }
         "cosmic_text" => Some(Capability::Text),
@@ -104,6 +104,7 @@ impl Scanner {
             | "usvg"
             | "skia_safe"
             | "softbuffer"
+            | "wgpu"
             | "cairo"
             | "fill_rect"
             | "fill_path"

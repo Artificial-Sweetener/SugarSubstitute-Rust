@@ -4,6 +4,44 @@
 use super::*;
 
 #[test]
+fn shared_axis_kernels_preserve_phase_clamping_and_normalized_bounded_support() -> TestResult {
+    let sampling = Sampling::new([0.5, 2.0], [-0.25, 3.5])?.with_filter(Filter::Nearest);
+    let horizontal = sampling.axis_kernel(SamplingAxis::Horizontal, 128, 4097)?;
+    let vertical = sampling.axis_kernel(SamplingAxis::Vertical, 0, 4097)?;
+    assert_eq!(horizontal.taps().len(), 1);
+    assert_eq!(horizontal.taps()[0].coordinate(), 64);
+    assert_eq!(vertical.taps()[0].coordinate(), 4);
+    assert_eq!(horizontal.taps()[0].weight(), 1.0);
+    let sampling = Sampling::resize(Extent::new(4097, 4097)?, Extent::new(2049, 2049)?);
+    for output in [0, 1, 127, 128, 2048] {
+        let kernel = sampling.axis_kernel(SamplingAxis::Horizontal, output, 4097)?;
+        assert!(kernel.taps().len() <= MAX_SAMPLING_TAPS);
+        assert!(kernel.taps().iter().all(|tap| tap.coordinate() < 4097));
+        let sum: f32 = kernel.taps().iter().map(|tap| tap.weight()).sum();
+        assert!((sum - 1.0).abs() < 1e-6);
+    }
+    Ok(())
+}
+
+#[test]
+fn shared_axis_kernels_reject_unbounded_steps_and_preserve_a_single_pixel_axis() -> TestResult {
+    let sampling = Sampling::new([128.0; 2], [0.0; 2])?;
+    assert!(sampling.axis_kernel(SamplingAxis::Horizontal, 0, 4097).is_err());
+    assert!(sampling.axis_kernel(SamplingAxis::Horizontal, 0, 0).is_err());
+    let kernel = sampling.axis_kernel(SamplingAxis::Horizontal, 17, 1)?;
+    assert_eq!(kernel.taps().len(), 1);
+    assert_eq!(kernel.taps()[0].coordinate(), 0);
+    assert_eq!(kernel.taps()[0].weight(), 1.0);
+    let extreme = Sampling::new([f64::MAX; 2], [f64::MAX; 2])?;
+    for filter in [Filter::Nearest, Filter::Lanczos3] {
+        assert!(
+            extreme.with_filter(filter).axis_kernel(SamplingAxis::Vertical, u32::MAX, 1).is_err()
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn nearest_preview_has_exact_global_phase_bounded_dependencies_and_distinct_content_keys()
 -> TestResult {
     run(MEMORY, |context| {

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Spatial contracts shared by evaluation, dirty-region propagation and backend planning.
-use crate::{Extent, Filter, Graph, ImageError, NodeId, Operation, Region};
+use crate::{Filter, Graph, ImageError, NodeId, Operation, Region};
 
 impl Graph {
     /// Required input regions for an exact output region, including Lanczos filter halos.
@@ -146,20 +146,4 @@ fn invalidated_axis(
             .clamp(f64::from(left), f64::from(target)) as u32
     };
     (left, right)
-}
-
-pub(crate) fn tile_region(extent: Extent, x: u32, y: u32) -> Result<Region, ImageError> {
-    let left =
-        x.checked_mul(crate::TILE_EDGE).ok_or(ImageError::Invalid("Tile coordinate overflow"))?;
-    let top =
-        y.checked_mul(crate::TILE_EDGE).ok_or(ImageError::Invalid("Tile coordinate overflow"))?;
-    if left >= extent.width() || top >= extent.height() {
-        return Err(ImageError::Invalid("Tile outside image"));
-    }
-    Region::new(
-        left,
-        top,
-        crate::TILE_EDGE.min(extent.width() - left),
-        crate::TILE_EDGE.min(extent.height() - top),
-    )
 }

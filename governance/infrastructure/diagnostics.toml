@@ -958,3 +958,17 @@ owner = "sugarsubstitute-image-io"
 source_sha256 = "sha256:6407d8b5e16fea742e67f326ba161349e0a892a55e27900bb6d85244a0f4fea5"
 disposition = "fixture"
 rationale = "Bounded external test wake reports retained terminal failure causes after real execution admission; no runtime sink is constructed."
+
+[[records]]
+path = "crates/sugarsubstitute-image-gpu/examples/adapter_qualification.rs"
+owner = "sugarsubstitute-image-gpu"
+source_sha256 = "sha256:2dedb4cfb9fe87eedeaa15f53f27c1b2bcf63479281392e07b172a7c77688faa"
+disposition = "fixture"
+rationale = "Isolated native hardware qualification reports actual adapter identity, CPU/GPU pixel comparisons, timings and observed execution retirement; runtime diagnostics use structured logging."
+
+[[records]]
+path = "crates/sugarsubstitute-image-gpu/examples/adapter_qualification/image.rs"
+owner = "sugarsubstitute-image-gpu"
+source_sha256 = "sha256:dfb562ba1644c70ca8012cf37ba16c3cc168e0dec0e71ba24831d99cfdf04ee2"
+disposition = "fixture"
+rationale = "Isolated native hardware qualification reports actual adapter identity, CPU/GPU pixel comparisons, timings and observed execution retirement; runtime diagnostics use structured logging."

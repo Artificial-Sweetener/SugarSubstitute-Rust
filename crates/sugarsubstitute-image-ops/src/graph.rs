@@ -46,6 +46,17 @@ impl VectorRectangle {
     pub const fn color(self) -> Pixel {
         self.color
     }
+    /// Analytic coverage of a unit pixel interval along one axis, evaluated before GPU rebasing.
+    /// Original document coordinates retain f64 precision even for distant vector edges.
+    pub fn axis_coverage(self, axis: crate::SamplingAxis, position: u32) -> f32 {
+        let axis = match axis {
+            crate::SamplingAxis::Horizontal => 0,
+            crate::SamplingAxis::Vertical => 1,
+        };
+        ((f64::from(position) + 1.0).min(self.bounds[axis + 2])
+            - f64::from(position).max(self.bounds[axis]))
+        .clamp(0.0, 1.0) as f32
+    }
 }
 
 /// Image semantics independent of evaluation backend, storage and presentation.
