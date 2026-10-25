@@ -13,6 +13,8 @@ use sugarsubstitute_execution::{ExecutionOwner, MonotonicClock};
 use sugarsubstitute_image_gpu::{AdapterCatalog, AdapterDescriptor, AdapterKey, GpuDevice};
 
 type Result<T = ()> = std::result::Result<T, Box<dyn Error>>;
+#[path = "frame_qualification/scale.rs"]
+mod scale;
 #[path = "frame_qualification/scene.rs"]
 mod scene;
 #[derive(Default)]
@@ -145,7 +147,8 @@ fn main() -> Result {
                         .device
                         .take()
                         .ok_or_else(|| io::Error::other("Selected GPU custody absent"))?;
-                    report.frames = scene::qualify(device, &context)?;
+                    report.frames = scene::qualify(device.clone(), &context)?;
+                    report.frames += scale::qualify(device, &context)?;
                     Ok::<Report, Box<dyn Error + Send + Sync>>(report)
                 },
             )?;
@@ -200,6 +203,13 @@ fn main() -> Result {
         Ok(report.settled.then_some(()))
     });
     let finished = stopped.and_then(|()| owner.finish_shutdown().map_err(Box::<dyn Error>::from));
+    let finished = finished.and_then(|()| {
+        if scope.snapshot().reserved_bytes == 0 {
+            Ok(())
+        } else {
+            Err("GPU qualification retained admission after actual worker shutdown".into())
+        }
+    });
     match (result, finished) {
         (Err(primary), Err(retirement)) => {
             Err(format!("{primary}; GPU qualification retirement: {retirement}").into())

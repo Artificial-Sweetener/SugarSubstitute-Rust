@@ -23,9 +23,20 @@ impl GpuError {
     pub(crate) fn invalid(message: &'static str) -> Self {
         Self::new("gpu_request", std::io::Error::new(std::io::ErrorKind::InvalidInput, message))
     }
-    pub(crate) fn memory_pressure(&self) -> bool {
+    /// Whether execution admission rejected an allocation, with no accompanying native retirement
+    /// failure. The caller may release reconstructible resources and retry within the same budget.
+    pub fn is_memory_pressure(&self) -> bool {
+        if self.retirement_cause().is_some() {
+            return false;
+        }
         let mut cause = self.source();
         while let Some(current) = cause {
+            if current
+                .downcast_ref::<Self>()
+                .is_some_and(|cause| cause.retirement_cause().is_some())
+            {
+                return false;
+            }
             if current.is::<sugarsubstitute_contracts::execution::MemoryClaimError>() {
                 return true;
             }
@@ -67,6 +78,26 @@ impl Error for GpuError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn only_execution_admission_without_native_retirement_failure_is_retryable() {
+        let admission = || {
+            GpuError::new(
+                "allocation",
+                sugarsubstitute_contracts::execution::MemoryClaimError {
+                    requested_bytes: 100,
+                    available_bytes: 1,
+                },
+            )
+        };
+        assert!(admission().is_memory_pressure());
+        assert!(
+            !GpuError::new("driver", std::io::Error::from(std::io::ErrorKind::OutOfMemory))
+                .is_memory_pressure()
+        );
+        let combined = GpuError::retirement(admission(), GpuError::invalid("Native failure"));
+        assert!(!combined.is_memory_pressure());
+        assert!(!GpuError::new("wrapped", combined).is_memory_pressure());
+    }
     #[test]
     fn preparation_and_retirement_keep_both_original_typed_causes() -> Result<(), Box<dyn Error>> {
         let cause = GpuError::retirement(

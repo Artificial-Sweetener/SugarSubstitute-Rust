@@ -201,10 +201,28 @@ pub(super) fn qualify(device: Arc<GpuDevice>, context: &JobContext) -> Result<us
         return Err("GPU discarded compatible content when graph identities changed".into());
     }
     gpu.clear_tiles();
+    let alias_case = replacement_cases
+        .iter()
+        .find(|case| case.name == "hidden_zero_mix")
+        .ok_or("Missing alias retention case")?;
+    let original_case = cpu_cases
+        .iter()
+        .find(|case| case.name == "hidden_zero_mix")
+        .ok_or("Missing CPU alias retention case")?;
+    let alias = gpu.region(alias_case.node, alias_case.region, context)?;
+    let alias_expected = cpu.region(original_case.node, original_case.region, context)?;
+    while gpu.evict_one() {}
+    if gpu.stats().resident_tiles != 0 {
+        return Err("Cache-only GPU aliases prevented reconstructible tile eviction".into());
+    }
     drop(gpu);
     if retained.read(context)?.pixels() != expected.pixels() {
         return Err("Retained GPU pixels changed after evaluator retirement".into());
     }
+    if alias.read(context)?.pixels() != alias_expected.pixels() {
+        return Err("GPU cache eviction changed outside alias pixels".into());
+    }
+    println!("DAG: aliased_cache_references_evicted=true outside_allocation_preserved=true");
     println!("DAG: compatible_graph_reuse=true retained_result_survives_evaluator=true");
     Ok(cpu_cases.len())
 }

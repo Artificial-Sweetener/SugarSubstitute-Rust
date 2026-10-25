@@ -96,6 +96,8 @@ fn native_and_ui_frames_share_the_original_delivery_limit() -> TestResult {
     drop(completion.memory);
     drop(service);
     drop(socket_job);
+    // Outcome delivery can precede the supervisor retiring its final context guard.
+    drop(rig.owner);
     assert_eq!(rig.scope.snapshot().reserved_bytes, 0);
     Ok(())
 }

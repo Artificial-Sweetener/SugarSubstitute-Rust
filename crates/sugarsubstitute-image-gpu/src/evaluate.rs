@@ -75,6 +75,14 @@ impl<S: RasterSource> GpuEvaluator<S> {
     pub fn clear_tiles(&mut self) {
         self.cache.clear();
     }
+    /// Remove one cache-only tile reference using the shared tile-retention policy.
+    /// Prefer allocations freed immediately, then release cache aliases. Returns false when no
+    /// cache-only tile value is eligible. Outside/native references keep their original allocations
+    /// charged, so an eviction does not necessarily release bytes until the last alias disappears.
+    pub fn evict_one(&mut self) -> bool {
+        self.cache.evict_unpinned(|computed| Arc::strong_count(&computed.tile.buffer) == 1)
+            || self.cache.evict_unpinned(|_| true)
+    }
     /// Evaluate one aligned 128-pixel image-space tile, clipping at image edges.
     /// # Errors
     /// Rejects invalid indices and preserves control, source, admission and native failures.
@@ -301,17 +309,14 @@ impl<S: RasterSource> GpuEvaluator<S> {
         let mut drained = false;
         loop {
             match operation(self) {
-                Err(cause) if cause.memory_pressure() => {
+                Err(cause) if cause.is_memory_pressure() => {
                     let had_batch = self.batch.is_some();
                     self.finish_batch()?;
                     if had_batch && !drained {
                         drained = true;
                         continue;
                     }
-                    if !self
-                        .cache
-                        .evict_unpinned(|computed| Arc::strong_count(&computed.tile.buffer) == 1)
-                    {
+                    if !self.evict_one() {
                         return Err(cause);
                     }
                 }

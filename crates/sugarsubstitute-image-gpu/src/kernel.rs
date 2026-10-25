@@ -12,6 +12,10 @@ use std::{borrow::Cow, sync::Arc};
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
 use sugarsubstitute_image_ops::{Pixel, Region, SrgbEncoder};
 
+#[cfg(test)]
+#[path = "kernel/tests.rs"]
+mod tests;
+
 pub(crate) struct Kernels {
     pipeline: wgpu::ComputePipeline,
     dummy: Arc<Buffer>,
@@ -121,7 +125,8 @@ impl Kernels {
             | wgpu::BufferUsages::COPY_DST
             | wgpu::BufferUsages::COPY_SRC;
         let bytes = if parameters.0[0] == 9 {
-            (region.pixels() * 4).next_multiple_of(16)
+            parameters.0[2] = crate::display::row_bytes(region.width()) / 4;
+            u64::from(parameters.0[2]) * u64::from(region.height()) * 4
         } else {
             region.pixels() * 16
         };
@@ -310,7 +315,8 @@ fn image(@builtin(global_invocation_id) id: vec3<u32>, @builtin(local_invocation
     if id.x < p.output.z && id.y < p.output.w {
         let index = id.y * p.output.z + id.x;
         if p.control.x == 9u {
-            output[index / 4u][index % 4u] = display_pixel(index);
+            let destination_index = id.y * p.control.z + id.x;
+            output[destination_index / 4u][destination_index % 4u] = display_pixel(index);
         } else {
             output[index] = bitcast<vec4<u32>>(pixel(id));
         }

@@ -969,14 +969,14 @@ rationale = "Isolated native hardware qualification reports actual adapter ident
 [[records]]
 path = "crates/sugarsubstitute-image-gpu/examples/adapter_qualification/image.rs"
 owner = "sugarsubstitute-image-gpu"
-source_sha256 = "sha256:54ccb265ed8472c83ccccd2c233ab11869742c132136f5b2851366eb31f55162"
+source_sha256 = "sha256:db4fe469021c6a2f6bc1320ff8989dce3195036991446657c6e10ef658b5bc15"
 disposition = "fixture"
 rationale = "Isolated native hardware qualification reports actual adapter identity, CPU/GPU pixel comparisons, timings and observed execution retirement; runtime diagnostics use structured logging."
 
 [[records]]
 path = "crates/sugarsubstitute-canvas-render/examples/frame_qualification.rs"
 owner = "sugarsubstitute-canvas-render"
-source_sha256 = "sha256:9ed7cd471818698e75e41129ff084bd2edebafaa4960996c31074a4affdb234e"
+source_sha256 = "sha256:cd82ba443864ef63f156608cc6d54de75d7b987223519aea9bcf5d599a616ece"
 disposition = "fixture"
 rationale = "Isolated native qualification reports observed GPU display, repair and cancellation outcomes through the production execution boundary; runtime diagnostics use structured logging."
 
@@ -997,6 +997,13 @@ rationale = "Isolated native qualification reports observed GPU display, repair 
 [[records]]
 path = "crates/sugarsubstitute-canvas-render/examples/frame_qualification/scene.rs"
 owner = "sugarsubstitute-canvas-render"
-source_sha256 = "sha256:22fe54d94da496c95ebf635e4b15db703ea1fe2a64ad4bfafd51b730a8d8e21a"
+source_sha256 = "sha256:356d04411bfee633f91577471bde3370063d1f2ff5048dbcc3916e75e182eaf1"
 disposition = "fixture"
 rationale = "Isolated native qualification reports observed GPU display, repair and cancellation outcomes through the production execution boundary; runtime diagnostics use structured logging."
+
+[[records]]
+path = "crates/sugarsubstitute-canvas-render/examples/frame_qualification/scale.rs"
+owner = "sugarsubstitute-canvas-render"
+source_sha256 = "sha256:e12e376900fa8006e9063bb90484d63c66955a3a3d59aad38e7f26f409a1ec92"
+disposition = "fixture"
+rationale = "Isolated 4K hardware qualification reports actual retained GPU copy, CPU pixel agreement and finite-admission tile eviction through the production execution boundary."

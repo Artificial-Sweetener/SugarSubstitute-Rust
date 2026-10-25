@@ -24,7 +24,7 @@ implementation plans, or workstation configuration.
   owns image-operation graphs, pyramid/resampling semantics and tiled evaluation.
   `sugarsubstitute-canvas` owns document snapshots, reversible layer commands,
   viewport transforms and damage planning. `sugarsubstitute-canvas-render` owns
-  prepared canvas frames and retained CPU presentation. Native windows and input
+  prepared canvas frames and retained CPU/GPU presentation. Native windows and input
   remain with the desktop adapter; consume each owner's public APIs.
 - SugarPrompt integration belongs to SugarCubes. Do not introduce a second
   editor integration in the desktop host.

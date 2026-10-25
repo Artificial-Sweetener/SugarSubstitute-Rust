@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Prepare sRGB8 GPU damage tiles through the same document compilation as CPU presentation.
-use crate::{RenderError, update::UpdatePlan};
+use crate::{GpuSurface, RenderError, SurfaceWork, update::UpdatePlan};
 use std::sync::Arc;
 use sugarsubstitute_canvas::{DamagePlan, FrameStamp, RenderRequest};
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim, MemoryLease};
@@ -12,7 +12,7 @@ use sugarsubstitute_image_ops::{EvaluationStats, Graph, ImageError, RasterSource
 /// Pixel allocations, inventory and update metadata retain their original execution charges.
 /// Native presentation owns window/surface affinity and consumes these completed results.
 pub struct PreparedGpuUpdate {
-    update: UpdatePlan,
+    pub(crate) update: UpdatePlan,
     regions: DisplayRegions,
     _memory: MemoryClaim,
 }
@@ -64,6 +64,26 @@ impl<S: RasterSource> GpuRenderer<S> {
     /// Completed native batches, operation dispatches and actual host transfer bytes.
     pub fn work(&self) -> GpuWork {
         self.evaluator.work()
+    }
+    /// Complete retained GPU copies under the same finite device admission as DAG evaluation.
+    /// On execution memory pressure, evict only unpinned reconstructible graph tiles before retrying.
+    /// Immutable published frames and prepared display regions keep their original custody.
+    /// # Errors
+    /// Rejects stale dependencies and preserves admission/control/native causes when no further
+    /// eligible tile can be released. Failures leave the preceding retained frame unchanged.
+    pub fn retain(
+        &mut self,
+        surface: &mut GpuSurface,
+        update: &PreparedGpuUpdate,
+        context: &JobContext,
+    ) -> Result<SurfaceWork, RenderError> {
+        loop {
+            match surface.apply(update, context) {
+                Err(RenderError::Gpu(cause))
+                    if cause.is_memory_pressure() && self.evaluator.evict_one() => {}
+                outcome => return outcome,
+            }
+        }
     }
     /// Compile this document/view and prepare only its requested physical damage on the GPU.
     /// No CPU-rendering fallback, native window work or mutable producer callback reaches the result.

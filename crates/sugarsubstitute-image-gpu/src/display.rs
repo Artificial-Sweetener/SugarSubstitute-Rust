@@ -11,6 +11,7 @@ use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
 use sugarsubstitute_image_ops::{NodeId, RasterSource, Region};
 
 /// Immutable opaque sRGB8 device pixels, packed as little-endian `0xffRRGGBB` words.
+/// Rows have 256-byte alignment for native texture copies; padding is excluded from readback.
 /// Clones retain the selected GPU and the allocation's original execution charge.
 #[derive(Clone)]
 pub struct DisplayTile {
@@ -43,6 +44,40 @@ impl DisplayReadback {
     pub fn pixels(&self) -> &[u32] {
         &self.words
     }
+    pub(crate) fn receive(
+        receiving: Arc<Buffer>,
+        region: Region,
+        context: &JobContext,
+    ) -> Result<Self, GpuError> {
+        let memory = context
+            .memory()
+            .claim(region.pixels() * 4 + 128)
+            .map_err(|cause| GpuError::new("gpu_display_readback", cause))?;
+        let mut words = Vec::new();
+        words
+            .try_reserve_exact(region.pixels() as usize)
+            .map_err(|cause| GpuError::new("gpu_display_readback_allocation", cause))?;
+        let mut mapping = Mapping::new(receiving);
+        mapping.wait()?;
+        {
+            let view = mapping.view()?;
+            for row in view.chunks_exact(row_bytes(region.width()) as usize) {
+                for bytes in row[..region.width() as usize * 4].chunks_exact(4) {
+                    let value = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+                    if value >> 24 != 255 {
+                        return Err(GpuError::invalid("GPU display result is not opaque"));
+                    }
+                    words.push(value);
+                }
+            }
+        }
+        mapping.finish()?;
+        crate::adapter::check(context)?;
+        Ok(Self { region, words, _memory: memory })
+    }
+}
+pub(crate) const fn row_bytes(width: u32) -> u32 {
+    (width * 4).next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT)
 }
 impl DisplayTile {
     /// Exact physical image region of this immutable device allocation.
@@ -53,14 +88,6 @@ impl DisplayTile {
     /// # Errors
     /// Preserves original native/control/admission causes and rejects nonopaque representations.
     pub fn read(&self, context: &JobContext) -> Result<DisplayReadback, GpuError> {
-        let memory = context
-            .memory()
-            .claim(self.region.pixels() * 4 + 128)
-            .map_err(|cause| GpuError::new("gpu_display_readback", cause))?;
-        let mut words = Vec::new();
-        words
-            .try_reserve_exact(self.region.pixels() as usize)
-            .map_err(|cause| GpuError::new("gpu_display_readback_allocation", cause))?;
         let device = &self.buffer.device;
         let receiving = device.allocate(
             self.buffer.bytes,
@@ -69,26 +96,12 @@ impl DisplayTile {
         )?;
         Transfer::copy(self.buffer.clone(), receiving.clone()).retire()?;
         crate::adapter::check(context)?;
-        let mut mapping = Mapping::new(receiving);
-        mapping.wait()?;
-        {
-            let view = mapping.view()?;
-            for bytes in view.chunks_exact(4).take(self.region.pixels() as usize) {
-                let value = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
-                if value >> 24 != 255 {
-                    return Err(GpuError::invalid("GPU display result is not opaque"));
-                }
-                words.push(value);
-            }
-        }
-        mapping.finish()?;
-        crate::adapter::check(context)?;
-        Ok(DisplayReadback { region: self.region, words, _memory: memory })
+        DisplayReadback::receive(receiving, self.region, context)
     }
 }
 impl<S: RasterSource> GpuEvaluator<S> {
     /// Evaluate up to 4096 regions and encode completed opaque sRGB8 pixels on the selected GPU.
-    /// Canonical intermediates remain evictable; retained final data uses four bytes per pixel.
+    /// Canonical intermediates remain evictable; display rows use four-byte words with native alignment.
     /// Transfer bytes and nearest-16-bit sampling match the image-ops CPU sRGB encoder.
     /// # Errors
     /// Rejects excessive inventories and nonopaque output; preserves graph/control/native causes.

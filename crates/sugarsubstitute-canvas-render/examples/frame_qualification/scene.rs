@@ -3,7 +3,9 @@
 //! Compare GPU document preparation and exact repair readback with complete CPU/GPU references.
 use std::{error::Error, sync::Arc, time::Instant};
 use sugarsubstitute_canvas::*;
-use sugarsubstitute_canvas_render::{CpuSurface, GpuRenderer, PreparedGpuUpdate, PreparedUpdate};
+use sugarsubstitute_canvas_render::{
+    CpuSurface, GpuRenderer, GpuSurface, PreparedGpuUpdate, PreparedUpdate, RenderError,
+};
 use sugarsubstitute_contracts::execution::{Generation, JobContext, SurfaceId};
 use sugarsubstitute_image_gpu::GpuDevice;
 use sugarsubstitute_image_ops::*;
@@ -110,23 +112,27 @@ pub(super) fn qualify(device: Arc<GpuDevice>, context: &JobContext) -> Result<us
     let mut document = document(image, context)?;
     let mut view = Viewport::new(extent)?;
     view.fit(image)?;
+    let mut retained = GpuSurface::new(stamp(1)?.surface, extent, device.clone())?;
     let mut gpu = GpuRenderer::new(Gradient(image), 256, device, context.memory(), context)?;
     let mut surface = CpuSurface::new(stamp(1)?.surface, extent, context.memory())?;
     let encoder = SrgbEncoder::new(context.memory())?;
     let matte = Pixel::linear(0.12, 0.13, 0.14, 1.0)?;
-    for phase in 0..7_u64 {
+    for phase in 0..12_u64 {
         let previous = view;
-        let filter = if phase == 2 { Filter::Nearest } else { Filter::Lanczos3 };
+        let filter = if phase == 6 { Filter::Nearest } else { Filter::Lanczos3 };
         match phase {
             1 => view.pan_by([7.0, -11.0])?,
-            2 => view.zoom_at(1.3, [187.5, 153.5])?,
-            4 => view.pan_by([-13.0, 5.0])?,
-            5 => {
+            2 | 8 => view.pan_by([-13.0, 5.0])?,
+            3 => view.pan_by([0.0, 19.0])?,
+            4 => view.pan_by([23.0, 0.0])?,
+            5 => view.pan_by([0.0, -29.0])?,
+            6 => view.zoom_at(1.3, [187.5, 153.5])?,
+            9 => {
                 if !document.undo()? {
                     return Err("Missing document undo".into());
                 }
             }
-            6 => {
+            10 => {
                 if !document.redo()? {
                     return Err("Missing document redo".into());
                 }
@@ -134,8 +140,10 @@ pub(super) fn qualify(device: Arc<GpuDevice>, context: &JobContext) -> Result<us
             _ => {}
         }
         let snapshot = document.snapshot();
-        let damage = if phase == 1 || phase == 4 {
+        let damage = if (1..=5).contains(&phase) || phase == 8 {
             view.repair_from(previous)?
+        } else if phase == 11 {
+            DamagePlan::unchanged(extent)
         } else {
             DamagePlan::full(extent)
         };
@@ -169,6 +177,43 @@ pub(super) fn qualify(device: Arc<GpuDevice>, context: &JobContext) -> Result<us
         let mut cpu = Evaluator::new(graph, Gradient(image), 32, context.memory())?;
         let (update, worst) = readback(&prepared, &mut cpu, output, &encoder, context)?;
         let repair = surface.apply(&update)?;
+        let preceding = retained.frame().cloned();
+        let sample = Region::new(63, 65, 7, 9)?;
+        let original = preceding
+            .as_ref()
+            .map(|frame| frame.image().read_region(sample, context))
+            .transpose()?;
+        let copied = Instant::now();
+        if gpu.retain(&mut retained, &prepared, context)? != repair {
+            return Err("GPU retained copy changed exact repair accounting".into());
+        }
+        let copy_us = copied.elapsed().as_micros();
+        if !matches!(gpu.retain(&mut retained, &prepared, context), Err(RenderError::StaleTarget)) {
+            return Err("GPU retained image accepted a stale generation".into());
+        }
+        let frame = retained.frame().ok_or("GPU retained frame is unavailable")?;
+        if frame.target() != prepared.target() || frame.image().extent() != extent {
+            return Err("GPU retained frame changed publication metadata".into());
+        }
+        for region in extent.region().tiles() {
+            let actual = frame.image().read_region(region, context)?;
+            for row in 0..region.height() as usize {
+                let target =
+                    (region.y() as usize + row) * extent.width() as usize + region.x() as usize;
+                let source = row * region.width() as usize;
+                let width = region.width() as usize;
+                if actual.pixels()[source..source + width]
+                    != surface.pixels()[target..target + width]
+                {
+                    return Err("GPU retained texture differs from CPU retained repair".into());
+                }
+            }
+        }
+        if let (Some(preceding), Some(original)) = (&preceding, original)
+            && preceding.image().read_region(sample, context)?.pixels() != original.pixels()
+        {
+            return Err("GPU repair changed a preceding immutable frame".into());
+        }
         drop(update);
         drop(prepared);
         let full = gpu.prepare(
@@ -190,12 +235,12 @@ pub(super) fn qualify(device: Arc<GpuDevice>, context: &JobContext) -> Result<us
             return Err("GPU repair readback differs from complete GPU redraw".into());
         }
         println!(
-            "CANVAS: phase={phase} prepare_us={prepare_us} prepared_bytes={prepared_bytes} maximum_display_channel_error={worst} repaired_pixels={} reused_pixels={} batches={} dispatches={} readback_pan_matches_full=true",
+            "CANVAS: phase={phase} prepare_us={prepare_us} copy_us={copy_us} prepared_bytes={prepared_bytes} maximum_display_channel_error={worst} repaired_pixels={} reused_pixels={} batches={} dispatches={} gpu_retained_matches_full=true previous_frame_immutable=true stale_rejected=true",
             repair.repaired_pixels,
             repair.reused_pixels,
             prepared_work.batches - before.batches,
             prepared_work.dispatches - before.dispatches
         );
     }
-    Ok(7)
+    Ok(12)
 }

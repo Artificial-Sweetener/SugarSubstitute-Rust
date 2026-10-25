@@ -23,7 +23,7 @@ concern = "Canvas document snapshots, reversible layer commands, viewport transf
 package = "sugarsubstitute-canvas-render"
 root = "crates/sugarsubstitute-canvas-render"
 layer = "adapter"
-concern = "Immutable CPU/GPU canvas frame preparation, shared damage validation, revision-safe publication and retained CPU pixel presentation"
+concern = "Immutable CPU/GPU frame preparation, shared damage validation, revision-safe publication and retained CPU/GPU viewport presentation"
 
 [[owners]]
 package = "sugarsubstitute-image-ops"

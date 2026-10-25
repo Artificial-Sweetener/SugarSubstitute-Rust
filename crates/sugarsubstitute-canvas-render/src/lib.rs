@@ -3,10 +3,12 @@
 //! Prepared canvas presentation independent of native window handles.
 mod cpu;
 mod gpu;
+mod gpu_surface;
 mod surface;
 mod update;
 pub use cpu::CpuRenderer;
 pub use gpu::{GpuRenderer, PreparedGpuUpdate};
+pub use gpu_surface::{GpuFrame, GpuSurface};
 pub use surface::{CpuSurface, PreparedUpdate, SurfaceWork};
 
 /// Reject invalid prepared presentation without changing retained surface contents.

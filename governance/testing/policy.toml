@@ -4,8 +4,8 @@ platforms = ["windows", "macos", "linux"]
 [[owners]]
 package = "sugarsubstitute-image-gpu"
 root = "crates/sugarsubstitute-image-gpu"
-concern = "GPU compatibility, exact device selection, alpha retirement and preserved failure causes; hardware qualification compares shared DAG pixels, exact display conversion and actual cancellation retirement"
-minimum_tests = 7
+concern = "GPU compatibility, exact device selection, shader validation, display-copy bounds and retryable admission classification; hardware qualification compares shared DAG pixels, display conversion, alias eviction and actual cancellation retirement"
+minimum_tests = 10
 
 [[owners]]
 package = "sugarsubstitute-canvas"
@@ -16,7 +16,7 @@ minimum_tests = 8
 [[owners]]
 package = "sugarsubstitute-canvas-render"
 root = "crates/sugarsubstitute-canvas-render"
-concern = "Overlap-safe pixel repairs, stale-frame rejection, bounded CPU/GPU damage inventories and native hardware comparison of prepared display tiles against CPU and full GPU redraw"
+concern = "Overlap-safe CPU repairs, stale-frame rejection, bounded GPU damage inventories and native hardware comparison of immutable retained display copies against CPU and full GPU redraw, including finite-admission 4K replacement"
 minimum_tests = 12
 
 [[owners]]

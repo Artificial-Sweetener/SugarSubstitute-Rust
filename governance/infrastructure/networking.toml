@@ -45,7 +45,7 @@ rationale = "Real loopback peers test execution-owned authentication, bounds and
 [[records]]
 path = "crates/sugarsubstitute-execution/src/provisioning_transport/native_tests.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:b40d708b3fa38dfc2316e814a402e4ae3be259235c78590749d32b18ea3278b7"
+source_sha256 = "sha256:198727a6497747b15957f16dc68ea78acb0af19dc37fa2fe5e0bb96b04bedc55"
 boundary = "fixture"
 rationale = "Native storage-lane tests preserve original execution memory and explicitly shut down actual fixture peers."
 

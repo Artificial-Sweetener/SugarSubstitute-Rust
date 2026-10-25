@@ -9,6 +9,7 @@ mod batch;
 mod buffer;
 mod dependency;
 mod display;
+mod display_image;
 mod error;
 mod evaluate;
 mod fault;
@@ -22,6 +23,7 @@ pub use adapter::{AdapterCatalog, AdapterClass, AdapterDescriptor, AdapterId, Ba
 pub use batch::GpuWork;
 pub use buffer::{GpuTile, Readback};
 pub use display::{DisplayReadback, DisplayRegions, DisplayTile};
+pub use display_image::{DisplayCopy, DisplayImage};
 pub use error::GpuError;
 pub use evaluate::GpuEvaluator;
 pub use request::GpuRegions;
