@@ -7,21 +7,26 @@ export class InputPreviewRows {
     binding;
     previews;
     report;
+    association;
     element;
     #empty;
     #entries = new Map();
     #alive = true;
     /** Bind pixels and state through the existing source and interpretation owners. */
-    constructor(document, binding, previews, report) {
+    constructor(document, binding, previews, report, association) {
         this.binding = binding;
         this.previews = previews;
         this.report = report;
+        this.association = association;
         this.element = document.createElement('div');
         this.element.className = 'sc-input-editor__rows';
         this.#empty = new InputPreviewSurface(document, true, () => { });
         this.#empty.element.dataset.inputEmpty = '';
         this.#empty.update('', true, false, true, () => { });
-        this.#empty.unavailable('Choose a source');
+        if (binding.loader.kind === 'mask')
+            this.#empty.black();
+        else
+            this.#empty.unavailable('Choose a source');
         this.element.append(this.#empty.element);
     }
     /** Reconcile only this loader's previews, retaining geometry and cached pixels during replacement. */
@@ -53,16 +58,16 @@ export class InputPreviewRows {
                 this.element.insertBefore(row.surface.element, destination);
             const document = this.binding.context?.document;
             if (document &&
-                ((this.binding.loader.kind === 'mask' &&
-                    this.binding.context?.targets.includes('composition')) ||
-                    entry.source.kind === 'canvas' ||
-                    !entry.source.file))
+                this.binding.loader.kind === 'image' &&
+                (entry.source.kind === 'canvas' || !entry.source.file))
                 row.surface.frame(document.width, document.height);
             if (this.binding.busy || this.binding.error) {
                 row.content?.dispose();
                 row.content = null;
                 row.reference = '';
-                if (this.binding.error)
+                if (this.binding.loader.kind === 'mask')
+                    row.surface.black();
+                else if (this.binding.error)
                     row.surface.unavailable('Source unavailable');
                 else
                     row.surface.loading();
@@ -85,7 +90,13 @@ export class InputPreviewRows {
     }
     /** Explain a rejected source intent within its existing selected preview. */
     unavailable(message) {
-        (this.#entries.get(this.binding.state.selected ?? '')?.surface ?? this.#empty).unavailable(message);
+        const row = this.#entries.get(this.binding.state.selected ?? '');
+        if (row?.content)
+            row.content.unavailable(message);
+        else if (this.binding.loader.kind === 'mask')
+            (row?.surface ?? this.#empty).black();
+        else
+            (row?.surface ?? this.#empty).unavailable(message);
     }
     /** Release geometry and capture observations before accepting any late interpretation result. */
     dispose() {
@@ -101,6 +112,11 @@ export class InputPreviewRows {
     #row(entry) {
         const surface = new InputPreviewSurface(this.element.ownerDocument, readPluginMode(this.element.ownerDocument), () => this.#select(entry.id));
         surface.element.dataset.inputEntry = entry.id;
+        const document = this.binding.context?.document;
+        if (document)
+            surface.frame(document.width, document.height);
+        if (this.binding.loader.kind === 'mask')
+            surface.black();
         return {
             surface,
             resolution: new InputPreviewResolutionObserver(surface.frameElement, () => this.refresh()),
@@ -124,19 +140,19 @@ export class InputPreviewRows {
                 return;
             if (value.kind === 'loading')
                 row.surface.loading();
+            else if (value.kind === 'black')
+                row.surface.black();
             else if (value.kind === 'error')
                 row.surface.unavailable(value.message);
             else {
                 try {
-                    row.surface.paint(value.pixels, entry.source.kind === 'canvas' || value.composition
-                        ? (this.binding.context?.document ?? null)
-                        : null, value.composition);
+                    row.surface.paint(value.pixels, value.frame, value.background);
                 }
                 catch (error) {
                     row.surface.unavailable('Preview unavailable');
                     this.report(error);
                 }
             }
-        }, this.report);
+        }, this.report, this.association);
     }
 }

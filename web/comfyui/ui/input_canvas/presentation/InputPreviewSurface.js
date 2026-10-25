@@ -91,17 +91,27 @@ export class InputPreviewSurface {
         this.canvas.hidden = true;
         this.#placeholder.hidden = false;
         this.#message.textContent = message;
+        this.#frame.dataset.content = 'unavailable';
         this.#frame.setAttribute('aria-busy', 'false');
     }
-    /** Paint interpreted pixels with one optional composition wash, retaining the mounted preview surface. */
-    paint(pixels, frame, composition = null) {
-        const raster = composition ?? pixels, canvas = this.canvas;
+    /** Show empty associated-image context as solid black without changing the reserved preview geometry. */
+    black() {
+        this.#painted = true;
+        this.canvas.hidden = true;
+        this.#placeholder.hidden = true;
+        this.#message.textContent = '';
+        this.#frame.dataset.content = 'black';
+        this.#frame.setAttribute('aria-busy', 'false');
+    }
+    /** Paint interpreted pixels with one optional associated-image wash, retaining the mounted preview surface. */
+    paint(pixels, frame, background = null) {
+        const raster = background ?? pixels, canvas = this.canvas;
         const context = canvas.getContext('2d');
         if (!context)
             throw new Error('Source preview rendering is unavailable.');
         const image = context.createImageData(raster.width, raster.height);
-        if (composition)
-            image.data.set(maskPreviewPixels(pixels, composition));
+        if (background)
+            image.data.set(maskPreviewPixels(pixels, background));
         else {
             const bytes = decodeCanvasRaster(pixels);
             if (pixels.format === 'rgba8')
@@ -119,10 +129,15 @@ export class InputPreviewSurface {
             canvas.height = raster.height;
         context.putImageData(image, 0, 0);
         this.frame(frame?.width ?? raster.width, frame?.height ?? raster.height);
+        this.#shown();
+    }
+    /** Reveal completed pixels after one atomic paint and retain them during replacement work. */
+    #shown() {
         this.#painted = true;
-        canvas.hidden = false;
+        this.canvas.hidden = false;
         this.#placeholder.hidden = true;
         this.#message.textContent = '';
+        this.#frame.dataset.content = 'pixels';
         this.#frame.setAttribute('aria-busy', 'false');
     }
     /** Keep plugin previews outside the focus and command paths. */

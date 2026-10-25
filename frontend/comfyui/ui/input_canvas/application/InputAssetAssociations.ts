@@ -1,0 +1,63 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Publish reusable graph-derived loader relationships independently of any preview or canvas implementation. */
+import {
+  resolveInputAssetAssociations,
+  type InputAssetAssociation,
+  type InputAssetAssociationGraph,
+} from '../domain/InputAssetAssociation.js';
+
+/** Own relationship queries and scoped changes for every application consumer. */
+export class InputAssetAssociations {
+  #associations: ReadonlyMap<string, InputAssetAssociation> = new Map();
+  readonly #listeners = new Set<(changed: ReadonlySet<string>) => void>();
+
+  /** Return an explicit missing relationship for stale or undiscovered field identities. */
+  read(mask: string): InputAssetAssociation {
+    return this.#associations.get(mask) ?? { kind: 'missing', mask, candidates: [], consumers: [] };
+  }
+
+  /** Query reverse ownership without asking another consumer to infer relationships. */
+  masksFor(image: string): readonly string[] {
+    return [...this.#associations.values()]
+      .flatMap((association) =>
+        association.kind === 'associated' && association.image === image ? [association.mask] : [],
+      )
+      .sort();
+  }
+
+  /** Replace normalized graph facts atomically and preserve unchanged association identities. */
+  replace(graphs: readonly InputAssetAssociationGraph[]): void {
+    const next = new Map(resolveInputAssetAssociations(graphs)),
+      changed = new Set<string>();
+    for (const mask of new Set([...next.keys(), ...this.#associations.keys()])) {
+      const previous = this.#associations.get(mask),
+        current = next.get(mask);
+      if (JSON.stringify(previous) !== JSON.stringify(current)) changed.add(mask);
+      else if (previous) next.set(mask, previous);
+    }
+    this.#associations = next;
+    if (changed.size) for (const listener of this.#listeners) listener(changed);
+  }
+
+  /** Subscribe to identified relationship changes without exposing mutable graph or preview state. */
+  subscribe(listener: (changed: ReadonlySet<string>) => void): () => void {
+    this.#listeners.add(listener);
+    return () => {
+      this.#listeners.delete(listener);
+    };
+  }
+}

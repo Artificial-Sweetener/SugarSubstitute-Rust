@@ -98,6 +98,7 @@ test('defaults an image loader to composition, displays actual image colors and 
     f.report,
     nativeInputFields(node),
     document.createElement('article'),
+    null,
   );
   document.body.append(view.element);
   await settled();
