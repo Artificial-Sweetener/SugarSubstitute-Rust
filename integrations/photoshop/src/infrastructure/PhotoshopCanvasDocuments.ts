@@ -26,7 +26,7 @@ import type {
 } from '../../../contracts/CanvasProtocol.generated.js';
 import type { PreparedCanvasImage } from '../application/InsertCanvasImage.js';
 import type { PhotoshopImageAssets } from './PhotoshopImageAssets.js';
-import { centerCanvasImage } from '../../../shared/CanvasPlacement.js';
+import { placeCanvasImage } from '../../../shared/CanvasPlacement.js';
 /** Identify a deliberate cancellation separately from unexpected native failures. */
 class CanvasInsertCancelled extends Error {}
 /** Keep document lookup, native history and source-document cleanup inside their editor adapter. */
@@ -43,7 +43,7 @@ export class PhotoshopCanvasDocuments {
       canvas: {
         id: 'photoshop',
         label: 'Photoshop',
-        capabilities: { displayOutput: false, insertImageLayer: true },
+        capabilities: { displayOutput: false, insertImageLayer: true, positionImageLayer: true },
       },
       document: document ? canvasDocumentIdentity(document) : null,
     };
@@ -158,7 +158,7 @@ export class PhotoshopCanvasDocuments {
         if (!layer) throw new Error('The imported image could not become a raster layer.');
       }
       layer.allLocked = false;
-      const position = centerCanvasImage(request.document, image);
+      const position = placeCanvasImage(request.document, image, request.position);
       await layer.translate(position.left, position.top);
       if (this.#cancelled(execution, cancellation)) throw new CanvasInsertCancelled();
       const inserted = await layer.duplicate(

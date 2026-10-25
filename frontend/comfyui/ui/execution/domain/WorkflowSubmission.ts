@@ -18,6 +18,7 @@
 import type { WorkflowSessionContext } from './WorkflowSession.js';
 import type { WorkflowOutputSource } from './WorkflowOutput.js';
 import type { WorkflowSessionId } from './ExecutionIdentity.js';
+import type { WorkflowCanvasReturn } from './WorkflowPreparation.js';
 
 export interface WorkflowSubmissionOrderSource {
   /** Read reserved queue order even while its transport receipt is outstanding. */
@@ -27,6 +28,7 @@ export interface WorkflowSubmissionOrderSource {
 export interface WorkflowSubmissionContext {
   readonly session: WorkflowSessionContext;
   readonly sources: readonly WorkflowOutputSource[];
+  readonly canvasReturns?: readonly WorkflowCanvasReturn[];
 }
 
 export interface WorkflowOrderedSubmission extends WorkflowSubmissionContext {
@@ -38,6 +40,33 @@ export function freezeWorkflowSubmissionContext(
   context: WorkflowSubmissionContext,
 ): WorkflowSubmissionContext {
   return Object.freeze({
+    ...(context.canvasReturns
+      ? {
+          canvasReturns: Object.freeze(
+            context.canvasReturns.map((value) =>
+              value.kind === 'unavailable'
+                ? Object.freeze({ ...value })
+                : Object.freeze({
+                    ...value,
+                    document: Object.freeze({ ...value.document }),
+                    regions: Object.freeze(
+                      value.regions.map((region) =>
+                        Object.freeze({
+                          ...region,
+                          mask: Object.freeze({ ...region.mask }),
+                          mapping: Object.freeze({
+                            imageSize: Object.freeze({ ...region.mapping.imageSize }),
+                            imageBounds: Object.freeze({ ...region.mapping.imageBounds }),
+                            documentBounds: Object.freeze({ ...region.mapping.documentBounds }),
+                          }),
+                        }),
+                      ),
+                    ),
+                  }),
+            ),
+          ),
+        }
+      : {}),
     session: Object.freeze({ ...context.session }),
     sources: Object.freeze(
       context.sources.map((source) =>

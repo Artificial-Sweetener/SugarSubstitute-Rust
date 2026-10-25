@@ -474,7 +474,7 @@ export const sugarCubesExtension: SugarCubesExtension = {
     },
   ],
   addCustomNodeDefs(definitions) {
-    canvasInputs.loaders.define(definitions);
+    canvasInputs.define(definitions);
     return cubePicker.contribute(definitions);
   },
   beforeRegisterVueAppNodeDefs(definitions) {
@@ -504,7 +504,7 @@ export const sugarCubesExtension: SugarCubesExtension = {
     scrollSurfaceInput.setup();
     setupPresentation();
     modelPickers.setup();
-    canvasInputs.masonry.setup();
+    canvasInputs.setup();
     await editorActions.setup();
     modelLibrarySettings.setup();
     modelUpdateSettings.setup(appRef);
@@ -527,7 +527,7 @@ export const sugarCubesExtension: SugarCubesExtension = {
     workflowWorkspace.canvas.afterConfigureGraph();
     workflowWorkspace.masonry.afterConfigureGraph();
     relations.afterConfigureGraph();
-    await canvasInputs.bindings.ready();
+    await canvasInputs.afterConfigureGraph();
     workflowHistory.setConfiguring(false);
   },
 };

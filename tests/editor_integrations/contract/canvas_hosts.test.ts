@@ -39,6 +39,7 @@ const image: CanvasInsertImage = {
   document,
   image: { format: 'png' as const, encoding: 'base64' as const, data: 'fixture-png' },
   layerName: 'Generated image',
+  position: null,
 };
 const result = {
   status: 'inserted',
@@ -50,7 +51,7 @@ const result = {
   height: 512,
 } as const;
 /** Compose a synchronous, native-independent host with controllable async mutation. */
-function application(supported = true) {
+function application(supported = true, positioned = false) {
   const sent: CanvasMessage[] = [],
     replies: CanvasMessage[] = [],
     errors: unknown[] = [];
@@ -59,7 +60,11 @@ function application(supported = true) {
       ? {
           id: 'test-editor',
           label: 'Test editor',
-          capabilities: { displayOutput: false, insertImageLayer: true },
+          capabilities: {
+            displayOutput: false,
+            insertImageLayer: true,
+            positionImageLayer: positioned,
+          },
         }
       : WEB_CANVAS,
     document: supported ? document : null,
@@ -113,11 +118,12 @@ test('does not repeat a mutation for duplicate, reordered or evicted requests', 
       layerName: image.layerName,
       image: image.image,
       document: { height: 384, width: 512, geometryRevision: 'geometry-1', id: 'doc-1' },
+      position: null,
     },
     type: 'image.insert',
     requestId: 1,
     session,
-    version: 1,
+    version: 2,
     protocol: 'sugarcubes.canvas',
   });
   expect(app.insert).toHaveBeenCalledTimes(1);
@@ -126,7 +132,7 @@ test('does not repeat a mutation for duplicate, reordered or evicted requests', 
   for (let requestId = 2; requestId < 40; requestId++)
     app.host.receive({
       protocol: 'sugarcubes.canvas',
-      version: 1,
+      version: 2,
       session,
       requestId,
       type: 'context.request',
@@ -137,15 +143,36 @@ test('does not repeat a mutation for duplicate, reordered or evicted requests', 
   app.client.dispose();
   app.host.dispose();
 });
+
+test('negotiates positioned insertion independently and refuses replay with a different origin', async () => {
+  const limited = application();
+  const positioned = { ...image, position: { left: 27, top: 41 } };
+  expect(await limited.client.insertImage(positioned)).toMatchObject({ status: 'unsupported' });
+  expect(limited.insert).not.toHaveBeenCalled();
+  limited.client.dispose();
+  limited.host.dispose();
+  const capable = application(true, true);
+  expect(await capable.client.insertImage(positioned)).toEqual(result);
+  expect(capable.insert.mock.calls[0]?.[0].position).toEqual(positioned.position);
+  const request = capable.sent[0];
+  capable.host.receive({ ...request, image: { ...positioned, position: { left: 28, top: 41 } } });
+  expect(capable.replies.at(-1)).toMatchObject({
+    type: 'error.reply',
+    failure: { status: 'stale' },
+  });
+  expect(capable.insert).toHaveBeenCalledTimes(1);
+  capable.client.dispose();
+  capable.host.dispose();
+});
 test('rejects hostile envelopes before touching an editor', () => {
   const app = application();
   for (const value of [
     null,
     {},
-    { protocol: 'sugarcubes.canvas', version: 1, session, requestId: 0, type: 'context.request' },
+    { protocol: 'sugarcubes.canvas', version: 2, session, requestId: 0, type: 'context.request' },
     {
       protocol: 'sugarcubes.canvas',
-      version: 1,
+      version: 2,
       session: 'wrong-session-0000',
       requestId: 1,
       type: 'image.insert',
@@ -153,7 +180,7 @@ test('rejects hostile envelopes before touching an editor', () => {
     },
     {
       protocol: 'sugarcubes.canvas',
-      version: 1,
+      version: 2,
       session,
       requestId: 1,
       type: 'image.insert',

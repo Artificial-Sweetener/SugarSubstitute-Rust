@@ -18,6 +18,7 @@ import type { CanvasSourceHost } from '../../../../../integrations/contracts/Can
 import type {
   CanvasInputSource,
   CanvasPixelRaster,
+  CanvasDocument,
 } from '../../../../../integrations/contracts/CanvasProtocol.generated.js';
 import { CanvasSourceUnavailable } from '../domain/CanvasSourceAvailability.js';
 import type { CanvasSourceCapture } from './CanvasSourceCapture.js';
@@ -29,7 +30,12 @@ import {
 /** Keep source capture failures explicit so consumers never present stale pixels as a current preview. */
 export type CanvasSourcePreview =
   | { readonly kind: 'loading' }
-  | { readonly kind: 'pixels'; readonly pixels: CanvasPixelRaster }
+  | {
+      readonly kind: 'pixels';
+      readonly pixels: CanvasPixelRaster;
+      readonly document: CanvasDocument;
+      readonly revision: string;
+    }
   | { readonly kind: 'error'; readonly message: string; readonly unavailable?: boolean };
 
 interface PreviewEntry {
@@ -179,7 +185,12 @@ export class CanvasSourcePreviews {
             for (const request of batch) {
               const snapshot = snapshots.get(request.key);
               if (!snapshot) throw new Error('Missing canvas source preview.');
-              this.#publish(request, { kind: 'pixels', pixels: snapshot.pixels });
+              this.#publish(request, {
+                kind: 'pixels',
+                pixels: snapshot.pixels,
+                document: snapshot.document,
+                revision: snapshot.revision,
+              });
             }
           } catch (error: unknown) {
             if (

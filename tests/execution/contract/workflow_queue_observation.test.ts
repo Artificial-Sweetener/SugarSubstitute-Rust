@@ -47,7 +47,7 @@ test.each(['capture', 'prepared', 'accepted', 'rejected'] as const)(
     const logger = { error: jest.fn() };
     const bridge = new ComfyPromptQueueBridge({
       api,
-      transform: async (payload) => payload,
+      transform: async (payload) => ({ payload }),
       observer: { logger, capture: stage === 'capture' ? failed : () => callbacks },
     });
     bridge.install();
@@ -76,9 +76,9 @@ test('captures before transformation and suppresses accepted metadata after disp
   const api: ComfyPromptQueueApi = { queuePrompt: async () => result };
   const bridge = new ComfyPromptQueueBridge({
     api,
-    transform: () => {
+    transform: async () => {
       order.push('transform');
-      return pending;
+      return { payload: await pending };
     },
     observer: {
       logger: { error: jest.fn() },

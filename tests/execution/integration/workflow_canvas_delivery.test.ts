@@ -34,6 +34,11 @@ import type {
   CanvasInsertResult,
 } from '../../../integrations/contracts/CanvasProtocol.generated.js';
 import { workflowFinal, workflowResultsFixture } from '../support/workflow_results.js';
+import { prepareCanvasImagePatch } from '../../../integrations/shared/CanvasImageRegions.js';
+import {
+  encodeCanvasRaster,
+  decodeCanvasRaster,
+} from '../../../integrations/shared/CanvasRasterEncoding.js';
 
 /** Assemble real attribution and delivery owners with only native and image-byte boundaries replaced. */
 function fixture() {
@@ -44,7 +49,7 @@ function fixture() {
     canvas: {
       id: 'editor',
       label: 'Editor',
-      capabilities: { displayOutput: false, insertImageLayer: true },
+      capabilities: { displayOutput: false, insertImageLayer: true, positionImageLayer: false },
     },
     document: { id: 'original', geometryRevision: 'original-size', width: 512, height: 384 },
   };
@@ -66,7 +71,9 @@ function fixture() {
     insertImage: insert,
   };
   const image = { format: 'png' as const, encoding: 'base64' as const, data: 'png-bytes' };
-  const load = jest.fn<CanvasGenerationImages['load']>().mockResolvedValue(image);
+  const load = jest
+    .fn<CanvasGenerationImages['load']>()
+    .mockResolvedValue({ image, position: null });
   const targets = ['editor', 'web', 'failing-peer'];
   const delivery = new WorkflowCanvasCoordinator<Blob>(events, f.results, report, () => targets);
   delivery.register(documentCanvasAdapter('editor', canvas, { load }, report));
@@ -159,7 +166,7 @@ test('updates the web peer immediately while the document peer is transferring a
   expect(f.web.read(f.a.session.sessionId)?.outputs[0]?.items[0]?.file.filename).toBe('second.png');
   expect(f.web.read(f.a.session.sessionId)?.runStatus).toBe('complete');
   if (!finishTransfer) throw new Error('The document adapter did not request image bytes.');
-  finishTransfer({ format: 'png', encoding: 'base64', data: 'png' });
+  finishTransfer({ image: { format: 'png', encoding: 'base64', data: 'png' }, position: null });
   await f.delivery.idle();
   expect(f.insert.mock.calls.map(([value]) => value.layerName)).toEqual([
     'final.png',
@@ -523,7 +530,7 @@ test('leaves display-only canvases with their existing capabilities', async () =
   const f = fixture();
   f.canvas.readCanvas = () => ({
     ...f.context.canvas,
-    capabilities: { displayOutput: true, insertImageLayer: false },
+    capabilities: { displayOutput: true, insertImageLayer: false, positionImageLayer: false },
   });
   f.ingestor.accepted(f.ingestor.submitting(f.a), f.id);
   f.ingestor.final(workflowFinal(f.id));
@@ -543,7 +550,7 @@ test('cancels transfer at workflow retirement while preserving another job deliv
       pending.release = resolve;
     });
     expect(cancellation.cancelled()).toBe(true);
-    return { format: 'png', encoding: 'base64', data: 'png' };
+    return { image: { format: 'png', encoding: 'base64', data: 'png' }, position: null };
   });
   f.ingestor.accepted(f.ingestor.submitting(f.a), f.id);
   f.ingestor.final(workflowFinal(f.id));
@@ -570,5 +577,106 @@ test('rejects queue failures without retaining a destination or admitting a late
   f.ingestor.terminal(f.id, 'complete');
   await f.delivery.idle();
   expect(f.insert).not.toHaveBeenCalled();
+  f.delivery.dispose();
+});
+
+test('delivers each mask-defined batch result before completion using capture provenance, including early finals', async () => {
+  const f = fixture();
+  f.readContext.mockResolvedValue({
+    ...f.context,
+    canvas: {
+      ...f.context.canvas,
+      capabilities: { ...f.context.canvas.capabilities, positionImageLayer: true },
+    },
+  });
+  const document = {
+    id: 'captured-before-upload',
+    geometryRevision: 'original',
+    width: 3,
+    height: 2,
+  };
+  const mapping = {
+    imageSize: { width: 3, height: 2 },
+    imageBounds: { left: 0, top: 0, width: 3, height: 2 },
+    documentBounds: { left: 0, top: 0, width: 3, height: 2 },
+  };
+  const regions = [
+    new Uint8Array([0, 255, 0, 0, 0, 128]),
+    new Uint8Array([255, 0, 0, 0, 0, 0]),
+  ].map((mask) => ({
+    mapping,
+    mask: encodeCanvasRaster(3, 2, 'coverage8', mask),
+    coverage: 'mask' as const,
+  }));
+  const generated = encodeCanvasRaster(
+    3,
+    2,
+    'rgba8',
+    new Uint8Array(Array.from({ length: 6 }, () => [80, 120, 160, 255]).flat()),
+  );
+  const patches: number[][] = [];
+  f.load.mockImplementation(async (_file, _stop, region) => {
+    if (!region) throw new Error('The captured return mask was lost.');
+    const patch = prepareCanvasImagePatch(generated, region);
+    if (!patch) return null;
+    patches.push([...decodeCanvasRaster(patch.pixels)]);
+    return {
+      image: { format: 'png', encoding: 'base64', data: 'prepared-transparent-patch' },
+      position: patch.position,
+    };
+  });
+  const submitted = f.ingestor.submitting(f.a);
+  f.ingestor.final(workflowFinal(f.id, 'first.png'));
+  f.ingestor.accepted(
+    {
+      ...submitted,
+      canvasReturns: [
+        { kind: 'region', executionPath: '42:23', canvasId: 'editor', document, regions },
+      ],
+    },
+    f.id,
+  );
+  await f.delivery.idle();
+  expect(f.insert).toHaveBeenCalledTimes(1);
+  expect(f.insert.mock.calls[0]?.[0]).toMatchObject({
+    document,
+    position: { left: 1, top: 0 },
+    layerName: 'first.png',
+  });
+  expect(patches[0]).toEqual([80, 120, 160, 255, 0, 0, 0, 0, 0, 0, 0, 0, 80, 120, 160, 128]);
+  expect(f.runs.read(f.id)?.status).not.toBe('complete');
+  f.ingestor.final(workflowFinal(f.id, 'first.png'));
+  f.ingestor.final(workflowFinal(f.id, 'second.png'));
+  await f.delivery.idle();
+  expect(f.insert.mock.calls[1]?.[0]).toMatchObject({
+    document,
+    position: { left: 0, top: 0 },
+    layerName: 'second.png',
+  });
+  expect(f.load.mock.calls.map((call) => call[2])).toEqual(regions);
+  expect(f.report).not.toHaveBeenCalled();
+  f.delivery.dispose();
+});
+
+test('never substitutes an opaque full image when return attribution or positioned insertion is unavailable', async () => {
+  const f = fixture();
+  const submitted = f.ingestor.submitting(f.a);
+  f.ingestor.accepted(
+    {
+      ...submitted,
+      canvasReturns: [
+        { kind: 'unavailable', executionPath: '42:23', message: 'Ambiguous inpaint source' },
+      ],
+    },
+    f.id,
+  );
+  f.ingestor.final(workflowFinal(f.id));
+  await f.delivery.idle();
+  expect(f.load).not.toHaveBeenCalled();
+  expect(f.insert).not.toHaveBeenCalled();
+  expect(f.report).toHaveBeenCalledWith(
+    expect.objectContaining({ message: 'Ambiguous inpaint source' }),
+  );
+  expect(f.web.read(f.a.session.sessionId)?.outputs[0]?.items[0]?.file.filename).toBe('final.png');
   f.delivery.dispose();
 });

@@ -13,7 +13,7 @@
 #
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Render the native Comfy mask loader's effective output instead of a source photograph."""
+"""Decode native effective mask coverage for bounded previews and full-resolution execution snapshots."""
 
 from __future__ import annotations
 
@@ -54,8 +54,8 @@ class _NativeMaskTensor(Protocol):
 def native_mask_preview(
     file: str, settings: InputPreviewSettings, maximum_size: int
 ) -> bytes:
-    """Return an opaque grayscale PNG using the actual registered loader's decoding and settings."""
-    if not 1 <= maximum_size <= 1024:
+    """Return native grayscale coverage; a zero maximum preserves its full resolution."""
+    if not 0 <= maximum_size <= 1024:
         raise ValueError("Invalid mask preview size.")
     validate_input_file(file)
     tensor_value = load_native_mask(file, settings)
@@ -75,7 +75,8 @@ def native_mask_preview(
         raise ValueError("The effective mask contains invalid coverage.")
     coverage = np.rint(np.clip(values[0], 0, 1) * 255).astype(np.uint8)
     image = Image.fromarray(coverage)
-    image.thumbnail((maximum_size, maximum_size), Image.Resampling.BILINEAR)
+    if maximum_size:
+        image.thumbnail((maximum_size, maximum_size), Image.Resampling.BILINEAR)
     output = BytesIO()
     image.save(output, format="PNG")
     return output.getvalue()

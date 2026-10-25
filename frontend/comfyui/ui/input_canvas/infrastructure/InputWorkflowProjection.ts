@@ -17,11 +17,16 @@
 import { isRecord, type UnknownRecord } from '../../types/common.js';
 import type { ComfyInputLoaders } from './ComfyInputLoaders.js';
 import { MASK_BINDING_KEY, IMAGE_BINDING_KEY, type InputBinding } from '../domain/InputBinding.js';
-import type { InputLoader } from '../domain/InputLoader.js';
+import type { InputLoader, InputPreviewSettings } from '../domain/InputLoader.js';
+import { inputLoaderSettings } from '../domain/InputLoaderSettings.js';
 import { readInputBinding, withInputBinding } from './InputBindingMetadata.js';
 /** Identify a field independently from its node's compiled prompt path. */
 export interface InputWorkflowTarget {
   readonly key: string;
+  readonly nodePath: string;
+  readonly settings: InputPreviewSettings;
+  readonly unresolvedSettings: readonly string[];
+  readonly maskOutput: boolean;
   readonly binding: InputBinding;
   readonly loader: InputLoader;
   apply(files: readonly string[]): void;
@@ -47,6 +52,7 @@ export async function inputWorkflowProjection(
       : [];
   const byId = new Map(definitions.filter(isRecord).map((entry) => [entry.id, entry]));
   const targets: InputWorkflowTarget[] = [];
+  const assetPorts = loaders.assetPorts();
   /** Follow exact authored instances and native subgraph identities without global numeric-ID matching. */
   async function visit(
     graph: UnknownRecord,
@@ -122,6 +128,52 @@ export async function inputWorkflowProjection(
         if (files !== null && JSON.stringify(files) !== JSON.stringify(binding.files)) continue;
         targets.push({
           key: JSON.stringify([key, loader.field]),
+          nodePath: key,
+          settings: inputLoaderSettings(loader, { ...values, ...(inputs ?? {}) }),
+          maskOutput:
+            loader.kind === 'image' &&
+            (assetPorts.get(loader.classType)?.outputs ?? []).some((kind, slot) => {
+              if (kind !== 'mask') return false;
+              if (output)
+                return Object.values(output).some(
+                  (value) =>
+                    isRecord(value) &&
+                    isRecord(value.inputs) &&
+                    Object.values(value.inputs).some(
+                      (input) =>
+                        Array.isArray(input) &&
+                        input.length === 2 &&
+                        input[0] === key &&
+                        input[1] === slot,
+                    ),
+                );
+              const socket = Array.isArray(node.outputs) ? node.outputs[slot] : null;
+              return isRecord(socket) && Array.isArray(socket.links) && socket.links.length > 0;
+            }),
+          unresolvedSettings: Object.freeze(
+            inputs
+              ? Object.entries(inputs)
+                  .filter(
+                    ([name, value]) =>
+                      name !== loader.field &&
+                      Array.isArray(value) &&
+                      value.length === 2 &&
+                      typeof value[0] === 'string' &&
+                      typeof value[1] === 'number',
+                  )
+                  .map(([name]) => name)
+              : Array.isArray(node.inputs)
+                ? node.inputs
+                    .filter(isRecord)
+                    .filter(
+                      (input) =>
+                        input.name !== loader.field &&
+                        input.link !== null &&
+                        input.link !== undefined,
+                    )
+                    .map((input) => String(input.name))
+                : [],
+          ),
           binding,
           loader,
           apply: (files) => {

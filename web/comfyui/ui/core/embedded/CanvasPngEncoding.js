@@ -1,4 +1,4 @@
-import { decodeCanvasRaster } from '../../core/embedded/CanvasRuntime.js';
+import { decodeCanvasRaster } from './CanvasRuntime.js';
 /** Preserve every RGBA sample, including RGB beneath transparent pixels, through normal Comfy uploads. */
 export async function encodeSourcePng(pixels) {
     if (pixels.format !== 'rgba8')

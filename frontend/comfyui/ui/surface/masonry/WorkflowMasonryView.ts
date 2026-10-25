@@ -33,6 +33,7 @@ import { SurfaceMotion, type SurfacePlacement } from '../motion/SurfaceMotion.js
 import { MasonryStackInsetMotion } from './MasonryStackInsetMotion.js';
 import { SurfacePresentationBoundary } from '../motion/SurfacePresentationBoundary.js';
 import { prepareNativePresentation } from '../NativePresentationReady.js';
+import { whenPromptEditorsPresented } from '../../prompt_editor/PromptEditorSurface.js';
 import { COMPACT_MASONRY_CHANGE } from './CompactMasonryPreference.js';
 import {
   measureNativeCardPresentationSources,
@@ -208,6 +209,8 @@ export class WorkflowMasonryView {
         });
       }
     }
+    if (this.#disposed || generation !== this.#generation) return;
+    await whenPromptEditorsPresented(this.element);
     if (this.#disposed || generation !== this.#generation) return;
     this.#mounting = false;
     this.#geometry.observe([

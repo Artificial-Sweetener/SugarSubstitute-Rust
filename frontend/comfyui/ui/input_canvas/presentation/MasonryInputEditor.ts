@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Present actual image sources and effective masks with reusable source choices and ordered collection controls. */
-import type { InputEditorBinding } from '../application/InputEditorPorts.js';
+import type { InputEditorBinding, InputImageAssociation } from '../application/InputEditorPorts.js';
 import type { CanvasSourcePreviews } from '../application/CanvasSourcePreviews.js';
 import { inputLabel } from '../domain/InputLoader.js';
 import { InputPreviewRows } from './InputPreviewRows.js';
@@ -46,6 +46,7 @@ export class MasonryInputEditor {
     report: (error: unknown) => void,
     fields: NativeNodeChoiceFields,
     fieldRoot: HTMLElement,
+    association: InputImageAssociation | null,
     showField = false,
   ) {
     ensureInputEditorStyles(document);
@@ -126,7 +127,7 @@ export class MasonryInputEditor {
       }
       this.#controls.append(actions);
     }
-    this.#rows = new InputPreviewRows(document, binding, previews, report);
+    this.#rows = new InputPreviewRows(document, binding, previews, report, association);
     this.#status = document.createElement('div');
     this.#status.className = 'sc-input-editor__status';
     this.#status.setAttribute('role', 'status');

@@ -26,7 +26,7 @@ test('transforms prompts and restores only its own queue wrapper', async () => {
   const queuePrompt = jest.fn(
     async (_position: number, payload: unknown, _options?: unknown) => payload,
   );
-  const transform = jest.fn(async () => ({ output: { transformed: {} } }));
+  const transform = jest.fn(async () => ({ payload: { output: { transformed: {} } } }));
   const api = { queuePrompt };
   const bridge = new ComfyPromptQueueBridge({ api, transform });
 
@@ -43,7 +43,7 @@ test('transforms prompts and restores only its own queue wrapper', async () => {
 
 test('rejects invalid nesting before transformation or host queue mutation', async () => {
   const queuePrompt = jest.fn(async (_position: number, payload: unknown) => payload);
-  const transform = jest.fn(async (payload: unknown) => payload);
+  const transform = jest.fn(async (payload: unknown) => ({ payload }));
   const api = { queuePrompt };
   const bridge = new ComfyPromptQueueBridge({
     api,
@@ -68,7 +68,7 @@ test('queues directly when SugarCubes owns the request and preserves legacy fall
   const queuePrompt = jest.fn(
     async (_position: number, payload: unknown, _options?: unknown) => payload,
   );
-  const transform = jest.fn(async (payload: unknown) => payload);
+  const transform = jest.fn(async (payload: unknown) => ({ payload }));
   const executeDirect = jest.fn(async () => ({ prompt_id: 'direct' }));
   const api = { queuePrompt };
   const bridge = new ComfyPromptQueueBridge({
@@ -86,7 +86,13 @@ test('queues directly when SugarCubes owns the request and preserves legacy fall
   await api.queuePrompt(0, 'substitute');
 
   expect(executeDirect).toHaveBeenCalledTimes(1);
-  expect(executeDirect).toHaveBeenCalledWith(0, { output: {} }, options, expect.any(Function));
+  expect(executeDirect).toHaveBeenCalledWith(
+    0,
+    { output: {} },
+    options,
+    expect.any(Function),
+    expect.any(Function),
+  );
   expect(transform).toHaveBeenCalledWith('substitute');
   expect(queuePrompt).toHaveBeenCalledWith(0, 'substitute', undefined);
   bridge.dispose();
@@ -122,7 +128,7 @@ test('preserves ordinary callback order, host receiver, options and response ide
     transform: async (payload) => {
       calls.push('transform');
       expect(payload).toBe(prepared);
-      return transformed;
+      return { payload: transformed };
     },
     executeDirect: async () => {
       throw new Error('Ordinary submissions must use the host queue.');
@@ -201,7 +207,7 @@ test.each(['prepare', 'transform', 'host', 'direct'] as const)(
       transform: async (payload) => {
         calls.push('transform');
         if (failureStage === 'transform') throw failure;
-        return payload;
+        return { payload };
       },
       executeDirect: async () => {
         calls.push('direct');
@@ -230,7 +236,10 @@ test('an already started submission completes through the captured host after di
   const response = { prompt_id: 'pending-prompt' };
   const queuePrompt = jest.fn(async (_position: number, _payload: unknown) => response);
   const api: ComfyPromptQueueApi = { queuePrompt };
-  const bridge = new ComfyPromptQueueBridge({ api, transform: () => pending.promise });
+  const bridge = new ComfyPromptQueueBridge({
+    api,
+    transform: async () => ({ payload: await pending.promise }),
+  });
   bridge.install();
   const request = api.queuePrompt?.(4, { workflow: { id: 'workflow-a' } });
 
@@ -245,7 +254,7 @@ test('an already started submission completes through the captured host after di
 test('repeated installation is stable and disposal preserves a later extension wrapper', () => {
   const original = jest.fn(async () => ({}));
   const api: ComfyPromptQueueApi = { queuePrompt: original };
-  const bridge = new ComfyPromptQueueBridge({ api, transform: async (payload) => payload });
+  const bridge = new ComfyPromptQueueBridge({ api, transform: async (payload) => ({ payload }) });
   bridge.install();
   const installed = api.queuePrompt;
   bridge.install();
@@ -260,7 +269,7 @@ test('repeated installation is stable and disposal preserves a later extension w
 
 test('installation without a host queue fails without creating a replacement', () => {
   const api: ComfyPromptQueueApi = {};
-  const bridge = new ComfyPromptQueueBridge({ api, transform: async (payload) => payload });
+  const bridge = new ComfyPromptQueueBridge({ api, transform: async (payload) => ({ payload }) });
   expect(() => bridge.install()).toThrow('Comfy queuePrompt is unavailable.');
   expect(api.queuePrompt).toBeUndefined();
   bridge.dispose();
@@ -268,7 +277,7 @@ test('installation without a host queue fails without creating a replacement', (
 
 test('a retained later wrapper still delegates after disposal and a fresh installation', async () => {
   const original = jest.fn(async () => ({ prompt_id: 'original' }));
-  const transform = jest.fn(async (payload: unknown) => payload);
+  const transform = jest.fn(async (payload: unknown) => ({ payload }));
   const api: ComfyPromptQueueApi = { queuePrompt: original };
   const bridge = new ComfyPromptQueueBridge({ api, transform });
   bridge.install();

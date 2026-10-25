@@ -38,6 +38,9 @@ export interface PromptBrowserProof {
   refresh(): void;
   setReadOnly(readOnly: boolean): void;
   reset(): void;
+  addInactiveProjection(connected: boolean): void;
+  removeDetachedProjection(): void;
+  releaseVisibleProjection(): void;
   updateModelTitle(title: string): void;
   axes(transform: string): { readonly x: number; readonly y: number } | null;
   annotateNativeField(): void;
@@ -93,6 +96,7 @@ let widget: ComfyWidget;
 let node: ComfyNode;
 let release: (() => void) | null = null;
 let reconcile: () => void = () => undefined;
+let detached: { root: HTMLElement; scope: CubePromptTextareaScope } | null = null;
 let sources: import('../../../frontend/comfyui/ui/surface/NativeNodeCardRenderer.js').NativeNodeWidgetSource[] =
   [];
 let callbacks = 0;
@@ -117,6 +121,9 @@ window.addEventListener(
 
 /** Recreate native presentation while retaining the exact graph/widget lifetime. */
 function present(renderer: 'nodes-1' | 'nodes-2', scale: number): void {
+  detached?.scope.dispose();
+  detached?.root.remove();
+  detached = null;
   release?.();
   root.replaceChildren();
   textarea = document.createElement('textarea');
@@ -234,6 +241,40 @@ window.promptBrowserProof = {
     reconcile();
   },
   reset: () => host.beforeConfigureGraph(),
+  /** Prepare a late graph card detached or already connected beneath an inert presentation. */
+  addInactiveProjection(connected): void {
+    const projection = document.createElement('section');
+    projection.className = 'late-native-graph-projection';
+    projection.style.visibility = 'hidden';
+    projection.inert = true;
+    const native = document.createElement('textarea');
+    native.value = typeof widget.value === 'string' ? widget.value : '';
+    native.readOnly = true;
+    projection.append(native);
+    const scope = new CubePromptTextareaScope(projection);
+    if (connected) document.body.append(projection);
+    scope.reconcile(node, sources);
+    if (!connected) document.body.append(projection);
+    scope.reconcile(node, sources);
+    detached = { root: projection, scope };
+    reconcile();
+  },
+  /** Release an inactive native graph projection independently of the visible editor. */
+  removeDetachedProjection(): void {
+    detached?.scope.dispose();
+    detached?.root.remove();
+    detached = null;
+  },
+  /** Return the widget to its surviving graph presentation when the active view closes. */
+  releaseVisibleProjection(): void {
+    release?.();
+    release = null;
+    root.replaceChildren();
+    if (detached) {
+      detached.root.style.visibility = '';
+      detached.root.inert = false;
+    }
+  },
   annotateNativeField(): void {
     const accessory = document.createElement('span');
     accessory.hidden = true;

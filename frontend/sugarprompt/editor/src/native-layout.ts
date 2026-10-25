@@ -117,6 +117,7 @@ class NativeLayout {
             Number.parseFloat(style.paddingTop) +
             Number.parseFloat(style.paddingBottom),
           viewportHeight: this.view.scrollDOM.clientHeight,
+          viewportWidth: parent.clientWidth,
           scaleY: this.view.scaleY,
         });
       },

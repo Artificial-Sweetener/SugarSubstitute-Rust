@@ -18,3 +18,7 @@ export function mountPromptEditorSurface(surface) {
 export function refreshPromptEditorSurface(surface) {
     return owners.get(surface.textarea.ownerDocument)?.refresh(surface) ?? false;
 }
+/** Finish identified prompt construction before its owning presentation is exposed. */
+export function whenPromptEditorsPresented(root) {
+    return owners.get(root.ownerDocument)?.ready(root) ?? Promise.resolve();
+}

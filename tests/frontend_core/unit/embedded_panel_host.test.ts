@@ -239,7 +239,11 @@ test('discovers a native canvas after configuration and releases correlated requ
               canvas: {
                 id: 'fixture',
                 label: 'Fixture editor',
-                capabilities: { displayOutput: false, insertImageLayer: true },
+                capabilities: {
+                  displayOutput: false,
+                  insertImageLayer: true,
+                  positionImageLayer: false,
+                },
               },
               document: null,
             },

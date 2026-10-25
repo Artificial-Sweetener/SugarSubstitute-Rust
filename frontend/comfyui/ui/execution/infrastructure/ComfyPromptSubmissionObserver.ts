@@ -26,6 +26,7 @@ import type { PromptQueueObservation, PromptQueueObserver } from './ComfyPromptQ
 import { decodeComfyPromptSources } from './ComfyPromptSourceDecoder.js';
 import { decodeComfySubmittedSeeds } from './ComfySubmittedSeeds.js';
 import type { WorkflowSeedHistory } from '../application/WorkflowSeedHistory.js';
+import type { WorkflowCanvasPreparation } from '../domain/WorkflowPreparation.js';
 
 export interface ComfyPromptSubmissionObserverOptions {
   readonly contexts: WorkflowSubmissionContexts;
@@ -53,11 +54,13 @@ export class ComfyPromptSubmissionObserver implements PromptQueueObserver {
     const submission = this.options.submitting(captured);
     let context = submission;
     let preparedPayload: unknown = payload;
+    let canvasPreparation: WorkflowCanvasPreparation | undefined;
     let active = true;
     return {
-      prepared: (prepared) => {
+      prepared: (prepared, canvas) => {
         if (!active) return;
         preparedPayload = prepared;
+        canvasPreparation = canvas;
         const sources = decodeComfyPromptSources(prepared, captured.sources);
         if (sources.length) context = Object.freeze({ ...submission, sources });
       },
@@ -86,6 +89,27 @@ export class ComfyPromptSubmissionObserver implements PromptQueueObserver {
             : isRecord(preparedPayload)
               ? preparedPayload.output
               : null;
+        if (canvasPreparation) {
+          try {
+            context = Object.freeze({
+              ...context,
+              canvasReturns: canvasPreparation.resolve(prompt),
+            });
+          } catch (error: unknown) {
+            this.logger.error('SugarCubes cannot resolve captured inpaint placement.', {
+              error,
+              promptId: id,
+            });
+            context = Object.freeze({
+              ...context,
+              canvasReturns: context.sources.map((source) => ({
+                kind: 'unavailable' as const,
+                executionPath: source.executionPath,
+                message: 'The inpaint output has no verified captured placement.',
+              })),
+            });
+          }
+        }
         this.options.seeds?.record(
           context.session,
           context.order,

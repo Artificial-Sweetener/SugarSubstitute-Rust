@@ -15,6 +15,11 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Recognize file-loading fields through native upload metadata independently of canvas representation. */
 export type InputKind = 'image' | 'mask';
+/** Declare only spatial socket semantics needed by reusable source association. */
+export interface InputAssetPorts {
+  readonly inputs: Readonly<Record<string, InputKind>>;
+  readonly outputs: readonly (InputKind | null)[];
+}
 /** Describe one independently configurable upload field on an installed node. */
 export interface InputLoader {
   readonly kind: InputKind;
@@ -89,4 +94,14 @@ export interface InputPreviewSettings {
   readonly classType: string;
   readonly field: string;
   readonly inputs: Readonly<Record<string, string | number | boolean>>;
+}
+
+/** Identify the installed loaders whose native channel convention is defined by shared mask-source semantics. */
+export function usesNativeMaskChannels(loader: Pick<InputLoader, 'classType'>): boolean {
+  return ['LoadImageMask', 'SimpleSyrup.LoadMaskBatch'].includes(loader.classType);
+}
+
+/** Preserve the documented inverse-alpha MASK output of native mixed image loaders. */
+export function nativeMaskOutputChannel(loader: Pick<InputLoader, 'classType'>): 'alpha' | null {
+  return ['LoadImage', 'LoadImageOutput'].includes(loader.classType) ? 'alpha' : null;
 }
