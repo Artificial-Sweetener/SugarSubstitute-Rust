@@ -33,9 +33,11 @@ impl Pixel {
         self.0
     }
     /// Porter-Duff source-over in linear light.
-    pub fn over(self, background: Self) -> Self {
+    /// # Errors
+    /// Rejects floating-point overflow so canonical pixels remain finite across safe API calls.
+    pub fn over(self, background: Self) -> Result<Self, ImageError> {
         let remaining = 1.0 - self.0[3];
-        Self(std::array::from_fn(|i| self.0[i] + background.0[i] * remaining))
+        Self::premultiplied(std::array::from_fn(|i| self.0[i] + background.0[i] * remaining))
     }
     pub(crate) fn filtered(channels: [f32; 4]) -> Result<Self, ImageError> {
         let alpha = channels[3].clamp(0.0, 1.0);

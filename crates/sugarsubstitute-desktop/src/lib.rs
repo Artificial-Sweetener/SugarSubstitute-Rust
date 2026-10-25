@@ -9,7 +9,12 @@ mod bootstrap;
 mod windows_activation;
 #[cfg(target_os = "windows")]
 pub use windows_activation::activate_desktop_process;
+#[allow(unsafe_code)]
+mod file_dialog;
+pub use file_dialog::SelectionKind;
 mod cadence;
+/// Native canvas window/input lifetime with borrowed immutable prepared presentation.
+pub mod canvas;
 mod completion_wake;
 mod console;
 /// Closed console failure operation and direct cause codes; these grant no native authority.

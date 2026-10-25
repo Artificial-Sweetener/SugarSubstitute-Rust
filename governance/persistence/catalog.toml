@@ -1373,3 +1373,27 @@ current_version = 1
 accepted_versions = [1]
 compatibility = "reject"
 migrations = []
+
+[[formats]]
+id = "canvas-viewer-proof-png"
+owner = "sugarsubstitute"
+sources = ["crates/sugarsubstitute/src/viewer/proof.rs"]
+source_sha256 = "sha256:183e8dd95459730b7bb30d1816161dcf0d30940ab56d1f2c0b71fd16991d4249"
+classification = "authored_document"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
+id = "canvas-viewer-proof-metrics"
+owner = "sugarsubstitute"
+sources = ["crates/sugarsubstitute/src/viewer/proof.rs"]
+source_sha256 = "sha256:183e8dd95459730b7bb30d1816161dcf0d30940ab56d1f2c0b71fd16991d4249"
+classification = "authored_document"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []

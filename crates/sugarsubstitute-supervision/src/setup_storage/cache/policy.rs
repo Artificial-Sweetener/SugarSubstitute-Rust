@@ -24,9 +24,11 @@ pub enum Namespace {
     UpstreamMetadata,
     /// Private headless provisioning session data, never application sessions.
     SetupRuntime,
+    /// Reconstructible original-precision raster tiles; authored images remain outside cache.
+    ImageSources,
 }
 impl Namespace {
-    pub(super) const ALL: [Self; 7] = [
+    pub(super) const ALL: [Self; 8] = [
         Self::UpdateOffers,
         Self::UpdateDownloads,
         Self::PackedPayloads,
@@ -34,6 +36,7 @@ impl Namespace {
         Self::SetupDownloads,
         Self::UpstreamMetadata,
         Self::SetupRuntime,
+        Self::ImageSources,
     ];
     /// Canonical schema/epoch-qualified directory component.
     pub const fn directory(self) -> &'static str {
@@ -45,6 +48,7 @@ impl Namespace {
             Self::SetupDownloads => "setup-downloads-v1",
             Self::UpstreamMetadata => "setup-upstream-metadata-v1",
             Self::SetupRuntime => "setup-runtime-v1",
+            Self::ImageSources => "image-sources-v1",
         }
     }
     /// Production byte budget for this namespace, including reserved active entries.
@@ -53,6 +57,7 @@ impl Namespace {
             Self::UpdateOffers => 64 * 1024 * 1024,
             Self::UpdateDownloads | Self::SetupDownloads => 24 * GIB,
             Self::PackedPayloads => 32 * GIB,
+            Self::ImageSources => 32 * GIB,
             Self::SetupBrowser => GIB,
             Self::UpstreamMetadata | Self::SetupRuntime => 256 * 1024 * 1024,
         }
@@ -63,6 +68,7 @@ impl Namespace {
             Self::UpdateOffers | Self::UpstreamMetadata => 7 * DAY,
             Self::UpdateDownloads | Self::SetupDownloads => 30 * DAY,
             Self::PackedPayloads => 7 * DAY,
+            Self::ImageSources => 7 * DAY,
             Self::SetupBrowser | Self::SetupRuntime => DAY,
         }
     }

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retained CPU pixel repairs agree with independent full redraws in every pan direction.
 use super::*;
-use sugarsubstitute_canvas::DamagePlan;
+use sugarsubstitute_canvas::{DamagePlan, FrameStamp, RenderRequest};
 use sugarsubstitute_contracts::execution::{Generation, JobContext, SurfaceId};
 use sugarsubstitute_image_ops::{Extent, ImageError, Region};
 mod harness;

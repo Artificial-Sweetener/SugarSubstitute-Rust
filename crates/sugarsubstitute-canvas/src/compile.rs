@@ -4,7 +4,7 @@
 use crate::{CanvasError, DocumentSnapshot, LayerContent, LayerMask, Viewport};
 use sugarsubstitute_contracts::execution::MemoryLease;
 use sugarsubstitute_image_ops::{
-    AssetId, Extent, Graph, NodeId, Operation, Pixel, Sampling, VectorRectangle,
+    AssetId, Extent, Filter, Graph, NodeId, Operation, Pixel, Sampling, VectorRectangle,
 };
 
 /// One immutable image graph for a document revision and physical evaluation grid.
@@ -39,6 +39,7 @@ impl DocumentSnapshot {
         &self,
         view: Viewport,
         matte: Pixel,
+        filter: Filter,
         memory: &MemoryLease,
     ) -> Result<CompiledView, CanvasError> {
         if matte.channels()[3] != 1.0 {
@@ -63,7 +64,7 @@ impl DocumentSnapshot {
             match layer.content() {
                 LayerContent::Exposure { stops } => {
                     let adjusted = graph.add(Operation::Exposure { input: composite, stops })?;
-                    let mask = mask_node(&mut graph, layer.mask(), document, view)?;
+                    let mask = mask_node(&mut graph, layer.mask(), document, view, filter)?;
                     composite = graph.add(Operation::Mix {
                         original: composite,
                         adjusted,
@@ -74,7 +75,7 @@ impl DocumentSnapshot {
                 content => {
                     let mut foreground = match content {
                         LayerContent::Raster { asset, .. } => {
-                            raster_node(&mut graph, asset, document, view, true)?
+                            raster_node(&mut graph, asset, document, view, filter, true)?
                         }
                         LayerContent::VectorRectangle(shape) => {
                             vector_node(&mut graph, shape, document, view)?
@@ -86,7 +87,7 @@ impl DocumentSnapshot {
                         }
                     };
                     if layer.mask().is_some() {
-                        let mask = mask_node(&mut graph, layer.mask(), document, view)?;
+                        let mask = mask_node(&mut graph, layer.mask(), document, view, filter)?;
                         foreground = graph.add(Operation::Mask { input: foreground, mask })?;
                     }
                     if layer.opacity() != 1.0 {
@@ -142,9 +143,12 @@ fn mask_node(
     mask: Option<LayerMask>,
     document: Extent,
     view: Viewport,
+    filter: Filter,
 ) -> Result<NodeId, CanvasError> {
     match mask {
-        Some(LayerMask::Raster { asset, .. }) => raster_node(graph, asset, document, view, false),
+        Some(LayerMask::Raster { asset, .. }) => {
+            raster_node(graph, asset, document, view, filter, false)
+        }
         Some(LayerMask::VectorRectangle(shape)) => vector_node(graph, shape, document, view),
         None => Ok(graph.add(Operation::Solid {
             extent: view.surface(),
@@ -158,6 +162,7 @@ fn raster_node(
     asset: AssetId,
     document: Extent,
     view: Viewport,
+    filter: Filter,
     clip: bool,
 ) -> Result<NodeId, CanvasError> {
     let source = graph.add(Operation::Raster { asset, extent: document })?;
@@ -193,7 +198,8 @@ fn raster_node(
     let sampling = Sampling::new(
         [ratios[0] / view.zoom(), ratios[1] / view.zoom()],
         [view.origin()[0] * ratios[0], view.origin()[1] * ratios[1]],
-    )?;
+    )?
+    .with_filter(filter);
     let sampled =
         graph.add(Operation::Resample { input: selected, extent: view.surface(), sampling })?;
     if !clip {

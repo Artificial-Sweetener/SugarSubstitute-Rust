@@ -155,14 +155,6 @@ pub fn run(options: Window, lifetime: &mut impl Lifetime) -> Result<(), Box<dyn 
     }
 }
 
-/// Native shell selection kind; filesystem validation remains with installation ownership.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PickerKind {
-    /// Choose an existing directory.
-    Folder,
-    /// Choose an existing interpreter executable.
-    File,
-}
 /// Original modal picker request, independent of display strings and filesystem authority.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Picker {
@@ -171,5 +163,5 @@ pub struct Picker {
     /// Surface-local monotonically increasing request identity.
     pub request: u64,
     /// Native chooser semantics.
-    pub kind: PickerKind,
+    pub kind: crate::SelectionKind,
 }

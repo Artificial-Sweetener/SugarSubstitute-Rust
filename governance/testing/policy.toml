@@ -102,3 +102,9 @@ package = "sugarsubstitute-ui"
 root = "crates/sugarsubstitute-ui"
 concern = "Admitted layered surface clipping, fractional coverage, cancellation and validated pixel publication; shared form peer identities and text limits, shaped measurement/paint agreement; shared native availability and activation fencing, bounded raster, progress and scrollbar widgets; native and portable label shaping, geometry, memory custody, clipping and styled console text"
 minimum_tests = 78
+
+[[owners]]
+package = "sugarsubstitute-image-io"
+root = "crates/sugarsubstitute-image-io"
+concern = "Bounded image decoding, archive integrity and seam-safe region reads with original storage and memory admission"
+minimum_tests = 4

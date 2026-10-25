@@ -132,7 +132,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/lib.rs"
-source_sha256 = "sha256:2955b5d788f1d1b3573af7773d69c8de299c28911f205738c35090c135bc9bd6"
+source_sha256 = "sha256:1dbc271a90b0e90c410f52508c263f938b954a9920e61169fde2cd892c77b866"
 kind = "native"
 rationale = "Native boundary: Own native window lifetime and CPU frame presentation independently of UI content.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -396,7 +396,7 @@ rationale = "Pure invalid-dimension qualification uses an empty title and unreac
 
 [[records]]
 path = "crates/sugarsubstitute/src/lib.rs"
-source_sha256 = "sha256:7550a95ff23fc04e2ed78d262b9bda1a975e7f0b52c3a4304a2d9af00eb89801"
+source_sha256 = "sha256:f7737aab853a73ceacdd075d1c129abf69df31753324cb01d8cad4374041c093"
 kind = "presentation"
 rationale = "The explicit splash demo composes DesktopOptions.title from messages(options.locale).loading; diagnostic and protocol values do not become UI labels."
 
@@ -564,7 +564,7 @@ rationale = "Isolated native interaction or rendering qualification uses deliber
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/installer/native/windows.rs"
-source_sha256 = "sha256:389aa4391906a5295b864aa172f84fa5c8e35ef667fee93403906c803ab12183"
+source_sha256 = "sha256:9daef3c1e7e1d189ace84e6bacf03d028ecd240ab4cc64069540506f3ff35e61"
 kind = "native"
 rationale = "Affine native text, control or window adapter consumes original bounded labels and shared widget specifications; the presenting owner supplies catalog copy, and external native references retain their checked lifetime."
 
@@ -687,3 +687,9 @@ path = "installer/patches/0006-standalone-node-runtime.patch"
 source_sha256 = "sha256:11d35fdab3d10431eea908090e0b037032f93929cd4793ad9ff699074e4596a5"
 kind = "external"
 rationale = "The upstream derivative compares numeric HTTP statusCode framing and retains upstream diagnostic errors; owned installer feedback still uses the canonical message catalog."
+
+[[records]]
+path = "crates/sugarsubstitute-desktop/src/canvas/windows.rs"
+source_sha256 = "sha256:7430452a32e4e742f35d5c4c982c9cebbf322e4284104816c0c0daa9734c1466"
+kind = "native"
+rationale = "Native canvas window consumes catalog-owned titles/status from the application lifetime; input observations preserve authored source paths without constructing product copy."

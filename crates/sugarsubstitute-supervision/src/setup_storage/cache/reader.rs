@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Keep every returned read handle borrowed from its actual entry lifetime.
+//! Keep read handles coupled to their original borrowed or transferred entry pins.
 use super::*;
 use std::io::{Read, Seek, SeekFrom};
 
@@ -8,12 +8,20 @@ use std::io::{Read, Seek, SeekFrom};
 /// Feature owners authenticate its bytes before use. Buffering remains charged to their job.
 pub struct CacheReader<'a> {
     file: File,
-    _lease: &'a CacheLease,
+    _pin: Pin<'a>,
+}
+enum Pin<'a> {
+    Borrowed { _lease: &'a CacheLease },
+    Owned { _lease: std::sync::Arc<CacheLease> },
 }
 impl<'a> CacheReader<'a> {
     /// Tie the opened regular file to the exact entry owner that established its custody.
     pub(super) fn new(file: File, lease: &'a CacheLease) -> Self {
-        Self { file, _lease: lease }
+        Self { file, _pin: Pin::Borrowed { _lease: lease } }
+    }
+    /// Retain a transferred entry pin after opening exactly its declared regular file.
+    pub(super) fn owned(file: File, lease: CacheLease) -> CacheReader<'static> {
+        CacheReader { file, _pin: Pin::Owned { _lease: std::sync::Arc::new(lease) } }
     }
     /// Read bounded metadata with the same before/after length checks as native storage inputs.
     /// The caller must admit `maximum` bytes of buffering before invoking this operation.

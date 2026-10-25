@@ -24,6 +24,11 @@ sugarsubstitute-execution = { path = "../sugarsubstitute-execution" }
 sugarsubstitute-splash = { path = "../sugarsubstitute-splash" }
 sugarsubstitute-desktop = { path = "../sugarsubstitute-desktop" }
 sugarsubstitute-supervision = { path = "../sugarsubstitute-supervision" }
+sugarsubstitute-image-ops = { path = "../sugarsubstitute-image-ops" }
+sugarsubstitute-canvas = { path = "../sugarsubstitute-canvas" }
+sugarsubstitute-canvas-render = { path = "../sugarsubstitute-canvas-render" }
+sugarsubstitute-image-io = { path = "../sugarsubstitute-image-io" }
+png.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 serde.workspace = true

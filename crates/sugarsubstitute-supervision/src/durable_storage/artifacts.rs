@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Bound explicit qualification inputs and staged outputs without acquiring application ownership.
+//! Bound caller-selected inputs and staged outputs without acquiring application ownership.
+mod input;
+pub use input::{ArtifactInput, with_artifact_input};
 #[cfg(windows)]
 mod windows;
 #[cfg(windows)]
@@ -58,11 +60,10 @@ pub fn read_artifact(
         return Err(invalid("Artifact input allocation exceeds admission"));
     }
     bytes.resize(capacity, 0);
-    let mut file = platform::Input::open(path, context)?;
     let mut used = 0;
-    let read = (|| {
+    with_artifact_input(path, maximum as u64, context, |file| {
         loop {
-            let count = effect(context, || file.read(&mut bytes[used..]))?;
+            let count = file.read(&mut bytes[used..])?;
             if count == 0 {
                 break;
             }
@@ -71,9 +72,12 @@ pub fn read_artifact(
                 return Err(invalid("Artifact input exceeds its byte bound"));
             }
         }
-        Ok(())
-    })();
-    finish_io(read, file.close())?;
+        Ok::<(), io::Error>(())
+    })
+    .map_err(|cause| match cause {
+        ArtifactError::Storage(cause) | ArtifactError::Producer(cause) => cause,
+        ArtifactError::Retirement { producer, storage } => retirement_error(producer, Err(storage)),
+    })?;
     bytes.truncate(used);
     Ok(ArtifactBytes { bytes, _memory: memory })
 }
@@ -85,11 +89,11 @@ pub enum ArtifactError<E> {
     Storage(io::Error),
     /// The feature's encoder or schema producer failed before publication.
     Producer(E),
-    /// Producer failure was followed by a checked file-close failure.
+    /// Producer failure was followed by an original-control or checked file-close failure.
     Retirement {
         /// Original feature failure.
         producer: E,
-        /// Native close failure; no successful retirement is implied.
+        /// Control/native retirement failure; successful completion is not implied.
         storage: io::Error,
     },
 }

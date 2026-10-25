@@ -29,7 +29,3 @@ pub struct InstallerConsole<'a> {
     /// Borrowed immutable transcript and current layout.
     pub view: crate::ConsoleView<'a>,
 }
-
-#[cfg(windows)]
-#[allow(unsafe_code)]
-mod dialog;

@@ -67,6 +67,34 @@ fn lanczos(distance: f64) -> f64 {
     (angle.sin() / angle) * ((angle / 3.0).sin() / (angle / 3.0))
 }
 
+/// Reconstruct a preview directly from admitted dependency pixels, without convolution scratch.
+pub(crate) fn nearest(
+    input: &Buffer,
+    source: Extent,
+    sampling: Sampling,
+    output: &mut Buffer,
+    context: &JobContext,
+) -> Result<(), ImageError> {
+    let coordinate = |value: u32, axis: usize, length: u32| {
+        ((f64::from(value) + 0.5) * sampling.scale()[axis] + sampling.offset()[axis])
+            .floor()
+            .clamp(0.0, f64::from(length - 1)) as u32
+    };
+    for y in output.region.y()..output.region.bottom() {
+        crate::evaluate::check(context)?;
+        let sy = coordinate(y, 1, source.height());
+        for x in output.region.x()..output.region.right() {
+            let sx = coordinate(x, 0, source.width());
+            let from = (sy - input.region.y()) as usize * input.region.width() as usize
+                + (sx - input.region.x()) as usize;
+            let to = (y - output.region.y()) as usize * output.region.width() as usize
+                + (x - output.region.x()) as usize;
+            output.pixels[to] = input.pixels[from];
+        }
+    }
+    Ok(())
+}
+
 /// Resample bounded dependency pixels; scratch storage and tap tables are already admitted.
 pub(crate) fn render(
     input: &Buffer,

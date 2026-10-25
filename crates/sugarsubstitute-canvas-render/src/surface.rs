@@ -2,18 +2,10 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Immutable region updates and overlap-safe retained CPU pixels.
 use crate::RenderError;
-use sugarsubstitute_canvas::DamagePlan;
-use sugarsubstitute_contracts::execution::{Generation, MemoryClaim, MemoryLease, SurfaceId};
+use sugarsubstitute_canvas::{DamagePlan, FrameStamp};
+use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease, SurfaceId};
 use sugarsubstitute_image_ops::{Extent, ImageError, Region};
 
-/// One monotonically published frame on a specific native or headless canvas surface.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct FrameStamp {
-    /// Application-owned presentation surface identity.
-    pub surface: SurfaceId,
-    /// Monotonic state generation also used by execution replacement admission.
-    pub generation: Generation,
-}
 struct Patch {
     region: Region,
     pixels: Vec<u32>,
@@ -77,6 +69,10 @@ impl PreparedUpdate {
     /// Exact application-assigned destination generation.
     pub const fn target(&self) -> FrameStamp {
         self.target
+    }
+    /// Exact retained frame required before applying a partial repair, or none for full replacement.
+    pub const fn base(&self) -> Option<FrameStamp> {
+        self.base
     }
     /// Camera repair and already-prepared damage; no image operations execute in presentation.
     pub const fn plan(&self) -> &DamagePlan {

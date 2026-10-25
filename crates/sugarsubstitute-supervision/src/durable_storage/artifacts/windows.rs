@@ -10,7 +10,11 @@ use crate::{
     native_claims::files::{Budget, Handle},
 };
 use ::windows::Win32::Foundation::HANDLE;
-use std::{os::windows::io::IntoRawHandle, sync::Arc};
+use std::{
+    io::{Seek, SeekFrom},
+    os::windows::{fs::OpenOptionsExt, io::IntoRawHandle},
+    sync::Arc,
+};
 
 pub(super) struct Stage {
     file: Handle,
@@ -48,13 +52,28 @@ impl Input {
         let budget = Budget::Protected(Arc::new(
             context.memory().claim(64 * 1024).map_err(io::Error::other)?,
         ));
-        let result = std::fs::File::open(path)
+        let result = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(1)
+            .open(path)
             .map(|file| Self(Handle::new(HANDLE(file.into_raw_handle()), budget)));
         super::super::control::observe(context, result)
     }
     pub(super) fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
         let file = self.0.borrow_file().map_err(io::Error::other)?;
         (&*file).read(bytes)
+    }
+    pub(super) fn length(&mut self) -> io::Result<u64> {
+        let file = self.0.borrow_file().map_err(io::Error::other)?;
+        let metadata = file.metadata()?;
+        if !metadata.is_file() {
+            return Err(invalid("Selected input must be a regular file"));
+        }
+        Ok(metadata.len())
+    }
+    pub(super) fn seek(&mut self, position: SeekFrom) -> io::Result<u64> {
+        let file = self.0.borrow_file().map_err(io::Error::other)?;
+        (&*file).seek(position)
     }
     pub(super) fn close(&mut self) -> io::Result<()> {
         self.0.close().map_err(io::Error::other)
@@ -116,6 +135,23 @@ mod tests {
     use ::windows::Win32::Foundation::{
         HANDLE_FLAG_PROTECT_FROM_CLOSE, HANDLE_FLAGS, SetHandleInformation,
     };
+
+    #[test]
+    fn selected_stream_excludes_external_writes_until_original_native_close()
+    -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        super::super::tests::run(|context, _| {
+            let root = tempfile::tempdir()?;
+            let path = root.path().join("authored");
+            std::fs::write(&path, b"original")?;
+            with_artifact_input(&path, 8, context, |_| {
+                assert!(std::fs::write(&path, b"changed").is_err());
+                Ok::<(), io::Error>(())
+            })?;
+            std::fs::write(&path, b"changed")?;
+            assert_eq!(std::fs::read(path)?, b"changed");
+            Ok(())
+        })
+    }
 
     /// Real native close failure keeps custody and ancestry until checked cleanup succeeds.
     #[test]

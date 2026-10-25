@@ -5,9 +5,10 @@ use super::*;
 use std::{
     ffi::CString,
     fs::File,
+    io::{Seek, SeekFrom},
     os::{
         fd::{AsRawFd, FromRawFd, IntoRawFd},
-        unix::ffi::OsStrExt,
+        unix::{ffi::OsStrExt, fs::OpenOptionsExt},
     },
     sync::Arc,
 };
@@ -62,11 +63,25 @@ impl Input {
     pub(super) fn open(path: &Path, context: &JobContext) -> io::Result<Self> {
         check(context)?;
         let memory = Arc::new(context.memory().claim(64 * 1024).map_err(io::Error::other)?);
-        let result = File::open(path).map(|file| Self(Descriptor { file: Some(file), memory }));
+        let result = std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_CLOEXEC | libc::O_NONBLOCK)
+            .open(path)
+            .map(|file| Self(Descriptor { file: Some(file), memory }));
         super::super::control::observe(context, result)
     }
     pub(super) fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
         self.0.file()?.read(bytes)
+    }
+    pub(super) fn length(&self) -> io::Result<u64> {
+        let metadata = self.0.file()?.metadata()?;
+        if !metadata.is_file() {
+            return Err(invalid("Selected input must be a regular file"));
+        }
+        Ok(metadata.len())
+    }
+    pub(super) fn seek(&mut self, position: SeekFrom) -> io::Result<u64> {
+        self.0.file()?.seek(position)
     }
     pub(super) fn close(&mut self) -> io::Result<()> {
         self.0.close()

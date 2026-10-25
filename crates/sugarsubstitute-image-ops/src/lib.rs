@@ -26,7 +26,7 @@ pub use evaluate::{EvaluationStats, Evaluator, RasterSource};
 pub use geometry::{Extent, Region};
 pub use graph::{AssetId, Graph, NodeId, Operation, Pyramid, VectorRectangle};
 pub use pixel::Pixel;
-pub use sampling::Sampling;
+pub use sampling::{Filter, Sampling};
 
 #[cfg(test)]
 mod tests;

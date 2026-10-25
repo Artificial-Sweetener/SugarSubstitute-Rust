@@ -1,7 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Explicit inverse pixel mapping for clamped Lanczos reconstruction.
+//! Explicit inverse pixel mapping and reconstruction quality for bounded image operations.
 use crate::{Extent, ImageError};
+
+/// Reconstruction semantics included in graph content identities and dependency regions.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Filter {
+    /// Normalized antialiased Lanczos-3 for finished viewing and canonical pyramids.
+    Lanczos3,
+    /// Closest pixel center, with positive ties selecting the next pixel and edges clamped.
+    Nearest,
+}
 
 /// Axis-aligned inverse mapping from output pixel corners to input pixel corners.
 /// Pixel centers map as `(coordinate + 0.5) * scale + offset - 0.5` in input-index space.
@@ -11,6 +20,7 @@ use crate::{Extent, ImageError};
 pub struct Sampling {
     scale: [f64; 2],
     offset: [f64; 2],
+    filter: Filter,
 }
 impl Sampling {
     /// Construct finite positive inverse scales and finite input-space offsets.
@@ -22,7 +32,7 @@ impl Sampling {
         {
             return Err(ImageError::Invalid("Invalid image sampling transform"));
         }
-        Ok(Self { scale, offset })
+        Ok(Self { scale, offset, filter: Filter::Lanczos3 })
     }
     /// Map a complete source extent into a complete target extent with aligned pixel corners.
     pub fn resize(source: Extent, target: Extent) -> Self {
@@ -32,6 +42,7 @@ impl Sampling {
                 f64::from(source.height()) / f64::from(target.height()),
             ],
             offset: [0.0; 2],
+            filter: Filter::Lanczos3,
         }
     }
     /// Inverse scales in input pixels per output pixel.
@@ -41,6 +52,15 @@ impl Sampling {
     /// Input pixel-corner coordinates corresponding to output pixel corner zero.
     pub const fn offset(self) -> [f64; 2] {
         self.offset
+    }
+    /// Select explicit reconstruction semantics while preserving global sample coordinates.
+    pub const fn with_filter(mut self, filter: Filter) -> Self {
+        self.filter = filter;
+        self
+    }
+    /// Current reconstruction semantics; canonical resize defaults to Lanczos-3.
+    pub const fn filter(self) -> Filter {
+        self.filter
     }
     pub(crate) fn validate(self, source: Extent, target: Extent) -> Result<(), ImageError> {
         for (axis, (input, output)) in

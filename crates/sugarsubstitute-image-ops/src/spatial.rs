@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Spatial contracts shared by evaluation, dirty-region propagation and backend planning.
-use crate::{Extent, Graph, ImageError, NodeId, Operation, Region};
+use crate::{Extent, Filter, Graph, ImageError, NodeId, Operation, Region};
 
 impl Graph {
     /// Required input regions for an exact output region, including Lanczos filter halos.
@@ -26,6 +26,7 @@ impl Graph {
                     source.width(),
                     sampling.scale()[0],
                     sampling.offset()[0],
+                    sampling.filter(),
                 );
                 let (top, bottom) = required_axis(
                     output.y(),
@@ -33,6 +34,7 @@ impl Graph {
                     source.height(),
                     sampling.scale()[1],
                     sampling.offset()[1],
+                    sampling.filter(),
                 );
                 [Some((input, Region::new(left, top, right - left, bottom - top)?)), None, None]
             }
@@ -61,20 +63,20 @@ impl Graph {
         match entry.operation {
             Operation::Resample { extent, sampling, .. } => {
                 let (left, right) = invalidated_axis(
-                    changed.x(),
-                    changed.right(),
+                    [changed.x(), changed.right()],
                     source.width(),
                     extent.width(),
                     sampling.scale()[0],
                     sampling.offset()[0],
+                    sampling.filter(),
                 );
                 let (top, bottom) = invalidated_axis(
-                    changed.y(),
-                    changed.bottom(),
+                    [changed.y(), changed.bottom()],
                     source.height(),
                     extent.height(),
                     sampling.scale()[1],
                     sampling.offset()[1],
+                    sampling.filter(),
                 );
                 if left == right || top == bottom {
                     return Ok(None);
@@ -87,13 +89,25 @@ impl Graph {
 }
 
 /// Include every nonzero tap for all output pixel centers, rounded outward before edge clipping.
-fn required_axis(start: u32, length: u32, source: u32, ratio: f64, offset: f64) -> (u32, u32) {
+fn required_axis(
+    start: u32,
+    length: u32,
+    source: u32,
+    ratio: f64,
+    offset: f64,
+    filter: Filter,
+) -> (u32, u32) {
     if source == 1 {
         return (0, 1);
     }
     let radius = 3.0 * ratio.max(1.0);
     let first = (f64::from(start) + 0.5) * ratio + offset - 0.5;
     let last = (f64::from(start + length - 1) + 0.5) * ratio + offset - 0.5;
+    if filter == Filter::Nearest {
+        let left = (first + 0.5).floor().clamp(0.0, f64::from(source - 1)) as u32;
+        let right = (last + 0.5).floor().clamp(f64::from(left), f64::from(source - 1)) as u32 + 1;
+        return (left, right);
+    }
     if ratio == 1.0 && offset.fract() == 0.0 {
         let left = first.clamp(0.0, f64::from(source - 1)) as u32;
         let right = (last + 1.0).clamp(f64::from(left + 1), f64::from(source)) as u32;
@@ -106,14 +120,17 @@ fn required_axis(start: u32, length: u32, source: u32, ratio: f64, offset: f64) 
 
 /// Dirty bounds include the complete support of each possibly influenced output sample.
 fn invalidated_axis(
-    start: u32,
-    end: u32,
+    [start, end]: [u32; 2],
     source: u32,
     target: u32,
     ratio: f64,
     offset: f64,
+    filter: Filter,
 ) -> (u32, u32) {
-    let radius = 3.0 * ratio.max(1.0);
+    let radius = match filter {
+        Filter::Lanczos3 => 3.0 * ratio.max(1.0),
+        Filter::Nearest => 0.5,
+    };
     let left = if start == 0 {
         0
     } else {

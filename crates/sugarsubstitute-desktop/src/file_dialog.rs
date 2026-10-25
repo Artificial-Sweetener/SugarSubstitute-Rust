@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Keep the shell's modal folder/file picker on the installer's existing UI STA.
-use std::error::Error;
+//! Keep shared shell file selection on the desktop's existing UI STA.
+#[cfg(windows)]
+use std::{error::Error, ffi::OsString, os::windows::ffi::OsStringExt, path::PathBuf};
+#[cfg(windows)]
 use tao::{platform::windows::WindowExtWindows, window::Window};
+#[cfg(windows)]
 use windows::{
     Win32::{
         Foundation::{ERROR_CANCELLED, HWND},
@@ -15,18 +18,32 @@ use windows::{
     core::HRESULT,
 };
 
+/// Native shell selection semantics; storage owners validate the selected original later.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SelectionKind {
+    /// Choose an existing directory.
+    Folder,
+    /// Choose an existing regular filesystem file.
+    File,
+}
+
+#[cfg(windows)]
+/// Borrow the owning UI STA/window until modal selection or cancellation completes.
+/// Native selected path units are preserved; storage and interface text consumers validate them.
+/// # Errors
+/// Preserves COM/shell failures; user cancellation returns `None`.
 pub(crate) fn choose(
     window: &Window,
-    kind: crate::installer::native::PickerKind,
-) -> Result<Option<String>, Box<dyn Error>> {
+    kind: SelectionKind,
+) -> Result<Option<PathBuf>, Box<dyn Error>> {
     // SAFETY: The caller retains its UI STA, parent HWND and event loop across this
     // modal operation. Every COM object is released before returning to that loop.
     unsafe {
         let dialog: IFileOpenDialog =
             CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER)?;
         let kind = match kind {
-            crate::installer::native::PickerKind::File => FOS_FILEMUSTEXIST,
-            crate::installer::native::PickerKind::Folder => FOS_PICKFOLDERS,
+            SelectionKind::File => FOS_FILEMUSTEXIST,
+            SelectionKind::Folder => FOS_PICKFOLDERS,
         };
         dialog.SetOptions(FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | kind)?;
         match dialog.Show(Some(HWND(window.hwnd() as *mut _))) {
@@ -38,8 +55,8 @@ pub(crate) fn choose(
         }
         let selected = dialog.GetResult()?;
         let pointer = selected.GetDisplayName(SIGDN_FILESYSPATH)?;
-        let result = pointer.to_string();
+        let result = PathBuf::from(OsString::from_wide(pointer.as_wide()));
         CoTaskMemFree(Some(pointer.0.cast()));
-        Ok(Some(result?))
+        Ok(Some(result))
     }
 }

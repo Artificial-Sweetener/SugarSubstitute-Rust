@@ -3,8 +3,8 @@
 //! Prepared canvas presentation independent of native window handles.
 mod cpu;
 mod surface;
-pub use cpu::{CpuRenderer, RenderRequest};
-pub use surface::{CpuSurface, FrameStamp, PreparedUpdate, SurfaceWork};
+pub use cpu::CpuRenderer;
+pub use surface::{CpuSurface, PreparedUpdate, SurfaceWork};
 
 /// Reject invalid prepared presentation without changing retained surface contents.
 #[derive(Debug)]

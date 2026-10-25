@@ -237,8 +237,12 @@ fn maximum_stack(
     let snapshot = document.snapshot();
     let mut view = Viewport::new(Extent::new(64, 64)?)?;
     view.fit(extent)?;
-    let compiled =
-        snapshot.compile_view(view, Pixel::linear(0.0, 0.0, 0.0, 1.0)?, context.memory())?;
+    let compiled = snapshot.compile_view(
+        view,
+        Pixel::linear(0.0, 0.0, 0.0, 1.0)?,
+        sugarsubstitute_image_ops::Filter::Lanczos3,
+        context.memory(),
+    )?;
     assert_eq!(compiled.graph().extent(compiled.output())?, view.surface());
     Ok(())
 }

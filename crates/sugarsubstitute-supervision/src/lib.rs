@@ -53,7 +53,8 @@ pub mod diagnostic_storage;
 mod durable_storage;
 #[cfg(any(windows, unix))]
 pub use durable_storage::artifacts::{
-    ArtifactBytes, ArtifactError, ArtifactPublication, read_artifact, write_artifact,
+    ArtifactBytes, ArtifactError, ArtifactInput, ArtifactPublication, read_artifact,
+    with_artifact_input, write_artifact,
 };
 #[cfg(windows)]
 mod environment;

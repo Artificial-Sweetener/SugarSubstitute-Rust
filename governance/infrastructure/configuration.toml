@@ -268,7 +268,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute/src/lib.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:7550a95ff23fc04e2ed78d262b9bda1a975e7f0b52c3a4304a2d9af00eb89801"
+source_sha256 = "sha256:f7737aab853a73ceacdd075d1c129abf69df31753324cb01d8cad4374041c093"
 capabilities = ["arguments"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -901,3 +901,10 @@ owner = "sugarsubstitute-networking"
 source_sha256 = "sha256:490d46f92124ff84c08635f9b8671da61fd8592537b341cb3a7c15615ddc3037"
 capabilities = ["environment"]
 rationale = "The transport consumes inherited proxy and bypass variables solely through Node proxyEnv; native system/PAC decisions and application configuration keep their authoritative owners."
+
+[[records]]
+path = "crates/sugarsubstitute/src/viewer.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:e933bdac6e609ddc205e5404645af3a6d58c76368c405c855f532887a1acfec5"
+capabilities = ["arguments"]
+rationale = "Standalone viewer entry captures explicit CLI values once and passes typed bounded options to its application lifetime; storage and execution remain with their authoritative owners."

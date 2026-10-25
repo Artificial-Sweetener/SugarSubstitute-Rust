@@ -1,0 +1,26 @@
+[package]
+name = "sugarsubstitute-image-io"
+description = "Streaming image imports and authenticated bounded raster tile access"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+sugarsubstitute-contracts = { path = "../sugarsubstitute-contracts" }
+sugarsubstitute-image-ops = { path = "../sugarsubstitute-image-ops" }
+png.workspace = true
+sha2.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+sugarsubstitute-supervision = { path = "../sugarsubstitute-supervision" }
+tracing.workspace = true
+
+[dev-dependencies]
+sugarsubstitute-execution = { path = "../sugarsubstitute-execution" }
+tempfile.workspace = true
+
+[lints]
+workspace = true

@@ -68,6 +68,8 @@ owner = "sugarsubstitute-desktop"
 concern = "Native event-loop presentation, accessible peers, platform dialogs and embedded ComfyUI browser surfaces"
 capabilities = ["raster", "text", "webview", "window"]
 sources = [
+    "crates/sugarsubstitute-desktop/src/canvas/paint.rs",
+    "crates/sugarsubstitute-desktop/src/canvas/windows.rs",
     "crates/sugarsubstitute-desktop/src/installer/native/windows.rs",
     "crates/sugarsubstitute-desktop/src/linux.rs",
     "crates/sugarsubstitute-desktop/src/macos.rs",
@@ -87,13 +89,9 @@ sources = [
     "crates/sugarsubstitute-desktop/src/startup_error_dialog.rs",
     "crates/sugarsubstitute-desktop/src/startup_surface.rs",
     "crates/sugarsubstitute-desktop/src/windows.rs",
+    "crates/sugarsubstitute-desktop/src/windows_alpha.rs",
     "crates/sugarsubstitute-desktop/src/windows_caption_hover_tests.rs",
     "crates/sugarsubstitute-desktop/src/windows_caption_text.rs",
-    "crates/sugarsubstitute-desktop/src/windows_text/accessibility/qualification.rs",
-    "crates/sugarsubstitute-desktop/src/windows_text/renderer.rs",
-    "crates/sugarsubstitute-desktop/src/windows_alpha.rs",
-    "crates/sugarsubstitute-desktop/src/windows_scroll/paint.rs",
-    "crates/sugarsubstitute-desktop/src/windows_text/field_tests.rs",
     "crates/sugarsubstitute-desktop/src/windows_console/native.rs",
     "crates/sugarsubstitute-desktop/src/windows_console/render_proxy/color_tests.rs",
     "crates/sugarsubstitute-desktop/src/windows_console/render_proxy/glyphs.rs",
@@ -101,14 +99,18 @@ sources = [
     "crates/sugarsubstitute-desktop/src/windows_console/render_proxy/tests.rs",
     "crates/sugarsubstitute-desktop/src/windows_console/text/native_fixture.rs",
     "crates/sugarsubstitute-desktop/src/windows_controls.rs",
-    "crates/sugarsubstitute-desktop/src/windows_controls_native.rs",
     "crates/sugarsubstitute-desktop/src/windows_controls_form_tests.rs",
+    "crates/sugarsubstitute-desktop/src/windows_controls_native.rs",
     "crates/sugarsubstitute-desktop/src/windows_controls_stacking_tests.rs",
     "crates/sugarsubstitute-desktop/src/windows_drag.rs",
     "crates/sugarsubstitute-desktop/src/windows_main_receivers.rs",
     "crates/sugarsubstitute-desktop/src/windows_main_receivers/completion.rs",
     "crates/sugarsubstitute-desktop/src/windows_main_receivers/navigation.rs",
     "crates/sugarsubstitute-desktop/src/windows_present_tests.rs",
+    "crates/sugarsubstitute-desktop/src/windows_scroll/paint.rs",
     "crates/sugarsubstitute-desktop/src/windows_subclass.rs",
+    "crates/sugarsubstitute-desktop/src/windows_text/accessibility/qualification.rs",
+    "crates/sugarsubstitute-desktop/src/windows_text/field_tests.rs",
+    "crates/sugarsubstitute-desktop/src/windows_text/renderer.rs",
 ]
-source_sha256 = "sha256:ca132dc565c0adead055e893566837e1fcbd2916a6688ae50f5f8f90913c1014"
+source_sha256 = "sha256:84abb1b0934c1f14291282d34afe61f7e83520cd6f32c5359715363391d4d834"

@@ -46,6 +46,69 @@ fn image_document(extent: Extent, context: &JobContext) -> Result<Document, Rend
 fn black() -> Result<Pixel, ImageError> {
     Pixel::linear(0.0, 0.0, 0.0, 1.0)
 }
+
+#[test]
+fn repeated_tall_pan_repairs_retain_warmed_source_chunks_under_view_cache_churn()
+-> harness::TestResult {
+    execute(|context| {
+        let extent = Extent::new(4096, 4096)?;
+        let snapshot = image_document(extent, context)?.snapshot();
+        let mut view = Viewport::new(Extent::new(512, 2048)?)?;
+        view.pan_by([-1024.0, -1024.0])?;
+        let mut renderer =
+            CpuRenderer::new(Gradient { extent, constant: None }, 64, context.memory())?;
+        let first = renderer.prepare(
+            RenderRequest {
+                filter: sugarsubstitute_image_ops::Filter::Lanczos3,
+                document: &snapshot,
+                view,
+                matte: black()?,
+                target: stamp(1)?,
+                base: None,
+                damage: DamagePlan::full(view.surface()),
+            },
+            context,
+        )?;
+        drop(first);
+        let previous = view;
+        view.pan_by([-5.0, 0.0])?;
+        let repaired = renderer.prepare(
+            RenderRequest {
+                filter: sugarsubstitute_image_ops::Filter::Lanczos3,
+                document: &snapshot,
+                view,
+                matte: black()?,
+                target: stamp(2)?,
+                base: Some(stamp(1)?),
+                damage: view.repair_from(previous)?,
+            },
+            context,
+        )?;
+        drop(repaired);
+        let warmed = renderer.stats().source_pixels;
+        let previous = view;
+        view.pan_by([-5.0, 0.0])?;
+        let repaired = renderer.prepare(
+            RenderRequest {
+                filter: sugarsubstitute_image_ops::Filter::Lanczos3,
+                document: &snapshot,
+                view,
+                matte: black()?,
+                target: stamp(3)?,
+                base: Some(stamp(2)?),
+                damage: view.repair_from(previous)?,
+            },
+            context,
+        )?;
+        drop(repaired);
+        assert_eq!(
+            renderer.stats().source_pixels,
+            warmed,
+            "Cheap viewport intermediates must not evict warmed source tiles during edge repair"
+        );
+        Ok(())
+    })
+}
 fn execute(
     action: impl FnOnce(&JobContext) -> Result<(), RenderError> + Send + 'static,
 ) -> harness::TestResult {
@@ -65,6 +128,7 @@ fn dag_pan_repair_matches_full_redraw_and_reduces_actual_image_work() -> harness
             CpuRenderer::new(Gradient { extent, constant: None }, 64, context.memory())?;
         let first = renderer.prepare(
             RenderRequest {
+                filter: sugarsubstitute_image_ops::Filter::Lanczos3,
                 document: &snapshot,
                 view,
                 matte: black()?,
@@ -83,6 +147,7 @@ fn dag_pan_repair_matches_full_redraw_and_reduces_actual_image_work() -> harness
         let damage = view.repair_from(previous)?;
         let update = renderer.prepare(
             RenderRequest {
+                filter: sugarsubstitute_image_ops::Filter::Lanczos3,
                 document: &snapshot,
                 view,
                 matte: black()?,
@@ -100,6 +165,7 @@ fn dag_pan_repair_matches_full_redraw_and_reduces_actual_image_work() -> harness
             CpuRenderer::new(Gradient { extent, constant: None }, 64, context.memory())?;
         let full = reference.prepare(
             RenderRequest {
+                filter: sugarsubstitute_image_ops::Filter::Lanczos3,
                 document: &snapshot,
                 view,
                 matte: black()?,
@@ -138,6 +204,7 @@ fn vector_layers_rasterize_at_requested_zoom_without_flattening_geometry() -> ha
             CpuRenderer::new(Gradient { extent, constant: None }, 32, context.memory())?;
         let frame = renderer.prepare(
             RenderRequest {
+                filter: sugarsubstitute_image_ops::Filter::Lanczos3,
                 document: &snapshot,
                 view,
                 matte: black()?,
@@ -177,6 +244,7 @@ fn adjustment_layer_mask_and_opacity_preserve_original_translucent_coverage() ->
             CpuRenderer::new(Gradient { extent, constant: Some(original) }, 32, context.memory())?;
         let frame = renderer.prepare(
             RenderRequest {
+                filter: sugarsubstitute_image_ops::Filter::Lanczos3,
                 document: &snapshot,
                 view,
                 matte: black()?,
@@ -211,6 +279,7 @@ fn completely_offscreen_huge_images_do_not_trigger_decode_or_pyramid_work() -> h
             CpuRenderer::new(Gradient { extent, constant: None }, 8, context.memory())?;
         let frame = renderer.prepare(
             RenderRequest {
+                filter: sugarsubstitute_image_ops::Filter::Lanczos3,
                 document: &snapshot,
                 view,
                 matte: black()?,
@@ -244,6 +313,7 @@ fn minified_one_pixel_axes_preserve_geometric_image_coverage() -> harness::TestR
         )?;
         let frame = renderer.prepare(
             RenderRequest {
+                filter: sugarsubstitute_image_ops::Filter::Lanczos3,
                 document: &snapshot,
                 view,
                 matte: black()?,

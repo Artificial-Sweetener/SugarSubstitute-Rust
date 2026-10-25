@@ -4,7 +4,7 @@
 use super::*;
 use crate::setup::presentation::{Action, Interaction};
 use sugarsubstitute_application::setup_flow::{PathField, Request};
-use sugarsubstitute_desktop::installer::native::{Event as NativeEvent, Picker, PickerKind};
+use sugarsubstitute_desktop::installer::native::{Event as NativeEvent, Picker};
 use sugarsubstitute_ui::form::{ControlId, Input};
 
 /// Keep the original page and document revision through the shell's modal selection.
@@ -164,9 +164,9 @@ impl Session {
                 control: Action::Path(field).id(),
                 request,
                 kind: if field == PathField::Python {
-                    PickerKind::File
+                    sugarsubstitute_desktop::SelectionKind::File
                 } else {
-                    PickerKind::Folder
+                    sugarsubstitute_desktop::SelectionKind::Folder
                 },
             },
             field,

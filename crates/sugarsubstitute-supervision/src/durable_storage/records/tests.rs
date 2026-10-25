@@ -138,19 +138,20 @@ fn busy_anchor_and_hard_link_records_are_preserved() -> TestResult {
 }
 #[test]
 fn inventories_are_paged_and_reject_overflow_without_removing_entries() -> TestResult {
-    worker::run_reserved(4 * 1024 * 1024, |context, _| {
-        let temporary = tempfile::tempdir()?;
-        for index in 0..4097 {
-            std::fs::write(temporary.path().join(format!("item-{index}")), b"")?;
-        }
-        let mut directory = RecordDirectory::open(temporary.path(), false, false, context)?;
+    let temporary = tempfile::tempdir()?;
+    for index in 0..4097 {
+        std::fs::write(temporary.path().join(format!("item-{index}")), b"")?;
+    }
+    let selected = temporary.path().to_owned();
+    worker::run_reserved(4 * 1024 * 1024, move |context, _| {
+        let mut directory = RecordDirectory::open(&selected, false, false, context)?;
         assert!(directory.page(false, context).is_err());
         assert_eq!(directory.page(true, context)?.len(), RECORD_PAGE_ENTRIES);
         for _ in 1..128 {
             assert_eq!(directory.page(false, context)?.len(), RECORD_PAGE_ENTRIES);
         }
         assert!(directory.page(false, context).is_err());
-        assert_eq!(std::fs::read_dir(temporary.path())?.count(), 4097);
+        assert_eq!(std::fs::read_dir(&selected)?.count(), 4097);
         Ok(())
     })
 }

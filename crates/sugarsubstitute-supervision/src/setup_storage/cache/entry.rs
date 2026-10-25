@@ -114,6 +114,25 @@ impl CacheLease {
     /// # Errors
     /// Returns absence distinctly and rejects undeclared paths, links or native read failures.
     pub fn read(&self, name: &str, context: &JobContext) -> io::Result<CacheReader<'_>> {
+        self.open_reader(name, context).map(|file| CacheReader::new(file, self))
+    }
+    /// Transfer this exact entry pin into one regular read-only stream.
+    /// The file is closed before its entry pin is released. Move the stream between admitted
+    /// jobs instead of reopening/protecting the same tile archive for every region request.
+    /// Buffer allocation and cancellation checks remain with the consuming feature worker.
+    /// # Errors
+    /// Preserves declared-file validation, native opening, protection and cancellation failures.
+    pub fn into_file_reader(
+        self,
+        name: &str,
+        context: &JobContext,
+    ) -> io::Result<CacheReader<'static>> {
+        let lease = self.into_reader(context)?;
+        let file = lease.open_reader(name, context)?;
+        Ok(CacheReader::owned(file, lease))
+    }
+    /// Keep borrowed and transferred read custody subject to identical native validation.
+    fn open_reader(&self, name: &str, context: &JobContext) -> io::Result<File> {
         if !self.record.files.iter().any(|declared| declared == name) {
             return Err(io::Error::new(io::ErrorKind::NotFound, "Cache file is not declared"));
         }
@@ -129,7 +148,7 @@ impl CacheLease {
                 .ok_or_else(|| invalid("Cache leaf absent"))?,
         )?;
         protection::with(context, |protection| protection.verify_file(&file))?;
-        Ok(CacheReader::new(file, self))
+        Ok(file)
     }
     /// Validate declared ownership and report physical payload usage without authenticating content.
     /// # Errors

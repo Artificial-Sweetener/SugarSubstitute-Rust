@@ -5,6 +5,9 @@
 
 extern crate self as sugarsubstitute;
 mod artifact_job;
+/// Standalone native canvas demonstration using shared execution and image/storage owners.
+#[cfg(windows)]
+pub mod viewer;
 
 #[cfg(all(windows, feature = "windows-native-host"))]
 mod authority_clock;

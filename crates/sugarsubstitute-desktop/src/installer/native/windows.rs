@@ -157,7 +157,11 @@ pub(super) fn run(
                         }
                     }
                     if !closing && let Some(picker) = lifetime.picker() {
-                        let result = super::super::dialog::choose(window.as_ref(), picker.kind).map_err(|cause| cause.to_string());
+                        let result = crate::file_dialog::choose(window.as_ref(), picker.kind).and_then(|path| {
+                            path.map(|path| path.into_os_string().into_string().map_err(|_| {
+                                Box::<dyn Error>::from("Selected path cannot be represented in interface text")
+                            })).transpose()
+                        }).map_err(|cause| cause.to_string());
                         lifetime.input(Event::Picked(picker, result))?;
                     }
                     if !closing && let Some(position) = scroll.take_position()? {

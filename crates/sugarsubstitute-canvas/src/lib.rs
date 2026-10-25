@@ -5,6 +5,7 @@ mod compile;
 mod damage;
 mod document;
 mod error;
+mod presentation;
 mod viewport;
 pub use compile::CompiledView;
 pub use damage::{DamagePlan, DirtyRegions, PixelBlit};
@@ -12,6 +13,7 @@ pub use document::{
     Document, DocumentEdit, DocumentSnapshot, Layer, LayerContent, LayerId, LayerMask,
 };
 pub use error::CanvasError;
+pub use presentation::{FrameStamp, RenderRequest};
 pub use viewport::Viewport;
 #[cfg(test)]
 mod tests;

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Final closure reuses retained inventory while other lifecycle owners hold their charges.
 use super::*;
-use sugarsubstitute_contracts::execution::JobOutcome;
+use sugarsubstitute_contracts::execution::{AdmissionError, JobOutcome};
 
 #[test]
 fn source_cleanup_admits_without_reserving_a_second_inventory() -> TestResult {
@@ -34,6 +34,12 @@ fn source_cleanup_admits_without_reserving_a_second_inventory() -> TestResult {
     assert!(crate::registry::lock(&harness.owner.shared.retained).is_none());
     assert_eq!(lease._claim.bytes(), FRONTEND_SOURCE_BYTES);
     assert_eq!(harness.boundary.releases.load(Ordering::Acquire), 2);
+    let mut retry = Harness::spec(4, 2000)?;
+    retry.reservation_bytes = harness.executor.limits().memory_bytes;
+    assert!(matches!(
+        harness.client.submit_blocking(&harness.scope, retry, |_| Ok::<_, ()>(())),
+        Err(AdmissionError::MemorySaturated { .. })
+    ));
     drop(terminal);
     drop(close);
     drop(lease);

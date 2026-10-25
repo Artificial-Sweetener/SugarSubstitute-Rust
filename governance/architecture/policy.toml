@@ -140,3 +140,9 @@ package = "sugarsubstitute-ui"
 root = "crates/sugarsubstitute-ui"
 layer = "adapter"
 concern = "Shared native widget rendering and interaction rules"
+
+[[owners]]
+package = "sugarsubstitute-image-io"
+root = "crates/sugarsubstitute-image-io"
+layer = "adapter"
+concern = "Streaming image imports, authenticated bounded source tile archives and shared-cache source custody"

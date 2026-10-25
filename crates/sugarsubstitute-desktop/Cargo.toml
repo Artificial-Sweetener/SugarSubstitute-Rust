@@ -16,6 +16,8 @@ k1-native-qualification = []
 [dependencies]
 sugarsubstitute-ui = { path = "../sugarsubstitute-ui" }
 sugarsubstitute-contracts = { path = "../sugarsubstitute-contracts" }
+sugarsubstitute-canvas = { path = "../sugarsubstitute-canvas" }
+sugarsubstitute-image-ops = { path = "../sugarsubstitute-image-ops" }
 tao.workspace = true
 tracing.workspace = true
 url.workspace = true

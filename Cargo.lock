@@ -2395,16 +2395,21 @@ dependencies = [
 name = "sugarsubstitute"
 version = "0.1.0"
 dependencies = [
+ "png",
  "serde",
  "serde_json",
  "sha2",
  "sugarsubstitute-application",
+ "sugarsubstitute-canvas",
+ "sugarsubstitute-canvas-render",
  "sugarsubstitute-comfy",
  "sugarsubstitute-configuration",
  "sugarsubstitute-contracts",
  "sugarsubstitute-crash",
  "sugarsubstitute-desktop",
  "sugarsubstitute-execution",
+ "sugarsubstitute-image-io",
+ "sugarsubstitute-image-ops",
  "sugarsubstitute-networking",
  "sugarsubstitute-splash",
  "sugarsubstitute-supervision",
@@ -2502,8 +2507,10 @@ dependencies = [
  "serde_json",
  "softbuffer",
  "sugarsubstitute-application",
+ "sugarsubstitute-canvas",
  "sugarsubstitute-contracts",
  "sugarsubstitute-execution",
+ "sugarsubstitute-image-ops",
  "sugarsubstitute-ui",
  "tao",
  "tracing",
@@ -2525,6 +2532,20 @@ dependencies = [
  "tokio",
  "tracing",
  "windows",
+]
+
+[[package]]
+name = "sugarsubstitute-image-io"
+version = "0.1.0"
+dependencies = [
+ "png",
+ "sha2",
+ "sugarsubstitute-contracts",
+ "sugarsubstitute-execution",
+ "sugarsubstitute-image-ops",
+ "sugarsubstitute-supervision",
+ "tempfile",
+ "tracing",
 ]
 
 [[package]]

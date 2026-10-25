@@ -72,7 +72,7 @@ pub enum Operation {
         /// Editable geometry and fill.
         shape: VectorRectangle,
     },
-    /// Lanczos-3 pixel-center resampling with clamped source edges and normalized weights.
+    /// Explicit pixel-center reconstruction with clamped source edges and a selected filter.
     /// A step reduces either axis by at most two; larger reductions use explicit pyramid nodes.
     Resample {
         /// Earlier graph node.
@@ -137,6 +137,8 @@ pub(crate) struct Entry {
     pub(crate) extent: Extent,
     depth: u16,
     fingerprint: [u8; 32],
+    pyramid_level: Option<u8>,
+    requested_level: u8,
 }
 
 /// A bounded acyclic image graph. Appending requires existing inputs; nodes never mutate.
@@ -171,8 +173,10 @@ impl Graph {
             return Err(ImageError::Invalid("Graph node capacity exhausted"));
         }
         let mut depth = 1;
+        let mut requested_level = 0;
         for input in operation.inputs().into_iter().flatten() {
             depth = depth.max(self.entry(input)?.depth + 1);
+            requested_level = requested_level.max(self.entry(input)?.requested_level);
         }
         if depth > MAX_DEPTH {
             return Err(ImageError::Invalid("Image graph depth exceeded"));
@@ -206,15 +210,51 @@ impl Graph {
         };
         let fingerprint = self.hash(operation, extent)?;
         let id = NodeId { graph: self.identity, index: self.entries.len() as u16 };
-        self.entries.push(Entry { operation, extent, depth, fingerprint });
+        let pyramid_level = matches!(operation, Operation::Raster { .. }).then_some(0);
+        self.entries.push(Entry {
+            operation,
+            extent,
+            depth,
+            fingerprint,
+            pyramid_level,
+            requested_level,
+        });
         Ok(id)
     }
     /// Resize a complete image with explicit aligned-corner Lanczos semantics.
     /// # Errors
     /// Rejects foreign nodes, excessive reduction, graph capacity/depth and invalid parameters.
     pub fn resize(&mut self, input: NodeId, extent: Extent) -> Result<NodeId, ImageError> {
-        let sampling = Sampling::resize(self.extent(input)?, extent);
-        self.add(Operation::Resample { input, extent, sampling })
+        let source = self.extent(input)?;
+        let preceding = self.entry(input)?.pyramid_level;
+        let sampling = Sampling::resize(source, extent);
+        let node = self.add(Operation::Resample { input, extent, sampling })?;
+        self.entries[node.index as usize].pyramid_level = if source == extent {
+            preceding
+        } else if extent.width() <= source.width() && extent.height() <= source.height() {
+            Some(preceding.unwrap_or(0).saturating_add(1))
+        } else {
+            None
+        };
+        self.entries[node.index as usize].requested_level =
+            self.entries[node.index as usize].pyramid_level.unwrap_or(0);
+        Ok(node)
+    }
+    /// Source level zero or explicit canonical reduction depth added by resize/pyramid.
+    /// View sampling added as a general operation has no intrinsic level. This is provenance
+    /// for backend reuse policy; it does not alter pixel semantics or structural content identity.
+    /// # Errors
+    /// Rejects a foreign or unavailable graph node.
+    pub fn pyramid_level(&self, node: NodeId) -> Result<Option<u8>, ImageError> {
+        Ok(self.entry(node)?.pyramid_level)
+    }
+    /// Highest canonical pyramid level consumed by this output's operation tree.
+    /// Evaluators use this constant-time hint to retire earlier, coarser viewing levels when
+    /// the caller requests finer image data. It does not alter structural content identity.
+    /// # Errors
+    /// Rejects a foreign or unavailable graph node.
+    pub fn requested_pyramid_level(&self, node: NodeId) -> Result<u8, ImageError> {
+        Ok(self.entry(node)?.requested_level)
     }
     /// Append explicit Lanczos pyramid nodes through a 1x1 image, retaining the source as level zero.
     /// Odd dimensions round upward independently; the complete required node capacity is checked first.
@@ -275,7 +315,7 @@ impl Graph {
     }
     fn hash(&self, operation: Operation, extent: Extent) -> Result<[u8; 32], ImageError> {
         let mut hash = Sha256::new();
-        hash.update(b"sugarsubstitute-image-ops-linear-srgb-lanczos3-clamp-v1\0");
+        hash.update(b"sugarsubstitute-image-ops-linear-srgb-filtered-clamp-v2\0");
         hash.update(extent.width().to_le_bytes());
         hash.update(extent.height().to_le_bytes());
         for input in operation.inputs().into_iter().flatten() {
@@ -300,6 +340,10 @@ impl Graph {
             }
             Operation::Resample { sampling, .. } => {
                 hash.update([3]);
+                hash.update([match sampling.filter() {
+                    crate::Filter::Lanczos3 => 0,
+                    crate::Filter::Nearest => 1,
+                }]);
                 for value in sampling.scale().into_iter().chain(sampling.offset()) {
                     hash.update(value.to_le_bytes());
                 }

@@ -11,6 +11,8 @@ pub mod incident;
 pub mod installer;
 /// Localized operation-specific startup feedback.
 pub mod startup;
+/// Localized standalone canvas viewer status.
+pub mod viewer;
 /// Localized native main-window controls.
 pub mod window;
 
@@ -62,6 +64,8 @@ pub struct Messages {
     pub report: &'static incident::ReportMessages,
     /// Accessible names for the native main-window caption controls.
     pub window: &'static window::WindowMessages,
+    /// Native canvas viewer title and image-opening feedback.
+    pub viewer: &'static viewer::ViewerMessages,
 }
 
 /// Keep the sole locale inventory together with complete owned-surface coverage.
@@ -87,6 +91,7 @@ pub static LOCALES: &[Messages] = &[
         report: &incident::EN,
         conflict: &conflict::EN,
         window: &window::EN,
+        viewer: &viewer::EN,
     },
     Messages {
         id: "zh-Hans",
@@ -109,6 +114,7 @@ pub static LOCALES: &[Messages] = &[
         report: &incident::ZH_HANS,
         conflict: &conflict::ZH_HANS,
         window: &window::ZH_HANS,
+        viewer: &viewer::ZH_HANS,
     },
     Messages {
         id: "ja",
@@ -131,6 +137,7 @@ pub static LOCALES: &[Messages] = &[
         report: &incident::JA,
         conflict: &conflict::JA,
         window: &window::JA,
+        viewer: &viewer::JA,
     },
     Messages {
         id: "ko",
@@ -153,6 +160,7 @@ pub static LOCALES: &[Messages] = &[
         report: &incident::KO,
         conflict: &conflict::KO,
         window: &window::KO,
+        viewer: &viewer::KO,
     },
     Messages {
         id: "es",
@@ -175,6 +183,7 @@ pub static LOCALES: &[Messages] = &[
         report: &incident::ES,
         conflict: &conflict::ES,
         window: &window::ES,
+        viewer: &viewer::ES,
     },
 ];
 
@@ -215,6 +224,7 @@ mod tests {
                 .chain(locale.report.labels())
                 .chain(locale.conflict.labels())
                 .chain(locale.window.labels())
+                .chain(locale.viewer.labels())
                 .chain(locale.startup.labels())
                 .all(|text| !text.trim().is_empty() && !text.contains('\0'))
             );

@@ -50,6 +50,89 @@ fn graph(context: &JobContext, extent: Extent) -> Result<(Graph, NodeId), ImageE
 }
 
 #[test]
+fn coarse_pyramid_results_survive_source_tile_churn_while_preparing_a_neighbor() -> TestResult {
+    harness::run(MEMORY, |context| {
+        let extent = Extent::new(512, 512)?;
+        let (mut graph, source) = graph(context, extent)?;
+        let mip = graph.resize(source, Extent::new(256, 256)?)?;
+        assert_eq!(graph.pyramid_level(source)?, Some(0));
+        assert_eq!(graph.pyramid_level(mip)?, Some(1));
+        let mut evaluator = Evaluator::new(graph, Grid { extent }, 8, context.memory())?;
+        drop(evaluator.tile(mip, 0, 0, context)?);
+        drop(evaluator.tile(mip, 1, 0, context)?);
+        let prepared = evaluator.stats();
+        drop(evaluator.tile(mip, 0, 0, context)?);
+        assert_eq!(evaluator.stats().source_pixels, prepared.source_pixels);
+        assert_eq!(evaluator.stats().computed_tiles, prepared.computed_tiles);
+        assert!(evaluator.stats().reused_tiles > prepared.reused_tiles);
+        Ok(())
+    })
+}
+
+#[test]
+fn returning_to_source_resolution_reclaims_obsolete_coarse_tiles() -> TestResult {
+    run(MEMORY, |context| {
+        let extent = Extent::new(1024, 512)?;
+        let (mut graph, source) = graph(context, extent)?;
+        let mip = graph.resize(source, Extent::new(512, 256)?)?;
+        let mut evaluator = Evaluator::new(graph, Grid { extent }, 8, context.memory())?;
+        for y in 0..2 {
+            for x in 0..4 {
+                drop(evaluator.tile(mip, x, y, context)?);
+            }
+        }
+        for x in 0..8 {
+            drop(evaluator.tile(source, x, 0, context)?);
+        }
+        let warmed = evaluator.stats();
+        for x in 0..8 {
+            drop(evaluator.tile(source, x, 0, context)?);
+        }
+        assert_eq!(evaluator.stats().source_pixels, warmed.source_pixels);
+        assert_eq!(evaluator.stats().computed_tiles, warmed.computed_tiles);
+        Ok(())
+    })
+}
+
+#[test]
+fn deep_reductions_keep_a_working_fine_neighborhood_under_a_small_tile_budget() -> TestResult {
+    struct White;
+    impl RasterSource for White {
+        fn read(
+            &mut self,
+            _: AssetId,
+            _: Region,
+            output: &mut [Pixel],
+            _: &JobContext,
+        ) -> Result<(), ImageError> {
+            output.fill(Pixel::linear(1.0, 1.0, 1.0, 1.0)?);
+            Ok(())
+        }
+    }
+    run(MEMORY, |context| {
+        let extent = Extent::new(1024, 1024)?;
+        let (mut graph, source) = graph(context, extent)?;
+        let pyramid = graph.pyramid(source)?;
+        let reduced = pyramid.levels()[3];
+        let mut evaluator = Evaluator::new(graph, White, 24, context.memory())?;
+        let tile = evaluator.tile(reduced, 0, 0, context)?;
+        assert!(
+            tile.pixels()
+                .iter()
+                .all(|pixel| pixel.channels().iter().all(|channel| (*channel - 1.0).abs() < 1e-4))
+        );
+        let stats = evaluator.stats();
+        assert!(
+            stats.source_pixels <= extent.pixels() * 3,
+            "Repeated source work exceeded the bounded neighborhood: {} pixels",
+            stats.source_pixels
+        );
+        assert_eq!(stats.resident_tiles, 24);
+        Ok(())
+    })
+}
+
+#[test]
 fn image_geometry_rejects_empty_overflowing_and_unaddressable_extents() -> TestResult {
     assert!(Extent::new(0, 10).is_err());
     assert!(Extent::new(u32::MAX, 1).is_err());
@@ -70,9 +153,12 @@ fn canonical_pixels_preserve_linear_hdr_and_reject_invalid_coverage() -> TestRes
     assert!(Pixel::linear(f32::NAN, 0.0, 0.0, 0.0).is_err());
     assert!(Pixel::premultiplied([1.0, 0.0, 0.0, 0.0]).is_err());
     assert_eq!(
-        Pixel::linear(1.0, 0.0, 0.0, 0.5)?.over(Pixel::linear(0.0, 0.0, 1.0, 1.0)?).channels(),
+        Pixel::linear(1.0, 0.0, 0.0, 0.5)?.over(Pixel::linear(0.0, 0.0, 1.0, 1.0)?)?.channels(),
         [0.5, 0.0, 0.5, 1.0]
     );
+    let foreground = Pixel::premultiplied([f32::MAX, 0.0, 0.0, 0.5])?;
+    let background = Pixel::linear(f32::MAX, 0.0, 0.0, 1.0)?;
+    assert!(foreground.over(background).is_err());
     Ok(())
 }
 

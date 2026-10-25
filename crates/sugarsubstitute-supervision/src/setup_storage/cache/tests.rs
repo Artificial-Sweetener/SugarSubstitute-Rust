@@ -4,6 +4,7 @@
 use super::*;
 mod generations;
 mod ownership;
+mod readers;
 mod recovery;
 mod retirement;
 use crate::setup_storage::test_worker::{self as worker, TestResult};
