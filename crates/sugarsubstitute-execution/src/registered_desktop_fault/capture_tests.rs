@@ -68,6 +68,7 @@ fn foreign_core_and_original_scope_cancellation_reject_before_fault_effect() -> 
             ExecutionId::new(2)?,
             Arc::new(ClockPort(owner.clock.clone())),
             Arc::new(Wake::default()),
+            crate::runtime::DEFAULT_MEMORY_BYTES,
         ),
     };
     assert!(

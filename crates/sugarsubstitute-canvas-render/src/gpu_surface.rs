@@ -28,6 +28,9 @@ impl GpuFrame {
 /// Worker-owned retained GPU viewport. Native peers consume cloned immutable completed frames.
 /// Construction creates no window or scheduler. Replacements preserve preceding published pixels
 /// while native copies execute, and adopt the new generation only after actual GPU completion.
+/// Clones have independent generation metadata and share only immutable completed pixels. Prepare
+/// on a clone, then adopt it after application document/source revision checks accept the result.
+#[derive(Clone)]
 pub struct GpuSurface {
     device: Arc<GpuDevice>,
     extent: Extent,

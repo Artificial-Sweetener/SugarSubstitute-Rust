@@ -176,7 +176,8 @@ impl AdapterCatalog {
         device.set_device_lost_callback(move |reason, message| callback.lost(reason, message));
         Ok(Arc::new(GpuDevice {
             descriptor: entry.descriptor,
-            _instance: self.instance,
+            instance: self.instance,
+            adapter: entry.adapter,
             device,
             queue,
             memory: memory.clone(),
@@ -189,7 +190,8 @@ impl AdapterCatalog {
 /// Application memory claims and submitted-resource lifetimes remain with this renderer adapter.
 pub struct GpuDevice {
     pub(crate) descriptor: AdapterDescriptor,
-    _instance: wgpu::Instance,
+    pub(crate) instance: wgpu::Instance,
+    pub(crate) adapter: wgpu::Adapter,
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
     pub(crate) memory: MemoryLease,

@@ -39,7 +39,7 @@ pub fn run(options: WindowOptions, lifetime: &mut impl Lifetime) -> Result<(), B
         .with_visible(options.visible)
         .build(&events)
     {
-        Ok(window) => window,
+        Ok(window) => Arc::new(window),
         Err(cause) => {
             drop(events);
             // SAFETY: Construction failed before a window, callback or COM receiver escaped.
@@ -53,9 +53,17 @@ pub fn run(options: WindowOptions, lifetime: &mut impl Lifetime) -> Result<(), B
             };
         }
     };
+    if !options.visible {
+        // Windows constrains creation bounds to the monitor work area. Hidden qualification
+        // explicitly restores its requested physical client extent before graphics attachment.
+        window.set_inner_size(PhysicalSize::new(options.extent.width(), options.extent.height()));
+    }
     let wake = WakeLifetime::new();
     let mut failure =
         lifetime.start(Arc::new(ProxyWake::new(events.create_proxy(), wake.clone(), ()))).err();
+    if failure.is_none() {
+        failure = lifetime.attach_window(WindowTarget(window.clone())).err();
+    }
     let mut closing = failure.is_some();
     let mut close_started = false;
     let mut painter = super::paint::Painter::default();
@@ -104,6 +112,7 @@ pub fn run(options: WindowOptions, lifetime: &mut impl Lifetime) -> Result<(), B
                         painter.present(HWND(window.hwnd() as *mut _), &frame, true)?;
                         displayed = Some(frame.target);
                     }
+                    lifetime.expose();
                 }
                 Event::MainEventsCleared => {
                     closing |= lifetime.is_closing();
@@ -136,6 +145,13 @@ pub fn run(options: WindowOptions, lifetime: &mut impl Lifetime) -> Result<(), B
                         if let Some(frame) = lifetime.frame() && displayed != Some(frame.target) {
                             painter.present(HWND(window.hwnd() as *mut _), &frame, false)?;
                             displayed = Some(frame.target);
+                        }
+                        if let Some(frame) = lifetime.take_gpu_presentation() {
+                            let target = frame.target;
+                            frame.frame.present()?;
+                            displayed = Some(target);
+                            lifetime.did_present_gpu(target)?;
+                            lifetime.poll(started.elapsed())?;
                         }
                         if lifetime.take_picker_request() {
                             lifetime.selected(crate::file_dialog::choose(&window, SelectionKind::File))?;

@@ -2,15 +2,53 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Adapt native observations to document/camera intent without locking image workers.
 use super::*;
-use sugarsubstitute_desktop::canvas::{CpuFrame, Input, Lifetime, WheelDelta};
+use sugarsubstitute_desktop::canvas::{
+    CpuFrame, GpuPresentation, Input, Lifetime, WheelDelta, WindowTarget,
+};
 use sugarsubstitute_image_ops::Extent;
 
 impl Lifetime for Session {
+    fn attach_window(&mut self, target: WindowTarget) -> Result<(), Box<dyn Error>> {
+        if self.native_target.is_some() {
+            return Err("Canvas native peer was already attached".into());
+        }
+        self.native_target = Some(target);
+        Ok(())
+    }
+    fn take_gpu_presentation(&mut self) -> Option<GpuPresentation> {
+        let target = self.gpu_front.as_ref()?.current()?;
+        let frame = self.gpu_presentation.take()?;
+        self.awaiting_gpu = Some(target);
+        Some(GpuPresentation { target, frame })
+    }
+    fn did_present_gpu(&mut self, target: FrameStamp) -> Result<(), Box<dyn Error>> {
+        if self.awaiting_gpu != Some(target) || self.current_frame() != Some(target) {
+            return Err("Canvas received a foreign GPU presentation acknowledgement".into());
+        }
+        self.awaiting_gpu = None;
+        self.native_presented = Some(target);
+        self.expose_pending = false;
+        Ok(())
+    }
+    fn expose(&mut self) {
+        if self.options.gpu.is_some() {
+            self.expose_pending = true;
+        }
+    }
     fn start(&mut self, wake: Arc<dyn CompletionWake>) -> Result<(), Box<dyn Error>> {
         if self.runtime.is_some() {
             return Err("Canvas execution is already started".into());
         }
-        let owner = ExecutionOwner::new(self.clock.clone(), wake)?;
+        let owner = if self.options.gpu.is_some() {
+            ExecutionOwner::with_memory_capacity(
+                self.clock.clone(),
+                wake,
+                std::num::NonZeroU64::new(512 * 1024 * 1024)
+                    .ok_or("Invalid GPU execution capacity")?,
+            )?
+        } else {
+            ExecutionOwner::new(self.clock.clone(), wake)?
+        };
         let client = owner.client();
         let scope =
             client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
@@ -64,7 +102,10 @@ impl Lifetime for Session {
         Ok(())
     }
     fn take_picker_request(&mut self) -> bool {
-        if self.closing || self.resources.is_none() || self.front.is_none() {
+        if self.closing
+            || self.resources.is_none()
+            || (self.front.is_none() && self.gpu_front.is_none())
+        {
             return false;
         }
         std::mem::take(&mut self.picker)
@@ -88,6 +129,9 @@ impl Lifetime for Session {
         Ok(())
     }
     fn frame(&self) -> Option<CpuFrame<'_>> {
+        if self.options.gpu.is_some() {
+            return None;
+        }
         let surface = self.front.as_ref()?;
         let presented = self.presented.as_ref()?;
         Some(CpuFrame {
@@ -101,6 +145,9 @@ impl Lifetime for Session {
         &self.title
     }
     fn next_deadline(&self) -> Option<std::time::Instant> {
+        if self.options.gpu.is_some() && self.expose_pending && !self.closing {
+            return std::time::Instant::now().checked_add(Duration::from_millis(16));
+        }
         let cutoff = self.navigation_until?;
         if self.clock.now() >= cutoff {
             return None;
@@ -112,10 +159,15 @@ impl Lifetime for Session {
     fn close(&mut self) -> Result<(), Box<dyn Error>> {
         self.closing = true;
         self.initialization_pending = false;
+        self.device_pending = false;
+        self.native_target = None;
         self.picker = false;
         self.pending_open = None;
         self.dragging = false;
         if let Some(job) = &self.initializing {
+            job.cancel();
+        }
+        if let Some(job) = &self.device_job {
             job.cancel();
         }
         if let Some(job) = &self.loading {

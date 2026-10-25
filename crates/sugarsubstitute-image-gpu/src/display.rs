@@ -36,6 +36,11 @@ pub struct DisplayReadback {
     _memory: MemoryClaim,
 }
 impl DisplayReadback {
+    pub(crate) fn swap_red_blue(&mut self) {
+        for word in &mut self.words {
+            *word = (*word & 0xff00ff00) | ((*word & 255) << 16) | ((*word >> 16) & 255);
+        }
+    }
     /// Exact device-pixel coordinates represented by these row-major words.
     pub const fn region(&self) -> Region {
         self.region

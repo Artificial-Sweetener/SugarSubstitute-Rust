@@ -46,6 +46,7 @@ fn actual_client_cancellation_cannot_be_overridden_by_matching_context_ports() -
         ExecutionId::new(1)?,
         Arc::new(ClockPort(Arc::new(ManualClock::default()))),
         Arc::new(Wake::default()),
+        crate::runtime::DEFAULT_MEMORY_BYTES,
     );
     let client = crate::ExecutionClient { core: core.clone() };
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;

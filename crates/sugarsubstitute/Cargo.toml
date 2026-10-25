@@ -28,6 +28,7 @@ sugarsubstitute-image-ops = { path = "../sugarsubstitute-image-ops" }
 sugarsubstitute-canvas = { path = "../sugarsubstitute-canvas" }
 sugarsubstitute-canvas-render = { path = "../sugarsubstitute-canvas-render" }
 sugarsubstitute-image-io = { path = "../sugarsubstitute-image-io" }
+sugarsubstitute-image-gpu = { path = "../sugarsubstitute-image-gpu" }
 png.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

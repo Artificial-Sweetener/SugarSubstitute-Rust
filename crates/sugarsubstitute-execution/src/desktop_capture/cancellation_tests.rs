@@ -48,6 +48,7 @@ fn cancelled_before_native_dispatch_returns_unused_loan_without_physical_retirem
         ExecutionId::new(1)?,
         Arc::new(ClockPort(Arc::new(ManualClock::default()))),
         Arc::new(Wake::default()),
+        crate::runtime::DEFAULT_MEMORY_BYTES,
     );
     let client = crate::ExecutionClient { core: core.clone() };
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;

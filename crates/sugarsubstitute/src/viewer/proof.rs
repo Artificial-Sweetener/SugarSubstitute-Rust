@@ -3,7 +3,7 @@
 //! Verify retained viewing against complete reconstruction and publish explicit proof artifacts.
 use super::{
     options::ProofPaths,
-    work::{RETAINED_BYTES, Resources, Source},
+    work::{Resources, Source},
     work_error::WorkError,
 };
 use serde::Serialize;
@@ -35,11 +35,13 @@ pub(super) struct Input {
     pub(super) front: CpuSurface,
     pub(super) samples: [Option<Sample>; 32],
     pub(super) paths: ProofPaths,
+    pub(super) adapter: Option<sugarsubstitute_image_gpu::AdapterDescriptor>,
 }
 #[derive(Serialize)]
 struct Metrics<'a> {
     schema_version: u32,
     backend: &'static str,
+    adapter: Option<AdapterEvidence<'a>>,
     image_extent: [u32; 2],
     viewport_extent: [u32; 2],
     retained_admission_bytes: u64,
@@ -47,10 +49,16 @@ struct Metrics<'a> {
     pixel_sha256: String,
     frames: &'a [Option<Sample>],
 }
+#[derive(Serialize)]
+struct AdapterEvidence<'a> {
+    name: &'a str,
+    vendor: u32,
+    device: u32,
+}
 /// Reconstruct through the same DAG with no retained-frame repair, compare every display pixel,
 /// and stream PNG/JSON on the original admitted storage worker. Originals are never modified.
 pub(super) fn publish(input: Input, context: &JobContext) -> Result<(), WorkError> {
-    let Input { resources, document, source, view, front, samples, paths } = input;
+    let Input { resources, document, source, view, front, samples, paths, adapter } = input;
     let target =
         front.current().ok_or_else(|| WorkError::invalid("Proof has no presented frame"))?;
     let mut renderer = CpuRenderer::new(super::work::SourcePort(source), 64, &resources.memory)?;
@@ -66,14 +74,13 @@ pub(super) fn publish(input: Input, context: &JobContext) -> Result<(), WorkErro
         },
         context,
     )?;
-    let mut reference = CpuSurface::new(target.surface, view.surface(), &resources.memory)?;
-    reference.apply(&update)?;
+    let reference = CpuSurface::from_prepared(update)?;
     if reference.pixels() != front.pixels() {
         return Err(WorkError::invalid(
             "Retained viewport differs from complete DAG reconstruction",
         ));
     }
-    drop((reference, update, renderer));
+    drop((reference, renderer));
     let mut hash = Sha256::new();
     for pixel in front.pixels() {
         hash.update(pixel.to_be_bytes());
@@ -119,10 +126,18 @@ pub(super) fn publish(input: Input, context: &JobContext) -> Result<(), WorkErro
     let count = samples.iter().take_while(|sample| sample.is_some()).count();
     let metrics = Metrics {
         schema_version: 1,
-        backend: "cpu",
+        backend: adapter.as_ref().map_or("cpu", |adapter| match adapter.backend {
+            sugarsubstitute_image_gpu::Backend::Vulkan => "vulkan",
+            sugarsubstitute_image_gpu::Backend::Metal => "metal",
+        }),
+        adapter: adapter.as_ref().map(|adapter| AdapterEvidence {
+            name: &adapter.name,
+            vendor: adapter.vendor,
+            device: adapter.device,
+        }),
         image_extent: [document_extent.width(), document_extent.height()],
         viewport_extent: [extent.width(), extent.height()],
-        retained_admission_bytes: RETAINED_BYTES,
+        retained_admission_bytes: resources.memory.bytes(),
         complete_redraw_verified: true,
         pixel_sha256: fingerprint,
         frames: &samples[..count],
@@ -141,7 +156,7 @@ pub(super) fn publish(input: Input, context: &JobContext) -> Result<(), WorkErro
         width = extent.width(),
         height = extent.height(),
         frames = count,
-        "Retained CPU viewing matches complete reconstruction; proof artifacts published"
+        "Retained viewing matches complete reconstruction; proof artifacts published"
     );
     Ok(())
 }

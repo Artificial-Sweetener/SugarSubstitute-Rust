@@ -14,6 +14,7 @@ fn stopped_pipe_removes_inherited_deadline_without_hiding_other_native_deadlines
         ExecutionId::new(1)?,
         Arc::new(ClockPort(Arc::new(ManualClock::default()))),
         Arc::new(Wake::default()),
+        crate::runtime::DEFAULT_MEMORY_BYTES,
     );
     let inherited = Moment::from_nanos(10);
     let scope = core.create_scope_kind(

@@ -18,6 +18,8 @@ mod request;
 mod resample;
 mod selection;
 mod transfer;
+mod window;
+mod window_shader;
 
 pub use adapter::{AdapterCatalog, AdapterClass, AdapterDescriptor, AdapterId, Backend, GpuDevice};
 pub use batch::GpuWork;
@@ -28,3 +30,4 @@ pub use error::GpuError;
 pub use evaluate::GpuEvaluator;
 pub use request::GpuRegions;
 pub use selection::AdapterKey;
+pub use window::{NativeWindowHandle, WindowFrame, WindowSurface};

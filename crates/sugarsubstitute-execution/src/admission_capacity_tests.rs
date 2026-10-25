@@ -9,6 +9,48 @@ use sugarsubstitute_contracts::execution::*;
 
 const LIMIT: u64 = 256 * 1024 * 1024;
 
+#[test]
+fn startup_memory_capacity_controls_retained_admission_and_retry_wakes() -> TestResult {
+    assert_eq!(Rig::new()?.owner.limits().memory_bytes, LIMIT);
+    for limit in [1024, 512 * 1024 * 1024] {
+        let clock = Arc::new(ManualClock::default());
+        let wake = Arc::new(Wake::default());
+        let owner = crate::ExecutionOwner::with_memory_capacity(
+            Arc::new(ClockPort(clock.clone())),
+            wake.clone(),
+            std::num::NonZeroU64::new(limit).ok_or("Zero capacity")?,
+        )?;
+        assert_eq!(owner.limits().memory_bytes, limit);
+        let client = owner.client();
+        let scope =
+            client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
+        let rig = Rig { owner, client, clock, wake, scope };
+        let retained = retained_context(&rig, 1, limit - 16)?;
+        let small = retained_context(&rig, 2, 16)?;
+        drain(&rig)?;
+        assert_eq!(rig.scope.snapshot().reserved_bytes, limit);
+        assert!(matches!(
+            rig.client.submit_blocking(
+                &rig.scope,
+                spec(3, JobClass::InfrastructureLifecycle, 17)?,
+                |_| Ok::<_, ()>(()),
+            ),
+            Err(AdmissionError::MemorySaturated { requested_bytes: 17, available_bytes: 0 })
+        ));
+        let before = rig.wake.count();
+        drop(small);
+        wait_bytes(&rig, limit - 16)?;
+        assert_eq!(rig.wake.count(), before);
+        drop(retained);
+        rig.wake.wait_after(before)?;
+        drain(&rig)?;
+        let whole = retained_context(&rig, 3, limit)?;
+        drop(whole);
+        wait_bytes(&rig, 0)?;
+    }
+    Ok(())
+}
+
 fn retained_context(rig: &Rig, id: u64, bytes: u64) -> TestResult<JobContext> {
     let mut job = rig.client.submit_blocking(
         &rig.scope,

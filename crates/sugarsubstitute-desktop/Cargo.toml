@@ -18,6 +18,7 @@ sugarsubstitute-ui = { path = "../sugarsubstitute-ui" }
 sugarsubstitute-contracts = { path = "../sugarsubstitute-contracts" }
 sugarsubstitute-canvas = { path = "../sugarsubstitute-canvas" }
 sugarsubstitute-image-ops = { path = "../sugarsubstitute-image-ops" }
+sugarsubstitute-image-gpu = { path = "../sugarsubstitute-image-gpu" }
 tao.workspace = true
 tracing.workspace = true
 url.workspace = true

@@ -29,6 +29,12 @@ struct Image {
     _memory: MemoryClaim,
 }
 impl DisplayImage {
+    pub(crate) fn device(&self) -> &Arc<GpuDevice> {
+        &self.0.device
+    }
+    pub(crate) fn view(&self) -> wgpu::TextureView {
+        self.0.texture.create_view(&wgpu::TextureViewDescriptor::default())
+    }
     /// Exact physical dimensions of this completed immutable image.
     pub fn extent(&self) -> Extent {
         self.0.extent
@@ -139,33 +145,41 @@ impl DisplayImage {
         region: Region,
         context: &JobContext,
     ) -> Result<DisplayReadback, GpuError> {
-        if region.width() > TILE_EDGE
-            || region.height() > TILE_EDGE
-            || region.intersection(self.extent().region()) != Some(region)
-        {
-            return Err(GpuError::invalid("Invalid retained GPU readback region"));
-        }
-        let device = &self.0.device;
-        let receiving: Arc<Buffer> = device.allocate(
-            u64::from(row_bytes(region.width())) * u64::from(region.height()),
-            wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-            context,
-        )?;
-        let mut commands = device.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("SugarSubstitute retained display readback"),
-        });
-        commands.copy_texture_to_buffer(
-            location(&self.0.texture, [region.x(), region.y()]),
-            wgpu::TexelCopyBufferInfo {
-                buffer: &receiving.raw,
-                layout: layout(region.width(), region.height()),
-            },
-            size(region.width(), region.height()),
-        );
-        Transfer::submit(device.clone(), commands).retire()?;
-        crate::adapter::check(context)?;
-        DisplayReadback::receive(receiving, region, context)
+        read_texture_region(&self.0.texture, &self.0.device, self.extent(), region, context)
     }
+}
+pub(crate) fn read_texture_region(
+    texture: &wgpu::Texture,
+    device: &Arc<GpuDevice>,
+    extent: Extent,
+    region: Region,
+    context: &JobContext,
+) -> Result<DisplayReadback, GpuError> {
+    if region.width() > TILE_EDGE
+        || region.height() > TILE_EDGE
+        || region.intersection(extent.region()) != Some(region)
+    {
+        return Err(GpuError::invalid("Invalid retained GPU readback region"));
+    }
+    let receiving: Arc<Buffer> = device.allocate(
+        u64::from(row_bytes(region.width())) * u64::from(region.height()),
+        wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        context,
+    )?;
+    let mut commands = device.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("SugarSubstitute retained display readback"),
+    });
+    commands.copy_texture_to_buffer(
+        location(texture, [region.x(), region.y()]),
+        wgpu::TexelCopyBufferInfo {
+            buffer: &receiving.raw,
+            layout: layout(region.width(), region.height()),
+        },
+        size(region.width(), region.height()),
+    );
+    Transfer::submit(device.clone(), commands).retire()?;
+    crate::adapter::check(context)?;
+    DisplayReadback::receive(receiving, region, context)
 }
 fn size(width: u32, height: u32) -> wgpu::Extent3d {
     wgpu::Extent3d { width, height, depth_or_array_layers: 1 }

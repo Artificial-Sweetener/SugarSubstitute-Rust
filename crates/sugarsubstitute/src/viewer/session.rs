@@ -3,6 +3,7 @@
 //! Coordinate one camera/document lifetime with typed shared-execution jobs and worker retirement.
 mod activity;
 mod completion;
+mod gpu;
 mod native;
 mod proof;
 #[cfg(test)]
@@ -15,12 +16,14 @@ use super::{
 use crate::{diagnostics::DiagnosticHealth, job_sequence::JobSequence};
 use std::{error::Error, path::PathBuf, sync::Arc, time::Duration};
 use sugarsubstitute_canvas::{DamagePlan, FrameStamp, Viewport};
-use sugarsubstitute_canvas_render::CpuSurface;
+use sugarsubstitute_canvas_render::{CpuSurface, GpuSurface};
 use sugarsubstitute_contracts::{
     execution::*,
     localization::{messages, viewer::ViewerMessages},
 };
+use sugarsubstitute_desktop::canvas::WindowTarget;
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner, MonotonicClock};
+use sugarsubstitute_image_gpu::{AdapterDescriptor, GpuDevice, WindowFrame};
 use sugarsubstitute_image_io::CacheReuse;
 use sugarsubstitute_image_ops::{AssetId, Filter};
 
@@ -40,6 +43,9 @@ struct Open {
 /// One bounded admitted disposal transaction; payload fields retain their own original claims.
 #[derive(Default)]
 struct Retired {
+    _device: Option<Arc<GpuDevice>>,
+    _gpu_front: Option<GpuSurface>,
+    _presentation: Option<WindowFrame>,
     _scene: Option<Scene>,
     _packet: Option<Packet>,
     _resources: Option<Resources>,
@@ -69,6 +75,11 @@ pub(super) struct Session {
     sequence: JobSequence,
     runtime: Option<Runtime>,
     initializing: Option<OwnedJob<(Resources, Scene), WorkError>>,
+    device_job: Option<OwnedJob<Arc<GpuDevice>, WorkError>>,
+    device_pending: bool,
+    gpu_ready: bool,
+    gpu_descriptor: Option<AdapterDescriptor>,
+    native_target: Option<WindowTarget>,
     resources: Option<Resources>,
     scene: Option<Scene>,
     loading: Option<Loading>,
@@ -81,6 +92,12 @@ pub(super) struct Session {
     view: Viewport,
     navigation_until: Option<Moment>,
     front: Option<CpuSurface>,
+    gpu_front: Option<GpuSurface>,
+    gpu_presentation: Option<WindowFrame>,
+    awaiting_gpu: Option<FrameStamp>,
+    native_presented: Option<FrameStamp>,
+    native_verified: bool,
+    expose_pending: bool,
     presented: Option<Presented>,
     frame_revision: u64,
     pointer: [f64; 2],
@@ -108,6 +125,7 @@ impl Session {
     pub(super) fn new(options: Options, health: DiagnosticHealth) -> Result<Self, Box<dyn Error>> {
         let labels = messages(&options.locale).viewer;
         let view = Viewport::new(options.extent)?;
+        let gpu_requested = options.gpu.is_some();
         Ok(Self {
             options,
             labels,
@@ -117,6 +135,11 @@ impl Session {
             sequence: JobSequence::new(),
             runtime: None,
             initializing: None,
+            device_job: None,
+            device_pending: gpu_requested,
+            gpu_ready: !gpu_requested,
+            gpu_descriptor: None,
+            native_target: None,
             resources: None,
             scene: None,
             loading: None,
@@ -129,6 +152,12 @@ impl Session {
             view,
             navigation_until: None,
             front: None,
+            gpu_front: None,
+            gpu_presentation: None,
+            awaiting_gpu: None,
+            native_presented: None,
+            native_verified: false,
+            expose_pending: false,
             presented: None,
             frame_revision: 0,
             pointer: [0.0; 2],
@@ -165,6 +194,19 @@ impl Session {
     /// Adopt one original error without destroying the currently displayed image.
     fn fail(&mut self, cause: impl Into<Box<dyn Error>>) {
         let cause = cause.into();
+        let mut current = Some(cause.as_ref());
+        while let Some(error) = current {
+            if let Some(memory) = error.downcast_ref::<MemoryClaimError>() {
+                tracing::error!(
+                    operation = "canvas_viewer_memory",
+                    requested_bytes = memory.requested_bytes,
+                    available_bytes = memory.available_bytes,
+                    "Canvas allocation exceeded its original execution admission"
+                );
+                break;
+            }
+            current = error.source();
+        }
         tracing::error!(operation="canvas_viewer_work", cause=%cause, "Canvas operation failed");
         if self.failed.is_none() {
             self.failed = Some(cause);

@@ -21,6 +21,7 @@ fn child_native_dispatch_obeys_actual_infrastructure_capacity_and_factory_routin
         ExecutionId::new(1)?,
         Arc::new(ClockPort(Arc::new(ManualClock::default()))),
         Arc::new(Wake::default()),
+        crate::runtime::DEFAULT_MEMORY_BYTES,
     );
     let client = crate::ExecutionClient { core: core.clone() };
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
@@ -103,6 +104,7 @@ fn stopped_child_routes_to_native_owner_at_capacity_and_returns_only_unused_loan
         ExecutionId::new(1)?,
         Arc::new(ClockPort(Arc::new(ManualClock::default()))),
         Arc::new(Wake::default()),
+        crate::runtime::DEFAULT_MEMORY_BYTES,
     );
     let client = crate::ExecutionClient { core: core.clone() };
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;

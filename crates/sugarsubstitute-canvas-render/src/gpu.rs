@@ -65,6 +65,11 @@ impl<S: RasterSource> GpuRenderer<S> {
     pub fn work(&self) -> GpuWork {
         self.evaluator.work()
     }
+    /// Release one cache-only graph reference for another admitted GPU presentation allocation.
+    /// Outside frames and native commands retain their own original allocation custody.
+    pub fn evict_one(&mut self) -> bool {
+        self.evaluator.evict_one()
+    }
     /// Complete retained GPU copies under the same finite device admission as DAG evaluation.
     /// On execution memory pressure, evict only unpinned reconstructible graph tiles before retrying.
     /// Immutable published frames and prepared display regions keep their original custody.

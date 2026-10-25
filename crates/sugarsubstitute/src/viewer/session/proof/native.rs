@@ -2,10 +2,22 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Qualify the ordinary native window and retirement path with the same bounded proof driver.
 use super::*;
-use sugarsubstitute_desktop::canvas::CpuFrame;
+use sugarsubstitute_desktop::canvas::{CpuFrame, GpuPresentation, WindowTarget};
 use sugarsubstitute_image_ops::Extent;
 
 impl Lifetime for Proof {
+    fn attach_window(&mut self, target: WindowTarget) -> Result<(), Box<dyn Error>> {
+        self.session.attach_window(target)
+    }
+    fn take_gpu_presentation(&mut self) -> Option<GpuPresentation> {
+        self.session.take_gpu_presentation()
+    }
+    fn did_present_gpu(&mut self, target: FrameStamp) -> Result<(), Box<dyn Error>> {
+        self.session.did_present_gpu(target)
+    }
+    fn expose(&mut self) {
+        self.session.expose();
+    }
     fn start(&mut self, wake: Arc<dyn CompletionWake>) -> Result<(), Box<dyn Error>> {
         self.session.start(wake)
     }

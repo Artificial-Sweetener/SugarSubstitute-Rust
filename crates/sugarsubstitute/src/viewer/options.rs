@@ -6,6 +6,8 @@ use sugarsubstitute_contracts::configuration::LocaleId;
 use sugarsubstitute_image_ops::Extent;
 
 pub(super) struct Options {
+    pub(super) gpu: Option<sugarsubstitute_image_gpu::AdapterKey>,
+    pub(super) capture: bool,
     pub(super) cache: PathBuf,
     pub(super) image: Option<PathBuf>,
     pub(super) locale: String,
@@ -32,10 +34,17 @@ impl Options {
         let mut output = None;
         let mut metrics = None;
         let mut proof_window = None;
+        let mut renderer = None;
         while let Some(flag) = arguments.next() {
             let value =
                 arguments.next().ok_or_else(|| invalid("Viewer option requires a value"))?;
             match flag.to_str() {
+                Some("--renderer") if renderer.is_none() => {
+                    let value = value
+                        .into_string()
+                        .map_err(|_| invalid("Renderer selector must be Unicode"))?;
+                    renderer = Some(if value == "cpu" { None } else { Some(value.parse()?) });
+                }
                 Some("--cache") if cache.is_none() => cache = Some(PathBuf::from(value)),
                 Some("--image") if image.is_none() => image = Some(PathBuf::from(value)),
                 Some("--locale") if locale.is_none() => {
@@ -72,6 +81,8 @@ impl Options {
             return Err(invalid("Hidden native qualification requires proof outputs").into());
         }
         Ok(Self {
+            gpu: renderer.flatten(),
+            capture: proof.is_some(),
             cache,
             image,
             locale: locale.unwrap_or_else(|| "en".to_owned()),
@@ -142,6 +153,37 @@ mod tests {
         assert!(options.proof.is_some());
         arguments[3] = "visible".into();
         assert!(Options::parse(arguments).is_err());
+        Ok(())
+    }
+    #[test]
+    fn renderer_selection_is_explicit_native_and_restart_scoped() -> Result<(), Box<dyn Error>> {
+        let root = if cfg!(windows) { "E:\\viewer-owned-cache" } else { "/viewer-owned-cache" };
+        let options = Options::parse([
+            "--cache".into(),
+            root.into(),
+            "--renderer".into(),
+            "vulkan:8086:a780".into(),
+        ])?;
+        assert_eq!(options.gpu.map(|key| key.to_string()).as_deref(), Some("vulkan:8086:a780"));
+        assert!(!options.capture);
+        assert!(
+            Options::parse(["--cache".into(), root.into(), "--renderer".into(), "webgpu".into()])
+                .is_err()
+        );
+        assert!(
+            Options::parse([
+                "--cache".into(),
+                root.into(),
+                "--renderer".into(),
+                "cpu".into(),
+                "--renderer".into(),
+                "vulkan:8086:a780".into()
+            ])
+            .is_err()
+        );
+        let cpu =
+            Options::parse(["--cache".into(), root.into(), "--renderer".into(), "cpu".into()])?;
+        assert!(cpu.gpu.is_none());
         Ok(())
     }
 }

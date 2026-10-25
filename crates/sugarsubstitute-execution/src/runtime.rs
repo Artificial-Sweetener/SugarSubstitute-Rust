@@ -11,7 +11,7 @@ use crate::{
 };
 use std::{
     future::Future,
-    num::NonZeroUsize,
+    num::{NonZeroU64, NonZeroUsize},
     sync::{
         Arc,
         atomic::{AtomicU64, Ordering},
@@ -30,6 +30,7 @@ static NEXT_OWNER: AtomicU64 = AtomicU64::new(1);
 
 #[path = "runtime_policy.rs"]
 mod policy;
+pub(crate) use policy::DEFAULT_MEMORY_BYTES;
 pub use policy::{
     EntryEnvironmentCustody, EntryEnvironmentExtent, ExecutionLimits, NativeOutputCustody,
     ProcessCaptureCustody, ShutdownProgress, UnresolvedJob, WorkerStatus,
@@ -100,23 +101,43 @@ impl ExecutionOwner {
         wake: Arc<dyn CompletionWake>,
     ) -> Result<Self, ExecutionError> {
         let logical = std::thread::available_parallelism().map_err(error)?.get();
-        Self::build(clock, wake, if logical == 1 { 1 } else { 2 })
+        Self::build(clock, wake, if logical == 1 { 1 } else { 2 }, DEFAULT_MEMORY_BYTES)
+    }
+
+    /// Construct the same execution owner with a startup-selected total memory capacity.
+    ///
+    /// Capacity is immutable for this owner's lifetime. All job reservations, retained
+    /// results and admission retry wakes use this single limit. It accounts for declared
+    /// application resources, including native allocations; it does not measure process RSS.
+    /// Worker and queue limits match `new`, whose default capacity remains 256 MiB.
+    ///
+    /// # Errors
+    /// Preserves original runtime/thread creation failures and joins partially created workers.
+    pub fn with_memory_capacity(
+        clock: Arc<dyn Clock>,
+        wake: Arc<dyn CompletionWake>,
+        memory_bytes: NonZeroU64,
+    ) -> Result<Self, ExecutionError> {
+        let logical = std::thread::available_parallelism().map_err(error)?.get();
+        Self::build(clock, wake, if logical == 1 { 1 } else { 2 }, memory_bytes.get())
     }
 
     fn build(
         clock: Arc<dyn Clock>,
         wake: Arc<dyn CompletionWake>,
         cpu_workers: usize,
+        memory_bytes: u64,
     ) -> Result<Self, ExecutionError> {
         let raw_id = NEXT_OWNER
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
             .map_err(|_| error(std::io::Error::other("Execution identity exhausted")))?;
         let id = ExecutionId::new(raw_id).map_err(error)?;
-        let core =
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| Core::new(id, clock, wake)))
-                .map_err(|payload| {
-                error(std::io::Error::other(task::panic_cause(payload).as_str().to_owned()))
-            })?;
+        let core = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            Core::new(id, clock, wake, memory_bytes)
+        }))
+        .map_err(|payload| {
+            error(std::io::Error::other(task::panic_cause(payload).as_str().to_owned()))
+        })?;
         let runtime = Builder::new_multi_thread()
             .worker_threads(2)
             .max_blocking_threads(2)
@@ -147,7 +168,7 @@ impl ExecutionOwner {
             supervisor: Some(supervisor),
             cpu: Some(cpu),
             shutdown_deadline: None,
-            limits: ExecutionLimits::fixed(cpu_workers),
+            limits: ExecutionLimits::fixed(cpu_workers, memory_bytes),
         })
     }
 
@@ -160,7 +181,7 @@ impl ExecutionOwner {
         if !matches!(workers, 1 | 2) {
             return Err(error(std::io::Error::other("CPU test worker count must be one or two")));
         }
-        Self::build(clock, wake, workers)
+        Self::build(clock, wake, workers, DEFAULT_MEMORY_BYTES)
     }
 
     /// Obtain an owned typed submission endpoint sharing this execution identity.

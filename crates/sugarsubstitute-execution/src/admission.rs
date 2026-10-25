@@ -219,6 +219,7 @@ pub(crate) struct State {
     pub(crate) queue: VecDeque<QueuedJob>,
     pub(crate) retired: VecDeque<Retirement>,
     pub(crate) bytes: u64,
+    pub(crate) byte_limit: u64,
     pub(crate) stopping: bool,
     pub(crate) notifications_inflight: usize,
     capacity_wait: capacity::CapacityWait,
@@ -262,6 +263,7 @@ impl Core {
         id: ExecutionId,
         clock: Arc<dyn Clock>,
         wake: Arc<dyn CompletionWake>,
+        byte_limit: u64,
     ) -> Arc<Self> {
         let mailbox = Mailbox::new(wake);
         let notify = mailbox.notify.clone();
@@ -279,6 +281,7 @@ impl Core {
                 queue: VecDeque::with_capacity(416),
                 retired: VecDeque::with_capacity(560),
                 bytes: 0,
+                byte_limit,
                 stopping: false,
                 notifications_inflight: 0,
                 capacity_wait: capacity::CapacityWait::default(),

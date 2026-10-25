@@ -117,11 +117,11 @@ sources = [
     "crates/sugarsubstitute-desktop/src/windows_text/field_tests.rs",
     "crates/sugarsubstitute-desktop/src/windows_text/renderer.rs",
 ]
-source_sha256 = "sha256:84abb1b0934c1f14291282d34afe61f7e83520cd6f32c5359715363391d4d834"
+source_sha256 = "sha256:20576e3d3d9c34f95aad2ac7e1309daa77e68197df85c9d9ef36ee94c226c5f5"
 
 [[boundaries]]
 owner = "sugarsubstitute-image-gpu"
-concern = "Explicit Vulkan/Metal devices, bounded DAG command batches, shared display encoding and original resource custody through observed native completion"
+concern = "Explicit Vulkan/Metal devices, bounded DAG command batches, shared display encoding, native swapchain presentation and original resource custody through observed native completion"
 capabilities = ["raster"]
 sources = [
     "crates/sugarsubstitute-image-gpu/src/adapter.rs",
@@ -135,5 +135,7 @@ sources = [
     "crates/sugarsubstitute-image-gpu/src/kernel.rs",
     "crates/sugarsubstitute-image-gpu/src/kernel/tests.rs",
     "crates/sugarsubstitute-image-gpu/src/transfer.rs",
+    "crates/sugarsubstitute-image-gpu/src/window.rs",
+    "crates/sugarsubstitute-image-gpu/src/window_shader.rs",
 ]
-source_sha256 = "sha256:b6232fc66a3009a3bd9bac23a31571c5ffc10cc97327c4f7614291aa649702b8"
+source_sha256 = "sha256:4493fbbf3d3928e0443a7d2d304bb98656a3b6b7fc11b9fc723fbe257df67147"

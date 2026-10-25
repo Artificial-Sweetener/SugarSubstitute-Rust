@@ -76,6 +76,12 @@ impl Proof {
             .as_ref()
             .and_then(CpuSurface::current)
             .ok_or("Proof lost its displayed frame")?;
+        if session.options.gpu.is_some()
+            && session.native_target.is_some()
+            && (session.native_presented != Some(stamp) || !session.native_verified)
+        {
+            return Ok(());
+        }
         if self.observed != Some(stamp) {
             let (computed_pixels, source_pixels) =
                 proof::difference(session.last_stats, self.previous_stats);
@@ -137,6 +143,7 @@ impl Proof {
                 front: session.front.take().ok_or("Proof surface is unavailable")?,
                 samples: self.samples,
                 paths: self.paths.take().ok_or("Proof output custody was lost")?,
+                adapter: session.gpu_descriptor.clone(),
             });
         }
         let runtime = session.runtime.as_ref().ok_or("Proof execution is unavailable")?;

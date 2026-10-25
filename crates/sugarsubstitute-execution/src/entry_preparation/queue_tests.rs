@@ -37,8 +37,12 @@ struct Fixture {
 impl Fixture {
     fn new() -> TestResult<Self> {
         let manual = Arc::new(ManualClock::default());
-        let core =
-            Core::new(ExecutionId::new(1)?, Arc::new(ClockPort(manual)), Arc::new(Wake::default()));
+        let core = Core::new(
+            ExecutionId::new(1)?,
+            Arc::new(ClockPort(manual)),
+            Arc::new(Wake::default()),
+            crate::runtime::DEFAULT_MEMORY_BYTES,
+        );
         let client = crate::ExecutionClient { core: core.clone() };
         let scope =
             client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;

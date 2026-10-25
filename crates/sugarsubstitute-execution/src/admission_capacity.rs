@@ -5,8 +5,6 @@
 
 use super::*;
 
-const MEMORY_LIMIT: u64 = 256 * 1024 * 1024;
-
 /// Retain bounded rejection interests, not callers, jobs or an additional queue.
 #[derive(Default)]
 pub(super) struct CapacityWait {
@@ -70,10 +68,10 @@ impl Core {
             state.capacity_wait.completion[index] = true;
             return Err(AdmissionError::CompletionSaturated);
         }
-        let available_bytes = MEMORY_LIMIT - state.bytes;
+        let available_bytes = state.byte_limit - state.bytes;
         if spec.reservation_bytes > available_bytes {
             // An individually impossible request can never become admissible.
-            if spec.reservation_bytes <= MEMORY_LIMIT {
+            if spec.reservation_bytes <= state.byte_limit {
                 state.capacity_wait.memory =
                     Some(state.capacity_wait.memory.map_or(spec.reservation_bytes, |waiting| {
                         waiting.min(spec.reservation_bytes)
@@ -146,7 +144,7 @@ impl Core {
                 ready = true;
             }
         }
-        if wait.memory.is_some_and(|bytes| bytes <= MEMORY_LIMIT - state.bytes) {
+        if wait.memory.is_some_and(|bytes| bytes <= state.byte_limit - state.bytes) {
             wait.memory = None;
             ready = true;
         }

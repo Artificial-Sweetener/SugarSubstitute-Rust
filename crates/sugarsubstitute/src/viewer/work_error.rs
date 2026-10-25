@@ -38,6 +38,7 @@ causes!(
     sugarsubstitute_image_ops::ImageError,
     sugarsubstitute_canvas::CanvasError,
     sugarsubstitute_canvas_render::RenderError,
+    sugarsubstitute_image_gpu::GpuError,
     sugarsubstitute_image_io::ImportError,
     sugarsubstitute_contracts::execution::MemoryClaimError,
     sugarsubstitute_contracts::execution::IdentityError,

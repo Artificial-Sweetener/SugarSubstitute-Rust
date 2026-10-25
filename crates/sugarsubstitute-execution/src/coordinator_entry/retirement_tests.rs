@@ -52,8 +52,12 @@ fn first_private_cleanup_deadlines_do_not_renew_and_expiry_retains_partial_nativ
 -> TestResult {
     let rig = Rig::new()?;
     // Drive the real admitted native owner directly: mailbox error wakes precede private timer updates.
-    let core =
-        Core::new(ExecutionId::new(99)?, Arc::new(ClockPort(rig.clock.clone())), rig.wake.clone());
+    let core = Core::new(
+        ExecutionId::new(99)?,
+        Arc::new(ClockPort(rig.clock.clone())),
+        rig.wake.clone(),
+        crate::runtime::DEFAULT_MEMORY_BYTES,
+    );
     let scope =
         core.create_scope_kind(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None, true)?;
     let boundary = Boundary::new(&rig, true)?;

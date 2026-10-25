@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 
-//! Report fixed admission limits and actual shutdown observations.
+//! Report startup admission limits and actual shutdown observations.
 
 use sugarsubstitute_contracts::execution::{JobId, JobPhase, JobSpec, ScopeId};
 
@@ -33,7 +33,9 @@ pub struct ProcessCaptureCustody {
     pub reservation_bytes: u64,
 }
 
-/// Fixed capacity policy for the production execution owner.
+pub(crate) const DEFAULT_MEMORY_BYTES: u64 = 256 * 1024 * 1024;
+
+/// Immutable capacity policy for one production execution owner.
 ///
 /// Lifecycle jobs can consume idle ordinary slots while ordinary submissions
 /// cannot consume lifecycle reserves. Peak bytes include caller-retained results.
@@ -76,7 +78,7 @@ pub struct ExecutionLimits {
 }
 
 impl ExecutionLimits {
-    pub(super) fn fixed(cpu_workers: usize) -> Self {
+    pub(super) fn fixed(cpu_workers: usize, memory_bytes: u64) -> Self {
         Self {
             native_running: if cfg!(any(windows, test)) { 384 } else { 0 },
             native_queued: if cfg!(any(windows, test)) { 384 } else { 0 },
@@ -93,7 +95,7 @@ impl ExecutionLimits {
             terminal: 48,
             terminal_ordinary: 44,
             scopes: 64,
-            memory_bytes: 256 * 1024 * 1024,
+            memory_bytes,
         }
     }
 }

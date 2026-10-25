@@ -13,6 +13,7 @@ fn fixture() -> TestResult<(Arc<Core>, crate::ExecutionClient, Scope)> {
         ExecutionId::new(1)?,
         Arc::new(ClockPort(Arc::new(ManualClock::default()))),
         Arc::new(Wake::default()),
+        crate::runtime::DEFAULT_MEMORY_BYTES,
     );
     let client = crate::ExecutionClient { core: core.clone() };
     let scope = client.create_scope(

@@ -5,7 +5,27 @@ use crate::DesktopError;
 use std::{error::Error, path::PathBuf, sync::Arc, time::Duration};
 use sugarsubstitute_canvas::{DamagePlan, FrameStamp};
 use sugarsubstitute_contracts::execution::CompletionWake;
+use sugarsubstitute_image_gpu::{GpuDevice, GpuError, WindowFrame, WindowSurface};
 use sugarsubstitute_image_ops::Extent;
+
+/// Desktop-owned peer custody, attached to GPU presentation only on the original window thread.
+#[derive(Clone)]
+pub struct WindowTarget(Arc<tao::window::Window>);
+impl WindowTarget {
+    /// Bind an already-selected native device to this peer while desktop ownership stays retained.
+    /// # Errors
+    /// Preserves native graphics/admission errors and rejects incompatible window/device pairs.
+    pub fn attach_gpu(&self, device: Arc<GpuDevice>) -> Result<WindowSurface, GpuError> {
+        WindowSurface::attach(device, self.0.clone())
+    }
+}
+/// Completed native GPU presentation with the exact application frame identity it represents.
+pub struct GpuPresentation {
+    /// Actual completed application frame.
+    pub target: FrameStamp,
+    /// Already-drawn native swapchain image; presentation performs no worker wait.
+    pub frame: WindowFrame,
+}
 
 #[cfg(windows)]
 #[allow(unsafe_code)]
@@ -92,6 +112,10 @@ pub trait Lifetime {
     /// # Errors
     /// Preserves partial startup ownership; close/poll/finish remain available after failure.
     fn start(&mut self, wake: Arc<dyn CompletionWake>) -> Result<(), Box<dyn Error>>;
+    /// Receive desktop peer custody on its owning thread before any image work is submitted.
+    /// # Errors
+    /// Reports duplicate attachment or partial native startup failures.
+    fn attach_window(&mut self, target: WindowTarget) -> Result<(), Box<dyn Error>>;
     /// Update physical dimensions without waiting for old image preparation.
     /// # Errors
     /// Reports invalid geometry or admission failures.
@@ -115,6 +139,14 @@ pub trait Lifetime {
     fn poll(&mut self, elapsed: Duration) -> Result<(), Box<dyn Error>>;
     /// Borrow the latest complete retained CPU viewport.
     fn frame(&self) -> Option<CpuFrame<'_>>;
+    /// Take at most one completed native GPU presentation; ownership is consumed by presentation.
+    fn take_gpu_presentation(&mut self) -> Option<GpuPresentation>;
+    /// Acknowledge the exact completed frame after the native queue accepted presentation.
+    /// # Errors
+    /// Rejects foreign, duplicate or out-of-order desktop acknowledgements.
+    fn did_present_gpu(&mut self, target: FrameStamp) -> Result<(), Box<dyn Error>>;
+    /// Request restoration of native GPU pixels after exposure without doing image work on the UI.
+    fn expose(&mut self);
     /// Current localized title/status, independent of paint scheduling.
     fn title(&self) -> &str;
     /// Earliest application refinement deadline in the native clock epoch; no timer is spawned.

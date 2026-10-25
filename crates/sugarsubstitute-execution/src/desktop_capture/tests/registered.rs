@@ -96,6 +96,7 @@ fn registered_temporary_transfer_retains_original_capsule_without_physical_retir
         ExecutionId::new(1)?,
         Arc::new(ClockPort(Arc::new(ManualClock::default()))),
         Arc::new(Wake::default()),
+        crate::runtime::DEFAULT_MEMORY_BYTES,
     );
     let client = crate::ExecutionClient { core: core.clone() };
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;

@@ -6,6 +6,10 @@ use sugarsubstitute_canvas::{DamagePlan, FrameStamp};
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease, SurfaceId};
 use sugarsubstitute_image_ops::{Extent, ImageError, Region};
 
+#[cfg(test)]
+#[path = "surface/adoption_tests.rs"]
+mod adoption_tests;
+
 struct Patch {
     region: Region,
     pixels: Vec<u32>,
@@ -92,6 +96,38 @@ pub struct CpuSurface {
     _memory: MemoryClaim,
 }
 impl CpuSurface {
+    /// Adopt one complete opaque prepared image without allocating a second viewport buffer.
+    /// The original pixel claim travels with its storage; partial or dependent updates are rejected.
+    /// # Errors
+    /// Rejects updates without one complete independent physical image or excessive dimensions.
+    pub fn from_prepared(mut update: PreparedUpdate) -> Result<Self, RenderError> {
+        let extent = update.update.damage.dirty().surface();
+        if update.base().is_some()
+            || update.plan().blit().is_some()
+            || update.patches.iter().flatten().count() != 1
+            || extent.width() > 16384
+            || extent.height() > 16384
+        {
+            return Err(RenderError::Invalid(
+                "Surface adoption requires a complete independent image",
+            ));
+        }
+        let patch = update.patches[0]
+            .take()
+            .ok_or(RenderError::Invalid("Prepared surface has no pixels"))?;
+        if patch.region != extent.region() {
+            return Err(RenderError::Invalid(
+                "Prepared surface does not cover its physical extent",
+            ));
+        }
+        Ok(Self {
+            pixels: patch.pixels,
+            extent,
+            identity: update.target().surface,
+            current: Some(update.target()),
+            _memory: patch._memory,
+        })
+    }
     /// Allocate bounded physical device pixels from the application's existing execution admission.
     /// # Errors
     /// Rejects surfaces beyond 16384 pixels per edge, insufficient admission and allocation failure.

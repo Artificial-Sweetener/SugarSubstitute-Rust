@@ -39,6 +39,7 @@ impl RegisteredOwner {
             ExecutionId::new(1)?,
             Arc::new(ClockPort(clock.clone())),
             Arc::new(Wake::default()),
+            crate::runtime::DEFAULT_MEMORY_BYTES,
         );
         let client = crate::ExecutionClient { core: core.clone() };
         let parent = client

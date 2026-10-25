@@ -85,10 +85,11 @@ impl Session {
             return Ok(());
         };
         match Self::terminal(outcome) {
-            Ok(mut packet) => {
+            Ok(packet) => {
                 let current = !self.closing
                     && self.pending_open.is_none()
                     && self.loading.is_none()
+                    && packet.view.surface() == self.view.surface()
                     && self.scene.as_ref().is_some_and(|scene| {
                         let snapshot = scene.document.snapshot();
                         packet.document == (snapshot.identity(), snapshot.revision())
@@ -98,23 +99,41 @@ impl Session {
                     self.retire(Retired { _packet: Some(packet), ..Default::default() })?;
                     return Ok(());
                 }
-                if let Some(replacement) = packet.replacement.take()
-                    && let Some(previous) = self.front.replace(replacement)
-                {
-                    self.retire(Retired { _front: Some(previous), ..Default::default() })?;
+                let mut retired = Retired::default();
+                let work = match packet.pixels {
+                    work::Pixels::Cpu { update, replacement } => {
+                        if let Some(replacement) = replacement {
+                            retired._front = self.front.replace(replacement);
+                        }
+                        self.front
+                            .as_mut()
+                            .ok_or("Canvas retained viewport is unavailable")?
+                            .apply(&update)?
+                    }
+                    work::Pixels::Gpu(pixels) => {
+                        if self.gpu_presentation.is_some() || self.awaiting_gpu.is_some() {
+                            return Err("Native GPU presentation slot is occupied".into());
+                        }
+                        retired._gpu_front = self.gpu_front.replace(pixels.surface);
+                        if let Some(snapshot) = pixels.snapshot {
+                            retired._front = self.front.replace(snapshot);
+                        }
+                        self.gpu_presentation = pixels.presentation;
+                        self.native_verified = pixels.native_verified;
+                        self.expose_pending = pixels.retry_presentation;
+                        pixels.work
+                    }
+                };
+                if retired._front.is_some() || retired._gpu_front.is_some() {
+                    self.retire(retired)?;
                 }
-                let work = self
-                    .front
-                    .as_mut()
-                    .ok_or("Canvas retained viewport is unavailable")?
-                    .apply(&packet.update)?;
-                let base = self.presented.as_ref().and_then(|_| packet.update.base());
+                let base = self.presented.as_ref().and(packet.base);
                 self.presented = Some(Presented {
                     view: packet.view,
                     filter: packet.filter,
                     document: packet.document,
                     source_revision: packet.source_revision,
-                    damage: *packet.update.plan(),
+                    damage: packet.damage,
                     base,
                 });
                 self.last_prepare = packet.elapsed;

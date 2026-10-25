@@ -34,6 +34,7 @@ fn core() -> TestResult<Arc<Core>> {
         ExecutionId::new(1)?,
         Arc::new(ClockPort(Arc::new(ManualClock::default()))),
         Arc::new(Wake::default()),
+        crate::runtime::DEFAULT_MEMORY_BYTES,
     ))
 }
 #[test]

@@ -28,8 +28,12 @@ fn checked_old_connection_with_held_frame_does_not_self_wake_on_repeated_worker_
     let rig = Rig::new()?;
     // Drive the sole native worker's actual Active body on a real admitted
     // Core; no concurrent supervisor consumes its observable Notify token.
-    let core =
-        Core::new(ExecutionId::new(99)?, Arc::new(ClockPort(rig.clock.clone())), rig.wake.clone());
+    let core = Core::new(
+        ExecutionId::new(99)?,
+        Arc::new(ClockPort(rig.clock.clone())),
+        rig.wake.clone(),
+        crate::runtime::DEFAULT_MEMORY_BYTES,
+    );
     let scope =
         core.create_scope_kind(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None, true)?;
     let boundary = Boundary::new(&rig, true)?;
