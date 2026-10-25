@@ -28,9 +28,11 @@ export function createCubeHostExecution(options) {
         prepare: options.prepareRelations,
         transform: async (payload) => {
             const candidate = await pipeline.transform(payload);
-            return options.prepareCanvasInputs ? await options.prepareCanvasInputs(candidate) : candidate;
+            return options.prepareCanvasInputs
+                ? await options.prepareCanvasInputs(candidate)
+                : { payload: candidate };
         },
-        executeDirect: (position, payload, queueOptions, submit) => transport.queue(payload, () => direct.queue(position, payload, queueOptions), submit),
+        executeDirect: (position, payload, queueOptions, submit, prepared) => transport.queue(payload, () => direct.queue(position, payload, queueOptions, prepared), submit),
         shouldExecuteDirect: (payload) => direct.owns(payload),
     });
     return queue;

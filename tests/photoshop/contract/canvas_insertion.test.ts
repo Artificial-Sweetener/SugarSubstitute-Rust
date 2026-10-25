@@ -25,6 +25,7 @@ const request = {
   document: { id: '1', geometryRevision: 'geometry', width: 512, height: 384 },
   image: { format: 'png' as const, encoding: 'base64' as const, data: 'fixture-png' },
   layerName: 'Generated',
+  position: null,
 };
 /** Record transaction boundaries without pretending that a mock proves Photoshop rendering. */
 function fixture() {

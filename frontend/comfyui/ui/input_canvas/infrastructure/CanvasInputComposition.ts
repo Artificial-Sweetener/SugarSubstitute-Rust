@@ -26,6 +26,8 @@ import { ComfyInputPreparation } from './ComfyInputPreparation.js';
 import { MasonryInputHost } from './MasonryInputHost.js';
 import { ComfyInputBindings } from './ComfyInputBindings.js';
 import { BrowserInputPreviews } from './BrowserInputPreviews.js';
+import { BrowserInputRasters } from './BrowserInputRasters.js';
+import { ComfyInputReturnPreparation } from './ComfyInputReturnPreparation.js';
 import { ComfyInputAssociations } from './ComfyInputAssociations.js';
 import type { ComfyGraph } from '../../types/graph.js';
 
@@ -55,12 +57,13 @@ export function createCanvasInputs(options: CanvasInputHostOptions): {
   const loaders = new ComfyInputLoaders();
   const assets = new BrowserCanvasSourceAssets((input, init) => fetch(input, init));
   const capture = new CanvasSourceCapture(host);
+  const rasters = new BrowserInputRasters(document, (input, init) => fetch(input, init));
   const previews = new CanvasSourcePreviews(capture, host, report);
   const legacy = new LegacyMaskMigration(legacyHost, assets);
   const defaults = new ComfyInputSourceDefaults(host, legacy);
   const bindings = new ComfyInputBindings(loaders, {
     host,
-    files: new BrowserInputPreviews(document, (source) => assets.stage(source)),
+    files: new BrowserInputPreviews((source) => assets.stage(source), rasters),
     legacy,
     verifyFile: (file) => assets.verify(file),
     verifiedFile: (file) => assets.verified(file),
@@ -96,6 +99,12 @@ export function createCanvasInputs(options: CanvasInputHostOptions): {
       loaders,
       new InputSourcePreparation(capture, assets),
       defaults,
+      new ComfyInputReturnPreparation(rasters, async () => {
+        const source = host();
+        if (!source) return null;
+        const context = await capture.context(source.canvasId);
+        return context.document ? { canvasId: source.canvasId, document: context.document } : null;
+      }),
     ),
     masonry,
     bindings,

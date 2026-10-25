@@ -69,7 +69,7 @@ test.each([false, true])(
     const bridge = new ComfyPromptQueueBridge({
       api,
       observer: f.observer,
-      transform: async (payload) => payload,
+      transform: async (payload) => ({ payload }),
       ...(direct
         ? {
             executeDirect: async () => ({

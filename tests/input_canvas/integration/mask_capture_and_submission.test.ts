@@ -73,7 +73,7 @@ test('captures ordered sources together, preserves original source channels and 
       '6': { class_type: 'Consumer', inputs: { mask: ['5', 0] } },
     },
   };
-  expect(await f.preparation.prepare(payload)).toMatchObject({
+  expect((await f.preparation.prepare(payload)).payload).toMatchObject({
     output: {
       '5': {
         inputs: {
@@ -112,12 +112,14 @@ test('rejects incomplete captures before upload and preserves the existing chann
     entries: node.properties.sugarcubes_canvas_masks.entries.slice(0, 1),
   };
   expect(
-    await f.preparation.prepare({
-      workflow: authored,
-      output: {
-        '5': { class_type: 'LoadImageMask', inputs: { image: 'old.png', channel: 'blue' } },
-      },
-    }),
+    (
+      await f.preparation.prepare({
+        workflow: authored,
+        output: {
+          '5': { class_type: 'LoadImageMask', inputs: { image: 'old.png', channel: 'blue' } },
+        },
+      })
+    ).payload,
   ).toMatchObject({ output: { '5': { inputs: { image: 'immutable-1.png', channel: 'blue' } } } });
 });
 
@@ -128,7 +130,7 @@ test('refuses disconnected sources and preserves workflows without applicable in
     'unavailable',
   );
   const payload = { output: {} };
-  expect(await f.preparation.prepare(payload)).toBe(payload);
+  expect((await f.preparation.prepare(payload)).payload).toBe(payload);
 });
 
 test('preserves file order without native reads and refuses to overwrite graph-connected file inputs', async () => {
@@ -143,15 +145,17 @@ test('preserves file order without native reads and refuses to overwrite graph-c
     })),
   };
   expect(
-    await f.preparation.prepare({
-      workflow: authored,
-      output: {
-        '5': {
-          class_type: 'SimpleSyrup.LoadMaskBatch',
-          inputs: { image: { __value__: ['original.png'] }, channel: 'red' },
+    (
+      await f.preparation.prepare({
+        workflow: authored,
+        output: {
+          '5': {
+            class_type: 'SimpleSyrup.LoadMaskBatch',
+            inputs: { image: { __value__: ['original.png'] }, channel: 'red' },
+          },
         },
-      },
-    }),
+      })
+    ).payload,
   ).toMatchObject({
     output: {
       '5': { inputs: { image: { __value__: ['file-0.png', 'file-1.png', 'file-2.png'] } } },
@@ -185,7 +189,7 @@ test('honors explicit native file edits over an older persisted source choice', 
       },
     },
   };
-  expect(await f.preparation.prepare(payload)).toBe(payload);
+  expect((await f.preparation.prepare(payload)).payload).toBe(payload);
   expect(f.execute).not.toHaveBeenCalled();
   expect(f.stage).not.toHaveBeenCalled();
 });
@@ -236,7 +240,7 @@ test('defaults an unconfigured capable loader even when no masonry card has moun
       '9': { class_type: 'LoadImageMask', inputs: { image: 'unrelated.png', channel: 'red' } },
     },
   };
-  expect(await f.preparation.prepare(payload)).toMatchObject({
+  expect((await f.preparation.prepare(payload)).payload).toMatchObject({
     output: { '9': { inputs: { image: 'immutable-1.png', channel: 'red' } } },
     workflow: {
       nodes: [
@@ -267,7 +271,7 @@ test('projects root and nested instances by compiled path while deduplicating th
       '7:5': { class_type: 'SimpleSyrup.LoadMaskBatch', inputs: { image: [], channel: 'blue' } },
     },
   };
-  expect(await f.preparation.prepare(payload)).toMatchObject({
+  expect((await f.preparation.prepare(payload)).payload).toMatchObject({
     output: {
       '5': {
         inputs: {
@@ -309,7 +313,7 @@ test('keeps custom interpretation settings and connected channel resolution with
       inputs: { image: 'authored.png', channel: ['settings', 0], invert: true },
     },
   };
-  const prepared = await f.preparation.prepare({ workflow: authored, output });
+  const prepared = (await f.preparation.prepare({ workflow: authored, output })).payload;
   expect(prepared).toMatchObject({
     output: {
       '5': {

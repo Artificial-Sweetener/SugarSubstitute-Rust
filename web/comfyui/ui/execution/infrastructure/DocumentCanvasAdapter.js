@@ -26,16 +26,33 @@ export function documentCanvasAdapter(id, host, images, report) {
                             return null;
                         return {
                             async receive(output, stop) {
-                                for (const { media } of output.images) {
+                                const returned = output.canvasReturns?.find((value) => value.executionPath === output.source.executionPath);
+                                if (returned?.kind === 'unavailable')
+                                    throw new Error(returned.message);
+                                if (returned?.kind === 'region' &&
+                                    (returned.canvasId !== context.canvas.id ||
+                                        !context.canvas.capabilities.positionImageLayer))
+                                    throw new Error('This canvas cannot receive the captured positioned inpaint.');
+                                for (const { media, batchIndex } of output.images) {
                                     if (stop.cancelled())
                                         return;
                                     try {
-                                        const image = await images.load(media.file, stop);
+                                        const region = returned?.kind === 'region'
+                                            ? returned.regions.length === 1
+                                                ? returned.regions[0]
+                                                : returned.regions[batchIndex]
+                                            : null;
+                                        if (returned?.kind === 'region' && !region)
+                                            throw new Error('The inpaint batch has no matching captured mask.');
+                                        const prepared = await images.load(media.file, stop, region ?? null);
+                                        if (!prepared)
+                                            continue;
                                         if (stop.cancelled())
                                             return;
                                         const result = await host.insertImage({
-                                            document,
-                                            image,
+                                            document: returned?.kind === 'region' ? returned.document : document,
+                                            image: prepared.image,
+                                            position: prepared.position,
                                             layerName: media.file.filename.slice(0, 128) || 'Generated image',
                                         }, stop);
                                         if (result.status !== 'inserted' && result.status !== 'cancelled')

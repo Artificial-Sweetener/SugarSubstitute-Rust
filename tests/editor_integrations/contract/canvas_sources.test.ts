@@ -54,7 +54,7 @@ test('round-trips raw channels and selection coverage without a mask consumer', 
 test('validates explicit layer targeting and keeps file access outside native source requests', () => {
   const request = {
     protocol: 'sugarcubes.canvas',
-    version: 1,
+    version: 2,
     session,
     requestId: 1,
     type: 'source.request',
@@ -78,7 +78,7 @@ test('validates explicit layer targeting and keeps file access outside native so
   expect(
     isCanvasMessage({
       protocol: 'sugarcubes.canvas',
-      version: 1,
+      version: 2,
       session,
       requestId: 0,
       type: 'source.changed',
@@ -127,7 +127,7 @@ function fixture(capable: boolean) {
       canvas: {
         id: 'editor',
         label: 'Editor',
-        capabilities: { displayOutput: false, insertImageLayer: false },
+        capabilities: { displayOutput: false, insertImageLayer: false, positionImageLayer: false },
       },
       document,
     }),

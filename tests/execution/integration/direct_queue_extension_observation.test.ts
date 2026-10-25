@@ -72,7 +72,7 @@ test('direct Cube runs traverse earlier queue observers exactly once without sen
   const execute = jest.fn(async () => ({ accepted: true, prompt_id: 'cube-run' }));
   const bridge = new ComfyPromptQueueBridge({
     api: f.api,
-    transform: async (payload) => payload,
+    transform: async (payload) => ({ payload }),
     executeDirect: (_position, payload, _forwarded, submit) =>
       f.transport.queue(payload, () => execute(), submit),
   });
@@ -215,7 +215,7 @@ test('queue wrappers installed after composition are captured at queue installat
   };
   const bridge = new ComfyPromptQueueBridge({
     api: f.api,
-    transform: async (payload) => payload,
+    transform: async (payload) => ({ payload }),
     executeDirect: (_position, payload, _options, submit) =>
       f.transport.queue(payload, async () => ({ prompt_id: 'late-wrapper' }), submit),
   });

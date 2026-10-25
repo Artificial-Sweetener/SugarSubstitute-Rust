@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Coordinate peer canvas capabilities through one execution delivery and lifecycle authority. */
 import { CanvasCancellation } from '../../core/embedded/CanvasRuntime.js';
-import { workflowCanvasImages } from './WorkflowCanvasImages.js';
+import { WorkflowCanvasImages } from './WorkflowCanvasImages.js';
 /** Route outputs, view restoration and previews by capability without identifying particular hosts. */
 export class WorkflowCanvasCoordinator {
     results;
@@ -126,8 +126,10 @@ export class WorkflowCanvasCoordinator {
             const key = this.#key(event.submission);
             const run = this.#submissions.get(key);
             this.#submissions.delete(key);
-            if (run)
+            if (run) {
+                run.submission = event.run;
                 this.#runs.set(event.run.promptId, run);
+            }
             return;
         }
         if (event.type === 'closed')
@@ -138,9 +140,10 @@ export class WorkflowCanvasCoordinator {
             return;
         if (event.type === 'output') {
             const output = Object.freeze({
+                ...(run.submission.canvasReturns ? { canvasReturns: run.submission.canvasReturns } : {}),
                 run: event.run,
                 source: event.source,
-                images: workflowCanvasImages(event.run, event.source.id, event.payload.images, run.seen),
+                images: run.images.read(event.run, event.source.id, event.payload.images),
                 state: event.retained
                     ? {
                         sessionId: event.run.session.sessionId,
@@ -195,7 +198,7 @@ export class WorkflowCanvasCoordinator {
         this.#submissions.set(this.#key(submission), {
             submission,
             destinations,
-            seen: new Set(),
+            images: new WorkflowCanvasImages(),
             pending: 0,
             settled: false,
         });

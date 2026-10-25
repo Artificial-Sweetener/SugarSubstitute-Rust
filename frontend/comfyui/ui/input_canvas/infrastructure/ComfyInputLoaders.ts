@@ -15,17 +15,38 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Validate Comfy node definitions before exposing portable loader-field semantics. */
 import { isRecord } from '../../types/common.js';
-import { recognizeInputLoaders, type InputLoader } from '../domain/InputLoader.js';
+import {
+  recognizeInputLoaders,
+  type InputLoader,
+  type InputAssetPorts,
+  type InputKind,
+} from '../domain/InputLoader.js';
 
 /** Own the definition catalog supplied by Comfy's registration lifecycle. */
 export class ComfyInputLoaders {
   readonly #loaders = new Map<string, readonly InputLoader[]>();
+  readonly #ports = new Map<string, InputAssetPorts>();
   /** Decode all definitions once when Comfy publishes or refreshes its node catalog. */
   define(definitions: unknown): void {
     if (!isRecord(definitions)) return;
     for (const [classType, value] of Object.entries(definitions)) {
       if (!isRecord(value)) continue;
       const input = isRecord(value.input) ? value.input : {};
+      const ports: Record<string, InputKind> = {};
+      for (const section of ['required', 'optional']) {
+        const entries = isRecord(input[section]) ? input[section] : {};
+        for (const [name, field] of Object.entries(entries)) {
+          const kind = assetKind(Array.isArray(field) ? field[0] : null);
+          if (kind) ports[name] = kind;
+        }
+      }
+      this.#ports.set(
+        classType,
+        Object.freeze({
+          inputs: Object.freeze(ports),
+          outputs: Object.freeze(Array.isArray(value.output) ? value.output.map(assetKind) : []),
+        }),
+      );
       const fields = ['required', 'optional'].flatMap((section) => {
         const entries = isRecord(input[section]) ? input[section] : {};
         return Object.entries(entries).map(([name, field]) => {
@@ -56,6 +77,10 @@ export class ComfyInputLoaders {
   all(classType: string): readonly InputLoader[] {
     return this.#loaders.get(classType) ?? [];
   }
+  /** Copy immutable spatial declarations before queue preparation can await a definition refresh. */
+  assetPorts(): ReadonlyMap<string, InputAssetPorts> {
+    return new Map(this.#ports);
+  }
   /** Resolve an exact field, or the sole unambiguous upload field. */
   read(classType: string, field?: string): InputLoader | null {
     const loaders = this.all(classType);
@@ -65,4 +90,9 @@ export class ComfyInputLoaders {
         : null
       : (loaders.find((loader) => loader.field === field) ?? null);
   }
+}
+
+/** Normalize spatial types while leaving unrelated Comfy sockets opaque. */
+function assetKind(value: unknown): InputKind | null {
+  return value === 'IMAGE' ? 'image' : value === 'MASK' ? 'mask' : null;
 }

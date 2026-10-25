@@ -27,7 +27,7 @@ import type { WorkflowOrderedSubmission } from '../domain/WorkflowSubmission.js'
 import type { PromptId, WorkflowSessionId } from '../domain/ExecutionIdentity.js';
 import type { WorkflowGenerationEvents } from './WorkflowGenerationEvents.js';
 import type { WorkflowResultStore } from './WorkflowResultStore.js';
-import { workflowCanvasImages } from './WorkflowCanvasImages.js';
+import { WorkflowCanvasImages } from './WorkflowCanvasImages.js';
 import type { CanvasMaskHost } from '../../../../../integrations/contracts/CanvasMasks.js';
 import type { CanvasSourceHost } from '../../../../../integrations/contracts/CanvasSources.js';
 
@@ -54,9 +54,9 @@ type Destination<Bytes> = DestinationScope<Bytes> &
       }
   );
 interface CanvasRun<Bytes> {
-  readonly submission: WorkflowOrderedSubmission;
+  submission: WorkflowOrderedSubmission;
   readonly destinations: readonly Destination<Bytes>[];
-  readonly seen: Set<string>;
+  readonly images: WorkflowCanvasImages;
   pending: number;
   settled: boolean;
 }
@@ -168,7 +168,10 @@ export class WorkflowCanvasCoordinator<Bytes> {
       const key = this.#key(event.submission);
       const run = this.#submissions.get(key);
       this.#submissions.delete(key);
-      if (run) this.#runs.set(event.run.promptId, run);
+      if (run) {
+        run.submission = event.run;
+        this.#runs.set(event.run.promptId, run);
+      }
       return;
     }
     if (event.type === 'closed') return this.#close(event.sessionId);
@@ -177,9 +180,10 @@ export class WorkflowCanvasCoordinator<Bytes> {
     if (!run) return;
     if (event.type === 'output') {
       const output: WorkflowCanvasOutput = Object.freeze({
+        ...(run.submission.canvasReturns ? { canvasReturns: run.submission.canvasReturns } : {}),
         run: event.run,
         source: event.source,
-        images: workflowCanvasImages(event.run, event.source.id, event.payload.images, run.seen),
+        images: run.images.read(event.run, event.source.id, event.payload.images),
         state: event.retained
           ? {
               sessionId: event.run.session.sessionId,
@@ -225,7 +229,7 @@ export class WorkflowCanvasCoordinator<Bytes> {
     this.#submissions.set(this.#key(submission), {
       submission,
       destinations,
-      seen: new Set(),
+      images: new WorkflowCanvasImages(),
       pending: 0,
       settled: false,
     });

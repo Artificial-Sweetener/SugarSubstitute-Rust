@@ -70,7 +70,7 @@ test.each([false, true])(
     const api: ComfyPromptQueueApi = { queuePrompt: async () => await response.promise };
     const bridge = new ComfyPromptQueueBridge({
       api,
-      transform: () => transformation.promise,
+      transform: async () => ({ payload: await transformation.promise }),
       ...(direct
         ? { executeDirect: async () => await response.promise, shouldExecuteDirect: () => true }
         : {}),
@@ -189,5 +189,85 @@ test('uses the direct backend receipt execution snapshot including prompt-only c
       ],
     }),
     'prompt:direct',
+  );
+});
+
+test.each([false, true])(
+  'resolves captured return metadata against the authoritative queue graph (direct=%s)',
+  async (direct) => {
+    const contexts = new WorkflowSubmissionContexts();
+    const payload = { output: { '7': { class_type: 'PreviewImage' } } };
+    const prepared = { output: { '8': { class_type: 'PreviewImage' } } };
+    const canonical = { '9': { class_type: 'PreviewImage' } };
+    contexts.associate(payload, { ...a, generation: 0 }, []);
+    const accepted = jest.fn<(context: WorkflowSubmissionContext, id: PromptId) => void>();
+    const resolve = jest.fn(() => [
+      {
+        kind: 'unavailable' as const,
+        executionPath: direct ? '9' : '8',
+        message: 'No registered placement',
+      },
+    ]);
+    const logger = { error: jest.fn(), warn: jest.fn() };
+    const api: ComfyPromptQueueApi = { queuePrompt: async () => ({ prompt_id: 'queued' }) };
+    const bridge = new ComfyPromptQueueBridge({
+      api,
+      transform: async () => ({ payload: prepared, canvas: { resolve } }),
+      ...(direct
+        ? {
+            executeDirect: async (_position, _payload, _options, _submit, preparedInput) => {
+              preparedInput({ payload: prepared, canvas: { resolve } });
+              return { prompt_id: 'queued', execution_prompt: canonical };
+            },
+          }
+        : {}),
+      observer: new ComfyPromptSubmissionObserver({
+        contexts,
+        logger,
+        submitting: (context) => ({ ...context, order: 1 }),
+        accepted,
+      }),
+    });
+    bridge.install();
+    await api.queuePrompt?.(0, payload);
+    expect(resolve).toHaveBeenCalledWith(direct ? canonical : prepared.output);
+    expect(accepted.mock.calls[0]?.[0].canvasReturns?.[0]).toMatchObject({
+      executionPath: direct ? '9' : '8',
+    });
+    expect(logger.error).not.toHaveBeenCalled();
+    bridge.dispose();
+  },
+);
+
+test('keeps accepted job ownership when return attribution fails and refuses native return explicitly', () => {
+  const contexts = new WorkflowSubmissionContexts(),
+    payload = { output: { '7': { class_type: 'PreviewImage' } } };
+  contexts.associate(payload, { ...a, generation: 0 }, []);
+  const accepted = jest.fn<(context: WorkflowSubmissionContext, id: PromptId) => void>(),
+    logger = { error: jest.fn(), warn: jest.fn() };
+  const observer = new ComfyPromptSubmissionObserver({
+    contexts,
+    logger,
+    submitting: (context) => ({ ...context, order: 1 }),
+    accepted,
+  });
+  const observed = observer.capture(payload);
+  observed?.prepared(payload, {
+    resolve() {
+      throw new Error('Malformed canonical graph');
+    },
+  });
+  observed?.accepted({ prompt_id: 'queued' });
+  expect(accepted).toHaveBeenCalledTimes(1);
+  expect(accepted.mock.calls[0]?.[0].canvasReturns).toEqual([
+    {
+      kind: 'unavailable',
+      executionPath: '7',
+      message: 'The inpaint output has no verified captured placement.',
+    },
+  ]);
+  expect(logger.error).toHaveBeenCalledWith(
+    expect.any(String),
+    expect.objectContaining({ error: expect.any(Error) }),
   );
 });

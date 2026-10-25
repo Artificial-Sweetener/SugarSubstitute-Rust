@@ -1,3 +1,4 @@
+import { usesNativeMaskChannels } from '../domain/InputLoader.js';
 import { interpretMaskSource } from '../domain/MaskSourcePixels.js';
 /** Apply mask semantics while image consumers retain actual source content and transparency. */
 export class InputPreviewInterpretation {
@@ -17,10 +18,7 @@ export class InputPreviewInterpretation {
     }
     /** Preserve custom-loader interpretation at native resolution while bounding ordinary display capture. */
     captureSize(maximumSize) {
-        return this.loader.kind === 'image' ||
-            ['LoadImageMask', 'SimpleSyrup.LoadMaskBatch'].includes(this.loader.classType)
-            ? maximumSize
-            : 0;
+        return this.loader.kind === 'image' || usesNativeMaskChannels(this.loader) ? maximumSize : 0;
     }
     /** Decode an actual file without competing with its loader's file codec. */
     file(file, maximumSize) {
@@ -47,7 +45,7 @@ export class InputPreviewInterpretation {
                 throw new Error('The image source did not contain image pixels.');
             return source;
         }
-        if (this.captureSize(maximumSize) !== 0) {
+        if (usesNativeMaskChannels(this.loader)) {
             const channel = settings.inputs.channel;
             if (typeof channel !== 'string')
                 throw new Error('The mask channel must be an authored setting to show a live preview.');

@@ -17,6 +17,7 @@
 import { isSerializedWidget } from '../../graph/WidgetValueSerialization.js';
 import type { ComfyNode } from '../../types/graph.js';
 import { inputLabel, type InputLoader } from '../domain/InputLoader.js';
+import { inputLoaderSettings } from '../domain/InputLoaderSettings.js';
 import type { InputPreviewPort } from '../application/InputEditorPorts.js';
 import { InputBindingController } from '../application/InputBindingController.js';
 import type { CanvasSourceHost } from '../../core/embedded/CanvasRuntime.js';
@@ -110,30 +111,24 @@ export function createComfyInputBinding(
         }
       },
       files: () => sourceFiles(node, loader.field),
-      settings: () => ({
-        kind: loader.kind,
-        classType: loader.classType,
-        field: loader.field,
-        inputs: Object.fromEntries(
-          (node.widgets ?? []).flatMap((widget) => {
-            const value: unknown = widget.value;
-            return widget.name &&
-              widget.name !== loader.field &&
+      settings: () =>
+        inputLoaderSettings(
+          loader,
+          Object.fromEntries(
+            (node.widgets ?? []).flatMap((widget) =>
+              widget.name &&
               isSerializedWidget(widget) &&
               !node.inputs?.some(
                 (input) =>
                   input.link !== null &&
                   input.link !== undefined &&
                   (input.widget?.name ?? input.name) === widget.name,
-              ) &&
-              (typeof value === 'string' ||
-                typeof value === 'boolean' ||
-                (typeof value === 'number' && Number.isFinite(value)))
-              ? [[widget.name, value]]
-              : [];
-          }),
+              )
+                ? [[widget.name, widget.value]]
+                : [],
+            ),
+          ),
         ),
-      }),
       subscribe: (changed) => observeInputLoaderWidgets(node, loader, changed, ports.report),
     },
     state,

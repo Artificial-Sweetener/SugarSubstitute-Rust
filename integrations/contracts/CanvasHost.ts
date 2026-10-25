@@ -45,5 +45,9 @@ export interface CanvasCancellationSource {
 export const WEB_CANVAS: CanvasDescriptor = Object.freeze({
   id: 'web',
   label: 'SugarCubes Web',
-  capabilities: Object.freeze({ displayOutput: true, insertImageLayer: false }),
+  capabilities: Object.freeze({
+    displayOutput: true,
+    insertImageLayer: false,
+    positionImageLayer: false,
+  }),
 });
