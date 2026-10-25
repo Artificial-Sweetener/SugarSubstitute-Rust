@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Prove effective masks overlay coherent composition context through the existing source and field owners. */
+/** Prove effective masks overlay the graph-associated loader's actual image through shared source owners. */
 import { jest } from '@jest/globals';
 import { randomUUID } from 'node:crypto';
 import {
@@ -22,11 +22,13 @@ import {
   sourceCoverage,
 } from '../support/source_mask_fixture.js';
 import { nativeInputFields } from '../support/native_input_fields.js';
+import { maskPreviewAssociation } from '../support/association_graph.js';
 import { encodeCanvasRaster } from '../../../integrations/shared/CanvasRasterEncoding.js';
 import { createComfyInputBinding } from '../../../frontend/comfyui/ui/input_canvas/infrastructure/ComfyInputBinding.js';
 import { MasonryInputEditor } from '../../../frontend/comfyui/ui/input_canvas/presentation/MasonryInputEditor.js';
 import { publishPluginMode } from '../../../frontend/comfyui/ui/core/PluginMode.js';
 import type { ComfyNode } from '../../../frontend/comfyui/ui/types/graph.js';
+import type { CanvasPixelRaster } from '../../../integrations/contracts/CanvasProtocol.generated.js';
 
 beforeAll(() =>
   Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: randomUUID }),
@@ -106,12 +108,14 @@ async function fixture(custom = false) {
     f.ports,
   );
   await binding.initialize();
+  const association = await maskPreviewAssociation(f, node, binding.loader);
   let view: MasonryInputEditor | null = null;
   return {
     ...f,
     node,
     binding,
     painted,
+    association,
     mount: async () => {
       view = new MasonryInputEditor(
         document,
@@ -121,6 +125,7 @@ async function fixture(custom = false) {
         f.report,
         nativeInputFields(node),
         document.createElement('article'),
+        association.source,
       );
       document.body.append(view.element);
       await settled();
@@ -141,13 +146,14 @@ async function fixture(custom = false) {
     },
     dispose: () => {
       view?.dispose();
+      association.dispose();
       binding.dispose();
       f.previews.dispose();
     },
   };
 }
 
-test('shows one black/white wash over the full composition and reinterprets channels without recapturing it', async () => {
+test('shows one wash over the associated composition source and reinterprets channels without recapturing it', async () => {
   const f = await fixture(),
     view = await f.mount();
   const frame = view.element.querySelector('.sc-input-editor__frame'),
@@ -156,7 +162,7 @@ test('shows one black/white wash over the full composition and reinterprets chan
   const captures = f.execute.mock.calls.filter(([query]) => query.type === 'capture');
   expect(captures).toHaveLength(1);
   expect(captures[0]?.[0]).toMatchObject({
-    targets: [{ kind: 'composition' }, { kind: 'selection' }],
+    targets: expect.arrayContaining([{ kind: 'composition' }, { kind: 'selection' }]),
     maximumSize: 256,
   });
   f.binding.changeSource({
@@ -211,11 +217,141 @@ test('keeps custom-loader interpretation separate from a bounded composition and
     f.execute.mock.calls.flatMap(([query]) =>
       query.type === 'capture' ? [query.maximumSize] : [],
     ),
-  ).toEqual([256, 0]);
+  ).toEqual(expect.arrayContaining([256, 0]));
   f.split(false);
   await f.changed();
   expect(f.painted.length).toBeGreaterThan(0);
   expect([...f.painted.at(-1)!.slice(0, 4)]).toEqual([40, 60, 80, 255]);
   expect(f.report).not.toHaveBeenCalled();
+  f.dispose();
+});
+
+test('follows the associated image loader source without recapturing the mask or rebuilding graph relationships', async () => {
+  const f = await fixture(),
+    view = await f.mount();
+  const frame = view.element.querySelector('.sc-input-editor__frame'),
+    canvas = view.element.querySelector('canvas'),
+    initial = f.association.associations.diagnostics();
+  f.association.image.changeSource({
+    kind: 'canvas',
+    canvasId: 'editor',
+    documentId: null,
+    target: { kind: 'current-layer' },
+  });
+  await settled();
+  expect([...f.painted.at(-1)!.slice(0, 8)]).toEqual([0, 51, 26, 160, 204, 255, 230, 160]);
+  const captures = f.execute.mock.calls.filter(([query]) => query.type === 'capture');
+  expect(captures).toHaveLength(2);
+  expect(captures.at(-1)?.[0]).toMatchObject({ targets: [{ kind: 'current-layer' }] });
+  expect(f.association.associations.diagnostics()).toEqual(initial);
+  expect(view.element.querySelector('.sc-input-editor__frame')).toBe(frame);
+  expect(view.element.querySelector('canvas')).toBe(canvas);
+  f.dispose();
+});
+
+test('keeps the rendered image while its replacement loads, then adopts the loaded file aspect ratio', async () => {
+  const f = await fixture(),
+    view = await f.mount();
+  const frame = view.element.querySelector<HTMLElement>('.sc-input-editor__frame'),
+    canvas = view.element.querySelector('canvas'),
+    previous = f.painted.at(-1);
+  let finish: ((pixels: CanvasPixelRaster) => void) | undefined;
+  f.files.load.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  f.association.image.changeSource({ kind: 'file', file: 'associated-image.png' });
+  await settled();
+  expect(canvas?.hidden).toBe(false);
+  expect(frame?.style.aspectRatio).toBe('3 / 2');
+  expect(f.painted.at(-1)).toBe(previous);
+  finish?.(
+    encodeCanvasRaster(
+      2,
+      2,
+      'rgba8',
+      Uint8Array.from(Array.from({ length: 4 }, () => [200, 40, 100, 255]).flat()),
+    ),
+  );
+  await settled();
+  expect([...f.painted.at(-1)!.slice(0, 4)]).toEqual([132, 52, 82, 255]);
+  expect(frame?.style.aspectRatio).toBe('2 / 2');
+  expect(view.element.querySelector('canvas')).toBe(canvas);
+  expect(view.element.querySelector('.sc-input-editor__frame')).toBe(frame);
+  expect(f.report).not.toHaveBeenCalled();
+  f.dispose();
+});
+
+test('uses solid black for absent, empty and unavailable associated images and recovers without a composition fallback', async () => {
+  const f = await fixture();
+  f.association.disconnect(1);
+  await settled();
+  const view = await f.mount(),
+    frame = view.element.querySelector<HTMLElement>('.sc-input-editor__frame');
+  expect(frame?.dataset.content).toBe('black');
+  expect(f.execute.mock.calls.filter(([query]) => query.type === 'capture')).toHaveLength(0);
+  f.association.connect(3, f.association.imageNode, 0, f.association.consumer, 0);
+  await settled();
+  expect(frame?.dataset.content).toBe('pixels');
+  f.association.image.changeSource({ kind: 'file', file: null });
+  await settled();
+  const count = f.execute.mock.calls.filter(([query]) => query.type === 'capture').length;
+  expect(frame?.dataset.content).toBe('black');
+  expect(frame?.querySelector('canvas')?.hidden).toBe(true);
+  const execute = f.execute.getMockImplementation();
+  if (!execute) throw new Error('Missing source boundary.');
+  let selected = false;
+  f.execute.mockImplementation(async (query) => {
+    const value = await execute(query);
+    return value.kind === 'context' ? { ...value, currentLayerId: selected ? 'a' : null } : value;
+  });
+  await f.changed();
+  f.association.image.changeSource({
+    kind: 'canvas',
+    canvasId: 'editor',
+    documentId: null,
+    target: { kind: 'current-layer' },
+  });
+  await settled();
+  expect(frame?.dataset.content).toBe('black');
+  expect(f.execute.mock.calls.filter(([query]) => query.type === 'capture')).toHaveLength(count);
+  f.files.load.mockRejectedValueOnce(new Error('File cannot be decoded'));
+  f.association.image.changeSource({ kind: 'file', file: 'broken.png' });
+  await settled();
+  expect(frame?.dataset.content).toBe('black');
+  expect(f.report).toHaveBeenCalledWith(
+    expect.objectContaining({ message: 'File cannot be decoded' }),
+  );
+  selected = true;
+  await f.changed();
+  f.association.image.changeSource({
+    kind: 'canvas',
+    canvasId: 'editor',
+    documentId: null,
+    target: { kind: 'current-layer' },
+  });
+  await settled();
+  expect(frame?.dataset.content).toBe('pixels');
+  expect([...f.painted.at(-1)!.slice(0, 4)]).toEqual([0, 51, 26, 160]);
+  f.dispose();
+});
+
+test('clears to black for a competing image connection and restores the actual image after disconnect', async () => {
+  const f = await fixture(),
+    view = await f.mount();
+  f.association.consumer.inputs!.push({ name: 'secondImage', type: 'IMAGE', link: null });
+  f.association.connect(3, f.association.imageNode, 0, f.association.consumer, 2);
+  await settled();
+  expect(view.element.querySelector<HTMLElement>('.sc-input-editor__frame')?.dataset.content).toBe(
+    'black',
+  );
+  f.association.disconnect(3);
+  await settled();
+  expect(view.element.querySelector<HTMLElement>('.sc-input-editor__frame')?.dataset.content).toBe(
+    'pixels',
+  );
+  expect([...f.painted.at(-1)!.slice(0, 4)]).toEqual([40, 60, 80, 255]);
   f.dispose();
 });

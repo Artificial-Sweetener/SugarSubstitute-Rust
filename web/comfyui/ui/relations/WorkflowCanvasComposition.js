@@ -35,6 +35,13 @@ export function createWorkflowCanvasComposition(options) {
     const window = options.document.defaultView;
     if (window)
         workflowExecution.bindCanvas(workflowFields.canvas, window, options.notifyCanvas);
-    const canvasInputs = createCanvasInputs(options.document, (id) => workflowExecution.canvases.sourceHost(id), (id) => workflowExecution.canvases.maskHost(id), options.reportPresentationError);
+    const canvasInputs = createCanvasInputs({
+        document: options.document,
+        host: (id) => workflowExecution.canvases.sourceHost(id),
+        legacyHost: (id) => workflowExecution.canvases.maskHost(id),
+        graph: () => options.app?.graph,
+        report: options.reportPresentationError,
+        logger: options.logger,
+    });
     return { workflowExecution, workflowFields, canvasInputs };
 }

@@ -22,6 +22,7 @@ import {
   sourceCoverage,
 } from '../support/source_mask_fixture.js';
 import { nativeInputFields } from '../support/native_input_fields.js';
+import { maskPreviewAssociation } from '../support/association_graph.js';
 import { nativePresentationWidgets } from '../../../frontend/comfyui/ui/surface/NativePresentationWidgets.js';
 import { createComfyInputBinding } from '../../../frontend/comfyui/ui/input_canvas/infrastructure/ComfyInputBinding.js';
 import { MasonryInputEditor } from '../../../frontend/comfyui/ui/input_canvas/presentation/MasonryInputEditor.js';
@@ -88,6 +89,7 @@ async function fixture(ordered = false, custom = false) {
   };
   const binding = createComfyInputBinding(node, loader, f.ports);
   await binding.initialize();
+  const association = await maskPreviewAssociation(f, node, loader);
   const view = new MasonryInputEditor(
     document,
     binding,
@@ -96,6 +98,7 @@ async function fixture(ordered = false, custom = false) {
     f.report,
     nativeInputFields(node),
     document.createElement('article'),
+    association.source,
   );
   document.body.append(view.element);
   await settled();
@@ -104,6 +107,7 @@ async function fixture(ordered = false, custom = false) {
     node,
     binding,
     view,
+    association,
     context: () => context,
     changeContext: async (next: CanvasSourceContext) => {
       context = next;
@@ -113,6 +117,7 @@ async function fixture(ordered = false, custom = false) {
     },
     dispose: () => {
       view.dispose();
+      association.dispose();
       binding.dispose();
       f.previews.dispose();
     },
@@ -291,9 +296,9 @@ test('an unavailable ordered target leaves other previews live and still blocks 
   expect(f.execute.mock.calls.filter(([query]) => query.type === 'capture')).toHaveLength(captures);
   expect(f.report).not.toHaveBeenCalled();
   await f.changeContext({ ...f.context(), document: null, layers: [], currentLayerId: null });
-  expect(f.view.element.querySelector('.sc-input-editor__message')?.textContent).toBe(
-    'Open a document',
-  );
+  expect(
+    f.view.element.querySelector('.sc-input-editor__frame')?.getAttribute('data-content'),
+  ).toBe('black');
   expect(
     f.view.element.querySelector<HTMLElement>('.sc-input-editor__frame')?.style.aspectRatio,
   ).toBe('3 / 2');
@@ -310,7 +315,9 @@ test('reserves a full canvas placeholder after the final entry is removed and ke
   expect(empty?.querySelector<HTMLElement>('.sc-input-editor__frame')?.style.aspectRatio).toBe(
     '3 / 2',
   );
-  expect(empty?.textContent).toContain('Choose a source');
+  expect(empty?.querySelector('.sc-input-editor__frame')?.getAttribute('data-content')).toBe(
+    'black',
+  );
   expect(f.view.element.querySelector('.sc-input-editor__rows')?.nextElementSibling).toBe(
     f.view.controlsElement,
   );
@@ -334,6 +341,7 @@ test('restores an unchosen file source as a canvas-shaped placeholder after remo
     f.report,
     nativeInputFields(f.node),
     document.createElement('article'),
+    f.association.source,
   );
   document.body.append(restored.element);
   await settled();

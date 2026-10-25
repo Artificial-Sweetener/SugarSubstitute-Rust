@@ -13,27 +13,27 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Composite effective mask coverage once over the unchanged full-color document preview. */
+/** Composite effective mask coverage once over the associated loader's full-color image. */
 import { decodeCanvasRaster } from '../../core/embedded/CanvasRuntime.js';
 import { INPUT_PREVIEW_MAXIMUM } from '../domain/InputPreviewResolution.js';
-/** Apply one half-opacity neutral wash, retaining soft coverage and straight-alpha composition pixels. */
-export function maskPreviewPixels(mask, composition) {
-    if (mask.format !== 'coverage8' || composition.format !== 'rgba8')
-        throw new Error('A mask preview requires an effective monochrome mask and a color composition.');
-    if (composition.width > INPUT_PREVIEW_MAXIMUM || composition.height > INPUT_PREVIEW_MAXIMUM)
-        throw new Error('The composition preview exceeds its display limit.');
-    const coverage = decodeCanvasRaster(mask), image = decodeCanvasRaster(composition), result = new Uint8ClampedArray(image.length);
-    for (let y = 0; y < composition.height; y++)
-        for (let x = 0; x < composition.width; x++) {
-            const value = sampleCoverage(coverage, mask.width, mask.height, ((x + 0.5) * mask.width) / composition.width - 0.5, ((y + 0.5) * mask.height) / composition.height - 0.5);
-            const offset = (y * composition.width + x) * 4, retainedAlpha = ((image[offset + 3] ?? 0) / 255) * 0.5, alpha = 0.5 + retainedAlpha;
+/** Apply one half-opacity neutral wash, retaining soft coverage and straight-alpha image pixels. */
+export function maskPreviewPixels(mask, image) {
+    if (mask.format !== 'coverage8' || image.format !== 'rgba8')
+        throw new Error('A mask preview requires an effective monochrome mask and a color image.');
+    if (image.width > INPUT_PREVIEW_MAXIMUM || image.height > INPUT_PREVIEW_MAXIMUM)
+        throw new Error('The image preview exceeds its display limit.');
+    const coverage = decodeCanvasRaster(mask), source = decodeCanvasRaster(image), result = new Uint8ClampedArray(source.length);
+    for (let y = 0; y < image.height; y++)
+        for (let x = 0; x < image.width; x++) {
+            const value = sampleCoverage(coverage, mask.width, mask.height, ((x + 0.5) * mask.width) / image.width - 0.5, ((y + 0.5) * mask.height) / image.height - 0.5);
+            const offset = (y * image.width + x) * 4, retainedAlpha = ((source[offset + 3] ?? 0) / 255) * 0.5, alpha = 0.5 + retainedAlpha;
             for (let channel = 0; channel < 3; channel++)
-                result[offset + channel] = Math.round((value * 0.5 + (image[offset + channel] ?? 0) * retainedAlpha) / alpha);
+                result[offset + channel] = Math.round((value * 0.5 + (source[offset + channel] ?? 0) * retainedAlpha) / alpha);
             result[offset + 3] = Math.round(alpha * 255);
         }
     return result;
 }
-/** Match pixel-center bilinear scaling when native loader output geometry differs from the composition. */
+/** Match pixel-center bilinear scaling when native loader output geometry differs from the image. */
 function sampleCoverage(bytes, width, height, x, y) {
     x = Math.max(0, Math.min(width - 1, x));
     y = Math.max(0, Math.min(height - 1, y));

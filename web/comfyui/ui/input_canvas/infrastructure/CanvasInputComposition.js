@@ -9,8 +9,10 @@ import { ComfyInputPreparation } from './ComfyInputPreparation.js';
 import { MasonryInputHost } from './MasonryInputHost.js';
 import { ComfyInputBindings } from './ComfyInputBindings.js';
 import { BrowserInputPreviews } from './BrowserInputPreviews.js';
+import { ComfyInputAssociations } from './ComfyInputAssociations.js';
 /** Keep definition registration, execution preparation and view lifetime under explicit owners. */
-export function createCanvasInputs(document, host, legacyHost, report) {
+export function createCanvasInputs(options) {
+    const { document, host, legacyHost, report } = options;
     const loaders = new ComfyInputLoaders();
     const assets = new BrowserCanvasSourceAssets((input, init) => fetch(input, init));
     const capture = new CanvasSourceCapture(host);
@@ -25,16 +27,34 @@ export function createCanvasInputs(document, host, legacyHost, report) {
         verifiedFile: (file) => assets.verified(file),
         report,
     });
-    const masonry = new MasonryInputHost(document, loaders, previews, (file) => assets.file(file), report, bindings);
-    document.defaultView?.addEventListener('pagehide', () => bindings.clear(), { once: true });
+    const associations = new ComfyInputAssociations(loaders, bindings, options.graph, report, options.logger);
+    const masonry = new MasonryInputHost(document, loaders, previews, (file) => assets.file(file), report, bindings, associations);
+    document.defaultView?.addEventListener('pagehide', () => {
+        associations.dispose();
+        bindings.clear();
+    }, { once: true });
     return {
         loaders,
         preparation: new ComfyInputPreparation(loaders, new InputSourcePreparation(capture, assets), defaults),
         masonry,
         bindings,
+        associations,
+        define: (definitions) => {
+            loaders.define(definitions);
+            associations.definitionsChanged();
+        },
+        setup: () => {
+            associations.start();
+            masonry.setup();
+        },
         beforeConfigureGraph: () => {
             masonry.beforeConfigureGraph();
+            associations.beforeConfigureGraph();
             bindings.clear();
+        },
+        afterConfigureGraph: async () => {
+            associations.start();
+            await bindings.ready();
         },
     };
 }
