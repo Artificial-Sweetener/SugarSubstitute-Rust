@@ -5,6 +5,7 @@ use super::*;
 use sugarsubstitute_image_ops::{Extent, Region};
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 mod harness;
+mod phase;
 
 #[test]
 fn cursor_centered_zoom_preserves_the_document_point() -> TestResult {

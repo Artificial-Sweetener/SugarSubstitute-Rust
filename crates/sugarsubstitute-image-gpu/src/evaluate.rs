@@ -157,14 +157,20 @@ impl<S: RasterSource> GpuEvaluator<S> {
                 }
                 computed
             }
-            Operation::Rectangle { shape, .. } => {
+            Operation::Rectangle { shape, translation, .. } => {
                 let mut coefficients = [0; 256];
                 for index in 0..region.width().max(region.height()) as usize {
                     coefficients[index * 2] = shape
-                        .axis_coverage(SamplingAxis::Horizontal, region.x() + index as u32)
+                        .axis_coverage(
+                            SamplingAxis::Horizontal,
+                            i64::from(region.x()) + index as i64 - i64::from(translation[0]),
+                        )
                         .to_bits();
                     coefficients[index * 2 + 1] = shape
-                        .axis_coverage(SamplingAxis::Vertical, region.y() + index as u32)
+                        .axis_coverage(
+                            SamplingAxis::Vertical,
+                            i64::from(region.y()) + index as i64 - i64::from(translation[1]),
+                        )
                         .to_bits();
                 }
                 let mut parameters = Parameters::new(1, region);

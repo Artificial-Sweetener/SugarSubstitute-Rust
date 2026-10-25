@@ -13,7 +13,8 @@ pub enum Filter {
 }
 
 /// Axis-aligned inverse mapping from output pixel corners to input pixel corners.
-/// Pixel centers map as `(coordinate + 0.5) * scale + offset - 0.5` in input-index space.
+/// Pixel centers map as `(coordinate - translation + 0.5) * scale + offset - 0.5`.
+/// Integer translation is subtracted before floating-point conversion, preserving exact phases.
 /// Reconstruction clamps source edges. Finite image footprints are separate coverage nodes,
 /// allowing a minified one-pixel pyramid axis to retain correct geometric coverage.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -21,6 +22,7 @@ pub struct Sampling {
     scale: [f64; 2],
     offset: [f64; 2],
     filter: Filter,
+    translation: [i32; 2],
 }
 impl Sampling {
     /// Construct finite positive inverse scales and finite input-space offsets.
@@ -32,7 +34,7 @@ impl Sampling {
         {
             return Err(ImageError::Invalid("Invalid image sampling transform"));
         }
-        Ok(Self { scale, offset, filter: Filter::Lanczos3 })
+        Ok(Self { scale, offset, filter: Filter::Lanczos3, translation: [0; 2] })
     }
     /// Map a complete source extent into a complete target extent with aligned pixel corners.
     pub fn resize(source: Extent, target: Extent) -> Self {
@@ -43,15 +45,35 @@ impl Sampling {
             ],
             offset: [0.0; 2],
             filter: Filter::Lanczos3,
+            translation: [0; 2],
         }
     }
     /// Inverse scales in input pixels per output pixel.
     pub const fn scale(self) -> [f64; 2] {
         self.scale
     }
-    /// Input pixel-corner coordinates corresponding to output pixel corner zero.
+    /// Input pixel-corner coordinates corresponding to unshifted output pixel corner zero.
     pub const fn offset(self) -> [f64; 2] {
         self.offset
+    }
+    /// Move reconstructed content by exact output pixels while preserving its original sample phase.
+    pub const fn with_output_translation(mut self, translation: [i32; 2]) -> Self {
+        self.translation = translation;
+        self
+    }
+    /// Exact output-pixel displacement; positive values move content right and down.
+    pub const fn output_translation(self) -> [i32; 2] {
+        self.translation
+    }
+    pub(crate) fn unshifted_index(self, axis: usize, output: u32) -> i64 {
+        i64::from(output) - i64::from(self.translation[axis])
+    }
+    pub(crate) fn center(self, axis: usize, output: u32) -> f64 {
+        crate::kernel::pixel_center(
+            self.unshifted_index(axis, output),
+            self.scale[axis],
+            self.offset[axis],
+        )
     }
     /// Select explicit reconstruction semantics while preserving global sample coordinates.
     pub const fn with_filter(mut self, filter: Filter) -> Self {
@@ -76,7 +98,8 @@ impl Sampling {
             if input > 1 && self.scale[axis] > 2.0 && !sampled_raster {
                 return Err(ImageError::Invalid("Large reductions require pyramid steps"));
             }
-            if !(f64::from(output) * self.scale[axis] + self.offset[axis]).is_finite() {
+            if [0, output - 1].into_iter().any(|position| !self.center(axis, position).is_finite())
+            {
                 return Err(ImageError::Invalid("Image sampling coordinate overflow"));
             }
         }

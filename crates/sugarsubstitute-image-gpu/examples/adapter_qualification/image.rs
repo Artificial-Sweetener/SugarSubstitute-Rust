@@ -50,6 +50,7 @@ fn graph(context: &JobContext) -> Result<(Graph, Vec<Case>, NodeId)> {
     let vector = graph.add(Operation::Rectangle {
         extent,
         shape: VectorRectangle::new([126.375, 1.25, 256.75, 129.125], color)?,
+        translation: [0; 2],
     })?;
     let exposure = graph.add(Operation::Exposure { input: source, stops: 1.25 })?;
     let over = graph.add(Operation::Over { background: source, foreground: vector })?;
@@ -91,7 +92,7 @@ fn graph(context: &JobContext) -> Result<(Graph, Vec<Case>, NodeId)> {
     })?;
     let near = Region::new(125, 2, 128, 127)?;
     let mut cases = Vec::new();
-    cases.try_reserve_exact(20)?;
+    cases.try_reserve_exact(24)?;
     for (name, node) in [
         ("source", source),
         ("solid_hdr", solid),
@@ -111,6 +112,30 @@ fn graph(context: &JobContext) -> Result<(Graph, Vec<Case>, NodeId)> {
         node: sparse,
         region: Region::new(0, 0, 128, 127)?,
     });
+    let translated_lanczos = graph.add(Operation::Resample {
+        input: mix,
+        extent: target,
+        sampling: sampling.with_output_translation([13, -7]),
+    })?;
+    let translated_sparse = graph.add(Operation::Resample {
+        input: source,
+        extent: target,
+        sampling: Sampling::new([15.5, 9.25], [-100.5, -20.25])?
+            .with_filter(Filter::Nearest)
+            .with_output_translation([-13, 7]),
+    })?;
+    let translated_vector = graph.add(Operation::Rectangle {
+        extent,
+        shape: VectorRectangle::new([126.375, 1.25, 256.75, 129.125], color)?,
+        translation: [13, -7],
+    })?;
+    for (name, node, region) in [
+        ("translated_lanczos", translated_lanczos, near),
+        ("translated_sparse_nearest", translated_sparse, Region::new(1, 1, 128, 127)?),
+        ("translated_vector", translated_vector, near),
+    ] {
+        cases.push(Case { name, node, region });
+    }
     cases.push(Case {
         name: "pyramid_odd_edges",
         node: pyramid,
@@ -124,11 +149,25 @@ fn graph(context: &JobContext) -> Result<(Graph, Vec<Case>, NodeId)> {
     let distant = graph.add(Operation::Rectangle {
         extent: distant_extent,
         shape: VectorRectangle::new([99_999_872.375, -1.25, 100_000_000.75, 99.125], color)?,
+        translation: [0; 2],
     })?;
     cases.push(Case {
         name: "distant_vector_precision",
         node: distant,
         region: Region::new(99_999_873, 1, 128, 99)?,
+    });
+    let boundary = graph.add(Operation::Rectangle {
+        extent: Extent::new(i32::MAX as u32, 128)?,
+        shape: VectorRectangle::new(
+            [f64::from(u32::MAX) - 1.5, 0.25, f64::from(u32::MAX) + 0.75, 127.5],
+            color,
+        )?,
+        translation: [i32::MIN, 0],
+    })?;
+    cases.push(Case {
+        name: "last_column_vector_coverage",
+        node: boundary,
+        region: Region::new(i32::MAX as u32 - 1, 0, 1, 128)?,
     });
     let singleton = graph.add(Operation::Raster { asset: ASSET, extent: Extent::new(1, 128)? })?;
     for (name, filter) in [

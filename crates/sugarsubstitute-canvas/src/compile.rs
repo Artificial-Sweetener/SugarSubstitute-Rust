@@ -48,14 +48,8 @@ impl DocumentSnapshot {
         let target = view.surface();
         let mut graph = Graph::new(graph_capacity(self), memory)?;
         let background = graph.add(Operation::Solid { extent: target, color: matte })?;
-        let last = view.document_at([f64::from(target.width()), f64::from(target.height())])?;
-        let origin = view.origin();
         let document = self.extent();
-        if origin[0] >= f64::from(document.width())
-            || origin[1] >= f64::from(document.height())
-            || last[0] <= 0.0
-            || last[1] <= 0.0
-        {
+        if !view.intersects_document(document) {
             return Ok(CompiledView { graph, output: background });
         }
         let mut composite =
@@ -199,9 +193,10 @@ fn raster_node(
     ];
     let sampling = Sampling::new(
         [ratios[0] / view.zoom(), ratios[1] / view.zoom()],
-        [view.origin()[0] * ratios[0], view.origin()[1] * ratios[1]],
+        [view.untranslated().origin()[0] * ratios[0], view.untranslated().origin()[1] * ratios[1]],
     )?
-    .with_filter(filter);
+    .with_filter(filter)
+    .with_output_translation(view.pixel_translation());
     let sampled =
         graph.add(Operation::Resample { input: selected, extent: view.surface(), sampling })?;
     if !clip {
@@ -233,8 +228,13 @@ fn vector_node(
             graph.add(Operation::Solid { extent: view.surface(), color: Pixel::TRANSPARENT })?
         );
     }
-    let start = view.device_at([bounds[0], bounds[1]])?;
-    let end = view.device_at([bounds[2], bounds[3]])?;
+    let phase = view.untranslated();
+    let start = phase.device_at([bounds[0], bounds[1]])?;
+    let end = phase.device_at([bounds[2], bounds[3]])?;
     let shape = VectorRectangle::new([start[0], start[1], end[0], end[1]], shape.color())?;
-    Ok(graph.add(Operation::Rectangle { extent: view.surface(), shape })?)
+    Ok(graph.add(Operation::Rectangle {
+        extent: view.surface(),
+        shape,
+        translation: view.pixel_translation(),
+    })?)
 }

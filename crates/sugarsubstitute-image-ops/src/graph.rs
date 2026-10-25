@@ -50,13 +50,14 @@ impl VectorRectangle {
     }
     /// Analytic coverage of a unit pixel interval along one axis, evaluated before GPU rebasing.
     /// Original document coordinates retain f64 precision even for distant vector edges.
-    pub fn axis_coverage(self, axis: crate::SamplingAxis, position: u32) -> f32 {
+    /// Subtract integer output translation before supplying this signed image-grid position.
+    pub fn axis_coverage(self, axis: crate::SamplingAxis, position: i64) -> f32 {
         let axis = match axis {
             crate::SamplingAxis::Horizontal => 0,
             crate::SamplingAxis::Vertical => 1,
         };
-        ((f64::from(position) + 1.0).min(self.bounds[axis + 2])
-            - f64::from(position).max(self.bounds[axis]))
+        ((position as f64 + 1.0).min(self.bounds[axis + 2])
+            - (position as f64).max(self.bounds[axis]))
         .clamp(0.0, 1.0) as f32
     }
 }
@@ -84,6 +85,8 @@ pub enum Operation {
         extent: Extent,
         /// Editable geometry and fill.
         shape: VectorRectangle,
+        /// Exact output-pixel displacement, applied to indices before coverage evaluation.
+        translation: [i32; 2],
     },
     /// Explicit pixel-center reconstruction with clamped source edges and a selected filter.
     /// Filtered reductions use explicit pyramid steps of at most two per axis.
@@ -354,7 +357,7 @@ impl Graph {
     }
     fn hash(&self, operation: Operation, extent: Extent) -> Result<[u8; 32], ImageError> {
         let mut hash = Sha256::new();
-        hash.update(b"sugarsubstitute-image-ops-linear-srgb-filtered-clamp-v2\0");
+        hash.update(b"sugarsubstitute-image-ops-linear-srgb-filtered-clamp-v3\0");
         hash.update(extent.width().to_le_bytes());
         hash.update(extent.height().to_le_bytes());
         for input in operation.inputs().into_iter().flatten() {
@@ -370,8 +373,11 @@ impl Graph {
                 hash.update([1]);
                 Some(color)
             }
-            Operation::Rectangle { shape, .. } => {
+            Operation::Rectangle { shape, translation, .. } => {
                 hash.update([2]);
+                for coordinate in translation {
+                    hash.update(coordinate.to_le_bytes());
+                }
                 for coordinate in shape.bounds {
                     hash.update(coordinate.to_le_bytes());
                 }
@@ -385,6 +391,9 @@ impl Graph {
                 }]);
                 for value in sampling.scale().into_iter().chain(sampling.offset()) {
                     hash.update(value.to_le_bytes());
+                }
+                for coordinate in sampling.output_translation() {
+                    hash.update(coordinate.to_le_bytes());
                 }
                 None
             }

@@ -4,7 +4,7 @@
 use crate::kernel::{
     AxisKernel as Kernel, MAX_SAMPLING_TAPS, SampleTap as Tap, nearest_coordinate,
 };
-use crate::{Extent, ImageError, Pixel, Sampling, buffer::Buffer};
+use crate::{Extent, ImageError, Pixel, Sampling, SamplingAxis, buffer::Buffer};
 use sugarsubstitute_contracts::execution::JobContext;
 
 /// Reconstruct a preview directly from admitted dependency pixels, without convolution scratch.
@@ -16,7 +16,12 @@ pub(crate) fn nearest(
     context: &JobContext,
 ) -> Result<(), ImageError> {
     let coordinate = |value: u32, axis: usize, length: u32| {
-        nearest_coordinate(value, length, sampling.scale()[axis], sampling.offset()[axis])
+        nearest_coordinate(
+            sampling.unshifted_index(axis, value),
+            length,
+            sampling.scale()[axis],
+            sampling.offset()[axis],
+        )
     };
     for y in output.region.y()..output.region.bottom() {
         crate::evaluate::check(context)?;
@@ -46,11 +51,10 @@ pub(crate) fn render(
     let mut horizontal = [Kernel { taps: [Tap::default(); MAX_SAMPLING_TAPS], length: 0 };
         crate::TILE_EDGE as usize];
     for (x, kernel) in horizontal[..region.width() as usize].iter_mut().enumerate() {
-        *kernel = Kernel::new(
+        *kernel = sampling.axis_kernel(
+            SamplingAxis::Horizontal,
             region.x() + x as u32,
             source.width(),
-            sampling.scale()[0],
-            sampling.offset()[0],
         )?;
     }
     for y in input.region.y()..input.region.bottom() {
@@ -70,12 +74,8 @@ pub(crate) fn render(
     }
     for y in 0..region.height() {
         crate::evaluate::check(context)?;
-        let kernel = Kernel::new(
-            region.y() + y,
-            source.height(),
-            sampling.scale()[1],
-            sampling.offset()[1],
-        )?;
+        let kernel =
+            sampling.axis_kernel(SamplingAxis::Vertical, region.y() + y, source.height())?;
         for x in 0..region.width() {
             let mut value = [0.0; 4];
             for tap in &kernel.taps[..kernel.length] {

@@ -6,6 +6,7 @@ use harness::{TestResult, run};
 use std::sync::Arc;
 use sugarsubstitute_contracts::execution::JobContext;
 mod harness;
+mod phase;
 mod preview;
 mod reference;
 mod retention;
@@ -347,7 +348,7 @@ fn vector_coverage_masks_exposure_and_composition_use_one_graph() -> TestResult 
             graph.add(Operation::Solid { extent, color: Pixel::linear(0.5, 0.0, 0.0, 1.0)? })?;
         let adjusted = graph.add(Operation::Exposure { input: image, stops: 1.0 })?;
         let shape = VectorRectangle::new([0.5, 0.5, 2.0, 2.0], Pixel::linear(1.0, 1.0, 1.0, 1.0)?)?;
-        let mask = graph.add(Operation::Rectangle { extent, shape })?;
+        let mask = graph.add(Operation::Rectangle { extent, shape, translation: [0; 2] })?;
         let masked = graph.add(Operation::Mask { input: adjusted, mask })?;
         let output = graph.add(Operation::Over { background, foreground: masked })?;
         let mut evaluator = Evaluator::new(graph, Grid { extent }, 8, context.memory())?;

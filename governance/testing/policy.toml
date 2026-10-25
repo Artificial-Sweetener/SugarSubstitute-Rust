@@ -11,19 +11,19 @@ minimum_tests = 11
 package = "sugarsubstitute-canvas"
 root = "crates/sugarsubstitute-canvas"
 concern = "Camera coordinate invariants, exact exposed-edge damage, retained source geometry and reversible document revision publication"
-minimum_tests = 8
+minimum_tests = 10
 
 [[owners]]
 package = "sugarsubstitute-canvas-render"
 root = "crates/sugarsubstitute-canvas-render"
 concern = "Overlap-safe CPU repairs, stale-frame rejection, bounded GPU damage inventories and native hardware comparison of immutable retained display copies against CPU and full GPU redraw, including finite-admission 4K replacement"
-minimum_tests = 16
+minimum_tests = 18
 
 [[owners]]
 package = "sugarsubstitute-image-ops"
 root = "crates/sugarsubstitute-image-ops"
 concern = "Graph identity, shared CPU/GPU sampling and retention, exact clipped tile inventories, pyramid semantics, vector coverage, dirty dependencies and original execution admission"
-minimum_tests = 34
+minimum_tests = 37
 
 [[owners]]
 package = "sugarsubstitute-contracts"

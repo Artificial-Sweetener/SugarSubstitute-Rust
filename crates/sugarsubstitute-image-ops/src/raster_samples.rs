@@ -20,9 +20,12 @@ impl RasterSamples {
         if sampling.filter() != Filter::Nearest
             || region.width() > TILE_EDGE
             || region.height() > TILE_EDGE
-            || !(f64::from(region.right()) * sampling.scale()[0] + sampling.offset()[0]).is_finite()
-            || !(f64::from(region.bottom()) * sampling.scale()[1] + sampling.offset()[1])
-                .is_finite()
+            || [region.x(), region.right() - 1]
+                .into_iter()
+                .any(|x| !sampling.center(0, x).is_finite())
+            || [region.y(), region.bottom() - 1]
+                .into_iter()
+                .any(|y| !sampling.center(1, y).is_finite())
         {
             return Err(ImageError::Invalid("Invalid sparse raster sampling request"));
         }
@@ -34,7 +37,7 @@ impl RasterSamples {
         };
         for (index, column) in result.columns[..region.width() as usize].iter_mut().enumerate() {
             *column = nearest_coordinate(
-                region.x() + index as u32,
+                sampling.unshifted_index(0, region.x() + index as u32),
                 source.width(),
                 sampling.scale()[0],
                 sampling.offset()[0],
@@ -42,7 +45,7 @@ impl RasterSamples {
         }
         for (index, row) in result.rows[..region.height() as usize].iter_mut().enumerate() {
             *row = nearest_coordinate(
-                region.y() + index as u32,
+                sampling.unshifted_index(1, region.y() + index as u32),
                 source.height(),
                 sampling.scale()[1],
                 sampling.offset()[1],

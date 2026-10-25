@@ -27,13 +27,13 @@ pub struct AxisKernel {
 }
 impl AxisKernel {
     pub(crate) fn new(
-        output: u32,
+        output: i64,
         source: u32,
         ratio: f64,
         offset: f64,
     ) -> Result<Self, ImageError> {
         let scale = ratio.max(1.0);
-        let center = (f64::from(output) + 0.5) * ratio + offset - 0.5;
+        let center = pixel_center(output, ratio, offset) - 0.5;
         if source == 1
             || center + 3.0 * scale < 0.0
             || center - 3.0 * scale > f64::from(source - 1)
@@ -121,15 +121,22 @@ impl Sampling {
         if source_length == 0 || (source_length > 1 && ratio > 2.0) {
             return Err(ImageError::Invalid("Invalid bounded sampling source or reduction"));
         }
-        if !((f64::from(output) + 0.5) * ratio + offset).is_finite() {
+        if !self.center(axis, output).is_finite() {
             return Err(ImageError::Invalid("Image sampling coordinate overflow"));
         }
         match self.filter() {
-            Filter::Lanczos3 => AxisKernel::new(output, source_length, ratio, offset),
+            Filter::Lanczos3 => {
+                AxisKernel::new(self.unshifted_index(axis, output), source_length, ratio, offset)
+            }
             Filter::Nearest => {
                 let mut taps = [SampleTap::default(); MAX_SAMPLING_TAPS];
                 taps[0] = SampleTap {
-                    coordinate: nearest_coordinate(output, source_length, ratio, offset),
+                    coordinate: nearest_coordinate(
+                        self.unshifted_index(axis, output),
+                        source_length,
+                        ratio,
+                        offset,
+                    ),
                     weight: 1.0,
                 };
                 Ok(AxisKernel { taps, length: 1 })
@@ -137,6 +144,9 @@ impl Sampling {
         }
     }
 }
-pub(crate) fn nearest_coordinate(output: u32, source: u32, ratio: f64, offset: f64) -> u32 {
-    ((f64::from(output) + 0.5) * ratio + offset).floor().clamp(0.0, f64::from(source - 1)) as u32
+pub(crate) fn pixel_center(output: i64, ratio: f64, offset: f64) -> f64 {
+    (output as f64 + 0.5) * ratio + offset
+}
+pub(crate) fn nearest_coordinate(output: i64, source: u32, ratio: f64, offset: f64) -> u32 {
+    pixel_center(output, ratio, offset).floor().clamp(0.0, f64::from(source - 1)) as u32
 }

@@ -14,6 +14,7 @@ pub struct Viewport {
     surface: Extent,
     origin: [f64; 2],
     zoom: f64,
+    translation: [i32; 2],
 }
 impl Viewport {
     /// Create an actual-size view with its document origin at the surface origin.
@@ -21,7 +22,7 @@ impl Viewport {
     /// Rejects surfaces beyond the 16384-pixel edge bound; image/document extents are independent.
     pub fn new(surface: Extent) -> Result<Self, CanvasError> {
         validate_surface(surface)?;
-        Ok(Self { surface, origin: [0.0; 2], zoom: 1.0 })
+        Ok(Self { surface, origin: [0.0; 2], zoom: 1.0, translation: [0; 2] })
     }
     /// Current drawable dimensions in physical device pixels.
     pub const fn surface(self) -> Extent {
@@ -29,7 +30,10 @@ impl Viewport {
     }
     /// Document coordinates at the physical viewport's top-left pixel corner.
     pub const fn origin(self) -> [f64; 2] {
-        self.origin
+        [
+            self.origin[0] - self.translation[0] as f64 / self.zoom,
+            self.origin[1] - self.translation[1] as f64 / self.zoom,
+        ]
     }
     /// Physical device pixels per document pixel.
     pub const fn zoom(self) -> f64 {
@@ -40,8 +44,10 @@ impl Viewport {
     /// Rejects nonfinite input or an unrepresentable result.
     pub fn document_at(self, device: [f64; 2]) -> Result<[f64; 2], CanvasError> {
         finite(device)?;
-        let result =
-            [self.origin[0] + device[0] / self.zoom, self.origin[1] + device[1] / self.zoom];
+        let result = [
+            self.origin[0] + (device[0] - f64::from(self.translation[0])) / self.zoom,
+            self.origin[1] + (device[1] - f64::from(self.translation[1])) / self.zoom,
+        ];
         finite(result)?;
         Ok(result)
     }
@@ -50,10 +56,7 @@ impl Viewport {
     /// Rejects nonfinite input or an unrepresentable result.
     pub fn device_at(self, document: [f64; 2]) -> Result<[f64; 2], CanvasError> {
         finite(document)?;
-        let result = [
-            (document[0] - self.origin[0]) * self.zoom,
-            (document[1] - self.origin[1]) * self.zoom,
-        ];
+        let result = self.project(document);
         finite(result)?;
         Ok(result)
     }
@@ -62,12 +65,25 @@ impl Viewport {
     /// Rejects nonfinite deltas or an unrepresentable resulting origin, without mutation.
     pub fn pan_by(&mut self, device_delta: [f64; 2]) -> Result<(), CanvasError> {
         finite(device_delta)?;
-        let origin = [
-            self.origin[0] - device_delta[0] / self.zoom,
-            self.origin[1] - device_delta[1] / self.zoom,
-        ];
+        if device_delta
+            .iter()
+            .all(|delta| delta.fract() == 0.0 && delta.abs() <= f64::from(i32::MAX))
+        {
+            let next = [
+                i64::from(self.translation[0]) + device_delta[0] as i64,
+                i64::from(self.translation[1]) + device_delta[1] as i64,
+            ];
+            if let (Ok(x), Ok(y)) = (i32::try_from(next[0]), i32::try_from(next[1])) {
+                self.translation = [x, y];
+                return Ok(());
+            }
+        }
+        let previous = self.origin();
+        let origin =
+            [previous[0] - device_delta[0] / self.zoom, previous[1] - device_delta[1] / self.zoom];
         finite(origin)?;
         self.origin = origin;
+        self.translation = [0; 2];
         Ok(())
     }
     /// Change scale while preserving the document point beneath a device-space anchor.
@@ -100,6 +116,7 @@ impl Viewport {
         ];
         self.origin = origin;
         self.zoom = zoom;
+        self.translation = [0; 2];
         Ok(())
     }
     /// Resize the drawable viewport while retaining the document point at its center.
@@ -107,6 +124,9 @@ impl Viewport {
     /// Rejects unsupported dimensions without changing the view.
     pub fn resize(&mut self, surface: Extent) -> Result<(), CanvasError> {
         validate_surface(surface)?;
+        if self.surface == surface {
+            return Ok(());
+        }
         let center = self.document_at([
             f64::from(self.surface.width()) * 0.5,
             f64::from(self.surface.height()) * 0.5,
@@ -118,6 +138,7 @@ impl Viewport {
         finite(origin)?;
         self.surface = surface;
         self.origin = origin;
+        self.translation = [0; 2];
         Ok(())
     }
     /// Plan reuse against the actually presented camera when document content is unchanged.
@@ -125,26 +146,60 @@ impl Viewport {
     /// # Errors
     /// Preserves checked region-construction failures before presenting a repair plan.
     pub fn repair_from(self, previous: Self) -> Result<DamagePlan, CanvasError> {
-        if self.surface != previous.surface || self.zoom != previous.zoom {
-            return Ok(DamagePlan::full(self.surface));
-        }
-        let shift = [
-            (previous.origin[0] - self.origin[0]) * self.zoom,
-            (previous.origin[1] - self.origin[1]) * self.zoom,
-        ];
-        if shift.iter().any(|v| !v.is_finite() || v.fract() != 0.0 || v.abs() > f64::from(i32::MAX))
+        if self.surface != previous.surface
+            || self.zoom != previous.zoom
+            || self.origin != previous.origin
         {
             return Ok(DamagePlan::full(self.surface));
         }
-        DamagePlan::pan(self.surface, shift[0] as i32, shift[1] as i32)
+        let x = i64::from(self.translation[0]) - i64::from(previous.translation[0]);
+        let y = i64::from(self.translation[1]) - i64::from(previous.translation[1]);
+        let (Ok(x), Ok(y)) = (i32::try_from(x), i32::try_from(y)) else {
+            return Ok(DamagePlan::full(self.surface));
+        };
+        DamagePlan::pan(self.surface, x, y)
     }
     fn set_zoom(&mut self, zoom: f64, anchor: [f64; 2]) -> Result<(), CanvasError> {
+        finite(anchor)?;
+        if zoom == self.zoom {
+            return Ok(());
+        }
         let point = self.document_at(anchor)?;
         let origin = [point[0] - anchor[0] / zoom, point[1] - anchor[1] / zoom];
         finite(origin)?;
         self.origin = origin;
         self.zoom = zoom;
+        self.translation = [0; 2];
         Ok(())
+    }
+    /// Camera phase before its exact physical-pixel displacement.
+    pub(crate) const fn untranslated(self) -> Self {
+        Self { translation: [0; 2], ..self }
+    }
+    /// Physical-pixel displacement subtracted before raster and vector sample conversion.
+    pub(crate) const fn pixel_translation(self) -> [i32; 2] {
+        self.translation
+    }
+    /// Test the document footprint in the same untranslated device grid as analytic coverage.
+    /// Infinite distant projections indicate an offscreen footprint; no visible pixels are omitted.
+    pub(crate) fn intersects_document(self, document: Extent) -> bool {
+        let base = self.untranslated();
+        let start = base.project([0.0; 2]);
+        let end = base.project([f64::from(document.width()), f64::from(document.height())]);
+        let left = -i64::from(self.translation[0]);
+        let top = -i64::from(self.translation[1]);
+        let right = i64::from(self.surface.width()) - i64::from(self.translation[0]);
+        let bottom = i64::from(self.surface.height()) - i64::from(self.translation[1]);
+        !(start[0] >= right as f64
+            || start[1] >= bottom as f64
+            || end[0] <= left as f64
+            || end[1] <= top as f64)
+    }
+    fn project(self, document: [f64; 2]) -> [f64; 2] {
+        [
+            (document[0] - self.origin[0]) * self.zoom + f64::from(self.translation[0]),
+            (document[1] - self.origin[1]) * self.zoom + f64::from(self.translation[1]),
+        ]
     }
 }
 

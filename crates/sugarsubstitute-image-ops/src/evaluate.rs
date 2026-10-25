@@ -177,12 +177,18 @@ impl<S: RasterSource> Evaluator<S> {
                 self.stats.source_pixels = self.stats.source_pixels.saturating_add(region.pixels());
             }
             Operation::Solid { color, .. } => output.pixels.fill(color),
-            Operation::Rectangle { shape, .. } => {
+            Operation::Rectangle { shape, translation, .. } => {
                 for y in region.y()..region.bottom() {
                     check(context)?;
-                    let vertical = shape.axis_coverage(crate::SamplingAxis::Vertical, y);
+                    let vertical = shape.axis_coverage(
+                        crate::SamplingAxis::Vertical,
+                        i64::from(y) - i64::from(translation[1]),
+                    );
                     for x in region.x()..region.right() {
-                        let horizontal = shape.axis_coverage(crate::SamplingAxis::Horizontal, x);
+                        let horizontal = shape.axis_coverage(
+                            crate::SamplingAxis::Horizontal,
+                            i64::from(x) - i64::from(translation[0]),
+                        );
                         let coverage = horizontal * vertical;
                         let index = (y - region.y()) as usize * region.width() as usize
                             + (x - region.x()) as usize;

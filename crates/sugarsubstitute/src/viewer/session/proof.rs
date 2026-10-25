@@ -104,22 +104,35 @@ impl Proof {
         if shown.filter != Filter::Lanczos3 || session.rendering.is_some() {
             return Ok(());
         }
+        let surface = session.view.surface();
+        let reusable = match self.phase {
+            5 => surface.width() > 13 && surface.height() > 7,
+            6 => surface.width() > 5 && surface.height() > 3,
+            _ => false,
+        };
+        if reusable && session.last_surface_work.reused_pixels == 0 {
+            return Err(
+                "Fractional-zoom navigation did not retain its integer-panned pixels".into()
+            );
+        }
         let center = [
             f64::from(session.view.surface().width()) * 0.5,
             f64::from(session.view.surface().height()) * 0.5,
         ];
         match self.phase {
-            0 | 4 => {
+            0 | 6 => {
                 session.input(Input::Pointer(center))?;
                 session.input(Input::ActualSize)?;
             }
-            1 | 5 => pan(session, center, [17.0, -11.0])?,
-            2 | 6 => pan(session, center, [-7.0, 3.0])?,
+            1 | 7 => pan(session, center, [17.0, -11.0])?,
+            2 | 8 => pan(session, center, [-7.0, 3.0])?,
             3 => {
                 session.input(Input::Pointer(center))?;
                 session.input(Input::Wheel(WheelDelta::Lines([0.0, 2.0])))?;
             }
-            7 => return self.prepare_output(),
+            4 => pan(session, center, [13.0, -7.0])?,
+            5 => pan(session, center, [-5.0, 3.0])?,
+            9 => return self.prepare_output(),
             _ => return Err("Invalid viewer proof navigation phase".into()),
         }
         self.phase += 1;

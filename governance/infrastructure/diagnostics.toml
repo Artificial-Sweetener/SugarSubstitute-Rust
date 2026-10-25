@@ -969,7 +969,7 @@ rationale = "Isolated native hardware qualification reports actual adapter ident
 [[records]]
 path = "crates/sugarsubstitute-image-gpu/examples/adapter_qualification/image.rs"
 owner = "sugarsubstitute-image-gpu"
-source_sha256 = "sha256:9d7cf3ffe718fa68f68ae6863fbcfe0a8f16c4d55b4c5fecf561f5b91c404f1b"
+source_sha256 = "sha256:60c06087316cfd5d1e193583b4770036815ae229080e9c96ffab4a4e56b89a51"
 disposition = "fixture"
 rationale = "Isolated native hardware qualification reports actual adapter identity, CPU/GPU pixel comparisons, timings and observed execution retirement; runtime diagnostics use structured logging."
 

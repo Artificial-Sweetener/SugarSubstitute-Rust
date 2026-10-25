@@ -27,6 +27,7 @@ impl Graph {
                     sampling.scale()[0],
                     sampling.offset()[0],
                     sampling.filter(),
+                    sampling.output_translation()[0],
                 );
                 let (top, bottom) = required_axis(
                     output.y(),
@@ -35,6 +36,7 @@ impl Graph {
                     sampling.scale()[1],
                     sampling.offset()[1],
                     sampling.filter(),
+                    sampling.output_translation()[1],
                 );
                 [Some((input, Region::new(left, top, right - left, bottom - top)?)), None, None]
             }
@@ -69,6 +71,7 @@ impl Graph {
                     sampling.scale()[0],
                     sampling.offset()[0],
                     sampling.filter(),
+                    sampling.output_translation()[0],
                 );
                 let (top, bottom) = invalidated_axis(
                     [changed.y(), changed.bottom()],
@@ -77,6 +80,7 @@ impl Graph {
                     sampling.scale()[1],
                     sampling.offset()[1],
                     sampling.filter(),
+                    sampling.output_translation()[1],
                 );
                 if left == right || top == bottom {
                     return Ok(None);
@@ -96,18 +100,22 @@ fn required_axis(
     ratio: f64,
     offset: f64,
     filter: Filter,
+    translation: i32,
 ) -> (u32, u32) {
     if source == 1 {
         return (0, 1);
     }
     let radius = 3.0 * ratio.max(1.0);
-    let first = (f64::from(start) + 0.5) * ratio + offset - 0.5;
-    let last = (f64::from(start + length - 1) + 0.5) * ratio + offset - 0.5;
+    let start = i64::from(start) - i64::from(translation);
+    let first_center = crate::kernel::pixel_center(start, ratio, offset);
+    let last_center = crate::kernel::pixel_center(start + i64::from(length) - 1, ratio, offset);
     if filter == Filter::Nearest {
-        let left = (first + 0.5).floor().clamp(0.0, f64::from(source - 1)) as u32;
-        let right = (last + 0.5).floor().clamp(f64::from(left), f64::from(source - 1)) as u32 + 1;
+        let left = first_center.floor().clamp(0.0, f64::from(source - 1)) as u32;
+        let right = last_center.floor().clamp(f64::from(left), f64::from(source - 1)) as u32 + 1;
         return (left, right);
     }
+    let first = first_center - 0.5;
+    let last = last_center - 0.5;
     if ratio == 1.0 && offset.fract() == 0.0 {
         let left = first.clamp(0.0, f64::from(source - 1)) as u32;
         let right = (last + 1.0).clamp(f64::from(left + 1), f64::from(source)) as u32;
@@ -126,6 +134,7 @@ fn invalidated_axis(
     ratio: f64,
     offset: f64,
     filter: Filter,
+    translation: i32,
 ) -> (u32, u32) {
     let radius = match filter {
         Filter::Lanczos3 => 3.0 * ratio.max(1.0),
@@ -134,14 +143,14 @@ fn invalidated_axis(
     let left = if start == 0 {
         0
     } else {
-        ((f64::from(start) - radius + 0.5 - offset) / ratio - 0.5)
+        ((f64::from(start) - radius + 0.5 - offset) / ratio - 0.5 + f64::from(translation))
             .floor()
             .clamp(0.0, f64::from(target)) as u32
     };
     let right = if end == source {
         target
     } else {
-        ((f64::from(end) + radius + 0.5 - offset) / ratio + 0.5)
+        ((f64::from(end) + radius + 0.5 - offset) / ratio + 0.5 + f64::from(translation))
             .ceil()
             .clamp(f64::from(left), f64::from(target)) as u32
     };

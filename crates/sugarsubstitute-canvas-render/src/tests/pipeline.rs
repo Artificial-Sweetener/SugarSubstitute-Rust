@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Render real document DAG content through exact viewport repair and canonical display encoding.
 use super::*;
+mod phase;
 mod progressive;
 use sugarsubstitute_canvas::{
     Document, DocumentEdit, Layer, LayerContent, LayerId, LayerMask, Viewport,
