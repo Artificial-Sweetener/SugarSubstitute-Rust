@@ -106,3 +106,33 @@ test('shares native field identity across simultaneous views and commits through
   again.dispose();
   expect(f.removed).not.toHaveBeenCalled();
 });
+
+test('places source choices before their native field anchor while preserving original graph order and identity', () => {
+  const f = fixture(),
+    channel: ComfyWidget = { name: 'channel', value: 'red', type: 'combo' };
+  f.node.widgets!.push(channel);
+  const original = f.node.widgets,
+    fields = new NativeNodeChoiceFields(f.node, 'source', document, 'channel');
+  const source = fields.mountChoice(document.createElement('article'), 'Source', jest.fn()),
+    layer = fields.mountChoice(document.createElement('article'), 'Layer', jest.fn()),
+    entry = fields.mountChoice(document.createElement('article'), 'Entry', jest.fn());
+  const projected = nativePresentationWidgets(f.node);
+  expect(projected.map((widget) => widget.label ?? widget.name)).toEqual([
+    'image',
+    'Source',
+    'Layer',
+    'Entry',
+    'channel',
+  ]);
+  expect(projected.at(-1)).toBe(channel);
+  expect(withNativePresentationWidgets(f.node, () => nativePresentationWidgets(f.node))).toEqual(
+    projected,
+  );
+  expect(f.node.widgets).toBe(original);
+  expect(f.node.widgets).toEqual([f.original, channel]);
+  expect(captureNodeWidgetValues(f.node)).toEqual({ image: 'input.png', channel: 'red' });
+  source.dispose();
+  layer.dispose();
+  entry.dispose();
+  expect(nativePresentationWidgets(f.node)).toEqual([f.original, channel]);
+});

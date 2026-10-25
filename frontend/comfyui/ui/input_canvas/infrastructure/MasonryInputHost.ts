@@ -139,7 +139,7 @@ export class MasonryInputHost {
           this.previews,
           this.upload,
           this.report,
-          this.#fieldScope(node, loader.field),
+          this.#fieldScope(node, loader.field, loader.kind === 'mask' ? loader.channel : null),
           root,
           loader.kind === 'mask' ? this.associations.image(node, loader.field) : null,
           loaders.length > 1,
@@ -164,7 +164,7 @@ export class MasonryInputHost {
     );
   }
   /** Share the native node-field lifecycle across projections of the same exact bound field. */
-  #fieldScope(node: ComfyNode, field: string): NativeNodeChoiceFields {
+  #fieldScope(node: ComfyNode, field: string, beforeField: string | null): NativeNodeChoiceFields {
     let scopes = this.#fields.get(node);
     if (!scopes) {
       scopes = new Map();
@@ -172,7 +172,7 @@ export class MasonryInputHost {
     }
     let scope = scopes.get(field);
     if (!scope) {
-      scope = new NativeNodeChoiceFields(node, 'canvas-input:' + field, this.document);
+      scope = new NativeNodeChoiceFields(node, 'canvas-input:' + field, this.document, beforeField);
       scopes.set(field, scope);
     }
     return scope;
