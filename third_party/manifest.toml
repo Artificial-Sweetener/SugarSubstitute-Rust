@@ -703,7 +703,7 @@ version = "3.1.3"
 modifications = "Official MenuList and MenuItem components bundled with esbuild; upstream source is unchanged. FAST dependency and license are pinned in package-lock.json and third_party/NOTICE.md."
 source_paths = ["packages/web-components/src/menu-list", "packages/web-components/src/menu-item"]
 runtime_files = ["web/comfyui/ui/menus/MenuControlRuntime.js"]
-runtime_sha256 = "0467df962aae942d0c32ed06e67a1c07a3384da5afa598169fead346c1f41d6c"
+runtime_sha256 = "ab36b0d5f27dafb88af29875eb32c64f75dde0b0b627a5edb631e9b95b1818a5"
 
 [[component]]
 name = "SugarSubstitute media wall presentation"
@@ -1175,3 +1175,184 @@ source_path = "qfluentwidgets/_rc/images/icons/Setting_white.svg"
 vendored_file = "frontend/static/orb/settings.svg"
 runtime_file = "web/orb/settings.svg"
 sha256 = "4ad9a555033cd921356ca768f02dbf4fdd971903656d406f80c5c904945cad85"
+
+[[component]]
+name = "GIMP Default theme"
+license = "GPL-3.0-or-later"
+license_file = "third_party/licenses/gimp.LICENSE.txt"
+source = "https://gitlab.gnome.org/GNOME/gimp"
+revision = "ae16d24447331802750ec2ea978d717e92bcfb45"
+modifications = "Adapt Default dark/light color roles, GTK entry/button paint, GimpSpinScale entry progress and fine dragging, notebook tab states, and compact dock geometry into semantic CSS tokens and Vue controls. Typography follows the Windows system UI font. No GIMP executables or image assets are distributed."
+source_paths = ["themes/Default/gimp-dark.css", "themes/Default/gimp-light.css", "themes/Default/common.css", "themes/Default/common-dark.css", "themes/System/gimp.css", "libgimpwidgets/gimpspinscale.c", "libgimpwidgets/gimpsizeentry.c"]
+runtime_files = ["web/comfyui/ui/surface/appearance/GimpThemeTokens.js", "web/comfyui/ui/surface/appearance/GimpAppearanceStyles.js", "web/comfyui/ui/surface/appearance/GimpNumericStyles.js", "web/comfyui/ui/surface/appearance/GimpWorkspaceStyles.js", "web/comfyui/ui/surface/appearance/GimpControlStyles.js", "web/comfyui/ui/surface/appearance/GimpThemeRuntime.js"]
+
+[[component.implementation]]
+source_path = "themes/Default/gimp-dark.css"
+source_sha256 = "e933c6f2705806fe30fdfe812502c781355705f91ea743adff0b093c9bd3826d"
+adapted_paths = ["frontend/comfyui/ui/surface/appearance/GimpThemeTokens.ts", "frontend/comfyui/ui/surface/appearance/GimpAppearanceStyles.ts", "frontend/comfyui/ui/surface/appearance/GimpWorkspaceStyles.ts", "frontend/comfyui/ui/surface/appearance/GimpControlStyles.ts"]
+
+[[component.implementation]]
+source_path = "themes/Default/gimp-light.css"
+source_sha256 = "af1ceacee3e6c689b76f9ff6dd22a2c6ac30d5b2e52fa0e5d0601b041a0754cf"
+adapted_paths = ["frontend/comfyui/ui/surface/appearance/GimpThemeTokens.ts", "frontend/comfyui/ui/surface/appearance/GimpAppearanceStyles.ts", "frontend/comfyui/ui/surface/appearance/GimpWorkspaceStyles.ts", "frontend/comfyui/ui/surface/appearance/GimpControlStyles.ts"]
+
+[[component.implementation]]
+source_path = "themes/Default/common.css"
+source_sha256 = "dcc7d1522cc9444e882be95bbcbfb06b9253e0a08673d0f2cbe5e5fda3877665"
+adapted_paths = ["frontend/comfyui/ui/surface/appearance/GimpThemeTokens.ts", "frontend/comfyui/ui/surface/appearance/GimpAppearanceStyles.ts", "frontend/comfyui/ui/surface/appearance/GimpNumericStyles.ts", "frontend/comfyui/ui/surface/appearance/GimpWorkspaceStyles.ts", "frontend/comfyui/ui/surface/appearance/GimpControlStyles.ts"]
+
+[[component.implementation]]
+source_path = "themes/Default/common-dark.css"
+source_sha256 = "696157a2b77d3bd2a09bed1153ec0ecddd1cd980cfdd1609e7fec4d835a35cfc"
+adapted_paths = ["frontend/comfyui/ui/surface/appearance/GimpThemeTokens.ts", "frontend/comfyui/ui/surface/appearance/GimpAppearanceStyles.ts", "frontend/comfyui/ui/surface/appearance/GimpWorkspaceStyles.ts", "frontend/comfyui/ui/surface/appearance/GimpControlStyles.ts"]
+
+[[component.implementation]]
+source_path = "themes/System/gimp.css"
+source_sha256 = "4594660920a529cc1200b8319d41eb19bad1bf570278df95dc488eb1384cfa8f"
+adapted_paths = ["frontend/comfyui/ui/surface/appearance/GimpThemeTokens.ts", "frontend/comfyui/ui/surface/appearance/GimpAppearanceStyles.ts", "frontend/comfyui/ui/surface/appearance/GimpWorkspaceStyles.ts", "frontend/comfyui/ui/surface/appearance/GimpControlStyles.ts"]
+
+[[component.implementation]]
+source_path = "libgimpwidgets/gimpspinscale.c"
+source_sha256 = "810835332bdff36961554bcfaabc91f0ec5576d2a103d335a1361befc9d5795b"
+adapted_paths = ["frontend/comfyui/ui/surface/appearance/GimpSpinScale.ts"]
+
+[[component.implementation]]
+source_path = "libgimpwidgets/gimpsizeentry.c"
+source_sha256 = "d8dd0b643b76eb97a6257e5397c7f1bca26d374edf90d37b1ae9ee28b5433b89"
+adapted_paths = ["frontend/comfyui/ui/surface/appearance/NumericSliderPresentation.ts"]
+
+[[component]]
+name = "GTK3 Adwaita symbolic icons for GIMP"
+license = "LGPL-3.0-only"
+license_file = "third_party/licenses/adwaita.LICENSE.txt"
+source = "https://gitlab.gnome.org/GNOME/adwaita-icon-theme"
+revision = "b496edba45cb664e92ac1333f40de515e518bec8"
+version = "3.38.0"
+modifications = "None; exported SVG bytes copied verbatim, resolving upstream hardlinks. Used under the LGPL v3 option. Copyright and attribution: GNOME Project. CSS masks supply the GIMP theme foreground color."
+source_paths = ["COPYING", "COPYING_LGPL", "Adwaita/scalable/actions/color-select-symbolic.svg", "Adwaita/scalable/actions/document-edit-symbolic.svg", "Adwaita/scalable/actions/document-open-symbolic.svg", "Adwaita/scalable/actions/document-save-symbolic.svg", "Adwaita/scalable/actions/edit-clear-all-symbolic.svg", "Adwaita/scalable/actions/edit-redo-symbolic-rtl.svg", "Adwaita/scalable/actions/edit-undo-symbolic-rtl.svg", "Adwaita/scalable/actions/folder-new-symbolic.svg", "Adwaita/scalable/actions/list-add-symbolic.svg", "Adwaita/scalable/actions/list-remove-symbolic.svg", "Adwaita/scalable/actions/system-run-symbolic.svg", "Adwaita/scalable/actions/view-refresh-symbolic.svg", "Adwaita/scalable/actions/zoom-fit-best-symbolic.svg", "Adwaita/scalable/actions/zoom-in-symbolic.svg", "Adwaita/scalable/actions/zoom-out-symbolic.svg", "Adwaita/scalable/categories/preferences-system-symbolic.svg", "Adwaita/scalable/mimetypes/image-x-generic-symbolic.svg", "Adwaita/scalable/status/folder-open-symbolic.svg", "Adwaita/scalable/ui/window-close-symbolic.svg"]
+runtime_files = ["web/icons/node/gimp/color-select-symbolic.svg", "web/icons/node/gimp/document-edit-symbolic.svg", "web/icons/node/gimp/document-open-symbolic.svg", "web/icons/node/gimp/document-save-symbolic.svg", "web/icons/node/gimp/edit-clear-all-symbolic.svg", "web/icons/node/gimp/edit-redo-symbolic.svg", "web/icons/node/gimp/edit-undo-symbolic.svg", "web/icons/node/gimp/folder-new-symbolic.svg", "web/icons/node/gimp/folder-open-symbolic.svg", "web/icons/node/gimp/image-x-generic-symbolic.svg", "web/icons/node/gimp/list-add-symbolic.svg", "web/icons/node/gimp/list-remove-symbolic.svg", "web/icons/node/gimp/preferences-system-symbolic.svg", "web/icons/node/gimp/system-run-symbolic.svg", "web/icons/node/gimp/view-refresh-symbolic.svg", "web/icons/node/gimp/window-close-symbolic.svg", "web/icons/node/gimp/zoom-fit-best-symbolic.svg", "web/icons/node/gimp/zoom-in-symbolic.svg", "web/icons/node/gimp/zoom-out-symbolic.svg"]
+
+[[component.asset]]
+source_path = "Adwaita/scalable/actions/color-select-symbolic.svg"
+vendored_file = "frontend/static/icons/node/gimp/color-select-symbolic.svg"
+runtime_file = "web/icons/node/gimp/color-select-symbolic.svg"
+sha256 = "6efea1a6fa89236ff3781146e99eaf62efcf351ccf6f26ccc0d98107d3996310"
+
+[[component.asset]]
+source_path = "Adwaita/scalable/actions/document-edit-symbolic.svg"
+vendored_file = "frontend/static/icons/node/gimp/document-edit-symbolic.svg"
+runtime_file = "web/icons/node/gimp/document-edit-symbolic.svg"
+sha256 = "65d9f54782726558c3d5162a0bd9c588d413bae0df81df5f395350a6561aa3ee"
+
+[[component.asset]]
+source_path = "Adwaita/scalable/actions/document-open-symbolic.svg"
+vendored_file = "frontend/static/icons/node/gimp/document-open-symbolic.svg"
+runtime_file = "web/icons/node/gimp/document-open-symbolic.svg"
+sha256 = "273d7267d4d23f023fa0405acae361544cad828dcce36de2338454804966daef"
+
+[[component.asset]]
+source_path = "Adwaita/scalable/actions/document-save-symbolic.svg"
+vendored_file = "frontend/static/icons/node/gimp/document-save-symbolic.svg"
+runtime_file = "web/icons/node/gimp/document-save-symbolic.svg"
+sha256 = "abd68c3279cfd129c77a4676d7d87ef55143a919c69ebb6f951b7a4540bfc1a9"
+
+[[component.asset]]
+source_path = "Adwaita/scalable/actions/edit-clear-all-symbolic.svg"
+vendored_file = "frontend/static/icons/node/gimp/edit-clear-all-symbolic.svg"
+runtime_file = "web/icons/node/gimp/edit-clear-all-symbolic.svg"
+sha256 = "7d42f19e2ce3646158d8f71280ef5f5e55a276ef53ae99c8ae7ba6e7a2bb3437"
+
+[[component.asset]]
+source_path = "Adwaita/scalable/actions/edit-undo-symbolic-rtl.svg"
+vendored_file = "frontend/static/icons/node/gimp/edit-redo-symbolic.svg"
+runtime_file = "web/icons/node/gimp/edit-redo-symbolic.svg"
+sha256 = "54848579d52c1d09a8dade3ee3441e718544835a7d07455100e898d96767845a"
+
+[[component.asset]]
+source_path = "Adwaita/scalable/actions/edit-redo-symbolic-rtl.svg"
+vendored_file = "frontend/static/icons/node/gimp/edit-undo-symbolic.svg"
+runtime_file = "web/icons/node/gimp/edit-undo-symbolic.svg"
+sha256 = "0ca274f687c42ed8d7e520f04efac2e26c605763449ef762f3153db760ef79f1"
+
+[[component.asset]]
+source_path = "Adwaita/scalable/actions/folder-new-symbolic.svg"
+vendored_file = "frontend/static/icons/node/gimp/folder-new-symbolic.svg"
+runtime_file = "web/icons/node/gimp/folder-new-symbolic.svg"
+sha256 = "632d0220ecb4cdbf4b5441da879ae4daca491e5d0b782dd6ed6e0c84e39890fb"
+
+[[component.asset]]
+source_path = "Adwaita/scalable/status/folder-open-symbolic.svg"
+vendored_file = "frontend/static/icons/node/gimp/folder-open-symbolic.svg"
+runtime_file = "web/icons/node/gimp/folder-open-symbolic.svg"
+sha256 = "12274f3a2e46b28d93f76b3390a32fa7f25891fb43d388a0802debc80948721b"
+
+[[component.asset]]
+source_path = "Adwaita/scalable/mimetypes/image-x-generic-symbolic.svg"
+vendored_file = "frontend/static/icons/node/gimp/image-x-generic-symbolic.svg"
+runtime_file = "web/icons/node/gimp/image-x-generic-symbolic.svg"
+sha256 = "406b237c7b1ab841e052d079d571470ad78637a4b01538d5d636115b820ef768"
+
+[[component.asset]]
+source_path = "Adwaita/scalable/actions/list-add-symbolic.svg"
+vendored_file = "frontend/static/icons/node/gimp/list-add-symbolic.svg"
+runtime_file = "web/icons/node/gimp/list-add-symbolic.svg"
+sha256 = "0a17ecd8b2b8ce295e353bba28578ddcbf9dd1d283008eec2a404c5608d2da05"
+
+[[component.asset]]
+source_path = "Adwaita/scalable/actions/list-remove-symbolic.svg"
+vendored_file = "frontend/static/icons/node/gimp/list-remove-symbolic.svg"
+runtime_file = "web/icons/node/gimp/list-remove-symbolic.svg"
+sha256 = "170ab5cdca0284fd4f96da1c8ce624ed558f352de76fbed6ae7f0de4baa82940"
+
+[[component.asset]]
+source_path = "Adwaita/scalable/categories/preferences-system-symbolic.svg"
+vendored_file = "frontend/static/icons/node/gimp/preferences-system-symbolic.svg"
+runtime_file = "web/icons/node/gimp/preferences-system-symbolic.svg"
+sha256 = "58adf1ecd4c7e419b22c2318ca545ccec2f9cb0a64a965e2c75bdd239b40b511"
+
+[[component.asset]]
+source_path = "Adwaita/scalable/actions/system-run-symbolic.svg"
+vendored_file = "frontend/static/icons/node/gimp/system-run-symbolic.svg"
+runtime_file = "web/icons/node/gimp/system-run-symbolic.svg"
+sha256 = "a8d093b9c8db36fcb276c7cd80580dde2ead3b708d02bdf79472c65f9164d457"
+
+[[component.asset]]
+source_path = "Adwaita/scalable/actions/view-refresh-symbolic.svg"
+vendored_file = "frontend/static/icons/node/gimp/view-refresh-symbolic.svg"
+runtime_file = "web/icons/node/gimp/view-refresh-symbolic.svg"
+sha256 = "6a71927ca3c8ff5442a7447c8358db9c72154e75add17c76de2f6a8507a82e8f"
+
+[[component.asset]]
+source_path = "Adwaita/scalable/ui/window-close-symbolic.svg"
+vendored_file = "frontend/static/icons/node/gimp/window-close-symbolic.svg"
+runtime_file = "web/icons/node/gimp/window-close-symbolic.svg"
+sha256 = "88d97b39c5ea9ce305c9047e36e804883c0b7b439ef6880ddb9a6f0a78105e0c"
+
+[[component.asset]]
+source_path = "Adwaita/scalable/actions/zoom-fit-best-symbolic.svg"
+vendored_file = "frontend/static/icons/node/gimp/zoom-fit-best-symbolic.svg"
+runtime_file = "web/icons/node/gimp/zoom-fit-best-symbolic.svg"
+sha256 = "5492ef5d6baf353db401085dcce09b32fc6fba597d6a5de2dcaffd4fe49f7a33"
+
+[[component.asset]]
+source_path = "Adwaita/scalable/actions/zoom-in-symbolic.svg"
+vendored_file = "frontend/static/icons/node/gimp/zoom-in-symbolic.svg"
+runtime_file = "web/icons/node/gimp/zoom-in-symbolic.svg"
+sha256 = "ac98c28d61d9b751a425cdd264811317172596e9f8030ddf6915f33a0d45efa6"
+
+[[component.asset]]
+source_path = "Adwaita/scalable/actions/zoom-out-symbolic.svg"
+vendored_file = "frontend/static/icons/node/gimp/zoom-out-symbolic.svg"
+runtime_file = "web/icons/node/gimp/zoom-out-symbolic.svg"
+sha256 = "ea8c33dfb3c3dbfb1bba90c57d4a86d45a196cd384f3a477d2202392af797d25"
+
+[[component]]
+name = "Vue GIMP controls"
+license = "MIT"
+license_file = "third_party/licenses/vue.LICENSE.txt"
+source = "https://github.com/vuejs/core"
+revision = "npm:vue@3.5.43"
+version = "3.5.43"
+modifications = "Unmodified Vue runtime bundled for GIMP custom-element controls. SugarCubes adapters retain native values, focus and shared keyboard ownership. Package integrity is pinned in package-lock.json."
+source_paths = ["packages/runtime-core", "packages/runtime-dom", "packages/reactivity", "packages/shared"]
+runtime_files = ["web/comfyui/ui/surface/appearance/GimpThemeRuntime.js"]

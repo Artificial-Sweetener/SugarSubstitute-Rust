@@ -186,7 +186,14 @@ test.each(['fluent', 'spectrum'] as const)(
   'normalizes %s slider values without dispatching a native host edit',
   (style) => {
     publishVisualStyle(document, style);
-    const slider = createNumericSlider(document);
+    const slider = createNumericSlider(document, {
+      name: 'denoise',
+      label: 'Denoise',
+      minimum: 0,
+      maximum: 1,
+      step: 0.01,
+      precision: 2,
+    });
     slider.synchronize(-1, 1, 0.01, false, 0.37);
     expect(slider.readValue()).toBeCloseTo(0.37);
     expect(slider.root.getAttribute('disabled')).toBeNull();

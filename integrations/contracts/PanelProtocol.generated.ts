@@ -17,7 +17,7 @@
 /** Describe the schema-defined PanelPresentation wire value. */
 export type PanelPresentation = {
   readonly pluginMode: boolean;
-  readonly visualStyle: 'comfy' | 'fluent' | 'spectrum' | 'photopro';
+  readonly visualStyle: 'comfy' | 'fluent' | 'spectrum' | 'photopro' | 'gimp';
   readonly photoProPalette: 'black' | 'dark-gray' | 'medium-gray' | 'light-gray';
   readonly accentColor: string | null;
   readonly resizeCornerSize: number;

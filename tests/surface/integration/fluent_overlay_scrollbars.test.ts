@@ -125,7 +125,7 @@ test('PhotoPro scroll track uses working arrow buttons and follows theme switchi
     const down = track?.querySelector<HTMLButtonElement>('[data-sc-scroll-step="end"]');
     expect(vertical?.hidden).toBe(false);
     expect(track?.hidden).toBe(false);
-    expect(area.hasAttribute('data-sc-photopro-scroll-gutter')).toBe(true);
+    expect(area.hasAttribute('data-sc-scroll-gutter')).toBe(true);
     expect(area.style.getPropertyValue('--sc-scrollbar-base-padding-right')).toBe('7px');
     down?.click();
     expect(area.scrollTop).toBe(40);
@@ -136,10 +136,90 @@ test('PhotoPro scroll track uses working arrow buttons and follows theme switchi
     area.dispatchEvent(new Event('scroll', { bubbles: true }));
     await flush(frames);
     expect(track?.hidden).toBe(true);
+    expect(area.hasAttribute('data-sc-scroll-gutter')).toBe(false);
   } finally {
     host.clear();
-    expect(area.hasAttribute('data-sc-photopro-scroll-gutter')).toBe(false);
+    expect(area.hasAttribute('data-sc-scroll-gutter')).toBe(false);
     expect(area.style.paddingRight).toBe('7px');
+    document.documentElement.removeAttribute('data-sc-visual-style');
+  }
+});
+
+test('GIMP reserves scroll space and switches to PhotoPro without changing author padding', async () => {
+  const area = scrollArea();
+  area.style.paddingRight = '7px';
+  document.body.append(area);
+  const frames: FrameRequestCallback[] = [];
+  jest.spyOn(window, 'requestAnimationFrame').mockImplementation((frame) => {
+    frames.push(frame);
+    return frames.length;
+  });
+  document.documentElement.dataset.scVisualStyle = 'gimp';
+  const host = new OverlayScrollbarHost(document, jest.fn());
+  try {
+    host.enable();
+    await flush(frames);
+    expect(area.hasAttribute('data-sc-scroll-gutter')).toBe(true);
+    expect(area.style.getPropertyValue('--sc-scrollbar-gutter-width')).toBe('12px');
+    expect(area.style.getPropertyValue('--sc-scrollbar-gutter-height')).toBe('12px');
+    expect(area.style.getPropertyValue('--sc-scrollbar-base-padding-right')).toBe('7px');
+    document.documentElement.dataset.scVisualStyle = 'photopro';
+    area.dispatchEvent(new Event('scroll', { bubbles: true }));
+    await flush(frames);
+    expect(area.style.getPropertyValue('--sc-scrollbar-gutter-width')).toBe('16px');
+    expect(area.style.getPropertyValue('--sc-scrollbar-gutter-height')).toBe('0px');
+  } finally {
+    host.clear();
+    expect(area.style.paddingRight).toBe('7px');
+    expect(area.hasAttribute('data-sc-scroll-gutter')).toBe(false);
+    document.documentElement.removeAttribute('data-sc-visual-style');
+  }
+});
+
+test('GIMP keeps full owner track geometry while clipping moves it partly offscreen', async () => {
+  const area = scrollArea();
+  area.style.position = 'relative';
+  document.body.append(area);
+  const frames: FrameRequestCallback[] = [];
+  jest.spyOn(window, 'requestAnimationFrame').mockImplementation((frame) => {
+    frames.push(frame);
+    return frames.length;
+  });
+  document.documentElement.dataset.scVisualStyle = 'gimp';
+  const host = new OverlayScrollbarHost(document, jest.fn());
+  try {
+    host.enable();
+    await flush(frames);
+    const vertical = area.querySelector<HTMLElement>(
+      '.sc-style-scrollbar[aria-orientation="vertical"]',
+    );
+    const horizontal = area.querySelector<HTMLElement>(
+      '.sc-style-scrollbar[aria-orientation="horizontal"]',
+    );
+    const height = vertical?.style.height;
+    expect(vertical?.querySelector<HTMLElement>('.sc-style-scrollbar-track')?.style.height).toBe(
+      '188px',
+    );
+    expect(horizontal?.querySelector<HTMLElement>('.sc-style-scrollbar-track')?.style.width).toBe(
+      '288px',
+    );
+    jest.mocked(area.getBoundingClientRect).mockReturnValue({
+      x: 20,
+      y: -80,
+      left: 20,
+      top: -80,
+      right: 320,
+      bottom: 120,
+      width: 300,
+      height: 200,
+      toJSON: () => ({}),
+    });
+    area.dispatchEvent(new Event('scroll', { bubbles: true }));
+    await flush(frames);
+    expect(vertical?.style.height).toBe(height);
+    expect(vertical?.getAttribute('aria-valuemax')).toBe('800');
+  } finally {
+    host.clear();
     document.documentElement.removeAttribute('data-sc-visual-style');
   }
 });

@@ -17,10 +17,13 @@
 import {
   nativeScrollbarCss,
   photoProScrollbarCss,
+  gimpScrollbarCss,
   scrollbarPresentationCss,
 } from './ScrollbarStyles.js';
 import { scrollbarTrack } from './ScrollbarLayout.js';
 import { ScrollbarView } from './ScrollbarView.js';
+import { ScrollbarGutter } from './ScrollbarGutter.js';
+import { scrollbarPresentation } from './ScrollbarPresentation.js';
 import { ScrollbarLayers, scrollbarCoordinateSpace } from './ScrollbarLayers.js';
 import type { ScrollbarCoordinateSpace } from './ScrollbarLayers.js';
 import { SURFACE_GEOMETRY_MOTION_EVENT } from '../motion/SurfaceGeometryMotion.js';
@@ -29,8 +32,7 @@ interface ScrollOwner {
   vertical: ScrollbarView;
   horizontal: ScrollbarView;
   assignedId: string | null;
-  basePaddingRight: string;
-  gutterReserved: boolean;
+  gutter: ScrollbarGutter;
 }
 
 /** Observe native overflow while leaving the host's layout and scrolling intact. */
@@ -200,9 +202,7 @@ export class OverlayScrollbarHost {
         vertical,
         horizontal,
         assignedId,
-        basePaddingRight:
-          this.#document.defaultView?.getComputedStyle(element).paddingRight || '0px',
-        gutterReserved: false,
+        gutter: new ScrollbarGutter(element),
       });
       this.#dirtyOwners.add(element);
       this.#views.set(vertical.element, vertical);
@@ -217,7 +217,10 @@ export class OverlayScrollbarHost {
       const styleElement = this.#document.createElement('style');
       styleElement.setAttribute('data-sc-scrollbar-policy', '');
       styleElement.textContent =
-        nativeScrollbarCss() + scrollbarPresentationCss() + photoProScrollbarCss();
+        nativeScrollbarCss() +
+        scrollbarPresentationCss() +
+        photoProScrollbarCss() +
+        gimpScrollbarCss();
       root.append(styleElement);
       this.#shadowStyles.set(root, styleElement);
       root.addEventListener('scroll', this.#onContentChange, true);
@@ -227,7 +230,7 @@ export class OverlayScrollbarHost {
 
   /** Tear down a detached owner without restoring IDs subsequently changed by the host. */
   #remove(element: HTMLElement, owner: ScrollOwner): void {
-    this.#reserveGutter(element, owner, false);
+    owner.gutter.clear();
     this.#dirtyOwners.delete(element);
     this.#views.delete(owner.vertical.element);
     this.#views.delete(owner.horizontal.element);
@@ -257,19 +260,6 @@ export class OverlayScrollbarHost {
     view.beginDrag(event);
     event.stopImmediatePropagation();
   };
-
-  /** Reserve a real content gutter while leaving the owner's declared padding intact. */
-  #reserveGutter(element: HTMLElement, owner: ScrollOwner, reserve: boolean): void {
-    if (owner.gutterReserved === reserve) return;
-    owner.gutterReserved = reserve;
-    if (reserve) {
-      element.style.setProperty('--sc-scrollbar-base-padding-right', owner.basePaddingRight);
-      element.setAttribute('data-sc-photopro-scroll-gutter', '');
-    } else {
-      element.removeAttribute('data-sc-photopro-scroll-gutter');
-      element.style.removeProperty('--sc-scrollbar-base-padding-right');
-    }
-  }
 
   /** Subscribe once per size owner so repeated discovery cannot retrigger resize delivery. */
   #observeSize(element: HTMLElement): void {
@@ -371,11 +361,11 @@ export class OverlayScrollbarHost {
             continue;
           }
           if (!this.#dirtyOwners.has(element) || this.#moving(element)) continue;
-          this.#reserveGutter(
-            element,
-            owner,
-            this.#document.documentElement.dataset.scVisualStyle === 'photopro' &&
-              element.scrollHeight > element.clientHeight,
+          const presentation = scrollbarPresentation(this.#document);
+          owner.gutter.update(
+            element.scrollHeight > element.clientHeight ? presentation.verticalGutter : 0,
+            element.scrollWidth > element.clientWidth ? presentation.horizontalGutter : 0,
+            presentation.context,
           );
           dirty.push({
             owner: element,
@@ -396,7 +386,7 @@ export class OverlayScrollbarHost {
           }
           const track = scrollbarTrack(
             element,
-            this.#document.documentElement.dataset.scVisualStyle === 'photopro',
+            scrollbarPresentation(this.#document).preserveOwnerExtent,
           );
           writes.push(owner.vertical.prepare(track, space), owner.horizontal.prepare(track, space));
           this.#dirtyOwners.delete(element);

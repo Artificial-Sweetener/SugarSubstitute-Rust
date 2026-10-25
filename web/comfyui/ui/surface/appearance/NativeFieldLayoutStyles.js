@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Keep labels and values at opposite field edges across native presentation surfaces. */
-import { CONTROL_HEIGHT, SPINNER_WIDTH } from './ControlGeometry.js';
+import { SPINNER_WIDTH } from './ControlGeometry.js';
 /** Reuse native scalar, model and numeric field sizing within one identified surface. */
 export function nativeFieldLayoutCss(scope) {
     return `
@@ -31,11 +31,6 @@ export function nativeFieldLayoutCss(scope) {
     }
     ${scope} [data-sc-style-row] [data-sc-style-layout]:not([data-sc-choice-inline] *) > :last-child:has(.sc-model-mount) {
       flex-basis:360px; max-width:min(65%,360px);
-    }
-    ${scope} [data-sc-style-row][data-sc-style-widget^="WidgetInputNumber"] [data-sc-style-layout] > :last-child > :first-child > :first-child {
-      height:${CONTROL_HEIGHT}; border:var(--sc-field-border-width) solid var(--sc-control-stroke);
-      border-bottom-color:var(--sc-control-bottom-stroke); border-radius:var(--sc-field-radius);
-      background:var(--sc-control-fill);
     }
   `;
 }

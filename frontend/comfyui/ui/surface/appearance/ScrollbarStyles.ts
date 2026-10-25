@@ -29,6 +29,10 @@ export function nativeScrollbarCss(): string {
 /** Let viewport-clipped handles paint beyond a layer that moves with native scroll content. */
 export function scrollbarPresentationCss(): string {
   return `
+    [data-sc-scroll-gutter] {
+      padding-right:calc(var(--sc-scrollbar-base-padding-right,0px) + var(--sc-scrollbar-gutter-width,0px)) !important;
+      padding-bottom:calc(var(--sc-scrollbar-base-padding-bottom,0px) + var(--sc-scrollbar-gutter-height,0px)) !important;
+    }
     .sc-style-scrollbar-layer {
       position:absolute; inset:0; z-index:1; overflow:visible; pointer-events:none;
     }
@@ -56,41 +60,38 @@ export function scrollbarPresentationCss(): string {
 /** Paint the same overlay controls as Photoshop's square tracks in every PhotoPro palette. */
 export function photoProScrollbarCss(): string {
   return `
-    [data-sc-photopro-scroll-gutter] {
-      padding-right:calc(var(--sc-scrollbar-base-padding-right,0px) + ${String(PHOTOPRO_SCROLLBAR_WIDTH)}px) !important;
-    }
-    .sc-style-scrollbar[data-sc-photopro-scrollbar] { isolation:isolate; }
-    .sc-style-scrollbar[data-sc-photopro-scrollbar] .sc-style-scrollbar-track {
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"] { isolation:isolate; }
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"] .sc-style-scrollbar-track {
       position:absolute; z-index:0; display:flex; box-sizing:border-box; justify-content:space-between;
       border:0; border-radius:0;
       background:var(--sc-photopro-scroll-track,#333); pointer-events:auto;
     }
-    .sc-style-scrollbar[data-sc-photopro-scrollbar] .sc-style-scrollbar-track[hidden] { display:none!important; }
-    .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="vertical"] .sc-style-scrollbar-track { flex-direction:column; }
-    .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="horizontal"] .sc-style-scrollbar-track { flex-direction:row; }
-    .sc-style-scrollbar[data-sc-photopro-scrollbar] .sc-style-scrollbar-track button {
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"] .sc-style-scrollbar-track[hidden] { display:none!important; }
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"][aria-orientation="vertical"] .sc-style-scrollbar-track { flex-direction:column; }
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"][aria-orientation="horizontal"] .sc-style-scrollbar-track { flex-direction:row; }
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"] .sc-style-scrollbar-track button {
       position:relative; flex:none; box-sizing:border-box; width:calc(${String(PHOTOPRO_SCROLLBAR_WIDTH)}px / var(--sc-scrollbar-scale-x,1)); height:calc(${String(PHOTOPRO_SCROLLBAR_WIDTH)}px / var(--sc-scrollbar-scale-y,1)); padding:0;
       border:0; border-radius:0; background:var(--sc-photopro-scroll-track,#333);
       color:var(--sc-photopro-scroll-arrow,#999); cursor:default;
     }
-    .sc-style-scrollbar[data-sc-photopro-scrollbar] .sc-style-scrollbar-track button::before {
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"] .sc-style-scrollbar-track button::before {
       content:''; position:absolute; box-sizing:content-box; left:calc(6px / var(--sc-scrollbar-scale-x,1)); top:calc(6px / var(--sc-scrollbar-scale-y,1)); width:calc(4px / var(--sc-scrollbar-scale-x,1)); height:calc(4px / var(--sc-scrollbar-scale-y,1));
       border-top:calc(1px / var(--sc-scrollbar-scale-y,1)) solid currentColor; border-left:calc(1px / var(--sc-scrollbar-scale-x,1)) solid currentColor;
     }
-    .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="vertical"] [data-sc-scroll-step="start"]::before { top:calc(9px / var(--sc-scrollbar-scale-y,1)); transform:rotate(45deg); }
-    .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="vertical"] [data-sc-scroll-step="end"]::before { top:calc(1px / var(--sc-scrollbar-scale-y,1)); transform:rotate(225deg); }
-    .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="horizontal"] [data-sc-scroll-step="start"]::before { left:calc(9px / var(--sc-scrollbar-scale-x,1)); transform:rotate(-45deg); }
-    .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="horizontal"] [data-sc-scroll-step="end"]::before { left:calc(1px / var(--sc-scrollbar-scale-x,1)); transform:rotate(135deg); }
-    .sc-style-scrollbar[data-sc-photopro-scrollbar]::before {
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"][aria-orientation="vertical"] [data-sc-scroll-step="start"]::before { top:calc(9px / var(--sc-scrollbar-scale-y,1)); transform:rotate(45deg); }
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"][aria-orientation="vertical"] [data-sc-scroll-step="end"]::before { top:calc(1px / var(--sc-scrollbar-scale-y,1)); transform:rotate(225deg); }
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"][aria-orientation="horizontal"] [data-sc-scroll-step="start"]::before { left:calc(9px / var(--sc-scrollbar-scale-x,1)); transform:rotate(-45deg); }
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"][aria-orientation="horizontal"] [data-sc-scroll-step="end"]::before { left:calc(1px / var(--sc-scrollbar-scale-x,1)); transform:rotate(135deg); }
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"]::before {
       z-index:1; box-sizing:border-box; border:0; border-radius:2px;
       background:var(--sc-photopro-scroll-thumb,#555); transition:none;
     }
-    .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="vertical"]::before,
-    .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="vertical"]:is(:hover,:focus-visible,[data-dragging])::before {
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"][aria-orientation="vertical"]::before,
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"][aria-orientation="vertical"]:is(:hover,:focus-visible,[data-dragging])::before {
       width:calc(${String(PHOTOPRO_SCROLLBAR_WIDTH - 4)}px / var(--sc-scrollbar-scale-x,1)); height:100%; right:calc(2px / var(--sc-scrollbar-scale-x,1));
     }
-    .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="horizontal"]::before,
-    .sc-style-scrollbar[data-sc-photopro-scrollbar][aria-orientation="horizontal"]:is(:hover,:focus-visible,[data-dragging])::before {
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"][aria-orientation="horizontal"]::before,
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"][aria-orientation="horizontal"]:is(:hover,:focus-visible,[data-dragging])::before {
       height:calc(${String(PHOTOPRO_SCROLLBAR_WIDTH - 4)}px / var(--sc-scrollbar-scale-y,1)); width:100%; bottom:calc(2px / var(--sc-scrollbar-scale-y,1));
     }
   `;
@@ -98,5 +99,19 @@ export function photoProScrollbarCss(): string {
 
 /** Apply the current palette without overriding the native owner's stacking context. */
 export function scrollbarCss(dark: boolean): string {
-  return `${nativeScrollbarCss()} :root { --sc-style-scrollbar-thumb:${dark ? 'rgba(255,255,255,.55)' : 'rgba(0,0,0,.45)'}; } ${scrollbarPresentationCss()} ${photoProScrollbarCss()}`;
+  return `${nativeScrollbarCss()} :root { --sc-style-scrollbar-thumb:${dark ? 'rgba(255,255,255,.55)' : 'rgba(0,0,0,.45)'}; } ${scrollbarPresentationCss()} ${photoProScrollbarCss()} ${gimpScrollbarCss()}`;
+}
+
+/** Paint GIMP's stable trough and thumb in document and shadow-root scrollbar layers. */
+export function gimpScrollbarCss(): string {
+  const scope = '.sc-style-scrollbar[data-sc-scrollbar-style="gimp"]';
+  return `
+    ${scope} { isolation:isolate; }
+    ${scope} .sc-style-scrollbar-track { position:absolute; z-index:0; box-sizing:border-box; background:var(--sc-gimp-trough); pointer-events:auto; }
+    ${scope} .sc-style-scrollbar-track[hidden] { display:none!important; }
+    ${scope} .sc-style-scrollbar-track button { display:none; }
+    ${scope}::before { z-index:1; box-sizing:border-box; border-radius:3px; background:var(--sc-gimp-scrollbar); border:2px solid var(--sc-gimp-border); transition:none; }
+    ${scope}[aria-orientation="vertical"]::before, ${scope}[aria-orientation="vertical"]:is(:hover,:focus-visible,[data-dragging])::before { width:calc(8px / var(--sc-scrollbar-scale-x,1)); right:calc(2px / var(--sc-scrollbar-scale-x,1)); }
+    ${scope}[aria-orientation="horizontal"]::before, ${scope}[aria-orientation="horizontal"]:is(:hover,:focus-visible,[data-dragging])::before { height:calc(8px / var(--sc-scrollbar-scale-y,1)); bottom:calc(2px / var(--sc-scrollbar-scale-y,1)); }
+  `;
 }

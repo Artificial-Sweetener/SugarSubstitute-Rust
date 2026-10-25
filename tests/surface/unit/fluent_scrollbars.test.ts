@@ -18,9 +18,9 @@ import { expect, test } from '@jest/globals';
 import { fluentAppearanceCss } from '../../../frontend/comfyui/ui/surface/appearance/FluentAppearanceStyles.js';
 import {
   photoProScrollbarCss,
-  scrollbarCss,
   scrollbarPresentationCss,
 } from '../../../frontend/comfyui/ui/surface/appearance/ScrollbarStyles.js';
+import { scrollbarPresentation } from '../../../frontend/comfyui/ui/surface/appearance/ScrollbarPresentation.js';
 import {
   scrollbarGeometry,
   scrollbarDragPosition,
@@ -35,8 +35,11 @@ test.each([true, false])(
     expect(css).not.toContain('scrollbar-width:auto!important');
     expect(css).not.toContain('scrollbar-width:thin!important');
     expect(css).not.toContain('data-sc-horizontal-scrollbar');
-    expect(scrollbarCss(dark)).not.toContain('padding-bottom');
-    expect(scrollbarCss(dark)).not.toContain('padding-block-end');
+    document.documentElement.dataset.scVisualStyle = 'fluent';
+    const presentation = scrollbarPresentation(document);
+    document.documentElement.removeAttribute('data-sc-visual-style');
+    expect(presentation.horizontalGutter).toBe(0);
+    expect(presentation.verticalGutter).toBe(0);
     expect(css).toContain('::-webkit-scrollbar');
     expect(css).toContain('.sc-style-scrollbar-layer');
     expect(css).toContain('position:absolute');
@@ -80,11 +83,11 @@ test('shares themed keyboard focus across all overlay thumbs with a system-color
 
 test('PhotoPro paints reference-width tracks, inset thumbs, and directional arrows', () => {
   const css = photoProScrollbarCss();
-  expect(css).toContain(
-    'padding-right:calc(var(--sc-scrollbar-base-padding-right,0px) + 16px) !important',
+  expect(scrollbarPresentationCss()).toContain(
+    'padding-right:calc(var(--sc-scrollbar-base-padding-right,0px) + var(--sc-scrollbar-gutter-width,0px)) !important',
   );
   expect(css).toContain(
-    '.sc-style-scrollbar[data-sc-photopro-scrollbar] .sc-style-scrollbar-track',
+    '.sc-style-scrollbar[data-sc-scrollbar-style="photopro"] .sc-style-scrollbar-track',
   );
   expect(css).toContain('background:var(--sc-photopro-scroll-track,#333)');
   expect(css).toContain('background:var(--sc-photopro-scroll-thumb,#555)');

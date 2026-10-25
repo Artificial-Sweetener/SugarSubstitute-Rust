@@ -1,4 +1,6 @@
-import { usesSubstituteSlider } from './NumericSliderPresentation.js';
+import { usesNumericSlider } from './NumericSliderPresentation.js';
+import { readOwnedVisualStyle } from './VisualStyleBoundary.js';
+import { formatDisplayLabel } from './DisplayLabels.js';
 /** Attach the selected slider beside the existing spinbox only at recognized native boundaries. */
 export class NativeNumericControls {
     #cards = new Map();
@@ -7,8 +9,8 @@ export class NativeNumericControls {
     constructor(createSlider) {
         this.#createSlider = createSlider;
     }
-    /** Follow replaced native inputs and reapply current presentation without duplicating controls. */
-    reconcile(root, fields) {
+    /** Reconcile native inputs while keeping adapter-identified seeds out of slider presentation. */
+    reconcile(root, fields, seedInputs) {
         for (const [card, bindings] of this.#cards) {
             if (!card.isConnected) {
                 for (const binding of bindings.values())
@@ -23,8 +25,7 @@ export class NativeNumericControls {
             if (!replacement ||
                 replacement.container !== binding.field.container ||
                 replacement.spinner !== binding.field.spinner ||
-                (usesSubstituteSlider(replacement) && !replacement.hasNativeSlider) !==
-                    (binding.slider !== null)) {
+                (supportsSlider(replacement) && !seedInputs.has(input)) !== (binding.slider !== null)) {
                 binding.release();
                 bindings.delete(input);
             }
@@ -36,7 +37,7 @@ export class NativeNumericControls {
                 existing.synchronize();
             }
             else
-                bindings.set(field.input, this.#bind(field));
+                bindings.set(field.input, this.#bind(field, supportsSlider(field) && !seedInputs.has(field.input)));
         }
     }
     /** Release controls, subscriptions, and annotations when the theme or renderer ends. */
@@ -47,10 +48,8 @@ export class NativeNumericControls {
         this.#cards.clear();
     }
     /** Synchronize through native model events so all edits use Comfy's existing value path. */
-    #bind(field) {
-        const slider = usesSubstituteSlider(field) && !field.hasNativeSlider
-            ? this.#createSlider(field.row.ownerDocument)
-            : null;
+    #bind(field, withSlider) {
+        const slider = withSlider ? this.#createSlider(field.row.ownerDocument, field) : null;
         const annotations = new Map();
         const gestureTargets = slider ? [field.spinner, slider.root] : [field.spinner];
         for (const target of gestureTargets)
@@ -71,6 +70,9 @@ export class NativeNumericControls {
                 synchronizeNumericAnnotations(binding.field, annotations);
                 if (!slider)
                     return;
+                const label = formatDisplayLabel(binding.field.label);
+                slider.root.setAttribute('aria-label', `${binding.field.label} slider`);
+                slider.root.dataset.scNumberLabel = label;
                 synchronizing = true;
                 try {
                     slider.synchronize(binding.field.minimum, binding.field.maximum, binding.field.step, binding.field.disabled(), binding.field.readValue());
@@ -93,7 +95,6 @@ export class NativeNumericControls {
             },
         };
         if (slider) {
-            slider.root.setAttribute('aria-label', `${field.label} slider`);
             slider.root.dataset.scNumberSlider = '';
             field.container.setAttribute('data-sc-number-pair', '');
             slider.root.addEventListener('input', publishSliderValue);
@@ -111,6 +112,11 @@ export class NativeNumericControls {
         }
         return binding;
     }
+}
+/** Select presentation at the browser boundary while the native field retains its input and value. */
+function supportsSlider(field) {
+    return (usesNumericSlider(field, readOwnedVisualStyle(field.row.ownerDocument)) &&
+        !field.hasNativeSlider);
 }
 /** Follow late-mounted native buttons while retaining the numeric input and slider identities. */
 function synchronizeNumericAnnotations(field, annotations) {

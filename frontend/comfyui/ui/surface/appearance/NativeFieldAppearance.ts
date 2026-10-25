@@ -63,10 +63,12 @@ export class NativeFieldAppearance {
   present(root: HTMLElement, themed = true): void {
     const card =
       this.kind === 'widget' ? this.#adapter.annotateWidget(root) : this.#adapter.annotate(root);
+    const seedInputs = new Set(card.seedFields.map((field) => field.numeric.input));
     if (!themed) {
       this.#numeric.reconcile(
         root,
         card.seedFields.map((field) => field.numeric),
+        seedInputs,
       );
       this.#seeds.reconcile(root, card.seedFields);
       return;
@@ -77,7 +79,7 @@ export class NativeFieldAppearance {
     this.#toggleRows.reconcile(root);
     this.#booleanSegments.reconcile(root);
     this.#advanced.reconcile(card);
-    this.#numeric.reconcile(root, card.numericFields);
+    this.#numeric.reconcile(root, card.numericFields, seedInputs);
     this.#seeds.reconcile(root, card.seedFields);
   }
 

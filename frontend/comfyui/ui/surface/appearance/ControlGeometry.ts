@@ -18,3 +18,12 @@ export const CONTROL_HEIGHT = 'var(--sc-control-height,33px)';
 
 /** Reserve five digit cells for four-digit values, signs or decimals, plus field chrome. */
 export const SPINNER_WIDTH = 'calc(5ch + 18px + var(--sc-spinner-stepper-width,20px))';
+
+/** Retain the established slider width beside native number spinners. */
+export const NUMERIC_SLIDER_WIDTH = '120px';
+
+/** Share spacing and total width for the existing slider-and-spinner composition. */
+export const NUMERIC_PAIR_GAP = '6px';
+
+/** Derive pair width from its shared slider, spinner, and spacing dimensions. */
+export const NUMERIC_PAIR_WIDTH = `calc(${SPINNER_WIDTH} + ${NUMERIC_SLIDER_WIDTH} + ${NUMERIC_PAIR_GAP})`;

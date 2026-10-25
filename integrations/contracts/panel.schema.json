@@ -10,7 +10,7 @@
           "type": "boolean"
         },
         "visualStyle": {
-          "enum": ["comfy", "fluent", "spectrum", "photopro"]
+          "enum": ["comfy", "fluent", "spectrum", "photopro", "gimp"]
         },
         "photoProPalette": {
           "enum": ["black", "dark-gray", "medium-gray", "light-gray"]

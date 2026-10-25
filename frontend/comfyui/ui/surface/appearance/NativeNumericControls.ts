@@ -15,7 +15,9 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own reversible numeric presentation while Comfy retains widget values and callbacks. */
 import type { NativeNumericField } from './ComfyNativeNumericField.js';
-import { usesSubstituteSlider } from './NumericSliderPresentation.js';
+import { usesNumericSlider, type NumericSliderSpec } from './NumericSliderPresentation.js';
+import { readOwnedVisualStyle } from './VisualStyleBoundary.js';
+import { formatDisplayLabel } from './DisplayLabels.js';
 
 export interface NumericSliderControl {
   readonly root: HTMLElement;
@@ -39,15 +41,21 @@ interface NumericBinding {
 /** Attach the selected slider beside the existing spinbox only at recognized native boundaries. */
 export class NativeNumericControls {
   readonly #cards = new Map<HTMLElement, Map<HTMLInputElement, NumericBinding>>();
-  readonly #createSlider: (documentRef: Document) => NumericSliderControl;
+  readonly #createSlider: (documentRef: Document, field: NumericSliderSpec) => NumericSliderControl;
 
   /** Bind the official component factory independently of native widget adaptation. */
-  constructor(createSlider: (documentRef: Document) => NumericSliderControl) {
+  constructor(
+    createSlider: (documentRef: Document, field: NumericSliderSpec) => NumericSliderControl,
+  ) {
     this.#createSlider = createSlider;
   }
 
-  /** Follow replaced native inputs and reapply current presentation without duplicating controls. */
-  reconcile(root: HTMLElement, fields: readonly NativeNumericField[]): void {
+  /** Reconcile native inputs while keeping adapter-identified seeds out of slider presentation. */
+  reconcile(
+    root: HTMLElement,
+    fields: readonly NativeNumericField[],
+    seedInputs: ReadonlySet<HTMLInputElement>,
+  ): void {
     for (const [card, bindings] of this.#cards) {
       if (!card.isConnected) {
         for (const binding of bindings.values()) binding.release();
@@ -62,8 +70,7 @@ export class NativeNumericControls {
         !replacement ||
         replacement.container !== binding.field.container ||
         replacement.spinner !== binding.field.spinner ||
-        (usesSubstituteSlider(replacement) && !replacement.hasNativeSlider) !==
-          (binding.slider !== null)
+        (supportsSlider(replacement) && !seedInputs.has(input)) !== (binding.slider !== null)
       ) {
         binding.release();
         bindings.delete(input);
@@ -74,7 +81,11 @@ export class NativeNumericControls {
       if (existing) {
         existing.field = field;
         existing.synchronize();
-      } else bindings.set(field.input, this.#bind(field));
+      } else
+        bindings.set(
+          field.input,
+          this.#bind(field, supportsSlider(field) && !seedInputs.has(field.input)),
+        );
     }
   }
 
@@ -86,11 +97,8 @@ export class NativeNumericControls {
   }
 
   /** Synchronize through native model events so all edits use Comfy's existing value path. */
-  #bind(field: NativeNumericField): NumericBinding {
-    const slider =
-      usesSubstituteSlider(field) && !field.hasNativeSlider
-        ? this.#createSlider(field.row.ownerDocument)
-        : null;
+  #bind(field: NativeNumericField, withSlider: boolean): NumericBinding {
+    const slider = withSlider ? this.#createSlider(field.row.ownerDocument, field) : null;
     const annotations = new Map<string, HTMLElement>();
     const gestureTargets = slider ? [field.spinner, slider.root] : [field.spinner];
     for (const target of gestureTargets)
@@ -109,6 +117,9 @@ export class NativeNumericControls {
       synchronize: () => {
         synchronizeNumericAnnotations(binding.field, annotations);
         if (!slider) return;
+        const label = formatDisplayLabel(binding.field.label);
+        slider.root.setAttribute('aria-label', `${binding.field.label} slider`);
+        slider.root.dataset.scNumberLabel = label;
         synchronizing = true;
         try {
           slider.synchronize(
@@ -135,7 +146,6 @@ export class NativeNumericControls {
       },
     };
     if (slider) {
-      slider.root.setAttribute('aria-label', `${field.label} slider`);
       slider.root.dataset.scNumberSlider = '';
       field.container.setAttribute('data-sc-number-pair', '');
       slider.root.addEventListener('input', publishSliderValue);
@@ -151,6 +161,14 @@ export class NativeNumericControls {
     }
     return binding;
   }
+}
+
+/** Select presentation at the browser boundary while the native field retains its input and value. */
+function supportsSlider(field: NativeNumericField): boolean {
+  return (
+    usesNumericSlider(field, readOwnedVisualStyle(field.row.ownerDocument)) &&
+    !field.hasNativeSlider
+  );
 }
 
 /** Follow late-mounted native buttons while retaining the numeric input and slider identities. */

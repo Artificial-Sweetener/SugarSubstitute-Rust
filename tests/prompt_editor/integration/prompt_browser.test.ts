@@ -38,7 +38,12 @@ beforeAll(async () => {
     target: 'es2022',
     write: false,
     loader: { '.txt': 'text' },
-    define: { 'process.env.NODE_ENV': '"production"' },
+    define: {
+      'process.env.NODE_ENV': '"production"',
+      __VUE_OPTIONS_API__: 'false',
+      __VUE_PROD_DEVTOOLS__: 'false',
+      __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: 'false',
+    },
   });
   const script = result.outputFiles[0]?.contents;
   if (!script) throw new Error('Missing prompt browser fixture');
@@ -102,6 +107,7 @@ test.each(['nodes-1', 'nodes-2'] as const)(
       await page.close();
     }
   },
+  30_000,
 );
 
 /** Require the rich presentation rather than the native textarea's two-line fallback. */
@@ -502,49 +508,76 @@ test.each(
   30_000,
 );
 
-test('uses provider field controls while retaining the same native document across all visual styles', async () => {
-  const page = await browser.newPage();
-  try {
-    await page.goto(address);
-    await page.waitForFunction(() => !!window.promptBrowserProof);
-    await page.evaluate((source) => window.promptBrowserProof.mount('nodes-2', 1, source), source);
-    await ready(page);
-    await page.locator('.cm-content').focus();
-    await page.keyboard.press('Control+End');
-    await page.keyboard.type('q');
-    const content = await page.locator('.cm-content').elementHandle();
-    for (const style of ['fluent', 'spectrum', 'comfy', 'fluent'] as const) {
-      await page.evaluate((style) => window.promptBrowserProof.theme(style, true), style);
-      const field = page.locator(`[data-sc-editor-field="${style}"]`);
-      await field.waitFor({ state: 'visible' });
-      expect(await field.evaluate((node) => node.tagName)).toBe(
-        style === 'fluent'
-          ? 'FLUENT-TEXTAREA'
-          : style === 'spectrum'
-            ? 'SC-SPECTRUM-EDITOR-FIELD'
-            : 'DIV',
+test.each(['nodes-1', 'nodes-2'] as const)(
+  '%s retains the focused native document and undo across visual styles',
+  async (renderer) => {
+    const page = await browser.newPage();
+    try {
+      await page.goto(address);
+      await page.waitForFunction(() => !!window.promptBrowserProof);
+      await page.evaluate(
+        ({ renderer, source }) => window.promptBrowserProof.mount(renderer, 1, source),
+        { renderer, source },
       );
-      expect(
-        await page.locator('.cm-content').evaluate((node, retained) => node === retained, content),
-      ).toBe(true);
-      expect(
-        await page.locator('.cm-content').evaluate((node) => node === document.activeElement),
-      ).toBe(true);
-      expect(await field.evaluate((node) => node.matches(':focus-within'))).toBe(true);
-      if (style === 'spectrum')
-        expect(await field.evaluate((node) => node.hasAttribute('focused'))).toBe(true);
-      expect(await page.evaluate(() => window.promptBrowserProof.read().source)).toBe(source + 'q');
+      await ready(page);
+      await page.locator('.cm-content').focus();
+      await page.keyboard.press('Control+End');
+      await page.keyboard.type('q');
+      const content = await page.locator('.cm-content').elementHandle();
+      for (const [style, dark] of [
+        ['gimp', true],
+        ['gimp', false],
+        ['photopro', true],
+        ['fluent', true],
+        ['spectrum', true],
+        ['comfy', true],
+        ['gimp', true],
+      ] as const) {
+        await page.evaluate(({ style, dark }) => window.promptBrowserProof.theme(style, dark), {
+          style,
+          dark,
+        });
+        const field = page.locator(`[data-sc-editor-field="${style}"]`);
+        await field.waitFor({ state: 'visible' });
+        expect(await field.evaluate((node) => node.tagName)).toBe(
+          style === 'fluent'
+            ? 'FLUENT-TEXTAREA'
+            : style === 'spectrum'
+              ? 'SC-SPECTRUM-EDITOR-FIELD'
+              : style === 'gimp'
+                ? 'SC-GIMP-FRAME'
+                : 'DIV',
+        );
+        expect(
+          await page
+            .locator('.cm-content')
+            .evaluate((node, retained) => node === retained, content),
+        ).toBe(true);
+        expect({
+          style,
+          focused: await page
+            .locator('.cm-content')
+            .evaluate((node) => node === document.activeElement),
+        }).toEqual({ style, focused: true });
+        expect(await field.evaluate((node) => node.matches(':focus-within'))).toBe(true);
+        if (style === 'spectrum')
+          expect(await field.evaluate((node) => node.hasAttribute('focused'))).toBe(true);
+        expect(await page.evaluate(() => window.promptBrowserProof.read().source)).toBe(
+          source + 'q',
+        );
+      }
+      await page.keyboard.press('Control+z');
+      await page.waitForFunction(
+        (source) => window.promptBrowserProof.read().source === source,
+        source,
+      );
+      expect(await page.evaluate(() => window.promptBrowserProof.read().errors)).toEqual([]);
+    } finally {
+      await page.close();
     }
-    await page.keyboard.press('Control+z');
-    await page.waitForFunction(
-      (source) => window.promptBrowserProof.read().source === source,
-      source,
-    );
-    expect(await page.evaluate(() => window.promptBrowserProof.read().errors)).toEqual([]);
-  } finally {
-    await page.close();
-  }
-}, 60_000);
+  },
+  60_000,
+);
 
 test('native typing retains unrelated wrapping DOM while semantic preparation is pending', async () => {
   const page = await browser.newPage();
@@ -795,7 +828,7 @@ test.each(['nodes-1', 'nodes-2'] as const)(
   60_000,
 );
 
-test.each(['fluent', 'spectrum', 'comfy'] as const)(
+test.each(['fluent', 'spectrum', 'comfy', 'gimp'] as const)(
   '%s provider owns field focus in both palettes without recreating the editor',
   async (style) => {
     const page = await browser.newPage();
@@ -873,6 +906,9 @@ test.each(['fluent', 'spectrum', 'comfy'] as const)(
         } else if (style === 'spectrum') {
           expect(paint.provider).toBe('SC-SPECTRUM-EDITOR-FIELD');
           expect(paint.spectrumFocused).toBe(true);
+          expect(paint.hostFrame).toBe('none');
+        } else if (style === 'gimp') {
+          expect(paint.provider).toBe('SC-GIMP-FRAME');
           expect(paint.hostFrame).toBe('none');
         } else {
           expect(paint.provider).toBe('DIV');

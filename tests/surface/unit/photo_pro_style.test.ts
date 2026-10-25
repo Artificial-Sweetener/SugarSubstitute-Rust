@@ -279,7 +279,14 @@ test('scopes PhotoPro tokens to owned controls and removes them on release', () 
 test('uses native PhotoPro inputs with one value and keyboard selection owner', () => {
   publishVisualStyle(document, 'photopro');
   const checkbox = createBooleanCheckbox(document);
-  const slider = createNumericSlider(document);
+  const slider = createNumericSlider(document, {
+    name: 'denoise',
+    label: 'Denoise',
+    minimum: 0,
+    maximum: 1,
+    step: 0.01,
+    precision: 2,
+  });
   const finder = createFinderInput(document);
   const segments = createBooleanSegments(document);
   const workflow = createWorkflowTablist(document);
