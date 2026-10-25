@@ -3,7 +3,7 @@
 ## Mission and repository scope
 
 SugarSubstitute is the Rust desktop host for ComfyUI frontend, SugarCubes, and
-the native CuteCanvas system. The product name is SugarSubstitute; the checkout
+the native canvas system. The product name is SugarSubstitute; the checkout
 directory name does not change application or installation identity.
 
 This file defines engineering guardrails, not feature specifications,
@@ -20,8 +20,10 @@ implementation plans, or workstation configuration.
   updates, connection/process lifecycle, OS services, workspace document
   lifecycle, and workflow/canvas/result coordination. Its native UI serves
   window chrome, OS dialogs, and situations where the web interface is unavailable.
-- CuteCanvas owns canvas documents, editing, layers, selections, history, and
-  rendering. Mount it through public APIs; do not reproduce its engine here.
+- Native canvas owners belong to this workspace. `sugarsubstitute-image-ops`
+  owns image-operation graphs, pyramid/resampling semantics and tiled evaluation.
+  Keep document editing, viewport interaction and native presentation ownership
+  distinct; consume each owner's public APIs.
 - SugarPrompt integration belongs to SugarCubes. Do not introduce a second
   editor integration in the desktop host.
 

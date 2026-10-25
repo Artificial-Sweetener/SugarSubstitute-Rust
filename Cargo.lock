@@ -2509,6 +2509,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sugarsubstitute-image-ops"
+version = "0.1.0"
+dependencies = [
+ "sha2",
+ "sugarsubstitute-contracts",
+ "sugarsubstitute-execution",
+]
+
+[[package]]
 name = "sugarsubstitute-networking"
 version = "0.1.0"
 dependencies = [

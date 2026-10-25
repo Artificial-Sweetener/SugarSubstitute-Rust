@@ -8,6 +8,12 @@ source_roots = ["crates", "tools"]
 layers = ["domain", "application", "adapter", "host", "tooling"]
 
 [[owners]]
+package = "sugarsubstitute-image-ops"
+root = "crates/sugarsubstitute-image-ops"
+layer = "domain"
+concern = "Image-operation DAG semantics, spatial dependencies, linear color and execution-admitted tiled CPU evaluation"
+
+[[owners]]
 package = "sugarsubstitute-contracts"
 root = "crates/sugarsubstitute-contracts"
 layer = "domain"

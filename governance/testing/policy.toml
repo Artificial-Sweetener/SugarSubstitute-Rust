@@ -2,6 +2,12 @@ schema_version = 1
 platforms = ["windows", "macos", "linux"]
 
 [[owners]]
+package = "sugarsubstitute-image-ops"
+root = "crates/sugarsubstitute-image-ops"
+concern = "Graph identity and validation, pyramid semantics, tiled/reference agreement, vector coverage, dirty dependencies, bounded source access and retained execution memory"
+minimum_tests = 12
+
+[[owners]]
 package = "sugarsubstitute-contracts"
 root = "crates/sugarsubstitute-contracts"
 concern = "Native installation selection, exact health-attempt correlation, interrupted trial reconciliation and failed-package suppression; Closed recovery correlation, physical generation identity, summary migration steps and localized capture degradation and unknown exit text; Owned contracts, localization, memory claims, immutable frames, scoped lifecycle and bounded transcript facts; bounded incident evidence, durable acknowledgment facts and namespace eviction ledger; bounded coordinator-entry identity, launch input and setup deadlines; sole five-locale native incident report messages and complete consent disclosure; fixed authenticated backend custody framing and exact purpose/session matching; authoritative capture target and domain-separated helper Supervisor subject; Shared diagnostic schema, identity grammar and privacy bounds"
