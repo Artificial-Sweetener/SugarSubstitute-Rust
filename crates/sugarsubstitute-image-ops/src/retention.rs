@@ -75,17 +75,30 @@ impl<T> TileRetention<T> {
             tile,
         });
     }
-    /// Evict one solely retained tile under allocation pressure. Returns false when all are pinned.
+    /// Evict one cache-only reference under allocation pressure, including aliases of one tile.
+    /// Returns false when every candidate has outside or backend allocation references.
     /// The backend reports additional native allocation references beyond this tile's Arc.
     /// Submitted work and outside results must retain their allocation guards until completion.
     pub fn evict_unpinned(&mut self, backend_unpinned: impl Fn(&T) -> bool) -> bool {
-        let Some(index) =
-            self.victim(|tile| Arc::strong_count(tile) == 1 && backend_unpinned(tile))
+        let Some(index) = self.victim(|tile| backend_unpinned(tile) && self.solely_cached(tile))
         else {
             return false;
         };
         self.entries.swap_remove(index);
         true
+    }
+    /// Alias entries share an allocation; their own references do not constitute an outside pin.
+    fn solely_cached(&self, tile: &Arc<T>) -> bool {
+        let references = Arc::strong_count(tile);
+        references == 1
+            || (references <= self.entries.len()
+                && self
+                    .entries
+                    .iter()
+                    .filter(|entry| Arc::ptr_eq(&entry.tile, tile))
+                    .take(references)
+                    .count()
+                    == references)
     }
     fn victim(&self, eligible: impl Fn(&Arc<T>) -> bool) -> Option<usize> {
         let mut counts = [0_usize; 256];

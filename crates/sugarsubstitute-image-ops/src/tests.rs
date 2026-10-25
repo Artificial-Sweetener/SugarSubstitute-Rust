@@ -10,6 +10,7 @@ mod phase;
 mod preview;
 mod reference;
 mod retention;
+mod reuse;
 mod sampling;
 
 const MEMORY: u64 = 64 * 1024 * 1024;

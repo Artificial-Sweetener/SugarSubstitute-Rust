@@ -80,7 +80,7 @@ rationale = "Host lifetime composes the existing execution adapter with the prot
 [[records]]
 path = "crates/sugarsubstitute/src/diagnostics/tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:1947d3385fca19709aecc598c1c89f503052d8b4db72c241b16cc3e2f85714e2"
+source_sha256 = "sha256:178ee4d86e7f63bd2f19127306c6cc8556f5e03c199de49caf7e0a193d7cb8dc"
 disposition = "fixture"
 rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
 
@@ -969,7 +969,7 @@ rationale = "Isolated native hardware qualification reports actual adapter ident
 [[records]]
 path = "crates/sugarsubstitute-image-gpu/examples/adapter_qualification/image.rs"
 owner = "sugarsubstitute-image-gpu"
-source_sha256 = "sha256:60c06087316cfd5d1e193583b4770036815ae229080e9c96ffab4a4e56b89a51"
+source_sha256 = "sha256:1303a6eea1452f25a68683e5c14b13b6168cd5605c7fe128b2a330454889d03f"
 disposition = "fixture"
 rationale = "Isolated native hardware qualification reports actual adapter identity, CPU/GPU pixel comparisons, timings and observed execution retirement; runtime diagnostics use structured logging."
 

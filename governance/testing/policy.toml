@@ -23,7 +23,7 @@ minimum_tests = 18
 package = "sugarsubstitute-image-ops"
 root = "crates/sugarsubstitute-image-ops"
 concern = "Graph identity, shared CPU/GPU sampling and retention, exact clipped tile inventories, pyramid semantics, vector coverage, dirty dependencies and original execution admission"
-minimum_tests = 37
+minimum_tests = 42
 
 [[owners]]
 package = "sugarsubstitute-contracts"

@@ -35,6 +35,10 @@ fn real_subscriber_failed_sink_is_nonrecursive_and_keeps_original_source_until_l
     tracing::subscriber::with_default(sub, || {
         tracing::info!(operation = "diagnostic_fixture", "actual fmt write");
     });
+    // tracing-core interest readers temporarily upgrade other registered subscribers.
+    // New registration joins those readers and removes the retired subscriber's weak registrar.
+    let _registration_barrier =
+        tracing::Dispatch::new(tracing::subscriber::NoSubscriber::default());
     let failure = health.check().err().ok_or("Actual sink failure missing")?;
     assert!(
         failure

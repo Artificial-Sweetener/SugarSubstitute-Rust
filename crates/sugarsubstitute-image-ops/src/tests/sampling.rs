@@ -228,3 +228,31 @@ fn display_lookup_tracks_srgb_transfer_within_one_output_level() -> TestResult {
         Ok(())
     })
 }
+
+#[test]
+fn display_quantization_preserves_reference_bytes_around_every_half_step() -> TestResult {
+    run(MEMORY, |context| {
+        let encoder = SrgbEncoder::new(context.memory())?;
+        let verify = |linear: f32| -> Result<(), ImageError> {
+            let index = (linear.clamp(0.0, 1.0) * 65535.0).round() as usize;
+            let expected = encoder.table()[index];
+            assert_eq!(
+                encoder.encode(Pixel::linear(linear, linear, linear, 1.0)?)?,
+                [expected, expected, expected, 255],
+                "Linear sample bits {:08x}",
+                linear.to_bits()
+            );
+            Ok(())
+        };
+        for index in 0..65535 {
+            let threshold = ((f64::from(index) + 0.5) / 65535.0) as f32;
+            for bits in threshold.to_bits() - 1..=threshold.to_bits() + 1 {
+                verify(f32::from_bits(bits))?;
+            }
+        }
+        for linear in [-f32::MAX, -1.0, -0.0, 0.0, f32::from_bits(1), 1.0, f32::MAX] {
+            verify(linear)?;
+        }
+        Ok(())
+    })
+}

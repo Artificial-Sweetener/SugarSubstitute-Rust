@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Bounded demand-driven CPU evaluation with feature-owned process-local tile reuse.
+mod reuse;
 use crate::{
     AssetId, Graph, ImageError, NodeId, Operation, Pixel, RasterSamples, Region, Sampling,
     TILE_EDGE, Tile, TileRetention, buffer::Buffer,
@@ -170,6 +171,12 @@ impl<S: RasterSource> Evaluator<S> {
             return Ok(tile);
         }
         let operation = self.graph.operation(node)?;
+        if let Some(tile) = self.alias_input(operation, region, context)? {
+            check(context)?;
+            self.cache.insert(key, region, level, Arc::clone(&tile));
+            self.stats.reused_tiles = self.stats.reused_tiles.saturating_add(1);
+            return Ok(tile);
+        }
         let mut output = self.allocate(region)?;
         match operation {
             Operation::Raster { asset, .. } => {
@@ -192,7 +199,8 @@ impl<S: RasterSource> Evaluator<S> {
                         let coverage = horizontal * vertical;
                         let index = (y - region.y()) as usize * region.width() as usize
                             + (x - region.x()) as usize;
-                        output.pixels[index] = Pixel(shape.color.0.map(|value| value * coverage));
+                        output.pixels[index] =
+                            Pixel::premultiplied(shape.color.0.map(|value| value * coverage))?;
                     }
                 }
             }
@@ -261,7 +269,7 @@ impl<S: RasterSource> Evaluator<S> {
                     for ((output, input), mask) in
                         output.pixels.iter_mut().zip(input.pixels()).zip(mask.pixels())
                     {
-                        *output = Pixel(input.0.map(|value| value * mask.0[3]));
+                        *output = Pixel::premultiplied(input.0.map(|value| value * mask.0[3]))?;
                     }
                 }
             }

@@ -41,7 +41,7 @@ struct Case {
     node: NodeId,
     region: Region,
 }
-fn graph(context: &JobContext) -> Result<(Graph, Vec<Case>, NodeId)> {
+fn graph(context: &JobContext) -> Result<(Graph, Vec<Case>, [NodeId; 3])> {
     let mut graph = Graph::new(128, context.memory())?;
     let extent = Extent::new(257, 131)?;
     let source = graph.add(Operation::Raster { asset: ASSET, extent })?;
@@ -185,12 +185,23 @@ fn graph(context: &JobContext) -> Result<(Graph, Vec<Case>, NodeId)> {
     let bright =
         graph.add(Operation::Solid { extent, color: Pixel::linear(f32::MAX, 0.0, 0.0, 1.0)? })?;
     let overflow = graph.add(Operation::Exposure { input: bright, stops: 32.0 })?;
-    Ok((graph, cases, overflow))
+    let tiny = Pixel::premultiplied([0.25, 0.0, 0.0, f32::from_bits(1)])?;
+    let one = Extent::new(1, 1)?;
+    let input = graph.add(Operation::Solid { extent: one, color: tiny })?;
+    let mask =
+        graph.add(Operation::Solid { extent: one, color: Pixel::linear(0.0, 0.0, 0.0, 0.25)? })?;
+    let underflow_mask = graph.add(Operation::Mask { input, mask })?;
+    let underflow_vector = graph.add(Operation::Rectangle {
+        extent: one,
+        shape: VectorRectangle::new([0.75, 0.0, 1.0, 1.0], tiny)?,
+        translation: [0; 2],
+    })?;
+    Ok((graph, cases, [overflow, underflow_mask, underflow_vector]))
 }
 pub(super) fn qualify(device: Arc<GpuDevice>, context: &JobContext) -> Result<usize> {
     let _inventory = context.memory().claim(256 * 1024)?;
-    let (cpu_graph, cpu_cases, cpu_overflow) = graph(context)?;
-    let (gpu_graph, gpu_cases, gpu_overflow) = graph(context)?;
+    let (cpu_graph, cpu_cases, cpu_invalid) = graph(context)?;
+    let (gpu_graph, gpu_cases, gpu_invalid) = graph(context)?;
     let mut cpu = Evaluator::new(cpu_graph, Pattern, 32, context.memory())?;
     let mut gpu = GpuEvaluator::new(gpu_graph, Pattern, 32, device, context.memory(), context)?;
     for (case, native) in cpu_cases.iter().zip(&gpu_cases) {
@@ -234,12 +245,18 @@ pub(super) fn qualify(device: Arc<GpuDevice>, context: &JobContext) -> Result<us
             return Err("GPU did not reuse an identical completed region".into());
         }
     }
-    if cpu.region(cpu_overflow, Region::new(0, 0, 1, 1)?, context).is_ok()
-        || gpu.region(gpu_overflow, Region::new(0, 0, 1, 1)?, context).is_ok()
-    {
-        return Err("Image evaluation accepted nonfinite exposure output".into());
+    for (cpu_node, gpu_node) in cpu_invalid.into_iter().zip(gpu_invalid) {
+        if cpu.region(cpu_node, Region::new(0, 0, 1, 1)?, context).is_ok()
+            || gpu.region(gpu_node, Region::new(0, 0, 1, 1)?, context).is_ok()
+        {
+            return Err("Image evaluation accepted invalid canonical output".into());
+        }
     }
-    println!("DAG: nonfinite_exposure_rejected=true stats={:?} work={:?}", gpu.stats(), gpu.work());
+    println!(
+        "DAG: invalid_canonical_outputs_rejected=3 stats={:?} work={:?}",
+        gpu.stats(),
+        gpu.work()
+    );
     let retained = gpu.region(gpu_cases[0].node, gpu_cases[0].region, context)?;
     let expected = cpu.region(cpu_cases[0].node, cpu_cases[0].region, context)?;
     let before = gpu.stats();

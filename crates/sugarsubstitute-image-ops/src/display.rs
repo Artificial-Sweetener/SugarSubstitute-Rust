@@ -41,7 +41,10 @@ impl SrgbEncoder {
         }
         let mut result = [255; 4];
         for (output, input) in result[..3].iter_mut().zip(channels) {
-            let index = (input.clamp(0.0, 1.0) * (LEVELS - 1) as f32).round() as usize;
+            let scaled = input.clamp(0.0, 1.0) * (LEVELS - 1) as f32;
+            let integer = scaled as u32;
+            // The bounded nonnegative fraction preserves half-up rounding without scalar roundf.
+            let index = (integer + u32::from(scaled - integer as f32 >= 0.5)) as usize;
             *output = self.table[index];
         }
         Ok(result)
