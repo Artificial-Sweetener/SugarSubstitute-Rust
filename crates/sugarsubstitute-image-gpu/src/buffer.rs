@@ -15,6 +15,39 @@ pub(crate) struct Buffer {
     pub(crate) bytes: u64,
     _memory: MemoryClaim,
 }
+pub(crate) struct Encoding {
+    pub(crate) bytes: Vec<u8>,
+    _memory: MemoryClaim,
+}
+impl Encoding {
+    pub(crate) fn pixels(
+        region: Region,
+        pixels: &[Pixel],
+        context: &JobContext,
+    ) -> Result<Self, GpuError> {
+        if region.width() > TILE_EDGE
+            || region.height() > TILE_EDGE
+            || region.pixels() != pixels.len() as u64
+        {
+            return Err(GpuError::invalid("GPU source upload requires one complete bounded tile"));
+        }
+        let bytes = region.pixels() * 16;
+        let memory = context
+            .memory()
+            .claim(bytes)
+            .map_err(|cause| GpuError::new("gpu_upload_workspace", cause))?;
+        let mut encoded = Vec::new();
+        encoded
+            .try_reserve_exact(bytes as usize)
+            .map_err(|cause| GpuError::new("gpu_upload_allocation", cause))?;
+        for pixel in pixels {
+            for channel in pixel.channels() {
+                encoded.extend_from_slice(&channel.to_le_bytes());
+            }
+        }
+        Ok(Self { bytes: encoded, _memory: memory })
+    }
+}
 /// Immutable canonical linear-premultiplied RGBA32F pixels in one selected GPU's memory.
 /// Clones share the allocation and its original charge. Raw buffers and queues remain private.
 #[derive(Clone)]
@@ -73,26 +106,8 @@ impl GpuDevice {
         pixels: &[Pixel],
         context: &JobContext,
     ) -> Result<GpuTile, GpuError> {
-        if region.width() > TILE_EDGE
-            || region.height() > TILE_EDGE
-            || region.pixels() != pixels.len() as u64
-        {
-            return Err(GpuError::invalid("GPU source upload requires one complete bounded tile"));
-        }
-        let bytes = region.pixels() * 16;
-        let _serialization = context
-            .memory()
-            .claim(bytes)
-            .map_err(|cause| GpuError::new("gpu_upload_workspace", cause))?;
-        let mut encoded = Vec::new();
-        encoded
-            .try_reserve_exact(bytes as usize)
-            .map_err(|cause| GpuError::new("gpu_upload_allocation", cause))?;
-        for pixel in pixels {
-            for channel in pixel.channels() {
-                encoded.extend_from_slice(&channel.to_le_bytes());
-            }
-        }
+        let encoded = Encoding::pixels(region, pixels, context)?;
+        let bytes = encoded.bytes.len() as u64;
         let buffer = self.allocate(
             bytes,
             wgpu::BufferUsages::STORAGE
@@ -104,7 +119,7 @@ impl GpuDevice {
             .memory()
             .claim(bytes)
             .map_err(|cause| GpuError::new("gpu_upload_staging", cause))?;
-        let mut transfer = Transfer::upload(buffer.clone(), staging, &encoded);
+        let mut transfer = Transfer::upload(buffer.clone(), staging, &encoded.bytes);
         transfer.retire()?;
         crate::adapter::check(context)?;
         Ok(GpuTile { buffer, region })

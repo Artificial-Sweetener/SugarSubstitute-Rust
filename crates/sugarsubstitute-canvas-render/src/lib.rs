@@ -2,8 +2,11 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Prepared canvas presentation independent of native window handles.
 mod cpu;
+mod gpu;
 mod surface;
+mod update;
 pub use cpu::CpuRenderer;
+pub use gpu::{GpuRenderer, PreparedGpuUpdate};
 pub use surface::{CpuSurface, PreparedUpdate, SurfaceWork};
 
 /// Reject invalid prepared presentation without changing retained surface contents.
@@ -19,6 +22,8 @@ pub enum RenderError {
     Image(sugarsubstitute_image_ops::ImageError),
     /// Document or camera compilation error preserving original image causes.
     Canvas(sugarsubstitute_canvas::CanvasError),
+    /// Native GPU evaluation failure preserving driver, image and execution causes.
+    Gpu(sugarsubstitute_image_gpu::GpuError),
 }
 impl std::fmt::Display for RenderError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -27,6 +32,7 @@ impl std::fmt::Display for RenderError {
             Self::StaleBase => f.write_str("Canvas repair base is no longer presented"),
             Self::StaleTarget => f.write_str("Canvas frame was superseded"),
             Self::Image(cause) => write!(f, "Canvas preparation: {cause}"),
+            Self::Gpu(cause) => write!(f, "Canvas GPU preparation: {cause}"),
             Self::Canvas(cause) => write!(f, "Canvas document: {cause}"),
         }
     }
@@ -36,6 +42,7 @@ impl std::error::Error for RenderError {
         match self {
             Self::Image(cause) => Some(cause),
             Self::Canvas(cause) => Some(cause),
+            Self::Gpu(cause) => Some(cause),
             _ => None,
         }
     }
@@ -50,5 +57,12 @@ impl From<sugarsubstitute_canvas::CanvasError> for RenderError {
         Self::Canvas(cause)
     }
 }
+
+impl From<sugarsubstitute_image_gpu::GpuError> for RenderError {
+    fn from(cause: sugarsubstitute_image_gpu::GpuError) -> Self {
+        Self::Gpu(cause)
+    }
+}
+
 #[cfg(test)]
 mod tests;

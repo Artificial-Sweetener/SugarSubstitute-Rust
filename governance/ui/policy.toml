@@ -121,14 +121,17 @@ source_sha256 = "sha256:84abb1b0934c1f14291282d34afe61f7e83520cd6f32c53597153633
 
 [[boundaries]]
 owner = "sugarsubstitute-image-gpu"
-concern = "Explicit Vulkan/Metal devices, shared DAG compute kernels, bounded GPU halos and original resource custody through observed native completion"
+concern = "Explicit Vulkan/Metal devices, bounded DAG command batches, shared display encoding and original resource custody through observed native completion"
 capabilities = ["raster"]
 sources = [
     "crates/sugarsubstitute-image-gpu/src/adapter.rs",
+    "crates/sugarsubstitute-image-gpu/src/batch.rs",
     "crates/sugarsubstitute-image-gpu/src/buffer.rs",
     "crates/sugarsubstitute-image-gpu/src/dependency.rs",
+    "crates/sugarsubstitute-image-gpu/src/display.rs",
+    "crates/sugarsubstitute-image-gpu/src/evaluate.rs",
     "crates/sugarsubstitute-image-gpu/src/fault.rs",
     "crates/sugarsubstitute-image-gpu/src/kernel.rs",
     "crates/sugarsubstitute-image-gpu/src/transfer.rs",
 ]
-source_sha256 = "sha256:c3824d020fee569f0caa3af09b88055024f5be9ab373689b1ea77308e2e21e34"
+source_sha256 = "sha256:557f5344ec78e67221d4d3df1af4d095fe080be806807ae3c6e14ac334474555"

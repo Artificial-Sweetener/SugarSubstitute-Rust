@@ -99,6 +99,31 @@ impl Region {
     pub const fn contains(self, x: u32, y: u32) -> bool {
         x >= self.x && x < self.right() && y >= self.y && y < self.bottom()
     }
+    /// Number of aligned image tiles intersected by this exact region, without allocating them.
+    pub const fn tile_count(self) -> u64 {
+        let columns = (self.right() - 1) / crate::TILE_EDGE - self.x / crate::TILE_EDGE + 1;
+        let rows = (self.bottom() - 1) / crate::TILE_EDGE - self.y / crate::TILE_EDGE + 1;
+        columns as u64 * rows as u64
+    }
+    /// Split into row-major clipped intersections with the shared image tile grid.
+    /// Every output is nonempty; exact repair edges and global coordinates remain unchanged.
+    /// Iteration allocates no proportional storage, including at the u32 coordinate boundary.
+    pub fn tiles(self) -> impl Iterator<Item = Self> {
+        let columns = self.x / crate::TILE_EDGE..=(self.right() - 1) / crate::TILE_EDGE;
+        (self.y / crate::TILE_EDGE..=(self.bottom() - 1) / crate::TILE_EDGE).flat_map(move |row| {
+            columns.clone().map(move |column| {
+                let left = self.x.max(column * crate::TILE_EDGE);
+                let top = self.y.max(row * crate::TILE_EDGE);
+                let right = u64::from(self.right())
+                    .min((u64::from(column) + 1) * u64::from(crate::TILE_EDGE))
+                    as u32;
+                let bottom = u64::from(self.bottom())
+                    .min((u64::from(row) + 1) * u64::from(crate::TILE_EDGE))
+                    as u32;
+                Self { x: left, y: top, width: right - left, height: bottom - top }
+            })
+        })
+    }
 }
 
 impl Extent {
@@ -121,5 +146,29 @@ impl Extent {
             crate::TILE_EDGE.min(self.width() - left),
             crate::TILE_EDGE.min(self.height() - top),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn exact_tile_intersections_preserve_row_order_and_integer_coordinate_limits()
+    -> Result<(), ImageError> {
+        let region = Region::new(127, 127, 3, 3)?;
+        assert_eq!(region.tile_count(), 4);
+        assert_eq!(region.tiles().map(Region::pixels).sum::<u64>(), region.pixels());
+        let mut tiles = region.tiles();
+        for expected in [(127, 127, 1, 1), (128, 127, 2, 1), (127, 128, 1, 2), (128, 128, 2, 2)] {
+            assert_eq!(
+                tiles.next(),
+                Some(Region::new(expected.0, expected.1, expected.2, expected.3)?)
+            );
+        }
+        assert_eq!(tiles.next(), None);
+        let edge = Region::new(u32::MAX - 2, u32::MAX - 2, 2, 2)?;
+        assert_eq!(edge.tile_count(), 1);
+        assert_eq!(edge.tiles().next(), Some(edge));
+        Ok(())
     }
 }

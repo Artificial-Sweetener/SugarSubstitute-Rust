@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Immutable region updates and overlap-safe retained CPU pixels.
-use crate::RenderError;
+use crate::{RenderError, update::UpdatePlan};
 use sugarsubstitute_canvas::{DamagePlan, FrameStamp};
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease, SurfaceId};
 use sugarsubstitute_image_ops::{Extent, ImageError, Region};
@@ -16,9 +16,7 @@ struct Patch {
 /// Fixed metadata and variable pixel payloads retain execution-backed memory claims.
 pub struct PreparedUpdate {
     patches: [Option<Patch>; 32],
-    target: FrameStamp,
-    base: Option<FrameStamp>,
-    plan: DamagePlan,
+    update: UpdatePlan,
     _memory: MemoryClaim,
 }
 impl PreparedUpdate {
@@ -33,23 +31,18 @@ impl PreparedUpdate {
         base: Option<FrameStamp>,
         plan: DamagePlan,
         memory: &MemoryLease,
+        produce: impl FnMut(Region, &mut [u32]) -> Result<(), RenderError>,
+    ) -> Result<Self, RenderError> {
+        Self::prepare_validated(UpdatePlan::new(target, base, plan)?, memory, produce)
+    }
+    pub(crate) fn prepare_validated(
+        update: UpdatePlan,
+        memory: &MemoryLease,
         mut produce: impl FnMut(Region, &mut [u32]) -> Result<(), RenderError>,
     ) -> Result<Self, RenderError> {
-        if base.is_some_and(|base| {
-            base.surface != target.surface || base.generation >= target.generation
-        }) {
-            return Err(RenderError::Invalid("Invalid canvas repair dependency"));
-        }
-        if base.is_none()
-            && (plan.blit().is_some()
-                || plan.dirty().regions().count() != 1
-                || plan.dirty().regions().next() != Some(plan.dirty().surface().region()))
-        {
-            return Err(RenderError::Invalid("First canvas frame must prepare the full surface"));
-        }
         let claim = memory.claim(size_of::<Self>() as u64 + 128).map_err(ImageError::from)?;
         let mut patches = [const { None }; 32];
-        for (slot, region) in patches.iter_mut().zip(plan.dirty().regions()) {
+        for (slot, region) in patches.iter_mut().zip(update.damage.dirty().regions()) {
             let payload = memory.claim(region.pixels() * 4 + 128).map_err(ImageError::from)?;
             let length = usize::try_from(region.pixels())
                 .map_err(|_| RenderError::Invalid("Device patch exceeds address space"))?;
@@ -64,19 +57,19 @@ impl PreparedUpdate {
             }
             *slot = Some(Patch { region, pixels, _memory: payload });
         }
-        Ok(Self { patches, target, base, plan, _memory: claim })
+        Ok(Self { patches, update, _memory: claim })
     }
     /// Exact application-assigned destination generation.
     pub const fn target(&self) -> FrameStamp {
-        self.target
+        self.update.target
     }
     /// Exact retained frame required before applying a partial repair, or none for full replacement.
     pub const fn base(&self) -> Option<FrameStamp> {
-        self.base
+        self.update.base
     }
     /// Camera repair and already-prepared damage; no image operations execute in presentation.
     pub const fn plan(&self) -> &DamagePlan {
-        &self.plan
+        &self.update.damage
     }
 }
 
@@ -135,18 +128,10 @@ impl CpuSurface {
     /// # Errors
     /// Rejects wrong dimensions/identity, superseded generations and unavailable repair bases.
     pub fn apply(&mut self, update: &PreparedUpdate) -> Result<SurfaceWork, RenderError> {
-        if update.target.surface != self.identity || update.plan.dirty().surface() != self.extent {
-            return Err(RenderError::Invalid("Canvas update targets a different surface"));
-        }
-        if self.current.is_some_and(|current| current.generation >= update.target.generation) {
-            return Err(RenderError::StaleTarget);
-        }
-        if update.base.is_some() && update.base != self.current {
-            return Err(RenderError::StaleBase);
-        }
+        update.update.validate(self.identity, self.extent, self.current)?;
         let mut work = SurfaceWork::default();
         let stride = self.extent.width() as usize;
-        if let Some(blit) = update.plan.blit() {
+        if let Some(blit) = update.update.damage.blit() {
             let source = blit.source;
             if blit.destination[1] > source.y() {
                 for row in (0..source.height()).rev() {
@@ -169,7 +154,7 @@ impl CpuSurface {
             }
             work.repaired_pixels += patch.region.pixels();
         }
-        self.current = Some(update.target);
+        self.current = Some(update.update.target);
         Ok(work)
     }
     fn copy_row(&mut self, source: Region, destination: [u32; 2], row: u32, stride: usize) {

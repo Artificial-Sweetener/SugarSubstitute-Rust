@@ -2687,6 +2687,7 @@ dependencies = [
  "sugarsubstitute-canvas",
  "sugarsubstitute-contracts",
  "sugarsubstitute-execution",
+ "sugarsubstitute-image-gpu",
  "sugarsubstitute-image-ops",
 ]
 

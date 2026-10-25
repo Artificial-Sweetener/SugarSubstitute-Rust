@@ -14,6 +14,10 @@ use sugarsubstitute_image_gpu::{AdapterCatalog, AdapterDescriptor, AdapterKey, G
 use sugarsubstitute_image_ops::{Pixel, Region};
 
 type Result<T = ()> = std::result::Result<T, Box<dyn Error>>;
+#[path = "adapter_qualification/cancel.rs"]
+mod cancel;
+#[path = "adapter_qualification/display.rs"]
+mod display;
 #[path = "adapter_qualification/image.rs"]
 mod image;
 #[derive(Default)]
@@ -180,7 +184,9 @@ fn main() -> Result {
                     drop(readback);
                     drop(tile);
                     drop(pixels);
-                    report.dag_cases = image::qualify(device, &context)?;
+                    report.dag_cases = image::qualify(device.clone(), &context)?;
+                    display::qualify(device.clone(), &context)?;
+                    report.device = Some(device);
                     Ok::<Report, Box<dyn Error + Send + Sync>>(report)
                 },
             )?;
@@ -194,6 +200,9 @@ fn main() -> Result {
                 other => return Err(format!("GPU transfer outcome: {:?}", other.kind()).into()),
             };
             drop(transfer);
+            if let Some(device) = report.device.take() {
+                cancel::qualify(&client, &scope, device, &wake)?;
+            }
         }
         for (index, adapter) in report.adapters.iter().enumerate() {
             println!(

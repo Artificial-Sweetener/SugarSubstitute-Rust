@@ -962,13 +962,41 @@ rationale = "Bounded external test wake reports retained terminal failure causes
 [[records]]
 path = "crates/sugarsubstitute-image-gpu/examples/adapter_qualification.rs"
 owner = "sugarsubstitute-image-gpu"
-source_sha256 = "sha256:2dedb4cfb9fe87eedeaa15f53f27c1b2bcf63479281392e07b172a7c77688faa"
+source_sha256 = "sha256:ea096c45a1700cd3999501143ff9f62bde3437bfc03969100e11a723589ced33"
 disposition = "fixture"
 rationale = "Isolated native hardware qualification reports actual adapter identity, CPU/GPU pixel comparisons, timings and observed execution retirement; runtime diagnostics use structured logging."
 
 [[records]]
 path = "crates/sugarsubstitute-image-gpu/examples/adapter_qualification/image.rs"
 owner = "sugarsubstitute-image-gpu"
-source_sha256 = "sha256:dfb562ba1644c70ca8012cf37ba16c3cc168e0dec0e71ba24831d99cfdf04ee2"
+source_sha256 = "sha256:54ccb265ed8472c83ccccd2c233ab11869742c132136f5b2851366eb31f55162"
 disposition = "fixture"
 rationale = "Isolated native hardware qualification reports actual adapter identity, CPU/GPU pixel comparisons, timings and observed execution retirement; runtime diagnostics use structured logging."
+
+[[records]]
+path = "crates/sugarsubstitute-canvas-render/examples/frame_qualification.rs"
+owner = "sugarsubstitute-canvas-render"
+source_sha256 = "sha256:9ed7cd471818698e75e41129ff084bd2edebafaa4960996c31074a4affdb234e"
+disposition = "fixture"
+rationale = "Isolated native qualification reports observed GPU display, repair and cancellation outcomes through the production execution boundary; runtime diagnostics use structured logging."
+
+[[records]]
+path = "crates/sugarsubstitute-image-gpu/examples/adapter_qualification/cancel.rs"
+owner = "sugarsubstitute-image-gpu"
+source_sha256 = "sha256:427d0604d13f719a269021a8dd47c032583d724db30e290a312f801daf1e3d66"
+disposition = "fixture"
+rationale = "Isolated native qualification reports observed GPU display, repair and cancellation outcomes through the production execution boundary; runtime diagnostics use structured logging."
+
+[[records]]
+path = "crates/sugarsubstitute-image-gpu/examples/adapter_qualification/display.rs"
+owner = "sugarsubstitute-image-gpu"
+source_sha256 = "sha256:2b978b2bd4776181c15e35a5e1e99451864ac700c627d881f27b35b9c773ca91"
+disposition = "fixture"
+rationale = "Isolated native qualification reports observed GPU display, repair and cancellation outcomes through the production execution boundary; runtime diagnostics use structured logging."
+
+[[records]]
+path = "crates/sugarsubstitute-canvas-render/examples/frame_qualification/scene.rs"
+owner = "sugarsubstitute-canvas-render"
+source_sha256 = "sha256:22fe54d94da496c95ebf635e4b15db703ea1fe2a64ad4bfafd51b730a8d8e21a"
+disposition = "fixture"
+rationale = "Isolated native qualification reports observed GPU display, repair and cancellation outcomes through the production execution boundary; runtime diagnostics use structured logging."

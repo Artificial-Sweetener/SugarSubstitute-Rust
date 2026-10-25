@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Assemble bounded GPU halos with device copies, preserving aligned source and pyramid reuse.
-use crate::{GpuError, GpuEvaluator, GpuTile, evaluate::image_error, transfer::Transfer};
+use crate::{GpuError, GpuEvaluator, GpuTile, evaluate::image_error};
 use sugarsubstitute_contracts::execution::JobContext;
 use sugarsubstitute_image_ops::{NodeId, Operation, RasterSource, Region, Sampling, TILE_EDGE};
 
@@ -20,14 +20,14 @@ impl<S: RasterSource> GpuEvaluator<S> {
             _ => false,
         };
         if !aligned {
-            return self.region(node, region, context);
+            return Ok(self.computed(node, region, context)?.tile.clone());
         }
         let x = region.x() / TILE_EDGE;
         let y = region.y() / TILE_EDGE;
         if self.graph.extent(node).map_err(image_error)?.tile_region(x, y).map_err(image_error)?
             == region
         {
-            return self.tile(node, x, y, context);
+            return Ok(self.computed(node, region, context)?.tile.clone());
         }
         self.gather(node, region, context)
     }
@@ -47,19 +47,21 @@ impl<S: RasterSource> GpuEvaluator<S> {
             self.retry(|this| this.device.allocate(region.pixels() * 16, storage, context))?;
         for y in region.y() / TILE_EDGE..=(region.bottom() - 1) / TILE_EDGE {
             for x in region.x() / TILE_EDGE..=(region.right() - 1) / TILE_EDGE {
-                let tile = self.tile(node, x, y, context)?;
+                let tile_region = self
+                    .graph
+                    .extent(node)
+                    .map_err(image_error)?
+                    .tile_region(x, y)
+                    .map_err(image_error)?;
+                let tile = self.computed(node, tile_region, context)?.tile.clone();
                 let overlap = tile
                     .region()
                     .intersection(region)
                     .ok_or_else(|| GpuError::invalid("Missing GPU dependency intersection"))?;
-                let memory = context
-                    .memory()
-                    .claim(16 * 1024)
-                    .map_err(|cause| GpuError::new("gpu_dependency_bookkeeping", cause))?;
-                let mut commands =
-                    self.device.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                        label: Some("SugarSubstitute bounded image halo"),
-                    });
+                let batch = self.ready(context)?;
+                batch.pin(tile.buffer.clone())?;
+                batch.pin(output.clone())?;
+                let commands = batch.commands()?;
                 for row in overlap.y()..overlap.bottom() {
                     let source = (u64::from(row - tile.region().y())
                         * u64::from(tile.region().width())
@@ -76,10 +78,7 @@ impl<S: RasterSource> GpuEvaluator<S> {
                         u64::from(overlap.width()) * 16,
                     );
                 }
-                let mut buffers = std::array::from_fn(|_| None);
-                buffers[0] = Some(tile.buffer.clone());
-                buffers[1] = Some(output.clone());
-                Transfer::commands(self.device.clone(), buffers, memory, commands).retire()?;
+                batch.copied();
                 crate::adapter::check(context)?;
             }
         }

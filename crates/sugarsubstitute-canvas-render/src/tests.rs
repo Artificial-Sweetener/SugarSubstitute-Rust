@@ -5,7 +5,7 @@ use super::*;
 use sugarsubstitute_canvas::{DamagePlan, FrameStamp, RenderRequest};
 use sugarsubstitute_contracts::execution::{Generation, JobContext, SurfaceId};
 use sugarsubstitute_image_ops::{Extent, ImageError, Region};
-mod harness;
+pub(crate) mod harness;
 mod pipeline;
 
 fn stamp(value: u64) -> Result<FrameStamp, RenderError> {

@@ -190,7 +190,7 @@ pub(super) fn qualify(device: Arc<GpuDevice>, context: &JobContext) -> Result<us
     {
         return Err("Image evaluation accepted nonfinite exposure output".into());
     }
-    println!("DAG: nonfinite_exposure_rejected=true stats={:?}", gpu.stats());
+    println!("DAG: nonfinite_exposure_rejected=true stats={:?} work={:?}", gpu.stats(), gpu.work());
     let retained = gpu.region(gpu_cases[0].node, gpu_cases[0].region, context)?;
     let expected = cpu.region(cpu_cases[0].node, cpu_cases[0].region, context)?;
     let before = gpu.stats();

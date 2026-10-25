@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Prepare only requested viewport damage through the shared image-operation DAG.
-use crate::{PreparedUpdate, RenderError};
+use crate::{PreparedUpdate, RenderError, update::UpdatePlan};
 use sugarsubstitute_canvas::RenderRequest;
 use sugarsubstitute_contracts::execution::{JobContext, MemoryLease};
-use sugarsubstitute_image_ops::{
-    EvaluationStats, Evaluator, Graph, RasterSource, Region, SrgbEncoder, TILE_EDGE,
-};
+use sugarsubstitute_image_ops::{EvaluationStats, Evaluator, Graph, RasterSource, SrgbEncoder};
 
 /// CPU canvas preparation retaining compatible image tiles across document/view graph replacement.
 /// Native presentation receives immutable device regions; authored data remains in the document.
@@ -45,6 +43,7 @@ impl<S: RasterSource> CpuRenderer<S> {
         if damage.dirty().surface() != view.surface() {
             return Err(RenderError::Invalid("Canvas damage and viewport dimensions differ"));
         }
+        let update = UpdatePlan::new(target, base, damage)?;
         let compiled = document
             .compile_view(view, matte, filter, &self.memory)
             .map_err(RenderError::Canvas)?;
@@ -52,25 +51,18 @@ impl<S: RasterSource> CpuRenderer<S> {
         self.evaluator.replace_graph(graph);
         let evaluator = &mut self.evaluator;
         let encoder = &self.encoder;
-        PreparedUpdate::prepare(target, base, damage, context.memory(), |region, pixels| {
-            for tile_y in region.y() / TILE_EDGE..=(region.bottom() - 1) / TILE_EDGE {
-                for tile_x in region.x() / TILE_EDGE..=(region.right() - 1) / TILE_EDGE {
-                    let left = region.x().max(tile_x * TILE_EDGE);
-                    let top = region.y().max(tile_y * TILE_EDGE);
-                    let right = region.right().min((tile_x + 1) * TILE_EDGE);
-                    let bottom = region.bottom().min((tile_y + 1) * TILE_EDGE);
-                    let overlap = Region::new(left, top, right - left, bottom - top)?;
-                    let tile = evaluator.region(output, overlap, context)?;
-                    for y in overlap.y()..overlap.bottom() {
-                        for x in overlap.x()..overlap.right() {
-                            let pixel = tile
-                                .pixel(x, y)
-                                .ok_or(RenderError::Invalid("Missing prepared canvas pixel"))?;
-                            let [red, green, blue, _] = encoder.encode(pixel)?;
-                            let index = (y - region.y()) as usize * region.width() as usize
-                                + (x - region.x()) as usize;
-                            pixels[index] = u32::from_be_bytes([255, red, green, blue]);
-                        }
+        PreparedUpdate::prepare_validated(update, context.memory(), |region, pixels| {
+            for overlap in region.tiles() {
+                let tile = evaluator.region(output, overlap, context)?;
+                for y in overlap.y()..overlap.bottom() {
+                    for x in overlap.x()..overlap.right() {
+                        let pixel = tile
+                            .pixel(x, y)
+                            .ok_or(RenderError::Invalid("Missing prepared canvas pixel"))?;
+                        let [red, green, blue, _] = encoder.encode(pixel)?;
+                        let index = (y - region.y()) as usize * region.width() as usize
+                            + (x - region.x()) as usize;
+                        pixels[index] = u32::from_be_bytes([255, red, green, blue]);
                     }
                 }
             }

@@ -51,15 +51,16 @@ impl Transfer {
         transfer.index = Some(transfer.device.queue.submit([commands.finish()]));
         transfer
     }
-    /// Retain command inputs, destinations and host-side native bookkeeping until the fence.
-    pub(crate) fn commands(
-        device: Arc<GpuDevice>,
-        buffers: [Option<Arc<Buffer>>; 8],
-        memory: MemoryClaim,
-        commands: wgpu::CommandEncoder,
-    ) -> Self {
-        let mut transfer =
-            Self { device, index: None, done: false, _buffers: buffers, _staging: Some(memory) };
+    /// Submit a command batch whose calling owner keeps every allocation and staging claim alive.
+    /// The guard's blocking destructor retires work before that calling custody can be released.
+    pub(crate) fn submit(device: Arc<GpuDevice>, commands: wgpu::CommandEncoder) -> Self {
+        let mut transfer = Self {
+            device,
+            index: None,
+            done: false,
+            _buffers: std::array::from_fn(|_| None),
+            _staging: None,
+        };
         transfer.index = Some(transfer.device.queue.submit([commands.finish()]));
         transfer
     }
@@ -165,7 +166,9 @@ impl Mapping {
 }
 impl Drop for Mapping {
     fn drop(&mut self) {
-        if let Err(cause) = self.finish() {
+        if (!self.done || self.mapped)
+            && let Err(cause) = self.finish()
+        {
             tracing::error!(operation="image_gpu_mapping_retirement", cause=%cause, "GPU mapping retired with a native failure");
         }
     }

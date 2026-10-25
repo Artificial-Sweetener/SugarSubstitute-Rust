@@ -3,15 +3,19 @@
 //! Compile shared image semantics and retain every dispatch resource through native retirement.
 use crate::{
     GpuDevice, GpuError, GpuTile,
+    batch::{Batch, Coverage},
     buffer::Buffer,
-    transfer::{Mapping, Transfer},
+    display::DisplayTile,
+    transfer::Transfer,
 };
 use std::{borrow::Cow, sync::Arc};
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
-use sugarsubstitute_image_ops::{Pixel, Region};
+use sugarsubstitute_image_ops::{Pixel, Region, SrgbEncoder};
 
 pub(crate) struct Kernels {
     pipeline: wgpu::ComputePipeline,
+    dummy: Arc<Buffer>,
+    srgb: Arc<Buffer>,
     device: Arc<GpuDevice>,
     _memory: MemoryClaim,
 }
@@ -33,7 +37,7 @@ impl Parameters {
 /// Computed tile and alpha summary from the same GPU dispatch; masks can skip unreachable inputs.
 pub(crate) struct Computed {
     pub(crate) tile: GpuTile,
-    pub(crate) has_alpha: bool,
+    pub(crate) coverage: Coverage,
 }
 impl Kernels {
     pub(crate) fn new(device: Arc<GpuDevice>, context: &JobContext) -> Result<Self, GpuError> {
@@ -56,30 +60,73 @@ impl Kernels {
             cache: None,
         });
         device.faults.check()?;
-        Ok(Self { pipeline, device, _memory: memory })
+        let dummy = device.allocate(16, wgpu::BufferUsages::STORAGE, context)?;
+        let table = SrgbEncoder::new(&device.memory).map_err(crate::evaluate::image_error)?;
+        let srgb = device.allocate(
+            table.table().len() as u64,
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            context,
+        )?;
+        let staging = context
+            .memory()
+            .claim(table.table().len() as u64)
+            .map_err(|cause| GpuError::new("gpu_display_table_staging", cause))?;
+        Transfer::upload(srgb.clone(), staging, table.table()).retire()?;
+        Ok(Self { pipeline, dummy, srgb, device, _memory: memory })
     }
-    pub(crate) fn dispatch(
+    pub(crate) fn encode(
         &self,
-        mut parameters: Parameters,
+        batch: &mut Batch,
+        parameters: Parameters,
         region: Region,
         inputs: [Option<&GpuTile>; 3],
         coefficients: &[u32],
         context: &JobContext,
     ) -> Result<Computed, GpuError> {
+        let (buffer, coverage) =
+            self.encode_raw(batch, parameters, region, inputs, coefficients, context)?;
+        Ok(Computed { tile: GpuTile { buffer, region }, coverage })
+    }
+    pub(crate) fn display(
+        &self,
+        batch: &mut Batch,
+        input: &GpuTile,
+        context: &JobContext,
+    ) -> Result<DisplayTile, GpuError> {
+        let region = input.region();
+        let (buffer, _) = self.encode_raw(
+            batch,
+            Parameters::new(9, region),
+            region,
+            [Some(input), None, None],
+            &[],
+            context,
+        )?;
+        Ok(DisplayTile { buffer, region })
+    }
+    fn encode_raw(
+        &self,
+        batch: &mut Batch,
+        mut parameters: Parameters,
+        region: Region,
+        inputs: [Option<&GpuTile>; 3],
+        coefficients: &[u32],
+        context: &JobContext,
+    ) -> Result<(Arc<Buffer>, Coverage), GpuError> {
         crate::adapter::check(context)?;
         if region.width() > 272 || region.height() > 272 || coefficients.len() > 4096 {
             return Err(GpuError::invalid("GPU kernel exceeds bounded image workspace"));
         }
-        let bookkeeping = context
-            .memory()
-            .claim(32 * 1024)
-            .map_err(|cause| GpuError::new("gpu_dispatch_bookkeeping", cause))?;
         let storage = wgpu::BufferUsages::STORAGE
             | wgpu::BufferUsages::COPY_DST
             | wgpu::BufferUsages::COPY_SRC;
-        let output = self.device.allocate(region.pixels() * 16, storage, context)?;
-        let dummy = self.device.allocate(16, storage, context)?;
-        let mut buffers: [Option<Arc<Buffer>>; 8] = std::array::from_fn(|_| None);
+        let bytes = if parameters.0[0] == 9 {
+            (region.pixels() * 4).next_multiple_of(16)
+        } else {
+            region.pixels() * 16
+        };
+        let output = self.device.allocate(bytes, storage, context)?;
+        let mut buffers: [Option<Arc<Buffer>>; 7] = std::array::from_fn(|_| None);
         for (index, input) in inputs.iter().enumerate() {
             if let Some(input) = input {
                 if !Arc::ptr_eq(&input.buffer.device, &self.device) {
@@ -94,26 +141,31 @@ impl Kernels {
                 ]);
                 buffers[index + 1] = Some(input.buffer.clone());
             } else {
-                buffers[index + 1] = Some(dummy.clone());
+                buffers[index + 1] = Some(self.dummy.clone());
             }
         }
-        let uniform = self.upload_words(&parameters.0, wgpu::BufferUsages::UNIFORM, context)?;
-        let taps = self.upload_words(
-            if coefficients.is_empty() { &[0, 0] } else { coefficients },
-            wgpu::BufferUsages::STORAGE,
-            context,
-        )?;
-        let status = self.device.allocate(4, storage, context)?;
-        let receiving = self.device.allocate(
-            4,
-            wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-            context,
-        )?;
+        let (slot, coverage) = batch.dispatch_status()?;
+        parameters.0[1] = slot;
+        let uniform =
+            self.upload_words(batch, &parameters.0, wgpu::BufferUsages::UNIFORM, context)?;
+        let taps = if parameters.0[0] == 9 {
+            self.srgb.clone()
+        } else {
+            self.upload_words(
+                batch,
+                if coefficients.is_empty() { &[0, 0] } else { coefficients },
+                wgpu::BufferUsages::STORAGE,
+                context,
+            )?
+        };
+        batch.pin(output.clone())?;
+        for input in inputs.into_iter().flatten() {
+            batch.pin(input.buffer.clone())?;
+        }
         buffers[0] = Some(uniform);
         buffers[4] = Some(output.clone());
         buffers[5] = Some(taps);
-        buffers[6] = Some(status.clone());
-        buffers[7] = Some(receiving.clone());
+        buffers[6] = Some(batch.status.clone());
         let entries: Vec<_> = buffers[..7]
             .iter()
             .enumerate()
@@ -129,34 +181,20 @@ impl Kernels {
             layout: &self.pipeline.get_bind_group_layout(0),
             entries: &entries,
         });
-        let mut commands =
-            self.device.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("SugarSubstitute image operation"),
-            });
+        let commands = batch.commands()?;
         {
             let mut pass = commands.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
             pass.set_pipeline(&self.pipeline);
             pass.set_bind_group(0, &group, &[]);
             pass.dispatch_workgroups(region.width().div_ceil(8), region.height().div_ceil(8), 1);
         }
-        commands.copy_buffer_to_buffer(&status.raw, 0, &receiving.raw, 0, 4);
-        let mut submitted = Transfer::commands(self.device.clone(), buffers, bookkeeping, commands);
-        submitted.retire()?;
-        let mut mapping = Mapping::new(receiving);
-        mapping.wait()?;
-        let flags = {
-            let view = mapping.view()?;
-            u32::from_le_bytes([view[0], view[1], view[2], view[3]])
-        };
-        mapping.finish()?;
-        crate::adapter::check(context)?;
-        if flags & 1 != 0 {
-            return Err(GpuError::invalid("Image GPU operation produced invalid canonical pixels"));
-        }
-        Ok(Computed { tile: GpuTile { buffer: output, region }, has_alpha: flags & 2 != 0 })
+        batch.dispatched();
+        self.device.faults.check()?;
+        Ok((output, coverage))
     }
     fn upload_words(
         &self,
+        batch: &mut Batch,
         words: &[u32],
         usage: wgpu::BufferUsages,
         context: &JobContext,
@@ -173,13 +211,7 @@ impl Kernels {
         for word in words {
             encoded.extend_from_slice(&word.to_le_bytes());
         }
-        let buffer = self.device.allocate(bytes, usage | wgpu::BufferUsages::COPY_DST, context)?;
-        let staging = context
-            .memory()
-            .claim(bytes)
-            .map_err(|cause| GpuError::new("gpu_coefficient_staging", cause))?;
-        Transfer::upload(buffer.clone(), staging, &encoded).retire()?;
-        Ok(buffer)
+        batch.upload(&encoded, usage, context)
     }
 }
 
@@ -200,9 +232,10 @@ struct Parameters {
 @group(0) @binding(1) var<storage, read> a: array<vec4<f32>>;
 @group(0) @binding(2) var<storage, read> b: array<vec4<f32>>;
 @group(0) @binding(3) var<storage, read> c: array<vec4<f32>>;
-@group(0) @binding(4) var<storage, read_write> output: array<vec4<f32>>;
+@group(0) @binding(4) var<storage, read_write> output: array<vec4<u32>>;
 @group(0) @binding(5) var<storage, read> taps: array<vec2<u32>>;
-@group(0) @binding(6) var<storage, read_write> status: atomic<u32>;
+@group(0) @binding(6) var<storage, read_write> status: array<atomic<u32>>;
+var<workgroup> group_flags: atomic<u32>;
 
 fn reconstructed(value: vec4<f32>) -> vec4<f32> {
     let alpha = clamp(value.a, 0.0, 1.0);
@@ -210,9 +243,7 @@ fn reconstructed(value: vec4<f32>) -> vec4<f32> {
     return vec4<f32>(value.rgb * (alpha / value.a), alpha);
 }
 
-@compute @workgroup_size(8, 8)
-fn image(@builtin(global_invocation_id) id: vec3<u32>) {
-    if id.x >= p.output.z || id.y >= p.output.w { return; }
+fn pixel(id: vec3<u32>) -> vec4<f32> {
     let index = id.y * p.output.z + id.x;
     var value = vec4<f32>(0.0);
     switch p.control.x {
@@ -247,16 +278,44 @@ fn image(@builtin(global_invocation_id) id: vec3<u32>) {
         case 8u: {
             value = a[taps[id.y].y * p.a.z + taps[id.x].x];
         }
-        default: { atomicOr(&status, 1u); }
+        default: { atomicOr(&group_flags, 1u); }
     }
     if p.control.x != 6u {
         if !all(abs(value) <= vec4<f32>(bitcast<f32>(0x7f7fffffu)))
             || value.a < 0.0 || value.a > 1.0
             || (value.a == 0.0 && any(value.rgb != vec3<f32>(0.0))) {
-            atomicOr(&status, 1u);
+            atomicOr(&group_flags, 1u);
         }
-        if value.a > 0.0 { atomicOr(&status, 2u); }
+        if value.a > 0.0 { atomicOr(&group_flags, 2u); }
     }
-    output[index] = value;
+    return value;
+}
+fn srgb_channel(linear: f32) -> u32 {
+    let scaled = clamp(linear, 0.0, 1.0) * 65535.0;
+    let integral = floor(scaled);
+    let index = u32(integral) + select(0u, 1u, scaled - integral >= 0.5);
+    let word = taps[index / 8u][(index / 4u) % 2u];
+    return (word >> ((index % 4u) * 8u)) & 255u;
+}
+fn display_pixel(index: u32) -> u32 {
+    let value = a[index];
+    if !all(abs(value) <= vec4<f32>(bitcast<f32>(0x7f7fffffu))) { atomicOr(&group_flags, 1u); }
+    if value.a != 1.0 { atomicOr(&group_flags, 8u); }
+    return 0xff000000u | (srgb_channel(value.r) << 16u) | (srgb_channel(value.g) << 8u) | srgb_channel(value.b);
+}
+@compute @workgroup_size(8, 8)
+fn image(@builtin(global_invocation_id) id: vec3<u32>, @builtin(local_invocation_index) local: u32) {
+    if local == 0u { atomicStore(&group_flags, 0u); }
+    workgroupBarrier();
+    if id.x < p.output.z && id.y < p.output.w {
+        let index = id.y * p.output.z + id.x;
+        if p.control.x == 9u {
+            output[index / 4u][index % 4u] = display_pixel(index);
+        } else {
+            output[index] = bitcast<vec4<u32>>(pixel(id));
+        }
+    }
+    workgroupBarrier();
+    if local == 0u { atomicOr(&status[p.control.y], atomicLoad(&group_flags)); }
 }
 "#;

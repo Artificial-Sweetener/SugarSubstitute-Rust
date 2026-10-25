@@ -3,6 +3,8 @@
 //! Evaluate the authoritative image DAG into bounded immutable GPU tiles.
 use crate::{
     GpuDevice, GpuError, GpuTile,
+    batch::{Batch, Coverage, GpuWork},
+    buffer::Encoding,
     kernel::{Computed, Kernels, Parameters},
 };
 use std::sync::Arc;
@@ -23,6 +25,8 @@ pub struct GpuEvaluator<S> {
     pub(crate) cache: TileRetention<Computed>,
     stats: EvaluationStats,
     depth: usize,
+    pub(crate) batch: Option<Batch>,
+    pub(crate) work: GpuWork,
 }
 impl<S: RasterSource> GpuEvaluator<S> {
     /// Compile kernels and reserve bounded reuse metadata inside an admitted worker.
@@ -46,6 +50,8 @@ impl<S: RasterSource> GpuEvaluator<S> {
             cache,
             stats: EvaluationStats::default(),
             depth: 0,
+            batch: None,
+            work: GpuWork::default(),
         })
     }
     /// Immutable semantics shared by all backend evaluation requests.
@@ -60,6 +66,10 @@ impl<S: RasterSource> GpuEvaluator<S> {
     /// Cumulative work and current semantic tile retention, excluding outside owners.
     pub fn stats(&self) -> EvaluationStats {
         EvaluationStats { resident_tiles: self.cache.len(), ..self.stats }
+    }
+    /// Completed native submissions and transfer work, excluding cache-only requests.
+    pub const fn work(&self) -> GpuWork {
+        self.work
     }
     /// Release evaluator references; outside GPU results retain their native allocation charges.
     pub fn clear_tiles(&mut self) {
@@ -88,7 +98,9 @@ impl<S: RasterSource> GpuEvaluator<S> {
         region: Region,
         context: &JobContext,
     ) -> Result<GpuTile, GpuError> {
-        Ok(self.computed(node, region, context)?.tile.clone())
+        let result = self.computed(node, region, context);
+        let computed = self.settle(result, context)?;
+        Ok(computed.tile.clone())
     }
     pub(crate) fn computed(
         &mut self,
@@ -137,14 +149,30 @@ impl<S: RasterSource> GpuEvaluator<S> {
                     .map_err(|cause| GpuError::new("gpu_source_allocation", cause))?;
                 pixels.resize(region.pixels() as usize, Pixel::TRANSPARENT);
                 self.source.read(asset, region, &mut pixels, context).map_err(image_error)?;
-                let tile = self.retry(|this| this.device.upload(region, &pixels, context))?;
+                let encoded = self.retry(|_| Encoding::pixels(region, &pixels, context))?;
+                let tile = self.retry(|this| {
+                    let batch = this.ready(context)?;
+                    let buffer = batch.upload(
+                        &encoded.bytes,
+                        wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+                        context,
+                    )?;
+                    Ok(GpuTile { buffer, region })
+                })?;
                 self.stats.source_pixels = self.stats.source_pixels.saturating_add(region.pixels());
-                Computed { tile, has_alpha: pixels.iter().any(|pixel| pixel.channels()[3] > 0.0) }
+                Computed {
+                    tile,
+                    coverage: Coverage::Known(pixels.iter().any(|pixel| pixel.channels()[3] > 0.0)),
+                }
             }
             Operation::Solid { color, .. } => {
                 let mut parameters = Parameters::new(0, region);
                 parameters.color(color);
-                self.dispatch(parameters, region, [None; 3], &[], context)?
+                let mut computed = self.dispatch(parameters, region, [None; 3], &[], context)?;
+                if let Some(coverage) = Coverage::bounded_maximum(color.channels()[3]) {
+                    computed.coverage = coverage;
+                }
+                computed
             }
             Operation::Rectangle { shape, .. } => {
                 let mut coefficients = [0; 256];
@@ -158,7 +186,27 @@ impl<S: RasterSource> GpuEvaluator<S> {
                 }
                 let mut parameters = Parameters::new(1, region);
                 parameters.color(shape.color());
-                self.dispatch(parameters, region, [None; 3], &coefficients, context)?
+                let horizontal = (0..region.width() as usize)
+                    .map(|index| f32::from_bits(coefficients[index * 2]))
+                    .fold(0.0, f32::max);
+                let vertical = (0..region.height() as usize)
+                    .map(|index| f32::from_bits(coefficients[index * 2 + 1]))
+                    .fold(0.0, f32::max);
+                let maximum = shape.color().channels()[3] * (horizontal * vertical);
+                let mut computed =
+                    self.dispatch(parameters, region, [None; 3], &coefficients, context)?;
+                let coverage =
+                    if shape.color().channels()[3] == 0.0 || horizontal == 0.0 || vertical == 0.0 {
+                        Some(Coverage::Known(false))
+                    } else if maximum > 0.0 {
+                        Coverage::bounded_maximum(maximum)
+                    } else {
+                        None
+                    };
+                if let Some(coverage) = coverage {
+                    computed.coverage = coverage;
+                }
+                computed
             }
             Operation::Resample { input, sampling, .. } => {
                 self.resample(node, input, sampling, region, context)?
@@ -182,7 +230,7 @@ impl<S: RasterSource> GpuEvaluator<S> {
             }
             Operation::Mask { input, mask } => {
                 let mask = self.computed(mask, region, context)?;
-                if mask.has_alpha {
+                if self.coverage(&mask)? {
                     let input = self.input(input, region, context)?;
                     self.dispatch(
                         Parameters::new(4, region),
@@ -198,9 +246,9 @@ impl<S: RasterSource> GpuEvaluator<S> {
             Operation::Mix { original, adjusted, mask, opacity } => {
                 let original = self.computed(original, region, context)?;
                 let mask = self.computed(mask, region, context)?;
-                if opacity == 0.0 || !mask.has_alpha {
+                if opacity == 0.0 || !self.coverage(&mask)? {
                     // Reusing immutable device storage preserves exact original pixels.
-                    Computed { tile: original.tile.clone(), has_alpha: original.has_alpha }
+                    Computed { tile: original.tile.clone(), coverage: original.coverage.clone() }
                 } else {
                     let adjusted = self.input(adjusted, region, context)?;
                     let mut parameters = Parameters::new(5, region);
@@ -231,16 +279,35 @@ impl<S: RasterSource> GpuEvaluator<S> {
         context: &JobContext,
     ) -> Result<Computed, GpuError> {
         self.retry(|this| {
-            this.kernels.dispatch(Parameters(parameters.0), region, inputs, coefficients, context)
+            this.ready(context)?;
+            let batch = this
+                .batch
+                .as_mut()
+                .ok_or_else(|| GpuError::invalid("Image batch is unavailable"))?;
+            this.kernels.encode(
+                batch,
+                Parameters(parameters.0),
+                region,
+                inputs,
+                coefficients,
+                context,
+            )
         })
     }
     pub(crate) fn retry<T>(
         &mut self,
-        mut operation: impl FnMut(&Self) -> Result<T, GpuError>,
+        mut operation: impl FnMut(&mut Self) -> Result<T, GpuError>,
     ) -> Result<T, GpuError> {
+        let mut drained = false;
         loop {
             match operation(self) {
                 Err(cause) if cause.memory_pressure() => {
+                    let had_batch = self.batch.is_some();
+                    self.finish_batch()?;
+                    if had_batch && !drained {
+                        drained = true;
+                        continue;
+                    }
                     if !self
                         .cache
                         .evict_unpinned(|computed| Arc::strong_count(&computed.tile.buffer) == 1)

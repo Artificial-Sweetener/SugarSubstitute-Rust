@@ -11,7 +11,7 @@ layers = ["domain", "application", "adapter", "host", "tooling"]
 package = "sugarsubstitute-image-gpu"
 root = "crates/sugarsubstitute-image-gpu"
 layer = "adapter"
-concern = "Explicit Vulkan/Metal adapter selection, execution-admitted tiled evaluation of the shared image DAG and original GPU resources through observed native retirement"
+concern = "Explicit Vulkan/Metal devices, execution-admitted batched image DAG evaluation, shared display encoding and original GPU resources through observed native retirement"
 
 [[owners]]
 package = "sugarsubstitute-canvas"
@@ -23,7 +23,7 @@ concern = "Canvas document snapshots, reversible layer commands, viewport transf
 package = "sugarsubstitute-canvas-render"
 root = "crates/sugarsubstitute-canvas-render"
 layer = "adapter"
-concern = "Immutable canvas frame preparation, revision-safe publication and retained CPU pixel presentation"
+concern = "Immutable CPU/GPU canvas frame preparation, shared damage validation, revision-safe publication and retained CPU pixel presentation"
 
 [[owners]]
 package = "sugarsubstitute-image-ops"

@@ -912,6 +912,13 @@ rationale = "Standalone viewer entry captures explicit CLI values once and passe
 [[records]]
 path = "crates/sugarsubstitute-image-gpu/examples/adapter_qualification.rs"
 owner = "sugarsubstitute-image-gpu"
-source_sha256 = "sha256:2dedb4cfb9fe87eedeaa15f53f27c1b2bcf63479281392e07b172a7c77688faa"
+source_sha256 = "sha256:ea096c45a1700cd3999501143ff9f62bde3437bfc03969100e11a723589ced33"
 capabilities = ["arguments"]
 rationale = "Developer hardware qualification accepts explicit backend/vendor/device model selectors; discovery rejects ambiguous model matches rather than using unstable enumeration order."
+
+[[records]]
+path = "crates/sugarsubstitute-canvas-render/examples/frame_qualification.rs"
+owner = "sugarsubstitute-canvas-render"
+source_sha256 = "sha256:9ed7cd471818698e75e41129ff084bd2edebafaa4960996c31074a4affdb234e"
+capabilities = ["arguments"]
+rationale = "Native frame qualification accepts explicit backend/vendor/device selectors and uses the actual selected adapter through admitted execution."

@@ -9,6 +9,7 @@ authors.workspace = true
 publish.workspace = true
 
 [dependencies]
+sugarsubstitute-image-gpu = { path = "../sugarsubstitute-image-gpu" }
 sugarsubstitute-contracts = { path = "../sugarsubstitute-contracts" }
 sugarsubstitute-image-ops = { path = "../sugarsubstitute-image-ops" }
 sugarsubstitute-canvas = { path = "../sugarsubstitute-canvas" }
