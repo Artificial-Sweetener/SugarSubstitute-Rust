@@ -65,7 +65,11 @@ class NativeTensor:
 
 
 def native_modules(
-    monkeypatch: pytest.MonkeyPatch, root: Path
+    monkeypatch: pytest.MonkeyPatch,
+    root: Path,
+    *,
+    mixed: bool = False,
+    ambiguous: bool = False,
 ) -> list[tuple[str, str]]:
     """Replace only dynamic Comfy imports while retaining validation and PNG conversion."""
     calls: list[tuple[str, str]] = []
@@ -73,7 +77,9 @@ def native_modules(
     class Loader:
         """Supply distinguishable native alpha and red-channel results."""
 
-        RETURN_TYPES = ("MASK",)
+        RETURN_TYPES = (
+            ("IMAGE", "MASK") if mixed else ("MASK", "MASK") if ambiguous else ("MASK",)
+        )
         FUNCTION = "load_image_mask"
 
         @classmethod
@@ -86,7 +92,7 @@ def native_modules(
                 }
             }
 
-        def load_image_mask(self, image: str, channel: str) -> tuple[NativeTensor]:
+        def load_image_mask(self, image: str, channel: str) -> tuple[NativeTensor, ...]:
             """Return native empty-alpha geometry or interpreted soft coverage."""
             calls.append((image, channel))
             values = (
@@ -94,10 +100,19 @@ def native_modules(
                 if channel == "alpha"
                 else np.asarray([[[0, 0.5, 1], [1, 0.25, 0]]], dtype=np.float32)
             )
-            return (NativeTensor(values),)
+            return (
+                (
+                    NativeTensor(np.zeros((1, 1, 1), dtype=np.float32)),
+                    NativeTensor(values),
+                )
+                if mixed
+                else (NativeTensor(values),)
+            )
 
     nodes = ModuleType("nodes")
-    setattr(nodes, "NODE_CLASS_MAPPINGS", {"LoadImageMask": Loader})
+    setattr(
+        nodes, "NODE_CLASS_MAPPINGS", {"LoadImageMask": Loader, "LoadImage": Loader}
+    )
     tensors = ModuleType("torch")
     setattr(tensors, "Tensor", NativeTensor)
     folders = ModuleType("folder_paths")
@@ -154,6 +169,49 @@ def test_native_mask_output_controls_channel_and_preview_geometry(
     assert red.size == (3, 2)
     assert list(red.tobytes()) == [0, 128, 255, 255, 64, 0]
     assert calls == [("source.png", "alpha"), ("source.png", "red")]
+
+
+def test_execution_mask_preserves_native_resolution_and_soft_coverage(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Freeze exact native samples rather than an upscaled preview for returned inpaints."""
+    Image.new("RGB", (120, 200), "red").save(tmp_path / "source.png")
+    calls = native_modules(monkeypatch, tmp_path)
+    settings = InputPreviewSettings(
+        "mask", "LoadImageMask", "image", {"channel": "red"}
+    )
+    full = Image.open(BytesIO(native_mask_preview("source.png", settings, 0)))
+    preview = Image.open(BytesIO(native_mask_preview("source.png", settings, 1)))
+    assert full.size == (3, 2)
+    assert list(full.tobytes()) == [0, 128, 255, 255, 64, 0]
+    assert preview.size == (1, 1)
+    assert len(calls) == 2
+
+
+def test_mixed_image_loader_decodes_its_actual_mask_output(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Select the MASK socket rather than mistaking the first IMAGE result for coverage."""
+    Image.new("RGB", (120, 200), "red").save(tmp_path / "source.png")
+    native_modules(monkeypatch, tmp_path, mixed=True)
+    settings = InputPreviewSettings("mask", "LoadImage", "image", {"channel": "red"})
+    mask = Image.open(BytesIO(native_mask_preview("source.png", settings, 0)))
+    assert mask.size == (3, 2)
+    assert list(mask.tobytes()) == [0, 128, 255, 255, 64, 0]
+
+
+def test_multiple_native_mask_outputs_are_not_guessed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Refuse an ambiguous source before interpreting a different mask than the queued graph."""
+    Image.new("RGB", (120, 200), "red").save(tmp_path / "source.png")
+    calls = native_modules(monkeypatch, tmp_path, ambiguous=True)
+    settings = InputPreviewSettings(
+        "mask", "LoadImageMask", "image", {"channel": "red"}
+    )
+    with pytest.raises(ValueError, match="unambiguous"):
+        native_mask_preview("source.png", settings, 0)
+    assert calls == []
 
 
 def test_file_preview_rejects_traversal_and_invalid_settings_before_native_loading(

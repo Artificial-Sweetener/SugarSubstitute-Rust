@@ -24,7 +24,7 @@ import type {
 import { freezeWorkflowSubmissionContext } from '../domain/WorkflowSubmission.js';
 import type { WorkflowRunStatus } from '../domain/WorkflowOutput.js';
 
-/** Retain outstanding jobs independently of the visible tab without retaining graph objects or pixels. */
+/** Retain outstanding job ownership and captured return plans independently of visible graph objects. */
 export class WorkflowRunRegistry {
   readonly #runs = new Map<PromptId, WorkflowRun>();
   readonly #orders = new Map<WorkflowSessionId, number>();

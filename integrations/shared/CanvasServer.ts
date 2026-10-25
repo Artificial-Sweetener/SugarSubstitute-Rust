@@ -79,6 +79,7 @@ export class CanvasServer {
               value.image.image.format,
               value.image.image.encoding,
               value.image.layerName,
+              value.image.position ?? null,
             ]);
     const existing = this.#entries.get(value.requestId);
     const imageData = value.type === 'image.insert' ? value.image.image.data : '';
@@ -165,7 +166,7 @@ export class CanvasServer {
             if (this.#disposed) return;
             this.#send({
               protocol: 'sugarcubes.canvas',
-              version: 1,
+              version: 2,
               session: this.session,
               requestId: 0,
               type: 'source.changed',
@@ -199,9 +200,16 @@ export class CanvasServer {
   ): Promise<void> {
     let result: CanvasInsertResult;
     try {
-      result = this.port.context().canvas.capabilities.insertImageLayer
-        ? await this.port.insert(request.image, entry.cancellation)
-        : { status: 'unsupported', message: 'This canvas does not support image layers.' };
+      const capabilities = this.port.context().canvas.capabilities;
+      result =
+        request.image.position && !capabilities.positionImageLayer
+          ? {
+              status: 'unsupported',
+              message: 'This canvas does not support positioned image layers.',
+            }
+          : capabilities.insertImageLayer
+            ? await this.port.insert(request.image, entry.cancellation)
+            : { status: 'unsupported', message: 'This canvas does not support image layers.' };
     } catch (error: unknown) {
       if (entry.cancellation.cancelled())
         result = { status: 'cancelled', message: 'Canvas insertion cancelled.' };
@@ -250,10 +258,10 @@ export class CanvasServer {
   /** Attach the authoritative protocol and session to every response. */
   #envelope(requestId: number): {
     readonly protocol: 'sugarcubes.canvas';
-    readonly version: 1;
+    readonly version: 2;
     readonly session: string;
     readonly requestId: number;
   } {
-    return { protocol: 'sugarcubes.canvas', version: 1, session: this.session, requestId };
+    return { protocol: 'sugarcubes.canvas', version: 2, session: this.session, requestId };
   }
 }

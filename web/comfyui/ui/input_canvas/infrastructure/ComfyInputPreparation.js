@@ -4,11 +4,13 @@ export class ComfyInputPreparation {
     loaders;
     sources;
     defaults;
+    returns;
     /** Share the exact catalog and capture owner used by masonry bindings. */
-    constructor(loaders, sources, defaults) {
+    constructor(loaders, sources, defaults, returns) {
         this.loaders = loaders;
         this.sources = sources;
         this.defaults = defaults;
+        this.returns = returns;
     }
     /** Pin entry identity, order and channel before any asynchronous native capture or upload. */
     async prepare(payload) {
@@ -23,17 +25,20 @@ export class ComfyInputPreparation {
             ]
             : []));
         if (!projection.targets.length)
-            return payload;
-        const files = await this.sources.prepare(entries);
+            return { payload };
+        const ports = this.loaders.assetPorts();
+        const origin = await this.returns.origin(projection.targets);
+        const sources = await this.sources.prepare(entries);
+        const canvas = await this.returns.prepare(projection.targets, sources, ports, origin);
         for (const target of projection.targets)
             target.apply(target.binding.entries.map((entry) => {
                 const file = entry.source.kind === 'canvas'
-                    ? files.get(JSON.stringify([target.key, entry.id]))
+                    ? sources.files.get(JSON.stringify([target.key, entry.id]))
                     : entry.source.file;
                 if (!file)
                     throw new Error('Choose a file or canvas source for every entry.');
                 return file;
             }));
-        return projection.payload;
+        return { payload: projection.payload, ...(canvas ? { canvas } : {}) };
     }
 }

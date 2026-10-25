@@ -35,7 +35,7 @@ test('routes finished node output directly to its canvas adapter before the job 
     canvas: {
       id: 'editor',
       label: 'Editor',
-      capabilities: { displayOutput: false, insertImageLayer: true },
+      capabilities: { displayOutput: false, insertImageLayer: true, positionImageLayer: false },
     },
     document: { id: 'captured', geometryRevision: 'geometry', width: 512, height: 384 },
   };
@@ -59,7 +59,12 @@ test('routes finished node output directly to its canvas adapter before the job 
           };
         },
       },
-      { load: async () => ({ format: 'png', encoding: 'base64', data: 'native-bytes' }) },
+      {
+        load: async () => ({
+          image: { format: 'png', encoding: 'base64', data: 'native-bytes' },
+          position: null,
+        }),
+      },
       (error) => {
         f.errors.push(error);
       },
@@ -199,7 +204,7 @@ function fixture(targets: readonly string[] = ['web']) {
       runtime.assertCurrentPrompt(payload);
       return payload;
     },
-    transform: (payload) => Promise.resolve(payload),
+    transform: (payload) => Promise.resolve({ payload }),
     observer: runtime.submissionObserver,
   });
   return { a, b, host, api, runtime, bridge, errors, created, revoked, clock, visibility };

@@ -31,6 +31,8 @@ import { ComfyInputSourceDefaults } from '../../../frontend/comfyui/ui/input_can
 import { ComfyInputPreparation } from '../../../frontend/comfyui/ui/input_canvas/infrastructure/ComfyInputPreparation.js';
 import { ComfyInputLoaders } from '../../../frontend/comfyui/ui/input_canvas/infrastructure/ComfyInputLoaders.js';
 
+import { ComfyInputReturnPreparation } from '../../../frontend/comfyui/ui/input_canvas/infrastructure/ComfyInputReturnPreparation.js';
+
 export const sourceDocument = { id: 'doc', geometryRevision: 'geometry', width: 3, height: 2 };
 export const sourceCoverage = encodeCanvasRaster(
   3,
@@ -135,7 +137,15 @@ export function sourceMaskFixture() {
     sourcePreparation,
     previews,
     files,
-    preparation: new ComfyInputPreparation(loaders, sourcePreparation, defaults),
+    preparation: new ComfyInputPreparation(
+      loaders,
+      sourcePreparation,
+      defaults,
+      new ComfyInputReturnPreparation(files, async () => ({
+        canvasId: 'editor',
+        document: sourceDocument,
+      })),
+    ),
     ports: {
       host: () => host,
       files,

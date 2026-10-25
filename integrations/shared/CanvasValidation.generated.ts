@@ -23,11 +23,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function isCanvasCapabilities(value: unknown): value is Contract.CanvasCapabilities {
   return (
     isRecord(value) &&
-    Object.keys(value).length === 2 &&
+    Object.keys(value).length === 3 &&
     Object.hasOwn(value, 'displayOutput') &&
     typeof value['displayOutput'] === 'boolean' &&
     Object.hasOwn(value, 'insertImageLayer') &&
-    typeof value['insertImageLayer'] === 'boolean'
+    typeof value['insertImageLayer'] === 'boolean' &&
+    Object.hasOwn(value, 'positionImageLayer') &&
+    typeof value['positionImageLayer'] === 'boolean'
   );
 }
 /** Validate a bounded CanvasDescriptor payload before dispatch. */
@@ -138,14 +140,16 @@ export function isCanvasContext(value: unknown): value is Contract.CanvasContext
 export function isCanvasInsertImage(value: unknown): value is Contract.CanvasInsertImage {
   return (
     isRecord(value) &&
-    Object.keys(value).length === 3 &&
+    Object.keys(value).length === 4 &&
     Object.hasOwn(value, 'document') &&
     isCanvasDocument(value['document']) &&
     Object.hasOwn(value, 'image') &&
     isCanvasEncodedImage(value['image']) &&
     Object.hasOwn(value, 'layerName') &&
     typeof value['layerName'] === 'string' &&
-    value['layerName'].length <= 128
+    value['layerName'].length <= 128 &&
+    Object.hasOwn(value, 'position') &&
+    (value['position'] === null || isCanvasImagePosition(value['position']))
   );
 }
 /** Validate a bounded CanvasReadRequest payload before dispatch. */
@@ -156,7 +160,7 @@ export function isCanvasReadRequest(value: unknown): value is Contract.CanvasRea
     Object.hasOwn(value, 'protocol') &&
     value['protocol'] === 'sugarcubes.canvas' &&
     Object.hasOwn(value, 'version') &&
-    value['version'] === 1 &&
+    value['version'] === 2 &&
     Object.hasOwn(value, 'session') &&
     typeof value['session'] === 'string' &&
     value['session'].length <= 80 &&
@@ -178,7 +182,7 @@ export function isCanvasReadReply(value: unknown): value is Contract.CanvasReadR
     Object.hasOwn(value, 'protocol') &&
     value['protocol'] === 'sugarcubes.canvas' &&
     Object.hasOwn(value, 'version') &&
-    value['version'] === 1 &&
+    value['version'] === 2 &&
     Object.hasOwn(value, 'session') &&
     typeof value['session'] === 'string' &&
     value['session'].length <= 80 &&
@@ -202,7 +206,7 @@ export function isCanvasInsertRequest(value: unknown): value is Contract.CanvasI
     Object.hasOwn(value, 'protocol') &&
     value['protocol'] === 'sugarcubes.canvas' &&
     Object.hasOwn(value, 'version') &&
-    value['version'] === 1 &&
+    value['version'] === 2 &&
     Object.hasOwn(value, 'session') &&
     typeof value['session'] === 'string' &&
     value['session'].length <= 80 &&
@@ -226,7 +230,7 @@ export function isCanvasInsertReply(value: unknown): value is Contract.CanvasIns
     Object.hasOwn(value, 'protocol') &&
     value['protocol'] === 'sugarcubes.canvas' &&
     Object.hasOwn(value, 'version') &&
-    value['version'] === 1 &&
+    value['version'] === 2 &&
     Object.hasOwn(value, 'session') &&
     typeof value['session'] === 'string' &&
     value['session'].length <= 80 &&
@@ -250,7 +254,7 @@ export function isCanvasCancelRequest(value: unknown): value is Contract.CanvasC
     Object.hasOwn(value, 'protocol') &&
     value['protocol'] === 'sugarcubes.canvas' &&
     Object.hasOwn(value, 'version') &&
-    value['version'] === 1 &&
+    value['version'] === 2 &&
     Object.hasOwn(value, 'session') &&
     typeof value['session'] === 'string' &&
     value['session'].length <= 80 &&
@@ -272,7 +276,7 @@ export function isCanvasErrorReply(value: unknown): value is Contract.CanvasErro
     Object.hasOwn(value, 'protocol') &&
     value['protocol'] === 'sugarcubes.canvas' &&
     Object.hasOwn(value, 'version') &&
-    value['version'] === 1 &&
+    value['version'] === 2 &&
     Object.hasOwn(value, 'session') &&
     typeof value['session'] === 'string' &&
     value['session'].length <= 80 &&
@@ -492,7 +496,7 @@ export function isCanvasSourceRequest(value: unknown): value is Contract.CanvasS
     Object.hasOwn(value, 'protocol') &&
     value['protocol'] === 'sugarcubes.canvas' &&
     Object.hasOwn(value, 'version') &&
-    value['version'] === 1 &&
+    value['version'] === 2 &&
     Object.hasOwn(value, 'session') &&
     typeof value['session'] === 'string' &&
     value['session'].length <= 80 &&
@@ -516,7 +520,7 @@ export function isCanvasSourceReply(value: unknown): value is Contract.CanvasSou
     Object.hasOwn(value, 'protocol') &&
     value['protocol'] === 'sugarcubes.canvas' &&
     Object.hasOwn(value, 'version') &&
-    value['version'] === 1 &&
+    value['version'] === 2 &&
     Object.hasOwn(value, 'session') &&
     typeof value['session'] === 'string' &&
     value['session'].length <= 80 &&
@@ -540,7 +544,7 @@ export function isCanvasSourceChanged(value: unknown): value is Contract.CanvasS
     Object.hasOwn(value, 'protocol') &&
     value['protocol'] === 'sugarcubes.canvas' &&
     Object.hasOwn(value, 'version') &&
-    value['version'] === 1 &&
+    value['version'] === 2 &&
     Object.hasOwn(value, 'session') &&
     typeof value['session'] === 'string' &&
     value['session'].length <= 80 &&
@@ -612,6 +616,23 @@ export function isCanvasInputSource(value: unknown): value is Contract.CanvasInp
         value['documentId'] === null) &&
       Object.hasOwn(value, 'target') &&
       isCanvasSourceTarget(value['target']))
+  );
+}
+/** Validate a bounded CanvasImagePosition payload before dispatch. */
+export function isCanvasImagePosition(value: unknown): value is Contract.CanvasImagePosition {
+  return (
+    isRecord(value) &&
+    Object.keys(value).length === 2 &&
+    Object.hasOwn(value, 'left') &&
+    typeof value['left'] === 'number' &&
+    Number.isSafeInteger(value['left']) &&
+    value['left'] >= -300000 &&
+    value['left'] <= 300000 &&
+    Object.hasOwn(value, 'top') &&
+    typeof value['top'] === 'number' &&
+    Number.isSafeInteger(value['top']) &&
+    value['top'] >= -300000 &&
+    value['top'] <= 300000
   );
 }
 /** Validate a bounded CanvasMessage payload before dispatch. */

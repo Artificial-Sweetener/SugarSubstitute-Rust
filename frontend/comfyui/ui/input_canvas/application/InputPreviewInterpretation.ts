@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Interpret consumer previews separately from source binding state and native capture policy. */
 import type { InputLoader, InputPreviewSettings } from '../domain/InputLoader.js';
+import { usesNativeMaskChannels } from '../domain/InputLoader.js';
 import type { InputPreviewPort } from './InputEditorPorts.js';
 import type { CanvasPixelRaster } from '../../core/embedded/CanvasRuntime.js';
 import { interpretMaskSource } from '../domain/MaskSourcePixels.js';
@@ -36,10 +37,7 @@ export class InputPreviewInterpretation {
   }
   /** Preserve custom-loader interpretation at native resolution while bounding ordinary display capture. */
   captureSize(maximumSize: number): number {
-    return this.loader.kind === 'image' ||
-      ['LoadImageMask', 'SimpleSyrup.LoadMaskBatch'].includes(this.loader.classType)
-      ? maximumSize
-      : 0;
+    return this.loader.kind === 'image' || usesNativeMaskChannels(this.loader) ? maximumSize : 0;
   }
   /** Decode an actual file without competing with its loader's file codec. */
   file(file: string, maximumSize: number): Promise<CanvasPixelRaster> {
@@ -69,7 +67,7 @@ export class InputPreviewInterpretation {
         throw new Error('The image source did not contain image pixels.');
       return source;
     }
-    if (this.captureSize(maximumSize) !== 0) {
+    if (usesNativeMaskChannels(this.loader)) {
       const channel = settings.inputs.channel;
       if (typeof channel !== 'string')
         throw new Error('The mask channel must be an authored setting to show a live preview.');

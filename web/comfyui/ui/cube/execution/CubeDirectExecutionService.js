@@ -34,7 +34,7 @@ export class CubeDirectExecutionService {
         return Array.isArray(nodes) && nodes.some(isPersistedCubeNode);
     }
     /** Serialize live workflow state and delegate execution to SugarCubes once. */
-    async queue(position, comfyPayload, queueOptions = {}) {
+    async queue(position, comfyPayload, queueOptions = {}, preparedInput) {
         const graph = this.options.getGraph();
         if (!graph)
             throw new TypeError('The active Comfy graph is unavailable.');
@@ -45,12 +45,14 @@ export class CubeDirectExecutionService {
         const proximityMatches = this.options.getProximityMatches();
         const proximityConnections = proximityMatches.flatMap(toConnection);
         const authored = enrichWorkflowPayload(serialize.call(graph), graph);
-        const prepared = this.options.prepareInputs
+        const preparation = this.options.prepareInputs
             ? await this.options.prepareInputs({ workflow: authored })
-            : { workflow: authored };
+            : { payload: { workflow: authored } };
+        const prepared = preparation.payload;
         if (!isRecord(prepared) || !isRecord(prepared.workflow))
             throw new Error('Canvas input preparation returned an invalid workflow.');
         const workflow = prepared.workflow;
+        preparedInput?.(preparation);
         const payload = isRecord(comfyPayload) ? comfyPayload : {};
         const extraData = buildExtraData(workflow, payload, queueOptions, this.options.hostApi);
         const clientId = readString(this.options.hostApi?.clientId) || readString(payload.client_id);

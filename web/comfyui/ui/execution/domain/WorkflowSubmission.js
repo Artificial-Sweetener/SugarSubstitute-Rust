@@ -17,6 +17,25 @@
 /** Copy ownership metadata so neither callers nor host mutations can change accepted routing. */
 export function freezeWorkflowSubmissionContext(context) {
     return Object.freeze({
+        ...(context.canvasReturns
+            ? {
+                canvasReturns: Object.freeze(context.canvasReturns.map((value) => value.kind === 'unavailable'
+                    ? Object.freeze({ ...value })
+                    : Object.freeze({
+                        ...value,
+                        document: Object.freeze({ ...value.document }),
+                        regions: Object.freeze(value.regions.map((region) => Object.freeze({
+                            ...region,
+                            mask: Object.freeze({ ...region.mask }),
+                            mapping: Object.freeze({
+                                imageSize: Object.freeze({ ...region.mapping.imageSize }),
+                                imageBounds: Object.freeze({ ...region.mapping.imageBounds }),
+                                documentBounds: Object.freeze({ ...region.mapping.documentBounds }),
+                            }),
+                        }))),
+                    }))),
+            }
+            : {}),
         session: Object.freeze({ ...context.session }),
         sources: Object.freeze(context.sources.map((source) => Object.freeze({
             ...source,

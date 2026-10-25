@@ -16,7 +16,7 @@
 /** Stage reusable source images and selected files through Comfy's normal immutable input upload boundary. */
 import type { CanvasPixelRaster } from '../../core/embedded/CanvasRuntime.js';
 import { isRecord } from '../../types/common.js';
-import { encodeSourcePng } from './BrowserSourcePng.js';
+import { encodeSourcePng } from '../../core/embedded/CanvasPngEncoding.js';
 
 /** Own one upload policy shared by source controls, migration and queue-time canvas capture. */
 export class BrowserCanvasSourceAssets {

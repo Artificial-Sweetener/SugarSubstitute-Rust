@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own known-job association and remove routing metadata when jobs or bindings retire. */
 import { freezeWorkflowSubmissionContext } from '../domain/WorkflowSubmission.js';
-/** Retain outstanding jobs independently of the visible tab without retaining graph objects or pixels. */
+/** Retain outstanding job ownership and captured return plans independently of visible graph objects. */
 export class WorkflowRunRegistry {
     #runs = new Map();
     #orders = new Map();

@@ -170,7 +170,7 @@ export class CanvasClient implements CanvasLayerHost {
           this.#cancel(requestId);
           resolve({
             protocol: 'sugarcubes.canvas',
-            version: 1,
+            version: 2,
             session: this.session,
             requestId,
             type: 'image.reply',
@@ -181,7 +181,7 @@ export class CanvasClient implements CanvasLayerHost {
       try {
         const envelope = {
           protocol: 'sugarcubes.canvas',
-          version: 1,
+          version: 2,
           session: this.session,
           requestId,
         } as const;
@@ -200,7 +200,7 @@ export class CanvasClient implements CanvasLayerHost {
     try {
       this.port.send({
         protocol: 'sugarcubes.canvas',
-        version: 1,
+        version: 2,
         session: this.session,
         requestId,
         type: 'cancel',

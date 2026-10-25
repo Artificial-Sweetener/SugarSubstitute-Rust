@@ -22,9 +22,11 @@ import type { WorkflowOutputSource } from './WorkflowOutput.js';
 import type { WorkflowResultSession } from './WorkflowResultSession.js';
 import type { WorkflowSessionId } from './ExecutionIdentity.js';
 import type { WorkflowPreview } from './WorkflowPreview.js';
+import type { WorkflowCanvasReturn } from './WorkflowPreparation.js';
 
 export interface WorkflowCanvasImage {
   readonly id: string;
+  readonly batchIndex: number;
   readonly media: WorkflowMediaReference;
 }
 export interface WorkflowCanvasOutput {
@@ -32,6 +34,7 @@ export interface WorkflowCanvasOutput {
   readonly source: WorkflowOutputSource;
   readonly images: readonly WorkflowCanvasImage[];
   readonly state: WorkflowCanvasState | null;
+  readonly canvasReturns?: readonly WorkflowCanvasReturn[];
 }
 export interface WorkflowCanvasState {
   readonly sessionId: WorkflowSessionId;
