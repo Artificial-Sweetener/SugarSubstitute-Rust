@@ -82,6 +82,7 @@ async function bundleVueSurface(
     'surface/appearance/VisualStyleBoundary.js',
     'surface/appearance/FluentThemeRuntime.js',
     'surface/appearance/SpectrumThemeRuntime.js',
+    'surface/appearance/GimpThemeRuntime.js',
   ];
   const sourceRoot = path.join(repositoryRoot, 'frontend/comfyui/ui');
   const roots = typeof relativeRoots === 'string' ? [relativeRoots] : relativeRoots;
@@ -147,6 +148,28 @@ async function main(): Promise<void> {
       target: 'es2022',
       legalComments: 'inline',
     });
+  await build({
+    ...browserDependencyResolution,
+    entryPoints: [
+      path.join(repositoryRoot, 'frontend/comfyui/ui/surface/appearance/GimpThemeRuntime.ts'),
+    ],
+    outfile: path.join(generatedRoot, 'comfyui/ui/surface/appearance/GimpThemeRuntime.js'),
+    bundle: true,
+    format: 'esm',
+    platform: 'browser',
+    target: 'es2022',
+    legalComments: 'inline',
+    external: ['../../core/ControlPlacement.js', './NativeTabGroup.js'],
+    define: {
+      __VUE_OPTIONS_API__: 'false',
+      __VUE_PROD_DEVTOOLS__: 'false',
+      __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: 'false',
+      'process.env.NODE_ENV': '"production"',
+    },
+  });
+  // Comfy eagerly imports deployed modules; private Vue components belong only to their runtime bundle.
+  for (const component of ['GimpControlComponents', 'GimpSpinScale'])
+    rmSync(path.join(generatedRoot, `comfyui/ui/surface/appearance/${component}.js`));
   await build({
     ...browserDependencyResolution,
     entryPoints: [

@@ -21,11 +21,14 @@ import { spectrumAppearanceCss } from './SpectrumAppearanceStyles.js';
 import { photoProAppearanceCss, photoProControlCss } from './PhotoProAppearanceStyles.js';
 import { photoProPaletteCss, photoProTokenDeclarations } from './PhotoProThemeTokens.js';
 import { photoProMenuCss } from './PhotoProMenuStyles.js';
+import { gimpTokenDeclarations } from './GimpThemeTokens.js';
+import { gimpAppearanceCss, gimpSurfaceCss } from './GimpAppearanceStyles.js';
 import { readOwnedVisualStyle } from './VisualStyleBoundary.js';
 import type { StyledVisualStyle } from './VisualStyle.js';
 
 /** Return the complete token contract for one accepted design system and palette. */
 export function visualStyleTokens(style: StyledVisualStyle, dark: boolean): string {
+  if (style === 'gimp') return gimpTokenDeclarations(dark);
   return style === 'spectrum'
     ? spectrumTokenDeclarations(dark)
     : style === 'photopro'
@@ -54,6 +57,7 @@ export function applyOwnedTheme(
 
 /** Share native-card geometry while giving Spectrum its official foundations and rounded surfaces. */
 export function nativeVisualStyleCss(style: StyledVisualStyle, dark: boolean): string {
+  if (style === 'gimp') return gimpAppearanceCss(dark);
   if (style === 'fluent') return fluentAppearanceCss(dark);
   return style === 'spectrum' ? spectrumAppearanceCss(dark) : photoProAppearanceCss();
 }
@@ -64,7 +68,7 @@ function ensureThemeStyles(document: Document): void {
   const stylesheet = document.createElement('style');
   stylesheet.id = 'sugarcubes-theme-providers';
   stylesheet.textContent =
-    (['fluent', 'spectrum', 'photopro'] as const)
+    (['fluent', 'spectrum', 'photopro', 'gimp'] as const)
       .flatMap((style) =>
         [true, false].map(
           (dark) =>
@@ -72,6 +76,7 @@ function ensureThemeStyles(document: Document): void {
         ),
       )
       .join('\n') +
+    gimpSurfaceCss() +
     photoProControlCss() +
     photoProMenuCss() +
     photoProPaletteCss() +

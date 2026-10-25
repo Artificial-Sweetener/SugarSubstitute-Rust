@@ -29,7 +29,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await browser.close();
-});
+}, 30_000);
 
 test.each(['dark-gray', 'medium-gray', 'light-gray'] as const)(
   'keeps one row and one segmented generation group in PhotoPro %s',

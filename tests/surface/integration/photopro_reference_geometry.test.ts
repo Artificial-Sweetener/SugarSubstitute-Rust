@@ -41,7 +41,7 @@ test('matches edge-aligned 30px tabs, 16px tracks and 12px thumbs and uses only 
     await page.setContent(`<!doctype html><html data-sc-visual-style="photopro" data-sc-photopro-palette="dark-gray" data-sc-substitute-frame><body>
       <header class="sc-substitute-frame" data-sc-theme="photopro"><div class="sc-workflow-strip"><div data-sc-workflow-tabs><button data-sc-workflow-tab aria-selected="false">Other<span class="sc-workflow-close">�</span></button><button data-sc-workflow-tab aria-selected="true">Selected</button></div></div><button class="sc-workflow-new" data-sc-button>+</button></header>
       <nav class="sc-cube-stack"><div class="sc-cube-stack__selection"></div></nav>
-      <section data-sc-style-surface><div class="sc-style-scrollbar" data-sc-photopro-scrollbar aria-orientation="vertical" style="width:16px;height:100px"><div class="sc-style-scrollbar-track" style="width:16px;height:300px"><button data-sc-scroll-step="start"></button><button data-sc-scroll-step="end"></button></div></div></section>
+      <section data-sc-style-surface><div class="sc-style-scrollbar" data-sc-scrollbar-style="photopro" aria-orientation="vertical" style="width:16px;height:100px"><div class="sc-style-scrollbar-track" style="width:16px;height:300px"><button data-sc-scroll-step="start"></button><button data-sc-scroll-step="end"></button></div></div></section>
       </body></html>`);
     await page.addStyleTag({
       content: `body {margin:0;} :root {${photoProScrollbarTokenDeclarations('dark-gray')}} [data-sc-theme="photopro"] {${photoProTokenDeclarations('dark-gray')}} ${substituteFrameCss}${photoProControlCss()}${scrollbarPresentationCss()}${photoProScrollbarCss()}${photoProControlCss()}`,

@@ -66,7 +66,7 @@ function fixture(style: VisualStyle) {
   return { host, root, input, values, registrations, events, frames, errors };
 }
 
-test.each(['comfy', 'fluent', 'spectrum', 'photopro'] as const)(
+test.each(['comfy', 'fluent', 'spectrum', 'photopro', 'gimp'] as const)(
   'restores %s from the combobox without following the superseded legacy toggle',
   (style) => {
     const f = fixture(style);
@@ -77,6 +77,7 @@ test.each(['comfy', 'fluent', 'spectrum', 'photopro'] as const)(
       { value: 'fluent', text: 'Fluent' },
       { value: 'spectrum', text: 'Spectrum 2' },
       { value: 'photopro', text: 'PhotoPro' },
+      { value: 'gimp', text: 'GIMP' },
     ]);
     expect(f.registrations.has('SugarCubes.Appearance.Fluent')).toBe(false);
     expect(f.host.state.appearance.style).toBe(style);
@@ -112,6 +113,28 @@ test('switches both providers reversibly and preserves Spectrum preference acros
   expect(f.host.state.appearance.style).toBe('spectrum');
   expect(document.getElementById('sugarcubes-native-appearance')?.textContent).toContain(
     '--sc-node-card-radius:var(--spectrum-corner-radius-large-default)',
+  );
+  f.host.dispose();
+  expect(f.errors).not.toHaveBeenCalled();
+});
+
+test('retains GIMP preference and native input identity through Nodes 1.0 suspension', async () => {
+  const f = fixture('gimp');
+  f.values.set('Comfy.VueNodes.Enabled', false);
+  f.events.dispatchEvent(new Event('Comfy.VueNodes.Enabled.change'));
+  await Promise.resolve();
+  expect(f.host.state.appearance.style).toBe('comfy');
+  expect(document.documentElement.dataset.scVisualStyle).toBe('gimp');
+  expect(f.root.hasAttribute('data-sc-style-node')).toBe(false);
+  expect(f.root.querySelector('input')).toBe(f.input);
+  f.values.set('Comfy.VueNodes.Enabled', true);
+  f.events.dispatchEvent(new Event('Comfy.VueNodes.Enabled.change'));
+  await Promise.resolve();
+  prepareNativePresentation(f.root);
+  expect(f.host.state.appearance.style).toBe('gimp');
+  expect(f.root.querySelector('input')).toBe(f.input);
+  expect(document.getElementById('sugarcubes-native-appearance')?.textContent).toContain(
+    '--sc-gimp-background:#3c3c3c;',
   );
   f.host.dispose();
   expect(f.errors).not.toHaveBeenCalled();

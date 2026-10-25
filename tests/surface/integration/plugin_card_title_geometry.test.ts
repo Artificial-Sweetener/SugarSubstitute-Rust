@@ -28,7 +28,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await browser.close();
-});
+}, 30_000);
 
 test('keeps the override pin at the top right across card widths with the activation footprint', async () => {
   const dom = new JSDOM();

@@ -1,5 +1,16 @@
 # Third-Party Notices
 
+## GIMP Default theme
+
+GIMP-theme card icons, action glyphs and numeric step buttons use unmodified GTK3-era [Adwaita](https://gitlab.gnome.org/GNOME/adwaita-icon-theme) 3.38.0 symbolic artwork, attributed to the [GNOME Project](https://www.gnome.org/). The artwork is distributed under its LGPL v3 option; the upstream notice and complete LGPL/GPL terms are included in `licenses/adwaita.LICENSE.txt`. Source paths, pinned revision and asset hashes are recorded in the manifest.
+
+The GIMP visual style adapts the Default theme's dark/light colors, GTK control
+paint, notebook states and compact dock geometry under GPL-3.0-or-later.
+The source revision, exact paths and source hashes are recorded in `manifest.toml`;
+the license is included in `licenses/gimp.LICENSE.txt`. GIMP controls use the
+unmodified Vue 3.5.43 runtime under MIT (`licenses/vue.LICENSE.txt`).
+
+
 ## OpenPhoto PhotoPro interface
 
 PhotoPro adapts OpenPhoto's medium-gray panel colors and compact control paint

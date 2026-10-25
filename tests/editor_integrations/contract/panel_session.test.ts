@@ -246,3 +246,15 @@ test('generated language bindings and validators match the authoritative wire sc
   for (const [file, source] of Object.entries(bindings))
     expect(readFileSync(file, 'utf8').replaceAll('\r\n', '\n')).toBe(source);
 });
+
+test('accepts GIMP as an additive panel presentation style', () => {
+  expect(
+    isPanelMessage({
+      protocol: 'sugarcubes.panel',
+      version: 3,
+      session,
+      type: 'configure',
+      presentation: { ...presentation, visualStyle: 'gimp' },
+    }),
+  ).toBe(true);
+});

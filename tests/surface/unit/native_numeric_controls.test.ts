@@ -19,7 +19,10 @@ import { NativeNumericControls } from '../../../frontend/comfyui/ui/surface/appe
 import type { NumericSliderControl } from '../../../frontend/comfyui/ui/surface/appearance/NativeNumericControls.js';
 import type { NativeNumericField } from '../../../frontend/comfyui/ui/surface/appearance/ComfyNativeNumericField.js';
 import { readNativeNumericField } from '../../../frontend/comfyui/ui/surface/appearance/ComfyNativeNumericField.js';
-import { usesSubstituteSlider } from '../../../frontend/comfyui/ui/surface/appearance/NumericSliderPresentation.js';
+import {
+  usesGimpSpinScale,
+  usesNumericSlider,
+} from '../../../frontend/comfyui/ui/surface/appearance/NumericSliderPresentation.js';
 import { ensureOwnedControlAppearanceStyles } from '../../../frontend/comfyui/ui/surface/appearance/OwnedControlAppearanceStyles.js';
 import { nativeNumericCss } from '../../../frontend/comfyui/ui/surface/appearance/NativeNumericStyles.js';
 import { createNumericSlider } from '../../../frontend/comfyui/ui/surface/appearance/ControlFactory.js';
@@ -108,7 +111,7 @@ test('keeps primary numeric gestures with the controls and restores graph gestur
   root.addEventListener('pointerdown', graphStart);
   const nativeStart = jest.fn();
   field.input.addEventListener('pointerdown', nativeStart);
-  controls.reconcile(root, [field]);
+  controls.reconcile(root, [field], new Set());
   const slider = root.querySelector<SliderFixture>('numeric-slider-fixture');
   if (!slider) throw new Error('Slider fixture missing');
   for (const target of [field.input, field.increment, field.decrement, slider]) {
@@ -131,7 +134,7 @@ test('keeps primary numeric gestures with the controls and restores graph gestur
 
 test('allows slider drag updates and completion to reach its window listeners', () => {
   const { root, field, controls, write } = fixture();
-  controls.reconcile(root, [field]);
+  controls.reconcile(root, [field], new Set());
   const slider = root.querySelector<SliderFixture>('numeric-slider-fixture');
   if (!slider) throw new Error('Slider fixture missing');
   const move = jest.fn(() => {
@@ -161,7 +164,7 @@ test.each(['fluent', 'spectrum', 'photopro'] as const)(
     const { root, field, write } = fixture();
     const controls = new NativeNumericControls(createNumericSlider);
     try {
-      controls.reconcile(root, [field]);
+      controls.reconcile(root, [field], new Set());
       const slider = root.querySelector<HTMLElement>('[data-sc-number-slider]');
       if (!slider) throw new Error('Numeric slider missing');
       Reflect.set(slider, 'value', style === 'spectrum' ? 0.4 : '0.4');
@@ -179,6 +182,51 @@ test.each(['fluent', 'spectrum', 'photopro'] as const)(
     } finally {
       controls.clear();
     }
+  },
+);
+
+/** Keep integrated GIMP numeric presentation on the characterized native binding. */
+test('GIMP presents bounded numeric fields through the existing native input and value owner', () => {
+  publishVisualStyle(document, 'gimp');
+  const { root, field, controls, write, external } = fixture('cfg', 'CFG', 2);
+  const input = field.input;
+  controls.reconcile(root, [field], new Set());
+  const slider = root.querySelector<SliderFixture>('[data-sc-number-slider]');
+  expect(slider).not.toBeNull();
+  expect(slider?.dataset.scNumberLabel).toBe('CFG');
+  expect(root.querySelector('input')).toBe(input);
+  external(0.7);
+  expect(slider?.readValue()).toBe(0.7);
+  expect(write).not.toHaveBeenCalled();
+  if (!slider) throw new Error('The GIMP numeric presentation did not mount.');
+  slider.value = '0.4';
+  slider.dispatchEvent(new Event('input', { bubbles: true }));
+  expect(input.value).toBe('0.4');
+  expect(write).toHaveBeenCalledTimes(1);
+  controls.clear();
+  expect(root.querySelector('input')).toBe(input);
+});
+
+test('GIMP excludes seed inputs identified by the host adapter even with a nonstandard name', () => {
+  publishVisualStyle(document, 'gimp');
+  const { root, field, controls } = fixture('entropy', 'Random state', 0);
+  controls.reconcile(root, [field], new Set([field.input]));
+  expect(root.querySelector('[data-sc-number-slider]')).toBeNull();
+  expect(field.input.hasAttribute('data-sc-number-input')).toBe(true);
+  controls.clear();
+});
+
+test.each(['width', 'height'])(
+  'GIMP retains an ordinary %s entry with its native step buttons',
+  (name) => {
+    publishVisualStyle(document, 'gimp');
+    const { root, field, controls } = fixture(name, name, 0);
+    controls.reconcile(root, [field], new Set());
+    expect(root.querySelector('[data-sc-number-slider]')).toBeNull();
+    expect(field.increment?.hasAttribute('data-sc-number-increment')).toBe(true);
+    expect(field.decrement?.hasAttribute('data-sc-number-decrement')).toBe(true);
+    expect(root.querySelector('input')).toBe(field.input);
+    controls.clear();
   },
 );
 
@@ -252,9 +300,9 @@ test.each([
   ['seed', 'seed', 0, false],
   ['denoise', 'denoise', 0, false],
 ])('matches Substitute slider policy for %s / %s', (name, label, precision, expected) => {
-  expect(usesSubstituteSlider({ name, label, precision, minimum: 0, maximum: 1, step: 0.01 })).toBe(
-    expected,
-  );
+  expect(
+    usesNumericSlider({ name, label, precision, minimum: 0, maximum: 1, step: 0.01 }, 'fluent'),
+  ).toBe(expected);
 });
 
 test('rejects invalid, reversed, and unsafe slider ranges', () => {
@@ -267,12 +315,26 @@ test('rejects invalid, reversed, and unsafe slider ranges', () => {
     step: 0.01,
   };
   for (const change of [{ step: 0 }, { maximum: Infinity }, { minimum: 2 }, { maximum: 1e20 }])
-    expect(usesSubstituteSlider({ ...spec, ...change })).toBe(false);
+    expect(usesNumericSlider({ ...spec, ...change }, 'fluent')).toBe(false);
+});
+
+test.each<[string, string, boolean]>([
+  ['denoise', 'Denoise', false],
+  ['variation_strength', 'Variation strength', false],
+  ['value', 'Scale Factor', false],
+  ['opacity', 'Opacity', true],
+  ['cfg', 'CFG', true],
+  ['width', 'Width', false],
+  ['height', 'Height', false],
+])('selects the intended GIMP numeric variant for %s', (name, label, expected) => {
+  expect(usesGimpSpinScale({ name, label, precision: 2, minimum: 0, maximum: 1, step: 0.01 })).toBe(
+    expected,
+  );
 });
 
 test('keeps slider, typed entry, buttons, and external updates synchronized through one native owner', () => {
   const { root, field, controls, write, external, unsubscribe } = fixture();
-  controls.reconcile(root, [field]);
+  controls.reconcile(root, [field], new Set());
   const slider = root.querySelector<SliderFixture>('numeric-slider-fixture');
   if (!slider) throw new Error('Slider fixture missing');
   expect(slider.value).toBe('0.2');
@@ -286,10 +348,10 @@ test('keeps slider, typed entry, buttons, and external updates synchronized thro
   external(0.63);
   expect(slider.value).toBe('0.63');
   expect(write).not.toHaveBeenCalled();
-  controls.reconcile(root, [field]);
+  controls.reconcile(root, [field], new Set());
   expect(root.querySelectorAll('numeric-slider-fixture')).toHaveLength(1);
   field.input.disabled = true;
-  controls.reconcile(root, [field]);
+  controls.reconcile(root, [field], new Set());
   expect(slider.disabled).toBe(true);
   slider.value = '0.9';
   expect(write).not.toHaveBeenCalled();
@@ -304,11 +366,11 @@ test('keeps slider, typed entry, buttons, and external updates synchronized thro
 
 test('stacks integer controls without adding sliders and releases stale controls on native replacement', () => {
   const { root, field, controls } = fixture('steps', 'steps', 0);
-  controls.reconcile(root, [field]);
+  controls.reconcile(root, [field], new Set());
   expect(field.increment?.hasAttribute('data-sc-number-increment')).toBe(true);
   expect(field.decrement?.hasAttribute('data-sc-number-decrement')).toBe(true);
   expect(root.querySelector('numeric-slider-fixture')).toBeNull();
-  controls.reconcile(root, []);
+  controls.reconcile(root, [], new Set());
   expect(field.input.hasAttribute('data-sc-number-input')).toBe(false);
   expect(nativeNumericCss()).toContain('[data-sc-number-increment] { top:0; }');
   expect(nativeNumericCss()).toContain('[data-sc-number-decrement] { bottom:0; }');
@@ -324,7 +386,7 @@ test('centers recognized numeric editors and uses the desktop slider cursor only
   custom.style.textAlign = 'right';
   root.append(custom);
   const originalAlignment = getComputedStyle(field.input).textAlign;
-  controls.reconcile(root, [field]);
+  controls.reconcile(root, [field], new Set());
   const slider = root.querySelector<SliderFixture>('numeric-slider-fixture');
   if (!slider) throw new Error('Slider fixture missing');
   expect(getComputedStyle(field.input).textAlign).toBe('center');
@@ -343,7 +405,7 @@ test('releases presentation when a native value subscription cannot be establish
   field.subscribe = () => {
     throw new Error('Native watcher unavailable');
   };
-  expect(() => controls.reconcile(root, [field])).toThrow('Native watcher unavailable');
+  expect(() => controls.reconcile(root, [field], new Set())).toThrow('Native watcher unavailable');
   expect(root.querySelector('numeric-slider-fixture')).toBeNull();
   expect(field.input.hasAttribute('data-sc-number-input')).toBe(false);
   expect(field.container.hasAttribute('data-sc-number-pair')).toBe(false);
@@ -353,13 +415,13 @@ test('releases presentation when a native value subscription cannot be establish
 
 test('renders markup-like labels literally and retains native sliders without duplication', () => {
   const { root, field, controls } = fixture('denoise', '<img src=x>');
-  controls.reconcile(root, [field]);
+  controls.reconcile(root, [field], new Set());
   expect(root.querySelector('img')).toBeNull();
   expect(root.querySelector('numeric-slider-fixture')?.getAttribute('aria-label')).toBe(
     '<img src=x> slider',
   );
   field.hasNativeSlider = true;
-  controls.reconcile(root, [field]);
+  controls.reconcile(root, [field], new Set());
   expect(root.querySelector('numeric-slider-fixture')).toBeNull();
   controls.clear();
 });
@@ -418,14 +480,14 @@ test('adapts the live numeric component model and watcher while rejecting unknow
 test('styles late-mounted and replaced native buttons without replacing the input or slider', () => {
   const { root, field, controls } = fixture();
   const input = field.input;
-  controls.reconcile(root, [{ ...field, increment: null, decrement: null }]);
+  controls.reconcile(root, [{ ...field, increment: null, decrement: null }], new Set());
   const slider = root.querySelector('numeric-slider-fixture');
-  controls.reconcile(root, [field]);
+  controls.reconcile(root, [field], new Set());
   expect(field.increment?.hasAttribute('data-sc-number-increment')).toBe(true);
   expect(field.decrement?.hasAttribute('data-sc-number-decrement')).toBe(true);
   const increment = document.createElement('button');
   field.spinner.append(increment);
-  controls.reconcile(root, [{ ...field, increment }]);
+  controls.reconcile(root, [{ ...field, increment }], new Set());
   expect(field.increment?.hasAttribute('data-sc-number-increment')).toBe(false);
   expect(increment.hasAttribute('data-sc-number-increment')).toBe(true);
   expect(root.querySelector('input')).toBe(input);
@@ -443,7 +505,7 @@ test('suppresses only the recognized native range fill while Fluent presentation
   const fill = document.createElement('div');
   const custom = document.createElement('div');
   field.spinner.prepend(fill, custom);
-  controls.reconcile(root, [{ ...field, rangeFill: fill }]);
+  controls.reconcile(root, [{ ...field, rangeFill: fill }], new Set());
   expect(getComputedStyle(fill).display).toBe('none');
   expect(custom.hasAttribute('data-sc-native-number-fill')).toBe(false);
   controls.clear();

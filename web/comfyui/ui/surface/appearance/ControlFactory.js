@@ -18,32 +18,39 @@ import { createFluentNumericSlider, createBooleanCheckboxControl, createBooleanS
 import { createSpectrumButton, createSpectrumSlider, createSpectrumCheckbox, createSpectrumSegments, createSpectrumFinderInput, createSpectrumTablist, createSpectrumActivationSwitch, createSpectrumEditorField, } from './SpectrumThemeRuntime.js';
 import { readOwnedVisualStyle } from './VisualStyleBoundary.js';
 import { createPhotoProButton, createPhotoProCheckbox, createPhotoProEditorField, createPhotoProFinderInput, createPhotoProSegments, createPhotoProSlider, createPhotoProTablist, createPhotoProWorkflowTab, } from './PhotoProControls.js';
+import { createGimpButton, createGimpCheckbox, createGimpNumericSlider, createGimpSegments, createGimpFinderInput, createGimpEditorField, createGimpTablist, createGimpWorkflowTab, } from './GimpThemeRuntime.js';
 import { adoptEditorFieldPadding } from './EditorFieldControl.js';
 import { relocateControl } from '../../core/ControlPlacement.js';
 import { createNativeActivationSwitch, createCheckboxActivation, } from './ActivationSwitchControl.js';
 /** Select activation presentation without taking ownership of node state or history. */
 export function createActivationSwitch(document) {
-    const result = readOwnedVisualStyle(document) === 'spectrum'
-        ? createSpectrumActivationSwitch(document)
-        : readOwnedVisualStyle(document) === 'photopro'
-            ? createCheckboxActivation(createPhotoProCheckbox(document))
-            : createNativeActivationSwitch(document);
+    const result = readOwnedVisualStyle(document) === 'gimp'
+        ? createCheckboxActivation(createGimpCheckbox(document))
+        : readOwnedVisualStyle(document) === 'spectrum'
+            ? createSpectrumActivationSwitch(document)
+            : readOwnedVisualStyle(document) === 'photopro'
+                ? createCheckboxActivation(createPhotoProCheckbox(document))
+                : createNativeActivationSwitch(document);
     result.control.dataset.scActivationSwitch = '';
     return result;
 }
 /** Create an owned command button with the selected system's real interaction implementation. */
 export function createButton(document) {
-    const button = readOwnedVisualStyle(document) === 'spectrum'
-        ? createSpectrumButton(document)
-        : readOwnedVisualStyle(document) === 'photopro'
-            ? createPhotoProButton(document)
-            : document.createElement('fluent-button');
+    const button = readOwnedVisualStyle(document) === 'gimp'
+        ? createGimpButton(document)
+        : readOwnedVisualStyle(document) === 'spectrum'
+            ? createSpectrumButton(document)
+            : readOwnedVisualStyle(document) === 'photopro'
+                ? createPhotoProButton(document)
+                : document.createElement('fluent-button');
     button.dataset.scButton = '';
     return button;
 }
 /** Normalize design-system numeric APIs before binding to a native Comfy field. */
-export function createNumericSlider(document) {
+export function createNumericSlider(document, field) {
     const style = readOwnedVisualStyle(document);
+    if (style === 'gimp')
+        return createGimpNumericSlider(document, field);
     return style === 'spectrum'
         ? createSpectrumSlider(document)
         : style === 'photopro'
@@ -53,6 +60,8 @@ export function createNumericSlider(document) {
 /** Keep checked-state semantics independent of the selected component library. */
 export function createBooleanCheckbox(document) {
     const style = readOwnedVisualStyle(document);
+    if (style === 'gimp')
+        return createGimpCheckbox(document);
     return style === 'spectrum'
         ? createSpectrumCheckbox(document)
         : style === 'photopro'
@@ -62,6 +71,8 @@ export function createBooleanCheckbox(document) {
 /** Keep native boolean edits and undo history under the existing shared binding owner. */
 export function createBooleanSegments(document) {
     const style = readOwnedVisualStyle(document);
+    if (style === 'gimp')
+        return createGimpSegments(document);
     return style === 'spectrum'
         ? createSpectrumSegments(document)
         : style === 'photopro'
@@ -71,6 +82,8 @@ export function createBooleanSegments(document) {
 /** Create a real accessible search field in the selected visual system. */
 export function createFinderInput(document) {
     const style = readOwnedVisualStyle(document);
+    if (style === 'gimp')
+        return createGimpFinderInput(document);
     return style === 'spectrum'
         ? createSpectrumFinderInput(document)
         : style === 'photopro'
@@ -79,13 +92,15 @@ export function createFinderInput(document) {
 }
 /** Select the existing provider's input asset for an editor with its own canonical document. */
 export function createEditorField(document, style) {
-    const field = style === 'fluent'
-        ? createFluentEditorField(document)
-        : style === 'spectrum'
-            ? createSpectrumEditorField(document)
-            : style === 'photopro'
-                ? createPhotoProEditorField(document)
-                : createComfyEditorField(document);
+    const field = style === 'gimp'
+        ? createGimpEditorField(document)
+        : style === 'fluent'
+            ? createFluentEditorField(document)
+            : style === 'spectrum'
+                ? createSpectrumEditorField(document)
+                : style === 'photopro'
+                    ? createPhotoProEditorField(document)
+                    : createComfyEditorField(document);
     field.root.dataset.scEditorField = style;
     field.root.style.cssText +=
         ';display:block;box-sizing:border-box;width:100%;height:100%;min-width:0;min-height:0';
@@ -112,22 +127,26 @@ function createComfyEditorField(document) {
 /** Create a workflow tab group whose adapter exposes stable child identity. */
 export function createWorkflowTablist(document) {
     const style = readOwnedVisualStyle(document);
-    const group = style === 'spectrum'
-        ? createSpectrumTablist(document)
-        : style === 'photopro'
-            ? createPhotoProTablist(document)
-            : createFluentWorkflowTablist();
+    const group = style === 'gimp'
+        ? createGimpTablist(document)
+        : style === 'spectrum'
+            ? createSpectrumTablist(document)
+            : style === 'photopro'
+                ? createPhotoProTablist(document)
+                : createFluentWorkflowTablist();
     group.dataset.scWorkflowTabs = '';
     return group;
 }
 /** Create the selected provider's workflow tab while retaining shared drag and close behavior. */
 export function createWorkflowTab(document) {
     const style = readOwnedVisualStyle(document);
-    const tab = style === 'spectrum'
-        ? document.createElement('sc-spectrum-workflow-tab')
-        : style === 'photopro'
-            ? createPhotoProWorkflowTab(document)
-            : createFluentWorkflowTab(document);
+    const tab = style === 'gimp'
+        ? createGimpWorkflowTab(document)
+        : style === 'spectrum'
+            ? document.createElement('sc-spectrum-workflow-tab')
+            : style === 'photopro'
+                ? createPhotoProWorkflowTab(document)
+                : createFluentWorkflowTab(document);
     tab.dataset.scWorkflowTab = '';
     return tab;
 }
@@ -137,6 +156,8 @@ export function workflowTabAccessorySlot(document, position) {
 }
 /** Name the already registered provider element for declarative Vue rendering. */
 export function buttonTag(style) {
+    if (style === 'gimp')
+        return 'sc-gimp-button';
     return style === 'comfy' || style === 'photopro'
         ? 'button'
         : style === 'spectrum'
@@ -145,6 +166,8 @@ export function buttonTag(style) {
 }
 /** Select a registered text-field adapter for declarative search views. */
 export function searchInputTag(style) {
+    if (style === 'gimp')
+        return 'sc-gimp-search';
     return style === 'comfy'
         ? 'input'
         : style === 'spectrum'

@@ -39,6 +39,9 @@ jobs:
       - name: Install Python dependencies
         run: pip install -e ".[dev]"
 
+      - name: Install headless browser runtimes
+        run: npx playwright install --with-deps chromium firefox
+
       - name: Verify repository gate
         run: npm run check
 
