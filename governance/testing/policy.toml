@@ -2,6 +2,18 @@ schema_version = 1
 platforms = ["windows", "macos", "linux"]
 
 [[owners]]
+package = "sugarsubstitute-canvas"
+root = "crates/sugarsubstitute-canvas"
+concern = "Camera coordinate invariants, exact exposed-edge damage, retained source geometry and reversible document revision publication"
+minimum_tests = 8
+
+[[owners]]
+package = "sugarsubstitute-canvas-render"
+root = "crates/sugarsubstitute-canvas-render"
+concern = "Overlap-safe pixel blitting and repair versus full redraw, immutable region preparation and rejected stale-frame publication"
+minimum_tests = 4
+
+[[owners]]
 package = "sugarsubstitute-image-ops"
 root = "crates/sugarsubstitute-image-ops"
 concern = "Graph identity and validation, pyramid semantics, tiled/reference agreement, vector coverage, dirty dependencies, bounded source access and retained execution memory"

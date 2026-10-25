@@ -1,0 +1,19 @@
+[package]
+name = "sugarsubstitute-canvas"
+description = "Revisioned canvas documents, viewport transforms and damage planning"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+sugarsubstitute-contracts = { path = "../sugarsubstitute-contracts" }
+sugarsubstitute-image-ops = { path = "../sugarsubstitute-image-ops" }
+
+[dev-dependencies]
+sugarsubstitute-execution = { path = "../sugarsubstitute-execution" }
+
+[lints]
+workspace = true

@@ -46,7 +46,7 @@ fn tiled_lanczos_matches_reference_at_seams_edges_and_fractional_phases() -> Tes
             (Extent::new(97, 81)?, Extent::new(259, 199)?),
         ] {
             let (mut graph, input) = graph(context, source)?;
-            let output = graph.add(Operation::Resample { input, extent: target })?;
+            let output = graph.resize(input, target)?;
             let mut evaluator =
                 Evaluator::new(graph, Grid { extent: source }, 24, context.memory())?;
             for ty in 0..target.height().div_ceil(TILE_EDGE) {

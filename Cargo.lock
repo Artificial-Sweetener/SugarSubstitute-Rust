@@ -2424,6 +2424,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "sugarsubstitute-canvas"
+version = "0.1.0"
+dependencies = [
+ "sugarsubstitute-contracts",
+ "sugarsubstitute-execution",
+ "sugarsubstitute-image-ops",
+]
+
+[[package]]
+name = "sugarsubstitute-canvas-render"
+version = "0.1.0"
+dependencies = [
+ "sugarsubstitute-canvas",
+ "sugarsubstitute-contracts",
+ "sugarsubstitute-execution",
+ "sugarsubstitute-image-ops",
+]
+
+[[package]]
 name = "sugarsubstitute-comfy"
 version = "0.1.0"
 dependencies = [

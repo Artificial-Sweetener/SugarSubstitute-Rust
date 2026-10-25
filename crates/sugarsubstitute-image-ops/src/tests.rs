@@ -7,6 +7,7 @@ use std::sync::Arc;
 use sugarsubstitute_contracts::execution::JobContext;
 mod harness;
 mod reference;
+mod sampling;
 
 const MEMORY: u64 = 64 * 1024 * 1024;
 const ASSET: AssetId = AssetId([7; 32]);
@@ -83,9 +84,7 @@ fn graph_rejects_foreign_inputs_unbounded_reductions_and_size_mismatches() -> Te
         let mut other = Graph::new(8, context.memory())?;
         let foreign = other.add(Operation::Raster { asset: ASSET, extent })?;
         assert!(graph.add(Operation::Exposure { input: foreign, stops: 1.0 }).is_err());
-        assert!(
-            graph.add(Operation::Resample { input: source, extent: Extent::new(1, 1)? }).is_err()
-        );
+        assert!(graph.resize(source, Extent::new(1, 1)?).is_err());
         assert!(graph.add(Operation::Exposure { input: source, stops: f32::INFINITY }).is_err());
         let small = graph
             .add(Operation::Solid { extent: Extent::new(1, 1)?, color: Pixel::TRANSPARENT })?;
@@ -159,7 +158,7 @@ fn filter_halos_and_dirty_propagation_cover_every_influenced_sample() -> TestRes
     run(MEMORY, |context| {
         let (mut graph, source) = graph(context, Extent::new(513, 65)?)?;
         let target = Extent::new(257, 33)?;
-        let reduced = graph.add(Operation::Resample { input: source, extent: target })?;
+        let reduced = graph.resize(source, target)?;
         let changed = Region::new(255, 22, 1, 1)?;
         let dirty = graph
             .invalidated_by(reduced, source, changed)?

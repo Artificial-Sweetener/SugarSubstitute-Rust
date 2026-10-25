@@ -9,20 +9,24 @@
 //! remains explicit until evaluated; source assets and document editing state are not caches.
 
 mod buffer;
+mod display;
 mod error;
 mod evaluate;
 mod geometry;
 mod graph;
 mod pixel;
 mod resample;
+mod sampling;
 mod spatial;
 
 pub use buffer::{TILE_EDGE, Tile};
+pub use display::SrgbEncoder;
 pub use error::ImageError;
 pub use evaluate::{EvaluationStats, Evaluator, RasterSource};
 pub use geometry::{Extent, Region};
 pub use graph::{AssetId, Graph, NodeId, Operation, Pyramid, VectorRectangle};
 pub use pixel::Pixel;
+pub use sampling::Sampling;
 
 #[cfg(test)]
 mod tests;

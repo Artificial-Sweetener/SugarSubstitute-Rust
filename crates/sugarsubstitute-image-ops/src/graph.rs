@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Append-only typed DAGs with structural identities and bounded graph ownership.
-use crate::{Extent, ImageError, Pixel};
+use crate::{Extent, ImageError, Pixel, Sampling};
 use sha2::{Digest, Sha256};
 use std::sync::atomic::{AtomicU64, Ordering};
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease};
 
 static NEXT_GRAPH: AtomicU64 = AtomicU64::new(1);
-const MAX_NODES: usize = 1024;
-const MAX_DEPTH: u16 = 64;
+const MAX_NODES: usize = 4096;
+const MAX_DEPTH: u16 = 128;
 
 /// Immutable source-content identity supplied by its asset owner, never a path alone.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -79,6 +79,8 @@ pub enum Operation {
         input: NodeId,
         /// Output dimensions.
         extent: Extent,
+        /// Explicit global sampling phase and inverse scale.
+        sampling: Sampling,
     },
     /// Multiply linear RGB by `2^stops`, preserving alpha.
     Exposure {
@@ -101,14 +103,31 @@ pub enum Operation {
         /// Equal-sized image supplying alpha coverage.
         mask: NodeId,
     },
+    /// Interpolate an adjustment against its original composite using authored mask coverage.
+    /// Unlike source-over, this preserves unchanged alpha when an adjustment preserves alpha.
+    Mix {
+        /// Original composite.
+        original: NodeId,
+        /// Adjusted composite.
+        adjusted: NodeId,
+        /// Alpha coverage controlling the adjustment.
+        mask: NodeId,
+        /// Finite adjustment strength in `[0, 1]`.
+        opacity: f32,
+    },
 }
 impl Operation {
-    pub(crate) fn inputs(self) -> [Option<NodeId>; 2] {
+    pub(crate) fn inputs(self) -> [Option<NodeId>; 3] {
         match self {
-            Self::Raster { .. } | Self::Solid { .. } | Self::Rectangle { .. } => [None, None],
-            Self::Resample { input, .. } | Self::Exposure { input, .. } => [Some(input), None],
-            Self::Over { background, foreground } => [Some(background), Some(foreground)],
-            Self::Mask { input, mask } => [Some(input), Some(mask)],
+            Self::Raster { .. } | Self::Solid { .. } | Self::Rectangle { .. } => [None; 3],
+            Self::Resample { input, .. } | Self::Exposure { input, .. } => {
+                [Some(input), None, None]
+            }
+            Self::Over { background, foreground } => [Some(background), Some(foreground), None],
+            Self::Mask { input, mask } => [Some(input), Some(mask), None],
+            Self::Mix { original, adjusted, mask, .. } => {
+                [Some(original), Some(adjusted), Some(mask)]
+            }
         }
     }
 }
@@ -162,13 +181,9 @@ impl Graph {
             Operation::Raster { extent, .. }
             | Operation::Solid { extent, .. }
             | Operation::Rectangle { extent, .. } => extent,
-            Operation::Resample { input, extent } => {
+            Operation::Resample { input, extent, sampling } => {
                 let source = self.extent(input)?;
-                if u64::from(source.width()) > 2 * u64::from(extent.width())
-                    || u64::from(source.height()) > 2 * u64::from(extent.height())
-                {
-                    return Err(ImageError::Invalid("Large reductions require pyramid steps"));
-                }
+                sampling.validate(source, extent)?;
                 extent
             }
             Operation::Exposure { input, stops } => {
@@ -181,11 +196,25 @@ impl Graph {
                 self.equal_extent(background, foreground)?
             }
             Operation::Mask { input, mask } => self.equal_extent(input, mask)?,
+            Operation::Mix { original, adjusted, mask, opacity } => {
+                if !opacity.is_finite() || !(0.0..=1.0).contains(&opacity) {
+                    return Err(ImageError::Invalid("Invalid adjustment strength"));
+                }
+                self.equal_extent(original, adjusted)?;
+                self.equal_extent(original, mask)?
+            }
         };
         let fingerprint = self.hash(operation, extent)?;
         let id = NodeId { graph: self.identity, index: self.entries.len() as u16 };
         self.entries.push(Entry { operation, extent, depth, fingerprint });
         Ok(id)
+    }
+    /// Resize a complete image with explicit aligned-corner Lanczos semantics.
+    /// # Errors
+    /// Rejects foreign nodes, excessive reduction, graph capacity/depth and invalid parameters.
+    pub fn resize(&mut self, input: NodeId, extent: Extent) -> Result<NodeId, ImageError> {
+        let sampling = Sampling::resize(self.extent(input)?, extent);
+        self.add(Operation::Resample { input, extent, sampling })
     }
     /// Append explicit Lanczos pyramid nodes through a 1x1 image, retaining the source as level zero.
     /// Odd dimensions round upward independently; the complete required node capacity is checked first.
@@ -208,7 +237,7 @@ impl Graph {
         let mut extent = self.extent(input)?;
         for level in 1..=extra {
             extent = Extent::new(extent.width().div_ceil(2), extent.height().div_ceil(2))?;
-            levels[level] = self.add(Operation::Resample { input: levels[level - 1], extent })?;
+            levels[level] = self.resize(levels[level - 1], extent)?;
         }
         Ok(Pyramid { levels, length: extra + 1 })
     }
@@ -269,8 +298,11 @@ impl Graph {
                 }
                 Some(shape.color)
             }
-            Operation::Resample { .. } => {
+            Operation::Resample { sampling, .. } => {
                 hash.update([3]);
+                for value in sampling.scale().into_iter().chain(sampling.offset()) {
+                    hash.update(value.to_le_bytes());
+                }
                 None
             }
             Operation::Exposure { stops, .. } => {
@@ -284,6 +316,11 @@ impl Graph {
             }
             Operation::Mask { .. } => {
                 hash.update([6]);
+                None
+            }
+            Operation::Mix { opacity, .. } => {
+                hash.update([7]);
+                hash.update(opacity.to_le_bytes());
                 None
             }
         };

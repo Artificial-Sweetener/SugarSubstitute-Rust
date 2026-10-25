@@ -12,19 +12,29 @@ impl Graph {
         &self,
         node: NodeId,
         output: Region,
-    ) -> Result<[Option<(NodeId, Region)>; 2], ImageError> {
+    ) -> Result<[Option<(NodeId, Region)>; 3], ImageError> {
         let entry = self.entry(node)?;
         if output.intersection(entry.extent.region()) != Some(output) {
             return Err(ImageError::Invalid("Requested region is outside node extent"));
         }
         let inputs = match entry.operation {
-            Operation::Resample { input, extent } => {
+            Operation::Resample { input, sampling, .. } => {
                 let source = self.extent(input)?;
-                let (left, right) =
-                    required_axis(output.x(), output.width(), source.width(), extent.width());
-                let (top, bottom) =
-                    required_axis(output.y(), output.height(), source.height(), extent.height());
-                [Some((input, Region::new(left, top, right - left, bottom - top)?)), None]
+                let (left, right) = required_axis(
+                    output.x(),
+                    output.width(),
+                    source.width(),
+                    sampling.scale()[0],
+                    sampling.offset()[0],
+                );
+                let (top, bottom) = required_axis(
+                    output.y(),
+                    output.height(),
+                    source.height(),
+                    sampling.scale()[1],
+                    sampling.offset()[1],
+                );
+                [Some((input, Region::new(left, top, right - left, bottom - top)?)), None, None]
             }
             operation => operation.inputs().map(|id| id.map(|id| (id, output))),
         };
@@ -49,14 +59,22 @@ impl Graph {
             return Ok(None);
         };
         match entry.operation {
-            Operation::Resample { extent, .. } => {
-                let (left, right) =
-                    invalidated_axis(changed.x(), changed.right(), source.width(), extent.width());
+            Operation::Resample { extent, sampling, .. } => {
+                let (left, right) = invalidated_axis(
+                    changed.x(),
+                    changed.right(),
+                    source.width(),
+                    extent.width(),
+                    sampling.scale()[0],
+                    sampling.offset()[0],
+                );
                 let (top, bottom) = invalidated_axis(
                     changed.y(),
                     changed.bottom(),
                     source.height(),
                     extent.height(),
+                    sampling.scale()[1],
+                    sampling.offset()[1],
                 );
                 if left == right || top == bottom {
                     return Ok(None);
@@ -69,26 +87,47 @@ impl Graph {
 }
 
 /// Include every nonzero tap for all output pixel centers, rounded outward before edge clipping.
-fn required_axis(start: u32, length: u32, source: u32, target: u32) -> (u32, u32) {
-    let ratio = f64::from(source) / f64::from(target);
+fn required_axis(start: u32, length: u32, source: u32, ratio: f64, offset: f64) -> (u32, u32) {
+    if source == 1 {
+        return (0, 1);
+    }
     let radius = 3.0 * ratio.max(1.0);
-    let first = (f64::from(start) + 0.5) * ratio - 0.5;
-    let last = (f64::from(start + length - 1) + 0.5) * ratio - 0.5;
+    let first = (f64::from(start) + 0.5) * ratio + offset - 0.5;
+    let last = (f64::from(start + length - 1) + 0.5) * ratio + offset - 0.5;
+    if ratio == 1.0 && offset.fract() == 0.0 {
+        let left = first.clamp(0.0, f64::from(source - 1)) as u32;
+        let right = (last + 1.0).clamp(f64::from(left + 1), f64::from(source)) as u32;
+        return (left, right);
+    }
     let left = (first - radius).floor().clamp(0.0, f64::from(source - 1)) as u32;
     let right = (last + radius + 1.0).ceil().clamp(f64::from(left + 1), f64::from(source)) as u32;
     (left, right)
 }
 
 /// Dirty bounds include the complete support of each possibly influenced output sample.
-fn invalidated_axis(start: u32, end: u32, source: u32, target: u32) -> (u32, u32) {
-    let ratio = f64::from(source) / f64::from(target);
+fn invalidated_axis(
+    start: u32,
+    end: u32,
+    source: u32,
+    target: u32,
+    ratio: f64,
+    offset: f64,
+) -> (u32, u32) {
     let radius = 3.0 * ratio.max(1.0);
-    let left = ((f64::from(start) - radius + 0.5) / ratio - 0.5)
-        .floor()
-        .clamp(0.0, f64::from(target)) as u32;
-    let right = ((f64::from(end) + radius + 0.5) / ratio + 0.5)
-        .ceil()
-        .clamp(f64::from(left), f64::from(target)) as u32;
+    let left = if start == 0 {
+        0
+    } else {
+        ((f64::from(start) - radius + 0.5 - offset) / ratio - 0.5)
+            .floor()
+            .clamp(0.0, f64::from(target)) as u32
+    };
+    let right = if end == source {
+        target
+    } else {
+        ((f64::from(end) + radius + 0.5 - offset) / ratio + 0.5)
+            .ceil()
+            .clamp(f64::from(left), f64::from(target)) as u32
+    };
     (left, right)
 }
 

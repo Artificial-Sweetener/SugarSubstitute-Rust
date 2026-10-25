@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Separable Lanczos-3 with global sample phase and bounded tap tables.
-use crate::{Extent, ImageError, Pixel, buffer::Buffer};
+use crate::{Extent, ImageError, Pixel, Sampling, buffer::Buffer};
 use sugarsubstitute_contracts::execution::JobContext;
 
 const MAX_TAPS: usize = 13;
@@ -16,10 +16,19 @@ struct Kernel {
     length: usize,
 }
 impl Kernel {
-    fn new(output: u32, source: u32, target: u32) -> Result<Self, ImageError> {
-        let ratio = f64::from(source) / f64::from(target);
+    fn new(output: u32, source: u32, ratio: f64, offset: f64) -> Result<Self, ImageError> {
         let scale = ratio.max(1.0);
-        let center = (f64::from(output) + 0.5) * ratio - 0.5;
+        let center = (f64::from(output) + 0.5) * ratio + offset - 0.5;
+        if source == 1
+            || center + 3.0 * scale < 0.0
+            || center - 3.0 * scale > f64::from(source - 1)
+            || (scale == 1.0 && center.fract() == 0.0)
+        {
+            let mut taps = [Tap::default(); MAX_TAPS];
+            taps[0] =
+                Tap { coordinate: center.clamp(0.0, f64::from(source - 1)) as u32, weight: 1.0 };
+            return Ok(Self { taps, length: 1 });
+        }
         let first = (center - 3.0 * scale).ceil() as i64;
         let last = (center + 3.0 * scale).floor() as i64;
         let length = (last - first + 1) as usize;
@@ -62,7 +71,7 @@ fn lanczos(distance: f64) -> f64 {
 pub(crate) fn render(
     input: &Buffer,
     source: Extent,
-    target: Extent,
+    sampling: Sampling,
     output: &mut Buffer,
     scratch: &mut Buffer,
     context: &JobContext,
@@ -71,7 +80,12 @@ pub(crate) fn render(
     let mut horizontal =
         [Kernel { taps: [Tap::default(); MAX_TAPS], length: 0 }; crate::TILE_EDGE as usize];
     for (x, kernel) in horizontal[..region.width() as usize].iter_mut().enumerate() {
-        *kernel = Kernel::new(region.x() + x as u32, source.width(), target.width())?;
+        *kernel = Kernel::new(
+            region.x() + x as u32,
+            source.width(),
+            sampling.scale()[0],
+            sampling.offset()[0],
+        )?;
     }
     for y in input.region.y()..input.region.bottom() {
         crate::evaluate::check(context)?;
@@ -90,7 +104,12 @@ pub(crate) fn render(
     }
     for y in 0..region.height() {
         crate::evaluate::check(context)?;
-        let kernel = Kernel::new(region.y() + y, source.height(), target.height())?;
+        let kernel = Kernel::new(
+            region.y() + y,
+            source.height(),
+            sampling.scale()[1],
+            sampling.offset()[1],
+        )?;
         for x in 0..region.width() {
             let mut value = [0.0; 4];
             for tap in &kernel.taps[..kernel.length] {

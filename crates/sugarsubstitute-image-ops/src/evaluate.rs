@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Bounded demand-driven CPU evaluation with feature-owned process-local tile reuse.
 use crate::{
-    AssetId, Graph, ImageError, NodeId, Operation, Pixel, Region, TILE_EDGE, Tile, buffer::Buffer,
+    AssetId, Graph, ImageError, NodeId, Operation, Pixel, Region, Sampling, TILE_EDGE, Tile,
+    buffer::Buffer,
 };
 use std::sync::Arc;
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim, MemoryLease};
@@ -28,6 +29,8 @@ pub trait RasterSource {
 pub struct EvaluationStats {
     /// Tiles actually computed, including intermediate graph nodes.
     pub computed_tiles: u64,
+    /// Pixels actually computed across all operation regions, including intermediate work.
+    pub computed_pixels: u64,
     /// Requests served by an existing immutable tile allocation.
     pub reused_tiles: u64,
     /// Exact source pixels requested through the asset boundary.
@@ -37,9 +40,8 @@ pub struct EvaluationStats {
 }
 
 struct CachedTile {
-    node: NodeId,
-    x: u32,
-    y: u32,
+    key: [u8; 32],
+    region: Region,
     used: u64,
     tile: Arc<Tile>,
 }
@@ -88,6 +90,12 @@ impl<S: RasterSource> Evaluator<S> {
     pub const fn graph(&self) -> &Graph {
         &self.graph
     }
+    /// Replace graph semantics while retaining tiles with identical structural content keys.
+    /// Source adapters must keep every asset ID bound to the same immutable original content.
+    /// Call on the preparation worker so retiring the preceding graph does not burden native input.
+    pub fn replace_graph(&mut self, graph: Graph) {
+        self.graph = graph;
+    }
     /// Current cumulative work and process-local retention.
     pub fn stats(&self) -> EvaluationStats {
         EvaluationStats { resident_tiles: self.cache.len(), ..self.stats }
@@ -107,11 +115,30 @@ impl<S: RasterSource> Evaluator<S> {
         y: u32,
         context: &JobContext,
     ) -> Result<Arc<Tile>, ImageError> {
-        check(context)?;
         let region = crate::spatial::tile_region(self.graph.extent(node)?, x, y)?;
-        self.tick = self.tick.saturating_add(1);
-        if let Some(entry) = self.cache.iter_mut().find(|v| v.node == node && v.x == x && v.y == y)
+        self.region(node, region, context)
+    }
+    /// Evaluate an exact bounded output region, preserving global sample phase at repair edges.
+    /// Dependencies still reuse aligned source/pyramid tiles; a narrow exposed strip does not
+    /// force reconstruction of an entire output tile. Width and height are at most `TILE_EDGE`.
+    /// # Errors
+    /// Rejects out-of-bounds/excessive regions and preserves admission, control and source errors.
+    pub fn region(
+        &mut self,
+        node: NodeId,
+        region: Region,
+        context: &JobContext,
+    ) -> Result<Arc<Tile>, ImageError> {
+        check(context)?;
+        if region.width() > TILE_EDGE
+            || region.height() > TILE_EDGE
+            || region.intersection(self.graph.extent(node)?.region()) != Some(region)
         {
+            return Err(ImageError::Invalid("Invalid bounded evaluation region"));
+        }
+        let key = self.graph.fingerprint(node)?;
+        self.tick = self.tick.saturating_add(1);
+        if let Some(entry) = self.cache.iter_mut().find(|v| v.key == key && v.region == region) {
             entry.used = self.tick;
             self.stats.reused_tiles = self.stats.reused_tiles.saturating_add(1);
             return Ok(Arc::clone(&entry.tile));
@@ -144,7 +171,7 @@ impl<S: RasterSource> Evaluator<S> {
                     }
                 }
             }
-            Operation::Resample { input, extent } => {
+            Operation::Resample { input, sampling, .. } => {
                 let dependency = self.graph.required_inputs(node, region)?[0]
                     .ok_or(ImageError::Invalid("Missing resample dependency"))?
                     .1;
@@ -159,16 +186,16 @@ impl<S: RasterSource> Evaluator<S> {
                 crate::resample::render(
                     &input_pixels,
                     self.graph.extent(input)?,
-                    extent,
+                    sampling,
                     &mut output,
                     &mut scratch,
                     context,
                 )?;
             }
             Operation::Exposure { input, stops } => {
-                let input = self.input(input, region, context)?;
+                let input = self.point_input(input, region, context)?;
                 let factor = stops.exp2();
-                for (output, input) in output.pixels.iter_mut().zip(input.pixels) {
+                for (output, input) in output.pixels.iter_mut().zip(input.pixels()) {
                     *output = Pixel::premultiplied([
                         input.0[0] * factor,
                         input.0[1] * factor,
@@ -178,21 +205,44 @@ impl<S: RasterSource> Evaluator<S> {
                 }
             }
             Operation::Over { background, foreground } => {
-                let background = self.input(background, region, context)?;
-                let foreground = self.input(foreground, region, context)?;
+                let background = self.point_input(background, region, context)?;
+                let foreground = self.point_input(foreground, region, context)?;
                 for ((output, background), foreground) in
-                    output.pixels.iter_mut().zip(background.pixels).zip(foreground.pixels)
+                    output.pixels.iter_mut().zip(background.pixels()).zip(foreground.pixels())
                 {
-                    *output = Pixel::premultiplied(foreground.over(background).channels())?;
+                    *output = Pixel::premultiplied(foreground.over(*background).channels())?;
                 }
             }
             Operation::Mask { input, mask } => {
-                let input = self.input(input, region, context)?;
-                let mask = self.input(mask, region, context)?;
-                for ((output, input), mask) in
-                    output.pixels.iter_mut().zip(input.pixels).zip(mask.pixels)
-                {
-                    *output = Pixel(input.0.map(|value| value * mask.0[3]));
+                let mask = self.point_input(mask, region, context)?;
+                if mask.pixels().iter().any(|pixel| pixel.0[3] > 0.0) {
+                    let input = self.point_input(input, region, context)?;
+                    for ((output, input), mask) in
+                        output.pixels.iter_mut().zip(input.pixels()).zip(mask.pixels())
+                    {
+                        *output = Pixel(input.0.map(|value| value * mask.0[3]));
+                    }
+                }
+            }
+            Operation::Mix { original, adjusted, mask, opacity } => {
+                let original = self.point_input(original, region, context)?;
+                let mask = self.point_input(mask, region, context)?;
+                if opacity == 0.0 || mask.pixels().iter().all(|pixel| pixel.0[3] == 0.0) {
+                    output.pixels.copy_from_slice(original.pixels());
+                } else {
+                    let adjusted = self.point_input(adjusted, region, context)?;
+                    for (((output, original), adjusted), mask) in output
+                        .pixels
+                        .iter_mut()
+                        .zip(original.pixels())
+                        .zip(adjusted.pixels())
+                        .zip(mask.pixels())
+                    {
+                        let coverage = opacity * mask.0[3];
+                        *output = Pixel::premultiplied(std::array::from_fn(|channel| {
+                            original.0[channel] * (1.0 - coverage) + adjusted.0[channel] * coverage
+                        }))?;
+                    }
                 }
             }
         }
@@ -208,9 +258,34 @@ impl<S: RasterSource> Evaluator<S> {
                 .ok_or(ImageError::Invalid("Empty full tile cache"))?;
             self.cache.swap_remove(index);
         }
-        self.cache.push(CachedTile { node, x, y, used: self.tick, tile: Arc::clone(&tile) });
+        self.cache.push(CachedTile { key, region, used: self.tick, tile: Arc::clone(&tile) });
         self.stats.computed_tiles = self.stats.computed_tiles.saturating_add(1);
+        self.stats.computed_pixels = self.stats.computed_pixels.saturating_add(region.pixels());
         Ok(tile)
+    }
+    /// Keep intrinsic image/mip storage aligned while propagating exact regions through operations.
+    fn point_input(
+        &mut self,
+        node: NodeId,
+        region: Region,
+        context: &JobContext,
+    ) -> Result<Arc<Tile>, ImageError> {
+        let aligned = match self.graph.operation(node)? {
+            Operation::Raster { .. } => true,
+            Operation::Resample { input, extent, sampling } => {
+                sampling == Sampling::resize(self.graph.extent(input)?, extent)
+            }
+            _ => false,
+        };
+        if !aligned {
+            return self.region(node, region, context);
+        }
+        let x = region.x() / TILE_EDGE;
+        let y = region.y() / TILE_EDGE;
+        if crate::spatial::tile_region(self.graph.extent(node)?, x, y)? == region {
+            return self.tile(node, x, y, context);
+        }
+        Ok(Arc::new(Tile { buffer: self.input(node, region, context)? }))
     }
     /// Gather only a bounded operation halo from source graph tiles, releasing each borrowed tile
     /// before requesting the next. Recursive pyramid evaluation never gathers a full base image.

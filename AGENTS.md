@@ -22,8 +22,10 @@ implementation plans, or workstation configuration.
   window chrome, OS dialogs, and situations where the web interface is unavailable.
 - Native canvas owners belong to this workspace. `sugarsubstitute-image-ops`
   owns image-operation graphs, pyramid/resampling semantics and tiled evaluation.
-  Keep document editing, viewport interaction and native presentation ownership
-  distinct; consume each owner's public APIs.
+  `sugarsubstitute-canvas` owns document snapshots, reversible layer commands,
+  viewport transforms and damage planning. `sugarsubstitute-canvas-render` owns
+  prepared canvas frames and retained CPU presentation. Native windows and input
+  remain with the desktop adapter; consume each owner's public APIs.
 - SugarPrompt integration belongs to SugarCubes. Do not introduce a second
   editor integration in the desktop host.
 
