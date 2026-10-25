@@ -108,23 +108,47 @@ impl Region {
     /// Split into row-major clipped intersections with the shared image tile grid.
     /// Every output is nonempty; exact repair edges and global coordinates remain unchanged.
     /// Iteration allocates no proportional storage, including at the u32 coordinate boundary.
-    pub fn tiles(self) -> impl Iterator<Item = Self> {
-        let columns = self.x / crate::TILE_EDGE..=(self.right() - 1) / crate::TILE_EDGE;
-        (self.y / crate::TILE_EDGE..=(self.bottom() - 1) / crate::TILE_EDGE).flat_map(move |row| {
-            columns.clone().map(move |column| {
-                let left = self.x.max(column * crate::TILE_EDGE);
-                let top = self.y.max(row * crate::TILE_EDGE);
-                let right = u64::from(self.right())
-                    .min((u64::from(column) + 1) * u64::from(crate::TILE_EDGE))
-                    as u32;
-                let bottom = u64::from(self.bottom())
-                    .min((u64::from(row) + 1) * u64::from(crate::TILE_EDGE))
-                    as u32;
-                Self { x: left, y: top, width: right - left, height: bottom - top }
-            })
-        })
+    pub fn tiles(self) -> RegionTiles {
+        RegionTiles {
+            region: self,
+            column: self.x / crate::TILE_EDGE,
+            row: self.y / crate::TILE_EDGE,
+        }
     }
 }
+
+/// Owned row-major iterator over globally aligned tile intersections of one exact region.
+/// Retain it across cooperative evaluation steps without allocating an inventory of tiles.
+#[derive(Clone, Debug)]
+pub struct RegionTiles {
+    region: Region,
+    column: u32,
+    row: u32,
+}
+impl Iterator for RegionTiles {
+    type Item = Region;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.row > (self.region.bottom() - 1) / crate::TILE_EDGE {
+            return None;
+        }
+        let left = self.region.x.max(self.column * crate::TILE_EDGE);
+        let top = self.region.y.max(self.row * crate::TILE_EDGE);
+        let right = u64::from(self.region.right())
+            .min((u64::from(self.column) + 1) * u64::from(crate::TILE_EDGE))
+            as u32;
+        let bottom = u64::from(self.region.bottom())
+            .min((u64::from(self.row) + 1) * u64::from(crate::TILE_EDGE))
+            as u32;
+        if self.column == (self.region.right() - 1) / crate::TILE_EDGE {
+            self.column = self.region.x / crate::TILE_EDGE;
+            self.row += 1;
+        } else {
+            self.column += 1;
+        }
+        Some(Region { x: left, y: top, width: right - left, height: bottom - top })
+    }
+}
+impl std::iter::FusedIterator for RegionTiles {}
 
 impl Extent {
     /// Clip an aligned 128-pixel tile to this image's right and bottom edges.

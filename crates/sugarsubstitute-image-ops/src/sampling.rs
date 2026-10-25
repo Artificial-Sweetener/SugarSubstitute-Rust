@@ -62,13 +62,18 @@ impl Sampling {
     pub const fn filter(self) -> Filter {
         self.filter
     }
-    pub(crate) fn validate(self, source: Extent, target: Extent) -> Result<(), ImageError> {
+    pub(crate) fn validate(
+        self,
+        source: Extent,
+        target: Extent,
+        sampled_raster: bool,
+    ) -> Result<(), ImageError> {
         for (axis, (input, output)) in
             [(source.width(), target.width()), (source.height(), target.height())]
                 .into_iter()
                 .enumerate()
         {
-            if input > 1 && self.scale[axis] > 2.0 {
+            if input > 1 && self.scale[axis] > 2.0 && !sampled_raster {
                 return Err(ImageError::Invalid("Large reductions require pyramid steps"));
             }
             if !(f64::from(output) * self.scale[axis] + self.offset[axis]).is_finite() {
@@ -76,5 +81,8 @@ impl Sampling {
             }
         }
         Ok(())
+    }
+    pub(crate) fn large_reduction(self, source: Extent) -> bool {
+        (source.width() > 1 && self.scale[0] > 2.0) || (source.height() > 1 && self.scale[1] > 2.0)
     }
 }

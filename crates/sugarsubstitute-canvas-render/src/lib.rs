@@ -6,7 +6,7 @@ mod gpu;
 mod gpu_surface;
 mod surface;
 mod update;
-pub use cpu::CpuRenderer;
+pub use cpu::{CpuPreparation, CpuRenderer};
 pub use gpu::{GpuRenderer, PreparedGpuUpdate};
 pub use gpu_surface::{GpuFrame, GpuSurface};
 pub use surface::{CpuSurface, PreparedUpdate, SurfaceWork};

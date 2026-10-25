@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Evaluate the authoritative image DAG into bounded immutable GPU tiles.
+mod source;
 use crate::{
     GpuDevice, GpuError, GpuTile,
     batch::{Batch, Coverage, GpuWork},
@@ -10,8 +11,8 @@ use crate::{
 use std::sync::Arc;
 use sugarsubstitute_contracts::execution::{JobContext, MemoryLease};
 use sugarsubstitute_image_ops::{
-    EvaluationStats, Graph, NodeId, Operation, Pixel, RasterSource, Region, SamplingAxis,
-    TILE_EDGE, TileRetention,
+    EvaluationStats, Graph, NodeId, Operation, Pixel, RasterSamples, RasterSource, Region,
+    SamplingAxis, TILE_EDGE, TileRetention,
 };
 
 /// Demand-driven evaluator for one explicitly selected GPU and the same graph used by CPU viewing.
@@ -146,33 +147,7 @@ impl<S: RasterSource> GpuEvaluator<S> {
         }
         let operation = self.graph.operation(node).map_err(image_error)?;
         let computed = match operation {
-            Operation::Raster { asset, .. } => {
-                let _memory = context
-                    .memory()
-                    .claim(region.pixels() * 16 + 128)
-                    .map_err(|cause| GpuError::new("gpu_source_workspace", cause))?;
-                let mut pixels = Vec::new();
-                pixels
-                    .try_reserve_exact(region.pixels() as usize)
-                    .map_err(|cause| GpuError::new("gpu_source_allocation", cause))?;
-                pixels.resize(region.pixels() as usize, Pixel::TRANSPARENT);
-                self.source.read(asset, region, &mut pixels, context).map_err(image_error)?;
-                let encoded = self.retry(|_| Encoding::pixels(region, &pixels, context))?;
-                let tile = self.retry(|this| {
-                    let batch = this.ready(context)?;
-                    let buffer = batch.upload(
-                        &encoded.bytes,
-                        wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-                        context,
-                    )?;
-                    Ok(GpuTile { buffer, region })
-                })?;
-                self.stats.source_pixels = self.stats.source_pixels.saturating_add(region.pixels());
-                Computed {
-                    tile,
-                    coverage: Coverage::Known(pixels.iter().any(|pixel| pixel.channels()[3] > 0.0)),
-                }
-            }
+            Operation::Raster { asset, .. } => self.source_tile(asset, region, None, context)?,
             Operation::Solid { color, .. } => {
                 let mut parameters = Parameters::new(0, region);
                 parameters.color(color);
@@ -217,7 +192,13 @@ impl<S: RasterSource> GpuEvaluator<S> {
                 computed
             }
             Operation::Resample { input, sampling, .. } => {
-                self.resample(node, input, sampling, region, context)?
+                if let Some((asset, samples)) =
+                    self.graph.sampled_source(node, region).map_err(image_error)?
+                {
+                    self.source_tile(asset, region, Some(&samples), context)?
+                } else {
+                    self.resample(node, input, sampling, region, context)?
+                }
             }
             Operation::Exposure { input, stops } => {
                 let input = self.input(input, region, context)?;

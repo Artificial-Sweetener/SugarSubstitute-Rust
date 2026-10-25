@@ -186,9 +186,11 @@ impl Session {
             replace_surface,
             gpu_surface,
             finished: false,
+            cpu: None,
+            started: None,
         }) {
             Ok(job) => {
-                self.rendering = Some(job);
+                self.rendering = Some(Rendering { job, filter, superseded: false });
                 self.frame_revision = next;
             }
             Err(cause) if retryable(&cause) => {}

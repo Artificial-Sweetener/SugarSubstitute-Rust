@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Prepare original assets and viewport pixels exclusively on execution-owned workers.
 use super::work_error::WorkError;
+mod cpu;
 mod gpu;
 use std::{
     path::PathBuf,
@@ -12,7 +13,7 @@ use sugarsubstitute_canvas::{
     RenderRequest, Viewport,
 };
 use sugarsubstitute_canvas_render::{
-    CpuRenderer, CpuSurface, GpuRenderer, GpuSurface, PreparedUpdate, SurfaceWork,
+    CpuPreparation, CpuRenderer, CpuSurface, GpuRenderer, GpuSurface, PreparedUpdate, SurfaceWork,
 };
 use sugarsubstitute_contracts::execution::{
     CpuStep, CpuTask, JobContext, MemoryClaim, MemoryLease,
@@ -58,6 +59,19 @@ impl Clone for Resources {
 /// Share only immutable source identity; region reads execute on the admitted preparation worker.
 pub(super) struct SourcePort(pub(super) Option<Source>);
 impl RasterSource for SourcePort {
+    fn read_samples(
+        &mut self,
+        asset: AssetId,
+        samples: &sugarsubstitute_image_ops::RasterSamples,
+        output: &mut [Pixel],
+        context: &JobContext,
+    ) -> Result<(), ImageError> {
+        self.0
+            .as_mut()
+            .ok_or(ImageError::Invalid("Canvas source is unavailable"))?
+            .read_samples(asset, samples, output, context)
+    }
+
     fn read(
         &mut self,
         asset: AssetId,
@@ -153,8 +167,13 @@ pub(super) struct Packet {
     pub(super) source_revision: u64,
 }
 pub(super) enum Pixels {
-    Cpu { update: Box<PreparedUpdate>, replacement: Option<CpuSurface> },
+    Cpu(CpuPacket),
     Gpu(GpuPacket),
+}
+/// A first/resize frame adopts complete pixels; repairs depend on the current retained frame.
+pub(super) enum CpuPacket {
+    Replace(CpuSurface),
+    Repair(Box<PreparedUpdate>),
 }
 pub(super) struct GpuPacket {
     pub(super) surface: GpuSurface,
@@ -178,14 +197,15 @@ pub(super) struct Prepare {
     pub(super) replace_surface: bool,
     pub(super) gpu_surface: Option<GpuSurface>,
     pub(super) finished: bool,
+    pub(super) cpu: Option<CpuPreparation>,
+    pub(super) started: Option<std::time::Instant>,
 }
 impl CpuTask<Packet, WorkError> for Prepare {
     fn step(&mut self, context: &JobContext) -> Result<CpuStep<Packet>, WorkError> {
         if self.finished {
             return Err(WorkError::invalid("Canvas request was already prepared"));
         }
-        self.finished = true;
-        let started = std::time::Instant::now();
+        let started = *self.started.get_or_insert_with(std::time::Instant::now);
         let handle = self.resources.engine.clone();
         let mut engine =
             handle.lock().map_err(|_| WorkError::invalid("Canvas preparation state failed"))?;
@@ -212,43 +232,12 @@ impl CpuTask<Packet, WorkError> for Prepare {
             .as_mut()
             .ok_or_else(|| WorkError::invalid("Canvas renderer is unavailable"))?;
         if matches!(renderer, Renderer::Gpu(_)) {
+            self.finished = true;
             return gpu::prepare(self, &mut engine, started, context).map(CpuStep::Complete);
         }
         let Renderer::Cpu(renderer) = renderer else {
             return Err(WorkError::invalid("Canvas renderer and startup backend differ"));
         };
-        let prepared = renderer.prepare(
-            RenderRequest {
-                document: &self.document,
-                view: self.view,
-                filter: self.filter,
-                matte: Pixel::linear(0.018, 0.018, 0.018, 1.0)?,
-                target: self.target,
-                base: self.base,
-                damage: self.damage,
-            },
-            context,
-        );
-        if started.elapsed() >= std::time::Duration::from_secs(1) || prepared.is_err() {
-            let stats = renderer.stats();
-            tracing::info!(operation="canvas_frame_preparation", document=self.document.identity(), revision=self.document.revision(), generation=?self.target.generation, elapsed_milliseconds=started.elapsed().as_millis(), computed_pixels=stats.computed_pixels, source_pixels=stats.source_pixels, succeeded=prepared.is_ok(), "Canvas DAG preparation reached its observed outcome");
-        }
-        let update = prepared?;
-        let replacement = if self.replace_surface {
-            Some(CpuSurface::new(self.target.surface, self.view.surface(), &self.resources.memory)?)
-        } else {
-            None
-        };
-        Ok(CpuStep::Complete(Packet {
-            pixels: Pixels::Cpu { update: Box::new(update), replacement },
-            damage: self.damage,
-            base: self.base,
-            view: self.view,
-            filter: self.filter,
-            document: (self.document.identity(), self.document.revision()),
-            elapsed: started.elapsed(),
-            stats: renderer.stats(),
-            source_revision: self.source_revision,
-        }))
+        cpu::step(self, renderer, started, context)
     }
 }

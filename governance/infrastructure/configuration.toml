@@ -912,7 +912,7 @@ rationale = "Standalone viewer entry captures explicit CLI values once and passe
 [[records]]
 path = "crates/sugarsubstitute-image-gpu/examples/adapter_qualification.rs"
 owner = "sugarsubstitute-image-gpu"
-source_sha256 = "sha256:ea096c45a1700cd3999501143ff9f62bde3437bfc03969100e11a723589ced33"
+source_sha256 = "sha256:f829305f4a86c4c04f544deebcb2fccabcd69c067756e173ecdfa37d214c9c4c"
 capabilities = ["arguments"]
 rationale = "Developer hardware qualification accepts explicit backend/vendor/device model selectors; discovery rejects ambiguous model matches rather than using unstable enumeration order."
 

@@ -68,6 +68,7 @@ impl Session {
                     }
                     self.rebuilt = false;
                 }
+                self.initial_preview = true;
                 self.failed = None;
                 self.title = self.labels.title.to_owned();
             }
@@ -81,10 +82,28 @@ impl Session {
     /// A current accepted camera request may finish while later camera intent is coalesced.
     /// Its pixels are always labelled with their actual camera and current authored revision.
     pub(super) fn consume_frame(&mut self) -> Result<(), Box<dyn Error>> {
-        let Some(outcome) = Self::take(&mut self.rendering) else {
+        let Some(completion) =
+            self.rendering.as_mut().and_then(|rendering| rendering.job.try_take_completion())
+        else {
             return Ok(());
         };
-        match Self::terminal(outcome) {
+        let rendering = self.rendering.take().ok_or("Canvas rendering identity was lost")?;
+        if rendering.superseded {
+            match completion.outcome {
+                JobOutcome::Success(packet) => {
+                    self.retire(Retired { _packet: Some(packet), ..Default::default() })?
+                }
+                JobOutcome::Failure(cause) => self.fail(cause),
+                JobOutcome::Panicked(cause) => self.fail(WorkerPanic { _cause: cause }),
+                stopped @ (JobOutcome::Cancelled
+                | JobOutcome::TimedOut
+                | JobOutcome::Coalesced { .. }) => {
+                    tracing::debug!(operation="canvas_refinement_stopped", outcome=?stopped.kind(), "Superseded refinement reached its actual terminal outcome");
+                }
+            }
+            return Ok(());
+        }
+        match Self::terminal(completion.outcome) {
             Ok(packet) => {
                 let current = !self.closing
                     && self.pending_open.is_none()
@@ -99,21 +118,36 @@ impl Session {
                     self.retire(Retired { _packet: Some(packet), ..Default::default() })?;
                     return Ok(());
                 }
+                if matches!(&packet.pixels, work::Pixels::Gpu(_))
+                    && (self.gpu_presentation.is_some() || self.awaiting_gpu.is_some())
+                {
+                    self.retire(Retired { _packet: Some(packet), ..Default::default() })?;
+                    return Err("Native GPU presentation slot is occupied".into());
+                }
                 let mut retired = Retired::default();
                 let work = match packet.pixels {
-                    work::Pixels::Cpu { update, replacement } => {
-                        if let Some(replacement) = replacement {
-                            retired._front = self.front.replace(replacement);
-                        }
-                        self.front
+                    work::Pixels::Cpu(work::CpuPacket::Replace(surface)) => {
+                        let work = sugarsubstitute_canvas_render::SurfaceWork {
+                            repaired_pixels: surface.extent().pixels(),
+                            reused_pixels: 0,
+                        };
+                        retired._front = self.front.replace(surface);
+                        Ok(work)
+                    }
+                    work::Pixels::Cpu(work::CpuPacket::Repair(update)) => {
+                        let result = self
+                            .front
                             .as_mut()
-                            .ok_or("Canvas retained viewport is unavailable")?
-                            .apply(&update)?
+                            .ok_or_else(|| {
+                                Box::<dyn Error>::from("Canvas retained viewport is unavailable")
+                            })
+                            .and_then(|surface| {
+                                surface.apply(&update).map_err(Box::<dyn Error>::from)
+                            });
+                        retired._update = Some(update);
+                        result
                     }
                     work::Pixels::Gpu(pixels) => {
-                        if self.gpu_presentation.is_some() || self.awaiting_gpu.is_some() {
-                            return Err("Native GPU presentation slot is occupied".into());
-                        }
                         retired._gpu_front = self.gpu_front.replace(pixels.surface);
                         if let Some(snapshot) = pixels.snapshot {
                             retired._front = self.front.replace(snapshot);
@@ -121,11 +155,18 @@ impl Session {
                         self.gpu_presentation = pixels.presentation;
                         self.native_verified = pixels.native_verified;
                         self.expose_pending = pixels.retry_presentation;
-                        pixels.work
+                        Ok(pixels.work)
                     }
                 };
-                if retired._front.is_some() || retired._gpu_front.is_some() {
+                if retired._front.is_some()
+                    || retired._gpu_front.is_some()
+                    || retired._update.is_some()
+                {
                     self.retire(retired)?;
+                }
+                let work = work?;
+                if packet.filter == Filter::Nearest {
+                    self.initial_preview = false;
                 }
                 let base = self.presented.as_ref().and(packet.base);
                 self.presented = Some(Presented {

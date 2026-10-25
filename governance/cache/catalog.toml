@@ -198,8 +198,8 @@ recovery = "Native containment object absence proves stopped writers after host 
 [[caches]]
 id = "image-sources"
 owner = "sugarsubstitute-image-io"
-sources = ["crates/sugarsubstitute-image-io/src/archive.rs", "crates/sugarsubstitute-image-io/src/cached.rs", "crates/sugarsubstitute-image-io/src/descriptor.rs", "crates/sugarsubstitute-image-io/src/layout.rs", "crates/sugarsubstitute-image-io/src/png_input.rs", "crates/sugarsubstitute-image-io/src/shared.rs", "crates/sugarsubstitute-image-io/src/write.rs"]
-source_sha256 = "sha256:5c5a652de0249888377196ec93a1ec125cdfbe4c338680269e583fbd28177715"
+sources = ["crates/sugarsubstitute-image-io/src/archive.rs", "crates/sugarsubstitute-image-io/src/archive/samples.rs", "crates/sugarsubstitute-image-io/src/cached.rs", "crates/sugarsubstitute-image-io/src/descriptor.rs", "crates/sugarsubstitute-image-io/src/layout.rs", "crates/sugarsubstitute-image-io/src/png_input.rs", "crates/sugarsubstitute-image-io/src/shared.rs", "crates/sugarsubstitute-image-io/src/write.rs"]
+source_sha256 = "sha256:ae945edca17cb62b1ad9eefc3a1067f80f21c7c7d913fe6fa0d41da5faed1f47"
 namespace = "image-sources-v1"
 storage_schema = 1
 compatibility_epoch = 1

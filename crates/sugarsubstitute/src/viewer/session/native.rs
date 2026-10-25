@@ -96,8 +96,20 @@ impl Lifetime for Session {
             Input::Open => self.picker = true,
             Input::Unfocused => self.dragging = false,
         }
-        if self.view.zoom() != preceding.zoom() {
+        let changed = self.view != preceding;
+        if self.view.zoom() != preceding.zoom()
+            || (changed
+                && self.presented.as_ref().is_some_and(|shown| shown.filter == Filter::Nearest))
+        {
             self.navigation_until = Some(self.clock.now().checked_add(Duration::from_millis(120))?);
+        }
+        if changed
+            && self.filter() == Filter::Nearest
+            && let Some(rendering) = &mut self.rendering
+            && rendering.filter == Filter::Lanczos3
+        {
+            rendering.superseded = true;
+            rendering.job.cancel();
         }
         Ok(())
     }
@@ -173,8 +185,8 @@ impl Lifetime for Session {
         if let Some(job) = &self.loading {
             job.job.cancel();
         }
-        if let Some(job) = &self.rendering {
-            job.cancel();
+        if let Some(rendering) = &self.rendering {
+            rendering.job.cancel();
         }
         Ok(())
     }

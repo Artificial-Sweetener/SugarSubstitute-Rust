@@ -9,6 +9,8 @@ use sugarsubstitute_image_ops::{Extent, ImageError, Region};
 #[cfg(test)]
 #[path = "surface/adoption_tests.rs"]
 mod adoption_tests;
+mod preparation;
+pub(crate) use preparation::Preparation;
 
 struct Patch {
     region: Region,
@@ -44,6 +46,18 @@ impl PreparedUpdate {
         memory: &MemoryLease,
         mut produce: impl FnMut(Region, &mut [u32]) -> Result<(), RenderError>,
     ) -> Result<Self, RenderError> {
+        let mut prepared = Self::allocate(update, memory)?;
+        for patch in prepared.patches.iter_mut().flatten() {
+            produce(patch.region, &mut patch.pixels)?;
+            if patch.pixels.iter().any(|pixel| pixel >> 24 != 255) {
+                return Err(RenderError::Invalid(
+                    "Canvas presentation requires opaque device pixels",
+                ));
+            }
+        }
+        Ok(prepared)
+    }
+    fn allocate(update: UpdatePlan, memory: &MemoryLease) -> Result<Self, RenderError> {
         let claim = memory.claim(size_of::<Self>() as u64 + 128).map_err(ImageError::from)?;
         let mut patches = [const { None }; 32];
         for (slot, region) in patches.iter_mut().zip(update.damage.dirty().regions()) {
@@ -53,12 +67,6 @@ impl PreparedUpdate {
             let mut pixels = Vec::new();
             pixels.try_reserve_exact(length).map_err(ImageError::from)?;
             pixels.resize(length, 0);
-            produce(region, &mut pixels)?;
-            if pixels.iter().any(|pixel| pixel >> 24 != 255) {
-                return Err(RenderError::Invalid(
-                    "Canvas presentation requires opaque device pixels",
-                ));
-            }
             *slot = Some(Patch { region, pixels, _memory: payload });
         }
         Ok(Self { patches, update, _memory: claim })

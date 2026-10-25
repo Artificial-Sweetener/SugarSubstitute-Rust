@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Reconstruct canonical image regions from bounded independently checked source chunks.
+mod samples;
 use crate::{ImportError, Packing, RasterDescriptor, buffer::Buffer};
 use sha2::{Digest, Sha256};
 use std::io::{Read, Seek, SeekFrom};
@@ -20,7 +21,7 @@ pub struct ArchiveStats {
 pub struct RasterArchive<R> {
     reader: R,
     descriptor: RasterDescriptor,
-    samples: Buffer<u8>,
+    encoded: Buffer<u8>,
     linear: Buffer<f32>,
     stats: ArchiveStats,
 }
@@ -50,7 +51,7 @@ impl<R: Read + Seek> RasterArchive<R> {
         let layout = descriptor.layout();
         let maximum =
             (layout.region(0, 0)?.pixels() * u64::from(layout.packing().bytes())) as usize;
-        let samples = Buffer::new(maximum, 0, memory)?;
+        let encoded = Buffer::new(maximum + 32, 0, memory)?;
         let entries = match layout.packing() {
             Packing::Rgba8 => 256,
             Packing::Rgba16 => 65536,
@@ -63,7 +64,7 @@ impl<R: Read + Seek> RasterArchive<R> {
             *value = descriptor.transfer().linear(index as f64 / (entries - 1) as f64);
         }
         crate::check(context)?;
-        Ok(Self { reader, descriptor, samples, linear, stats: ArchiveStats::default() })
+        Ok(Self { reader, descriptor, encoded, linear, stats: ArchiveStats::default() })
     }
     /// Exact original-content and source-interpretation contract.
     pub const fn descriptor(&self) -> RasterDescriptor {
@@ -72,6 +73,49 @@ impl<R: Read + Seek> RasterArchive<R> {
     /// Cumulative requested bytes and checked chunks.
     pub const fn stats(&self) -> ArchiveStats {
         self.stats
+    }
+    fn read_chunk(
+        &mut self,
+        column: u32,
+        stripe: u32,
+        context: &JobContext,
+    ) -> Result<Region, ImportError> {
+        let layout = self.descriptor.layout();
+        let stride = layout.packing().bytes() as usize;
+        crate::check(context)?;
+        let chunk = layout.region(column, stripe)?;
+        let length = chunk.pixels() as usize * stride;
+        self.reader.seek(SeekFrom::Start(layout.offset(column, stripe)?))?;
+        cache_read(self.reader.read_exact(&mut self.encoded.data[..length + 32]))?;
+        let expected: [u8; 32] = self.encoded.data[..32]
+            .try_into()
+            .map_err(|_| ImportError::Invalid("Source chunk checksum width changed"))?;
+        self.stats.read_bytes = self.stats.read_bytes.saturating_add(length as u64 + 32);
+        self.stats.chunks = self.stats.chunks.saturating_add(1);
+        let actual: [u8; 32] = Sha256::digest(&self.payload()[..length]).into();
+        if actual != expected {
+            return Err(ImportError::Corrupt(Box::new(ImportError::Invalid(
+                "Reconstructed source chunk failed integrity verification",
+            ))));
+        }
+        Ok(chunk)
+    }
+    fn payload(&self) -> &[u8] {
+        &self.encoded.data[32..]
+    }
+    fn decode_pixel(&self, encoded: &[u8]) -> Result<Pixel, ImportError> {
+        let indices: [usize; 4] = match self.descriptor.layout().packing() {
+            Packing::Rgba8 => std::array::from_fn(|channel| encoded[channel] as usize),
+            Packing::Rgba16 => std::array::from_fn(|channel| {
+                u16::from_be_bytes([encoded[channel * 2], encoded[channel * 2 + 1]]) as usize
+            }),
+        };
+        Ok(Pixel::linear(
+            self.linear.data[indices[0]],
+            self.linear.data[indices[1]],
+            self.linear.data[indices[2]],
+            indices[3] as f32 / (self.linear.data.len() - 1) as f32,
+        )?)
     }
     fn read_region(
         &mut self,
@@ -90,21 +134,7 @@ impl<R: Read + Seek> RasterArchive<R> {
         let stride = layout.packing().bytes() as usize;
         for stripe in region.y() / layout.rows()..=(region.bottom() - 1) / layout.rows() {
             for column in region.x() / TILE_EDGE..=(region.right() - 1) / TILE_EDGE {
-                crate::check(context)?;
-                let chunk = layout.region(column, stripe)?;
-                let length = chunk.pixels() as usize * stride;
-                self.reader.seek(SeekFrom::Start(layout.offset(column, stripe)?))?;
-                let mut expected = [0; 32];
-                cache_read(self.reader.read_exact(&mut expected))?;
-                cache_read(self.reader.read_exact(&mut self.samples.data[..length]))?;
-                self.stats.read_bytes = self.stats.read_bytes.saturating_add(length as u64 + 32);
-                self.stats.chunks = self.stats.chunks.saturating_add(1);
-                let actual: [u8; 32] = Sha256::digest(&self.samples.data[..length]).into();
-                if actual != expected {
-                    return Err(ImportError::Corrupt(Box::new(ImportError::Invalid(
-                        "Reconstructed source chunk failed integrity verification",
-                    ))));
-                }
+                let chunk = self.read_chunk(column, stripe, context)?;
                 let overlap = region
                     .intersection(chunk)
                     .ok_or(ImportError::Invalid("Missing source chunk overlap"))?;
@@ -114,24 +144,10 @@ impl<R: Read + Seek> RasterArchive<R> {
                         let source = ((y - chunk.y()) as usize * chunk.width() as usize
                             + (x - chunk.x()) as usize)
                             * stride;
-                        let encoded = &self.samples.data[source..source + stride];
-                        let indices: [usize; 4] = match layout.packing() {
-                            Packing::Rgba8 => {
-                                std::array::from_fn(|channel| encoded[channel] as usize)
-                            }
-                            Packing::Rgba16 => std::array::from_fn(|channel| {
-                                u16::from_be_bytes([encoded[channel * 2], encoded[channel * 2 + 1]])
-                                    as usize
-                            }),
-                        };
+                        let encoded = &self.payload()[source..source + stride];
                         let target = (y - region.y()) as usize * region.width() as usize
                             + (x - region.x()) as usize;
-                        output[target] = Pixel::linear(
-                            self.linear.data[indices[0]],
-                            self.linear.data[indices[1]],
-                            self.linear.data[indices[2]],
-                            indices[3] as f32 / (self.linear.data.len() - 1) as f32,
-                        )?;
+                        output[target] = self.decode_pixel(encoded)?;
                     }
                 }
             }
@@ -149,19 +165,4 @@ fn cache_read<T>(result: std::io::Result<T>) -> Result<T, ImportError> {
             ImportError::Io(cause)
         }
     })
-}
-impl<R: Read + Seek> RasterSource for RasterArchive<R> {
-    fn read(
-        &mut self,
-        asset: AssetId,
-        region: Region,
-        output: &mut [Pixel],
-        context: &JobContext,
-    ) -> Result<(), ImageError> {
-        if asset != self.descriptor.asset() {
-            return Err(ImageError::Invalid("Raster source asset identity mismatch"));
-        }
-        self.read_region(region, output, context)
-            .map_err(|cause| ImageError::Source(Box::new(cause)))
-    }
 }

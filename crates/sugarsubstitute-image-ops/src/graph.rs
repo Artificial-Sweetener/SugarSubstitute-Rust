@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Append-only typed DAGs with structural identities and bounded graph ownership.
-use crate::{Extent, ImageError, Pixel, Sampling};
+use crate::{Extent, Filter, ImageError, Pixel, Sampling};
 use sha2::{Digest, Sha256};
 use std::sync::atomic::{AtomicU64, Ordering};
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease};
+
+mod samples;
 
 static NEXT_GRAPH: AtomicU64 = AtomicU64::new(1);
 const MAX_NODES: usize = 4096;
@@ -84,7 +86,8 @@ pub enum Operation {
         shape: VectorRectangle,
     },
     /// Explicit pixel-center reconstruction with clamped source edges and a selected filter.
-    /// A step reduces either axis by at most two; larger reductions use explicit pyramid nodes.
+    /// Filtered reductions use explicit pyramid steps of at most two per axis.
+    /// Nearest reconstruction directly over a raster may address sparse original samples.
     Resample {
         /// Earlier graph node.
         input: NodeId,
@@ -198,7 +201,9 @@ impl Graph {
             | Operation::Rectangle { extent, .. } => extent,
             Operation::Resample { input, extent, sampling } => {
                 let source = self.extent(input)?;
-                sampling.validate(source, extent)?;
+                let sampled = sampling.filter() == Filter::Nearest
+                    && matches!(self.operation(input)?, Operation::Raster { .. });
+                sampling.validate(source, extent, sampled)?;
                 extent
             }
             Operation::Exposure { input, stops } => {
@@ -236,9 +241,20 @@ impl Graph {
     /// # Errors
     /// Rejects foreign nodes, excessive reduction, graph capacity/depth and invalid parameters.
     pub fn resize(&mut self, input: NodeId, extent: Extent) -> Result<NodeId, ImageError> {
+        self.resize_with_filter(input, extent, Filter::Lanczos3)
+    }
+    /// Resize with explicit reconstruction semantics, including inexpensive nearest previews.
+    /// # Errors
+    /// Rejects foreign nodes, excessive reduction, graph capacity/depth and invalid parameters.
+    pub fn resize_with_filter(
+        &mut self,
+        input: NodeId,
+        extent: Extent,
+        filter: Filter,
+    ) -> Result<NodeId, ImageError> {
         let source = self.extent(input)?;
         let preceding = self.entry(input)?.pyramid_level;
-        let sampling = Sampling::resize(source, extent);
+        let sampling = Sampling::resize(source, extent).with_filter(filter);
         let node = self.add(Operation::Resample { input, extent, sampling })?;
         self.entries[node.index as usize].pyramid_level = if source == extent {
             preceding
@@ -251,7 +267,7 @@ impl Graph {
             self.entries[node.index as usize].pyramid_level.unwrap_or(0);
         Ok(node)
     }
-    /// Source level zero or explicit canonical reduction depth added by resize/pyramid.
+    /// Source level zero or explicit reduction depth added by resize/pyramid.
     /// View sampling added as a general operation has no intrinsic level. This is provenance
     /// for backend reuse policy; it does not alter pixel semantics or structural content identity.
     /// # Errors
@@ -259,7 +275,7 @@ impl Graph {
     pub fn pyramid_level(&self, node: NodeId) -> Result<Option<u8>, ImageError> {
         Ok(self.entry(node)?.pyramid_level)
     }
-    /// Highest canonical pyramid level consumed by this output's operation tree.
+    /// Highest pyramid level consumed by this output's operation tree.
     /// Evaluators use this constant-time hint to retire earlier, coarser viewing levels when
     /// the caller requests finer image data. It does not alter structural content identity.
     /// # Errors
@@ -272,6 +288,18 @@ impl Graph {
     /// # Errors
     /// Rejects a foreign input, insufficient capacity or excessive graph depth without partial changes.
     pub fn pyramid(&mut self, input: NodeId) -> Result<Pyramid, ImageError> {
+        self.pyramid_with_filter(input, Filter::Lanczos3)
+    }
+    /// Build explicit bounded reductions using one quality throughout the chain.
+    /// Nearest pyramids are transient previews. Finished viewing uses Lanczos pyramids;
+    /// their different operation fingerprints prevent cross-quality reuse.
+    /// # Errors
+    /// Rejects foreign nodes or insufficient capacity/depth before appending any level.
+    pub fn pyramid_with_filter(
+        &mut self,
+        input: NodeId,
+        filter: Filter,
+    ) -> Result<Pyramid, ImageError> {
         let entry = self.entry(input)?;
         let mut extent = entry.extent;
         let mut extra = 0;
@@ -288,7 +316,7 @@ impl Graph {
         let mut extent = self.extent(input)?;
         for level in 1..=extra {
             extent = Extent::new(extent.width().div_ceil(2), extent.height().div_ceil(2))?;
-            levels[level] = self.resize(levels[level - 1], extent)?;
+            levels[level] = self.resize_with_filter(levels[level - 1], extent, filter)?;
         }
         Ok(Pyramid { levels, length: extra + 1 })
     }

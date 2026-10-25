@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Prepare only requested viewport damage through the shared image-operation DAG.
-use crate::{PreparedUpdate, RenderError, update::UpdatePlan};
+use crate::{PreparedUpdate, RenderError, surface::Preparation, update::UpdatePlan};
 use sugarsubstitute_canvas::RenderRequest;
 use sugarsubstitute_contracts::execution::{JobContext, MemoryLease};
-use sugarsubstitute_image_ops::{EvaluationStats, Evaluator, Graph, RasterSource, SrgbEncoder};
+use sugarsubstitute_image_ops::{
+    EvaluationStats, Evaluator, Graph, NodeId, RasterSource, SrgbEncoder,
+};
 
 /// CPU canvas preparation retaining compatible image tiles across document/view graph replacement.
 /// Native presentation receives immutable device regions; authored data remains in the document.
@@ -12,6 +14,14 @@ pub struct CpuRenderer<S> {
     evaluator: Evaluator<S>,
     encoder: SrgbEncoder,
     memory: MemoryLease,
+}
+/// Unpublished CPU patches and their exact compiled graph identity across cooperative steps.
+/// Keep this value on execution-owned workers. Dropping it releases its original pixel claims;
+/// it exposes no partial update that a native presenter could accidentally publish.
+pub struct CpuPreparation {
+    output: NodeId,
+    context: JobContext,
+    pending: Option<Preparation>,
 }
 impl<S: RasterSource> CpuRenderer<S> {
     /// Prepare canonical display conversion and retain the application's source/memory boundary.
@@ -39,34 +49,96 @@ impl<S: RasterSource> CpuRenderer<S> {
         request: RenderRequest<'_>,
         context: &JobContext,
     ) -> Result<PreparedUpdate, RenderError> {
+        let mut preparation = self.begin(request, context)?;
+        loop {
+            if let Some(update) = self.step(&mut preparation, context)? {
+                return Ok(update);
+            }
+        }
+    }
+    /// Compile one immutable request and admit its complete bounded patch storage.
+    /// The caller may yield through its existing execution job between `step` calls.
+    /// Only one preparation may use this renderer's current graph at a time.
+    /// # Errors
+    /// Preserves document, graph, control, allocation and original admission failures.
+    pub fn begin(
+        &mut self,
+        request: RenderRequest<'_>,
+        context: &JobContext,
+    ) -> Result<CpuPreparation, RenderError> {
+        check(context)?;
         let RenderRequest { document, view, filter, matte, target, base, damage } = request;
         if damage.dirty().surface() != view.surface() {
             return Err(RenderError::Invalid("Canvas damage and viewport dimensions differ"));
         }
         let update = UpdatePlan::new(target, base, damage)?;
-        let compiled = document
-            .compile_view(view, matte, filter, &self.memory)
-            .map_err(RenderError::Canvas)?;
+        let compiled = document.compile_view(view, matte, filter, &self.memory)?;
         let (graph, output) = compiled.into_parts();
+        let pending = Some(Preparation::new(update, context.memory())?);
         self.evaluator.replace_graph(graph);
+        Ok(CpuPreparation { output, pending, context: context.clone() })
+    }
+    /// Evaluate at most one aligned viewport tile and return only a complete immutable update.
+    /// `None` asks the caller to yield within the same original admitted job. Its original
+    /// cancellation, deadline and memory custody remain authoritative. Tile dependencies use the shared DAG's bounded region
+    /// rules and row-level cancellation checks; a cold pyramid dependency may require many tiles.
+    /// # Errors
+    /// Rejects superseded/completed preparations and preserves image/control failures. A failed
+    /// tile permanently prevents its incomplete patches from becoming a published update.
+    pub fn step(
+        &mut self,
+        preparation: &mut CpuPreparation,
+        context: &JobContext,
+    ) -> Result<Option<PreparedUpdate>, RenderError> {
+        check(&preparation.context)?;
+        if context.owner_id() != preparation.context.owner_id()
+            || context.scope_id() != preparation.context.scope_id()
+            || context.spec().id != preparation.context.spec().id
+            || !context.memory().same_reservation(preparation.context.memory())
+        {
+            return Err(RenderError::Invalid("Canvas preparation belongs to another job"));
+        }
+        self.evaluator.graph().extent(preparation.output)?;
+        let pending = preparation
+            .pending
+            .as_mut()
+            .ok_or(RenderError::Invalid("Canvas preparation already completed"))?;
         let evaluator = &mut self.evaluator;
         let encoder = &self.encoder;
-        PreparedUpdate::prepare_validated(update, context.memory(), |region, pixels| {
-            for overlap in region.tiles() {
-                let tile = evaluator.region(output, overlap, context)?;
-                for y in overlap.y()..overlap.bottom() {
-                    for x in overlap.x()..overlap.right() {
-                        let pixel = tile
-                            .pixel(x, y)
-                            .ok_or(RenderError::Invalid("Missing prepared canvas pixel"))?;
-                        let [red, green, blue, _] = encoder.encode(pixel)?;
-                        let index = (y - region.y()) as usize * region.width() as usize
-                            + (x - region.x()) as usize;
-                        pixels[index] = u32::from_be_bytes([255, red, green, blue]);
-                    }
+        let complete = pending.step(|region, patch, pixels| {
+            let tile = evaluator.region(preparation.output, region, context)?;
+            for y in region.y()..region.bottom() {
+                for x in region.x()..region.right() {
+                    let pixel = tile
+                        .pixel(x, y)
+                        .ok_or(RenderError::Invalid("Missing prepared canvas pixel"))?;
+                    let [red, green, blue, _] = encoder.encode(pixel)?;
+                    let index = (y - patch.y()) as usize * patch.width() as usize
+                        + (x - patch.x()) as usize;
+                    pixels[index] = u32::from_be_bytes([255, red, green, blue]);
                 }
             }
             Ok(())
-        })
+        })?;
+        if complete {
+            let pending = preparation
+                .pending
+                .take()
+                .ok_or(RenderError::Invalid("Canvas preparation lost its pixels"))?;
+            Ok(Some(pending.finish()))
+        } else {
+            Ok(None)
+        }
     }
+}
+
+/// Check original worker controls before allocating or advancing unpublished preparation.
+fn check(context: &JobContext) -> Result<(), RenderError> {
+    if context.cancellation_requested() {
+        return Err(sugarsubstitute_image_ops::ImageError::Cancelled.into());
+    }
+    if context.deadline().is_some_and(|deadline| context.now() >= deadline) {
+        return Err(sugarsubstitute_image_ops::ImageError::Deadline.into());
+    }
+    Ok(())
 }

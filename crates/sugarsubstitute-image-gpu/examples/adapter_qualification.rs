@@ -20,6 +20,8 @@ mod cancel;
 mod display;
 #[path = "adapter_qualification/image.rs"]
 mod image;
+#[path = "adapter_qualification/pressure.rs"]
+mod pressure;
 #[derive(Default)]
 struct Wake(Mutex<u64>, Condvar);
 impl CompletionWake for Wake {
@@ -72,6 +74,7 @@ struct Report {
     device: Option<Arc<GpuDevice>>,
     transferred: bool,
     dag_cases: usize,
+    memory: MemoryLease,
     _memory: MemoryClaim,
 }
 fn main() -> Result {
@@ -91,6 +94,7 @@ fn main() -> Result {
     let client = owner.client();
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
     let deadline = client.now()?.checked_add(Duration::from_secs(60))?;
+    let mut cancelled_scope = None;
     let result = (|| -> Result {
         let mut job = client.submit_async(
             &scope,
@@ -122,6 +126,7 @@ fn main() -> Result {
                     device: chosen,
                     transferred: false,
                     dag_cases: 0,
+                    memory: context.memory().clone(),
                     _memory: metadata,
                 })
             },
@@ -185,6 +190,8 @@ fn main() -> Result {
                     drop(tile);
                     drop(pixels);
                     report.dag_cases = image::qualify(device.clone(), &context)?;
+                    pressure::qualify(device.clone(), &report.memory, &context)?;
+                    println!("MEMORY: halo_batch_reclaims_cache=true pinned_input_preserved=true");
                     display::qualify(device.clone(), &context)?;
                     report.device = Some(device);
                     Ok::<Report, Box<dyn Error + Send + Sync>>(report)
@@ -201,7 +208,7 @@ fn main() -> Result {
             };
             drop(transfer);
             if let Some(device) = report.device.take() {
-                cancel::qualify(&client, &scope, device, &wake)?;
+                cancelled_scope = Some(cancel::qualify(&client, &scope, device, &wake)?);
             }
         }
         for (index, adapter) in report.adapters.iter().enumerate() {
@@ -225,9 +232,6 @@ fn main() -> Result {
         println!("TRANSFER: canonical_bits_exact={}", report.transferred);
         println!("DAG: qualified_cases={}", report.dag_cases);
         drop(report);
-        if scope.snapshot().reserved_bytes != 0 {
-            return Err("GPU qualification retained admission after resource retirement".into());
-        }
         Ok(())
     })();
     eprintln!("Qualification work returned; scope={:?}", scope.snapshot());
@@ -244,7 +248,18 @@ fn main() -> Result {
         shutdown_observations += 1;
         Ok(report.settled.then_some(()))
     });
-    let finished = stopped.and_then(|()| owner.finish_shutdown().map_err(Box::<dyn Error>::from));
+    let finished = stopped.and_then(|()| {
+        owner.finish_shutdown()?;
+        if scope.snapshot().reserved_bytes != 0
+            || cancelled_scope.as_ref().is_some_and(|scope| scope.snapshot().reserved_bytes != 0)
+        {
+            return Err(Box::<dyn Error>::from("GPU qualification retained admission after execution teardown"));
+        }
+        if cancelled_scope.is_some() {
+            println!("CANCELLATION: queued_upload_retired=true unpublished=true original_job_admission_released=true");
+        }
+        Ok(())
+    });
     match (result, finished) {
         (Err(primary), Err(retirement)) => {
             Err(format!("{primary}; GPU qualification retirement: {retirement}").into())

@@ -130,7 +130,7 @@ sources = [
     "crates/sugarsubstitute-image-gpu/src/dependency.rs",
     "crates/sugarsubstitute-image-gpu/src/display.rs",
     "crates/sugarsubstitute-image-gpu/src/display_image.rs",
-    "crates/sugarsubstitute-image-gpu/src/evaluate.rs",
+    "crates/sugarsubstitute-image-gpu/src/evaluate/source.rs",
     "crates/sugarsubstitute-image-gpu/src/fault.rs",
     "crates/sugarsubstitute-image-gpu/src/kernel.rs",
     "crates/sugarsubstitute-image-gpu/src/kernel/tests.rs",
@@ -138,4 +138,4 @@ sources = [
     "crates/sugarsubstitute-image-gpu/src/window.rs",
     "crates/sugarsubstitute-image-gpu/src/window_shader.rs",
 ]
-source_sha256 = "sha256:4493fbbf3d3928e0443a7d2d304bb98656a3b6b7fc11b9fc723fbe257df67147"
+source_sha256 = "sha256:68592474d2e9de355cb9d6e16a16257f46538d382b0a8193d50b2e3a90fe294b"

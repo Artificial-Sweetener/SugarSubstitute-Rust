@@ -17,13 +17,13 @@ minimum_tests = 8
 package = "sugarsubstitute-canvas-render"
 root = "crates/sugarsubstitute-canvas-render"
 concern = "Overlap-safe CPU repairs, stale-frame rejection, bounded GPU damage inventories and native hardware comparison of immutable retained display copies against CPU and full GPU redraw, including finite-admission 4K replacement"
-minimum_tests = 13
+minimum_tests = 16
 
 [[owners]]
 package = "sugarsubstitute-image-ops"
 root = "crates/sugarsubstitute-image-ops"
 concern = "Graph identity, shared CPU/GPU sampling and retention, exact clipped tile inventories, pyramid semantics, vector coverage, dirty dependencies and original execution admission"
-minimum_tests = 32
+minimum_tests = 34
 
 [[owners]]
 package = "sugarsubstitute-contracts"
@@ -47,7 +47,7 @@ minimum_tests = 116
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
 concern = "Private worker record framing, original native snapshots, bounded uploads and immutable host-selected write authority; Original admitted startup file input, installed descriptor and Unicode input pairing, retained primary/post-control causes and whole preparation custody; Localized native recovery decisions preserve their original diagnostics; Early installer folder inspection waits for package verification without provisioning; Same-profile successor joins authenticated native release and domain settlement with unchanged cutoff; Fresh subordinate recovery composition with unchanged Root authority, admission before ACK, independent real receiving and checked cleanup; Production desktop startup and retirement through actual execution, authenticated parent/child transport, shared backends, profiles and native window adapters; retained failures, captured startup, bounded console rendering and isolated qualification roles; contained headless backend witness invocation and original-budget Finish lifecycle; genuine boxed incident construction and bounded original terminal/cause diagnostics; unique heap activation ownership outside the persistent native pump frame; original launched-profile release consumption and precise Finish request status; actual Desktop probe formatter and sole bounded Root stderr diagnostic decoding; Offline startup activation independent of producing-build network configuration"
-minimum_tests = 1112
+minimum_tests = 1114
 
 [[owners]]
 package = "sugarsubstitute-execution"
@@ -113,4 +113,4 @@ minimum_tests = 78
 package = "sugarsubstitute-image-io"
 root = "crates/sugarsubstitute-image-io"
 concern = "Bounded image decoding, archive integrity and seam-safe region reads with original storage and memory admission"
-minimum_tests = 4
+minimum_tests = 6

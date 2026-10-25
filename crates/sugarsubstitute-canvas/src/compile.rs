@@ -30,7 +30,7 @@ impl CompiledView {
 
 impl DocumentSnapshot {
     /// Compile this revision at the viewport's evaluation grid without changing authored content.
-    /// Raster layers reconstruct from explicit Lanczos pyramids; vector coverage is evaluated from
+    /// Raster layers use Lanczos pyramids or sparse nearest previews; vector coverage uses
     /// transformed geometry at this resolution. Adjustments and composition operate on that same
     /// linear-light grid. At actual size, one document pixel corresponds to one device pixel.
     /// # Errors
@@ -166,29 +166,31 @@ fn raster_node(
     clip: bool,
 ) -> Result<NodeId, CanvasError> {
     let source = graph.add(Operation::Raster { asset, extent: document })?;
-    let pyramid = graph.pyramid(source)?;
     let mut selected = source;
-    for &level in pyramid.levels() {
-        let extent = graph.extent(level)?;
-        if extent.width() == 1 && extent.height() == 1 {
+    if filter == Filter::Lanczos3 {
+        let pyramid = graph.pyramid(source)?;
+        for &level in pyramid.levels() {
+            let extent = graph.extent(level)?;
+            if extent.width() == 1 && extent.height() == 1 {
+                selected = level;
+                break;
+            }
+            let scales = [
+                f64::from(extent.width()) / (f64::from(document.width()) * view.zoom()),
+                f64::from(extent.height()) / (f64::from(document.height()) * view.zoom()),
+            ];
+            let mut active = 0.0_f64;
+            if extent.width() > 1 {
+                active = active.max(scales[0]);
+            }
+            if extent.height() > 1 {
+                active = active.max(scales[1]);
+            }
+            if active < 1.0 {
+                break;
+            }
             selected = level;
-            break;
         }
-        let scales = [
-            f64::from(extent.width()) / (f64::from(document.width()) * view.zoom()),
-            f64::from(extent.height()) / (f64::from(document.height()) * view.zoom()),
-        ];
-        let mut active = 0.0_f64;
-        if extent.width() > 1 {
-            active = active.max(scales[0]);
-        }
-        if extent.height() > 1 {
-            active = active.max(scales[1]);
-        }
-        if active < 1.0 {
-            break;
-        }
-        selected = level;
     }
     let extent = graph.extent(selected)?;
     let ratios = [

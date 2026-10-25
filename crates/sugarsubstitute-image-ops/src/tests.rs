@@ -6,6 +6,7 @@ use harness::{TestResult, run};
 use std::sync::Arc;
 use sugarsubstitute_contracts::execution::JobContext;
 mod harness;
+mod preview;
 mod reference;
 mod retention;
 mod sampling;

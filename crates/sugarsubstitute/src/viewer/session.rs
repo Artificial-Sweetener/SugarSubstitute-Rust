@@ -50,6 +50,13 @@ struct Retired {
     _packet: Option<Packet>,
     _resources: Option<Resources>,
     _front: Option<CpuSurface>,
+    _update: Option<Box<sugarsubstitute_canvas_render::PreparedUpdate>>,
+}
+/// The original admitted request and its quality remain paired through cancellation acknowledgement.
+struct Rendering {
+    job: OwnedJob<Packet, WorkError>,
+    filter: Filter,
+    superseded: bool,
 }
 struct Loading {
     intent: u64,
@@ -85,12 +92,13 @@ pub(super) struct Session {
     loading: Option<Loading>,
     pending_open: Option<Open>,
     selection: u64,
-    rendering: Option<OwnedJob<Packet, WorkError>>,
+    rendering: Option<Rendering>,
     pending_retirement: Option<Retired>,
     retirement: Option<OwnedJob<(), WorkError>>,
     retirement_deadline: Option<Moment>,
     view: Viewport,
     navigation_until: Option<Moment>,
+    initial_preview: bool,
     front: Option<CpuSurface>,
     gpu_front: Option<GpuSurface>,
     gpu_presentation: Option<WindowFrame>,
@@ -115,7 +123,9 @@ pub(super) struct Session {
 impl Session {
     /// Preview only during the current navigation interval; settled output always refines.
     fn filter(&self) -> Filter {
-        if self.navigation_until.is_some_and(|deadline| self.clock.now() < deadline) {
+        if self.initial_preview
+            || self.navigation_until.is_some_and(|deadline| self.clock.now() < deadline)
+        {
             Filter::Nearest
         } else {
             Filter::Lanczos3
@@ -151,6 +161,7 @@ impl Session {
             retirement_deadline: None,
             view,
             navigation_until: None,
+            initial_preview: false,
             front: None,
             gpu_front: None,
             gpu_presentation: None,
@@ -226,7 +237,7 @@ impl Session {
             loading.job.cancel();
         }
         if let Some(rendering) = &self.rendering {
-            rendering.cancel();
+            rendering.job.cancel();
         }
         self.failed = None;
         self.title = self.labels.opening.to_owned();

@@ -2,8 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Bounded demand-driven CPU evaluation with feature-owned process-local tile reuse.
 use crate::{
-    AssetId, Graph, ImageError, NodeId, Operation, Pixel, Region, Sampling, TILE_EDGE, Tile,
-    TileRetention, buffer::Buffer,
+    AssetId, Graph, ImageError, NodeId, Operation, Pixel, RasterSamples, Region, Sampling,
+    TILE_EDGE, Tile, TileRetention, buffer::Buffer,
 };
 use std::sync::Arc;
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim, MemoryLease};
@@ -22,6 +22,35 @@ pub trait RasterSource {
         output: &mut [Pixel],
         context: &JobContext,
     ) -> Result<(), ImageError>;
+    /// Decode only the original pixels addressed by the DAG's bounded sparse sampling plan.
+    /// Source adapters may group reads by encoded chunk without changing sample coordinates.
+    /// The default reads individual canonical pixels, suitable for simple in-memory sources.
+    /// # Errors
+    /// Rejects an incorrect destination length and preserves source and control failures.
+    fn read_samples(
+        &mut self,
+        asset: AssetId,
+        samples: &RasterSamples,
+        output: &mut [Pixel],
+        context: &JobContext,
+    ) -> Result<(), ImageError> {
+        if output.len() as u64 != samples.region().pixels() {
+            return Err(ImageError::Invalid("Invalid sparse raster destination"));
+        }
+        for (y, &row) in samples.rows().iter().enumerate() {
+            for (x, &column) in samples.columns().iter().enumerate() {
+                check(context)?;
+                let index = y * samples.columns().len() + x;
+                self.read(
+                    asset,
+                    Region::new(column, row, 1, 1)?,
+                    std::slice::from_mut(&mut output[index]),
+                    context,
+                )?;
+            }
+        }
+        Ok(())
+    }
 }
 
 /// Cumulative observable work, useful for tests and headless performance qualification.
@@ -162,34 +191,40 @@ impl<S: RasterSource> Evaluator<S> {
                 }
             }
             Operation::Resample { input, sampling, .. } => {
-                let dependency = self.graph.required_inputs(node, region)?[0]
-                    .ok_or(ImageError::Invalid("Missing resample dependency"))?
-                    .1;
-                let input_pixels = self.input(input, dependency, context)?;
-                if sampling.filter() == crate::Filter::Nearest {
-                    crate::resample::nearest(
-                        &input_pixels,
-                        self.graph.extent(input)?,
-                        sampling,
-                        &mut output,
-                        context,
-                    )?;
+                if let Some((asset, samples)) = self.graph.sampled_source(node, region)? {
+                    self.source.read_samples(asset, &samples, &mut output.pixels, context)?;
+                    self.stats.source_pixels =
+                        self.stats.source_pixels.saturating_add(region.pixels());
                 } else {
-                    let mut scratch = self.allocate(Region::new(
-                        region.x(),
-                        dependency.y(),
-                        region.width(),
-                        dependency.height(),
-                    )?)?;
-                    let _tables = self.claim(32 * 1024)?;
-                    crate::resample::render(
-                        &input_pixels,
-                        self.graph.extent(input)?,
-                        sampling,
-                        &mut output,
-                        &mut scratch,
-                        context,
-                    )?;
+                    let dependency = self.graph.required_inputs(node, region)?[0]
+                        .ok_or(ImageError::Invalid("Missing resample dependency"))?
+                        .1;
+                    let input_pixels = self.input(input, dependency, context)?;
+                    if sampling.filter() == crate::Filter::Nearest {
+                        crate::resample::nearest(
+                            &input_pixels,
+                            self.graph.extent(input)?,
+                            sampling,
+                            &mut output,
+                            context,
+                        )?;
+                    } else {
+                        let mut scratch = self.allocate(Region::new(
+                            region.x(),
+                            dependency.y(),
+                            region.width(),
+                            dependency.height(),
+                        )?)?;
+                        let _tables = self.claim(32 * 1024)?;
+                        crate::resample::render(
+                            &input_pixels,
+                            self.graph.extent(input)?,
+                            sampling,
+                            &mut output,
+                            &mut scratch,
+                            context,
+                        )?;
+                    }
                 }
             }
             Operation::Exposure { input, stops } => {

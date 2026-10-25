@@ -962,14 +962,14 @@ rationale = "Bounded external test wake reports retained terminal failure causes
 [[records]]
 path = "crates/sugarsubstitute-image-gpu/examples/adapter_qualification.rs"
 owner = "sugarsubstitute-image-gpu"
-source_sha256 = "sha256:ea096c45a1700cd3999501143ff9f62bde3437bfc03969100e11a723589ced33"
+source_sha256 = "sha256:f829305f4a86c4c04f544deebcb2fccabcd69c067756e173ecdfa37d214c9c4c"
 disposition = "fixture"
 rationale = "Isolated native hardware qualification reports actual adapter identity, CPU/GPU pixel comparisons, timings and observed execution retirement; runtime diagnostics use structured logging."
 
 [[records]]
 path = "crates/sugarsubstitute-image-gpu/examples/adapter_qualification/image.rs"
 owner = "sugarsubstitute-image-gpu"
-source_sha256 = "sha256:db4fe469021c6a2f6bc1320ff8989dce3195036991446657c6e10ef658b5bc15"
+source_sha256 = "sha256:9d7cf3ffe718fa68f68ae6863fbcfe0a8f16c4d55b4c5fecf561f5b91c404f1b"
 disposition = "fixture"
 rationale = "Isolated native hardware qualification reports actual adapter identity, CPU/GPU pixel comparisons, timings and observed execution retirement; runtime diagnostics use structured logging."
 
@@ -980,12 +980,6 @@ source_sha256 = "sha256:cd82ba443864ef63f156608cc6d54de75d7b987223519aea9bcf5d59
 disposition = "fixture"
 rationale = "Isolated native qualification reports observed GPU display, repair and cancellation outcomes through the production execution boundary; runtime diagnostics use structured logging."
 
-[[records]]
-path = "crates/sugarsubstitute-image-gpu/examples/adapter_qualification/cancel.rs"
-owner = "sugarsubstitute-image-gpu"
-source_sha256 = "sha256:427d0604d13f719a269021a8dd47c032583d724db30e290a312f801daf1e3d66"
-disposition = "fixture"
-rationale = "Isolated native qualification reports observed GPU display, repair and cancellation outcomes through the production execution boundary; runtime diagnostics use structured logging."
 
 [[records]]
 path = "crates/sugarsubstitute-image-gpu/examples/adapter_qualification/display.rs"

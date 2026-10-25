@@ -54,7 +54,7 @@ impl<S: RasterSource> GpuEvaluator<S> {
             self.finish_batch()?;
         }
         if self.batch.is_none() {
-            self.batch = Some(Batch::new(self.device.clone(), context)?);
+            self.batch = Some(self.retry(|this| Batch::new(this.device.clone(), context))?);
         }
         let batch =
             self.batch.as_mut().ok_or_else(|| GpuError::invalid("Image batch is unavailable"))?;

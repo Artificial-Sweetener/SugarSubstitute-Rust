@@ -8,6 +8,7 @@ use sugarsubstitute_image_ops::{Extent, Pixel, RasterSource, Region};
 mod cached;
 mod harness;
 mod png;
+mod samples;
 
 #[test]
 fn adaptive_chunks_cover_exact_file_offsets_without_unbounded_stripe_memory()

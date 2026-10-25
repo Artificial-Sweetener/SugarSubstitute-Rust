@@ -43,6 +43,24 @@ impl<R> Clone for SharedRaster<R> {
     }
 }
 impl<R: Read + Seek> RasterSource for SharedRaster<R> {
+    fn read_samples(
+        &mut self,
+        asset: AssetId,
+        samples: &sugarsubstitute_image_ops::RasterSamples,
+        output: &mut [Pixel],
+        context: &JobContext,
+    ) -> Result<(), ImageError> {
+        if context.cancellation_requested() {
+            return Err(ImageError::Cancelled);
+        }
+        let mut source = self
+            .reader
+            .archive
+            .lock()
+            .map_err(|_| ImageError::Invalid("Shared raster reader failed"))?;
+        source.read_samples(asset, samples, output, context)
+    }
+
     fn read(
         &mut self,
         asset: AssetId,

@@ -7,8 +7,8 @@ use sugarsubstitute_image_gpu::{GpuDevice, GpuEvaluator};
 use sugarsubstitute_image_ops::*;
 
 type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
-const ASSET: AssetId = AssetId([17; 32]);
-struct Pattern;
+pub(super) const ASSET: AssetId = AssetId([17; 32]);
+pub(super) struct Pattern;
 impl RasterSource for Pattern {
     fn read(
         &mut self,
@@ -84,6 +84,11 @@ fn graph(context: &JobContext) -> Result<(Graph, Vec<Case>, NodeId)> {
         sampling: sampling.with_filter(Filter::Nearest),
     })?;
     let pyramid = graph.pyramid(masked)?.levels()[3];
+    let sparse = graph.add(Operation::Resample {
+        input: source,
+        extent: target,
+        sampling: Sampling::new([15.5, 9.25], [-100.5, -20.25])?.with_filter(Filter::Nearest),
+    })?;
     let near = Region::new(125, 2, 128, 127)?;
     let mut cases = Vec::new();
     cases.try_reserve_exact(20)?;
@@ -101,6 +106,11 @@ fn graph(context: &JobContext) -> Result<(Graph, Vec<Case>, NodeId)> {
     ] {
         cases.push(Case { name, node, region: near });
     }
+    cases.push(Case {
+        name: "nearest_sparse_source",
+        node: sparse,
+        region: Region::new(0, 0, 128, 127)?,
+    });
     cases.push(Case {
         name: "pyramid_odd_edges",
         node: pyramid,

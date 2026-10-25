@@ -43,7 +43,7 @@ pub(super) fn qualify(
     parent: &Scope,
     device: Arc<GpuDevice>,
     wake: &Wake,
-) -> Result {
+) -> Result<Arc<Scope>> {
     let scope = Arc::new(
         client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, Some(parent))?,
     );
@@ -93,20 +93,14 @@ pub(super) fn qualify(
             Ok::<(), Box<dyn Error + Send + Sync>>(())
         },
     )?;
-    let JobCompletion { outcome, .. } = wake.until(None, || {
+    let JobCompletion { outcome, memory, .. } = wake.until(None, || {
         client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
         Ok(job.try_take_completion())
     })?;
     if !matches!(outcome, JobOutcome::Cancelled) || !checked.load(Ordering::Acquire) {
         return Err("GPU cancellation did not observe unpublished, retired native work".into());
     }
+    drop(memory);
     drop(job);
-    if scope.snapshot().reserved_bytes != 0 {
-        return Err("Cancelled GPU work retained its original job admission".into());
-    }
-    drop(scope);
-    println!(
-        "CANCELLATION: queued_upload_retired=true unpublished=true original_job_admission_released=true"
-    );
-    Ok(())
+    Ok(scope)
 }

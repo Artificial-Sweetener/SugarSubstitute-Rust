@@ -60,7 +60,6 @@ impl Proof {
         let session = &mut self.session;
         if session.loading.is_some()
             || session.pending_open.is_some()
-            || session.rendering.is_some()
             || session.scene.as_ref().is_none_or(|scene| scene.source.is_none())
         {
             return Ok(());
@@ -102,7 +101,7 @@ impl Proof {
             self.previous_stats = session.last_stats;
             self.observed = Some(stamp);
         }
-        if shown.filter != Filter::Lanczos3 {
+        if shown.filter != Filter::Lanczos3 || session.rendering.is_some() {
             return Ok(());
         }
         let center = [
