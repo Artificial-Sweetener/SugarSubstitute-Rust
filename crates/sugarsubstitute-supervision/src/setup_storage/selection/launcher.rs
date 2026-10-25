@@ -77,7 +77,7 @@ impl SelectionStore {
     ) -> Result<(), SelectionFailure> {
         self.protected(context, |protection| {
             let _writer = writer(&self.root, protection, context)?;
-            entrypoint::stable::require_compatible(&self.root, compatibility, protection)?;
+            entrypoint::stable::require_compatible(&self.root, compatibility, protection, context)?;
             Ok(())
         })
     }

@@ -53,8 +53,8 @@ impl TrustStore {
             &repository,
             &sugarsubstitute_update::ReleaseHistory::empty().encode()?,
         )?;
-        let destination = parent.path.join(DIRECTORY);
-        if Self::has_state(&parent.path)? {
+        let destination = parent.path().join(DIRECTORY);
+        if Self::has_state(parent.path(), context)? {
             return Err(io::Error::new(
                 io::ErrorKind::AlreadyExists,
                 "Existing update trust state prevents initialization",
@@ -64,6 +64,7 @@ impl TrustStore {
         let staged = InitialState::stage(&parent, &bytes, &history, context)?;
         let root = staged.publish(&destination, context)?;
         let mut store = Self {
+            cache: std::sync::Mutex::new(None),
             preparation: None,
             root,
             _installation_root: parent,
@@ -75,7 +76,7 @@ impl TrustStore {
             repository,
         };
         let marker = protection::with_domain(context, |protection| {
-            protection.directory(&store.root.path, Mode::Existing, context)?;
+            protection.directory(store.root.path(), Mode::Existing, context)?;
             let _writer = store.writer(protection)?;
             continuity::ensure(&store, protection, context)
         })
@@ -85,9 +86,9 @@ impl TrustStore {
     }
 
     /// Any canonical object or continuity evidence requires opening, never bootstrap fallback.
-    pub(super) fn has_state(installation_root: &Path) -> io::Result<bool> {
+    pub(super) fn has_state(installation_root: &Path, context: &JobContext) -> io::Result<bool> {
         for name in [DIRECTORY, continuity::MARKER] {
-            match std::fs::symlink_metadata(installation_root.join(name)) {
+            match crate::durable_storage::files::inspect(installation_root.join(name), context) {
                 Ok(_) => return Ok(true),
                 Err(cause) if cause.kind() == io::ErrorKind::NotFound => {}
                 Err(cause) => return Err(cause),
@@ -114,11 +115,11 @@ impl InitialState {
             let path = staging::unique_path(parent, ".update-trust-stage")?;
             protection.directory(&path, Mode::CreateNew, context)?;
             let root = Directory::open(&path, false)?;
-            protection.file(&path.join(LOCK), context)?.sync_all()?;
+            files::sync(&protection.file(&path.join(LOCK), context)?, context)?;
             for (name, bytes) in [(releases::RECORD, history), (RECORD, checkpoint)] {
                 let mut file = protection.file(&path.join(name), context)?;
                 file.write_all(bytes)?;
-                file.sync_all()?;
+                files::sync(&file, context)?;
             }
             check(context)?;
             Ok(Self { path, identity: root.identity()? })

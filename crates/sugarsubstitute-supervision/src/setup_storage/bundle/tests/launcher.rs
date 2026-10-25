@@ -18,8 +18,17 @@ fn launcher_payload_survives_authenticated_extraction_and_destination_verificati
         let digest = format!("{:x}", Sha256::digest(&manifest));
         let source = temporary.path().join("setup.exe");
         std::fs::write(&source, test_package::seal(&manifest, &compressed))?;
-        let extracted = materialize(&source, temporary.path(), &digest, context)?;
-        let bundle = VerifiedBundle::open(&extracted, &digest, context)?;
+        let extracted = materialize(
+            &source,
+            &crate::setup_storage::cache::RuntimeCache::open(
+                temporary.path(),
+                crate::setup_storage::cache::CachePolicy::default(),
+                context,
+            )?,
+            &digest,
+            context,
+        )?;
+        let bundle = extracted;
         let destination = temporary.path().join("candidate");
         bundle.payload.copy("app/", &destination, context, files::create_new)?;
         let pinned =
@@ -31,7 +40,10 @@ fn launcher_payload_survives_authenticated_extraction_and_destination_verificati
             "sugarsubstitute-launcher.json",
         ] {
             let target = destination.join(name);
-            assert_eq!(std::fs::read(&target)?, std::fs::read(extracted.join("app").join(name))?);
+            assert_eq!(
+                std::fs::read(&target)?,
+                std::fs::read(bundle.payload.root.join("app").join(name))?
+            );
             assert!(std::fs::write(&target, b"replacement").is_err());
         }
         drop(pinned);
@@ -74,8 +86,16 @@ fn authenticated_but_incompatible_pairs_do_not_become_verified_bundles() -> test
             let digest = format!("{:x}", Sha256::digest(&manifest));
             let source = temporary.path().join("setup.exe");
             std::fs::write(&source, test_package::seal(&manifest, &compressed))?;
-            let extracted = materialize(&source, temporary.path(), &digest, context)?;
-            let Err(cause) = VerifiedBundle::open(&extracted, &digest, context) else {
+            let Err(cause) = materialize(
+                &source,
+                &crate::setup_storage::cache::RuntimeCache::open(
+                    temporary.path(),
+                    crate::setup_storage::cache::CachePolicy::default(),
+                    context,
+                )?,
+                &digest,
+                context,
+            ) else {
                 return Err("Incompatible launcher pair was admitted".into());
             };
             let rejection = cause
@@ -86,7 +106,11 @@ fn authenticated_but_incompatible_pairs_do_not_become_verified_bundles() -> test
                 .ok_or("Compatibility error cause absent")?;
             assert_eq!(format!("{rejection:?}"), expected);
             assert_eq!(
-                std::fs::read(extracted.join("app/sugarsubstitute-launcher.json"))?,
+                std::fs::read(test_worker::cache_file(
+                    temporary.path(),
+                    crate::setup_storage::cache::Namespace::PackedPayloads,
+                    "app/sugarsubstitute-launcher.json"
+                )?)?,
                 launcher
             );
         }

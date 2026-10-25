@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Recover unambiguous saved configuration without selecting or executing an old payload.
 use super::*;
-use std::collections::BTreeMap;
 
 const MAX_ENTRIES: usize = 1024;
 
@@ -38,7 +37,7 @@ pub(super) fn discover(
     sources: Sources,
     context: &JobContext,
 ) -> io::Result<Option<ExistingInstallation>> {
-    let releases = root.path.join("releases");
+    let releases = root.path().join("releases");
     let directory = match Directory::open(&releases, false) {
         Ok(directory) => directory,
         Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(None),
@@ -46,7 +45,7 @@ pub(super) fn discover(
     };
     let mut recovered: Option<ExistingInstallation> = None;
     let mut occupied = false;
-    for (index, entry) in std::fs::read_dir(&directory.path)?.enumerate() {
+    for (index, entry) in directory.entries(context)?.enumerate() {
         check(context)?;
         if index >= MAX_ENTRIES {
             return Err(io::Error::other(RecoveryFailure::InventoryBound));
@@ -71,9 +70,13 @@ pub(super) fn discover(
             Err(cause) => return Err(cause),
         }
         let mut candidate = match sources {
-            Sources::Historical => {
-                ExistingInstallation::from_directory(root, generation, marker.try_clone()?, None)?
-            }
+            Sources::Historical => ExistingInstallation::from_directory(
+                root,
+                generation,
+                marker.try_clone()?,
+                None,
+                context,
+            )?,
             Sources::Protected => {
                 let (generation, custody, identity) =
                     crate::setup_storage::transaction::generation::configuration(
@@ -85,6 +88,7 @@ pub(super) fn discover(
                     generation,
                     marker.try_clone()?,
                     Some(&identity),
+                    context,
                 )?;
                 candidate._inputs.push(custody);
                 candidate
@@ -95,7 +99,7 @@ pub(super) fn discover(
             if !equivalent(previous, &candidate) {
                 return Err(io::Error::other(RecoveryFailure::ConflictingSettings));
             }
-            if previous._directory.path <= candidate._directory.path {
+            if previous._directory.path() <= candidate._directory.path() {
                 continue;
             }
         }
@@ -111,19 +115,10 @@ pub(super) fn discover(
 /// Ignore only the checked generation-local configuration path and argument ordering.
 /// User-authored startup bytes and every other launch/Comfy selection remain exact.
 fn equivalent(left: &ExistingInstallation, right: &ExistingInstallation) -> bool {
-    fn arguments(existing: &ExistingInstallation) -> BTreeMap<&str, &str> {
-        existing
-            .descriptor
-            .arguments
-            .chunks_exact(2)
-            .filter(|pair| pair[0] != "--startup-config")
-            .map(|pair| (pair[0].as_str(), pair[1].as_str()))
-            .collect()
-    }
     left.startup == right.startup
         && left.runtime == right.runtime
         && left.summary.selection == right.summary.selection
-        && arguments(left) == arguments(right)
+        && left.descriptor.same_external_inputs(&right.descriptor)
 }
 
 #[cfg(test)]

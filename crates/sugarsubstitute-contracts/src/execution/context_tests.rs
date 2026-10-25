@@ -123,6 +123,17 @@ fn context_preserves_identity_deadline_and_owned_waits_without_scheduler_access(
     assert_eq!(retained.deadline(), Some(Moment::from_nanos(60)));
     assert_eq!(retained.now(), Moment::from_nanos(0));
     assert!(!retained.cancellation_requested());
+    let bounded = context.bounded_until(Moment::from_nanos(30));
+    assert_eq!(bounded.deadline(), Some(Moment::from_nanos(30)));
+    assert_eq!(bounded.owner_id(), owner_id);
+    assert_eq!(bounded.scope_id(), scope_id);
+    assert_eq!(bounded.job_id(), spec.id);
+    assert_eq!(bounded.spec(), spec);
+    assert_eq!(bounded.bounded_until(Moment::from_nanos(100)).deadline(), bounded.deadline());
+    assert_eq!(context.bounded_until(Moment::from_nanos(100)).deadline(), context.deadline());
+    let claim = bounded.memory().claim(10)?;
+    assert!(context.memory().claim(3).is_err());
+    drop(claim);
 
     let wakes = Arc::new(WakeCount::default());
     let waker = Waker::from(wakes.clone());
@@ -135,8 +146,11 @@ fn context_preserves_identity_deadline_and_owned_waits_without_scheduler_access(
     let result_guard = retained.memory().clone();
     cancel_state.advance(1);
     assert!(retained.cancellation_requested());
+    assert!(bounded.cancellation_requested());
     clock_state.advance(60);
     assert_eq!(retained.now(), Moment::from_nanos(60));
+    assert_eq!(bounded.now(), Moment::from_nanos(60));
+    drop(bounded);
     drop(retained);
     assert_eq!(released.load(Ordering::SeqCst), 0);
     assert_eq!(wakes.0.load(Ordering::SeqCst), 2);
@@ -144,5 +158,35 @@ fn context_preserves_identity_deadline_and_owned_waits_without_scheduler_access(
     assert_eq!(deadline.as_mut().poll(&mut poll_context), Poll::Ready(()));
     drop(result_guard);
     assert_eq!(released.load(Ordering::SeqCst), 12);
+    Ok(())
+}
+
+#[test]
+fn command_lifetime_can_bound_an_operation_without_extending_that_bound()
+-> Result<(), Box<dyn std::error::Error>> {
+    let context = JobContext::new(
+        ExecutionId::new(1)?,
+        ScopeId::new(1)?,
+        JobSpec {
+            id: JobId::new(1)?,
+            operation: Operation::Infrastructure,
+            class: JobClass::InfrastructureOrdinary,
+            deadline: None,
+            reservation_bytes: 12,
+            replacement: None,
+        },
+        None,
+        Arc::new(ManualCancel(Arc::new(WaitState::default()))),
+        Arc::new(ManualClock(Arc::new(WaitState::default()))),
+        AdmittedJobResources::new(
+            MemoryLease::new(12, Box::new(ReleaseCount(Arc::new(AtomicU64::new(0))))),
+            None,
+        ),
+    );
+    let operation = context.bounded_until(Moment::from_nanos(30));
+    assert_eq!(context.deadline(), None);
+    assert_eq!(operation.deadline(), Some(Moment::from_nanos(30)));
+    assert_eq!(operation.bounded_until(Moment::from_nanos(90)).deadline(), operation.deadline());
+    assert_eq!(operation.bounded_until(Moment::from_nanos(0)).deadline(), Some(context.now()));
     Ok(())
 }

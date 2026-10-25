@@ -85,16 +85,21 @@ fn actual_selected_origin_cannot_enter_ordinary_file_or_phase_branch() -> TestRe
         let original = AllocationOrigin::new(admission.into_origin())
             .map_err(|failure| ClaimError::capture_allocation(failure.cause))?;
         let budget = crate::native_claims::files::Budget::SelectedRelease(original);
-        assert!(crate::protected_storage::native_phase::NativePhase::ordinary(&budget).is_err());
+        assert!(
+            crate::durable_storage::protected::native_phase::NativePhase::ordinary(&budget)
+                .is_err()
+        );
         let result = NativeFile::reserve(
             1,
             1,
-            crate::protected_storage::native_file::FileGrant::ReadOnly,
+            crate::durable_storage::protected::native_file::FileGrant::ReadOnly,
             &mut Some((
-                crate::protected_storage::native_name::NativeName::Ordinary(
+                crate::durable_storage::protected::native_name::NativeName::Ordinary(
                     std::path::PathBuf::from(r"E:ixture-uninvoked"),
                 ),
-                crate::protected_storage::native_file::NativeFileAdmission::Ordinary { budget },
+                crate::durable_storage::protected::native_file::NativeFileAdmission::Ordinary {
+                    budget,
+                },
             )),
         );
         let failure = match result {

@@ -71,7 +71,8 @@ impl DiagnosticStorage {
         if let Some(content) = genesis {
             genesis::validate_issue(&mut state, operation.key, content)?;
         }
-        let group = crate::protected_storage::record_file::diagnostic_payload_group_digest(object);
+        let group =
+            crate::durable_storage::protected::record_file::diagnostic_payload_group_digest(object);
         if let Some(group) = group
             && !state.data_mut()?.payload_groups.contains(&group)
         {
@@ -116,7 +117,8 @@ impl DiagnosticStorage {
                 _ => (&data.seeds, usize::MAX),
             };
             if let DiagnosticObject::Seed(key) | DiagnosticObject::Summary(key) = object {
-                let digest = crate::protected_storage::record_file::diagnostic_subject_digest(key);
+                let digest =
+                    crate::durable_storage::protected::record_file::diagnostic_subject_digest(key);
                 let pending = data
                     .stages
                     .iter()
@@ -124,7 +126,7 @@ impl DiagnosticStorage {
                         (DiagnosticObject::Seed(_), DiagnosticObject::Seed(key))
                         | (DiagnosticObject::Summary(_), DiagnosticObject::Summary(key)) => !slots
                             .contains(
-                                &crate::protected_storage::record_file::diagnostic_subject_digest(
+                                &crate::durable_storage::protected::record_file::diagnostic_subject_digest(
                                     key,
                                 ),
                             ),

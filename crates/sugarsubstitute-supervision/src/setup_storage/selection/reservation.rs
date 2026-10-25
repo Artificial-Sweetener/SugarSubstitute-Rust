@@ -38,7 +38,7 @@ impl ReservedApplication {
     }
     /// Pinned generation directory for native launch composition.
     pub fn directory(&self) -> &Path {
-        &self.application.directory.path
+        self.application.directory.path()
     }
     /// Absolute executable; this path does not substitute for retaining this reservation.
     pub fn executable(&self) -> PathBuf {

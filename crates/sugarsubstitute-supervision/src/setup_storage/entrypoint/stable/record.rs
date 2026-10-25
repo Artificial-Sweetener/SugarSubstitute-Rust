@@ -36,7 +36,7 @@ impl Record {
         let record = Self {
             schema_version: 1,
             source: generation.clone(),
-            bytes: source.metadata()?.len(),
+            bytes: files::length(&source, context)?,
             sha256: payload::hash(&mut source, context)?,
             contract,
         };
@@ -66,7 +66,7 @@ pub(super) fn replace(
     protection: &mut Protection,
     context: &JobContext,
 ) -> io::Result<()> {
-    if read(state, protection)?.as_ref() != Some(previous) {
+    if read(state, protection, context)?.as_ref() != Some(previous) {
         return Err(invalid("Launcher ownership changed during replacement"));
     }
     next.validate()?;
@@ -76,15 +76,20 @@ pub(super) fn replace(
     }
     let mut stage = publication::Stage::create(state, protection, context)?;
     std::io::Write::write_all(stage.file(), &bytes)?;
-    stage.publish(&state.path.join(RECORD), true, protection, context)
+    stage.publish(&state.path().join(RECORD), true, protection, context)
 }
 
 /// Missing state permits first publication; invalid state is retained for explicit recovery.
-pub(super) fn read(state: &Directory, protection: &Protection) -> io::Result<Option<Record>> {
+pub(super) fn read(
+    state: &Directory,
+    protection: &Protection,
+    context: &JobContext,
+) -> io::Result<Option<Record>> {
+    check(context)?;
     let mut file = match state.read(RECORD) {
         Ok(file) => file,
         Err(cause) if cause.kind() == io::ErrorKind::NotFound => {
-            return match std::fs::symlink_metadata(state.path.join(NAME)) {
+            return match crate::durable_storage::files::inspect(state.path().join(NAME), context) {
                 Ok(_) => Err(invalid(
                     "Stable launcher ownership is missing; existing shell state has been preserved",
                 )),

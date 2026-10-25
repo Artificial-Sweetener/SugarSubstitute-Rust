@@ -396,7 +396,7 @@ pub use self::webview2::ScrollBarStyle;
 use self::webview2::*;
 #[cfg(target_os = "windows")]
 pub use webview2::{
-  ConstructionProgress, UserDataFolder, WebViewBuildFailure, WebViewConstruction, WebViewRetirement,
+  ConstructionProgress, PrivateProfileObserver, UserDataFolder, WebViewBuildFailure, WebViewConstruction, WebViewRetirement,
 };
 #[cfg(target_os = "windows")]
 use webview2_com::Microsoft::Web::WebView2::Win32::{
@@ -1792,6 +1792,7 @@ impl WebViewBuilderExtIos for WebViewBuilder<'_> {
 #[derive(Clone)]
 pub(crate) struct PlatformSpecificWebViewAttributes {
   additional_browser_args: Option<String>,
+  exclusive_user_data_folder_access: bool,
   browser_accelerator_keys: bool,
   theme: Option<Theme>,
   use_https: bool,
@@ -1808,6 +1809,7 @@ impl Default for PlatformSpecificWebViewAttributes {
   fn default() -> Self {
     Self {
       additional_browser_args: None,
+      exclusive_user_data_folder_access: false,
       browser_accelerator_keys: true, // This is WebView2's default behavior
       default_context_menus: true,    // This is WebView2's default behavior
       theme: None,
@@ -1833,6 +1835,10 @@ pub trait WebViewBuilderExtWindows {
   ///   and `--proxy-server=<scheme>://<host>:<port>` if a proxy is set.
   ///   so if you use this method, you have to add these arguments yourself if you want to keep the same behavior.
   fn with_additional_browser_args<S: Into<String>>(self, additional_args: S) -> Self;
+
+  /// Isolate a private disposable profile from other processes sharing its user data folder.
+  /// The default is false. Retain actual profile custody through BrowserProcessExited.
+  fn with_exclusive_user_data_folder_access(self, exclusive: bool) -> Self;
 
   /// Determines whether browser-specific accelerator keys are enabled. When this setting is set to
   /// `false`, it disables all accelerator keys that access features specific to a web browser.
@@ -1920,6 +1926,11 @@ pub trait WebViewBuilderExtWindows {
 impl WebViewBuilderExtWindows for WebViewBuilder<'_> {
   fn with_additional_browser_args<S: Into<String>>(mut self, additional_args: S) -> Self {
     self.platform_specific.additional_browser_args = Some(additional_args.into());
+    self
+  }
+
+  fn with_exclusive_user_data_folder_access(mut self, exclusive: bool) -> Self {
+    self.platform_specific.exclusive_user_data_folder_access = exclusive;
     self
   }
 

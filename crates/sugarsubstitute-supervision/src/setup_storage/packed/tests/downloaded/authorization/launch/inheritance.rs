@@ -44,7 +44,7 @@ fn inherited_pin_survives_parent_drop_then_releases_after_coordinator_adoption()
         let temporary = tempfile::tempdir()?;
         let directory = Directory::open(temporary.path(), false)?;
         let (generation, _) = accept_fixture(&directory, context)?;
-        let store = Arc::new(SelectionStore::open(&directory.path, context)?);
+        let store = Arc::new(SelectionStore::open(directory.path(), context)?);
         let before = store.load(context)?.ok_or("Selection absent")?;
         let ReservedLaunch::Application(reserved) = store.reserve_launch(context)? else {
             return Err("Reservation absent".into());
@@ -86,8 +86,8 @@ fn foreign_inherited_record_cannot_authorize_a_matching_generation_in_another_in
         let other = Directory::open(second.path(), false)?;
         accept_fixture(&directory, context)?;
         accept_fixture(&other, context)?;
-        let store = Arc::new(SelectionStore::open(&directory.path, context)?);
-        let foreign = Arc::new(SelectionStore::open(&other.path, context)?);
+        let store = Arc::new(SelectionStore::open(directory.path(), context)?);
+        let foreign = Arc::new(SelectionStore::open(other.path(), context)?);
         let before = foreign.load(context)?;
         let ReservedLaunch::Application(reserved) = store.reserve_launch(context)? else {
             return Err("Reservation absent".into());
@@ -100,7 +100,7 @@ fn foreign_inherited_record_cannot_authorize_a_matching_generation_in_another_in
         assert_eq!(foreign.load(context)?, before);
         let _released = std::fs::OpenOptions::new()
             .write(true)
-            .open(directory.path.join(".selection-state/.substitute-selection.json"))?;
+            .open(directory.path().join(".selection-state/.substitute-selection.json"))?;
         assert!(matches!(run.select_launch(None, context)?, InstallationLaunch::Application(_)));
         Ok(())
     })

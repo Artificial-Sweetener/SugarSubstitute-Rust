@@ -103,7 +103,7 @@ fn accepted_running_image_pins_bytes_without_application_or_preparation_exclusio
         let selection = Arc::new(storage::SelectionStore::open(root.path(), context)?);
         let application = selection.load(context)?;
         let _run = storage::InstallationRun::acquire(Arc::clone(&selection), context)?;
-        let _setup = storage::transaction::admission::Admission::open(root.path(), false)?;
+        let _setup = storage::transaction::admission::Admission::open(root.path(), false, context)?;
         trust.acquire_preparation(context)?;
         let _engine_preparation = trust.claim_updater_preparation(context)?;
         let image = trust.retain_running_updater(&executable, context)?;
@@ -180,7 +180,7 @@ fn running_engine_cannot_reinitialize_missing_established_state() -> TestResult 
                 prepare(root.path(), workspace.path(), release()?, context)?;
             accept_prepared(prepared, context)?;
             let trust = TrustStore::open(root.path(), [92; 32], context)?;
-            let path = trust.root.path.join(missing);
+            let path = trust.root.path().join(missing);
             std::fs::remove_file(&path)?;
             assert!(trust.retain_running_updater(&executable, context).is_err());
             assert!(!path.exists());
@@ -219,10 +219,10 @@ fn expired_running_image_verification_preserves_accepted_selection() -> TestResu
         let (prepared, executable) = prepare(root.path(), workspace.path(), release()?, context)?;
         accept_prepared(prepared, context)?;
         let trust = TrustStore::open(root.path(), [92; 32], context)?;
-        let before = std::fs::read(trust.root.path.join(SELECTION))?;
+        let before = std::fs::read(trust.root.path().join(SELECTION))?;
         clock.expire();
         assert!(trust.retain_running_updater(&executable, context).is_err());
-        assert_eq!(std::fs::read(trust.root.path.join(SELECTION))?, before);
+        assert_eq!(std::fs::read(trust.root.path().join(SELECTION))?, before);
         Ok(())
     })
 }

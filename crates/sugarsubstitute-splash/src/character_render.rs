@@ -6,7 +6,8 @@
 use super::{CharacterError, CharacterLibrary, POSE_SIZE, decode::PoseDecoder, sampling};
 use crate::animation::AnimationFrame;
 use crate::projection::{Bounds, Point, projected_quad};
-use tiny_skia::{FilterQuality, Pixmap, PixmapPaint, PixmapRef, Transform};
+use sugarsubstitute_ui::bitmap::{Bitmap, BitmapView};
+use tiny_skia::{FilterQuality, PixmapPaint, Transform};
 
 /// Own cursor state while transiently borrowing the renderer cache for each step.
 pub(crate) struct CharacterRender {
@@ -94,7 +95,7 @@ impl CharacterRender {
     pub(crate) fn step(
         &mut self,
         library: &mut CharacterLibrary,
-        target: &mut Pixmap,
+        target: &mut Bitmap,
     ) -> Result<bool, CharacterError> {
         let index = self.frame.pose;
         let asset = *library.assets.get(index).ok_or(CharacterError::PoseIndex { index })?;
@@ -120,13 +121,13 @@ impl CharacterRender {
             } else {
                 let end = (self.image_row + 8).min(source.height());
                 let stride = source.width() as usize * 4;
-                let strip = PixmapRef::from_bytes(
+                let strip = BitmapView::from_bytes(
                     &source.data()[self.image_row as usize * stride..end as usize * stride],
                     source.width(),
                     end - self.image_row,
                 )
                 .ok_or(CharacterError::InvalidBounds)?;
-                target.draw_pixmap(
+                target.draw_bitmap(
                     0,
                     self.image_row as i32,
                     strip,

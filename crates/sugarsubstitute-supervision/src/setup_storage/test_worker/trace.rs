@@ -24,11 +24,6 @@ struct State {
 #[derive(Clone, Default)]
 pub(in crate::setup_storage) struct StorageTrace(Arc<Mutex<State>>);
 impl StorageTrace {
-    /// Count actual completed native-boundary spans without asserting elapsed wall time.
-    pub(in crate::setup_storage) fn completed(&self, name: &'static str) -> u64 {
-        crate::registry::lock(&self.0).completed.get(name).map_or(0, |entry| entry.0)
-    }
-
     /// Report live calls and aggregate elapsed time; neither affects operation clocks or admission.
     pub(super) fn snapshot(&self) -> String {
         let state = crate::registry::lock(&self.0);

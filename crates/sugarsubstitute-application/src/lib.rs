@@ -7,6 +7,7 @@ pub mod instance_conflict;
 pub mod presentation;
 pub mod readiness;
 pub mod recovery_supervisor;
+pub mod setup_flow;
 pub mod startup;
 pub mod supervision;
 pub mod transcript;

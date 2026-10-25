@@ -45,13 +45,13 @@ pub(super) fn receive(
     let snapshot = store.protected(context, |protection| {
         protection.verify_exclusive_rendezvous(
             &inherited.run,
-            &store.root.path.join(LOCK),
+            &store.root.path().join(LOCK),
             context,
         )?;
         protection.verify_file(&inherited.snapshot)?;
         let _writer = super::super::super::writer(&store.root, protection, context)?;
         let (record, file) = store.read_pinned(protection)?.ok_or(SelectionFailure::Missing)?;
-        if !snapshot::matches(&inherited.snapshot, &file, &record)? {
+        if !snapshot::matches(&inherited.snapshot, &file, &record, context)? {
             return Err(SelectionFailure::Changed);
         }
         Ok(record)

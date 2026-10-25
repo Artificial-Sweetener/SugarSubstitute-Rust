@@ -78,7 +78,11 @@ fn disconnected_download_reopens_resumes_yields_and_verifies_the_real_archive() 
         let workspace = tempfile::tempdir()?;
         let bundle = crate::setup_storage::VerifiedBundle::from_download(
             *verified,
-            workspace.path(),
+            &crate::setup_storage::cache::RuntimeCache::open(
+                workspace.path(),
+                crate::setup_storage::cache::CachePolicy::default(),
+                context,
+            )?,
             context,
         )?;
         assert_eq!(bundle.release(), "local-package");

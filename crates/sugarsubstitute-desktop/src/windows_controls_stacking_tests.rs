@@ -19,11 +19,11 @@ impl Drop for Fixture {
 impl Fixture {
     /// Retain a created hidden parent or native child before any later assertion can fail.
     fn create(&mut self, parent: Option<HWND>) -> Result<HWND, DesktopError> {
-        // SAFETY: The built-in STATIC class requires no callback lifetime. All windows stay hidden.
+        // SAFETY: Built-in STATIC/BUTTON classes require no callback lifetime. Parents stay hidden.
         let hwnd = unsafe {
             CreateWindowExW(
                 WINDOW_EX_STYLE::default(),
-                w!("STATIC"),
+                if parent.is_some() { w!("BUTTON") } else { w!("STATIC") },
                 w!(""),
                 if parent.is_some() { WS_CHILD } else { WINDOW_STYLE::default() },
                 0,
@@ -66,5 +66,47 @@ fn original_native_caption_stays_above_a_later_browser_container_without_geometr
     // SAFETY: Read the exact child client bounds without mapping or activating it.
     unsafe { GetClientRect(caption, &raw mut client) }?;
     assert_eq!((client.right, client.bottom), (138, 34));
+    Ok(())
+}
+
+/// Exercise the actual shared Win32 effects against hidden, retained native BUTTON peers.
+#[test]
+fn shared_native_availability_keeps_geometry_stacking_and_hidden_parent_intact()
+-> Result<(), Box<dyn std::error::Error>> {
+    use sugarsubstitute_ui::windows::availability::{set_enabled, set_visible};
+    use windows::Win32::UI::{
+        Input::KeyboardAndMouse::{GetFocus, IsWindowEnabled},
+        WindowsAndMessaging::{GWL_STYLE, GetWindowLongPtrW, IsWindowVisible},
+    };
+    let mut fixture = Fixture(Vec::new());
+    let parent = fixture.create(None)?;
+    let child = fixture.create(Some(parent))?;
+    let sibling = fixture.create(Some(parent))?;
+    raise(sibling)?;
+    let mut original = RECT::default();
+    // SAFETY: The fixture retains these hidden HWNDs and writable output on this test thread.
+    unsafe { GetWindowRect(child, &raw mut original) }?;
+    // SAFETY: Passive query of this test thread's focus; no input/focus is synthesized.
+    let focus = unsafe { GetFocus() };
+    for (visible, enabled) in [(true, false), (true, true), (false, false), (true, false)] {
+        set_enabled(child, enabled)?;
+        set_visible(child, visible)?;
+        let mut actual = RECT::default();
+        // SAFETY: All observations refer to the same retained fixture windows and local outputs.
+        unsafe {
+            assert_eq!(IsWindowEnabled(child).as_bool(), enabled);
+            assert_eq!(GetWindowLongPtrW(child, GWL_STYLE) as u32 & WS_VISIBLE.0 != 0, visible);
+            assert!(!IsWindowVisible(parent).as_bool());
+            assert!(!IsWindowVisible(child).as_bool());
+            assert_eq!(GetFocus(), focus);
+            assert_eq!(GetTopWindow(Some(parent))?, sibling);
+            GetWindowRect(child, &raw mut actual)?;
+        }
+        assert_eq!(actual, original);
+    }
+    assert!(set_visible(parent, true).is_err());
+    assert!(set_enabled(parent, false).is_err());
+    assert!(set_enabled(HWND::default(), true).is_err());
+    assert!(set_visible(HWND::default(), true).is_err());
     Ok(())
 }

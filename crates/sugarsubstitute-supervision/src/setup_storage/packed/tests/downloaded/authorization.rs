@@ -19,7 +19,7 @@ struct Case<'a> {
 impl Case<'_> {
     fn preserved(&self) -> TestResult {
         assert_eq!(
-            entrypoint::selected(self.directory)?.ok_or("Selection lost")?.path,
+            entrypoint::selected(self.directory, self.context)?.ok_or("Selection lost")?.path(),
             self.original
         );
         assert_eq!(
@@ -75,22 +75,22 @@ fn run_source(
         let original = if accepted {
             clock.checkpoint("accepted_fixture");
             launch::accept_fixture(&directory, context)?;
-            directory.path.join("releases/installed")
+            directory.path().join("releases/installed")
         } else {
             clock.checkpoint("unselected_fixture");
             fixture::installed(&directory, context)?
         };
         let session =
-            crate::setup_storage::InstallationSession::maintain(&directory.path, context)?;
+            crate::setup_storage::InstallationSession::maintain(directory.path(), context)?;
         let (manifest, compressed) = distribution;
         clock.checkpoint("sign_fixture_metadata");
         let archive = test_package::seal(&manifest, &compressed);
         let signed = SignedPackage::new(&archive, sequence)?;
         clock.checkpoint("open_or_initialize_trust");
         let trust = if accepted {
-            TrustStore::open(&directory.path, [92; 32], context)?
+            TrustStore::open(directory.path(), [92; 32], context)?
         } else {
-            signed.initialize(&directory.path, context)?
+            signed.initialize(directory.path(), context)?
         };
         clock.checkpoint("authenticated_offer");
         let target = trust
@@ -98,9 +98,17 @@ fn run_source(
             .into_package()?;
         clock.checkpoint("package_delivery");
         let download =
-            delivery.receive(workspace.path(), &archive, &directory.path, target, context)?;
+            delivery.receive(workspace.path(), &archive, directory.path(), target, context)?;
         clock.checkpoint("extract_and_verify_bundle");
-        let bundle = Arc::new(VerifiedBundle::from_download(download, workspace.path(), context)?);
+        let bundle = Arc::new(VerifiedBundle::from_download(
+            download,
+            &crate::setup_storage::cache::RuntimeCache::open(
+                workspace.path(),
+                crate::setup_storage::cache::CachePolicy::default(),
+                context,
+            )?,
+            context,
+        )?);
         clock.checkpoint("reserve_maintenance_generation");
         let prepared = session.prepare(bundle, context)?;
         clock.checkpoint("stage_application_payload");
@@ -138,7 +146,7 @@ fn withdrawn_cached_package_cannot_publish_and_new_metadata_floors_survive_rejec
                 .is_err()
         );
         case.preserved()?;
-        let reopened = TrustStore::open(&case.directory.path, [92; 32], case.context)?;
+        let reopened = TrustStore::open(case.directory.path(), [92; 32], case.context)?;
         assert!(reopened.refresh(case.signed.metadata.metadata(), NOW, case.context).is_err());
         assert!(
             case.prepared
@@ -173,7 +181,7 @@ fn expiry_at_final_publication_preserves_old_shell_and_completed_candidate_files
         );
         assert_eq!(checks, 3);
         case.preserved()?;
-        let candidates: Vec<PathBuf> = std::fs::read_dir(case.directory.path.join("releases"))?
+        let candidates: Vec<PathBuf> = std::fs::read_dir(case.directory.path().join("releases"))?
             .map(|entry| entry.map(|entry| entry.path()))
             .collect::<io::Result<_>>()?;
         let candidate = candidates
@@ -213,7 +221,7 @@ fn foreign_installation_with_same_logical_id_and_keys_cannot_authorize_publicati
         let other = tempfile::tempdir()?;
         let directory = Directory::open(other.path(), false)?;
         fixture::installed(&directory, case.context)?;
-        let foreign = case.signed.initialize(&directory.path, case.context)?;
+        let foreign = case.signed.initialize(directory.path(), case.context)?;
         assert!(
             case.prepared
                 .prepare_update(
@@ -232,7 +240,7 @@ fn foreign_installation_with_same_logical_id_and_keys_cannot_authorize_publicati
 fn publication_requires_durable_checkpoint_and_cannot_bypass_download_authority() -> TestResult {
     run(1, |case| {
         assert!(case.prepared.activate(case.runtime, case.context).is_err());
-        let directory = Directory::open(&case.directory.path.join(".update-trust"), false)?;
+        let directory = Directory::open(&case.directory.path().join(".update-trust"), false)?;
         let checkpoint = directory.read("checkpoint")?;
         assert!(
             case.prepared
@@ -307,7 +315,7 @@ fn updater_payload_and_fabricated_engine_capabilities_cannot_reach_application_p
 fn trust_writer_remains_held_through_final_check_and_candidate_preparation() -> TestResult {
     run(1, |case| {
         let rotated = root(&key(94)?, 2, Some(&key(92)?))?;
-        let directory = Directory::open(&case.directory.path.join(".update-trust"), false)?;
+        let directory = Directory::open(&case.directory.path().join(".update-trust"), false)?;
         let writer = directory.read("writer")?;
         let mut checks = 0;
         let installed = case.prepared.prepare_update(
@@ -323,10 +331,11 @@ fn trust_writer_remains_held_through_final_check_and_candidate_preparation() -> 
         )?;
         assert_eq!(checks, 5);
         assert_eq!(
-            entrypoint::selected(case.directory)?.ok_or("Selection absent")?.path,
+            entrypoint::selected(case.directory, case.context)?.ok_or("Selection absent")?.path(),
             case.original
         );
-        let store = crate::setup_storage::SelectionStore::open(&case.directory.path, case.context)?;
+        let store =
+            crate::setup_storage::SelectionStore::open(case.directory.path(), case.context)?;
         let state = store.load(case.context)?.ok_or("Candidate selection absent")?;
         assert!(matches!(state.candidate(),
             Some(sugarsubstitute_contracts::installation::Candidate::Prepared { generation })

@@ -2,8 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Carry a bounded immutable trial snapshot without holding the mutable selection file open.
 use super::*;
-use crate::setup_storage::{
-    disk_inheritance::duplicate_readonly_inheritable, files, protection::Protection, staging,
+use crate::{
+    durable_storage::{files, protection::Protection, staging},
+    setup_storage::disk_inheritance::duplicate_readonly_inheritable,
 };
 use serde::{Deserialize, Serialize};
 use std::{io::Write, os::windows::fs::FileExt};
@@ -40,7 +41,7 @@ pub(super) fn create(
     let path = staging::unique_path(parent, ".trial-transfer")?;
     let mut file = protection.transient_file(&path, context)?;
     file.write_all(&bytes)?;
-    file.sync_all()?;
+    files::sync(&file, context)?;
     let readonly = duplicate_readonly_inheritable(&file)?;
     check(context)?;
     Ok(readonly)
@@ -51,14 +52,16 @@ pub(super) fn matches(
     file: &File,
     current: &File,
     record: &InstallationRecord,
+    context: &JobContext,
 ) -> io::Result<bool> {
-    let length = file.metadata()?.len();
+    let length = files::length(file, context)?;
     if length == 0 || length > MAX_BYTES as u64 {
         return Err(crate::setup_storage::invalid("Trial snapshot size is invalid"));
     }
     let mut bytes = vec![0; length as usize];
     let mut offset = 0;
     while offset < bytes.len() {
+        check(context)?;
         let count = file.seek_read(&mut bytes[offset..], offset as u64)?;
         if count == 0 {
             return Err(io::Error::new(
@@ -67,6 +70,7 @@ pub(super) fn matches(
             ));
         }
         offset += count;
+        check(context)?;
     }
     let snapshot: Snapshot = serde_json::from_slice(&bytes).map_err(io::Error::other)?;
     if snapshot.schema_version != 1 {

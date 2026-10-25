@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Verify installation copies completely and admit runtime files independently of diagnostics.
-use super::super::{check, files::Directory, invalid};
+//! Rehash and pin staged application payloads against their retained authenticated manifest.
+use super::super::check;
+use super::super::invalid;
 use super::payload::{Input, hash};
+use crate::durable_storage::files::{self, Directory};
 use std::{io, path::Path};
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
 use sugarsubstitute_update::package::Manifest;
@@ -21,7 +23,7 @@ impl VerifiedRuntime {
     pub(in crate::setup_storage) fn launch_pins(&self) -> impl Iterator<Item = &std::fs::File> {
         self._inputs
             .iter()
-            .flat_map(|input| std::iter::once(&input.file).chain(&input._parent._pins))
+            .flat_map(|input| std::iter::once(&input.file).chain(input._parent.native_pins()))
     }
 
     /// Admit runtime files from an already prepared, authenticated generation.
@@ -96,7 +98,7 @@ impl VerifiedRuntime {
                     .and_then(|value| value.to_str())
                     .ok_or_else(|| invalid("Prepared payload leaf absent"))?,
             )?;
-            if file.metadata()?.len() != entry.bytes()
+            if files::length(&file, context)? != entry.bytes()
                 || hash(&mut file, context)? != entry.digest()
             {
                 return Err(invalid("Prepared application payload verification failed"));
@@ -117,7 +119,7 @@ impl VerifiedRuntime {
     /// Installed engines require protected execution inputs as well as their retained manifest.
     pub(super) fn require_protected(
         &self,
-        protection: &super::super::protection::Protection,
+        protection: &crate::durable_storage::protection::Protection,
     ) -> io::Result<()> {
         for input in &self._inputs {
             protection.verify_file(&input.file)?;

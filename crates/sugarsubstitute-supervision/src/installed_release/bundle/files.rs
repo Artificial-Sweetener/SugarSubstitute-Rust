@@ -3,7 +3,7 @@
 //! Install each selected physical cell before its existing native producer runs.
 use super::super::{image, manifest::Pair, names::CapturePathRole};
 use super::*;
-use crate::protected_storage::{
+use crate::durable_storage::protected::{
     account,
     native_file::{FileGrant, NativeFileAdmission},
     native_name::NativeName,

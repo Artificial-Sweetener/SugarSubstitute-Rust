@@ -262,14 +262,16 @@ fn publish(
         state.custody_record.ok_or_else(|| ClaimError::invalid("profile_custody_record"))?;
     let file = state.file.as_ref().ok_or_else(|| ClaimError::invalid("profile_custody_writer"))?;
     state.publication_attempted = true;
-    crate::protected_storage::record_file::publish(
+    crate::durable_storage::protected::record_file::publish(
         file,
         &record.encode(),
-        crate::protected_storage::record_file::PublicationAuthority::Ordinary,
+        crate::durable_storage::protected::record_file::PublicationAuthority::Ordinary,
         context,
         |old| match old {
-            crate::protected_storage::record_file::RecordRead::Missing if file.created => Ok(()),
-            crate::protected_storage::record_file::RecordRead::Present(bytes)
+            crate::durable_storage::protected::record_file::RecordRead::Missing if file.created => {
+                Ok(())
+            }
+            crate::durable_storage::protected::record_file::RecordRead::Present(bytes)
                 if state.predecessor.as_ref() == Some(bytes) =>
             {
                 Ok(())

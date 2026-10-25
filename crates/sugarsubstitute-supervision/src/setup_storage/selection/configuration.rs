@@ -19,24 +19,30 @@ impl SelectionStore {
                 return Ok(None);
             }
             if let Some(Candidate::Prepared { generation }) = snapshot.candidate() {
-                let path = self._installation.path.join("releases").join(generation.id.as_str());
+                let path = self._installation.path().join("releases").join(generation.id.as_str());
                 protection.directory(&path, Mode::Existing, context)?;
                 let directory = Directory::open(&path, false)?;
                 if let Some(authorization) = completion::read(&directory, protection)? {
                     authorization.require(&self._installation, &directory, &snapshot)?;
-                    let present =
-                        stable::validate_link(&self._installation, &self.root, protection)?;
+                    let present = stable::validate_link(
+                        &self._installation,
+                        &self.root,
+                        protection,
+                        context,
+                    )?;
                     let existing = ExistingInstallation::from_prepared(
                         &self._installation,
                         directory,
                         generation,
                         present,
+                        context,
                     )?;
                     check(context)?;
                     return Ok(Some(existing));
                 }
             }
-            let Some(present) = stable::owned_entry(&self._installation, &self.root, protection)?
+            let Some(present) =
+                stable::owned_entry(&self._installation, &self.root, protection, context)?
             else {
                 return Ok(None);
             };

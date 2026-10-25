@@ -256,7 +256,7 @@ impl Handle {
     /// Actual closure is adopted before any caller's post-return control observation.
     pub(crate) fn close_in_phase(
         &mut self,
-        phase: &mut crate::protected_storage::native_phase::NativePhase<'_>,
+        phase: &mut crate::durable_storage::protected::native_phase::NativePhase<'_>,
     ) -> Result<(), ClaimError> {
         self.close_in_phase_using(phase, |raw| {
             // SAFETY: The same uniquely owned physical output remains armed.
@@ -267,7 +267,7 @@ impl Handle {
     /// Uncertain returned closure retains this exact physical cell and its counted credit.
     pub(crate) fn close_in_phase_using(
         &mut self,
-        phase: &mut crate::protected_storage::native_phase::NativePhase<'_>,
+        phase: &mut crate::durable_storage::protected::native_phase::NativePhase<'_>,
         close: impl FnOnce(HANDLE) -> windows::core::Result<()>,
     ) -> Result<(), ClaimError> {
         phase.check_budget(&self.budget)?;
@@ -284,7 +284,7 @@ impl Handle {
     pub(crate) fn close_diagnostic(
         &mut self,
         retirement: &mut crate::diagnostic_storage::DiagnosticNativeRetirement<'_>,
-        causes: &mut crate::protected_storage::native_file::NativeCauseDestinations,
+        causes: &mut crate::durable_storage::protected::native_file::NativeCauseDestinations,
     ) -> Result<(), ClaimError> {
         let Budget::Diagnostic(original) = &self.budget else {
             return Err(self.budget.rejection("diagnostic_retirement_origin"));
@@ -311,7 +311,7 @@ impl Handle {
     pub(crate) fn close_selected(
         &mut self,
         proof: &crate::installed_release::SelectedRetirement<'_>,
-        causes: &mut crate::protected_storage::native_file::NativeCauseDestinations,
+        causes: &mut crate::durable_storage::protected::native_file::NativeCauseDestinations,
     ) -> Result<(), ClaimError> {
         let Budget::SelectedRelease(original) = &self.budget else {
             return Err(self.budget.rejection("capture_close_origin"));

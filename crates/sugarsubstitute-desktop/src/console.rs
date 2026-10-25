@@ -45,12 +45,17 @@ pub struct ConsoleView<'a> {
     pub text: Option<&'a dyn ConsoleText>,
 }
 
-#[cfg(target_os = "windows")]
 impl ConsoleView<'_> {
+    /// Reserved peer identity for the shared transcript within its owning native window.
+    /// Surfaces must keep their other control identities distinct even while output is hidden.
+    pub const CONTROL_ID: u16 = 4;
+
     /// Use the same peer geometry for native layout and parent-frame exclusion.
+    #[cfg(target_os = "windows")]
     pub(crate) fn native_control(&self) -> crate::AccessibleControl {
         crate::AccessibleControl {
-            id: 4,
+            enabled: true,
+            id: Self::CONTROL_ID,
             label: self.label,
             bounds: self.bounds,
             close: false,

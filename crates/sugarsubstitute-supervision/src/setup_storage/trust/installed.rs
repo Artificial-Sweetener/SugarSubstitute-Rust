@@ -24,7 +24,7 @@ impl UpdateAuthorization<'_> {
     ) -> io::Result<()> {
         check(context)?;
         let expected =
-            self.trust._installation_root.path.join("releases").join(generation.id.as_str());
+            self.trust._installation_root.path().join("releases").join(generation.id.as_str());
         let expected = Directory::open(&expected, false)?;
         if directory.identity()? != expected.identity()? {
             return Err(invalid("Update receipt generation directory differs"));
@@ -49,7 +49,7 @@ impl UpdateAuthorization<'_> {
             &bytes,
         )?;
         protection::with(context, |protection| {
-            files::write_immutable(&directory.path.join(RECORD), &bytes, |path| {
+            files::write_immutable(&directory.path().join(RECORD), &bytes, |path| {
                 protection.file(path, context)
             })?;
             protection.verify_file(&directory.read(RECORD)?)
@@ -74,7 +74,7 @@ impl TrustStore {
         context: &JobContext,
     ) -> Result<Request, TrustFailure> {
         let mut request = UpdateAuthorization::local_request(channel)?;
-        let selection = Self::selection(&self._installation_root.path, context)?;
+        let selection = Self::selection(self._installation_root.path(), context)?;
         if selection.installation() != &self.installation {
             return Err(invalid("Update request installation identity changed").into());
         }

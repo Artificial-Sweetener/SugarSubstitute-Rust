@@ -17,10 +17,14 @@ impl BundleSource<'_> {
     pub(in crate::setup_storage) fn bind(
         self,
         mut download: super::super::VerifiedDownload,
+        trust: &super::super::TrustStore,
         context: &JobContext,
-    ) -> io::Result<VerifiedBundle> {
+    ) -> Result<VerifiedBundle, super::super::TrustFailure> {
         match self {
-            Self::Extract(workspace) => VerifiedBundle::from_download(download, workspace, context),
+            Self::Extract(workspace) => {
+                let cache = trust.workspace_cache(workspace, context)?;
+                Ok(VerifiedBundle::from_download(download, &cache, context)?)
+            }
             Self::Retained(bundle) => {
                 super::super::packed::require_manifest(
                     &mut download,

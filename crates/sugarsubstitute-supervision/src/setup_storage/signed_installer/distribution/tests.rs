@@ -2,11 +2,14 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Embedded distribution parsing reaches the real signed installer verifier and native journal.
 use super::*;
-use crate::setup_storage::{
-    existing::fixture,
-    files::Directory,
-    test_package::{self, repository::SignedPackage},
-    test_worker::{self as worker, TestResult},
+use crate::{
+    durable_storage::files::Directory,
+    setup_storage::{
+        existing::fixture,
+        test_package::{self, repository::SignedPackage},
+        test_worker as worker,
+        test_worker::TestResult,
+    },
 };
 use sha2::{Digest, Sha256};
 use sugarsubstitute_update::fixture::{EXPIRES, NOW};
@@ -17,21 +20,28 @@ mod reuse;
 fn retained_preview_and_signed_import_complete_on_the_same_execution_ledger() -> TestResult {
     use crate::setup_storage::test_worker::pipeline::Pipeline;
     let mut pipeline = Pipeline::new()?;
-    let (fixture, preview) = pipeline.run(RESERVATION_BYTES, |context| {
-        let fixture = Fixture::new(&context)?;
-        let distribution =
-            InstallerDistribution::decode(&serde_json::to_vec(&fixture.configuration)?, &context)?;
-        let digest = distribution.manifest_digest().to_owned();
-        drop(distribution);
-        let root = crate::setup_storage::materialize(
-            &fixture.executable,
-            fixture.workspace.path(),
-            &digest,
-            &context,
-        )?;
-        let preview = Arc::new(VerifiedBundle::open(&root, &digest, &context)?);
-        Ok((fixture, preview))
-    })?;
+    let (fixture, preview) =
+        pipeline.run(crate::setup_storage::MATERIALIZATION_RESERVATION_BYTES, |context| {
+            let fixture = Fixture::new(&context)?;
+            let distribution = InstallerDistribution::decode(
+                &serde_json::to_vec(&fixture.configuration)?,
+                &context,
+            )?;
+            let digest = distribution.manifest_digest().to_owned();
+            drop(distribution);
+            let root = crate::setup_storage::materialize(
+                &fixture.executable,
+                &crate::setup_storage::cache::RuntimeCache::open(
+                    fixture.workspace.path(),
+                    crate::setup_storage::cache::CachePolicy::default(),
+                    &context,
+                )?,
+                &digest,
+                &context,
+            )?;
+            let preview = Arc::new(root);
+            Ok((fixture, preview))
+        })?;
     let retained = Arc::clone(&preview);
     let (fixture, imported) = pipeline.run(SIGNED_INSTALLER_RESERVATION_BYTES, move |context| {
         let distribution =
@@ -44,7 +54,14 @@ fn retained_preview_and_signed_import_complete_on_the_same_execution_ledger() ->
             &context,
         )?;
         assert_eq!(
-            std::fs::read_dir(fixture.workspace.path().join("payloads-v1"))?.count(),
+            std::fs::read_dir(
+                fixture
+                    .workspace
+                    .path()
+                    .join(crate::setup_storage::cache::DIRECTORY)
+                    .join(crate::setup_storage::cache::Namespace::PackedPayloads.directory())
+            )?
+            .count(),
             1,
             "Signed import must reuse the retained verified preview"
         );
@@ -58,7 +75,7 @@ fn retained_preview_and_signed_import_complete_on_the_same_execution_ledger() ->
         let runtime = prepared.maintenance_runtime().ok_or("Saved runtime absent")?.clone();
         Ok(prepared.complete(&runtime, || NOW, &context)?)
     })?;
-    assert!(preview.worker_paths().0.is_file());
+    assert!(preview.worker()?.executable().to_owned().is_file());
     assert!(candidate.directory().join("sugarsubstitute.exe").is_file());
     assert_eq!(
         std::fs::read(candidate.directory().join("startup.local.toml"))?,

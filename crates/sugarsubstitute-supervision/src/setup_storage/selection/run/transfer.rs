@@ -5,9 +5,11 @@ mod custody;
 mod snapshot;
 mod witness;
 use super::*;
-use crate::setup_storage::{
-    AdmittedCandidate, application::VerifiedApplication, check, disk_inheritance::capture_disk,
-    files::Directory,
+use crate::{
+    durable_storage::files::Directory,
+    setup_storage::{
+        AdmittedCandidate, application::VerifiedApplication, check, disk_inheritance::capture_disk,
+    },
 };
 use std::{
     io,
@@ -97,7 +99,7 @@ impl TrialApplication {
 
     /// Verified generation directory; all payload files remain pinned by this owner.
     pub fn directory(&self) -> &Path {
-        &self.application.directory.path
+        self.application.directory.path()
     }
 
     /// Accept after the caller observes authenticated native readiness for this exact attempt.

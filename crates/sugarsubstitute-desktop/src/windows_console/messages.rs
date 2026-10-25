@@ -88,7 +88,7 @@ impl Messages {
     }
     /// Follow the document tail even when the read-only console has no active caret or focus.
     pub(super) fn scroll_bottom(&self) -> Result<(), DesktopError> {
-        super::engine::find(self.0)?.message(
+        crate::windows_text::find(self.0)?.message(
             WM_VSCROLL,
             WPARAM(SB_BOTTOM.0 as usize),
             LPARAM(0),

@@ -15,6 +15,8 @@ pub mod installed_release;
 #[cfg(windows)]
 pub mod setup_storage;
 #[cfg(windows)]
+pub use setup_storage::cache;
+#[cfg(windows)]
 pub mod update_http;
 #[cfg(windows)]
 pub mod update_preparation;
@@ -47,6 +49,12 @@ pub mod committed_reader;
 pub mod coordinator_entry;
 #[cfg(windows)]
 pub mod diagnostic_storage;
+#[cfg(any(windows, unix))]
+mod durable_storage;
+#[cfg(any(windows, unix))]
+pub use durable_storage::artifacts::{
+    ArtifactBytes, ArtifactError, ArtifactPublication, read_artifact, write_artifact,
+};
 #[cfg(windows)]
 mod environment;
 #[cfg(windows)]
@@ -64,10 +72,17 @@ pub mod profile_conflict;
 #[cfg(windows)]
 pub mod profiles;
 #[cfg(windows)]
-#[allow(unsafe_code)]
-mod protected_storage;
+pub use durable_storage::input::{PreparationFileError, read_preparation_file};
 #[cfg(windows)]
-pub use protected_storage::{ProtectedStorageGeneration, ProtectedStorageRoot};
+pub use durable_storage::protected::{ProtectedStorageGeneration, ProtectedStorageRoot};
+#[cfg(windows)]
+pub use durable_storage::receiving::{
+    ReportFile, ReportFileCode, ReportFileCustody, ReportFileError, ReportFileSelection,
+};
+#[cfg(windows)]
+pub use durable_storage::records::{
+    RECORD_PAGE_ENTRIES, RecordBytes, RecordDirectory, RecordEntry, WORKER_RECORD_BYTES,
+};
 #[cfg(windows)]
 #[allow(unsafe_code)]
 mod native_process;
@@ -133,3 +148,9 @@ pub use registry::{
     InheritedRecoveryJobInput, RecoveryChildCreation, RecoveryChildCreationRejection,
     RecoveryChildInput, RecoveryChildInputRejection, RecoveryChildStatus,
 };
+
+#[cfg(windows)]
+pub use registry_input::ProvisioningEndpoint;
+
+#[cfg(windows)]
+pub use registry::SettledProvisioning;

@@ -4,11 +4,12 @@
 //! Export deterministic production-renderer frames for external visual qualification.
 
 use serde::Deserialize;
-use std::{error::Error, fs, path::Path};
+use std::{error::Error, path::Path};
+use sugarsubstitute_contracts::execution::JobContext;
 use sugarsubstitute_contracts::localization::LOCALES;
-use sugarsubstitute_splash::{
-    AnimationFrame, Appearance, Control, ProgressFrame, SplashRenderer, Theme,
-};
+use sugarsubstitute_splash::{AnimationFrame, Appearance, Control, SplashRenderer, Theme};
+use sugarsubstitute_supervision::{ArtifactPublication, read_artifact, write_artifact};
+use sugarsubstitute_ui::progress::ProgressFrame;
 
 /// Read a parity scenario emitted by the production PySide reference harness.
 #[derive(Deserialize)]
@@ -37,6 +38,44 @@ struct Scenario {
     pressed: Option<String>,
 }
 
+/// Admit the finite scenario inventory during decoding, before allocating another element.
+struct Scenarios(Vec<Scenario>);
+impl<'de> Deserialize<'de> for Scenarios {
+    fn deserialize<D: serde::Deserializer<'de>>(decoder: D) -> Result<Self, D::Error> {
+        struct Visitor;
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = Scenarios;
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("1 through 1024 parity scenarios")
+            }
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                self,
+                mut sequence: A,
+            ) -> Result<Scenarios, A::Error> {
+                let mut scenarios = Vec::new();
+                for _ in 0..1024 {
+                    let Some(scenario) = sequence.next_element()? else {
+                        if scenarios.is_empty() {
+                            return Err(serde::de::Error::custom(
+                                "Parity input requires 1 through 1024 scenarios",
+                            ));
+                        }
+                        return Ok(Scenarios(scenarios));
+                    };
+                    scenarios.push(scenario);
+                }
+                if sequence.next_element::<serde::de::IgnoredAny>()?.is_some() {
+                    return Err(serde::de::Error::custom(
+                        "Parity input requires 1 through 1024 scenarios",
+                    ));
+                }
+                Ok(Scenarios(scenarios))
+            }
+        }
+        decoder.deserialize_seq(Visitor)
+    }
+}
+
 /// Preserve the original forward direction for reference harnesses predating direction cases.
 fn forward_direction() -> i8 {
     1
@@ -53,24 +92,40 @@ fn activity_enabled() -> bool {
 }
 
 /// Reject mistyped reference controls rather than silently painting a different state.
-fn control(value: Option<&str>) -> Result<Option<Control>, Box<dyn Error>> {
+fn control(value: Option<&str>) -> std::io::Result<Option<Control>> {
     match value {
         None => Ok(None),
         Some("console") => Ok(Some(Control::ConsoleToggle)),
         Some("close") => Ok(Some(Control::Close)),
-        Some(_) => Err("Parity scenario control is invalid".into()),
+        Some(_) => Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Parity scenario control is invalid",
+        )),
     }
 }
 
 /// Render explicit fixture scenarios without a window or native compositor.
 pub(crate) fn export(scenarios: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
-    let definitions: Vec<Scenario> = serde_json::from_slice(&fs::read(scenarios)?)?;
-    if definitions.is_empty() || definitions.len() > 1024 {
-        return Err("Parity input requires 1 through 1024 scenarios".into());
-    }
-    fs::create_dir_all(output)?;
+    let scenarios = scenarios.to_owned();
+    let output = output.to_owned();
+    crate::artifact_job::run(crate::artifact_job::Kind::Raster, move |context| {
+        export_admitted(&scenarios, &output, &context)
+            .map_err(crate::artifact_job::WorkError::boxed)
+    })
+}
+
+/// Hold scenario, renderer and encode allocations in the same original artifact reservation.
+fn export_admitted(
+    scenarios: &Path,
+    output: &Path,
+    context: &JobContext,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let source = read_artifact(scenarios, 16 * 1024 * 1024, context)?;
+    let _parsed = context.memory().claim(32 * 1024 * 1024)?;
+    let Scenarios(definitions) = serde_json::from_slice(source.as_slice())?;
+    drop(source);
     let mut locale = canonical_locale();
-    let mut renderer = SplashRenderer::new(&locale)?;
+    let mut renderer = SplashRenderer::new_admitted(&locale, context.memory().clone())?;
     for scenario in definitions {
         if scenario.name.is_empty()
             || !scenario
@@ -95,7 +150,8 @@ pub(crate) fn export(scenarios: &Path, output: &Path) -> Result<(), Box<dyn Erro
         }
         if locale != scenario.locale {
             locale = scenario.locale;
-            renderer = SplashRenderer::new(&locale)?;
+            drop(renderer);
+            renderer = SplashRenderer::new_admitted(&locale, context.memory().clone())?;
         }
         let appearance = Appearance {
             status: sugarsubstitute_splash::StartupStatus::Loading,
@@ -123,6 +179,8 @@ pub(crate) fn export(scenarios: &Path, output: &Path) -> Result<(), Box<dyn Erro
         if !size.is_finite() || !(1.0..=4096.0).contains(&size) {
             return Err("Parity scenario size is invalid".into());
         }
+        let _frame_workspace =
+            context.memory().claim(3 * (size as u64) * (size as u64) * 4 + 8 * 1024 * 1024)?;
         let frame = renderer.render(
             size as u32,
             size as u32,
@@ -131,9 +189,23 @@ pub(crate) fn export(scenarios: &Path, output: &Path) -> Result<(), Box<dyn Erro
             character,
             feedback,
         )?;
-        frame.save_png(output.join(format!("{}.png", scenario.name)))?;
+        write_artifact(
+            &output.join(format!("{}.png", scenario.name)),
+            true,
+            ArtifactPublication::ReplaceSelected,
+            64 * 1024 * 1024,
+            context,
+            |target| frame.write_png(target),
+        )?;
         if scenario.raw {
-            fs::write(output.join(format!("{}.raw", scenario.name)), frame.data())?;
+            write_artifact(
+                &output.join(format!("{}.raw", scenario.name)),
+                true,
+                ArtifactPublication::ReplaceSelected,
+                frame.data().len(),
+                context,
+                |target| target.write_all(frame.data()),
+            )?;
         }
     }
     Ok(())
@@ -142,6 +214,19 @@ pub(crate) fn export(scenarios: &Path, output: &Path) -> Result<(), Box<dyn Erro
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Reject excess inventory while decoding rather than materializing an unbounded vector.
+    #[test]
+    fn scenario_inventory_enforces_the_existing_finite_limit_during_decoding()
+    -> Result<(), Box<dyn Error>> {
+        let scenario = r#"{"name":"pose","theme":"dark","expanded":false,"scale":1.0,"flip":0.0,"fill":0.4,"sweep":0.5}"#;
+        let maximum = format!("[{}]", vec![scenario; 1024].join(","));
+        assert_eq!(serde_json::from_str::<Scenarios>(&maximum)?.0.len(), 1024);
+        let excessive = format!("[{}]", vec![scenario; 1025].join(","));
+        assert!(serde_json::from_str::<Scenarios>(&excessive).is_err());
+        assert!(serde_json::from_str::<Scenarios>("[]").is_err());
+        Ok(())
+    }
 
     /// Preserve existing qualification inputs while admitting explicit localized controls.
     #[test]

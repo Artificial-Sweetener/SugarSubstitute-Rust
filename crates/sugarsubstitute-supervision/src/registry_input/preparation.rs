@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compose the bounded preparation role from verified installed bytes without application custody.
+mod provisioning;
 use super::*;
 use crate::setup_storage::{PreparationImage, TrustFailure, UpdaterProbeTransfer};
+pub use provisioning::ProvisioningEndpoint;
+use provisioning::ProvisioningLaunch;
 use std::{ffi::OsString, io, path::Path};
 use sugarsubstitute_contracts::{configuration::LaunchConfiguration, lifecycle::CoordinatorKey};
 
@@ -16,10 +19,20 @@ pub(crate) struct PreparationLaunch {
 pub(crate) enum PreparationPayload {
     Image { _image: Box<PreparationImage> },
     Probe(Box<UpdaterProbeTransfer>),
+    Provisioning(Box<ProvisioningLaunch>),
 }
 impl PreparationLaunch {
     /// Peak boxed role metadata charged to the same original native family allocation.
     pub(crate) const fn storage_bytes() -> usize {
+        let existing = Self::image_storage_bytes();
+        if size_of::<Self>() + size_of::<ProvisioningLaunch>() > existing {
+            size_of::<Self>() + size_of::<ProvisioningLaunch>()
+        } else {
+            existing
+        }
+    }
+    /// Compare existing source roles before including provisioning resources.
+    const fn image_storage_bytes() -> usize {
         size_of::<Self>()
             + if size_of::<PreparationImage>() > size_of::<UpdaterProbeTransfer>() {
                 size_of::<PreparationImage>()
@@ -27,11 +40,28 @@ impl PreparationLaunch {
                 size_of::<UpdaterProbeTransfer>()
             }
     }
+    /// Transfer provisional command funding to the accepted native creation allocation.
+    pub(crate) fn transfer_input_memory(&mut self) {
+        if let PreparationPayload::Provisioning(value) = &mut self.payload {
+            value.transfer_input_memory();
+        }
+    }
+    /// Retain results whose owners must perform storage finalization after native settlement.
+    pub(crate) fn retains_settled_payload(&self) -> bool {
+        matches!(self.payload, PreparationPayload::Probe(_) | PreparationPayload::Provisioning(_))
+    }
+    /// Borrow the actual provisioning role without granting it to unrelated process launches.
+    pub(crate) fn provisioning(&self) -> Option<&ProvisioningLaunch> {
+        match &self.payload {
+            PreparationPayload::Provisioning(value) => Some(value),
+            _ => None,
+        }
+    }
     /// Borrow probe authority without granting it to ordinary preparation helpers.
     pub(crate) fn probe(&self) -> Option<&UpdaterProbeTransfer> {
         match &self.payload {
             PreparationPayload::Probe(probe) => Some(probe),
-            PreparationPayload::Image { .. } => None,
+            PreparationPayload::Image { .. } | PreparationPayload::Provisioning(_) => None,
         }
     }
 }

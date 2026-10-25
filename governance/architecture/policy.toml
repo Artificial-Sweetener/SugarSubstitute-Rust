@@ -17,20 +17,20 @@ concern = "Runtime-independent application contracts and product localization"
 package = "sugarsubstitute-application"
 root = "crates/sugarsubstitute-application"
 layer = "application"
-concern = "Acknowledged startup, settled retry, readiness, frame publication and supervision policy"
+concern = "Acknowledged startup, settled retry, readiness, frame publication, supervision and typed native installation navigation policy"
 
 [[owners]]
 package = "sugarsubstitute-comfy"
 root = "crates/sugarsubstitute-comfy"
 layer = "adapter"
-concern = "ComfyUI startup configuration and connection boundaries"
+concern = "ComfyUI managed launch and connection boundaries"
 
 [[owners]]
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
-auxiliary_roots = ["installer/worker", "installer/surface"]
+auxiliary_roots = ["installer/worker", "installer/tests"]
 layer = "host"
-concern = "Platform-independent startup and conflict controllers, retained native adapter contracts, platform host composition and application identity"
+concern = "Platform-independent startup and conflict controllers, supported operational diagnostic routing and lifecycle, retained native adapter contracts, platform host composition and application identity"
 
 [[owners]]
 package = "sugarsubstitute-execution"
@@ -41,15 +41,44 @@ concern = "Application execution and task lifetime"
 [[owners]]
 package = "sugarsubstitute-xtask"
 root = "tools/xtask"
-auxiliary_roots = ["installer/release"]
+auxiliary_roots = ["installer/release", "installer/patches", "tools/crashpad", "tools/local_k1", "tools/splash_parity", "tools/native_dxgi"]
+auxiliary_files = [
+    "installer/attach-package.mjs",
+    "installer/attach-package.test.mjs",
+    "installer/build.mjs",
+    "installer/check-upstream.mjs",
+    "installer/package-inventory.mjs",
+    "installer/package-inventory.test.mjs",
+    "installer/package-lock.json",
+    "installer/package.json",
+    "installer/package.mjs",
+    "installer/package.test.mjs",
+    "installer/prepare-runtime.mjs",
+    "installer/qualify-model-root.mjs",
+    "installer/runtime.json",
+    "installer/runtime.mjs",
+    "installer/seal.mjs",
+    "installer/seal.test.mjs",
+    "installer/typecheck.mjs",
+    "installer/upstream-types.mjs",
+    "installer/upstream-types.test.mjs",
+    "installer/worker-graph.mjs",
+    "installer/worker-graph.test.mjs",
+      "tools/test_updater_feed_fixture.py",
+    "tools/test_updater_qualification.py",
+    "tools/updater_feed_fixture.py",
+    "tools/updater_native_support.py",
+    "tools/updater_publication_qualification.py",
+    "tools/updater_qualification.py",
+]
 layer = "tooling"
-concern = "Repository governance and verification"
+concern = "Repository governance, native build/release helpers and qualification tooling"
 
 [[owners]]
 package = "sugarsubstitute-supervision"
 root = "crates/sugarsubstitute-supervision"
 layer = "adapter"
-concern = "Windows process and claim custody, protected native installation/update storage, authenticated update preparation and create-only native preview artifacts"
+concern = "Windows process and claim custody, shared retained durable filesystem mechanics, bounded operational diagnostic history and export, admitted preparation input reads, selected worker records and report receiving files, disposable runtime cache storage, protected native installation/update storage, authenticated update preparation and create-only native preview artifacts"
 
 [[owners]]
 package = "sugarsubstitute-splash"
@@ -66,6 +95,7 @@ concern = "Native window, headless event loop and CPU surface lifetime"
 [[owners]]
 package = "sugarsubstitute-crash"
 root = "crates/sugarsubstitute-crash"
+auxiliary_roots = ["native/crashpad"]
 layer = "adapter"
 concern = "Retained Windows capture, exact physical origin opening, native retirement, bounded symbol/report effects and restart-safe historical capture publication"
 
@@ -74,3 +104,21 @@ package = "sugarsubstitute-update"
 root = "crates/sugarsubstitute-update"
 layer = "adapter"
 concern = "Portable distribution inventory, update metadata authentication, HTTP destination/framing policy and streaming target verification"
+
+[[owners]]
+package = "sugarsubstitute-networking"
+root = "crates/sugarsubstitute-networking"
+layer = "adapter"
+concern = "Bounded native HTTP transport and checked handle custody"
+
+[[owners]]
+package = "sugarsubstitute-configuration"
+root = "crates/sugarsubstitute-configuration"
+layer = "adapter"
+concern = "Desktop startup documents, validated input selection, initial defaults and exact saved configuration preservation"
+
+[[owners]]
+package = "sugarsubstitute-ui"
+root = "crates/sugarsubstitute-ui"
+layer = "adapter"
+concern = "Shared native widget rendering and interaction rules"

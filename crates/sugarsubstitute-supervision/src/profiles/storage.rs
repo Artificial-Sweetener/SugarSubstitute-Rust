@@ -9,8 +9,8 @@ mod tests;
 use super::*;
 use crate::{
     ProtectedStorageRoot,
+    durable_storage::protected::{exclusion::HeldFile, paths, record_file},
     native_claims::files::Budget,
-    protected_storage::{exclusion::HeldFile, paths, record_file},
 };
 use std::{os::windows::ffi::OsStringExt, path::Path};
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim, Moment};
@@ -128,14 +128,14 @@ impl ProfilePort for WindowsProfilePort {
             true,
             file.handle.budget(),
             &mut retained,
-            &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+            &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
                 &(file.handle.budget()),
             )?,
         )?;
         let result = (|| {
             let actual = paths::file_identity(
                 &retained[index],
-                &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
                     &retained[index].budget(),
                 )?,
             )?;
@@ -144,10 +144,10 @@ impl ProfilePort for WindowsProfilePort {
             if actual != expected {
                 return Err(ClaimError::invalid("profile_environment_mismatch"));
             }
-            crate::protected_storage::security::verify(
+            crate::durable_storage::protected::security::verify(
                 &retained[index],
                 file.account_sid.bytes()?,
-                &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
                     &retained[index].budget(),
                 )?,
             )?;

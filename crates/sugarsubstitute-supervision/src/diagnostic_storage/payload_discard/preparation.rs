@@ -58,9 +58,10 @@ impl DiagnosticStorage {
             state.data_mut()?.stages[index].role = Some(stage::StageRole::PayloadCandidate);
             state.data_mut()?.payload = Some(intent_allocation.payload_intent(PayloadIntent {
                 id,
-                subject_digest: crate::protected_storage::record_file::diagnostic_subject_digest(
-                    selection.incident,
-                ),
+                subject_digest:
+                    crate::durable_storage::protected::record_file::diagnostic_subject_digest(
+                        selection.incident,
+                    ),
                 reserved_files: MAX_ATTACHMENTS + 2,
                 selection: Some(selection.clone()),
                 original_read: Some(original.id),

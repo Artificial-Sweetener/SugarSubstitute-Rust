@@ -7,8 +7,10 @@ use super::{
 };
 use crate::{
     ClaimError,
+    durable_storage::protected::{
+        account::ResolvedNamespace, exclusion::HeldFile, record_file::RecordRead,
+    },
     native_claims::lock,
-    protected_storage::{account::ResolvedNamespace, exclusion::HeldFile, record_file::RecordRead},
 };
 use std::sync::{Arc, MutexGuard, atomic::Ordering};
 use sugarsubstitute_contracts::{
@@ -160,7 +162,7 @@ impl ElectionInitializationGuard<'_> {
         let expected = namespace
             .directory
             .join("coordinators")
-            .join(crate::protected_storage::record_file::hex(self.proof.namespace.bytes()))
+            .join(crate::durable_storage::protected::record_file::hex(self.proof.namespace.bytes()))
             .with_extension("record");
         if !file.is_locked()
             || file.record_path.path()? != expected

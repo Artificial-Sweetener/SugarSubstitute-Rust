@@ -54,17 +54,17 @@ fn an_offer_is_returned_only_after_real_durable_publication() -> TestResult {
             &root,
             context,
         )?;
-        let original = std::fs::read(store.root.path.join(RECORD))?;
+        let original = std::fs::read(store.root.path().join(RECORD))?;
         let pin = store.root.read(RECORD)?;
         assert!(matches!(
             store.offer(metadata.metadata(), &request, &descriptor, NOW, context),
             Err(TrustFailure::Publication { verification: None, .. })
         ));
-        assert_eq!(std::fs::read(store.root.path.join(RECORD))?, original);
+        assert_eq!(std::fs::read(store.root.path().join(RECORD))?, original);
         drop(pin);
         let offer = store.offer(metadata.metadata(), &request, &descriptor, NOW, context)?;
         assert_eq!(offer.admission(), Admission::Prepare);
-        assert_ne!(std::fs::read(store.root.path.join(RECORD))?, original);
+        assert_ne!(std::fs::read(store.root.path().join(RECORD))?, original);
         let reopened = TrustStore::open(installation.path(), Sha256::digest(root).into(), context)?;
         assert!(matches!(
             reopened.refresh(
@@ -90,8 +90,8 @@ fn publication_failure_retains_both_causes_and_interrupted_files_are_not_authori
             &root,
             context,
         )?;
-        let original = std::fs::read(store.root.path.join(RECORD))?;
-        let pending = store.root.path.join("pending-interrupted");
+        let original = std::fs::read(store.root.path().join(RECORD))?;
+        let pending = store.root.path().join("pending-interrupted");
         std::fs::write(&pending, b"partial")?;
         let metadata = Set::new(&key, [3; 3], b"current", EXPIRES)?;
         let pin = store.root.read(RECORD)?;
@@ -107,7 +107,7 @@ fn publication_failure_retains_both_causes_and_interrupted_files_are_not_authori
             ),
             Err(TrustFailure::Publication { verification: Some(_), .. })
         ));
-        assert_eq!(std::fs::read(store.root.path.join(RECORD))?, original);
+        assert_eq!(std::fs::read(store.root.path().join(RECORD))?, original);
         drop(pin);
         store.refresh(metadata.metadata(), NOW, context)?;
         assert_eq!(std::fs::read(&pending)?, b"partial");
@@ -127,7 +127,7 @@ fn unprotected_directory_or_record_cannot_supply_trusted_bytes() -> TestResult {
             &root,
             context,
         )?;
-        let path = store.root.path.join(RECORD);
+        let path = store.root.path().join(RECORD);
         let bytes = std::fs::read(&path)?;
         let foreign = installation.path().join("ordinary-record");
         std::fs::write(&foreign, &bytes)?;
@@ -151,7 +151,7 @@ fn expiry_after_verification_commits_security_floors_without_returning_authority
             &root,
             context,
         )?;
-        let path = store.root.path.join(RECORD);
+        let path = store.root.path().join(RECORD);
         let previous = std::fs::read(&path)?;
         let metadata = Set::new(&key, [4; 3], b"current", EXPIRES)?;
         let outcome = store.transition(context, |trust| {

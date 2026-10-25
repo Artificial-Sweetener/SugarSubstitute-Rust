@@ -30,6 +30,9 @@ pub(crate) enum NativeAction {
     /// Repaint a retained splash source after its native focus cue changes.
     #[cfg(target_os = "windows")]
     FocusChanged,
+    /// Navigate an owning page viewport without taking selector or editable-text key semantics.
+    #[cfg(target_os = "windows")]
+    ScrollPage(sugarsubstitute_ui::windows::scroll_port::ScrollKey),
 }
 
 #[cfg(target_os = "windows")]

@@ -2,7 +2,10 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Feed offline distribution bytes through the same retained cache and signed target verifier.
 use super::*;
-use crate::setup_storage::{files::Directory, invalid};
+use crate::{
+    durable_storage::files::{self, Directory},
+    setup_storage::invalid,
+};
 
 /// Source layout is selected locally; untrusted footer bytes never grant target authority.
 enum Layout {
@@ -25,13 +28,13 @@ impl Download {
     /// ownership and I/O failures. Source rejection before cache open preserves existing bytes.
     /// Later interruption preserves the received prefix; digest failure resets only owned cache.
     pub fn import_file(
-        installation: &Path,
+        cache: RuntimeCache,
         target: Target,
         source: &Path,
         utc_seconds: impl FnMut() -> i64,
         context: &JobContext,
     ) -> Result<VerifiedDownload, DownloadFailure> {
-        Self::import_local(installation, target, source, Layout::Bare, utc_seconds, context)
+        Self::import_local(cache, target, source, Layout::Bare, utc_seconds, context)
     }
 
     /// Import the signed bare package embedded in an installer executable.
@@ -47,18 +50,18 @@ impl Download {
     /// Preserves malformed envelope, source, cache, cancellation and verification failures.
     /// Invalid bounds or a length mismatch leave the existing cache untouched.
     pub fn import_installer(
-        installation: &Path,
+        cache: RuntimeCache,
         target: Target,
         source: &Path,
         utc_seconds: impl FnMut() -> i64,
         context: &JobContext,
     ) -> Result<VerifiedDownload, DownloadFailure> {
-        Self::import_local(installation, target, source, Layout::Installer, utc_seconds, context)
+        Self::import_local(cache, target, source, Layout::Installer, utc_seconds, context)
     }
 
     /// Keep source and ancestry custody through the shared cache verification outcome.
     fn import_local(
-        installation: &Path,
+        cache: RuntimeCache,
         target: Target,
         source: &Path,
         layout: Layout,
@@ -66,7 +69,7 @@ impl Download {
         context: &JobContext,
     ) -> Result<VerifiedDownload, DownloadFailure> {
         check(context)?;
-        crate::setup_storage::files::lexical(source)?;
+        crate::durable_storage::files::lexical(source)?;
         let parent = Directory::open(
             source.parent().ok_or_else(|| invalid("Local package parent is absent"))?,
             false,
@@ -77,7 +80,7 @@ impl Download {
             .ok_or_else(|| invalid("Local package filename is invalid"))?;
         let mut source = parent.read(leaf)?;
         let range = match layout {
-            Layout::Bare => 0..source.metadata()?.len(),
+            Layout::Bare => 0..files::length(&source, context)?,
             Layout::Installer => crate::setup_storage::packed::embedded_range(&mut source)?,
         };
         let length = target.length();
@@ -86,11 +89,11 @@ impl Download {
         }
         target.require_valid_at(utc_seconds())?;
         check(context)?;
-        let mut download = Self::open(installation, target, context)?;
+        let mut download = Self::open(cache, target, context)?;
         let offset = download.offset()?;
         source.seek(SeekFrom::Start(range.start + offset))?;
         let mut remaining = (&mut source).take(length - offset);
-        download.receive_interval(offset, length - offset, &mut remaining, context)?;
+        download.custody.payload.receive_exact(offset, length - offset, &mut remaining, context)?;
         download.finish(utc_seconds, context)
     }
 }

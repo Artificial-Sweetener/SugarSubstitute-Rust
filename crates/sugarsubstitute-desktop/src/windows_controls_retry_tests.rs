@@ -92,16 +92,31 @@ impl RetryPort for Port {
 fn initial_fourth_native_peer_has_no_visible_or_enabled_style_and_others_are_unchanged()
 -> TestResult {
     let (identity, _) = current()?;
-    let hidden = initial_style(PaintMode::NativeButtons(identity), 4, false);
+    let hidden = initial_style(
+        PaintMode::NativeButtons(identity),
+        4,
+        sugarsubstitute_ui::availability::Availability { visible: false, enabled: true },
+    );
     assert_eq!(hidden & WS_VISIBLE, WINDOW_STYLE::default());
     assert_eq!(hidden & WS_DISABLED, WS_DISABLED);
     assert_eq!(hidden & WS_CHILD, WS_CHILD);
     for id in 1..=3 {
-        let existing = initial_style(PaintMode::NativeButtons(identity), id, true);
+        let existing = initial_style(
+            PaintMode::NativeButtons(identity),
+            id,
+            sugarsubstitute_ui::availability::Availability { visible: true, enabled: true },
+        );
         assert_eq!(existing & WS_VISIBLE, WS_VISIBLE);
         assert_eq!(existing & WS_DISABLED, WINDOW_STYLE::default());
     }
-    assert_eq!(initial_style(PaintMode::PreparedPixels, 4, true) & WS_VISIBLE, WS_VISIBLE);
+    assert_eq!(
+        initial_style(
+            PaintMode::PreparedPixels,
+            4,
+            sugarsubstitute_ui::availability::Availability { visible: true, enabled: true }
+        ) & WS_VISIBLE,
+        WS_VISIBLE
+    );
     Ok(())
 }
 #[test]
@@ -169,7 +184,8 @@ fn compiled_largest_retry_layout_fits_original_metadata_and_overflow_rejects() {
 }
 
 /// The generic resize boundary cannot construct a Main retry action; only Recovery supplies it.
-impl super::super::state::VisibilityPort for Port {
+impl sugarsubstitute_ui::availability::AvailabilityPort for Port {
+    type Error = DesktopError;
     fn live(&self) -> Result<(), DesktopError> {
         RetryPort::live(self)
     }
@@ -182,6 +198,19 @@ impl super::super::state::VisibilityPort for Port {
     fn visible(&mut self, visible: bool) -> Result<(), DesktopError> {
         RetryPort::visible(self, visible)
     }
+}
+
+#[test]
+fn initially_disabled_visible_control_keeps_its_visible_native_peer() {
+    use sugarsubstitute_ui::availability::Availability;
+    let visible =
+        initial_style(PaintMode::PreparedPixels, 5, Availability { visible: true, enabled: false });
+    assert_eq!(visible & WS_VISIBLE, WS_VISIBLE);
+    assert_eq!(visible & WS_DISABLED, WS_DISABLED);
+    let hidden =
+        initial_style(PaintMode::PreparedPixels, 5, Availability { visible: false, enabled: true });
+    assert_eq!(hidden & WS_VISIBLE, WINDOW_STYLE::default());
+    assert_eq!(hidden & WS_DISABLED, WS_DISABLED);
 }
 
 #[test]
@@ -212,7 +241,11 @@ fn actual_recovery_caption_resize_keeps_ready_action_and_retrying_disabled_peer(
             owner.presentation(labels),
         );
         super::super::state::validate_inventory(&retained, &resized)?;
-        super::super::state::update_visibility(retained[3], resized[3], &mut port)?;
+        sugarsubstitute_ui::availability::reconcile(
+            retained[3].availability(),
+            resized[3].availability(),
+            &mut port,
+        )?;
         assert!(port.visible && port.enabled);
         assert_eq!(port.action, Some(actual_action));
         assert!(port.calls.is_empty());
@@ -226,7 +259,11 @@ fn actual_recovery_caption_resize_keeps_ready_action_and_retrying_disabled_peer(
     let resized =
         crate::main_backend::caption_controls(1920.0, true, captions, owner.presentation(labels));
     super::super::state::validate_inventory(&retained, &resized)?;
-    super::super::state::update_visibility(retained[3], resized[3], &mut port)?;
+    sugarsubstitute_ui::availability::reconcile(
+        retained[3].availability(),
+        resized[3].availability(),
+        &mut port,
+    )?;
     assert!(port.visible && !port.enabled && port.action.is_none());
     assert!(port.calls.is_empty());
     assert!(owner.consume(actual_action)?.is_none());

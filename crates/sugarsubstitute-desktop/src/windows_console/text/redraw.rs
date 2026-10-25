@@ -15,7 +15,7 @@ pub(super) struct Suspension {
 impl Suspension {
     /// The owned input procedure handles redraw directly; hidden peers keep their original style.
     pub(super) fn new(hwnd: HWND) -> Result<Self, DesktopError> {
-        let engine = super::super::engine::find(hwnd)?;
+        let engine = crate::windows_text::find(hwnd)?;
         engine.check()?;
         let previous = engine.redraw_allowed();
         // SAFETY: Only the checked original affine child synchronously receives this scalar state.

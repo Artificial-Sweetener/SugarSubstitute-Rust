@@ -121,7 +121,10 @@ fn publication_failure_returns_the_same_owner_for_retry_without_new_generation()
         let attempt = trial.attempt().clone();
         let trust = TrustStore::open(root.path(), [92; 32], context)?;
         let before = trust.updater_selection(context)?;
-        let directory = storage::files::Directory::open(&root.path().join(".update-trust"), false)?;
+        let directory = crate::durable_storage::files::Directory::open(
+            &root.path().join(".update-trust"),
+            false,
+        )?;
         let pin = directory.read("updater-selection-v1")?;
         let rejected = match trial.into_probe(|| NOW, context) {
             Ok(_) => return Err("Pinned trial publication unexpectedly succeeded".into()),

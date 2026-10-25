@@ -1,0 +1,26 @@
+[package]
+name = "sugarsubstitute-networking"
+description = "Bounded native HTTP transport and checked handle custody"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[features]
+boundary-fixtures = []
+
+[dependencies]
+sugarsubstitute-contracts = { path = "../sugarsubstitute-contracts" }
+url.workspace = true
+tracing.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = ["Win32_Networking_WinHttp", "Win32_Networking_WinSock"] }
+
+[target.'cfg(windows)'.dev-dependencies]
+sugarsubstitute-execution = { path = "../sugarsubstitute-execution", features = ["boundary-fixtures"] }
+
+[lints]
+workspace = true

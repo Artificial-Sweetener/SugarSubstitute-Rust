@@ -13,18 +13,16 @@ use std::rc::Rc;
 use sugarsubstitute_contracts::presentation::PreparedFrame;
 use tao::{event_loop::EventLoopProxy, window::Window};
 use windows::Win32::UI::Input::KeyboardAndMouse::GetFocus;
-#[path = "windows_console/accessibility.rs"]
-mod accessibility;
 #[path = "windows_console/callback.rs"]
 mod callback;
-#[path = "windows_console/engine.rs"]
-mod engine;
 #[path = "windows_console/messages.rs"]
 mod messages;
 #[path = "windows_console/native.rs"]
 mod native;
+#[path = "windows_console/paint.rs"]
+pub(crate) mod paint;
 #[path = "windows_console/render_proxy.rs"]
-mod render_proxy;
+pub(crate) mod render_proxy;
 pub(crate) use render_proxy::diagnostic_code;
 #[path = "windows_console/text.rs"]
 mod text;
@@ -40,6 +38,28 @@ pub(crate) struct Console {
     funding: Funding,
 }
 impl Console {
+    #[cfg(any(test, feature = "boundary-fixtures"))]
+    /// Borrow the original visible transcript's native output after its accepted update.
+    pub(super) fn capture(
+        &self,
+        observer: &mut dyn crate::pixel_capture::PixelCapture,
+    ) -> Result<(), DesktopError> {
+        if self.visible {
+            for slot in &self.creation.peers {
+                slot.value.engine.capture(&mut |bounds, stride, pixels| {
+                    observer.overlay(
+                        Some(crate::ConsoleView::CONTROL_ID),
+                        [bounds.left, bounds.top, bounds.right, bounds.bottom],
+                        None,
+                        stride,
+                        pixels,
+                    )
+                })?;
+            }
+        }
+        Ok(())
+    }
+
     /// Claim/copy first; the containing Controls slot adopts this inert owner before initialize.
     pub(crate) fn new(
         proxy: EventLoopProxy<NativeAction>,
@@ -131,9 +151,9 @@ impl Console {
             )?;
             peer.value.engine.prepare(
                 frame,
-                documents.shared().ok_or_else(|| {
+                Some(documents.shared().ok_or_else(|| {
                     DesktopError::message("console_present", "published source absent")
-                })?,
+                })?),
                 rect,
                 view.dark,
                 window.scale_factor(),
@@ -193,15 +213,6 @@ impl Console {
     pub(crate) fn retired(&self) -> bool {
         self.creation.retired(Rc::strong_count(&self.callback) == 1)
     }
-    /// Raise the original console above a sibling webview without replacing its text peer.
-    pub(crate) fn raise(&self) -> Result<(), DesktopError> {
-        if let Some(peer) = self.creation.peers.first() {
-            peer.value.live()?;
-            super::stacking::raise(peer.value.hwnd)?;
-            peer.value.live()?;
-        }
-        Ok(())
-    }
 }
 impl Drop for Console {
     fn drop(&mut self) {
@@ -223,14 +234,15 @@ impl super::Controls {
         &mut self,
         frame: &sugarsubstitute_contracts::presentation::PreparedFrame,
         view: Option<crate::ConsoleView<'_>>,
+        focus_return: Option<u16>,
     ) -> Result<(), DesktopError> {
         let Some(view) = view else {
             return Ok(());
         };
-        if self.planned.iter().any(|control| control.id == 4) {
+        if self.planned.iter().any(|spec| spec.control.id == crate::ConsoleView::CONTROL_ID) {
             return Err(DesktopError::message(
                 "console_present",
-                "native console ID4 collides with a planned peer",
+                "native console identity collides with a planned peer",
             ));
         }
         native::validate(&view, self.window.scale_factor())?;
@@ -258,12 +270,11 @@ impl super::Controls {
                 // SAFETY: Compare exact retained child to this UI thread's passive focus observation.
                 (unsafe { GetFocus() }) == hwnd
             })
-            && let Some(disclosure) = self
-                .creation
-                .peers
-                .iter()
-                .map(|slot| &slot.value)
-                .find(|peer| peer.snapshot.id == 1 && peer.snapshot.visible)
+            && let Some(disclosure) =
+                self.creation.peers.iter().map(|slot| &slot.value).find(|peer| {
+                    focus_return == Some(peer.snapshot.id)
+                        && peer.snapshot.availability().actionable()
+                })
         {
             focus_window(disclosure.hwnd)?;
         }

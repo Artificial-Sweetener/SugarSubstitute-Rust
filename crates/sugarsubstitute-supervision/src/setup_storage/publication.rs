@@ -4,10 +4,9 @@
 mod journal;
 #[cfg(test)]
 mod tests;
-use super::{
-    check,
+use super::{check, invalid};
+use crate::durable_storage::{
     files::{self, Directory},
-    invalid,
     protection::{Protection, Publication},
     staging,
 };
@@ -35,14 +34,14 @@ impl<'a> Stage<'a> {
         context: &JobContext,
     ) -> io::Result<Self> {
         check(context)?;
-        let id = staging::generation_id()?.as_str().to_owned();
-        let source = parent.path.join(Record::stage_name(&id));
+        let id = staging::identity()?;
+        let source = parent.path().join(Record::stage_name(&id));
         let file = protection.transient_file(&source, context)?;
         let record = Record::new(id, parent.identity()?, files::file_identity(&file)?);
-        let journal_path = parent.path.join(record.journal_name());
+        let journal_path = parent.path().join(record.journal_name());
         let mut journal = protection.transient_file(&journal_path, context)?;
         journal.write_all(&serde_json::to_vec(&record).map_err(io::Error::other)?)?;
-        journal.sync_all()?;
+        files::sync(&journal, context)?;
         let journal_identity = files::file_identity(&journal)?;
         protection.retain_transient(&journal, context)?;
         protection.close_file(journal)?;
@@ -65,20 +64,20 @@ impl<'a> Stage<'a> {
         protection: &mut Protection,
         context: &JobContext,
     ) -> io::Result<()> {
-        if destination.parent() != Some(self.parent.path.as_path()) {
+        if destination.parent() != Some(self.parent.path()) {
             return Err(invalid("Journaled publication requires a sibling destination"));
         }
-        self.file.sync_all()?;
+        files::sync(&self.file, context)?;
         protection.close_file(self.file)?;
         protection.publish(
-            &self.parent.path.join(self.record.stage()),
+            &self.parent.path().join(self.record.stage()),
             destination,
             self.record.file,
             Publication::File { replace },
             context,
         )?;
         if let Err(cause) = protection.remove_journaled(
-            &self.parent.path.join(self.record.journal_name()),
+            &self.parent.path().join(self.record.journal_name()),
             self.journal_identity,
             context,
         ) {
@@ -98,7 +97,7 @@ pub(super) fn recover(
     context: &JobContext,
 ) -> io::Result<()> {
     let mut seen = 0;
-    for entry in std::fs::read_dir(&parent.path)? {
+    for entry in parent.entries(context)? {
         check(context)?;
         let entry = entry?;
         let name = entry.file_name();
@@ -150,7 +149,7 @@ pub(super) fn write_immutable(
     }
     let mut stage = Stage::create(parent, protection, context)?;
     stage.file().write_all(bytes)?;
-    stage.publish(&parent.path.join(leaf), false, protection, context)
+    stage.publish(&parent.path().join(leaf), false, protection, context)
 }
 
 /// Decode protected ownership before requesting deletion of either exact native object.
@@ -168,6 +167,6 @@ fn recover_one(
             Record::decode(&files::read_bounded(&mut file, 4096)?, id, parent.identity()?)?;
         (record, files::file_identity(&file)?)
     };
-    protection.remove_journaled(&parent.path.join(record.stage()), record.file, context)?;
-    protection.remove_journaled(&parent.path.join(name), identity, context)
+    protection.remove_journaled(&parent.path().join(record.stage()), record.file, context)?;
+    protection.remove_journaled(&parent.path().join(name), identity, context)
 }

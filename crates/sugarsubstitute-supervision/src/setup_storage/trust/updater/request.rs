@@ -72,7 +72,7 @@ impl TrustStore {
             payload_protection.directory(&path.join("app"), Mode::Existing, context)?;
             let payload = RuntimePackage::open(&path, generation.package.as_str(), context)?;
             payload.require_protected(payload_protection)?;
-            let installation = Directory::open(&self._installation_root.path, false)?;
+            let installation = Directory::open(self._installation_root.path(), false)?;
             check(context)?;
             Ok(PreparationImage::updater(generation.clone(), payload, installation))
         })

@@ -17,7 +17,7 @@ pub(super) fn open(
         let _transition =
             if enable { Some(transition(installation, protection, context)?) } else { None };
         let mut marker = read_marker(installation, protection)?;
-        let path = installation.path.join(DIRECTORY);
+        let path = installation.path().join(DIRECTORY);
         let root = match Directory::open(&path, false) {
             Ok(directory) => directory,
             Err(cause) if cause.kind() == io::ErrorKind::NotFound => {
@@ -54,10 +54,10 @@ pub(super) fn publish_marker(
     let staged = staging::unique_path(root, ".selection-enable-stage")?;
     let mut file = protection.file(&staged, context)?;
     file.write_all(CONTENT)?;
-    file.sync_all()?;
+    files::sync(&file, context)?;
     drop(file);
     check(context)?;
-    staging::publish(&staged, &installation.path.join(NAMESPACE_MARKER))?;
+    staging::publish(&staged, &installation.path().join(NAMESPACE_MARKER))?;
     read_marker(installation, protection)?
         .ok_or_else(|| super::super::invalid("Published selection continuity marker is absent"))
 }
@@ -79,7 +79,7 @@ pub(super) fn transition(
     context: &JobContext,
 ) -> io::Result<File> {
     let lock =
-        protection.rendezvous(&installation.path.join(".selection-transition-lock"), context)?;
+        protection.rendezvous(&installation.path().join(".selection-transition-lock"), context)?;
     lock.try_lock().map_err(io::Error::from)?;
     Ok(lock)
 }

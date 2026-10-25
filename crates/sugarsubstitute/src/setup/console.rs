@@ -157,6 +157,7 @@ impl Output {
         let (layout, _, frame) = self.prepared.as_ref()?;
         let visible = self.layout.is_some_and(|current| current.visible && current == *layout);
         Some(InstallerConsole {
+            focus_return: Some(super::presentation::Action::Details.id()),
             frame,
             view: ConsoleView {
                 label,

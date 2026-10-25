@@ -2,8 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retry native creation with the same pinned candidate after exact unstarted recovery.
 use super::*;
-use crate::application_launch::ApplicationLaunch;
-use crate::setup_storage::test_worker::pipeline::Pipeline;
+use crate::{
+    application_launch::ApplicationLaunch, setup_storage::test_worker::pipeline::Pipeline,
+};
 
 #[test]
 fn recovered_candidate_retries_creation_without_reimport_and_rechecks_expiry_and_keys() -> TestResult

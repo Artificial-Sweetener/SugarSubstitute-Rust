@@ -29,7 +29,7 @@ impl PreparedCandidate {
         self.compatibility().require_installed_launch()?;
         self.compatibility().require_trial_launch()?;
         let store =
-            SelectionStore::open(&self.installation.path, context).map_err(io::Error::other)?;
+            SelectionStore::open(self.installation.path(), context).map_err(io::Error::other)?;
         let snapshot = crate::native_claims::lock(&self.snapshot);
         self.authorize(authorization, now, context, |offer, recheck| {
             self.compatibility()

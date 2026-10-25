@@ -15,11 +15,21 @@ use syn::visit::Visit;
 
 /// Inspect all declared public boundaries while retaining private scheduler implementations.
 pub(crate) fn findings(root: &Path, dependencies: &[Dependency]) -> Result<Vec<String>> {
-    let names = Names::load(root, dependencies)?;
+    findings_with(root, dependencies, execution_source::restricted_path)
+}
+
+/// Reuse module/alias/projection/macro resolution for another raw-capability owner.
+pub(crate) fn findings_with(
+    root: &Path,
+    dependencies: &[Dependency],
+    restricted: fn(&[String]) -> bool,
+) -> Result<Vec<String>> {
+    let names = Names::load(root, dependencies, restricted)?;
     let mut found = BTreeSet::new();
     for (key, module) in &names.modules {
         let mut audit = Audit {
             names: &names,
+            restricted,
             module: key,
             parameters: BTreeSet::new(),
             found: BTreeSet::new(),
@@ -27,7 +37,12 @@ pub(crate) fn findings(root: &Path, dependencies: &[Dependency]) -> Result<Vec<S
         for item in &module.items {
             audit.item(item);
         }
-        audit.macro_findings(execution_exports_macros::findings(&names, key, &module.items));
+        audit.macro_findings(execution_exports_macros::findings(
+            &names,
+            key,
+            &module.items,
+            restricted,
+        ));
         found.extend(
             audit.found.into_iter().map(|message| format!("{}: {message}", module.file.display())),
         );
@@ -38,6 +53,7 @@ pub(crate) fn findings(root: &Path, dependencies: &[Dependency]) -> Result<Vec<S
 /// Inspect only externally declared types, not implementation bodies or hidden state fields.
 struct Audit<'a> {
     names: &'a Names,
+    restricted: fn(&[String]) -> bool,
     module: &'a [String],
     parameters: BTreeSet<String>,
     found: BTreeSet<String>,
@@ -53,14 +69,16 @@ impl Audit<'_> {
                     resolved[1]
                 ));
             }
-            if execution_source::restricted_path(&resolved) {
+            if (self.restricted)(&resolved) {
                 let detail = if resolved.iter().any(|part| part == "*") {
-                    "; qualify the public name instead of relying on a scheduler glob"
+                    "; qualify the public name instead of relying on a restricted glob"
                 } else {
                     ""
                 };
-                self.found
-                    .insert(format!("public scheduler capability {}{detail}", resolved.join("::")));
+                self.found.insert(format!(
+                    "public restricted capability {}{detail}",
+                    resolved.join("::")
+                ));
             }
         }
     }
@@ -70,6 +88,7 @@ impl Audit<'_> {
         for helper in report.helpers {
             let mut audit = Audit {
                 names: self.names,
+                restricted: self.restricted,
                 module: &helper[..helper.len() - 1],
                 parameters: BTreeSet::new(),
                 found: BTreeSet::new(),
@@ -170,9 +189,9 @@ impl Audit<'_> {
                     match member {
                         syn::ForeignItem::Fn(member) if public(&member.vis) => {
                             self.signature(&member.sig);
-                            if execution_source::restricted_path(&[member.sig.ident.to_string()]) {
+                            if (self.restricted)(&[member.sig.ident.to_string()]) {
                                 self.found.insert(format!(
-                                    "public native scheduling symbol {}",
+                                    "public native capability symbol {}",
                                     member.sig.ident
                                 ));
                             }
@@ -181,10 +200,10 @@ impl Audit<'_> {
                                     && value.path.is_ident("link_name")
                                     && let syn::Expr::Lit(value) = &value.value
                                     && let syn::Lit::Str(value) = &value.lit
-                                    && execution_source::restricted_path(&[value.value()])
+                                    && (self.restricted)(&[value.value()])
                                 {
                                     self.found.insert(format!(
-                                        "public native scheduling symbol {}",
+                                        "public native capability symbol {}",
                                         value.value()
                                     ));
                                 }
@@ -295,9 +314,9 @@ impl Audit<'_> {
                 if let Ok(path) = syn::parse_str::<syn::Path>(&prefix.join("::")) {
                     for mut resolved in self.names.resolve(self.module, &path, &self.parameters) {
                         resolved.push("*".into());
-                        if execution_source::restricted_path(&resolved) {
+                        if (self.restricted)(&resolved) {
                             self.found
-                                .insert(format!("public scheduler glob {}", resolved.join("::")));
+                                .insert(format!("public restricted glob {}", resolved.join("::")));
                         }
                     }
                 }
@@ -314,6 +333,14 @@ impl Audit<'_> {
 }
 
 impl<'ast> Visit<'ast> for Audit<'_> {
+    /// A capability owner may forbid all raw pointers, including byte-pointer aliases.
+    fn visit_type_ptr(&mut self, item: &'ast syn::TypePtr) {
+        if (self.restricted)(&["<raw-pointer>".into()]) {
+            self.found.insert("public raw pointer capability".into());
+        }
+        syn::visit::visit_type_ptr(self, item);
+    }
+
     /// Check nested path arguments, associated types and function-pointer signatures.
     fn visit_path(&mut self, path: &'ast syn::Path) {
         self.resolved(self.names.resolve(self.module, path, &self.parameters));
@@ -346,7 +373,12 @@ impl<'ast> Visit<'ast> for Audit<'_> {
 
     /// Macro arguments retain literal expression paths while harmless field identifiers remain valid.
     fn visit_macro(&mut self, item: &'ast syn::Macro) {
-        self.macro_findings(execution_exports_macros::invocation(self.names, self.module, item));
+        self.macro_findings(execution_exports_macros::invocation(
+            self.names,
+            self.module,
+            item,
+            self.restricted,
+        ));
     }
 }
 

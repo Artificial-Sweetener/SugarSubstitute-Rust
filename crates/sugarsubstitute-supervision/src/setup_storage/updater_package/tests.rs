@@ -50,7 +50,7 @@ fn updater_import_pins_exact_files_without_application_or_setup_lease_collision(
         let workspace = tempfile::tempdir()?;
         let store = Arc::new(storage::SelectionStore::open(root.path(), context)?);
         let _run = storage::InstallationRun::acquire(store, context)?;
-        let _setup = storage::transaction::admission::Admission::open(root.path(), false)?;
+        let _setup = storage::transaction::admission::Admission::open(root.path(), false, context)?;
         let (bytes, digest) = archive(
             sugarsubstitute_contracts::application_launch::updater::CURRENT_UPDATER_CONTRACT,
         )?;
@@ -101,7 +101,12 @@ fn foreign_component_and_application_payload_are_rejected_before_extraction() ->
                 )
                 .is_err()
             );
-            assert!(!workspace.path().join("payloads-v1").exists());
+            assert!(
+                !workspace
+                    .path()
+                    .join(crate::setup_storage::cache::Namespace::PackedPayloads.directory())
+                    .exists()
+            );
         }
         Ok(())
     })
@@ -144,7 +149,12 @@ fn updater_declaration_clock_and_installation_identity_fail_closed() -> TestResu
             }
             assert!(!root.path().join("releases").exists());
             if case == 2 {
-                assert!(!workspace.path().join("payloads-v1").exists());
+                assert!(
+                    !workspace
+                        .path()
+                        .join(crate::setup_storage::cache::Namespace::PackedPayloads.directory())
+                        .exists()
+                );
             }
         }
         Ok(())

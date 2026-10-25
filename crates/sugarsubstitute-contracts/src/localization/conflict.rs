@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Localized decisions for an occupied desktop profile.
 /// Complete copy for verified profile-conflict resolution.
+#[non_exhaustive]
 pub struct ConflictMessages {
     /// Native dialog heading.
     pub title: &'static str,

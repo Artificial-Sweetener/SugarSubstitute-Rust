@@ -28,31 +28,31 @@ pub(crate) fn activate(
 /// Must be called once on the native main thread. Selected application startup is independent
 /// after creation; this process retires its own worker scopes and inherited-handle duplicates.
 pub fn run() -> ExitCode {
-    match run_inner() {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(cause) => {
-            let details = crate::failure_details::Details(cause.as_ref());
-            tracing::error!(operation="stable_launcher_failed",cause=%details,"Installed application could not start");
-            if let Err(secondary) = sugarsubstitute_desktop::show_startup_failure(
-                crate::APPLICATION_NAME,
-                sugarsubstitute_contracts::localization::messages("en").report.startup_failed,
-                format_args!("{details}"),
-            ) {
-                tracing::error!(operation="stable_launcher_failure_presentation",cause=?secondary,"Startup failure presentation failed");
-            }
-            ExitCode::FAILURE
+    let result = crate::diagnostics::Diagnostics::run(|_health| {
+        let Err(cause) = run_inner() else { return Ok(()) };
+        let details = crate::failure_details::Details(cause.as_ref());
+        tracing::error!(operation="stable_launcher_failed",cause=%details,"Installed application could not start");
+        if let Err(secondary) = sugarsubstitute_desktop::show_startup_failure(
+            crate::APPLICATION_NAME,
+            sugarsubstitute_contracts::localization::messages("en").report.startup_failed,
+            format_args!("{details}"),
+        ) {
+            tracing::error!(operation="stable_launcher_failure_presentation",cause=?secondary,"Startup failure presentation failed");
+            return Err(crate::failure_details::retain_presentation(cause, secondary));
         }
+        Err(cause)
+    });
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(_retained) => ExitCode::FAILURE,
     }
 }
 
+/// Run the existing installed-launch lifetime while the caller retains diagnostic routing.
 fn run_inner() -> Result<(), Box<dyn Error>> {
-    let diagnostics = crate::diagnostics::Diagnostics::initialize()?;
-    let result = (|| {
-        let root = installation_root(&std::env::current_exe()?, std::env::args_os().skip(1))?;
-        sugarsubstitute_desktop::run_headless(&mut lifetime::Launcher::new(root))?;
-        Ok(())
-    })();
-    diagnostics.finish(result)
+    let root = installation_root(&std::env::current_exe()?, std::env::args_os().skip(1))?;
+    sugarsubstitute_desktop::run_headless(&mut lifetime::Launcher::new(root))?;
+    Ok(())
 }
 
 /// The stable executable's parent is the installation identity; callers cannot redirect it.

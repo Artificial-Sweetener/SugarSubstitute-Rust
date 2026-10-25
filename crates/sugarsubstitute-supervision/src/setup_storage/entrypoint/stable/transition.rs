@@ -61,14 +61,14 @@ pub(super) fn recover(
     let _image = if next_present {
         payload::ensure(root, &transition.next, protection, context)?
     } else {
-        let replacing = root.path.join(EXECUTABLE).try_exists()?;
+        let replacing = files::exists(root.path().join(EXECUTABLE), context)?;
         payload::replace(root, &transition.next, replacing, protection, context)?
     };
     if current != transition.next {
         record::replace(state, &current, &transition.next, protection, context)?;
     }
     check(context)?;
-    protection.remove_journaled(&state.path.join(JOURNAL), identity, context)?;
+    protection.remove_journaled(&state.path().join(JOURNAL), identity, context)?;
     Ok(Some(transition.next))
 }
 
@@ -96,9 +96,9 @@ pub(super) fn supersede(
             )?;
         }
         check(context)?;
-        protection.remove_journaled(&state.path.join(JOURNAL), pending.identity, context)?;
+        protection.remove_journaled(&state.path().join(JOURNAL), pending.identity, context)?;
     }
-    let previous = record::read(state, protection)?
+    let previous = record::read(state, protection, context)?
         .ok_or_else(|| invalid("Launcher replacement has lost established ownership"))?;
     if previous == next {
         return Ok(previous);
@@ -137,7 +137,7 @@ fn pending(
         }
         (transition, files::file_identity(&file)?)
     };
-    let current = record::read(state, protection)?
+    let current = record::read(state, protection, context)?
         .ok_or_else(|| invalid("Launcher transition has lost established ownership"))?;
     if current != transition.previous && current != transition.next {
         return Err(invalid("Launcher transition conflicts with established ownership"));
@@ -145,7 +145,7 @@ fn pending(
     let next_present = match root.read(EXECUTABLE) {
         Ok(mut file) => {
             protection.verify_file(&file)?;
-            let bytes = file.metadata()?.len();
+            let bytes = files::length(&file, context)?;
             let digest = payload::hash(&mut file, context)?;
             if bytes == transition.next.bytes && digest == transition.next.sha256 {
                 true

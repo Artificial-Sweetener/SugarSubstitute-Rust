@@ -55,7 +55,7 @@ impl Worker {
             configuration.workspace,
             super::state::Source::Distribution {
                 identity: configuration.repository,
-                repository: Repository::new(configuration.policy, configuration.idle),
+                repository: Box::new(Repository::new(configuration.policy, configuration.idle)),
             },
         )
     }

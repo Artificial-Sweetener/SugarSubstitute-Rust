@@ -1,0 +1,512 @@
+diff --git a/src/main/lib/download.ts b/src/main/lib/download.ts
+--- a/src/main/lib/download.ts
++++ b/src/main/lib/download.ts
+@@ -1,6 +1,6 @@
+ import { net } from 'electron'
+ import fs from 'fs'
+-import { cacheDownload, writeDownloadMeta } from './cache-policy'
++import type { Writable } from 'node:stream'
+ import path from 'path'
+ import * as settings from '../settings'
+ import { r2MirrorUrl } from './r2Mirror'
+@@ -23,7 +23,20 @@
+   lastModified?: string
+ }
+
++/** A destination capability supplied by the host adapter; paths grant no native authority. */
++export interface DownloadStorage {
++  length(): Promise<number | undefined>
++  metaLength(): Promise<number | undefined>
++  readMeta(): Promise<string>
++  writeMeta(data: string): Promise<void>
++  remove(): Promise<void>
++  removeMeta(): Promise<void>
++  open(append: boolean, expected: number, beforeOpen: Promise<void>, prefix: number): DownloadStream
++}
++export type DownloadStream = Writable & { close(callback: () => void): void }
++
+ export interface DownloadOptions {
++  storage?: DownloadStorage
+   signal?: AbortSignal
+   expectedSize?: number
+   /** Abort the request when no bytes arrive for this long (ms), turning a
+@@ -55,16 +68,19 @@
+   return fs.existsSync(filePath) && !fs.existsSync(downloadMetaPath(filePath))
+ }
+
+-function readMeta(metaPath: string): DownloadMeta | null {
++async function readMeta(metaPath: string, storage?: DownloadStorage): Promise<DownloadMeta | null> {
+   try {
+-    return JSON.parse(fs.readFileSync(metaPath, 'utf-8')) as DownloadMeta
+-  } catch {
++    return JSON.parse(storage ? await storage.readMeta() : fs.readFileSync(metaPath, 'utf-8')) as DownloadMeta
++  } catch (cause) {
++    if (storage && !(cause instanceof SyntaxError) && (cause as NodeJS.ErrnoException).code !== 'ENOENT') throw cause
+     return null
+   }
+ }
+
+-function writeMeta(metaPath: string, meta: DownloadMeta): void {
+-  writeDownloadMeta(metaPath, JSON.stringify(meta))
++function writeMeta(metaPath: string, meta: DownloadMeta, storage?: DownloadStorage): void | Promise<void> {
++  const data = JSON.stringify(meta)
++  if (storage) return storage.writeMeta(data)
++  fs.writeFileSync(metaPath, data)
+ }
+
+ function headerString(value: string | string[] | undefined): string | undefined {
+@@ -72,7 +88,7 @@
+   return Array.isArray(value) ? value[0] : value
+ }
+
+-export function download(
++export async function download(
+   url: string,
+   destPath: string,
+   onProgress: ((progress: DownloadProgress) => void) | null,
+@@ -82,6 +98,7 @@
+     typeof options === 'number' ? { _maxRedirects: options } : (options ?? {})
+   const {
+     signal,
++    storage,
+     expectedSize,
+     idleTimeoutMs = DEFAULT_IDLE_TIMEOUT_MS,
+     validateUrl,
+@@ -91,6 +108,19 @@
+
+   if (validateUrl && !validateUrl(url)) {
+     return Promise.reject(new Error(`Download URL is not allowed: ${url}`))
++  }
++
++  const metaPath = downloadMetaPath(destPath)
++  const length = async (): Promise<number | undefined> => storage ? storage.length() :
++    fs.existsSync(destPath) ? fs.statSync(destPath).size : undefined
++  const metaExists = async (): Promise<boolean> => storage ? (await storage.metaLength()) !== undefined : fs.existsSync(metaPath)
++  const removeData = async (): Promise<void> => {
++    if (storage) { await storage.remove(); return }
++    try { fs.unlinkSync(destPath) } catch {}
++  }
++  const removeMeta = async (): Promise<void> => {
++    if (storage) { await storage.removeMeta(); return }
++    try { fs.unlinkSync(metaPath) } catch {}
+   }
+
+   // Mirror retry is gated on useChineseMirrors to avoid a thundering-herd
+@@ -101,15 +131,12 @@
+   const mirror = mirrorEnabled ? r2MirrorUrl(url) : undefined
+   const tryMirror = async (primaryErr: Error): Promise<string> => {
+     if (!mirror || mirror === url) throw primaryErr
+-    try {
+-      fs.unlinkSync(destPath)
+-    } catch {}
+-    try {
+-      fs.unlinkSync(downloadMetaPath(destPath))
+-    } catch {}
++    try { await removeData(); await removeMeta() }
++    catch (cleanup) { throw new AggregateError([primaryErr, cleanup], 'Mirror preparation could not retire its previous destination') }
+     try {
+       return await download(mirror, destPath, onProgress, {
+         signal,
++        storage,
+         expectedSize,
+         idleTimeoutMs,
+         validateUrl,
+@@ -121,49 +148,25 @@
+     }
+   }
+
+-  const metaPath = downloadMetaPath(destPath)
++  if (signal?.aborted) throw new Error('Download cancelled')
++  if (!storage) fs.mkdirSync(path.dirname(destPath), { recursive: true })
++  let resumeFrom = 0
++  const existingMeta = await readMeta(metaPath, storage)
++  const existingLength = await length()
++  if (existingMeta && existingLength !== undefined) {
++    if (existingMeta.url === url) resumeFrom = existingLength
++    if (resumeFrom === 0) {
++      await removeData(); await removeMeta()
++    } else if (existingMeta.expectedSize > 0 && resumeFrom >= existingMeta.expectedSize) {
++      await removeMeta()
++      return destPath
++    }
++  } else if (await metaExists()) {
++    await removeMeta()
++  }
+
+   return new Promise((resolve, reject) => {
+-    if (signal?.aborted) {
+-      reject(new Error('Download cancelled'))
+-      return
+-    }
+-
+-    fs.mkdirSync(path.dirname(destPath), { recursive: true })
+-
+-    let resumeFrom = 0
+-    const existingMeta = readMeta(metaPath)
+-    if (existingMeta && fs.existsSync(destPath)) {
+-      if (existingMeta.url === url) {
+-        try {
+-          resumeFrom = fs.statSync(destPath).size
+-        } catch {
+-          resumeFrom = 0
+-        }
+-      }
+-      if (resumeFrom === 0) {
+-        // URL mismatch or can't stat — start fresh
+-        try {
+-          fs.unlinkSync(destPath)
+-        } catch {}
+-        try {
+-          fs.unlinkSync(metaPath)
+-        } catch {}
+-      } else if (existingMeta.expectedSize > 0 && resumeFrom >= existingMeta.expectedSize) {
+-        // Fully downloaded but meta wasn't cleaned up (crash after write, before meta delete)
+-        try {
+-          fs.unlinkSync(metaPath)
+-        } catch {}
+-        resolve(destPath)
+-        return
+-      }
+-    } else if (fs.existsSync(metaPath)) {
+-      // Stale meta without data file
+-      try {
+-        fs.unlinkSync(metaPath)
+-      } catch {}
+-    }
+-
++    if (signal?.aborted) { reject(new Error('Download cancelled')); return }
+     const request = net.request(url)
+     request.setHeader('User-Agent', 'ComfyUI-Desktop-2')
+     if (resumeFrom > 0 && existingMeta?.etag) {
+@@ -174,18 +177,26 @@
+     let aborted = false
+     let stalled = false
+     let settled = false
+-    let fileStream: fs.WriteStream | null = null
++    let fileStream: DownloadStream | null = null
++    let rejecting = false
++    let streamFailure: Error | undefined
+     const safeResolve = (v: string): void => {
+-      if (!settled) {
++      if (!settled && !rejecting) {
+         settled = true
+         resolve(v)
+       }
+     }
+-    const safeReject = (e: Error): void => {
+-      if (!settled) {
++    const safeReject = (cause: Error): void => {
++      if (settled || rejecting) return
++      if (!storage || !fileStream) { settled = true; reject(cause); return }
++      rejecting = true
++      const stream = fileStream
++      const closed = stream.closed ? Promise.resolve() : new Promise<void>(done => stream.once('close', done))
++      stream.destroy()
++      void closed.then(() => {
+         settled = true
+-        reject(e)
+-      }
++        reject(streamFailure && streamFailure !== cause ? new AggregateError([cause, streamFailure], 'Download and native retirement failed') : cause)
++      })
+     }
+
+     // No-progress watchdog: rearmed on every byte; if it fires the connection is
+@@ -253,6 +264,7 @@
+         }
+         download(redirectUrl, destPath, onProgress, {
+           signal,
++          storage,
+           expectedSize,
+           idleTimeoutMs,
+           validateUrl,
+@@ -277,7 +289,7 @@
+       let baseBytes = 0
+       if (isResumed) {
+         baseBytes = resumeFrom
+-      } else if (resumeFrom > 0) {
++      } else if (resumeFrom > 0 && !storage) {
+         try {
+           fs.unlinkSync(destPath)
+         } catch {}
+@@ -306,36 +318,40 @@
+       // Mark this download in-progress to enable resume if interrupted.
+       const etag = headerString(response.headers['etag'])
+       const lastModified = headerString(response.headers['last-modified'])
+-      let grant: ReturnType<typeof cacheDownload>
++      let beforeOpen: void | Promise<void>
+       try {
+-        writeMeta(metaPath, { url, expectedSize: effectiveSize, etag, lastModified })
+-        grant = cacheDownload(destPath, isResumed, effectiveSize > 0 ? effectiveSize : 0)
++        beforeOpen = writeMeta(metaPath, { url, expectedSize: effectiveSize, etag, lastModified }, storage)
++        fileStream = storage ? storage.open(isResumed, effectiveSize > 0 ? effectiveSize : 0, Promise.resolve(beforeOpen), baseBytes) :
++          fs.createWriteStream(destPath, isResumed ? { flags: 'a' } : undefined)
+       } catch (cause) {
+-        cleanup()
+-        aborted = true
+-        request.abort()
++        cleanup(); aborted = true; request.abort()
+         safeReject(cause instanceof Error ? cause : new Error(String(cause)))
+         return
+       }
+
+       let receivedBytes = baseBytes
+       const startTime = Date.now()
+-
+-      fileStream = fs.createWriteStream(destPath, grant ? { fd: grant.fd, autoClose: true, start: isResumed ? baseBytes : 0 } : isResumed ? { flags: 'a' } : undefined)
+-      fileStream.once('close', () => grant?.settled())
+       fileStream.on('error', (err: Error) => {
+-        cleanup()
+-        try {
+-          fs.unlinkSync(destPath)
+-        } catch {}
+-        try {
+-          fs.unlinkSync(metaPath)
+-        } catch {}
+-        safeReject(err)
++        streamFailure = err
++        cleanup()
++        if (!storage) {
++          try { fs.unlinkSync(destPath) } catch {}
++          try { fs.unlinkSync(metaPath) } catch {}
++          safeReject(err)
++          return
++        }
++        aborted = true; request.abort()
++        const stream = fileStream!
++        const closed = stream.closed ? Promise.resolve() : new Promise<void>(done => stream.once('close', done))
++        void closed.then(async () => {
++          if (!['EBUSY', 'ENOSPC', 'EINTR', 'ETIMEDOUT'].includes((err as NodeJS.ErrnoException).code ?? '')) {
++            await removeData(); await removeMeta()
++          }
++        }).then(() => safeReject(err), cleanup => safeReject(new AggregateError([err, cleanup], 'Download failure cleanup failed')))
+       })
+
+       response.on('data', (chunk: Buffer) => {
+-        if (aborted || settled) return
++        if (aborted || settled || rejecting) return
+         armIdleTimer()
+         try {
+           const next = receivedBytes + chunk.length
+@@ -345,7 +361,6 @@
+           if (fileStream!.writableLength + chunk.length > 1024 * 1024) {
+             throw new Error('Download write queue capacity exhausted; partial bytes remain resumable')
+           }
+-          grant?.reserve(next)
+           receivedBytes = next
+           fileStream!.write(chunk)
+         } catch (cause) {
+@@ -386,47 +401,25 @@
+         }
+         fileStream!.end()
+         fileStream!.on('close', () => {
+-          if (effectiveSize > 0) {
+-            try {
+-              const actualSize = fs.statSync(destPath).size
++          if (aborted || stalled || rejecting || settled) return
++          void (async () => {
++            if (effectiveSize > 0) {
++              const actualSize = await length()
+               if (actualSize !== effectiveSize) {
+-                // Size mismatch — delete everything, no resume possible
+-                try {
+-                  fs.unlinkSync(destPath)
+-                } catch {}
+-                try {
+-                  fs.unlinkSync(metaPath)
+-                } catch {}
+-                safeReject(
+-                  new Error(
+-                    `Download incomplete: expected ${effectiveSize} bytes but got ${actualSize}`
+-                  )
+-                )
+-                return
++                await removeData(); await removeMeta()
++                throw new Error(`Download incomplete: expected ${effectiveSize} bytes but got ${actualSize}`)
+               }
+-            } catch (err) {
+-              try {
+-                fs.unlinkSync(destPath)
+-              } catch {}
+-              try {
+-                fs.unlinkSync(metaPath)
+-              } catch {}
+-              safeReject(err as Error)
+-              return
+             }
+-          }
+-
+-          // Removing meta marks the download complete (the data file is already at destPath).
+-          try {
+-            fs.unlinkSync(metaPath)
+-          } catch {}
+-          safeResolve(destPath)
++            await removeMeta()
++            safeResolve(destPath)
++          })().catch(cause => safeReject(cause instanceof Error ? cause : new Error(String(cause))))
+         })
+       })
+
+       response.on('error', (err: Error) => {
+         cleanup()
+         if (aborted || stalled) return // onAbort / onStall already rejected
++        aborted = true
+         fileStream!.close(() => safeReject(err))
+       })
+     })
+@@ -438,7 +431,7 @@
+       // Network failure before any response arrived — try the mirror exactly
+       // once. If a partial body had already started landing we skip the mirror
+       // to avoid stitching together two origins' bytes.
+-      if (resumeFrom === 0 && !_skipMirror) {
++      if (!fileStream && resumeFrom === 0 && !_skipMirror) {
+         tryMirror(err).then(safeResolve, safeReject)
+       } else {
+         safeReject(err)
+diff --git a/src/main/lib/cache.ts b/src/main/lib/cache.ts
+--- a/src/main/lib/cache.ts
++++ b/src/main/lib/cache.ts
+@@ -3,9 +3,10 @@
+ import { META_SUFFIX } from './download'
+
+ export interface Cache {
+-  getCachePath(folder: string): string
+-  evict(): void
+-  touch(folder: string): void
++  getCachePath(folder: string): Promise<string>
++  length(file: string): Promise<number | undefined>
++  evict(): Promise<void>
++  touch(folder: string): Promise<void>
+   cleanPartials(maxAgeMs?: number): Promise<void>
+ }
+
+@@ -14,12 +15,14 @@
+     fs.mkdirSync(dir, { recursive: true })
+   }
+
+-  function getCachePath(folder: string): string {
++  async function getCachePath(folder: string): Promise<string> {
+     ensureDir()
+-    return path.join(dir, folder)
++    const target = path.join(dir, folder)
++    fs.mkdirSync(target, { recursive: true })
++    return target
+   }
+
+-  function evict(): void {
++  async function evict(): Promise<void> {
+     ensureDir()
+     const folders = fs
+       .readdirSync(dir, { withFileTypes: true })
+@@ -39,7 +42,7 @@
+     }
+   }
+
+-  function touch(folder: string): void {
++  async function touch(folder: string): Promise<void> {
+     const folderPath = path.join(dir, folder)
+     if (fs.existsSync(folderPath)) {
+       const now = new Date()
+@@ -79,5 +82,7 @@
+     } catch {}
+   }
+
+-  return { getCachePath, evict, touch, cleanPartials }
++  return { getCachePath, evict, touch, cleanPartials,
++    async length(file) { return fs.existsSync(file) ? fs.statSync(file).size : undefined }
++  }
+ }
+diff --git a/src/main/lib/installer.ts b/src/main/lib/installer.ts
+--- a/src/main/lib/installer.ts
++++ b/src/main/lib/installer.ts
+@@ -3,7 +3,7 @@
+ import { formatDownloadDetail, formatTime } from './util'
+ import { t } from './i18n'
+ import type { Cache } from './cache'
+-import { isDownloadComplete } from './download'
++import { downloadMetaPath } from './download'
+ import type { DownloadProgress } from './download'
+ import type { ExtractProgress } from './extract'
+
+@@ -135,16 +135,10 @@
+   }
+ }
+
+-function isCacheValid(cachePath: string, expectedSize?: number): boolean {
+-  if (!isDownloadComplete(cachePath)) return false
+-  if (expectedSize && expectedSize > 0) {
+-    try {
+-      return fs.statSync(cachePath).size === expectedSize
+-    } catch {
+-      return false
+-    }
+-  }
+-  return true
++async function isCacheValid(cachePath: string, cache: Cache, expectedSize?: number): Promise<boolean> {
++  const length = await cache.length(cachePath)
++  if (length === undefined || await cache.length(downloadMetaPath(cachePath)) !== undefined) return false
++  return !(expectedSize && expectedSize > 0) || length === expectedSize
+ }
+
+ export async function downloadAndExtract(
+@@ -156,8 +150,7 @@
+ ): Promise<void> {
+   const { sendProgress, download, cache, extract, signal, onPhase } = ctx
+   const filename = url.split('/').pop()!
+-  const cacheBase = cache.getCachePath(cacheKey)
+-  fs.mkdirSync(cacheBase, { recursive: true })
++  const cacheBase = await cache.getCachePath(cacheKey)
+   const cachePath = path.join(cacheBase, filename)
+
+   await withInstallPhase(onPhase, 'download', () =>
+@@ -169,7 +162,7 @@
+           sendProgress('download', { percent: 0, status: t('installer.waitingForDownload') })
+       },
+       async () => {
+-        if (isCacheValid(cachePath, expectedSize)) {
++        if (await isCacheValid(cachePath, cache, expectedSize)) {
+           sendProgress('download', { percent: 100, status: t('installer.cachedDownload') })
+         } else {
+           sendProgress('download', { percent: 0, status: t('installer.startingDownload') })
+@@ -184,9 +177,9 @@
+             },
+             { signal, expectedSize }
+           )
+-          cache.evict()
++          await cache.evict()
+         }
+-        cache.touch(cacheKey)
++        await cache.touch(cacheKey)
+       }
+     )
+   )
+@@ -221,8 +214,7 @@
+   ctx: InstallerContext
+ ): Promise<void> {
+   const { sendProgress, download, cache, extract, signal, onPhase } = ctx
+-  const cacheBase = cache.getCachePath(cacheDir)
+-  fs.mkdirSync(cacheBase, { recursive: true })
++  const cacheBase = await cache.getCachePath(cacheDir)
+
+   const count = files.length
+   const totalBytes = files.reduce((sum, f) => sum + (f.size || 0), 0)
+@@ -245,7 +237,7 @@
+             sendProgress('download', { percent: 0, status: t('installer.waitingForDownload') })
+         },
+         async () => {
+-          if (isCacheValid(fileCachePath, file.size)) {
++          if (await isCacheValid(fileCachePath, cache, file.size)) {
+             completedBytes += file.size || 0
+             const percent =
+               totalBytes > 0
+@@ -303,9 +295,9 @@
+     }
+   })
+
+-  cache.touch(cacheDir)
++  await cache.touch(cacheDir)
+   if (!allCached) {
+-    cache.evict()
++    await cache.evict()
+   }
+
+   const firstFile = files[0]

@@ -24,7 +24,7 @@ impl Resources {
             .ok()
             .map_err(|cause| ClaimError::new("profile_conflict_session", cause))?;
         self.session = Some(session);
-        let path = crate::protected_storage::paths::wide(path)?;
+        let path = crate::durable_storage::protected::paths::wide(path)?;
         // SAFETY: The single terminated path remains owned throughout registration.
         unsafe { RmRegisterResources(session, Some(&[PCWSTR(path.as_ptr())]), None, None) }
             .ok()

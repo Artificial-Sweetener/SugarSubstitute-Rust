@@ -55,3 +55,18 @@ impl From<sugarsubstitute_update::delivery::Rejection> for DownloadFailure {
         Self::Response(cause)
     }
 }
+
+impl From<crate::durable_storage::payload::TransferFailure> for DownloadFailure {
+    fn from(cause: crate::durable_storage::payload::TransferFailure) -> Self {
+        use crate::durable_storage::payload::TransferFailure;
+        use sugarsubstitute_update::delivery::Rejection;
+        match cause {
+            TransferFailure::Extent => Self::Response(Rejection::Offset),
+            TransferFailure::Length => Self::Response(Rejection::BodyLength),
+            TransferFailure::Storage(cause) => Self::Storage(cause),
+            TransferFailure::Flush { transfer, flush } => {
+                Self::Flush { transfer: Box::new((*transfer).into()), flush }
+            }
+        }
+    }
+}

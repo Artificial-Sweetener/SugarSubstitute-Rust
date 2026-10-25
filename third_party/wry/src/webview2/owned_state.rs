@@ -110,6 +110,7 @@ pub(super) struct NativeState {
   pub popup_token: Option<i64>,
   pub drag_drop: Option<DragDropController>,
   pub folder_queried: bool,
+  pub private_profile: Option<PrivateProfileObserver>,
 }
 
 pub(super) struct Shared {
@@ -137,6 +138,7 @@ impl Shared {
         popup_token: None,
         drag_drop: None,
         folder_queried: false,
+        private_profile: None,
       }),
       parent: Cell::new(parent),
       busy: Cell::new(false),

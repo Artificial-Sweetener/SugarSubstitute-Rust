@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Resolve maintenance configuration through protected accepted selection, independently of payload health.
 use super::*;
-use crate::setup_storage::{SelectionStore, protection};
+use crate::{durable_storage::protection, setup_storage::SelectionStore};
 
 /// Read selection without initializing it or mistaking damaged state for an earlier installation.
 pub(super) fn generation(root: &Path, context: &JobContext) -> io::Result<Option<Generation>> {
@@ -24,17 +24,17 @@ pub(super) fn read(
     generation: &Generation,
     context: &JobContext,
 ) -> io::Result<ExistingInstallation> {
-    let path = root.path.join("releases").join(generation.id.as_str());
+    let path = root.path().join("releases").join(generation.id.as_str());
     let directory = protection::with(context, |protection| {
         protection.directory(
             &path,
-            crate::protected_storage::directories::Mode::Existing,
+            crate::durable_storage::protected::directories::Mode::Existing,
             context,
         )?;
         Directory::open(&path, false)
     })?;
     let mut existing =
-        ExistingInstallation::from_directory(root, directory, marker, Some(generation))?;
+        ExistingInstallation::from_directory(root, directory, marker, Some(generation), context)?;
     existing.accepted = Some(generation.clone());
     existing.summary.launch_entry_missing = match root.read("SugarSubstitute.lnk") {
         Ok(_) => false,

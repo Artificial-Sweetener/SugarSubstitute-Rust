@@ -1,0 +1,172 @@
+--- a/src/main/sources/standalone/torchStackCatalog.ts
++++ b/src/main/sources/standalone/torchStackCatalog.ts
+@@ -12,8 +12,8 @@
+  */
+ import fs from 'fs'
+ import path from 'path'
+-import { dataDir } from '../../lib/paths'
+-import { writeFileSafe } from '../../lib/safe-file'
++import { cacheDir } from '../../lib/paths'
++import { writeFileSafe } from '../../lib/cache-policy'
+ import { getInstalledTorchTuple, PLATFORM_PREFIX } from './envPaths'
+ import { fetchR2VendorReleases, r2BundleUrl } from './r2Catalog'
+ import type { R2Variant } from './r2Catalog'
+@@ -64,7 +64,7 @@
+   capWarning?: { min: number; max: number; detected: number[] }
+ }
+ 
+-const CACHE_FILE = path.join(dataDir(), 'torch-stack-cache.json')
++const CACHE_FILE = path.join(cacheDir(), 'torch-stack-cache.json')
+ 
+ let _cache: Record<string, TorchStackEntry[]> = {}
+ let _loaded = false
+@@ -83,8 +83,8 @@
+ function _persist(): void {
+   try {
+     writeFileSafe(CACHE_FILE, JSON.stringify({ schemaVersion: 1, variants: _cache }, null, 2))
+-  } catch {
+-    // cache persistence is best-effort
++  } catch (cause) {
++    console.warn('Cache persistence failed', cause)
+   }
+ }
+ 
+--- a/src/main/sources/standalone/torchIndexManifest.ts
++++ b/src/main/sources/standalone/torchIndexManifest.ts
+@@ -32,8 +32,8 @@
+ import { execFile } from 'child_process'
+ import fs from 'fs'
+ import path from 'path'
+-import { dataDir } from '../../lib/paths'
+-import { writeFileSafe } from '../../lib/safe-file'
++import { cacheDir } from '../../lib/paths'
++import { writeFileSafe } from '../../lib/cache-policy'
+ import { fetchJSON } from '../../lib/fetch'
+ import { compareVersions, detectNvidiaDriverVersion } from '../../lib/gpu'
+ import { R2_BASE_URL } from '../../lib/r2Mirror'
+@@ -150,7 +150,7 @@
+ // ---------------------------------------------------------------------------
+ 
+ const REMOTE_MANIFEST_URL = `${R2_BASE_URL}/torch-index-stacks.json`
+-const REMOTE_CACHE_FILE = (): string => path.join(dataDir(), 'torch-index-manifest-cache.json')
++const REMOTE_CACHE_FILE = (): string => path.join(cacheDir(), 'torch-index-manifest-cache.json')
+ 
+ const SAFE_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
+ /** Package versions end up in pip `pkg==version` arguments — allowlist. */
+@@ -457,8 +457,8 @@
+           REMOTE_CACHE_FILE(),
+           JSON.stringify({ schemaVersion: 1, series: parsed.series, stacks: parsed.defs }, null, 2)
+         )
+-      } catch {
+-        // cache persistence is best-effort
++      } catch (cause) {
++        console.warn('Cache persistence failed', cause)
+       }
+     }
+   } catch {
+--- a/src/main/lib/fetch.ts
++++ b/src/main/lib/fetch.ts
+@@ -3,7 +3,7 @@
+ import fs from 'fs'
+ import { cacheDir } from './paths'
+ import { r2MirrorUrl } from './r2Mirror'
+-import { writeFileSafe } from './safe-file'
++import { writeFileSafe } from './cache-policy'
+ 
+ interface CacheEntry {
+   etag: string
+@@ -47,8 +47,8 @@
+       obj[url] = entry
+     }
+     writeFileSafe(CACHE_FILE, JSON.stringify(obj))
+-  } catch {
+-    // ignore — best-effort persistence
++  } catch (cause) {
++    console.warn('Cache persistence failed', cause)
+   }
+ }
+ 
+--- a/src/main/lib/download.ts
++++ b/src/main/lib/download.ts
+@@ -1,5 +1,6 @@
+ import { net } from 'electron'
+ import fs from 'fs'
++import { cacheDownload, writeDownloadMeta } from './cache-policy'
+ import path from 'path'
+ import * as settings from '../settings'
+ import { r2MirrorUrl } from './r2Mirror'
+@@ -63,9 +64,7 @@
+ }
+ 
+ function writeMeta(metaPath: string, meta: DownloadMeta): void {
+-  try {
+-    fs.writeFileSync(metaPath, JSON.stringify(meta))
+-  } catch {}
++  writeDownloadMeta(metaPath, JSON.stringify(meta))
+ }
+ 
+ function headerString(value: string | string[] | undefined): string | undefined {
+@@ -307,12 +306,23 @@
+       // Mark this download in-progress to enable resume if interrupted.
+       const etag = headerString(response.headers['etag'])
+       const lastModified = headerString(response.headers['last-modified'])
+-      writeMeta(metaPath, { url, expectedSize: effectiveSize, etag, lastModified })
++      let grant: ReturnType<typeof cacheDownload>
++      try {
++        writeMeta(metaPath, { url, expectedSize: effectiveSize, etag, lastModified })
++        grant = cacheDownload(destPath, isResumed, effectiveSize > 0 ? effectiveSize : 0)
++      } catch (cause) {
++        cleanup()
++        aborted = true
++        request.abort()
++        safeReject(cause instanceof Error ? cause : new Error(String(cause)))
++        return
++      }
+ 
+       let receivedBytes = baseBytes
+       const startTime = Date.now()
+ 
+-      fileStream = fs.createWriteStream(destPath, isResumed ? { flags: 'a' } : undefined)
++      fileStream = fs.createWriteStream(destPath, grant ? { fd: grant.fd, autoClose: true, start: isResumed ? baseBytes : 0 } : isResumed ? { flags: 'a' } : undefined)
++      fileStream.once('close', () => grant?.settled())
+       fileStream.on('error', (err: Error) => {
+         cleanup()
+         try {
+@@ -325,9 +335,27 @@
+       })
+ 
+       response.on('data', (chunk: Buffer) => {
++        if (aborted || settled) return
+         armIdleTimer()
+-        receivedBytes += chunk.length
+-        fileStream!.write(chunk)
++        try {
++          const next = receivedBytes + chunk.length
++          if (!Number.isSafeInteger(next) || (effectiveSize > 0 && next > effectiveSize)) {
++            throw new Error('Download exceeds its declared byte length')
++          }
++          if (fileStream!.writableLength + chunk.length > 1024 * 1024) {
++            throw new Error('Download write queue capacity exhausted; partial bytes remain resumable')
++          }
++          grant?.reserve(next)
++          receivedBytes = next
++          fileStream!.write(chunk)
++        } catch (cause) {
++          cleanup()
++          aborted = true
++          request.abort()
++          fileStream!.destroy()
++          safeReject(cause instanceof Error ? cause : new Error(String(cause)))
++          return
++        }
+         if (onProgress) {
+           const elapsedSecs = (Date.now() - startTime) / 1000
+           const newBytes = receivedBytes - baseBytes
+@@ -404,6 +432,7 @@
+     })
+ 
+     request.on('error', (err: Error) => {
++      if (settled) return
+       cleanup()
+       if (aborted || stalled) return // onAbort / onStall already rejected
+       // Network failure before any response arrived — try the mirror exactly

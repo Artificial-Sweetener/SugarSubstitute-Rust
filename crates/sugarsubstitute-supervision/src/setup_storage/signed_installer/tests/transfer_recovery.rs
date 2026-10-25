@@ -2,8 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Expire actual transfer workers at durable boundaries while keeping creator custody outside them.
 use super::*;
-use crate::application_launch::ApplicationLaunch;
-use crate::setup_storage::test_worker::pipeline::Pipeline;
+use crate::{
+    application_launch::ApplicationLaunch, setup_storage::test_worker::pipeline::Pipeline,
+};
 
 #[test]
 fn expired_transfer_and_discarded_success_recover_with_the_original_creator() -> TestResult {

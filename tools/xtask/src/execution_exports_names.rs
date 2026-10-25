@@ -13,6 +13,7 @@ use syn::visit::Visit;
 /// Index authored modules without compiling, evaluating platform conditions or expanding macros.
 #[derive(Default)]
 pub(crate) struct Names {
+    pub(crate) restricted_path: Option<fn(&[String]) -> bool>,
     pub(crate) modules: BTreeMap<Vec<String>, Module>,
     pub(crate) externs: BTreeMap<String, String>,
     pub(crate) loaded: BTreeSet<PathBuf>,
@@ -27,8 +28,18 @@ impl Names {
         path: &syn::Path,
         parameters: &BTreeSet<String>,
     ) -> BTreeSet<Vec<String>> {
-        let parts = path_parts(path);
-        self.expand(module, parts, parameters, &mut BTreeSet::new())
+        self.resolve_with(module, path, parameters, &mut BTreeSet::new())
+    }
+
+    /// Keep one alias/projection traversal guard across recursive implementation lookup.
+    pub(crate) fn resolve_with(
+        &self,
+        module: &[String],
+        path: &syn::Path,
+        parameters: &BTreeSet<String>,
+        visited: &mut BTreeSet<Vec<String>>,
+    ) -> BTreeSet<Vec<String>> {
+        self.expand(module, path_parts(path), parameters, visited)
     }
 
     /// Follow aliases and explicit associated-type projections within a declared type.
@@ -52,6 +63,9 @@ impl Names {
         visited: &mut BTreeSet<Vec<String>>,
     ) -> BTreeSet<Vec<String>> {
         let mut found = BTreeSet::new();
+        if paths.raw_pointer {
+            found.insert(vec!["<raw-pointer>".into()]);
+        }
         for path in paths.type_macros {
             found.insert(vec!["<type-macro>".into(), path]);
         }
@@ -72,7 +86,7 @@ impl Names {
             if !visited.insert(identity) {
                 continue;
             }
-            for (key, ty) in self.projected_types(module, &projection) {
+            for (key, ty) in self.projected_types(module, &projection, &mut visited.clone()) {
                 let mut nested = Paths::default();
                 nested.visit_type(&ty);
                 found.extend(self.expand_paths(&key, nested, parameters, &mut visited.clone()));
@@ -126,7 +140,22 @@ impl Names {
         }
         let Some(scope) = self.modules.get(&location) else { return BTreeSet::from([identity]) };
         let mut alternatives = BTreeSet::new();
-        if let Some(bindings) = scope.bindings.get(&name) {
+        let mut child = location.clone();
+        child.push(name.clone());
+        if parts.len() > 1 && self.modules.contains_key(&child) {
+            alternatives.extend(self.expand(
+                &child,
+                parts[1..].to_vec(),
+                parameters,
+                &mut visited.clone(),
+            ));
+        }
+        let mut binding_identity = location.clone();
+        binding_identity.extend(["<binding>".into(), name.clone()]);
+        let binding_available = visited.insert(binding_identity);
+        if let Some(bindings) = scope.bindings.get(&name)
+            && binding_available
+        {
             for binding in bindings {
                 if binding.as_slice() == [name.as_str()] {
                     let root = self.externs.get(&name).cloned().unwrap_or_else(|| name.clone());
@@ -145,7 +174,9 @@ impl Names {
                 ));
             }
         }
-        if let Some(aliases) = scope.aliases.get(&name) {
+        if let Some(aliases) = scope.aliases.get(&name)
+            && binding_available
+        {
             for alias in aliases {
                 let mut types = Paths::default();
                 types.visit_type(&alias.ty);
@@ -163,8 +194,6 @@ impl Names {
         if scope.bindings.contains_key(&name) || scope.aliases.contains_key(&name) {
             return alternatives;
         }
-        let mut child = location.clone();
-        child.push(name.clone());
         if self.modules.contains_key(&child) {
             visited.remove(&identity);
             return self.expand(&child, parts[1..].to_vec(), parameters, visited);
@@ -179,6 +208,9 @@ impl Names {
             }
             if matches!(first.as_str(), "std" | "core" | "alloc")
                 || execution_source::restricted_crate(&first)
+                || self
+                    .restricted_path
+                    .is_some_and(|restricted| restricted(std::slice::from_ref(&first)))
             {
                 return BTreeSet::from([parts]);
             }
@@ -187,7 +219,7 @@ impl Names {
         for glob in &scope.globs {
             for mut prefix in self.expand(&location, glob.clone(), parameters, &mut visited.clone())
             {
-                if execution_source::restricted_path(&prefix) {
+                if self.restricted_path.is_some_and(|restricted| restricted(&prefix)) {
                     prefix.push("*".into());
                     prefix.extend(parts.clone());
                     found.insert(prefix);
@@ -198,6 +230,10 @@ impl Names {
                         parameters,
                         &mut visited.clone(),
                     ));
+                } else {
+                    prefix.push("*".into());
+                    prefix.extend(parts.clone());
+                    found.insert(prefix);
                 }
             }
         }
@@ -224,8 +260,14 @@ struct Paths {
     paths: Vec<syn::Path>,
     type_macros: Vec<String>,
     projections: Vec<syn::TypePath>,
+    raw_pointer: bool,
 }
 impl<'ast> Visit<'ast> for Paths {
+    /// Preserve raw capability shape through private aliases and associated-type projections.
+    fn visit_type_ptr(&mut self, item: &'ast syn::TypePtr) {
+        self.raw_pointer = true;
+        syn::visit::visit_type_ptr(self, item);
+    }
     /// Retain explicitly qualified associated types for matching authored implementation lookup.
     fn visit_type_path(&mut self, item: &'ast syn::TypePath) {
         if item.qself.is_some() {

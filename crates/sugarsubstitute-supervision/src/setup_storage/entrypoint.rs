@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Publish a stable shell entry only after its complete desktop generation is ready.
-use super::{
+use super::invalid;
+use crate::durable_storage::{
     files::{self, Directory},
-    invalid, staging,
+    staging,
 };
 use std::{io, path::Path};
 use sugarsubstitute_contracts::execution::JobContext;
@@ -36,21 +37,26 @@ pub(super) fn stage(generation: &Path) -> io::Result<()> {
 }
 
 /// Unknown or edited links are preserved; only exact retained setup output is replaceable.
-pub(super) fn selected(root: &Directory) -> io::Result<Option<Directory>> {
+pub(super) fn selected(root: &Directory, context: &JobContext) -> io::Result<Option<Directory>> {
+    super::check(context)?;
     let mut existing = match root.read(NAME) {
         Ok(file) => file,
         Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(None),
         Err(cause) => return Err(cause),
     };
     let bytes = files::read_bounded(&mut existing, 65536)?;
-    let target = native::target(&root.path.join(NAME))?;
+    let target = native::target(&root.path().join(NAME))?;
     files::lexical(&target)?;
     let generation = target.parent().ok_or_else(|| invalid("Shell entry target is absent"))?;
     let directory = Directory::open(generation, false)?;
     if target.file_name().and_then(|name| name.to_str()) != Some("sugarsubstitute.exe")
-        || std::fs::canonicalize(
+        || crate::durable_storage::files::canonical_path(
             generation.parent().ok_or_else(|| invalid("Shell entry generation is absent"))?,
-        )? != std::fs::canonicalize(root.path.join("releases"))?
+            context,
+        )? != crate::durable_storage::files::canonical_path(
+            root.path().join("releases"),
+            context,
+        )?
     {
         return Err(invalid("The existing shell entry belongs to another installation"));
     }
@@ -65,32 +71,35 @@ pub(super) fn selected(root: &Directory) -> io::Result<Option<Directory>> {
 /// Earlier installer publication is allowed only before protected selection is enabled.
 /// Hold the first-enablement lock through publication, alongside the caller's setup exclusion.
 pub(super) fn publish(root: &Directory, generation: &Path, context: &JobContext) -> io::Result<()> {
-    super::selection::publication::legacy(root, context, || replace(root, generation))
+    super::selection::publication::legacy(root, context, || replace(root, generation, context))
 }
 
 /// Restore a verified accepted application's shell entry under its run, setup and writer guards.
 /// Validate the old entry before staging anything; edited or unknown links remain untouched.
 pub(super) fn repair(root: &Directory, generation: &Path, context: &JobContext) -> io::Result<()> {
-    selected(root)?;
+    selected(root, context)?;
     let directory = Directory::open(generation, false)?;
     ready(&directory)?;
     stage(generation)?;
     super::check(context)?;
-    replace(root, generation)
+    replace(root, generation, context)
 }
 
 /// Atomic same-volume publication leaves either the previous complete link or the new one.
 /// Callers retain publication authority and installation mutation exclusion until it returns.
-fn replace(root: &Directory, generation: &Path) -> io::Result<()> {
+fn replace(root: &Directory, generation: &Path, context: &JobContext) -> io::Result<()> {
+    super::check(context)?;
     let directory = Directory::open(generation, false)?;
     ready(&directory)?;
     let bytes = files::read_bounded(&mut directory.read(NAME)?, 65536)?;
-    let stage = staging::directory(root, ".setup-entry-stage")?;
-    let _stage = Directory::open(&stage, false)?;
-    let source = stage.join(NAME);
+    let source = staging::unique_path(root, ".setup-entry-stage")?;
     files::write_new(&source, &bytes)?;
-    let replace = selected(root)?.is_some();
-    native::publish(&source, &root.path.join(NAME), replace)
+    let replace = selected(root, context)?.is_some();
+    if replace {
+        staging::replace_record(&source, &root.path().join(NAME))
+    } else {
+        staging::publish(&source, &root.path().join(NAME))
+    }
 }
 
 fn ready(directory: &Directory) -> io::Result<()> {
@@ -121,7 +130,7 @@ mod tests {
     use crate::setup_storage::test_worker::{self as worker, TestResult};
 
     fn generation(root: &Directory, name: &str) -> io::Result<std::path::PathBuf> {
-        let path = root.path.join("releases").join(name);
+        let path = root.path().join("releases").join(name);
         let _directory = Directory::open(&path, true)?;
         files::write_new(&path.join("sugarsubstitute.exe"), b"unexecuted fixture")?;
         stage(&path)?;
@@ -143,19 +152,22 @@ mod tests {
             let root = Directory::open(temporary.path(), false)?;
             let first = generation(&root, "first install")?;
             assert!(publish(&root, &first, context).is_err());
-            assert!(!root.path.join(NAME).exists());
+            assert!(!root.path().join(NAME).exists());
             complete(&first)?;
             publish(&root, &first, context)?;
-            assert_eq!(native::target(&root.path.join(NAME))?, first.join("sugarsubstitute.exe"));
-            let old = std::fs::read(root.path.join(NAME))?;
+            assert_eq!(native::target(&root.path().join(NAME))?, first.join("sugarsubstitute.exe"));
+            let old = std::fs::read(root.path().join(NAME))?;
             let second = generation(&root, "第二 糖")?;
             assert!(publish(&root, &second, context).is_err());
-            assert_eq!(std::fs::read(root.path.join(NAME))?, old);
+            assert_eq!(std::fs::read(root.path().join(NAME))?, old);
             complete(&second)?;
             publish(&root, &second, context)?;
-            assert_eq!(native::target(&root.path.join(NAME))?, second.join("sugarsubstitute.exe"));
+            assert_eq!(
+                native::target(&root.path().join(NAME))?,
+                second.join("sugarsubstitute.exe")
+            );
             assert_eq!(std::fs::read(first.join(NAME))?, old);
-            assert!(selected(&root)?.is_some());
+            assert!(selected(&root, context)?.is_some());
             Ok(())
         })
     }
@@ -171,16 +183,16 @@ mod tests {
             publish(&root, &first, context)?;
             std::fs::OpenOptions::new()
                 .append(true)
-                .open(root.path.join(NAME))?
+                .open(root.path().join(NAME))?
                 .write_all(b"edit")?;
-            let edited = std::fs::read(root.path.join(NAME))?;
+            let edited = std::fs::read(root.path().join(NAME))?;
             let second = generation(&root, "second")?;
             complete(&second)?;
             assert!(publish(&root, &second, context).is_err());
-            assert_eq!(std::fs::read(root.path.join(NAME))?, edited);
-            std::fs::write(root.path.join(NAME), b"user file")?;
+            assert_eq!(std::fs::read(root.path().join(NAME))?, edited);
+            std::fs::write(root.path().join(NAME), b"user file")?;
             assert!(publish(&root, &second, context).is_err());
-            assert_eq!(std::fs::read(root.path.join(NAME))?, b"user file");
+            assert_eq!(std::fs::read(root.path().join(NAME))?, b"user file");
             Ok(())
         })
     }

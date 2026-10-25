@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Derive profile release facts from actual shared publication and retirement.
 use super::*;
-use crate::protected_storage::record_file::{
+use crate::durable_storage::protected::record_file::{
     publication::publish_with_boundary,
     retirement::retire_with_boundary,
     tests::{boundary::Fake, role_fixture::with_record},

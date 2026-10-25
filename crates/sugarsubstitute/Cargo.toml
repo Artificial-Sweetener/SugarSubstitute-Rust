@@ -15,12 +15,15 @@ windows-native-host = []
 k1-native-qualification = ["sugarsubstitute-execution/k1-native-qualification", "sugarsubstitute-desktop/k1-native-qualification", "sugarsubstitute-supervision/k1-native-qualification"]
 
 [dependencies]
+sugarsubstitute-ui = { path = "../sugarsubstitute-ui" }
 sugarsubstitute-contracts = { path = "../sugarsubstitute-contracts" }
+sugarsubstitute-configuration = { path = "../sugarsubstitute-configuration" }
 sugarsubstitute-application = { path = "../sugarsubstitute-application" }
 sugarsubstitute-comfy = { path = "../sugarsubstitute-comfy" }
 sugarsubstitute-execution = { path = "../sugarsubstitute-execution" }
 sugarsubstitute-splash = { path = "../sugarsubstitute-splash" }
 sugarsubstitute-desktop = { path = "../sugarsubstitute-desktop" }
+sugarsubstitute-supervision = { path = "../sugarsubstitute-supervision" }
 tracing.workspace = true
 tracing-subscriber.workspace = true
 serde.workspace = true
@@ -28,10 +31,11 @@ serde_json.workspace = true
 sha2.workspace = true
 
 [target.'cfg(windows)'.dependencies]
+sugarsubstitute-networking = { path = "../sugarsubstitute-networking" }
 sugarsubstitute-crash = { path = "../sugarsubstitute-crash" }
-sugarsubstitute-supervision = { path = "../sugarsubstitute-supervision" }
 
 [target.'cfg(windows)'.dev-dependencies]
+tempfile.workspace = true
 sugarsubstitute-execution = { path = "../sugarsubstitute-execution", features = ["boundary-fixtures"] }
 sugarsubstitute-desktop = { path = "../sugarsubstitute-desktop", features = ["boundary-fixtures"] }
 sugarsubstitute-supervision = { path = "../sugarsubstitute-supervision", features = ["boundary-fixtures"] }

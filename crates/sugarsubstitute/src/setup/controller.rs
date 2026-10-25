@@ -2,16 +2,22 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Coordinate one installer transaction through admitted storage jobs and the retained worker.
 mod completion;
+mod events;
+use events::{Completed, Event, Kind, Progress};
 mod lifetime;
+mod native;
+mod navigation;
+pub(super) use native::Native;
 mod provisioning;
+mod session;
 mod storage;
 use storage::{StorageJob, StorageResult, StorageWork};
 pub(super) mod managed_qualification;
 pub(super) mod qualification;
 mod requests;
-pub(super) mod window_qualification;
 use super::worker::Worker;
 use crate::job_sequence::JobSequence;
+pub(super) use native::qualification as window_qualification;
 use serde_json::{Value, json};
 use std::{collections::VecDeque, error::Error, io, path::PathBuf, sync::Arc};
 use sugarsubstitute_contracts::execution::{
@@ -27,6 +33,12 @@ use sugarsubstitute_supervision::{
     },
 };
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
+
+/// One root drain retains rendering metadata alongside the corresponding backend results.
+struct Advance {
+    completions: sugarsubstitute_contracts::execution::CompletionBatch,
+    events: Vec<Event>,
+}
 
 enum Purpose {
     Options,
@@ -50,23 +62,22 @@ pub(super) struct Controller {
     jobs: JobSequence,
     storage: Option<StorageJob>,
     bundle: Option<Arc<VerifiedBundle>>,
+    cache: Option<setup_storage::cache::RuntimeCache>,
     prepared: Option<Box<SignedPreparation>>,
     installed: Option<CompletedInstallation>,
     relaunch: Option<ApplicationLaunch>,
     launch_failure: Option<io::Error>,
     worker: Option<Worker>,
     pending: Option<Pending>,
-    waiting: Option<Value>,
+    waiting: Option<requests::Request>,
     selection: Option<Selection>,
     install_id: Option<String>,
     inspection_id: Option<String>,
-    output: VecDeque<Value>,
+    output: VecDeque<Event>,
     closing: bool,
     stopping: bool,
     unavailable: bool,
     console: Option<super::console::Output>,
-    profile_job: Option<OwnedJob<setup_storage::InstallerProfile, io::Error>>,
-    profile: Option<setup_storage::InstallerProfile>,
     locale: String,
 }
 
@@ -87,6 +98,7 @@ impl Controller {
             jobs: JobSequence::new(),
             storage: None,
             bundle: None,
+            cache: None,
             prepared: None,
             installed: None,
             relaunch: None,
@@ -102,22 +114,14 @@ impl Controller {
             stopping: false,
             unavailable: false,
             console: None,
-            profile_job: None,
-            profile: None,
             locale: "en".into(),
         }
     }
-    fn reply(&mut self, id: Option<&str>, event: &str, data: Value) -> Result<()> {
-        if matches!(event, "progress" | "diagnostic" | "unavailable" | "failed")
-            && let Some(console) = &mut self.console
-            && let Some(text) = data["message"].as_str().or_else(|| data["status"].as_str())
-        {
-            console.append(text)?;
-        }
-        if self.output.len() >= 32 {
-            return Err("Installer response admission exceeded".into());
-        }
-        self.output.push_back(json!({"version":1,"id":id,"event":event,"data":data}));
-        Ok(())
+}
+
+impl Controller {
+    /// Borrow the validated locale after native retirement for terminal feedback.
+    pub(super) fn locale(&self) -> &str {
+        &self.locale
     }
 }

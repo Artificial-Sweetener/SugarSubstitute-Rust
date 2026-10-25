@@ -20,6 +20,19 @@ pub(crate) struct Persistence {
     pub(crate) schema_version: u32,
     pub(crate) formats: Vec<Format>,
 }
+impl Persistence {
+    /// Require a preserved protocol's reviewed source before registering an external native boundary.
+    pub(crate) fn preserves_source(&self, id: &str, owner: &str, path: &str) -> bool {
+        self.schema_version == 1
+            && self.formats.iter().any(|format| {
+                format.id == id
+                    && format.owner == owner
+                    && format.sources.iter().any(|source| source == path)
+                    && matches!(format.classification, Classification::Protocol)
+                    && matches!(format.preservation, Preservation::MustPreserve)
+            })
+    }
+}
 
 /// Bind schema compatibility to exact source and a must-preserve classification.
 #[derive(Deserialize)]
@@ -73,11 +86,11 @@ pub(crate) struct Caches {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Cache {
-    id: String,
-    owner: String,
-    sources: Vec<String>,
-    source_sha256: String,
-    namespace: String,
+    pub(crate) id: String,
+    pub(crate) owner: String,
+    pub(crate) sources: Vec<String>,
+    pub(crate) source_sha256: String,
+    pub(crate) namespace: String,
     storage_schema: u32,
     compatibility_epoch: u32,
     compatibility_inputs: Vec<String>,

@@ -13,7 +13,7 @@ pub(crate) fn initialize(
 ) -> Result<(), ClaimError> {
     let pool = root.pool.as_ref().ok_or_else(|| ClaimError::invalid("missing_pool"))?.clone();
     let budget = files::Budget::Core(pool);
-    let resolved = crate::protected_storage::account::resolve_namespace(
+    let resolved = crate::durable_storage::protected::account::resolve_namespace(
         installation,
         &mut root.handles,
         budget.clone(),
@@ -28,8 +28,8 @@ pub(crate) fn initialize(
     root.directory = resolved.directory;
     let directory = &root.directory;
     let epoch = sugarsubstitute_contracts::lifecycle::CoordinatorEpoch::new(
-        crate::protected_storage::record_file::random(
-            &mut crate::protected_storage::native_phase::NativePhase::ordinary(&budget)?,
+        crate::durable_storage::protected::record_file::random(
+            &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(&budget)?,
         )?,
     )
     .map_err(|e| ClaimError::new("coordinator_epoch", e))?;
@@ -37,7 +37,7 @@ pub(crate) fn initialize(
     root.key = Some(key);
     let stem = directory
         .join("coordinators")
-        .join(crate::protected_storage::record_file::hex(namespace.bytes()));
+        .join(crate::durable_storage::protected::record_file::hex(namespace.bytes()));
     if let Some(guard) = guard.as_mut()
         && matches!(
             guard.proof.origin,
@@ -47,23 +47,25 @@ pub(crate) fn initialize(
         guard.adopt_recovered_coordinator(&mut root.coordinator)?;
     } else {
         HeldFile::acquire_into(
-            crate::protected_storage::exclusion::ExclusionOpen::CreateOrOpen,
+            crate::durable_storage::protected::exclusion::ExclusionOpen::CreateOrOpen,
             &mut root.coordinator,
-            crate::protected_storage::native_name::NativeName::Ordinary(
+            crate::durable_storage::protected::native_name::NativeName::Ordinary(
                 stem.with_extension("claim"),
             ),
-            crate::protected_storage::native_name::NativeName::Ordinary(
+            crate::durable_storage::protected::native_name::NativeName::Ordinary(
                 stem.with_extension("record"),
             ),
-            crate::protected_storage::native_name::NativeSid::Ordinary(root.sid.clone()),
+            crate::durable_storage::protected::native_name::NativeSid::Ordinary(root.sid.clone()),
             budget.clone(),
-            &mut crate::protected_storage::native_phase::NativePhase::ordinary(&budget)?,
+            &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(&budget)?,
         )?;
     }
     let held = root.coordinator.as_ref().ok_or_else(|| ClaimError::invalid("missing_claim"))?;
     let record = Record::coordinator(key);
     if let Some(guard) = &guard {
-        guard.check_record(&crate::protected_storage::record_file::read_shape(held, context)?)?;
+        guard.check_record(&crate::durable_storage::protected::record_file::read_shape(
+            held, context,
+        )?)?;
     }
     if !guard.as_ref().is_some_and(|guard| {
         matches!(
@@ -85,9 +87,9 @@ pub(crate) fn initialize(
     {
         let permission = guard.publication(
             held,
-            crate::protected_storage::paths::file_identity(
+            crate::durable_storage::protected::paths::file_identity(
                 &held.handle,
-                &mut crate::protected_storage::native_phase::NativePhase::ordinary(
+                &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(
                     &held.handle.budget(),
                 )?,
             )?,

@@ -42,6 +42,9 @@ pub(crate) struct Owner {
     /// Authored non-Cargo runtime surfaces consumed by this crate.
     #[serde(default)]
     pub(crate) auxiliary_roots: Vec<String>,
+    /// Exact non-Cargo source files beside separately owned directory trees.
+    #[serde(default)]
+    pub(crate) auxiliary_files: Vec<String>,
     pub(crate) layer: String,
     pub(crate) concern: String,
 }
@@ -50,6 +53,12 @@ impl Owner {
     /// Return every explicitly registered source root without implying another Cargo package.
     pub(crate) fn roots(&self) -> impl Iterator<Item = &str> {
         std::iter::once(self.root.as_str()).chain(self.auxiliary_roots.iter().map(String::as_str))
+    }
+
+    /// Resolve source ownership once for directory trees and explicitly registered loose files.
+    pub(crate) fn owns(&self, root: &Path, path: &Path) -> bool {
+        self.roots().any(|relative| path.starts_with(root.join(relative)))
+            || self.auxiliary_files.iter().any(|relative| path == root.join(relative))
     }
 }
 

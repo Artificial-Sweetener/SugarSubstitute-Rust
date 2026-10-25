@@ -1,18 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Own bounded installer messages inside an admitted asynchronous I/O job.
+mod memory;
+mod native;
+mod socket;
+pub use native::DownloadPort;
 #[cfg(windows)]
 #[allow(unsafe_code)]
 mod random;
 mod wire;
 
+#[cfg(not(windows))]
+use std::io::Read;
 use std::{
-    io::{self, Read, Write},
-    net::{Shutdown, TcpListener, TcpStream},
-    sync::mpsc::{self, Receiver, SyncSender, TryRecvError, TrySendError},
-    time::{Duration, Instant},
+    io,
+    sync::mpsc::{self, Receiver, SyncSender},
 };
-use sugarsubstitute_contracts::execution::JobContext;
+use tokio::sync::mpsc::{Receiver as CommandReceiver, Sender};
 
 /// Peak protocol buffers, queues and retained events reserved before worker admission.
 pub const RESERVATION_BYTES: u64 = 4 * 1024 * 1024;
@@ -30,205 +34,152 @@ pub enum TransportEvent {
         token: String,
     },
     /// One complete bounded UTF-8 JSON event from the authenticated worker.
-    Frame(String),
+    Frame(Frame),
 }
 
-/// Native-thread endpoint. Queue operations never wait for network or worker progress.
+/// A received UTF-8 message retaining original admission and one of sixteen delivery slots.
+///
+/// Borrow its bytes for decoding. Drop the frame after decoding to permit another delivery.
+/// Holding a frame after transport completion retains its original memory reservation.
+pub struct Frame {
+    bytes: String,
+    _permit: memory::Permit,
+}
+impl Frame {
+    /// Borrow the complete message without its newline; no writable allocation escapes.
+    pub fn as_str(&self) -> &str {
+        &self.bytes
+    }
+}
+
+/// Owned host endpoint. UI polling never waits; admitted native consumers may receive with controls.
 pub struct Transport {
-    commands: SyncSender<String>,
+    commands: Sender<String>,
     events: Receiver<TransportEvent>,
+    downloads: Option<Receiver<Frame>>,
+    budget: memory::Budget,
 }
 
 /// Inert transport job input. Run only through the application's execution scope.
 pub struct TransportJob {
-    commands: Receiver<String>,
+    commands: CommandReceiver<String>,
     events: SyncSender<TransportEvent>,
+    downloads: SyncSender<Frame>,
+    budget: memory::Budget,
 }
 
 impl Transport {
     /// Create a fixed-capacity pair without creating a thread, socket or process.
     pub fn pair() -> (Self, TransportJob) {
-        let (commands, input) = mpsc::sync_channel(QUEUE_SLOTS);
+        let (commands, input) = tokio::sync::mpsc::channel(QUEUE_SLOTS);
         let (output, events) = mpsc::sync_channel(QUEUE_SLOTS);
-        (Self { commands, events }, TransportJob { commands: input, events: output })
+        let (downloads, native) = mpsc::sync_channel(QUEUE_SLOTS);
+        let budget = memory::Budget::new();
+        (
+            Self { commands, events, downloads: Some(native), budget: budget.clone() },
+            TransportJob { commands: input, events: output, downloads, budget },
+        )
     }
 
     /// Queue one complete JSON command, preserving caller request identity.
     /// # Errors
-    /// Rejects oversized/multiline commands, closed transport and explicit overload.
+    /// Rejects oversized/multiline commands, allocations exceeding the frame bound,
+    /// commands before job admission, closed transport and explicit overload.
+    /// Wait for `Listening` before sending commands.
     pub fn send(&self, command: String) -> io::Result<()> {
-        if command.len() >= MAX_FRAME_BYTES || command.contains(['\r', '\n']) {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, "Invalid provisioning frame"));
-        }
-        self.commands.try_send(command).map_err(|cause| match cause {
-            TrySendError::Full(_) => {
-                io::Error::new(io::ErrorKind::WouldBlock, "Provisioning command queue full")
-            }
-            TrySendError::Disconnected(_) => {
-                io::Error::new(io::ErrorKind::BrokenPipe, "Provisioning transport closed")
-            }
-        })
+        send(&self.commands, &self.budget, command)
     }
 
-    /// Take at most one event without waiting. Absence is not proof of worker settlement.
-    pub fn next_event(&self) -> Option<TransportEvent> {
-        self.events.try_recv().ok()
-    }
-}
-
-impl TransportJob {
-    /// Authenticate one worker and transfer bounded messages until cancellation or disconnect.
-    ///
-    /// The host separately owns process-family cleanup. This job never treats a closed
-    /// connection as evidence that the worker or its descendants exited.
+    /// Move the authenticated download lane to one execution-owned native storage service.
+    /// The lane shares the original sixteen delivery slots and four MiB transport reservation.
     /// # Errors
-    /// Preserves socket errors, malformed frames, failed authentication and output overload.
-    pub async fn run(mut self, context: JobContext) -> io::Result<()> {
-        let _memory = context.memory().claim(RESERVATION_BYTES).map_err(io::Error::other)?;
-        let listener = TcpListener::bind(("127.0.0.1", 0))?;
-        listener.set_nonblocking(true)?;
-        let token = random_token()?;
-        self.publish(
-            &context,
-            TransportEvent::Listening { port: listener.local_addr()?.port(), token: token.clone() },
-        )
-        .await?;
-        let mut socket = loop {
-            if stopped(&context) {
-                return Ok(());
+    /// Rejects a second consumer. Taking this port creates neither a worker nor native I/O.
+    pub fn take_downloads(&mut self) -> io::Result<DownloadPort> {
+        let input =
+            self.downloads.take().ok_or_else(|| io::Error::other("Download lane already owned"))?;
+        Ok(DownloadPort { input, commands: self.commands.clone(), budget: self.budget.clone() })
+    }
+
+    /// Take at most one event without waiting. Received frames keep their delivery slots
+    /// until dropped; decoding must finish before another sixteen frames can arrive.
+    /// Absence is not proof of worker settlement.
+    pub fn next_event(&self) -> Option<TransportEvent> {
+        let event = self.events.try_recv().ok();
+        if event.is_some() {
+            self.budget.signal();
+        }
+        event
+    }
+    /// Receive on an admitted blocking worker for at most ten milliseconds, using current controls.
+    /// The original transport reservation funds events independently of the receiving job.
+    /// Never call this method on a UI thread.
+    /// # Errors
+    /// Preserves transport closure, current cancellation and expired job/scope deadlines.
+    pub fn receive(
+        &self,
+        context: &sugarsubstitute_contracts::execution::JobContext,
+    ) -> io::Result<Option<TransportEvent>> {
+        controlled(context, &self.budget)?;
+        let event = match self.events.recv_timeout(std::time::Duration::from_millis(10)) {
+            Ok(event) => {
+                self.budget.signal();
+                Some(event)
             }
-            match listener.accept() {
-                Ok((socket, address)) if address.ip().is_loopback() => break socket,
-                Ok(_) => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::PermissionDenied,
-                        "Non-loopback worker",
-                    ));
-                }
-                Err(cause) if cause.kind() == io::ErrorKind::WouldBlock => {
-                    tokio::time::sleep(Duration::from_millis(10)).await;
-                }
-                Err(cause) => return Err(cause),
+            Err(mpsc::RecvTimeoutError::Timeout) => None,
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                return Err(io::ErrorKind::BrokenPipe.into());
             }
         };
-        drop(listener);
-        socket.set_nonblocking(true)?;
-        let authenticated_by = Instant::now() + Duration::from_secs(15);
-        let mut decoder = wire::Decoder::default();
-        let mut authenticated = false;
-        let mut buffer = [0; 8192];
-        loop {
-            if stopped(&context) {
-                socket.shutdown(Shutdown::Both)?;
-                return Ok(());
-            }
-            if !authenticated && Instant::now() >= authenticated_by {
-                return Err(io::Error::new(
-                    io::ErrorKind::TimedOut,
-                    "Worker authentication timed out",
-                ));
-            }
-            if authenticated && !self.send_commands(&mut socket, &context).await? {
-                return Ok(());
-            }
-            match socket.read(&mut buffer) {
-                Ok(0) => return decoder.finish(),
-                Ok(count) => {
-                    for frame in decoder.push(&buffer[..count])? {
-                        if !authenticated {
-                            let value: serde_json::Value =
-                                serde_json::from_str(&frame).map_err(io::Error::other)?;
-                            if value["version"] != 1
-                                || value["event"] != "authenticate"
-                                || value["token"] != token
-                            {
-                                return Err(io::Error::new(
-                                    io::ErrorKind::PermissionDenied,
-                                    "Worker authentication failed",
-                                ));
-                            }
-                            authenticated = true;
-                        } else {
-                            self.publish(&context, TransportEvent::Frame(frame)).await?;
-                        }
-                    }
-                }
-                Err(cause)
-                    if matches!(
-                        cause.kind(),
-                        io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
-                    ) =>
-                {
-                    tokio::time::sleep(Duration::from_millis(10)).await
-                }
-                Err(cause) => return Err(cause),
-            }
-        }
-    }
-
-    async fn send_commands(
-        &mut self,
-        socket: &mut TcpStream,
-        context: &JobContext,
-    ) -> io::Result<bool> {
-        for _ in 0..QUEUE_SLOTS {
-            match self.commands.try_recv() {
-                Ok(mut command) => {
-                    command.push('\n');
-                    let mut remaining = command.as_bytes();
-                    let until = Instant::now() + Duration::from_secs(2);
-                    while !remaining.is_empty() {
-                        if stopped(context) {
-                            return Ok(false);
-                        }
-                        match socket.write(remaining) {
-                            Ok(0) => return Err(io::ErrorKind::WriteZero.into()),
-                            Ok(count) => remaining = &remaining[count..],
-                            Err(cause) if cause.kind() == io::ErrorKind::WouldBlock => {
-                                if Instant::now() >= until {
-                                    return Err(io::Error::new(
-                                        io::ErrorKind::TimedOut,
-                                        "Worker is not reading commands",
-                                    ));
-                                }
-                                tokio::time::sleep(Duration::from_millis(10)).await;
-                            }
-                            Err(cause) => return Err(cause),
-                        }
-                    }
-                }
-                Err(TryRecvError::Empty) => break,
-                Err(TryRecvError::Disconnected) => {
-                    socket.shutdown(Shutdown::Both)?;
-                    return Ok(false);
-                }
-            }
-        }
-        Ok(true)
-    }
-
-    async fn publish(&mut self, context: &JobContext, mut event: TransportEvent) -> io::Result<()> {
-        loop {
-            if stopped(context) {
-                return Ok(());
-            }
-            match self.events.try_send(event) {
-                Ok(()) => return Ok(()),
-                Err(TrySendError::Full(retained)) => {
-                    event = retained;
-                    tokio::time::sleep(Duration::from_millis(10)).await;
-                }
-                Err(TrySendError::Disconnected(_)) => {
-                    return Err(io::Error::new(io::ErrorKind::BrokenPipe, "Installer closed"));
-                }
-            }
-        }
+        controlled(context, &self.budget)?;
+        Ok(event)
     }
 }
 
-fn stopped(context: &JobContext) -> bool {
-    context.cancellation_requested()
-        || context.deadline().is_some_and(|until| context.now() >= until)
+/// Share current control checks across the two concrete owned delivery ports.
+fn controlled(
+    context: &sugarsubstitute_contracts::execution::JobContext,
+    budget: &memory::Budget,
+) -> io::Result<()> {
+    if context.cancellation_requested() {
+        return Err(io::ErrorKind::Interrupted.into());
+    }
+    if context.deadline().is_some_and(|deadline| context.now() >= deadline) {
+        return Err(io::ErrorKind::TimedOut.into());
+    }
+    if budget.closed() {
+        return Err(io::ErrorKind::BrokenPipe.into());
+    }
+    Ok(())
+}
+
+impl Drop for Transport {
+    fn drop(&mut self) {
+        self.budget.close();
+    }
+}
+
+/// Queue only a bounded allocation after actual transport admission, using one shared command rule.
+fn send(commands: &Sender<String>, budget: &memory::Budget, command: String) -> io::Result<()> {
+    if command.len() >= MAX_FRAME_BYTES
+        || command.capacity() > MAX_FRAME_BYTES
+        || command.contains(['\r', '\n'])
+    {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Invalid provisioning frame"));
+    }
+    if !budget.admitted() {
+        return Err(io::Error::new(io::ErrorKind::WouldBlock, "Transport not admitted"));
+    }
+    if budget.closed() {
+        return Err(io::Error::new(io::ErrorKind::BrokenPipe, "Provisioning transport closed"));
+    }
+    commands.try_send(command).map_err(|cause| match cause {
+        tokio::sync::mpsc::error::TrySendError::Full(_) => {
+            io::Error::new(io::ErrorKind::WouldBlock, "Provisioning command queue full")
+        }
+        tokio::sync::mpsc::error::TrySendError::Closed(_) => {
+            io::Error::new(io::ErrorKind::BrokenPipe, "Provisioning transport closed")
+        }
+    })
 }
 
 fn random_token() -> io::Result<String> {
@@ -239,3 +190,8 @@ fn random_token() -> io::Result<String> {
     std::fs::File::open("/dev/urandom")?.read_exact(&mut bytes)?;
     Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
 }
+
+#[cfg(test)]
+mod native_tests;
+#[cfg(test)]
+mod tests;

@@ -11,6 +11,8 @@ mod lifecycle;
 mod normal_idle;
 #[path = "entry_runner/post_exit.rs"]
 mod post_exit;
+#[path = "entry_runner/presentation.rs"]
+pub(super) mod presentation;
 #[path = "entry_runner/routing.rs"]
 mod routing;
 #[path = "entry_runner/scope_sequence.rs"]
@@ -67,6 +69,8 @@ pub(crate) struct EntryResources<'a> {
 /// admissions, authenticated loans and original causes stay in this adapter until
 /// checked retirement. No method may fabricate a Run, readiness or family settlement.
 pub(crate) trait EntryActivation {
+    /// Borrow the already authenticated locale; absence uses canonical fallback without reading settings.
+    fn presentation_locale(&self) -> Option<sugarsubstitute_contracts::configuration::LocaleId>;
     /// Consume a genuinely authenticated source into the existing child admission.
     /// On failure retain partial admitted custody and its original cause in this owner.
     /// Unexecuted rejection leaves this identical option unchanged. An admitted
@@ -139,7 +143,7 @@ pub(crate) fn run_application<C: EntryActivation + 'static>(
         && let Some(request) =
             sugarsubstitute_supervision::profiles::ProfileInUse::request(cause.as_ref())
     {
-        match super::profile_conflict::resolve(request) {
+        match super::profile_conflict::resolve(request, presentation::locale::<C>(cause.as_ref())) {
             Ok(_) => return Ok(()),
             Err(secondary) => {
                 tracing::error!(operation="profile_conflict_presentation", cause=?FailureDisplay(secondary.as_ref()),
@@ -229,7 +233,7 @@ impl fmt::Debug for FailureDisplay<'_> {
                 fmt::Display::fmt(current, f)?;
             }
             if current
-                .downcast_ref::<sugarsubstitute_comfy::configuration::StartupConfigurationError>()
+                .downcast_ref::<sugarsubstitute_configuration::startup::StartupConfigurationError>()
                 .is_some()
             {
                 return Ok(());

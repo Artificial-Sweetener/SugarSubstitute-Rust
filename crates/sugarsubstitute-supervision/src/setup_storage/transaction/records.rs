@@ -9,31 +9,28 @@ pub(super) fn write(
     cube: &Path,
 ) -> io::Result<()> {
     let configuration = root.join("startup.local.toml");
-    let startup = toml::to_string(&serde_json::json!({
-        "schema_version": 1, "mode": "launch", "port": 8188, "profile": "default",
-        "locale": selection.locale, "theme": "dark", "reduced_motion": false,
-        "launch": {
-            "root": runtime.directory, "interpreter": runtime.python,
-            "arguments": ["--output-directory", selection.outputs],
-        },
-    }))
-    .map_err(io::Error::other)?;
+    let startup = sugarsubstitute_configuration::initial::managed(
+        &runtime.directory,
+        &runtime.python,
+        &selection.outputs,
+        &selection.locale,
+    )?;
     files::write_immutable(&configuration, startup.as_bytes(), files::create_new)?;
-    let arguments = [
-        ("--startup-config", configuration),
-        ("--frontend-package", runtime.frontend.clone()),
-        ("--frontend-metadata", runtime.metadata.clone()),
-        ("--sugarcubes-root", cube.to_owned()),
-        ("--backend-script", runtime.directory.join("main.py")),
-        ("--profile-directory", selection.install_root.join("desktop-data").join("profile")),
-    ]
-    .into_iter()
-    .flat_map(|(flag, path)| [serde_json::json!(flag), serde_json::json!(path)])
-    .collect::<Vec<_>>();
+    let paths = sugarsubstitute_configuration::paths::StartupPaths::new([
+        configuration,
+        runtime.frontend.clone(),
+        runtime.metadata.clone(),
+        cube.to_owned(),
+        runtime.directory.join("main.py"),
+        selection.install_root.join("desktop-data").join("profile"),
+    ])
+    .map_err(io::Error::other)?;
     files::write_immutable(
         &root.join("sugarsubstitute-launch.local.json"),
-        &serde_json::to_vec(&serde_json::json!({"schema_version": 1, "arguments": arguments}))
-            .map_err(io::Error::other)?,
+        &sugarsubstitute_configuration::descriptor::LaunchDescriptor::encode(paths)?,
         files::create_new,
     )
 }
+
+#[cfg(test)]
+mod tests;

@@ -16,7 +16,8 @@ use sugarsubstitute_contracts::{
 use sugarsubstitute_desktop::{
     AccessibleControl, ControlBounds, HitTarget, KeyAction, Pointer, PointerAction, WindowContent,
 };
-use sugarsubstitute_splash::{Appearance, Control, PaperFlip, ProgressFrame};
+use sugarsubstitute_splash::{Appearance, Control, PaperFlip};
+use sugarsubstitute_ui::progress::ProgressFrame;
 
 /// Keep splash-specific interaction semantics outside the shared desktop adapter.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -72,6 +73,7 @@ impl SplashDemo {
             messages,
             controls: [
                 AccessibleControl {
+                    enabled: true,
                     id: 1,
                     label: if appearance.expanded {
                         messages.hide_output
@@ -83,6 +85,7 @@ impl SplashDemo {
                     visible: true,
                 },
                 AccessibleControl {
+                    enabled: true,
                     id: 2,
                     label: messages.cancel,
                     bounds: ControlBounds { x: 512.0, y: 0.0, width: 46.0, height: 32.0 },

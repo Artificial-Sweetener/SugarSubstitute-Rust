@@ -65,7 +65,7 @@ impl TextPort for NativeText {
         let range = self.control().selection();
         let first_line = self.control().first_line()?;
         let first = self.control().line_index(first_line)?;
-        let at_bottom = super::engine::find(self.hwnd)?.at_bottom()?;
+        let at_bottom = crate::windows_text::find(self.hwnd)?.at_bottom()?;
         if range.cpMin < 0 || range.cpMax < range.cpMin || first < 0 {
             return Err(DesktopError::message(
                 "console_selection_observe",

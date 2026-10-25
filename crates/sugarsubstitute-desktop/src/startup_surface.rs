@@ -192,7 +192,7 @@ impl SurfacePort for SplashPort<'_> {
         Controls::new(
             window.clone(),
             self.event_loop.create_proxy(),
-            self.controls,
+            &crate::windows_controls::Specification::buttons(self.controls),
             PaintMode::PreparedPixels,
             self.timings.clone(),
         )

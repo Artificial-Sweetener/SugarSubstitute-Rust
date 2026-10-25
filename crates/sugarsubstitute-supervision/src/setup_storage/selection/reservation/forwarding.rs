@@ -25,7 +25,7 @@ impl SelectionStore {
             let path = staging::unique_path(&self.root, ".selection-forward")?;
             let mut file = protection.transient_file(&path, context)?;
             file.write_all(&snapshot.encode()?)?;
-            file.sync_all()?;
+            files::sync(&file, context)?;
             let selection = duplicate_readonly_inheritable(&file)?;
             Ok(Some((trial.clone(), selection)))
         })?

@@ -10,6 +10,8 @@ mod archive;
 mod error;
 mod intent;
 mod operation;
+#[allow(unsafe_code)]
+mod retention;
 mod stream;
 pub use error::{ReportExportCause, ReportExportCode};
 pub use intent::ReportExportIntent;

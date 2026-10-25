@@ -7,7 +7,7 @@ fn candidate(
     object: DiagnosticObject,
     facts: DiagnosticReadFacts,
 ) -> TestResult {
-    let (class, digest) = crate::protected_storage::record_file::diagnostic_object_binding(
+    let (class, digest) = crate::durable_storage::protected::record_file::diagnostic_object_binding(
         object,
         owner_key(2)?.namespace,
     );

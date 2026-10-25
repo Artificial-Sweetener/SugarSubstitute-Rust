@@ -24,7 +24,10 @@ impl SelectionStore {
         let (root, marker) = protection::with_domain(context, |protection| {
             let _transition = namespace::transition(&installation, protection, context)?;
             for leaf in [DIRECTORY, NAMESPACE_MARKER] {
-                match std::fs::symlink_metadata(installation.path.join(leaf)) {
+                match crate::durable_storage::files::inspect(
+                    installation.path().join(leaf),
+                    context,
+                ) {
                     Ok(_) => return Err(SelectionFailure::Changed),
                     Err(cause) if cause.kind() == io::ErrorKind::NotFound => {}
                     Err(cause) => return Err(cause.into()),
@@ -34,14 +37,14 @@ impl SelectionStore {
                 let path = staging::unique_path(&installation, ".selection-init")?;
                 owner.directory(&path, Mode::CreateNew, context)?;
                 let root = Directory::open(&path, false)?;
-                owner.file(&path.join(LOCK), context)?.sync_all()?;
+                files::sync(&owner.file(&path.join(LOCK), context)?, context)?;
                 let mut file = owner.file(&path.join(RECORD), context)?;
                 file.write_all(&bytes)?;
-                file.sync_all()?;
+                files::sync(&file, context)?;
                 check(context)?;
                 Ok((path, root.identity()?))
             })?;
-            let destination = installation.path.join(DIRECTORY);
+            let destination = installation.path().join(DIRECTORY);
             protection::with(context, |owner| {
                 owner.publish(
                     &stage,

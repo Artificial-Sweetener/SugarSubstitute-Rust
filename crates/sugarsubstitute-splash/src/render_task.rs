@@ -4,13 +4,14 @@
 //! Move an exclusive renderer through admitted initialization and bounded frame preparation.
 
 use super::{RenderError, RenderFrame, SplashRenderer, stages::RenderStages};
-use crate::{AnimationFrame, Appearance, ProgressFrame};
+use crate::{AnimationFrame, Appearance};
 use std::{error::Error, fmt, num::NonZeroUsize};
 use sugarsubstitute_application::transcript::TranscriptSnapshot;
 use sugarsubstitute_contracts::{
     execution::{CpuStep, CpuTask, JobContext, MemoryClaim, MemoryLease},
     presentation::{FrameIdentity, FrameShape, FrameValidator, PreparedFrame},
 };
+use sugarsubstitute_ui::progress::ProgressFrame;
 
 /// Reserve all forty decoded poses and both current/replacement caption pairs.
 ///

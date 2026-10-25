@@ -79,7 +79,7 @@ impl TrustStore {
                 &self.repository,
                 ESTABLISHED,
             )?;
-            files::write_immutable(&self.root.path.join(MARKER), &bytes, |path| {
+            files::write_immutable(&self.root.path().join(MARKER), &bytes, |path| {
                 protection.file(path, context)
             })?;
         }

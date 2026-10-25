@@ -7,7 +7,7 @@ use crate::animation::{AnimationFrame, POSE_COUNT};
 use crate::projection::Bounds;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
-use tiny_skia::Pixmap;
+use sugarsubstitute_ui::bitmap::Bitmap;
 
 #[path = "character_decode.rs"]
 mod decode;
@@ -150,7 +150,7 @@ impl Error for CharacterError {
 /// persistent cache and has no application or canvas state.
 pub struct CharacterLibrary {
     assets: &'static [PoseAsset],
-    decoded: Vec<Option<Pixmap>>,
+    decoded: Vec<Option<Bitmap>>,
 }
 
 impl CharacterLibrary {
@@ -193,12 +193,12 @@ impl CharacterLibrary {
     /// Return a geometry, pose-index, PNG-decoding, packaged-image-size, or allocation error.
     pub fn render(
         &mut self,
-        target: &mut Pixmap,
+        target: &mut crate::Raster,
         bounds: Bounds,
         frame: AnimationFrame,
     ) -> Result<(), CharacterError> {
         let mut cursor = CharacterRender::new(target.width(), target.height(), bounds, frame)?;
-        while !cursor.step(self, target)? {}
+        while !cursor.step(self, &mut target.pixels)? {}
         Ok(())
     }
 

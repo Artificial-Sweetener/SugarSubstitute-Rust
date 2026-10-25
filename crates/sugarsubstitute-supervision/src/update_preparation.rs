@@ -113,7 +113,7 @@ impl Progress {
             Self::Preparing => {
                 2 * setup_storage::RESERVATION_BYTES
                     + setup_storage::TRUST_OPERATION_RESERVATION_BYTES
-                    + setup_storage::OFFER_CACHE_RESERVATION_BYTES
+                    + setup_storage::OFFER_PUBLICATION_RESERVATION_BYTES
             }
             Self::SelectingEngine => {
                 setup_storage::RESERVATION_BYTES + setup_storage::TRUST_OPERATION_RESERVATION_BYTES
@@ -122,8 +122,7 @@ impl Progress {
                 setup_storage::RESERVATION_BYTES + setup_storage::UPDATER_STAGING_RESERVATION_BYTES
             }
             Self::Restoring => {
-                setup_storage::OFFER_CACHE_RESERVATION_BYTES
-                    + setup_storage::OFFER_RESERVATION_BYTES
+                setup_storage::OFFER_LOOKUP_RESERVATION_BYTES
                     + setup_storage::TRUST_OPERATION_RESERVATION_BYTES
             }
             Self::Reopening => {
@@ -132,7 +131,7 @@ impl Progress {
             }
             Self::Remembering => {
                 setup_storage::TRUST_OPERATION_RESERVATION_BYTES
-                    + setup_storage::OFFER_CACHE_RESERVATION_BYTES
+                    + setup_storage::OFFER_PUBLICATION_RESERVATION_BYTES
             }
             Self::RestoringArchive => {
                 setup_storage::DOWNLOAD_RESERVATION_BYTES

@@ -20,7 +20,7 @@ fn incompatible_download_cannot_change_accepted_selection_or_begin_preparation()
             let (manifest, compressed) = test_package::distribution_with_contract(contract)?;
             let archive = test_package::seal(&manifest, &compressed);
             let signed = SignedPackage::new(&archive, 2)?;
-            let trust = TrustStore::open(&directory.path, [92; 32], context)?;
+            let trust = TrustStore::open(directory.path(), [92; 32], context)?;
             let target = trust
                 .offer(
                     signed.metadata.metadata(),
@@ -31,14 +31,18 @@ fn incompatible_download_cannot_change_accepted_selection_or_begin_preparation()
                 )?
                 .into_package()?;
             let bundle = Arc::new(VerifiedBundle::from_download(
-                receive(&archive, &directory.path, target, context)?,
-                workspace.path(),
+                receive(&archive, directory.path(), target, context)?,
+                &crate::setup_storage::cache::RuntimeCache::open(
+                    workspace.path(),
+                    crate::setup_storage::cache::CachePolicy::default(),
+                    context,
+                )?,
                 context,
             )?);
             let preparation =
-                crate::setup_storage::InstallationSession::maintain(&directory.path, context)?
+                crate::setup_storage::InstallationSession::maintain(directory.path(), context)?
                     .prepare(bundle, context)?;
-            let store = SelectionStore::open(&directory.path, context)?;
+            let store = SelectionStore::open(directory.path(), context)?;
             let before = store.load(context)?;
             let result = preparation.prepare_update(
                 preparation.maintenance_runtime().ok_or("Runtime absent")?,
@@ -68,7 +72,7 @@ fn historical_declaration(
     generation: &Generation,
     contract: Option<&[u8]>,
 ) -> TestResult {
-    let root = directory.path.join("releases").join(generation.id.as_str());
+    let root = directory.path().join("releases").join(generation.id.as_str());
     let manifest_path = root.join("application-package.json");
     let mut manifest: serde_json::Value = serde_json::from_slice(&std::fs::read(&manifest_path)?)?;
     let entries = manifest["files"].as_array_mut().ok_or("Inventory absent")?;
@@ -89,7 +93,7 @@ fn historical_declaration(
     }
     let bytes = serde_json::to_vec(&manifest)?;
     std::fs::write(manifest_path, &bytes)?;
-    let record = directory.path.join(".selection-state/.substitute-selection.json");
+    let record = directory.path().join(".selection-state/.substitute-selection.json");
     let mut state: serde_json::Value = serde_json::from_slice(&std::fs::read(&record)?)?;
     state["accepted"]["package"] = format!("{:x}", Sha256::digest(bytes)).into();
     std::fs::write(record, serde_json::to_vec(&state)?)?;
@@ -110,14 +114,14 @@ fn historical_direct_launch_remains_available_but_unsupported_transfer_is_reject
                 // An unlisted sidecar cannot assert capabilities for a historical application.
                 std::fs::write(
                     directory
-                        .path
+                        .path()
                         .join("releases")
                         .join(generation.id.as_str())
                         .join(CONTRACT_FILE),
                     sugarsubstitute_contracts::application_launch::CURRENT_CONTRACT,
                 )?;
             }
-            let store = Arc::new(SelectionStore::open(&directory.path, context)?);
+            let store = Arc::new(SelectionStore::open(directory.path(), context)?);
             let before = store.load(context)?;
             let mut run = InstallationRun::acquire(store.clone(), context)?;
             assert!(matches!(
@@ -139,7 +143,7 @@ fn historical_direct_launch_remains_available_but_unsupported_transfer_is_reject
             drop(
                 std::fs::OpenOptions::new()
                     .write(true)
-                    .open(directory.path.join(".selection-state/.substitute-selection.json"))?,
+                    .open(directory.path().join(".selection-state/.substitute-selection.json"))?,
             );
             assert!(InstallationRun::acquire(store, context).is_ok());
         }
@@ -154,9 +158,9 @@ fn altered_launch_declaration_cannot_override_authenticated_inventory() -> TestR
         let directory = Directory::open(temporary.path(), false)?;
         let (generation, _) = accept_fixture(&directory, context)?;
         let contract =
-            directory.path.join("releases").join(generation.id.as_str()).join(CONTRACT_FILE);
+            directory.path().join("releases").join(generation.id.as_str()).join(CONTRACT_FILE);
         std::fs::write(&contract, FUTURE)?;
-        let store = Arc::new(SelectionStore::open(&directory.path, context)?);
+        let store = Arc::new(SelectionStore::open(directory.path(), context)?);
         let before = store.load(context)?;
         assert!(store.reserve_launch(context).is_err());
         assert_eq!(store.load(context)?, before);

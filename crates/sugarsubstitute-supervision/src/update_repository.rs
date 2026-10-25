@@ -152,7 +152,7 @@ impl Repository {
         let target = offer.into_package()?;
         let name = target.name().to_owned();
         let total = target.length();
-        let mut download = Download::open(installation, target, context)?;
+        let mut download = Download::open(trust.runtime_cache(context)?, target, context)?;
         if download.offset()? < total {
             self.http.package(
                 &self.policy,

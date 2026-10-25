@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain accepted updater execution inputs independently of diagnostic symbol availability.
 use super::{VerifiedRuntime, manifest::AuthenticatedManifest};
-use crate::setup_storage::{check, files::Directory, inventory, protection::Protection};
+use crate::durable_storage::{files::Directory, protection::Protection};
+use crate::setup_storage::inventory;
 use std::{fs::File, io, path::Path};
 use sugarsubstitute_contracts::{execution::JobContext, update::Component};
 
@@ -32,13 +33,13 @@ impl RuntimePackage {
             memory,
         )?;
         runtime.compatibility.require_updater()?;
-        inventory::verify_runtime(root, &manifest.inventory, || check(context))?;
+        inventory::verify_runtime(root, &manifest.inventory, context)?;
         Ok(Self { directory: manifest.directory, manifest: manifest.file, runtime })
     }
 
     /// The helper's working directory stays pinned for its complete process-family lifetime.
     pub(in crate::setup_storage) fn directory(&self) -> &Path {
-        &self.directory.path
+        self.directory.path()
     }
 
     /// Require installed account protection on the inventory and each execution input.

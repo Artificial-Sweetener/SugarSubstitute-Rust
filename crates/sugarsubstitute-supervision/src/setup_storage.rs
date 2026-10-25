@@ -3,8 +3,17 @@
 //! Authenticate packaged setup inputs and retain filesystem custody during installation.
 mod application;
 mod bundle;
+pub mod cache;
+#[allow(unsafe_code)]
+pub(crate) mod cache_custody;
 mod compatibility;
+pub(crate) mod provisioning_cache;
 pub use application::LAUNCH_RESERVATION_BYTES;
+pub use provisioning_cache::{
+    DownloadRecord, MetadataChunk, MetadataRead, MetadataRecord, MetadataWrite,
+    ProvisioningCachePressure, ProvisioningDownloads, ProvisioningMetadata,
+    recover_provisioning_cache,
+};
 #[allow(unsafe_code)]
 mod disk_inheritance;
 mod download;
@@ -16,7 +25,7 @@ pub use updater_probe::{InheritedUpdaterProbe, capture_updater_probe};
 mod entrypoint;
 mod existing;
 pub use existing::{InstallationSummary, RecoveryFailure, inspect_installation};
-mod files;
+mod identity;
 mod image;
 mod inventory;
 pub use image::PreparationImage;
@@ -24,20 +33,14 @@ mod running;
 pub use running::{RunningApplication, retain_running_generation};
 mod ownership;
 mod packed;
-mod profile;
-#[allow(unsafe_code)]
-mod protection;
 mod publication;
-#[allow(unsafe_code)]
-mod staging;
-pub use packed::materialize;
-pub use profile::InstallerProfile;
+pub use packed::{MATERIALIZATION_RESERVATION_BYTES, materialize};
 mod selection;
 pub(crate) use selection::UnstartedTrial;
 mod transaction;
 mod trust;
 mod updater_package;
-pub use bundle::{BundleSource, VerifiedBundle};
+pub use bundle::{BundleSource, ProvisioningWorker, VerifiedBundle};
 pub use selection::{
     AcceptedApplication, InheritedSelection, InstallationLaunch, InstallationRun,
     LaunchInheritance, OwnedTrial, ReservedApplication, ReservedLaunch, SelectionFailure,
@@ -55,7 +58,10 @@ pub use transaction::{
     PreparedInstallation, RuntimePaths, Selection,
 };
 pub(crate) use trust::offered::OfferInputs;
-pub use trust::{AuthenticatedOffer, OFFER_CACHE_RESERVATION_BYTES, OFFER_RESERVATION_BYTES};
+pub use trust::{
+    AuthenticatedOffer, OFFER_LOOKUP_RESERVATION_BYTES, OFFER_PUBLICATION_RESERVATION_BYTES,
+    OFFER_RESERVATION_BYTES,
+};
 pub use trust::{
     TRUST_OPERATION_RESERVATION_BYTES, TRUST_RESERVATION_BYTES, TrustFailure, TrustStore,
     UpdateAuthorization,

@@ -6,21 +6,25 @@ source_url = "https://github.com/qt/qtbase/tree/v6.11.0/src/gui/painting"
 license = "GPL-3.0-only AND FTL"
 license_file = "third_party/licenses/qt-raster.GPL-3.0-and-FTL.txt"
 files = [
-  "crates/sugarsubstitute-splash/src/border_raster.rs",
+  "crates/sugarsubstitute-ui/src/panel_border.rs",
   "crates/sugarsubstitute-splash/src/character.rs",
   "crates/sugarsubstitute-splash/src/character_sampling.rs",
   "crates/sugarsubstitute-splash/src/character_sample.rs",
   "crates/sugarsubstitute-splash/src/character_render.rs",
   "crates/sugarsubstitute-splash/src/character_transform.rs",
   "crates/sugarsubstitute-splash/src/chrome.rs",
-  "crates/sugarsubstitute-splash/src/chrome_console.rs",
+  "crates/sugarsubstitute-ui/src/panel_cursor.rs",
+  "crates/sugarsubstitute-ui/src/panel.rs",
+  "crates/sugarsubstitute-ui/src/caption.rs",
   "crates/sugarsubstitute-splash/src/progress.rs",
-  "crates/sugarsubstitute-splash/src/progress_render.rs",
-  "crates/sugarsubstitute-splash/src/shapes.rs",
-  "crates/sugarsubstitute-splash/src/shapes_raster.rs",
-  "crates/sugarsubstitute-splash/src/shapes_composite.rs",
-  "crates/sugarsubstitute-splash/src/text_windows.rs",
-  "crates/sugarsubstitute-splash/src/text_windows_cursor.rs",
+  "crates/sugarsubstitute-ui/src/progress.rs",
+  "crates/sugarsubstitute-ui/src/progress_render.rs",
+  "crates/sugarsubstitute-ui/src/shapes.rs",
+  "crates/sugarsubstitute-ui/src/shapes_raster.rs",
+  "crates/sugarsubstitute-ui/src/shapes_composite.rs",
+  "crates/sugarsubstitute-ui/src/text_windows.rs",
+  "crates/sugarsubstitute-ui/src/text_windows_cursor.rs",
+  "crates/sugarsubstitute-splash/src/text_layout.rs",
 ]
 
 [[components]]
@@ -203,6 +207,7 @@ files = [
   "third_party/wry/src/webview2/owned_environment_tests.rs",
   "third_party/wry/src/webview2/owned_race_tests.rs",
   "third_party/wry/src/webview2/owned_state.rs",
+  "third_party/wry/src/webview2/private_profile.rs",
   "third_party/wry/src/webview2/owned_tests.rs",
   "third_party/wry/src/webview2/retirement.rs",
   "third_party/wry/src/webview2/retirement_reference.rs",
@@ -278,6 +283,9 @@ license_file = "third_party/licenses/comfy-desktop.AGPL-3.0.txt"
 files = [
   "installer/patches/0001-provisioning-entry.patch",
   "installer/patches/0002-require-complete-provisioning.patch",
+  "installer/patches/0003-shared-cache-grants.patch",
+  "installer/patches/0004-native-metadata.patch",
+  "installer/patches/0005-native-download-storage.patch",
   "third_party/comfy-desktop/lib/git_operations.py",
   "third_party/comfy-desktop/lib/pygit2_compat.py",
   "third_party/comfy-desktop/lib/update_comfyui.py",
@@ -328,6 +336,7 @@ files = [
   "third_party/comfy-desktop/src/shared/errorBucket.ts",
   "third_party/comfy-desktop/src/shared/errorEvent.ts",
   "third_party/comfy-desktop/src/shared/piiScrub.ts",
+  "installer/patches/0006-standalone-node-runtime.patch",
 ]
 
 [[components]]
@@ -335,7 +344,7 @@ id = "legacy-installer-wordmark"
 source_url = "https://github.com/Artificial-Sweetener/SugarSubstitute/blob/main/docs/readme/sugarsubstitute-logo.svg"
 license = "GPL-3.0-or-later"
 license_file = "third_party/licenses/splash-characters.GPL-3.0.txt"
-files = ["installer/surface/wordmark.svg"]
+files = ["assets/brand/wordmark.svg"]
 
 [[components]]
 id = "installer-fluent-icons"
@@ -343,12 +352,19 @@ source_url = "https://github.com/zhiyiYo/PyQt-Fluent-Widgets/tree/d90c008c534b2b
 license = "GPL-3.0-only"
 license_file = "third_party/licenses/qfluentwidgets.GPL-3.0.txt"
 files = [
-  "installer/surface/icons/Accept.svg",
-  "installer/surface/icons/ChevronDown.svg",
-  "installer/surface/icons/Close.svg",
-  "installer/surface/icons/Folder.svg",
-  "installer/surface/icons/Home.svg",
-  "installer/surface/icons/Language.svg",
-  "installer/surface/icons/Link.svg",
-  "installer/surface/icons/Sync.svg",
+  "crates/sugarsubstitute-ui/assets/fluent/Accept.svg",
+  "crates/sugarsubstitute-ui/assets/fluent/ChevronDown.svg",
+  "crates/sugarsubstitute-ui/assets/fluent/Close.svg",
+  "crates/sugarsubstitute-ui/assets/fluent/Folder.svg",
+  "crates/sugarsubstitute-ui/assets/fluent/Home.svg",
+  "crates/sugarsubstitute-ui/assets/fluent/Language.svg",
+  "crates/sugarsubstitute-ui/assets/fluent/Link.svg",
+  "crates/sugarsubstitute-ui/assets/fluent/Sync.svg",
 ]
+
+[[components]]
+id = "nodejs-provisioning-runtime"
+source_url = "https://nodejs.org/dist/v24.22.1/"
+license = "MIT AND LicenseRef-Nodejs-Bundled-Dependencies"
+license_file = "third_party/licenses/nodejs-24.22.1.txt"
+files = ["installer/runtime.json"]

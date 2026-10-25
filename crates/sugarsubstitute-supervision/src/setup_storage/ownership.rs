@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Read and pin the native installation ownership marker through maintenance operations.
-use super::{
-    files::{self, Directory},
-    invalid,
-};
+use super::invalid;
+use crate::durable_storage::files::{self, Directory};
 use std::{fs::File, io};
 pub(super) const MARKER: &str = ".substitute-installation.json";
 pub(super) const CONTENT: &[u8] = br#"{"schema_version":1,"product":"SugarSubstitute"}"#;

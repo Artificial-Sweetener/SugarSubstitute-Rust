@@ -17,6 +17,8 @@ mod owned_environment_tests;
 #[cfg(test)]
 mod owned_race_tests;
 mod owned_state;
+mod private_profile;
+pub use private_profile::PrivateProfileObserver;
 #[cfg(test)]
 mod owned_tests;
 mod retirement;
@@ -331,6 +333,7 @@ impl InnerWebView {
         unsafe {
           options.set_additional_browser_arguments(additional_browser_args);
           options.set_are_browser_extensions_enabled(pl_attrs.browser_extensions_enabled);
+          options.set_exclusive_user_data_folder_access(pl_attrs.exclusive_user_data_folder_access);
 
           // Get user's system language
           let lcid = GetUserDefaultUILanguage();

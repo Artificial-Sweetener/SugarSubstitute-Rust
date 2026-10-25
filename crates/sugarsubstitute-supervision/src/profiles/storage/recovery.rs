@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Recover abandoned witnessed profiles under both independent native exclusions.
 use super::*;
-use crate::protected_storage::{
+use crate::durable_storage::protected::{
     exclusion::ExclusionOpen,
     native_name::{NativeName, NativeSid},
     native_phase::NativePhase,

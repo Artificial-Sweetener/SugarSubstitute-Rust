@@ -6,7 +6,6 @@ use super::{
     buffer::Text,
     callback::{Callback, Event, procedure},
     clipboard::Clipboard,
-    font::Fonts,
 };
 use crate::windows_subclass::{Registration, install, remove};
 use std::{ffi::c_void, rc::Rc};
@@ -15,6 +14,7 @@ use sugarsubstitute_contracts::{
     incident::ReportRestartAvailability,
     localization::incident::ReportMessages,
 };
+use sugarsubstitute_ui::windows::font::{FontRole, Fonts};
 use tao::{event_loop::EventLoopProxy, platform::windows::WindowExtWindows, window::Window};
 use windows::{
     Win32::{
@@ -67,7 +67,7 @@ impl Controls {
             peers: std::array::from_fn(|_| None),
             clipboard: Clipboard::new(hwnd),
             lease,
-            fonts: Fonts::new(),
+            fonts: Fonts::new(FontRole::Message),
             _claim: claim,
         })
     }

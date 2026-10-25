@@ -71,7 +71,9 @@ pub(super) fn stage_by_id(
     let namespace =
         state.data_mut()?.namespace.ok_or_else(|| error(operation.key, Code::Closed))?;
     let (active_class, name_digest) =
-        crate::protected_storage::record_file::diagnostic_object_binding(object, namespace);
+        crate::durable_storage::protected::record_file::diagnostic_object_binding(
+            object, namespace,
+        );
     if target.is_some_and(|actual| actual != facts) {
         return Err(error(operation.key, Code::ChangedIdentity));
     }
@@ -112,9 +114,10 @@ pub(super) fn whole(
 
         let binding = match (retained.object, retained.candidate) {
             (Some(object), candidate) => {
-                let actual = crate::protected_storage::record_file::diagnostic_object_binding(
-                    object, namespace,
-                );
+                let actual =
+                    crate::durable_storage::protected::record_file::diagnostic_object_binding(
+                        object, namespace,
+                    );
                 if candidate.is_some_and(|observed| observed != actual) {
                     return Err(error(operation.key, Code::InvalidIdentity));
                 }
@@ -166,7 +169,9 @@ pub(super) fn canonical(
 ) -> bool {
     source.object.is_none_or(|actual| actual == object)
         && (source.class, source.name_digest)
-            == crate::protected_storage::record_file::diagnostic_object_binding(object, namespace)
+            == crate::durable_storage::protected::record_file::diagnostic_object_binding(
+                object, namespace,
+            )
 }
 pub(super) fn retained_source(
     state: &mut StateAccess<'_>,
@@ -189,10 +194,11 @@ pub(super) fn retained_source(
                 .call_native(|port| port.stage_target(source.native, object, context))?
                 .map_err(|cause| native(key, Code::Read, cause))?;
             check(state, key, context, false)?;
-            let (active, digest) = crate::protected_storage::record_file::diagnostic_object_binding(
-                object,
-                key.owner().namespace,
-            );
+            let (active, digest) =
+                crate::durable_storage::protected::record_file::diagnostic_object_binding(
+                    object,
+                    key.owner().namespace,
+                );
             if source.name_digest != digest
                 || source.class
                     != if target.is_some() { active } else { DiagnosticEntryClass::Stage }

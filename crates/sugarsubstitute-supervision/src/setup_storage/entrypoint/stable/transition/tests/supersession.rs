@@ -11,7 +11,7 @@ fn replacement(root: &Directory, context: &JobContext) -> io::Result<record::Rec
             package: PackageDigest::new("c".repeat(64)).map_err(io::Error::other)?,
         };
         let source =
-            Directory::open(&root.path.join("releases").join(generation.id.as_str()), true)?;
+            Directory::open(&root.path().join("releases").join(generation.id.as_str()), true)?;
         publication::write_immutable(&source, EXECUTABLE, b"rescue launcher", protection, context)?;
         publication::write_immutable(
             &source,
@@ -51,30 +51,30 @@ fn rescue(after_image: bool, missing_image: bool, ownership_advanced: bool) -> T
             let pin = state.read(JOURNAL)?;
             protection::with(context, |protection| {
                 assert!(recover(&root, &state, protection, context).is_err());
-                assert!(record::read(&state, protection)?.as_ref() == Some(&next));
+                assert!(record::read(&state, protection, context)?.as_ref() == Some(&next));
                 Ok(())
             })?;
             drop(pin);
         }
         for source in [&previous, &next] {
             std::fs::remove_file(
-                root.path.join("releases").join(source.source.id.as_str()).join(EXECUTABLE),
+                root.path().join("releases").join(source.source.id.as_str()).join(EXECUTABLE),
             )?;
         }
         if missing_image {
-            std::fs::remove_file(root.path.join(EXECUTABLE))?;
+            std::fs::remove_file(root.path().join(EXECUTABLE))?;
         }
         let replacement = replacement(&root, context)?;
         protection::with(context, |protection| {
             super::super::super::recover_publications(&root, &state, protection, context)?;
             let installed = supersede(&root, &state, replacement.clone(), protection, context)?;
             assert!(installed == replacement);
-            assert!(record::read(&state, protection)?.as_ref() == Some(&replacement));
+            assert!(record::read(&state, protection, context)?.as_ref() == Some(&replacement));
             assert!(recover(&root, &state, protection, context)?.is_none());
             Ok(())
         })?;
-        assert_eq!(std::fs::read(root.path.join(EXECUTABLE))?, b"rescue launcher");
-        assert!(!state.path.join(JOURNAL).exists());
+        assert_eq!(std::fs::read(root.path().join(EXECUTABLE))?, b"rescue launcher");
+        assert!(!state.path().join(JOURNAL).exists());
         Ok(())
     })
 }
@@ -111,23 +111,23 @@ fn interrupted_rescue_reconciles_ownership_before_retiring_old_intent() -> TestR
         let root = Directory::open(temporary.path(), false)?;
         let (state, _, next) = pending_fixture(&root, true, context)?;
         let replacement = replacement(&root, context)?;
-        let original = std::fs::read(state.path.join(JOURNAL))?;
+        let original = std::fs::read(state.path().join(JOURNAL))?;
         let pin = state.read(JOURNAL)?;
         protection::with(context, |protection| {
             super::super::super::recover_publications(&root, &state, protection, context)?;
             assert!(supersede(&root, &state, replacement.clone(), protection, context).is_err());
-            assert!(record::read(&state, protection)?.as_ref() == Some(&next));
+            assert!(record::read(&state, protection, context)?.as_ref() == Some(&next));
             Ok(())
         })?;
-        assert_eq!(std::fs::read(root.path.join(EXECUTABLE))?, b"new launcher");
-        assert_eq!(std::fs::read(state.path.join(JOURNAL))?, original);
+        assert_eq!(std::fs::read(root.path().join(EXECUTABLE))?, b"new launcher");
+        assert_eq!(std::fs::read(state.path().join(JOURNAL))?, original);
         drop(pin);
         protection::with(context, |protection| {
             supersede(&root, &state, replacement.clone(), protection, context)?;
-            assert!(record::read(&state, protection)?.as_ref() == Some(&replacement));
+            assert!(record::read(&state, protection, context)?.as_ref() == Some(&replacement));
             Ok(())
         })?;
-        assert_eq!(std::fs::read(root.path.join(EXECUTABLE))?, b"rescue launcher");
+        assert_eq!(std::fs::read(root.path().join(EXECUTABLE))?, b"rescue launcher");
         Ok(())
     })
 }
@@ -138,18 +138,18 @@ fn rescue_rejects_incompatible_replacement_without_discarding_old_intent() -> Te
         let temporary = tempfile::tempdir()?;
         let root = Directory::open(temporary.path(), false)?;
         let (state, previous, _) = pending_fixture(&root, false, context)?;
-        let original = std::fs::read(state.path.join(JOURNAL))?;
+        let original = std::fs::read(state.path().join(JOURNAL))?;
         let mut replacement = replacement(&root, context)?;
         replacement.contract =
             r#"{"schema_version":1,"installation_schemas":[1],"installed_launch_protocol":2}"#
                 .into();
         protection::with(context, |protection| {
             assert!(supersede(&root, &state, replacement, protection, context).is_err());
-            assert!(record::read(&state, protection)?.as_ref() == Some(&previous));
+            assert!(record::read(&state, protection, context)?.as_ref() == Some(&previous));
             Ok(())
         })?;
-        assert_eq!(std::fs::read(state.path.join(JOURNAL))?, original);
-        assert_eq!(std::fs::read(root.path.join(EXECUTABLE))?, b"old launcher");
+        assert_eq!(std::fs::read(state.path().join(JOURNAL))?, original);
+        assert_eq!(std::fs::read(root.path().join(EXECUTABLE))?, b"old launcher");
         Ok(())
     })
 }
@@ -161,7 +161,7 @@ fn rescue_preserves_foreign_intent_and_unknown_root_bytes() -> TestResult {
         let root = Directory::open(temporary.path(), false)?;
         let (state, previous, _) = pending_fixture(&root, false, context)?;
         let replacement = replacement(&root, context)?;
-        let original = std::fs::read(state.path.join(JOURNAL))?;
+        let original = std::fs::read(state.path().join(JOURNAL))?;
         for (field, value) in [
             ("schema_version", serde_json::json!(2)),
             ("installation_directory", serde_json::json!([0, 0, 0])),
@@ -169,25 +169,25 @@ fn rescue_preserves_foreign_intent_and_unknown_root_bytes() -> TestResult {
             let mut changed: serde_json::Value = serde_json::from_slice(&original)?;
             changed[field] = value;
             let bytes = serde_json::to_vec(&changed)?;
-            std::fs::write(state.path.join(JOURNAL), &bytes)?;
+            std::fs::write(state.path().join(JOURNAL), &bytes)?;
             protection::with(context, |protection| {
                 assert!(
                     supersede(&root, &state, replacement.clone(), protection, context).is_err()
                 );
-                assert!(record::read(&state, protection)?.as_ref() == Some(&previous));
+                assert!(record::read(&state, protection, context)?.as_ref() == Some(&previous));
                 Ok(())
             })?;
-            assert_eq!(std::fs::read(state.path.join(JOURNAL))?, bytes);
+            assert_eq!(std::fs::read(state.path().join(JOURNAL))?, bytes);
         }
-        std::fs::write(state.path.join(JOURNAL), &original)?;
-        std::fs::write(root.path.join(EXECUTABLE), b"unknown owner")?;
+        std::fs::write(state.path().join(JOURNAL), &original)?;
+        std::fs::write(root.path().join(EXECUTABLE), b"unknown owner")?;
         protection::with(context, |protection| {
             assert!(supersede(&root, &state, replacement, protection, context).is_err());
-            assert!(record::read(&state, protection)?.as_ref() == Some(&previous));
+            assert!(record::read(&state, protection, context)?.as_ref() == Some(&previous));
             Ok(())
         })?;
-        assert_eq!(std::fs::read(state.path.join(JOURNAL))?, original);
-        assert_eq!(std::fs::read(root.path.join(EXECUTABLE))?, b"unknown owner");
+        assert_eq!(std::fs::read(state.path().join(JOURNAL))?, original);
+        assert_eq!(std::fs::read(root.path().join(EXECUTABLE))?, b"unknown owner");
         Ok(())
     })
 }

@@ -41,7 +41,7 @@ impl DiagnosticStorage {
         }
         payload_discard::intent::admit_read(
             &mut state,
-            crate::protected_storage::record_file::diagnostic_object_binding(
+            crate::durable_storage::protected::record_file::diagnostic_object_binding(
                 object,
                 operation.key.owner().namespace,
             ),
@@ -195,7 +195,7 @@ impl DiagnosticReadLease {
         }
         if let Some(candidate) = retained.candidate {
             if candidate
-                != crate::protected_storage::record_file::diagnostic_object_binding(
+                != crate::durable_storage::protected::record_file::diagnostic_object_binding(
                     object, namespace,
                 )
             {

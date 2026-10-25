@@ -20,7 +20,7 @@ impl WindowsProfileLease {
     /// # Errors
     /// Returns Specification for an invalid local shape or checked-size overflow.
     pub fn constructor_storage_bytes(path: &Path) -> Result<u64, ClaimAdmissionError> {
-        crate::protected_storage::paths::validate_local_shape(path)
+        crate::durable_storage::protected::paths::validate_local_shape(path)
             .map_err(|_| ClaimAdmissionError::Specification)?;
         let units = u64::try_from(path.as_os_str().encode_wide().count())
             .map_err(|_| ClaimAdmissionError::Specification)?;

@@ -50,9 +50,9 @@ impl TrustStore {
         let mut file = protection.file(&staged, context)?;
         check(context)?;
         file.write_all(&bytes)?;
-        file.sync_all()?;
+        files::sync(&file, context)?;
         drop(file);
-        staging::replace_record(&staged, &self.root.path.join(RECORD))?;
+        staging::replace_record(&staged, &self.root.path().join(RECORD))?;
         check(context)?;
         Ok(())
     }

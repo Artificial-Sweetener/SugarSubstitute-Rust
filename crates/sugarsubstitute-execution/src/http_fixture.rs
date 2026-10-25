@@ -6,7 +6,7 @@ use std::{
     net::{TcpListener, TcpStream},
     time::Duration,
 };
-use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
+use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim, Scope};
 
 /// Exact request expectation and raw server response, including deliberately truncated bodies.
 pub struct Exchange {
@@ -18,6 +18,8 @@ pub struct Exchange {
     pub response: Vec<u8>,
     /// Keep a truncated response open until the client retires its socket.
     pub await_client_close: bool,
+    /// Cancel the client scope only after this peer receives its request and writes the response prefix.
+    pub cancel_client: Option<std::sync::Arc<Scope>>,
 }
 /// Nonblocking socket custody transferred to one execution-owned asynchronous fixture job.
 pub struct Server {
@@ -79,6 +81,9 @@ impl Server {
                     }
                     Err(cause) => return Err(cause),
                 }
+            }
+            if let Some(client) = &exchange.cancel_client {
+                client.cancel();
             }
             if exchange.await_client_close {
                 closed(&mut socket, &context).await?;

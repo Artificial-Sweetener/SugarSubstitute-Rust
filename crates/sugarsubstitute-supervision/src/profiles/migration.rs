@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Preserve exact Released v1 bytes before activating the supported v2 profile row.
 use super::{record, storage::NativeState};
-use crate::protected_storage::{
+use crate::durable_storage::protected::{
     exclusion::{ExclusionOpen, HeldFile},
     native_name::{NativeName, NativeSid},
     native_phase::NativePhase,

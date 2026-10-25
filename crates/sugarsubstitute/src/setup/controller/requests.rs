@@ -2,47 +2,46 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Admit explicit installer requests; rendering state grants no native authority.
 use super::*;
-use serde::Deserialize;
+mod input;
+use sugarsubstitute_application::setup_flow::{
+    Choices, Operation as Command, OptionField, RuntimeMode,
+};
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Request {
-    version: u32,
-    id: String,
-    operation: String,
-    input: Value,
+/// One original request retained through package and worker preparation.
+pub(super) struct Request {
+    pub(super) id: String,
+    pub(super) command: Command,
+}
+impl Request {
+    /// Native maintenance and folder inspection never start an upstream worker.
+    pub(super) fn needs_worker(&self) -> bool {
+        matches!(&self.command, Command::Options { .. } | Command::Install(_))
+            || matches!(&self.command, Command::Runtime(choices) if choices.mode == RuntimeMode::Attached)
+    }
 }
 
 impl Controller {
-    pub(super) fn request_value(&mut self, text: &str) -> Result<()> {
-        if text.len() > 65536 {
-            return Err("Installer request is too large".into());
-        }
-        let request: Request = serde_json::from_str(text)?;
-        if request.version != 1
-            || request.id.len() > 80
-            || request.id.is_empty()
-            || !request.id.bytes().all(|b| b.is_ascii_alphanumeric() || b"_-".contains(&b))
-        {
-            return Err("Invalid installer request identity".into());
-        }
+    /// Admit typed application intent, retaining failures as replies to the original identity.
+    pub(super) fn accept(&mut self, request: Request) -> Result<()> {
         let id = request.id.clone();
         if let Err(cause) = self.dispatch(request) {
-            self.reply(Some(&id), "failed", json!({"message":cause.to_string()}))?;
+            tracing::error!(operation="installer_request_failed", request_id=%id, cause=%crate::failure_details::Details(cause.as_ref()), "Installer request failed");
+            self.diagnostic(crate::failure_details::Details(cause.as_ref()).to_string())?;
+            self.emit(Some(id), Kind::Failed(input::message(cause.as_ref(), &self.locale).into()))?;
         }
         Ok(())
     }
+    /// Apply the same storage and provisioning admission regardless of the presenting surface.
     fn dispatch(&mut self, request: Request) -> Result<()> {
         if self.closing {
             return Err("Installer is closing".into());
         }
-        if self.unavailable && request.operation != "locale" {
+        if self.unavailable && !matches!(request.command, Command::Locale(_)) {
             return Err("Provisioning is unavailable; close and reopen setup".into());
         }
-        let Request { id, operation, input, .. } = request;
-        let needs_worker = matches!(operation.as_str(), "options" | "install")
-            || (operation == "runtime" && input["mode"] == "attached");
-        let needs_bundle = self.bundle.is_none() && (needs_worker || operation == "location");
+        let needs_worker = request.needs_worker();
+        let needs_bundle = self.bundle.is_none()
+            && (needs_worker || matches!(request.command, Command::Inspect(_)));
         if needs_bundle
             || (needs_worker && self.worker.as_ref().is_none_or(|worker| !worker.ready()))
         {
@@ -52,12 +51,12 @@ impl Controller {
             if !needs_bundle {
                 self.start_worker()?;
             }
-            self.waiting = Some(json!({"version":1,"id":id,"operation":operation,"input":input}));
+            self.waiting = Some(request);
             return Ok(());
         }
-        match operation.as_str() {
-            "locale" => {
-                let locale = input["locale"].as_str().ok_or("Locale missing")?;
+        let Request { id, command } = request;
+        match command {
+            Command::Locale(locale) => {
                 if !sugarsubstitute_contracts::localization::LOCALES
                     .iter()
                     .any(|entry| entry.id == locale)
@@ -65,18 +64,12 @@ impl Controller {
                     return Err("Unsupported locale".into());
                 }
                 self.locale = locale.to_owned();
-                self.reply(
-                    Some(&id),
-                    "completed",
-                    json!(sugarsubstitute_contracts::localization::installer::messages(locale)),
-                )
+                self.emit(Some(id), Kind::Completed(Completed::Locale))
             }
-            "location" => {
-                let root = PathBuf::from(
-                    input["directory"].as_str().ok_or("Installation folder missing")?,
-                );
+            Command::Inspect(root) => {
+                let root = PathBuf::from(root);
                 if !root.is_absolute() {
-                    return Err("Choose an absolute installation folder".into());
+                    return Err(input::InputFailure::absolute().into());
                 }
                 if self.inspection_id.is_some() || self.install_id.is_some() {
                     return Err("An installation operation is already active".into());
@@ -91,21 +84,39 @@ impl Controller {
                 }
                 Ok(())
             }
-            "options" => self.forward(id, "options", input, Purpose::Options),
-            "runtime" | "validate" => {
-                let selection: Selection = serde_json::from_value(input)?;
-                selection.validate()?;
-                if operation == "runtime" && selection.mode == "attached" {
+            Command::Options { field, release, version, locale, mirrors } => {
+                let field = match field {
+                    OptionField::Release => "release",
+                    OptionField::ComfyVersion => "comfyVersion",
+                    OptionField::Variant => "variant",
+                };
+                let mut selections = serde_json::Map::new();
+                if let Some(value) = release {
+                    selections.insert("release".into(), json!(value));
+                }
+                if let Some(value) = version {
+                    selections.insert("comfyVersion".into(), json!(value));
+                }
+                self.forward(id, "options", json!({"field":field,"selections":selections,"locale":locale,"mirrors":mirrors}), Purpose::Options)
+            }
+            command @ (Command::Runtime(_) | Command::Validate(_)) => {
+                let runtime = matches!(command, Command::Runtime(_));
+                let (Command::Runtime(choices) | Command::Validate(choices)) = command else {
+                    return Err("Invalid validation command".into());
+                };
+                let selection = selection(choices);
+                selection.validate().map_err(input::InputFailure::selection)?;
+                if runtime && selection.mode == "attached" {
                     let mut input = json!({"directory":selection.comfy_root});
                     if !selection.python.is_empty() {
                         input["python"] = json!(selection.python);
                     }
                     self.forward(id, "inspect", input, Purpose::Inspect)
                 } else {
-                    self.reply(Some(&id), "completed", json!({}))
+                    self.emit(Some(id), Kind::Completed(Completed::Validated))
                 }
             }
-            "install" | "maintain" => {
+            command @ (Command::Install(_) | Command::Maintain(_)) => {
                 if self.install_id.is_some() || self.pending.is_some() || self.installed.is_some() {
                     return Err("An installation transaction is already active".into());
                 }
@@ -113,19 +124,14 @@ impl Controller {
                     Arc::clone(self.bundle.as_ref().ok_or("Installer package is not ready")?);
                 let source = self.bundle_root.clone();
                 let distribution = self.distribution;
-                let maintenance_root = if operation == "maintain" {
-                    Some(PathBuf::from(
-                        input["directory"].as_str().ok_or("Installation folder missing")?,
-                    ))
-                } else {
-                    None
-                };
-                let selection = if maintenance_root.is_none() {
-                    let selection: Selection = serde_json::from_value(input)?;
-                    selection.validate()?;
-                    Some(selection)
-                } else {
-                    None
+                let (maintenance_root, selection) = match command {
+                    Command::Maintain(root) => (Some(PathBuf::from(root)), None),
+                    Command::Install(choices) => {
+                        let selection = selection(choices);
+                        selection.validate().map_err(input::InputFailure::selection)?;
+                        (None, Some(selection))
+                    }
+                    _ => return Err("Invalid installation command".into()),
                 };
                 self.selection = selection.clone();
                 self.install_id = Some(id.clone());
@@ -155,9 +161,17 @@ impl Controller {
                     self.install_id = None;
                     return Err(cause);
                 }
-                self.reply(Some(&id), "progress", json!({"overall":0,"status":sugarsubstitute_contracts::localization::installer::messages(&self.locale)["preparingInstallation"]}))
+                self.emit(
+                    Some(id),
+                    Kind::Progress(Progress::storage(
+                        sugarsubstitute_contracts::localization::installer::messages(&self.locale)
+                            .preparing_installation
+                            .into(),
+                        0.0,
+                    )),
+                )
             }
-            "open" => {
+            Command::Open => {
                 if self.install_id.is_some() || self.storage.is_some() || self.relaunch.is_some() {
                     return Err("An application launch is already active".into());
                 }
@@ -170,39 +184,121 @@ impl Controller {
                 }
                 Ok(())
             }
-            _ => Err("Unsupported installer operation".into()),
         }
+    }
+}
+
+/// Storage receives a proposal and remains the sole validator of paths and provisioning authority.
+pub(super) fn selection(value: Choices) -> Selection {
+    Selection {
+        locale: value.locale.into(),
+        install_root: value.install_root.into(),
+        mode: match value.mode {
+            RuntimeMode::Managed => "managed",
+            RuntimeMode::Attached => "attached",
+        }
+        .into(),
+        comfy_root: value.comfy_root.into(),
+        python: value.python,
+        models: value.models.into(),
+        outputs: value.outputs.into(),
+        selection_token: value.selection_token,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sugarsubstitute_desktop::installer::InstallerLifetime;
-
+    #[test]
+    fn native_application_requests_preserve_identity_and_defer_inspection() -> Result<()> {
+        use sugarsubstitute_application::setup_flow::{Completed, Outcome, SetupFlow};
+        let mut flow = SetupFlow::new("E:\\用户\\Substitute".into())?;
+        let mut controller = Controller::new(PathBuf::new(), PathBuf::new(), &[]);
+        let request = flow.primary(std::time::Duration::ZERO)?.ok_or("Locale request absent")?;
+        let id = request.id;
+        controller.accept(Request { id: id.get().to_string(), command: request.operation })?;
+        let reply = controller.output.pop_front().ok_or("Locale reply missing")?;
+        assert_eq!(reply.id, Some(id.get().to_string()));
+        assert!(matches!(reply.kind, Kind::Completed(super::Completed::Locale)));
+        flow.receive(id, Outcome::Completed(Completed::Locale), std::time::Duration::ZERO)?;
+        let request = flow.primary(std::time::Duration::ZERO)?.ok_or("Location request absent")?;
+        let id = request.id.get().to_string();
+        controller.accept(Request { id: id.clone(), command: request.operation })?;
+        let retained = controller.waiting.as_ref().ok_or("Request not retained")?;
+        assert_eq!(retained.command, Command::Inspect(flow.choices().install_root.clone()));
+        assert_eq!(retained.id, id);
+        assert!(!retained.needs_worker());
+        assert!(controller.worker.is_none());
+        controller.close()?;
+        assert!(controller.waiting.is_none());
+        Ok(())
+    }
+    #[test]
+    fn option_commands_preserve_upstream_identities_and_mirror_choice() -> Result<()> {
+        let command = Command::Options {
+            field: OptionField::Variant,
+            release: Some("release/id".into()),
+            version: Some("版本/🐈".into()),
+            locale: "ja",
+            mirrors: true,
+        };
+        let expected = command.clone();
+        let mut controller = Controller::new(PathBuf::new(), PathBuf::new(), &[]);
+        controller.accept(Request { id: "options-2".into(), command })?;
+        let pending = controller.waiting.as_ref().ok_or("Options request missing")?;
+        assert!(pending.needs_worker());
+        assert_eq!(pending.id, "options-2");
+        assert_eq!(pending.command, expected);
+        assert!(controller.worker.is_none());
+        controller.close()?;
+        Ok(())
+    }
+    #[test]
+    fn rejected_native_command_retains_its_identity_without_starting_a_worker() -> Result<()> {
+        let mut controller = Controller::new(PathBuf::new(), PathBuf::new(), &[]);
+        for (command, expected) in [
+            (Command::Locale("unknown"), "Unsupported locale"),
+            (Command::Open, "Installation is not complete"),
+        ] {
+            controller.accept(Request { id: "original".into(), command })?;
+            let diagnostic = controller.output.pop_front().ok_or("Original diagnostic absent")?;
+            assert!(diagnostic.id.is_none());
+            assert!(
+                matches!(diagnostic.kind, Kind::Diagnostic(ref data) if data.message == expected && data.omitted == 0)
+            );
+            let response = controller.output.pop_front().ok_or("Failure not reported")?;
+            assert_eq!(response.id.as_deref(), Some("original"));
+            assert!(
+                matches!(response.kind, Kind::Failed(ref message) if message == sugarsubstitute_contracts::localization::installer::messages("en").setup_failed)
+            );
+            assert!(controller.waiting.is_none() && controller.worker.is_none());
+        }
+        Ok(())
+    }
     #[test]
     fn early_location_request_waits_for_package_verification_without_starting_provisioning()
     -> Result<()> {
-        let mut controller =
-            Controller::new(PathBuf::from(r"E:\bundle"), PathBuf::from(r"E:\work"), &[]);
-        let request = |id| {
-            json!({"version":1,"id":id,"operation":"location",
-            "input":{"directory":r"E:\installed"}})
-            .to_string()
-        };
-        controller.request_value(&request("first"))?;
+        let mut controller = Controller::new(PathBuf::new(), PathBuf::new(), &[]);
+        let request =
+            |id: &str| Request { id: id.into(), command: Command::Inspect(r"E:\installed".into()) };
+        controller.accept(request("first"))?;
         assert!(controller.output.is_empty());
         assert!(controller.worker.is_none());
-        assert_eq!(controller.waiting.as_ref().ok_or("Request was not retained")?["id"], "first");
-        controller.request_value(&request("second"))?;
-        let rejection =
-            controller.output.pop_front().ok_or("Competing request was not rejected")?;
-        assert_eq!(rejection["id"], "second");
-        assert_eq!(rejection["event"], "failed");
-        assert_eq!(controller.waiting.as_ref().ok_or("First request was replaced")?["id"], "first");
+        assert_eq!(controller.waiting.as_ref().ok_or("Request not retained")?.id, "first");
+        controller.accept(request("second"))?;
+        let diagnostic =
+            controller.output.pop_front().ok_or("Competing request diagnostic absent")?;
+        assert!(
+            matches!(diagnostic.kind, Kind::Diagnostic(ref data) if data.message == "Provisioning is still preparing")
+        );
+        let rejection = controller.output.pop_front().ok_or("Competing request not rejected")?;
+        assert_eq!(rejection.id.as_deref(), Some("second"));
+        assert!(
+            matches!(rejection.kind, Kind::Failed(ref message) if message == sugarsubstitute_contracts::localization::installer::messages("en").setup_failed)
+        );
+        assert_eq!(controller.waiting.as_ref().ok_or("First request replaced")?.id, "first");
         controller.close()?;
-        assert!(controller.waiting.is_none());
-        assert!(controller.worker.is_none());
+        assert!(controller.waiting.is_none() && controller.worker.is_none());
         Ok(())
     }
 }

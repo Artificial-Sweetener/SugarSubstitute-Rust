@@ -14,6 +14,7 @@ boundary-fixtures = []
 k1-native-qualification = []
 
 [dependencies]
+sugarsubstitute-ui = { path = "../sugarsubstitute-ui" }
 sugarsubstitute-contracts = { path = "../sugarsubstitute-contracts" }
 tao.workspace = true
 tracing.workspace = true

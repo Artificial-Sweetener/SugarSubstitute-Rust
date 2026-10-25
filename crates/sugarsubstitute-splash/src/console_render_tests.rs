@@ -2,9 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Fake external shaping while exercising actual projection, row order and original pins.
 use super::*;
-use crate::text::console::{Background, BackgroundPaint};
 use sugarsubstitute_application::transcript::TranscriptStore;
 use sugarsubstitute_contracts::{lifecycle::*, presentation::console_color, transcript::*};
+use sugarsubstitute_ui::text::console::{Background, BackgroundPaint, ConsolePaintSpec};
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 fn store(text: &str) -> Result<TranscriptStore, Box<dyn std::error::Error>> {
@@ -81,7 +81,7 @@ fn drawing_bounds_clip_without_modifying_complete_original_record() -> TestResul
 
 struct Paint(BackgroundPaint);
 impl ConsoleGlyph for Paint {
-    fn step(&mut self, target: &mut Pixmap, max: NonZeroUsize) -> io::Result<bool> {
+    fn step(&mut self, target: &mut Bitmap, max: NonZeroUsize) -> io::Result<bool> {
         assert_eq!(max.get(), 32768);
         self.0.step(target, max)
     }
@@ -99,7 +99,7 @@ impl ConsoleFont for Fonts {
         _: Option<MemoryLease>,
     ) -> io::Result<Paint> {
         assert!(!row.runs.is_empty());
-        self.rows.push((row.text.to_owned(), spec.row, spec.top()));
+        self.rows.push((row.text.to_owned(), self.rows.len(), spec.top()));
         // Only external shaped geometry is fake; the clipping/composition owner is real.
         let spans = vec![Background {
             bounds: [28.0, spec.top(), 34.0, spec.top() + 1.0],
@@ -117,7 +117,7 @@ fn actual_console_owner_sequences_latest_ten_rows_and_keeps_same_snapshot_credit
     let others = [owner.snapshot_tail(1)?, owner.snapshot_tail(1)?, owner.snapshot_tail(1)?];
     let mut fonts = Fonts::default();
     let mut cursor = ConsoleRender::<Paint>::new(&view, Theme::Dark, 1.0, 558, 558);
-    let mut target = Pixmap::new(558, 558).ok_or("Raster absent")?;
+    let mut target = Bitmap::new(558, 558).ok_or("Raster absent")?;
     while !cursor.step(&view, &mut fonts, &mut target, None)? {
         assert!(matches!(owner.snapshot_tail(1), Err(TranscriptError::SnapshotCapacity)));
     }
@@ -157,7 +157,7 @@ fn clipped_row_fact_is_actual_bounded_and_survives_original_font_failure() -> Te
     let text = format!("{}\n", "😀".repeat(3000));
     let owner = store(&text.repeat(10))?;
     let view = owner.snapshot_tail(10)?;
-    let mut target = Pixmap::new(558, 558).ok_or("Raster absent")?;
+    let mut target = Bitmap::new(558, 558).ok_or("Raster absent")?;
     let mut fonts = Fonts::default();
     let mut cursor = ConsoleRender::<Paint>::new(&view, Theme::Dark, 1.0, 558, 558);
     while !cursor.step(&view, &mut fonts, &mut target, None)? {}

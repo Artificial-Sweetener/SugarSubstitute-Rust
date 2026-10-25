@@ -5,10 +5,10 @@ use super::*;
 
 fn cached(pipeline: &mut Pipeline, fixture: &Fixture) -> Result<Worker, Failure> {
     let mut signed = SignedPackage::new(&fixture.archive, 3)?;
-    requires(&mut signed, &fixture.archive, "minimum_updater_release", 2)?;
+    requires(&mut signed, &fixture.archive, "minimum_updater_release", NEXT_ENGINE)?;
     signed.metadata = sugarsubstitute_update::fixture::Set::targets(
         &sugarsubstitute_update::fixture::key(92)?,
-        [3; 3],
+        [(NEXT_ENGINE + 1).try_into()?; 3],
         &[
             (&signed.request.target_name(), &signed.descriptor),
             (&format!("{:x}.ssupdate", Sha256::digest(&fixture.archive)), &fixture.archive),
@@ -19,7 +19,7 @@ fn cached(pipeline: &mut Pipeline, fixture: &Fixture) -> Result<Worker, Failure>
     pipeline.run(
         TRUST_RESERVATION_BYTES
             + OFFER_RESERVATION_BYTES
-            + OFFER_CACHE_RESERVATION_BYTES
+            + OFFER_PUBLICATION_RESERVATION_BYTES
             + TRUST_OPERATION_RESERVATION_BYTES,
         move |context| {
             let trust = TrustStore::open(&root, [92; 32], &context)?;

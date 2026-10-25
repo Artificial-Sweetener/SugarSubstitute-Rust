@@ -10,7 +10,6 @@ use std::{
 use windows::{
     Win32::{
         Foundation::RPC_E_CHANGED_MODE,
-        Storage::FileSystem::{MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH, MoveFileExW},
         System::Com::{
             CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx,
             CoUninitialize, IPersistFile, IPersistStream, STATFLAG_NONAME, STATSTG, STGM_READ,
@@ -19,8 +18,9 @@ use windows::{
         UI::{
             Shell::{
                 IShellLinkDataList, IShellLinkW, SHCreateMemStream, SLDF_ENABLE_TARGET_METADATA,
-                SLDF_HAS_ICONLOCATION, SLDF_HAS_ID_LIST, SLDF_HAS_LINK_INFO, SLDF_HAS_NAME,
-                SLDF_HAS_RELPATH, SLDF_HAS_WORKINGDIR, SLDF_UNICODE, SLGP_RAWPATH, ShellLink,
+                SLDF_HAS_EXP_ICON_SZ, SLDF_HAS_ICONLOCATION, SLDF_HAS_ID_LIST, SLDF_HAS_LINK_INFO,
+                SLDF_HAS_NAME, SLDF_HAS_RELPATH, SLDF_HAS_WORKINGDIR, SLDF_UNICODE, SLGP_RAWPATH,
+                ShellLink,
             },
             WindowsAndMessaging::SW_SHOWNORMAL,
         },
@@ -99,6 +99,7 @@ pub(super) fn encode(executable: &Path) -> io::Result<Vec<u8>> {
     }
 }
 
+/// Validate launch behavior while allowing Windows to encode display-only icon environment metadata.
 pub(in crate::setup_storage) fn target(source: &Path) -> io::Result<PathBuf> {
     let _apartment = Apartment::enter()?;
     let mut path = [0_u16; 4097];
@@ -123,6 +124,7 @@ pub(in crate::setup_storage) fn target(source: &Path) -> io::Result<PathBuf> {
             | SLDF_HAS_RELPATH.0
             | SLDF_HAS_WORKINGDIR.0
             | SLDF_HAS_ICONLOCATION.0
+            | SLDF_HAS_EXP_ICON_SZ.0
             | SLDF_UNICODE.0
             | SLDF_ENABLE_TARGET_METADATA.0) as u32;
         if arguments[0] != 0
@@ -151,22 +153,4 @@ fn bounded_path(path: &[u16]) -> io::Result<PathBuf> {
         .filter(|end| *end > 0 && *end < 4096)
         .ok_or_else(|| super::invalid("Shell target exceeds its bound"))?;
     Ok(PathBuf::from(OsString::from_wide(&path[..end])))
-}
-
-pub(super) fn publish(source: &Path, destination: &Path, replace: bool) -> io::Result<()> {
-    let flags = if replace {
-        MOVEFILE_WRITE_THROUGH | MOVEFILE_REPLACE_EXISTING
-    } else {
-        MOVEFILE_WRITE_THROUGH
-    };
-    // SAFETY: The caller pins both parents and verifies the replaced bytes belong to setup.
-    // Same-volume atomic rename preserves either the old or the new complete shell entry.
-    unsafe {
-        MoveFileExW(
-            &HSTRING::from(source.as_os_str()),
-            &HSTRING::from(destination.as_os_str()),
-            flags,
-        )
-    }
-    .map_err(io::Error::other)
 }

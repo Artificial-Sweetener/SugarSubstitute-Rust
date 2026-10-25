@@ -59,3 +59,36 @@ fn shell_serialization_creates_no_files_and_round_trips_unicode_targets() -> Tes
         Ok(())
     })
 }
+
+#[test]
+fn expanded_icon_metadata_preserves_the_same_launch_contract() -> TestResult {
+    worker::run(|_, _| {
+        let temporary = tempfile::tempdir()?;
+        let executable = temporary.path().join("sugarsubstitute.exe");
+        std::fs::write(&executable, b"inert, never executed")?;
+        let path = temporary.path().join("icon.lnk");
+        std::fs::write(&path, encode(&executable)?)?;
+        let _apartment = Apartment::enter()?;
+        // SAFETY: The fixture retains its local shell interfaces and input strings on this worker.
+        unsafe {
+            let link: IShellLinkW = CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER)?;
+            let storage: IPersistFile = link.cast()?;
+            storage.Load(&HSTRING::from(path.as_os_str()), STGM_READ)?;
+            let windows = std::path::PathBuf::from(
+                std::env::var_os("SystemRoot").ok_or("Windows system root absent")?,
+            );
+            link.SetIconLocation(
+                &HSTRING::from(windows.join("System32/shell32.dll").as_os_str()),
+                0,
+            )?;
+            storage.Save(&HSTRING::from(path.as_os_str()), true)?;
+            storage.Load(&HSTRING::from(path.as_os_str()), STGM_READ)?;
+            let data: IShellLinkDataList = link.cast()?;
+            assert_ne!(data.GetFlags()? & SLDF_HAS_EXP_ICON_SZ.0 as u32, 0);
+        }
+        let before = std::fs::read(&path)?;
+        assert_eq!(target(&path)?, executable);
+        assert_eq!(std::fs::read(path)?, before);
+        Ok(())
+    })
+}

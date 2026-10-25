@@ -7,12 +7,12 @@ use super::sample::{bounded_count, sample};
 use super::{DeviceTransform, circle_above, multiply, over, paint, paper_edge};
 use crate::projection::{Bounds, Point};
 use std::error::Error;
-use tiny_skia::Pixmap;
+use sugarsubstitute_ui::bitmap::Bitmap;
 
 /// Preserve alpha validity and the source raster's downward interpolation at fractions.
 #[test]
 fn precise_sampling_retains_premultiplied_channels() -> Result<(), Box<dyn Error>> {
-    let mut source = Pixmap::new(2, 2).ok_or("Cannot allocate sample raster")?;
+    let mut source = Bitmap::new(2, 2).ok_or("Cannot allocate sample raster")?;
     source.data_mut().copy_from_slice(&[
         101, 24, 18, 255, 102, 34, 27, 255, 102, 84, 81, 255, 114, 153, 148, 255,
     ]);
@@ -47,7 +47,7 @@ fn complete_interpolation_steps_have_explicit_end_bounds() {
 /// Retain symmetric quarter-pixel coverage and the original widget's physical clip.
 #[test]
 fn paper_edge_covers_fractional_columns_and_clips_widget_rows() -> Result<(), Box<dyn Error>> {
-    let mut target = Pixmap::new(12, 12).ok_or("Cannot allocate edge raster")?;
+    let mut target = Bitmap::new(12, 12).ok_or("Cannot allocate edge raster")?;
     paper_edge(
         &mut target,
         Point { x: 5.0, y: 1.0 },
@@ -69,7 +69,7 @@ fn paper_edge_covers_fractional_columns_and_clips_widget_rows() -> Result<(), Bo
 /// Clip opaque airborne source pixels to the same widget rectangle as the paper edge.
 #[test]
 fn transformed_card_cannot_paint_outside_its_widget() -> Result<(), Box<dyn Error>> {
-    let mut source = Pixmap::new(4, 4).ok_or("Cannot allocate source raster")?;
+    let mut source = Bitmap::new(4, 4).ok_or("Cannot allocate source raster")?;
     source.fill(tiny_skia::Color::WHITE);
     let quad = [
         Point { x: 3.0, y: 1.0 },
@@ -77,7 +77,7 @@ fn transformed_card_cannot_paint_outside_its_widget() -> Result<(), Box<dyn Erro
         Point { x: 7.0, y: 8.0 },
         Point { x: 3.0, y: 9.0 },
     ];
-    let mut target = Pixmap::new(12, 12).ok_or("Cannot allocate target raster")?;
+    let mut target = Bitmap::new(12, 12).ok_or("Cannot allocate target raster")?;
     let mapping = DeviceTransform::from_quad(quad, 4.0, Point { x: 0.0, y: 0.0 }, 1.0);
     paint(&mut target, &source, quad, Bounds { x: 2.0, y: 3.0, width: 6.0, height: 4.0 }, mapping)?;
     assert!(target.pixel(5, 4).is_some_and(|pixel| pixel.alpha() == 255));
@@ -102,7 +102,7 @@ fn transformed_card_cannot_paint_outside_its_widget() -> Result<(), Box<dyn Erro
 #[test]
 fn fractional_widget_origins_snap_once_to_device_pixels() -> Result<(), Box<dyn Error>> {
     for (origin, first_row) in [(8.75, 9), (12.25, 12)] {
-        let mut target = Pixmap::new(20, 20).ok_or("Cannot allocate edge raster")?;
+        let mut target = Bitmap::new(20, 20).ok_or("Cannot allocate edge raster")?;
         paper_edge(
             &mut target,
             Point { x: 10.0, y: 1.0 },
@@ -120,7 +120,7 @@ fn fractional_widget_origins_snap_once_to_device_pixels() -> Result<(), Box<dyn 
 /// Preserve the callback span count across eight-row sampling slices and its 256-span flush.
 #[test]
 fn sampling_yields_keep_cross_row_native_span_history() -> Result<(), Box<dyn Error>> {
-    let mut source = Pixmap::new(4, 4).ok_or("Cannot allocate bounded source")?;
+    let mut source = Bitmap::new(4, 4).ok_or("Cannot allocate bounded source")?;
     source.fill(tiny_skia::Color::WHITE);
     let quad = [
         Point { x: 3.0, y: 0.0 },
@@ -129,7 +129,7 @@ fn sampling_yields_keep_cross_row_native_span_history() -> Result<(), Box<dyn Er
         Point { x: 3.0, y: 320.0 },
     ];
     let mapping = DeviceTransform::from_quad(quad, 4.0, Point { x: 0.0, y: 0.0 }, 1.0);
-    let mut target = Pixmap::new(64, 320).ok_or("Cannot allocate bounded target")?;
+    let mut target = Bitmap::new(64, 320).ok_or("Cannot allocate bounded target")?;
     let mut cursor = super::SamplingCursor::new(
         64,
         320,

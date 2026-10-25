@@ -81,7 +81,7 @@ fn foreign_custody_and_changed_activation_cannot_finalize_the_original_trial() -
         let prepared = prepare(&store, &accepted, 2, context)?;
         // A hostile record cannot turn original custody into another attempt's authority.
         let changed = prepared.begin_trial()?;
-        std::fs::write(store.root.path.join(super::super::super::RECORD), changed.encode()?)?;
+        std::fs::write(store.root.path().join(super::super::super::RECORD), changed.encode()?)?;
         assert!(matches!(run.finish_trial(&trial, context), Err(SelectionFailure::Changed)));
         assert_eq!(store.load(context)?, Some(changed));
         Ok(())

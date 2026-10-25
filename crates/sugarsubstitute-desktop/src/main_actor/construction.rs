@@ -74,7 +74,7 @@ impl MainActor {
                 self.controls = Some(Controls::new(
                     self.window()?.clone(),
                     proxy,
-                    &controls,
+                    &crate::windows_controls::Specification::buttons(&controls),
                     PaintMode::NativeButtons(self.identity()),
                     None,
                 )?);
@@ -253,7 +253,7 @@ impl MainActor {
     pub(super) fn resize(&mut self) -> Result<(), DesktopError> {
         let controls = self.caption_controls()?;
         if let Some(owner) = &mut self.controls {
-            owner.update(&controls)?;
+            owner.update(&crate::windows_controls::Specification::buttons(&controls))?;
         }
         if let Some(view) = &self.view {
             view.set_bounds(self.browser_bounds()?)

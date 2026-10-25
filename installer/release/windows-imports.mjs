@@ -15,6 +15,8 @@ const systemLibraries = new Set([
   'combase.dll', 'uiautomationcore.dll', 'dwrite.dll', 'imm32.dll', 'd2d1.dll',
   'shell32.dll', 'shlwapi.dll', 'rstrtmgr.dll', 'iphlpapi.dll', 'bcrypt.dll',
   'powrprof.dll', 'version.dll',
+  // Node uses Windows certificate, crash diagnostic and user-profile APIs.
+  'crypt32.dll', 'dbghelp.dll', 'userenv.dll',
   'api-ms-win-core-synch-l1-2-0.dll',
   ...['math', 'runtime', 'stdio', 'locale', 'heap', 'string', 'convert'].map(name => `api-ms-win-crt-${name}-l1-1-0.dll`),
 ])

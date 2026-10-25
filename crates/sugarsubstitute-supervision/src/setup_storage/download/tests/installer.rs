@@ -46,7 +46,8 @@ fn installer_import_resumes_bare_archive_and_excludes_executable_and_certificate
         for certificate in [None, Some(false), Some(true)] {
             let bytes = envelope(&archive, certificate);
             std::fs::write(&source, &bytes)?;
-            let mut download = Download::open(root.path(), signed(&archive)?, context)?;
+            let mut download =
+                Download::open(storage(root.path(), context)?, signed(&archive)?, context)?;
             assert!(
                 download
                     .receive(
@@ -63,7 +64,7 @@ fn installer_import_resumes_bare_archive_and_excludes_executable_and_certificate
             );
             drop(download);
             let mut verified = Download::import_installer(
-                root.path(),
+                storage(root.path(), context)?,
                 signed(&archive)?,
                 &source,
                 || {
@@ -90,7 +91,8 @@ fn malformed_installer_ranges_preserve_partial_cache() -> TestResult {
         let external = tempfile::tempdir()?;
         let source = external.path().join("setup.exe");
         let archive = archive();
-        let mut download = Download::open(root.path(), signed(&archive)?, context)?;
+        let mut download =
+            Download::open(storage(root.path(), context)?, signed(&archive)?, context)?;
         assert!(
             download
                 .receive(
@@ -122,7 +124,7 @@ fn malformed_installer_ranges_preserve_partial_cache() -> TestResult {
             std::fs::write(&source, &bytes)?;
             assert!(
                 Download::import_installer(
-                    root.path(),
+                    storage(root.path(), context)?,
                     signed(&archive)?,
                     &source,
                     || NOW,
@@ -130,11 +132,12 @@ fn malformed_installer_ranges_preserve_partial_cache() -> TestResult {
                 )
                 .is_err()
             );
-            let mut cached = Download::open(root.path(), signed(&archive)?, context)?;
+            let mut cached =
+                Download::open(storage(root.path(), context)?, signed(&archive)?, context)?;
             assert_eq!(cached.offset()?, 5);
-            cached.custody.file.seek(SeekFrom::Start(0))?;
+            cached.custody.payload.seek(SeekFrom::Start(0))?;
             let mut prefix = Vec::new();
-            cached.custody.file.read_to_end(&mut prefix)?;
+            cached.custody.payload.read_to_end(&mut prefix)?;
             assert_eq!(prefix, archive[..5]);
             assert_eq!(std::fs::read(&source)?, bytes);
         }
@@ -153,10 +156,19 @@ fn installer_footer_and_certificate_cannot_authorize_changed_package_bytes() -> 
         bytes[512] ^= 1;
         std::fs::write(&source, &bytes)?;
         assert!(matches!(
-            Download::import_installer(root.path(), signed(&archive)?, &source, || NOW, context),
+            Download::import_installer(
+                storage(root.path(), context)?,
+                signed(&archive)?,
+                &source,
+                || NOW,
+                context
+            ),
             Err(DownloadFailure::Verification(Verification::Digest))
         ));
-        assert_eq!(Download::open(root.path(), signed(&archive)?, context)?.offset()?, 0);
+        assert_eq!(
+            Download::open(storage(root.path(), context)?, signed(&archive)?, context)?.offset()?,
+            0
+        );
         assert_eq!(std::fs::read(&source)?, bytes);
         Ok(())
     })

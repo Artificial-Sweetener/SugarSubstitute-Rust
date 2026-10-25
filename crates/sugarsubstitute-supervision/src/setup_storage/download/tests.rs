@@ -19,9 +19,17 @@ fn target() -> Result<Target, Box<dyn std::error::Error + Send + Sync>> {
 fn full() -> Response<'static> {
     Response { status: 200, length: Some(PACKAGE.len() as u64), range: None, encoding: None }
 }
+/// Create the same explicit storage owner supplied by installation trust in production.
+fn storage(root: &Path, context: &JobContext) -> io::Result<RuntimeCache> {
+    RuntimeCache::open(root, crate::setup_storage::cache::CachePolicy::default(), context)
+}
+/// Inspect the one known fixture generation; the returned path grants no runtime custody.
 fn payload(root: &Path) -> Result<std::path::PathBuf, Box<dyn std::error::Error + Send + Sync>> {
-    let name = target()?.digest().iter().map(|b| format!("{b:02x}")).collect::<String>();
-    Ok(root.join("update-downloads-v1").join(name).join("payload"))
+    Ok(worker::cache_file(
+        root,
+        crate::setup_storage::cache::Namespace::UpdateDownloads,
+        "payload",
+    )?)
 }
 
 /// A network boundary that returns a prefix, then loses the connection deterministically.
@@ -39,7 +47,7 @@ fn interrupted_download_reopens_at_actual_offset_and_verifies_the_entire_file() 
         let root = installation(80, context)?;
         let prefix = 7;
         {
-            let mut download = Download::open(root.path(), target()?, context)?;
+            let mut download = Download::open(storage(root.path(), context)?, target()?, context)?;
             assert!(matches!(
                 download.receive(
                     full(),
@@ -50,7 +58,7 @@ fn interrupted_download_reopens_at_actual_offset_and_verifies_the_entire_file() 
             ));
             assert_eq!(download.offset()?, prefix as u64);
         }
-        let mut download = Download::open(root.path(), target()?, context)?;
+        let mut download = Download::open(storage(root.path(), context)?, target()?, context)?;
         assert_eq!(download.offset()?, prefix as u64);
         let range = format!("bytes {prefix}-{}/{}", PACKAGE.len() - 1, PACKAGE.len());
         download.receive(
@@ -68,11 +76,12 @@ fn interrupted_download_reopens_at_actual_offset_and_verifies_the_entire_file() 
         let mut actual = Vec::new();
         verified.read_to_end(&mut actual)?;
         assert_eq!(actual, PACKAGE);
-        assert!(Download::open(root.path(), target()?, context).is_err());
+        assert!(Download::open(storage(root.path(), context)?, target()?, context).is_err());
         assert!(std::fs::write(payload(root.path())?, b"changed").is_err());
         assert!(std::fs::remove_file(payload(root.path())?).is_err());
         drop(verified);
-        Download::open(root.path(), target()?, context)?.finish(|| NOW, context)?;
+        Download::open(storage(root.path(), context)?, target()?, context)?
+            .finish(|| NOW, context)?;
         Ok(())
     })
 }
@@ -81,7 +90,7 @@ fn interrupted_download_reopens_at_actual_offset_and_verifies_the_entire_file() 
 fn ignored_range_restarts_the_owned_payload_instead_of_appending() -> TestResult {
     worker::run_reserved(DOWNLOAD_RESERVATION_BYTES, |context, _| {
         let root = installation(81, context)?;
-        let mut download = Download::open(root.path(), target()?, context)?;
+        let mut download = Download::open(storage(root.path(), context)?, target()?, context)?;
         assert!(download.receive(full(), &mut Cursor::new(&PACKAGE[..5]), context).is_err());
         assert_eq!(download.offset()?, 5);
         download.receive(full(), &mut Cursor::new(PACKAGE), context)?;
@@ -97,7 +106,7 @@ fn ignored_range_restarts_the_owned_payload_instead_of_appending() -> TestResult
 fn malformed_framing_never_changes_the_retained_prefix_or_reads_the_body() -> TestResult {
     worker::run_reserved(DOWNLOAD_RESERVATION_BYTES, |context, _| {
         let root = installation(82, context)?;
-        let mut download = Download::open(root.path(), target()?, context)?;
+        let mut download = Download::open(storage(root.path(), context)?, target()?, context)?;
         assert!(download.receive(full(), &mut Cursor::new(&PACKAGE[..5]), context).is_err());
         let mut body = Cursor::new(PACKAGE);
         let result = download.receive(
@@ -118,7 +127,7 @@ fn malformed_framing_never_changes_the_retained_prefix_or_reads_the_body() -> Te
 fn corrupt_resumed_prefix_is_detected_and_next_attempt_starts_cleanly() -> TestResult {
     worker::run_reserved(DOWNLOAD_RESERVATION_BYTES, |context, _| {
         let root = installation(83, context)?;
-        let mut download = Download::open(root.path(), target()?, context)?;
+        let mut download = Download::open(storage(root.path(), context)?, target()?, context)?;
         assert!(download.receive(full(), &mut Cursor::new(b"wrong"), context).is_err());
         let range = format!("bytes 5-{}/{}", PACKAGE.len() - 1, PACKAGE.len());
         download.receive(
@@ -130,7 +139,7 @@ fn corrupt_resumed_prefix_is_detected_and_next_attempt_starts_cleanly() -> TestR
             download.finish(|| NOW, context),
             Err(DownloadFailure::Verification(Verification::Digest))
         ));
-        let mut retry = Download::open(root.path(), target()?, context)?;
+        let mut retry = Download::open(storage(root.path(), context)?, target()?, context)?;
         assert_eq!(retry.offset()?, 0);
         retry.receive(full(), &mut Cursor::new(PACKAGE), context)?;
         retry.finish(|| NOW, context)?;
@@ -142,7 +151,7 @@ fn corrupt_resumed_prefix_is_detected_and_next_attempt_starts_cleanly() -> TestR
 fn server_limited_contiguous_ranges_accumulate_until_the_whole_package_verifies() -> TestResult {
     worker::run_reserved(DOWNLOAD_RESERVATION_BYTES, |context, _| {
         let root = installation(89, context)?;
-        let mut download = Download::open(root.path(), target()?, context)?;
+        let mut download = Download::open(storage(root.path(), context)?, target()?, context)?;
         for offset in (0..PACKAGE.len()).step_by(4) {
             let end = (offset + 4).min(PACKAGE.len());
             let range = format!("bytes {offset}-{}/{}", end - 1, PACKAGE.len());

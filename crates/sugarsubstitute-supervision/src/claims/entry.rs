@@ -7,7 +7,7 @@ use crate::{
     coordinator_entry::election::{
         ElectionInitializationGuard, ElectionRecordOrigin, FreshRecordOrigin, RetainedElectionProof,
     },
-    protected_storage::{exclusion::HeldFile, record_file::RecordRead},
+    durable_storage::protected::{exclusion::HeldFile, record_file::RecordRead},
 };
 use sugarsubstitute_contracts::execution::ExecutionId;
 

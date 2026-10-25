@@ -198,5 +198,3 @@ class ProcessFamily:
             self.handles.clear()
         if failures:
             raise RuntimeError(f"Offscreen fixture cleanup encountered {len(failures)} failures") from failures[0]
-
-

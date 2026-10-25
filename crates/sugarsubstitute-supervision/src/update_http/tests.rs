@@ -142,3 +142,52 @@ fn redirect_loop_stops_at_bound_and_invalid_idle_opens_nothing() -> TestResult {
         server.finish()
     })
 }
+
+#[test]
+fn oversized_native_headers_are_rejected_with_observed_handle_and_socket_retirement() -> TestResult
+{
+    worker::run_reserved(RESERVATION, |context, _| {
+        let fields = format!("X-Bound: {}\r\nContent-Length: 0\r\n", "x".repeat(17 * 1024));
+        let (server, policy) =
+            Running::start(vec![exchange("oversized", None, 200, &fields, b"")], context)?;
+        let mut http = Http::new();
+        assert!(http.metadata(&policy, policy.asset("oversized")?, 100, IDLE, context).is_err());
+        assert!(http.settled());
+        server.finish()
+    })
+}
+
+#[test]
+fn shared_readiness_transport_observes_the_connected_tuple_before_and_after_body_reads()
+-> TestResult {
+    worker::run_reserved(RESERVATION, |context, _| {
+        let (server, policy) =
+            Running::start(vec![complete("native", b"actual loopback bytes")], context)?;
+        let port = policy.asset("native")?.port()?;
+        let mut transport = sugarsubstitute_networking::Transport::default();
+        let outcome = (|| -> TestResult {
+            transport.readiness(port, context)?;
+            transport.readiness_request("/native", context)?;
+            transport.send_readiness(context)?;
+            transport.receive(context)?;
+            let before = transport.loopback_tuple(port, context)?;
+            assert_ne!(before.0, 0);
+            assert_eq!(before.1, port);
+            assert!(transport.loopback_tuple(port.wrapping_add(1), context).is_err());
+            let response = transport.response(context)?;
+            assert_eq!(response.status, 200);
+            let mut bytes = [0; 128];
+            let count = transport.read(&mut bytes, context)?;
+            assert_eq!(&bytes[..count], b"actual loopback bytes");
+            assert_eq!(transport.read(&mut bytes, context)?, 0);
+            assert_eq!(transport.loopback_tuple(port, context)?, before);
+            transport.close_request()?;
+            Ok(())
+        })();
+        let retirement = transport.close();
+        outcome?;
+        retirement?;
+        assert!(transport.empty());
+        server.finish()
+    })
+}

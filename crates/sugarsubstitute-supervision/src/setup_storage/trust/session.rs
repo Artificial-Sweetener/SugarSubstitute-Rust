@@ -23,13 +23,14 @@ impl InstallationSession {
     ) -> Result<TrustStore, TrustFailure> {
         check(context)?;
         let root = self.directory();
-        if TrustStore::has_state(root)? {
+        if TrustStore::has_state(root, context)? {
             return TrustStore::open(root, repository, context);
         }
         let _work = context.memory().claim(WORK_BYTES).map_err(io::Error::other)?;
         let trust = RepositoryTrust::bootstrap(trusted_root)?;
         if SelectionStore::existing(root, context).map_err(io::Error::other)?.is_none() {
-            let initial = InstallationRecord::empty(staging::installation_id()?);
+            let initial =
+                InstallationRecord::empty(crate::setup_storage::identity::installation()?);
             SelectionStore::initialize(root, &initial, context).map_err(io::Error::other)?;
         }
         TrustStore::initialize_verified(root, repository, trust, context)

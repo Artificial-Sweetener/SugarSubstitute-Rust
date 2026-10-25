@@ -7,7 +7,9 @@ use super::{
     namespace::NativeState,
     native::{self, Discovered, Elected, NativePort},
 };
-use crate::{ClaimError, native_claims::lock, protected_storage::account::ResolvedNamespace};
+use crate::{
+    ClaimError, durable_storage::protected::account::ResolvedNamespace, native_claims::lock,
+};
 use std::{
     error::Error,
     num::NonZeroUsize,
@@ -39,7 +41,7 @@ pub(crate) use harness::Harness;
 /// Adopt a fixture boundary's real charged file into the retained namespace slot.
 pub(crate) fn install_recovery(
     proof: &RetainedElectionProof,
-    file: &mut Option<crate::protected_storage::exclusion::HeldFile<128>>,
+    file: &mut Option<crate::durable_storage::protected::exclusion::HeldFile<128>>,
 ) -> Result<(), ClaimError> {
     let mut state = lock(&proof.lifetime.state);
     if !matches!(proof.origin, ElectionRecordOrigin::RecoveredHeld { .. })

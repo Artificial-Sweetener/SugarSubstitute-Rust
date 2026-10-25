@@ -57,14 +57,14 @@ fn exact_probe_is_read_only_and_independent_of_application_and_preparation_owner
         let selection = Arc::new(storage::SelectionStore::open(root.path(), context)?);
         let app = selection.load(context)?;
         let _run = storage::InstallationRun::acquire(Arc::clone(&selection), context)?;
-        let _setup = storage::transaction::admission::Admission::open(root.path(), false)?;
+        let _setup = storage::transaction::admission::Admission::open(root.path(), false, context)?;
         let before = [SELECTION, MARKER, "checkpoint", "releases"]
-            .map(|name| std::fs::read(trust.root.path.join(name)))
+            .map(|name| std::fs::read(trust.root.path().join(name)))
             .into_iter()
             .collect::<io::Result<Vec<_>>>()?;
         trust.verify_updater_probe(&executable, trial.attempt(), context)?;
         for (name, bytes) in [SELECTION, MARKER, "checkpoint", "releases"].into_iter().zip(before) {
-            assert_eq!(std::fs::read(trust.root.path.join(name))?, bytes);
+            assert_eq!(std::fs::read(trust.root.path().join(name))?, bytes);
         }
         assert_eq!(selection.load(context)?, app);
         assert!(trust.updater_selection(context)?.accepted().is_none());
@@ -134,9 +134,9 @@ fn probes_never_reinitialize_missing_engine_continuity_or_selection() -> TestRes
             let executable = trust
                 .updater_path(&trial.attempt().generation)
                 .join("app/sugarsubstitute-updater.exe");
-            std::fs::remove_file(trust.root.path.join(missing))?;
+            std::fs::remove_file(trust.root.path().join(missing))?;
             assert!(trust.verify_updater_probe(&executable, trial.attempt(), context).is_err());
-            assert!(!trust.root.path.join(missing).exists());
+            assert!(!trust.root.path().join(missing).exists());
         }
         Ok(())
     })
@@ -171,10 +171,10 @@ fn expired_probe_job_leaves_the_original_pending_attempt_intact() -> TestResult 
         let trust = TrustStore::open(root.path(), [92; 32], context)?;
         let executable =
             trust.updater_path(&trial.attempt().generation).join("app/sugarsubstitute-updater.exe");
-        let before = std::fs::read(trust.root.path.join(SELECTION))?;
+        let before = std::fs::read(trust.root.path().join(SELECTION))?;
         clock.expire();
         assert!(trust.verify_updater_probe(&executable, trial.attempt(), context).is_err());
-        assert_eq!(std::fs::read(trust.root.path.join(SELECTION))?, before);
+        assert_eq!(std::fs::read(trust.root.path().join(SELECTION))?, before);
         Ok(())
     })
 }

@@ -2,8 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Persist signed preparation intent before allocating any canonical generation files.
 use super::*;
-use crate::setup_storage::{
-    SelectionStore, TrustFailure, UpdateAuthorization, protection, staging,
+use crate::{
+    durable_storage::protection,
+    setup_storage::{SelectionStore, TrustFailure, UpdateAuthorization},
 };
 use sugarsubstitute_contracts::installation::{Candidate, Generation, PackageDigest};
 use sugarsubstitute_update::VerifiedOffer;
@@ -53,7 +54,7 @@ impl InstallationSession {
                 let (generation, initialize) = match resumable {
                     None => {
                         let generation = Generation {
-                            id: staging::generation_id()?,
+                            id: crate::setup_storage::identity::generation()?,
                             package: PackageDigest::new(bundle.digest().to_owned())
                                 .map_err(io::Error::other)?,
                         };
@@ -80,7 +81,8 @@ impl InstallationSession {
                     return Err(invalid("Resume package differs from the recorded candidate"));
                 }
                 let path = self.directory().join("releases").join(generation.id.as_str());
-                let (pinned, marker) = match std::fs::symlink_metadata(&path) {
+                let (pinned, marker) = match crate::durable_storage::files::inspect(&path, context)
+                {
                     Ok(_) => generation::open(&path, bundle.digest(), context)?,
                     Err(cause) if cause.kind() == io::ErrorKind::NotFound && initialize => {
                         generation::create(&path, bundle.digest(), context)?
@@ -90,7 +92,7 @@ impl InstallationSession {
                 protection::with(context, |protection| {
                     protection.directory(
                         &self.directory().join("desktop-data"),
-                        crate::protected_storage::directories::Mode::OpenOrCreate,
+                        crate::durable_storage::protected::directories::Mode::OpenOrCreate,
                         context,
                     )?;
                     Ok(())
@@ -130,7 +132,7 @@ impl InstallationSession {
         }
         if initialize {
             let path = self.directory().join("releases").join(generation.id.as_str());
-            match std::fs::symlink_metadata(path) {
+            match crate::durable_storage::files::inspect(path, context) {
                 Err(cause) if cause.kind() == io::ErrorKind::NotFound => {
                     return Ok(Some((generation.clone(), true)));
                 }

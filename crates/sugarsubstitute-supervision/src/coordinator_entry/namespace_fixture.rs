@@ -10,7 +10,8 @@ use super::{
     native::{self, Discovered, Elected, NativePort},
 };
 use crate::{
-    ClaimError, native_claims::files::Handle, protected_storage::account::ResolvedNamespace,
+    ClaimError, durable_storage::protected::account::ResolvedNamespace,
+    native_claims::files::Handle,
 };
 use std::{
     path::{Path, PathBuf},

@@ -60,7 +60,7 @@ impl BackendCustodySource {
             memory: memory.clone(),
         })?;
         let construct = || -> Result<Self, ClaimError> {
-            crate::protected_storage::paths::validate_local_shape(&installation)
+            crate::durable_storage::protected::paths::validate_local_shape(&installation)
                 .map_err(ClaimError::invalid)?;
             let storage = size_of::<State>() + 2 * size_of::<usize>() + size_of::<Mutex<Option<Box<State>>>>()
                 + sugarsubstitute_execution::backend_custody::BackendCustodyWorkerStart::control_storage_bytes()

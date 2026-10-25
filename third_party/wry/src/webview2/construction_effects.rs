@@ -106,6 +106,7 @@ pub(super) fn advance(driver: &mut Driver) -> Result<ConstructionProgress> {
       let callback_owner = shared.clone();
       let handler = CreateCoreWebView2ControllerCompletedHandler::create(Box::new(
         move |status, controller| {
+          let actual = controller.clone();
           callback_owner.on_callback(|state| {
             construction_adoption::adopt(
               &mut state.controller,
@@ -117,6 +118,10 @@ pub(super) fn advance(driver: &mut Driver) -> Result<ConstructionProgress> {
               true,
             );
           });
+          let observer = callback_owner.native.borrow().private_profile.as_ref().map(PrivateProfileObserver::retained);
+          if let (Some(observer), Some(actual)) = (observer, actual) {
+            if let Err(cause) = observer.controller(&actual) { callback_owner.fail(cause); }
+          }
           Ok(())
         },
       ));

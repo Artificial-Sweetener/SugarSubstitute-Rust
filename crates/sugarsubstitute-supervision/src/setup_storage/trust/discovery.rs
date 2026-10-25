@@ -4,6 +4,42 @@
 use super::*;
 
 impl TrustStore {
+    /// Fund an explicit extraction workspace from this retained trust owner's original admission.
+    pub(crate) fn workspace_cache(
+        &self,
+        anchor: &Path,
+        context: &JobContext,
+    ) -> io::Result<super::super::cache::RuntimeCache> {
+        super::super::cache::RuntimeCache::open_retained(
+            anchor,
+            super::super::cache::CachePolicy::default(),
+            &self.workspace,
+            context,
+        )
+    }
+
+    /// Open disposable storage on demand without making trust operations depend on cache health.
+    /// Metadata uses this store's original admission; cancellation and native work use this job.
+    pub(crate) fn runtime_cache(
+        &self,
+        context: &JobContext,
+    ) -> io::Result<super::super::cache::RuntimeCache> {
+        check(context)?;
+        let mut cached =
+            self.cache.lock().map_err(|_| io::Error::other("Cache scope owner is poisoned"))?;
+        if let Some(cache) = &*cached {
+            return Ok(cache.clone());
+        }
+        let cache = super::super::cache::RuntimeCache::open_retained(
+            self._installation_root.path(),
+            super::super::cache::CachePolicy::default(),
+            &self.workspace,
+            context,
+        )?;
+        *cached = Some(cache.clone());
+        Ok(cache)
+    }
+
     /// Bind preparation storage to the physical installation that owns this trust.
     pub(crate) fn verify_installation(
         &self,

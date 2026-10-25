@@ -2,9 +2,11 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Admit an inert signed trial through the production installer pipeline for native tests.
 use super::repository::SignedPackage;
-use crate::setup_storage::{
-    InstallationSession, InstallerSource, TrialTransfer, existing::fixture, files::Directory,
-    test_package,
+use crate::{
+    durable_storage::files::Directory,
+    setup_storage::{
+        InstallationSession, InstallerSource, TrialTransfer, existing::fixture, test_package,
+    },
 };
 use std::path::Path;
 use sugarsubstitute_contracts::{

@@ -1,0 +1,121 @@
+schema_version = 1
+owner = "sugarsubstitute-supervision"
+control_cache = "runtime-cache-storage"
+entry_source = "crates/sugarsubstitute-supervision/src/setup_storage/cache.rs"
+registry_source = "crates/sugarsubstitute-supervision/src/setup_storage/cache/policy.rs"
+source_roots = ["crates", "tools", "native", "installer"]
+
+[[script_boundaries]]
+path = "installer/worker/provision.ts"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:200e9625132af274695e393280baa0b1c61f3ddae85e822d3f76be383e47ec9d"
+rationale = "Inspect existing managed or attached ComfyUI and Python paths; download storage is delegated to native capability consumers."
+role = "external_runtime"
+
+[[script_boundaries]]
+path = "installer/worker/integration.ts"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:031855f513876ca2a06e9f44711c6d5ecb9792ea2b6c19b59e8f61effce0a202"
+rationale = "Probe the external SugarCubes requirements file before invoking its installed Python owner."
+role = "external_runtime"
+
+[[script_boundaries]]
+path = "installer/worker/downloader.ts"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:6374d6370699c29c98d3369c0602341f576fa70a2c957d1b0ba34d010f5cffbc"
+rationale = "Inject the prepared native capability into the pinned upstream downloader for cache destinations; external authored destinations retain upstream storage ownership."
+role = "native_injection"
+
+[[script_boundaries]]
+path = "installer/worker/cache.ts"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:c6daf9588453e683b901e788550525215838f6d12724c730039b2b669ef6d8e2"
+rationale = "Consume only the upstream cache type; every implemented operation delegates to the prepared native cache capability."
+role = "native_injection"
+
+[[script_boundaries]]
+path = "installer/tests/download-cache.test.mjs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:fd0c68ae2fc02c8452c443f1796a1ae9edbea3edc7f115085b77f2ddb099b4a9"
+rationale = "Owned fixture destinations and external native/network reply actors verify the actual patched downloader without filesystem fallback."
+role = "fixture"
+
+[[script_boundaries]]
+path = "installer/tests/dependency-inspection.test.mjs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:b25c001432a32140fddaa772707c3a2d1538b92df742248e4f5b73eedcea6167"
+rationale = "Owned temporary Python environment fixtures verify dependency inspection and preserve the selected runtime."
+role = "fixture"
+
+[[script_boundaries]]
+path = "installer/tests/metadata.test.mjs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:5e5489dc12df6faef04b9c99ee4b7d3ba085b4e912e58e133fbf35cbd343aa40"
+rationale = "Owned build-receipt input and external reply actors verify native metadata streams."
+role = "fixture"
+
+[[script_boundaries]]
+path = "installer/tests/ownership.test.mjs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:0c1a330e6993e30c0bcecae4f5975b47e0461048694a9abf64359f4dba27c630"
+rationale = "Owned fixtures and native record reply actors verify managed environment preservation and cache delegation."
+role = "fixture"
+
+[[script_boundaries]]
+path = "installer/tests/worker.test.mjs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:5c18126447bfe6376dd1636a3e0a4fa3e75006d84ca10e28cfcb6f8a604337fb"
+rationale = "Owned temporary worker arguments and the packaged Node runtime verify private startup, protocol rejection and host closure."
+role = "fixture"
+
+[[script_boundaries]]
+path = "installer/tests/http-scenarios.mjs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:a4847e7d0cab842cda0e874f3c750a015cd90895e7c17708e53e2833a81ad837"
+rationale = "Owned temporary destinations verify real-socket download and resume behavior; cached metadata uses the native capability fixture."
+role = "fixture"
+
+[[script_boundaries]]
+path = "installer/tests/http.test.mjs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:34a7388c4e0cab1bf845fb8dacf33ffb0f1c326af7f9f76ab3aa99da1cfdc84f"
+rationale = "Build the actual patched HTTP adapters into an isolated qualification directory and retain bounded test output there."
+role = "fixture"
+
+[[script_boundaries]]
+path = "crates/sugarsubstitute-desktop/tests/frontend_startup_probe.mjs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:c04ed29ef32a12cb52a0638839b004278f23d37e1a74a8e5b63f9dae3096485c"
+rationale = "Read the actual Rust frontend readiness sample into an isolated JavaScript VM and exercise it with external document and owner-export fixtures."
+role = "fixture"
+
+[[namespace_reviews]]
+path = "tools/xtask/src/cache_storage.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:af5613da96d552f1bf9db9a84f276caa4491235c2e4f8f74da8f323746cd81ea"
+rationale = "Authoritative checker names and literal negative-test inputs; no runtime storage implementation."
+
+[[namespace_reviews]]
+path = "tools/xtask/src/cache_storage/tests.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:661af1e7c41a588f07c4087be624b00c5c0c654fbb17e6cace7e01d33fb909ea"
+rationale = "Isolated repository fixtures deliberately contain registered and adversarial namespace spellings."
+
+[[namespace_reviews]]
+path = "tools/xtask/src/cache_storage/registry.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:3ad2b5343eb02de7f0449c47ac48cbebd1ae4f4f65990fab6f3c21d19290704c"
+rationale = "Registry parser rejection fixtures and exact expected scope-directory data."
+
+[[namespace_reviews]]
+path = "tools/test_updater_qualification.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:cc23458d26a2a168e479720aa31e61d4ea93f3e116fab1d052646904ff1027af"
+rationale = "The isolated publication observer regression deliberately creates legacy payload namespace bytes to prove that only registered shared generations count and unrelated original content is preserved."
+
+[[script_boundaries]]
+path = "installer/tests/localization.test.mjs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:169a7ad569afe9fafe1fe6effb5a6166cdd29975670df49ca2937c8511ae9263"
+rationale = "The isolated localization contract tests read the owned TypeScript progress/failure module into a virtual compiler and reject invented copy and message codes; they perform no runtime cache acquisition."
+role = "fixture"

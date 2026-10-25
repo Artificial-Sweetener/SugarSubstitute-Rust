@@ -11,6 +11,12 @@ use std::{
         atomic::{AtomicU64, Ordering},
     },
 };
+mod fields;
+mod queue;
+#[cfg(windows)]
+mod service;
+#[cfg(all(windows, feature = "windows-native-host"))]
+pub(crate) mod worker;
 
 struct HealthState {
     first: OnceLock<io::Error>,
@@ -74,7 +80,7 @@ impl fmt::Debug for DiagnosticFailure {
 }
 impl fmt::Display for DiagnosticFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Owned diagnostic stderr write failed")
+        f.write_str("Owned diagnostic output failed")
     }
 }
 impl Error for DiagnosticFailure {
@@ -115,21 +121,30 @@ impl<W> Writer<W> {
 struct Factory<F> {
     make: F,
     health: DiagnosticHealth,
+    queue: Option<Arc<queue::Queue>>,
 }
 impl<'a, F, W> tracing_subscriber::fmt::MakeWriter<'a> for Factory<F>
 where
     F: Fn() -> W,
     W: Write,
 {
-    type Writer = Writer<W>;
+    type Writer = queue::Routed<Writer<W>>;
     fn make_writer(&'a self) -> Self::Writer {
-        Writer { sink: (self.make)(), health: self.health.clone() }
+        queue::Routed {
+            sink: Writer { sink: (self.make)(), health: self.health.clone() },
+            queue: self.queue.clone(),
+            frame: Vec::new(),
+            oversized: false,
+            written: 0,
+            failed: false,
+        }
     }
 }
 fn subscriber<F, W>(
     health: DiagnosticHealth,
     make: F,
     filter: tracing_subscriber::EnvFilter,
+    queue: Option<Arc<queue::Queue>>,
 ) -> impl tracing::Subscriber + Send + Sync
 where
     F: Fn() -> W + Send + Sync + 'static,
@@ -137,31 +152,70 @@ where
 {
     tracing_subscriber::fmt()
         .with_env_filter(filter)
-        .with_writer(Factory { make, health })
+        .fmt_fields(fields::Fields)
+        .with_ansi(false)
+        .with_writer(Factory { make, health, queue })
         .log_internal_errors(false)
         .finish()
 }
+/// Exercise the supported formatter around a source-owned test sink without installing global state.
+#[cfg(all(test, windows, feature = "windows-native-host"))]
+pub(crate) fn fixture_subscriber<F, W>(make: F) -> impl tracing::Subscriber + Send + Sync
+where
+    F: Fn() -> W + Send + Sync + 'static,
+    W: Write,
+{
+    subscriber(DiagnosticHealth::fixture(), make, "trace".into(), None)
+}
 /// Own health through the actual application lifetime and final error resolution.
-/// The global subscriber retains only bounded cause data, never a context, claim or native owner.
+/// The global subscriber retains bounded cause data and a queue whose admission claim retires with the service.
 pub(crate) struct Diagnostics {
     health: DiagnosticHealth,
+    #[cfg(windows)]
+    service: service::Service,
 }
 impl Diagnostics {
+    /// Keep routing and sink health alive through the caller's final error reporting and native teardown.
+    pub(crate) fn run<T>(
+        execute: impl FnOnce(DiagnosticHealth) -> Result<T, Box<dyn Error>>,
+    ) -> Result<T, Box<dyn Error>> {
+        let diagnostics = Self::initialize()?;
+        let result = execute(diagnostics.health());
+        diagnostics.finish(result)
+    }
     /// Install the supported process-global subscriber once, retaining two original causes and an omitted count.
-    pub(crate) fn initialize() -> Result<Self, Box<dyn Error>> {
+    fn initialize() -> Result<Self, Box<dyn Error>> {
         use tracing_subscriber::util::SubscriberInitExt as _;
         let health = DiagnosticHealth::new();
         let filter =
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into());
-        subscriber(health.clone(), std::io::stderr, filter).try_init()?;
-        Ok(Self { health })
+        #[cfg(windows)]
+        let service = service::Service::start(health.clone(), Arc::new(service::AccountSink))?;
+        let queue = {
+            #[cfg(windows)]
+            {
+                Some(service.queue())
+            }
+            #[cfg(not(windows))]
+            {
+                None
+            }
+        };
+        subscriber(health.clone(), std::io::stderr, filter, queue).try_init()?;
+        Ok(Self {
+            health,
+            #[cfg(windows)]
+            service,
+        })
     }
     /// Give the actual active host the same data-only diagnostic health owner.
     pub(crate) fn health(&self) -> DiagnosticHealth {
         self.health.clone()
     }
     /// Preserve both the application result and original diagnostic failure at final process observation.
-    pub(crate) fn finish<T>(self, result: Result<T, Box<dyn Error>>) -> Result<T, Box<dyn Error>> {
+    fn finish<T>(self, result: Result<T, Box<dyn Error>>) -> Result<T, Box<dyn Error>> {
+        #[cfg(windows)]
+        self.service.finish(&self.health);
         resolve(result, &self.health)
     }
 }

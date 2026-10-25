@@ -9,21 +9,14 @@ authors.workspace = true
 publish.workspace = true
 
 [dependencies]
+sugarsubstitute-ui = { path = "../sugarsubstitute-ui" }
 sugarsubstitute-application = { path = "../sugarsubstitute-application" }
 sugarsubstitute-contracts = { path = "../sugarsubstitute-contracts" }
 tiny-skia.workspace = true
 png.workspace = true
-
-[target.'cfg(not(target_os = "windows"))'.dependencies]
-cosmic-text.workspace = true
-
-[target.'cfg(target_os = "windows")'.dependencies]
-windows.workspace = true
-windows-core.workspace = true
 
 [lints]
 workspace = true
 
 [dev-dependencies]
 sugarsubstitute-execution = { path = "../sugarsubstitute-execution" }
-cosmic-text.workspace = true

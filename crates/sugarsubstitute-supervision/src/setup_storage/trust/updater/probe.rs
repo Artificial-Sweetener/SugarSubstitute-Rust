@@ -2,8 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Verify the running probe's exact engine generation without selecting it or claiming ownership.
 use super::*;
-use crate::setup_storage::InheritedUpdaterProbe;
-use crate::setup_storage::bundle::Payload;
+use crate::setup_storage::{InheritedUpdaterProbe, bundle::Payload};
 use std::ffi::OsStr;
 use sugarsubstitute_contracts::installation::Trial;
 

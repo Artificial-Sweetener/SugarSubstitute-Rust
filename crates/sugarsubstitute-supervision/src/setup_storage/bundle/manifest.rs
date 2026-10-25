@@ -1,11 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Authenticate a retained package inventory before either complete-copy or runtime admission.
-use super::super::{
-    check,
-    files::{self, Directory},
-    invalid, inventory,
-};
+use super::super::{check, invalid, inventory};
+use crate::durable_storage::files::{self, Directory};
 use sha2::{Digest, Sha256};
 use std::{fs::File, io, path::Path};
 use sugarsubstitute_contracts::{execution::JobContext, update::Component};
@@ -29,11 +26,20 @@ impl AuthenticatedManifest {
         component: Component,
         context: &JobContext,
     ) -> io::Result<Self> {
+        Self::open_directory(Directory::open(root, false)?, expected, component, context)
+    }
+
+    /// Authenticate the exact directory already checked against its cache lease or external source.
+    pub(super) fn open_directory(
+        directory: Directory,
+        expected: &str,
+        component: Component,
+        context: &JobContext,
+    ) -> io::Result<Self> {
         check(context)?;
         if expected.len() != 64 || !expected.bytes().all(|byte| byte.is_ascii_hexdigit()) {
             return Err(invalid("Package inventory authority is invalid"));
         }
-        let directory = Directory::open(root, false)?;
         let mut file = directory.read("setup-manifest.json")?;
         let bytes = files::read_bounded(&mut file, MAX_MANIFEST_BYTES)?;
         let digest = format!("{:x}", Sha256::digest(&bytes));

@@ -19,7 +19,7 @@ pub(in crate::setup_storage) use installed::PublishedRelease;
 mod offer_cache;
 pub(crate) mod offered;
 mod preparation;
-pub use offer_cache::OFFER_CACHE_RESERVATION_BYTES;
+pub use offer_cache::{OFFER_LOOKUP_RESERVATION_BYTES, OFFER_PUBLICATION_RESERVATION_BYTES};
 pub use offered::{AuthenticatedOffer, OFFER_RESERVATION_BYTES};
 mod receipt;
 mod records;
@@ -27,14 +27,16 @@ mod releases;
 mod session;
 mod subscription;
 mod updater;
-use super::{
-    SelectionStore, check,
+use super::SelectionStore;
+use super::check;
+use super::invalid;
+use super::ownership;
+use crate::durable_storage::{
     files::{self, Directory},
-    invalid, ownership,
+    protected::directories::Mode,
     protection::{self, Protection},
     staging,
 };
-use crate::protected_storage::directories::Mode;
 pub use failure::TrustFailure;
 use std::{fs::File, io, io::Write, path::Path};
 use sugarsubstitute_contracts::{
@@ -65,6 +67,7 @@ pub struct TrustStore {
     _continuity: Option<File>,
     _memory: MemoryClaim,
     workspace: MemoryLease,
+    cache: std::sync::Mutex<Option<super::cache::RuntimeCache>>,
     installation: InstallationId,
     repository: [u8; 32],
 }
@@ -145,16 +148,22 @@ impl TrustStore {
     fn apply<T>(
         &self,
         trust: &mut RepositoryTrust,
-        protection: &Protection,
+        protection: &mut Protection,
         context: &JobContext,
         operation: impl FnOnce(&mut RepositoryTrust) -> Result<T, sugarsubstitute_update::Error>,
     ) -> Result<T, TrustFailure> {
-        let staged = staging::unique_path(&self.root, "pending")?;
-        let mut file = protection.file(&staged, context)?;
+        let commit = crate::durable_storage::records::PreparedCommit::new(
+            &self.root,
+            RECORD,
+            "pending",
+            envelope::Kind::Checkpoint.limit(),
+            protection,
+            context,
+        )?;
         check(context)?;
         let outcome = operation(trust);
         // Once verification accepts authority, cancellation must not skip its durable floor.
-        // The precreated file lets this bounded commit finish without a new cancellable open.
+        // The prepared storage owner finishes this bounded commit without a cancellable open.
         let publication = (|| {
             let checkpoint = trust.checkpoint().map_err(io::Error::other)?;
             let bytes = envelope::encode(
@@ -163,10 +172,7 @@ impl TrustStore {
                 &self.repository,
                 &checkpoint,
             )?;
-            file.write_all(&bytes)?;
-            file.sync_all()?;
-            drop(file);
-            staging::replace_record(&staged, &self.root.path.join(RECORD))
+            commit.commit(&bytes)
         })();
         if let Err(storage) = publication {
             return Err(TrustFailure::Publication { storage, verification: outcome.err() });
@@ -180,12 +186,12 @@ impl TrustStore {
     fn protected<T>(
         &self,
         context: &JobContext,
-        operation: impl FnOnce(&Protection) -> Result<T, TrustFailure>,
+        operation: impl FnOnce(&mut Protection) -> Result<T, TrustFailure>,
     ) -> Result<T, TrustFailure> {
         check(context)?;
         let _memory = self.workspace.claim(WORK_BYTES).map_err(io::Error::other)?;
         protection::with_domain(context, |protection| {
-            protection.directory(&self.root.path, Mode::Existing, context)?;
+            protection.directory(self.root.path(), Mode::Existing, context)?;
             operation(protection)
         })
         .map_err(TrustFailure::from)

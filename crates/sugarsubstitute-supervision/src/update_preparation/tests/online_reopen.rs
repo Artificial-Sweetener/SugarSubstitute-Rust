@@ -9,14 +9,14 @@ use sugarsubstitute_update::fixture::{EXPIRES, Set, key};
 fn online_recheck_reopens_without_archive_or_workspace_and_refreshes_offline_evidence() -> TestResult
 {
     let (fixture, generation) = restart::prepared()?;
-    let archive = fixture
-        .installation
-        .path()
-        .join("update-downloads-v1")
-        .join(format!("{:x}", Sha256::digest(&fixture.archive)))
-        .join("payload");
+    let archive = crate::setup_storage::test_worker::cache_file(
+        fixture.installation.path(),
+        crate::setup_storage::cache::Namespace::UpdateDownloads,
+        "payload",
+    )?;
     let _exclusive =
-        std::fs::OpenOptions::new().read(true).write(true).share_mode(0).open(archive)?;
+        std::fs::OpenOptions::new().read(true).write(true).share_mode(0).open(&archive)?;
+    assert!(std::fs::read(&archive).is_err());
     let workspace = fixture.workspace.path().join("reserved-user-file");
     std::fs::write(&workspace, b"preserve this file")?;
     let mut signed = SignedPackage::new(&fixture.archive, 1)?;

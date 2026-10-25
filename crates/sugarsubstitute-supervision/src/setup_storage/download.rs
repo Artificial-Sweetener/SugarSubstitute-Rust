@@ -4,11 +4,11 @@
 mod custody;
 mod failure;
 mod local;
-use super::check;
+use super::{cache::RuntimeCache, check};
 use custody::Custody;
 pub use failure::DownloadFailure;
 use std::{
-    io::{self, Read, Seek, SeekFrom, Write},
+    io::{self, Read, Seek, SeekFrom},
     path::Path,
 };
 use sugarsubstitute_contracts::execution::JobContext;
@@ -18,7 +18,7 @@ use sugarsubstitute_update::{
 };
 
 /// Admission for one retained cache entry, fixed streaming buffer and protected native opens.
-pub const DOWNLOAD_RESERVATION_BYTES: u64 = 8 * 1024 * 1024;
+pub const DOWNLOAD_RESERVATION_BYTES: u64 = 16 * 1024 * 1024;
 const CHUNK: usize = 256 * 1024;
 
 /// Exclusive package preparation; it never acquires the application's lease or starts work.
@@ -34,15 +34,14 @@ impl Download {
     /// # Errors
     /// Rejects unknown installations, busy writers, unsafe paths, damaged ownership and I/O.
     pub fn open(
-        root: &Path,
+        cache: RuntimeCache,
         target: Target,
         context: &JobContext,
     ) -> Result<Self, DownloadFailure> {
-        let custody = Custody::open(root, &target, context)?;
-        let reset = custody.file.metadata()?.len() > target.length();
+        let mut custody = Custody::open(cache, &target, context)?;
+        let reset = custody.payload.length()? > target.length();
         if reset {
-            custody.file.set_len(0)?;
-            custody.file.sync_all()?;
+            custody.payload.reset(context)?;
         }
         Ok(Self { custody, target, reset })
     }
@@ -50,7 +49,7 @@ impl Download {
     /// # Errors
     /// Returns native metadata failures without guessing an offset.
     pub fn offset(&self) -> Result<u64, DownloadFailure> {
-        Ok(self.custody.file.metadata()?.len())
+        Ok(self.custody.payload.length()?)
     }
     /// An oversized owned cache payload was discarded as an observable miss at open.
     pub fn cache_was_reset(&self) -> bool {
@@ -70,62 +69,10 @@ impl Download {
     ) -> Result<(), DownloadFailure> {
         check(context)?;
         let plan = Transfer::accept(&self.target, self.offset()?, response)?;
-        self.receive_interval(plan.offset(), plan.length(), body, context)
-    }
-
-    /// Flush partial bytes and retain both causes when copying and durable storage fail.
-    fn receive_interval(
-        &mut self,
-        offset: u64,
-        length: u64,
-        body: &mut impl Read,
-        context: &JobContext,
-    ) -> Result<(), DownloadFailure> {
-        let outcome = self.copy(offset, length, body, context);
-        match (outcome, self.custody.file.sync_all()) {
-            (result, Ok(())) => result,
-            (Ok(()), Err(flush)) => Err(flush.into()),
-            (Err(transfer), Err(flush)) => {
-                Err(DownloadFailure::Flush { transfer: Box::new(transfer), flush })
-            }
-        }
-    }
-
-    /// Copy only the permitted interval, including an extra-byte probe before success.
-    fn copy(
-        &mut self,
-        offset: u64,
-        length: u64,
-        body: &mut impl Read,
-        context: &JobContext,
-    ) -> Result<(), DownloadFailure> {
-        if offset.checked_add(length).is_none_or(|end| end > self.target.length()) {
-            return Err(Rejection::Offset.into());
-        }
-        if offset == 0 {
-            self.custody.file.set_len(0)?;
-        }
-        self.custody.file.seek(SeekFrom::Start(offset))?;
-        let mut scratch = vec![0; CHUNK];
-        let mut copied = 0;
-        loop {
-            check(context)?;
-            let maximum = (length - copied).saturating_add(1).min(CHUNK as u64) as usize;
-            let count = body.read(&mut scratch[..maximum])?;
-            check(context)?;
-            if count == 0 {
-                break;
-            }
-            if count > maximum || count as u64 > length - copied {
-                return Err(Rejection::BodyLength.into());
-            }
-            self.custody.file.write_all(&scratch[..count])?;
-            copied += count as u64;
-        }
-        if copied != length {
-            return Err(Rejection::BodyLength.into());
-        }
-        Ok(())
+        self.custody
+            .payload
+            .receive_exact(plan.offset(), plan.length(), body, context)
+            .map_err(Into::into)
     }
 
     /// Verify every byte, including a resumed prefix, and retain the same exclusive file handle.
@@ -143,13 +90,19 @@ impl Download {
         if self.offset()? != self.target.length() {
             return Err(Rejection::BodyLength.into());
         }
-        self.custody.file.sync_all()?;
+        self.custody.payload.flush()?;
         let mut verifier = self.target.verifier(utc_seconds())?;
-        self.custody.file.seek(SeekFrom::Start(0))?;
-        let mut scratch = vec![0; CHUNK];
+        self.custody.payload.seek(SeekFrom::Start(0))?;
+        let _scratch = context.memory().claim(CHUNK as u64).map_err(io::Error::other)?;
+        let mut scratch = Vec::new();
+        scratch.try_reserve_exact(CHUNK).map_err(io::Error::other)?;
+        if scratch.capacity() > CHUNK {
+            return Err(super::invalid("Package hash buffer exceeds its admission").into());
+        }
+        scratch.resize(CHUNK, 0);
         loop {
             check(context)?;
-            let count = self.custody.file.read(&mut scratch)?;
+            let count = self.custody.payload.read(&mut scratch)?;
             if count == 0 {
                 break;
             }
@@ -159,16 +112,14 @@ impl Download {
         let verified = match verifier.finish(utc_seconds()) {
             Ok(verified) => verified,
             Err(cause @ sugarsubstitute_update::Error::Digest) => {
-                if let Err(flush) =
-                    self.custody.file.set_len(0).and_then(|()| self.custody.file.sync_all())
-                {
+                if let Err(flush) = self.custody.payload.reset(context) {
                     return Err(DownloadFailure::Flush { transfer: Box::new(cause.into()), flush });
                 }
                 return Err(cause.into());
             }
             Err(cause) => return Err(cause.into()),
         };
-        self.custody.file.seek(SeekFrom::Start(0))?;
+        self.custody.payload.seek(SeekFrom::Start(0))?;
         Ok(VerifiedDownload { custody: self.custody, verified })
     }
 }
@@ -187,12 +138,12 @@ impl VerifiedDownload {
 }
 impl Read for VerifiedDownload {
     fn read(&mut self, output: &mut [u8]) -> io::Result<usize> {
-        self.custody.file.read(output)
+        self.custody.payload.read(output)
     }
 }
 impl Seek for VerifiedDownload {
     fn seek(&mut self, position: SeekFrom) -> io::Result<u64> {
-        self.custody.file.seek(position)
+        self.custody.payload.seek(position)
     }
 }
 

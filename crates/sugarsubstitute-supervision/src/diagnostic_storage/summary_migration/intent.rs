@@ -91,7 +91,7 @@ pub(super) fn classified(
                 archive.generation == data.scan_generation
                     && archive.original.identity == entry.identity
                     && archive.original.bytes == entry.bytes
-                    && crate::protected_storage::record_file::diagnostic_object_binding(
+                    && crate::durable_storage::protected::record_file::diagnostic_object_binding(
                         archive.object,
                         key.owner().namespace,
                     )
@@ -100,13 +100,13 @@ pub(super) fn classified(
             DiagnosticEntryClass::Journal => {
                 data.archives.iter().any(|archive| {
                     archive.generation == data.scan_generation
-                        && archive.archive.identity == entry.identity
-                        && archive.archive.bytes == entry.bytes
-                        && crate::protected_storage::record_file::diagnostic_object_binding(
-                            DiagnosticObject::Journal(archive.historical),
-                            key.owner().namespace,
-                        )
-                        .1 == entry.digest
+                    && archive.archive.identity == entry.identity
+                    && archive.archive.bytes == entry.bytes
+                    && crate::durable_storage::protected::record_file::diagnostic_object_binding(
+                        DiagnosticObject::Journal(archive.historical),
+                        key.owner().namespace,
+                    )
+                    .1 == entry.digest
                 }) || capture_read::recognized_origin(data, entry)
             }
             _ => true,

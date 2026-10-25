@@ -6,13 +6,13 @@ use sugarsubstitute_update::fixture::{EXPIRES, Set, key};
 
 /// Signed engine requirement and exact network boundary reached by the host-side scenario.
 pub(super) struct Feed {
-    pub sequence: u32,
+    pub sequence: u64,
     pub requirement: Option<&'static str>,
     pub completed: usize,
 }
 impl Default for Feed {
     fn default() -> Self {
-        Self { sequence: 2, requirement: None, completed: 6 }
+        Self { sequence: NEXT_ENGINE, requirement: None, completed: 6 }
     }
 }
 
@@ -23,17 +23,22 @@ pub(super) fn campaign(
     feed: Feed,
 ) -> Result<(Worker, Running), Failure> {
     let mut application = SignedPackage::new(&fixture.archive, 3)?;
-    requires(&mut application, &fixture.archive, "minimum_updater_release", 2)?;
+    requires(&mut application, &fixture.archive, "minimum_updater_release", NEXT_ENGINE)?;
     let (archive, _) = updater::archive(CURRENT_UPDATER_CONTRACT)?;
-    let mut engine = SignedPackage::component(&archive, feed.sequence, Component::Updater)?;
+    let mut engine =
+        SignedPackage::component(&archive, feed.sequence.try_into()?, Component::Updater)?;
     if let Some(field) = feed.requirement {
         let mut value: serde_json::Value = serde_json::from_slice(&engine.descriptor)?;
-        value[field] = 2.into();
+        value[field] = if field == "minimum_updater_release" {
+            NEXT_ENGINE.into()
+        } else {
+            (u64::from(sugarsubstitute_update::ENGINE_PROTOCOL) + 1).into()
+        };
         engine.descriptor = serde_json::to_vec(&value)?;
     }
     let metadata = Set::targets(
         &key(92)?,
-        [3; 3],
+        [(NEXT_ENGINE + 1).try_into()?; 3],
         &[
             (&application.request.target_name(), &application.descriptor),
             (&engine.request.target_name(), &engine.descriptor),
@@ -74,8 +79,13 @@ pub(super) fn seed_accepted(pipeline: &mut Pipeline, fixture: &Fixture) -> TestR
         SIGNED_INSTALLER_RESERVATION_BYTES + UPDATER_STAGING_RESERVATION_BYTES,
         move |context| {
             let (archive, _) = updater::archive(CURRENT_UPDATER_CONTRACT)?;
-            let (trust, offer, download) =
-                updater::evidence(&installation, &archive, Component::Updater, &context)?;
+            let (trust, offer, download) = updater::evidence_version(
+                &installation,
+                &archive,
+                Component::Updater,
+                NEXT_ENGINE.try_into()?,
+                &context,
+            )?;
             let prepared = UpdaterPackage::import(
                 &installation,
                 trust,

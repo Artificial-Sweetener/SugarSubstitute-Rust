@@ -4,7 +4,7 @@
 use super::*;
 
 pub(super) enum StorageResult {
-    Bundle(Arc<VerifiedBundle>),
+    Bundle(Arc<VerifiedBundle>, setup_storage::cache::RuntimeCache),
     Inspected(PathBuf, Option<Box<setup_storage::InstallationSummary>>),
     Imported(Box<setup_storage::SignedInstallation>),
     Prepared(Box<SignedPreparation>),
@@ -61,10 +61,14 @@ impl Controller {
             StorageWork::Launch | StorageWork::Retire => {
                 Some(client.now()?.checked_add(std::time::Duration::from_secs(30))?)
             }
+            // Protected native effects require a finite phase, including large local archives.
+            // Streamed copies still observe cancellation between blocks.
             StorageWork::Payload
             | StorageWork::Import
             | StorageWork::Prepare
-            | StorageWork::Publish => None,
+            | StorageWork::Publish => {
+                Some(client.now()?.checked_add(std::time::Duration::from_secs(30 * 60))?)
+            }
         };
         let job = client.submit_blocking(
             self.scope.as_ref().ok_or("Installer scope is absent")?,
@@ -78,6 +82,7 @@ impl Controller {
                 },
                 deadline,
                 reservation_bytes: match work {
+                    StorageWork::Payload => setup_storage::MATERIALIZATION_RESERVATION_BYTES,
                     StorageWork::Import => setup_storage::SIGNED_INSTALLER_RESERVATION_BYTES,
                     StorageWork::Prepare => setup_storage::SIGNED_PREPARATION_RESERVATION_BYTES,
                     StorageWork::Transfer => setup_storage::SIGNED_TRANSFER_RESERVATION_BYTES,
@@ -119,7 +124,8 @@ impl Controller {
                         io::Error::other(
                             sugarsubstitute_contracts::localization::installer::messages(
                                 &self.locale,
-                            )["setupFailed"],
+                            )
+                            .setup_failed,
                         )
                     });
                     if self.closing || self.unavailable {
@@ -158,17 +164,11 @@ impl Controller {
             JobOutcome::Success(StorageResult::Inspected(root, existing)) => {
                 let id =
                     self.inspection_id.take().ok_or("Installation inspection identity absent")?;
-                self.reply(
-                    Some(&id),
-                    "completed",
-                    json!({
-                        "existing":existing, "comfyRoot":root.join("ComfyUI"),
-                        "models":root.join("models"), "outputs":root.join("outputs"),
-                    }),
-                )?;
+                self.emit(Some(id), Kind::Completed(Completed::Location { root, existing }))?;
             }
-            JobOutcome::Success(StorageResult::Bundle(bundle)) => {
+            JobOutcome::Success(StorageResult::Bundle(bundle, cache)) => {
                 self.bundle = Some(bundle);
+                self.cache = Some(cache);
             }
             JobOutcome::Success(StorageResult::Imported(imported)) => {
                 self.submit(StorageWork::Prepare, move |context| {
@@ -207,7 +207,7 @@ impl Controller {
             JobOutcome::Success(StorageResult::Installed(installed)) => {
                 self.installed = Some(installed);
                 let id = self.install_id.take().ok_or("Installation request absent")?;
-                self.reply(Some(&id), "completed", json!({"ready":true}))?;
+                self.emit(Some(id), Kind::Completed(Completed::Installed))?;
             }
             JobOutcome::Success(StorageResult::Completed(candidate)) => {
                 self.publish_installation(*candidate)?;
@@ -251,7 +251,7 @@ impl Controller {
         self.launch_failure = None;
         let id = self.install_id.take();
         if !self.closing && !self.unavailable {
-            self.reply(id.as_deref(), "completed", json!({}))?;
+            self.emit(id, Kind::Completed(Completed::Opened))?;
         }
         Ok(())
     }
@@ -272,10 +272,10 @@ impl Controller {
         if id.is_none() && self.bundle.is_none() {
             self.worker_failed(Box::new(cause))?;
         } else {
-            self.reply(
-                id.as_deref(),
-                "failed",
-                json!({"message":super::super::failure::storage_message(&cause, &self.locale)}),
+            self.diagnostic(crate::failure_details::Details(&cause).to_string())?;
+            self.emit(
+                id,
+                Kind::Failed(super::super::failure::storage_message(&cause, &self.locale)),
             )?;
         }
         self.prepared = None;

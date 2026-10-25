@@ -40,9 +40,8 @@ impl PreparedCandidate {
     /// Native launch transfer retains the actual candidate files and all pinned ancestors.
     pub(super) fn launch_pins(&self) -> impl Iterator<Item = &File> {
         self.directory
-            ._pins
-            .iter()
-            .chain(&self.installation._pins)
+            .native_pins()
+            .chain(self.installation.native_pins())
             .chain(self._payload.launch_pins())
     }
 
@@ -53,12 +52,12 @@ impl PreparedCandidate {
 
     /// Pinned immutable generation location; not permission to launch or select it.
     pub fn directory(&self) -> &Path {
-        &self.directory.path
+        self.directory.path()
     }
 
     /// Native installation pinned by this candidate independently of its delivery source.
     pub(in crate::setup_storage) fn installation_root(&self) -> &Path {
-        &self.installation.path
+        self.installation.path()
     }
 
     /// Compatibility is derived from the verified destination in both preparation and restart.
@@ -132,7 +131,7 @@ impl PreparedInstallation {
             context,
             |offer, recheck| {
                 let store = Arc::new(
-                    super::super::SelectionStore::open(&self.session.admission.root.path, context)
+                    super::super::SelectionStore::open(self.session.admission.root.path(), context)
                         .map_err(io::Error::other)?,
                 );
                 store
@@ -179,7 +178,7 @@ impl PreparedInstallation {
                 )?;
                 self.complete(runtime, context)?;
                 let directory = Directory::open(&self.generation, false)?;
-                let installation = Directory::open(&self.session.admission.root.path, false)?;
+                let installation = Directory::open(self.session.admission.root.path(), false)?;
                 recheck()?;
                 authorization.record_generation(offer, &generation, &directory, context)?;
                 recheck()?;

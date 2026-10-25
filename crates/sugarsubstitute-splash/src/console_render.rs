@@ -2,17 +2,15 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Project at most ten immutable transcript rows and serialize their actual glyph cursors.
 
-use crate::{
-    Theme,
-    text::console::{ConsoleFont, ConsoleGlyph, ConsolePaintSpec, ConsoleRowView, ProjectedRun},
-};
+use crate::Theme;
 use std::{io, num::NonZeroUsize};
 use sugarsubstitute_application::transcript::TranscriptSnapshot;
 use sugarsubstitute_contracts::{
     execution::{MemoryClaim, MemoryLease},
     transcript::{TextStyle, TranscriptRecord},
 };
-use tiny_skia::Pixmap;
+use sugarsubstitute_ui::bitmap::Bitmap;
+use sugarsubstitute_ui::text::console::{ConsoleFont, ConsoleGlyph, ConsoleRowView, ProjectedRun};
 
 const PROJECTION_BYTES: usize = 1024 * 1024;
 const MAX_UTF16: usize = 4096;
@@ -169,7 +167,7 @@ impl<P: ConsoleGlyph> ConsoleRender<P> {
         &mut self,
         snapshot: &TranscriptSnapshot,
         fonts: &mut F,
-        target: &mut Pixmap,
+        target: &mut Bitmap,
         lease: Option<MemoryLease>,
     ) -> io::Result<bool> {
         if self.row == self.rows {
@@ -213,7 +211,7 @@ impl<P: ConsoleGlyph> ConsoleRender<P> {
             self.row += 1;
             return Ok(self.row == self.rows);
         }
-        let spec = ConsolePaintSpec::new(
+        let spec = crate::text_layout::console(
             self.theme,
             self.scale,
             self.width,

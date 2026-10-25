@@ -3,9 +3,8 @@
 //! Qualify actual system RichEdit alpha and crop composition without displaying a window.
 use super::*;
 use crate::{
-    console::update::Documents,
-    native_storage::Dib,
-    windows_controls::console::{engine, messages},
+    console::update::Documents, native_storage::Dib, windows_controls::console::messages,
+    windows_text as engine,
 };
 use std::{
     num::NonZeroUsize,
@@ -115,14 +114,14 @@ fn native_alpha_console_preserves_exact_crop_semantic_alpha_unicode_selection_an
         let parent = Dib::for_frame(&mut parent, &frame)?;
         engine.prepare(
             &frame,
-            documents.shared().ok_or("shared index absent")?,
+            Some(documents.shared().ok_or("shared index absent")?),
             CROP,
             true,
             1.0,
         )?;
         assert!(
             frame.claim_storage(1).is_err(),
-            "native copies and metadata must consume their exact admitted credits"
+            "animated console copies retain their admitted resize capacity"
         );
         engine.qualify_pixels(parent.dc(), false, parent.pixels_mut()?).map_err(|cause| {
             DesktopError::new(
@@ -285,7 +284,13 @@ fn native_alpha_long_transcript_preserves_scroll_and_selection_on_first_paint() 
     let engine = engine::find(hwnd)?;
     let mut storage = None;
     let target = Dib::for_frame(&mut storage, &frame)?;
-    engine.prepare(&frame, documents.shared().ok_or("Shared document absent")?, CROP, true, 1.0)?;
+    engine.prepare(
+        &frame,
+        Some(documents.shared().ok_or("Shared document absent")?),
+        CROP,
+        true,
+        1.0,
+    )?;
     let control = messages::Messages(hwnd);
     let selection = control.selection();
     let line = control.first_line()?;
@@ -298,7 +303,7 @@ fn native_alpha_long_transcript_preserves_scroll_and_selection_on_first_paint() 
     for _ in 0..4 {
         engine.prepare(
             &frame,
-            documents.shared().ok_or("Shared document absent")?,
+            Some(documents.shared().ok_or("Shared document absent")?),
             CROP,
             true,
             1.0,

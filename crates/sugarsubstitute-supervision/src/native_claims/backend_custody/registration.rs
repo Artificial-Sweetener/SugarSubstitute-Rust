@@ -4,14 +4,14 @@
 use super::pool::WitnessSlot;
 use crate::{
     ClaimError,
-    native_claims::{Record, RecordState, files::Budget, records},
-    native_process::{Identity, custody::CustodyFamily},
-    protected_storage::{
+    durable_storage::protected::{
         exclusion::{ExclusionOpen, HeldFile},
         native_name::{NativeName, NativeSid},
         native_phase::NativePhase,
         record_file,
     },
+    native_claims::{Record, RecordState, files::Budget, records},
+    native_process::{Identity, custody::CustodyFamily},
 };
 use std::{
     error::Error,

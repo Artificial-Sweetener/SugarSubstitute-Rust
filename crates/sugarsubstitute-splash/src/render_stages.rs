@@ -8,15 +8,15 @@ use crate::{
     Control, Theme,
     caption_icons::{CaptionCursor, CaptionIcon},
     character::CharacterRender,
-    chrome::{ConsoleCursor, ControlsCursor},
     console_render::ConsoleRender,
-    progress::ProgressCursor,
-    text::{FontOwner, GlyphPaint},
 };
 use std::num::NonZeroUsize;
 use sugarsubstitute_application::transcript::TranscriptSnapshot;
 use sugarsubstitute_contracts::{execution::MemoryLease, localization::messages};
-use tiny_skia::{IntSize, Pixmap};
+use sugarsubstitute_ui::bitmap::Bitmap;
+use sugarsubstitute_ui::progress::ProgressCursor;
+use sugarsubstitute_ui::text::{FontOwner, GlyphPaint};
+use tiny_skia::IntSize;
 
 enum Stage {
     Clear,
@@ -37,16 +37,16 @@ enum Stage {
 pub(super) struct RenderStages {
     frame: RenderFrame,
     bytes: Vec<u8>,
-    target: Option<Pixmap>,
+    target: Option<Bitmap>,
     stage: Stage,
     character: Option<CharacterRender>,
-    console: Option<ConsoleCursor>,
+    console: Option<sugarsubstitute_ui::panel::PanelCursor>,
     console_text: Option<ConsoleRender<GlyphPaint>>,
     console_clipped_rows: u8,
     progress: Option<ProgressCursor>,
     caption: Option<(CaptionCursor, bool)>,
     status: Option<GlyphPaint>,
-    controls: Option<ControlsCursor>,
+    controls: Option<std::array::IntoIter<sugarsubstitute_ui::caption::CaptionButton, 2>>,
 }
 impl RenderStages {
     /// Validate public inputs and reserve output storage without zeroing it.
@@ -109,7 +109,7 @@ impl RenderStages {
                 let size = IntSize::from_wh(self.frame.width, self.frame.height)
                     .ok_or(RenderError::InvalidFrame)?;
                 self.target = Some(
-                    Pixmap::from_vec(std::mem::take(&mut self.bytes), size)
+                    Bitmap::from_vec(std::mem::take(&mut self.bytes), size)
                         .ok_or(RenderError::Allocation)?,
                 );
                 let mut bounds = self.frame.appearance.mascot();
@@ -138,10 +138,10 @@ impl RenderStages {
                 if cursor.step(&mut renderer.characters, target).map_err(RenderError::Character)? {
                     self.character = None;
                     if frame.appearance.reveal > 0.0 {
-                        self.console = Some(ConsoleCursor::new(
+                        self.console = Some(sugarsubstitute_ui::panel::PanelCursor::new(
                             frame.width,
                             frame.height,
-                            frame.appearance,
+                            crate::chrome::panel(frame.appearance),
                             frame.scale as f32,
                         )?);
                         self.stage = Stage::Console;
@@ -219,22 +219,15 @@ impl RenderStages {
                     crate::StartupStatus::RetryReady => copy.retry_ready,
                     crate::StartupStatus::CleanupFailed => copy.cleanup_failed,
                 };
+                let spec = crate::text_layout::status(
+                    frame.appearance.theme,
+                    frame.scale as f32,
+                    frame.width,
+                    frame.height,
+                );
                 let cursor = match lease {
-                    Some(lease) => text.prepare_status(
-                        message,
-                        frame.appearance.theme,
-                        frame.scale as f32,
-                        frame.width,
-                        frame.height,
-                        lease,
-                    ),
-                    None => text.prepare_status_offline(
-                        message,
-                        frame.appearance.theme,
-                        frame.scale as f32,
-                        frame.width,
-                        frame.height,
-                    ),
+                    Some(lease) => text.prepare(message, spec, lease),
+                    None => text.prepare_offline(message, spec),
                 }
                 .map_err(RenderError::Font)?;
                 self.status = Some(cursor);
@@ -253,13 +246,17 @@ impl RenderStages {
                 let cursor = self.progress.as_mut().ok_or(RenderError::InvalidFrame)?;
                 if cursor.step(target)? {
                     self.progress = None;
-                    self.controls = Some(ControlsCursor::new(frame.appearance, frame.scale as f32));
+                    self.controls =
+                        Some(crate::chrome::caption_buttons(frame.appearance).into_iter());
                     self.stage = Stage::Controls;
                 }
             }
             Stage::Controls => {
                 let cursor = self.controls.as_mut().ok_or(RenderError::InvalidFrame)?;
-                if !cursor.step(target) {
+                if let Some(button) = cursor.next() {
+                    button.paint(target, frame.scale as f32)?;
+                }
+                if cursor.len() != 0 {
                     return Ok(false);
                 }
                 self.controls = None;
@@ -316,7 +313,7 @@ impl RenderStages {
         self.progress = Some(ProgressCursor::new(
             frame.width,
             frame.height,
-            frame.appearance,
+            crate::progress::bar(frame.appearance),
             frame.feedback,
             frame.scale as f32,
         )?);
@@ -324,7 +321,7 @@ impl RenderStages {
         Ok(())
     }
     /// Transfer the completed target in constant time after all owner scratch is dropped.
-    pub(super) fn finish(self) -> Result<Pixmap, RenderError> {
+    pub(super) fn finish(self) -> Result<Bitmap, RenderError> {
         if !matches!(self.stage, Stage::Done) {
             return Err(RenderError::InvalidFrame);
         }

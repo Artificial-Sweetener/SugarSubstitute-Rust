@@ -5,10 +5,9 @@ use super::{
     ReportExportCause as E, ReportExportCode as C,
     archive::{self, Crc, Entry, Sink},
 };
-use crate::{
-    incident::IncidentDumpReadLease, native::report_export::Destination, report_view::ReportView,
-};
+use crate::{incident::IncidentDumpReadLease, report_view::ReportView};
 use sha2::{Digest, Sha256};
+use sugarsubstitute_supervision::ReportFile;
 pub(super) const CHUNK: usize = 65_536;
 /// Complete write observations retained until activation and checked retirement.
 pub(super) struct Written {
@@ -17,7 +16,7 @@ pub(super) struct Written {
 }
 /// Hash only complete observed writes to the same retained receiving-stage inode.
 struct Writer<'a> {
-    destination: &'a mut Destination,
+    destination: &'a mut ReportFile,
     hash: Sha256,
     bytes: u64,
 }
@@ -42,7 +41,7 @@ impl Sink for Writer<'_> {
 /// Stream exact canonical text and optional genuine same-inode native dump.
 /// The original reader independently guards every bounded read and current Summary.
 pub(super) fn write(
-    destination: &mut Destination,
+    destination: &mut ReportFile,
     view: &ReportView,
     dump: Option<&mut IncidentDumpReadLease>,
     buffer: &mut [u8; CHUNK],

@@ -39,7 +39,7 @@ impl PreparedInstallation {
         runtime: &RuntimePaths,
         context: &JobContext,
     ) -> io::Result<Option<InstalledApplication>> {
-        let Some(store) = SelectionStore::existing(&self.session.admission.root.path, context)
+        let Some(store) = SelectionStore::existing(self.session.admission.root.path(), context)
             .map_err(io::Error::other)?
         else {
             return Ok(None);

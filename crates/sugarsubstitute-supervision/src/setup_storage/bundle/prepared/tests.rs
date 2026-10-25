@@ -18,7 +18,15 @@ fn fixture(root: &Path, context: &JobContext) -> io::Result<(Manifest, std::path
     )?;
     let source = root.join("setup.exe");
     std::fs::write(&source, test_package::seal(&bytes, &compressed))?;
-    let extracted = materialize(&source, root, &format!("{:x}", Sha256::digest(&bytes)), context)?;
+    let cache = crate::setup_storage::cache::RuntimeCache::open(
+        root,
+        crate::setup_storage::cache::CachePolicy::default(),
+        context,
+    )?;
+    let bundle = materialize(&source, &cache, &format!("{:x}", Sha256::digest(&bytes)), context)?;
+    let extracted = root.join("installed");
+    bundle.payload.copy("app/", &extracted.join("app"), context, files::create_new)?;
+    drop(bundle);
     let mut value: serde_json::Value = serde_json::from_slice(&bytes)?;
     let entries = value["files"].as_array_mut().ok_or_else(|| invalid("Fixture files absent"))?;
     for name in [

@@ -1,19 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 /** Invoke upstream install and post-install with an owned destination and explicit progress. */
+import { diagnostic } from './diagnostics.mjs'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { execFile } from 'node:child_process'
 import { standalone } from '@upstream/sources/standalone/index'
-import { download } from '@upstream/lib/download'
+import { download } from './downloader'
 import { extract } from '@upstream/lib/extract'
 import { downloadCache } from './cache'
 import { getActivePythonPath } from '@upstream/lib/pythonEnv'
-import { cacheDir } from './paths'
 import { consumePlan } from './selection'
 import { reserve, record, ready } from './ownership'
+import { ProductFailure, type ProgressSink } from './product-messages'
 
-type Send = (event: string, data: unknown) => void
+type Send = ProgressSink
 
 export async function provision(
   input: { directory: string; selectionToken: string }, signal: AbortSignal, send: Send
@@ -26,7 +27,7 @@ export async function provision(
       return await verifyManaged(reusable.installation, reusable.directory, signal, send)
     } catch (cause) {
       signal.throwIfAborted()
-      console.warn('Preserving an environment that did not pass verification; provisioning a fresh attempt', cause)
+      diagnostic('warn', 'Preserving an environment that did not pass verification; provisioning a fresh attempt', cause)
     }
   }
   const reservation = await reserve(input.directory)
@@ -36,11 +37,11 @@ export async function provision(
     name: 'SugarSubstitute ComfyUI', installPath: reservation.directory,
   }
   const sendProgress = (phase: string, data: { percent: number; status: string }) => {
-    send('progress', { phase, ...data })
+    send('progress', { phase, ...data, textOwner: 'comfy-desktop' })
   }
   try {
     await standalone.install!(installation, {
-      signal, sendProgress, download, extract, cache: downloadCache(cacheDir()),
+      signal, sendProgress, download, extract, cache: downloadCache(),
     })
     await standalone.postInstall!(installation, {
       signal, sendProgress,
@@ -84,7 +85,7 @@ export async function inspect(
     const environment = await checkPython(python, comfy, signal)
     return { directory: comfy, python, ...environment }
   }
-  throw new Error('Select the Python executable used by this ComfyUI installation')
+  throw new ProductFailure('selectPython', 'Select the Python executable used by this ComfyUI installation')
 }
 
 /** Revalidate the actual runtime before reusing a completed provisioning attempt. */
@@ -101,7 +102,7 @@ async function verifyManaged(
   }
   const comfy = path.join(directory, 'ComfyUI')
   await fs.access(path.join(comfy, 'main.py'))
-  send('progress', { phase: 'verify', percent: -1, status: 'Checking the Python environment' })
+  send('progress', { phase: 'verify', percent: -1, statusCode: 'checkingPython' })
   const environment = await checkPython(python, comfy, signal)
   return { directory: comfy, python, ...environment }
 }

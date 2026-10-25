@@ -33,10 +33,10 @@ impl TrustStore {
         let staged = staging::unique_path(&self.root, "record-pending")?;
         let mut file = protection.file(&staged, context)?;
         file.write_all(&bytes)?;
-        file.sync_all()?;
+        files::sync(&file, context)?;
         drop(file);
         check(context)?;
-        staging::replace_record(&staged, &self.root.path.join(name))?;
+        staging::replace_record(&staged, &self.root.path().join(name))?;
         Ok(())
     }
 
@@ -50,7 +50,7 @@ impl TrustStore {
         context: &JobContext,
     ) -> Result<(), TrustFailure> {
         let bytes = envelope::encode(kind, &self.installation, &self.repository, payload)?;
-        files::write_immutable(&self.root.path.join(name), &bytes, |path| {
+        files::write_immutable(&self.root.path().join(name), &bytes, |path| {
             protection.file(path, context)
         })?;
         protection.verify_file(&self.root.read(name)?)?;

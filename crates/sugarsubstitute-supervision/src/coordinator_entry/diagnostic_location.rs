@@ -21,7 +21,7 @@ impl DiagnosticStorageLocation {
     pub fn validate(&self) -> Result<(), EntryInputError> {
         if let Self::Explicit(path) = self {
             LaunchConfiguration::validate_path(path).map_err(EntryInputError::Configuration)?;
-            crate::protected_storage::paths::validate_local_shape(path).map_err(|_| {
+            crate::durable_storage::protected::paths::validate_local_shape(path).map_err(|_| {
                 EntryInputError::Configuration(ConfigurationError::InvalidLaunchPath)
             })?;
             if path.file_name().is_none() || path.parent().is_none() {

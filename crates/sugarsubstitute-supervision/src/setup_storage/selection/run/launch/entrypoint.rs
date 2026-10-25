@@ -36,7 +36,7 @@ pub(in crate::setup_storage::selection::run) fn repair(
     context: &JobContext,
 ) -> Result<InstalledApplication, SelectionFailure> {
     check(context)?;
-    let admission = Admission::open(&custody.store._installation.path, false)?;
+    let admission = Admission::open(custody.store._installation.path(), false, context)?;
     repair_under_admission(custody, application, &admission, context)
 }
 
@@ -60,14 +60,14 @@ fn repair_under_admission(
             }
             if entrypoint::stable::repair(&admission.root, &store.root, application, protection, context)? {
                 Ok(InstalledApplication {
-                    executable: admission.root.path.join(entrypoint::stable::EXECUTABLE),
-                    directory: admission.root.path.clone(),
+                    executable: admission.root.path().join(entrypoint::stable::EXECUTABLE),
+                    directory: admission.root.path().to_path_buf(),
                 })
             } else {
-                entrypoint::repair(&admission.root, &application.directory.path, context)?;
+                entrypoint::repair(&admission.root, application.directory.path(), context)?;
                 Ok(InstalledApplication {
-                    executable: application.directory.path.join("sugarsubstitute.exe"),
-                    directory: application.directory.path.clone(),
+                    executable: application.directory.path().join("sugarsubstitute.exe"),
+                    directory: application.directory.path().to_path_buf(),
                 })
             }
         })

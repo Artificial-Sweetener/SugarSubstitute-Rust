@@ -6,6 +6,7 @@ use crate::ControlBounds;
 fn controls(retry: bool) -> [AccessibleControl; 3] {
     [
         AccessibleControl {
+            enabled: true,
             id: 1,
             label: "Show output",
             bounds: ControlBounds { x: 466.0, y: 0.0, width: 46.0, height: 32.0 },
@@ -13,6 +14,7 @@ fn controls(retry: bool) -> [AccessibleControl; 3] {
             visible: true,
         },
         AccessibleControl {
+            enabled: true,
             id: 2,
             label: "Cancel",
             bounds: ControlBounds { x: 512.0, y: 0.0, width: 46.0, height: 32.0 },
@@ -20,6 +22,7 @@ fn controls(retry: bool) -> [AccessibleControl; 3] {
             visible: true,
         },
         AccessibleControl {
+            enabled: true,
             id: 3,
             label: "Retry",
             bounds: ControlBounds { x: 24.0, y: 486.0, width: 510.0, height: 48.0 },
@@ -78,4 +81,27 @@ fn expanded_output_precedes_lower_retry_and_collapse_removes_only_the_console_ta
     let hidden = controls.map(|control| AccessibleControl { visible: false, ..control });
     assert_eq!(next(hidden.iter().copied(), None, None, false), None);
     assert_eq!(next(hidden.iter().copied(), Some(362.0), None, true), Some(Target::Console));
+}
+
+#[test]
+fn tab_skips_visible_disabled_peers_and_recovers_after_focused_peer_disables() {
+    let mut controls = controls(true);
+    controls[1].enabled = false;
+    assert_eq!(
+        ordered(controls.iter().copied(), None).collect::<Vec<_>>(),
+        [Target::Control(1), Target::Control(3)]
+    );
+    assert_eq!(
+        next(controls.iter().copied(), None, Some(Target::Control(2)), false),
+        Some(Target::Control(1))
+    );
+    assert_eq!(
+        next(controls.iter().copied(), None, Some(Target::Control(2)), true),
+        Some(Target::Control(3))
+    );
+    for control in &mut controls {
+        control.enabled = false;
+    }
+    assert_eq!(next(controls.iter().copied(), None, None, false), None);
+    assert_eq!(next(controls.iter().copied(), Some(362.0), None, false), Some(Target::Console));
 }

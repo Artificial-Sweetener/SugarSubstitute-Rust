@@ -13,7 +13,7 @@ fn offline_import_resumes_network_prefix_and_keeps_source_pinned_until_verificat
         let external = tempfile::tempdir()?;
         let source = external.path().join("package.bin");
         std::fs::write(&source, PACKAGE)?;
-        let mut download = Download::open(root.path(), target()?, context)?;
+        let mut download = Download::open(storage(root.path(), context)?, target()?, context)?;
         assert!(download.receive(full(), &mut Cursor::new(&PACKAGE[..7]), context).is_err());
         drop(download);
         let store = Arc::new(SelectionStore::open(root.path(), context)?);
@@ -21,7 +21,7 @@ fn offline_import_resumes_network_prefix_and_keeps_source_pinned_until_verificat
         let _run = InstallationRun::acquire(store.clone(), context)?;
         let mut checks = 0;
         let mut verified = Download::import_file(
-            root.path(),
+            storage(root.path(), context)?,
             target()?,
             &source,
             || {
@@ -39,7 +39,7 @@ fn offline_import_resumes_network_prefix_and_keeps_source_pinned_until_verificat
         let mut bytes = Vec::new();
         verified.read_to_end(&mut bytes)?;
         assert_eq!(bytes, PACKAGE);
-        assert!(Download::open(root.path(), target()?, context).is_err());
+        assert!(Download::open(storage(root.path(), context)?, target()?, context).is_err());
         Ok(())
     })
 }
@@ -50,21 +50,33 @@ fn offline_wrong_size_or_directory_preserves_existing_cache_prefix() -> TestResu
         let root = installation(102, context)?;
         let external = tempfile::tempdir()?;
         let source = external.path().join("package.bin");
-        let mut download = Download::open(root.path(), target()?, context)?;
+        let mut download = Download::open(storage(root.path(), context)?, target()?, context)?;
         assert!(download.receive(full(), &mut Cursor::new(&PACKAGE[..5]), context).is_err());
         drop(download);
         for bytes in [b"short".as_slice(), &[PACKAGE, b"extra"].concat()] {
             std::fs::write(&source, bytes)?;
             assert!(matches!(
-                Download::import_file(root.path(), target()?, &source, || NOW, context),
+                Download::import_file(
+                    storage(root.path(), context)?,
+                    target()?,
+                    &source,
+                    || NOW,
+                    context
+                ),
                 Err(DownloadFailure::Response(Rejection::BodyLength))
             ));
             assert_eq!(std::fs::read(&source)?, bytes);
             assert_eq!(std::fs::read(payload(root.path())?)?, &PACKAGE[..5]);
         }
         assert!(
-            Download::import_file(root.path(), target()?, external.path(), || NOW, context)
-                .is_err()
+            Download::import_file(
+                storage(root.path(), context)?,
+                target()?,
+                external.path(),
+                || NOW,
+                context
+            )
+            .is_err()
         );
         assert_eq!(std::fs::read(payload(root.path())?)?, &PACKAGE[..5]);
         Ok(())
@@ -80,7 +92,13 @@ fn offline_corrupt_source_or_cached_prefix_cannot_produce_verified_custody() -> 
         let wrong = vec![b'x'; PACKAGE.len()];
         std::fs::write(&source, &wrong)?;
         assert!(matches!(
-            Download::import_file(root.path(), target()?, &source, || NOW, context),
+            Download::import_file(
+                storage(root.path(), context)?,
+                target()?,
+                &source,
+                || NOW,
+                context
+            ),
             Err(DownloadFailure::Verification(Verification::Digest))
         ));
         assert_eq!(std::fs::read(&source)?, wrong);
@@ -88,11 +106,23 @@ fn offline_corrupt_source_or_cached_prefix_cannot_produce_verified_custody() -> 
         std::fs::write(&source, PACKAGE)?;
         std::fs::write(payload(root.path())?, b"wrong")?;
         assert!(matches!(
-            Download::import_file(root.path(), target()?, &source, || NOW, context),
+            Download::import_file(
+                storage(root.path(), context)?,
+                target()?,
+                &source,
+                || NOW,
+                context
+            ),
             Err(DownloadFailure::Verification(Verification::Digest))
         ));
         assert!(std::fs::read(payload(root.path())?)?.is_empty());
-        let verified = Download::import_file(root.path(), target()?, &source, || NOW, context)?;
+        let verified = Download::import_file(
+            storage(root.path(), context)?,
+            target()?,
+            &source,
+            || NOW,
+            context,
+        )?;
         assert_eq!(verified.identity().digest(), target()?.digest());
         Ok(())
     })
@@ -106,18 +136,24 @@ fn offline_expiry_before_copy_preserves_prefix_and_expiry_after_copy_preserves_f
         let external = tempfile::tempdir()?;
         let source = external.path().join("package.bin");
         std::fs::write(&source, PACKAGE)?;
-        let mut download = Download::open(root.path(), target()?, context)?;
+        let mut download = Download::open(storage(root.path(), context)?, target()?, context)?;
         assert!(download.receive(full(), &mut Cursor::new(&PACKAGE[..5]), context).is_err());
         drop(download);
         assert!(matches!(
-            Download::import_file(root.path(), target()?, &source, || EXPIRES, context),
+            Download::import_file(
+                storage(root.path(), context)?,
+                target()?,
+                &source,
+                || EXPIRES,
+                context
+            ),
             Err(DownloadFailure::Verification(Verification::Expired))
         ));
         assert_eq!(std::fs::read(payload(root.path())?)?, &PACKAGE[..5]);
         let mut checks = 0;
         assert!(matches!(
             Download::import_file(
-                root.path(),
+                storage(root.path(), context)?,
                 target()?,
                 &source,
                 || {
@@ -139,14 +175,21 @@ fn offline_cache_alias_is_rejected_without_truncating_either_name() -> TestResul
     worker::run_reserved(DOWNLOAD_RESERVATION_BYTES, |context, _| {
         let root = installation(105, context)?;
         let external = tempfile::tempdir()?;
-        drop(Download::open(root.path(), target()?, context)?);
+        drop(Download::open(storage(root.path(), context)?, target()?, context)?);
         let cached = payload(root.path())?;
         std::fs::write(&cached, PACKAGE)?;
         let alias = external.path().join("alias.bin");
         std::fs::hard_link(&cached, &alias)?;
         for source in [&cached, &alias] {
             assert!(
-                Download::import_file(root.path(), target()?, source, || NOW, context).is_err()
+                Download::import_file(
+                    storage(root.path(), context)?,
+                    target()?,
+                    source,
+                    || NOW,
+                    context
+                )
+                .is_err()
             );
             assert_eq!(std::fs::read(source)?, PACKAGE);
         }
@@ -161,12 +204,12 @@ fn cancelled_offline_import_releases_source_and_leaves_cache_unchanged() -> Test
         let external = tempfile::tempdir()?;
         let source = external.path().join("package.bin");
         std::fs::write(&source, PACKAGE)?;
-        let mut download = Download::open(root.path(), target()?, context)?;
+        let mut download = Download::open(storage(root.path(), context)?, target()?, context)?;
         assert!(download.receive(full(), &mut Cursor::new(&PACKAGE[..5]), context).is_err());
         drop(download);
         assert!(
             Download::import_file(
-                root.path(),
+                storage(root.path(), context)?,
                 target()?,
                 &source,
                 || {

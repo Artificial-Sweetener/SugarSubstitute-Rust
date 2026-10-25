@@ -3,14 +3,14 @@
 //! Validate packaged caption alpha, tinting, device phase and scale rejection.
 
 use super::{ASSETS, CaptionIcon, CaptionIcons};
-use tiny_skia::Pixmap;
+use sugarsubstitute_ui::bitmap::Bitmap;
 
 /// Require every resource to be bounded, nonempty white-alpha artwork.
 #[test]
 fn every_scale_has_valid_transparent_glyphs() -> Result<(), Box<dyn std::error::Error>> {
     for (scale, console, close) in ASSETS {
         for bytes in [console, close] {
-            let glyph = Pixmap::decode_png(bytes)?;
+            let glyph = Bitmap::decode_png(bytes)?;
             assert_eq!(glyph.width(), (46.0 * scale).round() as u32);
             assert_eq!(glyph.height(), (32.0 * scale).round() as u32);
             assert_eq!(glyph.pixel(0, 0).map(|p| p.alpha()), Some(0));
@@ -34,10 +34,10 @@ fn exact_scale_preserves_glyph_and_tint() -> Result<(), Box<dyn std::error::Erro
             [(CaptionIcon::Console, console, 466.0), (CaptionIcon::Close, close, 512.0)]
         {
             let mut white =
-                Pixmap::new((558.0 * scale).round() as u32, (32.0 * scale).round() as u32)
+                Bitmap::new((558.0 * scale).round() as u32, (32.0 * scale).round() as u32)
                     .ok_or("allocation")?;
             icons.draw(&mut white, scale, kind, [255; 3])?;
-            let source = Pixmap::decode_png(bytes)?;
+            let source = Bitmap::decode_png(bytes)?;
             let x = (offset * scale).floor() as u32;
             for row in 0..source.height() {
                 for column in 0..source.width() {
@@ -59,7 +59,7 @@ fn exact_scale_preserves_glyph_and_tint() -> Result<(), Box<dyn std::error::Erro
 fn arbitrary_scales_remain_bounded_and_invalid_input_is_atomic()
 -> Result<(), Box<dyn std::error::Error>> {
     let mut icons = CaptionIcons::new();
-    let mut target = Pixmap::new(1228, 71).ok_or("allocation")?;
+    let mut target = Bitmap::new(1228, 71).ok_or("allocation")?;
     for scale in [f64::NAN, f64::INFINITY, 0.0, 4.1] {
         assert!(icons.draw(&mut target, scale, CaptionIcon::Close, [255; 3]).is_err());
         assert!(target.pixels().iter().all(|p| p.alpha() == 0));

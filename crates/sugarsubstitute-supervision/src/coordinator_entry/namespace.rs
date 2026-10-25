@@ -4,8 +4,8 @@
 use super::{election::ElectionRecordOrigin, types::EntryError};
 use crate::{
     ClaimError,
+    durable_storage::protected::{account::ResolvedNamespace, exclusion::HeldFile},
     native_claims::files::Handle,
-    protected_storage::{account::ResolvedNamespace, exclusion::HeldFile},
 };
 use std::sync::{
     Arc, Mutex,

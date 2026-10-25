@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Own hidden RichEdit resources and the outer qualification's MTA cookie on one STA.
-use crate::windows_controls::console::engine::Engine;
+use crate::windows_text::Engine;
 use crate::{DesktopError, console::index::DocumentIndex, windows_ui_apartment::UiApartment};
 use std::rc::Rc;
 use windows::{
@@ -105,7 +105,10 @@ impl<'a> Hidden<'a> {
         let module = owner
             .module
             .ok_or_else(|| DesktopError::message("console_fixture_engine", "module absent"))?;
-        owner.engine = Some(Engine::new(child));
+        owner.engine = Some(Engine::new(
+            child,
+            sugarsubstitute_ui::windows::text_style::TextStyle::Transcript,
+        ));
         let engine = owner
             .engine
             .as_ref()

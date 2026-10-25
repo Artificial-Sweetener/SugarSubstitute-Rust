@@ -10,11 +10,13 @@ handles may be faulted; observer cleanup never counts as application cleanup.
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 import subprocess
 import sys
 import time
 import traceback
+import tomllib
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
@@ -59,6 +61,55 @@ def require_selection_preserved(before, after):
     """Preparation may advance pending work but cannot replace accepted application authority."""
     if after['accepted'] != before['accepted']:
         raise RuntimeError('Preparation changed accepted application authority')
+
+
+def payload_cache_root(workspace, catalog=None):
+    """Read the governed cache namespaces instead of maintaining a second path registry."""
+    source = catalog or REPO / 'governance/cache/catalog.toml'
+    policy = tomllib.loads(source.read_text(encoding='utf-8'))
+    if type(policy.get('schema_version')) is not int or policy['schema_version'] != 1:
+        raise ValueError('Unsupported cache catalog schema')
+    namespaces = {}
+    for identity in ('runtime-cache-storage', 'setup-packed-payloads'):
+        rows = [row for row in policy['caches'] if row['id'] == identity]
+        if len(rows) != 1 or not isinstance(rows[0].get('namespace'), str) \
+                or not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*', rows[0]['namespace']):
+            raise ValueError('Cache qualification requires unique registered namespaces')
+        namespaces[identity] = rows[0]['namespace']
+    if len(set(namespaces.values())) != 2:
+        raise ValueError('Cache qualification requires distinct registered namespaces')
+    return workspace / namespaces['runtime-cache-storage'] / namespaces['setup-packed-payloads']
+
+
+def payload_generations(root):
+    """Observe only shared generation directory identities; unknown content remains untouched."""
+    if any(path.is_symlink() or path.is_junction() for path in (root, *root.parents)):
+        raise ValueError('Shared payload namespace is redirected')
+    if not root.exists():
+        return {}
+    generations = {}
+    for index, entry in enumerate(root.iterdir()):
+        if index >= 4096:
+            raise RuntimeError('Payload qualification inventory exceeds its observation bound')
+        if not re.fullmatch(r'[a-f0-9]{64}-[a-f0-9]{16}', entry.name):
+            continue
+        if entry.is_symlink() or entry.is_junction() or not entry.is_dir():
+            raise ValueError('Shared payload generation is redirected or not a directory')
+        identity = entry.stat(follow_symlinks=False)
+        if identity.st_ino == 0:
+            raise RuntimeError('Shared payload generation has no observable file identity')
+        generations[entry.name] = (identity.st_dev, identity.st_ino)
+    return generations
+
+
+def require_payload_reuse(before, first, rescued=None):
+    """One preview may allocate once; rescue must retain exactly those immutable generations."""
+    created = set(first) - set(before)
+    if not first or len(created) > 1 or any(first[key] != before[key] for key in first.keys() & before.keys()):
+        raise RuntimeError('Installer did not retain its shared verified extraction')
+    if rescued is not None and rescued != first:
+        raise RuntimeError('Rescue replaced or duplicated its shared verified extraction')
+    return len(created)
 
 
 class Qualification:
@@ -139,8 +190,8 @@ class Qualification:
         if list(self.root.glob('.substitute-publication-*')):
             raise RuntimeError('Fixture requires no pre-existing publication attempts')
         selection = self.root / '.selection-state/.substitute-selection.json'
-        payload_root = self.work / 'payloads-v1'
-        prior_extractions = set(payload_root.glob('*'))
+        payload_root = payload_cache_root(self.work)
+        prior_extractions = payload_generations(payload_root)
         report = {'passed': False, 'scope': 'installer_publication_interruption_and_rescue_without_open',
             'expected_launcher_sha256': expected, 'selection_before': json.loads(selection.read_text())}
         owner = PrivateDesktop()
@@ -150,9 +201,8 @@ class Qualification:
             source, journal = self.interrupt(owner, report)
             settle(owner, 60, report)
             report['after_fault_alive'] = owner.alive()
-            report['extractions_after_fault'] = len(set(payload_root.glob('*')) - prior_extractions)
-            if report['extractions_after_fault'] != 1:
-                raise RuntimeError('Installer did not reuse its verified initial extraction')
+            fault_extractions = payload_generations(payload_root)
+            report['extractions_after_fault'] = require_payload_reuse(prior_extractions, fault_extractions)
             if not source.is_file() or not journal.is_file() or self.launcher.exists():
                 raise RuntimeError('Expected durable unpublished recovery inputs absent')
             report['staged_sha256_after_process_exit'] = digest(source)
@@ -169,9 +219,10 @@ class Qualification:
             if digest(self.launcher) != expected or digest(backup) != expected:
                 raise RuntimeError('Rescued launcher differs from original owned bytes')
             report['rescue_receipt'] = receipt
-            report['extractions_after_rescue'] = len(set(payload_root.glob('*')) - prior_extractions)
-            if report['extractions_after_rescue'] != 2:
-                raise RuntimeError('Rescue did not reuse its verified initial extraction')
+            rescue_extractions = payload_generations(payload_root)
+            report['extractions_after_rescue'] = require_payload_reuse(
+                prior_extractions, fault_extractions, rescue_extractions)
+            report['shared_payload_generation_reused'] = True
             report['run_available_after_rescue'] = run_available(self.root)
             if not report['run_available_after_rescue']:
                 raise RuntimeError('Rescue left application exclusion held')

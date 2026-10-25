@@ -41,7 +41,7 @@ fn missing_established_preference_and_corrupt_or_foreign_bytes_are_preserved() -
         worker::run_reserved(TRUST_RESERVATION_BYTES, move |context, _| {
             let (_installation, store) = fixture(context)?;
             store.subscription(context)?;
-            let path = store.root.path.join(RECORD);
+            let path = store.root.path().join(RECORD);
             let bytes = match mode {
                 0 => None,
                 1 => Some(b"damaged preference".to_vec()),
@@ -84,12 +84,12 @@ fn interrupted_initialization_preserves_completed_preference_and_unknown_staging
         let (_installation, store) = fixture(context)?;
         let initial = store.subscription(context)?;
         let canary = store.select_subscription(initial, Channel::Canary, context)?;
-        std::fs::remove_file(store.root.path.join(MARKER))?;
-        let orphan = store.root.path.join("subscription-pending-interrupted");
+        std::fs::remove_file(store.root.path().join(MARKER))?;
+        let orphan = store.root.path().join("subscription-pending-interrupted");
         std::fs::write(&orphan, b"partial")?;
         assert_eq!(store.subscription(context)?, canary);
         assert_eq!(std::fs::read(orphan)?, b"partial");
-        assert!(store.root.path.join(MARKER).exists());
+        assert!(store.root.path().join(MARKER).exists());
         Ok(())
     })
 }

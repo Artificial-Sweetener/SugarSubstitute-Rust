@@ -6,6 +6,7 @@
 //! partial stages remain in this owner outside cancellable result lifetimes.
 //! Dropping a lease never closes native custody or proves durable disposition.
 mod access;
+pub mod operational;
 use access::StateAccess;
 mod activation;
 mod allocation;

@@ -6,18 +6,16 @@ mod payload;
 mod prepared;
 mod runtime;
 mod source;
+pub(in crate::setup_storage) mod worker;
 pub use source::BundleSource;
+pub use worker::ProvisioningWorker;
 #[cfg(test)]
 mod tests;
-use super::files::{self, Directory};
+use crate::durable_storage::files::{self, Directory};
 pub(super) use payload::Payload;
 pub(super) use prepared::VerifiedRuntime;
 pub(super) use runtime::RuntimePackage;
-use std::{
-    io,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{io, path::Path, sync::Arc};
 use sugarsubstitute_contracts::{execution::JobContext, update::Component};
 
 /// Complete application distribution with authenticated and pinned source files.
@@ -25,22 +23,31 @@ use sugarsubstitute_contracts::{execution::JobContext, update::Component};
 /// Imports may share immutable payload custody; each signed import retains its own archive.
 pub struct VerifiedBundle {
     pub(super) payload: Arc<Payload>,
-    download: Option<super::VerifiedDownload>,
+    pub(super) download: Option<super::VerifiedDownload>,
 }
 impl VerifiedBundle {
+    /// Bind the immutable source to native creation before any worker can read its files.
+    pub(crate) fn bind_native_cache(
+        &self,
+        family: super::cache_custody::CacheFamilyId,
+        context: &JobContext,
+    ) -> io::Result<Option<super::cache::NativeCachePin>> {
+        self.payload.bind_native_cache(family, context)
+    }
+
     /// Extract an authenticated application download and retain exact archive and payload custody.
-    /// Reserve `RESERVATION_BYTES` alongside the download claim on an admitted storage worker.
+    /// Reserve 24 MiB alongside retained download and cache-scope admission on a storage worker.
     /// # Errors
     /// Rejects incomplete application packages, altered bytes, unsafe paths and cancellation.
     pub fn from_download(
         mut source: super::VerifiedDownload,
-        workspace: &Path,
+        cache: &super::cache::RuntimeCache,
         context: &JobContext,
     ) -> io::Result<Self> {
         Ok(Self {
             payload: Arc::new(Payload::from_download(
                 &mut source,
-                workspace,
+                cache,
                 Component::Application,
                 context,
             )?),
@@ -61,10 +68,6 @@ impl VerifiedBundle {
     pub fn download_identity(&self) -> Option<&sugarsubstitute_update::VerifiedBytes> {
         self.download.as_ref().map(super::VerifiedDownload::identity)
     }
-    /// Exact provisioning paths retained under this distribution's filesystem custody.
-    pub fn worker_paths(&self) -> (PathBuf, PathBuf) {
-        (self.payload.root.join("electron/electron.exe"), self.payload.root.join("worker"))
-    }
     /// Authenticated manifest digest used by installation generation identity.
     pub fn digest(&self) -> &str {
         self.payload.digest()
@@ -83,7 +86,7 @@ impl VerifiedBundle {
         target: &Path,
         context: &JobContext,
     ) -> io::Result<()> {
-        super::protection::with(context, |protection| {
+        crate::durable_storage::protection::with(context, |protection| {
             files::write_immutable(
                 &target.join(super::inventory::INSTALLED_MANIFEST),
                 &self.payload.manifest_bytes,

@@ -1,0 +1,145 @@
+--- a/src/main/lib/fetch.ts
++++ b/src/main/lib/fetch.ts
+@@ -1,9 +1,8 @@
+ import { net } from 'electron'
+ import path from 'path'
+-import fs from 'fs'
+ import { cacheDir } from './paths'
+ import { r2MirrorUrl } from './r2Mirror'
+-import { writeFileSafe } from './cache-policy'
++import { readFileSafe, writeFileSafe } from './native-metadata'
+
+ interface CacheEntry {
+   etag: string
+@@ -21,7 +20,7 @@
+   if (_loaded) return
+   _loaded = true
+   try {
+-    const raw: unknown = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf-8'))
++    const raw: unknown = JSON.parse(readFileSafe(CACHE_FILE))
+     if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+       for (const [url, entry] of Object.entries(raw as Record<string, unknown>)) {
+         if (
+@@ -40,19 +39,19 @@
+   }
+ }
+
+-function _persist(): void {
++async function _persist(): Promise<void> {
+   try {
+     const obj: Record<string, CacheEntry> = {}
+     for (const [url, entry] of _cache) {
+       obj[url] = entry
+     }
+-    writeFileSafe(CACHE_FILE, JSON.stringify(obj))
++    await writeFileSafe(CACHE_FILE, JSON.stringify(obj))
+   } catch (cause) {
+     console.warn('Cache persistence failed', cause)
+   }
+ }
+
+-function _cacheSet(url: string, entry: CacheEntry): void {
++async function _cacheSet(url: string, entry: CacheEntry): Promise<void> {
+   _cache.delete(url) // re-insert to refresh LRU order
+   _cache.set(url, entry)
+   if (_cache.size > MAX_CACHE_SIZE) {
+@@ -61,7 +60,7 @@
+       _cache.delete(oldest)
+     }
+   }
+-  _persist()
++  await _persist()
+ }
+
+ function _headerString(value: string | string[] | undefined): string | undefined {
+@@ -102,7 +101,7 @@
+     let data = ''
+     request.on('response', (response) => {
+       response.on('data', (chunk) => (data += chunk.toString()))
+-      response.on('end', () => {
++      response.on('end', async () => {
+         if (response.statusCode === 304 && cached) {
+           resolve(structuredClone(cached.data))
+           return
+@@ -138,7 +137,7 @@
+         if (cacheKey) {
+           const etag = _headerString(response.headers['etag'])
+           if (etag) {
+-            _cacheSet(cacheKey, { etag, data: parsed })
++            await _cacheSet(cacheKey, { etag, data: parsed })
+           }
+         }
+         resolve(parsed)
+--- a/src/main/sources/standalone/torchStackCatalog.ts
++++ b/src/main/sources/standalone/torchStackCatalog.ts
+@@ -10,10 +10,9 @@
+  * synchronous `getDetailSections` can render stack cards; async refreshes are
+  * triggered from the `check-update` action.
+  */
+-import fs from 'fs'
+ import path from 'path'
+ import { cacheDir } from '../../lib/paths'
+-import { writeFileSafe } from '../../lib/cache-policy'
++import { readFileSafe, writeFileSafe } from '../../lib/native-metadata'
+ import { getInstalledTorchTuple, PLATFORM_PREFIX } from './envPaths'
+ import { fetchR2VendorReleases, r2BundleUrl } from './r2Catalog'
+ import type { R2Variant } from './r2Catalog'
+@@ -72,7 +71,7 @@
+ function _ensureLoaded(): void {
+   if (_loaded) return
+   try {
+-    const raw = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf-8'))
++    const raw = JSON.parse(readFileSafe(CACHE_FILE))
+     _cache = (raw.variants as Record<string, TorchStackEntry[]>) || {}
+   } catch {
+     _cache = {}
+@@ -80,9 +79,9 @@
+   _loaded = true
+ }
+
+-function _persist(): void {
++async function _persist(): Promise<void> {
+   try {
+-    writeFileSafe(CACHE_FILE, JSON.stringify({ schemaVersion: 1, variants: _cache }, null, 2))
++    await writeFileSafe(CACHE_FILE, JSON.stringify({ schemaVersion: 1, variants: _cache }, null, 2))
+   } catch (cause) {
+     console.warn('Cache persistence failed', cause)
+   }
+@@ -257,7 +256,7 @@
+   const stacks = filterCompatibleStacks(variant, undefined, releases, { requirePythonAbi: false })
+   _ensureLoaded()
+   _cache[variant] = stacks
+-  _persist()
++  await _persist()
+   return filterStacksForInstall(installation, withIndexStacks(variant, stacks))
+ }
+
+--- a/src/main/sources/standalone/torchIndexManifest.ts
++++ b/src/main/sources/standalone/torchIndexManifest.ts
+@@ -33,7 +33,7 @@
+ import fs from 'fs'
+ import path from 'path'
+ import { cacheDir } from '../../lib/paths'
+-import { writeFileSafe } from '../../lib/cache-policy'
++import { readFileSafe, writeFileSafe } from '../../lib/native-metadata'
+ import { fetchJSON } from '../../lib/fetch'
+ import { compareVersions, detectNvidiaDriverVersion } from '../../lib/gpu'
+ import { R2_BASE_URL } from '../../lib/r2Mirror'
+@@ -431,7 +431,7 @@
+   if (_remoteDefs === null && !_remoteDiskLoaded) {
+     _remoteDiskLoaded = true
+     try {
+-      const raw = JSON.parse(fs.readFileSync(REMOTE_CACHE_FILE(), 'utf-8'))
++      const raw = JSON.parse(readFileSafe(REMOTE_CACHE_FILE()))
+       const parsed = parseRemoteManifest(raw)
+       if (parsed !== null) {
+         _remoteDefs = parsed.defs
+@@ -453,7 +453,7 @@
+       _remoteSeries = parsed.series
+       _remoteDiskLoaded = true
+       try {
+-        writeFileSafe(
++        await writeFileSafe(
+           REMOTE_CACHE_FILE(),
+           JSON.stringify({ schemaVersion: 1, series: parsed.series, stacks: parsed.defs }, null, 2)
+         )

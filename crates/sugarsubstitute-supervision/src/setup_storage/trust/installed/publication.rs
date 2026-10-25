@@ -47,11 +47,11 @@ impl TrustStore {
         let request = UpdateAuthorization::local_request(Channel::Release)?;
         protection::with_domain(context, |protection| -> Result<_, TrustFailure> {
             check(context)?;
-            let installation = Directory::open(&self._installation_root.path, false)?;
+            let installation = Directory::open(self._installation_root.path(), false)?;
             if installation.identity()? != self._installation_root.identity()? {
                 return Err(invalid("Prepared release installation changed").into());
             }
-            let path = installation.path.join("releases").join(generation.id.as_str());
+            let path = installation.path().join("releases").join(generation.id.as_str());
             protection.directory(&path, Mode::Existing, context)?;
             let directory = Directory::open(&path, false)?;
             let mut file = match directory.read(RECORD) {

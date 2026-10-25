@@ -9,11 +9,15 @@ fn preview(fixture: &Fixture, context: &JobContext) -> Result<Arc<VerifiedBundle
         InstallerDistribution::decode(&serde_json::to_vec(&fixture.configuration)?, context)?;
     let root = crate::setup_storage::materialize(
         &fixture.executable,
-        fixture.workspace.path(),
+        &crate::setup_storage::cache::RuntimeCache::open(
+            fixture.workspace.path(),
+            crate::setup_storage::cache::CachePolicy::default(),
+            context,
+        )?,
         distribution.manifest_digest(),
         context,
     )?;
-    Ok(Arc::new(VerifiedBundle::open(&root, distribution.manifest_digest(), context)?))
+    Ok(Arc::new(root))
 }
 
 /// Supply retained bytes to the actual signed import without weakening its trust checks.
@@ -39,12 +43,22 @@ fn imported_payload_keeps_source_files_immutable_after_preview_owner_retires() -
     worker::run_reserved(SIGNED_INSTALLER_RESERVATION_BYTES, |context, _| {
         let fixture = Fixture::new(context)?;
         let preview = preview(&fixture, context)?;
-        let worker = preview.worker_paths().0;
+        let worker = preview.worker()?.executable().to_owned();
         let original = std::fs::read(&worker)?;
         let imported = import(&fixture, preview, NOW, context)?;
         assert!(std::fs::write(&worker, b"changed while retained").is_err());
         assert_eq!(std::fs::read(&worker)?, original);
-        assert_eq!(std::fs::read_dir(fixture.workspace.path().join("payloads-v1"))?.count(), 1);
+        assert_eq!(
+            std::fs::read_dir(
+                fixture
+                    .workspace
+                    .path()
+                    .join(crate::setup_storage::cache::DIRECTORY)
+                    .join(crate::setup_storage::cache::Namespace::PackedPayloads.directory())
+            )?
+            .count(),
+            1
+        );
         drop(imported);
         std::fs::write(&worker, b"released after import retired")?;
         Ok(())
@@ -60,7 +74,17 @@ fn retained_preview_cannot_replace_archive_byte_authentication() -> TestResult {
         bytes[b"inert installer prefix".len()] ^= 1;
         std::fs::write(&fixture.executable, bytes)?;
         assert!(import(&fixture, preview, NOW, context).is_err());
-        assert_eq!(std::fs::read_dir(fixture.workspace.path().join("payloads-v1"))?.count(), 1);
+        assert_eq!(
+            std::fs::read_dir(
+                fixture
+                    .workspace
+                    .path()
+                    .join(crate::setup_storage::cache::DIRECTORY)
+                    .join(crate::setup_storage::cache::Namespace::PackedPayloads.directory())
+            )?
+            .count(),
+            1
+        );
         assert!(
             SelectionStore::open(fixture.root.path(), context)?
                 .load(context)?
@@ -79,7 +103,17 @@ fn retained_preview_cannot_replace_current_metadata_authentication() -> TestResu
         let preview = preview(&fixture, context)?;
         fixture.configuration["targets"] = serde_json::json!("{}");
         assert!(import(&fixture, preview, NOW, context).is_err());
-        assert_eq!(std::fs::read_dir(fixture.workspace.path().join("payloads-v1"))?.count(), 1);
+        assert_eq!(
+            std::fs::read_dir(
+                fixture
+                    .workspace
+                    .path()
+                    .join(crate::setup_storage::cache::DIRECTORY)
+                    .join(crate::setup_storage::cache::Namespace::PackedPayloads.directory())
+            )?
+            .count(),
+            1
+        );
         assert!(
             SelectionStore::open(fixture.root.path(), context)?
                 .load(context)?
@@ -97,7 +131,17 @@ fn retained_preview_cannot_extend_expired_update_authority() -> TestResult {
         let fixture = Fixture::new(context)?;
         let preview = preview(&fixture, context)?;
         assert!(import(&fixture, preview, EXPIRES, context).is_err());
-        assert_eq!(std::fs::read_dir(fixture.workspace.path().join("payloads-v1"))?.count(), 1);
+        assert_eq!(
+            std::fs::read_dir(
+                fixture
+                    .workspace
+                    .path()
+                    .join(crate::setup_storage::cache::DIRECTORY)
+                    .join(crate::setup_storage::cache::Namespace::PackedPayloads.directory())
+            )?
+            .count(),
+            1
+        );
         assert!(
             SelectionStore::open(fixture.root.path(), context)?
                 .load(context)?
@@ -122,13 +166,25 @@ fn another_valid_preview_cannot_supply_a_different_signed_inventory() -> TestRes
         let source = other.path().join("other.ssupdate");
         std::fs::write(&source, archive)?;
         let digest = format!("{:x}", Sha256::digest(&manifest));
-        let root = crate::setup_storage::materialize(&source, other.path(), &digest, context)?;
-        let preview = Arc::new(VerifiedBundle::open(&root, &digest, context)?);
-        let worker = preview.worker_paths().0;
+        let cache = crate::setup_storage::cache::RuntimeCache::open(
+            other.path(),
+            crate::setup_storage::cache::CachePolicy::default(),
+            context,
+        )?;
+        let preview =
+            Arc::new(crate::setup_storage::materialize(&source, &cache, &digest, context)?);
+        let worker = preview.worker()?.executable().to_owned();
         let before = std::fs::read(&worker)?;
         assert!(import(&fixture, preview, NOW, context).is_err());
         assert_eq!(std::fs::read(&worker)?, before);
-        assert!(!fixture.workspace.path().join("payloads-v1").exists());
+        assert!(
+            !fixture
+                .workspace
+                .path()
+                .join(crate::setup_storage::cache::DIRECTORY)
+                .join(crate::setup_storage::cache::Namespace::PackedPayloads.directory())
+                .exists()
+        );
         assert!(
             SelectionStore::open(fixture.root.path(), context)?
                 .load(context)?

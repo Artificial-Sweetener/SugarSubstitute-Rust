@@ -209,7 +209,7 @@ fn native_stage_generation_saturates_and_keeps_original_until_its_unique_last_dr
 fn native_observation_growth_keeps_old_vector_on_rejection_and_all_alias_credit() -> TestResult {
     use crate::{
         diagnostic_storage::inventory::{ObservedEntry, Scan},
-        protected_storage::record_file::StreamingPort,
+        durable_storage::protected::record_file::StreamingPort,
     };
     admitted(|context, _| {
         let (mut storage, operation) = setup(&context, Filesystem::new())?;

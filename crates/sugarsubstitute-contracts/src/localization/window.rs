@@ -3,6 +3,7 @@
 //! Own accessible native caption names selected by the sole supported-locale registry.
 
 /// Names used by native main-window controls independently of web-owned content.
+#[non_exhaustive]
 pub struct WindowMessages {
     /// Minimize the application window.
     pub minimize: &'static str,

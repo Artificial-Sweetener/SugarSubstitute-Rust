@@ -3,16 +3,19 @@
 //! Native branded setup entry point.
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> std::process::ExitCode {
     #[cfg(all(windows, feature = "windows-native-host"))]
     {
-        sugarsubstitute::setup::run(include_bytes!(concat!(
+        match sugarsubstitute::setup::run(include_bytes!(concat!(
             env!("OUT_DIR"),
             "/installer-distribution.json"
-        )))
+        ))) {
+            Ok(()) => std::process::ExitCode::SUCCESS,
+            Err(_retained) => std::process::ExitCode::FAILURE,
+        }
     }
     #[cfg(not(all(windows, feature = "windows-native-host")))]
     {
-        Err("The native installer adapter is not available on this platform".into())
+        sugarsubstitute::unavailable_native_entry(sugarsubstitute::NativeEntry::Installer)
     }
 }

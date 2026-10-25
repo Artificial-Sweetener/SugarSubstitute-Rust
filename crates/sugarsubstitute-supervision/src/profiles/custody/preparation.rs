@@ -2,8 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Transfer the actual prepared Job and pinned profile directory before Held publication.
 use super::*;
-use crate::native_claims::files::Budget;
-use crate::protected_storage::paths;
+use crate::{durable_storage::protected::paths, native_claims::files::Budget};
 use sugarsubstitute_contracts::execution::JobContext;
 /// Retain every partial duplicate in the genuine destination before original command admission.
 pub(in crate::profiles) fn prepare(
@@ -46,7 +45,7 @@ pub(in crate::profiles) fn prepare(
     }
     let writer = paths::file_identity(
         &file.handle,
-        &mut crate::protected_storage::native_phase::NativePhase::ordinary(&budget)?,
+        &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(&budget)?,
     )?;
     let target = prepared
         .destination

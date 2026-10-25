@@ -4,10 +4,10 @@
 //! The Account selector uses this D-local external discovery root; this fixture does not query or
 //! redirect the actual Shell known folder. Entry admission, consumption and source custody stay real.
 use super::*;
-use crate::native_claims::files::{self, Budget};
-use crate::protected_storage::{
+use crate::durable_storage::protected::{
     account, native_name::NativeNameDestination, native_phase::NativePhase, paths,
 };
+use crate::native_claims::files::{self, Budget};
 /// Supply an actual invalid external pin or a normal native observation.
 #[derive(Clone, Copy)]
 pub(crate) enum PinFault {

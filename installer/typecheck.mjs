@@ -5,6 +5,7 @@ import ts from 'typescript'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { declarations } from './upstream-types.mjs'
 const root = path.dirname(fileURLToPath(import.meta.url))
 const destination = process.env.SUBSTITUTE_INSTALLER_BUILD
 if (!destination || !path.isAbsolute(destination)) throw new Error('Explicit build directory required')
@@ -12,9 +13,21 @@ const receipt = JSON.parse(fs.readFileSync(path.join(destination, 'worker/build-
 const input = receipt.inputs.find(value => value.includes('/src/main/sources/standalone/index.ts'))
 if (!input) throw new Error('Actual upstream provisioning input missing from build receipt')
 const upstream = input.slice(0, input.indexOf('/src/main/'))
+const typeBoundaries = new Map()
+for (const [relative, names] of [
+  ['src/main/installations.ts', ['InstallationRecord']],
+  ['src/main/lib/coreBetaGrants.ts', ['CoreVersionState', 'CoreBetaGrant']],
+]) {
+  const source = path.join(upstream, relative)
+  const output = source.replace(/\.ts$/, '.provisioning.d.ts')
+  fs.writeFileSync(output, declarations(fs.readFileSync(source, 'utf8'), names))
+  typeBoundaries.set(path.resolve(source), output)
+}
 const replacements = new Map([
   ['src/main/settings.ts', 'settings.ts'], ['src/main/lib/paths.ts', 'paths.ts'],
   ['src/main/lib/telemetry.ts', 'telemetry.ts'], ['src/main/lib/bundledScript.ts', 'bundled-script.ts'],
+  ['src/main/lib/native-metadata.ts', 'metadata.ts'],
+  ['src/main/lib/provisioningTransport.ts', '../../crates/sugarsubstitute-networking/worker/http.ts'],
 ])
 const options = {
   noEmit: true, strict: true, skipLibCheck: true, allowJs: true, checkJs: false,
@@ -27,6 +40,8 @@ host.resolveModuleNames = (names, containing) => names.map(name => {
   if (name.startsWith('@upstream/')) return { resolvedFileName: path.join(upstream, 'src/main', name.slice(10) + '.ts'), extension: ts.Extension.Ts }
   if (name.startsWith('.') && path.resolve(containing).startsWith(path.resolve(upstream) + path.sep)) {
     const relative = path.relative(upstream, path.resolve(path.dirname(containing), name) + '.ts').replaceAll('\\', '/')
+    const boundary = typeBoundaries.get(path.resolve(upstream, relative))
+    if (boundary) return { resolvedFileName: boundary, extension: ts.Extension.Dts }
     if (replacements.has(relative)) return { resolvedFileName: path.join(root, 'worker', replacements.get(relative)), extension: ts.Extension.Ts }
   }
   return ts.resolveModuleName(name, name.startsWith('.') ? containing : path.join(root, 'worker/main.ts'), options, host).resolvedModule

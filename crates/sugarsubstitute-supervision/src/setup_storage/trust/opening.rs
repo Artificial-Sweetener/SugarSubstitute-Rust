@@ -33,9 +33,9 @@ impl TrustStore {
         let _work = context.memory().claim(WORK_BYTES).map_err(io::Error::other)?;
         let parent = Directory::open(installation_root, false)?;
         let ownership = ownership::read(&parent)?;
-        let root = Directory::open(&parent.path.join(DIRECTORY), false)?;
+        let root = Directory::open(&parent.path().join(DIRECTORY), false)?;
         protection::with_domain(context, |protection| {
-            protection.directory(&root.path, Mode::Existing, context)?;
+            protection.directory(root.path(), Mode::Existing, context)?;
             let writer = root.read(LOCK)?;
             protection.verify_file(&writer)?;
             writer.try_lock().map_err(io::Error::from)?;
@@ -52,6 +52,7 @@ impl TrustStore {
             }
             RepositoryTrust::from_trusted_checkpoint(checkpoint)?;
             let mut store = Self {
+                cache: std::sync::Mutex::new(None),
                 preparation: None,
                 root,
                 _installation_root: parent,

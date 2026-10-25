@@ -124,7 +124,11 @@ fn validate(
     || platform.environment.is_some()
     || platform.browser_extensions_enabled
     || platform.extension_path.is_some()
-    || platform.additional_browser_args.as_deref() != Some("")
+    || match platform.additional_browser_args.as_deref() {
+      Some("") => false,
+      Some("--disk-cache-size=33554432") if platform.exclusive_user_data_folder_access => false,
+      _ => true,
+    }
   {
     return Err(invalid("unsupported owned webview configuration"));
   }

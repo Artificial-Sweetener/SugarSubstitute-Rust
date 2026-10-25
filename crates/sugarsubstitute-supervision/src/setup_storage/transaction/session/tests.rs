@@ -49,19 +49,19 @@ fn maintenance_retains_saved_inputs_before_delivery_and_preserves_them_after_rel
         let directory = Directory::open(temporary.path(), false)?;
         let original = fixture::installed(&directory, context)?;
         let saved = std::fs::read(original.join("startup.local.toml"))?;
-        let session = InstallationSession::maintain(&directory.path, context)?;
+        let session = InstallationSession::maintain(directory.path(), context)?;
         assert_eq!(
             session.existing.as_ref().ok_or("Saved state absent")?.summary.selection.locale,
             "ja"
         );
         assert!(std::fs::write(original.join("startup.local.toml"), b"replace").is_err());
-        assert!(InstallationSession::maintain(&directory.path, context).is_err());
-        assert_eq!(std::fs::read_dir(directory.path.join("releases"))?.count(), 1);
+        assert!(InstallationSession::maintain(directory.path(), context).is_err());
+        assert_eq!(std::fs::read_dir(directory.path().join("releases"))?.count(), 1);
         drop(session);
-        let reopened = InstallationSession::maintain(&directory.path, context)?;
-        assert_eq!(reopened.directory(), directory.path);
+        let reopened = InstallationSession::maintain(directory.path(), context)?;
+        assert_eq!(reopened.directory(), directory.path());
         assert_eq!(std::fs::read(original.join("startup.local.toml"))?, saved);
-        assert!(!directory.path.join("external-comfy").exists());
+        assert!(!directory.path().join("external-comfy").exists());
         Ok(())
     })
 }
@@ -89,7 +89,7 @@ fn signed_delivery_prepares_under_the_original_session_while_run_custody_remains
         let directory = Directory::open(temporary.path(), false)?;
         let original = fixture::installed(&directory, context)?;
         let saved = std::fs::read(original.join("startup.local.toml"))?;
-        let session = InstallationSession::maintain(&directory.path, context)?;
+        let session = InstallationSession::maintain(directory.path(), context)?;
         let (manifest, compressed) = test_package::distribution()?;
         let archive = test_package::seal(&manifest, &compressed);
         let signed = SignedPackage::new(&archive, 1)?;
@@ -102,12 +102,25 @@ fn signed_delivery_prepares_under_the_original_session_while_run_custody_remains
             .into_package()?;
         let source = workspace.path().join("setup.exe");
         std::fs::write(&source, [b"inert setup prefix".as_slice(), &archive].concat())?;
-        let download =
-            Download::import_installer(session.directory(), target, &source, || NOW, context)?;
-        let bundle = Arc::new(VerifiedBundle::from_download(download, workspace.path(), context)?);
-        assert!(InstallationSession::maintain(&directory.path, context).is_err());
+        let download = Download::import_installer(
+            trust.runtime_cache(context)?,
+            target,
+            &source,
+            || NOW,
+            context,
+        )?;
+        let bundle = Arc::new(VerifiedBundle::from_download(
+            download,
+            &crate::setup_storage::cache::RuntimeCache::open(
+                workspace.path(),
+                crate::setup_storage::cache::CachePolicy::default(),
+                context,
+            )?,
+            context,
+        )?);
+        assert!(InstallationSession::maintain(directory.path(), context).is_err());
         let prepared = session.prepare(bundle, context)?;
-        assert!(InstallationSession::maintain(&directory.path, context).is_err());
+        assert!(InstallationSession::maintain(directory.path(), context).is_err());
         let candidate = prepared.prepare_update(
             prepared.maintenance_runtime().ok_or("Saved runtime absent")?,
             &signed.authorization(&trust),
@@ -120,10 +133,10 @@ fn signed_delivery_prepares_under_the_original_session_while_run_custody_remains
         );
         assert_eq!(std::fs::read(candidate.directory().join("startup.local.toml"))?, saved);
         assert_eq!(std::fs::read(original.join("startup.local.toml"))?, saved);
-        assert!(!directory.path.join("external-comfy").exists());
+        assert!(!directory.path().join("external-comfy").exists());
         drop(prepared);
-        let reopened = InstallationSession::maintain(&directory.path, context)?;
-        assert_eq!(reopened.directory(), directory.path);
+        let reopened = InstallationSession::maintain(directory.path(), context)?;
+        assert_eq!(reopened.directory(), directory.path());
         assert!(InstallationRun::acquire(selection, context).is_err());
         drop(running);
         Ok(())

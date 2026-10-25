@@ -90,15 +90,15 @@ fn recovery_preserves_history_user_files_and_damaged_candidate_without_applicati
         drop(trial);
         let payload = trust.updater_path(&generation).join("app/sugarsubstitute-updater.exe");
         std::fs::write(&payload, b"damaged candidate")?;
-        let receipt = trust.root.path.join(TrustStore::updater_receipt_name(&generation));
+        let receipt = trust.root.path().join(TrustStore::updater_receipt_name(&generation));
         let receipt_bytes = std::fs::read(&receipt)?;
-        let checkpoint = std::fs::read(trust.root.path.join("checkpoint"))?;
+        let checkpoint = std::fs::read(trust.root.path().join("checkpoint"))?;
         let user_file = root.path().join("user-settings.json");
         std::fs::write(&user_file, b"preserve authored settings")?;
         let app = Arc::new(storage::SelectionStore::open(root.path(), context)?);
         let app_before = app.load(context)?;
         let _run = storage::InstallationRun::acquire(app.clone(), context)?;
-        let _setup = storage::transaction::admission::Admission::open(root.path(), false)?;
+        let _setup = storage::transaction::admission::Admission::open(root.path(), false, context)?;
         let recovered = trust.recover_updater_trial(context)?;
         assert_eq!(recovered.accepted(), history.accepted());
         assert_eq!(recovered.retained(), history.retained());
@@ -106,7 +106,7 @@ fn recovery_preserves_history_user_files_and_damaged_candidate_without_applicati
         assert_eq!(recovered.revision(), pending.revision() + 1);
         assert_eq!(std::fs::read(&payload)?, b"damaged candidate");
         assert_eq!(std::fs::read(receipt)?, receipt_bytes);
-        assert_eq!(std::fs::read(trust.root.path.join("checkpoint"))?, checkpoint);
+        assert_eq!(std::fs::read(trust.root.path().join("checkpoint"))?, checkpoint);
         assert_eq!(std::fs::read(user_file)?, b"preserve authored settings");
         assert_eq!(app.load(context)?, app_before);
         let _pin = trust.root.read(SELECTION)?;
@@ -217,7 +217,7 @@ fn missing_or_corrupt_continuity_is_preserved_and_never_initialized_by_recovery(
             let workspace = tempfile::tempdir()?;
             drop(trial(root.path(), workspace.path(), context)?);
             let trust = TrustStore::open(root.path(), [92; 32], context)?;
-            let path = trust.root.path.join(name);
+            let path = trust.root.path().join(name);
             if missing {
                 std::fs::remove_file(&path)?;
             } else {
@@ -247,9 +247,9 @@ fn cancellation_after_fresh_exclusion_preserves_trial_and_releases_the_native_ha
             let workspace = tempfile::tempdir()?;
             drop(trial(root.path(), workspace.path(), context)?);
             let trust = TrustStore::open(root.path(), [92; 32], context)?;
-            let selection_path = trust.root.path.join(SELECTION);
+            let selection_path = trust.root.path().join(SELECTION);
             let before = std::fs::read(&selection_path)?;
-            let rendezvous = trust.root.path.join("updater-preparation-v1");
+            let rendezvous = trust.root.path().join("updater-preparation-v1");
             let observed = rendezvous.clone();
             // Expire only once the real share-none acquisition denies another data reader.
             clock.observe_checks(move || std::fs::read(&observed).is_err())?;

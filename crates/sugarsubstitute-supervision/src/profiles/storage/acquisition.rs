@@ -49,13 +49,13 @@ pub(super) fn acquire(
         state.memory.as_ref().ok_or_else(|| ClaimError::invalid("profile_memory"))?.clone(),
     );
     HeldFile::acquire_into(
-        crate::protected_storage::exclusion::ExclusionOpen::CreateOrOpen,
+        crate::durable_storage::protected::exclusion::ExclusionOpen::CreateOrOpen,
         &mut state.file,
-        crate::protected_storage::native_name::NativeName::Ordinary(exclusion_path),
-        crate::protected_storage::native_name::NativeName::Ordinary(record_path),
-        crate::protected_storage::native_name::NativeSid::Ordinary(sid.to_vec()),
+        crate::durable_storage::protected::native_name::NativeName::Ordinary(exclusion_path),
+        crate::durable_storage::protected::native_name::NativeName::Ordinary(record_path),
+        crate::durable_storage::protected::native_name::NativeSid::Ordinary(sid.to_vec()),
         budget.clone(),
-        &mut crate::protected_storage::native_phase::NativePhase::ordinary(&budget)?,
+        &mut crate::durable_storage::protected::native_phase::NativePhase::ordinary(&budget)?,
     )
     .map_err(|cause| {
         super::super::contention::at_profile(cause, folder, identity, record.account)

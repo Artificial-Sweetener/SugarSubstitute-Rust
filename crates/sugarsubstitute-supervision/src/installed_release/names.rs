@@ -122,7 +122,7 @@ impl CaptureNameDestination {
         if let Some(child) = child {
             owned.push(child);
         }
-        crate::protected_storage::paths::validate_local_shape(&owned)
+        crate::durable_storage::protected::paths::validate_local_shape(&owned)
             .map_err(CaptureNameFailure::Shape)?;
         self.finish(owned)
     }

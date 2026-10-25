@@ -29,7 +29,7 @@ impl LaunchInheritance {
     pub(crate) fn launch_pins(&self) -> impl Iterator<Item = &File> {
         let application = &self.application.application;
         std::iter::once(&application.inventory)
-            .chain(&application.directory._pins)
+            .chain(application.directory.native_pins())
             .chain(application.payload.launch_pins())
     }
 

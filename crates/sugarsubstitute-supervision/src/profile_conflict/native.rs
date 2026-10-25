@@ -4,16 +4,16 @@
 use super::*;
 use crate::{
     ProtectedStorageRoot,
-    native_claims::{
-        Record, RecordState,
-        files::{self, Budget, Handle},
-    },
-    protected_storage::{
+    durable_storage::protected::{
         account,
         exclusion::{ExclusionOpen, HeldFile},
         native_name::{NativeName, NativeSid, NativeSidDestination},
         native_phase::NativePhase,
         record_file::{self, RecordRead},
+    },
+    native_claims::{
+        Record, RecordState,
+        files::{self, Budget, Handle},
     },
 };
 use processes::Process;

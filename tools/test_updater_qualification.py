@@ -14,6 +14,7 @@ from unittest.mock import Mock, patch
 from tools import updater_native_support as native
 from tools.updater_publication_qualification import (
     Qualification, validate_paths, require_selection_preserved,
+    payload_cache_root, payload_generations, require_payload_reuse,
 )
 
 
@@ -154,6 +155,71 @@ class PublicationBoundaries(unittest.TestCase):
         self.setup.write_bytes(b'inert fixture')
         self.output = self.base / 'evidence'
 
+    def test_payload_namespace_comes_from_the_registered_catalog(self):
+        catalog = self.base / 'catalog.toml'
+        contents = ('schema_version = 1\n'
+            '[[caches]]\nid = "runtime-cache-storage"\nnamespace = "owned-root-v2"\n'
+            '[[caches]]\nid = "setup-packed-payloads"\nnamespace = "payload-content-v3"\n')
+        catalog.write_text(contents, encoding='utf-8')
+        self.assertEqual(payload_cache_root(self.work, catalog),
+            self.work / 'owned-root-v2' / 'payload-content-v3')
+        for invalid in (
+                contents.replace('schema_version = 1', 'schema_version = 99'),
+                contents.replace('schema_version = 1', 'schema_version = true'),
+                contents.replace('payload-content-v3', '../foreign'),
+                contents.replace('payload-content-v3', 'owned-root-v2'),
+                contents + '[[caches]]\nid = "setup-packed-payloads"\nnamespace = "other"\n'):
+            catalog.write_text(invalid, encoding='utf-8')
+            with self.assertRaises(ValueError):
+                payload_cache_root(self.work, catalog)
+
+    def test_shared_payload_inventory_preserves_unrelated_and_legacy_content(self):
+        legacy = self.work / 'payloads-v1'
+        legacy.mkdir()
+        (legacy / 'authored').write_bytes(b'preserve')
+        root = payload_cache_root(self.work)
+        self.assertEqual(payload_generations(root), {})
+        root.mkdir(parents=True)
+        unrelated = root / 'unknown-file'
+        unrelated.write_bytes(b'unknown bytes')
+        generation = root / ('a' * 64 + '-0000000000000001')
+        generation.mkdir()
+        first = payload_generations(root)
+        self.assertEqual(require_payload_reuse({}, first, payload_generations(root)), 1)
+        self.assertEqual(set(first), {generation.name})
+        self.assertEqual(unrelated.read_bytes(), b'unknown bytes')
+        self.assertEqual((legacy / 'authored').read_bytes(), b'preserve')
+        with patch.object(Path, 'is_junction', lambda path: path == generation):
+            with self.assertRaisesRegex(ValueError, 'redirected'):
+                payload_generations(root)
+        with patch.object(Path, 'is_junction', lambda path: path == root.parent):
+            with self.assertRaisesRegex(ValueError, 'redirected'):
+                payload_generations(root)
+        actual_stat = Path.stat
+
+        def absent_identity(path, **options):
+            value = actual_stat(path, **options)
+            return SimpleNamespace(st_mode=value.st_mode, st_dev=value.st_dev, st_ino=0) \
+                if path == generation else value
+
+        with patch.object(Path, 'stat', absent_identity):
+            with self.assertRaisesRegex(RuntimeError, 'no observable file identity'):
+                payload_generations(root)
+
+    def test_rescue_rejects_empty_duplicate_or_replaced_generation_evidence(self):
+        first = {'original': (1, 2)}
+        self.assertEqual(require_payload_reuse(first, first, first), 0)
+        for before, initial, rescued in (
+                ({}, {}, {}),
+                ({}, {**first, 'duplicate': (1, 3)}, first),
+                (first, {'original': (1, 3)}, {'original': (1, 3)}),
+                ({}, first, {**first, 'duplicate': (1, 3)}),
+                ({}, first, {'original': (1, 3)}),
+                ({}, first, {})):
+            with self.subTest(before=before, initial=initial, rescued=rescued):
+                with self.assertRaises(RuntimeError):
+                    require_payload_reuse(before, initial, rescued)
+
     def test_explicit_isolated_workspace_accepts_external_evidence(self):
         validate_paths(self.work, self.root, self.setup, self.output)
         self.assertFalse(self.output.exists())
@@ -193,7 +259,6 @@ class PublicationBoundaries(unittest.TestCase):
     def failed_attempt(self, replace_launcher=False):
         state = self.root / '.selection-state'
         state.mkdir()
-        (self.work / 'payloads-v1').mkdir()
         original = b'verified launcher'
         launcher = self.root / 'sugarsubstitute-launcher.exe'
         launcher.write_bytes(original)

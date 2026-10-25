@@ -76,6 +76,8 @@ impl WindowsPort {
         family.check_native()?;
         keep(close_slot(&mut family.job, "close_job"));
         family.check_native()?;
+        keep(close_slot(&mut family.rejected_job, "close_rejected_job_reference"));
+        family.check_native()?;
         keep(close_slot(&mut family.thread, "close_primary_thread"));
         family.check_native()?;
         keep(close_slot(&mut family.watch_duplicate, "close_watch_duplicate"));

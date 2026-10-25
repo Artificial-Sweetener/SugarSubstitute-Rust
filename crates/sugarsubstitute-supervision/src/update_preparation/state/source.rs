@@ -12,7 +12,7 @@ pub(in crate::update_preparation) enum Source {
     /// This campaign owns no HTTP client or transport policy.
     Installed,
     /// Online discovery remains bound to the producing distribution's repository.
-    Distribution { identity: [u8; 32], repository: Repository },
+    Distribution { identity: [u8; 32], repository: Box<Repository> },
 }
 impl Source {
     /// Open authority under the selected campaign's exact trust boundary.

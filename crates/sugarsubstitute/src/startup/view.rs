@@ -11,7 +11,8 @@ use sugarsubstitute_contracts::{
 use sugarsubstitute_desktop::{
     AccessibleControl, ControlBounds, HitTarget, KeyAction, Pointer, PointerAction,
 };
-use sugarsubstitute_splash::{Appearance, Control, PaperFlip, ProgressFrame, Theme};
+use sugarsubstitute_splash::{Appearance, Control, PaperFlip, Theme};
+use sugarsubstitute_ui::progress::ProgressFrame;
 #[path = "view/disclosure.rs"]
 mod disclosure;
 
@@ -68,6 +69,7 @@ impl StartupView {
             messages,
             controls: [
                 AccessibleControl {
+                    enabled: true,
                     id: 1,
                     label: messages.show_output,
                     bounds: ControlBounds { x: 466.0, y: 0.0, width: 46.0, height: 32.0 },
@@ -75,6 +77,7 @@ impl StartupView {
                     visible: true,
                 },
                 AccessibleControl {
+                    enabled: true,
                     id: 2,
                     label: messages.cancel,
                     bounds: ControlBounds { x: 512.0, y: 0.0, width: 46.0, height: 32.0 },
@@ -82,6 +85,7 @@ impl StartupView {
                     visible: true,
                 },
                 AccessibleControl {
+                    enabled: true,
                     id: 3,
                     label: messages.retry,
                     bounds: ControlBounds { x: 24.0, y: 486.0, width: 510.0, height: 48.0 },

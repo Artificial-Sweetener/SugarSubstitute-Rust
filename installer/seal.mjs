@@ -36,7 +36,7 @@ async function seal(arguments_) {
       if (!Number.isSafeInteger(file.bytes) || file.bytes < 0 || file.bytes > 2 * 1024 ** 3) throw new Error('Invalid expanded file size')
       expanded += file.bytes
       if (expanded > 16 * 1024 ** 3) throw new Error('Expanded package exceeds its native bound')
-      if (!/^(app|worker|electron|sugarcubes)\//.test(file.path) ||
+      if (!/^(app|worker|sugarcubes)\//.test(file.path) ||
           file.path.includes('\\') || file.path.split('/').some(part => !part || part === '..' || part === '.') ||
           names.has(file.path.toLowerCase())) throw new Error('Unsafe archive inventory')
       names.add(file.path.toLowerCase())

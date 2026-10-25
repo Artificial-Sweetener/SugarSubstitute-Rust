@@ -7,9 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 use sugarsubstitute_contracts::execution::CompletionWake;
-use sugarsubstitute_desktop::{
-    HeadlessLifetime, HeadlessStep, StartupPreparationStep, installer::InstallerLifetime,
-};
+use sugarsubstitute_desktop::{HeadlessLifetime, HeadlessStep, StartupPreparationStep};
 
 /// Use the actual upstream catalogue, download, extraction and Python verification.
 /// The test watchdog is independent of production provisioning, which has no total deadline.
@@ -23,7 +21,7 @@ pub(in crate::setup) fn run(
         controller: Controller::new(bundle, workspace.clone(), distribution),
         workspace,
         field: 0,
-        selected: serde_json::Map::new(),
+        selected: [None, None],
         started: false,
         cancel,
         cancelled_during_download: false,
@@ -49,7 +47,7 @@ struct Fixture {
     controller: Controller,
     workspace: PathBuf,
     field: usize,
-    selected: serde_json::Map<String, Value>,
+    selected: [Option<String>; 2],
     started: bool,
     cancel: bool,
     cancelled_during_download: bool,
@@ -57,81 +55,87 @@ struct Fixture {
     phases: Vec<String>,
     deadline: Instant,
 }
-const FIELDS: [&str; 3] = ["release", "comfyVersion", "variant"];
+use sugarsubstitute_application::setup_flow::{
+    Choice, Choices, Operation as Command, OptionField, RuntimeMode,
+};
+const FIELDS: [OptionField; 3] =
+    [OptionField::Release, OptionField::ComfyVersion, OptionField::Variant];
 impl Fixture {
     fn options(&mut self) -> Result<()> {
-        let field = FIELDS.get(self.field).ok_or("Qualification field exhausted")?;
-        self.controller.request(
-            &json!({
-                "version":1, "id":field, "operation":"options",
-                "input":{"field":field,"selections":self.selected,"locale":"en","mirrors":false},
-            })
-            .to_string(),
-        )
+        let field = *FIELDS.get(self.field).ok_or("Qualification field exhausted")?;
+        self.controller.accept(requests::Request {
+            id: format!("options-{}", self.field),
+            command: Command::Options {
+                field,
+                release: self.selected[0].clone(),
+                version: self.selected[1].clone(),
+                locale: "en",
+                mirrors: false,
+            },
+        })
     }
-    fn install(&mut self, token: &str) -> Result<()> {
-        self.controller.request(
-            &json!({
-                "version":1,"id":"install","operation":"install","input":{
-                    "locale":"en","installRoot":self.workspace.join("installed"),
-                    "mode":"managed","comfyRoot":self.workspace.join("managed"),
-                    "python":"","models":self.workspace.join("models"),
-                    "outputs":self.workspace.join("outputs"),"selectionToken":token,
-                },
-            })
-            .to_string(),
-        )
+    fn install(&mut self, token: String) -> Result<()> {
+        self.controller.accept(requests::Request {
+            id: "install".into(),
+            command: Command::Install(Choices {
+                locale: "en",
+                install_root: events::path_text(self.workspace.join("installed"))?,
+                mode: RuntimeMode::Managed,
+                comfy_root: events::path_text(self.workspace.join("managed"))?,
+                python: String::new(),
+                models: events::path_text(self.workspace.join("models"))?,
+                outputs: events::path_text(self.workspace.join("outputs"))?,
+                selection_token: Some(token),
+            }),
+        })
     }
     fn progress(&mut self) -> Result<HeadlessStep> {
-        for message in self.controller.advance()? {
-            let value: Value = serde_json::from_str(&message)?;
-            match value["event"].as_str() {
-                Some("diagnostic") => continue,
-                Some("progress") => {
-                    let data = &value["data"];
-                    if let Some(phase) = data["phase"].as_str() {
-                        if !self.phases.iter().any(|old| old == phase) {
+        for event in self.controller.advance_events()?.events {
+            match event.kind {
+                Kind::Diagnostic(_) => continue,
+                Kind::Progress(progress) => {
+                    if let Some(phase) = progress.phase {
+                        if !self.phases.contains(&phase) {
                             tracing::info!(
                                 operation = "managed_install_qualification",
                                 phase,
                                 "Provisioning phase observed"
                             );
-                            self.phases.push(phase.to_owned());
+                            self.phases.push(phase.clone());
                         }
                         if self.cancel
                             && phase == "download"
-                            && data["percent"]
-                                .as_f64()
-                                .is_some_and(|value| value > 0.0 && value < 100.0)
+                            && progress.percent.is_some_and(|value| value > 0.0 && value < 100.0)
                         {
                             self.cancelled_during_download = true;
                             return Ok(HeadlessStep::Shutdown);
                         }
                     }
                 }
-                Some("completed") if self.field < FIELDS.len() => {
-                    if value["id"].as_str() != Some(FIELDS[self.field]) {
+                Kind::Completed(Completed::Options(choices)) if self.field < FIELDS.len() => {
+                    if event.id.as_deref() != Some(&format!("options-{}", self.field)) {
                         return Err("Managed catalogue response identity changed".into());
                     }
-                    let choices = value["data"].as_array().ok_or("Catalogue is not an array")?;
-                    let choice = preferred(choices);
+                    let choice = preferred(&choices);
                     if self.field == 1 && choice.is_none() {
                         self.field += 1;
                         self.options()?;
                         continue;
                     }
                     let choice = choice.ok_or("No upstream provisioning option is available")?;
-                    self.selected.insert(FIELDS[self.field].into(), choice["value"].clone());
+                    if self.field < 2 {
+                        self.selected[self.field] = Some(choice.value.clone());
+                    }
                     self.field += 1;
                     if self.field == FIELDS.len() {
                         self.install(
-                            choice["selectionToken"].as_str().ok_or("Selection token missing")?,
+                            choice.selection_token.clone().ok_or("Selection token missing")?,
                         )?;
                     } else {
                         self.options()?;
                     }
                 }
-                Some("completed") if value["id"] == "install" => {
+                Kind::Completed(Completed::Installed) if event.id.as_deref() == Some("install") => {
                     self.installed = Some(
                         self.controller
                             .installed
@@ -142,12 +146,8 @@ impl Fixture {
                     );
                     return Ok(HeadlessStep::Shutdown);
                 }
-                _ => {
-                    return Err(format!(
-                        "Managed qualification observed unexpected result: {value}"
-                    )
-                    .into());
-                }
+                Kind::Failed(message) | Kind::Unavailable(message) => return Err(message.into()),
+                _ => return Err("Managed qualification received an unexpected result".into()),
             }
         }
         if Instant::now() >= self.deadline {
@@ -160,8 +160,8 @@ impl Fixture {
         Ok(HeadlessStep::Active)
     }
 }
-fn preferred(choices: &[Value]) -> Option<&Value> {
-    choices.iter().find(|choice| choice["recommended"] == true).or_else(|| choices.first())
+fn preferred(choices: &[Choice]) -> Option<&Choice> {
+    choices.iter().find(|choice| choice.recommended).or_else(|| choices.first())
 }
 impl HeadlessLifetime for Fixture {
     fn start(&mut self, wake: Arc<dyn CompletionWake>) -> Result<()> {
@@ -192,8 +192,14 @@ mod tests {
     use super::*;
     #[test]
     fn upstream_recommendation_wins_without_inventing_a_package_choice() {
-        let values = [json!({"value":"first"}), json!({"value":"recommended","recommended":true})];
-        assert_eq!(preferred(&values).map(|value| &value["value"]), Some(&json!("recommended")));
+        let values = [false, true].map(|recommended| Choice {
+            value: recommended.to_string(),
+            label: String::new(),
+            description: String::new(),
+            recommended,
+            selection_token: None,
+        });
+        assert_eq!(preferred(&values).map(|choice| choice.value.as_str()), Some("true"));
         assert_eq!(preferred(&values[..1]), values.first());
         assert!(preferred(&[]).is_none());
     }

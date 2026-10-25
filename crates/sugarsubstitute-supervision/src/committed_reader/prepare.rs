@@ -3,12 +3,12 @@
 //! Open the same protected namespace and exclusive existing writer fence.
 use super::*;
 use crate::{
-    installed_release::names::CapturePathRole,
-    protected_storage::{
+    durable_storage::protected::{
         account,
         directories::{self, Mode, RelativeDirectory},
         paths, security,
     },
+    installed_release::names::CapturePathRole,
 };
 use std::ffi::OsStr;
 fn name(
@@ -92,7 +92,9 @@ fn prepare_once(
     if paths::final_path(&fields.directories[0], &mut phase, destination)?.path()? != root.path()? {
         return Err(phase.invalid("committed_reader_root_canonical"));
     }
-    let hex = crate::protected_storage::diagnostic::namespace_component(fields.request.namespace());
+    let hex = crate::durable_storage::protected::diagnostic::namespace_component(
+        fields.request.namespace(),
+    );
     let leaf = std::str::from_utf8(&hex).map_err(|_| missing())?;
     let mut child = [0_u8; 88];
     let prefix = br"diagnostics\incident-v1\";
@@ -172,7 +174,7 @@ pub(super) fn object_name(
     original: &AllocationOrigin,
     object: CommittedReadObject,
 ) -> Result<NativeName, ClaimError> {
-    let leaf = crate::protected_storage::record_file::DiagnosticLeaf::object(
+    let leaf = crate::durable_storage::protected::record_file::DiagnosticLeaf::object(
         object.object(),
         fields.request.namespace(),
     )

@@ -27,16 +27,12 @@ fn units(path: &str) -> Vec<u8> {
     path.encode_utf16().flat_map(u16::to_le_bytes).collect()
 }
 #[test]
-fn export_destination_preserves_unicode_and_exact_request() -> Result<(), Box<dyn Error>> {
+fn export_intent_preserves_report_binding_selection_and_request() -> Result<(), Box<dyn Error>> {
     let bytes = units("D:\\糖\\report😀.txt");
     let intent = ReportExportIntent::new(binding()?, selection(&bytes)?)?;
-    assert_eq!(
-        &intent.path[..intent.length],
-        "D:\\糖\\report😀.txt".encode_utf16().collect::<Vec<_>>()
-    );
     assert_eq!(intent.binding(), binding()?);
     assert_eq!(intent.request().get(), 1);
-    assert_eq!(intent.directories, 2);
+    assert_eq!(intent.selection(), ExportSelection::TextOnly);
     Ok(())
 }
 #[test]

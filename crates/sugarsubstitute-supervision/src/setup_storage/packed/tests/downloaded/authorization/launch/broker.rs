@@ -13,7 +13,7 @@ fn source(
     context: &JobContext,
 ) -> Result<ApplicationLaunch, Box<dyn std::error::Error + Send + Sync>> {
     let ReservedLaunch::Application(application) =
-        reserve_installed_launch(&directory.path, context)?
+        reserve_installed_launch(directory.path(), context)?
     else {
         return Err("Accepted application absent".into());
     };
@@ -49,7 +49,7 @@ fn unanswered_publication_retains_source_slots_until_a_correlated_creator_result
         let directory = Directory::open(temporary.path(), false)?;
         let (generation, _) = accept_fixture(&directory, context)?;
         let payload = directory
-            .path
+            .path()
             .join("releases")
             .join(generation.id.as_str())
             .join("sugarsubstitute.exe");

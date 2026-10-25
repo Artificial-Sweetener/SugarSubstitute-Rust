@@ -19,7 +19,7 @@ fn launch_reservation_coexists_with_a_running_app_and_only_briefly_excludes_sele
         let directory = Directory::open(temporary.path(), false)?;
         let (generation, workspace) = accept_fixture(&directory, context)?;
         assert!(!workspace.exists());
-        let store = Arc::new(SelectionStore::open(&directory.path, context)?);
+        let store = Arc::new(SelectionStore::open(directory.path(), context)?);
         let before = store.load(context)?.ok_or("Selection absent")?;
         let mut run = InstallationRun::acquire(store.clone(), context)?;
         let InstallationLaunch::Application(running) = run.select_launch(None, context)? else {
@@ -53,7 +53,7 @@ fn coordinator_can_acquire_its_run_while_every_concurrent_launch_still_pins_sele
         let temporary = tempfile::tempdir()?;
         let directory = Directory::open(temporary.path(), false)?;
         accept_fixture(&directory, context)?;
-        let store = Arc::new(SelectionStore::open(&directory.path, context)?);
+        let store = Arc::new(SelectionStore::open(directory.path(), context)?);
         let before = store.load(context)?.ok_or("Selection absent")?;
         let ReservedLaunch::Application(first) = store.reserve_launch(context)? else {
             return Err("First reservation absent".into());
@@ -80,11 +80,11 @@ fn failed_payload_verification_releases_selection_custody_without_creating_a_run
             let temporary = tempfile::tempdir()?;
             let directory = Directory::open(temporary.path(), false)?;
             let (generation, _) = accept_fixture(&directory, context)?;
-            let path = directory.path.join("releases").join(generation.id.as_str()).join(leaf);
+            let path = directory.path().join("releases").join(generation.id.as_str()).join(leaf);
             let mut edited = std::fs::read(&path)?;
             edited[0] ^= 1;
             std::fs::write(&path, &edited)?;
-            let store = Arc::new(SelectionStore::open(&directory.path, context)?);
+            let store = Arc::new(SelectionStore::open(directory.path(), context)?);
             let before = store.load(context)?.ok_or("Selection absent")?;
             assert!(store.reserve_launch(context).is_err());
             assert_eq!(store.load(context)?, Some(before.clone()));
@@ -134,8 +134,8 @@ fn invalid_selection_is_preserved_and_does_not_leave_an_unreleaseable_read_pin()
         let temporary = tempfile::tempdir()?;
         let directory = Directory::open(temporary.path(), false)?;
         accept_fixture(&directory, context)?;
-        let store = Arc::new(SelectionStore::open(&directory.path, context)?);
-        let path = directory.path.join(".selection-state/.substitute-selection.json");
+        let store = Arc::new(SelectionStore::open(directory.path(), context)?);
+        let path = directory.path().join(".selection-state/.substitute-selection.json");
         let before = std::fs::read(&path)?;
         std::fs::write(&path, b"invalid preserved selection")?;
         assert!(store.reserve_launch(context).is_err());
@@ -154,7 +154,7 @@ fn reservation_cannot_be_adopted_by_a_foreign_native_installation_with_matching_
         let temporary = tempfile::tempdir()?;
         let directory = Directory::open(temporary.path(), false)?;
         let (generation, _) = accept_fixture(&directory, context)?;
-        let store = Arc::new(SelectionStore::open(&directory.path, context)?);
+        let store = Arc::new(SelectionStore::open(directory.path(), context)?);
         let before = store.load(context)?.ok_or("Selection absent")?;
         let foreign_root = tempfile::tempdir()?;
         let foreign_directory = Directory::open(foreign_root.path(), false)?;
@@ -190,7 +190,7 @@ fn repeated_adoption_is_rejected_without_leaking_selection_custody() -> TestResu
         let temporary = tempfile::tempdir()?;
         let directory = Directory::open(temporary.path(), false)?;
         accept_fixture(&directory, context)?;
-        let store = Arc::new(SelectionStore::open(&directory.path, context)?);
+        let store = Arc::new(SelectionStore::open(directory.path(), context)?);
         let before = store.load(context)?.ok_or("Selection absent")?;
         let ReservedLaunch::Application(reserved) = store.reserve_launch(context)? else {
             return Err("Reservation absent".into());
@@ -214,8 +214,8 @@ fn expired_adoption_releases_selection_pin_without_rewriting_state() -> TestResu
         let temporary = tempfile::tempdir()?;
         let directory = Directory::open(temporary.path(), false)?;
         accept_fixture(&directory, context)?;
-        let store = Arc::new(SelectionStore::open(&directory.path, context)?);
-        let path = directory.path.join(".selection-state/.substitute-selection.json");
+        let store = Arc::new(SelectionStore::open(directory.path(), context)?);
+        let path = directory.path().join(".selection-state/.substitute-selection.json");
         let before = std::fs::read(&path)?;
         let ReservedLaunch::Application(reserved) = store.reserve_launch(context)? else {
             return Err("Reservation absent".into());

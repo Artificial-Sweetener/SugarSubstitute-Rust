@@ -6,44 +6,25 @@ use std::{num::NonZeroUsize, time::Duration};
 use sugarsubstitute_contracts::execution::{
     Clock, CompletionWake, ExecutionPort, ScopeId, ScopeSpec,
 };
-use sugarsubstitute_desktop::installer::InstallerLifetime;
 
-impl InstallerLifetime for Controller {
-    fn environment_observed(&mut self, path: PathBuf) -> Result<()> {
-        if self.profile_job.is_some() || self.profile.is_some() || self.closing {
-            return Err("Installer environment already observed or closing".into());
-        }
-        let expected = self.workspace.join("webview-v1").join(std::process::id().to_string());
-        let client = self.client.as_ref().ok_or("Installer execution missing")?;
-        self.profile_job = Some(client.submit_blocking(
-            self.scope.as_ref().ok_or("Installer scope missing")?,
-            JobSpec {
-                id: self.jobs.allocate()?,
-                operation: Operation::Infrastructure,
-                class: JobClass::InfrastructureLifecycle,
-                deadline: Some(client.now()?.checked_add(Duration::from_secs(30))?),
-                reservation_bytes: 1024 * 1024,
-                replacement: None,
-            },
-            move |context| setup_storage::InstallerProfile::acquire(&expected, &path, &context),
-        )?);
-        Ok(())
-    }
-    fn environment_ready(&self) -> bool {
-        self.profile.is_some() && !self.closing
-    }
-    fn console_layout(
+impl Controller {
+    /// Admit the current native transcript placement without waiting for preparation.
+    pub(super) fn console_layout(
         &mut self,
         layout: sugarsubstitute_desktop::installer::InstallerConsoleLayout,
     ) -> Result<()> {
         self.console.as_mut().ok_or("Installer console absent")?.layout(layout)
     }
-    fn console(&self) -> Option<sugarsubstitute_desktop::installer::InstallerConsole<'_>> {
+    /// Borrow the retained native transcript and its original preparation lease.
+    pub(super) fn console(
+        &self,
+    ) -> Option<sugarsubstitute_desktop::installer::InstallerConsole<'_>> {
         self.console.as_ref()?.view(
-            sugarsubstitute_contracts::localization::installer::messages(&self.locale)["details"],
+            sugarsubstitute_contracts::localization::installer::messages(&self.locale).details,
         )
     }
-    fn start(&mut self, wake: Arc<dyn CompletionWake>) -> Result<()> {
+    /// Start the single installer execution root and authenticated package preparation.
+    pub(super) fn start(&mut self, wake: Arc<dyn CompletionWake>) -> Result<()> {
         if self.owner.is_some() || self.closing {
             return Err("Installer cannot start twice".into());
         }
@@ -60,82 +41,31 @@ impl InstallerLifetime for Controller {
             let distribution = super::super::distribution::decode(distribution, &context)?;
             let expected = distribution.manifest_digest().to_owned();
             drop(distribution);
-            let root = setup_storage::materialize(&root, &workspace, &expected, &context)?;
-            VerifiedBundle::open(&root, &expected, &context)
-                .map(|bundle| StorageResult::Bundle(Arc::new(bundle)))
+            let cache = setup_storage::cache::RuntimeCache::open(
+                &workspace,
+                setup_storage::cache::CachePolicy::default(),
+                &context,
+            )?;
+            let bundle = setup_storage::materialize(&root, &cache, &expected, &context)?;
+            Ok(StorageResult::Bundle(Arc::new(bundle), cache))
         })
     }
-    fn request(&mut self, json: &str) -> Result<()> {
-        self.request_value(json)
-    }
-    fn advance(&mut self) -> Result<Vec<String>> {
-        if let Some(job) = &mut self.profile_job
-            && let Some(completion) = job.try_take_completion()
-        {
-            self.profile_job = None;
-            match completion.outcome {
-                JobOutcome::Success(profile) => self.profile = Some(profile),
-                JobOutcome::Cancelled if self.closing => {}
-                JobOutcome::Failure(cause) => return Err(cause.into()),
-                _ => return Err("Installer profile verification did not complete".into()),
-            }
-        }
-        if let Some(client) = &self.client {
-            let batch = client
-                .drain_completions(NonZeroUsize::new(32).ok_or("Invalid installer drain limit")?)?;
-            if let Some(worker) = &mut self.worker {
-                match worker.advance(&batch) {
-                    Ok(events) => {
-                        for event in events {
-                            if !self.closing
-                                && !self.unavailable
-                                && let Err(cause) = self.worker_event(event)
-                            {
-                                self.worker_failed(cause)?;
-                            }
-                        }
-                    }
-                    Err(cause) if !self.closing => self.worker_failed(cause)?,
-                    Err(cause) => return Err(cause),
-                }
-            }
-            self.poll_storage()?;
-        }
-        if let (Some(console), Some(client), Some(scope)) =
-            (&mut self.console, &self.client, &self.scope)
-        {
-            console.advance(client, scope, &self.jobs, self.closing)?;
-        }
-        let waiting_ready = self.bundle.is_some()
-            && self.waiting.as_ref().is_some_and(|request| {
-                request["operation"] == "location" || self.worker.as_ref().is_none_or(Worker::ready)
-            });
-        if waiting_ready && let Some(request) = self.waiting.take() {
-            self.request_value(&serde_json::to_string(&request)?)?;
-        }
-        self.output
-            .drain(..self.output.len().min(16))
-            .map(|value| serde_json::to_string(&value).map_err(Into::into))
-            .collect()
-    }
-    fn close(&mut self) -> Result<()> {
+    /// Close admission while retaining original cleanup obligations.
+    pub(super) fn close(&mut self) -> Result<()> {
         self.closing = true;
         self.waiting = None;
         if let Some(storage) = &self.storage {
             storage.cancel_preparation();
-        }
-        if let Some(job) = &self.profile_job {
-            job.cancel();
         }
         if let Some(worker) = &mut self.worker {
             worker.close()?;
         }
         Ok(())
     }
-    fn settled(&mut self) -> Result<bool> {
+    /// Observe actual process and execution settlement before releasing custody.
+    pub(super) fn settled(&mut self) -> Result<bool> {
         if !self.closing
             || self.storage.is_some()
-            || self.profile_job.is_some()
             || self.console.as_ref().is_some_and(|console| !console.settled())
             || self.worker.as_ref().is_some_and(|worker| !worker.settled())
         {
@@ -159,7 +89,8 @@ impl InstallerLifetime for Controller {
         }
         Ok(state.settled)
     }
-    fn finish(&mut self) -> Result<()> {
+    /// Release already-settled installer resources after native window teardown.
+    pub(super) fn finish(&mut self) -> Result<()> {
         if !self.settled()? {
             return Err("Installer still owns active work".into());
         }
@@ -171,12 +102,59 @@ impl InstallerLifetime for Controller {
         self.relaunch = None;
         self.launch_failure = None;
         self.console = None;
-        self.profile = None;
         self.bundle = None;
+        self.cache = None;
         self.scope = None;
         self.client = None;
         self.owner = None;
         Ok(())
+    }
+}
+
+impl Controller {
+    /// Observe owned work and drain a bounded batch without a presentation serialization step.
+    pub(super) fn advance_events(&mut self) -> Result<Advance> {
+        let mut completions = sugarsubstitute_contracts::execution::CompletionBatch {
+            notifications: Vec::new(),
+            remaining: 0,
+        };
+        if let Some(client) = &self.client {
+            completions = client
+                .drain_completions(NonZeroUsize::new(32).ok_or("Invalid installer drain limit")?)?;
+            if let Some(worker) = &mut self.worker {
+                match worker.advance(&completions) {
+                    Ok(events) => {
+                        for event in events {
+                            if !self.closing
+                                && !self.unavailable
+                                && let Err(cause) = self.worker_event(event)
+                            {
+                                self.worker_failed(cause)?;
+                            }
+                        }
+                    }
+                    Err(cause) if !self.closing => self.worker_failed(cause)?,
+                    Err(cause) => return Err(cause),
+                }
+            }
+            self.poll_storage()?;
+        }
+        if let (Some(console), Some(client), Some(scope)) =
+            (&mut self.console, &self.client, &self.scope)
+        {
+            console.advance(client, scope, &self.jobs, self.closing)?;
+        }
+        let waiting_ready = self.bundle.is_some()
+            && self.waiting.as_ref().is_some_and(|request| {
+                !request.needs_worker() || self.worker.as_ref().is_none_or(Worker::ready)
+            });
+        if waiting_ready && let Some(request) = self.waiting.take() {
+            self.accept(request)?;
+        }
+        Ok(Advance {
+            completions,
+            events: self.output.drain(..self.output.len().min(16)).collect(),
+        })
     }
 }
 

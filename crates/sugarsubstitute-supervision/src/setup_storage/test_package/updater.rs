@@ -98,7 +98,7 @@ pub(crate) fn evidence_intent(
     let target = trust
         .offer(signed.metadata.metadata(), &signed.request, &signed.descriptor, NOW, context)?
         .into_package()?;
-    let mut download = storage::Download::open(root, target, context)?;
+    let mut download = storage::Download::open(trust.runtime_cache(context)?, target, context)?;
     download.receive(
         Response { status: 200, length: Some(bytes.len() as u64), range: None, encoding: None },
         &mut io::Cursor::new(bytes),
@@ -117,7 +117,7 @@ pub(crate) fn run(body: impl FnOnce(&JobContext) -> TestResult + Send + 'static)
 
 /// Retain a genuine read pin that prevents atomic updater-journal replacement.
 pub(crate) fn pin_journal(root: &Path) -> io::Result<std::fs::File> {
-    storage::files::Directory::open(&root.join(".update-trust"), false)?
+    crate::durable_storage::files::Directory::open(&root.join(".update-trust"), false)?
         .read("updater-selection-v1")
 }
 

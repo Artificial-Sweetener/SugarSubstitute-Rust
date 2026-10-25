@@ -10,7 +10,7 @@ mod backend_recovery;
 pub(crate) mod files;
 mod paths;
 mod records;
-use crate::protected_storage::exclusion::HeldFile;
+use crate::durable_storage::protected::exclusion::HeldFile;
 use crate::{ClaimError, claims::pool::SlotUse};
 use files::Handle;
 #[cfg(test)]

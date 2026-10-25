@@ -35,7 +35,7 @@ impl Compatibility {
             return Ok(());
         }
         file.seek(SeekFrom::Start(0))?;
-        let bytes = super::files::read_bounded(file, MAX_CONTRACT_BYTES)?;
+        let bytes = crate::durable_storage::files::read_bounded(file, MAX_CONTRACT_BYTES)?;
         if name == CONTRACT_FILE {
             self.application = Some(ApplicationContract::decode(&bytes).map_err(io::Error::other)?);
         } else if name == LAUNCHER_CONTRACT_FILE {

@@ -4,7 +4,16 @@
 use super::*;
 use std::sync::atomic::{AtomicU64, Ordering};
 static NEXT: AtomicU64 = AtomicU64::new(1);
-pub(crate) struct NoChild;
+pub(crate) struct NoChild(pub(crate) Option<sugarsubstitute_contracts::configuration::LocaleId>);
+
+/// Supply valid inert inputs while tests reject their installation before any read.
+pub(super) fn unopened_paths() -> Result<
+    sugarsubstitute_configuration::paths::StartupPaths,
+    sugarsubstitute_configuration::paths::StartupPathsError,
+> {
+    let path = std::env::temp_dir().join("unopened-runner-input");
+    sugarsubstitute_configuration::paths::StartupPaths::new(std::array::from_fn(|_| path.clone()))
+}
 
 #[test]
 fn original_cleanup_wake_is_consumed_before_unsettled_owner_returns() -> Result<(), Box<dyn Error>>
@@ -14,20 +23,20 @@ fn original_cleanup_wake_is_consumed_before_unsettled_owner_returns() -> Result<
         launch_selection: None,
         diagnostics: Default::default(),
         installation: installation.clone(),
-        options: super::super::options::ProductionEntryOptions {
-            configuration: installation.join("unopened.toml"),
-            package: installation.clone(),
-            metadata: installation.clone(),
-            cubes: installation.clone(),
-            script: installation.clone(),
-            profile: installation.clone(),
-        }
+        options: sugarsubstitute_configuration::paths::StartupPaths::new([
+            installation.join("unopened.toml"),
+            installation.clone(),
+            installation.clone(),
+            installation.clone(),
+            installation.clone(),
+            installation.clone(),
+        ])?
         .into(),
     };
     let mut owner = EntryRunner::new(
         command,
         installation.join("unopened.exe"),
-        Box::new(NoChild),
+        Box::new(NoChild(None)),
         crate::diagnostics::DiagnosticHealth::fixture(),
     );
     let issued = ShutdownBudget::new(sugarsubstitute_contracts::execution::Moment::from_nanos(0))?;
@@ -88,7 +97,7 @@ fn startup_diagnostic_preserves_nested_causes_and_bounds_cyclic_sources()
     assert_eq!(cyclic.matches("native operation failed").count(), 16);
     assert!(cyclic.ends_with("further causes retained"));
     assert!(!cyclic.contains("private retained payload"));
-    let configuration = sugarsubstitute_comfy::configuration::parse_startup_configuration(
+    let configuration = sugarsubstitute_configuration::startup::parse_startup_configuration(
         b"unrecognized = \"retained-config-secret\"",
     )
     .err()
@@ -111,14 +120,14 @@ fn startup_diagnostic_preserves_nested_causes_and_bounds_cyclic_sources()
 fn child_factory_failure_preserves_cause_before_native_pump_or_configuration()
 -> Result<(), Box<dyn Error>> {
     let installation = PathBuf::from(r"E:\unopened-installation");
-    let options = super::super::options::ProductionEntryOptions {
-        configuration: installation.join("unopened.toml"),
-        package: installation.clone(),
-        metadata: installation.clone(),
-        cubes: installation.clone(),
-        script: installation.clone(),
-        profile: installation.clone(),
-    }
+    let options = sugarsubstitute_configuration::paths::StartupPaths::new([
+        installation.join("unopened.toml"),
+        installation.clone(),
+        installation.clone(),
+        installation.clone(),
+        installation.clone(),
+        installation.clone(),
+    ])?
     .into();
     let command = ProductionCommand {
         launch_selection: None,
@@ -142,6 +151,9 @@ fn child_factory_failure_preserves_cause_before_native_pump_or_configuration()
     Ok(())
 }
 impl EntryActivation for NoChild {
+    fn presentation_locale(&self) -> Option<sugarsubstitute_contracts::configuration::LocaleId> {
+        self.0
+    }
     fn enter_activation(
         &mut self,
         _: &mut Option<AuthenticatedEntryLaunch>,
@@ -191,14 +203,14 @@ fn actual_runner_retains_schema_failure_and_joins_without_environment_capture()
     std::fs::create_dir(&directory)?;
     let configuration = directory.join("configuration.json");
     std::fs::write(&configuration, b"{invalid-json")?;
-    let options = super::super::options::ProductionEntryOptions {
+    let options = sugarsubstitute_configuration::paths::StartupPaths::new([
         configuration,
-        package: directory.clone(),
-        metadata: directory.clone(),
-        cubes: directory.clone(),
-        script: directory.clone(),
-        profile: directory.clone(),
-    }
+        directory.clone(),
+        directory.clone(),
+        directory.clone(),
+        directory.clone(),
+        directory.clone(),
+    ])?
     .into();
     let command = ProductionCommand {
         launch_selection: None,
@@ -221,7 +233,7 @@ fn actual_runner_retains_schema_failure_and_joins_without_environment_capture()
     let mut schema = false;
     while let Some(cause) = source {
         schema |= cause
-            .downcast_ref::<sugarsubstitute_comfy::configuration::StartupConfigurationError>()
+            .downcast_ref::<sugarsubstitute_configuration::startup::StartupConfigurationError>()
             .is_some();
         source = cause.source();
     }

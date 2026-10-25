@@ -37,7 +37,7 @@ pub(super) fn replace(
     context: &JobContext,
 ) -> io::Result<File> {
     let source =
-        Directory::open(&root.path.join("releases").join(record.source.id.as_str()), false)?;
+        Directory::open(&root.path().join("releases").join(record.source.id.as_str()), false)?;
     let mut input = source.read(EXECUTABLE)?;
     verify(&mut input, record, context)?;
     let mut stage = publication::Stage::create(root, protection, context)?;
@@ -51,10 +51,10 @@ pub(super) fn replace(
         }
         output.write_all(&buffer[..count])?;
     }
-    output.sync_all()?;
+    files::sync(output, context)?;
     verify(output, record, context)?;
     check(context)?;
-    stage.publish(&root.path.join(EXECUTABLE), replacing, protection, context)?;
+    stage.publish(&root.path().join(EXECUTABLE), replacing, protection, context)?;
     let mut file = root.read(EXECUTABLE)?;
     protection.verify_file(&file)?;
     verify(&mut file, record, context)?;
@@ -67,7 +67,7 @@ pub(super) fn verify(
     record: &record::Record,
     context: &JobContext,
 ) -> io::Result<()> {
-    if file.metadata()?.len() != record.bytes || hash(file, context)? != record.sha256 {
+    if files::length(file, context)? != record.bytes || hash(file, context)? != record.sha256 {
         return Err(invalid(
             "Stable launcher bytes differ from protected ownership; existing files have been preserved",
         ));

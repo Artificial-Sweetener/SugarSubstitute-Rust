@@ -3,7 +3,7 @@
 //! Own genuine capture generation directory leases under the same finite store operation.
 mod retirement;
 use super::*;
-use crate::protected_storage::capture_read::CaptureReadOwner;
+use crate::durable_storage::protected::capture_read::CaptureReadOwner;
 use std::os::windows::io::BorrowedHandle;
 /// Retain actual duplicated database/metrics handles, source pin and both original credits.
 /// Dropping uncertain native custody retains the complete owner without closing handles.

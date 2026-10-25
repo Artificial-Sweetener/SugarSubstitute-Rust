@@ -56,7 +56,7 @@ pub(super) fn parent(
             let registered = callback.controls.try_borrow().is_ok_and(|controls| {
                 controls
                     .iter()
-                    .any(|(peer, id, _)| *peer == item.hwndItem && u32::from(*id) == item.CtlID)
+                    .any(|peer| peer.hwnd == item.hwndItem && u32::from(peer.id) == item.CtlID)
             });
             if !registered {
                 return None;

@@ -21,13 +21,13 @@ pub(super) mod publication;
 mod reservation;
 pub use reservation::{ReservedApplication, ReservedLaunch, reserve_installed_launch};
 mod run;
-use super::{
-    check,
+use super::check;
+use crate::durable_storage::{
     files::{self, Directory},
+    protected::directories::Mode,
     protection::{self, Protection},
     staging,
 };
-use crate::protected_storage::directories::Mode;
 pub use failure::SelectionFailure;
 pub(crate) use run::UnstartedTrial;
 pub use run::{AcceptedApplication, InstallationLaunch, InstallationRun, OwnedTrial};
@@ -108,7 +108,8 @@ impl SelectionStore {
         let installation = Directory::open(root, false)?;
         let ownership = super::ownership::read(&installation)?;
         for earlier in [RECORD, LOCK] {
-            match std::fs::symlink_metadata(installation.path.join(earlier)) {
+            match crate::durable_storage::files::inspect(installation.path().join(earlier), context)
+            {
                 Ok(_) => {
                     return Err(
                         super::invalid("Unprotected selection requires verified recovery").into()
@@ -187,7 +188,7 @@ impl SelectionStore {
         operation: impl FnOnce(&mut Protection) -> Result<T, SelectionFailure>,
     ) -> Result<T, SelectionFailure> {
         protection::with_domain(context, |protection| {
-            protection.directory(&self.root.path, Mode::Existing, context)?;
+            protection.directory(self.root.path(), Mode::Existing, context)?;
             operation(protection)
         })
         .map_err(SelectionFailure::from)
@@ -240,10 +241,10 @@ impl SelectionStore {
         let staged = staging::unique_path(&self.root, ".selection-stage")?;
         let mut file = protection.file(&staged, context)?;
         file.write_all(&bytes)?;
-        file.sync_all()?;
+        files::sync(&file, context)?;
         drop(file);
         check(context)?;
-        staging::replace_record(&staged, &self.root.path.join(RECORD))?;
+        staging::replace_record(&staged, &self.root.path().join(RECORD))?;
         Ok(())
     }
 }
@@ -254,7 +255,7 @@ fn writer(
     protection: &Protection,
     context: &JobContext,
 ) -> Result<File, SelectionFailure> {
-    let lock = protection.rendezvous(&root.path.join(LOCK), context)?;
+    let lock = protection.rendezvous(&root.path().join(LOCK), context)?;
     lock.try_lock().map_err(|cause| match cause {
         std::fs::TryLockError::WouldBlock => SelectionFailure::WriterBusy,
         std::fs::TryLockError::Error(cause) => SelectionFailure::Storage(cause),

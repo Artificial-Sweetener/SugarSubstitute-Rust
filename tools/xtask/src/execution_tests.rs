@@ -47,6 +47,10 @@ fn scheduling_capabilities_include_async_pools_and_native_ffi() -> Result<()> {
         "use tokio as jobs; async fn job() { jobs::spawn(async {}); }",
         "extern crate tokio as jobs; fn job() { jobs::runtime::Runtime::new(); }",
         "fn job() { rayon::scope(|_| {}); }",
+        "fn job() { mio::Poll::new(); }",
+        "use mio as readiness; fn job() { readiness::Poll::new(); }",
+        "extern crate mio as readiness; fn job() { readiness::Waker::new(); }",
+        "invoke!(mio::Poll::new());",
         "fn job() { async_std::task::spawn(async {}); }",
         "fn job() { let pool = threadpool::ThreadPool::new(2); }",
         "fn job() { handle.spawn_blocking(|| {}); }",
@@ -132,23 +136,28 @@ fn repository_gate_rejects_ad_hoc_scheduling_without_an_owner() -> Result<()> {
 /// Dependency aliases and unused dev/target-specific runtimes still violate ownership.
 #[test]
 fn dependency_identity_cannot_hide_an_unused_or_renamed_runtime() -> Result<()> {
-    for kind in [None, Some("dev"), Some("build")] {
-        let mut fixture = Repository::new()?;
-        fixture.workspace.packages[0].dependencies.push(
-            serde_json::from_value(
-                serde_json::json!({"name":"tokio", "rename":"background", "kind":kind,
+    for identity in ["tokio", "mio"] {
+        for kind in [None, Some("dev"), Some("build")] {
+            let mut fixture = Repository::new()?;
+            fixture.workspace.packages[0].dependencies.push(
+                serde_json::from_value(
+                    serde_json::json!({"name":identity, "rename":"background", "kind":kind,
                 "path":null, "target":"cfg(target_os = \"linux\")"}),
-            )
-            .map_err(|error| {
-                crate::error::Failure::external("construct dependency fixture", error)
-            })?,
-        );
-        let policy = Policy { schema_version: 1, owner: None };
-        let error = check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace)
-            .err()
-            .map(|error| error.to_string())
-            .unwrap_or_default();
-        assert!(error.contains("scheduler dependency tokio"), "unexpected result: {error}");
+                )
+                .map_err(|error| {
+                    crate::error::Failure::external("construct dependency fixture", error)
+                })?,
+            );
+            let policy = Policy { schema_version: 1, owner: None };
+            let error = check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace)
+                .err()
+                .map(|error| error.to_string())
+                .unwrap_or_default();
+            assert!(
+                error.contains(&format!("scheduler dependency {identity}")),
+                "unexpected result: {error}"
+            );
+        }
     }
     Ok(())
 }
@@ -179,6 +188,7 @@ fn registered_owner_does_not_exempt_other_runtime_crates() -> Result<()> {
         package: "execution".into(),
         root: "crates/execution".into(),
         auxiliary_roots: Vec::new(),
+        auxiliary_files: Vec::new(),
         layer: "adapter".into(),
         concern: "Application execution and task lifetime".into(),
     });

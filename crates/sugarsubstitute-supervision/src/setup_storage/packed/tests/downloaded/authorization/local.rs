@@ -24,14 +24,33 @@ impl Delivery {
             Self::File => {
                 let source = workspace.join("offline.ssupdate");
                 std::fs::write(&source, archive)?;
-                Ok(Download::import_file(installation, target, &source, || NOW, context)?)
+                Ok(Download::import_file(
+                    crate::setup_storage::cache::RuntimeCache::open(
+                        installation,
+                        crate::setup_storage::cache::CachePolicy::default(),
+                        context,
+                    )?,
+                    target,
+                    &source,
+                    || NOW,
+                    context,
+                )?)
             }
             Self::Installer => {
                 let source = workspace.join("setup.exe");
                 let bytes = [b"inert installer prefix".as_slice(), archive].concat();
                 std::fs::write(&source, &bytes)?;
-                let download =
-                    Download::import_installer(installation, target, &source, || NOW, context)?;
+                let download = Download::import_installer(
+                    crate::setup_storage::cache::RuntimeCache::open(
+                        installation,
+                        crate::setup_storage::cache::CachePolicy::default(),
+                        context,
+                    )?,
+                    target,
+                    &source,
+                    || NOW,
+                    context,
+                )?;
                 assert_eq!(std::fs::read(source)?, bytes);
                 Ok(download)
             }
@@ -52,9 +71,9 @@ fn embedded_distribution_prepares_and_accepts_through_shared_trial_ownership() -
 
 fn accepts(delivery: Delivery) -> TestResult {
     run_source(2, true, test_package::distribution()?, delivery, |case| {
-        let store = Arc::new(SelectionStore::open(&case.directory.path, case.context)?);
+        let store = Arc::new(SelectionStore::open(case.directory.path(), case.context)?);
         let before = store.load(case.context)?.ok_or("Selection missing")?;
-        let document = case.directory.path.join("user-document");
+        let document = case.directory.path().join("user-document");
         std::fs::write(&document, b"user authored")?;
         let candidate = case.prepared.prepare_update(
             case.runtime,
@@ -102,7 +121,7 @@ fn revokes(delivery: Delivery) -> TestResult {
             || NOW,
             case.context,
         )?;
-        let store = Arc::new(SelectionStore::open(&case.directory.path, case.context)?);
+        let store = Arc::new(SelectionStore::open(case.directory.path(), case.context)?);
         let before = store.load(case.context)?;
         case.trust.rotate(&root(&key(94)?, 2, Some(&key(92)?))?, case.context)?;
         let mut run = InstallationRun::acquire(store.clone(), case.context)?;

@@ -6,6 +6,7 @@ use windows::Win32::System::Threading::{STARTF_USESTDHANDLES, STARTUPINFOW};
 impl Family {
     pub(crate) fn has_native_ownership(&self) -> bool {
         self.job.is_some()
+            || self.rejected_job.is_some()
             || self.thread.is_some()
             || self.watch_duplicate.is_some()
             || self.members.iter().flatten().any(|member| member.handle.is_some())

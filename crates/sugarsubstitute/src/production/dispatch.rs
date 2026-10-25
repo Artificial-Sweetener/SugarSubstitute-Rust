@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Start the installed application by default and select explicit qualification modes.
-use super::options::{ConfigurationSource, ProductionEntryOptions};
+use super::options::ConfigurationSource;
 use std::{
     error::Error,
     ffi::{OsStr, OsString},
     path::PathBuf,
 };
+use sugarsubstitute_configuration::paths::StartupPaths;
 use sugarsubstitute_contracts::configuration::LaunchConfiguration;
 
 /// Retain inert launch inputs; actual namespace discovery checks installed identity.
@@ -60,7 +61,7 @@ pub(crate) fn parse<I: IntoIterator<Item = OsString>>(
     } else {
         sugarsubstitute_supervision::coordinator_entry::DiagnosticStorageLocation::Account
     };
-    let options = ProductionEntryOptions::parse(arguments)?;
+    let options = StartupPaths::parse(arguments)?;
     Ok(Dispatch::Production(Box::new(ProductionCommand {
         launch_selection: None,
         installation,
@@ -133,7 +134,7 @@ mod tests {
             crate::diagnostics::DiagnosticHealth::fixture(),
             |_| {
                 calls.set(calls.get() + 1);
-                Ok(Box::new(super::super::entry_runner::tests::NoChild))
+                Ok(Box::new(super::super::entry_runner::tests::NoChild(None)))
             },
         )?
         .ok_or("Legacy command unexpectedly ran production")?;
@@ -191,7 +192,7 @@ mod tests {
         let ConfigurationSource::Explicit(paths) = command.options else {
             return Err("Explicit launch paths missing".into());
         };
-        assert_eq!(paths.configuration, PathBuf::from(r"E:\configuration.json"));
+        assert_eq!(paths.configuration(), PathBuf::from(r"E:\configuration.json"));
         Ok(())
     }
 }

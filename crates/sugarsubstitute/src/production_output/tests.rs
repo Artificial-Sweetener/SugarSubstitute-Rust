@@ -205,9 +205,10 @@ fn empty_frame_submission_preserves_original_pull_before_any_factory() -> TestRe
 fn real_cpu_raster_returns_complete_guarded_output_source_until_result_disposal() -> TestResult {
     use sugarsubstitute_contracts::presentation::{FrameIdentity, FrameShape};
     use sugarsubstitute_splash::{
-        AnimationFrame, Appearance, ProgressFrame, SPLASH_CACHE_RESERVATION_BYTES,
-        SplashRenderRequest, SplashRenderer,
+        AnimationFrame, Appearance, SPLASH_CACHE_RESERVATION_BYTES, SplashRenderRequest,
+        SplashRenderer,
     };
+    use sugarsubstitute_ui::progress::ProgressFrame;
     let rig = Rig::new()?;
     let jobs = crate::job_sequence::JobSequence::new();
     let mut construct = OutputOwner::submit_new(

@@ -22,7 +22,7 @@ impl InstallationSession {
     pub fn create(selection: Selection, context: &JobContext) -> io::Result<Self> {
         check(context)?;
         selection.validate()?;
-        let admission = Admission::open(&selection.install_root, true)?;
+        let admission = Admission::open(&selection.install_root, true, context)?;
         if ExistingInstallation::read(&admission.root, context)?.is_some() {
             return Err(invalid("Use update or repair for this existing installation"));
         }
@@ -36,7 +36,7 @@ impl InstallationSession {
     /// Rejects unknown installations, damaged saved state and competing setup owners.
     pub fn maintain(root: &Path, context: &JobContext) -> io::Result<Self> {
         check(context)?;
-        let admission = Admission::open(root, false)?;
+        let admission = Admission::open(root, false, context)?;
         let existing = ExistingInstallation::read(&admission.root, context)?
             .ok_or_else(|| invalid("No selected native installation is available to update"))?;
         let selection = existing.summary.selection.clone();
@@ -47,7 +47,7 @@ impl InstallationSession {
     /// Pinned installation root for trust and package-cache operations on admitted workers.
     /// The path alone does not transfer this session's mutation authority.
     pub fn directory(&self) -> &Path {
-        &self.admission.root.path
+        self.admission.root.path()
     }
 
     /// Reserve a protected generation and transfer this session into package preparation.
@@ -62,12 +62,13 @@ impl InstallationSession {
     ) -> io::Result<PreparedInstallation> {
         check(context)?;
         let root = &self.admission.root;
-        let releases = Directory::open(&root.path.join("releases"), true)?;
-        let generation = releases.path.join(super::super::staging::generation_id()?.as_str());
-        super::super::protection::with(context, |protection| {
+        let releases = Directory::open(&root.path().join("releases"), true)?;
+        let generation =
+            releases.path().join(crate::setup_storage::identity::generation()?.as_str());
+        crate::durable_storage::protection::with(context, |protection| {
             protection.directory(
-                &root.path.join("desktop-data"),
-                crate::protected_storage::directories::Mode::OpenOrCreate,
+                &root.path().join("desktop-data"),
+                crate::durable_storage::protected::directories::Mode::OpenOrCreate,
                 context,
             )?;
             Ok(())
