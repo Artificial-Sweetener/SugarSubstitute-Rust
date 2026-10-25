@@ -8,13 +8,15 @@ export class NativeNodeChoiceFields {
     node;
     namespace;
     document;
+    beforeField;
     #fields = new Map();
     #pending = false;
-    /** Scope exact widget identities to one node and feature-owned namespace. */
-    constructor(node, namespace, document) {
+    /** Scope widget identities and optional placement before an existing native field. */
+    constructor(node, namespace, document, beforeField = null) {
         this.node = node;
         this.namespace = namespace;
         this.document = document;
+        this.beforeField = beforeField;
     }
     /** Share a native field across simultaneous projections without multiplying value commits. */
     mountChoice(root, label, change, key = label) {
@@ -62,7 +64,7 @@ export class NativeNodeChoiceFields {
             this.#fields.set(name, field);
         }
         if (!field.callbacks.size)
-            field.release = registerNativePresentationWidget(this.node, field.widget);
+            field.release = registerNativePresentationWidget(this.node, field.widget, this.beforeField);
         field.callbacks.add(change);
         const owner = field;
         let constraints = null, anchor = null, disposed = false;

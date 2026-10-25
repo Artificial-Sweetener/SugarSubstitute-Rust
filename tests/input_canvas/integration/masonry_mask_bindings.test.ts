@@ -26,6 +26,7 @@ import { MasonryInputEditor } from '../../../frontend/comfyui/ui/input_canvas/pr
 import { MasonryInputHost } from '../../../frontend/comfyui/ui/input_canvas/infrastructure/MasonryInputHost.js';
 import { registerNativeNodeCard } from '../../../frontend/comfyui/ui/surface/NativeNodeCardBoundary.js';
 import { isNativeWidgetPresented } from '../../../frontend/comfyui/ui/surface/NativeWidgetPresentation.js';
+import { nativePresentationWidgets } from '../../../frontend/comfyui/ui/surface/NativePresentationWidgets.js';
 import type { ComfyNode } from '../../../frontend/comfyui/ui/types/graph.js';
 
 beforeAll(() =>
@@ -290,6 +291,11 @@ test('mounts registered masonry replacements, preserves channel controls and res
   expect(card.querySelector('[data-sc-input-editor]')).not.toBeNull();
   expect(isNativeWidgetPresented(f.node.widgets![0]!)).toBe(false);
   expect(isNativeWidgetPresented(f.node.widgets![1]!)).toBe(true);
+  expect(
+    nativePresentationWidgets(f.node)
+      .filter(isNativeWidgetPresented)
+      .map((widget) => widget.label ?? widget.name),
+  ).toEqual(['Source', 'Layer', 'Entry', 'channel']);
   expect(card.getAttribute('data-sc-native-media')).toBe('replaced');
   const editor = card.querySelector('[data-sc-input-editor]'),
     calls = f.execute.mock.calls.length;
