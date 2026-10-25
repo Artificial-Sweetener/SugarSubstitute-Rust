@@ -4181,9 +4181,9 @@ function getInclusive(spec, block = false) {
 function widgetsEq(a, b) {
   return a == b || !!(a && b && a.compare(b));
 }
-function addRange(from, to, ranges, margin2 = 0) {
+function addRange(from, to, ranges, margin = 0) {
   let last2 = ranges.length - 1;
-  if (last2 >= 0 && ranges[last2] + margin2 >= from)
+  if (last2 >= 0 && ranges[last2] + margin >= from)
     ranges[last2] = Math.max(ranges[last2], to);
   else
     ranges.push(from, to);
@@ -9825,7 +9825,7 @@ var ViewState = class {
   // the artifacts this might produce from the user.
   ensureLineGaps(current6, mayMeasure) {
     let wrapping = this.heightOracle.lineWrapping;
-    let margin2 = wrapping ? 2048 : 2e3, halfMargin = margin2 >> 1, doubleMargin = margin2 << 1;
+    let margin = wrapping ? 2048 : 2e3, halfMargin = margin >> 1, doubleMargin = margin << 1;
     if (this.defaultTextDirection != Direction.LTR && !wrapping)
       return [];
     let gaps = [];
@@ -9864,7 +9864,7 @@ var ViewState = class {
       let target = this.scrollTarget ? this.scrollTarget.range.head : null;
       let viewFrom, viewTo;
       if (wrapping) {
-        let marginHeight = margin2 / this.heightOracle.lineLength * this.heightOracle.lineHeight;
+        let marginHeight = margin / this.heightOracle.lineLength * this.heightOracle.lineHeight;
         let top2, bot;
         if (target != null) {
           let targetFrac = findFraction(structure, target);
@@ -9879,7 +9879,7 @@ var ViewState = class {
         viewTo = findPosition(structure, bot);
       } else {
         let totalWidth = structure.total * this.heightOracle.charWidth;
-        let marginWidth = margin2 * this.heightOracle.charWidth;
+        let marginWidth = margin * this.heightOracle.charWidth;
         let horizOffset = 0;
         if (totalWidth > 2e6)
           for (let old of current6) {
@@ -18564,113 +18564,6 @@ function projectWildcardDiagnosticVisibility(prepared4, state) {
   return decorations2 === prepared4.decorations && muted === prepared4.mutedWildcard ? prepared4 : { ...prepared4, decorations: decorations2, mutedWildcard: muted };
 }
 
-// frontend/sugarprompt/editor/src/native-snapshot-policy.ts
-var snapshotPresentation = Annotation.define();
-function snapshotPublicationMode(transactions) {
-  return transactions.length > 0 && transactions.every((transaction) => transaction.annotation(snapshotPresentation) === true) ? "presentation" : "current";
-}
-
-// frontend/sugarprompt/editor/src/prompt-viewport.ts
-var publishViewport = StateEffect.define();
-var margin = 128;
-function aroundSelection(state) {
-  const head = state.selection.main.head;
-  return {
-    document: state.doc,
-    from: Math.max(0, head - 2048),
-    to: Math.min(state.doc.length, head + 2048)
-  };
-}
-var promptViewport = StateField.define({
-  create: aroundSelection,
-  update(value, transaction) {
-    if (transaction.docChanged)
-      value = {
-        document: transaction.state.doc,
-        from: transaction.changes.mapPos(value.from, -1),
-        to: transaction.changes.mapPos(value.to, 1)
-      };
-    for (const effect of transaction.effects)
-      if (effect.is(publishViewport) && effect.value.document === transaction.state.doc)
-        value = effect.value;
-    const head = transaction.state.selection.main.head;
-    if (transaction.selection && (head < value.from || head > value.to))
-      return aroundSelection(transaction.state);
-    return value;
-  }
-});
-function viewportPromptDecorations(state, decorations2) {
-  const viewport = state.field(promptViewport, false);
-  if (!viewport || viewport.from === 0 && viewport.to === state.doc.length) return decorations2;
-  const ranges = [];
-  const lineStart = state.doc.lineAt(viewport.from).from;
-  if (lineStart < viewport.from)
-    decorations2.between(lineStart, lineStart, (from, to, value) => {
-      if (from === lineStart && to === from && value.point && !value.spec.widget)
-        ranges.push(value.range(from, to));
-    });
-  decorations2.between(viewport.from, viewport.to, (from, to, value) => {
-    if (from < to || value.point) ranges.push(value.range(from, to));
-  });
-  return Decoration.set(ranges, true);
-}
-var PromptViewportLayout = class {
-  view;
-  disposed = false;
-  /** Request the first geometry only after CodeMirror owns the mounted native document. */
-  constructor(view) {
-    this.view = view;
-    this.measure();
-  }
-  /** Geometry and native source navigation invalidate only this editor's presentation window. */
-  update(update) {
-    if (update.docChanged || update.viewportChanged || update.geometryChanged || update.selectionSet)
-      this.measure();
-  }
-  /** Fence every queued layout publication at the view's finite lifetime boundary. */
-  destroy() {
-    this.disposed = true;
-  }
-  /** Derive source positions from real native pixel geometry, then publish beyond the measure write phase. */
-  measure() {
-    this.view.requestMeasure({
-      key: this,
-      read: (view) => {
-        if (!view.inView || this.disposed) return null;
-        const rect = view.scrollDOM.getBoundingClientRect();
-        const top2 = Math.max(0, rect.top) + 3, bottom = Math.min(view.dom.ownerDocument.defaultView?.innerHeight ?? rect.bottom, rect.bottom) - 3;
-        if (bottom <= top2) return null;
-        const first = view.posAtCoords({ x: rect.left + 15, y: top2 }, false);
-        const last2 = view.posAtCoords({ x: rect.right - 5, y: bottom }, false);
-        if (first === null || last2 === null) return null;
-        return {
-          document: view.state.doc,
-          from: Math.max(0, Math.min(first, last2) - margin),
-          to: Math.min(view.state.doc.length, Math.max(first, last2) + margin)
-        };
-      },
-      write: (viewport, view) => {
-        if (!viewport || this.disposed || viewport.document !== view.state.doc) return;
-        const current6 = view.state.field(promptViewport);
-        if (current6.from <= viewport.from && current6.to >= viewport.to && current6.to - current6.from <= (viewport.to - viewport.from) * 2)
-          return;
-        queueMicrotask(() => {
-          if (this.disposed || view.state.doc !== viewport.document || view.state.field(promptViewport) !== current6)
-            return;
-          view.dispatch({
-            effects: publishViewport.of(viewport),
-            annotations: [Transaction.addToHistory.of(false), snapshotPresentation.of(true)]
-          });
-        });
-      }
-    });
-  }
-};
-var promptViewportExtension = [
-  promptViewport,
-  ViewPlugin.fromClass(PromptViewportLayout)
-];
-
 // frontend/sugarprompt/editor/src/rich-projection.ts
 var installProjection = StateEffect.define();
 var installUnmeasuredProjection = StateEffect.define();
@@ -18768,7 +18661,7 @@ function initialProjection(state) {
   );
 }
 var richProjection = StateField.define({
-  /** Rich semantics are prepared after mounting rather than inside native state creation. */
+  /** Initialize the intrinsic field before construction installs its complete source projection. */
   create: initialProjection,
   /** Map existing native ranges immediately and reject stale semantic publications. */
   update(prepared4, transaction) {
@@ -18909,11 +18802,7 @@ var richProjection = StateField.define({
   /** Every projection configuration includes its intrinsic held-token exposure state. */
   provide: (field) => [
     heldProjection,
-    promptViewport,
-    EditorView.decorations.compute(
-      [field, promptViewport],
-      (state) => viewportPromptDecorations(state, state.field(field).decorations)
-    ),
+    EditorView.decorations.from(field, (value) => value.decorations),
     EditorView.atomicRanges.of((view) => view.state.field(field).atomic)
   ]
 });
@@ -26580,6 +26469,12 @@ var regionHoverInteractions = [
   })
 ];
 
+// frontend/sugarprompt/editor/src/native-snapshot-policy.ts
+var snapshotPresentation = Annotation.define();
+function snapshotPublicationMode(transactions) {
+  return transactions.length > 0 && transactions.every((transaction) => transaction.annotation(snapshotPresentation) === true) ? "presentation" : "current";
+}
+
 // frontend/sugarprompt/editor/src/canonical-row-paint.ts
 function sameCanonicalRowPaint(a, b) {
   return a.sceneFill === b.sceneFill && a.region === b.region;
@@ -29461,7 +29356,6 @@ var reorderPreview = StateField.define({
   /** Native outer marks wrap existing rich widgets; changed-output replacements use the direct layout facet. */
   provide: (field) => [
     nativeReorderDisplay,
-    promptViewport,
     Prec.highest(
       EditorView.decorations.from(
         field,
@@ -29470,13 +29364,10 @@ var reorderPreview = StateField.define({
     ),
     EditorView.outerDecorations.from(field, (value) => value.outer),
     EditorView.outerDecorations.compute(
-      [semanticStructures, field, nativeReorderDisplay, promptViewport],
+      [semanticStructures, field, nativeReorderDisplay],
       (state) => {
         const publication2 = state.field(field), values = state.field(semanticStructures, false)?.native?.nativeValues;
-        return viewportPromptDecorations(
-          state,
-          publication2.paint && !publication2.native ? nativeReorderRecipeDecorations(values, publication2.paint.capture.target.entry) : state.field(nativeReorderDisplay)
-        );
+        return publication2.paint && !publication2.native ? nativeReorderRecipeDecorations(values, publication2.paint.capture.target.entry) : state.field(nativeReorderDisplay);
       }
     )
   ]
@@ -30790,9 +30681,8 @@ var PromptWrapLayout = class {
         const font = [style.font, style.letterSpacing, style.wordSpacing].join("|");
         const widths = new Map(this.#font === font ? this.#widths : []);
         for (const visible of view.visibleRanges) {
-          const window2 = view.state.field(promptViewport, false);
-          const visibleFrom = Math.max(visible.from, window2?.from ?? 0);
-          const visibleTo = Math.min(visible.to, window2?.to ?? view.state.doc.length);
+          const visibleFrom = visible.from;
+          const visibleTo = visible.to;
           let from = 0, to = this.#sourceGroups.length;
           while (from < to) {
             const middle = from + to >>> 1;
@@ -37094,6 +36984,7 @@ var NativeLayout = class {
           verticalPadding: (this.view.documentPadding.top + this.view.documentPadding.bottom) / this.view.scaleY,
           outerPadding: Number.parseFloat(style.borderTopWidth) + Number.parseFloat(style.borderBottomWidth) + Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom),
           viewportHeight: this.view.scrollDOM.clientHeight,
+          viewportWidth: parent.clientWidth,
           scaleY: this.view.scaleY
         });
       },
@@ -46991,7 +46882,6 @@ function createNativeState(source, options) {
       loraPresentation,
       nativeLoraSchedule,
       loraMedia,
-      promptViewportExtension,
       richProjectionExtension,
       promptWrapLayout,
       loraMetadataActions,
@@ -47082,7 +46972,13 @@ function createNativeState(source, options) {
       sourceLinesExtension(options.revision, options.onSourceLines)
     ]
   });
-  return initializeNativeStructure(state);
+  const initialized = initializeNativeStructure(state);
+  return initialized.update({
+    effects: installProjection.of(
+      prepareProjection(initialized, prepareNativeStructure(initialized))
+    ),
+    annotations: Transaction.addToHistory.of(false)
+  }).state;
 }
 
 // frontend/sugarprompt/editor/src/tooltip-parent.ts
@@ -48185,6 +48081,37 @@ function mountEditor(parent, options) {
 
 // frontend/comfyui/ui/prompt_editor/runtime/SugarPromptRuntime.ts
 import { applyOwnedTheme } from "../../surface/appearance/ThemeService.js";
+
+// frontend/comfyui/ui/prompt_editor/PromptMountReadiness.ts
+var PromptMountReadiness = class {
+  #waiting = /* @__PURE__ */ new Set();
+  #presented = false;
+  #retired = false;
+  /** Await the component's normal layout publication without requesting another measurement. */
+  wait() {
+    if (this.#retired || this.#presented) return Promise.resolve();
+    return new Promise((resolve) => this.#waiting.add(resolve));
+  }
+  /** Accept mounted native output without introducing a second geometry reader or sizing authority. */
+  publish(width) {
+    if (this.#retired || width <= 0) return;
+    this.#presented = true;
+    this.#release();
+  }
+  /** Release a retired presentation so its caller can discard an obsolete construction. */
+  dispose() {
+    this.#retired = true;
+    this.#release();
+  }
+  /** Complete each construction waiter exactly once. */
+  #release() {
+    const waiting = [...this.#waiting];
+    this.#waiting.clear();
+    for (const resolve of waiting) resolve();
+  }
+};
+
+// frontend/comfyui/ui/prompt_editor/runtime/SugarPromptRuntime.ts
 import { createEditorField } from "../../surface/appearance/ControlFactory.js";
 
 // frontend/comfyui/ui/core/ControlPlacement.ts
@@ -48209,6 +48136,7 @@ var SugarPromptEditor = class {
   #options;
   #stopAppearance;
   #content;
+  #readiness;
   #field = null;
   #fieldStyle = null;
   #resources = null;
@@ -48241,6 +48169,7 @@ var SugarPromptEditor = class {
     this.element.style.height = "128px";
     this.element.style.position = "relative";
     this.#content = document2.createElement("div");
+    this.#readiness = new PromptMountReadiness();
     this.#content.style.cssText = "width:100%;height:100%;min-width:0;min-height:0";
     options.anchor.before(this.element);
     this.#applyAppearance();
@@ -48308,10 +48237,15 @@ var SugarPromptEditor = class {
   snapshot() {
     return this.#api.snapshot();
   }
+  /** Complete construction after the native editor publishes its mounted layout. */
+  whenPresented() {
+    return this.#readiness.wait();
+  }
   /** Release the exact native view, thumbnail decoders and outstanding catalog work. */
   dispose() {
     if (this.#disposed) return;
     this.#disposed = true;
+    this.#readiness.dispose();
     this.#stopAppearance();
     this.#resources?.dispose();
     this.#api.destroy();
@@ -48413,10 +48347,12 @@ var SugarPromptEditor = class {
       128,
       Math.min(320, Math.ceil(metrics.contentHeight + metrics.outerPadding))
     );
-    if (this.#allocatedHeight === height) return;
-    this.#allocatedHeight = height;
-    this.element.style.height = `${String(height)}px`;
-    this.#options.layout(height);
+    if (this.#allocatedHeight !== height) {
+      this.#allocatedHeight = height;
+      this.element.style.height = `${String(height)}px`;
+      this.#options.layout(height);
+    }
+    this.#readiness.publish(metrics.viewportWidth);
   }
 };
 export {

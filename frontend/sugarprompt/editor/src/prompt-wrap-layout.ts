@@ -27,7 +27,6 @@ import { richRendering } from './presentation.js';
 import { richProjection } from './rich-projection.js';
 import { snapshotPresentation } from './native-snapshot-policy.js';
 import { measurePromptWrapGroup } from './prompt-wrap-measurement.js';
-import { promptViewport } from './prompt-viewport.js';
 import {
   fittingPromptWrapGroups,
   preparePromptWrapGroups,
@@ -178,9 +177,8 @@ class PromptWrapLayout {
         const font = [style.font, style.letterSpacing, style.wordSpacing].join('|');
         const widths = new Map(this.#font === font ? this.#widths : []);
         for (const visible of view.visibleRanges) {
-          const window = view.state.field(promptViewport, false);
-          const visibleFrom = Math.max(visible.from, window?.from ?? 0);
-          const visibleTo = Math.min(visible.to, window?.to ?? view.state.doc.length);
+          const visibleFrom = visible.from;
+          const visibleTo = visible.to;
           let from = 0,
             to = this.#sourceGroups.length;
           while (from < to) {

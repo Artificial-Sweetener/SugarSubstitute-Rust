@@ -44,7 +44,6 @@ import { projectWildcardDiagnosticVisibility } from './projection-diagnostics.js
 import { sceneErrors } from './scene-errors.js';
 import { documentKind } from './document-kind.js';
 import { projectWeightInput } from './exact-weight-projection.js';
-import { promptViewport, viewportPromptDecorations } from './prompt-viewport.js';
 /** Publish only prepared output, never parser work in a transaction or paint callback. */
 export const installProjection = StateEffect.define<PreparedProjection>();
 /** Publish one current projection for source input; native measurement still owns painting. */
@@ -194,7 +193,7 @@ function initialProjection(state: EditorState): PreparedProjection {
 }
 /** Own current derived rendering and native atomic wrapper navigation. */
 export const richProjection = StateField.define<PreparedProjection>({
-  /** Rich semantics are prepared after mounting rather than inside native state creation. */
+  /** Initialize the intrinsic field before construction installs its complete source projection. */
   create: initialProjection,
   /** Map existing native ranges immediately and reject stale semantic publications. */
   update(prepared, transaction) {
@@ -384,10 +383,7 @@ export const richProjection = StateField.define<PreparedProjection>({
   /** Every projection configuration includes its intrinsic held-token exposure state. */
   provide: (field) => [
     heldProjection,
-    promptViewport,
-    EditorView.decorations.compute([field, promptViewport], (state) =>
-      viewportPromptDecorations(state, state.field(field).decorations),
-    ),
+    EditorView.decorations.from(field, (value) => value.decorations),
     EditorView.atomicRanges.of((view) => view.state.field(field).atomic),
   ],
 });

@@ -17,7 +17,7 @@
 import { searchMatchExtension } from './search-matches.js';
 import { savedSegments } from './saved-segment-menu.js';
 import { savedSegmentActions } from './saved-segment-actions.js';
-import { EditorState, Prec, Text, type Extension } from '@codemirror/state';
+import { EditorState, Prec, Text, Transaction, type Extension } from '@codemirror/state';
 import { EditorView, keymap, type ViewUpdate } from '@codemirror/view';
 import {
   cursorDocEnd,
@@ -32,13 +32,17 @@ import { encodeSource } from '../../core/src/line-endings.js';
 import type { TagLexicon } from '../../core/src/index.js';
 import { changesExactSource, exactSourceExtension } from './exact-source.js';
 import { editorFreshness } from './freshness.js';
-import { semanticStructures, initializeNativeStructure } from './structure.js';
+import {
+  semanticStructures,
+  initializeNativeStructure,
+  prepareNativeStructure,
+} from './structure.js';
 import { authorshipExtension } from './authorship.js';
 import { typedNormalization } from './typed-normalization.js';
 import { promptHistory } from './prompt-history.js';
-import { richProjectionExtension } from './rich-projection.js';
+import { richProjectionExtension, installProjection } from './rich-projection.js';
+import { prepareProjection } from './projection-preparation.js';
 import { promptWrapLayout } from './prompt-wrap-layout.js';
-import { promptViewportExtension } from './prompt-viewport.js';
 import { semanticRefresh } from './semantic-refresh.js';
 import { promptMouseSelection } from './mouse-selection.js';
 import { weightPreview } from './weight-preview.js';
@@ -152,7 +156,6 @@ export function createNativeState(source: string, options: NativeStateOptions): 
       loraPresentation,
       nativeLoraSchedule,
       loraMedia,
-      promptViewportExtension,
       richProjectionExtension,
       promptWrapLayout,
       loraMetadataActions,
@@ -248,5 +251,11 @@ export function createNativeState(source: string, options: NativeStateOptions): 
       sourceLinesExtension(options.revision, options.onSourceLines),
     ],
   });
-  return initializeNativeStructure(state);
+  const initialized = initializeNativeStructure(state);
+  return initialized.update({
+    effects: installProjection.of(
+      prepareProjection(initialized, prepareNativeStructure(initialized)),
+    ),
+    annotations: Transaction.addToHistory.of(false),
+  }).state;
 }

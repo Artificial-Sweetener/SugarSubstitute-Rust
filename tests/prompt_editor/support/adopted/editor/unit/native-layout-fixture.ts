@@ -69,7 +69,7 @@ export function nativeLayoutFixture(faults: LayoutFaults = {}) {
     requests: { read(): unknown; write(value: unknown): void }[] = [],
     published: EditorLayoutMetrics[] = [],
     instances: ResizeBoundary[] = [];
-  const geometry = { content: 33, line: 20, viewport: 33, scale: 1 };
+  const geometry = { content: 33, line: 20, viewport: 33, width: 700, scale: 1 };
   let reading = false,
     reads = 0,
     owner: LayoutOwner | null = null,
@@ -104,7 +104,11 @@ export function nativeLayoutFixture(faults: LayoutFaults = {}) {
     reads++;
     return value;
   }
-  const parent = {},
+  const parent = {
+      get clientWidth() {
+        return measured(geometry.width);
+      },
+    },
     document = {
       defaultView: {
         getComputedStyle() {

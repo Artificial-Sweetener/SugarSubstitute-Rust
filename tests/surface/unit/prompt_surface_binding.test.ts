@@ -32,6 +32,7 @@ test('Nodes 1 presentation release retains the rich session allocation across re
   const release = registerPromptEditorSurfaceOwner(document, {
     mount: () => () => undefined,
     refresh: () => true,
+    ready: async () => undefined,
     dispose: () => undefined,
   });
   const widget: ComfyWidget = { name: 'text', value: 'prompt' };
@@ -59,6 +60,7 @@ test('extension setup replacement retires the previous owner and fences its late
   const first = registerPromptEditorSurfaceOwner(document, {
     mount: () => () => undefined,
     refresh: () => true,
+    ready: async () => undefined,
     dispose: () => {
       retired++;
     },
@@ -69,6 +71,7 @@ test('extension setup replacement retires the previous owner and fences its late
       return () => undefined;
     },
     refresh: () => true,
+    ready: async () => undefined,
     dispose: () => undefined,
   });
   try {
@@ -107,6 +110,7 @@ test('promoted prompt binds the boundary widget while preserving its internal pr
       };
     },
     refresh: () => true,
+    ready: async () => undefined,
     dispose: () => undefined,
   });
   const root = document.createElement('section');

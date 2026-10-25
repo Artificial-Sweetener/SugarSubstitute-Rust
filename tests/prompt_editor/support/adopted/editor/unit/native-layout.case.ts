@@ -24,9 +24,11 @@ test('host width rewrap without a CodeMirror update queues actual current conten
     f.create();
     f.flush();
     assert.equal(f.published[0]?.contentHeight, 33);
+    assert.equal(f.published[0]?.viewportWidth, 700);
     f.geometry.content = 88;
     f.geometry.scale = 1.25;
     f.geometry.viewport = 88;
+    f.geometry.width = 320;
     const reads = f.reads;
     f.resize();
     assert.equal(f.reads, reads);
@@ -35,6 +37,7 @@ test('host width rewrap without a CodeMirror update queues actual current conten
     assert.equal(f.published.length, 2);
     assert.equal(f.published[1]?.contentHeight, 88);
     assert.equal(f.published[1]?.scaleY, 1.25);
+    assert.equal(f.published[1]?.viewportWidth, 320);
     assert.deepEqual(f.instances[0]?.targets, new Set([f.view.dom, f.view.contentDOM]));
   } finally {
     f.close();
