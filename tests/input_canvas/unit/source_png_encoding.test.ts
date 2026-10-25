@@ -16,7 +16,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove uploaded PNG bytes retain channels beneath full and partial transparency. */
 import { inflateSync } from 'node:zlib';
-import { encodeSourcePng } from '../../../frontend/comfyui/ui/input_canvas/infrastructure/BrowserSourcePng.js';
+import { encodeSourcePng } from '../../../frontend/comfyui/ui/core/embedded/CanvasPngEncoding.js';
 import { encodeCanvasRaster } from '../../../integrations/shared/CanvasRasterEncoding.js';
 
 test('encodes exact straight RGBA scanlines rather than premultiplied browser canvas samples', async () => {

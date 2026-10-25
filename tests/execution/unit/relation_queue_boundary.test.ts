@@ -35,7 +35,7 @@ test.each([true, false])(
       },
       transform: async (payload) => {
         order.push('transform');
-        return payload;
+        return { payload };
       },
       executeDirect: async (_position, payload) => {
         order.push('direct');
@@ -59,7 +59,7 @@ test('rejects invalid direct execution before consuming a shared seed', async ()
     preflight: () => {
       throw new Error('invalid nesting');
     },
-    transform: async (payload) => payload,
+    transform: async (payload) => ({ payload }),
     executeDirect: async (_position, payload) => payload,
   });
   bridge.install();

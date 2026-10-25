@@ -14,6 +14,10 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Install one stable SugarCubes boundary around Comfy's prompt queue. */
+import type {
+  WorkflowPromptPreparation,
+  WorkflowCanvasPreparation,
+} from '../domain/WorkflowPreparation.js';
 
 export interface ComfyPromptQueueOptions {
   partialExecutionTargets?: unknown;
@@ -34,7 +38,7 @@ export type ComfyPromptSubmission = (payload: unknown) => Promise<unknown>;
 
 /** Describe one captured submission without sharing mutable context between queue requests. */
 export interface PromptQueueObservation {
-  prepared(payload: unknown): void;
+  prepared(payload: unknown, canvas?: WorkflowCanvasPreparation): void;
   accepted(response: unknown): void;
   rejected(error: unknown): void;
   cancelled(): void;
@@ -49,12 +53,13 @@ export interface ComfyPromptQueueBridgeOptions {
   api: ComfyPromptQueueApi;
   preflight?(): void;
   prepare?(payload: unknown): unknown;
-  transform(payload: unknown): Promise<unknown>;
+  transform(payload: unknown): Promise<WorkflowPromptPreparation>;
   executeDirect?(
     position: number,
     payload: unknown,
     options: ComfyPromptQueueOptions | undefined,
     submit: ComfyPromptSubmission,
+    prepared: (preparation: WorkflowPromptPreparation) => void,
   ): Promise<unknown>;
   shouldExecuteDirect?(payload: unknown): boolean;
   observer?: PromptQueueObserver;
@@ -71,7 +76,7 @@ interface QueueInstallation {
 export class ComfyPromptQueueBridge {
   readonly #api: ComfyPromptQueueApi;
   readonly #preflight: () => void;
-  readonly #transform: (payload: unknown) => Promise<unknown>;
+  readonly #transform: (payload: unknown) => Promise<WorkflowPromptPreparation>;
   readonly #prepare: (payload: unknown) => unknown;
   readonly #executeDirect: NonNullable<ComfyPromptQueueBridgeOptions['executeDirect']> | null;
   readonly #shouldExecuteDirect: (payload: unknown) => boolean;
@@ -106,20 +111,32 @@ export class ComfyPromptQueueBridge {
           const direct = Boolean(this.#executeDirect && this.#shouldExecuteDirect(payload));
           if (direct) this.#preflight();
           payload = this.#prepare(payload);
-          if (!direct) payload = await this.#transform(payload);
-          if (
-            installation.active &&
-            observation &&
-            !this.#observe('prepared', () => observation?.prepared(payload))
-          ) {
-            this.#observe('cancelled', () => observation?.cancelled());
-            installation.pending.delete(observation);
-            observation = null;
+          const prepared = (preparation: WorkflowPromptPreparation): void => {
+            if (
+              installation.active &&
+              observation &&
+              !this.#observe('prepared', () =>
+                observation?.prepared(preparation.payload, preparation.canvas),
+              )
+            ) {
+              this.#observe('cancelled', () => observation?.cancelled());
+              installation.pending.delete(observation);
+              observation = null;
+            }
+          };
+          if (!direct) {
+            const preparation = await this.#transform(payload);
+            payload = preparation.payload;
+            prepared(preparation);
           }
           const result =
             direct && this.#executeDirect
-              ? await this.#executeDirect(position, payload, options, (prepared) =>
-                  original.call(this.#api, position, prepared, options),
+              ? await this.#executeDirect(
+                  position,
+                  payload,
+                  options,
+                  (prepared) => original.call(this.#api, position, prepared, options),
+                  prepared,
                 )
               : await original.call(this.#api, position, payload, options);
           if (installation.active && observation)

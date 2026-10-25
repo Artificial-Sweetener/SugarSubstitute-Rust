@@ -29,18 +29,20 @@ export class MasonryInputHost {
     upload;
     report;
     bindings;
+    associations;
     #views = new Map();
     #retired = new WeakMap();
     #observer = null;
     #fields = new WeakMap();
     /** Share the registration catalog and peer capability resolver with execution preparation. */
-    constructor(document, loaders, previews, upload, report, bindings) {
+    constructor(document, loaders, previews, upload, report, bindings, associations) {
         this.document = document;
         this.loaders = loaders;
         this.previews = previews;
         this.upload = upload;
         this.report = report;
         this.bindings = bindings;
+        this.associations = associations;
     }
     /** Observe card mounts and scoped native value changes, excluding owned preview rendering. */
     setup() {
@@ -113,7 +115,7 @@ export class MasonryInputHost {
             const editors = new Map();
             for (const loader of loaders) {
                 const binding = this.bindings.get(node, loader);
-                const editor = new MasonryInputEditor(this.document, binding, this.previews, this.upload, this.report, this.#fieldScope(node, loader.field), root, loaders.length > 1);
+                const editor = new MasonryInputEditor(this.document, binding, this.previews, this.upload, this.report, this.#fieldScope(node, loader.field, loader.kind === 'mask' ? loader.channel : null), root, loader.kind === 'mask' ? this.associations.image(node, loader.field) : null, loaders.length > 1);
                 root.append(editor.element);
                 editors.set(loader.field, { editor, binding });
             }
@@ -131,7 +133,7 @@ export class MasonryInputHost {
         reconcileNativeNodeBodyAccessories(root, editors.map((editor) => editor.element), editors.map((editor) => editor.controlsElement));
     }
     /** Share the native node-field lifecycle across projections of the same exact bound field. */
-    #fieldScope(node, field) {
+    #fieldScope(node, field, beforeField) {
         let scopes = this.#fields.get(node);
         if (!scopes) {
             scopes = new Map();
@@ -139,7 +141,7 @@ export class MasonryInputHost {
         }
         let scope = scopes.get(field);
         if (!scope) {
-            scope = new NativeNodeChoiceFields(node, 'canvas-input:' + field, this.document);
+            scope = new NativeNodeChoiceFields(node, 'canvas-input:' + field, this.document, beforeField);
             scopes.set(field, scope);
         }
         return scope;

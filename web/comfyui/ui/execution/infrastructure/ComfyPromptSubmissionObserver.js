@@ -37,12 +37,14 @@ export class ComfyPromptSubmissionObserver {
         const submission = this.options.submitting(captured);
         let context = submission;
         let preparedPayload = payload;
+        let canvasPreparation;
         let active = true;
         return {
-            prepared: (prepared) => {
+            prepared: (prepared, canvas) => {
                 if (!active)
                     return;
                 preparedPayload = prepared;
+                canvasPreparation = canvas;
                 const sources = decodeComfyPromptSources(prepared, captured.sources);
                 if (sources.length)
                     context = Object.freeze({ ...submission, sources });
@@ -69,6 +71,28 @@ export class ComfyPromptSubmissionObserver {
                     : isRecord(preparedPayload)
                         ? preparedPayload.output
                         : null;
+                if (canvasPreparation) {
+                    try {
+                        context = Object.freeze({
+                            ...context,
+                            canvasReturns: canvasPreparation.resolve(prompt),
+                        });
+                    }
+                    catch (error) {
+                        this.logger.error('SugarCubes cannot resolve captured inpaint placement.', {
+                            error,
+                            promptId: id,
+                        });
+                        context = Object.freeze({
+                            ...context,
+                            canvasReturns: context.sources.map((source) => ({
+                                kind: 'unavailable',
+                                executionPath: source.executionPath,
+                                message: 'The inpaint output has no verified captured placement.',
+                            })),
+                        });
+                    }
+                }
                 this.options.seeds?.record(context.session, context.order, decodeComfySubmittedSeeds(prompt));
                 this.options.accepted(context, promptId(id));
             },

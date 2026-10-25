@@ -46,11 +46,12 @@ interface Field {
 export class NativeNodeChoiceFields {
   readonly #fields = new Map<string, Field>();
   #pending = false;
-  /** Scope exact widget identities to one node and feature-owned namespace. */
+  /** Scope widget identities and optional placement before an existing native field. */
   constructor(
     private readonly node: ComfyNode,
     private readonly namespace: string,
     private readonly document: Document,
+    private readonly beforeField: string | null = null,
   ) {}
 
   /** Share a native field across simultaneous projections without multiplying value commits. */
@@ -98,7 +99,7 @@ export class NativeNodeChoiceFields {
       this.#fields.set(name, field);
     }
     if (!field.callbacks.size)
-      field.release = registerNativePresentationWidget(this.node, field.widget);
+      field.release = registerNativePresentationWidget(this.node, field.widget, this.beforeField);
     field.callbacks.add(change);
     const owner = field;
     let constraints: NativeChoiceRestrictions | null = null,

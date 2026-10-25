@@ -22,6 +22,8 @@ import {
 import type { CanvasGenerationImages } from '../domain/CanvasGenerationImages.js';
 import type { OutputFileReference } from '../domain/WorkflowOutput.js';
 import { OutputMediaClient } from '../../output_saving/OutputMediaClient.js';
+import type { CanvasImageRegion } from '../../../../../integrations/contracts/CanvasImageRegion.js';
+import { browserCanvasImageRegion } from './BrowserCanvasImageRegions.js';
 
 /** Reuse the existing image rendition endpoint and bridge portable cancellation into HTTP transport. */
 export class BrowserCanvasGenerationImages implements CanvasGenerationImages {
@@ -31,14 +33,23 @@ export class BrowserCanvasGenerationImages implements CanvasGenerationImages {
     this.#media = new OutputMediaClient(origin, fetch);
   }
   /** Encode intrinsic PNG bytes and reject oversized transfers before native decoding. */
-  async load(file: OutputFileReference, cancellation: CanvasCancellationSource) {
+  async load(
+    file: OutputFileReference,
+    cancellation: CanvasCancellationSource,
+    region: CanvasImageRegion | null,
+  ) {
     const controller = new AbortController();
     const stop = cancellation.subscribe(() => controller.abort());
     try {
       const media = await this.#media.image(file, 'png', controller.signal);
       if (media.blob.size > MAX_CANVAS_IMAGE_BYTES)
         throw new Error('This image exceeds the canvas transfer byte budget.');
-      return encodeCanvasImage(new Uint8Array(await media.blob.arrayBuffer()));
+      return region
+        ? await browserCanvasImageRegion(media.blob, region, cancellation)
+        : {
+            image: encodeCanvasImage(new Uint8Array(await media.blob.arrayBuffer())),
+            position: null,
+          };
     } finally {
       stop();
     }

@@ -27,3 +27,19 @@ export function centerCanvasImage(
     top: Math.floor((canvas.height - image.height) / 2),
   });
 }
+
+/** Preserve intrinsic pixels at an explicit captured origin, using centering only for ordinary generation. */
+export function placeCanvasImage(
+  canvas: { readonly width: number; readonly height: number },
+  image: { readonly width: number; readonly height: number },
+  position: { readonly left: number; readonly top: number } | null,
+): { readonly left: number; readonly top: number } {
+  if (!position) return centerCanvasImage(canvas, image);
+  if (
+    ![position.left, position.top].every(
+      (value) => Number.isSafeInteger(value) && Math.abs(value) <= 300000,
+    )
+  )
+    throw new Error('Invalid canvas image position.');
+  return Object.freeze({ ...position });
+}

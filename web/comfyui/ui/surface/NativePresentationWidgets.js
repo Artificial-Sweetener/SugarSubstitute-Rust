@@ -1,12 +1,12 @@
 const additions = new WeakMap();
-/** Retain a native widget only for the lifetime of its presentation owner. */
-export function registerNativePresentationWidget(node, widget) {
+/** Retain a presentation widget with optional placement before an existing graph field. */
+export function registerNativePresentationWidget(node, widget, beforeField = null) {
     let widgets = additions.get(node);
     if (!widgets) {
-        widgets = new Set();
+        widgets = new Map();
         additions.set(node, widgets);
     }
-    widgets.add(widget);
+    widgets.set(widget, beforeField);
     return () => {
         widgets.delete(widget);
         if (!widgets.size)
@@ -18,9 +18,17 @@ export function nativeGraphWidgets(node) {
     const presentation = additions.get(node);
     return (node.widgets ?? []).filter((widget) => !presentation?.has(widget));
 }
-/** Resolve native graph widgets and active presentation additions without changing the graph. */
+/** Resolve presentation additions before their optional native field anchor without changing graph order. */
 export function nativePresentationWidgets(node) {
-    return [...new Set([...(node.widgets ?? []), ...(additions.get(node) ?? [])])];
+    const widgets = [...new Set(nativeGraphWidgets(node))];
+    for (const [widget, beforeField] of additions.get(node) ?? []) {
+        const index = beforeField ? widgets.findIndex((item) => item.name === beforeField) : -1;
+        if (index < 0)
+            widgets.push(widget);
+        else
+            widgets.splice(index, 0, widget);
+    }
+    return widgets;
 }
 /** Expose additions synchronously to Comfy's extractor, then restore the exact live widget list. */
 export function withNativePresentationWidgets(node, operation) {

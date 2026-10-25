@@ -1,19 +1,3 @@
-//    SugarCubes - composable workflow units for ComfyUI
-//    Copyright (C) 2026  Artificial Sweetener and contributors
-//
-//    This program is free software: you can redistribute it and/or modify
-//    it under the terms of the GNU Affero General Public License as published by
-//    the Free Software Foundation, either version 3 of the License, or
-//    (at your option) any later version.
-//
-//    This program is distributed in the hope that it will be useful,
-//    but WITHOUT ANY WARRANTY; without even the implied warranty of
-//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//    GNU Affero General Public License for more details.
-//
-//    You should have received a copy of the GNU Affero General Public License
-//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Install one stable SugarCubes boundary around Comfy's prompt queue. */
 /** Own the sole SugarCubes host queue interaction across workflow lifecycles. */
 export class ComfyPromptQueueBridge {
     #api;
@@ -56,17 +40,22 @@ export class ComfyPromptQueueBridge {
                     if (direct)
                         this.#preflight();
                     payload = this.#prepare(payload);
-                    if (!direct)
-                        payload = await this.#transform(payload);
-                    if (installation.active &&
-                        observation &&
-                        !this.#observe('prepared', () => observation?.prepared(payload))) {
-                        this.#observe('cancelled', () => observation?.cancelled());
-                        installation.pending.delete(observation);
-                        observation = null;
+                    const prepared = (preparation) => {
+                        if (installation.active &&
+                            observation &&
+                            !this.#observe('prepared', () => observation?.prepared(preparation.payload, preparation.canvas))) {
+                            this.#observe('cancelled', () => observation?.cancelled());
+                            installation.pending.delete(observation);
+                            observation = null;
+                        }
+                    };
+                    if (!direct) {
+                        const preparation = await this.#transform(payload);
+                        payload = preparation.payload;
+                        prepared(preparation);
                     }
                     const result = direct && this.#executeDirect
-                        ? await this.#executeDirect(position, payload, options, (prepared) => original.call(this.#api, position, prepared, options))
+                        ? await this.#executeDirect(position, payload, options, (prepared) => original.call(this.#api, position, prepared, options), prepared)
                         : await original.call(this.#api, position, payload, options);
                     if (installation.active && observation)
                         this.#observe('accepted', () => observation?.accepted(result));

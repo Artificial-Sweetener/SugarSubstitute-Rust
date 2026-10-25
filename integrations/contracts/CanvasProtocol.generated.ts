@@ -18,6 +18,7 @@
 export type CanvasCapabilities = {
   readonly displayOutput: boolean;
   readonly insertImageLayer: boolean;
+  readonly positionImageLayer: boolean;
 };
 /** Describe the schema-defined CanvasDescriptor wire value. */
 export type CanvasDescriptor = {
@@ -59,11 +60,12 @@ export type CanvasInsertImage = {
   readonly document: CanvasDocument;
   readonly image: CanvasEncodedImage;
   readonly layerName: string;
+  readonly position: null | CanvasImagePosition;
 };
 /** Describe the schema-defined CanvasReadRequest wire value. */
 export type CanvasReadRequest = {
   readonly protocol: 'sugarcubes.canvas';
-  readonly version: 1;
+  readonly version: 2;
   readonly session: string;
   readonly requestId: number;
   readonly type: 'context.request';
@@ -71,7 +73,7 @@ export type CanvasReadRequest = {
 /** Describe the schema-defined CanvasReadReply wire value. */
 export type CanvasReadReply = {
   readonly protocol: 'sugarcubes.canvas';
-  readonly version: 1;
+  readonly version: 2;
   readonly session: string;
   readonly requestId: number;
   readonly type: 'context.reply';
@@ -80,7 +82,7 @@ export type CanvasReadReply = {
 /** Describe the schema-defined CanvasInsertRequest wire value. */
 export type CanvasInsertRequest = {
   readonly protocol: 'sugarcubes.canvas';
-  readonly version: 1;
+  readonly version: 2;
   readonly session: string;
   readonly requestId: number;
   readonly type: 'image.insert';
@@ -89,7 +91,7 @@ export type CanvasInsertRequest = {
 /** Describe the schema-defined CanvasInsertReply wire value. */
 export type CanvasInsertReply = {
   readonly protocol: 'sugarcubes.canvas';
-  readonly version: 1;
+  readonly version: 2;
   readonly session: string;
   readonly requestId: number;
   readonly type: 'image.reply';
@@ -98,7 +100,7 @@ export type CanvasInsertReply = {
 /** Describe the schema-defined CanvasCancelRequest wire value. */
 export type CanvasCancelRequest = {
   readonly protocol: 'sugarcubes.canvas';
-  readonly version: 1;
+  readonly version: 2;
   readonly session: string;
   readonly requestId: number;
   readonly type: 'cancel';
@@ -106,7 +108,7 @@ export type CanvasCancelRequest = {
 /** Describe the schema-defined CanvasErrorReply wire value. */
 export type CanvasErrorReply = {
   readonly protocol: 'sugarcubes.canvas';
-  readonly version: 1;
+  readonly version: 2;
   readonly session: string;
   readonly requestId: number;
   readonly type: 'error.reply';
@@ -184,7 +186,7 @@ export type CanvasSourceResult =
 /** Describe the schema-defined CanvasSourceRequest wire value. */
 export type CanvasSourceRequest = {
   readonly protocol: 'sugarcubes.canvas';
-  readonly version: 1;
+  readonly version: 2;
   readonly session: string;
   readonly requestId: number;
   readonly type: 'source.request';
@@ -193,7 +195,7 @@ export type CanvasSourceRequest = {
 /** Describe the schema-defined CanvasSourceReply wire value. */
 export type CanvasSourceReply = {
   readonly protocol: 'sugarcubes.canvas';
-  readonly version: 1;
+  readonly version: 2;
   readonly session: string;
   readonly requestId: number;
   readonly type: 'source.reply';
@@ -202,7 +204,7 @@ export type CanvasSourceReply = {
 /** Describe the schema-defined CanvasSourceChanged wire value. */
 export type CanvasSourceChanged = {
   readonly protocol: 'sugarcubes.canvas';
-  readonly version: 1;
+  readonly version: 2;
   readonly session: string;
   readonly requestId: 0;
   readonly type: 'source.changed';
@@ -228,7 +230,9 @@ export type CanvasInputSource =
       readonly documentId: string | null;
       readonly target: CanvasSourceTarget;
     };
-/** Describe every version-one canvas message. */
+/** Describe the schema-defined CanvasImagePosition wire value. */
+export type CanvasImagePosition = { readonly left: number; readonly top: number };
+/** Describe every version-two canvas message. */
 export type CanvasMessage =
   | CanvasReadRequest
   | CanvasReadReply

@@ -144,6 +144,7 @@ function fixture() {
     document: context.document,
     image: { format: 'png', encoding: 'base64', data: 'prepared-by-assets' },
     layerName: 'Generated',
+    position: null,
   };
   return {
     api,
@@ -205,6 +206,28 @@ test.each(['native-error', 'no-document'])(
     expect(f.resume).toHaveBeenCalledWith({ id: 1 }, false);
   },
 );
+test('translates a captured patch origin directly instead of centering its trimmed pixels', async () => {
+  const f = fixture();
+  const position = { left: 73, top: 119 };
+  f.opened.width = 31;
+  f.opened.height = 19;
+  expect(
+    await f.api.insert(
+      { ...f.request, position },
+      { ...material, width: 31, height: 19 },
+      f.cancel,
+    ),
+  ).toMatchObject({
+    status: 'inserted',
+    left: 73,
+    top: 119,
+    width: 31,
+    height: 19,
+  });
+  expect(f.sourceLayer.translate).toHaveBeenCalledWith(73, 119);
+  expect([f.target.width, f.target.height]).toEqual([512, 384]);
+  expect(f.resume).toHaveBeenCalledWith({ id: 1 }, true);
+});
 test('refuses closed or resized captured destinations without opening image material', async () => {
   const f = fixture();
   f.target.width = 1024;

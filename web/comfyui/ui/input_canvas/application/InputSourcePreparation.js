@@ -24,6 +24,6 @@ export class InputSourcePreparation {
             }
             files.set(entry.key, await file);
         }
-        return files;
+        return { files, snapshots };
     }
 }

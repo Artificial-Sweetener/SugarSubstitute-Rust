@@ -14,8 +14,8 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Encode straight source channels as PNG without browser canvas premultiplication changing hidden RGB. */
-import type { CanvasPixelRaster } from '../../core/embedded/CanvasRuntime.js';
-import { decodeCanvasRaster } from '../../core/embedded/CanvasRuntime.js';
+import type { CanvasPixelRaster } from './CanvasRuntime.js';
+import { decodeCanvasRaster } from './CanvasRuntime.js';
 
 /** Preserve every RGBA sample, including RGB beneath transparent pixels, through normal Comfy uploads. */
 export async function encodeSourcePng(pixels: CanvasPixelRaster): Promise<Blob> {

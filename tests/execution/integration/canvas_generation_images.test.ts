@@ -42,8 +42,8 @@ function fixture() {
 test('transfers full-resolution PNG from the output service without deriving pixels from a viewer', async () => {
   const f = fixture();
   const file = { filename: 'generated.png', subfolder: '', type: 'temp' as const };
-  const image = await f.images.load(file, new CanvasCancellation());
-  expect(decodeCanvasImage(image)).toEqual(f.bytes);
+  const image = await f.images.load(file, new CanvasCancellation(), null);
+  expect(decodeCanvasImage(image!.image)).toEqual(f.bytes);
   expect(f.fetch.mock.calls[0]?.[0]).toBe('/sugarcubes/output-saving/image');
   expect(f.fetch.mock.calls[0]?.[1]?.body).toBe(JSON.stringify({ file, format: 'png' }));
 });
@@ -57,7 +57,7 @@ test('propagates cancellation into an in-flight full-resolution download', async
     throw new DOMException('Cancelled', 'AbortError');
   });
   await expect(
-    f.images.load({ filename: 'generated.png', subfolder: '', type: 'temp' }, cancellation),
+    f.images.load({ filename: 'generated.png', subfolder: '', type: 'temp' }, cancellation, null),
   ).rejects.toThrow('Cancelled');
 });
 
@@ -68,6 +68,7 @@ test('rejects a rendition exceeding the native transfer budget before decoding o
     f.images.load(
       { filename: 'generated.png', subfolder: '', type: 'temp' },
       new CanvasCancellation(),
+      null,
     ),
   ).rejects.toThrow('byte budget');
 });

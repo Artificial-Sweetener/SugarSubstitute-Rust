@@ -16,12 +16,21 @@
 /** Stage captured sources as immutable loader images using the same representation as consumer previews. */
 import type { CanvasPixelRaster } from '../../../../../integrations/contracts/CanvasProtocol.generated.js';
 import { canvasInputSourceKey } from '../../core/embedded/CanvasRuntime.js';
-import type { CanvasSourceCapture, CanvasSourceEntry } from './CanvasSourceCapture.js';
+import type {
+  CanvasSourceCapture,
+  CanvasSourceEntry,
+  CapturedCanvasSource,
+} from './CanvasSourceCapture.js';
 import { maskSourceImage } from '../domain/MaskSourcePixels.js';
 
 /** Keep file encoding and upload outside application source interpretation. */
 export interface InputSourceAssets {
   stage(pixels: CanvasPixelRaster): Promise<string>;
+}
+/** Retain capture provenance with immutable uploads instead of discarding it at the file boundary. */
+export interface PreparedInputSources {
+  readonly files: ReadonlyMap<string, string>;
+  readonly snapshots: ReadonlyMap<string, CapturedCanvasSource>;
 }
 
 /** Adapt source capture to a file-loading field without changing source channels or the loader's settings. */
@@ -32,7 +41,7 @@ export class InputSourcePreparation {
     private readonly assets: InputSourceAssets,
   ) {}
   /** Capture all targets before upload and preserve each caller's exact entry identity. */
-  async prepare(entries: readonly CanvasSourceEntry[]): Promise<ReadonlyMap<string, string>> {
+  async prepare(entries: readonly CanvasSourceEntry[]): Promise<PreparedInputSources> {
     const snapshots = await this.capture.capture(entries, 0),
       staged = new Map<string, Promise<string>>(),
       files = new Map<string, string>();
@@ -47,6 +56,6 @@ export class InputSourcePreparation {
       }
       files.set(entry.key, await file);
     }
-    return files;
+    return { files, snapshots };
   }
 }

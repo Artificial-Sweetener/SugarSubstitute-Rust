@@ -181,7 +181,12 @@ export class CanvasSourceCapture {
           } else if (pixels.format !== 'rgba8')
             throw new Error('The canvas image source did not return image pixels.');
         }
-        const value = { ...snapshot, pixels, representation };
+        const value = Object.freeze({
+          ...snapshot,
+          document: Object.freeze({ ...snapshot.document }),
+          pixels: Object.freeze({ ...pixels }),
+          representation,
+        });
         represented.set(representationKey, value);
         captured.set(entry.key, value);
       }

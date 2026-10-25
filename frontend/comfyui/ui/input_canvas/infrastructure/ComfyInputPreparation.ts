@@ -19,6 +19,8 @@ import type { CanvasSourceEntry } from '../application/CanvasSourceCapture.js';
 import type { ComfyInputSourceDefaults } from './ComfyInputSourceDefaults.js';
 import type { ComfyInputLoaders } from './ComfyInputLoaders.js';
 import { inputWorkflowProjection } from './InputWorkflowProjection.js';
+import type { ComfyInputReturnPreparation } from './ComfyInputReturnPreparation.js';
+import type { WorkflowPromptPreparation } from '../../execution/domain/WorkflowPreparation.js';
 
 /** Prepare both queue routes without changing graph topology or authored file values. */
 export class ComfyInputPreparation {
@@ -27,9 +29,10 @@ export class ComfyInputPreparation {
     private readonly loaders: ComfyInputLoaders,
     private readonly sources: InputSourcePreparation,
     private readonly defaults: ComfyInputSourceDefaults,
+    private readonly returns: ComfyInputReturnPreparation,
   ) {}
   /** Pin entry identity, order and channel before any asynchronous native capture or upload. */
-  async prepare(payload: unknown): Promise<unknown> {
+  async prepare(payload: unknown): Promise<WorkflowPromptPreparation> {
     const projection = await inputWorkflowProjection(
       payload,
       this.loaders,
@@ -49,19 +52,22 @@ export class ComfyInputPreparation {
           : [],
       ),
     );
-    if (!projection.targets.length) return payload;
-    const files = await this.sources.prepare(entries);
+    if (!projection.targets.length) return { payload };
+    const ports = this.loaders.assetPorts();
+    const origin = await this.returns.origin(projection.targets);
+    const sources = await this.sources.prepare(entries);
+    const canvas = await this.returns.prepare(projection.targets, sources, ports, origin);
     for (const target of projection.targets)
       target.apply(
         target.binding.entries.map((entry) => {
           const file =
             entry.source.kind === 'canvas'
-              ? files.get(JSON.stringify([target.key, entry.id]))
+              ? sources.files.get(JSON.stringify([target.key, entry.id]))
               : entry.source.file;
           if (!file) throw new Error('Choose a file or canvas source for every entry.');
           return file;
         }),
       );
-    return projection.payload;
+    return { payload: projection.payload, ...(canvas ? { canvas } : {}) };
   }
 }

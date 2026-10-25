@@ -17,7 +17,7 @@ export class MasonryInputEditor {
     #stop;
     #entryField;
     /** Bind presentation to portable state and share raw source acquisition with queue preparation. */
-    constructor(document, binding, previews, upload, report, fields, fieldRoot, showField = false) {
+    constructor(document, binding, previews, upload, report, fields, fieldRoot, association, showField = false) {
         this.binding = binding;
         ensureInputEditorStyles(document);
         this.element = document.createElement('section');
@@ -85,7 +85,7 @@ export class MasonryInputEditor {
             }
             this.#controls.append(actions);
         }
-        this.#rows = new InputPreviewRows(document, binding, previews, report);
+        this.#rows = new InputPreviewRows(document, binding, previews, report, association);
         this.#status = document.createElement('div');
         this.#status.className = 'sc-input-editor__status';
         this.#status.setAttribute('role', 'status');

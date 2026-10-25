@@ -18,12 +18,15 @@ import { nativeInputFields, nativeSourceField } from '../support/native_input_fi
 import { jest } from '@jest/globals';
 import { randomUUID } from 'node:crypto';
 import { sourceMaskFixture } from '../support/source_mask_fixture.js';
+import { maskPreviewAssociation } from '../support/association_graph.js';
+import { ComfyInputAssociations } from '../../../frontend/comfyui/ui/input_canvas/infrastructure/ComfyInputAssociations.js';
 import { createComfyInputBinding } from '../../../frontend/comfyui/ui/input_canvas/infrastructure/ComfyInputBinding.js';
 import { ComfyInputBindings } from '../../../frontend/comfyui/ui/input_canvas/infrastructure/ComfyInputBindings.js';
 import { MasonryInputEditor } from '../../../frontend/comfyui/ui/input_canvas/presentation/MasonryInputEditor.js';
 import { MasonryInputHost } from '../../../frontend/comfyui/ui/input_canvas/infrastructure/MasonryInputHost.js';
 import { registerNativeNodeCard } from '../../../frontend/comfyui/ui/surface/NativeNodeCardBoundary.js';
 import { isNativeWidgetPresented } from '../../../frontend/comfyui/ui/surface/NativeWidgetPresentation.js';
+import { nativePresentationWidgets } from '../../../frontend/comfyui/ui/surface/NativePresentationWidgets.js';
 import type { ComfyNode } from '../../../frontend/comfyui/ui/types/graph.js';
 
 beforeAll(() =>
@@ -223,6 +226,7 @@ test('keeps row identity, renders literal labels and updates the effective mask 
       entries: state.entries.map((entry) => ({ ...entry, label: '<img src=x onerror=boom>' })),
     },
   };
+  const association = await maskPreviewAssociation(f, f.node, loader);
   const view = new MasonryInputEditor(
     document,
     f.binding,
@@ -231,6 +235,7 @@ test('keeps row identity, renders literal labels and updates the effective mask 
     f.report,
     nativeInputFields(f.node),
     document.createElement('article'),
+    association.source,
   );
   document.body.append(view.element);
   await settled();
@@ -250,6 +255,7 @@ test('keeps row identity, renders literal labels and updates the effective mask 
   expect(view.element.querySelector('[data-input-entry]')).toBe(row);
   expect(nativeSourceField(f.node).value).toBe('current-layer');
   view.dispose();
+  association.dispose();
   f.binding.dispose();
   f.previews.dispose();
   expect(f.report).not.toHaveBeenCalled();
@@ -260,6 +266,13 @@ test('mounts registered masonry replacements, preserves channel controls and res
   f.binding.dispose();
   const bindings = new ComfyInputBindings(f.loaders, f.ports);
   nativeInputFields(f.node);
+  const associations = new ComfyInputAssociations(
+    f.loaders,
+    bindings,
+    () => f.node.graph,
+    f.report,
+    { warn: jest.fn() },
+  );
   const host = new MasonryInputHost(
     document,
     f.loaders,
@@ -267,6 +280,7 @@ test('mounts registered masonry replacements, preserves channel controls and res
     async () => 'chosen.png',
     f.report,
     bindings,
+    associations,
   );
   const card = document.createElement('article');
   card.className = 'sugarcubes-workflow-masonry__card sugarcubes-cube-face__node-card';
@@ -277,6 +291,11 @@ test('mounts registered masonry replacements, preserves channel controls and res
   expect(card.querySelector('[data-sc-input-editor]')).not.toBeNull();
   expect(isNativeWidgetPresented(f.node.widgets![0]!)).toBe(false);
   expect(isNativeWidgetPresented(f.node.widgets![1]!)).toBe(true);
+  expect(
+    nativePresentationWidgets(f.node)
+      .filter(isNativeWidgetPresented)
+      .map((widget) => widget.label ?? widget.name),
+  ).toEqual(['Source', 'Layer', 'Entry', 'channel']);
   expect(card.getAttribute('data-sc-native-media')).toBe('replaced');
   const editor = card.querySelector('[data-sc-input-editor]'),
     calls = f.execute.mock.calls.length;
@@ -293,6 +312,7 @@ test('mounts registered masonry replacements, preserves channel controls and res
   expect(isNativeWidgetPresented(f.node.widgets![0]!)).toBe(true);
   expect(card.hasAttribute('data-sc-native-media')).toBe(false);
   host.dispose();
+  associations.dispose();
   bindings.clear();
   release();
 });
@@ -318,6 +338,7 @@ test('routes custom loader interpretation through its actual settings and refres
   };
   const binding = createComfyInputBinding(node, custom, f.ports);
   await binding.initialize();
+  const association = await maskPreviewAssociation(f, node, custom);
   const view = new MasonryInputEditor(
     document,
     binding,
@@ -326,6 +347,7 @@ test('routes custom loader interpretation through its actual settings and refres
     f.report,
     nativeInputFields(node),
     document.createElement('article'),
+    association.source,
   );
   document.body.append(view.element);
   await settled();
@@ -356,6 +378,7 @@ test('routes custom loader interpretation through its actual settings and refres
   expect(f.execute.mock.calls.filter(([query]) => query.type === 'capture')).toHaveLength(captures);
   expect(f.report).not.toHaveBeenCalled();
   view.dispose();
+  association.dispose();
   binding.dispose();
   f.previews.dispose();
 });

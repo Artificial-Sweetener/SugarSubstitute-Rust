@@ -35,6 +35,7 @@ import { installSugarPromptStyles } from './SugarPromptStyles.js';
 import type { AppearanceSource } from '../../surface/appearance/AppearanceState.js';
 import { applyOwnedTheme } from '../../surface/appearance/ThemeService.js';
 import { markComfyPromptInput } from './ComfyPromptInput.js';
+import { PromptMountReadiness } from '../PromptMountReadiness.js';
 import { bundledPromptTagCatalog } from './BundledPromptTags.js';
 import { createEditorField } from '../../surface/appearance/ControlFactory.js';
 import type { EditorFieldControl } from '../../surface/appearance/EditorFieldControl.js';
@@ -60,6 +61,7 @@ export class SugarPromptEditor {
   readonly #options: SugarPromptMountOptions;
   readonly #stopAppearance: () => void;
   readonly #content: HTMLDivElement;
+  readonly #readiness: PromptMountReadiness;
   #field: EditorFieldControl | null = null;
   #fieldStyle: VisualStyle | null = null;
   #resources: LoraResourceSession | null = null;
@@ -94,6 +96,7 @@ export class SugarPromptEditor {
     this.element.style.height = '128px';
     this.element.style.position = 'relative';
     this.#content = document.createElement('div');
+    this.#readiness = new PromptMountReadiness();
     this.#content.style.cssText = 'width:100%;height:100%;min-width:0;min-height:0';
     options.anchor.before(this.element);
     this.#applyAppearance();
@@ -166,10 +169,16 @@ export class SugarPromptEditor {
     return this.#api.snapshot();
   }
 
+  /** Complete construction after the native editor publishes its mounted layout. */
+  whenPresented(): Promise<void> {
+    return this.#readiness.wait();
+  }
+
   /** Release the exact native view, thumbnail decoders and outstanding catalog work. */
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
+    this.#readiness.dispose();
     this.#stopAppearance();
     this.#resources?.dispose();
     this.#api.destroy();
@@ -285,9 +294,11 @@ export class SugarPromptEditor {
       128,
       Math.min(320, Math.ceil(metrics.contentHeight + metrics.outerPadding)),
     );
-    if (this.#allocatedHeight === height) return;
-    this.#allocatedHeight = height;
-    this.element.style.height = `${String(height)}px`;
-    this.#options.layout(height);
+    if (this.#allocatedHeight !== height) {
+      this.#allocatedHeight = height;
+      this.element.style.height = `${String(height)}px`;
+      this.#options.layout(height);
+    }
+    this.#readiness.publish(metrics.viewportWidth);
   }
 }

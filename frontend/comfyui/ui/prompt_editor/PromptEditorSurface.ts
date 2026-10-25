@@ -29,6 +29,7 @@ export interface PromptEditorSurface {
 export interface PromptEditorSurfaceOwner {
   mount(surface: PromptEditorSurface): () => void;
   refresh(surface: PromptEditorSurface): boolean;
+  ready(root: HTMLElement): Promise<void>;
   dispose(): void;
 }
 
@@ -55,4 +56,9 @@ export function mountPromptEditorSurface(surface: PromptEditorSurface): (() => v
 /** Report expired sessions so retained renderer surfaces can reacquire their editor. */
 export function refreshPromptEditorSurface(surface: PromptEditorSurface): boolean {
   return owners.get(surface.textarea.ownerDocument)?.refresh(surface) ?? false;
+}
+
+/** Finish identified prompt construction before its owning presentation is exposed. */
+export function whenPromptEditorsPresented(root: HTMLElement): Promise<void> {
+  return owners.get(root.ownerDocument)?.ready(root) ?? Promise.resolve();
 }

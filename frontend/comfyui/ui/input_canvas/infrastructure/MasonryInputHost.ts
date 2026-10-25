@@ -25,6 +25,7 @@ import type { CanvasSourcePreviews } from '../application/CanvasSourcePreviews.j
 import { InputLoaderPresentation } from './InputLoaderPresentation.js';
 import type { ComfyNode } from '../../types/graph.js';
 import type { ComfyInputBindings } from './ComfyInputBindings.js';
+import type { ComfyInputAssociations } from './ComfyInputAssociations.js';
 import { refreshNativeNodeCards } from '../../surface/NativeNodeCardRefresh.js';
 
 /** Mount previews only in masonry and leave every unsupported canvas's capabilities unchanged. */
@@ -48,6 +49,7 @@ export class MasonryInputHost {
     private readonly upload: (file: File) => Promise<string>,
     private readonly report: (error: unknown) => void,
     private readonly bindings: ComfyInputBindings,
+    private readonly associations: ComfyInputAssociations,
   ) {}
   /** Observe card mounts and scoped native value changes, excluding owned preview rendering. */
   setup(): void {
@@ -137,8 +139,9 @@ export class MasonryInputHost {
           this.previews,
           this.upload,
           this.report,
-          this.#fieldScope(node, loader.field),
+          this.#fieldScope(node, loader.field, loader.kind === 'mask' ? loader.channel : null),
           root,
+          loader.kind === 'mask' ? this.associations.image(node, loader.field) : null,
           loaders.length > 1,
         );
         root.append(editor.element);
@@ -161,7 +164,7 @@ export class MasonryInputHost {
     );
   }
   /** Share the native node-field lifecycle across projections of the same exact bound field. */
-  #fieldScope(node: ComfyNode, field: string): NativeNodeChoiceFields {
+  #fieldScope(node: ComfyNode, field: string, beforeField: string | null): NativeNodeChoiceFields {
     let scopes = this.#fields.get(node);
     if (!scopes) {
       scopes = new Map();
@@ -169,7 +172,7 @@ export class MasonryInputHost {
     }
     let scope = scopes.get(field);
     if (!scope) {
-      scope = new NativeNodeChoiceFields(node, 'canvas-input:' + field, this.document);
+      scope = new NativeNodeChoiceFields(node, 'canvas-input:' + field, this.document, beforeField);
       scopes.set(field, scope);
     }
     return scope;

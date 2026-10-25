@@ -19,28 +19,35 @@ import type { WorkflowRun } from '../domain/WorkflowRun.js';
 import type { WorkflowMediaPayload } from '../domain/WorkflowMedia.js';
 import type { OutputSourceId } from '../domain/ExecutionIdentity.js';
 
-/** Admit each finished image once per job and output source, including overlapping jobs. */
-export function workflowCanvasImages(
-  run: WorkflowRun,
-  source: OutputSourceId,
-  images: WorkflowMediaPayload['images'],
-  seen: Set<string>,
-): readonly WorkflowCanvasImage[] {
-  const fresh: WorkflowCanvasImage[] = [];
-  for (const media of images) {
-    if (!media || media.mediaKind !== 'image' || media.file.type === 'input') continue;
-    const id = JSON.stringify([
-      run.session.sessionId,
-      run.session.generation,
-      run.promptId,
-      source,
-      media.file.type,
-      media.file.subfolder,
-      media.file.filename,
-    ]);
-    if (seen.has(id)) continue;
-    seen.add(id);
-    fresh.push(Object.freeze({ id, media }));
+/** Own stable per-source batch positions and replay suppression for one captured run. */
+export class WorkflowCanvasImages {
+  readonly #seen = new Set<string>();
+  readonly #positions = new Map<OutputSourceId, number>();
+
+  /** Admit each finished image immediately, retaining its mask-batch position across incremental events. */
+  read(
+    run: WorkflowRun,
+    source: OutputSourceId,
+    images: WorkflowMediaPayload['images'],
+  ): readonly WorkflowCanvasImage[] {
+    const fresh: WorkflowCanvasImage[] = [];
+    for (const media of images) {
+      if (!media || media.mediaKind !== 'image' || media.file.type === 'input') continue;
+      const id = JSON.stringify([
+        run.session.sessionId,
+        run.session.generation,
+        run.promptId,
+        source,
+        media.file.type,
+        media.file.subfolder,
+        media.file.filename,
+      ]);
+      if (this.#seen.has(id)) continue;
+      this.#seen.add(id);
+      const batchIndex = this.#positions.get(source) ?? 0;
+      this.#positions.set(source, batchIndex + 1);
+      fresh.push(Object.freeze({ id, media, batchIndex }));
+    }
+    return Object.freeze(fresh);
   }
-  return Object.freeze(fresh);
 }

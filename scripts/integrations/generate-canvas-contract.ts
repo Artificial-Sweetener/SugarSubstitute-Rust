@@ -27,7 +27,7 @@ export function canvasBindings(schemaText: string): Promise<Readonly<Record<stri
     types: 'integrations/contracts/CanvasProtocol.generated.ts',
     validation: 'integrations/shared/CanvasValidation.generated.ts',
     importPath: '../contracts/CanvasProtocol.generated.js',
-    description: 'every version-one canvas message',
+    description: 'every version-two canvas message',
   });
 }
 /** Generate or check bindings without modifying application or host state. */

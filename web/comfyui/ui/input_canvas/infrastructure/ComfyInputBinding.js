@@ -16,6 +16,7 @@
 /** Adapt native node persistence and widget commits to the shared mask binding use case. */
 import { isSerializedWidget } from '../../graph/WidgetValueSerialization.js';
 import { inputLabel } from '../domain/InputLoader.js';
+import { inputLoaderSettings } from '../domain/InputLoaderSettings.js';
 import { InputBindingController } from '../application/InputBindingController.js';
 import { readInputBinding, withInputBinding } from './InputBindingMetadata.js';
 import { observeInputLoaderWidgets } from './ComfyInputWidgetObserver.js';
@@ -80,25 +81,13 @@ export function createComfyInputBinding(node, loader, ports) {
             }
         },
         files: () => sourceFiles(node, loader.field),
-        settings: () => ({
-            kind: loader.kind,
-            classType: loader.classType,
-            field: loader.field,
-            inputs: Object.fromEntries((node.widgets ?? []).flatMap((widget) => {
-                const value = widget.value;
-                return widget.name &&
-                    widget.name !== loader.field &&
-                    isSerializedWidget(widget) &&
-                    !node.inputs?.some((input) => input.link !== null &&
-                        input.link !== undefined &&
-                        (input.widget?.name ?? input.name) === widget.name) &&
-                    (typeof value === 'string' ||
-                        typeof value === 'boolean' ||
-                        (typeof value === 'number' && Number.isFinite(value)))
-                    ? [[widget.name, value]]
-                    : [];
-            })),
-        }),
+        settings: () => inputLoaderSettings(loader, Object.fromEntries((node.widgets ?? []).flatMap((widget) => widget.name &&
+            isSerializedWidget(widget) &&
+            !node.inputs?.some((input) => input.link !== null &&
+                input.link !== undefined &&
+                (input.widget?.name ?? input.name) === widget.name)
+            ? [[widget.name, widget.value]]
+            : []))),
         subscribe: (changed) => observeInputLoaderWidgets(node, loader, changed, ports.report),
     }, state, ports.host, ports.files, () => crypto.randomUUID(), ports.report);
 }

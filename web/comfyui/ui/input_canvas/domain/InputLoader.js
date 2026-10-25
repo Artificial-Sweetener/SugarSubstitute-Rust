@@ -42,3 +42,11 @@ export function recognizeInputLoaders(definition) {
 export function inputLabel(kind) {
     return kind === 'mask' ? 'Mask' : 'Image';
 }
+/** Identify the installed loaders whose native channel convention is defined by shared mask-source semantics. */
+export function usesNativeMaskChannels(loader) {
+    return ['LoadImageMask', 'SimpleSyrup.LoadMaskBatch'].includes(loader.classType);
+}
+/** Preserve the documented inverse-alpha MASK output of native mixed image loaders. */
+export function nativeMaskOutputChannel(loader) {
+    return ['LoadImage', 'LoadImageOutput'].includes(loader.classType) ? 'alpha' : null;
+}

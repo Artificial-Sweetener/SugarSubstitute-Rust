@@ -19,10 +19,19 @@ import type {
   CanvasEncodedImage,
 } from '../../core/embedded/CanvasRuntime.js';
 import type { OutputFileReference } from './WorkflowOutput.js';
+import type { CanvasImageRegion } from '../../../../../integrations/contracts/CanvasImageRegion.js';
+import type { CanvasImagePosition } from '../../../../../integrations/contracts/CanvasProtocol.generated.js';
+
+/** Materialize a normal image or a transparent region without leaking browser raster objects. */
+export interface PreparedGenerationImage {
+  readonly image: CanvasEncodedImage;
+  readonly position: CanvasImagePosition | null;
+}
 
 export interface CanvasGenerationImages {
   load(
     file: OutputFileReference,
     cancellation: CanvasCancellationSource,
-  ): Promise<CanvasEncodedImage>;
+    region: CanvasImageRegion | null,
+  ): Promise<PreparedGenerationImage | null>;
 }

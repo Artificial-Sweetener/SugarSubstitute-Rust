@@ -98,6 +98,7 @@ test('defaults an image loader to composition, displays actual image colors and 
     f.report,
     nativeInputFields(node),
     document.createElement('article'),
+    null,
   );
   document.body.append(view.element);
   await settled();
@@ -123,7 +124,7 @@ test('defaults an image loader to composition, displays actual image colors and 
       '8': { class_type: 'MaskConsumer', inputs: { mask: ['7', 1] } },
     },
   };
-  const prepared = await f.preparation.prepare(payload);
+  const prepared = (await f.preparation.prepare(payload)).payload;
   expect(prepared).toMatchObject({
     output: {
       '7': { class_type: 'LoadImage', inputs: { image: 'immutable-1.png' } },
@@ -174,19 +175,21 @@ test('owns multiple upload fields on a node with one native callback lifetime an
     documentId: null,
     target: { kind: 'current-layer' },
   });
-  const prepared = await f.preparation.prepare({
-    workflow: {
-      nodes: [
-        {
-          id: 3,
-          type: 'Multi',
-          properties: node.properties,
-          sugarcubes_widget_values: { reference: '', guide: '' },
-        },
-      ],
-    },
-    output: { '3': { class_type: 'Multi', inputs: { reference: '', guide: '', strength: 0.7 } } },
-  });
+  const prepared = (
+    await f.preparation.prepare({
+      workflow: {
+        nodes: [
+          {
+            id: 3,
+            type: 'Multi',
+            properties: node.properties,
+            sugarcubes_widget_values: { reference: '', guide: '' },
+          },
+        ],
+      },
+      output: { '3': { class_type: 'Multi', inputs: { reference: '', guide: '', strength: 0.7 } } },
+    })
+  ).payload;
   expect(prepared).toMatchObject({
     workflow: {
       nodes: [
@@ -269,7 +272,7 @@ test('preserves connected file inputs without silently replacing a graph-owned s
     },
     output: { '4': { class_type: 'LoadImage', inputs: { image: ['other', 0] } } },
   };
-  expect(await f.preparation.prepare(payload)).toBe(payload);
+  expect((await f.preparation.prepare(payload)).payload).toBe(payload);
   expect(f.stage).not.toHaveBeenCalled();
   f.previews.dispose();
 });

@@ -17,6 +17,7 @@
 export { CanvasClient } from '../../../../../integrations/shared/CanvasClient.js';
 export { MAX_CANVAS_IMAGE_BYTES } from '../../../../../integrations/shared/CanvasImagePolicy.js';
 export { encodeCanvasImage } from '../../../../../integrations/shared/CanvasImageEncoding.js';
+export { prepareCanvasImagePatch } from '../../../../../integrations/shared/CanvasImageRegions.js';
 export { CanvasCancellation } from '../../../../../integrations/shared/CanvasCancellation.js';
 export { WEB_CANVAS } from '../../../../../integrations/contracts/CanvasHost.js';
 export { CanvasMaskClient } from '../../../../../integrations/shared/CanvasMaskClient.js';

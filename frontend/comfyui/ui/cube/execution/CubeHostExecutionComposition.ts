@@ -24,6 +24,7 @@ import type { PromptQueueObserver } from '../../execution/infrastructure/ComfyPr
 import { CubePromptPipeline } from './CubePromptPipeline.js';
 import { CubeOutputPromptAdapter } from './CubeOutputPromptAdapter.js';
 import { createCubeDirectExecution } from './CubeDirectExecutionService.js';
+import type { WorkflowPromptPreparation } from '../../execution/domain/WorkflowPreparation.js';
 
 export interface CubeHostExecutionOptions {
   api: unknown;
@@ -36,7 +37,7 @@ export interface CubeHostExecutionOptions {
   applyProximity(payload: unknown): unknown;
   prepareRelations(payload: unknown): unknown;
   preflight(): void;
-  prepareCanvasInputs?(payload: unknown): Promise<unknown>;
+  prepareCanvasInputs?(payload: unknown): Promise<WorkflowPromptPreparation>;
 }
 
 /** Preserve existing execution sequencing while adding a common relation boundary for both queue paths. */
@@ -64,10 +65,16 @@ export function createCubeHostExecution(options: CubeHostExecutionOptions): Comf
     prepare: options.prepareRelations,
     transform: async (payload) => {
       const candidate = await pipeline.transform(payload);
-      return options.prepareCanvasInputs ? await options.prepareCanvasInputs(candidate) : candidate;
+      return options.prepareCanvasInputs
+        ? await options.prepareCanvasInputs(candidate)
+        : { payload: candidate };
     },
-    executeDirect: (position, payload, queueOptions, submit) =>
-      transport.queue(payload, () => direct.queue(position, payload, queueOptions), submit),
+    executeDirect: (position, payload, queueOptions, submit, prepared) =>
+      transport.queue(
+        payload,
+        () => direct.queue(position, payload, queueOptions, prepared),
+        submit,
+      ),
     shouldExecuteDirect: (payload) => direct.owns(payload),
   });
   return queue;

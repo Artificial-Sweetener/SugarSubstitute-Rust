@@ -48,11 +48,10 @@ def load_native_mask(file: str, settings: InputPreviewSettings) -> object:
     if (
         not isinstance(schema, dict)
         or not isinstance(outputs, (tuple, list))
-        or "MASK" not in outputs
-        or "IMAGE" in outputs
+        or outputs.count("MASK") != 1
         or schema.get("hidden")
     ):
-        raise ValueError("The node is not a standalone file-mask loader.")
+        raise ValueError("The node is not an unambiguous file-mask source.")
     fields: dict[str, object] = {}
     required: set[str] = set()
     for section in ("required", "optional"):

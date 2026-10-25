@@ -54,3 +54,14 @@ export interface InputEditorBinding {
   remove(): void;
   move(delta: number): void;
 }
+
+/** Query one graph-derived image relationship without exposing host nodes or reimplementing pairing policy. */
+export interface InputImageAssociation {
+  read(): InputEditorBinding | null;
+  subscribe(listener: () => void): () => void;
+}
+
+/** Resolve graph-derived endpoint identities through the same source-state registry for any application consumer. */
+export interface InputAssetBindingLookup {
+  binding(endpoint: string): InputEditorBinding | null;
+}
