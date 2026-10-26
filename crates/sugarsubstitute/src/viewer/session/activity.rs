@@ -5,23 +5,37 @@ use super::*;
 use sugarsubstitute_execution::OwnedInputError;
 
 impl Session {
-    /// Preview startup/resampling and phase-changing drags while preserving integer-pan repair.
+    /// Preview scale changes while continuing finished reconstruction during a pan.
     pub(super) fn reconstruction(&self) -> Result<Reconstruction, Box<dyn Error>> {
-        if self.initial_preview
-            || self.tools.navigation().resampling()
-            || (self.tools.navigation().captured()
-                && self.presented.as_ref().is_some_and(|shown| {
-                    shown.reconstruction.is_preview()
-                        || (shown.tier == BackingTier::Detail
-                            && !shown.view.shares_sampling_grid(self.tools.navigation().viewport()))
-                }))
-        {
+        if self.initial_preview || self.tools.navigation().resampling() {
             Ok(Reconstruction::Preview)
         } else {
             Ok(Reconstruction::finished_for_display_zoom(
                 self.tools.navigation().viewport().zoom(),
             )?)
         }
+    }
+    /// Keep pan repairs on settled pixels; fractional motion remains a display offset until release.
+    pub(super) fn detail_view(
+        &self,
+        target: Viewport,
+        document: (u64, u64),
+        source_revision: u64,
+        reconstruction: Reconstruction,
+    ) -> Result<Viewport, Box<dyn Error>> {
+        if self.tools.navigation().captured()
+            && !self.tools.navigation().resampling()
+            && let Some(shown) = &self.presented
+            && shown.tier == BackingTier::Detail
+            && shown.document == document
+            && shown.source_revision == source_revision
+            && !shown.reconstruction.is_preview()
+            && shown.reconstruction == reconstruction
+            && shown.view.zoom().to_bits() == target.zoom().to_bits()
+        {
+            return Ok(target.on_sampling_grid(shown.view)?);
+        }
+        Ok(target)
     }
     /// Drain metadata and typed completions before submitting the latest application intent.
     pub(super) fn advance(&mut self) -> Result<(), Box<dyn Error>> {
@@ -118,7 +132,9 @@ impl Session {
             if reconstruction.is_preview() && self.tools.navigation().interacting() {
                 return Ok(());
             }
-            let desired = coverage::detail(target_view)?;
+            let detail_view =
+                self.detail_view(target_view, identity, scene.source_revision, reconstruction)?;
+            let desired = coverage::detail(detail_view)?;
             let current = if let Some(shown) = self.presented.as_ref() {
                 shown.document == identity
                     && shown.source_revision == scene.source_revision
@@ -126,7 +142,7 @@ impl Session {
                     && shown.view.zoom() == target_view.zoom()
                     && !coverage::detail_needs_refresh(
                         shown.coverage,
-                        target_view,
+                        detail_view,
                         document_extent,
                     )?
                     && shown.coverage.crop(target_view, document_extent)?.is_some()

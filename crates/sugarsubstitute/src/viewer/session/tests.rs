@@ -102,7 +102,7 @@ fn panning_keeps_finished_quality_and_focus_loss_ends_tool_capture() -> Result<(
 }
 
 #[test]
-fn fractional_pan_previews_until_release_then_requests_phase_correct_finished_detail()
+fn fractional_pan_repairs_finished_detail_on_the_retained_grid_until_release()
 -> Result<(), Box<dyn Error>> {
     let (mut session, clock, _directory) = session()?;
     session.input(Input::Tool(ToolInput::OneToOne))?;
@@ -125,10 +125,54 @@ fn fractional_pan_previews_until_release_then_requests_phase_correct_finished_de
     session.input(Input::Tool(ToolInput::Pointer([27.0, 19.0])))?;
     assert_eq!(session.reconstruction()?, finished);
     session.input(Input::Tool(ToolInput::Pointer([27.5, 19.25])))?;
-    assert_eq!(session.reconstruction()?, Reconstruction::Preview);
+    assert_eq!(session.reconstruction()?, finished);
+    let actual = session.tools.navigation().viewport();
+    let repair_view = session.detail_view(actual, (1, 1), 0, finished)?;
+    assert!(repair_view.shares_sampling_grid(retained.viewport()));
+    assert_eq!(session.tools.navigation().viewport(), actual);
+    let repair = coverage::detail(repair_view)?.viewport().repair_from(retained.viewport())?;
+    assert!(repair.blit().is_some());
+    assert!(repair.dirty().pixels() < repair.dirty().surface().pixels());
     session
         .input(Input::Tool(ToolInput::Button { button: ToolButton::Primary, pressed: false }))?;
     assert_eq!(session.reconstruction()?, finished);
+    assert_eq!(session.detail_view(actual, (1, 1), 0, finished)?, actual);
+    assert!(!actual.shares_sampling_grid(retained.viewport()));
+    Ok(())
+}
+
+#[test]
+fn pan_detail_grid_requires_the_same_document_source_and_finished_quality()
+-> Result<(), Box<dyn Error>> {
+    let (mut session, clock, _directory) = session()?;
+    session.input(Input::Tool(ToolInput::OneToOne))?;
+    clock.0.store(80_000_000, Ordering::SeqCst);
+    session.poll(Duration::ZERO)?;
+    let retained = coverage::detail(session.tools.navigation().viewport())?;
+    let finished = Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3);
+    session.presented = Some(Presented {
+        tier: BackingTier::Detail,
+        coverage: retained,
+        view: retained.viewport(),
+        reconstruction: finished,
+        document: (1, 1),
+        source_revision: 7,
+    });
+    session.input(Input::Tool(ToolInput::Button { button: ToolButton::Primary, pressed: true }))?;
+    session.input(Input::Tool(ToolInput::Pointer([0.5, -0.25])))?;
+    let actual = session.tools.navigation().viewport();
+    assert!(!actual.shares_sampling_grid(retained.viewport()));
+    assert!(
+        session.detail_view(actual, (1, 1), 7, finished)?.shares_sampling_grid(retained.viewport())
+    );
+    for (document, source, quality) in [
+        ((2, 1), 7, finished),
+        ((1, 2), 7, finished),
+        ((1, 1), 8, finished),
+        ((1, 1), 7, Reconstruction::Preview),
+    ] {
+        assert_eq!(session.detail_view(actual, document, source, quality)?, actual);
+    }
     Ok(())
 }
 

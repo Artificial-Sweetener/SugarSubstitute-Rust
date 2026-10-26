@@ -11,7 +11,7 @@ minimum_tests = 15
 package = "sugarsubstitute-canvas"
 root = "crates/sugarsubstitute-canvas"
 concern = "Physical camera, retained projection phase and exact damage invariants; semantic navigation stops, anchors, cadence, refresh deadlines and cancellation; tool selection, temporary navigation and document-bound transactional gestures sharing reversible history"
-minimum_tests = 47
+minimum_tests = 50
 
 [[owners]]
 package = "sugarsubstitute-canvas-render"
@@ -47,7 +47,7 @@ minimum_tests = 116
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
 concern = "Private worker record framing, original native snapshots, bounded uploads and immutable host-selected write authority; Original admitted startup file input, installed descriptor and Unicode input pairing, retained primary/post-control causes and whole preparation custody; Localized native recovery decisions preserve their original diagnostics; Early installer folder inspection waits for package verification without provisioning; Same-profile successor joins authenticated native release and domain settlement with unchanged cutoff; Fresh subordinate recovery composition with unchanged Root authority, admission before ACK, independent real receiving and checked cleanup; Production desktop startup and retirement through actual execution, authenticated parent/child transport, shared backends, profiles and native window adapters; retained failures, captured startup, bounded console rendering and isolated qualification roles; contained headless backend witness invocation and original-budget Finish lifecycle; genuine boxed incident construction and bounded original terminal/cause diagnostics; unique heap activation ownership outside the persistent native pump frame; original launched-profile release consumption and precise Finish request status; actual Desktop probe formatter and sole bounded Root stderr diagnostic decoding; Offline startup activation independent of producing-build network configuration"
-minimum_tests = 1208
+minimum_tests = 1209
 
 [[owners]]
 package = "sugarsubstitute-execution"

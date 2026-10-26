@@ -202,6 +202,39 @@ impl Viewport {
         self.translation = translation;
         Ok(())
     }
+    /// Approximate this camera on a retained reference camera's exact sampling grid.
+    ///
+    /// The target surface stays unchanged. Stored origin and zoom come directly from `reference`;
+    /// only an integer device translation is chosen, with at most half a physical pixel of pose
+    /// error. This is suitable for transient detail repair during fractional navigation. The exact
+    /// fractional camera still requires full refinement after interaction ends.
+    /// # Errors
+    /// Rejects bit-different zooms, unrepresentable projection coordinates and translations that
+    /// cannot fit the exact integer sampling phase.
+    pub fn on_sampling_grid(self, reference: Self) -> Result<Self, CanvasError> {
+        if self.zoom.to_bits() != reference.zoom.to_bits() {
+            return Err(CanvasError::Invalid("Sampling-grid zoom differs from target camera"));
+        }
+        let (scale, offset) = reference.projection_to(self)?;
+        if scale.to_bits() != 1.0_f64.to_bits() {
+            return Err(CanvasError::Invalid("Sampling-grid projection scale is not identity"));
+        }
+        let mut translation = [0_i32; 2];
+        for axis in 0..2 {
+            let desired = f64::from(reference.translation[axis]) + offset[axis];
+            let rounded = (desired + 0.5).floor();
+            if rounded < f64::from(i32::MIN) || rounded > f64::from(i32::MAX) {
+                return Err(CanvasError::Invalid("Sampling-grid translation exceeds bounds"));
+            }
+            translation[axis] = rounded as i32;
+        }
+        Ok(Self {
+            surface: self.surface,
+            origin: reference.origin,
+            zoom: reference.zoom,
+            translation,
+        })
+    }
     /// Whether both cameras use the same exact physical sampling grid.
     ///
     /// The bit-identical untranslated stored origin and zoom define sampling coefficients.

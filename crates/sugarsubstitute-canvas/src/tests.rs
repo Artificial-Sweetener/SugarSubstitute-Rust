@@ -93,6 +93,71 @@ fn sampling_grid_identity_ignores_expansion_but_rejects_rebased_integer_phase() 
 }
 
 #[test]
+fn pan_grid_aligns_fractional_cameras_to_padded_large_origins_with_bounded_repair() -> TestResult {
+    let surface = Extent::new(640, 480)?;
+    let mut base = Viewport::new(surface)?;
+    base.reframe([1.0e12, -1.0e12], 1.375)?;
+    base.pan_by([5.0, -3.0])?;
+    let coverage = BackingCoverage::new(base, [128, 128])?;
+    let reference = coverage.viewport();
+    assert_eq!(reference.surface(), Extent::new(896, 736)?);
+    assert_eq!(ViewProjection::new(reference, base)?.offset(), [-128.0; 2]);
+    let initial = base.on_sampling_grid(reference)?;
+    assert_eq!(initial.surface(), surface);
+    assert!(initial.shares_sampling_grid(reference));
+
+    for delta in [[13.375, -7.625], [-11.375, 9.625]] {
+        let mut actual = base;
+        actual.pan_by(delta)?;
+        let aligned = actual.on_sampling_grid(reference)?;
+        assert_eq!(aligned.surface(), surface);
+        assert!(aligned.shares_sampling_grid(reference));
+        let pose = ViewProjection::new(aligned, actual)?;
+        assert_eq!(pose.scale(), 1.0);
+        assert!(pose.offset().iter().all(|offset| offset.abs() <= 0.5));
+        let damage = aligned.repair_from(initial)?;
+        assert!(damage.blit().is_some());
+        assert!(damage.dirty().pixels() < surface.pixels());
+    }
+    Ok(())
+}
+
+#[test]
+fn pan_grid_repeated_fractional_reversal_returns_without_drift() -> TestResult {
+    let surface = Extent::new(320, 240)?;
+    let base = Viewport::new(surface)?;
+    let reference = BackingCoverage::new(base, [128, 128])?.viewport();
+    let initial = base.on_sampling_grid(reference)?;
+    let mut actual = base;
+    for _ in 0..128 {
+        actual.pan_by([0.375, -0.375])?;
+        let forward = actual.on_sampling_grid(reference)?;
+        assert!(forward.shares_sampling_grid(initial));
+        actual.pan_by([-0.375, 0.375])?;
+        assert_eq!(actual.on_sampling_grid(reference)?, initial);
+    }
+    Ok(())
+}
+
+#[test]
+fn pan_grid_alignment_rejects_zoom_and_translation_overflow_without_mutation() -> TestResult {
+    let surface = Extent::new(64, 64)?;
+    let target = Viewport::new(surface)?;
+    let before = target;
+    let mut different_zoom = target;
+    different_zoom.zoom_at(2.0, [0.0; 2])?;
+    assert!(target.on_sampling_grid(different_zoom).is_err());
+    assert_eq!(target, before);
+
+    let mut overflow = target;
+    overflow.reframe([-f64::from(i32::MAX) - 1.0, 0.0], 1.0)?;
+    let overflow_before = overflow;
+    assert!(overflow.on_sampling_grid(target).is_err());
+    assert_eq!(overflow, overflow_before);
+    Ok(())
+}
+
+#[test]
 fn pan_repair_covers_each_pixel_exactly_once_in_all_directions() -> TestResult {
     let extent = Extent::new(11, 7)?;
     for dy in -9_i32..=9 {

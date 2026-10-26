@@ -73,6 +73,21 @@ fn preparing(reconstruction: Reconstruction) -> Result<Fixture, Box<dyn Error>> 
     let owner = ExecutionOwner::new(session.clock.clone(), wake.clone())?;
     let client = owner.client();
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
+    let setup_spec = session.spec(
+        Operation::Infrastructure,
+        JobClass::InfrastructureOrdinary,
+        65536,
+        Duration::from_secs(30),
+        None,
+    )?;
+    let mut setup = client.submit_blocking(&scope, setup_spec, |context| {
+        sugarsubstitute_canvas::Document::new(1, Extent::new(640, 480)?, context.memory())
+    })?;
+    let JobOutcome::Success(document) = wake.completion(&client, &mut setup)?.outcome else {
+        return Err("Refinement document setup failed".into());
+    };
+    let identity = (document.snapshot().identity(), document.snapshot().revision());
+    session.scene = Some(Scene { document, source: None, source_revision: 0, original: None });
     let spec = session.spec(
         Operation::FramePrepare,
         JobClass::CpuInteractive,
@@ -98,7 +113,7 @@ fn preparing(reconstruction: Reconstruction) -> Result<Fixture, Box<dyn Error>> 
         coverage,
         view: session.tools.navigation().viewport(),
         reconstruction: Reconstruction::Preview,
-        document: (1, 1),
+        document: identity,
         source_revision: 0,
     });
     Ok(Fixture { session, wake, _directory: directory })
@@ -119,13 +134,19 @@ fn observe_terminal(session: &mut Session, wake: &Wake) -> Result<(), Box<dyn Er
 }
 
 #[test]
-fn panning_a_preview_cancels_pending_finished_refinement_without_failing_the_viewer()
--> Result<(), Box<dyn Error>> {
+fn panning_a_preview_keeps_covered_finished_refinement_running() -> Result<(), Box<dyn Error>> {
     let Fixture { mut session, wake, _directory, .. } =
         preparing(Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3))?;
     session.input(Input::Tool(ToolInput::Button { button: ToolButton::Primary, pressed: true }))?;
     session.input(Input::Tool(ToolInput::Pointer([7.0, 3.0])))?;
-    assert_eq!(session.reconstruction()?, Reconstruction::Preview);
+    assert_eq!(
+        session.reconstruction()?,
+        Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3)
+    );
+    let rendering = session.rendering.as_mut().ok_or("Pan lost its covered refinement")?;
+    assert!(!rendering.superseded);
+    rendering.superseded = true;
+    rendering.job.cancel();
     observe_terminal(&mut session, &wake)?;
     assert!(session.failed.is_none());
     assert!(session.presented.is_some());
@@ -133,11 +154,12 @@ fn panning_a_preview_cancels_pending_finished_refinement_without_failing_the_vie
 }
 
 #[test]
-fn uncovered_preview_work_reaches_cancelled_terminal_without_failing_viewer()
+fn uncovered_pan_work_reaches_cancelled_terminal_without_failing_viewer()
 -> Result<(), Box<dyn Error>> {
-    let Fixture { mut session, wake, _directory, .. } = preparing(Reconstruction::Preview)?;
+    let Fixture { mut session, wake, _directory, .. } =
+        preparing(Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3))?;
     session.input(Input::Tool(ToolInput::Button { button: ToolButton::Primary, pressed: true }))?;
-    session.input(Input::Tool(ToolInput::Pointer([129.0, 3.0])))?;
+    session.input(Input::Tool(ToolInput::Pointer([-129.0, 3.0])))?;
     observe_terminal(&mut session, &wake)?;
     assert!(session.failed.is_none());
     Ok(())
