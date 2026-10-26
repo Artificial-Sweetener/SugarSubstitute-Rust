@@ -5,7 +5,7 @@ use super::*;
 use std::sync::{Condvar, Mutex, atomic::AtomicBool};
 
 #[derive(Default)]
-struct Wake {
+pub(super) struct Wake {
     count: Mutex<u64>,
     changed: Condvar,
 }
@@ -13,6 +13,39 @@ impl CompletionWake for Wake {
     fn wake(&self) -> Result<(), ExecutionError> {
         *self.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner) += 1;
         self.changed.notify_all();
+        Ok(())
+    }
+}
+impl Wake {
+    /// Observe a real terminal boundary without sleeps or depending on worker speed.
+    pub(super) fn completion<T, E>(
+        &self,
+        client: &ExecutionClient,
+        job: &mut OwnedJob<T, E>,
+    ) -> Result<JobCompletion<T, E>, Box<dyn Error>> {
+        loop {
+            let observed = self.revision();
+            client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
+            if let Some(completion) = job.try_take_completion() {
+                return Ok(completion);
+            }
+            self.wait_after(observed)?;
+        }
+    }
+    /// Snapshot completion notification revision before inspecting the owned typed result.
+    pub(super) fn revision(&self) -> u64 {
+        *self.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+    /// Bound a stalled external observer while remaining insensitive to ordinary scheduling order.
+    pub(super) fn wait_after(&self, observed: u64) -> Result<(), Box<dyn Error>> {
+        let count = self.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let (count, timeout) = self
+            .changed
+            .wait_timeout_while(count, Duration::from_secs(10), |count| *count == observed)
+            .map_err(|cause| std::io::Error::other(cause.to_string()))?;
+        if timeout.timed_out() && *count == observed {
+            return Err("Preparation terminal delivery did not arrive".into());
+        }
         Ok(())
     }
 }
@@ -52,7 +85,8 @@ fn preparing(filter: Filter) -> Result<Fixture, Box<dyn Error>> {
     let task_release = release.clone();
     let job = client.submit_cpu(&scope, spec, move |_| PreparationBoundary(task_release))?;
     session.runtime = Some(Runtime { owner, client, scope });
-    session.rendering = Some(Rendering { job, filter, superseded: false });
+    session.rendering =
+        Some(Rendering { job, filter, superseded: false, input_at: Duration::ZERO });
     session.presented = Some(Presented {
         view: session.tools.navigation().viewport(),
         filter: Filter::Nearest,
@@ -60,12 +94,13 @@ fn preparing(filter: Filter) -> Result<Fixture, Box<dyn Error>> {
         source_revision: 0,
         damage: DamagePlan::full(session.tools.navigation().viewport().surface()),
         base: None,
+        input_at: Duration::ZERO,
     });
     Ok(Fixture { session, wake, release, _directory: directory })
 }
 fn observe_terminal(session: &mut Session, wake: &Wake) -> Result<(), Box<dyn Error>> {
     while session.rendering.is_some() {
-        let observed = *wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let observed = wake.revision();
         session.consume_frame()?;
         let runtime = session.runtime.as_ref().ok_or("Missing execution")?;
         runtime.client.drain_completions(std::num::NonZeroUsize::MIN)?;
@@ -73,14 +108,7 @@ fn observe_terminal(session: &mut Session, wake: &Wake) -> Result<(), Box<dyn Er
         if session.rendering.is_none() {
             break;
         }
-        let count = wake.count.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let (_count, timeout) = wake
-            .changed
-            .wait_timeout_while(count, Duration::from_secs(10), |count| *count == observed)
-            .map_err(|cause| std::io::Error::other(cause.to_string()))?;
-        if timeout.timed_out() {
-            return Err("Preparation terminal delivery did not arrive".into());
-        }
+        wake.wait_after(observed)?;
     }
     Ok(())
 }

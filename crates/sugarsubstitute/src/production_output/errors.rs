@@ -11,7 +11,7 @@ use sugarsubstitute_supervision::lifecycle_protocol::ProtocolError;
 #[derive(Debug)]
 pub(crate) enum OutputError {
     /// Central finite-job admission failed before the parser ran.
-    Input(sugarsubstitute_execution::BlockingInputError),
+    Input(sugarsubstitute_execution::OwnedInputError),
     /// The actual execution clock failed before finite parser admission.
     Clock(sugarsubstitute_contracts::execution::ExecutionError),
     /// Checked finite parser deadline addition overflowed.

@@ -3,7 +3,7 @@
 //! Disposable nearest display pixels sampled once from a canonical retained viewport.
 use crate::{CpuSurface, RenderError, cpu::check};
 use sugarsubstitute_canvas::{FrameStamp, ViewProjection};
-use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
+use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim, MemoryLease};
 use sugarsubstitute_image_ops::{ImageError, Pixel, SrgbEncoder};
 
 /// Admitted physical source indices shared by software and native GPU display projection.
@@ -79,15 +79,35 @@ pub struct ProjectionBuffer {
     pixels: Vec<u32>,
     _memory: MemoryClaim,
 }
+/// Paired exclusive CPU projection allocations retained by one renderer reservation.
+/// One buffer may remain in native presentation while the other is filled on its worker.
+pub struct ProjectionBuffers {
+    first: ProjectionBuffer,
+    second: ProjectionBuffer,
+}
+impl ProjectionBuffers {
+    /// Bind two separately admitted allocations into one exclusive handoff value.
+    pub(crate) fn new(first: ProjectionBuffer, second: ProjectionBuffer) -> Self {
+        Self { first, second }
+    }
+    /// Consume the pair into its two independently owned reusable allocations.
+    pub fn into_parts(self) -> (ProjectionBuffer, ProjectionBuffer) {
+        (self.first, self.second)
+    }
+}
 impl ProjectionBuffer {
-    /// Admit one output-sized allocation for this physical projection target.
+    /// Admit one output-sized allocation from the retained presentation lease on this worker.
+    /// Control remains with the current job; recycling never creates another reservation.
     /// # Errors
     /// Preserves original allocation/admission/control failures before any frame is published.
-    pub fn new(view: ViewProjection, context: &JobContext) -> Result<Self, RenderError> {
+    pub fn new(
+        view: ViewProjection,
+        memory: &MemoryLease,
+        context: &JobContext,
+    ) -> Result<Self, RenderError> {
         check(context)?;
         let extent = view.target().surface();
-        let memory = context
-            .memory()
+        let memory = memory
             .claim(extent.pixels() * 4 + size_of::<CpuProjection>() as u64 + 128)
             .map_err(ImageError::from)?;
         let mut pixels = Vec::new();

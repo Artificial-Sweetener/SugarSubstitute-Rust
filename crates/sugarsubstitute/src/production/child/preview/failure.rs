@@ -12,7 +12,7 @@ pub(in crate::production::child) enum PreviewError {
     Deadline,
     Capacity,
     Execution(ExecutionError),
-    Admission(sugarsubstitute_execution::BlockingInputError),
+    Admission(sugarsubstitute_execution::OwnedInputError),
     JobIdentity(IdentityError),
 }
 impl fmt::Display for PreviewError {

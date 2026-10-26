@@ -5,6 +5,27 @@ use super::*;
 use crate::TileRetention;
 
 #[test]
+fn evaluator_pressure_eviction_preserves_outside_pixels_and_releases_only_cache_custody()
+-> TestResult {
+    run(MEMORY, |context| {
+        let extent = Extent::new(128, 128)?;
+        let (graph, source) = graph(context, extent)?;
+        let mut evaluator = Evaluator::new(graph, Grid { extent }, 4, context.memory())?;
+        let outside = evaluator.tile(source, 0, 0, context)?;
+        let expected = outside.pixel(17, 19);
+        assert!(!evaluator.evict_one());
+        assert_eq!(outside.pixel(17, 19), expected);
+        drop(outside);
+        assert!(evaluator.evict_one());
+        assert_eq!(evaluator.stats().resident_tiles, 0);
+        assert!(!evaluator.evict_one());
+        let reconstructed = evaluator.tile(source, 0, 0, context)?;
+        assert_eq!(reconstructed.pixel(17, 19), expected);
+        Ok(())
+    })
+}
+
+#[test]
 fn cache_only_aliases_release_payloads_but_external_results_keep_the_original_charge() -> TestResult
 {
     run(MEMORY, |context| {

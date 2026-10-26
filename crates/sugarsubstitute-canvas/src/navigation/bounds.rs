@@ -25,6 +25,13 @@ impl Navigation {
         let Some(content) = self.content else {
             return Ok(view);
         };
+        if self.mode == ZoomMode::Fit {
+            let mut fitted = view;
+            fitted.fit(content)?;
+            if view.zoom() == fitted.zoom() {
+                return Ok(fitted);
+            }
+        }
         let image = [content.width(), content.height()];
         let panel = [view.surface().width(), view.surface().height()];
         let mut delta = [0.0; 2];

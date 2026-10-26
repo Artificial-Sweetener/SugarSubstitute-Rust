@@ -169,7 +169,7 @@ impl ProductionActivation {
             projection::project,
         ) {
             Ok(job) => job,
-            Err(sugarsubstitute_execution::BlockingInputError::Admission(
+            Err(sugarsubstitute_execution::OwnedInputError::Admission(
                 AdmissionError::QueueSaturated { .. } | AdmissionError::MemorySaturated { .. },
             )) => {
                 return Ok(());

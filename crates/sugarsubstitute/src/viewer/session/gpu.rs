@@ -74,7 +74,7 @@ impl Session {
         if self.options.gpu.is_some() {
             self.gpu_front.as_ref().and_then(GpuSurface::current)
         } else {
-            self.front.as_ref().and_then(CpuSurface::current)
+            self.front.as_ref().and_then(|surface| surface.current())
         }
     }
 }

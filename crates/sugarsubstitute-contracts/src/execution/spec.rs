@@ -20,6 +20,8 @@ pub enum Operation {
     FramePrepare,
     /// Decode bounded image storage.
     ImageDecode,
+    /// Evaluate an image-operation graph independently of interactive presentation.
+    ImageEvaluate,
     /// Perform finite infrastructure work.
     Infrastructure,
 }
@@ -37,7 +39,7 @@ pub enum JobClass {
     InfrastructureLifecycle,
     /// Interactive presentation preparation capacity.
     CpuInteractive,
-    /// Background image decoding capacity.
+    /// Background image decoding and graph evaluation capacity.
     CpuDecode,
     /// Private native observations admitted independently of asynchronous I/O.
     NativeObservation,
@@ -110,7 +112,7 @@ impl JobSpec {
                         | JobClass::NativeObservation
                 )
                 | (Operation::FramePrepare, JobClass::CpuInteractive)
-                | (Operation::ImageDecode, JobClass::CpuDecode)
+                | (Operation::ImageDecode | Operation::ImageEvaluate, JobClass::CpuDecode)
                 | (
                     Operation::Infrastructure,
                     JobClass::IoOrdinary
@@ -142,6 +144,7 @@ mod tests {
             ),
             (Operation::FramePrepare, vec![JobClass::CpuInteractive]),
             (Operation::ImageDecode, vec![JobClass::CpuDecode]),
+            (Operation::ImageEvaluate, vec![JobClass::CpuDecode]),
             (
                 Operation::Infrastructure,
                 vec![

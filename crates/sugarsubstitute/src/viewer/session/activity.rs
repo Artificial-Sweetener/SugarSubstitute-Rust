@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Admit coalesced viewer work and owned cleanup through the existing execution boundary.
 use super::*;
-use sugarsubstitute_execution::BlockingInputError;
+use sugarsubstitute_execution::OwnedInputError;
 
 impl Session {
     /// Drain metadata and typed completions before submitting the latest application intent.
@@ -17,14 +17,25 @@ impl Session {
             }
         }
         self.consume_initialization()?;
-        self.consume_device()?;
-        self.consume_load()?;
-        self.consume_frame()?;
+        if self.pending_retirement.is_none() {
+            self.consume_device()?;
+        }
+        if self.pending_retirement.is_none() {
+            self.consume_load()?;
+        }
+        if self.pending_retirement.is_none() {
+            self.consume_frame()?;
+        }
+        if self.pending_retirement.is_none() {
+            self.consume_display()?;
+        }
         if let Some(outcome) = Self::take(&mut self.retirement) {
             if let Err(cause) = Self::terminal(outcome) {
                 self.fail(cause);
             }
-            self.retirement_deadline = None;
+            if self.pending_retirement.is_none() {
+                self.retirement_deadline = None;
+            }
         }
         if self.closing {
             self.advance_close()?;
@@ -51,6 +62,9 @@ impl Session {
             }
             return Ok(());
         }
+        if self.failed.is_none() {
+            self.submit_display()?;
+        }
         if self.loading.is_none() && self.rendering.is_none() && self.failed.is_none() {
             if self.gpu_presentation.is_some() || self.awaiting_gpu.is_some() {
                 return Ok(());
@@ -75,8 +89,9 @@ impl Session {
         )?;
         let anchor = self.options.cache.clone();
         let capture = self.options.capture;
+        let verify_native = self.options.verify_native;
         match runtime.client.submit_blocking(&runtime.scope, spec, move |context| {
-            work::initialize(anchor, capture, &context)
+            work::initialize(anchor, capture, verify_native, &context)
         }) {
             Ok(job) => {
                 self.initializing = Some(job);
@@ -110,7 +125,7 @@ impl Session {
             },
         ) {
             Ok(job) => self.loading = Some(Loading { intent, expected, job }),
-            Err(BlockingInputError::Admission(cause)) if retryable(&cause) => {}
+            Err(OwnedInputError::Admission(cause)) if retryable(&cause) => {}
             Err(cause) => return Err(cause.into()),
         }
         Ok(())
@@ -122,14 +137,28 @@ impl Session {
         let document = scene.document.snapshot();
         let identity = (document.identity(), document.revision());
         let filter = self.filter();
-        if !self.expose_pending
+        if self.native_target.is_some()
+            && filter == Filter::Lanczos3
+            && self.presented.as_ref().is_some_and(|shown| shown.filter == Filter::Nearest)
+            && self.display_source != self.current_frame()
+        {
+            return Ok(());
+        }
+        if !self.initial_preview
+            && self.tools.navigation().resampling()
+            && (self.gpu_front.is_some() || self.front.is_some())
             && self.presented.as_ref().is_some_and(|shown| {
-                shown.view == self.tools.navigation().viewport()
-                    && shown.filter == filter
-                    && shown.document == identity
-                    && shown.source_revision == scene.source_revision
+                shown.document == identity && shown.source_revision == scene.source_revision
             })
         {
+            return Ok(());
+        }
+        if self.presented.as_ref().is_some_and(|shown| {
+            shown.view == self.tools.navigation().viewport()
+                && shown.filter == filter
+                && shown.document == identity
+                && shown.source_revision == scene.source_revision
+        }) {
             return Ok(());
         }
         let extent = self.tools.navigation().viewport().surface();
@@ -146,6 +175,10 @@ impl Session {
             self.gpu_front.as_ref().is_none_or(|surface| surface.extent() != extent)
         } else {
             self.front.as_ref().is_none_or(|surface| surface.extent() != extent)
+                || self.display_buffers.iter().filter(|slot| slot.is_some()).count()
+                    + usize::from(self.cpu_projection.is_some())
+                    + usize::from(self.displaying.is_some())
+                    < 2
         };
         let base =
             if replace_surface { None } else { compatible.and_then(|_| self.current_frame()) };
@@ -162,11 +195,11 @@ impl Session {
                 .ok_or("Canvas patch reservation overflow")?
         };
         let spec = self.spec(
-            Operation::FramePrepare,
-            JobClass::CpuInteractive,
+            Operation::ImageEvaluate,
+            JobClass::CpuDecode,
             bytes,
             Duration::from_secs(300),
-            Some(ReplacementKey { surface: target.surface, revision: target.generation }),
+            None,
         )?;
         let resources =
             self.resources.as_ref().ok_or("Canvas preparation resources are unavailable")?.clone();
@@ -189,10 +222,16 @@ impl Session {
             gpu_surface,
             finished: false,
             cpu: None,
+            display_buffers: None,
             started: None,
         }) {
             Ok(job) => {
-                self.rendering = Some(Rendering { job, filter, superseded: false });
+                self.rendering = Some(Rendering {
+                    job,
+                    filter,
+                    superseded: false,
+                    input_at: self.input_observed,
+                });
                 self.frame_revision = next;
             }
             Err(cause) if retryable(&cause) => {}
@@ -225,7 +264,7 @@ impl Session {
             },
         ) {
             Ok(job) => self.retirement = Some(job),
-            Err(BlockingInputError::Admission(cause)) if retryable(&cause) => {}
+            Err(OwnedInputError::Admission(cause)) if retryable(&cause) => {}
             Err(cause) => return Err(cause.into()),
         }
         Ok(())
@@ -236,6 +275,7 @@ impl Session {
             || self.device_job.is_some()
             || self.loading.is_some()
             || self.rendering.is_some()
+            || self.displaying.is_some()
             || self.pending_retirement.is_some()
             || self.retirement.is_some()
         {
@@ -246,13 +286,17 @@ impl Session {
             || self.front.is_some()
             || self.gpu_front.is_some()
             || self.gpu_presentation.is_some()
+            || self.cpu_projection.is_some()
+            || self.display_buffers.iter().any(Option::is_some)
         {
             let retired = Retired {
                 _scene: self.scene.take(),
                 _resources: self.resources.take(),
                 _front: self.front.take(),
                 _gpu_front: self.gpu_front.take(),
-                _presentation: self.gpu_presentation.take(),
+                _presentation: self.gpu_presentation.take().map(|presentation| presentation.frame),
+                _projection: self.cpu_projection.take(),
+                _buffers: std::mem::take(&mut self.display_buffers),
                 ..Default::default()
             };
             self.presented = None;

@@ -10,7 +10,7 @@ use sugarsubstitute_contracts::{
     configuration::ConfigurationError,
     execution::{AdmissionError, ExecutionError, JobClass, JobOutcome, JobSpec, Operation},
 };
-use sugarsubstitute_execution::BlockingInputError;
+use sugarsubstitute_execution::OwnedInputError;
 #[derive(Default)]
 struct ScopeWake {
     revision: Mutex<u64>,
@@ -167,7 +167,7 @@ fn mailbox_wake_failure_retains_original_and_runner_observes_cleanup_after_admis
         &mut rejected_input,
         |value, _| Ok::<_, std::io::Error>(value),
     );
-    assert!(matches!(rejected, Err(BlockingInputError::Admission(AdmissionError::ShuttingDown))));
+    assert!(matches!(rejected, Err(OwnedInputError::Admission(AdmissionError::ShuttingDown))));
     assert!(Arc::ptr_eq(rejected_input.as_ref().ok_or("Rejected input was lost")?, &identity));
     drop(completion);
     drop(job);
@@ -233,7 +233,7 @@ fn actual_runner_native_rejects_finite_box_and_real_finite_scope_preserves_origi
     });
     assert!(matches!(
         rejected,
-        Err(BlockingInputError::Admission(AdmissionError::WrongClass {
+        Err(OwnedInputError::Admission(AdmissionError::WrongClass {
             operation: Operation::NativeLifecycle,
             class: JobClass::InfrastructureLifecycle
         }))

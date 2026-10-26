@@ -8,6 +8,8 @@ use std::io::{Read, Seek, SeekFrom};
 use sugarsubstitute_contracts::execution::{JobContext, MemoryLease};
 use sugarsubstitute_image_ops::{AssetId, ImageError, Pixel, RasterSource, Region, TILE_EDGE};
 
+const MAX_ENCODED_BYTES: usize = 1024 * 1024 - 128;
+
 /// Actual source work, excluding decoded tiles retained by the image-ops evaluator.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct ArchiveStats {
@@ -24,6 +26,7 @@ pub struct RasterArchive<R> {
     encoded: Buffer<u8>,
     linear: Buffer<f32>,
     stats: ArchiveStats,
+    position: Option<u64>,
 }
 impl<R: Read + Seek> RasterArchive<R> {
     /// Verify expected source semantics and complete archive length before region access.
@@ -42,16 +45,30 @@ impl<R: Read + Seek> RasterArchive<R> {
         cache_read(reader.read_exact(&mut bytes))?;
         let descriptor = RasterDescriptor::from_header(&bytes)
             .map_err(|cause| ImportError::Corrupt(Box::new(cause)))?;
-        if descriptor != expected || reader.seek(SeekFrom::End(0))? != descriptor.layout().length()
-        {
+        let length = reader.seek(SeekFrom::End(0))?;
+        if descriptor != expected || length != descriptor.layout().length() {
             return Err(ImportError::Corrupt(Box::new(ImportError::Invalid(
                 "Reconstructed source differs from its original content identity",
             ))));
         }
         let layout = descriptor.layout();
-        let maximum =
-            (layout.region(0, 0)?.pixels() * u64::from(layout.packing().bytes())) as usize;
-        let encoded = Buffer::new(maximum + 32, 0, memory)?;
+        let maximum_chunk = usize::try_from(
+            layout.region(0, 0)?.pixels() * u64::from(layout.packing().bytes()) + 32,
+        )
+        .map_err(|_| ImportError::Invalid("Image source chunk exceeds address space"))?;
+        if maximum_chunk > MAX_ENCODED_BYTES {
+            return Err(ImportError::Invalid("Image source chunk exceeds bounded workspace"));
+        }
+        let stripe = layout
+            .stripe_bytes()
+            .checked_add(
+                usize::try_from(layout.columns())
+                    .map_err(|_| ImportError::Invalid("Image source columns exceed address space"))?
+                    .checked_mul(32)
+                    .ok_or(ImportError::Invalid("Image source stripe size overflow"))?,
+            )
+            .ok_or(ImportError::Invalid("Image source stripe size overflow"))?;
+        let encoded = Buffer::new(maximum_chunk.max(stripe.min(MAX_ENCODED_BYTES)), 0, memory)?;
         let entries = match layout.packing() {
             Packing::Rgba8 => 256,
             Packing::Rgba16 => 65536,
@@ -64,7 +81,14 @@ impl<R: Read + Seek> RasterArchive<R> {
             *value = descriptor.transfer().linear(index as f64 / (entries - 1) as f64);
         }
         crate::check(context)?;
-        Ok(Self { reader, descriptor, encoded, linear, stats: ArchiveStats::default() })
+        Ok(Self {
+            reader,
+            descriptor,
+            encoded,
+            linear,
+            stats: ArchiveStats::default(),
+            position: Some(length),
+        })
     }
     /// Exact original-content and source-interpretation contract.
     pub const fn descriptor(&self) -> RasterDescriptor {
@@ -85,8 +109,7 @@ impl<R: Read + Seek> RasterArchive<R> {
         crate::check(context)?;
         let chunk = layout.region(column, stripe)?;
         let length = chunk.pixels() as usize * stride;
-        self.reader.seek(SeekFrom::Start(layout.offset(column, stripe)?))?;
-        cache_read(self.reader.read_exact(&mut self.encoded.data[..length + 32]))?;
+        self.read_encoded(layout.offset(column, stripe)?, length + 32)?;
         let expected: [u8; 32] = self.encoded.data[..32]
             .try_into()
             .map_err(|_| ImportError::Invalid("Source chunk checksum width changed"))?;
@@ -99,6 +122,27 @@ impl<R: Read + Seek> RasterArchive<R> {
             ))));
         }
         Ok(chunk)
+    }
+    /// Load one bounded contiguous archive span, preserving sequential cursor position.
+    fn read_encoded(&mut self, offset: u64, length: usize) -> Result<(), ImportError> {
+        if length > self.encoded.data.len() {
+            return Err(ImportError::Invalid("Image source read exceeds bounded workspace"));
+        }
+        if self.position != Some(offset) {
+            self.position = None;
+            let position = self.reader.seek(SeekFrom::Start(offset))?;
+            if position != offset {
+                return Err(ImportError::Invalid("Image source seek reached another offset"));
+            }
+            self.position = Some(position);
+        }
+        let end = offset
+            .checked_add(length as u64)
+            .ok_or(ImportError::Invalid("Image source read offset overflow"))?;
+        self.position = None;
+        cache_read(self.reader.read_exact(&mut self.encoded.data[..length]))?;
+        self.position = Some(end);
+        Ok(())
     }
     fn payload(&self) -> &[u8] {
         &self.encoded.data[32..]

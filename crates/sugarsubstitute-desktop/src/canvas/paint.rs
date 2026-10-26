@@ -65,7 +65,11 @@ impl Painter {
             && clip.top <= 0
             && clip.right >= extent.width() as i32
             && clip.bottom >= extent.height() as i32;
-        let repair = !expose
+        if frame.kind == CpuFrameKind::Projected {
+            self.last = None;
+        }
+        let repair = frame.kind == CpuFrameKind::Prepared
+            && !expose
             && complete
             && self.last.is_some()
             && self.last == frame.base
@@ -96,7 +100,8 @@ impl Painter {
         } else {
             copied = upload(dc, frame, extent, extent.region())?;
         }
-        self.last = (copied && complete).then_some(frame.target);
+        self.last =
+            (frame.kind == CpuFrameKind::Prepared && copied && complete).then_some(frame.target);
         self.extent = Some(extent);
         Ok(())
     }

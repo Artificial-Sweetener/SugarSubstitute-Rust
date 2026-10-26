@@ -690,7 +690,7 @@ rationale = "The upstream derivative compares numeric HTTP statusCode framing an
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/canvas/windows.rs"
-source_sha256 = "sha256:840df3a911be05216ac7d3cd4089da9f4f68b4f1c768e67cfba31637c192679b"
+source_sha256 = "sha256:6a109f14b40a6acbe5978b6dd1b238932b2aea223df1d3eb60cf91bd3020aec1"
 kind = "native"
 rationale = "Native canvas window consumes catalog-owned titles/status from the application lifetime; input observations preserve authored source paths without constructing product copy."
 

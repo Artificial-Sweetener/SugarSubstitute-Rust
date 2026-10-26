@@ -3,7 +3,7 @@
 //! Release coordinator installation custody on the existing cleanup executor before it joins.
 use super::*;
 use std::io;
-use sugarsubstitute_execution::BlockingInputError;
+use sugarsubstitute_execution::OwnedInputError;
 
 /// Native file guards and their original allocation remain together until worker destruction.
 struct Custody {
@@ -15,7 +15,7 @@ struct Custody {
 pub(super) struct Release {
     job: Option<OwnedJob<(), io::Error>>,
     terminal: Option<terminal::Terminal>,
-    admission: Option<BlockingInputError>,
+    admission: Option<OwnedInputError>,
     confirmed: bool,
 }
 impl Release {

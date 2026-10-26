@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Verify retained viewing against complete reconstruction and publish explicit proof artifacts.
+mod presentation;
 use super::{
     options::ProofPaths,
     work::{Resources, Source},
     work_error::WorkError,
 };
+use presentation::{PresentationEvidence, PresentationTimingContext};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::io::Write;
@@ -32,10 +34,15 @@ pub(super) struct Input {
     pub(super) document: DocumentSnapshot,
     pub(super) source: Option<Source>,
     pub(super) view: Viewport,
-    pub(super) front: CpuSurface,
+    pub(super) front: std::sync::Arc<CpuSurface>,
     pub(super) samples: [Option<Sample>; 32],
     pub(super) paths: ProofPaths,
     pub(super) adapter: Option<sugarsubstitute_image_gpu::AdapterDescriptor>,
+    pub(super) presentations: sugarsubstitute_canvas_render::PresentationStats,
+    pub(super) motion: Option<sugarsubstitute_canvas_render::PresentationStats>,
+    pub(super) warmup: Option<sugarsubstitute_canvas_render::PresentationStats>,
+    pub(super) canonical_gpu_snapshot_readback: bool,
+    pub(super) native_gpu_display_verification_readback: bool,
 }
 #[derive(Serialize)]
 struct Metrics<'a> {
@@ -48,6 +55,11 @@ struct Metrics<'a> {
     complete_redraw_verified: bool,
     pixel_sha256: String,
     frames: &'a [Option<Sample>],
+    presentation_timing_context: PresentationTimingContext,
+    motion_requested_duration_nanoseconds: u64,
+    navigation_presentations: PresentationEvidence,
+    motion_and_fit_recovery_presentations: Option<PresentationEvidence>,
+    initial_settle_presentations: Option<PresentationEvidence>,
 }
 #[derive(Serialize)]
 struct AdapterEvidence<'a> {
@@ -58,7 +70,22 @@ struct AdapterEvidence<'a> {
 /// Reconstruct through the same DAG with no retained-frame repair, compare every display pixel,
 /// and stream PNG/JSON on the original admitted storage worker. Originals are never modified.
 pub(super) fn publish(input: Input, context: &JobContext) -> Result<(), WorkError> {
-    let Input { resources, document, source, view, front, samples, paths, adapter } = input;
+    let Input {
+        resources,
+        document,
+        source,
+        view,
+        front,
+        samples,
+        paths,
+        adapter,
+        presentations,
+        motion,
+        warmup,
+        canonical_gpu_snapshot_readback,
+        native_gpu_display_verification_readback,
+    } = input;
+    resources.release_graph_tiles()?;
     let target =
         front.current().ok_or_else(|| WorkError::invalid("Proof has no presented frame"))?;
     let mut renderer = CpuRenderer::new(super::work::SourcePort(source), 64, &resources.memory)?;
@@ -125,7 +152,7 @@ pub(super) fn publish(input: Input, context: &JobContext) -> Result<(), WorkErro
     .map_err(WorkError::new)?;
     let count = samples.iter().take_while(|sample| sample.is_some()).count();
     let metrics = Metrics {
-        schema_version: 1,
+        schema_version: 2,
         backend: adapter.as_ref().map_or("cpu", |adapter| match adapter.backend {
             sugarsubstitute_image_gpu::Backend::Vulkan => "vulkan",
             sugarsubstitute_image_gpu::Backend::Metal => "metal",
@@ -141,6 +168,15 @@ pub(super) fn publish(input: Input, context: &JobContext) -> Result<(), WorkErro
         complete_redraw_verified: true,
         pixel_sha256: fingerprint,
         frames: &samples[..count],
+        presentation_timing_context: PresentationTimingContext {
+            canonical_gpu_snapshot_readback,
+            native_gpu_display_verification_readback,
+        },
+        motion_requested_duration_nanoseconds: u64::try_from(paths.motion_duration.as_nanos())
+            .map_err(WorkError::new)?,
+        navigation_presentations: PresentationEvidence::new(presentations),
+        motion_and_fit_recovery_presentations: motion.map(PresentationEvidence::new),
+        initial_settle_presentations: warmup.map(PresentationEvidence::new),
     };
     write_artifact(
         &paths.metrics,

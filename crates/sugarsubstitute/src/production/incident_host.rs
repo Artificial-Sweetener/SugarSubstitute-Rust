@@ -21,7 +21,7 @@ use sugarsubstitute_contracts::{
     incident::*,
     lifecycle::{CoordinatorKey, ShutdownBudget},
 };
-use sugarsubstitute_execution::{BlockingInputError, ChargedBlockingInput, ExecutionClient};
+use sugarsubstitute_execution::{ChargedBlockingInput, ExecutionClient, OwnedInputError};
 use sugarsubstitute_supervision::coordinator_entry::{EntryError, VerifiedEntryNamespace};
 
 /// One unchanged original admitted controller reservation, in bytes.
@@ -129,7 +129,7 @@ impl fmt::Display for HostIssue {
 impl Error for HostIssue {}
 
 enum HostCause {
-    Admission(BlockingInputError),
+    Admission(OwnedInputError),
     Identity(IdentityError),
     Decision(IncidentDecisionError),
     Recovery(recovery::RecoveryAdoptionCause),

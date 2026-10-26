@@ -3,7 +3,7 @@
 //! Reproject the genuine registered archive once and retain the successful grant/completion.
 use super::*;
 use sugarsubstitute_contracts::execution::AdmissionError;
-use sugarsubstitute_execution::BlockingInputError;
+use sugarsubstitute_execution::OwnedInputError;
 impl RecoveryPreparation {
     pub(super) fn prepare_projection(
         &mut self,
@@ -57,7 +57,7 @@ impl RecoveryPreparation {
                 super::super::projection::project,
             ) {
                 Ok(job) => self.job = Some(job),
-                Err(BlockingInputError::Admission(
+                Err(OwnedInputError::Admission(
                     AdmissionError::QueueSaturated { .. } | AdmissionError::MemorySaturated { .. },
                 )) => return Ok(()),
                 Err(cause) => return Err(cause.into()),

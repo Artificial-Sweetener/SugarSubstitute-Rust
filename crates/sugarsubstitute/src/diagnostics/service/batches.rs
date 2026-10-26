@@ -25,7 +25,7 @@ impl std::error::Error for ContentionDeadline {
 /// Preserve the originating writer rejection alongside a later execution admission failure.
 #[derive(Debug)]
 struct AdmissionFailure {
-    cause: sugarsubstitute_execution::BlockingInputError,
+    cause: sugarsubstitute_execution::OwnedInputError,
     _contention: Option<io::Error>,
 }
 impl std::fmt::Display for AdmissionFailure {

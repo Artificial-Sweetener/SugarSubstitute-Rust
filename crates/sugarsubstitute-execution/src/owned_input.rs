@@ -9,25 +9,25 @@ use crate::{
 };
 use std::{error::Error, fmt, sync::Arc};
 use sugarsubstitute_contracts::execution::{
-    AdmissionError, JobContext, JobSpec, MemoryClaim, OwnedJob, Scope,
+    AdmissionError, CpuTask, JobContext, JobSpec, MemoryClaim, OwnedJob, Scope,
 };
 /// Owned-input rejection. A rejected submission leaves the complete input unchanged.
 #[derive(Debug)]
-pub enum BlockingInputError {
+pub enum OwnedInputError {
     /// No original input was supplied; admission has not begun.
     MissingInput,
     /// Actual admission rejected the original input before ownership transfer.
     Admission(AdmissionError),
 }
-impl fmt::Display for BlockingInputError {
+impl fmt::Display for OwnedInputError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::MissingInput => f.write_str("Blocking input is absent"),
+            Self::MissingInput => f.write_str("Owned job input is absent"),
             Self::Admission(cause) => cause.fmt(f),
         }
     }
 }
-impl Error for BlockingInputError {
+impl Error for OwnedInputError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::MissingInput => None,
@@ -66,14 +66,43 @@ impl ExecutionClient {
         spec: JobSpec,
         input: &mut Option<I>,
         factory: M,
-    ) -> Result<OwnedJob<T, E>, BlockingInputError>
+    ) -> Result<OwnedJob<T, E>, OwnedInputError>
     where
         T: Send + 'static,
         E: Send + 'static,
         I: Send + 'static,
         M: FnOnce(I, JobContext) -> Result<T, E> + Send + 'static,
     {
-        self.submit_input(scope, spec, input, |input, _| take(input), factory)
+        self.submit_blocking_input(scope, spec, input, |input, _| take(input), factory)
+    }
+    /// Transfer exclusive reusable state into a cooperative CPU task after actual admission.
+    /// Rejection leaves the identical input in the caller. Factories and task destruction run
+    /// on execution workers; CPU class, replacement, cancellation and yield rules stay unchanged.
+    /// This never waits and creates no scheduler or additional worker.
+    /// # Errors
+    /// Missing input or actual admission rejection preserves the complete original caller Option.
+    pub fn submit_cpu_owned_input<T, E, I, C, M>(
+        &self,
+        scope: &Scope,
+        spec: JobSpec,
+        input: &mut Option<I>,
+        factory: M,
+    ) -> Result<OwnedJob<T, E>, OwnedInputError>
+    where
+        T: Send + 'static,
+        E: Send + 'static,
+        I: Send + 'static,
+        C: CpuTask<T, E>,
+        M: FnOnce(I, JobContext) -> C + Send + 'static,
+    {
+        let mut pending = Some(factory);
+        self.submit_input(scope, spec, RequestKind::Cpu, input, |input, job, _| {
+            let value = take(input)?;
+            let factory = pending.take().ok_or_else(missing)?;
+            Ok(Work::Cpu(Box::new(move |context, started| {
+                crate::cpu::work(job, context, started, move |context| factory(value, context))
+            })))
+        })
     }
     /// Fund the exact input box before allocation or transfer into the same finite worker.
     /// The constructor claims `size_of::<I>()` from the actual admitted reservation before
@@ -89,14 +118,14 @@ impl ExecutionClient {
         spec: JobSpec,
         input: &mut Option<I>,
         factory: M,
-    ) -> Result<OwnedJob<T, E>, BlockingInputError>
+    ) -> Result<OwnedJob<T, E>, OwnedInputError>
     where
         T: Send + 'static,
         E: Send + 'static,
         I: Send + 'static,
         M: FnOnce(ChargedBlockingInput<I>, JobContext) -> Result<T, E> + Send + 'static,
     {
-        self.submit_input(
+        self.submit_blocking_input(
             scope,
             spec,
             input,
@@ -110,14 +139,15 @@ impl ExecutionClient {
             factory,
         )
     }
-    fn submit_input<T, E, I, V, P, M>(
+    /// Preserve first returned failures for blocking work through the shared ownership transaction.
+    fn submit_blocking_input<T, E, I, V, P, M>(
         &self,
         scope: &Scope,
         spec: JobSpec,
         input: &mut Option<I>,
         prepare: P,
         factory: M,
-    ) -> Result<OwnedJob<T, E>, BlockingInputError>
+    ) -> Result<OwnedJob<T, E>, OwnedInputError>
     where
         T: Send + 'static,
         E: Send + 'static,
@@ -126,54 +156,55 @@ impl ExecutionClient {
         P: FnOnce(&mut Option<I>, &JobContext) -> Result<V, AdmissionError>,
         M: FnOnce(V, JobContext) -> Result<T, E> + Send + 'static,
     {
-        if input.is_none() {
-            return Err(BlockingInputError::MissingInput);
-        }
-        // Reinstall a rejected factory before returning so its arbitrary owned captures
-        // drop only after the authoritative Core constructor has released its mutex.
         let mut pending_factory = Some(factory);
+        let mut pending_prepare = Some(prepare);
+        self.submit_input(scope, spec, RequestKind::Blocking, input, |input, job, context| {
+            let prepare = pending_prepare.take().ok_or_else(missing)?;
+            let value = prepare(input, context)?;
+            let factory = pending_factory.take().ok_or_else(missing)?;
+            Ok(Work::Blocking(Box::new(move |context, started| {
+                Box::pin(crate::blocking::run_source_first(job, context, started, move |context| {
+                    factory(value, context)
+                }))
+            })))
+        })
+    }
+    /// One queue/memory transaction for exclusive input; borrowed builders retain captures outside
+    /// Core's mutex on rejection. Only successful construction may consume the original input.
+    fn submit_input<T, E, I>(
+        &self,
+        scope: &Scope,
+        spec: JobSpec,
+        kind: RequestKind<'_>,
+        input: &mut Option<I>,
+        mut construct: impl FnMut(
+            &mut Option<I>,
+            Arc<Job<T, E>>,
+            &JobContext,
+        ) -> Result<Work, AdmissionError>,
+    ) -> Result<OwnedJob<T, E>, OwnedInputError>
+    where
+        T: Send + 'static,
+        E: Send + 'static,
+        I: Send + 'static,
+    {
+        if input.is_none() {
+            return Err(OwnedInputError::MissingInput);
+        }
         self.core
-            .admit_owned(
-                scope,
-                spec,
-                RequestKind::Blocking,
-                input,
-                |input, context, cancel, timing| {
-                    let Some(factory) = pending_factory.take() else {
-                        return Err((missing(), input));
-                    };
-                    let value = match prepare(input, &context) {
-                        Ok(value) => value,
-                        Err(cause) => {
-                            pending_factory = Some(factory);
-                            return Err((cause, input));
-                        }
-                    };
-                    let job = Job::new(
-                        scope.id(),
-                        spec,
-                        timing.admitted,
-                        cancel,
-                        Arc::downgrade(&self.core),
-                    );
-                    let owner = OwnedJob::new(scope.id(), spec, Box::new(JobHandle(job.clone())));
-                    let worker_job = job.clone();
-                    let work = Work::Blocking(Box::new(move |context, started| {
-                        Box::pin(crate::blocking::run_source_first(
-                            worker_job,
-                            context,
-                            started,
-                            move |context| factory(value, context),
-                        ))
-                    }));
-                    Ok((QueuedJob { context, job, work }, owner))
-                },
-            )
-            .map_err(|(cause, _input)| BlockingInputError::Admission(cause))
+            .admit_owned(scope, spec, kind, input, |input, context, cancel, timing| {
+                let job =
+                    Job::new(scope.id(), spec, timing.admitted, cancel, Arc::downgrade(&self.core));
+                let work =
+                    construct(input, job.clone(), &context).map_err(|cause| (cause, input))?;
+                let owner = OwnedJob::new(scope.id(), spec, Box::new(JobHandle(job.clone())));
+                Ok((QueuedJob { context, job, work }, owner))
+            })
+            .map_err(|(cause, _input)| OwnedInputError::Admission(cause))
     }
 }
 fn missing() -> AdmissionError {
-    AdmissionError::Unexpected(crate::runtime::error(BlockingInputError::MissingInput))
+    AdmissionError::Unexpected(crate::runtime::error(OwnedInputError::MissingInput))
 }
 fn take<I>(input: &mut Option<I>) -> Result<I, AdmissionError> {
     input.take().ok_or_else(missing)
@@ -182,6 +213,9 @@ fn take<I>(input: &mut Option<I>) -> Result<I, AdmissionError> {
 #[cfg(test)]
 #[path = "blocking_box_tests.rs"]
 mod box_tests;
+#[cfg(test)]
+#[path = "cpu_input_tests.rs"]
+mod cpu_tests;
 #[cfg(test)]
 #[path = "blocking_input_tests.rs"]
 mod tests;

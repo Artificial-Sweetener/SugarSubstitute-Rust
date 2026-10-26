@@ -64,9 +64,9 @@ pub(super) fn submit(
     scope: &Scope,
     id: JobId,
     input: &mut Option<MainConstruction>,
-) -> std::result::Result<MainJob, sugarsubstitute_execution::BlockingInputError> {
+) -> std::result::Result<MainJob, sugarsubstitute_execution::OwnedInputError> {
     let original =
-        input.as_ref().ok_or(sugarsubstitute_execution::BlockingInputError::MissingInput)?.original;
+        input.as_ref().ok_or(sugarsubstitute_execution::OwnedInputError::MissingInput)?.original;
     client.submit_blocking_owned_input(
         scope,
         JobSpec {

@@ -73,7 +73,7 @@ impl CpuTask<Report, Failure> for Task {
         let mapping = ViewProjection::new(self.view, target)?;
         let storage = match if reuse { self.scratch.take() } else { None } {
             Some(storage) => storage,
-            None => ProjectionBuffer::new(mapping, context)?,
+            None => ProjectionBuffer::new(mapping, context.memory(), context)?,
         };
         let frame = storage.project(
             stamp(self.phase as u64 + 2)?,

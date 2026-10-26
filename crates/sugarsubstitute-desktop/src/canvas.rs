@@ -36,30 +36,52 @@ mod windows;
 #[cfg(windows)]
 pub use windows::run;
 
-/// Borrowed opaque top-row-first sRGB words, `0xffRRGGBB`, with exact repair dependencies.
+/// Native meaning of a borrowed CPU viewport.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CpuFrameKind {
+    /// Canonical retained pixels that may use an exact preceding-frame repair dependency.
+    Prepared,
+    /// Complete transient display projection that must be uploaded without native pixel reuse.
+    Projected,
+}
+
+/// Borrowed opaque top-row-first sRGB words, `0xffRRGGBB`, with explicit pixel semantics.
 /// The application keeps the original execution-backed pixels alive for the complete borrow.
 pub struct CpuFrame<'a> {
+    /// Whether these pixels are canonical prepared output or a transient complete projection.
+    pub kind: CpuFrameKind,
+    /// `true` requires exactly one successful-upload acknowledgement from whichever paint route
+    /// presents this frame.
+    pub pending: bool,
     /// Retained frame represented by every pixel in this buffer.
     pub target: FrameStamp,
-    /// Native repair may blit only from this exact previously displayed frame.
+    /// Prepared native repair may blit only from this exact previously displayed frame.
+    /// Projected frames carry no base.
     pub base: Option<FrameStamp>,
-    /// Exact physical camera repair; exposure always uses the complete retained buffer.
+    /// Prepared physical camera repair, or one complete viewport region for a projection.
+    /// Exposure always uses the complete retained buffer.
     pub damage: &'a DamagePlan,
     /// Complete immutable retained viewport, including valid pixels outside dirty rectangles.
     pub pixels: &'a [u32],
 }
 impl CpuFrame<'_> {
     /// Validate complete source dimensions and dependency shape before any native pixel effect.
+    /// Projected frames are complete standalone viewports and cannot carry exact repair state.
     /// # Errors
     /// Rejects incomplete pixel storage, unsupported dimensions or inconsistent frame identities.
     pub fn validate(&self) -> Result<Extent, DesktopError> {
         let extent = self.damage.dirty().surface();
+        let invalid_projection = self.kind == CpuFrameKind::Projected
+            && (self.base.is_some()
+                || self.damage.blit().is_some()
+                || self.damage.dirty().regions().ne([extent.region()]));
         if self.pixels.len() as u64 != extent.pixels()
             || extent.width() > 16384
             || extent.height() > 16384
             || self.base.is_some_and(|base| {
                 base.surface != self.target.surface || base.generation >= self.target.generation
             })
+            || invalid_projection
         {
             return Err(DesktopError::message(
                 "canvas_frame",
@@ -141,6 +163,11 @@ pub trait Lifetime {
     fn poll(&mut self, elapsed: Duration) -> Result<(), Box<dyn Error>>;
     /// Borrow the latest complete retained CPU viewport.
     fn frame(&self) -> Option<CpuFrame<'_>>;
+    /// Acknowledge successful synchronous upload of a new CPU frame to the native surface.
+    /// This confirms native pixel acceptance on the UI thread, not physical display scanout.
+    /// # Errors
+    /// Rejects foreign, duplicate or out-of-order desktop acknowledgements.
+    fn did_present_cpu(&mut self, target: FrameStamp) -> Result<(), Box<dyn Error>>;
     /// Take at most one completed native GPU presentation; ownership is consumed by presentation.
     fn take_gpu_presentation(&mut self) -> Option<GpuPresentation>;
     /// Acknowledge the exact completed frame after the native queue accepted presentation.

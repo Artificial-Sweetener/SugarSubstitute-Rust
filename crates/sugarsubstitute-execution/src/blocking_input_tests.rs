@@ -3,7 +3,7 @@
 
 //! Prove real rejection custody and source-first finite worker outcomes.
 use crate::{
-    BlockingInputError,
+    OwnedInputError,
     runtime_test_support::{Gate, Rig, TestResult, spec},
 };
 use std::{
@@ -44,10 +44,7 @@ fn owned_input_rejection_returns_identical_input_without_factory_or_memory_effec
             Ok::<_, io::Error>(())
         },
     );
-    assert!(matches!(
-        rejected,
-        Err(BlockingInputError::Admission(AdmissionError::WrongClass { .. }))
-    ));
+    assert!(matches!(rejected, Err(OwnedInputError::Admission(AdmissionError::WrongClass { .. }))));
     assert!(Arc::ptr_eq(input.as_ref().ok_or("Original input lost")?, &original));
     assert_eq!(calls.load(Ordering::Acquire), 0);
     assert_eq!(rig.scope.snapshot().reserved_bytes, 0);
@@ -59,7 +56,7 @@ fn owned_input_rejection_returns_identical_input_without_factory_or_memory_effec
             &mut missing,
             |_, _| Ok::<_, io::Error>(())
         ),
-        Err(BlockingInputError::MissingInput)
+        Err(OwnedInputError::MissingInput)
     ));
     let mut job = rig.client.submit_blocking_owned_input(
         &rig.scope,

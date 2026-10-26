@@ -338,7 +338,7 @@ fn exercise_source_stop(
             .err()
             .ok_or("Fresh admission failure was hidden")?;
         assert!(std::ptr::eq(std::ptr::from_ref(returned.as_ref()), first));
-        assert!(returned.downcast_ref::<sugarsubstitute_execution::BlockingInputError>().is_some());
+        assert!(returned.downcast_ref::<sugarsubstitute_execution::OwnedInputError>().is_some());
         assert_eq!(stopped.snapshot().reserved_bytes, 0);
         assert!(backend.record(key)?.output_observed);
         assert!(matches!(

@@ -1,8 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Prepare only requested viewport damage through the shared image-operation DAG.
-use crate::{PreparedUpdate, RenderError, surface::Preparation, update::UpdatePlan};
-use sugarsubstitute_canvas::RenderRequest;
+use crate::{
+    PreparedUpdate, RenderError,
+    projection::{ProjectionBuffer, ProjectionBuffers},
+    surface::Preparation,
+    update::UpdatePlan,
+};
+use sugarsubstitute_canvas::{RenderRequest, ViewProjection};
 use sugarsubstitute_contracts::execution::{JobContext, MemoryLease};
 use sugarsubstitute_image_ops::{
     EvaluationStats, Evaluator, Graph, NodeId, RasterSource, SrgbEncoder,
@@ -38,6 +43,27 @@ impl<S: RasterSource> CpuRenderer<S> {
     /// Cumulative actual graph work, excluding inexpensive device-pixel blits.
     pub fn stats(&self) -> EvaluationStats {
         self.evaluator.stats()
+    }
+    /// Release one unpinned reconstructible DAG tile for another retained presentation allocation.
+    /// Call on the preparation worker; source, document and published frame custody stay intact.
+    pub fn evict_one(&mut self) -> bool {
+        self.evaluator.evict_one()
+    }
+    /// Admit the two exclusive CPU projection allocations retained across native presentation.
+    /// Both allocations use this renderer's original reservation. Under pressure only cache-only
+    /// reconstructible DAG tiles are evicted; the first allocation remains owned while the second
+    /// is admitted.
+    /// # Errors
+    /// Preserves allocation and worker-control failures, or the final memory admission failure
+    /// when no eligible cached tile remains.
+    pub fn projection_buffers(
+        &mut self,
+        view: ViewProjection,
+        context: &JobContext,
+    ) -> Result<ProjectionBuffers, RenderError> {
+        let first = self.projection_buffer(view, context)?;
+        let second = self.projection_buffer(view, context)?;
+        Ok(ProjectionBuffers::new(first, second))
     }
     /// Evaluate the requested document/view into immutable physical damage regions.
     /// Caller assigns revisions and chooses full damage when document content changed. Every row
@@ -128,6 +154,25 @@ impl<S: RasterSource> CpuRenderer<S> {
             Ok(Some(pending.finish()))
         } else {
             Ok(None)
+        }
+    }
+    fn projection_buffer(
+        &mut self,
+        view: ViewProjection,
+        context: &JobContext,
+    ) -> Result<ProjectionBuffer, RenderError> {
+        loop {
+            check(context)?;
+            match ProjectionBuffer::new(view, &self.memory, context) {
+                Err(
+                    cause @ RenderError::Image(sugarsubstitute_image_ops::ImageError::Memory(_)),
+                ) => {
+                    if !self.evaluator.evict_one() {
+                        return Err(cause);
+                    }
+                }
+                outcome => return outcome,
+            }
         }
     }
 }

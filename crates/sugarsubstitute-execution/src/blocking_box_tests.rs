@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Observe actual boxed-input rejection, source failure and original storage teardown.
 use crate::{
-    BlockingInputError, ChargedBlockingInput,
+    ChargedBlockingInput, OwnedInputError,
     admission::Core,
     runtime_test_support::{Gate, Rig, TestResult, spec},
 };
@@ -89,7 +89,7 @@ fn actual_input_claim_rejection_preserves_source_and_disposes_factory_after_core
             Ok::<_, io::Error>(())
         },
     );
-    let Err(BlockingInputError::Admission(AdmissionError::Memory(cause))) = rejection else {
+    let Err(OwnedInputError::Admission(AdmissionError::Memory(cause))) = rejection else {
         return Err("Actual constructor claim cause absent".into());
     };
     assert_eq!(cause.requested_bytes, size_of::<Input>() as u64);

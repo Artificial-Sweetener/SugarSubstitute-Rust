@@ -78,12 +78,21 @@ fn actual_gdi_pan_repairs_and_native_exposure_match_complete_device_pixels()
         let full = DamagePlan::full(extent);
         painter.paint(
             dib.dc(),
-            &CpuFrame { target: stamp(1)?, base: None, damage: &full, pixels: &original },
+            &CpuFrame {
+                kind: CpuFrameKind::Prepared,
+                pending: false,
+                target: stamp(1)?,
+                base: None,
+                damage: &full,
+                pixels: &original,
+            },
             false,
         )?;
         matches(dib, &original)?;
         let repair = DamagePlan::pan(extent, dx, dy)?;
         let frame = CpuFrame {
+            kind: CpuFrameKind::Prepared,
+            pending: false,
             target: stamp(2)?,
             base: Some(stamp(1)?),
             damage: &repair,
@@ -110,7 +119,14 @@ fn clipped_native_presentation_cannot_become_a_future_blit_dependency() -> Resul
     let original = pixels(extent, 0, 0);
     painter.paint(
         dib.dc(),
-        &CpuFrame { target: stamp(1)?, base: None, damage: &full, pixels: &original },
+        &CpuFrame {
+            kind: CpuFrameKind::Prepared,
+            pending: false,
+            target: stamp(1)?,
+            base: None,
+            damage: &full,
+            pixels: &original,
+        },
         false,
     )?;
     // SAFETY: Both clipping calls borrow this test's original live memory DC on its owner thread.
@@ -121,6 +137,8 @@ fn clipped_native_presentation_cannot_become_a_future_blit_dependency() -> Resul
     painter.paint(
         dib.dc(),
         &CpuFrame {
+            kind: CpuFrameKind::Prepared,
+            pending: false,
             target: stamp(2)?,
             base: Some(stamp(1)?),
             damage: &repair,
@@ -148,6 +166,8 @@ fn clipped_native_presentation_cannot_become_a_future_blit_dependency() -> Resul
     painter.paint(
         dib.dc(),
         &CpuFrame {
+            kind: CpuFrameKind::Prepared,
+            pending: false,
             target: stamp(3)?,
             base: Some(stamp(2)?),
             damage: &repair,
@@ -172,11 +192,20 @@ fn invalid_native_source_rejects_before_blitting_or_changing_the_retained_depend
     let full = DamagePlan::full(extent);
     painter.paint(
         dib.dc(),
-        &CpuFrame { target: stamp(1)?, base: None, damage: &full, pixels: &original },
+        &CpuFrame {
+            kind: CpuFrameKind::Prepared,
+            pending: false,
+            target: stamp(1)?,
+            base: None,
+            damage: &full,
+            pixels: &original,
+        },
         false,
     )?;
     let repair = DamagePlan::pan(extent, 3, -2)?;
     let invalid = CpuFrame {
+        kind: CpuFrameKind::Prepared,
+        pending: false,
         target: stamp(2)?,
         base: Some(stamp(1)?),
         damage: &repair,
@@ -186,5 +215,109 @@ fn invalid_native_source_rejects_before_blitting_or_changing_the_retained_depend
     assert_eq!(painter.last, Some(stamp(1)?));
     matches(dib, &original)?;
     dib.close()?;
+    Ok(())
+}
+
+#[test]
+fn projected_native_pixels_cannot_become_an_exact_repair_dependency() -> Result<(), Box<dyn Error>>
+{
+    let owner = admitted()?;
+    let extent = Extent::new(31, 17)?;
+    let mut retained = None;
+    let dib = Dib::for_frame(&mut retained, &owner)?;
+    let mut painter = Painter::default();
+    let full = DamagePlan::full(extent);
+    let preview = vec![0xffd15ea5; extent.pixels() as usize];
+    painter.paint(
+        dib.dc(),
+        &CpuFrame {
+            kind: CpuFrameKind::Projected,
+            pending: false,
+            target: stamp(2)?,
+            base: None,
+            damage: &full,
+            pixels: &preview,
+        },
+        false,
+    )?;
+    assert_eq!(painter.last, None);
+    matches(dib, &preview)?;
+
+    let prepared = pixels(extent, 7, -3);
+    let forged_repair = DamagePlan::pan(extent, 7, -3)?;
+    painter.paint(
+        dib.dc(),
+        &CpuFrame {
+            kind: CpuFrameKind::Prepared,
+            pending: false,
+            target: stamp(3)?,
+            base: Some(stamp(2)?),
+            damage: &forged_repair,
+            pixels: &prepared,
+        },
+        false,
+    )?;
+    matches(dib, &prepared)?;
+    dib.close()?;
+    Ok(())
+}
+
+#[test]
+fn projected_frame_validation_rejects_base_blit_and_partial_damage() -> Result<(), Box<dyn Error>> {
+    let extent = Extent::new(31, 17)?;
+    let pixels = pixels(extent, 0, 0);
+    let full = DamagePlan::full(extent);
+    assert_eq!(
+        CpuFrame {
+            kind: CpuFrameKind::Projected,
+            pending: false,
+            target: stamp(2)?,
+            base: None,
+            damage: &full,
+            pixels: &pixels,
+        }
+        .validate()?,
+        extent
+    );
+    assert!(
+        CpuFrame {
+            kind: CpuFrameKind::Projected,
+            pending: false,
+            target: stamp(2)?,
+            base: Some(stamp(1)?),
+            damage: &full,
+            pixels: &pixels,
+        }
+        .validate()
+        .is_err()
+    );
+
+    let repair = DamagePlan::pan(extent, 3, -2)?;
+    assert!(
+        CpuFrame {
+            kind: CpuFrameKind::Projected,
+            pending: false,
+            target: stamp(2)?,
+            base: None,
+            damage: &repair,
+            pixels: &pixels,
+        }
+        .validate()
+        .is_err()
+    );
+
+    let partial = DamagePlan::unchanged(extent);
+    assert!(
+        CpuFrame {
+            kind: CpuFrameKind::Projected,
+            pending: false,
+            target: stamp(2)?,
+            base: None,
+            damage: &partial,
+            pixels: &pixels,
+        }
+        .validate()
+        .is_err()
+    );
     Ok(())
 }

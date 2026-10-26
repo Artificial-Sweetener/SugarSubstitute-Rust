@@ -3,7 +3,9 @@
 //! Prepare original assets and viewport pixels exclusively on execution-owned workers.
 use super::work_error::WorkError;
 mod cpu;
+mod display;
 mod gpu;
+pub(super) use display::{Draw, DrawInput, DrawPixels, DrawSource};
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -13,7 +15,8 @@ use sugarsubstitute_canvas::{
     RenderRequest, Viewport,
 };
 use sugarsubstitute_canvas_render::{
-    CpuPreparation, CpuRenderer, CpuSurface, GpuRenderer, GpuSurface, PreparedUpdate, SurfaceWork,
+    CpuPreparation, CpuRenderer, CpuSurface, GpuRenderer, GpuSurface, PreparedUpdate,
+    ProjectionBuffers, SurfaceWork,
 };
 use sugarsubstitute_contracts::execution::{
     CpuStep, CpuTask, JobContext, MemoryClaim, MemoryLease,
@@ -40,18 +43,22 @@ pub(super) struct Scene {
 /// Original retained admission is shared by cache custody, source data, DAG reuse and UI buffers.
 pub(super) struct Resources {
     pub(super) capture: bool,
+    verify_native: bool,
     pub(super) memory: MemoryLease,
     pub(super) cache: RuntimeCache,
     pub(super) engine: Arc<Mutex<Engine>>,
+    window: Arc<Mutex<Option<WindowSurface>>>,
     pub(super) _metadata: Arc<MemoryClaim>,
 }
 impl Clone for Resources {
     fn clone(&self) -> Self {
         Self {
             capture: self.capture,
+            verify_native: self.verify_native,
             memory: self.memory.clone(),
             cache: self.cache.clone(),
             engine: self.engine.clone(),
+            window: self.window.clone(),
             _metadata: self._metadata.clone(),
         }
     }
@@ -90,13 +97,26 @@ pub(super) struct Engine {
     renderer: Option<Renderer>,
     source_revision: Option<u64>,
     device: Option<Arc<GpuDevice>>,
-    window: Option<WindowSurface>,
 }
 enum Renderer {
     Cpu(Box<CpuRenderer<SourcePort>>),
     Gpu(Box<GpuRenderer<SourcePort>>),
 }
 impl Resources {
+    /// Release reconstructible image tiles before an independent proof evaluator shares this lease.
+    /// Call only on an admitted worker after viewer preparation has reached a terminal outcome.
+    pub(super) fn release_graph_tiles(&self) -> Result<(), WorkError> {
+        let mut engine = self
+            .engine
+            .lock()
+            .map_err(|_| WorkError::invalid("Canvas preparation state failed"))?;
+        match engine.renderer.as_mut() {
+            Some(Renderer::Cpu(renderer)) => while renderer.evict_one() {},
+            Some(Renderer::Gpu(renderer)) => while renderer.evict_one() {},
+            None => {}
+        }
+        Ok(())
+    }
     /// Bind the startup-selected native device before any frame preparation has begun.
     pub(super) fn with_gpu(
         mut self,
@@ -107,8 +127,8 @@ impl Resources {
             renderer: None,
             source_revision: None,
             device: Some(device),
-            window,
         }));
+        self.window = Arc::new(Mutex::new(window));
         self
     }
 }
@@ -117,20 +137,25 @@ impl Resources {
 pub(super) fn initialize(
     anchor: PathBuf,
     capture: bool,
+    verify_native: bool,
     context: &JobContext,
 ) -> Result<(Resources, Scene), WorkError> {
     let memory = context.memory().clone();
     let metadata = Arc::new(memory.claim(1024 * 1024)?);
     let cache = RuntimeCache::open(&anchor, CachePolicy::default(), context)?;
     let document = Document::new(1, Extent::new(1, 1)?, &memory)?;
-    let engine = Arc::new(Mutex::new(Engine {
-        renderer: None,
-        source_revision: None,
-        device: None,
-        window: None,
-    }));
+    let engine =
+        Arc::new(Mutex::new(Engine { renderer: None, source_revision: None, device: None }));
     Ok((
-        Resources { memory, cache, engine, _metadata: metadata, capture },
+        Resources {
+            memory,
+            cache,
+            engine,
+            window: Arc::new(Mutex::new(None)),
+            _metadata: metadata,
+            capture,
+            verify_native,
+        },
         Scene { document, source: None, source_revision: 0, original: None },
     ))
 }
@@ -172,16 +197,13 @@ pub(super) enum Pixels {
 }
 /// A first/resize frame adopts complete pixels; repairs depend on the current retained frame.
 pub(super) enum CpuPacket {
-    Replace(CpuSurface),
+    Replace { surface: CpuSurface, buffers: ProjectionBuffers },
     Repair(Box<PreparedUpdate>),
 }
 pub(super) struct GpuPacket {
     pub(super) surface: GpuSurface,
-    pub(super) presentation: Option<WindowFrame>,
     pub(super) snapshot: Option<CpuSurface>,
     pub(super) work: SurfaceWork,
-    pub(super) retry_presentation: bool,
-    pub(super) native_verified: bool,
 }
 /// Own all inputs for one accepted CPU request; subsequent navigation intents remain outside it.
 pub(super) struct Prepare {
@@ -198,6 +220,7 @@ pub(super) struct Prepare {
     pub(super) gpu_surface: Option<GpuSurface>,
     pub(super) finished: bool,
     pub(super) cpu: Option<CpuPreparation>,
+    pub(super) display_buffers: Option<ProjectionBuffers>,
     pub(super) started: Option<std::time::Instant>,
 }
 impl CpuTask<Packet, WorkError> for Prepare {

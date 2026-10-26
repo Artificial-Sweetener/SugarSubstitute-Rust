@@ -116,7 +116,7 @@ impl ReporterSession {
 /// Retain the exact rejection and original finite credit through checked child disposal.
 #[derive(Debug)]
 pub(super) struct OwnedOutputAdmissionFailure {
-    cause: sugarsubstitute_execution::BlockingInputError,
+    cause: sugarsubstitute_execution::OwnedInputError,
     _original: MemoryLease,
 }
 impl std::fmt::Display for OwnedOutputAdmissionFailure {

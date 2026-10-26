@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Drive the real viewer coordinator through a bounded headless navigation and artifact lifetime.
+mod motion;
 mod native;
 use super::*;
 use crate::viewer::{
     options::ProofPaths,
     proof::{self, Input as ProofInput, Sample},
 };
+use motion::Motion;
 use std::{num::NonZeroUsize, time::Instant};
 use sugarsubstitute_canvas::{ScrollPhase, ToolButton, ToolInput};
 use sugarsubstitute_desktop::{
@@ -25,6 +27,12 @@ struct Proof {
     publishing: Option<OwnedJob<(), WorkError>>,
     complete: bool,
     cutoff: Instant,
+    motion: Option<Motion>,
+    motion_duration: Duration,
+    motion_done: bool,
+    motion_collecting: bool,
+    motion_stats: Option<sugarsubstitute_canvas_render::PresentationStats>,
+    warmup_stats: Option<sugarsubstitute_canvas_render::PresentationStats>,
 }
 impl Session {
     /// Exercise original loading, settled zoom, retained pan and checked shutdown through either
@@ -34,6 +42,7 @@ impl Session {
         paths: ProofPaths,
         window: Option<sugarsubstitute_desktop::canvas::WindowOptions>,
     ) -> Result<(), Box<dyn Error>> {
+        let motion_duration = paths.motion_duration;
         let mut proof = Proof {
             session: self,
             paths: Some(paths),
@@ -47,6 +56,12 @@ impl Session {
             cutoff: Instant::now()
                 .checked_add(Duration::from_secs(900))
                 .ok_or("Proof deadline overflow")?,
+            motion: None,
+            motion_duration,
+            motion_done: motion_duration.is_zero(),
+            motion_collecting: false,
+            motion_stats: None,
+            warmup_stats: None,
         };
         match window {
             Some(window) => sugarsubstitute_desktop::canvas::run(window, &mut proof)?,
@@ -58,6 +73,9 @@ impl Session {
 impl Proof {
     /// Advance only after an actual applied frame matches current source, revision and camera.
     fn navigate(&mut self) -> Result<(), Box<dyn Error>> {
+        if self.motion.is_some() {
+            return self.drive_motion();
+        }
         let session = &mut self.session;
         if session.loading.is_some()
             || session.pending_open.is_some()
@@ -74,11 +92,24 @@ impl Proof {
         let stamp = session
             .front
             .as_ref()
-            .and_then(CpuSurface::current)
+            .and_then(|surface| surface.current())
             .ok_or("Proof lost its displayed frame")?;
+        if session.native_target.is_some()
+            && session.options.gpu.is_none()
+            && (session.cpu_pending.is_some()
+                || session.display_source != Some(stamp)
+                || session.display_view != Some(shown.view))
+        {
+            return Ok(());
+        }
         if session.options.gpu.is_some()
             && session.native_target.is_some()
-            && (session.native_presented != Some(stamp) || !session.native_verified)
+            && (session.display_source != Some(stamp)
+                || session.display_view != Some(shown.view)
+                || session.gpu_presentation.is_some()
+                || session.awaiting_gpu.is_some()
+                || session.native_presented.is_none()
+                || !session.native_verified)
         {
             return Ok(());
         }
@@ -109,6 +140,28 @@ impl Proof {
             return Ok(());
         }
         let surface = session.tools.navigation().viewport().surface();
+        if !self.motion_done {
+            let now = session.navigation_time();
+            let Some(stats) = take_settled_presentation_stats(&mut session.pacing, now)? else {
+                return Ok(());
+            };
+            self.warmup_stats = Some(stats);
+            self.motion_collecting = true;
+            self.motion = Some(Motion::new(
+                session.navigation_time(),
+                session.tools.navigation().frame_period(),
+                self.motion_duration,
+            )?);
+            return self.drive_motion();
+        }
+        if self.motion_collecting {
+            let now = session.navigation_time();
+            let Some(stats) = take_settled_presentation_stats(&mut session.pacing, now)? else {
+                return Ok(());
+            };
+            self.motion_stats = Some(stats);
+            self.motion_collecting = false;
+        }
         let reusable = match self.phase {
             5 => surface.width() > 13 && surface.height() > 7,
             6 => surface.width() > 5 && surface.height() > 3,
@@ -163,6 +216,14 @@ impl Proof {
                 samples: self.samples,
                 paths: self.paths.take().ok_or("Proof output custody was lost")?,
                 adapter: session.gpu_descriptor.clone(),
+                presentations: session.pacing.stats(),
+                motion: self.motion_stats,
+                warmup: self.warmup_stats,
+                canonical_gpu_snapshot_readback: session.options.gpu.is_some()
+                    && session.options.capture,
+                native_gpu_display_verification_readback: session.options.gpu.is_some()
+                    && session.options.verify_native
+                    && session.native_target.is_some(),
             });
         }
         let runtime = session.runtime.as_ref().ok_or("Proof execution is unavailable")?;
@@ -180,13 +241,43 @@ impl Proof {
             |input, context| proof::publish(input, &context),
         ) {
             Ok(job) => self.publishing = Some(job),
-            Err(sugarsubstitute_execution::BlockingInputError::Admission(cause))
+            Err(sugarsubstitute_execution::OwnedInputError::Admission(cause))
                 if super::activity::retryable(&cause) => {}
             Err(cause) => return Err(cause.into()),
         }
         Ok(())
     }
 }
+impl Proof {
+    /// Deliver one latest due qualification observation through the ordinary normalized input port.
+    fn drive_motion(&mut self) -> Result<(), Box<dyn Error>> {
+        let now = self.session.navigation_time();
+        let motion = self.motion.as_mut().ok_or("Proof motion lifetime is unavailable")?;
+        if let Some(step) = motion.next(now)? {
+            self.session
+                .input(Input::Tool(ToolInput::Wheel { steps: step.steps, phase: step.phase }))?;
+        }
+        if motion.finished() {
+            self.motion = None;
+            self.motion_done = true;
+            self.session.input(Input::Tool(ToolInput::Fit))?;
+        }
+        self.session.advance()
+    }
+}
+
+/// Split qualification statistics only after every submitted presentation releases pacer custody.
+fn take_settled_presentation_stats(
+    pacing: &mut PresentationPacer,
+    now: Duration,
+) -> Result<Option<sugarsubstitute_canvas_render::PresentationStats>, Box<dyn Error>> {
+    if matches!(pacing.readiness(now)?, PresentationReadiness::Busy { .. }) {
+        Ok(None)
+    } else {
+        Ok(Some(pacing.take_stats()))
+    }
+}
+
 /// Native observations exercise exactly the same camera input path used by a visible window.
 fn pan(session: &mut Session, start: [f64; 2], delta: [f64; 2]) -> Result<(), Box<dyn Error>> {
     session.input(Input::Tool(ToolInput::Pointer(start)))?;
@@ -194,6 +285,10 @@ fn pan(session: &mut Session, start: [f64; 2], delta: [f64; 2]) -> Result<(), Bo
     session.input(Input::Tool(ToolInput::Pointer([start[0] + delta[0], start[1] + delta[1]])))?;
     session.input(Input::Tool(ToolInput::Button { button: ToolButton::Primary, pressed: false }))
 }
+
+#[cfg(test)]
+#[path = "proof/tests.rs"]
+mod tests;
 impl HeadlessLifetime for Proof {
     fn start(&mut self, wake: Arc<dyn CompletionWake>) -> Result<(), Box<dyn Error>> {
         self.session.start(wake)
@@ -230,11 +325,16 @@ impl HeadlessLifetime for Proof {
         if self.session.closing {
             None
         } else {
-            Some(
-                self.session
-                    .next_deadline()
-                    .map_or(self.cutoff, |navigation| navigation.min(self.cutoff)),
-            )
+            let ordinary = self
+                .session
+                .next_deadline()
+                .map_or(self.cutoff, |navigation| navigation.min(self.cutoff));
+            let motion =
+                self.motion.as_ref().and_then(Motion::next_deadline).and_then(|deadline| {
+                    Instant::now()
+                        .checked_add(deadline.saturating_sub(self.session.navigation_time()))
+                });
+            Some(motion.map_or(ordinary, |motion| ordinary.min(motion)))
         }
     }
     fn request_shutdown(&mut self) -> Result<(), Box<dyn Error>> {

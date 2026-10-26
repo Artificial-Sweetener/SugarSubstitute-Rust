@@ -35,16 +35,6 @@ pub(super) fn prepare(
     let work = renderer.retain(&mut surface, &update, context)?;
     drop(update);
     let frame = surface.frame().ok_or_else(|| WorkError::invalid("GPU viewport is unavailable"))?;
-    let presentation = match engine.window.as_mut() {
-        Some(window) => loop {
-            match window.prepare(frame.image(), context) {
-                Err(cause) if cause.is_memory_pressure() && renderer.evict_one() => {}
-                result => break result?,
-            }
-        },
-        None => None,
-    };
-    let native_verified = engine.window.is_none() || presentation.is_some();
     let snapshot = if input.resources.capture {
         let prepared = PreparedUpdate::prepare(
             input.target,
@@ -54,13 +44,6 @@ pub(super) fn prepare(
             |region, pixels| {
                 for tile in region.tiles() {
                     let source = frame.image().read_region(tile, context)?;
-                    if let Some(native) = &presentation
-                        && native.read_region(tile, context)?.pixels() != source.pixels()
-                    {
-                        return Err(sugarsubstitute_canvas_render::RenderError::Invalid(
-                            "Native GPU presentation differs from its completed display image",
-                        ));
-                    }
                     for row in 0..tile.height() as usize {
                         let from = row * tile.width() as usize;
                         let to = (tile.y() as usize - region.y() as usize + row)
@@ -81,14 +64,7 @@ pub(super) fn prepare(
     Ok(Packet {
         damage: input.damage,
         base: input.base,
-        pixels: Pixels::Gpu(GpuPacket {
-            surface,
-            retry_presentation: engine.window.is_some() && presentation.is_none(),
-            presentation,
-            snapshot,
-            work,
-            native_verified,
-        }),
+        pixels: Pixels::Gpu(GpuPacket { surface, snapshot, work }),
         view: input.view,
         filter: input.filter,
         document: (input.document.identity(), input.document.revision()),

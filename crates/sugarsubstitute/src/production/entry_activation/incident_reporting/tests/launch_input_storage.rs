@@ -60,7 +60,7 @@ fn launch_slot_closed_actual_admission_keeps_original_caller_input_unallocated()
         &mut original,
         |_original, _context| -> std::result::Result<(), ()> { Ok(()) },
     );
-    assert!(matches!(rejection, Err(sugarsubstitute_execution::BlockingInputError::Admission(_))));
+    assert!(matches!(rejection, Err(sugarsubstitute_execution::OwnedInputError::Admission(_))));
     assert!(matches!(original, Some(None)));
     assert_eq!(scope.snapshot().reserved_bytes, 0);
     drop(owner);

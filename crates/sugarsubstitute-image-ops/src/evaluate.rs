@@ -118,6 +118,11 @@ impl<S: RasterSource> Evaluator<S> {
     pub fn clear_tiles(&mut self) {
         self.cache.clear();
     }
+    /// Release one reconstructible cache-only tile reference under shared allocation pressure.
+    /// Outside immutable results keep their original claims and prevent their own eviction.
+    pub fn evict_one(&mut self) -> bool {
+        self.cache.evict_unpinned(|_| true)
+    }
     /// Evaluate one image-space tile. Edge tiles clip to the node's extent.
     /// Returned pixels remain charged through their final owner, after this job or evaluator ends.
     /// # Errors

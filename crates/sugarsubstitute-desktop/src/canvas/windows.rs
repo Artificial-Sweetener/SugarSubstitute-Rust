@@ -137,8 +137,14 @@ pub fn run(options: WindowOptions, lifetime: &mut impl Lifetime) -> Result<(), B
                 }
                 Event::RedrawRequested(_) if !closing => {
                     if let Some(frame) = lifetime.frame() {
+                        let target = frame.target;
+                        let pending = frame.pending;
                         painter.present(HWND(window.hwnd() as *mut _), &frame, true)?;
-                        displayed = Some(frame.target);
+                        if record_cpu_upload(&mut displayed, target, pending, |target| {
+                            lifetime.did_present_cpu(target)
+                        })? {
+                            lifetime.poll(started.elapsed())?;
+                        }
                     }
                     lifetime.expose();
                 }
@@ -194,8 +200,14 @@ pub fn run(options: WindowOptions, lifetime: &mut impl Lifetime) -> Result<(), B
                             window.set_title(&title);
                         }
                         if let Some(frame) = lifetime.frame() && displayed != Some(frame.target) {
+                            let target = frame.target;
+                            let pending = frame.pending;
                             painter.present(HWND(window.hwnd() as *mut _), &frame, false)?;
-                            displayed = Some(frame.target);
+                            if record_cpu_upload(&mut displayed, target, pending, |target| {
+                                lifetime.did_present_cpu(target)
+                            })? {
+                                lifetime.poll(started.elapsed())?;
+                            }
                         }
                         if let Some(frame) = lifetime.take_gpu_presentation() {
                             let target = frame.target;
@@ -279,6 +291,20 @@ pub fn run(options: WindowOptions, lifetime: &mut impl Lifetime) -> Result<(), B
     combine(combine(combine(failure.map_or(Ok(()), Err), input_retired), retired), finished)
 }
 
+/// Acknowledge a pending synchronous CPU upload before making its native identity current.
+fn record_cpu_upload<E>(
+    displayed: &mut Option<FrameStamp>,
+    target: FrameStamp,
+    pending: bool,
+    acknowledge: impl FnOnce(FrameStamp) -> Result<(), E>,
+) -> Result<bool, E> {
+    if pending {
+        acknowledge(target)?;
+    }
+    *displayed = Some(target);
+    Ok(pending)
+}
+
 /// Retain primary and later native/application failures independently through finalization.
 fn combine(
     first: Result<(), Box<dyn Error>>,
@@ -303,5 +329,41 @@ impl std::fmt::Display for NativeFailures {
 impl Error for NativeFailures {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(self.primary.as_ref())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sugarsubstitute_contracts::execution::{Generation, SurfaceId};
+
+    fn stamp(generation: u64) -> Result<FrameStamp, Box<dyn Error>> {
+        Ok(FrameStamp { surface: SurfaceId::new(1)?, generation: Generation::new(generation)? })
+    }
+
+    #[test]
+    fn cpu_upload_acknowledgement_is_pending_only_and_precedes_display_state()
+    -> Result<(), Box<dyn Error>> {
+        let old = stamp(1)?;
+        let next = stamp(2)?;
+        let mut displayed = Some(old);
+        let mut acknowledgements = Vec::new();
+        assert!(record_cpu_upload(&mut displayed, next, true, |target| {
+            acknowledgements.push(target);
+            Ok::<(), Box<dyn Error>>(())
+        })?);
+        assert_eq!(acknowledgements, [next]);
+        assert_eq!(displayed, Some(next));
+
+        assert!(!record_cpu_upload(&mut displayed, old, false, |_| {
+            Err::<(), Box<dyn Error>>("Acknowledged an already-presented exposure".into())
+        })?);
+        assert_eq!(acknowledgements, [next]);
+        assert_eq!(displayed, Some(old));
+
+        let failed = record_cpu_upload(&mut displayed, next, true, |_| Err("acknowledgement"));
+        assert!(failed.is_err());
+        assert_eq!(displayed, Some(old));
+        Ok(())
     }
 }

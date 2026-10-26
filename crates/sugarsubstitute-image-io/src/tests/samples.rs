@@ -3,24 +3,29 @@
 //! Sparse source addressing retains integer precision, alpha and complete chunk integrity.
 use super::*;
 use std::{
-    cell::Cell,
+    cell::{Cell, RefCell},
     io::{Read, Seek, SeekFrom},
 };
 use sugarsubstitute_image_ops::{Filter, RasterSamples, Sampling};
+mod batching;
 
 /// Count actual read-boundary calls independently of the archive's work counters.
 struct CountedReader<'a> {
     bytes: Cursor<Vec<u8>>,
     reads: &'a Cell<u64>,
+    seeks: &'a Cell<u64>,
+    lengths: &'a RefCell<Vec<usize>>,
 }
 impl Read for CountedReader<'_> {
     fn read(&mut self, output: &mut [u8]) -> io::Result<usize> {
         self.reads.set(self.reads.get() + 1);
+        self.lengths.borrow_mut().push(output.len());
         self.bytes.read(output)
     }
 }
 impl Seek for CountedReader<'_> {
     fn seek(&mut self, position: SeekFrom) -> io::Result<u64> {
+        self.seeks.set(self.seeks.get() + 1);
         self.bytes.seek(position)
     }
 }
@@ -60,7 +65,14 @@ fn sparse_decode_groups_original_samples_by_chunk_for_both_integer_precisions()
                 Ok(())
             })?;
             let reads = Cell::new(0);
-            let reader = CountedReader { bytes: Cursor::new(bytes), reads: &reads };
+            let seeks = Cell::new(0);
+            let lengths = RefCell::new(Vec::new());
+            let reader = CountedReader {
+                bytes: Cursor::new(bytes),
+                reads: &reads,
+                seeks: &seeks,
+                lengths: &lengths,
+            };
             let mut source = RasterArchive::open(reader, descriptor, context.memory(), context)?;
             let samples = RasterSamples::new(
                 descriptor.layout().extent(),
@@ -82,8 +94,13 @@ fn sparse_decode_groups_original_samples_by_chunk_for_both_integer_precisions()
                 }
             }
             assert_eq!(source.stats().chunks, 15);
-            assert_eq!(reads.get(), 16);
+            assert_eq!(reads.get(), 4);
+            assert_eq!(seeks.get(), 3);
             assert_eq!(source.stats().read_bytes + 128, descriptor.layout().length());
+            assert_eq!(
+                lengths.borrow().iter().map(|length| *length as u64).sum::<u64>(),
+                descriptor.layout().length()
+            );
         }
         Ok(())
     })

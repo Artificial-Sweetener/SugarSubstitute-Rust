@@ -22,6 +22,44 @@ impl Clock for FixedClock {
     }
 }
 #[derive(Default)]
+struct CancelState {
+    reached: bool,
+    released: bool,
+}
+/// Deterministically pause one test read while the owning execution job is cancelled.
+#[derive(Default)]
+pub(super) struct CancelPoint {
+    state: Mutex<CancelState>,
+    changed: Condvar,
+}
+impl CancelPoint {
+    /// Stop the worker at an actual native-read boundary until the harness requests cancellation.
+    pub(super) fn pause(&self) {
+        let mut state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        state.reached = true;
+        self.changed.notify_all();
+        while !state.released {
+            state = self.changed.wait(state).unwrap_or_else(std::sync::PoisonError::into_inner);
+        }
+    }
+    fn wait_until_reached(&self) -> TestResult {
+        let state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let (state, timeout) = self
+            .changed
+            .wait_timeout_while(state, Duration::from_secs(30), |state| !state.reached)
+            .map_err(|cause| std::io::Error::other(cause.to_string()))?;
+        if timeout.timed_out() && !state.reached {
+            return Err(std::io::Error::other("Image test did not reach cancellation point").into());
+        }
+        Ok(())
+    }
+    fn release(&self) {
+        let mut state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        state.released = true;
+        self.changed.notify_all();
+    }
+}
+#[derive(Default)]
 struct Wake {
     revision: Mutex<u64>,
     changed: Condvar,
@@ -54,7 +92,17 @@ pub(super) fn run<T: Send + 'static>(
     bytes: u64,
     action: impl FnOnce(&JobContext) -> Result<T, ImportError> + Send + 'static,
 ) -> TestResult<T> {
-    run_admitted(bytes, action, false)
+    run_admitted(bytes, action, false, None)
+}
+
+/// Cancel an active image job while its test reader is paused inside one bounded operation.
+pub(super) fn run_cancelled(
+    bytes: u64,
+    action: impl FnOnce(&JobContext, &CancelPoint) -> Result<(), ImportError> + Send + 'static,
+) -> TestResult {
+    let point = Arc::new(CancelPoint::default());
+    let worker_point = point.clone();
+    run_admitted(bytes, move |context| action(context, &worker_point), false, Some((point, ())))
 }
 
 /// Exercise native storage through the same execution-owned blocking boundary as production.
@@ -63,7 +111,7 @@ pub(super) fn run_storage<T: Send + 'static>(
     bytes: u64,
     action: impl FnOnce(&JobContext) -> Result<T, ImportError> + Send + 'static,
 ) -> TestResult<T> {
-    run_admitted(bytes, action, true)
+    run_admitted(bytes, action, true, None)
 }
 
 /// Share original admission and terminal observation without exporting a scheduler handle.
@@ -71,6 +119,7 @@ fn run_admitted<T: Send + 'static>(
     bytes: u64,
     action: impl FnOnce(&JobContext) -> Result<T, ImportError> + Send + 'static,
     storage: bool,
+    cancelled: Option<(Arc<CancelPoint>, T)>,
 ) -> TestResult<T> {
     let wake = Arc::new(Wake::default());
     let owner = ExecutionOwner::new(Arc::new(FixedClock), wake.clone())?;
@@ -89,6 +138,14 @@ fn run_admitted<T: Send + 'static>(
     } else {
         client.submit_cpu(&scope, spec, |_| Task { run: Some(action), output: PhantomData })?
     };
+    if let Some((point, _)) = &cancelled {
+        if let Err(cause) = point.wait_until_reached() {
+            point.release();
+            return Err(cause);
+        }
+        job.cancel();
+        point.release();
+    }
     let outcome = loop {
         let revision = *wake.revision.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(completion) = job.try_take_completion() {
@@ -110,6 +167,10 @@ fn run_admitted<T: Send + 'static>(
     client.drain_completions(maximum)?;
     match outcome.outcome {
         JobOutcome::Success(value) => Ok(value),
+        JobOutcome::Cancelled => match cancelled {
+            Some((_, value)) => Ok(value),
+            None => Err(std::io::Error::other("Unexpected image execution cancellation").into()),
+        },
         JobOutcome::Failure(cause) => {
             let mut observed: Option<&dyn std::error::Error> = Some(&cause);
             for depth in 0..16 {

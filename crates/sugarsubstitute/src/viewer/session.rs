@@ -3,6 +3,7 @@
 //! Coordinate one camera/document lifetime with typed shared-execution jobs and worker retirement.
 mod activity;
 mod completion;
+mod display;
 mod gpu;
 mod native;
 mod proof;
@@ -16,12 +17,15 @@ use super::{
 use crate::{diagnostics::DiagnosticHealth, job_sequence::JobSequence};
 use std::{error::Error, path::PathBuf, sync::Arc, time::Duration};
 use sugarsubstitute_canvas::{DamagePlan, FrameStamp, Navigation, ToolManager, Viewport};
-use sugarsubstitute_canvas_render::{CpuSurface, GpuSurface};
+use sugarsubstitute_canvas_render::{
+    CpuProjection, CpuSurface, GpuSurface, PresentationMode, PresentationPacer,
+    PresentationReadiness, ProjectionBuffer,
+};
 use sugarsubstitute_contracts::{
     execution::*,
     localization::{messages, viewer::ViewerMessages},
 };
-use sugarsubstitute_desktop::canvas::WindowTarget;
+use sugarsubstitute_desktop::canvas::{GpuPresentation, WindowTarget};
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner, MonotonicClock};
 use sugarsubstitute_image_gpu::{AdapterDescriptor, GpuDevice, WindowFrame};
 use sugarsubstitute_image_io::CacheReuse;
@@ -46,10 +50,13 @@ struct Retired {
     _device: Option<Arc<GpuDevice>>,
     _gpu_front: Option<GpuSurface>,
     _presentation: Option<WindowFrame>,
+    _drawing: Option<work::Draw>,
+    _projection: Option<Box<CpuProjection>>,
+    _buffers: [Option<ProjectionBuffer>; 2],
     _scene: Option<Scene>,
     _packet: Option<Packet>,
     _resources: Option<Resources>,
-    _front: Option<CpuSurface>,
+    _front: Option<Arc<CpuSurface>>,
     _update: Option<Box<sugarsubstitute_canvas_render::PreparedUpdate>>,
 }
 /// The original admitted request and its quality remain paired through cancellation acknowledgement.
@@ -57,6 +64,7 @@ struct Rendering {
     job: OwnedJob<Packet, WorkError>,
     filter: Filter,
     superseded: bool,
+    input_at: Duration,
 }
 struct Loading {
     intent: u64,
@@ -70,6 +78,7 @@ struct Presented {
     source_revision: u64,
     damage: DamagePlan,
     base: Option<FrameStamp>,
+    input_at: Duration,
 }
 
 /// Native callbacks mutate only application intent and retained presentation, never image kernels.
@@ -93,17 +102,27 @@ pub(super) struct Session {
     pending_open: Option<Open>,
     selection: u64,
     rendering: Option<Rendering>,
+    displaying: Option<OwnedJob<work::Draw, WorkError>>,
     pending_retirement: Option<Retired>,
     retirement: Option<OwnedJob<(), WorkError>>,
     retirement_deadline: Option<Moment>,
     tools: ToolManager,
     initial_preview: bool,
-    front: Option<CpuSurface>,
+    front: Option<Arc<CpuSurface>>,
     gpu_front: Option<GpuSurface>,
-    gpu_presentation: Option<WindowFrame>,
+    gpu_presentation: Option<GpuPresentation>,
     awaiting_gpu: Option<FrameStamp>,
     native_presented: Option<FrameStamp>,
     native_verified: bool,
+    display_source: Option<FrameStamp>,
+    display_view: Option<Viewport>,
+    pacing: PresentationPacer,
+    input_observed: Duration,
+    cpu_pending: Option<FrameStamp>,
+    cpu_shown_projected: bool,
+    cpu_projection: Option<Box<CpuProjection>>,
+    projection_damage: Option<DamagePlan>,
+    display_buffers: [Option<ProjectionBuffer>; 2],
     expose_pending: bool,
     presented: Option<Presented>,
     frame_revision: u64,
@@ -159,6 +178,7 @@ impl Session {
             pending_open: None,
             selection: 1,
             rendering: None,
+            displaying: None,
             pending_retirement: None,
             retirement: None,
             retirement_deadline: None,
@@ -170,6 +190,15 @@ impl Session {
             awaiting_gpu: None,
             native_presented: None,
             native_verified: false,
+            display_source: None,
+            display_view: None,
+            pacing: PresentationPacer::new(Duration::from_nanos(16_666_667))?,
+            input_observed: Duration::ZERO,
+            cpu_pending: None,
+            cpu_shown_projected: false,
+            cpu_projection: None,
+            projection_damage: None,
+            display_buffers: [None, None],
             expose_pending: false,
             presented: None,
             frame_revision: 0,
@@ -231,6 +260,7 @@ impl Session {
         reuse: CacheReuse,
         expected: Option<AssetId>,
     ) -> Result<(), Box<dyn Error>> {
+        self.input_observed = self.navigation_time();
         self.selection = self.selection.checked_add(1).ok_or("Canvas source revision exhausted")?;
         self.pending_open = Some(Open { path, intent: self.selection, reuse, expected });
         if let Some(loading) = &self.loading {
@@ -254,9 +284,28 @@ impl Session {
     }
     /// Consume one terminal delivery and its exact identity; resource claims travel inside values.
     fn take<T>(slot: &mut Option<OwnedJob<T, WorkError>>) -> Option<JobOutcome<T, WorkError>> {
-        let completion = slot.as_mut()?.try_take_completion()?;
+        let job = slot.as_mut()?;
+        let completion = job.try_take_completion()?;
+        Self::observe_terminal(job, &completion.outcome);
         drop(slot.take());
         Some(completion.outcome)
+    }
+    /// Preserve bounded failure category and execution identity while private causes stay owned.
+    fn observe_terminal<T>(job: &OwnedJob<T, WorkError>, outcome: &JobOutcome<T, WorkError>) {
+        if matches!(
+            outcome,
+            JobOutcome::Failure(_) | JobOutcome::Panicked(_) | JobOutcome::TimedOut
+        ) {
+            let spec = job.spec();
+            tracing::warn!(
+                operation = "canvas_execution_terminal",
+                job_id = spec.id.get(),
+                work_kind = ?spec.operation,
+                capacity_class = ?spec.class,
+                terminal_kind = ?outcome.kind(),
+                "Canvas execution reached an unsuccessful terminal outcome"
+            );
+        }
     }
     /// Preserve supervision failure categories while keeping arbitrary panic text out of logs.
     fn terminal<T>(outcome: JobOutcome<T, WorkError>) -> Result<T, Box<dyn Error>> {

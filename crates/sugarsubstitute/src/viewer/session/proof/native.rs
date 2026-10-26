@@ -15,6 +15,9 @@ impl Lifetime for Proof {
     fn did_present_gpu(&mut self, target: FrameStamp) -> Result<(), Box<dyn Error>> {
         self.session.did_present_gpu(target)
     }
+    fn did_present_cpu(&mut self, target: FrameStamp) -> Result<(), Box<dyn Error>> {
+        self.session.did_present_cpu(target)
+    }
     fn expose(&mut self) {
         self.session.expose();
     }

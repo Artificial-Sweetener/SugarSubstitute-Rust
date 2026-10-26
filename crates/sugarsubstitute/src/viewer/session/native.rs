@@ -4,7 +4,7 @@
 use super::*;
 use sugarsubstitute_canvas::ToolCancelReason;
 use sugarsubstitute_desktop::canvas::{
-    CpuFrame, Feedback, GpuPresentation, Input, Lifetime, WindowTarget,
+    CpuFrame, CpuFrameKind, Feedback, GpuPresentation, Input, Lifetime, WindowTarget,
 };
 use sugarsubstitute_image_ops::Extent;
 
@@ -17,16 +17,38 @@ impl Lifetime for Session {
         Ok(())
     }
     fn take_gpu_presentation(&mut self) -> Option<GpuPresentation> {
-        let target = self.gpu_front.as_ref()?.current()?;
-        let frame = self.gpu_presentation.take()?;
-        self.awaiting_gpu = Some(target);
-        Some(GpuPresentation { target, frame })
+        let presentation = self.gpu_presentation.take()?;
+        self.awaiting_gpu = Some(presentation.target);
+        Some(presentation)
     }
     fn did_present_gpu(&mut self, target: FrameStamp) -> Result<(), Box<dyn Error>> {
-        if self.awaiting_gpu != Some(target) || self.current_frame() != Some(target) {
+        if self.awaiting_gpu != Some(target) {
             return Err("Canvas received a foreign GPU presentation acknowledgement".into());
         }
+        self.pacing.native_accepted(target, self.navigation_time())?;
         self.awaiting_gpu = None;
+        self.native_presented = Some(target);
+        self.expose_pending = false;
+        Ok(())
+    }
+    fn did_present_cpu(&mut self, target: FrameStamp) -> Result<(), Box<dyn Error>> {
+        if self.cpu_pending != Some(target) {
+            return Err("Canvas received a foreign CPU presentation acknowledgement".into());
+        }
+        let (source, view) = if self.cpu_shown_projected {
+            let frame =
+                self.cpu_projection.as_ref().ok_or("CPU projection custody is unavailable")?;
+            (frame.source(), frame.view().target())
+        } else {
+            (
+                self.current_frame().ok_or("CPU canonical frame is unavailable")?,
+                self.presented.as_ref().ok_or("CPU canonical camera is unavailable")?.view,
+            )
+        };
+        self.pacing.native_accepted(target, self.navigation_time())?;
+        self.cpu_pending = None;
+        self.display_source = Some(source);
+        self.display_view = Some(view);
         self.native_presented = Some(target);
         self.expose_pending = false;
         Ok(())
@@ -34,6 +56,7 @@ impl Lifetime for Session {
     fn expose(&mut self) {
         if self.options.gpu.is_some() {
             self.expose_pending = true;
+            self.input_observed = self.navigation_time();
         }
     }
     fn start(&mut self, wake: Arc<dyn CompletionWake>) -> Result<(), Box<dyn Error>> {
@@ -63,6 +86,7 @@ impl Lifetime for Session {
             self.scene.as_ref().map(|scene| &scene.document),
             self.navigation_time(),
         )?;
+        self.input_observed = self.navigation_time();
         Ok(())
     }
     fn input(&mut self, input: Input) -> Result<(), Box<dyn Error>> {
@@ -70,6 +94,8 @@ impl Lifetime for Session {
             return Ok(());
         }
         let now = self.navigation_time();
+        let before =
+            (self.tools.navigation().viewport(), self.tools.navigation().target_viewport());
         match input {
             Input::Tool(input) => self.tools.input(
                 input,
@@ -88,6 +114,13 @@ impl Lifetime for Session {
                 self.scene.as_ref().map(|scene| &scene.document),
                 now,
             )?,
+        }
+        if before != (self.tools.navigation().viewport(), self.tools.navigation().target_viewport())
+        {
+            self.input_observed = now;
+        }
+        if self.pacing.period() != self.tools.navigation().frame_period() {
+            self.pacing.set_frame_period(self.tools.navigation().frame_period(), now)?;
         }
         self.cancel_obsolete_refinement();
         Ok(())
@@ -129,9 +162,22 @@ impl Lifetime for Session {
         if self.options.gpu.is_some() {
             return None;
         }
+        if self.cpu_shown_projected {
+            let frame = self.cpu_projection.as_ref()?;
+            return Some(CpuFrame {
+                pending: self.cpu_pending == Some(frame.target()),
+                kind: CpuFrameKind::Projected,
+                target: frame.target(),
+                base: None,
+                damage: self.projection_damage.as_ref()?,
+                pixels: frame.pixels(),
+            });
+        }
         let surface = self.front.as_ref()?;
         let presented = self.presented.as_ref()?;
         Some(CpuFrame {
+            pending: self.cpu_pending == surface.current(),
+            kind: CpuFrameKind::Prepared,
             target: surface.current()?,
             base: presented.base,
             damage: &presented.damage,
@@ -151,7 +197,9 @@ impl Lifetime for Session {
         let motion = navigation
             .next_deadline(now)
             .and_then(|cutoff| native_now.checked_add(cutoff.saturating_sub(now)));
-        let presentation = if self.options.gpu.is_some() && self.expose_pending {
+        let presentation = if let Some(deadline) = self.display_deadline(now) {
+            native_now.checked_add(deadline.saturating_sub(now))
+        } else if self.options.gpu.is_some() && self.expose_pending && self.displaying.is_none() {
             native_now.checked_add(navigation.frame_period())
         } else {
             None
@@ -162,6 +210,16 @@ impl Lifetime for Session {
         }
     }
     fn close(&mut self) -> Result<(), Box<dyn Error>> {
+        let now = self.navigation_time();
+        if let PresentationReadiness::Busy {
+            target,
+            stage: sugarsubstitute_canvas_render::PresentationStage::AwaitingNative,
+        } = self.pacing.readiness(now)?
+        {
+            self.pacing.abandoned(target, now)?;
+        }
+        self.cpu_pending = None;
+        self.awaiting_gpu = None;
         self.closing = true;
         self.initialization_pending = false;
         self.device_pending = false;
@@ -184,6 +242,9 @@ impl Lifetime for Session {
         }
         if let Some(rendering) = &self.rendering {
             rendering.job.cancel();
+        }
+        if let Some(displaying) = &self.displaying {
+            displaying.cancel();
         }
         Ok(())
     }

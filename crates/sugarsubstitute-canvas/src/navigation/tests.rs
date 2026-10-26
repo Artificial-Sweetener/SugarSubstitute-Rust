@@ -81,6 +81,38 @@ fn final_phased_wheel_delta_is_not_lost_when_gesture_ends() -> TestResult {
     Ok(())
 }
 type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+#[test]
+fn irregular_slow_frames_sample_elapsed_motion_and_never_queue_missed_refresh_ticks() -> TestResult
+{
+    for hz in [30.0, 60.0, 120.0, 144.0, 240.0] {
+        let mut slow = navigation()?;
+        slow.set_refresh_rate(Some(hz))?;
+        let pointer = [313.25, 219.125];
+        slow.input(NavigationInput::Pointer(pointer), time(0))?;
+        let anchor = slow.viewport().document_at(pointer)?;
+        wheel(&mut slow, 1.0, 0)?;
+        let endpoint = slow.target_viewport();
+        for ms in [13, 42, 79] {
+            slow.advance(time(ms))?;
+            let t = ms as f64 / 80.0;
+            let expected = 0.5 + 0.125 * (1.0 - (1.0 - t).powi(2));
+            assert!((slow.viewport().zoom() - expected).abs() < 1e-12);
+            assert_eq!(slow.viewport().document_at(pointer)?, anchor);
+            let next = slow.next_deadline(time(ms)).ok_or("Missing next animation deadline")?;
+            assert!(next > time(ms));
+            assert!(next <= time(80));
+        }
+        slow.advance(time(250))?;
+        assert_eq!(slow.viewport(), endpoint);
+        assert_eq!(slow.next_deadline(time(250)), None);
+        assert!(!slow.interacting());
+        wheel(&mut slow, 1.0, 250)?;
+        assert_eq!(slow.target_viewport().zoom(), 0.78125);
+    }
+    Ok(())
+}
+
 fn time(ms: u64) -> Duration {
     Duration::from_millis(ms)
 }
@@ -283,5 +315,27 @@ fn integer_drag_preserves_exact_blit_phase_and_bounds_allow_small_native_images(
     nav.input(NavigationInput::Pan(true), time(190))?;
     nav.input(NavigationInput::Pointer([100_000.0; 2]), time(191))?;
     assert_eq!(nav.viewport().origin(), [-900.0, -400.0]);
+    Ok(())
+}
+
+#[test]
+fn returning_to_fit_preserves_the_original_large_image_sampling_phase() -> TestResult {
+    let mut nav = Navigation::new(Viewport::new(Extent::new(3840, 2160)?)?);
+    nav.set_content(Some(Extent::new(16384, 16384)?), time(0))?;
+    let fitted = nav.viewport();
+    nav.input(NavigationInput::Fit, time(1))?;
+    assert_eq!(nav.viewport(), fitted);
+    nav.input(NavigationInput::OneToOne, time(10))?;
+    nav.advance(time(90))?;
+    nav.input(NavigationInput::Fit, time(100))?;
+    nav.advance(time(180))?;
+    assert_eq!(nav.viewport(), fitted);
+    nav.input(NavigationInput::Wheel { steps: 1.0, phase: ScrollPhase::Begin }, time(200))?;
+    nav.advance(time(280))?;
+    nav.input(NavigationInput::Wheel { steps: -1.0, phase: ScrollPhase::End }, time(300))?;
+    nav.advance(time(380))?;
+    assert_eq!(nav.zoom_mode(), ZoomMode::Fit);
+    assert_eq!(nav.viewport(), fitted);
+    assert_eq!(nav.viewport().repair_from(fitted)?.dirty().pixels(), 0);
     Ok(())
 }

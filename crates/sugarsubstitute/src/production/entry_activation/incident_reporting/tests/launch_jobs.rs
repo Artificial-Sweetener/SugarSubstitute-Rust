@@ -4,7 +4,7 @@
 use super::*;
 use crate::production::entry_runner::ScopeSequence;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use sugarsubstitute_execution::{BlockingInputError, windows::NativeCorrelation};
+use sugarsubstitute_execution::{OwnedInputError, windows::NativeCorrelation};
 
 #[test]
 fn production_reporter_jobs_admit_watch_before_creation_and_keep_original_credit_and_cutoff()
@@ -78,7 +78,7 @@ fn production_reporter_jobs_admit_watch_before_creation_and_keep_original_credit
             Ok::<_, MemoryClaimError>(input)
         });
     assert!(
-        matches!(rejected, Err(BlockingInputError::Admission(AdmissionError::JobIdentityOrder { latest })) if latest == old_watch.id)
+        matches!(rejected, Err(OwnedInputError::Admission(AdmissionError::JobIdentityOrder { latest })) if latest == old_watch.id)
     );
     assert_eq!(original, Some(17));
     assert_eq!(calls.load(Ordering::Acquire), 0);

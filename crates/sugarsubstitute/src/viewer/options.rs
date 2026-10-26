@@ -8,6 +8,7 @@ use sugarsubstitute_image_ops::Extent;
 pub(super) struct Options {
     pub(super) gpu: Option<sugarsubstitute_image_gpu::AdapterKey>,
     pub(super) capture: bool,
+    pub(super) verify_native: bool,
     pub(super) cache: PathBuf,
     pub(super) image: Option<PathBuf>,
     pub(super) locale: String,
@@ -19,6 +20,7 @@ pub(super) struct Options {
 pub(super) struct ProofPaths {
     pub(super) image: PathBuf,
     pub(super) metrics: PathBuf,
+    pub(super) motion_duration: std::time::Duration,
 }
 impl Options {
     /// Require an explicit storage anchor so qualification never grows an ambient temporary cache.
@@ -35,10 +37,34 @@ impl Options {
         let mut metrics = None;
         let mut proof_window = None;
         let mut renderer = None;
+        let mut motion = None;
+        let mut native_readback = None;
         while let Some(flag) = arguments.next() {
             let value =
                 arguments.next().ok_or_else(|| invalid("Viewer option requires a value"))?;
             match flag.to_str() {
+                Some("--motion-duration-ms") if motion.is_none() => {
+                    let ms = number(value)?;
+                    if !(1..=10000).contains(&ms) {
+                        return Err(invalid(
+                            "Proof motion duration must be between 1 and 10000 milliseconds",
+                        )
+                        .into());
+                    }
+                    motion = Some(std::time::Duration::from_millis(u64::from(ms)));
+                }
+                Some("--native-display-verification-readback") if native_readback.is_none() => {
+                    native_readback = Some(match value.to_str() {
+                        Some("on") => true,
+                        Some("off") => false,
+                        _ => {
+                            return Err(invalid(
+                                "Use --native-display-verification-readback on or off",
+                            )
+                            .into());
+                        }
+                    });
+                }
                 Some("--renderer") if renderer.is_none() => {
                     let value = value
                         .into_string()
@@ -74,15 +100,22 @@ impl Options {
         }
         let proof = match (output, metrics) {
             (None, None) => None,
-            (Some(output), Some(metrics)) if image.is_some() && output.is_absolute() && metrics.is_absolute() && output != metrics => Some(ProofPaths { image: output, metrics }),
+            (Some(output), Some(metrics)) if image.is_some() && output.is_absolute() && metrics.is_absolute() && output != metrics => Some(ProofPaths { image: output, metrics, motion_duration: motion.unwrap_or_default() }),
             _ => return Err(invalid("Headless viewer proof requires --image, distinct absolute --output and --metrics paths").into()),
         };
         if proof_window.is_some() && proof.is_none() {
             return Err(invalid("Hidden native qualification requires proof outputs").into());
         }
+        if (motion.is_some() || native_readback.is_some()) && proof.is_none() {
+            return Err(invalid(
+                "Motion qualification and native readback selection require proof outputs",
+            )
+            .into());
+        }
         Ok(Self {
             gpu: renderer.flatten(),
             capture: proof.is_some(),
+            verify_native: proof.is_some() && native_readback.unwrap_or(true),
             cache,
             image,
             locale: locale.unwrap_or_else(|| "en".to_owned()),
@@ -184,6 +217,52 @@ mod tests {
         let cpu =
             Options::parse(["--cache".into(), root.into(), "--renderer".into(), "cpu".into()])?;
         assert!(cpu.gpu.is_none());
+        Ok(())
+    }
+    #[test]
+    fn motion_and_readback_controls_are_bounded_to_complete_qualification_inputs()
+    -> Result<(), Box<dyn Error>> {
+        let root = if cfg!(windows) { "E:\\viewer-proof" } else { "/viewer-proof" };
+        let root = PathBuf::from(root);
+        let mut arguments = vec!["--cache".into(), root.join("cache").into_os_string()];
+        for flags in
+            [["--motion-duration-ms", "1000"], ["--native-display-verification-readback", "off"]]
+        {
+            let mut incomplete = arguments.clone();
+            incomplete.extend(flags.map(OsString::from));
+            assert!(Options::parse(incomplete).is_err());
+        }
+        arguments.extend([
+            "--image".into(),
+            root.join("source.png").into_os_string(),
+            "--output".into(),
+            root.join("viewport.png").into_os_string(),
+            "--metrics".into(),
+            root.join("metrics.json").into_os_string(),
+        ]);
+        for invalid in ["0", "10001", "-1", "invalid"] {
+            let mut rejected = arguments.clone();
+            rejected.extend(["--motion-duration-ms".into(), invalid.into()]);
+            assert!(Options::parse(rejected).is_err());
+        }
+        let default = Options::parse(arguments.clone())?;
+        assert!(default.verify_native);
+        assert!(default.proof.ok_or("Proof inputs absent")?.motion_duration.is_zero());
+        arguments.extend([
+            "--motion-duration-ms".into(),
+            "1000".into(),
+            "--native-display-verification-readback".into(),
+            "off".into(),
+        ]);
+        let options = Options::parse(arguments.clone())?;
+        assert!(options.capture);
+        assert!(!options.verify_native);
+        assert_eq!(
+            options.proof.ok_or("Proof inputs absent")?.motion_duration,
+            std::time::Duration::from_secs(1)
+        );
+        arguments.extend(["--native-display-verification-readback".into(), "on".into()]);
+        assert!(Options::parse(arguments).is_err());
         Ok(())
     }
 }

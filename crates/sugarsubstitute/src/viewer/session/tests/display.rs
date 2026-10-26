@@ -1,0 +1,288 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Artificial Sweetener and contributors
+//! Application publication labels actual completed display poses and rejects obsolete content.
+use super::refinement::Wake;
+use super::*;
+use sugarsubstitute_canvas::{Document, ViewProjection};
+use sugarsubstitute_canvas_render::{PreparedUpdate, ProjectionBuffer};
+use sugarsubstitute_desktop::canvas::CpuFrameKind;
+use sugarsubstitute_image_ops::Pixel;
+
+/// Replace only the external GPU draw boundary; publication and execution are production owners.
+struct DrawBoundary(Option<work::Draw>);
+impl CpuTask<work::Draw, WorkError> for DrawBoundary {
+    fn step(&mut self, _: &JobContext) -> Result<CpuStep<work::Draw>, WorkError> {
+        self.0
+            .take()
+            .ok_or_else(|| WorkError::invalid("Draw fixture already consumed"))
+            .map(CpuStep::Complete)
+    }
+}
+
+/// Real canonical pixels and paired projection allocations created under one admitted job.
+struct CpuDisplayProducts {
+    surface: Arc<CpuSurface>,
+    projection: Box<CpuProjection>,
+    spare: ProjectionBuffer,
+}
+/// Create real application display products through the execution-owned CPU task boundary.
+struct CpuDisplayBoundary {
+    source: FrameStamp,
+    target: FrameStamp,
+    source_view: Viewport,
+    projected_view: Viewport,
+}
+impl CpuTask<CpuDisplayProducts, WorkError> for CpuDisplayBoundary {
+    fn step(&mut self, context: &JobContext) -> Result<CpuStep<CpuDisplayProducts>, WorkError> {
+        let damage = DamagePlan::full(self.source_view.surface());
+        let prepared =
+            PreparedUpdate::prepare(self.source, None, damage, context.memory(), |_, pixels| {
+                pixels.fill(0xff4269a5);
+                Ok(())
+            })?;
+        let surface = Arc::new(CpuSurface::from_prepared(prepared)?);
+        let mapping = ViewProjection::new(self.source_view, self.projected_view)?;
+        let projection = ProjectionBuffer::new(mapping, context.memory(), context)?.project(
+            self.target,
+            &surface,
+            mapping,
+            Pixel::linear(0.018, 0.018, 0.018, 1.0)?,
+            context,
+        )?;
+        let spare = ProjectionBuffer::new(mapping, context.memory(), context)?;
+        Ok(CpuStep::Complete(CpuDisplayProducts {
+            surface,
+            projection: Box::new(projection),
+            spare,
+        }))
+    }
+}
+/// A real admitted document and one typed completed display request, without a native GPU device.
+struct Fixture {
+    session: Session,
+    clock: Arc<TestClock>,
+    wake: Arc<Wake>,
+    view: Viewport,
+    source: FrameStamp,
+    _directory: tempfile::TempDir,
+}
+/// Construct original document custody on a worker before faking only the native draw result.
+fn pending_draw() -> Result<Fixture, Box<dyn Error>> {
+    let (mut session, clock, directory) = session()?;
+    session.options.gpu = Some("vulkan:8086:a780".parse()?);
+    let wake = Arc::new(Wake::default());
+    let owner = ExecutionOwner::new(session.clock.clone(), wake.clone())?;
+    let client = owner.client();
+    let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
+    let spec = session.spec(
+        Operation::Infrastructure,
+        JobClass::InfrastructureOrdinary,
+        65536,
+        Duration::from_secs(30),
+        None,
+    )?;
+    let mut setup = client.submit_blocking(&scope, spec, |context| {
+        Document::new(1, Extent::new(640, 480)?, context.memory())
+    })?;
+    let JobOutcome::Success(document) = wake.completion(&client, &mut setup)?.outcome else {
+        return Err("Draw fixture document failed".into());
+    };
+    let identity = (document.snapshot().identity(), document.snapshot().revision());
+    session.scene = Some(Scene { document, source: None, source_revision: 7, original: None });
+    let view = session.tools.navigation().viewport();
+    let source = FrameStamp { surface: SurfaceId::new(1)?, generation: Generation::new(1)? };
+    let target = FrameStamp { generation: Generation::new(2)?, ..source };
+    let spec = session.spec(
+        Operation::FramePrepare,
+        JobClass::CpuInteractive,
+        65536,
+        Duration::from_secs(30),
+        Some(ReplacementKey { surface: SurfaceId::new(2)?, revision: target.generation }),
+    )?;
+    let job = client.submit_cpu(&scope, spec, move |_| {
+        DrawBoundary(Some(work::Draw {
+            source,
+            target,
+            view,
+            pixels: work::DrawPixels::Gpu(None),
+            document: identity,
+            source_revision: 7,
+            verified: true,
+        }))
+    })?;
+    session.pacing.submitted(
+        target,
+        PresentationMode::Canonical,
+        Duration::ZERO,
+        Duration::ZERO,
+    )?;
+    session.displaying = Some(job);
+    session.runtime = Some(Runtime { owner, client, scope });
+    Ok(Fixture { session, clock, wake, view, source, _directory: directory })
+}
+/// Observe the typed completion through its real application consumer before asserting publication.
+fn consume(session: &mut Session, wake: &Wake) -> Result<(), Box<dyn Error>> {
+    while session.displaying.is_some() {
+        let observed = wake.revision();
+        session
+            .runtime
+            .as_ref()
+            .ok_or("Draw fixture execution absent")?
+            .client
+            .drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
+        session.consume_display()?;
+        if session.displaying.is_some() {
+            wake.wait_after(observed)?;
+        }
+    }
+    Ok(())
+}
+
+/// Admit the exact source and paired display allocations retained by the test session.
+fn cpu_display_products(
+    session: &mut Session,
+    wake: Arc<Wake>,
+    source: FrameStamp,
+    target: FrameStamp,
+    source_view: Viewport,
+    projected_view: Viewport,
+) -> Result<CpuDisplayProducts, Box<dyn Error>> {
+    let owner = ExecutionOwner::new(session.clock.clone(), wake.clone())?;
+    let client = owner.client();
+    let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
+    let spec = session.spec(
+        Operation::FramePrepare,
+        JobClass::CpuInteractive,
+        2 * 1024 * 1024,
+        Duration::from_secs(30),
+        Some(ReplacementKey { surface: SurfaceId::new(2)?, revision: target.generation }),
+    )?;
+    let mut job = client.submit_cpu(&scope, spec, move |_| CpuDisplayBoundary {
+        source,
+        target,
+        source_view,
+        projected_view,
+    })?;
+    let JobOutcome::Success(products) = wake.completion(&client, &mut job)?.outcome else {
+        return Err("CPU display fixture failed".into());
+    };
+    session.runtime = Some(Runtime { owner, client, scope });
+    Ok(products)
+}
+
+#[test]
+fn acknowledged_cpu_projection_publishes_actual_pose_and_recycles_on_canonical_catchup()
+-> Result<(), Box<dyn Error>> {
+    let (mut session, clock, _directory) = session()?;
+    let wake = Arc::new(Wake::default());
+    let source = FrameStamp { surface: SurfaceId::new(1)?, generation: Generation::new(1)? };
+    let target = FrameStamp { generation: Generation::new(2)?, ..source };
+    let foreign = FrameStamp { generation: Generation::new(3)?, ..source };
+    let source_view = session.tools.navigation().viewport();
+    let mut projected_view = source_view;
+    projected_view.pan_by([11.0, -7.0])?;
+    let mut latest_view = projected_view;
+    latest_view.pan_by([-3.0, 5.0])?;
+    session.tools = ToolManager::new(Navigation::new(latest_view));
+
+    let products =
+        cpu_display_products(&mut session, wake, source, target, source_view, projected_view)?;
+    session.front = Some(products.surface);
+    session.cpu_projection = Some(products.projection);
+    session.display_buffers = [Some(products.spare), None];
+    session.projection_damage = Some(DamagePlan::full(projected_view.surface()));
+    session.cpu_shown_projected = true;
+    session.cpu_pending = Some(target);
+    session.pacing.submitted(
+        target,
+        PresentationMode::Projected,
+        Duration::ZERO,
+        Duration::ZERO,
+    )?;
+    session.pacing.prepared(target, Duration::ZERO)?;
+
+    let pending = session.frame().ok_or("CPU projection was not published")?;
+    assert_eq!(pending.kind, CpuFrameKind::Projected);
+    assert!(pending.pending);
+    assert_eq!(pending.target, target);
+    assert!(session.did_present_cpu(foreign).is_err());
+    assert_eq!(session.cpu_pending, Some(target));
+    assert!(matches!(
+        session.pacing.readiness(Duration::ZERO)?,
+        PresentationReadiness::Busy { target: retained, .. } if retained == target
+    ));
+
+    session.did_present_cpu(target)?;
+    assert_eq!(session.cpu_pending, None);
+    assert_eq!(session.display_source, Some(source));
+    assert_eq!(session.display_view, Some(projected_view));
+    assert_ne!(session.display_view, Some(latest_view));
+    assert_eq!(session.native_presented, Some(target));
+    assert!(!session.frame().ok_or("Acknowledged projection was lost")?.pending);
+    assert_eq!(session.pacing.stats().projected_accepted, 1);
+    assert!(session.did_present_cpu(target).is_err());
+
+    session.tools = ToolManager::new(Navigation::new(source_view));
+    session.presented = Some(Presented {
+        view: source_view,
+        filter: Filter::Nearest,
+        document: (1, 1),
+        source_revision: 0,
+        damage: DamagePlan::full(source_view.surface()),
+        base: None,
+        input_at: Duration::ZERO,
+    });
+    clock.0.store(20_000_000, Ordering::SeqCst);
+    session.stage_cpu_canonical()?;
+    assert!(!session.cpu_shown_projected);
+    assert!(session.cpu_projection.is_none());
+    assert!(session.projection_damage.is_none());
+    assert_eq!(session.display_buffers.iter().filter(|slot| slot.is_some()).count(), 2);
+    let canonical = session.frame().ok_or("Canonical CPU frame was not restored")?;
+    assert_eq!(canonical.kind, CpuFrameKind::Prepared);
+    assert!(!canonical.pending);
+    assert_eq!(canonical.target, source);
+    assert_eq!(session.display_source, Some(source));
+    assert_eq!(session.display_view, Some(source_view));
+    Ok(())
+}
+
+#[test]
+fn completed_display_keeps_actual_camera_while_latest_zoom_intent_skips_missed_ticks()
+-> Result<(), Box<dyn Error>> {
+    let Fixture { mut session, clock, wake, view, source, _directory } = pending_draw()?;
+    session.input(Input::Tool(ToolInput::Wheel { steps: 1.0, phase: ScrollPhase::Unphased }))?;
+    clock.0.store(250_000_000, Ordering::SeqCst);
+    session.tools.advance(Duration::from_millis(250))?;
+    let latest = session.tools.navigation().viewport();
+    assert_ne!(latest, view);
+    consume(&mut session, &wake)?;
+    assert_eq!(session.display_source, Some(source));
+    assert_eq!(session.display_view, Some(view));
+    assert_eq!(session.tools.navigation().viewport(), latest);
+    assert_eq!(session.tools.navigation().target_viewport(), latest);
+    assert!(!session.tools.navigation().interacting());
+    assert!(session.failed.is_none());
+    Ok(())
+}
+
+#[test]
+fn obsolete_content_and_resized_native_outputs_retain_custody_for_worker_retirement()
+-> Result<(), Box<dyn Error>> {
+    for resized in [false, true] {
+        let Fixture { mut session, wake, _directory, .. } = pending_draw()?;
+        if resized {
+            session.resize(Extent::new(400, 300)?)?;
+        } else {
+            session.scene.as_mut().ok_or("Draw fixture scene absent")?.source_revision += 1;
+        }
+        consume(&mut session, &wake)?;
+        assert_eq!(session.display_source, None);
+        assert_eq!(session.display_view, None);
+        assert!(
+            session.pending_retirement.as_ref().is_some_and(|retired| retired._drawing.is_some())
+        );
+        assert!(session.failed.is_none());
+    }
+    Ok(())
+}

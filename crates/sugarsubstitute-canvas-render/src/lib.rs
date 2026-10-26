@@ -4,13 +4,18 @@
 mod cpu;
 mod gpu;
 mod gpu_surface;
+mod pacing;
 mod projection;
 mod surface;
 mod update;
 pub use cpu::{CpuPreparation, CpuRenderer};
 pub use gpu::{GpuRenderer, PreparedGpuUpdate};
 pub use gpu_surface::{GpuFrame, GpuSurface};
-pub use projection::{CpuProjection, ProjectionBuffer, ProjectionSamples};
+pub use pacing::{
+    PacingError, PresentationMode, PresentationPacer, PresentationReadiness, PresentationStage,
+    PresentationStats, TimingSummary,
+};
+pub use projection::{CpuProjection, ProjectionBuffer, ProjectionBuffers, ProjectionSamples};
 pub use surface::{CpuSurface, PreparedUpdate, SurfaceWork};
 
 /// Reject invalid prepared presentation without changing retained surface contents.

@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Verify native navigation intent and exact preview/refinement decisions with an injected clock.
 use super::*;
+mod display;
 mod refinement;
 use std::sync::atomic::{AtomicU64, Ordering};
 use sugarsubstitute_canvas::{ScrollPhase, ToolButton, ToolInput};

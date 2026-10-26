@@ -10,6 +10,11 @@ pub(super) fn step(
     started: Instant,
     context: &JobContext,
 ) -> Result<CpuStep<Packet>, WorkError> {
+    if input.replace_surface && input.display_buffers.is_none() {
+        let view = sugarsubstitute_canvas::ViewProjection::new(input.view, input.view)?;
+        input.display_buffers = Some(renderer.projection_buffers(view, context)?);
+        return Ok(CpuStep::Yield);
+    }
     if input.cpu.is_none() {
         input.cpu = Some(renderer.begin(
             RenderRequest {
@@ -39,7 +44,13 @@ pub(super) fn step(
         tracing::info!(operation="canvas_frame_preparation", document=input.document.identity(), revision=input.document.revision(), generation=?input.target.generation, elapsed_milliseconds=started.elapsed().as_millis(), computed_pixels=stats.computed_pixels, source_pixels=stats.source_pixels, "Canvas DAG preparation completed");
     }
     let pixels = if input.replace_surface {
-        CpuPacket::Replace(CpuSurface::from_prepared(update)?)
+        CpuPacket::Replace {
+            surface: CpuSurface::from_prepared(update)?,
+            buffers: input
+                .display_buffers
+                .take()
+                .ok_or_else(|| WorkError::invalid("CPU display allocations are unavailable"))?,
+        }
     } else {
         CpuPacket::Repair(Box::new(update))
     };

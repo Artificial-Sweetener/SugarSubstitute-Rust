@@ -59,7 +59,7 @@ rationale = "Supported bounded field formatter applies the shared contract befor
 [[records]]
 path = "crates/sugarsubstitute/src/diagnostics/service/batches.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:b6e41293285f6f2e19c4bbd863c269ae96979d334c66425e221c0f3d08870f63"
+source_sha256 = "sha256:6183ead63f4905f822ada780a7d98cc78568828b6a38c10851af38346ab86c96"
 disposition = "routing"
 rationale = "Native sink calls suppress recursive executor events within source-preserving bounded publication attempts."
 
@@ -948,7 +948,7 @@ rationale = "The isolated Node transport qualification captures bounded child st
 [[records]]
 path = "crates/sugarsubstitute-image-io/src/tests/harness.rs"
 owner = "sugarsubstitute-image-io"
-source_sha256 = "sha256:6407d8b5e16fea742e67f326ba161349e0a892a55e27900bb6d85244a0f4fea5"
+source_sha256 = "sha256:423b070f5a55433c8209c2c062afe3e211bbf33ca34dcfcac411a7edbb8ce004"
 disposition = "fixture"
 rationale = "Bounded external test wake reports retained terminal failure causes after real execution admission; no runtime sink is constructed."
 
@@ -1012,6 +1012,6 @@ rationale = "The actual admitted native storage body receives an isolated diagno
 [[records]]
 path = "crates/sugarsubstitute-canvas-render/examples/frame_qualification/projection.rs"
 owner = "sugarsubstitute-canvas-render"
-source_sha256 = "sha256:18576f7c352761985379f915618e02675f116c3651cdb0c7053d184a2d16a36b"
+source_sha256 = "sha256:aa25a6f38d90dec9cf6efdd9b054ed2575f37262707d87a12e806556c09f77eb"
 disposition = "fixture"
 rationale = "Isolated finite CPU qualification reports physical 4K projection costs with fresh and recycled admitted storage through the production execution boundary. Measurements are diagnostics, not timing-based correctness assertions."
