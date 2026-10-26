@@ -215,7 +215,11 @@ impl WindowSurface {
             .memory()
             .claim(upload.bytes.len() as u64 + 128)
             .map_err(|cause| GpuError::new("gpu_display_mapping_staging", cause))?;
-        let texture = match self.owner.surface.get_current_texture() {
+        let acquired = {
+            let _timing = device.timings.begin(crate::timing::Phase::Acquire, 0, 1);
+            self.owner.surface.get_current_texture()
+        };
+        let texture = match acquired {
             wgpu::CurrentSurfaceTexture::Success(texture) => {
                 self.owner.reconfiguration.mark(ReconfigureReason::Discarded);
                 texture

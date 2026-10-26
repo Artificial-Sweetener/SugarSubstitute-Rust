@@ -53,6 +53,7 @@ impl Session {
                         let resources =
                             self.resources.take().ok_or("Canvas resources are unavailable")?;
                         self.gpu_descriptor = Some(device.descriptor().clone());
+                        self.gpu_diagnostics = Some(device.diagnostics());
                         self.resources = Some(resources.with_gpu(device, window));
                         self.gpu_ready = true;
                     }

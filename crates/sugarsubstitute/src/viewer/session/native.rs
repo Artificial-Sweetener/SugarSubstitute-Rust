@@ -154,6 +154,9 @@ impl Lifetime for Session {
         Ok(())
     }
     fn poll(&mut self, _: Duration) -> Result<(), Box<dyn Error>> {
+        if let Some(diagnostics) = &self.gpu_diagnostics {
+            diagnostics.report();
+        }
         self.advance()?;
         if !self.closing {
             self.health.check()?;
@@ -269,6 +272,7 @@ impl Lifetime for Session {
         }
     }
     fn finish(&mut self) -> Result<(), Box<dyn Error>> {
+        self.gpu_diagnostics = None;
         if let Some(runtime) = &mut self.runtime {
             runtime.owner.finish_shutdown()?;
         }

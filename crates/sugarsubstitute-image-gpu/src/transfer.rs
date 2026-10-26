@@ -34,9 +34,8 @@ impl Transfer {
             _staging: Some(staging),
             submission: Some(submission),
         };
-        transfer.device.queue.write_buffer(&buffer.raw, 0, bytes);
-        transfer.index =
-            Some(transfer.device.queue.submit(commands.into_iter().map(|value| value.finish())));
+        transfer.device.write_buffer(&buffer, bytes);
+        transfer.index = Some(transfer.device.submit(commands));
         transfer
     }
     pub(crate) fn copy(
@@ -62,7 +61,7 @@ impl Transfer {
                 label: Some("SugarSubstitute image readback"),
             });
         commands.copy_buffer_to_buffer(&source.raw, 0, &receiving.raw, 0, source.bytes);
-        transfer.index = Some(transfer.device.queue.submit([commands.finish()]));
+        transfer.index = Some(transfer.device.submit(Some(commands)));
         transfer
     }
     /// Submit a command batch whose calling owner keeps every allocation and staging claim alive.
@@ -80,7 +79,7 @@ impl Transfer {
             _staging: None,
             submission: Some(submission),
         };
-        transfer.index = Some(transfer.device.queue.submit([commands.finish()]));
+        transfer.index = Some(transfer.device.submit(Some(commands)));
         transfer
     }
     /// Cancellation stops new image work; submitted native work keeps every guard until this ends.
@@ -89,8 +88,9 @@ impl Transfer {
             return self.device.faults.check();
         }
         if self.index.is_none() {
-            self.index = Some(self.device.queue.submit([]));
+            self.index = Some(self.device.submit(None));
         }
+        let mut timing = self.device.timings.begin(crate::timing::Phase::Wait, 0, 1);
         let mut failure = None;
         loop {
             match self.device.device.poll(wgpu::PollType::Wait {
@@ -98,7 +98,8 @@ impl Transfer {
                 timeout: Some(Duration::from_millis(100)),
             }) {
                 Ok(status) if status.wait_finished() => break,
-                Ok(_) | Err(wgpu::PollError::Timeout) => {}
+                Ok(_) => {}
+                Err(wgpu::PollError::Timeout) => timing.timeout(),
                 Err(cause @ wgpu::PollError::WrongSubmissionIndex(..)) => {
                     if failure.is_none() {
                         failure = Some(GpuError::new("gpu_submission_identity", cause));
@@ -137,12 +138,19 @@ impl Mapping {
     pub(crate) fn new(buffer: Arc<Buffer>, submission: SubmissionPermit) -> Self {
         let completion = Arc::new(Mutex::new(None));
         let delivered = completion.clone();
+        let timing = buffer.device.timings.begin(crate::timing::Phase::MapRequest, 0, 1);
         buffer.raw.map_async(wgpu::MapMode::Read, .., move |outcome| {
             *delivered.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(outcome);
         });
+        drop(timing);
         Self { buffer, completion, done: false, mapped: false, submission: Some(submission) }
     }
     pub(crate) fn wait(&mut self) -> Result<(), GpuError> {
+        if self.done {
+            return self.buffer.device.faults.check();
+        }
+        let mut timing =
+            self.buffer.device.timings.begin(crate::timing::Phase::MapWait, self.buffer.bytes, 1);
         let mut failure = None;
         while !self.done {
             let result =
@@ -157,7 +165,8 @@ impl Mapping {
                 submission_index: None,
                 timeout: Some(Duration::from_millis(100)),
             }) {
-                Ok(_) | Err(wgpu::PollError::Timeout) => {}
+                Ok(_) => {}
+                Err(wgpu::PollError::Timeout) => timing.timeout(),
                 Err(cause) => {
                     if failure.is_none() {
                         failure = Some(GpuError::new("gpu_mapping_observation", cause));

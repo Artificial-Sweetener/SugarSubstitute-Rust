@@ -142,6 +142,7 @@ sources = [
     "crates/sugarsubstitute-image-gpu/src/error.rs",
     "crates/sugarsubstitute-image-gpu/src/fault.rs",
     "crates/sugarsubstitute-image-gpu/src/kernel.rs",
+    "crates/sugarsubstitute-image-gpu/src/native_commands.rs",
     "crates/sugarsubstitute-image-gpu/src/kernel/tests.rs",
     "crates/sugarsubstitute-image-gpu/src/transfer.rs",
     "crates/sugarsubstitute-image-gpu/src/boundary_fixtures.rs",
@@ -150,7 +151,7 @@ sources = [
     "crates/sugarsubstitute-image-gpu/src/window_frame.rs",
     "crates/sugarsubstitute-image-gpu/src/window_shader.rs",
 ]
-source_sha256 = "sha256:1b1bbaf9318cd94d7e64ef1dfb237579aa8a4411413218f0d5f6b789513e7cbc"
+source_sha256 = "sha256:7dbd1c3275ae5eca453a62d74911b350a5d0a96586a3d04c1573aa23bda9de8f"
 
 [[boundaries]]
 owner = "sugarsubstitute-desktop"

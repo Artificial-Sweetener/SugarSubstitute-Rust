@@ -174,6 +174,11 @@ impl AdapterCatalog {
         device.on_uncaptured_error(Arc::new(move |cause| callback.record(cause)));
         let callback = faults.clone();
         device.set_device_lost_callback(move |reason, message| callback.lost(reason, message));
+        let timings = crate::timing::GpuDiagnostics::new(
+            entry.descriptor.vendor,
+            entry.descriptor.device,
+            memory,
+        )?;
         Ok(Arc::new(GpuDevice {
             descriptor: entry.descriptor,
             instance: self.instance,
@@ -183,6 +188,7 @@ impl AdapterCatalog {
             memory: memory.clone(),
             faults,
             submission: Arc::new(crate::coordination::SubmissionGate::default()),
+            timings,
             _memory: claim,
         }))
     }
@@ -198,6 +204,7 @@ pub struct GpuDevice {
     pub(crate) memory: MemoryLease,
     pub(crate) faults: Arc<crate::fault::Faults>,
     pub(crate) submission: Arc<crate::coordination::SubmissionGate>,
+    pub(crate) timings: crate::timing::GpuDiagnostics,
     _memory: MemoryClaim,
 }
 impl GpuDevice {
@@ -205,10 +212,16 @@ impl GpuDevice {
     pub fn descriptor(&self) -> &AdapterDescriptor {
         &self.descriptor
     }
+    /// Clone observations without retaining this device; the UI can report active native calls
+    /// even while a preparation worker is blocked. Reporting never polls or waits for the GPU.
+    pub fn diagnostics(&self) -> crate::timing::GpuDiagnostics {
+        self.timings.clone()
+    }
     pub(crate) fn submission(
         &self,
         context: &JobContext,
     ) -> Result<crate::coordination::SubmissionPermit, GpuError> {
+        let _timing = self.timings.begin(crate::timing::Phase::Coordination, 0, 1);
         self.submission.submission(context)
     }
 }

@@ -172,7 +172,7 @@ impl Batch {
             .map_err(|cause| GpuError::new("gpu_batch_upload_staging", cause))?;
         self.pin(buffer.clone())?;
         self.staging.push(memory);
-        self.device.queue.write_buffer(&buffer.raw, 0, bytes);
+        self.device.write_buffer(&buffer, bytes);
         self.work.uploaded_bytes += bytes.len() as u64;
         Ok(buffer)
     }
@@ -198,6 +198,11 @@ impl Batch {
         let Some(mut commands) = self.encoder.take() else {
             return Ok(self.work);
         };
+        let _timing = self.device.timings.begin(
+            crate::timing::Phase::Batch,
+            self.work.uploaded_bytes,
+            self.work.dispatches,
+        );
         commands.copy_buffer_to_buffer(
             &self.status.raw,
             0,

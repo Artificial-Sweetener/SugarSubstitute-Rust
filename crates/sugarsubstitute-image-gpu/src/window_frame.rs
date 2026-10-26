@@ -114,7 +114,10 @@ impl WindowFrame {
             .texture
             .take()
             .ok_or_else(|| GpuError::invalid("Native window frame was already consumed"))?;
-        self.owner.device.queue.present(texture);
+        {
+            let _timing = self.owner.device.timings.begin(crate::timing::Phase::Present, 0, 1);
+            self.owner.device.queue.present(texture);
+        }
         self.owner.device.faults.check()?;
         self.owner.reconfiguration.presented();
         Ok(accept_presentation(&self.owner.follow_up_after_configuration))
