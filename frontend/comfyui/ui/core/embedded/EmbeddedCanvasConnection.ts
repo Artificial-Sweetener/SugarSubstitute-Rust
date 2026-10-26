@@ -25,7 +25,7 @@ import {
   type CanvasDescriptor,
   type CanvasSourceHost,
 } from './CanvasRuntime.js';
-import type { BrowserPanelTransport } from './UxpPanelTransport.js';
+import type { BrowserPanelTransport } from './BrowserPanelTransport.js';
 /** Keep the optional native canvas unavailable until the panel has authenticated and negotiated it. */
 export class EmbeddedCanvasConnection implements CanvasLayerHost {
   #client: CanvasClient | null = null;
@@ -59,6 +59,7 @@ export class EmbeddedCanvasConnection implements CanvasLayerHost {
       transport.session,
       {
         send: (message) => transport.send(message),
+        report,
         later: (ms, callback) => {
           const timer = window.setTimeout(callback, ms);
           return () => window.clearTimeout(timer);

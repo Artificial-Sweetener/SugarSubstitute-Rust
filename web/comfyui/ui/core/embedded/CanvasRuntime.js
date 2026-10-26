@@ -27,22 +27,22 @@ function isCanvasInsertImage(value) {
   return isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "document") && isCanvasDocument(value["document"]) && Object.hasOwn(value, "image") && isCanvasEncodedImage(value["image"]) && Object.hasOwn(value, "layerName") && typeof value["layerName"] === "string" && value["layerName"].length <= 128 && Object.hasOwn(value, "position") && (value["position"] === null || isCanvasImagePosition(value["position"]));
 }
 function isCanvasReadRequest(value) {
-  return isRecord(value) && Object.keys(value).length === 5 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 2 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "context.request";
+  return isRecord(value) && Object.keys(value).length === 5 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "context.request";
 }
 function isCanvasReadReply(value) {
-  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 2 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "context.reply" && Object.hasOwn(value, "context") && isCanvasContext(value["context"]);
+  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "context.reply" && Object.hasOwn(value, "context") && isCanvasContext(value["context"]);
 }
 function isCanvasInsertRequest(value) {
-  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 2 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "image.insert" && Object.hasOwn(value, "image") && isCanvasInsertImage(value["image"]);
+  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "image.insert" && Object.hasOwn(value, "image") && isCanvasInsertImage(value["image"]);
 }
 function isCanvasInsertReply(value) {
-  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 2 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "image.reply" && Object.hasOwn(value, "result") && isCanvasInsertResult(value["result"]);
+  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "image.reply" && Object.hasOwn(value, "result") && isCanvasInsertResult(value["result"]);
 }
 function isCanvasCancelRequest(value) {
-  return isRecord(value) && Object.keys(value).length === 5 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 2 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "cancel";
+  return isRecord(value) && Object.keys(value).length === 5 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "cancel";
 }
 function isCanvasErrorReply(value) {
-  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 2 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "error.reply" && Object.hasOwn(value, "failure") && isCanvasFailure(value["failure"]);
+  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "error.reply" && Object.hasOwn(value, "failure") && isCanvasFailure(value["failure"]);
 }
 function isCanvasEncodedImage(value) {
   return isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "format") && value["format"] === "png" && Object.hasOwn(value, "encoding") && value["encoding"] === "base64" && Object.hasOwn(value, "data") && typeof value["data"] === "string" && value["data"].length <= 89478488;
@@ -60,9 +60,9 @@ function isCanvasSourceLayer(value) {
   return isRecord(value) && Object.keys(value).length === 5 && Object.hasOwn(value, "id") && typeof value["id"] === "string" && value["id"].length <= 128 && Object.hasOwn(value, "name") && typeof value["name"] === "string" && value["name"].length <= 256 && Object.hasOwn(value, "parentId") && (typeof value["parentId"] === "string" && value["parentId"].length <= 128 || value["parentId"] === null) && Object.hasOwn(value, "depth") && typeof value["depth"] === "number" && Number.isSafeInteger(value["depth"]) && value["depth"] >= 0 && value["depth"] <= 128 && Object.hasOwn(value, "visible") && typeof value["visible"] === "boolean";
 }
 function isCanvasSourceContext(value) {
-  return isRecord(value) && Object.keys(value).length === 7 && Object.hasOwn(value, "kind") && value["kind"] === "context" && Object.hasOwn(value, "supported") && typeof value["supported"] === "boolean" && Object.hasOwn(value, "document") && (isCanvasDocument(value["document"]) || value["document"] === null) && Object.hasOwn(value, "revision") && typeof value["revision"] === "string" && value["revision"].length <= 512 && Object.hasOwn(value, "targets") && Array.isArray(value["targets"]) && value["targets"].length <= 5 && value["targets"].every(
+  return isRecord(value) && Object.keys(value).length === 8 && Object.hasOwn(value, "kind") && value["kind"] === "context" && Object.hasOwn(value, "supported") && typeof value["supported"] === "boolean" && Object.hasOwn(value, "document") && (isCanvasDocument(value["document"]) || value["document"] === null) && Object.hasOwn(value, "revision") && typeof value["revision"] === "string" && value["revision"].length <= 512 && Object.hasOwn(value, "targets") && Array.isArray(value["targets"]) && value["targets"].length <= 5 && value["targets"].every(
     (item) => item === "selection" || item === "current-layer" || item === "layer" || item === "composition" || item === "composition-from-layer"
-  ) && Object.hasOwn(value, "layers") && Array.isArray(value["layers"]) && value["layers"].length <= 4096 && value["layers"].every((item) => isCanvasSourceLayer(item)) && Object.hasOwn(value, "currentLayerId") && (typeof value["currentLayerId"] === "string" && value["currentLayerId"].length <= 128 || value["currentLayerId"] === null);
+  ) && Object.hasOwn(value, "layers") && Array.isArray(value["layers"]) && value["layers"].length <= 4096 && value["layers"].every((item) => isCanvasSourceLayer(item)) && Object.hasOwn(value, "currentLayerId") && (typeof value["currentLayerId"] === "string" && value["currentLayerId"].length <= 128 || value["currentLayerId"] === null) && Object.hasOwn(value, "observesChanges") && typeof value["observesChanges"] === "boolean";
 }
 function isCanvasSourceSnapshot(value) {
   return isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "target") && isCanvasSourceTarget(value["target"]) && Object.hasOwn(value, "document") && isCanvasDocument(value["document"]) && Object.hasOwn(value, "revision") && typeof value["revision"] === "string" && value["revision"].length <= 512 && Object.hasOwn(value, "pixels") && isCanvasPixelRaster(value["pixels"]);
@@ -71,16 +71,16 @@ function isCanvasSourceCommand(value) {
   return isCanvasSourceQuery(value) || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "type") && value["type"] === "watch" && Object.hasOwn(value, "enabled") && typeof value["enabled"] === "boolean";
 }
 function isCanvasSourceResult(value) {
-  return isCanvasSourceContext(value) || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "kind") && value["kind"] === "captured" && Object.hasOwn(value, "snapshots") && Array.isArray(value["snapshots"]) && value["snapshots"].length <= 64 && value["snapshots"].every((item) => isCanvasSourceSnapshot(item)) || isRecord(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "kind") && value["kind"] === "watching" || isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "kind") && value["kind"] === "failure" && Object.hasOwn(value, "status") && (value["status"] === "unavailable" || value["status"] === "unsupported" || value["status"] === "stale" || value["status"] === "cancelled" || value["status"] === "error") && Object.hasOwn(value, "message") && typeof value["message"] === "string" && value["message"].length <= 512;
+  return isCanvasSourceContext(value) || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "kind") && value["kind"] === "captured" && Object.hasOwn(value, "snapshots") && Array.isArray(value["snapshots"]) && value["snapshots"].length <= 64 && value["snapshots"].every((item) => isCanvasSourceSnapshot(item)) || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "kind") && value["kind"] === "watching" && Object.hasOwn(value, "supported") && typeof value["supported"] === "boolean" || isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "kind") && value["kind"] === "failure" && Object.hasOwn(value, "status") && (value["status"] === "unavailable" || value["status"] === "unsupported" || value["status"] === "stale" || value["status"] === "cancelled" || value["status"] === "error") && Object.hasOwn(value, "message") && typeof value["message"] === "string" && value["message"].length <= 512;
 }
 function isCanvasSourceRequest(value) {
-  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 2 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "source.request" && Object.hasOwn(value, "command") && isCanvasSourceCommand(value["command"]);
+  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "source.request" && Object.hasOwn(value, "command") && isCanvasSourceCommand(value["command"]);
 }
 function isCanvasSourceReply(value) {
-  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 2 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "source.reply" && Object.hasOwn(value, "result") && isCanvasSourceResult(value["result"]);
+  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "source.reply" && Object.hasOwn(value, "result") && isCanvasSourceResult(value["result"]);
 }
 function isCanvasSourceChanged(value) {
-  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 2 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && value["requestId"] === 0 && Object.hasOwn(value, "type") && value["type"] === "source.changed" && Object.hasOwn(value, "change") && isCanvasSourceChange(value["change"]);
+  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 3 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && value["requestId"] === 0 && Object.hasOwn(value, "type") && value["type"] === "source.changed" && Object.hasOwn(value, "change") && isCanvasSourceChange(value["change"]);
 }
 function isCanvasSourceChange(value) {
   return isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "documentId") && (typeof value["documentId"] === "string" && value["documentId"].length <= 128 || value["documentId"] === null) && Object.hasOwn(value, "revision") && typeof value["revision"] === "string" && value["revision"].length <= 512;
@@ -98,14 +98,151 @@ function isCanvasMessage(value) {
   return isCanvasReadRequest(value) || isCanvasReadReply(value) || isCanvasInsertRequest(value) || isCanvasInsertReply(value) || isCanvasCancelRequest(value) || isCanvasErrorReply(value) || isCanvasSourceRequest(value) || isCanvasSourceReply(value) || isCanvasSourceChanged(value);
 }
 
+// integrations/shared/CanvasRemoteChanges.ts
+var CanvasRemoteChanges = class {
+  /** Keep protocol-specific requests and native event envelopes outside this lifetime owner. */
+  constructor(port) {
+    this.port = port;
+  }
+  #listeners = /* @__PURE__ */ new Set();
+  #ready = null;
+  #stop = null;
+  #epoch = 0;
+  #accepted = false;
+  #buffer = [];
+  #overflow = false;
+  #watchSent = false;
+  #disposed = false;
+  /** Register before starting the watch so synchronous native notifications cannot escape the lease. */
+  subscribe(listener) {
+    if (this.#disposed) return { ready: Promise.resolve("unavailable"), stop: () => {
+    } };
+    this.#listeners.add(listener);
+    const ready = this.#ready ?? this.#start();
+    let stopped = false;
+    return {
+      ready,
+      stop: () => {
+        if (stopped) return;
+        stopped = true;
+        this.#listeners.delete(listener);
+        if (!this.#listeners.size) this.#release();
+      }
+    };
+  }
+  /** Stop accepting events before releasing the session's transport. */
+  dispose() {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    this.#listeners.clear();
+    this.#release();
+  }
+  /** Retain bounded early notifications without losing changes to different masks or documents. */
+  #start() {
+    const epoch = ++this.#epoch;
+    this.#stop = this.port.listen((change) => {
+      if (!this.#owns(epoch)) return;
+      if (this.#accepted) this.#publish(change);
+      else if (this.#buffer.length < 64) this.#buffer.push(change);
+      else this.#overflow = true;
+    });
+    this.#watchSent = true;
+    const ready = this.port.watch(true).then(
+      (supported) => {
+        if (!this.#owns(epoch)) return "unavailable";
+        const buffered = this.#buffer;
+        this.#buffer = [];
+        if (supported && this.#overflow) {
+          this.#stop?.();
+          this.#stop = null;
+          this.#stopWatch();
+          this.port.report(
+            new Error(
+              "Canvas changes exceeded the pending observation budget. Refresh the canvas sources."
+            )
+          );
+          return "unavailable";
+        }
+        this.#accepted = supported;
+        if (supported)
+          for (const change of buffered) {
+            if (!this.#owns(epoch)) break;
+            this.#publish(change);
+          }
+        if (!supported) {
+          this.#stop?.();
+          this.#stop = null;
+        }
+        return supported ? "observing" : "unsupported";
+      },
+      (error) => {
+        if (this.#owns(epoch)) {
+          this.#buffer = [];
+          this.#stop?.();
+          this.#stop = null;
+          this.#stopWatch();
+          this.port.report(error);
+        }
+        return "unavailable";
+      }
+    );
+    this.#ready = ready;
+    return ready;
+  }
+  /** Notify only consumers still mounted in the current observation lifetime. */
+  #publish(change) {
+    for (const listener of this.#listeners) listener(change);
+  }
+  /** Re-read ownership after consumer callbacks may dispose or replace the observation lifetime. */
+  #owns(epoch) {
+    return !this.#disposed && epoch === this.#epoch;
+  }
+  /** Send the matching stop even when its start acknowledgement has not arrived yet. */
+  #release() {
+    if (!this.#ready) return;
+    this.#epoch++;
+    this.#ready = null;
+    this.#accepted = false;
+    this.#buffer = [];
+    this.#overflow = false;
+    this.#stop?.();
+    this.#stop = null;
+    this.#stopWatch();
+  }
+  /** Send exactly one stop for each admitted native watch, including an overflowing start. */
+  #stopWatch() {
+    if (!this.#watchSent) return;
+    this.#watchSent = false;
+    void this.port.watch(false).catch((error) => {
+      if (!this.#disposed) this.port.report(error);
+    });
+  }
+};
+
 // integrations/shared/CanvasSourceConnection.ts
 var CanvasSourceConnection = class {
   /** Borrow the session transport without creating a second request-ID sequence. */
   constructor(port) {
     this.port = port;
+    this.changes = new CanvasRemoteChanges({
+      listen: (listener) => this.port.listen((change) => {
+        this.#context = null;
+        listener(change);
+      }),
+      watch: async (enabled) => {
+        const result = await this.port.execute({ type: "watch", enabled });
+        if (result.kind !== "watching")
+          throw new Error(
+            result.kind === "failure" ? result.message : "Invalid observation acknowledgement."
+          );
+        return result.supported;
+      },
+      report: (error) => {
+        this.port.report(error);
+      }
+    });
   }
-  #listeners = /* @__PURE__ */ new Set();
-  #stop = null;
+  changes;
   #disposed = false;
   #context = null;
   /** Resolve identity from the actual connected canvas rather than an editor-specific name. */
@@ -128,46 +265,12 @@ var CanvasSourceConnection = class {
     this.#context = pending;
     return pending;
   }
-  /** Share one native watch across all interested views and application collaborators. */
-  subscribe(listener) {
-    if (this.#disposed) return () => {
-    };
-    this.#listeners.add(listener);
-    if (!this.#stop) {
-      this.#stop = this.port.listen((change) => {
-        this.#context = null;
-        for (const notify of this.#listeners) notify(change);
-      });
-      this.#watch(true);
-    }
-    return () => {
-      this.#listeners.delete(listener);
-      if (!this.#listeners.size && this.#stop) {
-        this.#stop();
-        this.#stop = null;
-        this.#watch(false);
-      }
-    };
-  }
   /** Release observation before the shared request client tears down its pending work. */
   dispose() {
     if (this.#disposed) return;
-    const watching = this.#stop !== null;
+    this.changes.dispose();
     this.#disposed = true;
     this.#context = null;
-    this.#stop?.();
-    this.#stop = null;
-    this.#listeners.clear();
-    if (watching) this.#watch(false);
-  }
-  /** Report live transport failures while discarding obsolete teardown feedback. */
-  #watch(enabled) {
-    void this.port.execute({ type: "watch", enabled }).then((result) => {
-      if (!this.#disposed && result.kind === "failure")
-        this.port.report(new Error(result.message));
-    }).catch((error) => {
-      if (!this.#disposed) this.port.report(error);
-    });
   }
 };
 
@@ -196,16 +299,21 @@ var CanvasClient = class {
   #sourceListeners = /* @__PURE__ */ new Set();
   #next = 0;
   #context = null;
+  #contextReply = 0;
   #disposed = false;
   /** Discover only capabilities actually reported by this canvas implementation. */
   readCanvas() {
     return this.#context?.canvas ?? null;
   }
-  /** Read the current document before preparing an insertion against that exact identity. */
+  /** Read native context while keeping cached capabilities on the latest reply in this live session. */
   async readContext() {
     const reply = await this.#request({ type: "context.request" }, "context.reply");
     if (reply.type !== "context.reply") throw new Error("Invalid canvas context reply.");
-    this.#context = reply.context;
+    if (this.#disposed) throw new Error("Canvas connection closed.");
+    if (reply.requestId > this.#contextReply) {
+      this.#contextReply = reply.requestId;
+      this.#context = reply.context;
+    }
     return reply.context;
   }
   /** Insert once using the caller's captured destination rather than a later active document. */
@@ -287,7 +395,7 @@ var CanvasClient = class {
         this.#cancel(requestId);
         resolve({
           protocol: "sugarcubes.canvas",
-          version: 2,
+          version: 3,
           session: this.session,
           requestId,
           type: "image.reply",
@@ -299,7 +407,7 @@ var CanvasClient = class {
       try {
         const envelope = {
           protocol: "sugarcubes.canvas",
-          version: 2,
+          version: 3,
           session: this.session,
           requestId
         };
@@ -318,7 +426,7 @@ var CanvasClient = class {
     try {
       this.port.send({
         protocol: "sugarcubes.canvas",
-        version: 2,
+        version: 3,
         session: this.session,
         requestId,
         type: "cancel"
@@ -561,7 +669,7 @@ function isCanvasMaskSnapshot(value) {
   return isRecord2(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "mask") && isCanvasMaskReference(value["mask"]) && Object.hasOwn(value, "revision") && typeof value["revision"] === "string" && value["revision"].length <= 512 && Object.hasOwn(value, "pixels") && isCanvasMaskPixels(value["pixels"]);
 }
 function isCanvasMaskContext(value) {
-  return isRecord2(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "kind") && value["kind"] === "context" && Object.hasOwn(value, "supported") && typeof value["supported"] === "boolean" && Object.hasOwn(value, "document") && (isCanvasDocument2(value["document"]) || value["document"] === null);
+  return isRecord2(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "kind") && value["kind"] === "context" && Object.hasOwn(value, "supported") && typeof value["supported"] === "boolean" && Object.hasOwn(value, "document") && (isCanvasDocument2(value["document"]) || value["document"] === null) && Object.hasOwn(value, "observesChanges") && typeof value["observesChanges"] === "boolean";
 }
 function isCanvasMaskCreate(value) {
   return isRecord2(value) && Object.keys(value).length === 5 && Object.hasOwn(value, "type") && value["type"] === "create" && Object.hasOwn(value, "document") && isCanvasDocument2(value["document"]) && Object.hasOwn(value, "name") && typeof value["name"] === "string" && value["name"].length <= 128 && Object.hasOwn(value, "source") && (value["source"] === "selection" || value["source"] === "blank" || value["source"] === "pixels") && Object.hasOwn(value, "pixels") && (isCanvasMaskPixels(value["pixels"]) || value["pixels"] === null);
@@ -573,19 +681,22 @@ function isCanvasMaskCapture(value) {
   return isRecord2(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "type") && value["type"] === "capture" && Object.hasOwn(value, "masks") && Array.isArray(value["masks"]) && value["masks"].length <= 64 && value["masks"].every((item) => isCanvasMaskReference(item)) && Object.hasOwn(value, "maximumSize") && typeof value["maximumSize"] === "number" && Number.isSafeInteger(value["maximumSize"]) && value["maximumSize"] >= 0 && value["maximumSize"] <= 1024;
 }
 function isCanvasMaskCommand(value) {
-  return isRecord2(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "type") && value["type"] === "context" || isCanvasMaskCreate(value) || isCanvasMaskActivate(value) || isCanvasMaskCapture(value) || isRecord2(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "type") && value["type"] === "release" && Object.hasOwn(value, "mask") && (isCanvasMaskReference(value["mask"]) || value["mask"] === null);
+  return isCanvasMaskQuery(value) || isRecord2(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "enabled") && typeof value["enabled"] === "boolean" && Object.hasOwn(value, "type") && value["type"] === "watch";
 }
 function isCanvasMaskResult(value) {
-  return isCanvasMaskContext(value) || isRecord2(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "kind") && value["kind"] === "created" && Object.hasOwn(value, "mask") && isCanvasMaskReference(value["mask"]) || isRecord2(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "kind") && value["kind"] === "activated" || isRecord2(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "kind") && value["kind"] === "captured" && Object.hasOwn(value, "snapshots") && Array.isArray(value["snapshots"]) && value["snapshots"].length <= 64 && value["snapshots"].every((item) => isCanvasMaskSnapshot(item)) || isRecord2(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "kind") && value["kind"] === "failure" && Object.hasOwn(value, "status") && (value["status"] === "unavailable" || value["status"] === "unsupported" || value["status"] === "stale" || value["status"] === "cancelled" || value["status"] === "error") && Object.hasOwn(value, "message") && typeof value["message"] === "string" && value["message"].length <= 512;
+  return isCanvasMaskContext(value) || isRecord2(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "kind") && value["kind"] === "created" && Object.hasOwn(value, "mask") && isCanvasMaskReference(value["mask"]) || isRecord2(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "kind") && value["kind"] === "activated" || isRecord2(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "kind") && value["kind"] === "captured" && Object.hasOwn(value, "snapshots") && Array.isArray(value["snapshots"]) && value["snapshots"].length <= 64 && value["snapshots"].every((item) => isCanvasMaskSnapshot(item)) || isRecord2(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "kind") && value["kind"] === "failure" && Object.hasOwn(value, "status") && (value["status"] === "unavailable" || value["status"] === "unsupported" || value["status"] === "stale" || value["status"] === "cancelled" || value["status"] === "error") && Object.hasOwn(value, "message") && typeof value["message"] === "string" && value["message"].length <= 512 || isRecord2(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "supported") && typeof value["supported"] === "boolean" && Object.hasOwn(value, "kind") && value["kind"] === "watching";
 }
 function isCanvasMaskRequest(value) {
-  return isRecord2(value) && Object.keys(value).length === 5 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas.masks" && Object.hasOwn(value, "version") && value["version"] === 1 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "command") && isCanvasMaskCommand(value["command"]);
+  return isRecord2(value) && Object.keys(value).length === 5 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas.masks" && Object.hasOwn(value, "version") && value["version"] === 2 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "command") && isCanvasMaskCommand(value["command"]);
 }
 function isCanvasMaskReply(value) {
-  return isRecord2(value) && Object.keys(value).length === 5 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas.masks" && Object.hasOwn(value, "version") && value["version"] === 1 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "result") && isCanvasMaskResult(value["result"]);
+  return isRecord2(value) && Object.keys(value).length === 5 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas.masks" && Object.hasOwn(value, "version") && value["version"] === 2 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "result") && isCanvasMaskResult(value["result"]);
 }
 function isCanvasMaskChanged(value) {
-  return isRecord2(value) && Object.keys(value).length === 7 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas.masks" && Object.hasOwn(value, "version") && value["version"] === 1 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "type") && value["type"] === "changed" && Object.hasOwn(value, "documentId") && typeof value["documentId"] === "string" && value["documentId"].length <= 128 && Object.hasOwn(value, "revision") && typeof value["revision"] === "string" && value["revision"].length <= 512 && Object.hasOwn(value, "maskId") && typeof value["maskId"] === "string" && value["maskId"].length <= 128;
+  return isRecord2(value) && Object.keys(value).length === 7 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas.masks" && Object.hasOwn(value, "version") && value["version"] === 2 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "type") && value["type"] === "changed" && Object.hasOwn(value, "documentId") && typeof value["documentId"] === "string" && value["documentId"].length <= 128 && Object.hasOwn(value, "revision") && typeof value["revision"] === "string" && value["revision"].length <= 512 && Object.hasOwn(value, "maskId") && typeof value["maskId"] === "string" && value["maskId"].length <= 128;
+}
+function isCanvasMaskQuery(value) {
+  return isRecord2(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "type") && value["type"] === "context" || isCanvasMaskCreate(value) || isCanvasMaskActivate(value) || isCanvasMaskCapture(value) || isRecord2(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "type") && value["type"] === "release" && Object.hasOwn(value, "mask") && (isCanvasMaskReference(value["mask"]) || value["mask"] === null);
 }
 function isCanvasMaskMessage(value) {
   return isCanvasMaskRequest(value) || isCanvasMaskReply(value) || isCanvasMaskChanged(value);
@@ -598,7 +709,27 @@ var CanvasMaskClient = class {
     this.session = session;
     this.port = port;
     this.identity = identity;
+    this.changes = new CanvasRemoteChanges({
+      listen: (listener) => {
+        this.#listeners.add(listener);
+        return () => {
+          this.#listeners.delete(listener);
+        };
+      },
+      watch: async (enabled) => {
+        const result = await this.#request({ type: "watch", enabled });
+        if (result.kind !== "watching")
+          throw new Error(
+            result.kind === "failure" ? result.message : "Invalid mask observation acknowledgement."
+          );
+        return result.supported;
+      },
+      report: (error) => {
+        this.port.report(error);
+      }
+    });
   }
+  changes;
   #pending = /* @__PURE__ */ new Map();
   #listeners = /* @__PURE__ */ new Set();
   #next = 0;
@@ -609,6 +740,10 @@ var CanvasMaskClient = class {
   }
   /** Submit one capability operation and retire it on timeout or connection loss. */
   execute(command) {
+    return this.#request(command);
+  }
+  /** Keep observation requests in the same correlated sequence as native mask operations. */
+  #request(command) {
     if (this.#disposed)
       return Promise.resolve({
         kind: "failure",
@@ -629,7 +764,7 @@ var CanvasMaskClient = class {
       try {
         this.port.send({
           protocol: "sugarcubes.canvas.masks",
-          version: 1,
+          version: 2,
           session: this.session,
           requestId,
           command
@@ -644,13 +779,6 @@ var CanvasMaskClient = class {
         });
       }
     });
-  }
-  /** Receive committed changes independently of in-flight replies. */
-  subscribe(listener) {
-    this.#listeners.add(listener);
-    return () => {
-      this.#listeners.delete(listener);
-    };
   }
   /** Validate the complete bounded envelope before exposing any native value. */
   receive(value) {
@@ -670,6 +798,7 @@ var CanvasMaskClient = class {
   }
   /** Settle outstanding operations before releasing native-change consumers. */
   dispose() {
+    this.changes.dispose();
     this.#disposed = true;
     for (const pending of this.#pending.values()) {
       pending.stop();

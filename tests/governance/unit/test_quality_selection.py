@@ -59,14 +59,29 @@ def test_unrelated_work_omits_editor_checks_and_shared_work_includes_consumers()
         "comfy",
         "integrations",
         "photoshop",
+        "gimp",
     }
     assert _checks("integrations/shared/PanelSession.ts") == {
         "comfy",
         "integrations",
         "photoshop",
+        "gimp",
     }
     assert _checks("scripts/photoshop/build.ts") == {"integrations", "photoshop"}
-    assert _checks("package-lock.json") == {"comfy", "integrations", "photoshop"}
+    assert _checks("package-lock.json") == {
+        "comfy",
+        "integrations",
+        "photoshop",
+        "gimp",
+    }
+    assert _checks("integrations/gimp/companion/src/connection.rs") == {
+        "integrations",
+        "gimp",
+    }
+    assert _checks("integrations/gimp/native/images.py") == {
+        "integrations",
+        "gimp",
+    }
 
 
 def test_check_selection_is_monotonic_and_common_config_selects_every_proof() -> None:

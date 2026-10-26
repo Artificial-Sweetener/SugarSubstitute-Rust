@@ -15,7 +15,11 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose native canvas ports while retaining replay and lifetime ownership in the shared server. */
 import type { CanvasMessage } from '../../../contracts/CanvasProtocol.generated.js';
-import type { CanvasMaskMessage } from '../../../contracts/CanvasMasksProtocol.generated.js';
+import type {
+  CanvasMaskMessage,
+  CanvasMaskChanged,
+} from '../../../contracts/CanvasMasksProtocol.generated.js';
+import { nativeCanvasChanges } from '../../../shared/CanvasChangeRelay.js';
 import { CanvasMaskServer } from '../../../shared/CanvasMaskServer.js';
 import { PhotoshopCanvasMasks } from './PhotoshopCanvasMasks.js';
 import { PhotoshopCanvasSources } from './PhotoshopCanvasSources.js';
@@ -52,27 +56,35 @@ export class PhotoshopCanvasBridge {
     this.#sources = new PhotoshopCanvasSources(this.report);
     this.#server = new CanvasServer(session, {
       sources: this.#sources,
-      context: () => this.#documents.context(),
+      context: () => Promise.resolve(this.#documents.context()),
       insert: (image, cancel) => this.#insertion.execute(image, cancel),
       send: this.send,
       report: this.report,
     });
+    const maskChanges = new Set<(change: CanvasMaskChanged) => void>();
     this.#masks = new PhotoshopCanvasMasks(
       (documentId, maskId, revision) => {
-        this.send({
-          protocol: 'sugarcubes.canvas.masks',
-          version: 1,
-          session,
-          type: 'changed',
-          documentId,
-          maskId,
-          revision,
-        });
+        for (const listener of maskChanges)
+          listener({
+            protocol: 'sugarcubes.canvas.masks',
+            version: 2,
+            session,
+            type: 'changed',
+            documentId,
+            maskId,
+            revision,
+          });
       },
       this.report,
       this.maskSession,
     );
     this.#maskServer = new CanvasMaskServer(session, {
+      changes: nativeCanvasChanges((listener) => {
+        maskChanges.add(listener);
+        return () => {
+          maskChanges.delete(listener);
+        };
+      }),
       execute: (command) =>
         this.#masks?.execute(command) ??
         Promise.resolve({

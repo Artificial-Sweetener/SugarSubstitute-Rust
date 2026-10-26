@@ -65,7 +65,7 @@ export type CanvasInsertImage = {
 /** Describe the schema-defined CanvasReadRequest wire value. */
 export type CanvasReadRequest = {
   readonly protocol: 'sugarcubes.canvas';
-  readonly version: 2;
+  readonly version: 3;
   readonly session: string;
   readonly requestId: number;
   readonly type: 'context.request';
@@ -73,7 +73,7 @@ export type CanvasReadRequest = {
 /** Describe the schema-defined CanvasReadReply wire value. */
 export type CanvasReadReply = {
   readonly protocol: 'sugarcubes.canvas';
-  readonly version: 2;
+  readonly version: 3;
   readonly session: string;
   readonly requestId: number;
   readonly type: 'context.reply';
@@ -82,7 +82,7 @@ export type CanvasReadReply = {
 /** Describe the schema-defined CanvasInsertRequest wire value. */
 export type CanvasInsertRequest = {
   readonly protocol: 'sugarcubes.canvas';
-  readonly version: 2;
+  readonly version: 3;
   readonly session: string;
   readonly requestId: number;
   readonly type: 'image.insert';
@@ -91,7 +91,7 @@ export type CanvasInsertRequest = {
 /** Describe the schema-defined CanvasInsertReply wire value. */
 export type CanvasInsertReply = {
   readonly protocol: 'sugarcubes.canvas';
-  readonly version: 2;
+  readonly version: 3;
   readonly session: string;
   readonly requestId: number;
   readonly type: 'image.reply';
@@ -100,7 +100,7 @@ export type CanvasInsertReply = {
 /** Describe the schema-defined CanvasCancelRequest wire value. */
 export type CanvasCancelRequest = {
   readonly protocol: 'sugarcubes.canvas';
-  readonly version: 2;
+  readonly version: 3;
   readonly session: string;
   readonly requestId: number;
   readonly type: 'cancel';
@@ -108,7 +108,7 @@ export type CanvasCancelRequest = {
 /** Describe the schema-defined CanvasErrorReply wire value. */
 export type CanvasErrorReply = {
   readonly protocol: 'sugarcubes.canvas';
-  readonly version: 2;
+  readonly version: 3;
   readonly session: string;
   readonly requestId: number;
   readonly type: 'error.reply';
@@ -161,6 +161,7 @@ export type CanvasSourceContext = {
   )[];
   readonly layers: readonly CanvasSourceLayer[];
   readonly currentLayerId: string | null;
+  readonly observesChanges: boolean;
 };
 /** Describe the schema-defined CanvasSourceSnapshot wire value. */
 export type CanvasSourceSnapshot = {
@@ -177,7 +178,7 @@ export type CanvasSourceCommand =
 export type CanvasSourceResult =
   | CanvasSourceContext
   | { readonly kind: 'captured'; readonly snapshots: readonly CanvasSourceSnapshot[] }
-  | { readonly kind: 'watching' }
+  | { readonly kind: 'watching'; readonly supported: boolean }
   | {
       readonly kind: 'failure';
       readonly status: 'unavailable' | 'unsupported' | 'stale' | 'cancelled' | 'error';
@@ -186,7 +187,7 @@ export type CanvasSourceResult =
 /** Describe the schema-defined CanvasSourceRequest wire value. */
 export type CanvasSourceRequest = {
   readonly protocol: 'sugarcubes.canvas';
-  readonly version: 2;
+  readonly version: 3;
   readonly session: string;
   readonly requestId: number;
   readonly type: 'source.request';
@@ -195,7 +196,7 @@ export type CanvasSourceRequest = {
 /** Describe the schema-defined CanvasSourceReply wire value. */
 export type CanvasSourceReply = {
   readonly protocol: 'sugarcubes.canvas';
-  readonly version: 2;
+  readonly version: 3;
   readonly session: string;
   readonly requestId: number;
   readonly type: 'source.reply';
@@ -204,7 +205,7 @@ export type CanvasSourceReply = {
 /** Describe the schema-defined CanvasSourceChanged wire value. */
 export type CanvasSourceChanged = {
   readonly protocol: 'sugarcubes.canvas';
-  readonly version: 2;
+  readonly version: 3;
   readonly session: string;
   readonly requestId: 0;
   readonly type: 'source.changed';
@@ -232,7 +233,7 @@ export type CanvasInputSource =
     };
 /** Describe the schema-defined CanvasImagePosition wire value. */
 export type CanvasImagePosition = { readonly left: number; readonly top: number };
-/** Describe every version-two canvas message. */
+/** Describe every version-three canvas message. */
 export type CanvasMessage =
   | CanvasReadRequest
   | CanvasReadReply

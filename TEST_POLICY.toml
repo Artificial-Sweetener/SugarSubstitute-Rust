@@ -5,7 +5,7 @@ full_suite_sources = [
   "ARCHITECTURE_*.toml", "tools/architecture/**", "tools/testing/**", "tools/quality/**",
   "tools/test.py", "jest.config.json", "tsconfig.json", "tsconfig.tests.json", ".eslintrc.json",
   ".github/workflows/**",
-  ".gitignore", ".gitattributes", ".prettierrc.json",
+  ".gitignore", ".gitattributes", ".prettierrc.json", ".prettierignore",
   "scripts/standards-audit.ts", "tools/add_license_headers.py",
 ]
 
@@ -67,6 +67,7 @@ sources = [
   ".gitattributes",
   ".eslintrc.json",
   ".prettierrc.json",
+  ".prettierignore",
   "artifacts/phase6-acceptance/**",
   "artifacts/recipe-compatibility/**",
   ".github/workflows/**",
@@ -579,10 +580,19 @@ name = "photoshop"
 sources = ["integrations/photoshop/**", "scripts/photoshop/**", "tsconfig.photoshop.json"]
 proofs = ["contract"]
 
+[[area]]
+name = "gimp"
+sources = ["integrations/gimp/**", "scripts/gimp/**", "tsconfig.gimp.json"]
+proofs = ["contract", "unit"]
+
 [[boundary]]
 name = "editor_adapter_contract"
 area = "editor_integrations"
 
 [[subscription]]
+boundary = "native_card_presentation"
+groups = ["gimp/contract"]
+
+[[subscription]]
 boundary = "editor_adapter_contract"
-groups = ["photoshop/contract", "frontend_core/unit", "frontend_core/integration", "surface/unit", "surface/integration", "relations/unit", "execution/unit", "execution/contract", "execution/integration", "output_canvas/unit", "output_canvas/contract", "output_canvas/integration", "input_canvas/unit", "input_canvas/integration"]
+groups = ["photoshop/contract", "gimp/contract", "frontend_core/unit", "frontend_core/integration", "surface/unit", "surface/integration", "relations/unit", "execution/unit", "execution/contract", "execution/integration", "output_canvas/unit", "output_canvas/contract", "output_canvas/integration", "input_canvas/unit", "input_canvas/integration"]

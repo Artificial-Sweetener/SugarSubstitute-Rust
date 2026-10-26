@@ -44,6 +44,7 @@ export type CanvasMaskContext = {
   readonly kind: 'context';
   readonly supported: boolean;
   readonly document: CanvasDocument | null;
+  readonly observesChanges: boolean;
 };
 /** Describe the schema-defined CanvasMaskCreate wire value. */
 export type CanvasMaskCreate = {
@@ -63,11 +64,8 @@ export type CanvasMaskCapture = {
 };
 /** Describe the schema-defined CanvasMaskCommand wire value. */
 export type CanvasMaskCommand =
-  | { readonly type: 'context' }
-  | CanvasMaskCreate
-  | CanvasMaskActivate
-  | CanvasMaskCapture
-  | { readonly type: 'release'; readonly mask: CanvasMaskReference | null };
+  | CanvasMaskQuery
+  | { readonly enabled: boolean; readonly type: 'watch' };
 /** Describe the schema-defined CanvasMaskResult wire value. */
 export type CanvasMaskResult =
   | CanvasMaskContext
@@ -78,11 +76,12 @@ export type CanvasMaskResult =
       readonly kind: 'failure';
       readonly status: 'unavailable' | 'unsupported' | 'stale' | 'cancelled' | 'error';
       readonly message: string;
-    };
+    }
+  | { readonly supported: boolean; readonly kind: 'watching' };
 /** Describe the schema-defined CanvasMaskRequest wire value. */
 export type CanvasMaskRequest = {
   readonly protocol: 'sugarcubes.canvas.masks';
-  readonly version: 1;
+  readonly version: 2;
   readonly session: string;
   readonly requestId: number;
   readonly command: CanvasMaskCommand;
@@ -90,7 +89,7 @@ export type CanvasMaskRequest = {
 /** Describe the schema-defined CanvasMaskReply wire value. */
 export type CanvasMaskReply = {
   readonly protocol: 'sugarcubes.canvas.masks';
-  readonly version: 1;
+  readonly version: 2;
   readonly session: string;
   readonly requestId: number;
   readonly result: CanvasMaskResult;
@@ -98,12 +97,19 @@ export type CanvasMaskReply = {
 /** Describe the schema-defined CanvasMaskChanged wire value. */
 export type CanvasMaskChanged = {
   readonly protocol: 'sugarcubes.canvas.masks';
-  readonly version: 1;
+  readonly version: 2;
   readonly session: string;
   readonly type: 'changed';
   readonly documentId: string;
   readonly revision: string;
   readonly maskId: string;
 };
-/** Describe every version-one mask message. */
+/** Describe the schema-defined CanvasMaskQuery wire value. */
+export type CanvasMaskQuery =
+  | { readonly type: 'context' }
+  | CanvasMaskCreate
+  | CanvasMaskActivate
+  | CanvasMaskCapture
+  | { readonly type: 'release'; readonly mask: CanvasMaskReference | null };
+/** Describe every version-two mask message. */
 export type CanvasMaskMessage = CanvasMaskRequest | CanvasMaskReply | CanvasMaskChanged;

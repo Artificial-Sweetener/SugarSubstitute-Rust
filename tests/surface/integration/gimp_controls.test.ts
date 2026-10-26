@@ -29,6 +29,129 @@ const address = 'data:text/html,' + encodeURIComponent('<!doctype html><html><bo
 const browsers: Browser[] = [];
 const retirements: Array<Promise<PromiseSettledResult<void>[]>> = [];
 
+testInBrowsers(
+  'paints labelled and standalone GIMP combos as continuous GTK fields in browser %s',
+  async (page) => {
+    try {
+      await page.setContent(
+        '<!doctype html><html data-sc-style-theme-root><body><section data-sc-style-node style="width:400px"><div id="field" data-sc-style-layout data-sc-style-combo-layout><div id="caption" data-testid="widget-layout-field-label">Mode</div><div><div id="combo" data-sc-style-combo-frame><button role="combobox" data-testid="widget-select-default-trigger"><span id="value">Normal</span></button><button id="arrow" aria-hidden="true" tabindex="-1"><i>v</i></button></div></div></div><div id="standalone" data-sc-style-combo-frame style="display:flex;width:200px"><button role="combobox"><span>No guides</span></button><button aria-hidden="true" tabindex="-1"><i>v</i></button></div></section></body></html>',
+      );
+      for (const dark of [true, false]) {
+        await page.addStyleTag({ content: gimpAppearanceCss(dark) });
+        await page.mouse.move(450, 200);
+        await page.evaluate(() => {
+          document.documentElement.dataset.scVisualStyle = 'gimp';
+        });
+        const paint = await page.evaluate(() => {
+          const field = document.getElementById('field')!;
+          const frame = document.getElementById('combo')!;
+          const caption = document.getElementById('caption')!;
+          const arrow = document.getElementById('arrow')!;
+          const standalone = document.getElementById('standalone')!;
+          const box = field.getBoundingClientRect(),
+            label = caption.getBoundingClientRect();
+          return {
+            height: box.height,
+            fill: getComputedStyle(field).backgroundColor,
+            border: getComputedStyle(field).borderTopColor,
+            radius: getComputedStyle(field).borderRadius,
+            shadow: getComputedStyle(field).boxShadow,
+            frameBorder: getComputedStyle(frame).borderTopWidth,
+            valueAlign: getComputedStyle(document.getElementById('value')!).textAlign,
+            captionInside: label.left > box.left && label.right < box.right,
+            arrowWidth: arrow.getBoundingClientRect().width,
+            arrowStroke: getComputedStyle(arrow, '::after').borderRightWidth,
+            legacyArrow: getComputedStyle(arrow.querySelector('i')!).display,
+            standaloneHeight: standalone.getBoundingClientRect().height,
+          };
+        });
+        expect(paint).toEqual({
+          height: 26,
+          fill: dark ? 'rgb(42, 42, 42)' : 'rgb(220, 220, 220)',
+          border: dark ? 'rgb(26, 26, 26)' : 'rgb(185, 185, 185)',
+          radius: '5px',
+          shadow: expect.stringContaining(dark ? 'rgb(55, 55, 55)' : 'rgb(250, 250, 250)'),
+          frameBorder: '0px',
+          valueAlign: 'right',
+          captionInside: true,
+          arrowWidth: 20,
+          arrowStroke: '2px',
+          legacyArrow: 'none',
+          standaloneHeight: 26,
+        });
+        await page.locator('#caption').hover();
+        expect(
+          await page
+            .locator('#field')
+            .evaluate((element) => getComputedStyle(element).backgroundColor),
+        ).toBe(dark ? 'rgb(30, 30, 30)' : 'rgb(250, 250, 250)');
+        await page.locator('#combo [role=combobox]').focus();
+        expect(
+          await page.locator('#field').evaluate((element) => ({
+            style: getComputedStyle(element).outlineStyle,
+            offset: getComputedStyle(element).outlineOffset,
+          })),
+        ).toEqual({ style: 'dotted', offset: '1px' });
+      }
+      await page.evaluate(() => {
+        document.documentElement.dataset.scVisualStyle = 'fluent';
+      });
+      expect(
+        await page
+          .locator('#field')
+          .evaluate((element) => getComputedStyle(element).borderTopWidth),
+      ).toBe('0px');
+    } finally {
+      await disposePage(page);
+    }
+  },
+);
+
+testInBrowsers(
+  'stacks GIMP fields while preserving override rows and other themes in browser %s',
+  async (page) => {
+    try {
+      await page.setContent(
+        '<!doctype html><html><body><section class="sugarcubes-cube-face__node-card" data-sc-style-node><div data-sc-style-fields><div id="width" data-sc-style-row data-sc-style-column="1" style="--sc-field-row:1;--sc-field-column:1;--sc-field-span:1">Width</div><div id="height" data-sc-style-row data-sc-style-column="2" style="--sc-field-row:1;--sc-field-column:2;--sc-field-span:1">Height</div><div id="batch" data-sc-style-row style="--sc-field-row:2;--sc-field-column:1;--sc-field-span:2">Batch size</div></div></section><section class="sc-overrides-toolbar"><div data-sc-style-fields><div data-sc-style-row>Width</div><div data-sc-style-row>Height</div></div></section><section class="sc-overrides-graph-content"><div data-sc-style-fields><div data-sc-style-row>Seed</div><div data-sc-style-row>Steps</div></div></section></body></html>',
+      );
+      await page.addStyleTag({
+        content:
+          '[data-sc-style-fields]{display:grid;grid-template-columns:1fr 1fr;width:400px}[data-sc-style-row]{grid-row:var(--sc-field-row);grid-column:var(--sc-field-column) / span var(--sc-field-span);height:28px;box-sizing:border-box}',
+      });
+      await page.addStyleTag({ content: gimpAppearanceCss(true) });
+      const overrides = async (): Promise<number[]> =>
+        page
+          .locator(
+            '.sc-overrides-toolbar [data-sc-style-row],.sc-overrides-graph-content [data-sc-style-row]',
+          )
+          .evaluateAll((rows) => rows.map((row) => row.getBoundingClientRect().width));
+      const baseline = await overrides();
+      for (const theme of ['gimp', 'fluent', 'gimp']) {
+        await page.evaluate((value) => {
+          document.documentElement.dataset.scVisualStyle = value;
+        }, theme);
+        const boxes = await page.locator('#width,#height,#batch').evaluateAll((rows) =>
+          rows.map((row) => {
+            const box = row.getBoundingClientRect();
+            return { x: box.x, y: box.y, width: box.width };
+          }),
+        );
+        if (theme === 'gimp') {
+          expect(boxes.map((box) => box.width)).toEqual([400, 400, 400]);
+          expect(new Set(boxes.map((box) => box.y)).size).toBe(3);
+          expect(new Set(boxes.map((box) => box.x)).size).toBe(1);
+        } else {
+          expect(boxes[0]!.y).toBe(boxes[1]!.y);
+          expect(boxes.map((box) => box.width)).toEqual([200, 200, 400]);
+        }
+        expect(await overrides()).toEqual(baseline);
+      }
+    } finally {
+      await disposePage(page);
+    }
+  },
+);
+
 testInBrowsers('swaps GTK3 Adwaita icons only while GIMP is active in browser %s', async (page) => {
   try {
     await page.setContent(
@@ -75,7 +198,7 @@ testInBrowsers('swaps GTK3 Adwaita icons only while GIMP is active in browser %s
           card: getComputedStyle(document.getElementById('card')!, '::before').width,
           save: document.getElementById('save')!.getBoundingClientRect().width,
         })),
-      ).toEqual({ card: '20px', save: 10 });
+      ).toEqual({ card: theme === 'gimp' ? '16px' : '20px', save: 10 });
       expect(
         await page.locator('#owned').evaluate((icon) => icon.getBoundingClientRect().width),
       ).toBe(actionWidth);

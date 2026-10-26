@@ -16,7 +16,7 @@
 /** Own Photoshop mask identities, committed selection editing and coherent full-resolution captures. */
 import { app, core } from 'photoshop';
 import type {
-  CanvasMaskCommand,
+  CanvasMaskQuery,
   CanvasMaskReference,
   CanvasMaskResult,
   CanvasMaskSnapshot,
@@ -88,7 +88,7 @@ export class PhotoshopCanvasMasks {
     if (this.#active) this.#changes.start();
   }
   /** Keep all selection mutations and captures in one native operation sequence. */
-  execute(command: CanvasMaskCommand): Promise<CanvasMaskResult> {
+  execute(command: CanvasMaskQuery): Promise<CanvasMaskResult> {
     return this.#queue(() => this.#execute(command));
   }
   /** Release native observation without deleting authored channels from a user's document. */
@@ -108,11 +108,12 @@ export class PhotoshopCanvasMasks {
     return result;
   }
   /** Dispatch native capabilities while requiring exact document geometry for every bound mask. */
-  async #execute(command: CanvasMaskCommand): Promise<CanvasMaskResult> {
+  async #execute(command: CanvasMaskQuery): Promise<CanvasMaskResult> {
     if (command.type === 'context')
       return {
         kind: 'context',
         supported: true,
+        observesChanges: true,
         document: app.activeDocument ? canvasDocumentIdentity(app.activeDocument) : null,
       };
     if (command.type === 'release') {

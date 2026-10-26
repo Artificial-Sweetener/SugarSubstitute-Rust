@@ -18,7 +18,11 @@
 /** Present cards as compact GTK panels and workflow tabs as GIMP notebook tabs. */
 export function gimpWorkspaceCss(): string {
   const root = 'html[data-sc-visual-style="gimp"]';
+  const fields = `${root} [data-sc-style-fields]:not(:is(.sc-overrides-toolbar,.sc-overrides-graph-content) *)`;
   return `
+    ${fields} { display:grid; grid-template-columns:minmax(0,1fr); }
+    ${fields} > [data-sc-style-row] { grid-column:1 / -1; grid-row:auto; padding-left:10px; padding-right:10px; }
+    ${fields} > [data-sc-style-row][data-sc-style-column="2"]::before { display:none; }
     ${root} :is(.sugarcubes-workflow-masonry,.sugarcubes-workflow-masonry__backdrop,.sc-cube-stack-host) { background:var(--sc-gimp-background); font-size:12px; }
     ${root} .sugarcubes-workflow-masonry { --sugarcubes-masonry-gap:6; --sugarcubes-masonry-card-surface:var(--sc-gimp-background); }
     ${root}[data-sc-compact-masonry] .sugarcubes-workflow-masonry { --sugarcubes-masonry-gap:0; }

@@ -51,7 +51,7 @@ export class PhotoshopMaskSession implements PhotoshopMaskSessionPort {
         throw new Error('The retained mask association is invalid.');
       const request: unknown = {
         protocol: 'sugarcubes.canvas.masks',
-        version: 1,
+        version: 2,
         session: '00000000-0000-4000-8000-000000000001',
         requestId: 1,
         command: { type: 'activate', mask: value.mask },

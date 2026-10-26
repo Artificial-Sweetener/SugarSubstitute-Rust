@@ -279,11 +279,13 @@ test.each(['WidgetSelect', 'WidgetDOM'])(
     const control = document.createElement('div');
     const frame = document.createElement('div');
     frame.setAttribute('data-capture-wheel', 'true');
+    const layout = document.createElement('div');
     const trigger = document.createElement('button');
     trigger.dataset.testid = 'widget-select-default-trigger';
     trigger.textContent = '<literal selection>';
     frame.append(trigger);
-    control.append(frame);
+    layout.append(frame);
+    control.append(layout);
     row.append(control);
     fields.append(row);
     root.append(fields);
@@ -292,7 +294,9 @@ test.each(['WidgetSelect', 'WidgetDOM'])(
     Object.assign(mount, {
       _vnode: vnode('LGraphNode', root, [
         vnode('NodeWidgets', fields, [
-          vnode(componentName, control, [], { widget: { name: 'sampler_name' } }),
+          vnode(componentName, control, [vnode('WidgetLayoutField', layout, [])], {
+            widget: { name: 'sampler_name' },
+          }),
         ]),
       ]),
     });
@@ -300,9 +304,13 @@ test.each(['WidgetSelect', 'WidgetDOM'])(
     adapter.annotate(root);
     expect(frame.hasAttribute('data-sc-style-combo-frame')).toBe(componentName === 'WidgetSelect');
     expect(frame.hasAttribute('data-sc-style-edit-frame')).toBe(componentName === 'WidgetSelect');
+    expect(layout.hasAttribute('data-sc-style-combo-layout')).toBe(
+      componentName === 'WidgetSelect',
+    );
     adapter.clear();
     expect(frame.hasAttribute('data-sc-style-combo-frame')).toBe(false);
     expect(frame.hasAttribute('data-sc-style-edit-frame')).toBe(false);
+    expect(layout.hasAttribute('data-sc-style-combo-layout')).toBe(false);
     expect(trigger.textContent).toBe('<literal selection>');
     expect(trigger.children).toHaveLength(0);
   },

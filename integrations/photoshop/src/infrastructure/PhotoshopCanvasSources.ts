@@ -34,6 +34,7 @@ import {
   type PhotoshopDocument,
 } from './PhotoshopCanvasIdentity.js';
 import { PhotoshopCommittedChanges } from './PhotoshopCommittedChanges.js';
+import { nativeCanvasChanges } from '../../../shared/CanvasChangeRelay.js';
 import { readSelectionPixels } from './PhotoshopSelectionPixels.js';
 import { photoshopSourcePixels } from './PhotoshopSourcePixels.js';
 import {
@@ -53,6 +54,9 @@ const targets: readonly CanvasSourceTarget['kind'][] = [
 /** Serialize coherent document reads and observe committed changes only while consumers subscribe. */
 export class PhotoshopCanvasSources implements CanvasSourceHost {
   readonly canvasId = 'photoshop';
+  readonly changes = nativeCanvasChanges<CanvasSourceChange>((listener) =>
+    this.#subscribe(listener),
+  );
   readonly #listeners = new Set<(change: CanvasSourceChange) => void>();
   readonly #changes: PhotoshopCommittedChanges;
   #tail: Promise<unknown> = Promise.resolve();
@@ -111,8 +115,8 @@ export class PhotoshopCanvasSources implements CanvasSourceHost {
     return pending;
   }
   /** Share one metadata observer across every consumer of this native canvas. */
-  subscribe(listener: (change: CanvasSourceChange) => void): () => void {
-    if (this.#disposed) return () => {};
+  #subscribe(listener: (change: CanvasSourceChange) => void): (() => void) | null {
+    if (this.#disposed) return null;
     this.#listeners.add(listener);
     this.#changes.start();
     return () => {
@@ -144,6 +148,7 @@ export class PhotoshopCanvasSources implements CanvasSourceHost {
           result = {
             kind: 'context',
             supported: true,
+            observesChanges: true,
             document: document ? canvasDocumentIdentity(document) : null,
             revision: this.#revision(),
             targets,

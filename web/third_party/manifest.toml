@@ -873,6 +873,7 @@ source_path = "substitute/presentation/resources/app_icons/app_icon_256.png"
 vendored_file = "frontend/static/orb/app_icon_256.png"
 runtime_file = "web/orb/app_icon_256.png"
 sha256 = "c6e1e822fbe3fe67fe00eefffb678b52f41ac734bea25f62a048a7aa1414d0f3"
+generated_derivatives = [{ runtime_file = "build/gimp/companion/companion.ico", sha256 = "858644748f3798e5dc2182134ba70cfa6c2b2dc9a537878e19f825938884f41f", modification = "Wrap the unmodified PNG bytes in an ICO container for the Windows Tauri companion." }]
 
 [[component.asset]]
 source_path = "substitute/presentation/resources/app_orb/orb_base.png"
@@ -1178,13 +1179,14 @@ sha256 = "4ad9a555033cd921356ca768f02dbf4fdd971903656d406f80c5c904945cad85"
 
 [[component]]
 name = "GIMP Default theme"
+additional_consumers = ["build/gimp/companion/palette.css"]
 license = "GPL-3.0-or-later"
 license_file = "third_party/licenses/gimp.LICENSE.txt"
 source = "https://gitlab.gnome.org/GNOME/gimp"
 revision = "ae16d24447331802750ec2ea978d717e92bcfb45"
-modifications = "Adapt Default dark/light color roles, GTK entry/button paint, GimpSpinScale entry progress and fine dragging, notebook tab states, and compact dock geometry into semantic CSS tokens and Vue controls. Typography follows the Windows system UI font. No GIMP executables or image assets are distributed."
-source_paths = ["themes/Default/gimp-dark.css", "themes/Default/gimp-light.css", "themes/Default/common.css", "themes/Default/common-dark.css", "themes/System/gimp.css", "libgimpwidgets/gimpspinscale.c", "libgimpwidgets/gimpsizeentry.c"]
-runtime_files = ["web/comfyui/ui/surface/appearance/GimpThemeTokens.js", "web/comfyui/ui/surface/appearance/GimpAppearanceStyles.js", "web/comfyui/ui/surface/appearance/GimpNumericStyles.js", "web/comfyui/ui/surface/appearance/GimpWorkspaceStyles.js", "web/comfyui/ui/surface/appearance/GimpControlStyles.js", "web/comfyui/ui/surface/appearance/GimpThemeRuntime.js"]
+modifications = "Adapt Default dark/light color roles, GTK entry/button paint, GimpSpinScale entry progress and fine dragging, labelled GtkComboBox fields and popup paint, notebook tab states, and compact dock geometry into semantic CSS tokens and Vue controls. Typography follows the Windows system UI font. No GIMP executables or image assets are distributed."
+source_paths = ["themes/Default/gimp-dark.css", "themes/Default/gimp-light.css", "themes/Default/common.css", "themes/Default/common-dark.css", "themes/Default/common-light.css", "themes/System/gimp.css", "libgimpwidgets/gimpspinscale.c", "libgimpwidgets/gimpsizeentry.c", "libgimpwidgets/gimpintcombobox.c"]
+runtime_files = ["web/comfyui/ui/surface/appearance/GimpComboStyles.js", "web/comfyui/ui/surface/appearance/GimpThemeTokens.js", "web/comfyui/ui/surface/appearance/GimpAppearanceStyles.js", "web/comfyui/ui/surface/appearance/GimpNumericStyles.js", "web/comfyui/ui/surface/appearance/GimpWorkspaceStyles.js", "web/comfyui/ui/surface/appearance/GimpControlStyles.js", "web/comfyui/ui/surface/appearance/GimpThemeRuntime.js"]
 
 [[component.implementation]]
 source_path = "themes/Default/gimp-dark.css"
@@ -1199,12 +1201,17 @@ adapted_paths = ["frontend/comfyui/ui/surface/appearance/GimpThemeTokens.ts", "f
 [[component.implementation]]
 source_path = "themes/Default/common.css"
 source_sha256 = "dcc7d1522cc9444e882be95bbcbfb06b9253e0a08673d0f2cbe5e5fda3877665"
-adapted_paths = ["frontend/comfyui/ui/surface/appearance/GimpThemeTokens.ts", "frontend/comfyui/ui/surface/appearance/GimpAppearanceStyles.ts", "frontend/comfyui/ui/surface/appearance/GimpNumericStyles.ts", "frontend/comfyui/ui/surface/appearance/GimpWorkspaceStyles.ts", "frontend/comfyui/ui/surface/appearance/GimpControlStyles.ts"]
+adapted_paths = ["frontend/comfyui/ui/surface/appearance/GimpComboStyles.ts", "frontend/comfyui/ui/surface/appearance/GimpThemeTokens.ts", "frontend/comfyui/ui/surface/appearance/GimpAppearanceStyles.ts", "frontend/comfyui/ui/surface/appearance/GimpNumericStyles.ts", "frontend/comfyui/ui/surface/appearance/GimpWorkspaceStyles.ts", "frontend/comfyui/ui/surface/appearance/GimpControlStyles.ts"]
 
 [[component.implementation]]
 source_path = "themes/Default/common-dark.css"
 source_sha256 = "696157a2b77d3bd2a09bed1153ec0ecddd1cd980cfdd1609e7fec4d835a35cfc"
-adapted_paths = ["frontend/comfyui/ui/surface/appearance/GimpThemeTokens.ts", "frontend/comfyui/ui/surface/appearance/GimpAppearanceStyles.ts", "frontend/comfyui/ui/surface/appearance/GimpWorkspaceStyles.ts", "frontend/comfyui/ui/surface/appearance/GimpControlStyles.ts"]
+adapted_paths = ["frontend/comfyui/ui/surface/appearance/GimpComboStyles.ts", "frontend/comfyui/ui/surface/appearance/GimpThemeTokens.ts", "frontend/comfyui/ui/surface/appearance/GimpAppearanceStyles.ts", "frontend/comfyui/ui/surface/appearance/GimpWorkspaceStyles.ts", "frontend/comfyui/ui/surface/appearance/GimpControlStyles.ts"]
+
+[[component.implementation]]
+source_path = "themes/Default/common-light.css"
+source_sha256 = "4ab849fc70a60f7e7bd549f25eb44de9bf331f45f3ddefb491cbfae4910012b5"
+adapted_paths = ["frontend/comfyui/ui/surface/appearance/GimpComboStyles.ts", "frontend/comfyui/ui/surface/appearance/GimpThemeTokens.ts"]
 
 [[component.implementation]]
 source_path = "themes/System/gimp.css"
@@ -1220,6 +1227,11 @@ adapted_paths = ["frontend/comfyui/ui/surface/appearance/GimpSpinScale.ts"]
 source_path = "libgimpwidgets/gimpsizeentry.c"
 source_sha256 = "d8dd0b643b76eb97a6257e5397c7f1bca26d374edf90d37b1ae9ee28b5433b89"
 adapted_paths = ["frontend/comfyui/ui/surface/appearance/NumericSliderPresentation.ts"]
+
+[[component.implementation]]
+source_path = "libgimpwidgets/gimpintcombobox.c"
+source_sha256 = "e8a3bb200f5a8d30b3c953ed5c4117e65a3db3a21c1664b2ff8859fa54325825"
+adapted_paths = ["frontend/comfyui/ui/surface/appearance/GimpComboStyles.ts"]
 
 [[component]]
 name = "GTK3 Adwaita symbolic icons for GIMP"
@@ -1356,3 +1368,13 @@ version = "3.5.43"
 modifications = "Unmodified Vue runtime bundled for GIMP custom-element controls. SugarCubes adapters retain native values, focus and shared keyboard ownership. Package integrity is pinned in package-lock.json."
 source_paths = ["packages/runtime-core", "packages/runtime-dom", "packages/reactivity", "packages/shared"]
 runtime_files = ["web/comfyui/ui/surface/appearance/GimpThemeRuntime.js"]
+
+[[component]]
+name = "GIMP Tauri companion dependencies"
+license = "Per-component expressions in third_party/gimp-companion-licenses.json"
+license_file = "third_party/licenses/gimp-companion-dependencies.txt"
+source = "https://crates.io"
+revision = "sha256:4d4ce7aaaaf12757d66ef1d3674e88aae525d903d02c0b8236632fa601d20d30"
+modifications = "Unmodified locked Windows desktop dependencies; complete upstream license and notice texts are aggregated by scripts/gimp/licenses.ts. The index records exact source archives and resource SHA-256 values. The Microsoft WebView2 loader is byte-matched to SDK 1.0.3800.47 and retains its BSD license and notices."
+source_paths = ["integrations/gimp/companion/Cargo.lock", "third_party/gimp-companion-licenses.json"]
+runtime_files = ["plug-ins/sugarcubes-gimp/companion/sugarcubes-gimp-companion.exe"]

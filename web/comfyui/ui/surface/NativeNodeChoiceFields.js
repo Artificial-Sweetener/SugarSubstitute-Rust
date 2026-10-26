@@ -3,6 +3,7 @@ import { nativeNodeFieldRows } from './NativeNodeFieldRows.js';
 import { NativeChoiceRestrictions, } from './NativeChoiceRestrictions.js';
 import { registerNativePresentationWidget } from './NativePresentationWidgets.js';
 import { refreshNativeNodeCards } from './NativeNodeCardRefresh.js';
+import { NativeChoicePreparation } from './NativeChoicePreparation.js';
 /** Keep display-only widgets out of serialization while the native node owns their rendering and theme. */
 export class NativeNodeChoiceFields {
     node;
@@ -19,7 +20,7 @@ export class NativeNodeChoiceFields {
         this.beforeField = beforeField;
     }
     /** Share a native field across simultaneous projections without multiplying value commits. */
-    mountChoice(root, label, change, key = label) {
+    mountChoice(root, label, change, key = label, prepare) {
         const name = '__sugarcubes_presentation:' + this.namespace + ':' + key;
         let field = this.#fields.get(name);
         if (!field) {
@@ -67,7 +68,7 @@ export class NativeNodeChoiceFields {
             field.release = registerNativePresentationWidget(this.node, field.widget, this.beforeField);
         field.callbacks.add(change);
         const owner = field;
-        let constraints = null, anchor = null, disposed = false;
+        let constraints = null, preparation = null, anchor = null, disposed = false;
         return {
             update: (value, choices, disabled = false, visible = true) => {
                 if (disposed)
@@ -99,8 +100,10 @@ export class NativeNodeChoiceFields {
                 const row = nativeNodeFieldRows(root).get(name) ?? null;
                 if (anchor !== row) {
                     constraints?.dispose();
+                    preparation?.dispose();
                     anchor = row;
                     constraints = row ? new NativeChoiceRestrictions(row) : null;
+                    preparation = row && prepare ? new NativeChoicePreparation(row, prepare) : null;
                 }
                 constraints?.update(choices.map((choice) => ({ value: choice.label, blockers: choice.blockers })));
             },
@@ -109,6 +112,7 @@ export class NativeNodeChoiceFields {
                     return;
                 disposed = true;
                 constraints?.dispose();
+                preparation?.dispose();
                 owner.callbacks.delete(change);
                 if (owner.callbacks.size)
                     return;

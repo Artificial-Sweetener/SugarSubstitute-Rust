@@ -13,7 +13,7 @@
 #
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Execute selected Python and TypeScript proof groups deterministically."""
+"""Execute selected Python, TypeScript and Rust proof groups deterministically."""
 
 from __future__ import annotations
 
@@ -23,6 +23,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from .model import TestGroup, TestPolicy, TestSelection
+from .rust import rust_test_targets
 
 
 def run_selection(
@@ -36,6 +37,7 @@ def run_selection(
 
     ordinary_python: list[str] = []
     ordinary_typescript: list[str] = []
+    ordinary_rust: list[Path] = []
     isolated: list[Path] = []
     for group in selection.groups:
         files = group_test_files(root, policy, group)
@@ -49,6 +51,7 @@ def run_selection(
         ordinary_typescript.extend(
             str(path.relative_to(root)) for path in files if path.suffix == ".ts"
         )
+        ordinary_rust.extend(path for path in files if path.suffix == ".rs")
     if ordinary_python:
         status = _run_paths(
             root,
@@ -72,6 +75,18 @@ def run_selection(
         )
         if status:
             return status
+    for target in rust_test_targets(root, tuple(ordinary_rust)):
+        status = _run(
+            target.manifest.parent,
+            [
+                *target.runner,
+                "--test",
+                target.name,
+            ],
+            environment=environment,
+        )
+        if status:
+            return status
     for path in sorted(isolated):
         relative = str(path.relative_to(root))
         if path.suffix == ".py":
@@ -80,7 +95,7 @@ def run_selection(
                 [sys.executable, "-m", "pytest", "-q", relative],
                 environment=environment,
             )
-        else:
+        elif path.suffix == ".ts":
             status = _run(
                 root,
                 [
@@ -89,6 +104,17 @@ def run_selection(
                     "node_modules/jest/bin/jest.js",
                     "--runTestsByPath",
                     relative,
+                ],
+                environment=environment,
+            )
+        else:
+            target = rust_test_targets(root, (path,))[0]
+            status = _run(
+                target.manifest.parent,
+                [
+                    *target.runner,
+                    "--test",
+                    target.name,
                 ],
                 environment=environment,
             )
@@ -113,7 +139,7 @@ def group_test_files(
     policy: TestPolicy,
     group: TestGroup,
 ) -> tuple[Path, ...]:
-    """Return every Python and TypeScript module in one proof group."""
+    """Return every authored proof module in one selected group."""
 
     group_root = root / policy.test_root / group.area / group.proof
     return tuple(
@@ -123,7 +149,7 @@ def group_test_files(
             if path.is_file()
             and (
                 (path.name.startswith("test_") and path.suffix == ".py")
-                or path.name.endswith((".test.ts", ".spec.ts"))
+                or path.name.endswith((".test.ts", ".spec.ts", "_test.rs"))
             )
         )
     )

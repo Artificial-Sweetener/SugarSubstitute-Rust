@@ -20,6 +20,7 @@ import { gimpTokenDeclarations } from './GimpThemeTokens.js';
 import { gimpWorkspaceCss } from './GimpWorkspaceStyles.js';
 import { gimpNumericCss } from './GimpNumericStyles.js';
 import { gimpIconCss } from './GimpIconStyles.js';
+import { gimpComboCss } from './GimpComboStyles.js';
 /** Keep the graph's native structure while applying GIMP's compact Default theme. */
 export function gimpAppearanceCss(dark) {
     return (nativeAppearanceCss({
@@ -43,8 +44,8 @@ export function gimpSurfaceCss() {
     return (`
     ${controls} { font-family:var(--sc-font-family); color:var(--sc-text); }
     ${controls} :is(button,input,textarea,[role="combobox"]) { font-family:var(--sc-font-family); font-size:12px; }
-    ${controls} :is(input,textarea,[role="combobox"]):not([type="checkbox"]):not([type="range"]):not([data-sc-number-input]) { border-radius:3px; background:var(--sc-gimp-widget); color:var(--sc-gimp-foreground); }
-    ${controls} :is(button,input,textarea,[role="combobox"],[role="tab"]):focus-visible { outline:1px dotted var(--sc-gimp-foreground); outline-offset:-3px; }
+    ${controls} :is(input,textarea,[role="combobox"]):not([type="checkbox"]):not([type="range"]):not([data-sc-number-input]):not([data-sc-style-combo-frame] *) { border-radius:3px; background:var(--sc-gimp-widget); color:var(--sc-gimp-foreground); }
+    ${controls} :is(button,input,textarea,[role="combobox"],[role="tab"]):focus-visible:not([data-sc-style-combo-frame] *) { outline:1px dotted var(--sc-gimp-foreground); outline-offset:-3px; }
     ${scope} [data-sc-style-node] { --sc-node-card-radius:3px; }
     ${scope} [data-sc-style-node] [data-testid^="node-header-"] { box-sizing:border-box; min-height:32px; height:32px; border-bottom:1px solid var(--sc-gimp-strongBorder); background:var(--sc-gimp-widget); }
     ${scope} [data-sc-style-node] [data-testid="node-title"] { font-size:12px; font-weight:600; }
@@ -70,5 +71,6 @@ export function gimpSurfaceCss() {
   ` +
         gimpWorkspaceCss() +
         gimpNumericCss() +
+        gimpComboCss() +
         gimpIconCss());
 }

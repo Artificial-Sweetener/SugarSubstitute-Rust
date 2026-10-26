@@ -9,6 +9,8 @@
   "include": [
     "scripts/integrations/**/*",
     "scripts/photoshop/**/*",
+    "scripts/gimp/**/*.ts",
+    "tests/gimp/**/*.ts",
     "tests/editor_integrations/**/*",
     "tests/photoshop/**/*"
   ],
