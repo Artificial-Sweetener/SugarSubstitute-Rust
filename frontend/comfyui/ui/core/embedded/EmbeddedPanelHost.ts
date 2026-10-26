@@ -16,7 +16,9 @@
 /** Bind one browser document to negotiated host presentation and existing Comfy connectivity. */
 import { PanelClientSession } from './PanelRuntime.js';
 import type { EmbeddedPresentation } from './EmbeddedPresentation.js';
-import { createUxpPanelTransport, type BrowserPanelTransport } from './UxpPanelTransport.js';
+import { createUxpPanelTransport } from './UxpPanelTransport.js';
+import { createNativePanelTransport } from './NativePanelTransport.js';
+import type { BrowserPanelTransport } from './BrowserPanelTransport.js';
 import { EmbeddedPanelLayout } from './EmbeddedPanelLayout.js';
 import type { EmbeddedCanvasConnection } from './EmbeddedCanvasConnection.js';
 
@@ -91,7 +93,14 @@ export class EmbeddedPanelHost {
 
 /** Activate embedded presentation only for an identified application WebView. */
 export function startEmbeddedPanel(options: EmbeddedPanelOptions): EmbeddedPanelHost | null {
-  const transport = createUxpPanelTransport(options.window);
+  const query = new URLSearchParams(options.window.location.search);
+  const kind = query.get('sc-panel-transport');
+  if (query.getAll('sc-panel-transport').length > 1 || (kind !== null && kind !== 'native'))
+    return null;
+  const transport =
+    kind === 'native'
+      ? createNativePanelTransport(options.window)
+      : createUxpPanelTransport(options.window);
   if (!transport) return null;
   const host = new EmbeddedPanelHost(options, transport);
   host.setup();

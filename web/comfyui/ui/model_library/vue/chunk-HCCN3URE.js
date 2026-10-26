@@ -226,13 +226,19 @@ var ModelPickerSession = class {
 };
 
 // frontend/comfyui/ui/surface/appearance/ComboToggleController.ts
+import { readDocumentVisualStyle } from "../../surface/appearance/VisualStyleBoundary.js";
 var leases = /* @__PURE__ */ new WeakMap();
 function acquireComboToggle(documentRef) {
   let lease = leases.get(documentRef);
   if (!lease) {
-    lease = { users: 0, onClick: (event) => closeOpenCombo(documentRef, event) };
+    lease = {
+      users: 0,
+      onClick: (event) => routeComboClick(documentRef, event),
+      onPointerDown: (event) => retainCaptionToggle(documentRef, event)
+    };
     leases.set(documentRef, lease);
     documentRef.addEventListener("click", lease.onClick, true);
+    documentRef.addEventListener("pointerdown", lease.onPointerDown, true);
   }
   lease.users += 1;
   let released = false;
@@ -241,11 +247,35 @@ function acquireComboToggle(documentRef) {
     released = true;
     if (--lease.users !== 0) return;
     documentRef.removeEventListener("click", lease.onClick, true);
+    documentRef.removeEventListener("pointerdown", lease.onPointerDown, true);
     leases.delete(documentRef);
   };
 }
-function closeOpenCombo(documentRef, event) {
+function captionTrigger(document2, target) {
+  if (readDocumentVisualStyle(document2) !== "gimp" || !(target instanceof Element) || target.closest('[data-sc-style-combo-frame],button,input,a,[role="button"]'))
+    return null;
+  const trigger = target.closest("[data-sc-style-combo-layout]")?.querySelector(
+    '[data-sc-style-combo-frame]:not([data-sc-model-native]) > [role="combobox"]'
+  );
+  return trigger && !trigger.matches(':disabled,[aria-disabled="true"]') ? trigger : null;
+}
+function retainCaptionToggle(document2, event) {
+  const trigger = event.button === 0 ? captionTrigger(document2, event.target) : null;
+  if (!trigger) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  trigger.focus({ preventScroll: true });
+}
+function routeComboClick(documentRef, event) {
   if (!(event.target instanceof Element)) return;
+  const trigger = captionTrigger(documentRef, event.target);
+  if (trigger) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    trigger.focus({ preventScroll: true });
+    trigger.click();
+    return;
+  }
   const inlineSearch = event.target.closest("[data-sc-inline-search]");
   const frame = event.target.closest(
     "[data-sc-style-combo-frame], [data-capture-wheel]"

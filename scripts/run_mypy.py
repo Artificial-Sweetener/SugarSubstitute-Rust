@@ -46,6 +46,8 @@ def main() -> int:
         [
             "sugarcubes",
             "sugarcubes_model_roots",
+            "integrations/gimp/native",
+            "integrations/gimp/entry",
             "prestartup_script.py",
             "load_model_roots.py",
             "tests",

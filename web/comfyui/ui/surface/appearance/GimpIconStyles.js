@@ -52,7 +52,10 @@ export function gimpIconCss() {
       ${selector}::before { visibility:hidden; }`;
     })
         .join('\n');
-    return `${cards}
+    return `${root} .sugarcubes-cube-face__node-card [data-masonry-title-icon] { padding-left:22px; }
+    ${root} .sugarcubes-workflow-masonry__node-icon { width:16px; height:16px; }
+    ${root} .sugarcubes-workflow-masonry__node-icon::before { width:16px; height:16px; margin:0; }
+    ${cards}
     ${controls}
     ${root} :is([data-sc-plugin-toolbar],[data-sc-substitute-toolbar]) .sc-application-gear { mask-image:${iconUrl('preferences-system-symbolic.svg')}; }`;
 }

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://artificialsweetener.ai/schemas/sugarcubes/canvas/masks/v1",
-  "title": "SugarCubes canvas mask protocol version 1",
+  "$id": "https://artificialsweetener.ai/schemas/sugarcubes/canvas/masks/v2",
+  "title": "SugarCubes canvas mask protocol version 2",
   "$defs": {
     "CanvasDocument": {
       "$ref": "canvas.schema.json#/$defs/CanvasDocument"
@@ -80,9 +80,12 @@
               "const": null
             }
           ]
+        },
+        "observesChanges": {
+          "type": "boolean"
         }
       },
-      "required": ["kind", "supported", "document"],
+      "required": ["kind", "supported", "document", "observesChanges"],
       "additionalProperties": false
     },
     "CanvasMaskCreate": {
@@ -153,43 +156,20 @@
     "CanvasMaskCommand": {
       "oneOf": [
         {
-          "type": "object",
+          "$ref": "#/$defs/CanvasMaskQuery"
+        },
+        {
           "properties": {
-            "type": {
-              "const": "context"
-            }
-          },
-          "required": ["type"],
-          "additionalProperties": false
-        },
-        {
-          "$ref": "#/$defs/CanvasMaskCreate"
-        },
-        {
-          "$ref": "#/$defs/CanvasMaskActivate"
-        },
-        {
-          "$ref": "#/$defs/CanvasMaskCapture"
-        },
-        {
-          "type": "object",
-          "properties": {
-            "type": {
-              "const": "release"
+            "enabled": {
+              "type": "boolean"
             },
-            "mask": {
-              "oneOf": [
-                {
-                  "$ref": "#/$defs/CanvasMaskReference"
-                },
-                {
-                  "const": null
-                }
-              ]
+            "type": {
+              "const": "watch"
             }
           },
-          "required": ["type", "mask"],
-          "additionalProperties": false
+          "additionalProperties": false,
+          "required": ["enabled", "type"],
+          "type": "object"
         }
       ]
     },
@@ -254,6 +234,19 @@
           },
           "required": ["kind", "status", "message"],
           "additionalProperties": false
+        },
+        {
+          "properties": {
+            "supported": {
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "watching"
+            }
+          },
+          "additionalProperties": false,
+          "required": ["supported", "kind"],
+          "type": "object"
         }
       ]
     },
@@ -264,7 +257,7 @@
           "const": "sugarcubes.canvas.masks"
         },
         "version": {
-          "const": 1
+          "const": 2
         },
         "session": {
           "type": "string",
@@ -290,7 +283,7 @@
           "const": "sugarcubes.canvas.masks"
         },
         "version": {
-          "const": 1
+          "const": 2
         },
         "session": {
           "type": "string",
@@ -316,7 +309,7 @@
           "const": "sugarcubes.canvas.masks"
         },
         "version": {
-          "const": 1
+          "const": 2
         },
         "session": {
           "type": "string",
@@ -341,6 +334,49 @@
       },
       "required": ["protocol", "version", "session", "type", "documentId", "revision", "maskId"],
       "additionalProperties": false
+    },
+    "CanvasMaskQuery": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "context"
+            }
+          },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "$ref": "#/$defs/CanvasMaskCreate"
+        },
+        {
+          "$ref": "#/$defs/CanvasMaskActivate"
+        },
+        {
+          "$ref": "#/$defs/CanvasMaskCapture"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "release"
+            },
+            "mask": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/CanvasMaskReference"
+                },
+                {
+                  "const": null
+                }
+              ]
+            }
+          },
+          "required": ["type", "mask"],
+          "additionalProperties": false
+        }
+      ]
     }
   },
   "oneOf": [

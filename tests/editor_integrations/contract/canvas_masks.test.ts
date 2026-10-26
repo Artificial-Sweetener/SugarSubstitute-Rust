@@ -18,6 +18,7 @@
 import { readFileSync } from 'node:fs';
 import { jest } from '@jest/globals';
 import { CanvasMaskClient } from '../../../integrations/shared/CanvasMaskClient.js';
+import { nativeCanvasChanges } from '../../../integrations/shared/CanvasChangeRelay.js';
 import { CanvasMaskServer } from '../../../integrations/shared/CanvasMaskServer.js';
 import {
   encodeMaskPixels,
@@ -28,26 +29,38 @@ import type {
   CanvasMaskMessage,
   CanvasMaskCommand,
   CanvasMaskResult,
+  CanvasMaskChanged,
 } from '../../../integrations/contracts/CanvasMasksProtocol.generated.js';
 const session = '00000000-0000-4000-8000-000000000001';
 
 /** Connect a real shared client/server without browser or native editor dependencies. */
-function fixture(supported = true) {
+function fixture(supported = true, observesChanges = supported) {
   const sent: CanvasMaskMessage[] = [];
   const errors: unknown[] = [];
+  const changes = new Set<(change: CanvasMaskChanged) => void>();
   const execute = jest.fn(
     async (_command: CanvasMaskCommand): Promise<CanvasMaskResult> => ({
+      observesChanges,
       kind: 'context',
       supported,
       document: null,
     }),
   );
   const host = new CanvasMaskServer(session, {
+    changes: observesChanges
+      ? nativeCanvasChanges((listener) => {
+          changes.add(listener);
+          return () => {
+            changes.delete(listener);
+          };
+        })
+      : null,
     execute,
     send: (value) => client.receive(value),
     report: (error) => errors.push(error),
   });
   const client = new CanvasMaskClient(session, {
+    report: (error) => errors.push(error),
     send: (value) => {
       sent.push(value);
       host.receive(value);
@@ -65,6 +78,7 @@ test.each([true, false])(
   async (supported) => {
     const f = fixture(supported);
     expect(await f.client.execute({ type: 'context' })).toEqual({
+      observesChanges: supported,
       kind: 'context',
       supported,
       document: null,
@@ -74,6 +88,31 @@ test.each([true, false])(
     expect(f.errors).toEqual([]);
   },
 );
+
+test('captures masks without native observation and negotiates the limitation independently', async () => {
+  const f = fixture(true, false);
+  const lease = f.client.changes.subscribe(jest.fn());
+  expect(await lease.ready).toBe('unsupported');
+  const mask = {
+    canvasId: 'editor',
+    document: { id: 'doc', geometryRevision: '1', width: 2, height: 1 },
+    id: 'mask',
+  };
+  const pixels = encodeMaskPixels(2, 1, Uint8Array.from([64, 255]));
+  f.execute.mockResolvedValueOnce({
+    kind: 'captured',
+    snapshots: [{ mask, revision: '2', pixels }],
+  });
+  expect(await f.client.execute({ type: 'capture', masks: [mask], maximumSize: 0 })).toEqual({
+    kind: 'captured',
+    snapshots: [{ mask, revision: '2', pixels }],
+  });
+  expect(f.execute).toHaveBeenCalledTimes(1);
+  lease.stop();
+  f.client.dispose();
+  f.host.dispose();
+  expect(f.errors).toEqual([]);
+});
 
 test('preserves all coverage values including feathering, holes and non-multiple-of-three rasters', () => {
   for (const size of [1, 2, 3, 256, 12287, 12288, 12289]) {
@@ -106,13 +145,14 @@ test('settles pending work and prevents queued native calls after teardown', asy
   expect(f.execute).not.toHaveBeenCalled();
 });
 
-test('publishes only validated committed changes within the correct session', () => {
+test('publishes only validated committed changes within the correct session', async () => {
   const f = fixture();
   const changed = jest.fn();
-  f.client.subscribe(changed);
+  const lease = f.client.changes.subscribe(changed);
+  expect(await lease.ready).toBe('observing');
   const message = {
     protocol: 'sugarcubes.canvas.masks',
-    version: 1,
+    version: 2,
     session,
     type: 'changed',
     documentId: 'doc',

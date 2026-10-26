@@ -45,8 +45,10 @@ export class CanvasSourcePreviews {
         entry.listeners.add(listener);
         listener(entry.value);
         const host = this.host(source.canvasId);
-        if (host && !this.#hosts.has(host))
-            this.#hosts.set(host, host.subscribe(() => this.refresh(host.canvasId)));
+        if (host && !this.#hosts.has(host)) {
+            const lease = host.changes?.subscribe(() => this.refresh(host.canvasId));
+            this.#hosts.set(host, lease ? () => lease.stop() : () => { });
+        }
         if (entry.value.kind === 'loading')
             this.#invalidate(key, entry);
         this.#schedule();
@@ -67,6 +69,14 @@ export class CanvasSourcePreviews {
     refresh(canvasId) {
         for (const [key, entry] of this.#entries)
             if (entry.source.canvasId === canvasId)
+                this.#invalidate(key, entry);
+        this.#schedule();
+    }
+    /** Refresh sources used by one picker while unrelated mounted inputs retain their previews. */
+    refreshSources(sources) {
+        const requested = new Set(sources.filter((source) => source.kind === 'canvas').map(canvasInputSourceKey));
+        for (const [key, entry] of this.#entries)
+            if (requested.has(canvasInputSourceKey(entry.source)))
                 this.#invalidate(key, entry);
         this.#schedule();
     }

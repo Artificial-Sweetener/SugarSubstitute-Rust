@@ -23,6 +23,7 @@ import {
 } from './NativeChoiceRestrictions.js';
 import { registerNativePresentationWidget } from './NativePresentationWidgets.js';
 import { refreshNativeNodeCards } from './NativeNodeCardRefresh.js';
+import { NativeChoicePreparation } from './NativeChoicePreparation.js';
 export interface NativeNodeChoiceOption extends NativeChoiceRestriction {
   label: string;
 }
@@ -60,6 +61,7 @@ export class NativeNodeChoiceFields {
     label: string,
     change: (value: string) => void,
     key = label,
+    prepare?: () => Promise<boolean>,
   ): NativeNodeChoiceMount {
     const name = '__sugarcubes_presentation:' + this.namespace + ':' + key;
     let field = this.#fields.get(name);
@@ -103,6 +105,7 @@ export class NativeNodeChoiceFields {
     field.callbacks.add(change);
     const owner = field;
     let constraints: NativeChoiceRestrictions | null = null,
+      preparation: NativeChoicePreparation | null = null,
       anchor: HTMLElement | null = null,
       disposed = false;
     return {
@@ -134,8 +137,10 @@ export class NativeNodeChoiceFields {
         const row = nativeNodeFieldRows(root).get(name) ?? null;
         if (anchor !== row) {
           constraints?.dispose();
+          preparation?.dispose();
           anchor = row;
           constraints = row ? new NativeChoiceRestrictions(row) : null;
+          preparation = row && prepare ? new NativeChoicePreparation(row, prepare) : null;
         }
         constraints?.update(
           choices.map((choice) => ({ value: choice.label, blockers: choice.blockers })),
@@ -145,6 +150,7 @@ export class NativeNodeChoiceFields {
         if (disposed) return;
         disposed = true;
         constraints?.dispose();
+        preparation?.dispose();
         owner.callbacks.delete(change);
         if (owner.callbacks.size) return;
         owner.release();

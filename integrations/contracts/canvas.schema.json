@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://artificialsweetener.ai/schemas/sugarcubes/canvas/v2",
-  "title": "SugarCubes canvas protocol version 2",
+  "$id": "https://artificialsweetener.ai/schemas/sugarcubes/canvas/v3",
+  "title": "SugarCubes canvas protocol version 3",
   "$defs": {
     "CanvasCapabilities": {
       "type": "object",
@@ -178,7 +178,7 @@
           "const": "sugarcubes.canvas"
         },
         "version": {
-          "const": 2
+          "const": 3
         },
         "session": {
           "type": "string",
@@ -204,7 +204,7 @@
           "const": "sugarcubes.canvas"
         },
         "version": {
-          "const": 2
+          "const": 3
         },
         "session": {
           "type": "string",
@@ -233,7 +233,7 @@
           "const": "sugarcubes.canvas"
         },
         "version": {
-          "const": 2
+          "const": 3
         },
         "session": {
           "type": "string",
@@ -262,7 +262,7 @@
           "const": "sugarcubes.canvas"
         },
         "version": {
-          "const": 2
+          "const": 3
         },
         "session": {
           "type": "string",
@@ -291,7 +291,7 @@
           "const": "sugarcubes.canvas"
         },
         "version": {
-          "const": 2
+          "const": 3
         },
         "session": {
           "type": "string",
@@ -317,7 +317,7 @@
           "const": "sugarcubes.canvas"
         },
         "version": {
-          "const": 2
+          "const": 3
         },
         "session": {
           "type": "string",
@@ -551,6 +551,9 @@
               "const": null
             }
           ]
+        },
+        "observesChanges": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -560,7 +563,8 @@
         "revision",
         "targets",
         "layers",
-        "currentLayerId"
+        "currentLayerId",
+        "observesChanges"
       ],
       "additionalProperties": false
     },
@@ -631,9 +635,12 @@
           "properties": {
             "kind": {
               "const": "watching"
+            },
+            "supported": {
+              "type": "boolean"
             }
           },
-          "required": ["kind"],
+          "required": ["kind", "supported"],
           "additionalProperties": false
         },
         {
@@ -662,7 +669,7 @@
           "const": "sugarcubes.canvas"
         },
         "version": {
-          "const": 2
+          "const": 3
         },
         "session": {
           "type": "string",
@@ -691,7 +698,7 @@
           "const": "sugarcubes.canvas"
         },
         "version": {
-          "const": 2
+          "const": 3
         },
         "session": {
           "type": "string",
@@ -720,7 +727,7 @@
           "const": "sugarcubes.canvas"
         },
         "version": {
-          "const": 2
+          "const": 3
         },
         "session": {
           "type": "string",

@@ -43,6 +43,7 @@ export class EmbeddedCanvasConnection {
         this.#client = client;
         this.#masks = new CanvasMaskClient(transport.session, {
             send: (message) => transport.send(message),
+            report,
             later: (ms, callback) => {
                 const timer = window.setTimeout(callback, ms);
                 return () => window.clearTimeout(timer);

@@ -10,6 +10,12 @@ root = "integrations/photoshop"
 infrastructure = "integrations/photoshop/src/infrastructure"
 modules = ["photoshop", "uxp"]
 
+[[integrations.editors]]
+name = "gimp"
+root = "integrations/gimp"
+infrastructure = "integrations/gimp/src/infrastructure"
+modules = ["@tauri-apps/api"]
+
 [menus]
 context_menu = "frontend/comfyui/ui/menus/ContextMenu.ts"
 floating_surface = "frontend/comfyui/ui/menus/FloatingSurface.ts"
@@ -62,7 +68,7 @@ source_roots = [
   "stubs",
   "types",
 ]
-extensions = [".py", ".pyi", ".ts", ".tsx"]
+extensions = [".py", ".pyi", ".ts", ".tsx", ".rs"]
 excluded_prefixes = [
   ".generated/",
   "artifacts/",
@@ -257,6 +263,15 @@ forbidden_typescript_paths = [
   "frontend/comfyui/ui/dialogs",
   "frontend/comfyui/ui/surface",
   "frontend/comfyui/ui/model_library",
+]
+
+[[dependency]]
+name = "PYTHON_GIMP_ADAPTER"
+paths = ["integrations/gimp/native/*.py", "integrations/gimp/native/**/*.py", "integrations/gimp/entry/*.py"]
+forbidden_python_imports = [
+  "sugarcubes",
+  "frontend",
+  "integrations.photoshop",
 ]
 
 [[dependency]]

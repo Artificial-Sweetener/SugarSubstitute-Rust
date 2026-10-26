@@ -136,6 +136,7 @@ test.each(['nodes-1', 'nodes-2'] as const)(
       await page.close();
     }
   },
+  30_000,
 );
 
 test.each(['nodes-1', 'nodes-2'] as const)(

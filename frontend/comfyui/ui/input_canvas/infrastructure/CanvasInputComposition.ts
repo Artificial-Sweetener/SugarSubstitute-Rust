@@ -63,6 +63,7 @@ export function createCanvasInputs(options: CanvasInputHostOptions): {
   const defaults = new ComfyInputSourceDefaults(host, legacy);
   const bindings = new ComfyInputBindings(loaders, {
     host,
+    refreshPreviews: (sources) => previews.refreshSources(sources),
     files: new BrowserInputPreviews((source) => assets.stage(source), rasters),
     legacy,
     verifyFile: (file) => assets.verify(file),

@@ -28,6 +28,7 @@ import type {
 } from '../../../integrations/contracts/CanvasProtocol.generated.js';
 
 const context: CanvasSourceContext = {
+  observesChanges: true,
   kind: 'context',
   supported: true,
   document: { id: 'doc', geometryRevision: 'geometry', width: 10, height: 20 },
@@ -63,6 +64,7 @@ function fixture(sourceContext: CanvasSourceContext = context) {
       disabled: false,
       source: () => source,
       context: () => sourceContext,
+      refresh: async () => {},
       change,
       upload: async () => 'uploads/chosen.png',
       report,

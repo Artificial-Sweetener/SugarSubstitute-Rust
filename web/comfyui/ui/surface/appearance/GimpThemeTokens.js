@@ -131,6 +131,7 @@ export function gimpTokenDeclarations(dark) {
         .join('');
     return (themeTokenDeclarations(gimpThemeTokens(dark)) +
         palette +
+        `--sc-gimp-combo-highlight:${dark ? colors.extremeSelected : colors.extreme};` +
         '--sc-control-height:26px;--sc-number-stepper-width:22px;--sc-spinner-stepper-width:calc(2 * var(--sc-number-stepper-width));' +
         `--sc-gimp-spin-scale-entry:${dark ? colors.widget : colors.extreme};` +
         `--sc-gimp-spin-scale-fill:${dark ? colors.hover : colors.widget};`);
