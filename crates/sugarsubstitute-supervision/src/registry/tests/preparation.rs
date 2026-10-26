@@ -10,63 +10,15 @@ use crate::setup_storage::{
         repository::SignedPackage,
     },
 };
-use std::{cell::RefCell, path::Path};
+use std::path::Path;
 use sugarsubstitute_contracts::execution::{JobContext, JobOutcome};
 use sugarsubstitute_update::fixture::NOW;
 
 type Failure = Box<dyn Error + Send + Sync>;
 mod image_tests;
 mod probe_tests;
-
-/// Admit native storage phases against the same ledger that retains the registry and families.
-#[track_caller]
-fn storage<T: Send + 'static>(
-    h: &mut Harness,
-    bytes: u64,
-    body: impl FnOnce(JobContext) -> Result<T, Failure> + Send + 'static,
-) -> Result<T, Box<dyn Error>> {
-    let source = std::panic::Location::caller();
-    let phase = Arc::new(std::sync::atomic::AtomicU8::new(0));
-    let worker_phase = phase.clone();
-    let mut spec = h.spec(JobClass::InfrastructureLifecycle, bytes)?;
-    spec.deadline = Some(Moment::from_nanos(2_000_000_000));
-    let job = RefCell::new(h.client.submit_blocking(&h.scope, spec, move |context| {
-        worker_phase.store(1, Ordering::Release);
-        let started = Instant::now();
-        let result = body(context);
-        worker_phase.store(2, Ordering::Release);
-        eprintln!(
-            "Native storage phase {source}: body returned after {:?}; success={}",
-            started.elapsed(),
-            result.is_ok()
-        );
-        result
-    })?);
-    let completion = RefCell::new(None);
-    h.drain_until(|_| {
-        *completion.borrow_mut() = job.borrow_mut().try_take_completion();
-        completion.borrow().is_some()
-    })
-    .map_err(|cause| {
-        format!(
-            "Native storage phase {source}: state={} (0=queued, 1=running, 2=returned); {cause}",
-            phase.load(Ordering::Acquire)
-        )
-    })?;
-    match completion.into_inner().ok_or("Storage completion absent")?.outcome {
-        JobOutcome::Success(value) => Ok(value),
-        JobOutcome::Failure(cause) => {
-            let mut next: Option<&(dyn Error + 'static)> = Some(cause.as_ref());
-            for _ in 0..16 {
-                let Some(error) = next else { break };
-                eprintln!("Native storage fixture: {error}");
-                next = error.source();
-            }
-            Err(cause)
-        }
-        other => Err(format!("Storage job stopped: {:?}", other.kind()).into()),
-    }
-}
+mod storage;
+use storage::run as storage;
 
 /// Create a real accepted inert package, then retain only independently verified helper files.
 fn preparation(

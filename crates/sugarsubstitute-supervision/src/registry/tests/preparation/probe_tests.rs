@@ -3,6 +3,7 @@
 //! Signed inert payloads exercise real custody and journals with process effects at the fake boundary.
 use super::*;
 use crate::setup_storage::{TrustStore, UpdaterPackage, test_package::updater, test_worker};
+use std::cell::RefCell;
 use sugarsubstitute_contracts::{
     application_launch::updater::CURRENT_UPDATER_CONTRACT,
     installation::{Candidate, InstallationRecord},

@@ -35,7 +35,7 @@ sources = [
     "crates/sugarsubstitute-supervision/src/durable_storage/files/ordinary/tests.rs",
     "crates/sugarsubstitute-supervision/src/durable_storage/files/observations.rs",
 ]
-source_sha256 = "sha256:3e0ff9f40fda0f0bbb124c940be82c12db53233700ed631f76334dcea1c0d41c"
+source_sha256 = "sha256:8e0ae06d91152335b3b3024dc9b3b3d1afaea5ac87f62c15e4da3fa15db912b2"
 namespace = "update-downloads-v1"
 storage_schema = 1
 compatibility_epoch = 1

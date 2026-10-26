@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Observe synchronous storage spans per admitted test job without a global subscriber.
+use super::observation::Observation;
 use std::{
     collections::BTreeMap,
     sync::{Arc, Mutex},
@@ -22,10 +23,14 @@ struct State {
 
 /// Bounded diagnostic state shared only by one worker and its completion observer.
 #[derive(Clone, Default)]
-pub(in crate::setup_storage) struct StorageTrace(Arc<Mutex<State>>);
+pub(crate) struct StorageTrace(Arc<Mutex<State>>, Option<Observation>);
 impl StorageTrace {
+    /// Attach bounded native-return observation to this job's isolated diagnostic subscriber.
+    pub(crate) fn new(observation: Observation) -> Self {
+        Self(Arc::default(), Some(observation))
+    }
     /// Report live calls and aggregate elapsed time; neither affects operation clocks or admission.
-    pub(super) fn snapshot(&self) -> String {
+    pub(crate) fn snapshot(&self) -> String {
         let state = crate::registry::lock(&self.0);
         let active: Vec<_> = state
             .active
@@ -89,6 +94,10 @@ impl Subscriber for StorageTrace {
             } else {
                 state.omitted += 1;
             }
+            drop(state);
+            if let Some(observation) = &self.1 {
+                observation.returned();
+            }
         }
     }
     fn clone_span(&self, id: &Id) -> Id {
@@ -136,4 +145,29 @@ fn storage_diagnostics_follow_nested_custody_and_ignore_other_targets() {
     assert_eq!(state.completed["inner"].0, 1);
     assert_eq!(state.completed["outer"].0, 1);
     assert_eq!(state.completed.len(), 2);
+}
+
+#[test]
+fn only_actual_storage_returns_advance_native_observation_without_completion_traffic()
+-> std::io::Result<()> {
+    let wake = Arc::new(super::Wake::default());
+    let observation = Observation::new(wake.clone(), Duration::from_secs(20));
+    observation.started();
+    let trace = StorageTrace::new(observation.clone());
+    tracing::subscriber::with_default(trace, || {
+        let outer = tracing::trace_span!(target: "sugarsubstitute::storage", "outer").entered();
+        {
+            let _unrelated = tracing::trace_span!(target: "other", "unrelated").entered();
+        }
+        assert_eq!(observation.progress().map(|progress| progress.returned).ok(), Some(0));
+        {
+            let _inner =
+                tracing::trace_span!(target: "sugarsubstitute::storage", "inner").entered();
+        }
+        assert_eq!(observation.progress().map(|progress| progress.returned).ok(), Some(1));
+        drop(outer);
+    });
+    assert_eq!(observation.progress()?.returned, 2);
+    assert_eq!(*crate::registry::lock(&wake.0), 1);
+    observation.completed()
 }

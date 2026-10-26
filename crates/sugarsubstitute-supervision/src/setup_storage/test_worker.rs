@@ -38,15 +38,17 @@ use std::{
         Arc, Condvar, Mutex, OnceLock,
         atomic::{AtomicU64, Ordering},
     },
-    time::{Duration, Instant},
+    time::Duration,
 };
 use sugarsubstitute_contracts::execution::{
     Clock, CompletionWake, ExecutionError, ExecutionPort, JobClass, JobId, JobOutcome, JobSpec,
     Moment, Operation, ScopeId, ScopeSpec, WaitFuture,
 };
 use sugarsubstitute_execution::ExecutionOwner;
+pub(crate) mod observation;
 pub(crate) mod pipeline;
 pub(super) mod trace;
+pub(crate) use trace::StorageTrace;
 
 #[derive(Default)]
 pub(crate) struct TestClock(
@@ -127,8 +129,10 @@ fn execute(
     let worker_observed = observed.clone();
     let stage = Arc::new(AtomicU64::new(0));
     let worker_stage = stage.clone();
-    let trace = trace::StorageTrace::default();
+    let observation = observation::Observation::new(wake.clone(), Duration::from_secs(20));
+    let trace = StorageTrace::new(observation.clone());
     let worker_trace = trace.clone();
+    let worker_observation = observation.clone();
     let executor = ExecutionOwner::new(clock.clone(), wake.clone())?;
     let client = executor.client();
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
@@ -144,46 +148,38 @@ fn execute(
         },
         move |context| {
             worker_stage.store(1, Ordering::SeqCst);
+            worker_observation.started();
             let result = tracing::subscriber::with_default(worker_trace, || body(&context, &clock));
             *crate::registry::lock(&worker_observed) = Some(result);
             worker_stage.store(2, Ordering::SeqCst);
             Ok::<_, io::Error>(())
         },
     )?;
-    let until = Instant::now() + Duration::from_secs(20);
     let completion = loop {
         let revision = *crate::registry::lock(&wake.0);
         client.drain_completions(
             std::num::NonZeroUsize::new(32).ok_or("Invalid completion bound")?,
         )?;
         if let Some(completion) = job.try_take_completion() {
+            observation.completed()?;
             break completion;
         }
-        let remaining = until.checked_duration_since(Instant::now()).ok_or_else(|| {
+        let remaining = observation.remaining().map_err(|cause| {
             format!(
-                "Storage observer expired: stage={}, phase={}, status={:?}, {}",
+                "Storage observer stopped: {cause}; stage={}, phase={}, status={:?}, {}",
                 stage.load(Ordering::SeqCst),
                 *crate::registry::lock(&observer_clock.1),
                 job.status(),
                 trace.snapshot()
             )
         })?;
-        let (_guard, timeout) = wake
-            .1
-            .wait_timeout_while(crate::registry::lock(&wake.0), remaining, |current| {
-                *current == revision
-            })
-            .map_err(|_| "Poisoned storage completion wake")?;
-        if timeout.timed_out() {
-            return Err(format!(
-                "Storage observer expired: stage={}, phase={}, status={:?}, {}",
-                stage.load(Ordering::SeqCst),
-                *crate::registry::lock(&observer_clock.1),
-                job.status(),
-                trace.snapshot()
-            )
-            .into());
-        }
+        drop(
+            wake.1
+                .wait_timeout_while(crate::registry::lock(&wake.0), remaining, |current| {
+                    *current == revision
+                })
+                .map_err(|_| "Poisoned storage completion wake")?,
+        );
     };
     drop(job);
     drop(executor);

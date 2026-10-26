@@ -195,7 +195,7 @@ fn actual_source_and_native_flush_failures_keep_both_original_causes() -> TestRe
 fn protected_payload_creation_and_resume_support_long_unicode_parent_paths() -> TestResult {
     worker::run_reserved(JOB_BYTES, |context, _| {
         let root = tempfile::tempdir()?;
-        let scope = root.path().join("糖".repeat(80)).join("x".repeat(110));
+        let scope = root.path().join("糖".repeat(80)).join("x".repeat(180));
         std::fs::create_dir_all(&scope)?;
         assert!(scope.join("payload").to_string_lossy().encode_utf16().count() > 260);
         let parent = Directory::open(&scope, false)?;

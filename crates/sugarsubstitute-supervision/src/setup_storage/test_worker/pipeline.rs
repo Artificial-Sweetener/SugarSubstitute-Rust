@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Run successive storage phases under one actual execution admission ledger.
+use super::observation::Observation;
 use super::*;
+use std::time::Instant;
 use sugarsubstitute_contracts::execution::{AdmissionError, Scope};
 use sugarsubstitute_execution::ExecutionClient;
 type Failure = Box<dyn Error + Send + Sync>;
@@ -57,8 +59,11 @@ impl Pipeline {
     ) -> Result<T, Failure> {
         let id = self.admit(|_, _, id| Ok(id))?;
         let body = Arc::new(Mutex::new(Some(body)));
+        let observation = Observation::new(self.wake.clone(), Duration::from_secs(20));
         let submit = || {
             let body = body.clone();
+            let observed = observation.clone();
+            let trace = StorageTrace::new(observed.clone());
             self.client.submit_blocking(
                 &self.scope,
                 JobSpec {
@@ -70,10 +75,11 @@ impl Pipeline {
                     replacement: None,
                 },
                 move |context| {
+                    observed.started();
                     let body = crate::registry::lock(&body)
                         .take()
                         .ok_or("Storage factory already consumed")?;
-                    body(context)
+                    tracing::subscriber::with_default(trace, || body(context))
                 },
             )
         };
@@ -81,7 +87,7 @@ impl Pipeline {
             Capacity::Wait => self.wait_capacity(submit)?,
             Capacity::Once => submit()?,
         };
-        match self.observe(|| job.try_take_completion())?.outcome {
+        match self.observe_phase(Some(&observation), || job.try_take_completion())?.outcome {
             JobOutcome::Success(value) => Ok(value),
             JobOutcome::Failure(cause) => Err(cause),
             other => Err(format!("Pipeline worker stopped: {:?}", other.kind()).into()),
@@ -135,26 +141,39 @@ impl Pipeline {
     }
 
     /// Observe the real owner's terminal delivery with a finite observer bound and native wake.
-    pub(crate) fn observe<T>(&self, mut poll: impl FnMut() -> Option<T>) -> Result<T, Failure> {
+    pub(crate) fn observe<T>(&self, poll: impl FnMut() -> Option<T>) -> Result<T, Failure> {
+        self.observe_phase(None, poll)
+    }
+
+    /// Native-return progress and pure admission/completion waits have distinct liveness bounds.
+    fn observe_phase<T>(
+        &self,
+        observation: Option<&Observation>,
+        mut poll: impl FnMut() -> Option<T>,
+    ) -> Result<T, Failure> {
         let until = Instant::now() + Duration::from_secs(20);
         loop {
             let revision = *crate::registry::lock(&self.wake.0);
             self.client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
             if let Some(completion) = poll() {
+                if let Some(observation) = observation {
+                    observation.completed()?;
+                }
                 return Ok(completion);
             }
-            let remaining =
-                until.checked_duration_since(Instant::now()).ok_or("Pipeline observer expired")?;
-            let (_guard, timeout) = self
-                .wake
-                .1
-                .wait_timeout_while(crate::registry::lock(&self.wake.0), remaining, |current| {
-                    *current == revision
-                })
-                .map_err(|_| "Pipeline observer poisoned")?;
-            if timeout.timed_out() {
-                return Err("Pipeline observer expired".into());
-            }
+            let remaining = if let Some(observation) = observation {
+                observation.remaining()?
+            } else {
+                until.checked_duration_since(Instant::now()).ok_or("Pipeline observer expired")?
+            };
+            drop(
+                self.wake
+                    .1
+                    .wait_timeout_while(crate::registry::lock(&self.wake.0), remaining, |current| {
+                        *current == revision
+                    })
+                    .map_err(|_| "Pipeline observer poisoned")?,
+            );
         }
     }
 }
