@@ -41,6 +41,8 @@ impl Sample {
 #[derive(Default)]
 struct Window {
     elapsed: Duration,
+    activity: u64,
+    exposures: u64,
     input: Sample,
     other: Sample,
     poll: Sample,
@@ -54,6 +56,14 @@ pub(super) struct Timing {
     last_report: Duration,
 }
 impl Timing {
+    /// Count host activity requests separately from OS exposures; both coalesce before drawing.
+    pub(super) fn activity(&mut self) {
+        self.window.activity = self.window.activity.saturating_add(1);
+    }
+    /// Count OS restoration events without equating them to newly prepared image content.
+    pub(super) fn exposure(&mut self) {
+        self.window.exposures = self.window.exposures.saturating_add(1);
+    }
     /// Record complete callback time; polling is an inclusive subset of non-input callbacks.
     pub(super) fn turn(&mut self, input: bool, elapsed: Duration) {
         if input { &mut self.window.input } else { &mut self.window.other }.observe(elapsed);
@@ -87,6 +97,8 @@ impl Timing {
             tracing::info!(
                 operation = "canvas_native_input_timing",
                 window_microseconds = window.elapsed.as_micros(),
+                native_activity_events = window.activity,
+                native_exposure_events = window.exposures,
                 interaction_callbacks = window.input.count,
                 max_interaction_microseconds = window.input.maximum.as_micros(),
                 total_interaction_microseconds = window.input.total.as_micros(),
@@ -121,6 +133,9 @@ mod tests {
     fn diagnostic_windows_retain_maxima_until_one_bounded_report_then_reset()
     -> Result<(), Box<dyn std::error::Error>> {
         let mut timing = Timing::default();
+        timing.activity();
+        timing.activity();
+        timing.exposure();
         timing.turn(true, Duration::from_micros(17));
         timing.turn(true, Duration::from_micros(4));
         timing.turn(false, Duration::from_millis(30));
@@ -134,6 +149,8 @@ mod tests {
             .take(Duration::from_secs(1), InputDelay { messages: 3, maximum_ms: 7 }, false)
             .ok_or("Missing due timing window")?;
         assert_eq!(window.input.count, 2);
+        assert_eq!(window.activity, 2);
+        assert_eq!(window.exposures, 1);
         assert_eq!(window.input.maximum, Duration::from_micros(17));
         assert_eq!(window.input.total, Duration::from_micros(21));
         assert_eq!(window.elapsed, Duration::from_secs(1));
@@ -145,6 +162,8 @@ mod tests {
             .take(Duration::from_millis(1001), InputDelay::default(), true)
             .ok_or("Missing forced timing window")?;
         assert_eq!(empty.input.count, 0);
+        assert_eq!(empty.activity, 0);
+        assert_eq!(empty.exposures, 0);
         assert_eq!(empty.native.messages, 0);
         Ok(())
     }

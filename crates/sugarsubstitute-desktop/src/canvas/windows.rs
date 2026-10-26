@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Pump native canvas input, borrowed presentation and actual application teardown on one UI STA.
+mod activity;
 mod cursor;
 mod display;
 mod input;
@@ -18,7 +19,7 @@ use std::time::Instant;
 use sugarsubstitute_canvas::{ScrollPhase, ToolButton, ToolInput};
 use tao::{
     dpi::PhysicalSize,
-    event::{ElementState, Event, MouseButton, WindowEvent},
+    event::{DeviceEvent, ElementState, Event, MouseButton, WindowEvent},
     event_loop::{ControlFlow, EventLoopBuilder},
     keyboard::Key,
     platform::{
@@ -123,13 +124,15 @@ fn run_with_picker(
     let mut control_down = false;
     let mut display_id = None;
     let mut display_dirty = true;
+    let mut drawable = true;
     let started = Instant::now();
     let mut timing = Timing::default();
     let mut stopped = false;
     while !stopped {
         let status = events.run_return(|event, _, control| {
         let turn_started = Instant::now();
-        let input_turn = matches!(&event, Event::UserEvent(NativeEvent::Wheel { .. } | NativeEvent::DoubleClick(_)) | Event::WindowEvent { event: WindowEvent::CursorMoved { .. } | WindowEvent::MouseInput { .. } | WindowEvent::KeyboardInput { .. }, .. });
+        let raw_motion = matches!(&event, Event::DeviceEvent { event: DeviceEvent::MouseMotion { delta, .. }, .. } if activity::pointer_motion(*delta, options.visible, window.is_focused()));
+        let input_turn = raw_motion || matches!(&event, Event::UserEvent(NativeEvent::Wheel { .. } | NativeEvent::DoubleClick(_)) | Event::WindowEvent { event: WindowEvent::CursorMoved { .. } | WindowEvent::MouseInput { .. } | WindowEvent::KeyboardInput { .. }, .. });
         *control = ControlFlow::Wait;
         let result = (|| -> Result<(), Box<dyn Error>> {
             match event {
@@ -142,7 +145,9 @@ fn run_with_picker(
                 Event::UserEvent(NativeEvent::DisplayChanged) if !closing => display_dirty = true,
                 Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => closing = true,
                 Event::WindowEvent { event: WindowEvent::ModifiersChanged(modifiers), .. } => control_down = modifiers.control_key(),
-                Event::WindowEvent { event: WindowEvent::CursorMoved { position, .. }, .. } if !closing => feedback::dispatch_input(lifetime, native.as_ref(), Input::Tool(ToolInput::Pointer([position.x, position.y])))?,
+                Event::WindowEvent { event: WindowEvent::CursorMoved { position, .. }, .. } if !closing => {
+                    feedback::dispatch_input(lifetime, native.as_ref(), Input::Tool(ToolInput::Pointer([position.x, position.y])))?;
+                },
                 Event::WindowEvent { event: WindowEvent::MouseInput { state, button: button @ (MouseButton::Left | MouseButton::Middle), .. }, .. } if !closing => {
                     let button = if button == MouseButton::Left { ToolButton::Primary } else { ToolButton::Middle };
                     feedback::dispatch_input(lifetime, native.as_ref(), Input::Tool(ToolInput::Button { button, pressed: state == ElementState::Pressed }))?;
@@ -164,6 +169,7 @@ fn run_with_picker(
                     }
                 }
                 Event::RedrawRequested(_) if !closing => {
+                    timing.exposure();
                     if let Some(frame) = lifetime.frame() {
                         let target = frame.target;
                         let pending = frame.pending;
@@ -205,6 +211,11 @@ fn run_with_picker(
                                 "Native canvas display timing updated");
                             display_id = identity;
                             display_dirty = false;
+                        }
+                        let available = !window.is_minimized();
+                        if drawable != available {
+                            drawable = available;
+                            feedback::dispatch_input(lifetime, native.as_ref(), Input::Drawable(available))?;
                         }
                         let size = window.inner_size();
                         if size.width > 0 && size.height > 0 {
@@ -257,6 +268,10 @@ fn run_with_picker(
                     }
                 }
                 _ => {}
+            }
+            if input_turn && !closing && options.visible && window.is_focused() {
+                timing.activity();
+                lifetime.expose();
             }
             Ok(())
         })();

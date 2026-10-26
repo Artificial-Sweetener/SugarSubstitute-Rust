@@ -111,8 +111,17 @@ pub(in crate::viewer) struct Draw {
     pub(in crate::viewer) source_revision: u64,
     pub(in crate::viewer) verified: bool,
 }
-impl CpuTask<Draw, WorkError> for DrawInput {
-    fn step(&mut self, context: &JobContext) -> Result<CpuStep<Draw>, WorkError> {
+impl DrawInput {
+    /// Prepare native GPU presentation on an admitted blocking worker, independently of the
+    /// cooperative CPU lane occupied by image reconstruction.
+    pub(in crate::viewer) fn prepare_gpu(mut self, context: JobContext) -> Result<Draw, WorkError> {
+        if !matches!(self.source, DrawSource::Gpu { .. }) {
+            return Err(WorkError::invalid("Native display preparation requires a GPU source"));
+        }
+        self.prepare(&context)
+    }
+    /// Validate retained identities before consuming exclusive software storage or a GPU image.
+    fn prepare(&mut self, context: &JobContext) -> Result<Draw, WorkError> {
         let underlay = match &self.source {
             DrawSource::Cpu { underlay, .. } => underlay.as_ref().and_then(|underlay| {
                 underlay.surface.current().map(|source| (source, underlay.view))
@@ -158,7 +167,7 @@ impl CpuTask<Draw, WorkError> for DrawInput {
                 (frame.target(), DrawPixels::Gpu(native), verified)
             }
         };
-        Ok(CpuStep::Complete(Draw {
+        Ok(Draw {
             underlay: self.underlay,
             tier: self.tier,
             target: self.target,
@@ -170,7 +179,18 @@ impl CpuTask<Draw, WorkError> for DrawInput {
             document: self.document,
             source_revision: self.source_revision,
             verified,
-        }))
+        })
+    }
+}
+
+impl CpuTask<Draw, WorkError> for DrawInput {
+    fn step(&mut self, context: &JobContext) -> Result<CpuStep<Draw>, WorkError> {
+        if !matches!(self.source, DrawSource::Cpu { .. }) {
+            return Err(WorkError::invalid(
+                "GPU presentation cannot occupy the cooperative CPU lane",
+            ));
+        }
+        self.prepare(context).map(CpuStep::Complete)
     }
 }
 

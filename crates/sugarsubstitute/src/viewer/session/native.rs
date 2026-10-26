@@ -34,7 +34,6 @@ impl Lifetime for Session {
         self.awaiting_gpu = None;
         self.accept_display(evidence, true)?;
         self.native_presented = Some(target);
-        self.expose_pending = false;
         Ok(())
     }
     fn did_present_cpu(&mut self, target: FrameStamp) -> Result<(), Box<dyn Error>> {
@@ -55,11 +54,14 @@ impl Lifetime for Session {
         self.cpu_pending = None;
         self.accept_display(evidence, true)?;
         self.native_presented = Some(target);
-        self.expose_pending = false;
         Ok(())
     }
     fn expose(&mut self) {
-        if self.options.gpu.is_some() {
+        if !self.closing
+            && self.drawable
+            && self.options.gpu.is_some()
+            && self.native_presented.is_some()
+        {
             self.expose_pending = true;
             self.input_observed = self.navigation_time();
         }
@@ -102,6 +104,12 @@ impl Lifetime for Session {
         let before =
             (self.tools.navigation().viewport(), self.tools.navigation().target_viewport());
         match input {
+            Input::Drawable(available) => {
+                self.drawable = available;
+                if available {
+                    self.expose();
+                }
+            }
             Input::Tool(input) => self.tools.input(
                 input,
                 self.scene.as_mut().map(|scene| &mut scene.document),
@@ -190,19 +198,24 @@ impl Lifetime for Session {
         let motion = navigation
             .next_deadline(now)
             .and_then(|cutoff| native_now.checked_add(cutoff.saturating_sub(now)));
-        let presentation = match self.display_deadline(now) {
-            Ok(Some(deadline)) => native_now.checked_add(deadline.saturating_sub(now)),
-            Ok(None)
-                if self.options.gpu.is_some()
-                    && self.expose_pending
-                    && self.displaying.is_none() =>
-            {
-                native_now.checked_add(navigation.frame_period())
-            }
-            Ok(None) => None,
-            Err(cause) => {
-                tracing::error!(operation="canvas_display_deadline", cause=%cause, "Canvas display selection is invalid");
-                None
+        let presentation = if !self.drawable {
+            None
+        } else {
+            match self.display_deadline(now) {
+                Ok(Some(deadline)) => native_now.checked_add(deadline.saturating_sub(now)),
+                Ok(None)
+                    if self.options.gpu.is_some()
+                        && self.expose_pending
+                        && self.displaying.is_none()
+                        && !self.gpu_presentation_pending() =>
+                {
+                    native_now.checked_add(navigation.frame_period())
+                }
+                Ok(None) => None,
+                Err(cause) => {
+                    tracing::error!(operation="canvas_display_deadline", cause=%cause, "Canvas display selection is invalid");
+                    None
+                }
             }
         };
         match (motion, presentation) {
@@ -248,7 +261,7 @@ impl Lifetime for Session {
             rendering.job.cancel();
         }
         if let Some(displaying) = &self.displaying {
-            displaying.cancel();
+            displaying.job.cancel();
         }
         if let Some(presenting) = &self.presenting {
             presenting.job.cancel();

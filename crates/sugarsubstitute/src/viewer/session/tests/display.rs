@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Application publication labels actual completed display poses and rejects obsolete content.
+mod activity;
 mod composite;
 mod presentation;
 use super::refinement::Wake;
@@ -9,17 +10,6 @@ use sugarsubstitute_canvas::{BackingCoverage, Document, ViewProjection};
 use sugarsubstitute_canvas_render::{PreparedUpdate, ProjectionBuffer};
 use sugarsubstitute_desktop::canvas::CpuFrameKind;
 use sugarsubstitute_image_ops::Pixel;
-
-/// Replace only the external GPU draw boundary; publication and execution are production owners.
-struct DrawBoundary(Option<work::Draw>);
-impl CpuTask<work::Draw, WorkError> for DrawBoundary {
-    fn step(&mut self, _: &JobContext) -> Result<CpuStep<work::Draw>, WorkError> {
-        self.0
-            .take()
-            .ok_or_else(|| WorkError::invalid("Draw fixture already consumed"))
-            .map(CpuStep::Complete)
-    }
-}
 
 /// Real canonical pixels and paired projection allocations created under one admitted job.
 pub(super) struct CpuDisplayProducts {
@@ -121,27 +111,22 @@ fn pending_draw() -> Result<Fixture, Box<dyn Error>> {
     let target = FrameStamp { generation: Generation::new(2)?, ..source };
     let coverage = BackingCoverage::new(view, [0; 2])?;
     let projection = ViewProjection::new(view, view)?;
-    let spec = session.spec(
-        Operation::FramePrepare,
-        JobClass::CpuInteractive,
-        65536,
-        Duration::from_secs(30),
-        Some(ReplacementKey { surface: SurfaceId::new(2)?, revision: target.generation }),
-    )?;
-    let job = client.submit_cpu(&scope, spec, move |_| {
-        DrawBoundary(Some(work::Draw {
-            underlay: None,
-            tier: BackingTier::Detail,
-            source,
-            target,
-            view,
-            coverage,
-            projection,
-            pixels: work::DrawPixels::Gpu(None),
-            document: identity,
-            source_revision: 7,
-            verified: true,
-        }))
+    let spec = session.display_spec(target, true)?;
+    let mut drawing = Some(work::Draw {
+        underlay: None,
+        tier: BackingTier::Detail,
+        source,
+        target,
+        view,
+        coverage,
+        projection,
+        pixels: work::DrawPixels::Gpu(None),
+        document: identity,
+        source_revision: 7,
+        verified: true,
+    });
+    let job = client.submit_blocking_owned_input(&scope, spec, &mut drawing, |drawing, _| {
+        Ok::<_, WorkError>(drawing)
     })?;
     session.pacing.submitted(
         target,
@@ -149,7 +134,7 @@ fn pending_draw() -> Result<Fixture, Box<dyn Error>> {
         Duration::ZERO,
         Duration::ZERO,
     )?;
-    session.displaying = Some(job);
+    session.displaying = Some(super::super::display::Displaying { target, job });
     session.runtime = Some(Runtime { owner, client, scope });
     Ok(Fixture { session, clock, wake, view, source, _directory: directory })
 }

@@ -52,14 +52,16 @@ impl Gate {
 }
 
 /// Release the fake external boundary before the real executor can join, including assertion unwind.
-struct Release(Arc<Gate>);
+pub(super) struct Release(Arc<Gate>);
 impl Drop for Release {
     fn drop(&mut self) {
         self.0.release();
     }
 }
 
-fn presenting(with_storage: bool) -> Result<(Fixture, Release, FrameStamp), Box<dyn Error>> {
+pub(super) fn presenting(
+    with_storage: bool,
+) -> Result<(Fixture, Release, FrameStamp), Box<dyn Error>> {
     let mut fixture = pending_draw()?;
     consume(&mut fixture.session, &fixture.wake)?;
     if with_storage {
@@ -91,7 +93,7 @@ fn presenting(with_storage: bool) -> Result<(Fixture, Release, FrameStamp), Box<
     Ok((fixture, release, target))
 }
 
-fn consume_present(session: &mut Session, wake: &Wake) -> Result<(), Box<dyn Error>> {
+pub(super) fn consume_present(session: &mut Session, wake: &Wake) -> Result<(), Box<dyn Error>> {
     while session.presenting.is_some() {
         let observed = wake.revision();
         session
@@ -190,5 +192,71 @@ fn install_storage(fixture: &mut Fixture) -> Result<(), Box<dyn Error>> {
     };
     fixture.session.resources = Some(resources);
     fixture.session.gpu_ready = true;
+    Ok(())
+}
+
+/// Hold an actual cooperative CPU slot at the external reconstruction boundary.
+struct HeldCpu {
+    gate: Arc<Gate>,
+    target: FrameStamp,
+}
+impl CpuTask<(), WorkError> for HeldCpu {
+    fn step(&mut self, _: &JobContext) -> Result<CpuStep<()>, WorkError> {
+        self.gate.present(self.target)?;
+        Ok(CpuStep::Complete(()))
+    }
+}
+
+#[test]
+fn native_display_prepares_while_reconstruction_retains_the_cpu_interactive_slot()
+-> Result<(), Box<dyn Error>> {
+    let mut fixture = pending_draw()?;
+    consume(&mut fixture.session, &fixture.wake)?;
+    let previous = fixture.session.display_evidence.ok_or("Missing display evidence")?;
+    let target = FrameStamp { generation: Generation::new(3)?, ..previous.target };
+    let cpu_spec = fixture.session.display_spec(target, false)?;
+    let native_spec = fixture.session.display_spec(target, true)?;
+    assert_eq!(native_spec.class, JobClass::InfrastructureOrdinary);
+    assert_eq!(fixture.session.display_spec(target, false)?.class, JobClass::CpuInteractive);
+    let gate = Arc::new(Gate::default());
+    let release = Release(gate.clone());
+    let held = gate.clone();
+    let runtime = fixture.session.runtime.as_ref().ok_or("Missing execution")?;
+    let mut reconstruction = runtime
+        .client
+        .submit_cpu(&runtime.scope, cpu_spec, move |_| HeldCpu { gate: held, target })?;
+    gate.wait_entered()?;
+    let mut input = Some(work::Draw {
+        underlay: previous.underlay,
+        tier: previous.tier,
+        target,
+        source: previous.source,
+        view: previous.view,
+        coverage: previous.coverage,
+        projection: previous.projection,
+        pixels: work::DrawPixels::Gpu(None),
+        document: previous.document,
+        source_revision: previous.source_revision,
+        verified: true,
+    });
+    let job = runtime.client.submit_blocking_owned_input(
+        &runtime.scope,
+        native_spec,
+        &mut input,
+        |drawing, _| Ok::<_, WorkError>(drawing),
+    )?;
+    let now = fixture.session.pacing.next_deadline(Duration::ZERO)?.unwrap_or(Duration::ZERO);
+    fixture.clock.0.store(u64::try_from(now.as_nanos())?, Ordering::SeqCst);
+    fixture.session.pacing.submitted(target, PresentationMode::Projected, now, now)?;
+    fixture.session.displaying = Some(super::super::super::display::Displaying { target, job });
+    consume(&mut fixture.session, &fixture.wake)?;
+    assert_eq!(fixture.session.display_evidence.ok_or("Missing prepared display")?.target, target);
+    assert!(reconstruction.try_take_completion().is_none());
+    drop(release);
+    let runtime = fixture.session.runtime.as_ref().ok_or("Missing execution")?;
+    assert!(matches!(
+        fixture.wake.completion(&runtime.client, &mut reconstruction)?.outcome,
+        JobOutcome::Success(())
+    ));
     Ok(())
 }

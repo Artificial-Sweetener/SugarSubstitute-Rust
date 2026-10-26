@@ -3,6 +3,13 @@
 //! Coalesce immutable display requests through one portable cadence and owned native handoff.
 use super::*;
 use sugarsubstitute_canvas::ViewProjection;
+mod admission;
+
+/// Preserve the submitted frame identity independently of execution-lane replacement metadata.
+pub(super) struct Displaying {
+    pub(super) target: FrameStamp,
+    pub(super) job: OwnedJob<work::Draw, WorkError>,
+}
 
 /// Exact retained mapping and authored identity committed only by native acknowledgement.
 #[derive(Clone, Copy)]
@@ -37,6 +44,7 @@ impl Session {
     /// Admit only the latest camera when the sole display slot and its cadence are available.
     pub(super) fn submit_display(&mut self) -> Result<(), Box<dyn Error>> {
         if self.closing
+            || !self.drawable
             || self.displaying.is_some()
             || self.gpu_presentation_pending()
             || self.cpu_pending.is_some()
@@ -70,13 +78,6 @@ impl Session {
             FrameStamp { surface: source_stamp.surface, generation: Generation::new(next)? };
         let mode = PresentationMode::Projected;
         let input_at = self.input_observed;
-        let spec = self.spec(
-            Operation::FramePrepare,
-            JobClass::CpuInteractive,
-            2 * 1024 * 1024,
-            Duration::from_secs(30),
-            Some(ReplacementKey { surface: SurfaceId::new(2)?, revision: target.generation }),
-        )?;
         let resources = self.resources.as_ref().ok_or("Canvas resources are unavailable")?.clone();
         let document = shown.document;
         let source_revision = shown.source_revision;
@@ -155,7 +156,7 @@ impl Session {
                 .and_then(Option::take);
             work::DrawSource::Cpu { surface, storage, underlay }
         };
-        let mut input = Some(work::DrawInput {
+        let input = work::DrawInput {
             underlay: underlay_evidence,
             tier: shown.tier,
             resources,
@@ -165,45 +166,19 @@ impl Session {
             coverage: shown.coverage,
             document,
             source_revision,
-        });
-        let runtime = self.runtime.as_ref().ok_or("Canvas execution is unavailable")?;
-        let submitted =
-            runtime
-                .client
-                .submit_cpu_owned_input(&runtime.scope, spec, &mut input, |input, _| input);
-        if let Some(input) = input
-            && let work::DrawSource::Cpu { storage: Some(storage), .. } = input.source
-        {
-            self.recycle_buffer(storage)?;
-        }
-        match submitted {
-            Ok(job) => {
-                self.pacing.submitted(target, mode, input_at, now)?;
-                self.displaying = Some(job);
-                self.frame_revision = next;
-            }
-            Err(sugarsubstitute_execution::OwnedInputError::Admission(cause))
-                if activity::retryable(&cause) => {}
-            Err(cause) => return Err(cause.into()),
-        }
-        Ok(())
+        };
+        self.admit_display(input, mode, input_at, now)
     }
     /// Preserve the actual completed camera and source; newer navigation remains pending intent.
     pub(super) fn consume_display(&mut self) -> Result<(), Box<dyn Error>> {
-        let Some(completion) = self.displaying.as_mut().and_then(OwnedJob::try_take_completion)
+        let Some(completion) =
+            self.displaying.as_mut().and_then(|display| display.job.try_take_completion())
         else {
             return Ok(());
         };
-        let job = self.displaying.take().ok_or("Display execution identity was lost")?;
+        let Displaying { target, job } =
+            self.displaying.take().ok_or("Display execution identity was lost")?;
         Self::observe_terminal(&job, &completion.outcome);
-        let target = FrameStamp {
-            surface: SurfaceId::new(1)?,
-            generation: job
-                .spec()
-                .replacement
-                .ok_or("Display replacement identity is unavailable")?
-                .revision,
-        };
         let now = self.navigation_time();
         match Self::terminal(completion.outcome) {
             Ok(drawing) => {
@@ -213,6 +188,7 @@ impl Session {
                     return Err("Canvas received a foreign completed display identity".into());
                 }
                 let current = !self.closing
+                    && self.drawable
                     && self.pending_open.is_none()
                     && self.loading.is_none()
                     && drawing.view.surface() == self.tools.navigation().viewport().surface()
@@ -302,7 +278,7 @@ impl Session {
                     }
                     work::DrawPixels::Gpu(None) => {
                         self.pacing.abandoned(target, now)?;
-                        self.expose_pending = !drawing.verified;
+                        self.expose_pending |= !drawing.verified;
                         if drawing.verified {
                             self.accept_display(evidence, false)?;
                             self.native_presented = Some(target);
@@ -339,6 +315,9 @@ impl Session {
         &self,
         now: Duration,
     ) -> Result<Option<Duration>, Box<dyn Error>> {
+        if !self.drawable {
+            return Ok(None);
+        }
         let Some(selection) = self.select_backing()? else {
             return Ok(None);
         };

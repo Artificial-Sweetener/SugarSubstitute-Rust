@@ -111,6 +111,9 @@ pub struct WindowOptions {
 /// alone does not establish an input target. Image editing and backend policy remain independent.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Input {
+    /// Whether the native viewport can currently display pixels. Minimized or hidden tabs
+    /// retain image products and demand while native presentation stays suspended.
+    Drawable(bool),
     /// Tool observation normalized once into physical pixels and hardware wheel steps.
     Tool(ToolInput),
     /// Non-repeating Space state, independent of persistent tool selection.
@@ -179,7 +182,8 @@ pub trait Lifetime {
     /// # Errors
     /// Rejects foreign, duplicate or out-of-order desktop acknowledgements.
     fn did_present_gpu(&mut self, target: FrameStamp) -> Result<(), Box<dyn Error>>;
-    /// Request restoration of native GPU pixels after exposure without doing image work on the UI.
+    /// Request retained native GPU presentation after exposure or pointer activity.
+    /// This coalesces display demand without changing authored content or evaluating image ops.
     fn expose(&mut self);
     /// Current localized title/status, independent of paint scheduling.
     fn title(&self) -> &str;
