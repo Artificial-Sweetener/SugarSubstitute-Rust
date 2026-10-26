@@ -4,6 +4,7 @@
 mod cursor;
 mod display;
 mod input;
+mod retirement;
 use super::feedback;
 use super::latency::Timing;
 use super::*;
@@ -33,15 +34,14 @@ use tao::{
 /// # Errors
 /// Preserves construction, paint, application and teardown failures; cancellation never implies exit.
 pub fn run(options: WindowOptions, lifetime: &mut impl Lifetime) -> Result<(), Box<dyn Error>> {
-    run_with_picker(options, lifetime, |window| {
-        crate::file_dialog::choose(window, SelectionKind::File)
-    })
+    run_with_picker(options, lifetime, crate::file_dialog::Picker::new)
 }
 
+/// Compose the native loop with one shared modal dispatcher installed before event-loop creation.
 fn run_with_picker(
     options: WindowOptions,
     lifetime: &mut impl Lifetime,
-    mut choose: impl FnMut(&tao::window::Window) -> Result<Option<PathBuf>, Box<dyn Error>>,
+    make_picker: impl FnOnce(&mut EventLoopBuilder<NativeEvent>) -> crate::file_dialog::Picker,
 ) -> Result<(), Box<dyn Error>> {
     let mut apartment = crate::windows_ui_apartment::UiApartment::enter()?;
     let mut builder = EventLoopBuilder::<NativeEvent>::with_user_event();
@@ -50,6 +50,7 @@ fn run_with_picker(
         use tao::platform::windows::EventLoopBuilderExtWindows;
         builder.with_any_thread(true);
     }
+    let picker = make_picker(&mut builder);
     let mut events = builder.build();
     let window = match WindowBuilder::new()
         .with_title(&options.title)
@@ -80,7 +81,15 @@ fn run_with_picker(
     }
     let wake = WakeLifetime::new();
     let hwnd = HWND(window.hwnd() as *mut _);
-    let mut failure = None;
+    let picker_proxy = events.create_proxy();
+    let mut failure = picker
+        .bind(hwnd, move || {
+            picker_proxy
+                .send_event(NativeEvent::Wake)
+                .map_err(|cause| DesktopError::new("canvas_picker_wake", cause))
+        })
+        .err()
+        .map(Box::<dyn Error>::from);
     let input_proxy = events.create_proxy();
     let native = match NativeInput::new(hwnd, move |event| {
         input_proxy
@@ -169,7 +178,12 @@ fn run_with_picker(
                 }
                 Event::MainEventsCleared => {
                     if let Some(native) = &native { native.check()?; }
+                    picker.check()?;
                     closing |= lifetime.is_closing();
+                    if closing { picker.cancel()?; }
+                    if let Some(result) = picker.take_result() {
+                        if closing { result?; } else { feedback::selected(lifetime, native.as_ref(), result)?; }
+                    }
                     if closing && !close_started {
                         feedback::close(lifetime, native.as_ref())?;
                         close_started = true;
@@ -204,7 +218,7 @@ fn run_with_picker(
                     let advanced = timing.poll(|| feedback::poll(lifetime, native.as_ref(), started.elapsed()));
                     if closing {
                         let settled = lifetime.settled();
-                        if matches!(settled, Ok(true)) { stopped = true; *control = ControlFlow::Exit; }
+                        if matches!(settled, Ok(true)) && !picker.busy() { stopped = true; *control = ControlFlow::Exit; }
                         combine(advanced, settled.map(|_| ()))?;
                     } else {
                         advanced?;
@@ -236,10 +250,9 @@ fn run_with_picker(
                             }
                             timing.poll(|| feedback::poll(lifetime, native.as_ref(), started.elapsed()))?;
                         }
-                        if lifetime.take_picker_request() {
+                        if !picker.busy() && lifetime.take_picker_request() {
                             feedback::dispatch_input(lifetime, native.as_ref(), Input::Unfocused)?;
-                            feedback::selected(lifetime, native.as_ref(), choose(&window))?;
-                            timing.poll(|| feedback::poll(lifetime, native.as_ref(), started.elapsed()))?;
+                            picker.request(SelectionKind::File)?;
                         }
                     }
                 }
@@ -280,31 +293,10 @@ fn run_with_picker(
         native.as_ref().map(NativeInput::take_input_delay).unwrap_or_default(),
         true,
     );
+    picker.retire()?;
+    drop(picker);
     wake.disconnect();
-    let original = window.id();
-    drop(window);
-    let deadline = Instant::now() + Duration::from_secs(15);
-    let mut destroyed = false;
-    events.run_return(|event, _, control| {
-        *control = ControlFlow::WaitUntil(deadline);
-        match event {
-            Event::WindowEvent { window_id, event: WindowEvent::Destroyed, .. }
-                if window_id == original =>
-            {
-                destroyed = true;
-                *control = ControlFlow::Exit;
-            }
-            Event::MainEventsCleared if Instant::now() >= deadline => *control = ControlFlow::Exit,
-            _ => {}
-        }
-    });
-    if !destroyed || native.as_ref().is_some_and(|native| !native.retired()) {
-        return Err(DesktopError::message(
-            "canvas_window_retirement",
-            "Native canvas destruction was not observed",
-        )
-        .into());
-    }
+    retirement::destroy(&mut events, window, native.as_ref())?;
     drop(events);
     let input_retired = native.as_ref().map_or(Ok(()), NativeInput::retire);
     tracing::info!(

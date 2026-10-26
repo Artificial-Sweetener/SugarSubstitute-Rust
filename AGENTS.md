@@ -100,6 +100,14 @@ implementation plans, or workstation configuration.
   thread affinity, cancellation, and teardown. Keep blocking work off the UI thread.
 - Isolate platform-specific behavior in adapters with explicit contracts.
   Keep rendering policy with its authoritative owner.
+- Never enter a native modal dialog or another application-event-loop pump from an
+  application event callback. Submit a request to its desktop owner and receive
+  the result later. Modal owners dispatch on the required UI thread between
+  application callbacks, retain the original peer through actual modal return,
+  and handle cancellation and teardown explicitly. The UI gate isolates known
+  modal APIs in exact reviewed sources and rejects mixing them with window or
+  event-loop construction. Native OS-managed move/resize dispatch remains with
+  its reviewed desktop adapter.
 
 ## Rust toolchain and dependency policy
 

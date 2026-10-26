@@ -69,7 +69,7 @@ fn run() -> Result<()> {
     let task = select_task(&arguments)?;
     if task == "help" {
         eprintln!(
-            "cargo xtask governance | check | verify | storage-inventory | help\ngovernance: repository policies\ncheck: policies, formatting and strict Clippy\nverify: check plus tests and warning-free Rustdoc"
+            "cargo xtask governance | ui | check | verify | storage-inventory | help\ngovernance: repository policies\nui: native UI ownership policy only\ncheck: policies, formatting and strict Clippy\nverify: check plus tests and warning-free Rustdoc"
         );
         return Ok(());
     }
@@ -90,6 +90,12 @@ fn run() -> Result<()> {
             .map_err(|cause| Failure::external("encode storage inventory", cause))?;
         println!("{json}");
         return Ok(());
+    }
+    if task == "ui" {
+        let architecture = policy::load(root, "governance/architecture/policy.toml")?;
+        let workspace = workspace::Workspace::load(root)?;
+        let ui = policy::load(root, "governance/ui/policy.toml")?;
+        return ui::check(root, &ui, &architecture, &workspace);
     }
     governance::check(root)?;
     if task == "governance" {
@@ -162,9 +168,9 @@ fn select_task(arguments: &[String]) -> Result<&str> {
     match arguments {
         [] => Ok("help"),
         [task] if matches!(task.as_str(), "help" | "--help" | "-h") => Ok("help"),
-        [task] if matches!(task.as_str(), "governance" | "check" | "verify" | "storage-inventory") => Ok(task),
+        [task] if matches!(task.as_str(), "governance" | "ui" | "check" | "verify" | "storage-inventory") => Ok(task),
         _ => Err(Failure::Policy(
-            "use cargo xtask governance, check, verify, storage-inventory or help; extra arguments are rejected"
+            "use cargo xtask governance, ui, check, verify, storage-inventory or help; extra arguments are rejected"
                 .into(),
         )),
     }
@@ -196,6 +202,8 @@ mod tests {
     fn dispatch_rejects_unknown_or_extra_arguments() -> Result<()> {
         assert_eq!(select_task(&["verify".into()])?, "verify");
         assert_eq!(select_task(&[])?, "help");
+        assert_eq!(select_task(&["ui".into()])?, "ui");
+        assert!(select_task(&["ui".into(), "--skip-modal".into()]).is_err());
         assert!(select_task(&["verfy".into()]).is_err());
         assert!(select_task(&["verify".into(), "--skip-tests".into()]).is_err());
         Ok(())

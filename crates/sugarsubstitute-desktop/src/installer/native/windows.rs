@@ -14,7 +14,7 @@ use tao::{
     dpi::LogicalSize,
     event::{ElementState, Event as NativeEvent, MouseButton, WindowEvent},
     event_loop::{ControlFlow, EventLoopBuilder},
-    platform::run_return::EventLoopExtRunReturn,
+    platform::{run_return::EventLoopExtRunReturn, windows::WindowExtWindows},
     window::{Theme, WindowBuilder},
 };
 #[path = "projection.rs"]
@@ -33,6 +33,7 @@ pub(super) fn run(
         use tao::platform::windows::EventLoopBuilderExtWindows;
         builder.with_any_thread(true);
     }
+    let picker = crate::file_dialog::Picker::new(&mut builder);
     let mut events = builder.build();
     let proxy = events.create_proxy();
     let wake_lifetime = WakeLifetime::new();
@@ -53,6 +54,19 @@ pub(super) fn run(
             Ok(owner) => (Some(owner), None),
             Err(cause) => (None, Some(Box::new(cause))),
         };
+    let picker_proxy = proxy.clone();
+    let bound =
+        picker.bind(::windows::Win32::Foundation::HWND(window.hwnd() as *mut _), move || {
+            picker_proxy
+                .send_event(NativeAction::Completions)
+                .map_err(|cause| crate::DesktopError::new("installer_picker_wake", cause))
+        });
+    if let Err(cause) = bound
+        && failure.is_none()
+    {
+        failure = Some(Box::new(cause));
+    }
+    let mut picker_request = None;
     let scroll = ScrollViewport::new(window.clone());
     if let Err(cause) = scroll.initialize()
         && failure.is_none()
@@ -143,7 +157,9 @@ pub(super) fn run(
                 },
                 NativeEvent::MainEventsCleared => {
                     if let Some(owner) = &controls {owner.check()?;}
+                    picker.check()?;
                     closing |= failure.is_some() || lifetime.close_requested();
+                    if closing { picker.cancel()?; }
                     if closing && !close_started {
                         lifetime.close()?;
                         scroll.shutdown()?;
@@ -156,13 +172,18 @@ pub(super) fn run(
                             if shape != Some(next) { lifetime.resize(next)?; shape = Some(next); }
                         }
                     }
-                    if !closing && let Some(picker) = lifetime.picker() {
-                        let result = crate::file_dialog::choose(window.as_ref(), picker.kind).and_then(|path| {
-                            path.map(|path| path.into_os_string().into_string().map_err(|_| {
+                    if let Some(result) = picker.take_result() {
+                        let request = picker_request.take().ok_or("Native picker returned without a request")?;
+                        if !closing {
+                            let result = result.and_then(|path| path.map(|path| path.into_os_string().into_string().map_err(|_| {
                                 Box::<dyn Error>::from("Selected path cannot be represented in interface text")
-                            })).transpose()
-                        }).map_err(|cause| cause.to_string());
-                        lifetime.input(Event::Picked(picker, result))?;
+                            })).transpose()).map_err(|cause| cause.to_string());
+                            lifetime.input(Event::Picked(request, result))?;
+                        } else { result?; }
+                    }
+                    if !closing && !picker.busy() && let Some(request) = lifetime.picker() {
+                        picker.request(request.kind)?;
+                        picker_request = Some(request);
                     }
                     if !closing && let Some(position) = scroll.take_position()? {
                         lifetime.input(Event::Scroll(position))?;
@@ -212,7 +233,7 @@ pub(super) fn run(
                             scroll.capture(observer)?;
                             observer.finished();
                         }
-                    } else if lifetime.settled()? {
+                    } else if lifetime.settled()? && !picker.busy() {
                         if let Some(owner) = &mut controls {
                             owner.shutdown()?;
                             if !owner.retired() { return Ok(()); }
@@ -234,6 +255,8 @@ pub(super) fn run(
             closing = true;
         }
     });
+    picker.retire()?;
+    drop(picker);
     wake_lifetime.disconnect();
     drop(scroll);
     drop(controls);

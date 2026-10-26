@@ -59,7 +59,7 @@ minimum_tests = 741
 package = "sugarsubstitute-xtask"
 root = "tools/xtask"
 concern = "Architecture, execution, filesystem, cache, networking, diagnostics, configuration and localization owner boundaries; exact reviewed source and dependency identities across authored languages, alias-safe public contracts, adversarial rejection fixtures and verification orchestration."
-minimum_tests = 165
+minimum_tests = 167
 
 [[owners]]
 package = "sugarsubstitute-supervision"
@@ -77,7 +77,7 @@ minimum_tests = 64
 package = "sugarsubstitute-desktop"
 root = "crates/sugarsubstitute-desktop"
 concern = "Nonblocking frame delivery, pre-Tao preparation, lossless wake handoff, bounded native dispatch, headless settlement, retained native storage, input and timing boundaries; current-view native reporter controls, explicit consent and inert save selection, clipboard transfer, bounded modal input and checked font/callback retirement; post-show native layout reconciliation and retained closed preview source mismatch; actual incomplete-probe conditions, coalesced creating-thread custody counters and bounded closed stderr observations"
-minimum_tests = 499
+minimum_tests = 503
 
 [[owners]]
 package = "sugarsubstitute-crash"

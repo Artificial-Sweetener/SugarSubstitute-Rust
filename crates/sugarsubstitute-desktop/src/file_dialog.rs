@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Keep shared shell file selection on the desktop's existing UI STA.
+//! Queue shell selection between application callbacks on the desktop's existing UI STA.
 #[cfg(windows)]
-use std::{error::Error, ffi::OsString, os::windows::ffi::OsStringExt, path::PathBuf};
+mod picker;
 #[cfg(windows)]
-use tao::{platform::windows::WindowExtWindows, window::Window};
+pub(crate) use picker::Picker;
+#[cfg(windows)]
+use std::{
+    cell::RefCell, error::Error, ffi::OsString, os::windows::ffi::OsStringExt, path::PathBuf,
+};
 #[cfg(windows)]
 use windows::{
     Win32::{
@@ -28,13 +32,14 @@ pub enum SelectionKind {
 }
 
 #[cfg(windows)]
-/// Borrow the owning UI STA/window until modal selection or cancellation completes.
+/// Borrow the owning UI STA/window only from the picker's installed pre-dispatch hook.
 /// Native selected path units are preserved; storage and interface text consumers validate them.
 /// # Errors
 /// Preserves COM/shell failures; user cancellation returns `None`.
-pub(crate) fn choose(
-    window: &Window,
+fn choose(
+    window: HWND,
     kind: SelectionKind,
+    active: &ActiveDialog,
 ) -> Result<Option<PathBuf>, Box<dyn Error>> {
     // SAFETY: The caller retains its UI STA, parent HWND and event loop across this
     // modal operation. Every COM object is released before returning to that loop.
@@ -46,7 +51,10 @@ pub(crate) fn choose(
             SelectionKind::Folder => FOS_PICKFOLDERS,
         };
         dialog.SetOptions(FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | kind)?;
-        match dialog.Show(Some(HWND(window.hwnd() as *mut _))) {
+        *active.0.borrow_mut() = Some(dialog.clone());
+        let shown = dialog.Show(Some(window));
+        active.0.borrow_mut().take();
+        match shown {
             Ok(()) => {}
             Err(cause) if cause.code() == HRESULT::from_win32(ERROR_CANCELLED.0) => {
                 return Ok(None);
@@ -60,3 +68,26 @@ pub(crate) fn choose(
         Ok(Some(result))
     }
 }
+
+/// UI-thread-only cancellation access, independent of the application's mutable event handler.
+#[cfg(windows)]
+#[derive(Default)]
+pub(super) struct ActiveDialog(RefCell<Option<IFileOpenDialog>>);
+#[cfg(windows)]
+impl ActiveDialog {
+    /// Close the retained shell receiver without holding a RefCell borrow across native reentry.
+    fn cancel(&self) -> Result<(), crate::DesktopError> {
+        let dialog = self.0.borrow().clone();
+        if let Some(dialog) = dialog {
+            // SAFETY: The original UI STA retains both references through the modal call.
+            unsafe { dialog.Close(HRESULT::from_win32(ERROR_CANCELLED.0)) }
+                .map_err(|cause| crate::DesktopError::new("cancel_native_picker", cause))?;
+        }
+        Ok(())
+    }
+}
+
+/// Typed same-STA shell boundary; replacement is exposed only to hidden native tests.
+#[cfg(windows)]
+pub(super) type Selection =
+    Box<dyn Fn(HWND, SelectionKind, &ActiveDialog) -> Result<Option<PathBuf>, Box<dyn Error>>>;

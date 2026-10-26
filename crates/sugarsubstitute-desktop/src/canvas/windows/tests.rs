@@ -5,7 +5,7 @@
 use super::*;
 use ::windows::Win32::UI::{
     Input::KeyboardAndMouse::{GetActiveWindow, GetCapture, GetFocus},
-    WindowsAndMessaging::IsWindowVisible,
+    WindowsAndMessaging::{IsWindowVisible, SendMessageW, WM_PAINT},
 };
 use std::{cell::Cell, rc::Rc, sync::Arc};
 use sugarsubstitute_canvas::{CursorIntent, DamagePlan};
@@ -65,6 +65,8 @@ struct StartupFixture {
     closing: bool,
     close_calls: usize,
     finished: bool,
+    selecting: Rc<Cell<bool>>,
+    nested_exposure: Rc<Cell<bool>>,
 }
 
 impl StartupFixture {
@@ -93,6 +95,8 @@ impl StartupFixture {
             closing: false,
             close_calls: 0,
             finished: false,
+            selecting: Rc::new(Cell::new(false)),
+            nested_exposure: Rc::new(Cell::new(false)),
         })
     }
 
@@ -202,7 +206,11 @@ impl Lifetime for StartupFixture {
         Err("Hidden CPU fixture received a GPU acknowledgement".into())
     }
 
-    fn expose(&mut self) {}
+    fn expose(&mut self) {
+        if self.selecting.get() {
+            self.nested_exposure.set(true);
+        }
+    }
 
     fn title(&self) -> &str {
         "Hidden canvas qualification"
@@ -250,24 +258,48 @@ fn hidden_empty_startup_selects_and_presents_one_cpu_frame_without_activation()
     let native_window = Rc::new(Cell::new(HWND::default()));
     let mut fixture =
         StartupFixture::new(extent, selected.clone(), native_window.clone(), original)?;
-    let mut picker_calls = 0;
+    let picker_calls = Rc::new(Cell::new(0));
+    let observed_calls = picker_calls.clone();
+    let selecting = fixture.selecting.clone();
+    let nested_exposure = fixture.nested_exposure.clone();
 
     run_with_picker(
         WindowOptions { title: "Hidden canvas qualification".to_owned(), extent, visible: false },
         &mut fixture,
-        |peer| {
-            picker_calls += 1;
-            let hwnd = HWND(peer.hwnd() as *mut _);
-            native_window.set(hwnd);
-            // SAFETY: Tao retains this valid peer throughout the synchronous picker boundary.
-            if unsafe { IsWindowVisible(hwnd) }.as_bool() || thread_ui_state() != original {
-                return Err("Hidden picker boundary changed input or activation state".into());
-            }
-            Ok(Some(selected.clone()))
+        move |builder| {
+            crate::file_dialog::Picker::with_selection(
+                builder,
+                Box::new(move |hwnd, kind, _| {
+                    assert_eq!(kind, SelectionKind::File);
+                    picker_calls.set(picker_calls.get() + 1);
+                    native_window.set(hwnd);
+                    // SAFETY: Tao retains this valid peer throughout the synchronous picker boundary.
+                    if unsafe { IsWindowVisible(hwnd) }.as_bool() || thread_ui_state() != original {
+                        return Err(
+                            "Hidden picker boundary changed input or activation state".into()
+                        );
+                    }
+                    selecting.set(true);
+                    // SAFETY: Repaint only this invisible fixture. The real Tao callback must run while
+                    // the external shell boundary is active, without borrowing its handler recursively.
+                    unsafe {
+                        SendMessageW(hwnd, WM_PAINT, None, None);
+                    }
+                    selecting.set(false);
+                    if !nested_exposure.get() {
+                        return Err(
+                            "Nested native events were buffered behind the application callback"
+                                .into(),
+                        );
+                    }
+                    Ok(Some(selected.clone()))
+                }),
+            )
         },
     )?;
 
-    assert_eq!(picker_calls, 1);
+    assert_eq!(observed_calls.get(), 1);
+    assert!(fixture.nested_exposure.get());
     assert!(fixture.finished);
     assert_eq!(thread_ui_state(), original);
     Ok(())

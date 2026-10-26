@@ -21,6 +21,7 @@ pub(crate) enum Capability {
     Text,
     Window,
     Webview,
+    Modal,
 }
 
 /// Canonical Cargo identities prevent dependency renaming from bypassing ownership.
@@ -76,6 +77,12 @@ struct Scanner {
 impl Scanner {
     /// Macro arguments and inactive target/test branches remain governed code.
     fn tokens(&mut self, stream: TokenStream) {
+        self.context_tokens(stream, false);
+    }
+
+    /// `rounded` is also an ordinary numeric binding. Only imports, paths and calls name the
+    /// shared drawing operation; preserve that context through macro groups and aliases.
+    fn context_tokens(&mut self, stream: TokenStream, mut importing: bool) {
         let tokens: Vec<_> = stream.into_iter().collect();
         if let [TokenTree::Ident(name), TokenTree::Punct(equal), TokenTree::Literal(value)] =
             tokens.as_slice()
@@ -85,12 +92,21 @@ impl Scanner {
         {
             self.identifier(&name.value());
         }
-        for token in tokens {
+        for (index, token) in tokens.iter().enumerate() {
             match token {
-                TokenTree::Group(group) => self.tokens(group.stream()),
+                TokenTree::Group(group) => self.context_tokens(group.stream(), importing),
                 TokenTree::Ident(name) => {
-                    self.identifier(name.to_string().trim_start_matches("r#"))
+                    let name = name.to_string();
+                    let name = name.trim_start_matches("r#");
+                    importing |= name == "use";
+                    let call = matches!(tokens.get(index + 1), Some(TokenTree::Group(group)) if group.delimiter() == proc_macro2::Delimiter::Parenthesis);
+                    let path = index > 0
+                        && matches!(tokens.get(index - 1), Some(TokenTree::Punct(separator)) if separator.as_char() == ':');
+                    if name != "rounded" || importing || call || path {
+                        self.identifier(name);
+                    }
                 }
+                TokenTree::Punct(separator) if separator.as_char() == ';' => importing = false,
                 _ => {}
             }
         }
@@ -150,7 +166,8 @@ impl Scanner {
             | "IDWriteTextRenderer"
             | "CreateFontW"
             | "CreateFontIndirectW" => Some(Capability::Text),
-            "WindowBuilder"
+            "EventLoopBuilder"
+            | "WindowBuilder"
             | "CreateCursor"
             | "CreateWindowExW"
             | "CreateWindowExA"
@@ -158,14 +175,28 @@ impl Scanner {
             | "CreateWindowA"
             | "CreateDialogParamW"
             | "CreateDialogIndirectParamW"
-            | "DialogBoxParamW"
-            | "DialogBoxIndirectParamW"
-            | "MessageBoxW"
-            | "MessageBoxA"
-            | "TaskDialog"
-            | "TaskDialogIndirect"
+            | "run_return"
             | "RegisterClassExW"
             | "RegisterClassW" => Some(Capability::Window),
+            "DialogBoxParamW"
+            | "DialogBoxParamA"
+            | "DialogBoxIndirectParamW"
+            | "DialogBoxIndirectParamA"
+            | "MessageBoxW"
+            | "MessageBoxA"
+            | "MessageBoxExW"
+            | "MessageBoxExA"
+            | "TaskDialog"
+            | "TaskDialogIndirect"
+            | "GetOpenFileNameW"
+            | "GetOpenFileNameA"
+            | "GetSaveFileNameW"
+            | "GetSaveFileNameA"
+            | "IFileDialog"
+            | "IFileOpenDialog"
+            | "IFileSaveDialog"
+            | "FileOpenDialog"
+            | "FileSaveDialog" => Some(Capability::Modal),
             "WebViewBuilder" | "CreateCoreWebView2EnvironmentWithOptions" => {
                 Some(Capability::Webview)
             }

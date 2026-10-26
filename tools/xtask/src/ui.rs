@@ -95,7 +95,12 @@ pub(crate) fn check(
                         .is_some_and(|extension| extension.eq_ignore_ascii_case("rs")),
                 format!("UI: boundary source is outside its Rust owner: {source}"),
             )?;
-            observed.extend(ui_source::findings(&read(&path)?, &package.dependencies)?);
+            let found = ui_source::findings(&read(&path)?, &package.dependencies)?;
+            require(
+                !found.contains(&Capability::Modal) || !found.contains(&Capability::Window),
+                "UI: modal operations must live outside application event-loop/window sources",
+            )?;
+            observed.extend(found);
             require(
                 registered.insert(path, (&boundary.owner, capabilities.clone())).is_none(),
                 "UI: duplicate source registration",
@@ -124,8 +129,10 @@ pub(crate) fn check(
         let found = ui_source::findings(&read(&path)?, &package.dependencies)?;
         if owner.package == policy.owner {
             require(
-                !found.contains(&Capability::Webview) && !found.contains(&Capability::Window),
-                "UI: widget owner must not create windows or webviews",
+                !found.contains(&Capability::Webview)
+                    && !found.contains(&Capability::Window)
+                    && !found.contains(&Capability::Modal),
+                "UI: widget owner must not create windows, webviews or modal dialogs",
             )?;
             continue;
         }

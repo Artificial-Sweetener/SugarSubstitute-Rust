@@ -564,7 +564,7 @@ rationale = "Isolated native interaction or rendering qualification uses deliber
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/installer/native/windows.rs"
-source_sha256 = "sha256:9daef3c1e7e1d189ace84e6bacf03d028ecd240ab4cc64069540506f3ff35e61"
+source_sha256 = "sha256:78ac978d46b3546e9c6e7e692e70a7399ae33cb04c683ec91230988b4730051b"
 kind = "native"
 rationale = "Affine native text, control or window adapter consumes original bounded labels and shared widget specifications; the presenting owner supplies catalog copy, and external native references retain their checked lifetime."
 
@@ -690,7 +690,7 @@ rationale = "The upstream derivative compares numeric HTTP statusCode framing an
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/canvas/windows.rs"
-source_sha256 = "sha256:7e82432fc37de851fb1fe23e98da1e31c872043a0402924ad87cc2556d469638"
+source_sha256 = "sha256:8e413eb57bdbd22563c6f1d92184b23a670f36d8dbcd93165b5aaa5b95671648"
 kind = "native"
 rationale = "Native canvas window consumes catalog-owned titles/status from the application lifetime; input observations preserve authored source paths without constructing product copy."
 
@@ -699,3 +699,9 @@ path = "crates/sugarsubstitute-desktop/src/canvas/windows/input/lifecycle_tests.
 source_sha256 = "sha256:9d24ec60e8dbae9f1757c661d6d456da5b76f40ed2da47ac3c3b32a92e7690fe"
 kind = "fixture"
 rationale = "Hidden native input qualification creates an untitled OS STATIC peer; the class identifier is native plumbing, and the fixture presents no product copy."
+
+[[records]]
+path = "crates/sugarsubstitute-desktop/src/file_dialog/picker/tests.rs"
+source_sha256 = "sha256:bad5b76b3ebb8a5b62d868b794dc4adf02c1a52c74455d6bbf6bd6ce971ffe77"
+kind = "fixture"
+rationale = "Hidden native picker lifecycle fixtures preserve original paths and errors; their empty native labels grant no product text route."

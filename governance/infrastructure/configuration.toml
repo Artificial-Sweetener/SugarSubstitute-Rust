@@ -443,7 +443,7 @@ rationale = "Tooling build, source inspection or isolated qualification input; n
 [[records]]
 path = "tools/xtask/src/main.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:fe42c2b8fda8fdcc79312022b289ad7e3e1be737dc5a75e7862713bae3130605"
+source_sha256 = "sha256:29580cb0a05c48bc9b3f771a9021f95fb27616e83b9cde89544a57a690638824"
 capabilities = ["arguments"]
 rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
 
@@ -856,7 +856,7 @@ rationale = "Publication-recovery qualification reads the authoritative cache ca
 [[records]]
 path = "tools/xtask/src/ui/tests.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:bfe390a1aab1d8108f7d8df76f002535c54f67bb55cd42e71db6c3b0713e82d2"
+source_sha256 = "sha256:88b22ab227e8b0ef4c48eeae9acc859b22233d7d4c0c353177051ea46c815458"
 capabilities = ["codec"]
 rationale = "Construct isolated malformed UI policy documents to verify unknown-schema, duplicate, stale-review and dependency-identity rejection through the real governance checker."
 

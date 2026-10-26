@@ -4027,7 +4027,7 @@ rationale = "Repository tooling tests.rs: Adversarial capability, copy-provenanc
 [[records]]
 path = "tools/xtask/src/main.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:fe42c2b8fda8fdcc79312022b289ad7e3e1be737dc5a75e7862713bae3130605"
+source_sha256 = "sha256:29580cb0a05c48bc9b3f771a9021f95fb27616e83b9cde89544a57a690638824"
 capabilities = ["method canonicalize"]
 disposition = "tooling"
 rationale = "Repository tooling main.rs: Provide the same portable verification entry point for local work, hooks and CI. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
