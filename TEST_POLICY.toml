@@ -527,6 +527,14 @@ groups = ["surface/integration", "relations/integration", "output_canvas/integra
 name = "workflow_execution_results"
 area = "execution"
 
+[[boundary]]
+name = "spatial_probe"
+area = "execution"
+
+[[subscription]]
+boundary = "spatial_probe"
+groups = ["editor_actions/unit", "editor_actions/integration"]
+
 [[subscription]]
 boundary = "workflow_execution_results"
 groups = ["surface/integration", "surface/unit", "model_library/unit", "output_canvas/integration", "input_canvas/integration"]

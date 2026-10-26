@@ -21,7 +21,7 @@ import {
   workflowTabAccessorySlot,
 } from '../appearance/ControlFactory.js';
 import { ContextMenu, type ContextMenuEntry } from '../../menus/ContextMenu.js';
-import { WORKFLOW_TAB_WIDTH } from './WorkflowTabStyles.js';
+import { workflowTabAtOffset, workflowTabOffsets } from './WorkflowTabGeometry.js';
 import { scrollWheelDistance } from '../ScrollWheelDistance.js';
 import { WorkflowTabPointerDrag } from './WorkflowTabPointerDrag.js';
 import type { FrameWorkflowTab } from './ComfyFrameWorkflowAdapter.js';
@@ -51,7 +51,7 @@ export class WorkflowTabsView {
   readonly #drag: WorkflowTabPointerDrag;
   #projecting = false;
   #selection = '';
-  #tabWidth = WORKFLOW_TAB_WIDTH;
+  #widths: readonly number[] = [];
   #menuRequest = 0;
   #menuTarget: WorkflowSessionId | null = null;
   #paintKey = '';
@@ -71,7 +71,7 @@ export class WorkflowTabsView {
       (from, to) => actions.reorder(from, to),
       (error) => actions.report(error),
       () => this.#updateOrbAdjacency(),
-      () => this.#tabWidth,
+      () => this.#widths,
     );
     this.element.setAttribute('aria-label', 'Workflows');
     this.viewport.addEventListener('scroll', this.#scrolled);
@@ -146,17 +146,18 @@ export class WorkflowTabsView {
   #revealSelected(index: number): void {
     const width = this.viewport.clientWidth;
     if (index < 0 || width <= 0) return;
-    const left = index * this.#tabWidth;
-    const right = left + this.#tabWidth;
+    const starts = workflowTabOffsets(this.#widths);
+    const left = starts[index] ?? 0;
+    const right = starts[index + 1] ?? left;
     if (left < this.viewport.scrollLeft) this.viewport.scrollLeft = left;
     else if (right > this.viewport.scrollLeft + width)
       this.viewport.scrollLeft = Math.max(0, right - width);
   }
 
   /** Keep selection and the orb cutout aligned after the enclosing strip changes width. */
-  resize(width: number): void {
+  resize(widths: readonly number[]): void {
     this.#drag.cancelForResize();
-    this.#tabWidth = width;
+    this.#widths = widths;
     if (!this.#drag.active) this.#revealSelected(this.#order.findIndex((tab) => tab.selected));
     this.#updateOrbAdjacency();
   }
@@ -186,12 +187,15 @@ export class WorkflowTabsView {
     this.viewport.scrollLeft += scrollWheelDistance(event, 'horizontal', this.viewport.clientWidth);
   };
 
-  /** Keep the cutout aligned to the orb when the uniform-width tab strip scrolls or reorders. */
+  /** Keep the cutout aligned to the orb when the tab strip scrolls or reorders. */
   #updateOrbAdjacency(): void {
     if (this.#drag.active) return;
-    const index = Math.floor(Math.max(0, this.viewport.scrollLeft) / this.#tabWidth);
+    const index = workflowTabAtOffset(this.#widths, Math.max(0, this.viewport.scrollLeft));
+    const left = workflowTabOffsets(this.#widths)[index] ?? 0;
     const adjacent =
-      !this.#orbVisible || this.viewport.hasAttribute('data-sc-overflow')
+      !this.#orbVisible ||
+      this.viewport.hasAttribute('data-sc-overflow') ||
+      this.viewport.hasAttribute('data-sc-natural-tabs')
         ? undefined
         : this.#order[index]?.id;
     for (const [id, tab] of this.#tabs) {
@@ -199,7 +203,7 @@ export class WorkflowTabsView {
       if (id === adjacent)
         tab.element.style.setProperty(
           '--sc-tab-cutout-x',
-          `${String(-17 + this.viewport.scrollLeft - index * this.#tabWidth)}px`,
+          `${String(-17 + this.viewport.scrollLeft - left)}px`,
         );
     }
   }

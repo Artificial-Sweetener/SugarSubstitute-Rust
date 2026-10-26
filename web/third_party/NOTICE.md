@@ -219,3 +219,7 @@ CodeMirror, Lezer, and their editing and style helpers are bundled with SugarPro
 - crelt 1.0.7
 - style-mod 4.1.4
 - w3c-keyname 2.2.8
+
+## Photoshop image decoding
+
+The Photoshop UXP package bundles UPNG.js 2.1.0 and pako 1.0.11 for image decoding. Their license texts are included under `third_party/licenses/` and their package identities are recorded in `manifest.toml`.

@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Match SugarSubstitute's bounded decimal spinner/slider presentation. */
+/** Select bounded compound presentation for native numeric fields. */
 
 export interface NumericSliderSpec {
   name: string;
@@ -22,14 +22,16 @@ export interface NumericSliderSpec {
   minimum: number;
   maximum: number;
   step: number;
+  presentation?: 'spinner-slider';
 }
 
-/** Select Substitute's float controls without turning seeds or arbitrary numbers into sliders. */
+/** Honor explicit compound fields while retaining the established automatic float selection. */
 export function usesSubstituteSlider(field: NumericSliderSpec): boolean {
   const label = field.label.trim().toLowerCase().replace(/[_-]/g, ' ').replace(/\s+/g, ' ');
   return (
-    field.precision !== 0 &&
-    (['denoise', 'variation_strength'].includes(field.name) || label === 'scale factor') &&
+    (field.presentation === 'spinner-slider' ||
+      (field.precision !== 0 &&
+        (['denoise', 'variation_strength'].includes(field.name) || label === 'scale factor'))) &&
     [field.minimum, field.maximum, field.step].every(Number.isFinite) &&
     field.maximum > field.minimum &&
     field.step > 0 &&

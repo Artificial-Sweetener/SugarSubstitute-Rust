@@ -45,6 +45,24 @@ test('portals are fixed without feature styles and never become dialog descendan
 });
 
 test('bounds, vertical flipping and submenu directions have one geometry policy', () => {
+  const reserved = floatingPosition({ kind: 'pointer', x: 216, y: 100 }, 324, 200, 562, 600, 324);
+  expect(reserved).toEqual({ left: 4, top: 100 });
+  expect(
+    floatingPosition(
+      {
+        kind: 'submenu',
+        bounds: { left: reserved.left, right: reserved.left + 324, top: 100, bottom: 118 },
+      },
+      192,
+      110,
+      562,
+      600,
+    ),
+  ).toEqual({ left: 324, top: 100 });
+  expect(floatingPosition({ kind: 'pointer', x: 216, y: 100 }, 324, 200, 400, 600, 324)).toEqual({
+    left: 4,
+    top: 100,
+  });
   expect(floatingPosition({ kind: 'pointer', x: 790, y: 590 }, 200, 150, 800, 600)).toEqual({
     left: 596,
     top: 446,

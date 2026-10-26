@@ -74,7 +74,6 @@ export { buildShiftedPlacementPayload };
 
 export type { SugarCubesExtension } from './ui/types/extension.js';
 
-const EXTENSION_NAME = 'SugarCubes.UI';
 let invalidateCubeCatalogs: () => Promise<void> = async () => undefined;
 
 /** Provide the authoritative UI service graph for this host extension instance. */
@@ -151,7 +150,7 @@ const cubeCatalogInvalidation = new CubeCatalogInvalidationCoordinator({
 });
 invalidateCubeCatalogs = () => cubeCatalogInvalidation.invalidate();
 const nativeBoundaryResolver = new NativeSubgraphBoundaryResolver(logger);
-const promptQueueBridge = createCubeHostExecution({
+const { queue: promptQueueBridge, prepareAnalysisPrompt } = createCubeHostExecution({
   api,
   observer: workflowExecution.submissionObserver,
   logger,
@@ -438,6 +437,8 @@ const editorActions = createEditorActionsRuntime(
   logger,
   hostFeedback,
   modelPickers,
+  workflowExecution,
+  prepareAnalysisPrompt,
 );
 
 /** Compose shared model-root settings without duplicating persistence or dialog policy. */
@@ -455,7 +456,7 @@ const modelLibrarySettings = new ModelLibrarySettings({
 
 /** Define the ComfyUI extension lifecycle owned by SugarCubes. */
 export const sugarCubesExtension: SugarCubesExtension = {
-  name: EXTENSION_NAME,
+  name: 'SugarCubes.UI',
   commands: [
     {
       id: 'SugarCubes.CubeStackCart',

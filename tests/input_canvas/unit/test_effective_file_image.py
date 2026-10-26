@@ -61,8 +61,9 @@ class Tensor:
         return self.values
 
 
+@pytest.mark.parametrize("maximum_size", [0, 288])
 def test_file_images_use_native_codec_and_retain_source_frame_and_alpha(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, maximum_size: int
 ) -> None:
     """Preview source file content while leaving graph-driven image resizing/compositing to its own node."""
     Image.new("RGB", (2, 1)).save(tmp_path / "source.png")
@@ -129,7 +130,7 @@ def test_file_images_use_native_codec_and_retain_source_frame_and_alpha(
             native_image_preview(
                 "source.png",
                 InputPreviewSettings("image", "Composite", "reference", {}),
-                288,
+                maximum_size,
             )
         )
     )

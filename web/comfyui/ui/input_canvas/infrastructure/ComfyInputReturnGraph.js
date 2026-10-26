@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Validate compiled Comfy connections and translate them into shared return-association facts. */
 import { isRecord } from '../../types/common.js';
+import { isContextImageInput } from '../domain/InputContextSemantics.js';
 import { resolveInputReturnAssociations } from '../domain/InputReturnAssociation.js';
 /** Resolve only validated graph links, excluding literal lists supplied through native multiselect wrappers. */
 function link(value) {
@@ -87,7 +88,7 @@ export function compiledInputReturnAssociations(prompt, captured, ports) {
                     incomingMasks.push(`unresolved:${provider.node}:${provider.slot}`);
             }
             // The generated source is the replacement; the destination supplies the composite's image context.
-            if (node.class_type !== 'ImageCompositeMasked' || name !== 'source')
+            if (typeof node.class_type === 'string' && isContextImageInput(node.class_type, name))
                 inputs.push({ consumer: id, input: name, kind, endpoints: found });
             if (node.class_type === 'ImageCompositeMasked' &&
                 name === 'mask' &&

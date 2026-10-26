@@ -67,6 +67,7 @@ def test_execution_capabilities_publish_stable_routes_and_schema_versions(
         "atomic_queueing": True,
         "cube_scoped_optimization": True,
         "validated_queue_observers": True,
+        "prepared_input_assets": True,
     }
 
 

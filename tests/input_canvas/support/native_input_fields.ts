@@ -16,7 +16,7 @@
 /** Model only Comfy's native widget creation/removal boundary for source controls. */
 import type { ComfyNode, ComfyWidget } from '../../../frontend/comfyui/ui/types/graph.js';
 import { nativePresentationWidgets } from '../../../frontend/comfyui/ui/surface/NativePresentationWidgets.js';
-import { NativeNodeChoiceFields } from '../../../frontend/comfyui/ui/surface/NativeNodeChoiceFields.js';
+import { NativeNodeFields } from '../../../frontend/comfyui/ui/surface/NativeNodeFields.js';
 import { isRecord } from '../../../frontend/comfyui/ui/types/common.js';
 
 /** Retain native widget identity while deterministic tests exercise their owning source state. */
@@ -35,9 +35,9 @@ export function installNativeNodeFields(node: ComfyNode): void {
   };
 }
 /** Supply the production native node-field owner with a deterministic host widget lifecycle. */
-export function nativeInputFields(node: ComfyNode): NativeNodeChoiceFields {
+export function nativeInputFields(node: ComfyNode): NativeNodeFields {
   installNativeNodeFields(node);
-  return new NativeNodeChoiceFields(node, 'image', document);
+  return new NativeNodeFields(node, 'image', document);
 }
 /** Read the actual native widget supplied to the node's ordinary renderer. */
 export function nativeSourceField(node: ComfyNode, field = 'kind'): ComfyWidget {

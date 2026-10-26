@@ -47,18 +47,25 @@ test('clicked side chooses its ratio anchor; title menus offer both and preset o
   };
   const entries = dimensionMenuEntries(binding, 'width', library, [], () => undefined);
   expect(entries.map((entry) => entry.label)).toEqual([
+    'Set ratio by Width',
     'Swap width & height',
     'Set dimensions',
-    'Set ratio by Width',
     '',
     'Save current dimensions',
   ]);
-  expect(entries[2]?.children?.map((entry) => entry.label)).toEqual(['Landscape', 'Portrait']);
-  entries[2]?.children?.[0]?.children?.find((entry) => entry.label === '16:9')?.select?.();
+  expect(entries[0]?.children?.map((entry) => entry.label)).toEqual(['Landscape', 'Portrait']);
+  entries[0]?.children?.[0]?.children?.find((entry) => entry.label === '16:9')?.select?.();
   expect([width, height]).toEqual([1024, 576]);
-  entries[1]?.children?.[1]?.children?.[1]?.select?.();
+  entries[2]?.children?.[1]?.children?.[1]?.select?.();
   expect([width, height]).toEqual([1344, 960]);
   expect(
     dimensionMenuEntries(binding, null, library, [], () => undefined).map((entry) => entry.label),
-  ).toContain('Set ratio by Height');
+  ).toEqual([
+    'Set ratio by Width',
+    'Set ratio by Height',
+    'Swap width & height',
+    'Set dimensions',
+    '',
+    'Save current dimensions',
+  ]);
 });

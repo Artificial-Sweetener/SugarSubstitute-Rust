@@ -15,6 +15,8 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Bound encoded PNG admission independently of native decoders and transports. */
 export const MAX_CANVAS_IMAGE_BYTES = 64 * 1024 * 1024;
+/** Preserve full-image admission independently of the encoded PNG byte budget. */
+export const MAX_CANVAS_IMAGE_PIXELS = 64 * 1024 * 1024;
 /** Read intrinsic PNG dimensions before an editor allocates decoded pixels. */
 export function canvasPngDimensions(bytes: Uint8Array): {
   readonly width: number;
@@ -39,7 +41,7 @@ export function canvasPngDimensions(bytes: Uint8Array): {
     height < 1 ||
     width > 30000 ||
     height > 30000 ||
-    width * height > 64 * 1024 * 1024
+    width * height > MAX_CANVAS_IMAGE_PIXELS
   )
     throw new Error('This image exceeds the canvas insertion pixel budget.');
   return Object.freeze({ width, height });

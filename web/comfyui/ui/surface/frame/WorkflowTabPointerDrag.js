@@ -14,15 +14,14 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own captured workflow-tab gestures, cancellation and one authoritative release command. */
-import { workflowTabDragPlacement } from './WorkflowTabDragGeometry.js';
+import { workflowTabDragPlacement, workflowTabOffsets } from './WorkflowTabGeometry.js';
 import { WorkflowTabDragPreview } from './WorkflowTabDragPreview.js';
-import { WORKFLOW_TAB_WIDTH } from './WorkflowTabStyles.js';
 /** Coordinate presentation with host reorder while leaving selection to official Fluent focus. */
 export class WorkflowTabPointerDrag {
     viewport;
     reorder;
     report;
-    tabWidth;
+    tabWidths;
     #preview;
     #tabs = [];
     #candidate = null;
@@ -31,13 +30,13 @@ export class WorkflowTabPointerDrag {
     #awaitingOrder = false;
     #document;
     /** Bind one delegated pointer lifetime to the scrolling workflow strip. */
-    constructor(viewport, list, reorder, report, restored, tabWidth = () => WORKFLOW_TAB_WIDTH) {
+    constructor(viewport, list, reorder, report, restored, tabWidths) {
         this.viewport = viewport;
         this.reorder = reorder;
         this.report = report;
-        this.tabWidth = tabWidth;
+        this.tabWidths = tabWidths;
         this.#document = viewport.ownerDocument;
-        this.#preview = new WorkflowTabDragPreview(list, viewport, restored, tabWidth);
+        this.#preview = new WorkflowTabDragPreview(list, viewport, restored, tabWidths);
         viewport.addEventListener('pointerdown', this.#down);
         viewport.addEventListener('scroll', this.#scrolled);
         viewport.addEventListener('click', this.#click, true);
@@ -92,6 +91,7 @@ export class WorkflowTabPointerDrag {
             viewportLeft,
             pointer: event.clientX,
             tabs: this.#tabs,
+            widths: [...this.tabWidths()],
             started: false,
             target: origin,
         };
@@ -120,14 +120,14 @@ export class WorkflowTabPointerDrag {
     };
     /** Account for scroll movement without changing the original press-relative grab position. */
     #placement(candidate) {
-        const placement = workflowTabDragPlacement(candidate.tabs.length, candidate.origin, candidate.pointer -
+        const placement = workflowTabDragPlacement(candidate.widths, candidate.origin, candidate.pointer -
             candidate.x +
             candidate.viewportLeft -
             this.viewport.getBoundingClientRect().left +
             this.viewport.scrollLeft -
             candidate.scroll +
             candidate.startLeft -
-            candidate.origin * this.tabWidth(), candidate.target, this.tabWidth());
+            (workflowTabOffsets(candidate.widths)[candidate.origin] ?? 0), candidate.target);
         candidate.target = placement.target;
         return placement;
     }

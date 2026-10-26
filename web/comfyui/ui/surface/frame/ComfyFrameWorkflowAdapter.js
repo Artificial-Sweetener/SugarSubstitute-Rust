@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Adapt Comfy's mounted workflow action surface without reimplementing workflow policies. */
 import { isRecord } from '../../types/common.js';
+import { ComfyWorkflowRename } from './ComfyWorkflowRename.js';
 import { ComfyWorkflowTabMenuAdapter } from './ComfyWorkflowTabMenuAdapter.js';
 /** Keep external component compatibility isolated from the Fluent view and session identity owner. */
 export class ComfyFrameWorkflowAdapter {
@@ -22,8 +23,9 @@ export class ComfyFrameWorkflowAdapter {
     #manager;
     #workflow;
     #menus;
+    #rename;
     /** Validate the public store and retain the existing native tab component as its action port. */
-    constructor(app, native) {
+    constructor(app, native, promptRename) {
         this.native = native;
         const manager = isRecord(app) && isRecord(app.extensionManager) ? app.extensionManager : null;
         if (!manager || !isRecord(manager.workflow))
@@ -31,6 +33,7 @@ export class ComfyFrameWorkflowAdapter {
         this.#manager = manager;
         this.#workflow = manager.workflow;
         this.#menus = new ComfyWorkflowTabMenuAdapter(native.ownerDocument);
+        this.#rename = new ComfyWorkflowRename(this.#workflow, () => this.#open(), promptRename);
     }
     /** Project only host-owned labels, order and dirty state onto existing session identities. */
     read(sessions) {
@@ -66,10 +69,22 @@ export class ComfyFrameWorkflowAdapter {
         tab.dispatchEvent(new MouseEventType('mouseup', { button: 1, bubbles: true, cancelable: true }));
     }
     /** Project the retained native tab's complete action model without changing the active workflow. */
-    menu(id, sessions, report) {
+    async menu(id, sessions, report) {
         const tab = this.#nativeTab(id, sessions);
         const session = sessions.find((candidate) => candidate.sessionId === id);
-        return this.#menus.read(tab, session?.path, report);
+        const entries = await this.#menus.read(tab, session?.path, report);
+        const workflow = this.#open().find((item) => item.path === session?.path);
+        if (!workflow || !this.#rename.available(workflow))
+            return entries;
+        return entries.map((entry) => entry.attributes?.['data-sc-native-tab-action'] === 'rename'
+            ? {
+                ...entry,
+                disabled: false,
+                select: () => {
+                    void this.#rename.rename(workflow).catch(report);
+                },
+            }
+            : entry);
     }
     /** Reorder through the host store without mutating workflow contents or session identities. */
     reorder(from, to) {

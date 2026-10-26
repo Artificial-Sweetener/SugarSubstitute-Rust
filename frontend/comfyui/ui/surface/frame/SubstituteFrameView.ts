@@ -125,7 +125,7 @@ export class SubstituteFrameView {
       viewport,
       this.#tabs.element,
       { overflow, previous, next },
-      (width) => this.#tabs.resize(width),
+      (widths) => this.#tabs.resize(widths),
       () => this.#overflowMenu.close(),
       () => this.#tabs.refreshScrollLayout(),
     );
@@ -196,8 +196,8 @@ export class SubstituteFrameView {
   /** Retain tab identities through workflow and activity updates. */
   update(tabs: readonly FrameWorkflowTab[], unread: (id: WorkflowSessionId) => boolean): void {
     this.#presented = tabs;
-    this.#stripLayout.update(tabs.length);
     this.#tabs.update(tabs, unread, this.#initialized);
+    this.#stripLayout.update(tabs);
     this.#initialized = true;
   }
 

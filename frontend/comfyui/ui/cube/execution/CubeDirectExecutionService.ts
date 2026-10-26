@@ -87,6 +87,9 @@ export class CubeDirectExecutionService {
       endpoints: proximityMatches.map(describeMatchProjection),
     });
     return await this.options.client.queue({
+      ...(preparation.preparedInputs?.length
+        ? { prepared_inputs: preparation.preparedInputs }
+        : {}),
       schema_version: 1,
       workflow,
       proximity_connections: proximityConnections,

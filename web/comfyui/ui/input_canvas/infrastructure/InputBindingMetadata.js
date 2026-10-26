@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Validate durable workflow source bindings before using native document references. */
 import { isRecord } from '../../types/common.js';
+import { readMaskEditSettings } from '../domain/MaskEditSettings.js';
 import { isCanvasInputSource } from '../../core/embedded/CanvasRuntime.js';
 import { IMAGE_BINDING_KEY, MASK_BINDING_KEY, } from '../domain/InputBinding.js';
 /** Read persisted bindings strictly so malformed entries cannot silently become another source. */
@@ -77,6 +78,7 @@ function parseBinding(value) {
         selected: value.selected,
         entries,
         files: value.files.filter((file) => typeof file === 'string'),
+        ...(value.edits === undefined ? {} : { edits: readMaskEditSettings(value.edits) }),
     };
 }
 /** Replace only the owning field's metadata and retain every sibling field and unrelated node property. */

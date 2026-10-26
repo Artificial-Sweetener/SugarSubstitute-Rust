@@ -57,11 +57,28 @@ export class WorkflowCanvasCoordinator {
                         destination.cancellation.cancel();
         };
     }
+    /** Resolve dimension editing independently of output delivery or source-raster capture. */
+    geometryHost(canvasId) {
+        const hosts = [...this.#entries.values()]
+            .flatMap(({ adapter }) => adapter.capabilities.geometry ? [adapter.capabilities.geometry] : [])
+            .filter((host) => host.canvasId && (!canvasId || host.canvasId === canvasId));
+        return hosts.length === 1 ? (hosts[0] ?? null) : null;
+    }
     /** Resolve source reads independently of output routing or mask interpretation. */
     sourceHost(canvasId) {
         const hosts = [...this.#entries.values()]
             .flatMap(({ adapter }) => adapter.capabilities.sources ? [adapter.capabilities.sources] : [])
             .filter((host) => host.canvasId && (!canvasId || host.canvasId === canvasId));
+        return hosts.length === 1 ? (hosts[0] ?? null) : null;
+    }
+    /** Resolve the existing layer primitive by peer identity without exposing a particular editor. */
+    layerHost(canvasId) {
+        const hosts = [...this.#entries.values()]
+            .flatMap(({ adapter }) => (adapter.capabilities.layers ? [adapter.capabilities.layers] : []))
+            .filter((host) => {
+            const descriptor = host.readCanvas();
+            return descriptor && (!canvasId || descriptor.id === canvasId);
+        });
         return hosts.length === 1 ? (hosts[0] ?? null) : null;
     }
     /** Resolve one unambiguous mask capability by canvas identity independently of output routing. */

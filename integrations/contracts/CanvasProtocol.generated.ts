@@ -15,11 +15,18 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Generated from canvas.schema.json by scripts/integrations/generate-canvas-contract.ts. */
 /** Describe the schema-defined CanvasCapabilities wire value. */
-export type CanvasCapabilities = {
-  readonly displayOutput: boolean;
-  readonly insertImageLayer: boolean;
-  readonly positionImageLayer: boolean;
-};
+export type CanvasCapabilities =
+  | {
+      readonly displayOutput: boolean;
+      readonly insertImageLayer: boolean;
+      readonly positionImageLayer: boolean;
+    }
+  | {
+      readonly displayOutput: boolean;
+      readonly insertImageLayer: boolean;
+      readonly positionImageLayer: boolean;
+      readonly geometry: boolean;
+    };
 /** Describe the schema-defined CanvasDescriptor wire value. */
 export type CanvasDescriptor = {
   readonly id: string;
@@ -232,6 +239,63 @@ export type CanvasInputSource =
     };
 /** Describe the schema-defined CanvasImagePosition wire value. */
 export type CanvasImagePosition = { readonly left: number; readonly top: number };
+/** Describe the schema-defined CanvasDimensions wire value. */
+export type CanvasDimensions = { readonly width: number; readonly height: number };
+/** Describe the schema-defined CanvasDimensionFieldValues wire value. */
+export type CanvasDimensionFieldValues = { readonly width: number; readonly height: number };
+/** Describe the schema-defined CanvasSelectionBounds wire value. */
+export type CanvasSelectionBounds = {
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly height: number;
+};
+/** Describe the schema-defined CanvasDimensionLimits wire value. */
+export type CanvasDimensionLimits = {
+  readonly minimum: number;
+  readonly maximum: number;
+  readonly multiple: number;
+};
+/** Describe the schema-defined CanvasScaleOutput wire value. */
+export type CanvasScaleOutput = { readonly id: string; readonly label: string };
+/** Describe the schema-defined CanvasGeometryCommand wire value. */
+export type CanvasGeometryCommand =
+  | { readonly type: 'context' }
+  | { readonly type: 'resize'; readonly document: CanvasDocument; readonly size: CanvasDimensions };
+/** Describe the schema-defined CanvasGeometryResult wire value. */
+export type CanvasGeometryResult =
+  | {
+      readonly kind: 'context';
+      readonly supported: boolean;
+      readonly resize: boolean;
+      readonly selectionSupported: boolean;
+      readonly document: CanvasDocument | null;
+      readonly selection: CanvasSelectionBounds | null;
+    }
+  | { readonly kind: 'resized'; readonly document: CanvasDocument }
+  | {
+      readonly kind: 'failure';
+      readonly status: 'unavailable' | 'unsupported' | 'stale' | 'cancelled' | 'error';
+      readonly message: string;
+    };
+/** Describe the schema-defined CanvasGeometryRequest wire value. */
+export type CanvasGeometryRequest = {
+  readonly protocol: 'sugarcubes.canvas';
+  readonly version: 2;
+  readonly session: string;
+  readonly requestId: number;
+  readonly type: 'geometry.request';
+  readonly command: CanvasGeometryCommand;
+};
+/** Describe the schema-defined CanvasGeometryReply wire value. */
+export type CanvasGeometryReply = {
+  readonly protocol: 'sugarcubes.canvas';
+  readonly version: 2;
+  readonly session: string;
+  readonly requestId: number;
+  readonly type: 'geometry.reply';
+  readonly result: CanvasGeometryResult;
+};
 /** Describe every version-two canvas message. */
 export type CanvasMessage =
   | CanvasReadRequest
@@ -242,4 +306,6 @@ export type CanvasMessage =
   | CanvasErrorReply
   | CanvasSourceRequest
   | CanvasSourceReply
-  | CanvasSourceChanged;
+  | CanvasSourceChanged
+  | CanvasGeometryRequest
+  | CanvasGeometryReply;

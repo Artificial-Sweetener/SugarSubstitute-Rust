@@ -27,6 +27,7 @@ from .runtime.cube_output_preview import build_cube_output_preview
 from .output_saving.host_binding import runtime_images
 from .output_saving.infrastructure.managed_node import ManagedImageOutput
 from .output_saving.infrastructure.policy_error_node import OutputSavingPolicyError
+from .execution.spatial_measurement_node import SpatialProbeMeasurementNode
 
 
 class AnyType(str):
@@ -229,6 +230,7 @@ class CubeOutput:
 
 
 NODE_CLASS_MAPPINGS = {
+    "SugarCubes.SpatialProbeMeasurement": SpatialProbeMeasurementNode,
     "SugarCubes.CubeInput": CubeInput,
     "SugarCubes.CubeOutput": CubeOutput,
     "SugarCubes.ManagedImageOutput": ManagedImageOutput,

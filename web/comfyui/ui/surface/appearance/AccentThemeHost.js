@@ -16,7 +16,7 @@
 /** Own accent persistence, external CSS overrides, and palette-only invalidation. */
 import { sugarCubesSettingsSection } from '../../settings/SugarCubesSettingsSections.js';
 import { isRecord } from '../../types/common.js';
-import { readComfyDarkTheme } from './ComfyColorScheme.js';
+import { readOwnedDarkTheme } from './OwnedColorScheme.js';
 import { DEFAULT_ACCENT_COLOR, normalizeAccentColor } from './AccentPalette.js';
 import { createAccentColorSetting } from './AccentColorSetting.js';
 import { accentThemeCss } from './AccentThemeStyles.js';
@@ -108,7 +108,10 @@ export class AccentThemeHost {
             this.#styleTexts.set(style, style.textContent);
         this.#document.head.addEventListener('load', this.#onStylesheetLoad, true);
         for (const root of [this.#document.documentElement, this.#document.body])
-            this.#observer.observe(root, { attributes: true, attributeFilter: ['class', 'style'] });
+            this.#observer.observe(root, {
+                attributes: true,
+                attributeFilter: ['class', 'style', 'data-sc-visual-style', 'data-sc-photopro-palette'],
+            });
         this.#observer.observe(this.#document.head, {
             childList: true,
             subtree: true,
@@ -127,7 +130,7 @@ export class AccentThemeHost {
         const color = normalizeAccentColor(this.embedded?.read()?.accentColor) ??
             normalizeAccentColor(style?.getPropertyValue('--sugarcubes-accent')) ??
             this.#configured;
-        const dark = readComfyDarkTheme(this.#document);
+        const dark = readOwnedDarkTheme(this.#document);
         const signature = `${color}:${dark}`;
         if (signature === this.#signature)
             return;

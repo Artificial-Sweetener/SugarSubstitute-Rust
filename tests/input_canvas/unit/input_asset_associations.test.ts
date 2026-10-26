@@ -16,6 +16,10 @@
 /** Prove reusable image/mask relationships independently of rendering, source choices and editor identity. */
 import { InputAssetAssociations } from '../../../frontend/comfyui/ui/input_canvas/application/InputAssetAssociations.js';
 import type { InputAssetAssociationGraph } from '../../../frontend/comfyui/ui/input_canvas/domain/InputAssetAssociation.js';
+import {
+  exclusiveInputImage,
+  resolveInputAssetAssociations,
+} from '../../../frontend/comfyui/ui/input_canvas/domain/InputAssetAssociation.js';
 
 /** Describe exact typed consumer connections supplied by the native adapter. */
 function graph(
@@ -40,6 +44,39 @@ function graph(
     ],
   };
 }
+
+test('editing requires exclusive image ownership even when each mask individually has a valid association', () => {
+  const shared = graph();
+  expect(
+    exclusiveInputImage(resolveInputAssetAssociations([shared]), 'mask', new Set()),
+  ).toBeNull();
+  const single = {
+    ...shared,
+    inputs: shared.inputs.filter((input) => input.input !== 'other-mask'),
+  };
+  expect(exclusiveInputImage(resolveInputAssetAssociations([single]), 'mask', new Set())).toBe(
+    'image',
+  );
+  expect(
+    exclusiveInputImage(resolveInputAssetAssociations([single]), 'second-mask', new Set()),
+  ).toBeNull();
+});
+
+test('a competing ambiguous mask also prevents editing a potentially shared image', () => {
+  const shared = graph();
+  const associations = resolveInputAssetAssociations([
+    shared,
+    {
+      endpoints: [],
+      inputs: [
+        { consumer: 'other', input: 'image', kind: 'image', endpoints: ['other'] },
+        { consumer: 'other', input: 'mask', kind: 'mask', endpoints: ['second-mask'] },
+      ],
+    },
+  ]);
+  expect(associations.get('second-mask')?.kind).toBe('ambiguous');
+  expect(exclusiveInputImage(associations, 'mask', new Set())).toBeNull();
+});
 
 test('exposes shared-consumer associations in both directions for independent application consumers', () => {
   const owner = new InputAssetAssociations();
@@ -95,7 +132,7 @@ test('coalesces shared use of one image and rejects masks that belong to distinc
   expect(owner.read('mask')).toMatchObject({ kind: 'ambiguous', candidates: ['image', 'other'] });
 });
 
-test('notifies only changed mask relationships and removes stale workflow identities', () => {
+test('notifies changed relationships and their shared-image editing eligibility without unrelated discovery', () => {
   const owner = new InputAssetAssociations(),
     events: string[][] = [];
   const stop = owner.subscribe((changed) => events.push([...changed]));
@@ -105,8 +142,9 @@ test('notifies only changed mask relationships and removes stale workflow identi
   expect(events).toHaveLength(1);
   expect(owner.read('mask')).toBe(association);
   owner.replace([{ ...graph(), inputs: graph().inputs.filter((input) => input.input !== 'mask') }]);
-  expect(events.at(-1)).toEqual(['mask']);
+  expect(events.at(-1)).toEqual(['mask', 'second-mask']);
   expect(owner.read('second-mask').kind).toBe('associated');
+  expect(owner.exclusiveImage('second-mask')).toBe('image');
   owner.replace([]);
   expect(owner.masksFor('image')).toEqual([]);
   stop();

@@ -68,7 +68,6 @@ import { CivitaiCredentialClient } from './ui/model_library/CivitaiCredentialCli
 import { ModelRootClient } from './ui/model_library/ModelRootClient.js';
 import { ModelLibrarySettings } from './ui/model_library/ModelLibrarySettings.js';
 export { buildShiftedPlacementPayload };
-const EXTENSION_NAME = 'SugarCubes.UI';
 let invalidateCubeCatalogs = async () => undefined;
 /** Provide the authoritative UI service graph for this host extension instance. */
 export const sugarCubesUI = getSugarCubesUI({
@@ -139,7 +138,7 @@ const cubeCatalogInvalidation = new CubeCatalogInvalidationCoordinator({
 });
 invalidateCubeCatalogs = () => cubeCatalogInvalidation.invalidate();
 const nativeBoundaryResolver = new NativeSubgraphBoundaryResolver(logger);
-const promptQueueBridge = createCubeHostExecution({
+const { queue: promptQueueBridge, prepareAnalysisPrompt } = createCubeHostExecution({
     api,
     observer: workflowExecution.submissionObserver,
     logger,
@@ -366,7 +365,7 @@ const modelPickers = new ModelPickerHost({
         cubes: () => cubeRuntimeLifecycle.current()?.nodes.list() ?? [],
     },
 });
-const editorActions = createEditorActionsRuntime(adapter, modelCatalog, logger, hostFeedback, modelPickers);
+const editorActions = createEditorActionsRuntime(adapter, modelCatalog, logger, hostFeedback, modelPickers, workflowExecution, prepareAnalysisPrompt);
 /** Compose shared model-root settings without duplicating persistence or dialog policy. */
 const modelLibrarySettings = new ModelLibrarySettings({
     app: appRef,
@@ -381,7 +380,7 @@ const modelLibrarySettings = new ModelLibrarySettings({
 });
 /** Define the ComfyUI extension lifecycle owned by SugarCubes. */
 export const sugarCubesExtension = {
-    name: EXTENSION_NAME,
+    name: 'SugarCubes.UI',
     commands: [
         {
             id: 'SugarCubes.CubeStackCart',

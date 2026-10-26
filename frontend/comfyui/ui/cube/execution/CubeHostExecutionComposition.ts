@@ -39,9 +39,13 @@ export interface CubeHostExecutionOptions {
   preflight(): void;
   prepareCanvasInputs?(payload: unknown): Promise<WorkflowPromptPreparation>;
 }
+export interface CubeHostExecution {
+  readonly queue: ComfyPromptQueueBridge;
+  prepareAnalysisPrompt(payload: unknown): Promise<unknown>;
+}
 
 /** Preserve existing execution sequencing while adding a common relation boundary for both queue paths. */
-export function createCubeHostExecution(options: CubeHostExecutionOptions): ComfyPromptQueueBridge {
+export function createCubeHostExecution(options: CubeHostExecutionOptions): CubeHostExecution {
   const outputAdapter = new CubeOutputPromptAdapter({
     getCubes: options.getCubes,
     boundaryResolver: options.boundaryResolver,
@@ -77,5 +81,11 @@ export function createCubeHostExecution(options: CubeHostExecutionOptions): Comf
       ),
     shouldExecuteDirect: (payload) => direct.owns(payload),
   });
-  return queue;
+  return {
+    queue,
+    prepareAnalysisPrompt: async (payload) => {
+      options.preflight();
+      return await pipeline.transform(options.prepareRelations(payload));
+    },
+  };
 }

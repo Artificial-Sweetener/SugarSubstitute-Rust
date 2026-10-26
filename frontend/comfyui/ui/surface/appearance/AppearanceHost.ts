@@ -28,7 +28,7 @@ import { NativeFieldAppearance } from './NativeFieldAppearance.js';
 import { NativeInlineComboSearch } from './NativeInlineComboSearch.js';
 import { acquireComboToggle } from './ComboToggleController.js';
 import type { NativeSeedReuseResolver } from './ComfyNativeSeedControl.js';
-import { readComfyDarkTheme } from './ComfyColorScheme.js';
+import { readOwnedDarkTheme } from './OwnedColorScheme.js';
 import { OverlayScrollbarHost } from './OverlayScrollbarHost.js';
 import { isBorrowedNativeCardPresentation } from '../NativeCardPresentationOwner.js';
 import { NATIVE_PRESENTATION_READY_EVENT } from '../NativePresentationReady.js';
@@ -165,7 +165,10 @@ export class AppearanceHost {
       this.#options.document.getElementById('vue-app'),
     ]) {
       if (element)
-        this.#palette.observe(element, { attributes: true, attributeFilter: ['class', 'style'] });
+        this.#palette.observe(element, {
+          attributes: true,
+          attributeFilter: ['class', 'style', 'data-sc-visual-style', 'data-sc-photopro-palette'],
+        });
     }
     this.#options.document.addEventListener('pointerdown', this.#rememberPopupOrigin, true);
     this.#options.document.addEventListener('keydown', this.#rememberPopupOrigin, true);
@@ -257,7 +260,7 @@ export class AppearanceHost {
       !this.#disposed &&
       resolveComfyRendererMode(this.#options.app, null, this.#options.document) === 'vue';
     this.#active = false;
-    if (publish) this.state.update('comfy', readComfyDarkTheme(this.#options.document));
+    if (publish) this.state.update('comfy', readOwnedDarkTheme(this.#options.document));
     this.#style.remove();
     this.#scrollbars.clear();
     this.#nodes.clear();
@@ -285,9 +288,9 @@ export class AppearanceHost {
     this.#frame = null;
   }
 
-  /** Follow Comfy's theme selector without replacing its palette owner. */
+  /** Publish accepted surface brightness without remounting themed controls. */
   #refreshPalette(): void {
-    const dark = readComfyDarkTheme(this.#options.document);
+    const dark = readOwnedDarkTheme(this.#options.document);
     this.state.update(this.#active && this.#nativeCards ? this.#selectedStyle : 'comfy', dark);
     if (!this.#active) return;
     if (dark === this.#dark) return;
@@ -348,12 +351,13 @@ export class AppearanceHost {
         if (themed) this.#themes.retain(element);
         if (element.matches('.lg-node, .sugarcubes-native-widget')) {
           const standalone = element.matches('.sugarcubes-native-widget');
-          if (!standalone && !this.#nativeCards) continue;
+          if (!standalone && !this.#nativeCards && element.dataset.cubeFacePresentation !== 'true')
+            continue;
           (standalone ? this.#widgets : this.#nodes).present(element, themed);
           if (!standalone)
             for (const widget of element.querySelectorAll<HTMLElement>('.sugarcubes-native-widget'))
               this.#dirty.add(widget);
-          if (!standalone) this.#graphGeometry.request(element);
+          if (!standalone && this.#nativeCards) this.#graphGeometry.request(element);
         } else if (themed) {
           if (!element.hasAttribute('data-sc-style-surface'))
             element.setAttribute('data-sc-style-surface', '');

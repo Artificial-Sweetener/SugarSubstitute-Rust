@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Follow positively registered masonry cards without discovering graphs from DOM mutations. */
 import { reconcileNativeNodeBodyAccessories } from '../../surface/NativeNodeBodyAccessories.js';
-import { NativeNodeChoiceFields } from '../../surface/NativeNodeChoiceFields.js';
+import { NativeNodeFields } from '../../surface/NativeNodeFields.js';
 import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
 import { readNativeNodeCard } from '../../surface/NativeNodeCardBoundary.js';
 import { MasonryInputEditor } from '../presentation/MasonryInputEditor.js';
@@ -141,7 +141,7 @@ export class MasonryInputHost {
         }
         let scope = scopes.get(field);
         if (!scope) {
-            scope = new NativeNodeChoiceFields(node, 'canvas-input:' + field, this.document, beforeField);
+            scope = new NativeNodeFields(node, 'canvas-input:' + field, this.document, beforeField);
             scopes.set(field, scope);
         }
         return scope;

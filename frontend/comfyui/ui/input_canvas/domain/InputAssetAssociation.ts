@@ -20,6 +20,8 @@ import type { InputKind } from './InputLoader.js';
 export interface InputAssetEndpoint {
   readonly key: string;
   readonly kind: InputKind;
+  /** Identify image fields whose file also supplies a connected native MASK output. */
+  readonly maskOutput?: boolean;
 }
 /** Preserve every connected spatial input, including providers with no recognized loader field. */
 export interface InputAssetConsumerInput {
@@ -116,4 +118,24 @@ export function resolveInputAssetAssociations(
       return [mask, Object.freeze(association)];
     }),
   );
+}
+
+/** Admit editing only when no other mask can target the same image input. */
+export function exclusiveInputImage(
+  associations: ReadonlyMap<string, InputAssetAssociation>,
+  mask: string,
+  maskSources: ReadonlySet<string>,
+): string | null {
+  const pair = associations.get(mask);
+  if (pair?.kind !== 'associated' || maskSources.has(pair.image)) return null;
+  for (const other of associations.values()) {
+    if (other.mask === mask) continue;
+    if (
+      other.kind === 'associated'
+        ? other.image === pair.image
+        : other.candidates.includes(pair.image)
+    )
+      return null;
+  }
+  return pair.image;
 }

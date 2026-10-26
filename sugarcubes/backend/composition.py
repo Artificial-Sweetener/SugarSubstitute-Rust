@@ -37,6 +37,7 @@ from ..workflow_analysis import CubeGraphAnalysisService
 from ..workflow_mutation import CubeGraphMutationService
 from ..exporter.definition_snapshot import resolve_definition_via_nodes
 from ..execution.ports import ComfyExecutionPort
+from ..execution.prepared_input_projection import PreparedInputProjector
 from ..importer import load_cube as load_cube_artifact
 from ..importer import load_materialized_cube_document
 from ..importer import prepare_import as prepare_cube_import
@@ -259,6 +260,7 @@ def build_backend_services(
             comfy=execution_port,
             live_defaults=LiveNodeDefaultReconciler(resolve_definition_via_nodes),
             workflow_normalizer=workflow_normalizer,
+            prepared_inputs=PreparedInputProjector(resolve_definition_via_nodes),
         ),
         workflow_analysis=workflow_analysis,
         workflow_mutation=CubeGraphMutationService(workflow_analysis),

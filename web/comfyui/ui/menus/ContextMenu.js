@@ -15,6 +15,7 @@ var _a;
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own every SugarCubes menu's themed rows, nested interaction and floating presentation. */
+import { createContextMenuField } from './ContextMenuField.js';
 import { FloatingSurface } from './FloatingSurface.js';
 import { createMenuList, createMenuItem, setMenuItemChecked, menuItemSlot, } from './MenuControlRuntime.js';
 import { subscribeVisualStyle } from '../surface/appearance/VisualStyleBoundary.js';
@@ -48,9 +49,13 @@ export class ContextMenu {
         this.#openLevel(options.entries, options.anchor, null, 0);
         this.#document.addEventListener('keydown', this.#key, true);
         if (options.focusChecked)
-            this.#levels[0]?.rows.find((row) => row.getAttribute('aria-checked') === 'true')?.focus();
+            this.#levels[0]?.rows
+                .find((row) => row.getAttribute('aria-checked') === 'true' &&
+                row.getAttribute('aria-disabled') !== 'true')
+                ?.focus();
         if (!this.#levels[0]?.rows.some((row) => row === this.#document.activeElement))
-            (this.#levels[0]?.rows[0] ?? this.#levels[0]?.surface.element)?.focus();
+            (this.#levels[0]?.rows.find((row) => row.getAttribute('aria-disabled') !== 'true' &&
+                !(row instanceof HTMLInputElement && row.disabled)) ?? this.#levels[0]?.surface.element)?.focus();
     }
     /** Report the complete tree's lifetime rather than one submenu's state. */
     isOpen() {
@@ -75,7 +80,7 @@ export class ContextMenu {
         options?.closed?.();
     }
     /** Render official controls with literal text and feature-owned icon slots. */
-    #openLevel(entries, anchor, trigger, depth) {
+    #openLevel(entries, anchor, trigger, depth, opened) {
         this.#trim(depth);
         const menu = createMenuList(this.#document);
         menu.className = 'sc-context-menu';
@@ -91,16 +96,28 @@ export class ContextMenu {
         if (depth === 0)
             for (const [name, value] of Object.entries(this.#options?.attributes ?? {}))
                 menu.setAttribute(name, value);
-        const rows = this.#renderRows(menu, entries, depth);
+        const updates = [];
+        const refresh = () => {
+            for (const update of updates)
+                update();
+        };
+        const rows = this.#renderRows(menu, entries, depth, updates, refresh);
         const surface = new FloatingSurface(menu);
-        this.#levels.push({ surface, rows, trigger });
+        const level = { surface, rows, trigger, refresh, updates };
+        this.#levels.push(level);
         surface.open({
             anchor,
+            reserveRight: depth === 0 && this.#options?.preferRightSubmenus === true,
             dismiss: this.close,
             containsTarget: (target) => this.#levels.some((level) => level.surface.element.contains(target)) ||
                 (this.#options?.anchor.kind === 'below' &&
                     (this.#options.trigger?.contains(target) ?? false)),
         });
+        if (opened)
+            level.release = opened(() => {
+                for (const current of this.#levels)
+                    current.refresh();
+            }, this.close);
     }
     /** Update checked choices without replacing the floating surface or losing its scroll position. */
     updateEntries(entries) {
@@ -111,14 +128,31 @@ export class ContextMenu {
         const index = active instanceof HTMLElement ? level.rows.indexOf(active) : -1;
         this.#trim(1);
         level.surface.element.replaceChildren();
-        level.rows.splice(0, level.rows.length, ...this.#renderRows(level.surface.element, entries, 0));
+        level.updates.length = 0;
+        level.rows.splice(0, level.rows.length, ...this.#renderRows(level.surface.element, entries, 0, level.updates, level.refresh));
         (level.rows[Math.max(0, index)] ?? level.surface.element).focus();
         level.surface.reposition();
     }
     /** Build rows for one level from the current feature-owned choices. */
-    #renderRows(menu, entries, depth) {
+    #renderRows(menu, entries, depth, updates, refresh) {
         const rows = [];
         for (const entry of entries) {
+            if (entry.input) {
+                const field = createContextMenuField(this.#document, {
+                    ...entry,
+                    input: entry.input,
+                    get label() {
+                        return entry.label;
+                    },
+                    get disabled() {
+                        return entry.disabled ?? false;
+                    },
+                }, refresh);
+                updates.push(field.refresh);
+                rows.push(field.input);
+                menu.append(field.root);
+                continue;
+            }
             if (entry.section) {
                 const heading = this.#document.createElement('div');
                 heading.dataset.scMenuSection = '';
@@ -163,7 +197,8 @@ export class ContextMenu {
             label.textContent = entry.label;
             label.style.cssText = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
             row.append(label);
-            if (entry.children?.length) {
+            const children = () => entry.children ?? [];
+            if (entry.children) {
                 row.setAttribute('aria-haspopup', 'menu');
                 row.setAttribute('aria-expanded', 'false');
                 const arrow = this.#document.createElement('span');
@@ -177,13 +212,20 @@ export class ContextMenu {
             const activate = () => {
                 if (entry.disabled)
                     return;
-                if (entry.children?.length) {
-                    this.#openLevel(entry.children, { kind: 'submenu', bounds: row.getBoundingClientRect() }, row, depth + 1);
+                if (entry.children) {
+                    if (this.#levels[depth + 1]?.trigger !== row)
+                        this.#openLevel(children(), { kind: entry.submenuPlacement ?? 'submenu', bounds: row.getBoundingClientRect() }, row, depth + 1, entry.opened);
                     row.setAttribute('aria-expanded', 'true');
-                    this.#levels[depth + 1]?.rows[0]?.focus();
+                    (this.#levels[depth + 1]?.rows.find((item) => item.getAttribute('aria-disabled') !== 'true' &&
+                        !(item instanceof HTMLInputElement && item.disabled)) ?? this.#levels[depth + 1]?.surface.element)?.focus();
                 }
                 else {
-                    if (!entry.keepOpen)
+                    if (entry.keepOpen === 'parent' && depth > 0) {
+                        const parent = this.#levels[depth]?.trigger;
+                        this.#trim(depth);
+                        parent?.focus();
+                    }
+                    else if (!entry.keepOpen || entry.keepOpen === 'parent')
                         this.#close(this.#options?.returnFocusOnSelect !== false);
                     entry.select?.();
                 }
@@ -196,15 +238,25 @@ export class ContextMenu {
             row.addEventListener('pointerenter', () => {
                 if (entry.disabled)
                     return;
-                if (entry.children?.length && this.#levels[depth + 1]?.trigger !== row) {
-                    this.#openLevel(entry.children, { kind: 'submenu', bounds: row.getBoundingClientRect() }, row, depth + 1);
+                if (entry.children && this.#levels[depth + 1]?.trigger !== row) {
+                    this.#openLevel(children(), { kind: entry.submenuPlacement ?? 'submenu', bounds: row.getBoundingClientRect() }, row, depth + 1, entry.opened);
                     row.setAttribute('aria-expanded', 'true');
                 }
-                else if (!entry.children?.length)
+                else if (!entry.children)
                     this.#trim(depth + 1);
             });
-            if (!entry.disabled)
-                rows.push(row);
+            const update = () => {
+                label.textContent = entry.label;
+                row.setAttribute('aria-disabled', String(entry.disabled ?? false));
+                if (entry.disabled)
+                    row.setAttribute('disabled', '');
+                else
+                    row.removeAttribute('disabled');
+                if (entry.checked !== undefined)
+                    setMenuItemChecked(row, entry.checked);
+            };
+            updates.push(update);
+            rows.push(row);
             menu.append(row);
         }
         return rows;
@@ -212,6 +264,7 @@ export class ContextMenu {
     /** Remove descendant panels without disturbing the parent menu's focus or actions. */
     #trim(depth) {
         for (const level of this.#levels.splice(depth).reverse()) {
+            level.release?.();
             level.surface.close();
             level.trigger?.setAttribute('aria-expanded', 'false');
         }
@@ -231,6 +284,9 @@ export class ContextMenu {
             ' ',
         ].includes(event.key))
             return;
+        if (this.#document.activeElement instanceof HTMLInputElement &&
+            !['Escape', 'Tab'].includes(event.key))
+            return;
         event.preventDefault();
         event.stopImmediatePropagation();
         if (event.key === 'Tab') {
@@ -238,7 +294,8 @@ export class ContextMenu {
             return;
         }
         const active = this.#document.activeElement;
-        const depth = this.#levels.findIndex((level) => level.rows.includes(active instanceof HTMLElement ? active : this.#document.body));
+        const depth = this.#levels.findIndex((level) => level.surface.element === active ||
+            level.rows.includes(active instanceof HTMLElement ? active : this.#document.body));
         const index = Math.max(0, depth);
         const level = this.#levels[index];
         if (!level)
@@ -253,23 +310,25 @@ export class ContextMenu {
                 this.close();
             return;
         }
-        const current = level.rows.indexOf(active instanceof HTMLElement ? active : this.#document.body);
+        const rows = level.rows.filter((row) => row.getAttribute('aria-disabled') !== 'true' &&
+            !(row instanceof HTMLInputElement && row.disabled));
+        const current = rows.indexOf(active instanceof HTMLElement ? active : this.#document.body);
         if (event.key === 'ArrowRight') {
-            if (level.rows[current]?.getAttribute('aria-haspopup') === 'menu')
-                level.rows[current]?.click();
+            if (rows[current]?.getAttribute('aria-haspopup') === 'menu')
+                rows[current]?.click();
             return;
         }
         if (event.key === 'Enter' || event.key === ' ') {
-            level.rows[current]?.click();
+            rows[current]?.click();
             return;
         }
         this.#trim(index + 1);
         const next = event.key === 'Home'
             ? 0
             : event.key === 'End'
-                ? level.rows.length - 1
-                : (current + (event.key === 'ArrowUp' ? -1 : 1) + level.rows.length) % level.rows.length;
-        level.rows[next]?.focus();
+                ? rows.length - 1
+                : (current + (event.key === 'ArrowUp' ? -1 : 1) + rows.length) % rows.length;
+        rows[next]?.focus();
     };
 }
 _a = ContextMenu;

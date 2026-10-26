@@ -18,8 +18,10 @@ import type { InputBindingStatePort } from './InputBindingStatePort.js';
 import { InputPreviewInterpretation } from './InputPreviewInterpretation.js';
 import { inputLabel } from '../domain/InputLoader.js';
 import type { InputPreviewPort } from './InputEditorPorts.js';
+import type { MaskEditingPort } from './MaskEditingPort.js';
 import type { InputLoader } from '../domain/InputLoader.js';
 import { moveInputEntry, type InputBinding, type InputEntry } from '../domain/InputBinding.js';
+import { readMaskEditSettings, type MaskEditSettings } from '../domain/MaskEditSettings.js';
 import { chooseCanvasInput, defaultCanvasInput } from '../domain/CanvasInputSource.js';
 import type { CanvasSourceHost } from '../../../../../integrations/contracts/CanvasSources.js';
 import type {
@@ -49,6 +51,8 @@ export class InputBindingController {
     files: InputPreviewPort,
     private readonly nextId: () => string,
     private readonly report: (error: unknown) => void,
+    readonly maskEditing: MaskEditingPort,
+    private readonly editableCanvas: (canvasId: string) => boolean,
   ) {
     this.preview = new InputPreviewInterpretation(loader, files, () => port.settings());
     this.#stopWidgets = port.subscribe((intent) => {
@@ -71,6 +75,12 @@ export class InputBindingController {
   /** Resolve the attached canvas identity for reusable controls. */
   get canvasId(): string {
     return this.#canvas?.canvasId ?? '';
+  }
+
+  /** Require actual positioned layer support rather than inferring editing from selection reads. */
+  get canEditMask(): boolean {
+    const id = this.#canvas?.canvasId ?? this.host()?.canvasId;
+    return Boolean(id && this.editableCanvas(id));
   }
   /** Supply layer choices without teaching presentation about native APIs. */
   get context(): CanvasSourceContext | null {
@@ -192,6 +202,14 @@ export class InputBindingController {
   move(delta: number): void {
     const state = this.state;
     if (state.selected) this.#save(moveInputEntry(state, state.selected, delta));
+  }
+  /** Persist preparation intent through the same workflow history as the source it transforms. */
+  changeMaskEdits(settings: MaskEditSettings): void {
+    if (this.loader.kind !== 'mask' || this.loader.ordered || this.state.entries.length !== 1)
+      throw new Error('Mask editing requires one scalar mask source.');
+    const edits = readMaskEditSettings(settings);
+    if (JSON.stringify(this.state.edits) === JSON.stringify(edits)) return;
+    this.#save({ ...this.state, edits });
   }
   /** Adopt explicit graph file edits while preserving SimpleSyrup append intent. */
   adoptFiles(intent: 'append' | 'replace' | null = null): void {

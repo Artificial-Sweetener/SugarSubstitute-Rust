@@ -94,7 +94,7 @@ test('routes finished node output directly to its canvas adapter before the job 
   });
   await delivery.idle();
   expect(inserted).toHaveLength(1);
-  expect(inserted[0]).toMatchObject({ document: context.document, layerName: 'generation.png' });
+  expect(inserted[0]).toMatchObject({ document: context.document, layerName: 'generation' });
   expect(f.api.history.requests).toHaveLength(0);
   const result = web.read(session.sessionId);
   expect(

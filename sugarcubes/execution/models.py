@@ -22,6 +22,7 @@ from enum import Enum
 from typing import Literal, Mapping, TypeAlias
 
 from ..workflow import CubeInstance
+from .prepared_input_values import PreparedInputAsset
 
 JsonValue: TypeAlias = (
     None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
@@ -412,3 +413,4 @@ class CubeExecutionRequest:
         default_factory=CubeOptimizationOptions
     )
     extra_data: Mapping[str, JsonValue] = field(default_factory=dict)
+    prepared_inputs: tuple[PreparedInputAsset, ...] = ()

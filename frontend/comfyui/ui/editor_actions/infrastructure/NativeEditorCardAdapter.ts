@@ -23,8 +23,10 @@ import { copySavablePresetValue } from '../domain/PresetCodec.js';
 import type { NativeAdvancedInputControl } from '../../surface/NativeAdvancedInputControl.js';
 import { readNativeEditorModelInputs } from './NativeEditorModelInputs.js';
 import type { NativeEditorModelInput } from './NativeEditorModelInputs.js';
+import { nativeDimensionLimits, nativeDimensionTargets } from './NativeDimensionFieldMetadata.js';
+import type { DimensionField } from '../application/CanvasDimensionFields.js';
 
-export interface NativeEditorField extends EditorField {
+export interface NativeEditorField extends EditorField, Pick<DimensionField, 'limits' | 'targets'> {
   readonly element: HTMLElement;
 }
 export interface NativeEditorCard {
@@ -48,7 +50,10 @@ const components = new Map<string, EditorField['kind']>([
 ]);
 
 /** Resolve a positively identified node component and only its own standard widget descendants. */
-export function readNativeEditorCard(root: HTMLElement): NativeEditorCard | null {
+export function readNativeEditorCard(
+  root: HTMLElement,
+  graph: () => unknown = () => null,
+): NativeEditorCard | null {
   const mount = projectedEditorCardMount(root);
   if (!mount) return null;
   const record: UnknownRecord = isRecord(mount) ? mount : {};
@@ -59,13 +64,16 @@ export function readNativeEditorCard(root: HTMLElement): NativeEditorCard | null
   const props = isRecord(instance.props) ? instance.props : {};
   const data = isRecord(props.nodeData) ? props.nodeData : {};
   if (typeof data.type !== 'string') return null;
+  const metadata = [data.widgets, data.sugarcubesEditorWidgets].flatMap((value: unknown) =>
+    Array.isArray(value) ? value.filter(isRecord) : [],
+  );
   const fields: NativeEditorField[] = [];
   const widgetContainers = findVueComponents(vnode, 'NodeWidgets')
     .map(elementOf)
     .filter((element): element is HTMLElement => element?.closest('.lg-node') === root);
   for (const [component, kind] of components) {
     for (const child of findVueComponents(vnode, component)) {
-      const field = readField(child, root, kind, widgetContainers);
+      const field = readField(child, root, kind, widgetContainers, graph, metadata);
       if (field && !fields.some((existing) => existing.name === field.name)) fields.push(field);
     }
   }
@@ -74,7 +82,7 @@ export function readNativeEditorCard(root: HTMLElement): NativeEditorCard | null
   if (Array.isArray(declared))
     for (const widget of declared) {
       if (!isRecord(widget) || fields.some((field) => field.name === widget.name)) continue;
-      const field = readUnrenderedField(widget, root, hasOwnedWidgets);
+      const field = readUnrenderedField(widget, root, hasOwnedWidgets, graph);
       if (field) fields.push(field);
     }
   // Preserve authored order regardless of Vue's traversal direction or nested wrapper components.
@@ -142,6 +150,8 @@ function readField(
   root: HTMLElement,
   kind: EditorField['kind'],
   containers: readonly HTMLElement[],
+  graph: () => unknown,
+  metadata: readonly UnknownRecord[],
 ): NativeEditorField | null {
   const instance = isRecord(vnode.component) ? vnode.component : {};
   const props = isRecord(instance.props) ? instance.props : {};
@@ -157,6 +167,8 @@ function readField(
   )
     return null;
   const options = (): UnknownRecord => (isRecord(widget.options) ? widget.options : {});
+  // Comfy normalizes component widget props and removes extension metadata from that copy.
+  const owner = metadata.find((candidate) => candidate.name === widget.name) ?? widget;
   const disabled = (): boolean => {
     const constraints = options();
     const input = element.querySelector<HTMLInputElement | HTMLTextAreaElement>('input,textarea');
@@ -173,6 +185,8 @@ function readField(
   return {
     name: widget.name,
     kind,
+    limits: () => nativeDimensionLimits(owner),
+    targets: () => nativeDimensionTargets(owner, graph()),
     element: fieldRow(element, containers) ?? element,
     read,
     disabled,
@@ -193,6 +207,7 @@ function readUnrenderedField(
   widget: UnknownRecord,
   root: HTMLElement,
   owned: boolean,
+  graph: () => unknown,
 ): NativeEditorField | null {
   if (
     typeof widget.name !== 'string' ||
@@ -223,6 +238,8 @@ function readUnrenderedField(
   return {
     name: widget.name,
     kind,
+    limits: () => nativeDimensionLimits(widget),
+    targets: () => nativeDimensionTargets(widget, graph()),
     element: root,
     read: () => widget.value,
     disabled,

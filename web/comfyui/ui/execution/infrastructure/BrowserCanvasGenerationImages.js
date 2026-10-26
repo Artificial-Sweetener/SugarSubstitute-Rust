@@ -14,9 +14,9 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prepare full-resolution generation bytes without depending on the web canvas or its resources. */
-import { MAX_CANVAS_IMAGE_BYTES, encodeCanvasImage, } from '../../core/embedded/CanvasRuntime.js';
+import { MAX_CANVAS_IMAGE_BYTES, } from '../../core/embedded/CanvasRuntime.js';
 import { OutputMediaClient } from '../../output_saving/OutputMediaClient.js';
-import { browserCanvasImageRegion } from './BrowserCanvasImageRegions.js';
+import { browserCanvasImage } from './BrowserCanvasImage.js';
 /** Reuse the existing image rendition endpoint and bridge portable cancellation into HTTP transport. */
 export class BrowserCanvasGenerationImages {
     #media;
@@ -32,12 +32,7 @@ export class BrowserCanvasGenerationImages {
             const media = await this.#media.image(file, 'png', controller.signal);
             if (media.blob.size > MAX_CANVAS_IMAGE_BYTES)
                 throw new Error('This image exceeds the canvas transfer byte budget.');
-            return region
-                ? await browserCanvasImageRegion(media.blob, region, cancellation)
-                : {
-                    image: encodeCanvasImage(new Uint8Array(await media.blob.arrayBuffer())),
-                    position: null,
-                };
+            return await browserCanvasImage(media.blob, region, cancellation);
         }
         finally {
             stop();

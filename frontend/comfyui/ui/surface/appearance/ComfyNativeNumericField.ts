@@ -75,6 +75,7 @@ export function readNativeNumericField(
     name: widget.name,
     label: typeof widget.label === 'string' ? widget.label : widget.name,
     precision,
+    ...(options.presentation === 'spinner-slider' ? { presentation: 'spinner-slider' } : {}),
     minimum: finite(numericProps.min) ?? finite(options.min) ?? 0,
     maximum: finite(numericProps.max) ?? finite(options.max) ?? 1,
     step:

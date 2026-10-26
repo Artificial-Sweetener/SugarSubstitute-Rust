@@ -4,20 +4,43 @@
   "title": "SugarCubes canvas protocol version 2",
   "$defs": {
     "CanvasCapabilities": {
-      "type": "object",
-      "properties": {
-        "displayOutput": {
-          "type": "boolean"
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "displayOutput": {
+              "type": "boolean"
+            },
+            "insertImageLayer": {
+              "type": "boolean"
+            },
+            "positionImageLayer": {
+              "type": "boolean"
+            }
+          },
+          "required": ["displayOutput", "insertImageLayer", "positionImageLayer"],
+          "additionalProperties": false
         },
-        "insertImageLayer": {
-          "type": "boolean"
-        },
-        "positionImageLayer": {
-          "type": "boolean"
+        {
+          "type": "object",
+          "properties": {
+            "displayOutput": {
+              "type": "boolean"
+            },
+            "insertImageLayer": {
+              "type": "boolean"
+            },
+            "positionImageLayer": {
+              "type": "boolean"
+            },
+            "geometry": {
+              "type": "boolean"
+            }
+          },
+          "required": ["displayOutput", "insertImageLayer", "positionImageLayer", "geometry"],
+          "additionalProperties": false
         }
-      },
-      "required": ["displayOutput", "insertImageLayer", "positionImageLayer"],
-      "additionalProperties": false
+      ]
     },
     "CanvasDescriptor": {
       "type": "object",
@@ -870,6 +893,273 @@
       },
       "required": ["left", "top"],
       "additionalProperties": false
+    },
+    "CanvasDimensions": {
+      "type": "object",
+      "properties": {
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000
+        }
+      },
+      "required": ["width", "height"],
+      "additionalProperties": false
+    },
+    "CanvasDimensionFieldValues": {
+      "type": "object",
+      "description": "Carry current dimension field values, including zero-valued automatic settings.",
+      "properties": {
+        "width": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 300000
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 300000
+        }
+      },
+      "required": ["width", "height"],
+      "additionalProperties": false
+    },
+    "CanvasSelectionBounds": {
+      "type": "object",
+      "properties": {
+        "left": {
+          "type": "integer",
+          "minimum": -300000,
+          "maximum": 300000
+        },
+        "top": {
+          "type": "integer",
+          "minimum": -300000,
+          "maximum": 300000
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000
+        }
+      },
+      "required": ["left", "top", "width", "height"],
+      "additionalProperties": false
+    },
+    "CanvasDimensionLimits": {
+      "type": "object",
+      "properties": {
+        "minimum": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000
+        },
+        "maximum": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000
+        },
+        "multiple": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000
+        }
+      },
+      "required": ["minimum", "maximum", "multiple"],
+      "additionalProperties": false
+    },
+    "CanvasScaleOutput": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 256
+        }
+      },
+      "required": ["id", "label"],
+      "additionalProperties": false
+    },
+    "CanvasGeometryCommand": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "context"
+            }
+          },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "resize"
+            },
+            "document": {
+              "$ref": "#/$defs/CanvasDocument"
+            },
+            "size": {
+              "$ref": "#/$defs/CanvasDimensions"
+            }
+          },
+          "required": ["type", "document", "size"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CanvasGeometryResult": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "context"
+            },
+            "supported": {
+              "type": "boolean"
+            },
+            "resize": {
+              "type": "boolean"
+            },
+            "selectionSupported": {
+              "type": "boolean"
+            },
+            "document": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/CanvasDocument"
+                },
+                {
+                  "const": null
+                }
+              ]
+            },
+            "selection": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/CanvasSelectionBounds"
+                },
+                {
+                  "const": null
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "supported",
+            "resize",
+            "selectionSupported",
+            "document",
+            "selection"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "resized"
+            },
+            "document": {
+              "$ref": "#/$defs/CanvasDocument"
+            }
+          },
+          "required": ["kind", "document"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "failure"
+            },
+            "status": {
+              "enum": ["unavailable", "unsupported", "stale", "cancelled", "error"]
+            },
+            "message": {
+              "type": "string",
+              "maxLength": 512
+            }
+          },
+          "required": ["kind", "status", "message"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CanvasGeometryRequest": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.canvas"
+        },
+        "version": {
+          "const": 2
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "type": {
+          "const": "geometry.request"
+        },
+        "command": {
+          "$ref": "#/$defs/CanvasGeometryCommand"
+        }
+      },
+      "required": ["protocol", "version", "session", "requestId", "type", "command"],
+      "additionalProperties": false
+    },
+    "CanvasGeometryReply": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.canvas"
+        },
+        "version": {
+          "const": 2
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "type": {
+          "const": "geometry.reply"
+        },
+        "result": {
+          "$ref": "#/$defs/CanvasGeometryResult"
+        }
+      },
+      "required": ["protocol", "version", "session", "requestId", "type", "result"],
+      "additionalProperties": false
     }
   },
   "oneOf": [
@@ -899,6 +1189,12 @@
     },
     {
       "$ref": "#/$defs/CanvasSourceChanged"
+    },
+    {
+      "$ref": "#/$defs/CanvasGeometryRequest"
+    },
+    {
+      "$ref": "#/$defs/CanvasGeometryReply"
     }
   ]
 }

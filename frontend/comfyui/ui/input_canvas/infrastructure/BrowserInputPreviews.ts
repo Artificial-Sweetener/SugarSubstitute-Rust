@@ -25,6 +25,7 @@ import type { CanvasPixelRaster } from '../../core/embedded/CanvasRuntime.js';
 /** Keep original image decoding, alpha absence and orientation semantics with the native file loader. */
 export class BrowserInputPreviews implements InputPreviewPort {
   readonly #decoded = new InputPreviewWorkCache();
+  readonly #full = new InputPreviewWorkCache(0, 1);
   readonly #sources = new WeakMap<CanvasPixelRaster, Promise<string>>();
   /** Bind image decoding to the owning document and inject same-origin transport for verification. */
   constructor(
@@ -56,11 +57,13 @@ export class BrowserInputPreviews implements InputPreviewPort {
   ): Promise<CanvasPixelRaster> {
     if (
       !Number.isSafeInteger(maximumSize) ||
-      maximumSize < 1 ||
+      maximumSize < 0 ||
       maximumSize > INPUT_PREVIEW_MAXIMUM
     )
       return Promise.reject(new Error('Invalid source preview size.'));
     const key = JSON.stringify([file, settings, maximumSize]);
-    return this.#decoded.read(key, () => this.rasters.load(file, settings, maximumSize));
+    return (maximumSize === 0 ? this.#full : this.#decoded).read(key, () =>
+      this.rasters.load(file, settings, maximumSize),
+    );
   }
 }

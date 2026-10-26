@@ -16,14 +16,13 @@
 /** Prepare full-resolution generation bytes without depending on the web canvas or its resources. */
 import {
   MAX_CANVAS_IMAGE_BYTES,
-  encodeCanvasImage,
   type CanvasCancellationSource,
 } from '../../core/embedded/CanvasRuntime.js';
 import type { CanvasGenerationImages } from '../domain/CanvasGenerationImages.js';
 import type { OutputFileReference } from '../domain/WorkflowOutput.js';
 import { OutputMediaClient } from '../../output_saving/OutputMediaClient.js';
 import type { CanvasImageRegion } from '../../../../../integrations/contracts/CanvasImageRegion.js';
-import { browserCanvasImageRegion } from './BrowserCanvasImageRegions.js';
+import { browserCanvasImage } from './BrowserCanvasImage.js';
 
 /** Reuse the existing image rendition endpoint and bridge portable cancellation into HTTP transport. */
 export class BrowserCanvasGenerationImages implements CanvasGenerationImages {
@@ -44,12 +43,7 @@ export class BrowserCanvasGenerationImages implements CanvasGenerationImages {
       const media = await this.#media.image(file, 'png', controller.signal);
       if (media.blob.size > MAX_CANVAS_IMAGE_BYTES)
         throw new Error('This image exceeds the canvas transfer byte budget.');
-      return region
-        ? await browserCanvasImageRegion(media.blob, region, cancellation)
-        : {
-            image: encodeCanvasImage(new Uint8Array(await media.blob.arrayBuffer())),
-            position: null,
-          };
+      return await browserCanvasImage(media.blob, region, cancellation);
     } finally {
       stop();
     }

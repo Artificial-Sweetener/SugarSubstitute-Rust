@@ -1175,3 +1175,25 @@ source_path = "qfluentwidgets/_rc/images/icons/Setting_white.svg"
 vendored_file = "frontend/static/orb/settings.svg"
 runtime_file = "web/orb/settings.svg"
 sha256 = "4ad9a555033cd921356ca768f02dbf4fdd971903656d406f80c5c904945cad85"
+
+[[component]]
+name = "upng-js"
+license = "MIT"
+license_file = "third_party/licenses/upng-js.MIT.txt"
+source = "https://github.com/photopea/UPNG.js"
+revision = "npm:upng-js@2.1.0"
+version = "2.1.0"
+modifications = "None; bundled into the Photoshop UXP runtime for bounded PNG decoding. Exact package integrity is pinned in package-lock.json."
+source_paths = ["upng-js"]
+runtime_files = ["build/photoshop/main.js"]
+
+[[component]]
+name = "pako"
+license = "(MIT AND Zlib)"
+license_file = "third_party/licenses/pako.LICENSE.txt"
+source = "https://github.com/nodeca/pako"
+revision = "npm:pako@1.0.11"
+version = "1.0.11"
+modifications = "None; bundled into the Photoshop UXP runtime for bounded PNG decoding. Exact package integrity is pinned in package-lock.json."
+source_paths = ["pako"]
+runtime_files = ["build/photoshop/main.js"]

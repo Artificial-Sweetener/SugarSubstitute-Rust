@@ -133,7 +133,7 @@ export class EditorContextMenuHost {
     }
     /** Compose available commands through their authoritative policy owners. */
     #entries(card) {
-        return nodeActionEntries(card, this.#options.library, this.#options.families(card), this.#dialog, this.#run, this.#options.skipped, this.#options.modelContributions?.(card.root) ?? []);
+        return nodeActionEntries(card, this.#options.library, this.#options.families(card), this.#dialog, this.#run, this.#options.skipped, this.#options.modelContributions?.(card.root) ?? [], this.#options.canvasDimensions);
     }
     /** Route exact numeric pair fields while retaining model and prompt-specific menu ownership. */
     #context = (event) => {
@@ -157,6 +157,7 @@ export class EditorContextMenuHost {
                 entries,
                 anchor: { kind: 'pointer', x: event.clientX, y: event.clientY },
                 trigger: card.header,
+                preferRightSubmenus: inferDimensionPairs(card.fields.map((field) => field.name)).length > 0,
             });
             return;
         }
@@ -169,7 +170,7 @@ export class EditorContextMenuHost {
         const width = card.fields.find((field) => field.name === pair.width), height = card.fields.find((field) => field.name === pair.height);
         if (!width || !height || width.kind !== 'number' || height.kind !== 'number')
             return;
-        const entries = dimensionMenuEntries({ width, height }, field.name === pair.width ? 'width' : 'height', this.#options.library, this.#options.families(card), this.#run);
+        const entries = dimensionMenuEntries({ width, height }, field.name === pair.width ? 'width' : 'height', this.#options.library, this.#options.families(card), this.#run, this.#options.canvasDimensions?.({ width, height }));
         if (!entries.length)
             return;
         event.preventDefault();
@@ -180,6 +181,7 @@ export class EditorContextMenuHost {
             entries,
             anchor: { kind: 'pointer', x: event.clientX, y: event.clientY },
             trigger: field.element,
+            preferRightSubmenus: true,
         });
     };
     /** Route persistence failures through existing non-blocking SugarCubes feedback. */

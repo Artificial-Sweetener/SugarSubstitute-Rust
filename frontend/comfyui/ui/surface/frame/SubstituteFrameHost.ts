@@ -16,6 +16,7 @@
 /** Bind reversible host frame mounts to the existing workflow, mode and palette authorities. */
 import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
 import type { AccentThemeHost } from '../appearance/AccentThemeHost.js';
+import { InputModal } from '../../dialogs/InputModal.js';
 import { subscribeVisualStyle } from '../appearance/VisualStyleBoundary.js';
 import type { WorkflowSessionStore } from '../../execution/application/WorkflowSessionStore.js';
 import type { WorkflowOutputActivity } from '../../execution/application/WorkflowOutputActivity.js';
@@ -56,6 +57,7 @@ export class SubstituteFrameHost {
   #mount: HTMLElement | null = null;
   #native: HTMLElement | null = null;
   #view: SubstituteFrameView | null = null;
+  readonly #renamePrompt: InputModal;
   #generation: GenerationStripHost | null = null;
   #toolbarLayout: SubstituteToolbarLayout | null = null;
   #pluginToolbar: PluginToolbarPlacement | null = null;
@@ -66,6 +68,12 @@ export class SubstituteFrameHost {
 
   /** Prepare collaborators without choosing presentation before settings are restored. */
   constructor(private readonly options: SubstituteFrameHostOptions) {
+    this.#renamePrompt = new InputModal({
+      adapter: {
+        getDocument: () => options.document,
+        getWindow: () => options.document.defaultView,
+      },
+    });
     this.#style = options.document.createElement('style');
     this.#style.id = 'sugarcubes-substitute-frame';
     this.#style.textContent = substituteFrameCss + desktopFrameCss + pluginFrameCss;
@@ -196,7 +204,16 @@ export class SubstituteFrameHost {
   #attach(mount: HTMLElement, native: HTMLElement): void {
     this.#mount = mount;
     this.#native = native;
-    this.#adapter = new ComfyFrameWorkflowAdapter(this.options.app, native);
+    this.#adapter = new ComfyFrameWorkflowAdapter(this.options.app, native, (name, validate) =>
+      this.#renamePrompt.open({
+        title: 'Rename workflow',
+        label: 'Name',
+        initialValue: name,
+        confirmLabel: 'Rename',
+        normalizeValue: (value) => value.trim(),
+        validate,
+      }),
+    );
     this.#stopWorkflow = this.#adapter.subscribe(() => this.#queue());
     const command = (id: string): void => {
       void this.#adapter?.command(id).catch(this.options.report);
@@ -244,6 +261,7 @@ export class SubstituteFrameHost {
 
   /** Retire the view while preserving host controls, workflow state and saved preferences. */
   #unmount(): void {
+    this.#renamePrompt.close(null);
     this.#desktop.detach();
     this.#pluginToolbar?.dispose();
     this.#pluginToolbar = null;

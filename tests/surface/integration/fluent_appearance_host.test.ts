@@ -17,6 +17,7 @@
 import { VISUAL_STYLE_SETTING } from '../../../frontend/comfyui/ui/surface/appearance/VisualStylePreference.js';
 import { afterEach, expect, jest, test } from '@jest/globals';
 import { AppearanceHost } from '../../../frontend/comfyui/ui/surface/appearance/AppearanceHost.js';
+import { NativeFieldAppearance } from '../../../frontend/comfyui/ui/surface/appearance/NativeFieldAppearance.js';
 import { isRecord } from '../../../frontend/comfyui/ui/types/common.js';
 import type { UnknownRecord } from '../../../frontend/comfyui/ui/types/common.js';
 import { NativeCardAdapter } from '../../../frontend/comfyui/ui/surface/appearance/NativeCardAdapter.js';
@@ -63,6 +64,40 @@ test('finishes requested native presentation before its first animation frame wi
   host.dispose();
   prepareNativePresentation(surface);
   expect(card.hasAttribute('data-sc-style-node')).toBe(false);
+});
+
+test('keeps explicit projected-field presentation active in Comfy style while leaving graph cards native', () => {
+  jest.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 1);
+  jest.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
+  const host = new AppearanceHost({
+    document,
+    app: {
+      ui: {
+        settings: {
+          addSetting: () => undefined,
+          getSettingValue: (key: string) => key === 'Comfy.VueNodes.Enabled',
+        },
+      },
+    },
+    reportError: jest.fn(),
+  });
+  host.setup();
+  host.setStyle('comfy');
+  const surface = document.createElement('section');
+  surface.className = 'sugarcubes-workflow-masonry';
+  const projected = document.createElement('div');
+  projected.className = 'lg-node';
+  projected.dataset.cubeFacePresentation = 'true';
+  const graphCard = document.createElement('div');
+  graphCard.className = 'lg-node';
+  surface.append(projected, graphCard);
+  document.body.append(surface);
+  const present = jest.spyOn(NativeFieldAppearance.prototype, 'present');
+  prepareNativePresentation(surface);
+  expect(present).toHaveBeenCalledWith(projected, false);
+  expect(present.mock.calls.some(([root]) => root === graphCard)).toBe(false);
+  expect(graphCard.hasAttribute('data-sc-style-node')).toBe(false);
+  host.dispose();
 });
 
 test('prepares a replacement native card synchronously without refreshing unrelated cards', () => {
@@ -547,4 +582,36 @@ test('owns one stable graph token scope across native card and masonry presentat
   host.setStyle('comfy');
   expect(document.querySelector('[data-sc-style-theme-root]')).toBeNull();
   host.dispose();
+});
+
+test('PhotoPro publishes Photoshop palette brightness to icon and surface consumers despite a light Comfy theme', async () => {
+  document.documentElement.style.setProperty('--comfy-menu-bg', '#ffffff');
+  jest.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 1);
+  jest.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
+  const app = {
+    ui: {
+      settings: {
+        addSetting: () => undefined,
+        getSettingValue: (key: string) => key === 'Comfy.VueNodes.Enabled',
+      },
+    },
+  };
+  const host = new AppearanceHost({ document, app, reportError: jest.fn() });
+  try {
+    host.setup();
+    host.setStyle('photopro');
+    document.documentElement.dataset.scPhotoproPalette = 'medium-gray';
+    await Promise.resolve();
+    expect(host.state.appearance).toEqual({ style: 'photopro', dark: true });
+    document.documentElement.dataset.scPhotoproPalette = 'light-gray';
+    await Promise.resolve();
+    expect(host.state.appearance).toEqual({ style: 'photopro', dark: false });
+    document.documentElement.dataset.scPhotoproPalette = 'dark-gray';
+    await Promise.resolve();
+    expect(host.state.appearance).toEqual({ style: 'photopro', dark: true });
+  } finally {
+    host.dispose();
+    document.documentElement.removeAttribute('data-sc-photopro-palette');
+    document.documentElement.removeAttribute('style');
+  }
 });

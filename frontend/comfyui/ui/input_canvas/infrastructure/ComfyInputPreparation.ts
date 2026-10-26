@@ -14,15 +14,21 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Adapt outgoing workflows to the single shared full-resolution source capture use case. */
-import type { InputSourcePreparation } from '../application/InputSourcePreparation.js';
+import {
+  preparedSourceFile,
+  type InputSourcePreparation,
+} from '../application/InputSourcePreparation.js';
 import type { CanvasSourceEntry } from '../application/CanvasSourceCapture.js';
 import type { ComfyInputSourceDefaults } from './ComfyInputSourceDefaults.js';
 import type { ComfyInputLoaders } from './ComfyInputLoaders.js';
 import { inputWorkflowProjection } from './InputWorkflowProjection.js';
 import type { ComfyInputReturnPreparation } from './ComfyInputReturnPreparation.js';
 import type { WorkflowPromptPreparation } from '../../execution/domain/WorkflowPreparation.js';
+import type { ComfyMaskInputPreparation } from './ComfyMaskInputPreparation.js';
+import type { PreparedInputPromptClient } from './PreparedInputPromptClient.js';
+import { isRecord } from '../../types/common.js';
 
-/** Prepare both queue routes without changing graph topology or authored file values. */
+/** Prepare detached execution inputs and immutable return placement for both queue routes. */
 export class ComfyInputPreparation {
   /** Share the exact catalog and capture owner used by masonry bindings. */
   constructor(
@@ -30,9 +36,12 @@ export class ComfyInputPreparation {
     private readonly sources: InputSourcePreparation,
     private readonly defaults: ComfyInputSourceDefaults,
     private readonly returns: ComfyInputReturnPreparation,
+    private readonly maskInputs: ComfyMaskInputPreparation,
+    private readonly promptInputs: Pick<PreparedInputPromptClient, 'prepare'>,
   ) {}
   /** Pin entry identity, order and channel before any asynchronous native capture or upload. */
   async prepare(payload: unknown): Promise<WorkflowPromptPreparation> {
+    const pairs = this.maskInputs.pairs();
     const projection = await inputWorkflowProjection(
       payload,
       this.loaders,
@@ -56,18 +65,37 @@ export class ComfyInputPreparation {
     const ports = this.loaders.assetPorts();
     const origin = await this.returns.origin(projection.targets);
     const sources = await this.sources.prepare(entries);
-    const canvas = await this.returns.prepare(projection.targets, sources, ports, origin);
+    const masks = await this.maskInputs.prepare(
+      projection.targets,
+      sources,
+      pairs,
+      ports,
+      origin?.document ?? null,
+    );
+    const canvas = await this.returns.prepare(
+      projection.targets,
+      sources,
+      ports,
+      origin,
+      masks.returnInputs,
+    );
     for (const target of projection.targets)
       target.apply(
         target.binding.entries.map((entry) => {
-          const file =
-            entry.source.kind === 'canvas'
-              ? sources.files.get(JSON.stringify([target.key, entry.id]))
-              : entry.source.file;
-          if (!file) throw new Error('Choose a file or canvas source for every entry.');
-          return file;
+          return (
+            masks.sourceFiles.get(target.key) ?? preparedSourceFile(target.key, entry, sources)
+          );
         }),
       );
-    return { payload: projection.payload, ...(canvas ? { canvas } : {}) };
+    const prepared = projection.payload;
+    if (masks.replacements.length && isRecord(prepared) && isRecord(prepared.output))
+      prepared.output = await this.promptInputs.prepare(prepared.output, masks.replacements);
+    return {
+      payload: prepared,
+      ...(canvas ? { canvas } : {}),
+      ...(masks.replacements.length && (!isRecord(prepared) || !isRecord(prepared.output))
+        ? { preparedInputs: masks.replacements }
+        : {}),
+    };
   }
 }

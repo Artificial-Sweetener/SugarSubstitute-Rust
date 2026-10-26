@@ -23,6 +23,11 @@ import type {
   CanvasPixelRaster,
 } from '../../../integrations/contracts/CanvasProtocol.generated.js';
 import { encodeCanvasRaster } from '../../../integrations/shared/CanvasRasterEncoding.js';
+import { editMaskInput } from '../../../frontend/comfyui/ui/input_canvas/domain/MaskInputEditing.js';
+import type { MaskEditingPort } from '../../../frontend/comfyui/ui/input_canvas/application/MaskEditingPort.js';
+import { MaskInputPreparation } from '../../../frontend/comfyui/ui/input_canvas/application/MaskInputPreparation.js';
+import { ComfyMaskInputPreparation } from '../../../frontend/comfyui/ui/input_canvas/infrastructure/ComfyMaskInputPreparation.js';
+import type { WorkflowPreparedInput } from '../../../frontend/comfyui/ui/execution/domain/WorkflowPreparation.js';
 import { CanvasSourceCapture } from '../../../frontend/comfyui/ui/input_canvas/application/CanvasSourceCapture.js';
 import { CanvasSourcePreviews } from '../../../frontend/comfyui/ui/input_canvas/application/CanvasSourcePreviews.js';
 import { InputSourcePreparation } from '../../../frontend/comfyui/ui/input_canvas/application/InputSourcePreparation.js';
@@ -102,7 +107,10 @@ export function sourceMaskFixture() {
   const assets = { stage },
     legacy = new LegacyMaskMigration(() => null, assets);
   const loaders = new ComfyInputLoaders();
-  loaders.define({ 'SimpleSyrup.LoadMaskBatch': {}, LoadImageMask: {} });
+  loaders.define({
+    'SimpleSyrup.LoadMaskBatch': { output: ['MASK'] },
+    LoadImageMask: { output: ['MASK'] },
+  });
   const defaults = new ComfyInputSourceDefaults(() => host, legacy);
   const sourcePreparation = new InputSourcePreparation(capture, assets);
   const previews = new CanvasSourcePreviews(capture, () => host, report);
@@ -124,6 +132,13 @@ export function sourceMaskFixture() {
       }),
     ),
   };
+  const maskEditing: MaskEditingPort = {
+    prepare: async (source, settings) => editMaskInput(source, settings),
+  };
+  const editingPairs = new Map<string, string>();
+  const projectInputs = jest.fn(
+    async (prompt: unknown, _assets: readonly WorkflowPreparedInput[]): Promise<unknown> => prompt,
+  );
   return {
     host,
     execute,
@@ -137,6 +152,9 @@ export function sourceMaskFixture() {
     sourcePreparation,
     previews,
     files,
+    maskEditing,
+    editingPairs,
+    projectInputs,
     preparation: new ComfyInputPreparation(
       loaders,
       sourcePreparation,
@@ -145,10 +163,19 @@ export function sourceMaskFixture() {
         canvasId: 'editor',
         document: sourceDocument,
       })),
+      new ComfyMaskInputPreparation(
+        files,
+        assets,
+        new MaskInputPreparation(maskEditing),
+        () => new Map(editingPairs),
+      ),
+      { prepare: projectInputs },
     ),
     ports: {
       host: () => host,
+      editable: () => true,
       files,
+      maskEditing,
       legacy,
       report,
       verifyFile: async () => true,

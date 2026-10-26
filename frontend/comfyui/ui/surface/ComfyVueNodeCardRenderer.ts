@@ -128,6 +128,10 @@ export class ComfyVueNodeCardRenderer implements NativeNodeCardRenderer {
         options.allowCollapse,
       );
       nodeData.widgets = projectNativeWidgetEdits(node, nodeData.widgets);
+      nodeData.sugarcubesEditorWidgets = projectNativeWidgetEdits(
+        node,
+        nodeData.sugarcubesEditorWidgets,
+      );
       for (const source of options.widgetSources ?? []) {
         const ownerData = createCubeFaceNodeData(
           this.#runtime.extractVueNodeData(source.node),

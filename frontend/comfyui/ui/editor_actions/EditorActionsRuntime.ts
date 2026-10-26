@@ -25,6 +25,12 @@ import { ComfyPresetRepository } from './infrastructure/ComfyPresetRepository.js
 import type { PresetApiFetch } from './infrastructure/ComfyPresetRepository.js';
 import { editorModelScopes } from './infrastructure/EditorModelScopeAdapter.js';
 import { EditorContextMenuHost } from './presentation/EditorContextMenuHost.js';
+import { canvasDimensionMenuEntries } from './presentation/CanvasDimensionMenu.js';
+import type { CanvasDimensionCommands } from './application/CanvasDimensionCommands.js';
+import type { DimensionBinding } from './application/CanvasDimensionFields.js';
+import { CanvasCancellation } from '../core/embedded/CanvasRuntime.js';
+import { readNativeEditorCard } from './infrastructure/NativeEditorCardAdapter.js';
+import { isRecord } from '../types/common.js';
 export interface EditorActionsRuntimeOptions {
   readonly document: Document;
   readonly app: unknown;
@@ -33,6 +39,8 @@ export interface EditorActionsRuntimeOptions {
   readonly reportError: (error: unknown) => void;
   readonly skipped: (names: readonly string[]) => void;
   readonly modelContributions: (root: HTMLElement) => readonly ModelContextContribution[];
+  readonly dimensions?: CanvasDimensionCommands;
+  readonly workflowContext?: () => unknown;
 }
 
 /** Keep storage, appearance, node values and menu policy in separate focused owners. */
@@ -42,6 +50,7 @@ export class EditorActionsRuntime {
   readonly #host: EditorContextMenuHost;
   #release: (() => void) | null = null;
   #generation = 0;
+  readonly #dimensionTasks = new Set<CanvasCancellation>();
   /** Prepare explicit collaborators without loading or changing user libraries during construction. */
   constructor(options: EditorActionsRuntimeOptions) {
     this.#options = options;
@@ -56,6 +65,9 @@ export class EditorActionsRuntime {
       reportError: options.reportError,
       skipped: options.skipped,
       modelContributions: options.modelContributions,
+      canvasDimensions: (binding) => this.#dimensionEntries(binding),
+      readCard: (root) =>
+        readNativeEditorCard(root, () => (isRecord(options.app) ? options.app.graph : null)),
       enabled: () => resolveComfyRendererMode(options.app, null, options.document) === 'vue',
       families: (card) =>
         editorModelScopes(card, this.#host.preparedCards(), options.catalog.current()),
@@ -79,6 +91,8 @@ export class EditorActionsRuntime {
   /** Release editor accessories before the host graph and Vue application disappear. */
   dispose(): void {
     this.#generation += 1;
+    for (const cancellation of this.#dimensionTasks) cancellation.cancel();
+    this.#dimensionTasks.clear();
     this.#release?.();
     this.#release = null;
     this.#host.dispose();
@@ -86,4 +100,37 @@ export class EditorActionsRuntime {
   }
   /** Adapt page lifetime without introducing a second graph lifecycle owner. */
   readonly #pagehide = (): void => this.dispose();
+
+  /** Scope explicit dimension commands to the workflow and page that supplied their native fields. */
+  #dimensionEntries(binding: DimensionBinding) {
+    const commands = this.#options.dimensions;
+    return canvasDimensionMenuEntries(
+      Boolean(commands?.available),
+      async (action, configure, signal) => {
+        if (!commands) return;
+        const cancellation = signal ?? new CanvasCancellation();
+        const workflow = this.#options.workflowContext?.();
+        this.#dimensionTasks.add(cancellation);
+        try {
+          await commands.execute(
+            action,
+            {
+              ...binding,
+              current: () =>
+                (!this.#options.workflowContext ||
+                  (workflow != null && workflow === this.#options.workflowContext())) &&
+                binding.current?.() !== false,
+            },
+            cancellation,
+            configure,
+          );
+        } finally {
+          this.#dimensionTasks.delete(cancellation);
+        }
+      },
+      (operation) => {
+        void operation.catch(this.#options.reportError);
+      },
+    );
+  }
 }

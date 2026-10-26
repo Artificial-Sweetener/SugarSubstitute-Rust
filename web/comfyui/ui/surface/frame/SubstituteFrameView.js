@@ -100,7 +100,7 @@ export class SubstituteFrameView {
         previous.classList.add('sc-workflow-scroll', 'sc-workflow-scroll--previous');
         next.classList.add('sc-workflow-scroll');
         viewport.append(this.#tabs.element);
-        this.#stripLayout = new WorkflowTabStripLayout(document, this.element, viewport, this.#tabs.element, { overflow, previous, next }, (width) => this.#tabs.resize(width), () => this.#overflowMenu.close(), () => this.#tabs.refreshScrollLayout());
+        this.#stripLayout = new WorkflowTabStripLayout(document, this.element, viewport, this.#tabs.element, { overflow, previous, next }, (widths) => this.#tabs.resize(widths), () => this.#overflowMenu.close(), () => this.#tabs.refreshScrollLayout());
         const cluster = document.createElement('div');
         this.#cluster = cluster;
         cluster.className = 'sc-orb-actions';
@@ -164,8 +164,8 @@ export class SubstituteFrameView {
     /** Retain tab identities through workflow and activity updates. */
     update(tabs, unread) {
         this.#presented = tabs;
-        this.#stripLayout.update(tabs.length);
         this.#tabs.update(tabs, unread, this.#initialized);
+        this.#stripLayout.update(tabs);
         this.#initialized = true;
     }
     /** Project the accepted palette only when it changes and let the orb retain raster variants. */

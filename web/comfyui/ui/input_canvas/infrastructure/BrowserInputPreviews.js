@@ -22,6 +22,7 @@ export class BrowserInputPreviews {
     stage;
     rasters;
     #decoded = new InputPreviewWorkCache();
+    #full = new InputPreviewWorkCache(0, 1);
     #sources = new WeakMap();
     /** Bind image decoding to the owning document and inject same-origin transport for verification. */
     constructor(stage, rasters) {
@@ -43,10 +44,10 @@ export class BrowserInputPreviews {
     /** Decode the actual loader output, retaining native orientation and empty-mask geometry. */
     load(file, settings, maximumSize) {
         if (!Number.isSafeInteger(maximumSize) ||
-            maximumSize < 1 ||
+            maximumSize < 0 ||
             maximumSize > INPUT_PREVIEW_MAXIMUM)
             return Promise.reject(new Error('Invalid source preview size.'));
         const key = JSON.stringify([file, settings, maximumSize]);
-        return this.#decoded.read(key, () => this.rasters.load(file, settings, maximumSize));
+        return (maximumSize === 0 ? this.#full : this.#decoded).read(key, () => this.rasters.load(file, settings, maximumSize));
     }
 }

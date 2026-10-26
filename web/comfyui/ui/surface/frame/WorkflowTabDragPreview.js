@@ -1,3 +1,20 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Own transient tab transforms and settle motion without mutating workflow order. */
+import { workflowTabAtOffset, workflowTabOffsets, } from './WorkflowTabGeometry.js';
 import { WORKFLOW_TAB_ORB_CUTOUT_RADIUS } from './WorkflowTabStyles.js';
 const motion = { duration: 180, easing: 'cubic-bezier(.22,1,.36,1)' };
 /** Retain visual continuity across the host's accepted DOM permutation. */
@@ -5,16 +22,16 @@ export class WorkflowTabDragPreview {
     list;
     viewport;
     restored;
-    tabWidth;
+    tabWidths;
     #animations = new Map();
     #elementAnimations = new Map();
     #active = false;
     /** Restore canonical orb destinations when accepted order is projected. */
-    constructor(list, viewport, restored, tabWidth) {
+    constructor(list, viewport, restored, tabWidths) {
         this.list = list;
         this.viewport = viewport;
         this.restored = restored;
-        this.tabWidth = tabWidth;
+        this.tabWidths = tabWidths;
     }
     /** Report whether the pointer preview owns geometry before accepted order is projected. */
     get active() {
@@ -28,12 +45,16 @@ export class WorkflowTabDragPreview {
         }
         this.#active = true;
         this.viewport.setAttribute('data-sc-tab-dragging', '');
-        const first = Math.floor(this.viewport.scrollLeft / this.tabWidth());
+        const widths = this.tabWidths();
+        const starts = workflowTabOffsets(widths);
+        const first = workflowTabAtOffset(widths, this.viewport.scrollLeft);
+        const natural = this.viewport.hasAttribute('data-sc-natural-tabs');
         const cutoutDisabled = this.viewport.hasAttribute('data-sc-overflow') ||
-            this.viewport.hasAttribute('data-sc-orb-hidden');
+            this.viewport.hasAttribute('data-sc-orb-hidden') ||
+            natural;
         const progress = cutoutDisabled
             ? 0
-            : Math.max(0, Math.min(1, 1 - (placement.draggedLeft / this.tabWidth() - first)));
+            : Math.max(0, Math.min(1, 1 - (placement.draggedLeft - (starts[first] ?? 0)) / (widths[first] ?? 1)));
         const successor = cutoutDisabled ? -1 : origin === first ? first + 1 : first;
         for (const [index, tab] of tabs.entries()) {
             const offset = placement.offsets[index] ?? 0;
@@ -54,7 +75,10 @@ export class WorkflowTabDragPreview {
             }
             tab.toggleAttribute('data-sc-held', index === origin);
             const cutout = index === origin ? progress : index === successor ? 1 - progress : 0;
-            tab.style.paddingLeft = `${String(20 + 12 * cutout)}px`;
+            if (natural)
+                tab.style.removeProperty('padding-left');
+            else
+                tab.style.paddingLeft = `${String(20 + 12 * cutout)}px`;
             tab.style.setProperty('--sc-tab-cutout-radius', `${String(WORKFLOW_TAB_ORB_CUTOUT_RADIUS * cutout)}px`);
             tab.style.setProperty('--sc-tab-cutout-x', `${String(-17 * cutout)}px`);
         }
@@ -103,7 +127,11 @@ export class WorkflowTabDragPreview {
                 ? `${String(WORKFLOW_TAB_ORB_CUTOUT_RADIUS)}px`
                 : '0px';
             const destinationX = tab.style.getPropertyValue('--sc-tab-cutout-x') || '-17px';
-            const destinationPadding = tab.hasAttribute('data-orb-adjacent') ? '32px' : '20px';
+            const destinationPadding = this.viewport.hasAttribute('data-sc-natural-tabs')
+                ? (tab.ownerDocument.defaultView?.getComputedStyle(tab).paddingLeft ?? '0px')
+                : tab.hasAttribute('data-orb-adjacent')
+                    ? '32px'
+                    : '20px';
             const finished = () => {
                 tab.removeAttribute('data-sc-held');
                 tab.style.removeProperty('transition');

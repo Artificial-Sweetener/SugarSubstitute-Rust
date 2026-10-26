@@ -51,6 +51,9 @@ from .output_instrumentation import CubeOutputInstrumenter
 from .phase_measurements import ExecutionPhaseMeasurements, NanoClock
 from .partial_execution import resolve_partial_execution_targets
 from .ports import ComfyExecutionPort
+from .prepared_input_projection import PreparedInputProjector
+from .prepared_input_values import PreparedInputAsset
+from .models import ApiPrompt
 from .topology import build_cube_topology
 
 _logger = logging.getLogger(__name__)
@@ -71,6 +74,7 @@ class CubeExecutionCoordinator:
         clock_ns: NanoClock = perf_counter_ns,
         proximity_matcher: SerializedCubeProximityMatcher | None = None,
         workflow_normalizer: WorkflowNormalizer | None = None,
+        prepared_inputs: PreparedInputProjector | None = None,
     ) -> None:
         """Bind cohesive domain owners behind one application use case."""
 
@@ -83,6 +87,13 @@ class CubeExecutionCoordinator:
         self._clock_ns = clock_ns
         self._proximity_matcher = proximity_matcher or SerializedCubeProximityMatcher()
         self._workflow_normalizer = workflow_normalizer
+        self._prepared_inputs = prepared_inputs or PreparedInputProjector()
+
+    def project_prepared_inputs(
+        self, prompt: ApiPrompt, assets: tuple[PreparedInputAsset, ...]
+    ) -> ApiPrompt:
+        """Apply the same captured-output projection to an ordinary Comfy prompt."""
+        return self._prepared_inputs.project(prompt, assets).prompt
 
     async def queue(self, request: CubeExecutionRequest) -> CubeExecutionResult:
         """Prepare, validate, and queue one canonical Cube workflow through Comfy."""
@@ -132,6 +143,8 @@ class CubeExecutionCoordinator:
         lowered = self._lowerer.lower(workflow, topology)
         if self._live_defaults is not None:
             self._live_defaults.apply(lowered.prompt)
+        prepared_inputs = self._prepared_inputs.lower(lowered, request.prepared_inputs)
+        lowered = prepared_inputs.lowered
         measurements.finish("lowering")
         inherited = self._inheritance.resolve(lowered, topology)
         measurements.finish("inheritance")
@@ -145,7 +158,8 @@ class CubeExecutionCoordinator:
                 options=request.optimization,
                 protected_node_ids=frozenset(
                     binding.node_id for binding in inherited.boundary_bindings
-                ),
+                )
+                | prepared_inputs.protected_nodes,
             )
         except Exception as error:
             _logger.exception(

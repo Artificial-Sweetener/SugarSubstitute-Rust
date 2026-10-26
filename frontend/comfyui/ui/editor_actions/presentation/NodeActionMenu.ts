@@ -24,6 +24,7 @@ import type { NativeEditorCard } from '../infrastructure/NativeEditorCardAdapter
 import { dimensionMenuEntries } from './DimensionMenu.js';
 import type { SaveNodePresetDialog } from './SaveNodePresetDialog.js';
 import type { ModelContextContribution } from '../../model_library/ModelContextProjection.js';
+import type { DimensionBinding } from '../application/CanvasDimensionFields.js';
 
 /** Consume prepared libraries and explicit command collaborators instead of owning persistence. */
 export function nodeActionEntries(
@@ -34,6 +35,7 @@ export function nodeActionEntries(
   run: (operation: Promise<void>) => void,
   skipped: (names: readonly string[]) => void,
   modelContributions: readonly ModelContextContribution[] = [],
+  canvasDimensions?: (binding: DimensionBinding) => readonly ContextMenuEntry[],
 ): ContextMenuEntry[] {
   const scopes = [...families, GLOBAL_ASSOCIATION];
   const presets = library.nodePresets(card.nodeType, scopes);
@@ -99,7 +101,15 @@ export function nodeActionEntries(
     const width = card.fields.find((field) => field.name === pair.width),
       height = card.fields.find((field) => field.name === pair.height);
     if (!width || !height || width.kind !== 'number' || height.kind !== 'number') continue;
-    const dimensions = dimensionMenuEntries({ width, height }, null, library, families, run);
+    const binding = { width, height };
+    const dimensions = dimensionMenuEntries(
+      binding,
+      null,
+      library,
+      families,
+      run,
+      canvasDimensions?.(binding),
+    );
     contributions.push({
       order: Math.min(fieldNames.indexOf(pair.width), fieldNames.indexOf(pair.height)),
       entries: dimensions,

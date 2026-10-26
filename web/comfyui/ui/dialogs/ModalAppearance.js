@@ -17,7 +17,7 @@
 import { readOwnedVisualStyle } from '../surface/appearance/VisualStyleBoundary.js';
 import { subscribeVisualStyle } from '../surface/appearance/VisualStyleBoundary.js';
 import { applyOwnedTheme } from '../surface/appearance/ThemeService.js';
-import { readComfyDarkTheme } from '../surface/appearance/ComfyColorScheme.js';
+import { readOwnedDarkTheme } from '../surface/appearance/OwnedColorScheme.js';
 import { injectModalAppearanceStyles } from './ModalAppearanceStyles.js';
 /** Keep every open SugarCubes dialog synchronized with Comfy's active palette. */
 export class ModalAppearance {
@@ -76,7 +76,7 @@ export class ModalAppearance {
         if (!this.#overlay)
             return;
         const accepted = this.#source?.appearance;
-        const dark = accepted?.dark ?? readComfyDarkTheme(this.#overlay.ownerDocument);
+        const dark = accepted?.dark ?? readOwnedDarkTheme(this.#overlay.ownerDocument);
         const style = accepted?.style ?? readOwnedVisualStyle(this.#overlay.ownerDocument);
         if (dark === this.#dark && style === this.#style)
             return;

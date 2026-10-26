@@ -3,7 +3,7 @@ function isRecord(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 function isCanvasCapabilities(value) {
-  return isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "displayOutput") && typeof value["displayOutput"] === "boolean" && Object.hasOwn(value, "insertImageLayer") && typeof value["insertImageLayer"] === "boolean" && Object.hasOwn(value, "positionImageLayer") && typeof value["positionImageLayer"] === "boolean";
+  return isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "displayOutput") && typeof value["displayOutput"] === "boolean" && Object.hasOwn(value, "insertImageLayer") && typeof value["insertImageLayer"] === "boolean" && Object.hasOwn(value, "positionImageLayer") && typeof value["positionImageLayer"] === "boolean" || isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "displayOutput") && typeof value["displayOutput"] === "boolean" && Object.hasOwn(value, "insertImageLayer") && typeof value["insertImageLayer"] === "boolean" && Object.hasOwn(value, "positionImageLayer") && typeof value["positionImageLayer"] === "boolean" && Object.hasOwn(value, "geometry") && typeof value["geometry"] === "boolean";
 }
 function isCanvasDescriptor(value) {
   return isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "id") && typeof value["id"] === "string" && value["id"].length <= 128 && Object.hasOwn(value, "label") && typeof value["label"] === "string" && value["label"].length <= 128 && Object.hasOwn(value, "capabilities") && isCanvasCapabilities(value["capabilities"]);
@@ -94,8 +94,26 @@ function isCanvasInputSource(value) {
 function isCanvasImagePosition(value) {
   return isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "left") && typeof value["left"] === "number" && Number.isSafeInteger(value["left"]) && value["left"] >= -3e5 && value["left"] <= 3e5 && Object.hasOwn(value, "top") && typeof value["top"] === "number" && Number.isSafeInteger(value["top"]) && value["top"] >= -3e5 && value["top"] <= 3e5;
 }
+function isCanvasDimensions(value) {
+  return isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "width") && typeof value["width"] === "number" && Number.isSafeInteger(value["width"]) && value["width"] >= 1 && value["width"] <= 3e5 && Object.hasOwn(value, "height") && typeof value["height"] === "number" && Number.isSafeInteger(value["height"]) && value["height"] >= 1 && value["height"] <= 3e5;
+}
+function isCanvasSelectionBounds(value) {
+  return isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "left") && typeof value["left"] === "number" && Number.isSafeInteger(value["left"]) && value["left"] >= -3e5 && value["left"] <= 3e5 && Object.hasOwn(value, "top") && typeof value["top"] === "number" && Number.isSafeInteger(value["top"]) && value["top"] >= -3e5 && value["top"] <= 3e5 && Object.hasOwn(value, "width") && typeof value["width"] === "number" && Number.isSafeInteger(value["width"]) && value["width"] >= 1 && value["width"] <= 3e5 && Object.hasOwn(value, "height") && typeof value["height"] === "number" && Number.isSafeInteger(value["height"]) && value["height"] >= 1 && value["height"] <= 3e5;
+}
+function isCanvasGeometryCommand(value) {
+  return isRecord(value) && Object.keys(value).length === 1 && Object.hasOwn(value, "type") && value["type"] === "context" || isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "type") && value["type"] === "resize" && Object.hasOwn(value, "document") && isCanvasDocument(value["document"]) && Object.hasOwn(value, "size") && isCanvasDimensions(value["size"]);
+}
+function isCanvasGeometryResult(value) {
+  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "kind") && value["kind"] === "context" && Object.hasOwn(value, "supported") && typeof value["supported"] === "boolean" && Object.hasOwn(value, "resize") && typeof value["resize"] === "boolean" && Object.hasOwn(value, "selectionSupported") && typeof value["selectionSupported"] === "boolean" && Object.hasOwn(value, "document") && (isCanvasDocument(value["document"]) || value["document"] === null) && Object.hasOwn(value, "selection") && (isCanvasSelectionBounds(value["selection"]) || value["selection"] === null) || isRecord(value) && Object.keys(value).length === 2 && Object.hasOwn(value, "kind") && value["kind"] === "resized" && Object.hasOwn(value, "document") && isCanvasDocument(value["document"]) || isRecord(value) && Object.keys(value).length === 3 && Object.hasOwn(value, "kind") && value["kind"] === "failure" && Object.hasOwn(value, "status") && (value["status"] === "unavailable" || value["status"] === "unsupported" || value["status"] === "stale" || value["status"] === "cancelled" || value["status"] === "error") && Object.hasOwn(value, "message") && typeof value["message"] === "string" && value["message"].length <= 512;
+}
+function isCanvasGeometryRequest(value) {
+  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 2 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "geometry.request" && Object.hasOwn(value, "command") && isCanvasGeometryCommand(value["command"]);
+}
+function isCanvasGeometryReply(value) {
+  return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "protocol") && value["protocol"] === "sugarcubes.canvas" && Object.hasOwn(value, "version") && value["version"] === 2 && Object.hasOwn(value, "session") && typeof value["session"] === "string" && value["session"].length <= 80 && new RegExp("^[a-zA-Z0-9-]{16,80}$").test(value["session"]) && Object.hasOwn(value, "requestId") && typeof value["requestId"] === "number" && Number.isSafeInteger(value["requestId"]) && value["requestId"] >= 1 && value["requestId"] <= 2147483647 && Object.hasOwn(value, "type") && value["type"] === "geometry.reply" && Object.hasOwn(value, "result") && isCanvasGeometryResult(value["result"]);
+}
 function isCanvasMessage(value) {
-  return isCanvasReadRequest(value) || isCanvasReadReply(value) || isCanvasInsertRequest(value) || isCanvasInsertReply(value) || isCanvasCancelRequest(value) || isCanvasErrorReply(value) || isCanvasSourceRequest(value) || isCanvasSourceReply(value) || isCanvasSourceChanged(value);
+  return isCanvasReadRequest(value) || isCanvasReadReply(value) || isCanvasInsertRequest(value) || isCanvasInsertReply(value) || isCanvasCancelRequest(value) || isCanvasErrorReply(value) || isCanvasSourceRequest(value) || isCanvasSourceReply(value) || isCanvasSourceChanged(value) || isCanvasGeometryRequest(value) || isCanvasGeometryReply(value);
 }
 
 // integrations/shared/CanvasSourceConnection.ts
@@ -177,6 +195,13 @@ var CanvasClient = class {
   constructor(session, port) {
     this.session = session;
     this.port = port;
+    this.geometry = {
+      get canvasId() {
+        return readIdentity();
+      },
+      execute: (command, cancellation) => this.#geometryRequest(command, cancellation)
+    };
+    const readIdentity = () => this.#context?.canvas.id ?? "";
     this.sources = new CanvasSourceConnection({
       identity: () => this.#context?.canvas.id ?? "",
       execute: (command) => this.#sourceRequest(command),
@@ -191,6 +216,7 @@ var CanvasClient = class {
       }
     });
   }
+  geometry;
   sources;
   #pending = /* @__PURE__ */ new Map();
   #sourceListeners = /* @__PURE__ */ new Set();
@@ -238,7 +264,7 @@ var CanvasClient = class {
     this.#disposed = true;
     for (const [id, pending] of this.#pending) {
       pending.stop();
-      if (pending.type === "image.reply") this.#cancel(id);
+      if (pending.type === "image.reply" || pending.type === "geometry.reply") this.#cancel(id);
       pending.reject(new Error("Canvas connection closed."));
     }
     this.#pending.clear();
@@ -259,6 +285,18 @@ var CanvasClient = class {
       };
     }
   }
+  /** Delegate geometry and native sizing through the existing correlated host transport. */
+  async #geometryRequest(command, cancellation) {
+    if (cancellation?.cancelled())
+      return { kind: "failure", status: "cancelled", message: "Canvas sizing cancelled." };
+    const reply = await this.#request(
+      { type: "geometry.request", command },
+      "geometry.reply",
+      cancellation
+    );
+    if (reply.type !== "geometry.reply") throw new Error("Invalid canvas geometry reply.");
+    return reply.result;
+  }
   /** Register reply ownership before synchronous transports can answer, and bound every request. */
   #request(request, reply, cancellation) {
     if (this.#disposed) return Promise.reject(new Error("Canvas connection closed."));
@@ -276,7 +314,8 @@ var CanvasClient = class {
       stopDeadline = this.port.later(3e4, () => {
         this.#pending.delete(requestId);
         stop();
-        if (request.type === "image.insert") this.#cancel(requestId);
+        if (request.type === "image.insert" || request.type === "geometry.request")
+          this.#cancel(requestId);
         reject(new Error("Canvas request timed out; it was not retried."));
       });
       stopCancellation = cancellation?.subscribe(() => {
@@ -285,6 +324,17 @@ var CanvasClient = class {
         this.#pending.delete(requestId);
         stop();
         this.#cancel(requestId);
+        if (request.type === "geometry.request") {
+          resolve({
+            protocol: "sugarcubes.canvas",
+            version: 2,
+            session: this.session,
+            requestId,
+            type: "geometry.reply",
+            result: { kind: "failure", status: "cancelled", message: "Canvas sizing cancelled." }
+          });
+          return;
+        }
         resolve({
           protocol: "sugarcubes.canvas",
           version: 2,
@@ -331,13 +381,14 @@ var CanvasClient = class {
 
 // integrations/shared/CanvasImagePolicy.ts
 var MAX_CANVAS_IMAGE_BYTES = 64 * 1024 * 1024;
+var MAX_CANVAS_IMAGE_PIXELS = 64 * 1024 * 1024;
 function canvasPngDimensions(bytes) {
   const signature = [137, 80, 78, 71, 13, 10, 26, 10];
   if (bytes.length < 33 || bytes.length > MAX_CANVAS_IMAGE_BYTES || signature.some((byte, index) => bytes[index] !== byte) || bytes[12] !== 73 || bytes[13] !== 72 || bytes[14] !== 68 || bytes[15] !== 82)
     throw new Error("Canvas insertion requires a valid bounded PNG image.");
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const width = view.getUint32(16, false), height = view.getUint32(20, false);
-  if (width < 1 || height < 1 || width > 3e4 || height > 3e4 || width * height > 64 * 1024 * 1024)
+  if (width < 1 || height < 1 || width > 3e4 || height > 3e4 || width * height > MAX_CANVAS_IMAGE_PIXELS)
     throw new Error("This image exceeds the canvas insertion pixel budget.");
   return Object.freeze({ width, height });
 }
@@ -424,11 +475,59 @@ function sampleCanvasComponent(bytes, width, components, component, x, y, bounds
   return value(x0, y0) * (1 - dx) * (1 - dy) + value(x1, y0) * dx * (1 - dy) + value(x0, y1) * (1 - dx) * dy + value(x1, y1) * dx * dy;
 }
 
+// integrations/shared/CanvasImageRegionCrop.ts
+function resolveCanvasImageRegion(image, region) {
+  const frame = region.mapping.imageSize;
+  if (region.outputFrame !== "vae-center-crop" || image.width > frame.width || image.height > frame.height || image.width === frame.width && image.height === frame.height)
+    return region;
+  return cropCanvasImageRegion(region, {
+    left: Math.floor((frame.width - image.width) / 2),
+    top: Math.floor((frame.height - image.height) / 2),
+    width: image.width,
+    height: image.height
+  });
+}
+function cropCanvasImageRegion(region, crop) {
+  const { imageSize, imageBounds: source, documentBounds: target } = region.mapping;
+  if (region.mask.format !== "coverage8" || region.mask.width !== imageSize.width || region.mask.height !== imageSize.height || !Object.values(crop).every(Number.isSafeInteger) || crop.left < 0 || crop.top < 0 || crop.width <= 0 || crop.height <= 0 || crop.left + crop.width > imageSize.width || crop.top + crop.height > imageSize.height)
+    throw new Error("Invalid processing frame crop.");
+  const left = Math.max(source.left, crop.left), top = Math.max(source.top, crop.top);
+  const right = Math.min(source.left + source.width, crop.left + crop.width);
+  const bottom = Math.min(source.top + source.height, crop.top + crop.height);
+  if (right <= left || bottom <= top)
+    throw new Error("The processing crop removed its image support.");
+  const original = decodeCanvasRaster(region.mask), mask = new Uint8Array(crop.width * crop.height);
+  for (let y = 0; y < crop.height; y++) {
+    const start = (crop.top + y) * imageSize.width + crop.left;
+    mask.set(original.subarray(start, start + crop.width), y * crop.width);
+  }
+  const scaleX = target.width / source.width, scaleY = target.height / source.height;
+  return Object.freeze({
+    coverage: region.coverage,
+    mask: Object.freeze(encodeCanvasRaster(crop.width, crop.height, "coverage8", mask)),
+    mapping: Object.freeze({
+      imageSize: Object.freeze({ width: crop.width, height: crop.height }),
+      imageBounds: Object.freeze({
+        left: left - crop.left,
+        top: top - crop.top,
+        width: right - left,
+        height: bottom - top
+      }),
+      documentBounds: Object.freeze({
+        left: target.left + (left - source.left) * scaleX,
+        top: target.top + (top - source.top) * scaleY,
+        width: (right - left) * scaleX,
+        height: (bottom - top) * scaleY
+      })
+    })
+  });
+}
+
 // integrations/shared/CanvasImageRegions.ts
 function validateMapping(image, region) {
   const { mapping, mask } = region;
   const { imageSize, imageBounds, documentBounds } = mapping;
-  if (image.format !== "rgba8" || mask.format !== "coverage8" || image.width !== imageSize.width || image.height !== imageSize.height || mask.width !== imageSize.width || mask.height !== imageSize.height)
+  if (image.format !== "rgba8" || mask.format !== "coverage8" || mask.width !== imageSize.width || mask.height !== imageSize.height)
     throw new Error(
       "The returned image or mask geometry does not match its captured processing frame."
     );
@@ -436,7 +535,7 @@ function validateMapping(image, region) {
     if (!Object.values(rectangle).every(Number.isFinite) || rectangle.width <= 0 || rectangle.height <= 0 || rectangle.width > 3e5 || rectangle.height > 3e5 || Math.abs(rectangle.left) > 3e5 || Math.abs(rectangle.top) > 3e5)
       throw new Error("Invalid canvas return mapping.");
   }
-  if (!Object.values(imageBounds).every(Number.isSafeInteger) || imageBounds.left < 0 || imageBounds.top < 0 || imageBounds.left + imageBounds.width > image.width || imageBounds.top + imageBounds.height > image.height)
+  if (!Object.values(imageBounds).every(Number.isSafeInteger) || imageBounds.left < 0 || imageBounds.top < 0 || imageBounds.left + imageBounds.width > imageSize.width || imageBounds.top + imageBounds.height > imageSize.height)
     throw new Error("Invalid canvas return image mapping.");
 }
 function coverageBounds(mask, width, bounds) {
@@ -468,15 +567,25 @@ function documentRectangle(bounds, mapping) {
   };
 }
 function prepareCanvasImagePatch(image, region) {
+  region = resolveCanvasImageRegion(image, region);
   validateMapping(image, region);
   const pixels = decodeCanvasRaster(image), mask = decodeCanvasRaster(region.mask);
-  const support = coverageBounds(mask, image.width, region.mapping.imageBounds);
+  const frame = region.mapping.imageSize;
+  const support = coverageBounds(mask, frame.width, region.mapping.imageBounds);
   if (!support) return null;
   const rectangle = documentRectangle(support, region.mapping);
   const result = new Uint8Array(canvasRasterByteLength(rectangle.width, rectangle.height, "rgba8"));
   const source = region.mapping.imageBounds, target = region.mapping.documentBounds;
   const scaleX = source.width / target.width, scaleY = source.height / target.height;
   const direct = scaleX === 1 && scaleY === 1 && Number.isInteger(target.left) && Number.isInteger(target.top);
+  const imageScaleX = image.width / frame.width, imageScaleY = image.height / frame.height;
+  const directImage = direct && imageScaleX === 1 && imageScaleY === 1;
+  const imageBounds = {
+    left: Math.floor(source.left * imageScaleX),
+    top: Math.floor(source.top * imageScaleY),
+    width: Math.ceil((source.left + source.width) * imageScaleX) - Math.floor(source.left * imageScaleX),
+    height: Math.ceil((source.top + source.height) * imageScaleY) - Math.floor(source.top * imageScaleY)
+  };
   let visible = false;
   for (let y = 0; y < rectangle.height; y++)
     for (let x = 0; x < rectangle.width; x++) {
@@ -484,9 +593,10 @@ function prepareCanvasImagePatch(image, region) {
       const sy = source.top + (rectangle.top + y + 0.5 - target.top) * scaleY - 0.5;
       if (rectangle.left + x + 0.5 < target.left || rectangle.top + y + 0.5 < target.top || rectangle.left + x + 0.5 >= target.left + target.width || rectangle.top + y + 0.5 >= target.top + target.height)
         continue;
-      const sourceOffset = (sy * image.width + sx) * 4;
-      const coverage = direct ? mask[sy * image.width + sx] ?? 0 : sampleCanvasComponent(mask, image.width, 1, 0, sx, sy, source);
-      const alpha = direct ? pixels[sourceOffset + 3] ?? 0 : sampleCanvasComponent(pixels, image.width, 4, 3, sx, sy, source);
+      const ix = (sx + 0.5) * imageScaleX - 0.5, iy = (sy + 0.5) * imageScaleY - 0.5;
+      const sourceOffset = (iy * image.width + ix) * 4;
+      const coverage = direct ? mask[sy * frame.width + sx] ?? 0 : sampleCanvasComponent(mask, frame.width, 1, 0, sx, sy, source);
+      const alpha = directImage ? pixels[sourceOffset + 3] ?? 0 : sampleCanvasComponent(pixels, image.width, 4, 3, ix, iy, imageBounds);
       const opacity = Math.round(
         alpha * (region.coverage === "support" ? coverage > 0 ? 1 : 0 : coverage / 255)
       );
@@ -494,8 +604,8 @@ function prepareCanvasImagePatch(image, region) {
       visible = true;
       const offset = (y * rectangle.width + x) * 4;
       for (let component = 0; component < 3; component++)
-        result[offset + component] = direct ? pixels[sourceOffset + component] ?? 0 : Math.round(
-          sampleCanvasComponent(pixels, image.width, 4, component, sx, sy, source, true) * 255 / alpha
+        result[offset + component] = directImage ? pixels[sourceOffset + component] ?? 0 : Math.round(
+          sampleCanvasComponent(pixels, image.width, 4, component, ix, iy, imageBounds, true) * 255 / alpha
         );
       result[offset + 3] = opacity;
     }
@@ -718,16 +828,50 @@ function canvasInputSourceKey(source) {
 function sameCanvasSourceDocument(first, second) {
   return first.id === second.id && first.geometryRevision === second.geometryRevision && first.width === second.width && first.height === second.height;
 }
+
+// integrations/shared/CanvasDimensions.ts
+function constrainCanvasDimension(value, limits) {
+  if (![limits.minimum, limits.maximum, limits.multiple].every(
+    (limit) => Number.isSafeInteger(limit) && limit > 0
+  ))
+    throw new Error("Dimension limits must be positive integer pixel values.");
+  const minimum = Math.ceil(limits.minimum / limits.multiple) * limits.multiple;
+  const maximum = Math.floor(limits.maximum / limits.multiple) * limits.multiple;
+  if (!Number.isFinite(value) || value <= 0 || minimum > maximum)
+    throw new Error("These dimensions cannot satisfy the field limits.");
+  return Math.min(
+    maximum,
+    Math.max(minimum, Math.round(value / limits.multiple) * limits.multiple)
+  );
+}
+function canvasSizingProposal(request, scale = request.scale) {
+  if (scale.length > 32 || !/^[0-9]+(?:\.[0-9]+)?$/.test(scale))
+    throw new Error("Enter a positive decimal scale factor of at most 32 characters.");
+  const factor = Number(scale);
+  if (!Number.isFinite(factor) || factor <= 0 || factor > 1e3)
+    throw new Error("Enter a scale factor greater than zero and no greater than 1000.");
+  const source = request.direction === "to-canvas" ? request.generation : request.reference;
+  const multiplier = request.direction === "to-canvas" ? factor : 1 / factor;
+  return {
+    width: constrainCanvasDimension(source.width * multiplier, request.widthLimits),
+    height: constrainCanvasDimension(source.height * multiplier, request.heightLimits)
+  };
+}
 export {
   CanvasCancellation,
   CanvasClient,
   CanvasMaskClient,
   MAX_CANVAS_IMAGE_BYTES,
+  MAX_CANVAS_IMAGE_PIXELS,
   MAX_CANVAS_RASTER_BYTES,
   WEB_CANVAS,
   canvasInputSourceKey,
+  canvasPngDimensions,
   canvasRasterByteLength,
+  canvasSizingProposal,
   canvasSourceTargetKey,
+  constrainCanvasDimension,
+  cropCanvasImageRegion,
   decodeCanvasRaster,
   decodeMaskPixels,
   encodeCanvasImage,
@@ -736,6 +880,8 @@ export {
   isCanvasInputSource,
   isCanvasInputTarget,
   isCanvasMaskReference,
+  isCanvasPixelRaster,
   prepareCanvasImagePatch,
+  resolveCanvasImageRegion,
   sameCanvasSourceDocument
 };

@@ -15,12 +15,21 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Bound and reuse expensive file decoding independently of browser transport and raster interpretation. */
 import { INPUT_PREVIEW_MAXIMUM } from '../domain/InputPreviewResolution.js';
+import { canvasRasterByteLength, MAX_CANVAS_RASTER_BYTES, } from '../../core/embedded/CanvasRuntime.js';
 /** Share pending work and retain at most sixteen maximum-size rasters with two concurrent decoders. */
 export class InputPreviewWorkCache {
+    maximumSize;
+    concurrency;
     #ready = new Map();
     #jobs = new Map();
     #queue = [];
     #active = 0;
+    #bytes = 0;
+    /** Use zero for full-resolution editing while preserving an explicit retained-byte and decoder budget. */
+    constructor(maximumSize = INPUT_PREVIEW_MAXIMUM, concurrency = 2) {
+        this.maximumSize = maximumSize;
+        this.concurrency = concurrency;
+    }
     /** Reuse completed pixels or admit one bounded pending decode for this exact file, settings and size. */
     read(key, load) {
         const ready = this.#ready.get(key);
@@ -47,7 +56,7 @@ export class InputPreviewWorkCache {
     }
     /** Release a decoder slot on both success and failure before admitting the next queued source. */
     #drain() {
-        while (this.#active < 2 && this.#queue.length) {
+        while (this.#active < this.concurrency && this.#queue.length) {
             const job = this.#queue.shift();
             if (!job)
                 return;
@@ -59,12 +68,18 @@ export class InputPreviewWorkCache {
                     !Number.isSafeInteger(pixels.height) ||
                     pixels.width < 1 ||
                     pixels.height < 1 ||
-                    pixels.width > INPUT_PREVIEW_MAXIMUM ||
-                    pixels.height > INPUT_PREVIEW_MAXIMUM)
+                    (this.maximumSize > 0 &&
+                        (pixels.width > this.maximumSize || pixels.height > this.maximumSize)))
                     throw new Error('The source preview exceeds its size limit.');
                 this.#ready.set(job.key, pixels);
-                while (this.#ready.size > 16)
-                    this.#ready.delete(this.#ready.keys().next().value ?? '');
+                this.#bytes += canvasRasterByteLength(pixels.width, pixels.height, pixels.format);
+                while (this.#ready.size > 16 || this.#bytes > MAX_CANVAS_RASTER_BYTES) {
+                    const oldest = this.#ready.entries().next().value;
+                    if (!oldest)
+                        break;
+                    this.#ready.delete(oldest[0]);
+                    this.#bytes -= canvasRasterByteLength(oldest[1].width, oldest[1].height, oldest[1].format);
+                }
                 return pixels;
             })
                 .then(job.resolve, job.reject)

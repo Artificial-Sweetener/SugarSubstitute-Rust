@@ -16,6 +16,7 @@
 /** Own persistent preview geometry and passive plugin presentation independently of source acquisition. */
 import { decodeCanvasRaster, type CanvasPixelRaster } from '../../core/embedded/CanvasRuntime.js';
 import { maskPreviewPixels } from './MaskPreviewWash.js';
+import type { MaskPreviewPlacement } from '../domain/MaskPreviewGeometry.js';
 
 /** Keep the same raster and frame mounted while source identity, interpretation and availability change. */
 export class InputPreviewSurface {
@@ -25,8 +26,14 @@ export class InputPreviewSurface {
   readonly #frame: HTMLElement;
   readonly #placeholder: HTMLElement;
   readonly #message: HTMLElement;
+  readonly #crop: HTMLElement;
   #passive: boolean;
   #painted = false;
+  #rendered: {
+    pixels: CanvasPixelRaster;
+    background: CanvasPixelRaster | null;
+    placement: MaskPreviewPlacement | null;
+  } | null = null;
 
   /** Use native button semantics only when entry selection belongs to the preview. */
   constructor(document: Document, passive: boolean, select: () => void) {
@@ -51,6 +58,11 @@ export class InputPreviewSurface {
     this.#message.className = 'sc-input-editor__message';
     this.#placeholder.append(icon, this.#message);
     this.#frame.append(this.canvas, this.#placeholder);
+    this.#crop = document.createElement('div');
+    this.#crop.className = 'sc-input-editor__crop';
+    this.#crop.hidden = true;
+    this.#crop.setAttribute('aria-hidden', 'true');
+    this.#frame.append(this.#crop);
     this.element.append(this.#label, this.#frame);
     this.loading();
   }
@@ -98,6 +110,7 @@ export class InputPreviewSurface {
 
   /** Replace stale pixels with concise feedback inside the same persistent frame. */
   unavailable(message: string): void {
+    this.#crop.hidden = true;
     this.#painted = false;
     this.canvas.hidden = true;
     this.#placeholder.hidden = false;
@@ -108,6 +121,7 @@ export class InputPreviewSurface {
 
   /** Show empty associated-image context as solid black without changing the reserved preview geometry. */
   black(): void {
+    this.#crop.hidden = true;
     this.#painted = true;
     this.canvas.hidden = true;
     this.#placeholder.hidden = true;
@@ -121,13 +135,58 @@ export class InputPreviewSurface {
     pixels: CanvasPixelRaster,
     frame: { readonly width: number; readonly height: number } | null,
     background: CanvasPixelRaster | null = null,
+    placement: MaskPreviewPlacement | null = null,
+    outline = false,
+    viewport: MaskPreviewPlacement | null = null,
+  ): void {
+    const raster = background ?? pixels,
+      canvas = this.canvas;
+    if (
+      this.#rendered?.pixels !== pixels ||
+      this.#rendered.background !== background ||
+      this.#rendered.placement !== placement
+    ) {
+      this.#paintPixels(pixels, background, placement);
+      this.#rendered = { pixels, background, placement };
+    }
+    Object.assign(
+      canvas.style,
+      viewport
+        ? {
+            left: `${(-viewport.bounds.left * 100) / viewport.bounds.width}%`,
+            top: `${(-viewport.bounds.top * 100) / viewport.bounds.height}%`,
+            width: `${(viewport.frame.width * 100) / viewport.bounds.width}%`,
+            height: `${(viewport.frame.height * 100) / viewport.bounds.height}%`,
+            objectFit: 'fill',
+          }
+        : { left: '0%', top: '0%', width: '100%', height: '100%', objectFit: 'contain' },
+    );
+    this.frame(frame?.width ?? raster.width, frame?.height ?? raster.height);
+    this.#crop.hidden = !placement || !outline;
+    if (placement && outline) {
+      const { bounds, frame: source } = placement;
+      Object.assign(this.#crop.style, {
+        left: `${(bounds.left * 100) / source.width}%`,
+        top: `${(bounds.top * 100) / source.height}%`,
+        width: `${(bounds.width * 100) / source.width}%`,
+        height: `${(bounds.height * 100) / source.height}%`,
+      });
+    }
+    this.#shown();
+  }
+
+  /** Upload changed display pixels once while viewport-only changes retain the same canvas backing store. */
+  #paintPixels(
+    pixels: CanvasPixelRaster,
+    background: CanvasPixelRaster | null,
+    placement: MaskPreviewPlacement | null,
   ): void {
     const raster = background ?? pixels,
       canvas = this.canvas;
     const context = canvas.getContext('2d');
     if (!context) throw new Error('Source preview rendering is unavailable.');
     const image = context.createImageData(raster.width, raster.height);
-    if (background) image.data.set(maskPreviewPixels(pixels, background));
+    if (background) image.data.set(maskPreviewPixels(pixels, background, placement));
     else {
       const bytes = decodeCanvasRaster(pixels);
       if (pixels.format === 'rgba8') image.data.set(bytes);
@@ -142,8 +201,6 @@ export class InputPreviewSurface {
     if (canvas.width !== raster.width) canvas.width = raster.width;
     if (canvas.height !== raster.height) canvas.height = raster.height;
     context.putImageData(image, 0, 0);
-    this.frame(frame?.width ?? raster.width, frame?.height ?? raster.height);
-    this.#shown();
   }
 
   /** Reveal completed pixels after one atomic paint and retain them during replacement work. */

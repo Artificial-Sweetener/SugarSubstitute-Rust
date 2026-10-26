@@ -27,6 +27,7 @@ export function projectNativeWidgetEdits(node: ComfyNode, widgets: unknown): unk
     const callback = projected.callback;
     return {
       ...projected,
+      sugarcubesNativeWidgetOwner: () => ({ node, name: owner.name }),
       /** Capture the complete native value change before exposing its completed history state. */
       callback(value: unknown): void {
         const root = isRecord(node.rootGraph) ? node.rootGraph : node.graph;

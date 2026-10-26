@@ -17,8 +17,10 @@
 
 import { isRecord } from '../../types/common.js';
 import type { ApiResponse, ComfyHostApi } from '../../types/graph.js';
+import type { WorkflowPreparedInput } from '../../execution/domain/WorkflowPreparation.js';
 
 export interface CubeExecutionRequestPayload {
+  prepared_inputs?: readonly WorkflowPreparedInput[];
   schema_version: 1;
   workflow: unknown;
   proximity_connections: unknown[];

@@ -3,7 +3,7 @@ import { GLOBAL_ASSOCIATION } from '../domain/UserPreset.js';
 import { captureEditorInputs, applyEditorInputs } from '../application/EditorField.js';
 import { dimensionMenuEntries } from './DimensionMenu.js';
 /** Consume prepared libraries and explicit command collaborators instead of owning persistence. */
-export function nodeActionEntries(card, library, families, dialog, run, skipped, modelContributions = []) {
+export function nodeActionEntries(card, library, families, dialog, run, skipped, modelContributions = [], canvasDimensions) {
     const scopes = [...families, GLOBAL_ASSOCIATION];
     const presets = library.nodePresets(card.nodeType, scopes);
     const entries = [];
@@ -62,7 +62,8 @@ export function nodeActionEntries(card, library, families, dialog, run, skipped,
         const width = card.fields.find((field) => field.name === pair.width), height = card.fields.find((field) => field.name === pair.height);
         if (!width || !height || width.kind !== 'number' || height.kind !== 'number')
             continue;
-        const dimensions = dimensionMenuEntries({ width, height }, null, library, families, run);
+        const binding = { width, height };
+        const dimensions = dimensionMenuEntries(binding, null, library, families, run, canvasDimensions?.(binding));
         contributions.push({
             order: Math.min(fieldNames.indexOf(pair.width), fieldNames.indexOf(pair.height)),
             entries: dimensions,

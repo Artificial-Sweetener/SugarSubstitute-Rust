@@ -17,6 +17,62 @@
 import { test, expect, jest } from '@jest/globals';
 import { ContextMenu } from '../../../frontend/comfyui/ui/menus/ContextMenu.js';
 
+test('refreshes editable submenu values in place and releases the branch on outside dismissal', () => {
+  const menu = new ContextMenu(document);
+  let value = '1';
+  let refresh = (): void => {};
+  const released = jest.fn();
+  menu.open({
+    label: 'Editable actions',
+    anchor: { kind: 'pointer', x: 12, y: 12 },
+    entries: [
+      {
+        label: 'Scaled action',
+        children: [
+          {
+            label: 'Scale factor',
+            input: {
+              get value() {
+                return value;
+              },
+              minimum: 0.001,
+              maximum: 1000,
+              step: 'any',
+              change(next) {
+                value = next;
+              },
+            },
+          },
+          {
+            get label() {
+              return `Apply ${value}`;
+            },
+          },
+        ],
+        opened(update) {
+          refresh = update;
+          return released;
+        },
+      },
+    ],
+  });
+  document.querySelector<HTMLElement>('[role=menuitem]')?.click();
+  const input = document.querySelector<HTMLInputElement>('input[aria-label="Scale factor"]');
+  if (!input) throw new Error('Missing editable submenu field');
+  input.focus();
+  input.value = '1.5';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  expect(document.body.textContent).toContain('Apply 1.5');
+  value = '2';
+  refresh();
+  expect(document.querySelector('input')).toBe(input);
+  expect(document.activeElement).toBe(input);
+  expect(input.value).toBe('2');
+  document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+  expect(menu.isOpen()).toBe(false);
+  expect(released).toHaveBeenCalledTimes(1);
+});
+
 test('renders non-interactive section labels literally without introducing another submenu level', () => {
   const menu = new ContextMenu(document);
   menu.open({

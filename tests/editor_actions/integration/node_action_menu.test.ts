@@ -70,9 +70,9 @@ test('orders presets before field actions and advanced visibility, preserving va
   expect(entries.filter((entry) => !entry.separator).map((entry) => entry.label)).toEqual([
     'Apply preset',
     'Save current Latent as preset...',
-    'Swap width & height',
     'Set ratio by Width',
     'Set ratio by Height',
+    'Swap width & height',
     'Save current dimensions',
     'Show advanced inputs',
   ]);
@@ -131,9 +131,9 @@ test('retains authored field contribution order instead of grouping all dimensio
   expect(entries.filter((entry) => !entry.separator).map((entry) => entry.label)).toEqual([
     'Save current Generation as preset...',
     'Checkpoint metadata',
-    'Swap width & height',
     'Set ratio by Width',
     'Set ratio by Height',
+    'Swap width & height',
     'Save current dimensions',
     'VAE metadata',
   ]);

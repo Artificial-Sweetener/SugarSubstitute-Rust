@@ -57,8 +57,8 @@ class _Tensor(Protocol):
 def native_image_preview(
     file: str, settings: InputPreviewSettings, maximum_size: int
 ) -> bytes:
-    """Show the image supplied to the selected upload field; resizing and compositing remain node operations."""
-    if settings.kind != "image" or not 1 <= maximum_size <= 1024:
+    """Read source pixels at display or full resolution while node operations remain in the workflow."""
+    if settings.kind != "image" or not 0 <= maximum_size <= 1024:
         raise ValueError("Invalid image source preview settings.")
     validate_input_file(file)
     nodes = import_module("nodes")
@@ -102,6 +102,8 @@ def native_image_preview(
         or shape[1] * shape[2] * 4 > 64 * 1024 * 1024
     ):
         raise ValueError("The image source exceeds the supported preview size.")
+    if maximum_size == 0 and shape[0] != 1:
+        raise ValueError("Input editing requires one decoded source image.")
     colors = image_tensor.detach().cpu().float().numpy()[0]
     if not np.isfinite(colors).all():
         raise ValueError("The image source contains invalid samples.")
@@ -118,7 +120,8 @@ def native_image_preview(
             raise ValueError("The image source contains invalid alpha.")
         rgba[..., 3] = np.rint((1 - np.clip(coverage, 0, 1)) * 255).astype(np.uint8)
     image = Image.fromarray(rgba)
-    image.thumbnail((maximum_size, maximum_size), Image.Resampling.BILINEAR)
+    if maximum_size:
+        image.thumbnail((maximum_size, maximum_size), Image.Resampling.BILINEAR)
     output = BytesIO()
     image.save(output, format="PNG")
     return output.getvalue()

@@ -110,6 +110,26 @@ function fixture() {
   };
 }
 
+test.each([
+  ['render.png', 'render'],
+  ['render.PNG', 'render'],
+  ['render.png.copy.png', 'render.png.copy'],
+  ['render.jpg', 'render.jpg'],
+  ['x'.repeat(140) + '.png', 'x'.repeat(128)],
+])(
+  'names the document layer %s without changing its output file identity',
+  async (filename, name) => {
+    const f = fixture();
+    f.ingestor.accepted(f.ingestor.submitting(f.a), f.id);
+    f.ingestor.final(workflowFinal(f.id, filename));
+    await f.delivery.idle();
+    expect(f.insert.mock.calls[0]?.[0].layerName).toBe(name);
+    expect(f.load.mock.calls[0]?.[0].filename).toBe(filename);
+    expect(f.web.read(f.a.session.sessionId)?.outputs[0]?.items[0]?.file.filename).toBe(filename);
+    f.delivery.dispose();
+  },
+);
+
 test('discovers mask operations by peer capability and refuses an ambiguous default', () => {
   const f = fixture();
   expect(f.delivery.maskHost()).toBeNull();
@@ -168,10 +188,7 @@ test('updates the web peer immediately while the document peer is transferring a
   if (!finishTransfer) throw new Error('The document adapter did not request image bytes.');
   finishTransfer({ image: { format: 'png', encoding: 'base64', data: 'png' }, position: null });
   await f.delivery.idle();
-  expect(f.insert.mock.calls.map(([value]) => value.layerName)).toEqual([
-    'final.png',
-    'second.png',
-  ]);
+  expect(f.insert.mock.calls.map(([value]) => value.layerName)).toEqual(['final', 'second']);
   expect(f.web.read(f.a.session.sessionId)?.runStatus).toBe('complete');
   f.delivery.dispose();
 });
@@ -290,7 +307,7 @@ test('pins explicit destination selection at submission instead of broadcasting 
   f.ingestor.accepted(f.ingestor.submitting(f.a), secondId);
   f.ingestor.final(workflowFinal(secondId, 'document-only.png'));
   await f.delivery.idle();
-  expect(f.insert.mock.calls.map(([value]) => value.layerName)).toEqual(['document-only.png']);
+  expect(f.insert.mock.calls.map(([value]) => value.layerName)).toEqual(['document-only']);
   expect(f.web.read(f.a.session.sessionId)?.outputs[0]?.items[0]?.file.filename).toBe(
     'web-only.png',
   );
@@ -313,7 +330,7 @@ test('inserts each finished output into the captured document while the job is s
   expect(f.results.read(f.a.session.sessionId)?.runStatus).toBe('running');
   expect(f.insert.mock.calls[0]?.[0]).toMatchObject({
     document: f.context.document,
-    layerName: 'final.png',
+    layerName: 'final',
   });
   expect(f.load.mock.calls[0]?.[0]).toEqual({
     filename: 'final.png',
@@ -322,10 +339,7 @@ test('inserts each finished output into the captured document while the job is s
   });
   f.ingestor.final(workflowFinal(f.id, 'second.png'));
   await f.delivery.idle();
-  expect(f.insert.mock.calls.map(([image]) => image.layerName)).toEqual([
-    'final.png',
-    'second.png',
-  ]);
+  expect(f.insert.mock.calls.map(([image]) => image.layerName)).toEqual(['final', 'second']);
   expect(f.results.read(f.a.session.sessionId)?.runStatus).toBe('running');
   f.ingestor.terminal(f.id, 'complete');
   await f.delivery.idle();
@@ -350,10 +364,7 @@ test('attributes early completion, deduplicates recovery and inserts every image
   f.ingestor.final({ ...batch, delivery: 'history-copy' });
   f.ingestor.recovered(f.id, 'complete');
   await f.delivery.idle();
-  expect(f.insert.mock.calls.map(([value]) => value.layerName)).toEqual([
-    'final.png',
-    'second.png',
-  ]);
+  expect(f.insert.mock.calls.map(([value]) => value.layerName)).toEqual(['final', 'second']);
   expect(f.report).not.toHaveBeenCalled();
   f.delivery.dispose();
 });
@@ -390,7 +401,7 @@ test('keeps overlapping runs independent even when an older result is no longer 
   f.ingestor.final(workflowFinal(f.id, 'older.png'));
   f.ingestor.terminal(f.id, 'complete');
   await f.delivery.idle();
-  expect(f.insert.mock.calls.map(([value]) => value.layerName)).toEqual(['newer.png', 'older.png']);
+  expect(f.insert.mock.calls.map(([value]) => value.layerName)).toEqual(['newer', 'older']);
   f.delivery.dispose();
 });
 
@@ -402,7 +413,7 @@ test.each(['cancelled', 'error'] as const)(
     f.ingestor.final(workflowFinal(f.id));
     f.ingestor.terminal(f.id, status);
     await f.delivery.idle();
-    expect(f.insert.mock.calls.map(([image]) => image.layerName)).toEqual(['final.png']);
+    expect(f.insert.mock.calls.map(([image]) => image.layerName)).toEqual(['final']);
     f.ingestor.final(workflowFinal(f.id, 'late.png'));
     await f.delivery.idle();
     expect(f.insert).toHaveBeenCalledTimes(1);
@@ -421,10 +432,7 @@ test('delivers incremental and replacement image notifications once without dupl
   const second = workflowFinal(f.id, 'second.png');
   f.ingestor.final({ ...second, merge: true });
   await f.delivery.idle();
-  expect(f.insert.mock.calls.map(([image]) => image.layerName)).toEqual([
-    'final.png',
-    'second.png',
-  ]);
+  expect(f.insert.mock.calls.map(([image]) => image.layerName)).toEqual(['final', 'second']);
   f.ingestor.final({ ...second, merge: true });
   f.ingestor.final({
     ...first,
@@ -448,7 +456,7 @@ test('delivers recovered output for an observed live run but never replays resto
   f.ingestor.final(workflowFinal(f.id, 'recovered.png'), 1);
   f.ingestor.recovered(f.id, 'complete');
   await f.delivery.idle();
-  expect(f.insert.mock.calls.map(([value]) => value.layerName)).toEqual(['recovered.png']);
+  expect(f.insert.mock.calls.map(([value]) => value.layerName)).toEqual(['recovered']);
   f.delivery.dispose();
   f.ingestor.dispose();
 });
@@ -564,7 +572,7 @@ test('cancels transfer at workflow retirement while preserving another job deliv
   f.ingestor.terminal(other, 'complete');
   pending.release?.();
   await f.delivery.idle();
-  expect(f.insert.mock.calls.map(([image]) => image.layerName)).toEqual(['other.png']);
+  expect(f.insert.mock.calls.map(([image]) => image.layerName)).toEqual(['other']);
   f.delivery.dispose();
 });
 
@@ -641,7 +649,7 @@ test('delivers each mask-defined batch result before completion using capture pr
   expect(f.insert.mock.calls[0]?.[0]).toMatchObject({
     document,
     position: { left: 1, top: 0 },
-    layerName: 'first.png',
+    layerName: 'first',
   });
   expect(patches[0]).toEqual([80, 120, 160, 255, 0, 0, 0, 0, 0, 0, 0, 0, 80, 120, 160, 128]);
   expect(f.runs.read(f.id)?.status).not.toBe('complete');
@@ -651,7 +659,7 @@ test('delivers each mask-defined batch result before completion using capture pr
   expect(f.insert.mock.calls[1]?.[0]).toMatchObject({
     document,
     position: { left: 0, top: 0 },
-    layerName: 'second.png',
+    layerName: 'second',
   });
   expect(f.load.mock.calls.map((call) => call[2])).toEqual(regions);
   expect(f.report).not.toHaveBeenCalled();

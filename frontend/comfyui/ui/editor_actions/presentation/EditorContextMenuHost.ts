@@ -30,6 +30,7 @@ import { nodeActionEntries } from './NodeActionMenu.js';
 import { dimensionMenuEntries } from './DimensionMenu.js';
 import { dimensionFieldTarget } from './DimensionFieldTarget.js';
 import type { ModelContextContribution } from '../../model_library/ModelContextProjection.js';
+import type { DimensionBinding } from '../application/CanvasDimensionFields.js';
 export interface EditorContextMenuOptions {
   readonly document: Document;
   readonly library: UserPresetLibrary;
@@ -39,6 +40,7 @@ export interface EditorContextMenuOptions {
   readonly readCard?: (root: HTMLElement) => NativeEditorCard | null;
   readonly enabled?: () => boolean;
   readonly modelContributions?: (root: HTMLElement) => readonly ModelContextContribution[];
+  readonly canvasDimensions?: (binding: DimensionBinding) => readonly ContextMenuEntry[];
 }
 interface CardMenu {
   readonly root: HTMLElement;
@@ -159,6 +161,7 @@ export class EditorContextMenuHost {
       this.#run,
       this.#options.skipped,
       this.#options.modelContributions?.(card.root) ?? [],
+      this.#options.canvasDimensions,
     );
   }
   /** Route exact numeric pair fields while retaining model and prompt-specific menu ownership. */
@@ -179,6 +182,7 @@ export class EditorContextMenuHost {
         entries,
         anchor: { kind: 'pointer', x: event.clientX, y: event.clientY },
         trigger: card.header,
+        preferRightSubmenus: inferDimensionPairs(card.fields.map((field) => field.name)).length > 0,
       });
       return;
     }
@@ -204,6 +208,7 @@ export class EditorContextMenuHost {
       this.#options.library,
       this.#options.families(card),
       this.#run,
+      this.#options.canvasDimensions?.({ width, height }),
     );
     if (!entries.length) return;
     event.preventDefault();
@@ -214,6 +219,7 @@ export class EditorContextMenuHost {
       entries,
       anchor: { kind: 'pointer', x: event.clientX, y: event.clientY },
       trigger: field.element,
+      preferRightSubmenus: true,
     });
   };
   /** Route persistence failures through existing non-blocking SugarCubes feedback. */

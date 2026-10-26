@@ -127,6 +127,10 @@ async function fixture(ordered = false, custom = false) {
 test('plugin previews have no click command, border selection semantics or focus stop; native entry fields retain ordered editing', async () => {
   const f = await fixture(true),
     first = f.binding.state.selected;
+  expect(
+    getComputedStyle(f.view.element.querySelector<HTMLElement>('.sc-input-editor__status')!)
+      .display,
+  ).toBe('none');
   f.binding.add();
   await settled();
   const second = f.binding.state.selected,

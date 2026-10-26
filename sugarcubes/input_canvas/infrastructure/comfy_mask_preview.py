@@ -70,6 +70,8 @@ def native_mask_preview(
         or shape[1] * shape[2] > 64 * 1024 * 1024
     ):
         raise ValueError("The effective mask exceeds the supported preview size.")
+    if maximum_size == 0 and shape[0] != 1:
+        raise ValueError("Input editing requires one effective mask.")
     values = tensor.detach().cpu().float().numpy()
     if not np.isfinite(values).all():
         raise ValueError("The effective mask contains invalid coverage.")

@@ -295,7 +295,7 @@ test('mounts registered masonry replacements, preserves channel controls and res
     nativePresentationWidgets(f.node)
       .filter(isNativeWidgetPresented)
       .map((widget) => widget.label ?? widget.name),
-  ).toEqual(['Source', 'Layer', 'Entry', 'channel']);
+  ).toEqual(['Source', 'Layer', 'File', 'Entry', 'channel']);
   expect(card.getAttribute('data-sc-native-media')).toBe('replaced');
   const editor = card.querySelector('[data-sc-input-editor]'),
     calls = f.execute.mock.calls.length;

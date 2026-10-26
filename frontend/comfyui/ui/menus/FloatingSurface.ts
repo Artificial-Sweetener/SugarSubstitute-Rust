@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own detached, bounded popup geometry and lifecycle without participating in application layout. */
 import { applyOwnedTheme } from '../surface/appearance/ThemeService.js';
-import { readComfyDarkTheme } from '../surface/appearance/ComfyColorScheme.js';
+import { readOwnedDarkTheme } from '../surface/appearance/OwnedColorScheme.js';
 
 export type FloatingAnchor =
   | { readonly kind: 'pointer'; readonly x: number; readonly y: number }
@@ -29,6 +29,8 @@ export interface FloatingBounds {
 export interface FloatingSurfaceOptions {
   /** Let native editor tooltips retain their own measured positions inside one shared top-layer plane. */
   readonly viewport?: boolean;
+  /** Reserve one measured surface width to the right before interaction starts. */
+  readonly reserveRight?: boolean;
   readonly anchor: FloatingAnchor;
   readonly dismiss: () => void;
   readonly containsTarget?: (target: Node) => boolean;
@@ -77,6 +79,7 @@ export function floatingPosition(
   height: number,
   viewportWidth: number,
   viewportHeight: number,
+  reserveRight = 0,
 ): { left: number; top: number } {
   const gap = 4;
   let left = anchor.kind === 'pointer' ? anchor.x : anchor.bounds.left;
@@ -87,6 +90,8 @@ export function floatingPosition(
     if (left + width > viewportWidth - gap) left = anchor.bounds.left - width + gap;
   } else if (anchor.kind === 'below' && top + height > viewportHeight - gap)
     top = anchor.bounds.top - height - gap;
+  if (anchor.kind === 'pointer' && reserveRight > 0)
+    left = Math.min(left, Math.max(gap, viewportWidth - width - reserveRight - gap));
   return {
     left: Math.max(gap, Math.min(left, viewportWidth - width - gap)),
     top: Math.max(gap, Math.min(top, viewportHeight - height - gap)),
@@ -124,7 +129,7 @@ export class FloatingSurface {
     this.close();
     this.#options = options;
     this.#document.body.append(this.element);
-    applyOwnedTheme(this.element, readComfyDarkTheme(this.#document));
+    applyOwnedTheme(this.element, readOwnedDarkTheme(this.#document));
     if (typeof this.element.showPopover === 'function') this.element.showPopover();
     this.reposition();
     const windowRef = this.#document.defaultView;
@@ -170,6 +175,7 @@ export class FloatingSurface {
       rect.height,
       windowRef?.innerWidth ?? this.#document.documentElement.clientWidth,
       windowRef?.innerHeight ?? this.#document.documentElement.clientHeight,
+      this.#options.reserveRight ? rect.width : 0,
     );
     this.element.style.setProperty('left', `${String(position.left)}px`, 'important');
     this.element.style.setProperty('top', `${String(position.top)}px`, 'important');

@@ -22,6 +22,7 @@ import type {
   CapturedCanvasSource,
 } from './CanvasSourceCapture.js';
 import { maskSourceImage } from '../domain/MaskSourcePixels.js';
+import type { InputEntry } from '../domain/InputBinding.js';
 
 /** Keep file encoding and upload outside application source interpretation. */
 export interface InputSourceAssets {
@@ -31,6 +32,20 @@ export interface InputSourceAssets {
 export interface PreparedInputSources {
   readonly files: ReadonlyMap<string, string>;
   readonly snapshots: ReadonlyMap<string, CapturedCanvasSource>;
+}
+
+/** Resolve one frozen entry through the same source-to-upload identity used by every queue consumer. */
+export function preparedSourceFile(
+  field: string,
+  entry: InputEntry,
+  sources: PreparedInputSources,
+): string {
+  const file =
+    entry.source.kind === 'canvas'
+      ? sources.files.get(JSON.stringify([field, entry.id]))
+      : entry.source.file;
+  if (!file) throw new Error('Choose a file or canvas source for every entry.');
+  return file;
 }
 
 /** Adapt source capture to a file-loading field without changing source channels or the loader's settings. */

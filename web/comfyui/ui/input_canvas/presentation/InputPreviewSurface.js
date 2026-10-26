@@ -24,8 +24,10 @@ export class InputPreviewSurface {
     #frame;
     #placeholder;
     #message;
+    #crop;
     #passive;
     #painted = false;
+    #rendered = null;
     /** Use native button semantics only when entry selection belongs to the preview. */
     constructor(document, passive, select) {
         this.#passive = passive;
@@ -49,6 +51,11 @@ export class InputPreviewSurface {
         this.#message.className = 'sc-input-editor__message';
         this.#placeholder.append(icon, this.#message);
         this.#frame.append(this.canvas, this.#placeholder);
+        this.#crop = document.createElement('div');
+        this.#crop.className = 'sc-input-editor__crop';
+        this.#crop.hidden = true;
+        this.#crop.setAttribute('aria-hidden', 'true');
+        this.#frame.append(this.#crop);
         this.element.append(this.#label, this.#frame);
         this.loading();
     }
@@ -87,6 +94,7 @@ export class InputPreviewSurface {
     }
     /** Replace stale pixels with concise feedback inside the same persistent frame. */
     unavailable(message) {
+        this.#crop.hidden = true;
         this.#painted = false;
         this.canvas.hidden = true;
         this.#placeholder.hidden = false;
@@ -96,6 +104,7 @@ export class InputPreviewSurface {
     }
     /** Show empty associated-image context as solid black without changing the reserved preview geometry. */
     black() {
+        this.#crop.hidden = true;
         this.#painted = true;
         this.canvas.hidden = true;
         this.#placeholder.hidden = true;
@@ -104,14 +113,45 @@ export class InputPreviewSurface {
         this.#frame.setAttribute('aria-busy', 'false');
     }
     /** Paint interpreted pixels with one optional associated-image wash, retaining the mounted preview surface. */
-    paint(pixels, frame, background = null) {
+    paint(pixels, frame, background = null, placement = null, outline = false, viewport = null) {
+        const raster = background ?? pixels, canvas = this.canvas;
+        if (this.#rendered?.pixels !== pixels ||
+            this.#rendered.background !== background ||
+            this.#rendered.placement !== placement) {
+            this.#paintPixels(pixels, background, placement);
+            this.#rendered = { pixels, background, placement };
+        }
+        Object.assign(canvas.style, viewport
+            ? {
+                left: `${(-viewport.bounds.left * 100) / viewport.bounds.width}%`,
+                top: `${(-viewport.bounds.top * 100) / viewport.bounds.height}%`,
+                width: `${(viewport.frame.width * 100) / viewport.bounds.width}%`,
+                height: `${(viewport.frame.height * 100) / viewport.bounds.height}%`,
+                objectFit: 'fill',
+            }
+            : { left: '0%', top: '0%', width: '100%', height: '100%', objectFit: 'contain' });
+        this.frame(frame?.width ?? raster.width, frame?.height ?? raster.height);
+        this.#crop.hidden = !placement || !outline;
+        if (placement && outline) {
+            const { bounds, frame: source } = placement;
+            Object.assign(this.#crop.style, {
+                left: `${(bounds.left * 100) / source.width}%`,
+                top: `${(bounds.top * 100) / source.height}%`,
+                width: `${(bounds.width * 100) / source.width}%`,
+                height: `${(bounds.height * 100) / source.height}%`,
+            });
+        }
+        this.#shown();
+    }
+    /** Upload changed display pixels once while viewport-only changes retain the same canvas backing store. */
+    #paintPixels(pixels, background, placement) {
         const raster = background ?? pixels, canvas = this.canvas;
         const context = canvas.getContext('2d');
         if (!context)
             throw new Error('Source preview rendering is unavailable.');
         const image = context.createImageData(raster.width, raster.height);
         if (background)
-            image.data.set(maskPreviewPixels(pixels, background));
+            image.data.set(maskPreviewPixels(pixels, background, placement));
         else {
             const bytes = decodeCanvasRaster(pixels);
             if (pixels.format === 'rgba8')
@@ -128,8 +168,6 @@ export class InputPreviewSurface {
         if (canvas.height !== raster.height)
             canvas.height = raster.height;
         context.putImageData(image, 0, 0);
-        this.frame(frame?.width ?? raster.width, frame?.height ?? raster.height);
-        this.#shown();
     }
     /** Reveal completed pixels after one atomic paint and retain them during replacement work. */
     #shown() {

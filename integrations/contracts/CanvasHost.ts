@@ -22,12 +22,14 @@ import type {
 } from './CanvasProtocol.generated.js';
 import type { CanvasMaskHost } from './CanvasMasks.js';
 import type { CanvasSourceHost } from './CanvasSources.js';
+import type { CanvasGeometryHost } from './CanvasGeometry.js';
 /** Expose common discovery without requiring document editing from display-only canvases. */
 export interface CanvasHost {
   readCanvas(): CanvasDescriptor | null;
 }
 /** Supply image insertion only on hosts declaring the corresponding capability. */
 export interface CanvasLayerHost extends CanvasHost {
+  readonly geometry?: CanvasGeometryHost | null;
   readonly masks?: CanvasMaskHost | null;
   readonly sources?: CanvasSourceHost | null;
   readContext(): Promise<CanvasContext>;

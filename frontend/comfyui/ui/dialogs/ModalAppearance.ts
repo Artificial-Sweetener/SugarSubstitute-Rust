@@ -18,7 +18,7 @@ import { readOwnedVisualStyle } from '../surface/appearance/VisualStyleBoundary.
 import { subscribeVisualStyle } from '../surface/appearance/VisualStyleBoundary.js';
 import type { VisualStyle } from '../surface/appearance/VisualStyle.js';
 import { applyOwnedTheme } from '../surface/appearance/ThemeService.js';
-import { readComfyDarkTheme } from '../surface/appearance/ComfyColorScheme.js';
+import { readOwnedDarkTheme } from '../surface/appearance/OwnedColorScheme.js';
 import { injectModalAppearanceStyles } from './ModalAppearanceStyles.js';
 import type { AppearanceSource } from '../surface/appearance/AppearanceState.js';
 
@@ -81,7 +81,7 @@ export class ModalAppearance {
   #refresh(): void {
     if (!this.#overlay) return;
     const accepted = this.#source?.appearance;
-    const dark = accepted?.dark ?? readComfyDarkTheme(this.#overlay.ownerDocument);
+    const dark = accepted?.dark ?? readOwnedDarkTheme(this.#overlay.ownerDocument);
     const style = accepted?.style ?? readOwnedVisualStyle(this.#overlay.ownerDocument);
     if (dark === this.#dark && style === this.#style) return;
     this.#dark = dark;

@@ -41,7 +41,8 @@ test.each(['fluent', 'spectrum', 'photopro'] as const)(
     expect(css).toContain(
       `[data-sc-number-spinner]:not([data-sc-seed-box]) { width:${SPINNER_WIDTH};`,
     );
-    expect(css).toContain(
+    ensureOwnedControlAppearanceStyles(document);
+    expect(document.getElementById('sugarcubes-owned-control-appearance')?.textContent).toContain(
       `[data-sc-number-pair] > :first-child { width:${SPINNER_WIDTH}; min-width:${SPINNER_WIDTH};`,
     );
     expect(css).toContain(`flex-basis:${SPINNER_WIDTH};`);
@@ -152,6 +153,36 @@ test('allows slider drag updates and completion to reach its window listeners', 
     window.removeEventListener('pointerup', finish);
     controls.clear();
   }
+});
+
+test('keeps slider navigation out of graph shortcuts without canceling native range actions', () => {
+  const { root, field, controls } = fixture();
+  const graphKey = jest.fn((event: Event) => event.preventDefault());
+  root.addEventListener('keydown', graphKey);
+  controls.reconcile(root, [field]);
+  const slider = root.querySelector('numeric-slider-fixture');
+  if (!slider) throw new Error('Missing slider.');
+  for (const key of [
+    'ArrowRight',
+    'ArrowLeft',
+    'ArrowUp',
+    'ArrowDown',
+    'Home',
+    'End',
+    'PageUp',
+    'PageDown',
+  ]) {
+    const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+    slider.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+  }
+  expect(graphKey).not.toHaveBeenCalled();
+  slider.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  expect(graphKey).toHaveBeenCalledTimes(1);
+  controls.clear();
+  root.append(slider);
+  slider.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+  expect(graphKey).toHaveBeenCalledTimes(2);
 });
 
 test.each(['fluent', 'spectrum', 'photopro'] as const)(
@@ -269,6 +300,39 @@ test('rejects invalid, reversed, and unsafe slider ranges', () => {
   for (const change of [{ step: 0 }, { maximum: Infinity }, { minimum: 2 }, { maximum: 1e20 }])
     expect(usesSubstituteSlider({ ...spec, ...change })).toBe(false);
 });
+
+test.each([
+  ['mask_dilation', 0, -512, 512, 1],
+  ['crop_factor', 1, 0, 100, 0.1],
+  ['post_dilation', 0, -512, 512, 1],
+  ['feather', 0, 0, 512, 1],
+])(
+  'explicit %s spinner-slider shares native values for integers and decimals',
+  (name, precision, minimum, maximum, step) => {
+    const { root, field, controls, write, external } = fixture(
+      String(name),
+      String(name),
+      Number(precision),
+    );
+    field.presentation = 'spinner-slider';
+    field.minimum = Number(minimum);
+    field.maximum = Number(maximum);
+    field.step = Number(step);
+    external(0);
+    controls.reconcile(root, [field]);
+    const slider = root.querySelector<SliderFixture>('numeric-slider-fixture');
+    expect(slider).not.toBeNull();
+    expect(slider?.min).toBe(String(minimum));
+    expect(slider?.step).toBe(String(step));
+    if (!slider) throw new Error('Missing paired slider.');
+    slider.value = Number(minimum) < 0 ? '-2' : '2';
+    expect(write).toHaveBeenLastCalledWith(Number(slider.value));
+    external(0);
+    expect(slider.value).toBe('0');
+    controls.clear();
+    expect(field.input.isConnected).toBe(true);
+  },
+);
 
 test('keeps slider, typed entry, buttons, and external updates synchronized through one native owner', () => {
   const { root, field, controls, write, external, unsubscribe } = fixture();
@@ -394,7 +458,7 @@ test('adapts the live numeric component model and watcher while rejecting unknow
         widget: {
           name: 'value',
           label: 'Scale Factor',
-          options: { min: 1, max: 5, step2: 0.1, precision: 1 },
+          options: { min: 1, max: 5, step2: 0.1, precision: 1, presentation: 'spinner-slider' },
         },
       },
       subTree: { children: [numeric] },
@@ -404,6 +468,9 @@ test('adapts the live numeric component model and watcher while rejecting unknow
   if (!adapted) throw new Error('Native boundary missing');
   expect(adapted.label).toBe('Scale Factor');
   expect(adapted.maximum).toBe(5);
+  expect(adapted.presentation).toBe('spinner-slider');
+  widget.component.props.widget.options.presentation = 'unknown';
+  expect(readNativeNumericField(field.row, widget)?.presentation).toBeUndefined();
   expect(adapted.rangeFill).toBe(rangeFill);
   adapted.writeValue(0.4);
   expect(emit).toHaveBeenCalledWith('update:modelValue', 0.4);

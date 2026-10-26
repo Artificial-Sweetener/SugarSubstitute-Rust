@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Bind reversible host frame mounts to the existing workflow, mode and palette authorities. */
 import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
+import { InputModal } from '../../dialogs/InputModal.js';
 import { subscribeVisualStyle } from '../appearance/VisualStyleBoundary.js';
 import { SubstituteFrameMode } from './SubstituteFrameMode.js';
 import { ComfyFrameWorkflowAdapter } from './ComfyFrameWorkflowAdapter.js';
@@ -38,6 +39,7 @@ export class SubstituteFrameHost {
     #mount = null;
     #native = null;
     #view = null;
+    #renamePrompt;
     #generation = null;
     #toolbarLayout = null;
     #pluginToolbar = null;
@@ -48,6 +50,12 @@ export class SubstituteFrameHost {
     /** Prepare collaborators without choosing presentation before settings are restored. */
     constructor(options) {
         this.options = options;
+        this.#renamePrompt = new InputModal({
+            adapter: {
+                getDocument: () => options.document,
+                getWindow: () => options.document.defaultView,
+            },
+        });
         this.#style = options.document.createElement('style');
         this.#style.id = 'sugarcubes-substitute-frame';
         this.#style.textContent = substituteFrameCss + desktopFrameCss + pluginFrameCss;
@@ -156,7 +164,14 @@ export class SubstituteFrameHost {
     #attach(mount, native) {
         this.#mount = mount;
         this.#native = native;
-        this.#adapter = new ComfyFrameWorkflowAdapter(this.options.app, native);
+        this.#adapter = new ComfyFrameWorkflowAdapter(this.options.app, native, (name, validate) => this.#renamePrompt.open({
+            title: 'Rename workflow',
+            label: 'Name',
+            initialValue: name,
+            confirmLabel: 'Rename',
+            normalizeValue: (value) => value.trim(),
+            validate,
+        }));
         this.#stopWorkflow = this.#adapter.subscribe(() => this.#queue());
         const command = (id) => {
             void this.#adapter?.command(id).catch(this.options.report);
@@ -195,6 +210,7 @@ export class SubstituteFrameHost {
     }
     /** Retire the view while preserving host controls, workflow state and saved preferences. */
     #unmount() {
+        this.#renamePrompt.close(null);
         this.#desktop.detach();
         this.#pluginToolbar?.dispose();
         this.#pluginToolbar = null;

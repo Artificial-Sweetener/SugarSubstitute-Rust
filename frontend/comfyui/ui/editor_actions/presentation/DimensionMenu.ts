@@ -25,16 +25,7 @@ import type { DimensionSide } from '../domain/DimensionPolicy.js';
 import { GLOBAL_ASSOCIATION } from '../domain/UserPreset.js';
 import type { PresetAssociation } from '../domain/UserPreset.js';
 import type { UserPresetLibrary } from '../application/UserPresetLibrary.js';
-
-export interface DimensionField {
-  read(): unknown;
-  write(value: number): unknown;
-  disabled(): boolean;
-}
-export interface DimensionBinding {
-  readonly width: DimensionField;
-  readonly height: DimensionField;
-}
+import type { DimensionBinding } from '../application/CanvasDimensionFields.js';
 
 /** Build side-aware dimensions, ratio orientations and matching persisted scopes without IO. */
 export function dimensionMenuEntries(
@@ -43,21 +34,41 @@ export function dimensionMenuEntries(
   library: UserPresetLibrary,
   families: readonly PresetAssociation[],
   run: (operation: Promise<void>) => void,
+  canvasEntries: readonly ContextMenuEntry[] = [],
 ): ContextMenuEntry[] {
   if (binding.width.disabled() || binding.height.disabled()) return [];
-  const entries: ContextMenuEntry[] = [
-    {
-      label: 'Swap width & height',
-      select: () => {
-        const width = binding.width.read(),
-          height = binding.height.read();
-        if (typeof width === 'number' && typeof height === 'number') {
-          binding.width.write(height);
-          binding.height.write(width);
-        }
-      },
+  const entries: ContextMenuEntry[] = [];
+  for (const anchor of side ? [side] : (['width', 'height'] as const))
+    entries.push({
+      label: `Set ratio by ${anchor === 'width' ? 'Width' : 'Height'}`,
+      children: [
+        { label: 'Landscape', ratios: LANDSCAPE_RATIOS },
+        { label: 'Portrait', ratios: PORTRAIT_RATIOS },
+      ].map(({ label, ratios }) => ({
+        label,
+        children: ratios.map(([width, height]) => ({
+          label: `${width}:${height}`,
+          select: () => {
+            const value = binding[anchor].read();
+            const target =
+              typeof value === 'number' ? ratioDimension(value, anchor, width, height) : null;
+            if (target !== null) binding[anchor === 'width' ? 'height' : 'width'].write(target);
+          },
+        })),
+      })),
+    });
+  entries.push({
+    label: 'Swap width & height',
+    select: () => {
+      const width = binding.width.read(),
+        height = binding.height.read();
+      if (typeof width === 'number' && typeof height === 'number') {
+        binding.width.write(height);
+        binding.height.write(width);
+      }
     },
-  ];
+  });
+  entries.push(...canvasEntries);
   const scopes = [...families, GLOBAL_ASSOCIATION];
   if (scopes.some((scope) => library.dimensions(scope).length))
     entries.push({
@@ -92,25 +103,6 @@ export function dimensionMenuEntries(
               };
             }),
           ]),
-      })),
-    });
-  for (const anchor of side ? [side] : (['width', 'height'] as const))
-    entries.push({
-      label: `Set ratio by ${anchor === 'width' ? 'Width' : 'Height'}`,
-      children: [
-        { label: 'Landscape', ratios: LANDSCAPE_RATIOS },
-        { label: 'Portrait', ratios: PORTRAIT_RATIOS },
-      ].map(({ label, ratios }) => ({
-        label,
-        children: ratios.map(([width, height]) => ({
-          label: `${width}:${height}`,
-          select: () => {
-            const value = binding[anchor].read();
-            const target =
-              typeof value === 'number' ? ratioDimension(value, anchor, width, height) : null;
-            if (target !== null) binding[anchor === 'width' ? 'height' : 'width'].write(target);
-          },
-        })),
       })),
     });
   const width = binding.width.read(),
