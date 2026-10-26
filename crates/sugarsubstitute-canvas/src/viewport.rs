@@ -17,6 +17,20 @@ pub struct Viewport {
     translation: [i32; 2],
 }
 impl Viewport {
+    /// Map source device coordinates directly without cancelling the retained integer phase.
+    pub(crate) fn projection_to(self, target: Self) -> Result<(f64, [f64; 2]), CanvasError> {
+        let scale = target.zoom / self.zoom;
+        let offset = std::array::from_fn(|axis| {
+            (self.origin[axis] - target.origin[axis]) * target.zoom
+                + f64::from(target.translation[axis])
+                - f64::from(self.translation[axis]) * scale
+        });
+        if !scale.is_finite() || scale <= 0.0 {
+            return Err(CanvasError::Invalid("Unrepresentable viewport projection scale"));
+        }
+        finite(offset)?;
+        Ok((scale, offset))
+    }
     /// Create an actual-size view with its document origin at the surface origin.
     /// # Errors
     /// Rejects surfaces beyond the 16384-pixel edge bound; image/document extents are independent.

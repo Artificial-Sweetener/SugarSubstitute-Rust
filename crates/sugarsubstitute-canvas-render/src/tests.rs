@@ -8,7 +8,7 @@ use sugarsubstitute_image_ops::{Extent, ImageError, Region};
 pub(crate) mod harness;
 mod pipeline;
 
-fn stamp(value: u64) -> Result<FrameStamp, RenderError> {
+pub(crate) fn stamp(value: u64) -> Result<FrameStamp, RenderError> {
     let surface = SurfaceId::new(1).map_err(|_| RenderError::Invalid("Invalid test surface"))?;
     let generation =
         Generation::new(value).map_err(|_| RenderError::Invalid("Invalid test generation"))?;
@@ -29,7 +29,7 @@ fn paint(region: Region, output: &mut [u32], dx: i32, dy: i32) {
         }
     }
 }
-fn run_test(
+pub(crate) fn run_test(
     action: impl FnOnce(&JobContext) -> Result<(), RenderError> + Send + 'static,
 ) -> harness::TestResult {
     harness::run(2 * 1024 * 1024, |context| {

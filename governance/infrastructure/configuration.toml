@@ -919,6 +919,6 @@ rationale = "Developer hardware qualification accepts explicit backend/vendor/de
 [[records]]
 path = "crates/sugarsubstitute-canvas-render/examples/frame_qualification.rs"
 owner = "sugarsubstitute-canvas-render"
-source_sha256 = "sha256:cd82ba443864ef63f156608cc6d54de75d7b987223519aea9bcf5d599a616ece"
+source_sha256 = "sha256:d12211caedd13feb0bbe6b7ae3108f6b92860c689e541d94539e1692a137c067"
 capabilities = ["arguments"]
 rationale = "Native frame qualification accepts explicit backend/vendor/device selectors and uses the actual selected adapter through admitted execution."

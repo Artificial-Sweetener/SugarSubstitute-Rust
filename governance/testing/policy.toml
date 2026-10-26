@@ -4,20 +4,20 @@ platforms = ["windows", "macos", "linux"]
 [[owners]]
 package = "sugarsubstitute-image-gpu"
 root = "crates/sugarsubstitute-image-gpu"
-concern = "GPU compatibility, exact device selection, shader validation, display-copy bounds and retryable admission classification; hardware qualification compares shared DAG pixels, display conversion, alias eviction and actual cancellation retirement"
-minimum_tests = 11
+concern = "GPU compatibility, exact device selection, shader validation, bounded physical display mappings, display-copy bounds and retryable admission classification; hardware qualification compares shared DAG pixels, display conversion, alias eviction and actual cancellation retirement"
+minimum_tests = 12
 
 [[owners]]
 package = "sugarsubstitute-canvas"
 root = "crates/sugarsubstitute-canvas"
-concern = "Physical camera and exact damage invariants; semantic navigation stops, anchors, cadence, refresh deadlines and cancellation; tool selection, temporary navigation and document-bound transactional gestures sharing reversible history"
-minimum_tests = 34
+concern = "Physical camera, retained projection phase and exact damage invariants; semantic navigation stops, anchors, cadence, refresh deadlines and cancellation; tool selection, temporary navigation and document-bound transactional gestures sharing reversible history"
+minimum_tests = 37
 
 [[owners]]
 package = "sugarsubstitute-canvas-render"
 root = "crates/sugarsubstitute-canvas-render"
-concern = "Overlap-safe CPU repairs, stale-frame rejection, bounded GPU damage inventories and native hardware comparison of immutable retained display copies against CPU and full GPU redraw, including finite-admission 4K replacement"
-minimum_tests = 18
+concern = "Overlap-safe CPU repairs, stale-frame rejection, independently sampled disposable projection, storage reuse and memory pressure, bounded GPU damage inventories and native hardware comparison of immutable retained display copies against CPU and full GPU redraw, including finite-admission 4K replacement"
+minimum_tests = 22
 
 [[owners]]
 package = "sugarsubstitute-image-ops"

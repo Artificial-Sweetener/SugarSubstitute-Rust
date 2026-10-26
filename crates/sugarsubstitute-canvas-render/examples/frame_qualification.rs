@@ -13,6 +13,8 @@ use sugarsubstitute_execution::{ExecutionOwner, MonotonicClock};
 use sugarsubstitute_image_gpu::{AdapterCatalog, AdapterDescriptor, AdapterKey, GpuDevice};
 
 type Result<T = ()> = std::result::Result<T, Box<dyn Error>>;
+#[path = "frame_qualification/projection.rs"]
+mod projection;
 #[path = "frame_qualification/scale.rs"]
 mod scale;
 #[path = "frame_qualification/scene.rs"]
@@ -72,12 +74,13 @@ struct Report {
 }
 fn main() -> Result {
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
-    let selected = match arguments.as_slice() {
-        [] => None,
-        [flag] if flag == "--list" => None,
-        [flag, index] if flag == "--adapter" => Some(index.parse::<AdapterKey>()?),
+    let (selected, cpu_projection) = match arguments.as_slice() {
+        [] => (None, false),
+        [flag] if flag == "--list" => (None, false),
+        [flag] if flag == "--cpu-projection" => (None, true),
+        [flag, index] if flag == "--adapter" => (Some(index.parse::<AdapterKey>()?), false),
         _ => {
-            return Err("Use frame_qualification --list | --adapter <backend:vendor:device>".into());
+            return Err("Use frame_qualification --list | --adapter <backend:vendor:device> | --cpu-projection".into());
         }
     };
     let wake = Arc::new(Wake::default());
@@ -86,6 +89,9 @@ fn main() -> Result {
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
     let deadline = client.now()?.checked_add(Duration::from_secs(60))?;
     let result = (|| -> Result {
+        if cpu_projection {
+            return projection::qualify(&client, &scope, &wake, deadline);
+        }
         let mut job = client.submit_async(
             &scope,
             JobSpec {

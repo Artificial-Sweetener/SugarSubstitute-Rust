@@ -7,6 +7,7 @@ mod document;
 mod error;
 mod navigation;
 mod presentation;
+mod projection;
 mod tools;
 mod viewport;
 pub use compile::CompiledView;
@@ -18,6 +19,7 @@ pub use document::{
 pub use error::CanvasError;
 pub use navigation::{CursorIntent, Navigation, NavigationInput, ScrollPhase, ZoomMode};
 pub use presentation::{FrameStamp, RenderRequest};
+pub use projection::ViewProjection;
 pub use tools::{
     CanvasTool, ToolButton, ToolCancelReason, ToolContext, ToolId, ToolInput, ToolManager, ToolView,
 };

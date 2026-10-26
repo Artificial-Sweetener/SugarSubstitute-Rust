@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Native swapchain custody: attach on the window thread, prepare on workers, present completed work.
 use crate::{
-    DisplayImage, DisplayReadback, GpuDevice, GpuError, transfer::Transfer, window_shader::Blitter,
+    DisplayImage, DisplayMapping, DisplayReadback, GpuDevice, GpuError,
+    display_mapping::MappingUpload, transfer::Transfer, window_shader::Blitter,
 };
 use std::sync::{Arc, Mutex};
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
@@ -95,6 +96,31 @@ impl WindowSurface {
         image: &DisplayImage,
         context: &JobContext,
     ) -> Result<Option<WindowFrame>, GpuError> {
+        self.draw(image, None, context)
+    }
+    /// Project one immutable retained image into a current physical viewport on the same device.
+    /// Supplied indices are prevalidated; no source pixels are read back or replaced. Outstanding
+    /// frame/backpressure and native completion semantics match canonical presentation.
+    /// # Errors
+    /// Rejects foreign source extents/devices; preserves original control, admission and GPU causes.
+    pub fn prepare_projected(
+        &mut self,
+        image: &DisplayImage,
+        mapping: DisplayMapping<'_>,
+        context: &JobContext,
+    ) -> Result<Option<WindowFrame>, GpuError> {
+        if mapping.source() != image.extent() {
+            return Err(GpuError::invalid("Display projection source differs from retained image"));
+        }
+        self.draw(image, Some(mapping), context)
+    }
+    /// Configure, acquire and retire one draw while retaining upload and swapchain custody.
+    fn draw(
+        &mut self,
+        image: &DisplayImage,
+        mapping: Option<DisplayMapping<'_>>,
+        context: &JobContext,
+    ) -> Result<Option<WindowFrame>, GpuError> {
         crate::adapter::check(context)?;
         if !Arc::ptr_eq(image.device(), &self.owner.device) {
             return Err(GpuError::invalid(
@@ -106,8 +132,8 @@ impl WindowSurface {
         }
         let device = &self.owner.device;
         device.faults.check()?;
-        if self.extent != Some(image.extent()) {
-            let extent = image.extent();
+        let extent = mapping.map_or(image.extent(), DisplayMapping::output);
+        if self.extent != Some(extent) {
             let bytes = (u64::from(crate::display::row_bytes(extent.width()))
                 * u64::from(extent.height())
                 * 3)
@@ -180,12 +206,18 @@ impl WindowSurface {
         });
         let input = image.view();
         let output = texture.texture.create_view(&wgpu::TextureViewDescriptor::default());
-        self.blitter
+        let blitter = self
+            .blitter
             .as_ref()
-            .ok_or_else(|| GpuError::invalid("Native window shader is unavailable"))?
-            .encode(device, &input, &output, &mut commands);
+            .ok_or_else(|| GpuError::invalid("Native window shader is unavailable"))?;
+        let upload = MappingUpload::new(mapping, extent, context)?;
+        let staging = context
+            .memory()
+            .claim(upload.bytes.len() as u64 + 128)
+            .map_err(|cause| GpuError::new("gpu_display_mapping_staging", cause))?;
+        blitter.encode(device, &input, &output, &mut commands);
         device.faults.check()?;
-        Transfer::submit(device.clone(), commands).retire()?;
+        Transfer::upload(blitter.mapping(), staging, &upload.bytes, Some(commands)).retire()?;
         crate::adapter::check(context)?;
         Ok(Some(WindowFrame { texture: Some(texture), owner: self.owner.clone() }))
     }

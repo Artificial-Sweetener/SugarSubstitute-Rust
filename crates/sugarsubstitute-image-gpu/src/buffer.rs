@@ -119,7 +119,7 @@ impl GpuDevice {
             .memory()
             .claim(bytes)
             .map_err(|cause| GpuError::new("gpu_upload_staging", cause))?;
-        let mut transfer = Transfer::upload(buffer.clone(), staging, &encoded.bytes);
+        let mut transfer = Transfer::upload(buffer.clone(), staging, &encoded.bytes, None);
         transfer.retire()?;
         crate::adapter::check(context)?;
         Ok(GpuTile { buffer, region })

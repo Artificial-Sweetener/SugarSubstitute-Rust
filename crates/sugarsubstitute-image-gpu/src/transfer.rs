@@ -17,7 +17,12 @@ pub(crate) struct Transfer {
     _staging: Option<MemoryClaim>,
 }
 impl Transfer {
-    pub(crate) fn upload(buffer: Arc<Buffer>, staging: MemoryClaim, bytes: &[u8]) -> Self {
+    pub(crate) fn upload(
+        buffer: Arc<Buffer>,
+        staging: MemoryClaim,
+        bytes: &[u8],
+        commands: Option<wgpu::CommandEncoder>,
+    ) -> Self {
         let device = buffer.device.clone();
         let mut transfer = Self {
             device,
@@ -27,7 +32,8 @@ impl Transfer {
             _staging: Some(staging),
         };
         transfer.device.queue.write_buffer(&buffer.raw, 0, bytes);
-        transfer.index = Some(transfer.device.queue.submit([]));
+        transfer.index =
+            Some(transfer.device.queue.submit(commands.into_iter().map(|value| value.finish())));
         transfer
     }
     pub(crate) fn copy(source: Arc<Buffer>, receiving: Arc<Buffer>) -> Self {

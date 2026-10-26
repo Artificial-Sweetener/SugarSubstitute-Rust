@@ -133,7 +133,7 @@ impl<S: RasterSource> CpuRenderer<S> {
 }
 
 /// Check original worker controls before allocating or advancing unpublished preparation.
-fn check(context: &JobContext) -> Result<(), RenderError> {
+pub(crate) fn check(context: &JobContext) -> Result<(), RenderError> {
     if context.cancellation_requested() {
         return Err(sugarsubstitute_image_ops::ImageError::Cancelled.into());
     }

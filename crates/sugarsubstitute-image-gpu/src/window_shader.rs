@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Present already-encoded sRGB display bytes through a native unorm swapchain.
-use crate::{GpuDevice, GpuError};
+use crate::{GpuDevice, GpuError, buffer::Buffer, display_mapping::MappingUpload};
 use std::{borrow::Cow, sync::Arc};
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
 
 pub(crate) struct Blitter {
     pipeline: wgpu::RenderPipeline,
+    mapping: Arc<Buffer>,
     _memory: MemoryClaim,
 }
 impl Blitter {
@@ -20,6 +21,11 @@ impl Blitter {
             .memory
             .claim(4 * 1024 * 1024)
             .map_err(|cause| GpuError::new("gpu_window_pipeline_admission", cause))?;
+        let mapping = device.allocate(
+            MappingUpload::CAPACITY,
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            context,
+        )?;
         let module = device.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("SugarSubstitute native display shader"),
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(SOURCE)),
@@ -51,7 +57,11 @@ impl Blitter {
             cache: None,
         });
         device.faults.check()?;
-        Ok(Self { pipeline, _memory: memory })
+        Ok(Self { pipeline, mapping, _memory: memory })
+    }
+    /// Retain the exact mapping buffer through its write and draw submission.
+    pub(crate) fn mapping(&self) -> Arc<Buffer> {
+        self.mapping.clone()
     }
     pub(crate) fn encode(
         &self,
@@ -63,10 +73,13 @@ impl Blitter {
         let group = device.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("SugarSubstitute native display image"),
             layout: &self.pipeline.get_bind_group_layout(0),
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureView(input),
-            }],
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(input),
+                },
+                wgpu::BindGroupEntry { binding: 1, resource: self.mapping.raw.as_entire_binding() },
+            ],
         });
         let mut pass = commands.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("SugarSubstitute native display"),
@@ -89,6 +102,7 @@ impl Blitter {
 const SOURCE: &str = r#"// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 @group(0) @binding(0) var image: texture_2d<f32>;
+@group(0) @binding(1) var<storage, read> mapping: array<u32>;
 @vertex
 fn vertex(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
     let positions = array<vec2<f32>, 3>(vec2<f32>(-1.0, -1.0), vec2<f32>(3.0, -1.0), vec2<f32>(-1.0, 3.0));
@@ -96,7 +110,18 @@ fn vertex(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
 }
 @fragment
 fn fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
-    return textureLoad(image, vec2<i32>(position.xy), 0);
+    let output = vec2<u32>(position.xy);
+    if mapping[0] == 0u {
+        return textureLoad(image, vec2<i32>(output), 0);
+    }
+    let source_x = mapping[8u + output.x];
+    let source_y = mapping[8u + mapping[1] + output.y];
+    if source_x == 0xffffffffu || source_y == 0xffffffffu {
+        let matte = mapping[3];
+        return vec4<f32>(f32((matte >> 16u) & 255u), f32((matte >> 8u) & 255u),
+            f32(matte & 255u), 255.0) / 255.0;
+    }
+    return textureLoad(image, vec2<i32>(i32(source_x), i32(source_y)), 0);
 }
 "#;
 

@@ -140,4 +140,4 @@ sources = [
     "crates/sugarsubstitute-image-gpu/src/window.rs",
     "crates/sugarsubstitute-image-gpu/src/window_shader.rs",
 ]
-source_sha256 = "sha256:68592474d2e9de355cb9d6e16a16257f46538d382b0a8193d50b2e3a90fe294b"
+source_sha256 = "sha256:37fc71e65f62800c919aac4bfde7e7a476aa4ad5b4e0d0f0dfc59734e2ebe943"

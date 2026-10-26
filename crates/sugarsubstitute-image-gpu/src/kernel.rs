@@ -75,7 +75,7 @@ impl Kernels {
             .memory()
             .claim(table.table().len() as u64)
             .map_err(|cause| GpuError::new("gpu_display_table_staging", cause))?;
-        Transfer::upload(srgb.clone(), staging, table.table()).retire()?;
+        Transfer::upload(srgb.clone(), staging, table.table(), None).retire()?;
         Ok(Self { pipeline, dummy, srgb, device, _memory: memory })
     }
     pub(crate) fn encode(

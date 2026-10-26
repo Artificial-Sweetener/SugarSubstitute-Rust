@@ -237,6 +237,10 @@ fn display_quantization_preserves_reference_bytes_around_every_half_step() -> Te
             let index = (linear.clamp(0.0, 1.0) * 65535.0).round() as usize;
             let expected = encoder.table()[index];
             assert_eq!(
+                SrgbEncoder::encode_constant(Pixel::linear(linear, linear, linear, 1.0)?)?,
+                [expected, expected, expected, 255],
+            );
+            assert_eq!(
                 encoder.encode(Pixel::linear(linear, linear, linear, 1.0)?)?,
                 [expected, expected, expected, 255],
                 "Linear sample bits {:08x}",

@@ -969,7 +969,7 @@ rationale = "Isolated native hardware qualification reports actual adapter ident
 [[records]]
 path = "crates/sugarsubstitute-canvas-render/examples/frame_qualification.rs"
 owner = "sugarsubstitute-canvas-render"
-source_sha256 = "sha256:cd82ba443864ef63f156608cc6d54de75d7b987223519aea9bcf5d599a616ece"
+source_sha256 = "sha256:d12211caedd13feb0bbe6b7ae3108f6b92860c689e541d94539e1692a137c067"
 disposition = "fixture"
 rationale = "Isolated native qualification reports observed GPU display, repair and cancellation outcomes through the production execution boundary; runtime diagnostics use structured logging."
 
@@ -1008,3 +1008,10 @@ owner = "sugarsubstitute-supervision"
 source_sha256 = "sha256:b9f3c8026979d3ad8113be1af2349bb1fe8dc2a1356f2f7865fe2bd40ded42b9"
 disposition = "fixture"
 rationale = "The actual admitted native storage body receives an isolated diagnostic subscriber to observe returned storage scopes. Domain clocks, completion consumption and native effects retain their production owners; no global subscriber is installed."
+
+[[records]]
+path = "crates/sugarsubstitute-canvas-render/examples/frame_qualification/projection.rs"
+owner = "sugarsubstitute-canvas-render"
+source_sha256 = "sha256:18576f7c352761985379f915618e02675f116c3651cdb0c7053d184a2d16a36b"
+disposition = "fixture"
+rationale = "Isolated finite CPU qualification reports physical 4K projection costs with fresh and recycled admitted storage through the production execution boundary. Measurements are diagnostics, not timing-based correctness assertions."
