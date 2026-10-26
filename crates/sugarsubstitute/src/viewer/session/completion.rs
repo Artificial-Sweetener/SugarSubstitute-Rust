@@ -87,11 +87,20 @@ impl Session {
     /// A current accepted camera request may finish while later camera intent is coalesced.
     /// Its pixels are always labelled with their actual camera and current authored revision.
     pub(super) fn consume_frame(&mut self) -> Result<(), Box<dyn Error>> {
+        let backing_borrowed =
+            self.rendering.as_ref().is_some_and(|rendering| match rendering.tier {
+                BackingTier::Fallback => {
+                    self.fallback_front.as_ref().is_some_and(|front| Arc::strong_count(front) > 1)
+                }
+                BackingTier::Detail => {
+                    self.front.as_ref().is_some_and(|front| Arc::strong_count(front) > 1)
+                }
+            });
         if self.options.gpu.is_none()
             && !self.closing
             && self.pending_open.is_none()
             && (self.cpu_pending.is_some()
-                || self.front.as_ref().is_some_and(|front| Arc::strong_count(front) > 1)
+                || backing_borrowed
                 || (self.native_target.is_some()
                     && self.pacing.readiness(self.navigation_time())?
                         != PresentationReadiness::Ready))
@@ -121,40 +130,72 @@ impl Session {
             return Ok(());
         }
         match Self::terminal(completion.outcome) {
-            Ok(packet) => {
+            Ok(mut packet) => {
+                if packet.tier != rendering.tier
+                    || packet.reconstruction != rendering.reconstruction
+                    || packet.view != rendering.coverage.viewport()
+                {
+                    self.retire(Retired { _packet: Some(packet), ..Default::default() })?;
+                    return Err("Canvas received foreign backing coverage".into());
+                }
                 let current = !self.closing
                     && self.pending_open.is_none()
                     && self.loading.is_none()
-                    && packet.view.surface() == self.tools.navigation().viewport().surface()
                     && self.scene.as_ref().is_some_and(|scene| {
                         let snapshot = scene.document.snapshot();
                         packet.document == (snapshot.identity(), snapshot.revision())
                             && packet.source_revision == scene.source_revision
+                            && (packet.tier == BackingTier::Fallback
+                                || rendering
+                                    .coverage
+                                    .crop(self.tools.navigation().viewport(), snapshot.extent())
+                                    .is_ok_and(|crop| crop.is_some()))
                     });
                 if !current {
                     self.retire(Retired { _packet: Some(packet), ..Default::default() })?;
                     return Ok(());
                 }
                 let mut retired = Retired::default();
+                if let Some(buffers) = packet.display_buffers.take() {
+                    let (first, second) = buffers.into_parts();
+                    if first.extent() != rendering.display_extent
+                        || second.extent() != rendering.display_extent
+                    {
+                        self.retire(Retired {
+                            _packet: Some(packet),
+                            _buffers: [Some(first), Some(second)],
+                            ..Default::default()
+                        })?;
+                        return Err("Canvas received projection buffers for another extent".into());
+                    }
+                    retired._buffers = self.install_display_buffers(
+                        [Some(first), Some(second)],
+                        rendering.display_extent,
+                    );
+                }
                 let work = match packet.pixels {
-                    work::Pixels::Cpu(work::CpuPacket::Replace { surface, buffers }) => {
+                    work::Pixels::Cpu(work::CpuPacket::Replace { surface }) => {
                         let work = sugarsubstitute_canvas_render::SurfaceWork {
                             repaired_pixels: surface.extent().pixels(),
                             reused_pixels: 0,
                         };
-                        retired._front = self.front.replace(Arc::new(surface));
-                        retired._projection = self.cpu_projection.take();
-                        let (first, second) = buffers.into_parts();
-                        retired._buffers = std::mem::replace(
-                            &mut self.display_buffers,
-                            [Some(first), Some(second)],
-                        );
-                        self.projection_damage = None;
+                        match packet.tier {
+                            BackingTier::Fallback => {
+                                retired._fallback_front =
+                                    self.fallback_front.replace(Arc::new(surface));
+                            }
+                            BackingTier::Detail => {
+                                retired._front = self.front.replace(Arc::new(surface));
+                            }
+                        }
                         Ok(work)
                     }
                     work::Pixels::Cpu(work::CpuPacket::Repair(update)) => {
-                        let result = self
-                            .front
+                        let retained = match packet.tier {
+                            BackingTier::Fallback => &mut self.fallback_front,
+                            BackingTier::Detail => &mut self.front,
+                        };
+                        let result = retained
                             .as_mut()
                             .ok_or_else(|| {
                                 Box::<dyn Error>::from("Canvas retained viewport is unavailable")
@@ -167,9 +208,21 @@ impl Session {
                         result
                     }
                     work::Pixels::Gpu(pixels) => {
-                        retired._gpu_front = self.gpu_front.replace(pixels.surface);
-                        if let Some(snapshot) = pixels.snapshot {
-                            retired._front = self.front.replace(Arc::new(snapshot));
+                        match packet.tier {
+                            BackingTier::Fallback => {
+                                retired._fallback_gpu_front =
+                                    self.fallback_gpu_front.replace(pixels.surface);
+                                if let Some(snapshot) = pixels.snapshot {
+                                    retired._fallback_front =
+                                        self.fallback_front.replace(Arc::new(snapshot));
+                                }
+                            }
+                            BackingTier::Detail => {
+                                retired._gpu_front = self.gpu_front.replace(pixels.surface);
+                                if let Some(snapshot) = pixels.snapshot {
+                                    retired._front = self.front.replace(Arc::new(snapshot));
+                                }
+                            }
                         }
                         self.native_verified = false;
                         self.expose_pending = true;
@@ -178,6 +231,8 @@ impl Session {
                 };
                 if retired._front.is_some()
                     || retired._gpu_front.is_some()
+                    || retired._fallback_front.is_some()
+                    || retired._fallback_gpu_front.is_some()
                     || retired._update.is_some()
                     || retired._projection.is_some()
                     || retired._buffers.iter().any(Option::is_some)
@@ -185,25 +240,26 @@ impl Session {
                     self.retire(retired)?;
                 }
                 let work = work?;
-                if packet.filter == Filter::Nearest {
+                if packet.tier == BackingTier::Fallback && rendering.reconstruction.is_preview() {
                     self.initial_preview = false;
                 }
-                let base = self.presented.as_ref().and(packet.base);
-                self.presented = Some(Presented {
+                let shown = Presented {
+                    tier: packet.tier,
+                    coverage: rendering.coverage,
                     view: packet.view,
-                    filter: packet.filter,
+                    reconstruction: packet.reconstruction,
                     document: packet.document,
                     source_revision: packet.source_revision,
-                    damage: packet.damage,
-                    base,
-                    input_at: rendering.input_at,
-                });
+                };
+                match packet.tier {
+                    BackingTier::Fallback => self.fallback_presented = Some(shown),
+                    BackingTier::Detail => self.presented = Some(shown),
+                }
                 self.last_prepare = packet.elapsed;
                 self.last_stats = packet.stats;
                 self.last_surface_work = work;
-                self.stage_cpu_canonical()?;
                 if self.scene.as_ref().is_some_and(|scene| scene.source.is_some()) {
-                    self.title = self.labels.viewing(packet.view.zoom());
+                    self.title = self.labels.viewing(self.tools.navigation().viewport().zoom());
                 }
             }
             Err(cause) if self.closing || self.pending_open.is_some() => {

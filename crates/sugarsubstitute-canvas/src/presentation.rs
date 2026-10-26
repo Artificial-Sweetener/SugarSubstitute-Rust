@@ -3,7 +3,7 @@
 //! Device-independent frame intent and exact application-owned presentation identities.
 use crate::{DamagePlan, DocumentSnapshot, Viewport};
 use sugarsubstitute_contracts::execution::{Generation, SurfaceId};
-use sugarsubstitute_image_ops::{Filter, Pixel};
+use sugarsubstitute_image_ops::{Pixel, Reconstruction};
 
 /// One monotonically published frame on a specific native or headless canvas surface.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -19,8 +19,8 @@ pub struct RenderRequest<'a> {
     pub document: &'a DocumentSnapshot,
     /// Requested physical camera state.
     pub view: Viewport,
-    /// Raster reconstruction for this frame; preview quality never changes authored content.
-    pub filter: Filter,
+    /// Explicit disposable-preview or canonical-finished raster reconstruction intent.
+    pub reconstruction: Reconstruction,
     /// Opaque linear-light background.
     pub matte: Pixel,
     /// Monotonic destination surface generation.

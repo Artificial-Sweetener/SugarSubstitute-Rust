@@ -8,7 +8,7 @@ impl Session {
     /// Drain metadata and typed completions before submitting the latest application intent.
     pub(super) fn advance(&mut self) -> Result<(), Box<dyn Error>> {
         self.tools.advance(self.navigation_time())?;
-        self.cancel_obsolete_refinement();
+        self.cancel_obsolete_refinement()?;
         if let Some(runtime) = &self.runtime {
             let batch =
                 runtime.client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
@@ -50,6 +50,9 @@ impl Session {
         if self.initializing.is_some() || self.resources.is_none() {
             return Ok(());
         }
+        if self.picker {
+            return Ok(());
+        }
         if !self.gpu_ready {
             if self.failed.is_none() {
                 self.initialize_gpu()?;
@@ -73,115 +76,93 @@ impl Session {
         }
         Ok(())
     }
-    /// Startup storage shares the original retained admission used by every later resource.
-    fn submit_initialization(&mut self) -> Result<(), Box<dyn Error>> {
-        let runtime = self.runtime.as_ref().ok_or("Canvas execution is unavailable")?;
-        let spec = self.spec(
-            Operation::Infrastructure,
-            JobClass::InfrastructureLifecycle,
-            if self.options.gpu.is_some() {
-                work::GPU_RETAINED_BYTES
-            } else {
-                work::RETAINED_BYTES
-            },
-            Duration::from_secs(30),
-            None,
-        )?;
-        let anchor = self.options.cache.clone();
-        let capture = self.options.capture;
-        let verify_native = self.options.verify_native;
-        match runtime.client.submit_blocking(&runtime.scope, spec, move |context| {
-            work::initialize(anchor, capture, verify_native, &context)
-        }) {
-            Ok(job) => {
-                self.initializing = Some(job);
-                self.initialization_pending = false;
-            }
-            Err(cause) if retryable(&cause) => {}
-            Err(cause) => return Err(cause.into()),
-        }
-        Ok(())
-    }
-    /// The typed owned-input API keeps the exact selected path intact on admission rejection.
-    fn submit_load(&mut self) -> Result<(), Box<dyn Error>> {
-        let runtime = self.runtime.as_ref().ok_or("Canvas execution is unavailable")?;
-        let resources = self.resources.as_ref().ok_or("Canvas storage is unavailable")?.clone();
-        let pending = self.pending_open.as_ref().ok_or("Canvas source intent is unavailable")?;
-        let intent = pending.intent;
-        let expected = pending.expected;
-        let spec = self.spec(
-            Operation::Infrastructure,
-            JobClass::InfrastructureOrdinary,
-            work::IMPORT_BYTES,
-            Duration::from_secs(300),
-            None,
-        )?;
-        match runtime.client.submit_blocking_owned_input(
-            &runtime.scope,
-            spec,
-            &mut self.pending_open,
-            move |open, context| {
-                work::load(open.path, open.intent, open.reuse, &resources, &context)
-            },
-        ) {
-            Ok(job) => self.loading = Some(Loading { intent, expected, job }),
-            Err(OwnedInputError::Admission(cause)) if retryable(&cause) => {}
-            Err(cause) => return Err(cause.into()),
-        }
-        Ok(())
-    }
     /// Commit a camera request only when the preceding request has actually completed.
     /// Navigation remains coalesced intent while a current document frame is being prepared.
     fn submit_frame(&mut self) -> Result<(), Box<dyn Error>> {
         let scene = self.scene.as_ref().ok_or("Canvas document is unavailable")?;
         let document = scene.document.snapshot();
         let identity = (document.identity(), document.revision());
-        let filter = self.filter();
-        if self.native_target.is_some()
-            && filter == Filter::Lanczos3
-            && self.presented.as_ref().is_some_and(|shown| shown.filter == Filter::Nearest)
-            && self.display_source != self.current_frame()
-        {
-            return Ok(());
-        }
-        if !self.initial_preview
-            && self.tools.navigation().resampling()
-            && (self.gpu_front.is_some() || self.front.is_some())
-            && self.presented.as_ref().is_some_and(|shown| {
-                shown.document == identity && shown.source_revision == scene.source_revision
-            })
-        {
-            return Ok(());
-        }
-        if self.presented.as_ref().is_some_and(|shown| {
-            shown.view == self.tools.navigation().viewport()
-                && shown.filter == filter
-                && shown.document == identity
-                && shown.source_revision == scene.source_revision
-        }) {
-            return Ok(());
-        }
-        let extent = self.tools.navigation().viewport().surface();
-        let compatible = self.presented.as_ref().filter(|shown| {
+        let target_view = self.tools.navigation().viewport();
+        let document_extent = document.extent();
+        let display_extent = target_view.surface();
+        let needs_display_buffers = self.needs_display_buffers(display_extent);
+        let fallback_current = self.fallback_presented.as_ref().is_some_and(|shown| {
+            shown.document == identity && shown.source_revision == scene.source_revision
+        });
+        let (tier, coverage, reconstruction) = if !fallback_current {
+            (BackingTier::Fallback, coverage::fallback(document_extent)?, Reconstruction::Preview)
+        } else if needs_display_buffers {
+            let shown =
+                self.fallback_presented.as_ref().ok_or("Canvas fallback identity was lost")?;
+            (BackingTier::Fallback, shown.coverage, shown.reconstruction)
+        } else {
+            let reconstruction = self.reconstruction()?;
+            if reconstruction.is_preview() && self.tools.navigation().interacting() {
+                return Ok(());
+            }
+            let desired = coverage::detail(target_view)?;
+            let current = if let Some(shown) = self.presented.as_ref() {
+                shown.document == identity
+                    && shown.source_revision == scene.source_revision
+                    && shown.reconstruction == reconstruction
+                    && shown.view.zoom() == target_view.zoom()
+                    && !coverage::detail_needs_refresh(
+                        shown.coverage,
+                        target_view,
+                        document_extent,
+                    )?
+                    && shown.coverage.crop(target_view, document_extent)?.is_some()
+            } else {
+                false
+            };
+            if current {
+                return Ok(());
+            }
+            (BackingTier::Detail, desired, reconstruction)
+        };
+        let view = coverage.viewport();
+        let shown = match tier {
+            BackingTier::Fallback => self.fallback_presented.as_ref(),
+            BackingTier::Detail => self.presented.as_ref(),
+        };
+        let compatible = shown.filter(|shown| {
             shown.document == identity
                 && shown.source_revision == scene.source_revision
-                && shown.filter == filter
+                && shown.reconstruction == reconstruction
+                && shown.view.surface() == view.surface()
         });
         let damage = match compatible {
-            Some(shown) => self.tools.navigation().viewport().repair_from(shown.view)?,
-            None => DamagePlan::full(extent),
+            Some(shown) => view.repair_from(shown.view)?,
+            None => DamagePlan::full(view.surface()),
         };
         let replace_surface = if self.options.gpu.is_some() {
-            self.gpu_front.as_ref().is_none_or(|surface| surface.extent() != extent)
+            let surface = match tier {
+                BackingTier::Fallback => self.fallback_gpu_front.as_ref(),
+                BackingTier::Detail => self.gpu_front.as_ref(),
+            };
+            surface.is_none_or(|surface| surface.extent() != view.surface())
         } else {
-            self.front.as_ref().is_none_or(|surface| surface.extent() != extent)
-                || self.display_buffers.iter().filter(|slot| slot.is_some()).count()
-                    + usize::from(self.cpu_projection.is_some())
-                    + usize::from(self.displaying.is_some())
-                    < 2
+            let surface = match tier {
+                BackingTier::Fallback => self.fallback_front.as_ref(),
+                BackingTier::Detail => self.front.as_ref(),
+            };
+            surface.is_none_or(|surface| surface.extent() != view.surface())
         };
-        let base =
-            if replace_surface { None } else { compatible.and_then(|_| self.current_frame()) };
+        let replace_buffers = needs_display_buffers;
+        let base = if replace_surface {
+            None
+        } else {
+            compatible.and_then(|_| match tier {
+                BackingTier::Fallback => {
+                    if self.options.gpu.is_some() {
+                        self.fallback_gpu_front.as_ref().and_then(GpuSurface::current)
+                    } else {
+                        self.fallback_front.as_ref().and_then(|surface| surface.current())
+                    }
+                }
+                BackingTier::Detail => self.current_frame(),
+            })
+        };
         let next = self.frame_revision.checked_add(1).ok_or("Canvas frame revision exhausted")?;
         let target = FrameStamp { surface: SurfaceId::new(1)?, generation: Generation::new(next)? };
         let bytes = if self.options.gpu.is_some() {
@@ -205,20 +186,25 @@ impl Session {
             self.resources.as_ref().ok_or("Canvas preparation resources are unavailable")?.clone();
         let source = scene.source.clone();
         let source_revision = scene.source_revision;
-        let view = self.tools.navigation().viewport();
-        let gpu_surface = self.gpu_front.clone();
+        let gpu_surface = match tier {
+            BackingTier::Fallback => self.fallback_gpu_front.clone(),
+            BackingTier::Detail => self.gpu_front.clone(),
+        };
         let runtime = self.runtime.as_ref().ok_or("Canvas execution is unavailable")?;
         match runtime.client.submit_cpu(&runtime.scope, spec, move |_| work::Prepare {
+            tier,
+            reconstruction,
             resources,
             document,
             source,
             source_revision,
             view,
-            filter,
             target,
             base,
             damage,
             replace_surface,
+            replace_buffers,
+            display_extent,
             gpu_surface,
             finished: false,
             cpu: None,
@@ -228,9 +214,11 @@ impl Session {
             Ok(job) => {
                 self.rendering = Some(Rendering {
                     job,
-                    filter,
+                    reconstruction,
+                    tier,
+                    coverage,
+                    display_extent,
                     superseded: false,
-                    input_at: self.input_observed,
                 });
                 self.frame_revision = next;
             }
@@ -284,7 +272,9 @@ impl Session {
         if self.resources.is_some()
             || self.scene.is_some()
             || self.front.is_some()
+            || self.fallback_front.is_some()
             || self.gpu_front.is_some()
+            || self.fallback_gpu_front.is_some()
             || self.gpu_presentation.is_some()
             || self.cpu_projection.is_some()
             || self.display_buffers.iter().any(Option::is_some)
@@ -293,13 +283,19 @@ impl Session {
                 _scene: self.scene.take(),
                 _resources: self.resources.take(),
                 _front: self.front.take(),
+                _fallback_front: self.fallback_front.take(),
                 _gpu_front: self.gpu_front.take(),
+                _fallback_gpu_front: self.fallback_gpu_front.take(),
                 _presentation: self.gpu_presentation.take().map(|presentation| presentation.frame),
                 _projection: self.cpu_projection.take(),
                 _buffers: std::mem::take(&mut self.display_buffers),
                 ..Default::default()
             };
             self.presented = None;
+            self.fallback_presented = None;
+            self.display_evidence = None;
+            self.display_buffer_extent = None;
+            self.projection_base = None;
             self.retire(retired)?;
         } else if !self.shutdown_started {
             if let Some(runtime) = &mut self.runtime {

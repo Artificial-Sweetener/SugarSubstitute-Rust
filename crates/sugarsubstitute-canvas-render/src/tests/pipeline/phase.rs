@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compare repaired pixels with full graph reconstruction after exact integer moves at fractional zoom.
 use super::*;
-use sugarsubstitute_image_ops::Filter;
+use sugarsubstitute_image_ops::{Filter, Reconstruction};
 
 #[test]
 fn fractional_zoom_repairs_match_full_raster_vector_mask_and_adjustment_composites()
@@ -41,7 +41,7 @@ fn fractional_zoom_repairs_match_full_raster_vector_mask_and_adjustment_composit
                     RenderRequest {
                         document: &snapshot,
                         view,
-                        filter,
+                        reconstruction: Reconstruction::Finished(filter),
                         matte: black()?,
                         target: stamp(generation)?,
                         base: None,
@@ -61,7 +61,7 @@ fn fractional_zoom_repairs_match_full_raster_vector_mask_and_adjustment_composit
                         RenderRequest {
                             document: &snapshot,
                             view,
-                            filter,
+                            reconstruction: Reconstruction::Finished(filter),
                             matte: black()?,
                             target,
                             base: surface.current(),
@@ -74,7 +74,7 @@ fn fractional_zoom_repairs_match_full_raster_vector_mask_and_adjustment_composit
                         RenderRequest {
                             document: &snapshot,
                             view,
-                            filter,
+                            reconstruction: Reconstruction::Finished(filter),
                             matte: black()?,
                             target,
                             base: None,
@@ -120,16 +120,22 @@ impl RasterSource for AlternatingSource {
 fn nearest_pan_preserves_the_source_pixel_where_offset_rounding_would_choose_its_neighbor()
 -> harness::TestResult {
     execute(|context| {
-        let extent = Extent::new(65536, 16384)?;
+        let extent = Extent::new(8, 4)?;
         let snapshot = image_document(extent, context)?.snapshot();
-        let mut view = Viewport::new(Extent::new(1920, 128)?)?;
-        view.zoom_at(800.0 / 16384.0, [0.0; 2])?;
+        let surface_extent = Extent::new(32, 16)?;
+        let mut view = Viewport::new(surface_extent)?;
+        view.zoom_at(3.5, [0.0; 2])?;
+        let reconstruction = Reconstruction::finished_for_display_zoom(view.zoom())?;
+        assert_eq!(reconstruction, Reconstruction::Finished(Filter::Nearest));
+        let boundary_x = 3_u32;
+        let scale = 1.0 / view.zoom();
+        assert_eq!((f64::from(boundary_x) + 0.5) * scale, 1.0);
         let mut renderer = CpuRenderer::new(AlternatingSource, 64, context.memory())?;
         let mut surface = CpuSurface::from_prepared(renderer.prepare(
             RenderRequest {
                 document: &snapshot,
                 view,
-                filter: Filter::Nearest,
+                reconstruction,
                 matte: black()?,
                 target: stamp(1)?,
                 base: None,
@@ -137,16 +143,24 @@ fn nearest_pan_preserves_the_source_pixel_where_offset_rounding_would_choose_its
             },
             context,
         )?)?;
-        assert_eq!(surface.pixels()[1920 + 1587], 0xffff0000);
+        let row = 1_usize;
+        let expected_source_one = 0xff0000ff;
+        assert_eq!(
+            surface.pixels()[row * surface_extent.width() as usize + boundary_x as usize],
+            expected_source_one
+        );
         let before = view;
-        view.pan_by([13.0, 0.0])?;
+        view.pan_by([1.0, 0.0])?;
+        let moved_x = boundary_x + 1;
+        let rounded_offset_sample = (f64::from(moved_x) + 0.5) * scale + view.origin()[0];
+        assert_eq!(rounded_offset_sample.floor(), 0.0);
         let damage = view.repair_from(before)?;
         assert!(damage.blit().is_some());
         surface.apply(&renderer.prepare(
             RenderRequest {
                 document: &snapshot,
                 view,
-                filter: Filter::Nearest,
+                reconstruction,
                 matte: black()?,
                 target: stamp(2)?,
                 base: Some(stamp(1)?),
@@ -158,7 +172,7 @@ fn nearest_pan_preserves_the_source_pixel_where_offset_rounding_would_choose_its
             RenderRequest {
                 document: &snapshot,
                 view,
-                filter: Filter::Nearest,
+                reconstruction,
                 matte: black()?,
                 target: stamp(2)?,
                 base: None,
@@ -166,7 +180,10 @@ fn nearest_pan_preserves_the_source_pixel_where_offset_rounding_would_choose_its
             },
             context,
         )?)?;
-        assert_eq!(surface.pixels()[1920 + 1600], 0xffff0000);
+        assert_eq!(
+            surface.pixels()[row * surface_extent.width() as usize + moved_x as usize],
+            expected_source_one
+        );
         assert_eq!(surface.pixels(), full.pixels());
         Ok(())
     })

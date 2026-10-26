@@ -4,6 +4,35 @@
 use super::*;
 
 #[test]
+fn finished_display_reconstruction_changes_only_strictly_above_two_x() -> TestResult {
+    assert_eq!(Reconstruction::Preview.filter(), Filter::Nearest);
+    assert!(Reconstruction::Preview.is_preview());
+    assert!(!Reconstruction::Preview.uses_canonical_pyramid());
+    assert!(Reconstruction::Finished(Filter::Nearest).uses_canonical_pyramid());
+    assert!(!Reconstruction::Finished(Filter::Nearest).is_preview());
+    assert_eq!(
+        Reconstruction::finished_for_display_zoom(0.125)?,
+        Reconstruction::Finished(Filter::Lanczos3)
+    );
+    assert_eq!(
+        Reconstruction::finished_for_display_zoom(2.0)?,
+        Reconstruction::Finished(Filter::Lanczos3)
+    );
+    assert_eq!(
+        Reconstruction::finished_for_display_zoom(f64::from_bits(2.0_f64.to_bits() + 1))?,
+        Reconstruction::Finished(Filter::Nearest)
+    );
+    assert_eq!(
+        Reconstruction::finished_for_display_zoom(400.0)?,
+        Reconstruction::Finished(Filter::Nearest)
+    );
+    for invalid in [0.0, -1.0, f64::INFINITY, f64::NAN] {
+        assert!(Reconstruction::finished_for_display_zoom(invalid).is_err());
+    }
+    Ok(())
+}
+
+#[test]
 fn shared_axis_kernels_preserve_phase_clamping_and_normalized_bounded_support() -> TestResult {
     let sampling = Sampling::new([0.5, 2.0], [-0.25, 3.5])?.with_filter(Filter::Nearest);
     let horizontal = sampling.axis_kernel(SamplingAxis::Horizontal, 128, 4097)?;

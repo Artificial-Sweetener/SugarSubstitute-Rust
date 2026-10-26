@@ -5,17 +5,18 @@ use super::cursor::Cursors;
 use super::*;
 use crate::windows_subclass::{self, Registration};
 use ::windows::Win32::{
-    Foundation::{LPARAM, LRESULT, POINT, WPARAM},
+    Foundation::{LPARAM, LRESULT, POINT, RECT, WPARAM},
     Graphics::Gdi::ScreenToClient,
     UI::{
         HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
         Input::KeyboardAndMouse::{GetCapture, GetDoubleClickTime, ReleaseCapture, SetCapture},
         Shell::DefSubclassProc,
         WindowsAndMessaging::{
-            GetCursorPos, GetMessageTime, HCURSOR, HTCLIENT, IsWindowVisible, SM_CXDOUBLECLK,
-            SM_CYDOUBLECLK, SetCursor, WM_CANCELMODE, WM_CAPTURECHANGED, WM_DISPLAYCHANGE,
-            WM_DPICHANGED, WM_KILLFOCUS, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONUP, WM_MOUSEWHEEL,
-            WM_NCDESTROY, WM_RBUTTONUP, WM_SETCURSOR, WM_XBUTTONUP, WindowFromPoint,
+            GetClientRect, GetCursorPos, GetMessageTime, HCURSOR, HTCLIENT, IsWindowVisible,
+            SM_CXDOUBLECLK, SM_CYDOUBLECLK, SetCursor, WM_CANCELMODE, WM_CAPTURECHANGED,
+            WM_DISPLAYCHANGE, WM_DPICHANGED, WM_ENTERSIZEMOVE, WM_EXITSIZEMOVE, WM_KILLFOCUS,
+            WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONUP, WM_MOUSEWHEEL, WM_NCDESTROY, WM_RBUTTONUP,
+            WM_SETCURSOR, WM_XBUTTONUP, WindowFromPoint,
         },
     },
 };
@@ -42,11 +43,13 @@ struct Click {
 }
 struct State {
     send: Box<dyn Fn(NativeEvent) -> Result<(), DesktopError>>,
-    cursors: RefCell<Option<Cursors>>,
+    cursors: Cursors,
     failure: RefCell<Option<DesktopError>>,
     click: Cell<Option<Click>>,
     releasing: Cell<bool>,
+    capture_owned: Cell<bool>,
     capture_lost: Cell<bool>,
+    moving: Cell<bool>,
     cursor: Cell<Option<HCURSOR>>,
 }
 impl State {
@@ -61,6 +64,51 @@ impl State {
             *failure = Some(cause);
         }
     }
+    /// Reconcile only canvas-owned capture; Windows retains its nonclient move/size capture.
+    fn capture(&self, window: HWND, active: bool) -> Result<bool, DesktopError> {
+        // SAFETY: This owner retains the original live HWND on the same presentation thread.
+        let captured = unsafe { GetCapture() };
+        if active {
+            if self.moving.get()
+                || self.capture_lost.get()
+                || (!captured.is_invalid() && captured != window)
+            {
+                return Ok(false);
+            }
+            if captured.is_invalid() {
+                // SAFETY: The requested owner is this same live window; no handle escapes.
+                unsafe {
+                    SetCapture(window);
+                }
+                // SAFETY: Query this UI thread's resulting capture without retaining a peer.
+                if unsafe { GetCapture() } != window {
+                    return Err(DesktopError::message(
+                        "canvas_capture",
+                        "Native pointer capture was rejected",
+                    ));
+                }
+            }
+            self.capture_owned.set(true);
+        } else {
+            if self.capture_owned.get() && captured == window {
+                self.releasing.set(true);
+                // SAFETY: Release only capture admitted to the canvas by this state owner.
+                let result = unsafe { ReleaseCapture() };
+                self.releasing.set(false);
+                result.map_err(|cause| DesktopError::new("canvas_release_capture", cause))?;
+            }
+            self.capture_owned.set(false);
+            self.capture_lost.set(false);
+        }
+        Ok(true)
+    }
+    /// Revoke logical canvas capture without releasing capture used by a native move loop.
+    fn lose_capture(&self) {
+        if self.capture_owned.replace(false) {
+            self.capture_lost.set(true);
+            self.send(NativeEvent::CaptureLost);
+        }
+    }
 }
 /// Retain callback data until the original HWND's final destruction is observed.
 pub(super) struct NativeInput {
@@ -73,14 +121,16 @@ impl NativeInput {
         window: HWND,
         send: impl Fn(NativeEvent) -> Result<(), DesktopError> + 'static,
     ) -> Result<Self, Box<dyn Error>> {
-        let cursors = Cursors::new(window)?;
+        let cursors = Cursors::new()?;
         let state = Rc::new(State {
             send: Box::new(send),
-            cursors: RefCell::new(Some(cursors)),
+            cursors,
             failure: RefCell::new(None),
             click: Cell::new(None),
             releasing: Cell::new(false),
+            capture_owned: Cell::new(false),
             capture_lost: Cell::new(false),
+            moving: Cell::new(false),
             cursor: Cell::new(None),
         });
         let callback = Rc::new(state.clone());
@@ -105,102 +155,57 @@ impl NativeInput {
         if !unsafe { IsWindowVisible(self.window) }.as_bool() {
             return Ok(true);
         }
-        // SAFETY: This owner retains the original live HWND on the same presentation thread.
-        let captured = unsafe { GetCapture() };
-        if active && captured != self.window {
-            if !captured.is_invalid() || self.state.capture_lost.get() {
-                return Ok(false);
-            }
-            // SAFETY: The requested owner is this same live window; no handle escapes.
-            unsafe {
-                SetCapture(self.window);
-            }
-            // SAFETY: Query this UI thread's resulting capture without retaining another peer.
-            if unsafe { GetCapture() } != self.window {
-                return Err(DesktopError::message(
-                    "canvas_capture",
-                    "Native pointer capture was rejected",
-                ));
-            }
-        } else if !active && captured == self.window {
-            self.state.releasing.set(true);
-            // SAFETY: Only this window's current capture is released. The flag distinguishes
-            // the synchronous WM_CAPTURECHANGED notification from unexpected capture loss.
-            let result = unsafe { ReleaseCapture() };
-            self.state.releasing.set(false);
-            result.map_err(|cause| DesktopError::new("canvas_release_capture", cause))?;
-        }
-        if !active {
-            self.state.capture_lost.set(false);
-        }
-        Ok(true)
+        self.state.capture(self.window, active)
     }
-    /// Publish a cursor only after fallible preparation succeeds; callback state retains its owner.
+    /// Publish a shared system cursor only while the canvas client or its gesture owns the pointer.
     pub(super) fn cursor(
         &self,
         intent: sugarsubstitute_canvas::CursorIntent,
     ) -> Result<(), Box<dyn Error>> {
-        let replace = self
-            .state
-            .cursors
-            .borrow()
-            .as_ref()
-            .ok_or("Native cursor resources have retired")?
-            .changed(self.window);
-        let replacement = if replace { Some(Cursors::new(self.window)?) } else { None };
-        let cursor = if let Some(cursors) = &replacement {
-            cursors.get(intent)?
-        } else {
-            self.state
-                .cursors
-                .borrow()
-                .as_ref()
-                .ok_or("Native cursor resources have retired")?
-                .get(intent)?
-        };
+        let cursor = self.state.cursors.get(intent);
         if self.state.cursor.get() == Some(cursor) {
             return Ok(());
         }
         // SAFETY: Read the original peer's visibility without creating or focusing another peer.
         let visible = unsafe { IsWindowVisible(self.window) }.as_bool();
-        let mut owned = false;
+        let mut owned = self.state.capture_owned.get();
         if visible {
             let mut point = POINT::default();
             // SAFETY: Stack storage remains live through this synchronous input-desktop query.
             unsafe { GetCursorPos(&mut point) }
                 .map_err(|cause| DesktopError::new("canvas_cursor_position", cause))?;
             // SAFETY: These queries retain no peer and never change another control's input.
-            owned = unsafe { WindowFromPoint(point) == self.window || GetCapture() == self.window };
+            if !owned && unsafe { WindowFromPoint(point) == self.window } {
+                let mut client = point;
+                let mut bounds = RECT::default();
+                // SAFETY: Both writes target local storage for the same retained original HWND.
+                let converted = unsafe { ScreenToClient(self.window, &mut client) }.as_bool();
+                // SAFETY: The original HWND remains live; the complete client rect is copied out.
+                unsafe { GetClientRect(self.window, &mut bounds) }
+                    .map_err(|cause| DesktopError::new("canvas_cursor_bounds", cause))?;
+                owned = converted
+                    && client.x >= bounds.left
+                    && client.x < bounds.right
+                    && client.y >= bounds.top
+                    && client.y < bounds.bottom;
+            }
         }
-        let retired =
-            replacement.and_then(|cursors| self.state.cursors.borrow_mut().replace(cursors));
         self.state.cursor.set(Some(cursor));
         if owned {
-            // SAFETY: Callback state owns this cursor through final HWND retirement.
+            // SAFETY: Windows owns this shared cursor resource; SetCursor only selects it.
             unsafe {
                 SetCursor(Some(cursor));
             }
         }
-        if let Some(mut retired) = retired {
-            retired.retire()?;
-        }
         Ok(())
     }
-    /// Release native resources after the actual final callback, preserving delivery and close errors.
+    /// Observe callback retirement and discard only the selected shared-handle identity.
     pub(super) fn retire(&self) -> Result<(), Box<dyn Error>> {
         if !self.retired() {
             return Err("Native input callback has not retired".into());
         }
-        let observed = self.check().map_err(Box::<dyn Error>::from);
-        let retired = self
-            .state
-            .cursors
-            .borrow_mut()
-            .take()
-            .map_or(Ok(()), |mut cursors| cursors.retire())
-            .map_err(Box::<dyn Error>::from);
         self.state.cursor.set(None);
-        combine(observed, retired)
+        self.check().map_err(Box::<dyn Error>::from)
     }
 }
 
@@ -275,18 +280,25 @@ unsafe extern "system" fn procedure(
                 state.send(NativeEvent::DoubleClick(position.map(f64::from)));
             }
         }
-        WM_CAPTURECHANGED if lparam.0 != window.0 as isize && !state.releasing.get() => {
-            state.capture_lost.set(true);
+        WM_CAPTURECHANGED if lparam.0 != window.0 as isize => {
             state.click.set(None);
-            state.send(NativeEvent::CaptureLost);
+            if !state.releasing.get() {
+                state.lose_capture();
+            }
         }
+        WM_ENTERSIZEMOVE => {
+            state.moving.set(true);
+            state.click.set(None);
+            state.lose_capture();
+        }
+        WM_EXITSIZEMOVE => state.moving.set(false),
         WM_CANCELMODE | WM_KILLFOCUS => {
             state.click.set(None);
         }
         WM_DISPLAYCHANGE | WM_DPICHANGED => state.send(NativeEvent::DisplayChanged),
         WM_SETCURSOR if wparam.0 == window.0 as usize && lparam.0 as u16 as u32 == HTCLIENT => {
             if let Some(cursor) = state.cursor.get() {
-                // SAFETY: NativeInput's cursor owner outlives the registered callback.
+                // SAFETY: Windows retains this shared system cursor beyond the callback lifetime.
                 unsafe {
                     SetCursor(Some(cursor));
                 }

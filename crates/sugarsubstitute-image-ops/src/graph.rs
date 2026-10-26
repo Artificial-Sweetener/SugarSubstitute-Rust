@@ -291,18 +291,6 @@ impl Graph {
     /// # Errors
     /// Rejects a foreign input, insufficient capacity or excessive graph depth without partial changes.
     pub fn pyramid(&mut self, input: NodeId) -> Result<Pyramid, ImageError> {
-        self.pyramid_with_filter(input, Filter::Lanczos3)
-    }
-    /// Build explicit bounded reductions using one quality throughout the chain.
-    /// Nearest pyramids are transient previews. Finished viewing uses Lanczos pyramids;
-    /// their different operation fingerprints prevent cross-quality reuse.
-    /// # Errors
-    /// Rejects foreign nodes or insufficient capacity/depth before appending any level.
-    pub fn pyramid_with_filter(
-        &mut self,
-        input: NodeId,
-        filter: Filter,
-    ) -> Result<Pyramid, ImageError> {
         let entry = self.entry(input)?;
         let mut extent = entry.extent;
         let mut extra = 0;
@@ -319,7 +307,7 @@ impl Graph {
         let mut extent = self.extent(input)?;
         for level in 1..=extra {
             extent = Extent::new(extent.width().div_ceil(2), extent.height().div_ceil(2))?;
-            levels[level] = self.resize_with_filter(levels[level - 1], extent, filter)?;
+            levels[level] = self.resize(levels[level - 1], extent)?;
         }
         Ok(Pyramid { levels, length: extra + 1 })
     }

@@ -3,7 +3,7 @@
 //! Application publication labels actual completed display poses and rejects obsolete content.
 use super::refinement::Wake;
 use super::*;
-use sugarsubstitute_canvas::{Document, ViewProjection};
+use sugarsubstitute_canvas::{BackingCoverage, Document, ViewProjection};
 use sugarsubstitute_canvas_render::{PreparedUpdate, ProjectionBuffer};
 use sugarsubstitute_desktop::canvas::CpuFrameKind;
 use sugarsubstitute_image_ops::Pixel;
@@ -20,21 +20,27 @@ impl CpuTask<work::Draw, WorkError> for DrawBoundary {
 }
 
 /// Real canonical pixels and paired projection allocations created under one admitted job.
-struct CpuDisplayProducts {
-    surface: Arc<CpuSurface>,
-    projection: Box<CpuProjection>,
-    spare: ProjectionBuffer,
+pub(super) struct CpuDisplayProducts {
+    pub(super) document: Document,
+    pub(super) surface: Arc<CpuSurface>,
+    pub(super) projection: Box<CpuProjection>,
+    pub(super) second_projection: Box<CpuProjection>,
+    pub(super) spare: ProjectionBuffer,
+    pub(super) replacement: [Option<ProjectionBuffer>; 2],
 }
 /// Create real application display products through the execution-owned CPU task boundary.
-struct CpuDisplayBoundary {
-    source: FrameStamp,
-    target: FrameStamp,
-    source_view: Viewport,
-    projected_view: Viewport,
+pub(super) struct CpuDisplayBoundary {
+    pub(super) source: FrameStamp,
+    pub(super) target: FrameStamp,
+    pub(super) second_target: FrameStamp,
+    pub(super) source_view: Viewport,
+    pub(super) projected_view: Viewport,
+    pub(super) replacement_extent: Extent,
 }
 impl CpuTask<CpuDisplayProducts, WorkError> for CpuDisplayBoundary {
     fn step(&mut self, context: &JobContext) -> Result<CpuStep<CpuDisplayProducts>, WorkError> {
         let damage = DamagePlan::full(self.source_view.surface());
+        let document = Document::new(1, Extent::new(1, 1)?, context.memory())?;
         let prepared =
             PreparedUpdate::prepare(self.source, None, damage, context.memory(), |_, pixels| {
                 pixels.fill(0xff4269a5);
@@ -42,18 +48,37 @@ impl CpuTask<CpuDisplayProducts, WorkError> for CpuDisplayBoundary {
             })?;
         let surface = Arc::new(CpuSurface::from_prepared(prepared)?);
         let mapping = ViewProjection::new(self.source_view, self.projected_view)?;
-        let projection = ProjectionBuffer::new(mapping, context.memory(), context)?.project(
-            self.target,
-            &surface,
-            mapping,
-            Pixel::linear(0.018, 0.018, 0.018, 1.0)?,
-            context,
-        )?;
-        let spare = ProjectionBuffer::new(mapping, context.memory(), context)?;
+        let projection =
+            ProjectionBuffer::new(self.projected_view.surface(), context.memory(), context)?
+                .project(
+                    self.target,
+                    &surface,
+                    mapping,
+                    Pixel::linear(0.018, 0.018, 0.018, 1.0)?,
+                    context,
+                )?;
+        let spare =
+            ProjectionBuffer::new(self.projected_view.surface(), context.memory(), context)?;
+        let second_projection =
+            ProjectionBuffer::new(self.projected_view.surface(), context.memory(), context)?
+                .project(
+                    self.second_target,
+                    &surface,
+                    mapping,
+                    Pixel::linear(0.018, 0.018, 0.018, 1.0)?,
+                    context,
+                )?;
+        let replacement = [
+            Some(ProjectionBuffer::new(self.replacement_extent, context.memory(), context)?),
+            Some(ProjectionBuffer::new(self.replacement_extent, context.memory(), context)?),
+        ];
         Ok(CpuStep::Complete(CpuDisplayProducts {
+            document,
             surface,
             projection: Box::new(projection),
+            second_projection: Box::new(second_projection),
             spare,
+            replacement,
         }))
     }
 }
@@ -92,6 +117,8 @@ fn pending_draw() -> Result<Fixture, Box<dyn Error>> {
     let view = session.tools.navigation().viewport();
     let source = FrameStamp { surface: SurfaceId::new(1)?, generation: Generation::new(1)? };
     let target = FrameStamp { generation: Generation::new(2)?, ..source };
+    let coverage = BackingCoverage::new(view, [0; 2])?;
+    let projection = ViewProjection::new(view, view)?;
     let spec = session.spec(
         Operation::FramePrepare,
         JobClass::CpuInteractive,
@@ -104,6 +131,8 @@ fn pending_draw() -> Result<Fixture, Box<dyn Error>> {
             source,
             target,
             view,
+            coverage,
+            projection,
             pixels: work::DrawPixels::Gpu(None),
             document: identity,
             source_revision: 7,
@@ -139,13 +168,10 @@ fn consume(session: &mut Session, wake: &Wake) -> Result<(), Box<dyn Error>> {
 }
 
 /// Admit the exact source and paired display allocations retained by the test session.
-fn cpu_display_products(
+pub(super) fn cpu_display_products(
     session: &mut Session,
     wake: Arc<Wake>,
-    source: FrameStamp,
-    target: FrameStamp,
-    source_view: Viewport,
-    projected_view: Viewport,
+    boundary: CpuDisplayBoundary,
 ) -> Result<CpuDisplayProducts, Box<dyn Error>> {
     let owner = ExecutionOwner::new(session.clock.clone(), wake.clone())?;
     let client = owner.client();
@@ -153,16 +179,11 @@ fn cpu_display_products(
     let spec = session.spec(
         Operation::FramePrepare,
         JobClass::CpuInteractive,
-        2 * 1024 * 1024,
+        4 * 1024 * 1024,
         Duration::from_secs(30),
-        Some(ReplacementKey { surface: SurfaceId::new(2)?, revision: target.generation }),
+        Some(ReplacementKey { surface: SurfaceId::new(2)?, revision: boundary.target.generation }),
     )?;
-    let mut job = client.submit_cpu(&scope, spec, move |_| CpuDisplayBoundary {
-        source,
-        target,
-        source_view,
-        projected_view,
-    })?;
+    let mut job = client.submit_cpu(&scope, spec, move |_| boundary)?;
     let JobOutcome::Success(products) = wake.completion(&client, &mut job)?.outcome else {
         return Err("CPU display fixture failed".into());
     };
@@ -171,28 +192,58 @@ fn cpu_display_products(
 }
 
 #[test]
-fn acknowledged_cpu_projection_publishes_actual_pose_and_recycles_on_canonical_catchup()
--> Result<(), Box<dyn Error>> {
-    let (mut session, clock, _directory) = session()?;
+fn acknowledged_cpu_projection_publishes_actual_pose_once() -> Result<(), Box<dyn Error>> {
+    let (mut session, _clock, _directory) = session()?;
     let wake = Arc::new(Wake::default());
     let source = FrameStamp { surface: SurfaceId::new(1)?, generation: Generation::new(1)? };
     let target = FrameStamp { generation: Generation::new(2)?, ..source };
     let foreign = FrameStamp { generation: Generation::new(3)?, ..source };
+    let second_target = FrameStamp { generation: Generation::new(4)?, ..source };
     let source_view = session.tools.navigation().viewport();
     let mut projected_view = source_view;
     projected_view.pan_by([11.0, -7.0])?;
     let mut latest_view = projected_view;
     latest_view.pan_by([-3.0, 5.0])?;
     session.tools = ToolManager::new(Navigation::new(latest_view));
+    let replacement_extent = Extent::new(400, 300)?;
 
-    let products =
-        cpu_display_products(&mut session, wake, source, target, source_view, projected_view)?;
+    let products = cpu_display_products(
+        &mut session,
+        wake,
+        CpuDisplayBoundary {
+            source,
+            target,
+            second_target,
+            source_view,
+            projected_view,
+            replacement_extent,
+        },
+    )?;
+    let document_identity =
+        (products.document.snapshot().identity(), products.document.snapshot().revision());
+    session.scene = Some(Scene {
+        document: products.document,
+        source: None,
+        source_revision: 0,
+        original: None,
+    });
+    let source_revision = 0;
     session.front = Some(products.surface);
     session.cpu_projection = Some(products.projection);
     session.display_buffers = [Some(products.spare), None];
+    session.display_buffer_extent = Some(projected_view.surface());
     session.projection_damage = Some(DamagePlan::full(projected_view.surface()));
-    session.cpu_shown_projected = true;
     session.cpu_pending = Some(target);
+    let coverage = BackingCoverage::new(source_view, [0; 2])?;
+    session.pending_cpu_evidence = Some(DisplayEvidence {
+        target,
+        source,
+        view: projected_view,
+        coverage,
+        projection: ViewProjection::new(source_view, projected_view)?,
+        document: document_identity,
+        source_revision,
+    });
     session.pacing.submitted(
         target,
         PresentationMode::Projected,
@@ -200,6 +251,15 @@ fn acknowledged_cpu_projection_publishes_actual_pose_and_recycles_on_canonical_c
         Duration::ZERO,
     )?;
     session.pacing.prepared(target, Duration::ZERO)?;
+
+    assert!(session.needs_display_buffers(replacement_extent));
+    let retired = session.install_display_buffers(products.replacement, replacement_extent);
+    assert!(retired[0].is_some());
+    assert!(!session.needs_display_buffers(replacement_extent));
+    assert_eq!(
+        session.frame().ok_or("Old acknowledged frame disappeared during pair replacement")?.target,
+        target
+    );
 
     let pending = session.frame().ok_or("CPU projection was not published")?;
     assert_eq!(pending.kind, CpuFrameKind::Projected);
@@ -218,32 +278,16 @@ fn acknowledged_cpu_projection_publishes_actual_pose_and_recycles_on_canonical_c
     assert_eq!(session.display_view, Some(projected_view));
     assert_ne!(session.display_view, Some(latest_view));
     assert_eq!(session.native_presented, Some(target));
+    let evidence = session.display_evidence.ok_or("Accepted display evidence was lost")?;
+    assert_eq!(evidence.target, target);
+    assert_eq!(evidence.source, source);
+    assert_eq!(evidence.view, projected_view);
+    assert_eq!(evidence.projection.source(), source_view);
+    assert_eq!(evidence.projection.target(), projected_view);
     assert!(!session.frame().ok_or("Acknowledged projection was lost")?.pending);
     assert_eq!(session.pacing.stats().projected_accepted, 1);
     assert!(session.did_present_cpu(target).is_err());
 
-    session.tools = ToolManager::new(Navigation::new(source_view));
-    session.presented = Some(Presented {
-        view: source_view,
-        filter: Filter::Nearest,
-        document: (1, 1),
-        source_revision: 0,
-        damage: DamagePlan::full(source_view.surface()),
-        base: None,
-        input_at: Duration::ZERO,
-    });
-    clock.0.store(20_000_000, Ordering::SeqCst);
-    session.stage_cpu_canonical()?;
-    assert!(!session.cpu_shown_projected);
-    assert!(session.cpu_projection.is_none());
-    assert!(session.projection_damage.is_none());
-    assert_eq!(session.display_buffers.iter().filter(|slot| slot.is_some()).count(), 2);
-    let canonical = session.frame().ok_or("Canonical CPU frame was not restored")?;
-    assert_eq!(canonical.kind, CpuFrameKind::Prepared);
-    assert!(!canonical.pending);
-    assert_eq!(canonical.target, source);
-    assert_eq!(session.display_source, Some(source));
-    assert_eq!(session.display_view, Some(source_view));
     Ok(())
 }
 

@@ -41,7 +41,7 @@ pub use windows::run;
 pub enum CpuFrameKind {
     /// Canonical retained pixels that may use an exact preceding-frame repair dependency.
     Prepared,
-    /// Complete transient display projection that must be uploaded without native pixel reuse.
+    /// Complete display projection; exact same-source integer motion may reuse native pixels.
     Projected,
 }
 
@@ -55,10 +55,10 @@ pub struct CpuFrame<'a> {
     pub pending: bool,
     /// Retained frame represented by every pixel in this buffer.
     pub target: FrameStamp,
-    /// Prepared native repair may blit only from this exact previously displayed frame.
-    /// Projected frames carry no base.
+    /// Native repair may blit only from this exact previously displayed frame. For projections,
+    /// the producer must prove identical source identity and unchanged output sampling phase.
     pub base: Option<FrameStamp>,
-    /// Prepared physical camera repair, or one complete viewport region for a projection.
+    /// Physical output repair, independent of any offscreen backing repair.
     /// Exposure always uses the complete retained buffer.
     pub damage: &'a DamagePlan,
     /// Complete immutable retained viewport, including valid pixels outside dirty rectangles.
@@ -66,14 +66,14 @@ pub struct CpuFrame<'a> {
 }
 impl CpuFrame<'_> {
     /// Validate complete source dimensions and dependency shape before any native pixel effect.
-    /// Projected frames are complete standalone viewports and cannot carry exact repair state.
+    /// Projections carry complete pixels for exposure; partial output repair requires an exact base.
     /// # Errors
     /// Rejects incomplete pixel storage, unsupported dimensions or inconsistent frame identities.
     pub fn validate(&self) -> Result<Extent, DesktopError> {
         let extent = self.damage.dirty().surface();
         let invalid_projection = self.kind == CpuFrameKind::Projected
-            && (self.base.is_some()
-                || self.damage.blit().is_some()
+            && self.base.is_none()
+            && (self.damage.blit().is_some()
                 || self.damage.dirty().regions().ne([extent.region()]));
         if self.pixels.len() as u64 != extent.pixels()
             || extent.width() > 16384

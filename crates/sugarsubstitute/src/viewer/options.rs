@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Parse explicit standalone demonstration inputs without filesystem or execution effects.
+//! Parse standalone inputs and locate the portable viewer's cache without creating storage.
 use std::{error::Error, ffi::OsString, io, path::PathBuf};
 use sugarsubstitute_contracts::configuration::LocaleId;
 use sugarsubstitute_image_ops::Extent;
@@ -23,7 +23,8 @@ pub(super) struct ProofPaths {
     pub(super) motion_duration: std::time::Duration,
 }
 impl Options {
-    /// Require an explicit storage anchor so qualification never grows an ambient temporary cache.
+    /// Resolve ordinary portable launches beside the executable; qualification requires an
+    /// explicit absolute cache anchor. Parsing never creates a directory or evaluates images.
     pub(super) fn parse(
         arguments: impl IntoIterator<Item = OsString>,
     ) -> Result<Self, Box<dyn Error>> {
@@ -90,7 +91,13 @@ impl Options {
                 _ => return Err(invalid("Unknown or duplicate viewer option").into()),
             }
         }
-        let cache = cache.filter(|path| path.is_absolute()).ok_or_else(|| invalid("Use canvas-viewer --cache <absolute folder> [--image <file>] [--locale <id>] [--width <pixels>] [--height <pixels>]"))?;
+        if cache.is_none() && (output.is_some() || metrics.is_some()) {
+            return Err(invalid(
+                "Headless qualification requires an explicit absolute --cache folder",
+            )
+            .into());
+        }
+        let cache = cache_anchor(cache, std::env::current_exe)?;
         let extent = Extent::new(width.unwrap_or(1280), height.unwrap_or(800))?;
         if extent.width() > 3840 || extent.height() > 2160 {
             return Err(invalid(
@@ -112,10 +119,11 @@ impl Options {
             )
             .into());
         }
+        let verify_native = proof.is_some() && native_readback.unwrap_or(true);
         Ok(Self {
             gpu: renderer.flatten(),
-            capture: proof.is_some(),
-            verify_native: proof.is_some() && native_readback.unwrap_or(true),
+            capture: verify_native,
+            verify_native,
             cache,
             image,
             locale: locale.unwrap_or_else(|| "en".to_owned()),
@@ -124,6 +132,24 @@ impl Options {
             proof_window: proof_window.unwrap_or(false),
         })
     }
+}
+/// Resolve only the executable location when no explicit cache anchor was supplied. The existing
+/// cache owner performs every storage operation later on an admitted worker.
+fn cache_anchor(
+    selected: Option<PathBuf>,
+    executable: impl FnOnce() -> io::Result<PathBuf>,
+) -> io::Result<PathBuf> {
+    let path = match selected {
+        Some(path) => path,
+        None => executable()?
+            .parent()
+            .ok_or_else(|| invalid("Viewer executable has no parent directory"))?
+            .join("cache"),
+    };
+    if !path.is_absolute() {
+        return Err(invalid("Viewer cache folder must be absolute"));
+    }
+    Ok(path)
 }
 fn invalid(message: &'static str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidInput, message)
@@ -136,7 +162,7 @@ fn number(value: OsString) -> Result<u32, Box<dyn Error>> {
 mod tests {
     use super::*;
     #[test]
-    fn viewer_options_require_explicit_storage_and_preserve_selected_source_units()
+    fn viewer_options_resolve_portable_storage_and_preserve_selected_source_units()
     -> Result<(), Box<dyn Error>> {
         let cache = if cfg!(windows) { "E:\\viewer-owned-cache" } else { "/viewer-owned-cache" };
         let selected = OsString::from("画像🙂.png");
@@ -150,7 +176,7 @@ mod tests {
         ])?;
         assert_eq!(options.image, Some(PathBuf::from(selected)));
         assert_eq!(options.locale, "ja");
-        assert!(Options::parse([]).is_err());
+        assert!(Options::parse([])?.cache.is_absolute());
         assert!(Options::parse(["--cache".into(), "relative".into()]).is_err());
         assert!(
             Options::parse(["--cache".into(), cache.into(), "--width".into(), "0".into()]).is_err()
@@ -159,6 +185,21 @@ mod tests {
             Options::parse(["--cache".into(), cache.into(), "--locale".into(), "unknown".into()])
                 .is_err()
         );
+        Ok(())
+    }
+    #[test]
+    fn portable_cache_uses_executable_location_and_explicit_anchor_avoids_discovery()
+    -> Result<(), Box<dyn Error>> {
+        let root =
+            PathBuf::from(if cfg!(windows) { "E:\\portable-画像" } else { "/portable-画像" });
+        assert_eq!(cache_anchor(None, || Ok(root.join("canvas-viewer.exe")))?, root.join("cache"));
+        let explicit = root.join("selected-cache");
+        assert_eq!(
+            cache_anchor(Some(explicit.clone()), || Err(io::Error::other("not queried")))?,
+            explicit
+        );
+        assert!(cache_anchor(None, || Err(io::Error::other("executable lookup failed"))).is_err());
+        assert!(cache_anchor(Some(PathBuf::from("relative")), || Ok(root.join("viewer"))).is_err());
         Ok(())
     }
     #[test]
@@ -246,6 +287,7 @@ mod tests {
             assert!(Options::parse(rejected).is_err());
         }
         let default = Options::parse(arguments.clone())?;
+        assert!(default.capture);
         assert!(default.verify_native);
         assert!(default.proof.ok_or("Proof inputs absent")?.motion_duration.is_zero());
         arguments.extend([
@@ -255,7 +297,7 @@ mod tests {
             "off".into(),
         ]);
         let options = Options::parse(arguments.clone())?;
-        assert!(options.capture);
+        assert!(!options.capture);
         assert!(!options.verify_native);
         assert_eq!(
             options.proof.ok_or("Proof inputs absent")?.motion_duration,

@@ -6,6 +6,7 @@ use sugarsubstitute_image_ops::Extent;
 
 const MIN_ZOOM: f64 = 1e-9;
 const MAX_ZOOM: f64 = 16384.0;
+pub(crate) const MAX_SURFACE_EDGE: u32 = 16384;
 
 /// Immutable camera state. Origin is the document coordinate at the device viewport's top-left.
 /// Zoom is physical device pixels per document pixel; device scale is handled at the input boundary.
@@ -172,6 +173,35 @@ impl Viewport {
         self.translation = [0; 2];
         Ok(())
     }
+    /// Place this viewport at an exact physical offset within a larger drawable surface.
+    /// Base origin and zoom remain bit-identical; checked integer translation preserves the
+    /// sampling phase used by retained-pixel pan repairs. This operation never recenters.
+    /// # Errors
+    /// Rejects unsupported surfaces, shrinkage, placements outside the expanded surface or
+    /// integer-translation exhaustion without changing the viewport.
+    pub fn expand_surface(&mut self, surface: Extent, offset: [u32; 2]) -> Result<(), CanvasError> {
+        validate_surface(surface)?;
+        if offset[0] > surface.width().saturating_sub(self.surface.width())
+            || offset[1] > surface.height().saturating_sub(self.surface.height())
+            || surface.width() < self.surface.width()
+            || surface.height() < self.surface.height()
+        {
+            return Err(CanvasError::Invalid("Expanded surface does not contain viewport"));
+        }
+        let translation = [
+            i64::from(self.translation[0]) + i64::from(offset[0]),
+            i64::from(self.translation[1]) + i64::from(offset[1]),
+        ];
+        let translation = [
+            i32::try_from(translation[0])
+                .map_err(|_| CanvasError::Invalid("Expanded surface translation exceeds bounds"))?,
+            i32::try_from(translation[1])
+                .map_err(|_| CanvasError::Invalid("Expanded surface translation exceeds bounds"))?,
+        ];
+        self.surface = surface;
+        self.translation = translation;
+        Ok(())
+    }
     /// Plan reuse against the actually presented camera when document content is unchanged.
     /// Exact integer translation is required; fractional translation never blits stale sample phases.
     /// # Errors
@@ -241,7 +271,7 @@ fn finite(point: [f64; 2]) -> Result<(), CanvasError> {
     Ok(())
 }
 fn validate_surface(surface: Extent) -> Result<(), CanvasError> {
-    if surface.width() > 16384 || surface.height() > 16384 {
+    if surface.width() > MAX_SURFACE_EDGE || surface.height() > MAX_SURFACE_EDGE {
         return Err(CanvasError::Invalid("Canvas surface exceeds device-pixel bounds"));
     }
     Ok(())

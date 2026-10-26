@@ -962,7 +962,7 @@ rationale = "Isolated native hardware qualification reports actual adapter ident
 [[records]]
 path = "crates/sugarsubstitute-image-gpu/examples/adapter_qualification/image.rs"
 owner = "sugarsubstitute-image-gpu"
-source_sha256 = "sha256:1303a6eea1452f25a68683e5c14b13b6168cd5605c7fe128b2a330454889d03f"
+source_sha256 = "sha256:f52dd700fe954ef38b2bf7a98e30804150027f9b368dcf11597d600ccc9e980d"
 disposition = "fixture"
 rationale = "Isolated native hardware qualification reports actual adapter identity, CPU/GPU pixel comparisons, timings and observed execution retirement; runtime diagnostics use structured logging."
 
@@ -984,14 +984,14 @@ rationale = "Isolated native qualification reports observed GPU display, repair 
 [[records]]
 path = "crates/sugarsubstitute-canvas-render/examples/frame_qualification/scene.rs"
 owner = "sugarsubstitute-canvas-render"
-source_sha256 = "sha256:356d04411bfee633f91577471bde3370063d1f2ff5048dbcc3916e75e182eaf1"
+source_sha256 = "sha256:0499bb7770a79530de6515cc1826b051317bd62b9f85679ae3740fad49561fba"
 disposition = "fixture"
 rationale = "Isolated native qualification reports observed GPU display, repair and cancellation outcomes through the production execution boundary; runtime diagnostics use structured logging."
 
 [[records]]
 path = "crates/sugarsubstitute-canvas-render/examples/frame_qualification/scale.rs"
 owner = "sugarsubstitute-canvas-render"
-source_sha256 = "sha256:e12e376900fa8006e9063bb90484d63c66955a3a3d59aad38e7f26f409a1ec92"
+source_sha256 = "sha256:7d20bd20e0fbe8efbcea9c3df6bc81245d3ba3e6ba9ee1a5948dc3bfa1f8afc4"
 disposition = "fixture"
 rationale = "Isolated 4K hardware qualification reports actual retained GPU copy, CPU pixel agreement and finite-admission tile eviction through the production execution boundary."
 
@@ -1012,6 +1012,6 @@ rationale = "The actual admitted native storage body receives an isolated diagno
 [[records]]
 path = "crates/sugarsubstitute-canvas-render/examples/frame_qualification/projection.rs"
 owner = "sugarsubstitute-canvas-render"
-source_sha256 = "sha256:aa25a6f38d90dec9cf6efdd9b054ed2575f37262707d87a12e806556c09f77eb"
+source_sha256 = "sha256:1fc71c4c21edad8146b807c6614cd471ef06a70092c9513edcd2c30a7c539ea1"
 disposition = "fixture"
 rationale = "Isolated finite CPU qualification reports physical 4K projection costs with fresh and recycled admitted storage through the production execution boundary. Measurements are diagnostics, not timing-based correctness assertions."

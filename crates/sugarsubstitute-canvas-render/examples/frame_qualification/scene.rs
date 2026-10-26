@@ -119,7 +119,8 @@ pub(super) fn qualify(device: Arc<GpuDevice>, context: &JobContext) -> Result<us
     let matte = Pixel::linear(0.12, 0.13, 0.14, 1.0)?;
     for phase in 0..12_u64 {
         let previous = view;
-        let filter = if phase == 6 { Filter::Nearest } else { Filter::Lanczos3 };
+        let reconstruction =
+            Reconstruction::Finished(if phase == 6 { Filter::Nearest } else { Filter::Lanczos3 });
         match phase {
             1 => view.pan_by([7.0, -11.0])?,
             2 | 8 => view.pan_by([-13.0, 5.0])?,
@@ -154,7 +155,7 @@ pub(super) fn qualify(device: Arc<GpuDevice>, context: &JobContext) -> Result<us
             RenderRequest {
                 document: &snapshot,
                 view,
-                filter,
+                reconstruction,
                 matte,
                 target: stamp(phase + 1)?,
                 base,
@@ -172,7 +173,7 @@ pub(super) fn qualify(device: Arc<GpuDevice>, context: &JobContext) -> Result<us
         {
             return Err("GPU frame changed publication metadata".into());
         }
-        let compiled = snapshot.compile_view(view, matte, filter, context.memory())?;
+        let compiled = snapshot.compile_view(view, matte, reconstruction, context.memory())?;
         let (graph, output) = compiled.into_parts();
         let mut cpu = Evaluator::new(graph, Gradient(image), 32, context.memory())?;
         let (update, worst) = readback(&prepared, &mut cpu, output, &encoder, context)?;
@@ -220,7 +221,7 @@ pub(super) fn qualify(device: Arc<GpuDevice>, context: &JobContext) -> Result<us
             RenderRequest {
                 document: &snapshot,
                 view,
-                filter,
+                reconstruction,
                 matte,
                 target: stamp(100 + phase)?,
                 base: None,

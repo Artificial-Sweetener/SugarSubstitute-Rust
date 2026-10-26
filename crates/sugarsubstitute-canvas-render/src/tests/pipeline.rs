@@ -2,12 +2,16 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Render real document DAG content through exact viewport repair and canonical display encoding.
 use super::*;
+mod coverage;
 mod phase;
 mod progressive;
+mod reconstruction;
 use sugarsubstitute_canvas::{
     Document, DocumentEdit, Layer, LayerContent, LayerId, LayerMask, Viewport,
 };
-use sugarsubstitute_image_ops::{AssetId, Pixel, RasterSource, SrgbEncoder, VectorRectangle};
+use sugarsubstitute_image_ops::{
+    AssetId, Filter, Pixel, RasterSource, Reconstruction, SrgbEncoder, VectorRectangle,
+};
 
 struct Gradient {
     extent: Extent,
@@ -61,7 +65,7 @@ fn repeated_tall_pan_repairs_retain_warmed_source_chunks_under_view_cache_churn(
             CpuRenderer::new(Gradient { extent, constant: None }, 64, context.memory())?;
         let first = renderer.prepare(
             RenderRequest {
-                filter: sugarsubstitute_image_ops::Filter::Lanczos3,
+                reconstruction: Reconstruction::Finished(Filter::Lanczos3),
                 document: &snapshot,
                 view,
                 matte: black()?,
@@ -76,7 +80,7 @@ fn repeated_tall_pan_repairs_retain_warmed_source_chunks_under_view_cache_churn(
         view.pan_by([-5.0, 0.0])?;
         let repaired = renderer.prepare(
             RenderRequest {
-                filter: sugarsubstitute_image_ops::Filter::Lanczos3,
+                reconstruction: Reconstruction::Finished(Filter::Lanczos3),
                 document: &snapshot,
                 view,
                 matte: black()?,
@@ -92,7 +96,7 @@ fn repeated_tall_pan_repairs_retain_warmed_source_chunks_under_view_cache_churn(
         view.pan_by([-5.0, 0.0])?;
         let repaired = renderer.prepare(
             RenderRequest {
-                filter: sugarsubstitute_image_ops::Filter::Lanczos3,
+                reconstruction: Reconstruction::Finished(Filter::Lanczos3),
                 document: &snapshot,
                 view,
                 matte: black()?,
@@ -130,7 +134,7 @@ fn dag_pan_repair_matches_full_redraw_and_reduces_actual_image_work() -> harness
             CpuRenderer::new(Gradient { extent, constant: None }, 64, context.memory())?;
         let first = renderer.prepare(
             RenderRequest {
-                filter: sugarsubstitute_image_ops::Filter::Lanczos3,
+                reconstruction: Reconstruction::Finished(Filter::Lanczos3),
                 document: &snapshot,
                 view,
                 matte: black()?,
@@ -149,7 +153,7 @@ fn dag_pan_repair_matches_full_redraw_and_reduces_actual_image_work() -> harness
         let damage = view.repair_from(previous)?;
         let update = renderer.prepare(
             RenderRequest {
-                filter: sugarsubstitute_image_ops::Filter::Lanczos3,
+                reconstruction: Reconstruction::Finished(Filter::Lanczos3),
                 document: &snapshot,
                 view,
                 matte: black()?,
@@ -167,7 +171,7 @@ fn dag_pan_repair_matches_full_redraw_and_reduces_actual_image_work() -> harness
             CpuRenderer::new(Gradient { extent, constant: None }, 64, context.memory())?;
         let full = reference.prepare(
             RenderRequest {
-                filter: sugarsubstitute_image_ops::Filter::Lanczos3,
+                reconstruction: Reconstruction::Finished(Filter::Lanczos3),
                 document: &snapshot,
                 view,
                 matte: black()?,
@@ -206,7 +210,7 @@ fn vector_layers_rasterize_at_requested_zoom_without_flattening_geometry() -> ha
             CpuRenderer::new(Gradient { extent, constant: None }, 32, context.memory())?;
         let frame = renderer.prepare(
             RenderRequest {
-                filter: sugarsubstitute_image_ops::Filter::Lanczos3,
+                reconstruction: Reconstruction::Finished(Filter::Lanczos3),
                 document: &snapshot,
                 view,
                 matte: black()?,
@@ -246,7 +250,7 @@ fn adjustment_layer_mask_and_opacity_preserve_original_translucent_coverage() ->
             CpuRenderer::new(Gradient { extent, constant: Some(original) }, 32, context.memory())?;
         let frame = renderer.prepare(
             RenderRequest {
-                filter: sugarsubstitute_image_ops::Filter::Lanczos3,
+                reconstruction: Reconstruction::Finished(Filter::Lanczos3),
                 document: &snapshot,
                 view,
                 matte: black()?,
@@ -281,7 +285,7 @@ fn completely_offscreen_huge_images_do_not_trigger_decode_or_pyramid_work() -> h
             CpuRenderer::new(Gradient { extent, constant: None }, 8, context.memory())?;
         let frame = renderer.prepare(
             RenderRequest {
-                filter: sugarsubstitute_image_ops::Filter::Lanczos3,
+                reconstruction: Reconstruction::Finished(Filter::Lanczos3),
                 document: &snapshot,
                 view,
                 matte: black()?,
@@ -315,7 +319,7 @@ fn minified_one_pixel_axes_preserve_geometric_image_coverage() -> harness::TestR
         )?;
         let frame = renderer.prepare(
             RenderRequest {
-                filter: sugarsubstitute_image_ops::Filter::Lanczos3,
+                reconstruction: Reconstruction::Finished(Filter::Lanczos3),
                 document: &snapshot,
                 view,
                 matte: black()?,

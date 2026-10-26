@@ -4,7 +4,7 @@
 use crate::{CanvasError, DocumentSnapshot, LayerContent, LayerMask, Viewport};
 use sugarsubstitute_contracts::execution::MemoryLease;
 use sugarsubstitute_image_ops::{
-    AssetId, Extent, Filter, Graph, NodeId, Operation, Pixel, Sampling, VectorRectangle,
+    AssetId, Extent, Graph, NodeId, Operation, Pixel, Reconstruction, Sampling, VectorRectangle,
 };
 
 /// One immutable image graph for a document revision and physical evaluation grid.
@@ -30,16 +30,17 @@ impl CompiledView {
 
 impl DocumentSnapshot {
     /// Compile this revision at the viewport's evaluation grid without changing authored content.
-    /// Raster layers use Lanczos pyramids or sparse nearest previews; vector coverage uses
-    /// transformed geometry at this resolution. Adjustments and composition operate on that same
-    /// linear-light grid. At actual size, one document pixel corresponds to one device pixel.
+    /// Finished raster layers use canonical Lanczos pyramid reduction followed by their selected
+    /// final filter. Previews sample original rasters directly with sparse nearest reconstruction.
+    /// Vector coverage, adjustments and composition use the same requested linear-light grid. At
+    /// actual size, one document pixel corresponds to one device pixel.
     /// # Errors
     /// Reports invalid matte/coordinates, graph limits and original memory/operation failures.
     pub fn compile_view(
         &self,
         view: Viewport,
         matte: Pixel,
-        filter: Filter,
+        reconstruction: Reconstruction,
         memory: &MemoryLease,
     ) -> Result<CompiledView, CanvasError> {
         if matte.channels()[3] != 1.0 {
@@ -58,7 +59,7 @@ impl DocumentSnapshot {
             match layer.content() {
                 LayerContent::Exposure { stops } => {
                     let adjusted = graph.add(Operation::Exposure { input: composite, stops })?;
-                    let mask = mask_node(&mut graph, layer.mask(), document, view, filter)?;
+                    let mask = mask_node(&mut graph, layer.mask(), document, view, reconstruction)?;
                     composite = graph.add(Operation::Mix {
                         original: composite,
                         adjusted,
@@ -69,7 +70,7 @@ impl DocumentSnapshot {
                 content => {
                     let mut foreground = match content {
                         LayerContent::Raster { asset, .. } => {
-                            raster_node(&mut graph, asset, document, view, filter, true)?
+                            raster_node(&mut graph, asset, document, view, reconstruction, true)?
                         }
                         LayerContent::VectorRectangle(shape) => {
                             vector_node(&mut graph, shape, document, view)?
@@ -81,7 +82,8 @@ impl DocumentSnapshot {
                         }
                     };
                     if layer.mask().is_some() {
-                        let mask = mask_node(&mut graph, layer.mask(), document, view, filter)?;
+                        let mask =
+                            mask_node(&mut graph, layer.mask(), document, view, reconstruction)?;
                         foreground = graph.add(Operation::Mask { input: foreground, mask })?;
                     }
                     if layer.opacity() != 1.0 {
@@ -137,11 +139,11 @@ fn mask_node(
     mask: Option<LayerMask>,
     document: Extent,
     view: Viewport,
-    filter: Filter,
+    reconstruction: Reconstruction,
 ) -> Result<NodeId, CanvasError> {
     match mask {
         Some(LayerMask::Raster { asset, .. }) => {
-            raster_node(graph, asset, document, view, filter, false)
+            raster_node(graph, asset, document, view, reconstruction, false)
         }
         Some(LayerMask::VectorRectangle(shape)) => vector_node(graph, shape, document, view),
         None => Ok(graph.add(Operation::Solid {
@@ -156,12 +158,12 @@ fn raster_node(
     asset: AssetId,
     document: Extent,
     view: Viewport,
-    filter: Filter,
+    reconstruction: Reconstruction,
     clip: bool,
 ) -> Result<NodeId, CanvasError> {
     let source = graph.add(Operation::Raster { asset, extent: document })?;
     let mut selected = source;
-    if filter == Filter::Lanczos3 {
+    if reconstruction.uses_canonical_pyramid() {
         let pyramid = graph.pyramid(source)?;
         for &level in pyramid.levels() {
             let extent = graph.extent(level)?;
@@ -195,7 +197,7 @@ fn raster_node(
         [ratios[0] / view.zoom(), ratios[1] / view.zoom()],
         [view.untranslated().origin()[0] * ratios[0], view.untranslated().origin()[1] * ratios[1]],
     )?
-    .with_filter(filter)
+    .with_filter(reconstruction.filter())
     .with_output_translation(view.pixel_translation());
     let sampled =
         graph.add(Operation::Resample { input: selected, extent: view.surface(), sampling })?;
@@ -238,3 +240,7 @@ fn vector_node(
         translation: view.pixel_translation(),
     })?)
 }
+
+#[cfg(test)]
+#[path = "compile/tests.rs"]
+mod tests;

@@ -7,10 +7,10 @@ use crate::{
     surface::Preparation,
     update::UpdatePlan,
 };
-use sugarsubstitute_canvas::{RenderRequest, ViewProjection};
+use sugarsubstitute_canvas::RenderRequest;
 use sugarsubstitute_contracts::execution::{JobContext, MemoryLease};
 use sugarsubstitute_image_ops::{
-    EvaluationStats, Evaluator, Graph, NodeId, RasterSource, SrgbEncoder,
+    EvaluationStats, Evaluator, Extent, Graph, NodeId, RasterSource, SrgbEncoder,
 };
 
 /// CPU canvas preparation retaining compatible image tiles across document/view graph replacement.
@@ -58,11 +58,11 @@ impl<S: RasterSource> CpuRenderer<S> {
     /// when no eligible cached tile remains.
     pub fn projection_buffers(
         &mut self,
-        view: ViewProjection,
+        output: Extent,
         context: &JobContext,
     ) -> Result<ProjectionBuffers, RenderError> {
-        let first = self.projection_buffer(view, context)?;
-        let second = self.projection_buffer(view, context)?;
+        let first = self.projection_buffer(output, context)?;
+        let second = self.projection_buffer(output, context)?;
         Ok(ProjectionBuffers::new(first, second))
     }
     /// Evaluate the requested document/view into immutable physical damage regions.
@@ -93,12 +93,12 @@ impl<S: RasterSource> CpuRenderer<S> {
         context: &JobContext,
     ) -> Result<CpuPreparation, RenderError> {
         check(context)?;
-        let RenderRequest { document, view, filter, matte, target, base, damage } = request;
+        let RenderRequest { document, view, reconstruction, matte, target, base, damage } = request;
         if damage.dirty().surface() != view.surface() {
             return Err(RenderError::Invalid("Canvas damage and viewport dimensions differ"));
         }
         let update = UpdatePlan::new(target, base, damage)?;
-        let compiled = document.compile_view(view, matte, filter, &self.memory)?;
+        let compiled = document.compile_view(view, matte, reconstruction, &self.memory)?;
         let (graph, output) = compiled.into_parts();
         let pending = Some(Preparation::new(update, context.memory())?);
         self.evaluator.replace_graph(graph);
@@ -158,12 +158,12 @@ impl<S: RasterSource> CpuRenderer<S> {
     }
     fn projection_buffer(
         &mut self,
-        view: ViewProjection,
+        output: Extent,
         context: &JobContext,
     ) -> Result<ProjectionBuffer, RenderError> {
         loop {
             check(context)?;
-            match ProjectionBuffer::new(view, &self.memory, context) {
+            match ProjectionBuffer::new(output, &self.memory, context) {
                 Err(
                     cause @ RenderError::Image(sugarsubstitute_image_ops::ImageError::Memory(_)),
                 ) => {

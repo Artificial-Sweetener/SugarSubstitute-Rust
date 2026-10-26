@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Prepare original assets and viewport pixels exclusively on execution-owned workers.
-use super::work_error::WorkError;
+use super::{coverage::BackingTier, work_error::WorkError};
 mod cpu;
 mod display;
 mod gpu;
@@ -23,7 +23,9 @@ use sugarsubstitute_contracts::execution::{
 };
 use sugarsubstitute_image_gpu::{GpuDevice, WindowFrame, WindowSurface};
 use sugarsubstitute_image_io::{CacheReuse, SharedRaster, import_png};
-use sugarsubstitute_image_ops::{AssetId, Extent, Filter, ImageError, Pixel, RasterSource, Region};
+use sugarsubstitute_image_ops::{
+    AssetId, Extent, ImageError, Pixel, RasterSource, Reconstruction, Region,
+};
 use sugarsubstitute_supervision::cache::{CachePolicy, CacheReader, RuntimeCache};
 
 pub(super) const RETAINED_BYTES: u64 = 160 * 1024 * 1024;
@@ -181,11 +183,11 @@ pub(super) fn load(
 }
 /// One immutable prepared request plus optional newly admitted UI backing for physical resize.
 pub(super) struct Packet {
+    pub(super) tier: BackingTier,
+    pub(super) reconstruction: Reconstruction,
+    pub(super) display_buffers: Option<ProjectionBuffers>,
     pub(super) pixels: Pixels,
-    pub(super) damage: sugarsubstitute_canvas::DamagePlan,
-    pub(super) base: Option<FrameStamp>,
     pub(super) view: Viewport,
-    pub(super) filter: Filter,
     pub(super) document: (u64, u64),
     pub(super) elapsed: std::time::Duration,
     pub(super) stats: sugarsubstitute_image_ops::EvaluationStats,
@@ -197,7 +199,7 @@ pub(super) enum Pixels {
 }
 /// A first/resize frame adopts complete pixels; repairs depend on the current retained frame.
 pub(super) enum CpuPacket {
-    Replace { surface: CpuSurface, buffers: ProjectionBuffers },
+    Replace { surface: CpuSurface },
     Repair(Box<PreparedUpdate>),
 }
 pub(super) struct GpuPacket {
@@ -207,16 +209,19 @@ pub(super) struct GpuPacket {
 }
 /// Own all inputs for one accepted CPU request; subsequent navigation intents remain outside it.
 pub(super) struct Prepare {
+    pub(super) tier: BackingTier,
+    pub(super) reconstruction: Reconstruction,
     pub(super) resources: Resources,
     pub(super) document: DocumentSnapshot,
     pub(super) source: Option<Source>,
     pub(super) source_revision: u64,
     pub(super) view: Viewport,
-    pub(super) filter: Filter,
     pub(super) target: FrameStamp,
     pub(super) base: Option<FrameStamp>,
     pub(super) damage: sugarsubstitute_canvas::DamagePlan,
     pub(super) replace_surface: bool,
+    pub(super) replace_buffers: bool,
+    pub(super) display_extent: Extent,
     pub(super) gpu_surface: Option<GpuSurface>,
     pub(super) finished: bool,
     pub(super) cpu: Option<CpuPreparation>,

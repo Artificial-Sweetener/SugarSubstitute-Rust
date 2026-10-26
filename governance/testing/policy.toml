@@ -5,25 +5,25 @@ platforms = ["windows", "macos", "linux"]
 package = "sugarsubstitute-image-gpu"
 root = "crates/sugarsubstitute-image-gpu"
 concern = "GPU compatibility, exact device selection, shader validation, bounded physical display mappings, display-copy bounds and retryable admission classification; hardware qualification compares shared DAG pixels, display conversion, alias eviction and actual cancellation retirement"
-minimum_tests = 12
+minimum_tests = 14
 
 [[owners]]
 package = "sugarsubstitute-canvas"
 root = "crates/sugarsubstitute-canvas"
 concern = "Physical camera, retained projection phase and exact damage invariants; semantic navigation stops, anchors, cadence, refresh deadlines and cancellation; tool selection, temporary navigation and document-bound transactional gestures sharing reversible history"
-minimum_tests = 39
+minimum_tests = 45
 
 [[owners]]
 package = "sugarsubstitute-canvas-render"
 root = "crates/sugarsubstitute-canvas-render"
 concern = "Overlap-safe CPU repairs, stale-frame rejection, independently sampled disposable projection, storage reuse and memory pressure, bounded GPU damage inventories and native hardware comparison of immutable retained display copies against CPU and full GPU redraw, including finite-admission 4K replacement"
-minimum_tests = 31
+minimum_tests = 34
 
 [[owners]]
 package = "sugarsubstitute-image-ops"
 root = "crates/sugarsubstitute-image-ops"
 concern = "Graph identity, shared CPU/GPU sampling and retention, exact clipped tile inventories, pyramid semantics, vector coverage, dirty dependencies and original execution admission"
-minimum_tests = 43
+minimum_tests = 44
 
 [[owners]]
 package = "sugarsubstitute-contracts"
@@ -47,7 +47,7 @@ minimum_tests = 116
 package = "sugarsubstitute"
 root = "crates/sugarsubstitute"
 concern = "Private worker record framing, original native snapshots, bounded uploads and immutable host-selected write authority; Original admitted startup file input, installed descriptor and Unicode input pairing, retained primary/post-control causes and whole preparation custody; Localized native recovery decisions preserve their original diagnostics; Early installer folder inspection waits for package verification without provisioning; Same-profile successor joins authenticated native release and domain settlement with unchanged cutoff; Fresh subordinate recovery composition with unchanged Root authority, admission before ACK, independent real receiving and checked cleanup; Production desktop startup and retirement through actual execution, authenticated parent/child transport, shared backends, profiles and native window adapters; retained failures, captured startup, bounded console rendering and isolated qualification roles; contained headless backend witness invocation and original-budget Finish lifecycle; genuine boxed incident construction and bounded original terminal/cause diagnostics; unique heap activation ownership outside the persistent native pump frame; original launched-profile release consumption and precise Finish request status; actual Desktop probe formatter and sole bounded Root stderr diagnostic decoding; Offline startup activation independent of producing-build network configuration"
-minimum_tests = 1192
+minimum_tests = 1199
 
 [[owners]]
 package = "sugarsubstitute-execution"
@@ -77,7 +77,7 @@ minimum_tests = 64
 package = "sugarsubstitute-desktop"
 root = "crates/sugarsubstitute-desktop"
 concern = "Nonblocking frame delivery, pre-Tao preparation, lossless wake handoff, bounded native dispatch, headless settlement, retained native storage, input and timing boundaries; current-view native reporter controls, explicit consent and inert save selection, clipboard transfer, bounded modal input and checked font/callback retirement; post-show native layout reconciliation and retained closed preview source mismatch; actual incomplete-probe conditions, coalesced creating-thread custody counters and bounded closed stderr observations"
-minimum_tests = 486
+minimum_tests = 489
 
 [[owners]]
 package = "sugarsubstitute-crash"
@@ -107,7 +107,7 @@ minimum_tests = 24
 package = "sugarsubstitute-ui"
 root = "crates/sugarsubstitute-ui"
 concern = "Admitted layered surface clipping, fractional coverage, cancellation and validated pixel publication; shared form peer identities and text limits, shaped measurement/paint agreement; shared native availability and activation fencing, bounded raster, progress and scrollbar widgets; native and portable label shaping, geometry, memory custody, clipping and styled console text"
-minimum_tests = 81
+minimum_tests = 80
 
 [[owners]]
 package = "sugarsubstitute-image-io"

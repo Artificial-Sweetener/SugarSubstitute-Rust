@@ -6,7 +6,7 @@ mod native;
 use super::*;
 use crate::viewer::{
     options::ProofPaths,
-    proof::{self, Input as ProofInput, Sample},
+    proof::{self, Input as ProofInput, ProofBacking, Sample},
 };
 use motion::Motion;
 use std::{num::NonZeroUsize, time::Instant};
@@ -77,6 +77,9 @@ impl Proof {
             return self.drive_motion();
         }
         let session = &mut self.session;
+        if !session.displayed_coverage_is_valid()? {
+            return Err("Viewer published output without current document coverage".into());
+        }
         if session.loading.is_some()
             || session.pending_open.is_some()
             || session.scene.as_ref().is_none_or(|scene| scene.source.is_none())
@@ -86,27 +89,26 @@ impl Proof {
         let Some(shown) = &session.presented else {
             return Ok(());
         };
-        if shown.view != session.tools.navigation().viewport() {
+        let target_view = session.tools.navigation().viewport();
+        let scene = session.scene.as_ref().ok_or("Proof document is unavailable")?;
+        let snapshot = scene.document.snapshot();
+        let Some(_) = shown.coverage.crop(target_view, snapshot.extent())? else {
+            return Ok(());
+        };
+        if shown.view.zoom() != target_view.zoom() {
             return Ok(());
         }
-        let stamp = session
-            .front
-            .as_ref()
-            .and_then(|surface| surface.current())
-            .ok_or("Proof lost its displayed frame")?;
-        if session.native_target.is_some()
-            && session.options.gpu.is_none()
-            && (session.cpu_pending.is_some()
-                || session.display_source != Some(stamp)
-                || session.display_view != Some(shown.view))
+        let stamp = session.current_frame().ok_or("Proof lost its displayed frame")?;
+        if session.displaying.is_some()
+            || session.cpu_pending.is_some()
+            || session.display_source != Some(stamp)
+            || session.display_view != Some(target_view)
         {
             return Ok(());
         }
         if session.options.gpu.is_some()
             && session.native_target.is_some()
-            && (session.display_source != Some(stamp)
-                || session.display_view != Some(shown.view)
-                || session.gpu_presentation.is_some()
+            && (session.gpu_presentation.is_some()
                 || session.awaiting_gpu.is_some()
                 || session.native_presented.is_none()
                 || !session.native_verified)
@@ -123,7 +125,10 @@ impl Proof {
                 .ok_or("Viewer proof exceeded its bounded frame inventory")?;
             *slot = Some(Sample {
                 phase: self.phase,
-                preview: shown.filter == Filter::Nearest,
+                physical_zoom: target_view.zoom(),
+                nearest_reconstruction: shown.reconstruction.filter()
+                    == sugarsubstitute_image_ops::Filter::Nearest,
+                preview: shown.reconstruction.is_preview(),
                 prepare_microseconds: session.last_prepare.as_micros(),
                 computed_pixels,
                 source_pixels,
@@ -133,13 +138,14 @@ impl Proof {
             self.previous_stats = session.last_stats;
             self.observed = Some(stamp);
         }
-        if shown.filter != Filter::Lanczos3
+        if shown.reconstruction.is_preview()
+            || shown.reconstruction
+                != Reconstruction::finished_for_display_zoom(target_view.zoom())?
             || session.rendering.is_some()
             || session.tools.navigation().interacting()
         {
             return Ok(());
         }
-        let surface = session.tools.navigation().viewport().surface();
         if !self.motion_done {
             let now = session.navigation_time();
             let Some(stats) = take_settled_presentation_stats(&mut session.pacing, now)? else {
@@ -162,16 +168,6 @@ impl Proof {
             self.motion_stats = Some(stats);
             self.motion_collecting = false;
         }
-        let reusable = match self.phase {
-            5 => surface.width() > 13 && surface.height() > 7,
-            6 => surface.width() > 5 && surface.height() > 3,
-            _ => false,
-        };
-        if reusable && session.last_surface_work.reused_pixels == 0 {
-            return Err(
-                "Fractional-zoom navigation did not retain its integer-panned pixels".into()
-            );
-        }
         let center = [
             f64::from(session.tools.navigation().viewport().surface().width()) * 0.5,
             f64::from(session.tools.navigation().viewport().surface().height()) * 0.5,
@@ -186,7 +182,7 @@ impl Proof {
             3 => {
                 session.input(Input::Tool(ToolInput::Pointer(center)))?;
                 session.input(Input::Tool(ToolInput::Wheel {
-                    steps: 2.0,
+                    steps: 4.0,
                     phase: ScrollPhase::Unphased,
                 }))?;
             }
@@ -202,17 +198,43 @@ impl Proof {
     fn prepare_output(&mut self) -> Result<(), Box<dyn Error>> {
         let session = &mut self.session;
         if self.pending.is_none() {
+            if session.coverage_acceptances == 0 {
+                return Err("Proof observed no coverage-validated native presentations".into());
+            }
             let scene = session.scene.as_ref().ok_or("Proof document is unavailable")?;
+            let document = scene.document.snapshot();
+            let target = session.tools.navigation().viewport();
+            let shown = session.presented.ok_or("Proof detailed backing is unavailable")?;
+            let projection = shown
+                .coverage
+                .crop(target, document.extent())?
+                .ok_or("Proof detailed backing does not cover its output camera")?;
+            let backing = match session.options.gpu {
+                Some(_) => ProofBacking::Gpu(
+                    session
+                        .gpu_front
+                        .as_ref()
+                        .and_then(GpuSurface::frame)
+                        .ok_or("Proof GPU backing is unavailable")?
+                        .clone(),
+                ),
+                None => ProofBacking::Cpu(
+                    session.front.take().ok_or("Proof CPU backing is unavailable")?,
+                ),
+            };
             self.pending = Some(ProofInput {
                 resources: session
                     .resources
                     .as_ref()
                     .ok_or("Proof resources are unavailable")?
                     .clone(),
-                document: scene.document.snapshot(),
+                document,
                 source: scene.source.clone(),
-                view: session.tools.navigation().viewport(),
-                front: session.front.take().ok_or("Proof surface is unavailable")?,
+                view: target,
+                backing_view: shown.view,
+                projection,
+                reconstruction: shown.reconstruction,
+                backing,
                 samples: self.samples,
                 paths: self.paths.take().ok_or("Proof output custody was lost")?,
                 adapter: session.gpu_descriptor.clone(),
@@ -224,6 +246,8 @@ impl Proof {
                 native_gpu_display_verification_readback: session.options.gpu.is_some()
                     && session.options.verify_native
                     && session.native_target.is_some(),
+                coverage_acceptances: session.coverage_acceptances,
+                first_image_queue_latency: session.first_image_queue_latency,
             });
         }
         let runtime = session.runtime.as_ref().ok_or("Proof execution is unavailable")?;
@@ -251,6 +275,9 @@ impl Proof {
 impl Proof {
     /// Deliver one latest due qualification observation through the ordinary normalized input port.
     fn drive_motion(&mut self) -> Result<(), Box<dyn Error>> {
+        if !self.session.displayed_coverage_is_valid()? {
+            return Err("Motion published output without current document coverage".into());
+        }
         let now = self.session.navigation_time();
         let motion = self.motion.as_mut().ok_or("Proof motion lifetime is unavailable")?;
         if let Some(step) = motion.next(now)? {
@@ -342,8 +369,13 @@ impl HeadlessLifetime for Proof {
             job.cancel();
         }
         if let Some(input) = self.pending.take() {
+            let (front, proof_gpu) = match input.backing {
+                ProofBacking::Cpu(front) => (Some(front), None),
+                ProofBacking::Gpu(frame) => (None, Some(frame)),
+            };
             self.session.retire(Retired {
-                _front: Some(input.front),
+                _front: front,
+                _proof_gpu: proof_gpu,
                 _resources: Some(input.resources),
                 ..Default::default()
             })?;

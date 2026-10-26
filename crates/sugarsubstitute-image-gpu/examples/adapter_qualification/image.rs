@@ -141,6 +141,18 @@ fn graph(context: &JobContext) -> Result<(Graph, Vec<Case>, [NodeId; 3])> {
         node: pyramid,
         region: Extent::new(33, 17)?.region(),
     });
+    let reduced_extent = graph.extent(pyramid)?;
+    let nearest_extent = Extent::new(20, 10)?;
+    let nearest_reconstruction = graph.add(Operation::Resample {
+        input: pyramid,
+        extent: nearest_extent,
+        sampling: Sampling::resize(reduced_extent, nearest_extent).with_filter(Filter::Nearest),
+    })?;
+    cases.push(Case {
+        name: "lanczos_pyramid_nearest_reconstruction",
+        node: nearest_reconstruction,
+        region: nearest_extent.region(),
+    });
     for (name, node) in [("lanczos_global_phase", lanczos), ("nearest_global_phase", nearest)] {
         cases.push(Case { name, node, region: Region::new(128, 1, 128, 127)? });
         cases.push(Case { name, node, region: Region::new(0, 0, 128, 1)? });

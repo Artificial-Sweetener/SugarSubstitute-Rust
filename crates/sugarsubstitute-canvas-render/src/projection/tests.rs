@@ -9,7 +9,7 @@ use crate::{
 use sugarsubstitute_canvas::{
     DamagePlan, Document, DocumentEdit, Layer, LayerContent, LayerId, RenderRequest, Viewport,
 };
-use sugarsubstitute_image_ops::{AssetId, Extent, Filter, RasterSource, Region};
+use sugarsubstitute_image_ops::{AssetId, Extent, RasterSource, Reconstruction, Region};
 
 struct TestSource {
     extent: Extent,
@@ -87,8 +87,12 @@ fn projected_pixels_match_independent_camera_sampling_with_safe_matte_coverage()
                     target.pan_by([dx, dy])?;
                     target.resize(Extent::new(37, 29)?)?;
                     let mapping = ViewProjection::new(source, target)?;
-                    let projection = ProjectionBuffer::new(mapping, context.memory(), context)?
-                        .project(stamp(2)?, &base, mapping, matte, context)?;
+                    let projection = ProjectionBuffer::new(
+                        mapping.target().surface(),
+                        context.memory(),
+                        context,
+                    )?
+                    .project(stamp(2)?, &base, mapping, matte, context)?;
                     for y in 0..29 {
                         for x in 0..37 {
                             let point = source.device_at(
@@ -134,7 +138,7 @@ fn projection_rejects_foreign_or_stale_frames_and_incomplete_matte() -> harness:
         let map = ViewProjection::new(view, view)?;
         let black = Pixel::linear(0.0, 0.0, 0.0, 1.0)?;
         assert!(matches!(
-            ProjectionBuffer::new(map, context.memory(), context)?.project(
+            ProjectionBuffer::new(map.target().surface(), context.memory(), context)?.project(
                 stamp(1)?,
                 &base,
                 map,
@@ -149,18 +153,18 @@ fn projection_rejects_foreign_or_stale_frames_and_incomplete_matte() -> harness:
             ..stamp(2)?
         };
         assert!(
-            ProjectionBuffer::new(map, context.memory(), context)?
+            ProjectionBuffer::new(map.target().surface(), context.memory(), context)?
                 .project(foreign, &base, map, black, context)
                 .is_err()
         );
         assert!(
-            ProjectionBuffer::new(map, context.memory(), context)?
+            ProjectionBuffer::new(map.target().surface(), context.memory(), context)?
                 .project(stamp(2)?, &base, map, Pixel::TRANSPARENT, context)
                 .is_err()
         );
         let empty = CpuSurface::new(stamp(1)?.surface, base.extent(), context.memory())?;
         assert!(matches!(
-            ProjectionBuffer::new(map, context.memory(), context)?.project(
+            ProjectionBuffer::new(map.target().surface(), context.memory(), context)?.project(
                 stamp(2)?,
                 &empty,
                 map,
@@ -183,19 +187,14 @@ fn projection_memory_pressure_does_not_replace_or_reallocate_canonical_source()
         let view = Viewport::new(base.extent())?;
         let large = Viewport::new(Extent::new(16384, 16384)?)?;
         assert!(matches!(
-            ProjectionBuffer::new(ViewProjection::new(view, large)?, context.memory(), context),
+            ProjectionBuffer::new(large.surface(), context.memory(), context),
             Err(RenderError::Image(ImageError::Memory(_)))
         ));
         assert_eq!(base.pixels().as_ptr(), original);
         assert_eq!(base.current(), Some(stamp(1)?));
         let map = ViewProjection::new(view, view)?;
-        let small = ProjectionBuffer::new(map, context.memory(), context)?.project(
-            stamp(3)?,
-            &base,
-            map,
-            Pixel::linear(0.0, 0.0, 0.0, 1.0)?,
-            context,
-        )?;
+        let small = ProjectionBuffer::new(map.target().surface(), context.memory(), context)?
+            .project(stamp(3)?, &base, map, Pixel::linear(0.0, 0.0, 0.0, 1.0)?, context)?;
         assert_eq!(small.pixels(), base.pixels());
         Ok(())
     })
@@ -208,7 +207,8 @@ fn recycled_storage_keeps_allocation_and_resamples_only_canonical_pixels() -> ha
         let source = Viewport::new(base.extent())?;
         let matte = Pixel::linear(0.0, 0.0, 0.0, 1.0)?;
         let identity = ViewProjection::new(source, source)?;
-        let mut buffer = ProjectionBuffer::new(identity, context.memory(), context)?;
+        let mut buffer =
+            ProjectionBuffer::new(identity.target().surface(), context.memory(), context)?;
         let mut allocation = None;
         for (index, factor) in [0.5, 4.0, 1.0, 0.8, 1.0].into_iter().enumerate() {
             let mut target = source;
@@ -247,7 +247,7 @@ fn paired_projection_storage_owns_two_exact_claims_and_releases_them_together()
         let mut renderer =
             CpuRenderer::new(TestSource { extent: source.surface() }, 1, context.memory())?;
         let before = available(context)?;
-        let pair = renderer.projection_buffers(view, context)?;
+        let pair = renderer.projection_buffers(view.target().surface(), context)?;
         let claim = source.surface().pixels() * 4 + size_of::<CpuProjection>() as u64 + 128;
         assert_eq!(available(context)?, before - 2 * claim);
         let (first, second) = pair.into_parts();
@@ -257,7 +257,7 @@ fn paired_projection_storage_owns_two_exact_claims_and_releases_them_together()
         assert_eq!(available(context)?, before);
         let blocker = context.memory().claim(before - claim).map_err(ImageError::from)?;
         assert!(matches!(
-            renderer.projection_buffers(view, context),
+            renderer.projection_buffers(view.target().surface(), context),
             Err(RenderError::Image(ImageError::Memory(cause)))
                 if cause.requested_bytes == claim && cause.available_bytes == 0
         ));
@@ -281,7 +281,7 @@ fn paired_projection_pressure_evicts_only_cache_tiles_and_preserves_canonical_pi
             RenderRequest {
                 document: &snapshot,
                 view: source_view,
-                filter: Filter::Nearest,
+                reconstruction: Reconstruction::Preview,
                 matte: Pixel::linear(0.0, 0.0, 0.0, 1.0)?,
                 target: stamp(1)?,
                 base: None,
@@ -306,8 +306,7 @@ fn paired_projection_pressure_evicts_only_cache_tiles_and_preserves_canonical_pi
                 .map_err(|_| RenderError::Invalid("Projection test target is too tall"))?,
         )?;
         let target_view = Viewport::new(target_extent)?;
-        let pair =
-            renderer.projection_buffers(ViewProjection::new(source_view, target_view)?, context)?;
+        let pair = renderer.projection_buffers(target_view.surface(), context)?;
         assert!(renderer.stats().resident_tiles < resident);
         assert_eq!(surface.pixels().as_ptr(), original);
         assert_eq!(surface.pixels()[17 * extent.width() as usize + 19], expected);

@@ -24,7 +24,7 @@ pub(super) fn prepare(
         RenderRequest {
             document: &input.document,
             view: input.view,
-            filter: input.filter,
+            reconstruction: input.reconstruction,
             matte: Pixel::linear(0.018, 0.018, 0.018, 1.0)?,
             target: input.target,
             base: input.base,
@@ -62,11 +62,11 @@ pub(super) fn prepare(
         None
     };
     Ok(Packet {
-        damage: input.damage,
-        base: input.base,
+        tier: input.tier,
+        reconstruction: input.reconstruction,
+        display_buffers: None,
         pixels: Pixels::Gpu(GpuPacket { surface, snapshot, work }),
         view: input.view,
-        filter: input.filter,
         document: (input.document.identity(), input.document.revision()),
         elapsed: started.elapsed(),
         stats: renderer.stats(),

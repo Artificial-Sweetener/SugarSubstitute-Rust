@@ -25,8 +25,14 @@ impl Lifetime for Session {
         if self.awaiting_gpu != Some(target) {
             return Err("Canvas received a foreign GPU presentation acknowledgement".into());
         }
+        let evidence = self
+            .pending_gpu_evidence
+            .take()
+            .filter(|evidence| evidence.target == target)
+            .ok_or("Canvas GPU presentation evidence is unavailable")?;
         self.pacing.native_accepted(target, self.navigation_time())?;
         self.awaiting_gpu = None;
+        self.accept_display(evidence, true)?;
         self.native_presented = Some(target);
         self.expose_pending = false;
         Ok(())
@@ -35,20 +41,19 @@ impl Lifetime for Session {
         if self.cpu_pending != Some(target) {
             return Err("Canvas received a foreign CPU presentation acknowledgement".into());
         }
-        let (source, view) = if self.cpu_shown_projected {
-            let frame =
-                self.cpu_projection.as_ref().ok_or("CPU projection custody is unavailable")?;
-            (frame.source(), frame.view().target())
-        } else {
-            (
-                self.current_frame().ok_or("CPU canonical frame is unavailable")?,
-                self.presented.as_ref().ok_or("CPU canonical camera is unavailable")?.view,
-            )
-        };
+        let frame = self.cpu_projection.as_ref().ok_or("CPU projection custody is unavailable")?;
+        let (source, view) = (frame.source(), frame.view().target());
+        let evidence = self
+            .pending_cpu_evidence
+            .take()
+            .filter(|evidence| evidence.target == target)
+            .ok_or("Canvas CPU presentation evidence is unavailable")?;
+        if evidence.source != source || evidence.view != view {
+            return Err("Canvas CPU presentation evidence differs from projection custody".into());
+        }
         self.pacing.native_accepted(target, self.navigation_time())?;
         self.cpu_pending = None;
-        self.display_source = Some(source);
-        self.display_view = Some(view);
+        self.accept_display(evidence, true)?;
         self.native_presented = Some(target);
         self.expose_pending = false;
         Ok(())
@@ -122,7 +127,7 @@ impl Lifetime for Session {
         if self.pacing.period() != self.tools.navigation().frame_period() {
             self.pacing.set_frame_period(self.tools.navigation().frame_period(), now)?;
         }
-        self.cancel_obsolete_refinement();
+        self.cancel_obsolete_refinement()?;
         Ok(())
     }
     fn feedback(&self) -> Feedback {
@@ -132,10 +137,7 @@ impl Lifetime for Session {
         }
     }
     fn take_picker_request(&mut self) -> bool {
-        if self.closing
-            || self.resources.is_none()
-            || (self.front.is_none() && self.gpu_front.is_none())
-        {
+        if self.closing || self.resources.is_none() {
             return false;
         }
         std::mem::take(&mut self.picker)
@@ -162,26 +164,14 @@ impl Lifetime for Session {
         if self.options.gpu.is_some() {
             return None;
         }
-        if self.cpu_shown_projected {
-            let frame = self.cpu_projection.as_ref()?;
-            return Some(CpuFrame {
-                pending: self.cpu_pending == Some(frame.target()),
-                kind: CpuFrameKind::Projected,
-                target: frame.target(),
-                base: None,
-                damage: self.projection_damage.as_ref()?,
-                pixels: frame.pixels(),
-            });
-        }
-        let surface = self.front.as_ref()?;
-        let presented = self.presented.as_ref()?;
+        let frame = self.cpu_projection.as_ref()?;
         Some(CpuFrame {
-            pending: self.cpu_pending == surface.current(),
-            kind: CpuFrameKind::Prepared,
-            target: surface.current()?,
-            base: presented.base,
-            damage: &presented.damage,
-            pixels: surface.pixels(),
+            pending: self.cpu_pending == Some(frame.target()),
+            kind: CpuFrameKind::Projected,
+            target: frame.target(),
+            base: self.projection_base,
+            damage: self.projection_damage.as_ref()?,
+            pixels: frame.pixels(),
         })
     }
     fn title(&self) -> &str {
@@ -220,6 +210,9 @@ impl Lifetime for Session {
         }
         self.cpu_pending = None;
         self.awaiting_gpu = None;
+        self.pending_cpu_evidence = None;
+        self.pending_gpu_evidence = None;
+        self.projection_base = None;
         self.closing = true;
         self.initialization_pending = false;
         self.device_pending = false;
@@ -274,14 +267,68 @@ impl Lifetime for Session {
 }
 
 impl Session {
-    /// Retain one observed terminal outcome while newer tool intent replaces expensive refinement.
-    pub(super) fn cancel_obsolete_refinement(&mut self) {
-        if self.filter() == Filter::Nearest
-            && let Some(rendering) = &mut self.rendering
-            && rendering.filter == Filter::Lanczos3
+    /// Commit immutable source and coverage evidence only at the matching native acceptance.
+    pub(super) fn accept_display(
+        &mut self,
+        evidence: DisplayEvidence,
+        native_acknowledged: bool,
+    ) -> Result<(), Box<dyn Error>> {
+        let scene = self.scene.as_ref().ok_or("Canvas display evidence has no document")?;
+        let snapshot = scene.document.snapshot();
+        if evidence.document != (snapshot.identity(), snapshot.revision())
+            || evidence.source_revision != scene.source_revision
+            || evidence.projection.source() != evidence.coverage.viewport()
+            || evidence.projection.target() != evidence.view
+            || evidence.coverage.crop(evidence.view, snapshot.extent())?
+                != Some(evidence.projection)
         {
+            return Err("Canvas display evidence does not prove complete current coverage".into());
+        }
+        self.display_source = Some(evidence.source);
+        self.display_view = Some(evidence.view);
+        self.display_evidence = Some(evidence);
+        if native_acknowledged
+            && self.first_image_queue_latency.is_none()
+            && let Some((source_revision, intent)) = self.pending_first_image
+            && evidence.source_revision == source_revision
+        {
+            self.first_image_queue_latency = Some(
+                self.navigation_time()
+                    .checked_sub(intent)
+                    .ok_or("Canvas native acknowledgement preceded source intent")?,
+            );
+            self.pending_first_image = None;
+        }
+        self.coverage_acceptances = self
+            .coverage_acceptances
+            .checked_add(1)
+            .ok_or("Canvas coverage acceptance count exhausted")?;
+        Ok(())
+    }
+
+    /// Retain one observed terminal outcome while newer tool intent replaces expensive refinement.
+    pub(super) fn cancel_obsolete_refinement(&mut self) -> Result<(), Box<dyn Error>> {
+        let desired = self.reconstruction()?;
+        let Some(rendering) = &mut self.rendering else {
+            return Ok(());
+        };
+        if rendering.tier == BackingTier::Fallback {
+            return Ok(());
+        }
+        let current = self.scene.as_ref().is_some_and(|scene| {
+            let snapshot = scene.document.snapshot();
+            let target = self.tools.navigation().viewport();
+            rendering.display_extent == target.surface()
+                && rendering.coverage.viewport().zoom() == target.zoom()
+                && rendering
+                    .coverage
+                    .crop(target, snapshot.extent())
+                    .is_ok_and(|crop| crop.is_some())
+        });
+        if !current || rendering.reconstruction != desired {
             rendering.superseded = true;
             rendering.job.cancel();
         }
+        Ok(())
     }
 }

@@ -5,7 +5,10 @@ use crate::{
     DisplayImage, DisplayMapping, DisplayReadback, GpuDevice, GpuError,
     display_mapping::MappingUpload, transfer::Transfer, window_shader::Blitter,
 };
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
+};
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
 use sugarsubstitute_image_ops::{Extent, Region};
 
@@ -22,6 +25,7 @@ struct SurfaceOwner {
     device: Arc<GpuDevice>,
     format: wgpu::TextureFormat,
     capture: bool,
+    follow_up_after_configuration: AtomicBool,
     claims: Mutex<SwapchainClaims>,
     _memory: MemoryClaim,
 }
@@ -40,6 +44,23 @@ pub struct WindowFrame {
     texture: Option<wgpu::SurfaceTexture>,
     owner: Arc<SurfaceOwner>,
 }
+/// Native queue acceptance and the bounded recovery work required after configuration.
+/// Queue acceptance does not prove compositor delivery or physical display scanout.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[must_use]
+pub struct WindowPresentation {
+    /// Present one coalesced follow-up frame so acquisition can observe an opaque surface loss.
+    pub needs_follow_up: bool,
+}
+
+fn require_follow_up_after_configuration(follow_up: &AtomicBool) {
+    follow_up.store(true, Ordering::Release);
+}
+
+fn accept_presentation(follow_up: &AtomicBool) -> WindowPresentation {
+    WindowPresentation { needs_follow_up: follow_up.swap(false, Ordering::AcqRel) }
+}
+
 impl WindowSurface {
     /// Bind this selected device to a desktop-owned native peer without creating another device.
     /// Call on the OS window thread, including the macOS main thread. Heavy pipeline preparation
@@ -78,6 +99,7 @@ impl WindowSurface {
                 device,
                 format,
                 capture,
+                follow_up_after_configuration: AtomicBool::new(false),
                 claims: Mutex::new(SwapchainClaims::default()),
                 _memory: memory,
             }),
@@ -177,6 +199,7 @@ impl WindowSurface {
             }
             self.extent = Some(extent);
             device.faults.check()?;
+            require_follow_up_after_configuration(&self.owner.follow_up_after_configuration);
         }
         if self.blitter.is_none() {
             self.blitter = Some(Blitter::new(device, self.owner.format, context)?);
@@ -256,15 +279,49 @@ impl WindowFrame {
         Ok(readback)
     }
     /// Present already-completed native GPU work on the original desktop window thread.
+    /// The returned receipt requests one follow-up acquisition after each configuration because
+    /// wgpu does not expose recoverable present status through its public queue API.
     /// # Errors
     /// Preserves original device failures; this operation never waits for an execution job.
-    pub fn present(mut self) -> Result<(), GpuError> {
+    pub fn present(mut self) -> Result<WindowPresentation, GpuError> {
         self.owner.device.faults.check()?;
         let texture = self
             .texture
             .take()
             .ok_or_else(|| GpuError::invalid("Native window frame was already consumed"))?;
         self.owner.device.queue.present(texture);
-        self.owner.device.faults.check()
+        self.owner.device.faults.check()?;
+        Ok(accept_presentation(&self.owner.follow_up_after_configuration))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn configured_surface_requests_exactly_one_follow_up_after_acceptance() {
+        let follow_up = AtomicBool::new(false);
+        assert!(!accept_presentation(&follow_up).needs_follow_up);
+
+        require_follow_up_after_configuration(&follow_up);
+        assert!(accept_presentation(&follow_up).needs_follow_up);
+        assert!(!accept_presentation(&follow_up).needs_follow_up);
+
+        require_follow_up_after_configuration(&follow_up);
+        assert!(accept_presentation(&follow_up).needs_follow_up);
+        assert!(!accept_presentation(&follow_up).needs_follow_up);
+    }
+
+    #[test]
+    fn dropped_candidate_preserves_configured_surface_follow_up() {
+        let follow_up = AtomicBool::new(false);
+        require_follow_up_after_configuration(&follow_up);
+
+        // Dropping a prepared token never reaches queue acceptance and cannot consume the probe.
+        assert!(follow_up.load(Ordering::Acquire));
+        require_follow_up_after_configuration(&follow_up);
+        assert!(accept_presentation(&follow_up).needs_follow_up);
+        assert!(!accept_presentation(&follow_up).needs_follow_up);
     }
 }

@@ -61,7 +61,7 @@ pub(super) fn qualify(device: Arc<GpuDevice>, context: &JobContext) -> Result<us
             RenderRequest {
                 document: &snapshot,
                 view,
-                filter: Filter::Lanczos3,
+                reconstruction: Reconstruction::Finished(Filter::Lanczos3),
                 matte,
                 target,
                 base,
@@ -77,8 +77,14 @@ pub(super) fn qualify(device: Arc<GpuDevice>, context: &JobContext) -> Result<us
         let copy_us = started.elapsed().as_micros();
         drop(prepared);
         let frame = retained.frame().ok_or("4K retained frame is unavailable")?;
-        let (graph, output) =
-            snapshot.compile_view(view, matte, Filter::Lanczos3, context.memory())?.into_parts();
+        let (graph, output) = snapshot
+            .compile_view(
+                view,
+                matte,
+                Reconstruction::Finished(Filter::Lanczos3),
+                context.memory(),
+            )?
+            .into_parts();
         let mut cpu = Evaluator::new(graph, UnusedSource, 32, context.memory())?;
         for region in extent.region().tiles() {
             let actual = frame.image().read_region(region, context)?;

@@ -7,16 +7,21 @@ mod display;
 mod gpu;
 mod native;
 mod proof;
+mod startup;
 #[cfg(test)]
 mod tests;
+use self::display::DisplayEvidence;
 use super::{
+    coverage::{self, BackingTier},
     options::Options,
     work::{self, Packet, Resources, Scene},
     work_error::WorkError,
 };
 use crate::{diagnostics::DiagnosticHealth, job_sequence::JobSequence};
 use std::{error::Error, path::PathBuf, sync::Arc, time::Duration};
-use sugarsubstitute_canvas::{DamagePlan, FrameStamp, Navigation, ToolManager, Viewport};
+use sugarsubstitute_canvas::{
+    BackingCoverage, DamagePlan, FrameStamp, Navigation, ToolManager, Viewport,
+};
 use sugarsubstitute_canvas_render::{
     CpuProjection, CpuSurface, GpuSurface, PresentationMode, PresentationPacer,
     PresentationReadiness, ProjectionBuffer,
@@ -29,7 +34,7 @@ use sugarsubstitute_desktop::canvas::{GpuPresentation, WindowTarget};
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner, MonotonicClock};
 use sugarsubstitute_image_gpu::{AdapterDescriptor, GpuDevice, WindowFrame};
 use sugarsubstitute_image_io::CacheReuse;
-use sugarsubstitute_image_ops::{AssetId, Filter};
+use sugarsubstitute_image_ops::{AssetId, Reconstruction};
 
 /// Actual executor/parent scope remain retained until all typed jobs and worker notifications stop.
 struct Runtime {
@@ -57,30 +62,34 @@ struct Retired {
     _packet: Option<Packet>,
     _resources: Option<Resources>,
     _front: Option<Arc<CpuSurface>>,
+    _fallback_front: Option<Arc<CpuSurface>>,
+    _fallback_gpu_front: Option<GpuSurface>,
+    _proof_gpu: Option<sugarsubstitute_canvas_render::GpuFrame>,
     _update: Option<Box<sugarsubstitute_canvas_render::PreparedUpdate>>,
 }
 /// The original admitted request and its quality remain paired through cancellation acknowledgement.
 struct Rendering {
     job: OwnedJob<Packet, WorkError>,
-    filter: Filter,
+    reconstruction: Reconstruction,
+    tier: BackingTier,
+    coverage: BackingCoverage,
+    display_extent: sugarsubstitute_image_ops::Extent,
     superseded: bool,
-    input_at: Duration,
 }
 struct Loading {
     intent: u64,
     expected: Option<AssetId>,
     job: OwnedJob<Scene, WorkError>,
 }
+#[derive(Clone, Copy)]
 struct Presented {
+    tier: BackingTier,
+    coverage: BackingCoverage,
     view: Viewport,
-    filter: Filter,
+    reconstruction: Reconstruction,
     document: (u64, u64),
     source_revision: u64,
-    damage: DamagePlan,
-    base: Option<FrameStamp>,
-    input_at: Duration,
 }
-
 /// Native callbacks mutate only application intent and retained presentation, never image kernels.
 pub(super) struct Session {
     options: Options,
@@ -100,6 +109,10 @@ pub(super) struct Session {
     scene: Option<Scene>,
     loading: Option<Loading>,
     pending_open: Option<Open>,
+    /// Latest unresolved source identity and input clock before any image reaches native custody.
+    pending_first_image: Option<(u64, Duration)>,
+    /// Intent-through-native-queue acceptance, including import/load but excluding scanout.
+    first_image_queue_latency: Option<Duration>,
     selection: u64,
     rendering: Option<Rendering>,
     displaying: Option<OwnedJob<work::Draw, WorkError>>,
@@ -109,22 +122,30 @@ pub(super) struct Session {
     tools: ToolManager,
     initial_preview: bool,
     front: Option<Arc<CpuSurface>>,
+    fallback_front: Option<Arc<CpuSurface>>,
     gpu_front: Option<GpuSurface>,
+    fallback_gpu_front: Option<GpuSurface>,
     gpu_presentation: Option<GpuPresentation>,
     awaiting_gpu: Option<FrameStamp>,
     native_presented: Option<FrameStamp>,
     native_verified: bool,
     display_source: Option<FrameStamp>,
     display_view: Option<Viewport>,
+    display_evidence: Option<DisplayEvidence>,
+    coverage_acceptances: u64,
+    pending_cpu_evidence: Option<DisplayEvidence>,
+    pending_gpu_evidence: Option<DisplayEvidence>,
     pacing: PresentationPacer,
     input_observed: Duration,
     cpu_pending: Option<FrameStamp>,
-    cpu_shown_projected: bool,
     cpu_projection: Option<Box<CpuProjection>>,
     projection_damage: Option<DamagePlan>,
+    projection_base: Option<FrameStamp>,
     display_buffers: [Option<ProjectionBuffer>; 2],
+    display_buffer_extent: Option<sugarsubstitute_image_ops::Extent>,
     expose_pending: bool,
     presented: Option<Presented>,
+    fallback_presented: Option<Presented>,
     frame_revision: u64,
     picker: bool,
     failed: Option<Box<dyn Error>>,
@@ -137,16 +158,18 @@ pub(super) struct Session {
     pub(super) last_surface_work: sugarsubstitute_canvas_render::SurfaceWork,
 }
 impl Session {
-    /// Preview only during the current navigation interval; settled output always refines.
-    fn filter(&self) -> Filter {
+    /// Preview startup/resampling while preserving finished retained-detail repair during panning.
+    fn reconstruction(&self) -> Result<Reconstruction, Box<dyn Error>> {
         if self.initial_preview
             || self.tools.navigation().resampling()
             || (self.tools.navigation().captured()
-                && self.presented.as_ref().is_some_and(|shown| shown.filter == Filter::Nearest))
+                && self.presented.as_ref().is_some_and(|shown| shown.reconstruction.is_preview()))
         {
-            Filter::Nearest
+            Ok(Reconstruction::Preview)
         } else {
-            Filter::Lanczos3
+            Ok(Reconstruction::finished_for_display_zoom(
+                self.tools.navigation().viewport().zoom(),
+            )?)
         }
     }
     /// One elapsed clock epoch supplies navigation and execution deadlines.
@@ -176,6 +199,8 @@ impl Session {
             scene: None,
             loading: None,
             pending_open: None,
+            pending_first_image: None,
+            first_image_queue_latency: None,
             selection: 1,
             rendering: None,
             displaying: None,
@@ -185,22 +210,30 @@ impl Session {
             tools: ToolManager::new(Navigation::new(view)),
             initial_preview: false,
             front: None,
+            fallback_front: None,
             gpu_front: None,
+            fallback_gpu_front: None,
             gpu_presentation: None,
             awaiting_gpu: None,
             native_presented: None,
             native_verified: false,
             display_source: None,
             display_view: None,
+            display_evidence: None,
+            coverage_acceptances: 0,
+            pending_cpu_evidence: None,
+            pending_gpu_evidence: None,
             pacing: PresentationPacer::new(Duration::from_nanos(16_666_667))?,
             input_observed: Duration::ZERO,
             cpu_pending: None,
-            cpu_shown_projected: false,
             cpu_projection: None,
             projection_damage: None,
+            projection_base: None,
             display_buffers: [None, None],
+            display_buffer_extent: None,
             expose_pending: false,
             presented: None,
+            fallback_presented: None,
             frame_revision: 0,
             picker: false,
             failed: None,
@@ -262,6 +295,9 @@ impl Session {
     ) -> Result<(), Box<dyn Error>> {
         self.input_observed = self.navigation_time();
         self.selection = self.selection.checked_add(1).ok_or("Canvas source revision exhausted")?;
+        if self.first_image_queue_latency.is_none() {
+            self.pending_first_image = Some((self.selection, self.input_observed));
+        }
         self.pending_open = Some(Open { path, intent: self.selection, reuse, expected });
         if let Some(loading) = &self.loading {
             loading.job.cancel();

@@ -219,15 +219,15 @@ fn invalid_native_source_rejects_before_blitting_or_changing_the_retained_depend
 }
 
 #[test]
-fn projected_native_pixels_cannot_become_an_exact_repair_dependency() -> Result<(), Box<dyn Error>>
-{
+fn projected_native_pixels_support_exact_motion_and_full_exposure_recovery()
+-> Result<(), Box<dyn Error>> {
     let owner = admitted()?;
     let extent = Extent::new(31, 17)?;
     let mut retained = None;
     let dib = Dib::for_frame(&mut retained, &owner)?;
     let mut painter = Painter::default();
     let full = DamagePlan::full(extent);
-    let preview = vec![0xffd15ea5; extent.pixels() as usize];
+    let preview = pixels(extent, 0, 0);
     painter.paint(
         dib.dc(),
         &CpuFrame {
@@ -240,30 +240,46 @@ fn projected_native_pixels_cannot_become_an_exact_repair_dependency() -> Result<
         },
         false,
     )?;
-    assert_eq!(painter.last, None);
+    assert_eq!(painter.last, Some(stamp(2)?));
     matches(dib, &preview)?;
 
     let prepared = pixels(extent, 7, -3);
-    let forged_repair = DamagePlan::pan(extent, 7, -3)?;
+    let exact_repair = DamagePlan::pan(extent, 7, -3)?;
     painter.paint(
         dib.dc(),
         &CpuFrame {
-            kind: CpuFrameKind::Prepared,
+            kind: CpuFrameKind::Projected,
             pending: false,
             target: stamp(3)?,
             base: Some(stamp(2)?),
-            damage: &forged_repair,
+            damage: &exact_repair,
             pixels: &prepared,
         },
         false,
     )?;
     matches(dib, &prepared)?;
+    assert_eq!(painter.last, Some(stamp(3)?));
+    let recovered = pixels(extent, -5, 2);
+    painter.paint(
+        dib.dc(),
+        &CpuFrame {
+            kind: CpuFrameKind::Projected,
+            pending: false,
+            target: stamp(4)?,
+            base: Some(stamp(3)?),
+            damage: &DamagePlan::pan(extent, -12, 5)?,
+            pixels: &recovered,
+        },
+        true,
+    )?;
+    matches(dib, &recovered)?;
     dib.close()?;
     Ok(())
 }
 
 #[test]
-fn projected_frame_validation_rejects_base_blit_and_partial_damage() -> Result<(), Box<dyn Error>> {
+fn projected_frame_validation_requires_exact_base_for_partial_damage() -> Result<(), Box<dyn Error>>
+{
     let extent = Extent::new(31, 17)?;
     let pixels = pixels(extent, 0, 0);
     let full = DamagePlan::full(extent);
@@ -284,7 +300,7 @@ fn projected_frame_validation_rejects_base_blit_and_partial_damage() -> Result<(
             kind: CpuFrameKind::Projected,
             pending: false,
             target: stamp(2)?,
-            base: Some(stamp(1)?),
+            base: Some(stamp(2)?),
             damage: &full,
             pixels: &pixels,
         }

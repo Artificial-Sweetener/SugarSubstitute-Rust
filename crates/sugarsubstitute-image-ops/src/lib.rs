@@ -17,6 +17,7 @@ mod graph;
 mod kernel;
 mod pixel;
 mod raster_samples;
+mod reconstruction;
 mod resample;
 mod retention;
 mod sampling;
@@ -31,6 +32,7 @@ pub use graph::{AssetId, Graph, NodeId, Operation, Pyramid, VectorRectangle};
 pub use kernel::{AxisKernel, MAX_SAMPLING_TAPS, SampleTap, SamplingAxis};
 pub use pixel::Pixel;
 pub use raster_samples::RasterSamples;
+pub use reconstruction::Reconstruction;
 pub use retention::TileRetention;
 pub use sampling::{Filter, Sampling};
 

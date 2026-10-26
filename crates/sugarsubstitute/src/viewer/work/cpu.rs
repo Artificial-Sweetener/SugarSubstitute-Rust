@@ -10,9 +10,8 @@ pub(super) fn step(
     started: Instant,
     context: &JobContext,
 ) -> Result<CpuStep<Packet>, WorkError> {
-    if input.replace_surface && input.display_buffers.is_none() {
-        let view = sugarsubstitute_canvas::ViewProjection::new(input.view, input.view)?;
-        input.display_buffers = Some(renderer.projection_buffers(view, context)?);
+    if input.replace_buffers && input.display_buffers.is_none() {
+        input.display_buffers = Some(renderer.projection_buffers(input.display_extent, context)?);
         return Ok(CpuStep::Yield);
     }
     if input.cpu.is_none() {
@@ -20,7 +19,7 @@ pub(super) fn step(
             RenderRequest {
                 document: &input.document,
                 view: input.view,
-                filter: input.filter,
+                reconstruction: input.reconstruction,
                 matte: Pixel::linear(0.018, 0.018, 0.018, 1.0)?,
                 target: input.target,
                 base: input.base,
@@ -44,22 +43,16 @@ pub(super) fn step(
         tracing::info!(operation="canvas_frame_preparation", document=input.document.identity(), revision=input.document.revision(), generation=?input.target.generation, elapsed_milliseconds=started.elapsed().as_millis(), computed_pixels=stats.computed_pixels, source_pixels=stats.source_pixels, "Canvas DAG preparation completed");
     }
     let pixels = if input.replace_surface {
-        CpuPacket::Replace {
-            surface: CpuSurface::from_prepared(update)?,
-            buffers: input
-                .display_buffers
-                .take()
-                .ok_or_else(|| WorkError::invalid("CPU display allocations are unavailable"))?,
-        }
+        CpuPacket::Replace { surface: CpuSurface::from_prepared(update)? }
     } else {
         CpuPacket::Repair(Box::new(update))
     };
     Ok(CpuStep::Complete(Packet {
+        tier: input.tier,
+        reconstruction: input.reconstruction,
+        display_buffers: input.display_buffers.take(),
         pixels: Pixels::Cpu(pixels),
-        damage: input.damage,
-        base: input.base,
         view: input.view,
-        filter: input.filter,
         document: (input.document.identity(), input.document.revision()),
         elapsed: started.elapsed(),
         stats: renderer.stats(),

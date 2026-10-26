@@ -11,16 +11,20 @@ use presentation::{PresentationEvidence, PresentationTimingContext};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::io::Write;
-use sugarsubstitute_canvas::{DamagePlan, DocumentSnapshot, RenderRequest, Viewport};
-use sugarsubstitute_canvas_render::{CpuRenderer, CpuSurface};
+use sugarsubstitute_canvas::{
+    DamagePlan, DocumentSnapshot, RenderRequest, ViewProjection, Viewport,
+};
+use sugarsubstitute_canvas_render::{CpuRenderer, CpuSurface, GpuFrame};
 use sugarsubstitute_contracts::execution::JobContext;
-use sugarsubstitute_image_ops::{EvaluationStats, Filter, Pixel};
+use sugarsubstitute_image_ops::{EvaluationStats, Pixel, Reconstruction, Region};
 use sugarsubstitute_supervision::{ArtifactPublication, write_artifact};
 
 /// Bounded frame evidence captured only from actual applied presentation generations.
 #[derive(Clone, Copy, Serialize)]
 pub(super) struct Sample {
     pub(super) phase: u8,
+    pub(super) physical_zoom: f64,
+    pub(super) nearest_reconstruction: bool,
     pub(super) preview: bool,
     pub(super) prepare_microseconds: u128,
     pub(super) computed_pixels: u64,
@@ -29,12 +33,36 @@ pub(super) struct Sample {
     pub(super) reused_pixels: u64,
 }
 /// Move complete retained pixels into one admitted artifact worker; rejection preserves this input.
+pub(super) enum ProofBacking {
+    /// Immutable retained software pixels and their accepted generation.
+    Cpu(std::sync::Arc<CpuSurface>),
+    /// Immutable retained device pixels read back only by the final artifact worker.
+    Gpu(GpuFrame),
+}
+impl ProofBacking {
+    /// Accepted backing generation represented by the retained pixels.
+    pub(super) fn target(&self) -> Option<sugarsubstitute_canvas::FrameStamp> {
+        match self {
+            Self::Cpu(surface) => surface.current(),
+            Self::Gpu(frame) => Some(frame.target()),
+        }
+    }
+    fn extent(&self) -> sugarsubstitute_image_ops::Extent {
+        match self {
+            Self::Cpu(surface) => surface.extent(),
+            Self::Gpu(frame) => frame.image().extent(),
+        }
+    }
+}
 pub(super) struct Input {
     pub(super) resources: Resources,
     pub(super) document: DocumentSnapshot,
     pub(super) source: Option<Source>,
     pub(super) view: Viewport,
-    pub(super) front: std::sync::Arc<CpuSurface>,
+    pub(super) backing_view: Viewport,
+    pub(super) projection: ViewProjection,
+    pub(super) reconstruction: Reconstruction,
+    pub(super) backing: ProofBacking,
     pub(super) samples: [Option<Sample>; 32],
     pub(super) paths: ProofPaths,
     pub(super) adapter: Option<sugarsubstitute_image_gpu::AdapterDescriptor>,
@@ -43,6 +71,9 @@ pub(super) struct Input {
     pub(super) warmup: Option<sugarsubstitute_canvas_render::PresentationStats>,
     pub(super) canonical_gpu_snapshot_readback: bool,
     pub(super) native_gpu_display_verification_readback: bool,
+    pub(super) coverage_acceptances: u64,
+    /// First source intent through native queue acceptance; includes import/load, not scanout.
+    pub(super) first_image_queue_latency: Option<std::time::Duration>,
 }
 #[derive(Serialize)]
 struct Metrics<'a> {
@@ -60,6 +91,9 @@ struct Metrics<'a> {
     navigation_presentations: PresentationEvidence,
     motion_and_fit_recovery_presentations: Option<PresentationEvidence>,
     initial_settle_presentations: Option<PresentationEvidence>,
+    coverage_validated_presentations: u64,
+    /// First source intent through native queue acceptance; excludes display scanout.
+    initial_image_input_to_native_queue_nanoseconds: Option<u64>,
 }
 #[derive(Serialize)]
 struct AdapterEvidence<'a> {
@@ -75,7 +109,10 @@ pub(super) fn publish(input: Input, context: &JobContext) -> Result<(), WorkErro
         document,
         source,
         view,
-        front,
+        backing_view,
+        projection,
+        reconstruction,
+        backing,
         samples,
         paths,
         adapter,
@@ -84,16 +121,18 @@ pub(super) fn publish(input: Input, context: &JobContext) -> Result<(), WorkErro
         warmup,
         canonical_gpu_snapshot_readback,
         native_gpu_display_verification_readback,
+        coverage_acceptances,
+        first_image_queue_latency,
     } = input;
     resources.release_graph_tiles()?;
     let target =
-        front.current().ok_or_else(|| WorkError::invalid("Proof has no presented frame"))?;
+        backing.target().ok_or_else(|| WorkError::invalid("Proof has no presented frame"))?;
     let mut renderer = CpuRenderer::new(super::work::SourcePort(source), 64, &resources.memory)?;
     let update = renderer.prepare(
         RenderRequest {
             document: &document,
             view,
-            filter: Filter::Lanczos3,
+            reconstruction,
             matte: Pixel::linear(0.018, 0.018, 0.018, 1.0)?,
             target,
             base: None,
@@ -102,14 +141,23 @@ pub(super) fn publish(input: Input, context: &JobContext) -> Result<(), WorkErro
         context,
     )?;
     let reference = CpuSurface::from_prepared(update)?;
-    if reference.pixels() != front.pixels() {
-        return Err(WorkError::invalid(
-            "Retained viewport differs from complete DAG reconstruction",
-        ));
+    if projection.source() != backing_view
+        || projection.target() != view
+        || backing.extent() != backing_view.surface()
+    {
+        return Err(WorkError::invalid("Proof backing projection differs from retained coverage"));
     }
-    drop((reference, renderer));
+    let rgba = sugarsubstitute_image_ops::SrgbEncoder::encode_constant(Pixel::linear(
+        0.018, 0.018, 0.018, 1.0,
+    )?)?;
+    let matte = u32::from_be_bytes([255, rgba[0], rgba[1], rgba[2]]);
+    match &backing {
+        ProofBacking::Cpu(front) => compare_cpu(&reference, front, projection, matte)?,
+        ProofBacking::Gpu(front) => compare_gpu(&reference, front, projection, matte, context)?,
+    }
+    drop(renderer);
     let mut hash = Sha256::new();
-    for pixel in front.pixels() {
+    for pixel in reference.pixels() {
         hash.update(pixel.to_be_bytes());
     }
     let digest = hash.finalize();
@@ -137,7 +185,7 @@ pub(super) fn publish(input: Input, context: &JobContext) -> Result<(), WorkErro
             let mut writer = encoder.write_header().map_err(WorkError::new)?;
             {
                 let mut stream = writer.stream_writer().map_err(WorkError::new)?;
-                for source in front.pixels().chunks_exact(extent.width() as usize) {
+                for source in reference.pixels().chunks_exact(extent.width() as usize) {
                     for (rgb, pixel) in row.chunks_exact_mut(3).zip(source) {
                         let [_, red, green, blue] = pixel.to_be_bytes();
                         rgb.copy_from_slice(&[red, green, blue]);
@@ -152,7 +200,7 @@ pub(super) fn publish(input: Input, context: &JobContext) -> Result<(), WorkErro
     .map_err(WorkError::new)?;
     let count = samples.iter().take_while(|sample| sample.is_some()).count();
     let metrics = Metrics {
-        schema_version: 2,
+        schema_version: 3,
         backend: adapter.as_ref().map_or("cpu", |adapter| match adapter.backend {
             sugarsubstitute_image_gpu::Backend::Vulkan => "vulkan",
             sugarsubstitute_image_gpu::Backend::Metal => "metal",
@@ -177,6 +225,11 @@ pub(super) fn publish(input: Input, context: &JobContext) -> Result<(), WorkErro
         navigation_presentations: PresentationEvidence::new(presentations),
         motion_and_fit_recovery_presentations: motion.map(PresentationEvidence::new),
         initial_settle_presentations: warmup.map(PresentationEvidence::new),
+        coverage_validated_presentations: coverage_acceptances,
+        initial_image_input_to_native_queue_nanoseconds: first_image_queue_latency
+            .map(|latency| u64::try_from(latency.as_nanos()))
+            .transpose()
+            .map_err(WorkError::new)?,
     };
     write_artifact(
         &paths.metrics,
@@ -195,6 +248,89 @@ pub(super) fn publish(input: Input, context: &JobContext) -> Result<(), WorkErro
         "Retained viewing matches complete reconstruction; proof artifacts published"
     );
     Ok(())
+}
+
+fn compare_cpu(
+    reference: &CpuSurface,
+    retained: &CpuSurface,
+    projection: ViewProjection,
+    matte: u32,
+) -> Result<(), WorkError> {
+    let source_stride = retained.extent().width() as usize;
+    let target_width = reference.extent().width() as usize;
+    for (index, actual) in reference.pixels().iter().enumerate() {
+        let x = u32::try_from(index % target_width).map_err(WorkError::new)?;
+        let y = u32::try_from(index / target_width).map_err(WorkError::new)?;
+        let expected = match (projection.column(x), projection.row(y)) {
+            (Some(column), Some(row)) => {
+                retained.pixels()[row as usize * source_stride + column as usize]
+            }
+            _ => matte,
+        };
+        if *actual != expected {
+            return Err(WorkError::invalid(
+                "Retained CPU backing crop differs from complete DAG reconstruction",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn compare_gpu(
+    reference: &CpuSurface,
+    retained: &GpuFrame,
+    projection: ViewProjection,
+    matte: u32,
+    context: &JobContext,
+) -> Result<(), WorkError> {
+    let target_stride = reference.extent().width() as usize;
+    for target in reference.extent().region().tiles() {
+        let columns = mapped_bounds(target.x(), target.right(), |value| projection.column(value));
+        let rows = mapped_bounds(target.y(), target.bottom(), |value| projection.row(value));
+        let readback = match (columns, rows) {
+            (Some((left, right)), Some((top, bottom))) => Some(retained.image().read_region(
+                Region::new(left, top, right - left + 1, bottom - top + 1)?,
+                context,
+            )?),
+            _ => None,
+        };
+        for y in target.y()..target.bottom() {
+            for x in target.x()..target.right() {
+                let expected = match (projection.column(x), projection.row(y), readback.as_ref()) {
+                    (Some(column), Some(row), Some(readback)) => {
+                        let region = readback.region();
+                        readback.pixels()[(row - region.y()) as usize * region.width() as usize
+                            + (column - region.x()) as usize]
+                    }
+                    _ => matte,
+                };
+                let actual = reference.pixels()[y as usize * target_stride + x as usize];
+                if actual != expected {
+                    return Err(WorkError::invalid(
+                        "Retained GPU backing crop differs from complete DAG reconstruction",
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn mapped_bounds(
+    start: u32,
+    end: u32,
+    mut map: impl FnMut(u32) -> Option<u32>,
+) -> Option<(u32, u32)> {
+    let mut bounds: Option<(u32, u32)> = None;
+    for value in start..end {
+        if let Some(mapped) = map(value) {
+            bounds = Some(match bounds {
+                Some((minimum, maximum)) => (minimum.min(mapped), maximum.max(mapped)),
+                None => (mapped, mapped),
+            });
+        }
+    }
+    bounds
 }
 
 /// Difference cumulative source/operation counters without attributing earlier work to a new frame.

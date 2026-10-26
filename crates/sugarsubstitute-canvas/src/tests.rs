@@ -241,7 +241,9 @@ fn maximum_stack(
     let compiled = snapshot.compile_view(
         view,
         Pixel::linear(0.0, 0.0, 0.0, 1.0)?,
-        sugarsubstitute_image_ops::Filter::Lanczos3,
+        sugarsubstitute_image_ops::Reconstruction::Finished(
+            sugarsubstitute_image_ops::Filter::Lanczos3,
+        ),
         context.memory(),
     )?;
     assert_eq!(compiled.graph().extent(compiled.output())?, view.surface());

@@ -6,10 +6,11 @@ use ::windows::{
     Win32::{
         Graphics::Gdi::{ClientToScreen, DeleteObject, HGDIOBJ},
         UI::{
-            Input::KeyboardAndMouse::GetCapture,
+            Input::KeyboardAndMouse::{GetCapture, ReleaseCapture, SetCapture},
             WindowsAndMessaging::{
                 CreateWindowExW, DestroyWindow, GetCursor, GetIconInfo, HICON, ICONINFO,
-                SendMessageW, WINDOW_EX_STYLE, WINDOW_STYLE,
+                SendMessageW, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CAPTURECHANGED, WM_ENTERSIZEMOVE,
+                WM_EXITSIZEMOVE,
             },
         },
     },
@@ -62,8 +63,13 @@ impl Drop for Window {
         }
     }
 }
+/// Observe this test thread's current capture without retaining the returned identity.
+fn captured() -> HWND {
+    // SAFETY: Read-only current-thread input state; no handle ownership is transferred.
+    unsafe { GetCapture() }
+}
 #[test]
-fn native_callback_keeps_cursor_custody_after_owner_drop_until_final_destruction()
+fn native_callback_keeps_shared_cursor_selection_after_owner_drop_until_final_destruction()
 -> Result<(), Box<dyn Error>> {
     let mut window = Window::new()?;
     let input = NativeInput::new(window.handle()?, |_| Ok(()))?;
@@ -105,7 +111,72 @@ fn hidden_peers_preserve_input_desktop_and_retire_only_after_the_real_final_call
     window.destroy()?;
     assert!(input.retired());
     input.retire()?;
-    assert!(input.state.cursors.borrow().is_none());
+    Ok(())
+}
+
+#[test]
+fn canvas_capture_never_releases_or_adopts_native_move_capture() -> Result<(), Box<dyn Error>> {
+    let mut window = Window::new()?;
+    let handle = window.handle()?;
+    let input = NativeInput::new(handle, |_| Ok(()))?;
+    // SAFETY: This test thread owns the hidden fixture and starts without another capture owner.
+    unsafe {
+        assert!(captured().is_invalid());
+        SetCapture(handle);
+    }
+    assert_eq!(captured(), handle);
+    assert!(input.state.capture(handle, false)?);
+    assert_eq!(captured(), handle);
+    assert!(!input.state.capture_owned.get());
+
+    input.state.moving.set(true);
+    assert!(!input.state.capture(handle, true)?);
+    assert_eq!(captured(), handle);
+    assert!(!input.state.capture_owned.get());
+    input.state.moving.set(false);
+    // SAFETY: Release exactly the simulated OS-owned capture before testing canvas acquisition.
+    unsafe { ReleaseCapture() }?;
+
+    assert!(input.state.capture(handle, true)?);
+    assert_eq!(captured(), handle);
+    assert!(input.state.capture_owned.get());
+    assert!(input.state.capture(handle, false)?);
+    assert!(captured().is_invalid());
+    assert!(!input.state.capture_owned.get());
+    window.destroy()?;
+    input.retire()?;
+    Ok(())
+}
+
+#[test]
+fn native_move_messages_revoke_only_canvas_capture_once() -> Result<(), Box<dyn Error>> {
+    let mut window = Window::new()?;
+    let losses = Rc::new(Cell::new(0));
+    let observed = losses.clone();
+    let input = NativeInput::new(window.handle()?, move |event| {
+        if matches!(event, NativeEvent::CaptureLost) {
+            observed.set(observed.get() + 1);
+        }
+        Ok(())
+    })?;
+    input.state.capture_owned.set(true);
+    // SAFETY: Synchronously deliver lifecycle notifications to this test's hidden original HWND.
+    unsafe {
+        SendMessageW(window.handle()?, WM_ENTERSIZEMOVE, None, None);
+    }
+    assert!(input.state.moving.get());
+    assert!(!input.state.capture_owned.get());
+    assert_eq!(losses.get(), 1);
+    // An OS-owned capture transition must not manufacture another canvas loss.
+    // SAFETY: This test retains the original hidden HWND on its native thread through both calls.
+    unsafe {
+        SendMessageW(window.handle()?, WM_CAPTURECHANGED, None, Some(LPARAM(0)));
+        SendMessageW(window.handle()?, WM_EXITSIZEMOVE, None, None);
+    }
+    assert!(!input.state.moving.get());
+    assert_eq!(losses.get(), 1);
+    window.destroy()?;
+    input.retire()?;
     Ok(())
 }
 #[test]

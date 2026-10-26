@@ -31,6 +31,16 @@ use tao::{
 /// # Errors
 /// Preserves construction, paint, application and teardown failures; cancellation never implies exit.
 pub fn run(options: WindowOptions, lifetime: &mut impl Lifetime) -> Result<(), Box<dyn Error>> {
+    run_with_picker(options, lifetime, |window| {
+        crate::file_dialog::choose(window, SelectionKind::File)
+    })
+}
+
+fn run_with_picker(
+    options: WindowOptions,
+    lifetime: &mut impl Lifetime,
+    mut choose: impl FnMut(&tao::window::Window) -> Result<Option<PathBuf>, Box<dyn Error>>,
+) -> Result<(), Box<dyn Error>> {
     let mut apartment = crate::windows_ui_apartment::UiApartment::enter()?;
     let mut builder = EventLoopBuilder::<NativeEvent>::with_user_event();
     #[cfg(any(test, feature = "boundary-fixtures"))]
@@ -211,15 +221,18 @@ pub fn run(options: WindowOptions, lifetime: &mut impl Lifetime) -> Result<(), B
                         }
                         if let Some(frame) = lifetime.take_gpu_presentation() {
                             let target = frame.target;
-                            frame.frame.present()?;
+                            let presentation = frame.frame.present()?;
                             displayed = Some(target);
                             lifetime.did_present_gpu(target)?;
+                            if presentation.needs_follow_up {
+                                lifetime.expose();
+                            }
                             lifetime.poll(started.elapsed())?;
                         }
                         if lifetime.take_picker_request() {
                             lifetime.input(Input::Unfocused)?;
                             if let Some(native) = &native { native.capture(false)?; }
-                            lifetime.selected(crate::file_dialog::choose(&window, SelectionKind::File))?;
+                            lifetime.selected(choose(&window))?;
                             lifetime.poll(started.elapsed())?;
                         }
                     }
@@ -333,37 +346,5 @@ impl Error for NativeFailures {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use sugarsubstitute_contracts::execution::{Generation, SurfaceId};
-
-    fn stamp(generation: u64) -> Result<FrameStamp, Box<dyn Error>> {
-        Ok(FrameStamp { surface: SurfaceId::new(1)?, generation: Generation::new(generation)? })
-    }
-
-    #[test]
-    fn cpu_upload_acknowledgement_is_pending_only_and_precedes_display_state()
-    -> Result<(), Box<dyn Error>> {
-        let old = stamp(1)?;
-        let next = stamp(2)?;
-        let mut displayed = Some(old);
-        let mut acknowledgements = Vec::new();
-        assert!(record_cpu_upload(&mut displayed, next, true, |target| {
-            acknowledgements.push(target);
-            Ok::<(), Box<dyn Error>>(())
-        })?);
-        assert_eq!(acknowledgements, [next]);
-        assert_eq!(displayed, Some(next));
-
-        assert!(!record_cpu_upload(&mut displayed, old, false, |_| {
-            Err::<(), Box<dyn Error>>("Acknowledged an already-presented exposure".into())
-        })?);
-        assert_eq!(acknowledgements, [next]);
-        assert_eq!(displayed, Some(old));
-
-        let failed = record_cpu_upload(&mut displayed, next, true, |_| Err("acknowledgement"));
-        assert!(failed.is_err());
-        assert_eq!(displayed, Some(old));
-        Ok(())
-    }
-}
+#[path = "windows/tests.rs"]
+mod tests;

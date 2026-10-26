@@ -101,12 +101,11 @@ impl ProjectionBuffer {
     /// # Errors
     /// Preserves original allocation/admission/control failures before any frame is published.
     pub fn new(
-        view: ViewProjection,
+        extent: sugarsubstitute_image_ops::Extent,
         memory: &MemoryLease,
         context: &JobContext,
     ) -> Result<Self, RenderError> {
         check(context)?;
-        let extent = view.target().surface();
         let memory = memory
             .claim(extent.pixels() * 4 + size_of::<CpuProjection>() as u64 + 128)
             .map_err(ImageError::from)?;

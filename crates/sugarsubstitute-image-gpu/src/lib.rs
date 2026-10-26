@@ -32,4 +32,4 @@ pub use error::GpuError;
 pub use evaluate::GpuEvaluator;
 pub use request::GpuRegions;
 pub use selection::AdapterKey;
-pub use window::{NativeWindowHandle, WindowFrame, WindowSurface};
+pub use window::{NativeWindowHandle, WindowFrame, WindowPresentation, WindowSurface};

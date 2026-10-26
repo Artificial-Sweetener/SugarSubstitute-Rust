@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Qualify resumable preparation, publication completeness and superseded graph rejection.
 use super::*;
-use sugarsubstitute_image_ops::Filter;
+use sugarsubstitute_image_ops::Reconstruction;
 
 struct InterruptedSource(bool);
 impl RasterSource for InterruptedSource {
@@ -35,7 +35,7 @@ fn a_failed_tile_cannot_be_skipped_to_publish_incomplete_patch_pixels() -> harne
             RenderRequest {
                 document: &snapshot,
                 view,
-                filter: Filter::Nearest,
+                reconstruction: Reconstruction::Preview,
                 matte: black()?,
                 target: stamp(1)?,
                 base: None,
@@ -67,7 +67,7 @@ fn cooperative_preparation_publishes_only_after_all_viewport_tiles_are_complete(
             RenderRequest {
                 document: &snapshot,
                 view,
-                filter: Filter::Nearest,
+                reconstruction: Reconstruction::Preview,
                 matte: black()?,
                 target: stamp(1)?,
                 base: None,
@@ -102,7 +102,7 @@ fn replacing_the_compiled_graph_rejects_unpublished_earlier_preparations() -> ha
         let request = || RenderRequest {
             document: &snapshot,
             view,
-            filter: Filter::Nearest,
+            reconstruction: Reconstruction::Preview,
             matte,
             target,
             base: None,

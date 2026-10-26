@@ -4,7 +4,34 @@
 use super::*;
 use sugarsubstitute_canvas::ViewProjection;
 
+/// Exact retained mapping and authored identity committed only by native acknowledgement.
+#[derive(Clone, Copy)]
+pub(super) struct DisplayEvidence {
+    pub(super) target: FrameStamp,
+    pub(super) source: FrameStamp,
+    pub(super) view: Viewport,
+    pub(super) coverage: BackingCoverage,
+    pub(super) projection: ViewProjection,
+    pub(super) document: (u64, u64),
+    pub(super) source_revision: u64,
+}
+
 impl Session {
+    /// A pair generation is usable only for its exact native output extent.
+    pub(super) fn needs_display_buffers(&self, extent: sugarsubstitute_image_ops::Extent) -> bool {
+        self.options.gpu.is_none() && self.display_buffer_extent != Some(extent)
+    }
+
+    /// Publish a complete pair generation without withdrawing the acknowledged old projection.
+    pub(super) fn install_display_buffers(
+        &mut self,
+        buffers: [Option<ProjectionBuffer>; 2],
+        extent: sugarsubstitute_image_ops::Extent,
+    ) -> [Option<ProjectionBuffer>; 2] {
+        self.display_buffer_extent = Some(extent);
+        std::mem::replace(&mut self.display_buffers, buffers)
+    }
+
     /// Admit only the latest camera when the sole display slot and its cadence are available.
     pub(super) fn submit_display(&mut self) -> Result<(), Box<dyn Error>> {
         if self.closing
@@ -19,34 +46,67 @@ impl Session {
         if self.pacing.readiness(now)? != PresentationReadiness::Ready {
             return Ok(());
         }
-        let Some(source_stamp) = self.current_frame() else {
+        let Some(scene) = &self.scene else {
             return Ok(());
         };
-        let Some(shown) = &self.presented else {
-            return Ok(());
-        };
+        let snapshot = scene.document.snapshot();
+        let document = (snapshot.identity(), snapshot.revision());
+        let document_extent = snapshot.extent();
         let view = self.tools.navigation().viewport();
+        let detail = match self.presented.as_ref() {
+            Some(shown)
+                if shown.document == document && shown.source_revision == scene.source_revision =>
+            {
+                shown.coverage.crop(view, document_extent)?.map(|mapping| (*shown, mapping))
+            }
+            _ => None,
+        };
+        let fallback = match self.fallback_presented.as_ref() {
+            Some(shown)
+                if shown.document == document && shown.source_revision == scene.source_revision =>
+            {
+                shown.coverage.crop(view, document_extent)?.map(|mapping| (*shown, mapping))
+            }
+            _ => None,
+        };
+        let Some((shown, mapping)) = detail.or(fallback) else {
+            return Ok(());
+        };
+        let source_stamp = if self.options.gpu.is_some() {
+            match shown.tier {
+                BackingTier::Fallback => self.fallback_gpu_front.as_ref(),
+                BackingTier::Detail => self.gpu_front.as_ref(),
+            }
+            .and_then(GpuSurface::current)
+        } else {
+            match shown.tier {
+                BackingTier::Fallback => self.fallback_front.as_ref(),
+                BackingTier::Detail => self.front.as_ref(),
+            }
+            .and_then(|surface| surface.current())
+        };
+        let Some(source_stamp) = source_stamp else {
+            return Ok(());
+        };
         if !self.expose_pending
             && self.display_source == Some(source_stamp)
             && self.display_view == Some(view)
         {
             return Ok(());
         }
-        if self.options.gpu.is_none() && shown.view == view {
-            return self.stage_cpu_canonical();
-        }
-        if self.options.gpu.is_none() && !self.display_buffers.iter().any(Option::is_some) {
+        if self.options.gpu.is_none()
+            && !self
+                .display_buffers
+                .iter()
+                .flatten()
+                .any(|buffer| buffer.extent() == view.surface())
+        {
             return Ok(());
         }
         let next = self.frame_revision.checked_add(1).ok_or("Canvas display revision exhausted")?;
         let target =
             FrameStamp { surface: source_stamp.surface, generation: Generation::new(next)? };
-        let mapping = ViewProjection::new(shown.view, view)?;
-        let mode = if shown.view == view {
-            PresentationMode::Canonical
-        } else {
-            PresentationMode::Projected
-        };
+        let mode = PresentationMode::Projected;
         let input_at = self.input_observed;
         let spec = self.spec(
             Operation::FramePrepare,
@@ -59,18 +119,33 @@ impl Session {
         let document = shown.document;
         let source_revision = shown.source_revision;
         let source = if self.options.gpu.is_some() {
+            let surface = match shown.tier {
+                BackingTier::Fallback => self.fallback_gpu_front.as_ref(),
+                BackingTier::Detail => self.gpu_front.as_ref(),
+            };
+            let reference = match shown.tier {
+                BackingTier::Fallback => self.fallback_front.clone(),
+                BackingTier::Detail => self.front.clone(),
+            };
             work::DrawSource::Gpu {
-                frame: self
-                    .gpu_front
-                    .as_ref()
+                frame: surface
                     .and_then(GpuSurface::frame)
                     .ok_or("GPU display source is unavailable")?
                     .clone(),
-                reference: if self.options.capture { self.front.clone() } else { None },
+                reference: if self.options.capture { reference } else { None },
             }
         } else {
-            let surface = self.front.as_ref().ok_or("CPU display source is unavailable")?.clone();
-            let storage = self.display_buffers.iter_mut().find_map(Option::take);
+            let surface = match shown.tier {
+                BackingTier::Fallback => self.fallback_front.as_ref(),
+                BackingTier::Detail => self.front.as_ref(),
+            }
+            .ok_or("CPU display source is unavailable")?
+            .clone();
+            let storage = self
+                .display_buffers
+                .iter_mut()
+                .find(|slot| slot.as_ref().is_some_and(|buffer| buffer.extent() == view.surface()))
+                .and_then(Option::take);
             work::DrawSource::Cpu { surface, storage }
         };
         let mut input = Some(work::DrawInput {
@@ -78,6 +153,7 @@ impl Session {
             source,
             target,
             view: mapping,
+            coverage: shown.coverage,
             document,
             source_revision,
         });
@@ -147,34 +223,55 @@ impl Session {
                     return self.retire(Retired { _drawing: Some(drawing), ..Default::default() });
                 }
                 self.native_verified = drawing.verified;
+                let evidence = DisplayEvidence {
+                    target,
+                    source: drawing.source,
+                    view: drawing.view,
+                    coverage: drawing.coverage,
+                    projection: drawing.projection,
+                    document: drawing.document,
+                    source_revision: drawing.source_revision,
+                };
                 match drawing.pixels {
                     work::DrawPixels::Cpu(frame) => {
-                        self.projection_damage = Some(DamagePlan::full(drawing.view.surface()));
+                        let (damage, base) = if self.display_source == Some(drawing.source) {
+                            match (self.display_view, self.native_presented) {
+                                (Some(previous), Some(base)) => {
+                                    let damage = drawing.view.repair_from(previous)?;
+                                    let base = (damage.blit().is_some()
+                                        || damage.dirty().is_empty())
+                                    .then_some(base);
+                                    (damage, base)
+                                }
+                                _ => (DamagePlan::full(drawing.view.surface()), None),
+                            }
+                        } else {
+                            (DamagePlan::full(drawing.view.surface()), None)
+                        };
+                        self.projection_damage = Some(damage);
+                        self.projection_base = base;
                         if let Some(previous) = self.cpu_projection.replace(frame) {
                             self.recycle_buffer((*previous).into_buffer())?;
                         }
-                        self.cpu_shown_projected = true;
                         self.pacing.prepared(target, now)?;
                         if self.native_target.is_some() {
                             self.cpu_pending = Some(target);
+                            self.pending_cpu_evidence = Some(evidence);
                         } else {
                             self.pacing.abandoned(target, now)?;
-                            self.display_source = Some(drawing.source);
-                            self.display_view = Some(drawing.view);
+                            self.accept_display(evidence, false)?;
                         }
                     }
                     work::DrawPixels::Gpu(Some(frame)) => {
                         self.pacing.prepared(target, now)?;
-                        self.display_source = Some(drawing.source);
-                        self.display_view = Some(drawing.view);
+                        self.pending_gpu_evidence = Some(evidence);
                         self.gpu_presentation = Some(GpuPresentation { target, frame });
                     }
                     work::DrawPixels::Gpu(None) => {
                         self.pacing.abandoned(target, now)?;
                         self.expose_pending = !drawing.verified;
                         if drawing.verified {
-                            self.display_source = Some(drawing.source);
-                            self.display_view = Some(drawing.view);
+                            self.accept_display(evidence, false)?;
                             self.native_presented = Some(target);
                         }
                     }
@@ -191,48 +288,11 @@ impl Session {
         }
         Ok(())
     }
-    /// Stage canonical CPU pixels only after prior native custody has ended.
-    pub(super) fn stage_cpu_canonical(&mut self) -> Result<(), Box<dyn Error>> {
-        if self.options.gpu.is_some() || self.closing || self.cpu_pending.is_some() {
-            return Ok(());
-        }
-        let Some(target) = self.front.as_ref().and_then(|front| front.current()) else {
-            return Ok(());
-        };
-        let Some(shown) = &self.presented else {
-            return Ok(());
-        };
-        let view = shown.view;
-        let input_at = if shown.view == self.tools.navigation().viewport() {
-            self.input_observed.max(shown.input_at)
-        } else {
-            shown.input_at
-        };
-        if self.native_presented == Some(target) {
-            return Ok(());
-        }
-        let now = self.navigation_time();
-        if self.pacing.readiness(now)? != PresentationReadiness::Ready {
-            return Ok(());
-        }
-        if let Some(previous) = self.cpu_projection.take() {
-            self.recycle_buffer((*previous).into_buffer())?;
-            self.projection_damage = None;
-        }
-        self.cpu_shown_projected = false;
-        if self.native_target.is_some() {
-            self.pacing.submitted(target, PresentationMode::Canonical, input_at, now)?;
-            self.pacing.prepared(target, now)?;
-            self.cpu_pending = Some(target);
-        } else {
-            self.display_source = Some(target);
-            self.display_view = Some(view);
-            self.native_presented = Some(target);
-        }
-        Ok(())
-    }
     /// Restore exclusive storage after either publication or rejected admission, without freeing it.
     fn recycle_buffer(&mut self, buffer: ProjectionBuffer) -> Result<(), Box<dyn Error>> {
+        if self.display_buffer_extent != Some(buffer.extent()) {
+            return self.retire(Retired { _buffers: [Some(buffer), None], ..Default::default() });
+        }
         let slot = self
             .display_buffers
             .iter_mut()
@@ -243,7 +303,7 @@ impl Session {
     }
     /// Only idle pending work needs a cadence timer; running work supplies its completion wake.
     pub(super) fn display_deadline(&self, now: Duration) -> Option<Duration> {
-        let source = self.current_frame()?;
+        let source = self.display_frame()?;
         let pending = self.expose_pending
             || self.display_source != Some(source)
             || self.display_view != Some(self.tools.navigation().viewport())

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compose a standalone canvas without workflow, browser or inference startup.
+mod coverage;
 mod options;
 mod proof;
 mod session;

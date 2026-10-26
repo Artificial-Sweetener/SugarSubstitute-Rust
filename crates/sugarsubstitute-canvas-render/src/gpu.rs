@@ -101,7 +101,7 @@ impl<S: RasterSource> GpuRenderer<S> {
         request: RenderRequest<'_>,
         context: &JobContext,
     ) -> Result<PreparedGpuUpdate, RenderError> {
-        let RenderRequest { document, view, filter, matte, target, base, damage } = request;
+        let RenderRequest { document, view, reconstruction, matte, target, base, damage } = request;
         if damage.dirty().surface() != view.surface() {
             return Err(RenderError::Invalid("Canvas damage and viewport dimensions differ"));
         }
@@ -112,7 +112,7 @@ impl<S: RasterSource> GpuRenderer<S> {
             .claim(size_of::<PreparedGpuUpdate>() as u64 + 128)
             .map_err(ImageError::from)?;
         let compiled = document
-            .compile_view(view, matte, filter, &self.memory)
+            .compile_view(view, matte, reconstruction, &self.memory)
             .map_err(RenderError::Canvas)?;
         let (graph, output) = compiled.into_parts();
         self.evaluator.replace_graph(graph);

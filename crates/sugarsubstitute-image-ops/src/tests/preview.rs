@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Preview reductions preserve explicit sampling and cannot contaminate finished pyramid reuse.
+//! Nearest reconstruction preserves explicit sampling without changing canonical pyramid reduction.
 use super::*;
 
 #[test]
@@ -55,23 +55,43 @@ fn sparse_nearest_reads_only_requested_original_samples_across_repairs_and_edges
 }
 
 #[test]
-fn nearest_pyramids_sample_original_pixels_and_do_not_alias_finished_levels() -> TestResult {
+fn canonical_pyramids_feed_distinct_nearest_final_reconstruction() -> TestResult {
     run(MEMORY, |context| {
         let extent = Extent::new(32, 32)?;
         let (mut graph, source) = graph(context, extent)?;
-        let preview = graph.pyramid_with_filter(source, Filter::Nearest)?;
-        let finished = graph.pyramid(source)?;
-        let output = preview.levels()[2];
-        assert_ne!(graph.fingerprint(output)?, graph.fingerprint(finished.levels()[2])?);
+        let pyramid = graph.pyramid(source)?;
+        let reduced = pyramid.levels()[2];
+        let Operation::Resample { sampling: reduction, .. } = graph.operation(reduced)? else {
+            return Err(ImageError::Invalid("Canonical pyramid level is not a reduction"));
+        };
+        assert_eq!(reduction.filter(), Filter::Lanczos3);
+        let target = Extent::new(16, 16)?;
+        let sampling = Sampling::resize(graph.extent(reduced)?, target);
+        let nearest = graph.add(Operation::Resample {
+            input: reduced,
+            extent: target,
+            sampling: sampling.with_filter(Filter::Nearest),
+        })?;
+        let finished =
+            graph.add(Operation::Resample { input: reduced, extent: target, sampling })?;
+        assert_ne!(graph.fingerprint(nearest)?, graph.fingerprint(finished)?);
         let mut evaluator = Evaluator::new(graph, Grid { extent }, 64, context.memory())?;
-        let tile = evaluator.tile(output, 0, 0, context)?;
-        for y in 0..8 {
-            for x in 0..8 {
-                assert_eq!(tile.pixel(x, y), Some(grid_pixel(4 * x + 3, 4 * y + 3)));
+        let reduced_tile = evaluator.tile(reduced, 0, 0, context)?;
+        let nearest_tile = evaluator.tile(nearest, 0, 0, context)?;
+        for y in 0..16 {
+            for x in 0..16 {
+                assert_eq!(nearest_tile.pixel(x, y), reduced_tile.pixel(x / 2, y / 2));
             }
         }
-        let final_tile = evaluator.tile(finished.levels()[2], 0, 0, context)?;
-        assert_ne!(tile.pixel(0, 0), final_tile.pixel(0, 0));
+        let finished_tile = evaluator.tile(finished, 0, 0, context)?;
+        assert!(
+            nearest_tile
+                .pixels()
+                .iter()
+                .zip(finished_tile.pixels())
+                .any(|(nearest, finished)| nearest != finished),
+            "Final nearest and Lanczos reconstruction unexpectedly produced identical pixels"
+        );
         Ok(())
     })
 }

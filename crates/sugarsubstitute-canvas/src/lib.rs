@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Native canvas document and viewport state independent of windows and render devices.
 mod compile;
+mod coverage;
 mod damage;
 mod document;
 mod error;
@@ -11,6 +12,7 @@ mod projection;
 mod tools;
 mod viewport;
 pub use compile::CompiledView;
+pub use coverage::BackingCoverage;
 pub use damage::{DamagePlan, DirtyRegions, PixelBlit};
 pub use document::{
     Document, DocumentEdit, DocumentSnapshot, EditPreview, EditSession, EditSessionId, Layer,
