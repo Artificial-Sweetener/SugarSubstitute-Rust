@@ -66,6 +66,7 @@ struct Fixture {
 }
 fn preparing(reconstruction: Reconstruction) -> Result<Fixture, Box<dyn Error>> {
     let (mut session, clock, directory) = session()?;
+    session.tools.set_content(Some(Extent::new(4096, 4096)?), None, Duration::ZERO)?;
     session.input(Input::Tool(ToolInput::OneToOne))?;
     clock.0.store(80_000_000, Ordering::SeqCst);
     session.tools.advance(Duration::from_millis(80))?;
@@ -81,7 +82,7 @@ fn preparing(reconstruction: Reconstruction) -> Result<Fixture, Box<dyn Error>> 
         None,
     )?;
     let mut setup = client.submit_blocking(&scope, setup_spec, |context| {
-        sugarsubstitute_canvas::Document::new(1, Extent::new(640, 480)?, context.memory())
+        sugarsubstitute_canvas::Document::new(1, Extent::new(4096, 4096)?, context.memory())
     })?;
     let JobOutcome::Success(document) = wake.completion(&client, &mut setup)?.outcome else {
         return Err("Refinement document setup failed".into());
@@ -154,13 +155,75 @@ fn panning_a_preview_keeps_covered_finished_refinement_running() -> Result<(), B
 }
 
 #[test]
-fn uncovered_pan_work_reaches_cancelled_terminal_without_failing_viewer()
--> Result<(), Box<dyn Error>> {
+fn overlapping_repair_survives_pan_beyond_the_complete_coverage_guard() -> Result<(), Box<dyn Error>>
+{
     let Fixture { mut session, wake, _directory, .. } =
         preparing(Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3))?;
     session.input(Input::Tool(ToolInput::Button { button: ToolButton::Primary, pressed: true }))?;
     session.input(Input::Tool(ToolInput::Pointer([-129.0, 3.0])))?;
+    let rendering = session.rendering.as_mut().ok_or("Overlapping pan lost useful refinement")?;
+    assert!(!rendering.superseded);
+    rendering.superseded = true;
+    rendering.job.cancel();
     observe_terminal(&mut session, &wake)?;
     assert!(session.failed.is_none());
+    Ok(())
+}
+
+#[test]
+fn zero_overlap_pan_cancels_obsolete_refinement_without_failing_viewer()
+-> Result<(), Box<dyn Error>> {
+    let Fixture { mut session, wake, _directory, .. } =
+        preparing(Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3))?;
+    session.input(Input::Tool(ToolInput::Button { button: ToolButton::Primary, pressed: true }))?;
+    session.input(Input::Tool(ToolInput::Pointer([-2000.0, 3.0])))?;
+    assert!(session.rendering.as_ref().is_some_and(|rendering| rendering.superseded));
+    observe_terminal(&mut session, &wake)?;
+    assert!(session.failed.is_none());
+    Ok(())
+}
+
+#[test]
+fn zoom_keeps_overlapping_compatible_finished_refinement_running() -> Result<(), Box<dyn Error>> {
+    let Fixture { mut session, wake, _directory, .. } =
+        preparing(Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3))?;
+    session.input(Input::Tool(ToolInput::Wheel {
+        steps: 1.0,
+        phase: sugarsubstitute_canvas::ScrollPhase::Unphased,
+    }))?;
+    assert_eq!(
+        session.reconstruction()?,
+        Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3)
+    );
+    let rendering = session.rendering.as_mut().ok_or("Zoom lost useful refinement")?;
+    assert!(!rendering.superseded);
+    rendering.superseded = true;
+    rendering.job.cancel();
+    observe_terminal(&mut session, &wake)?;
+    assert!(session.failed.is_none());
+    Ok(())
+}
+
+#[test]
+fn completed_detail_is_current_for_partial_overlap_but_not_disjoint_motion()
+-> Result<(), Box<dyn Error>> {
+    let document = Extent::new(4096, 4096)?;
+    let mut target = Viewport::new(Extent::new(320, 240)?)?;
+    target.reframe([1000.0, 1000.0], 1.0)?;
+    let coverage = coverage::detail(target)?;
+    target.pan_by([200.0, 0.0])?;
+    assert!(completion::completed_coverage_is_current(
+        BackingTier::Detail,
+        coverage,
+        target,
+        document,
+    )?);
+    target.pan_by([2000.0, 0.0])?;
+    assert!(!completion::completed_coverage_is_current(
+        BackingTier::Detail,
+        coverage,
+        target,
+        document,
+    )?);
     Ok(())
 }

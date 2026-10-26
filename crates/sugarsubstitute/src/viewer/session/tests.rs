@@ -37,7 +37,7 @@ fn session() -> Result<(Session, Arc<TestClock>, tempfile::TempDir), Box<dyn Err
     Ok((session, clock, directory))
 }
 #[test]
-fn normalized_tool_zoom_uses_the_execution_clock_and_refines_after_wheel_idle()
+fn normalized_tool_zoom_uses_the_execution_clock_and_keeps_finished_work_during_motion()
 -> Result<(), Box<dyn Error>> {
     let (mut session, clock, _directory) = session()?;
     let pointer = [71.25, 53.5];
@@ -45,7 +45,10 @@ fn normalized_tool_zoom_uses_the_execution_clock_and_refines_after_wheel_idle()
     let anchor = session.tools.navigation().viewport().document_at(pointer)?;
     session.input(Input::Tool(ToolInput::Wheel { steps: 1.0, phase: ScrollPhase::Unphased }))?;
     assert_eq!(session.tools.navigation().target_viewport().zoom(), 0.625);
-    assert_eq!(session.reconstruction()?, Reconstruction::Preview);
+    assert_eq!(
+        session.reconstruction()?,
+        Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3)
+    );
     assert!(session.next_deadline().is_some());
     clock.0.store(40_000_000, Ordering::SeqCst);
     session.poll(Duration::ZERO)?;
@@ -55,7 +58,10 @@ fn normalized_tool_zoom_uses_the_execution_clock_and_refines_after_wheel_idle()
     clock.0.store(119_999_999, Ordering::SeqCst);
     session.poll(Duration::ZERO)?;
     assert_eq!(session.tools.navigation().viewport().zoom(), 0.625);
-    assert_eq!(session.reconstruction()?, Reconstruction::Preview);
+    assert_eq!(
+        session.reconstruction()?,
+        Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3)
+    );
     clock.0.store(120_000_000, Ordering::SeqCst);
     session.poll(Duration::ZERO)?;
     assert_eq!(

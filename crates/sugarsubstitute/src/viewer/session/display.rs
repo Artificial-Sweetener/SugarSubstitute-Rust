@@ -7,6 +7,7 @@ use sugarsubstitute_canvas::ViewProjection;
 /// Exact retained mapping and authored identity committed only by native acknowledgement.
 #[derive(Clone, Copy)]
 pub(super) struct DisplayEvidence {
+    pub(super) underlay: Option<work::UnderlayEvidence>,
     pub(super) tier: BackingTier,
     pub(super) target: FrameStamp,
     pub(super) source: FrameStamp,
@@ -47,51 +48,19 @@ impl Session {
         if self.pacing.readiness(now)? != PresentationReadiness::Ready {
             return Ok(());
         }
-        let Some(scene) = &self.scene else {
-            return Ok(());
-        };
-        let snapshot = scene.document.snapshot();
-        let document = (snapshot.identity(), snapshot.revision());
-        let document_extent = snapshot.extent();
         let view = self.tools.navigation().viewport();
-        let detail = match self.presented.as_ref() {
-            Some(shown)
-                if shown.document == document && shown.source_revision == scene.source_revision =>
-            {
-                shown.coverage.crop(view, document_extent)?.map(|mapping| (*shown, mapping))
-            }
-            _ => None,
-        };
-        let fallback = match self.fallback_presented.as_ref() {
-            Some(shown)
-                if shown.document == document && shown.source_revision == scene.source_revision =>
-            {
-                shown.coverage.crop(view, document_extent)?.map(|mapping| (*shown, mapping))
-            }
-            _ => None,
-        };
-        let Some((shown, mapping)) = detail.or(fallback) else {
+        let Some(selection) = self.select_backing()? else {
             return Ok(());
         };
-        let source_stamp = if self.options.gpu.is_some() {
-            match shown.tier {
-                BackingTier::Fallback => self.fallback_gpu_front.as_ref(),
-                BackingTier::Detail => self.gpu_front.as_ref(),
-            }
-            .and_then(GpuSurface::current)
-        } else {
-            match shown.tier {
-                BackingTier::Fallback => self.fallback_front.as_ref(),
-                BackingTier::Detail => self.front.as_ref(),
-            }
-            .and_then(|surface| surface.current())
-        };
-        let Some(source_stamp) = source_stamp else {
-            return Ok(());
-        };
+        let shown = selection.primary.shown;
+        let source_stamp = selection.primary.source;
+        let underlay_source = selection.underlay.map(|layer| layer.source);
         if !self.expose_pending
             && self.display_source == Some(source_stamp)
             && self.display_view == Some(view)
+            && self.display_evidence.is_some_and(|evidence| {
+                evidence.underlay.map(|underlay| underlay.source) == underlay_source
+            })
         {
             return Ok(());
         }
@@ -119,6 +88,11 @@ impl Session {
         let resources = self.resources.as_ref().ok_or("Canvas resources are unavailable")?.clone();
         let document = shown.document;
         let source_revision = shown.source_revision;
+        let underlay_evidence = selection.underlay.map(|layer| work::UnderlayEvidence {
+            source: layer.source,
+            coverage: layer.shown.coverage,
+            projection: layer.projection,
+        });
         let source = if self.options.gpu.is_some() {
             let surface = match shown.tier {
                 BackingTier::Fallback => self.fallback_gpu_front.as_ref(),
@@ -128,12 +102,36 @@ impl Session {
                 BackingTier::Fallback => self.fallback_front.clone(),
                 BackingTier::Detail => self.front.clone(),
             };
+            let underlay = selection
+                .underlay
+                .map(|layer| {
+                    let surface = match layer.shown.tier {
+                        BackingTier::Fallback => self.fallback_gpu_front.as_ref(),
+                        BackingTier::Detail => self.gpu_front.as_ref(),
+                    };
+                    let reference = match layer.shown.tier {
+                        BackingTier::Fallback => self.fallback_front.clone(),
+                        BackingTier::Detail => self.front.clone(),
+                    };
+                    Ok::<_, Box<dyn Error>>(work::GpuUnderlay {
+                        frame: surface
+                            .and_then(GpuSurface::frame)
+                            .filter(|frame| frame.target() == layer.source)
+                            .ok_or("GPU display underlay is unavailable")?
+                            .clone(),
+                        reference: if self.options.capture { reference } else { None },
+                        view: layer.projection,
+                    })
+                })
+                .transpose()?;
             work::DrawSource::Gpu {
                 frame: surface
                     .and_then(GpuSurface::frame)
+                    .filter(|frame| frame.target() == source_stamp)
                     .ok_or("GPU display source is unavailable")?
                     .clone(),
                 reference: if self.options.capture { reference } else { None },
+                underlay,
             }
         } else {
             let surface = match shown.tier {
@@ -142,19 +140,36 @@ impl Session {
             }
             .ok_or("CPU display source is unavailable")?
             .clone();
+            if surface.current() != Some(source_stamp) {
+                return Err("CPU display source generation changed during selection".into());
+            }
+            let underlay = selection
+                .underlay
+                .map(|layer| {
+                    let surface = match layer.shown.tier {
+                        BackingTier::Fallback => self.fallback_front.as_ref(),
+                        BackingTier::Detail => self.front.as_ref(),
+                    }
+                    .filter(|surface| surface.current() == Some(layer.source))
+                    .ok_or("CPU display underlay is unavailable")?
+                    .clone();
+                    Ok::<_, Box<dyn Error>>(work::CpuUnderlay { surface, view: layer.projection })
+                })
+                .transpose()?;
             let storage = self
                 .display_buffers
                 .iter_mut()
                 .find(|slot| slot.as_ref().is_some_and(|buffer| buffer.extent() == view.surface()))
                 .and_then(Option::take);
-            work::DrawSource::Cpu { surface, storage }
+            work::DrawSource::Cpu { surface, storage, underlay }
         };
         let mut input = Some(work::DrawInput {
+            underlay: underlay_evidence,
             tier: shown.tier,
             resources,
             source,
             target,
-            view: mapping,
+            view: selection.primary.projection,
             coverage: shown.coverage,
             document,
             source_revision,
@@ -226,6 +241,7 @@ impl Session {
                 }
                 self.native_verified = drawing.verified;
                 let evidence = DisplayEvidence {
+                    underlay: drawing.underlay,
                     tier: drawing.tier,
                     target,
                     source: drawing.source,
@@ -237,7 +253,24 @@ impl Session {
                 };
                 match drawing.pixels {
                     work::DrawPixels::Cpu(frame) => {
-                        let (damage, base) = if self.display_source == Some(drawing.source) {
+                        if frame.underlay() != drawing.underlay.map(|underlay| underlay.source) {
+                            self.pacing.abandoned(target, now)?;
+                            self.retire(Retired {
+                                _projection: Some(frame),
+                                ..Default::default()
+                            })?;
+                            return Err(
+                                "Canvas CPU projection underlay differs from display evidence"
+                                    .into(),
+                            );
+                        }
+                        let same_sources = self.display_source == Some(drawing.source)
+                            && self
+                                .display_evidence
+                                .and_then(|evidence| evidence.underlay)
+                                .map(|underlay| underlay.source)
+                                == drawing.underlay.map(|underlay| underlay.source);
+                        let (damage, base) = if same_sources {
                             match (self.display_view, self.native_presented) {
                                 (Some(previous), Some(base)) => {
                                     let damage = drawing.view.repair_from(previous)?;
@@ -305,21 +338,20 @@ impl Session {
         Ok(())
     }
     /// Only idle pending work needs a cadence timer; running work supplies its completion wake.
-    pub(super) fn display_deadline(&self, now: Duration) -> Option<Duration> {
-        let source = self.display_frame()?;
+    pub(super) fn display_deadline(
+        &self,
+        now: Duration,
+    ) -> Result<Option<Duration>, Box<dyn Error>> {
+        let Some(source) = self.display_frame()? else {
+            return Ok(None);
+        };
         let pending = self.expose_pending
             || self.display_source != Some(source)
             || self.display_view != Some(self.tools.navigation().viewport())
             || self.rendering.is_some();
         if !pending {
-            return None;
+            return Ok(None);
         }
-        match self.pacing.next_deadline(now) {
-            Ok(deadline) => deadline,
-            Err(cause) => {
-                tracing::error!(operation="canvas_display_deadline", cause=%cause, "Canvas presentation clock is invalid");
-                None
-            }
-        }
+        Ok(self.pacing.next_deadline(now)?)
     }
 }

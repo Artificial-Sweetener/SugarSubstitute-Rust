@@ -4216,7 +4216,7 @@ rationale = "Owned temporary PNG/cache fixtures verify exact source identity, la
 [[records]]
 path = "crates/sugarsubstitute/src/viewer/session/tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:c16c70065b6596ce8442cea605a3d101924e52fcf3a9df93ad171bc916367f80"
+source_sha256 = "sha256:75c1ecc523560acb44b44b0bf1623259cf579fa02c72b52b37abeebd3a8425aa"
 capabilities = ["tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary directories keep viewer document and refinement fixtures portable and isolated; test teardown retains the directory through its actual session lifetime."
@@ -4224,7 +4224,7 @@ rationale = "Owned temporary directories keep viewer document and refinement fix
 [[records]]
 path = "crates/sugarsubstitute/src/viewer/session/tests/refinement.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:9cc2feccf4338db38fa50938c631106f3f644a9e74763f8807f0f93d7f54698c"
+source_sha256 = "sha256:3926ab277904ccfa253978f1d6a3dbe68cef79c86d7433496305d3fc62010c64"
 capabilities = ["tempfile::TempDir"]
 disposition = "fixture"
 rationale = "Owned temporary directories keep viewer document and refinement fixtures portable and isolated; test teardown retains the directory through its actual session lifetime."
@@ -4232,7 +4232,7 @@ rationale = "Owned temporary directories keep viewer document and refinement fix
 [[records]]
 path = "crates/sugarsubstitute/src/viewer/session/tests/display.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:552f4edfc6fb7578ecaacad12793151ecd9e71777310ae1ead4d45b3c26de993"
+source_sha256 = "sha256:08487468a93cb54f06cda5bce794e7eff2be525dda0079cdc865a098448e381e"
 capabilities = ["tempfile::TempDir"]
 disposition = "fixture"
 rationale = "The admitted document and display publication fixture retains its isolated temporary directory through the actual session and execution lifetime. Temporary directory construction remains in the shared viewer test helper."

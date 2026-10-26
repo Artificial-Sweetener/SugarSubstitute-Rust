@@ -187,12 +187,20 @@ impl Lifetime for Session {
         let motion = navigation
             .next_deadline(now)
             .and_then(|cutoff| native_now.checked_add(cutoff.saturating_sub(now)));
-        let presentation = if let Some(deadline) = self.display_deadline(now) {
-            native_now.checked_add(deadline.saturating_sub(now))
-        } else if self.options.gpu.is_some() && self.expose_pending && self.displaying.is_none() {
-            native_now.checked_add(navigation.frame_period())
-        } else {
-            None
+        let presentation = match self.display_deadline(now) {
+            Ok(Some(deadline)) => native_now.checked_add(deadline.saturating_sub(now)),
+            Ok(None)
+                if self.options.gpu.is_some()
+                    && self.expose_pending
+                    && self.displaying.is_none() =>
+            {
+                native_now.checked_add(navigation.frame_period())
+            }
+            Ok(None) => None,
+            Err(cause) => {
+                tracing::error!(operation="canvas_display_deadline", cause=%cause, "Canvas display selection is invalid");
+                None
+            }
         };
         match (motion, presentation) {
             (Some(a), Some(b)) => Some(a.min(b)),
@@ -277,10 +285,7 @@ impl Session {
         let snapshot = scene.document.snapshot();
         if evidence.document != (snapshot.identity(), snapshot.revision())
             || evidence.source_revision != scene.source_revision
-            || evidence.projection.source() != evidence.coverage.viewport()
-            || evidence.projection.target() != evidence.view
-            || evidence.coverage.crop(evidence.view, snapshot.extent())?
-                != Some(evidence.projection)
+            || !evidence.proves_complete(snapshot.extent())?
         {
             return Err("Canvas display evidence does not prove complete current coverage".into());
         }
@@ -303,7 +308,7 @@ impl Session {
             .coverage_acceptances
             .checked_add(1)
             .ok_or("Canvas coverage acceptance count exhausted")?;
-        if evidence.tier == BackingTier::Fallback {
+        if evidence.tier == BackingTier::Fallback || evidence.underlay.is_some() {
             self.fallback_projection_acceptances = self
                 .fallback_projection_acceptances
                 .checked_add(1)
@@ -321,17 +326,20 @@ impl Session {
         if rendering.tier == BackingTier::Fallback {
             return Ok(());
         }
-        let current = self.scene.as_ref().is_some_and(|scene| {
+        let compatible = matches!(
+            (rendering.reconstruction, desired),
+            (Reconstruction::Finished(rendering), Reconstruction::Finished(desired))
+                if rendering == desired
+        );
+        let current = if let Some(scene) = &self.scene {
             let snapshot = scene.document.snapshot();
             let target = self.tools.navigation().viewport();
             rendering.display_extent == target.surface()
-                && rendering.coverage.viewport().zoom() == target.zoom()
-                && rendering
-                    .coverage
-                    .crop(target, snapshot.extent())
-                    .is_ok_and(|crop| crop.is_some())
-        });
-        if !current || rendering.reconstruction != desired {
+                && rendering.coverage.overlaps(target, snapshot.extent())?
+        } else {
+            false
+        };
+        if !current || !compatible {
             rendering.superseded = true;
             rendering.job.cancel();
         }

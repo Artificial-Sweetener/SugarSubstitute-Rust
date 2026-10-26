@@ -57,38 +57,88 @@ pub(crate) struct MappingUpload {
     _memory: MemoryClaim,
 }
 impl MappingUpload {
-    pub(crate) const CAPACITY: u64 = (8 + 6 * 16384) * 4;
-    /// Encode one bounded little-endian mapping; identity presentation uploads only its header.
+    pub(crate) const CAPACITY: u64 = (8 + 12 * 16384) * 4;
+    /// Encode bounded little-endian primary and optional underlay mappings. Identity presentation
+    /// uploads only its header.
     pub(crate) fn new(
         mapping: Option<DisplayMapping<'_>>,
+        underlay: Option<DisplayMapping<'_>>,
         output: Extent,
         context: &JobContext,
     ) -> Result<Self, GpuError> {
         crate::adapter::check(context)?;
-        let words = 8 + mapping.map_or(0, |map| (map.columns.len() + map.rows.len()) * 3);
+        let layout = MappingLayout::new(mapping, underlay, output)?;
         let memory = context
             .memory()
-            .claim(words as u64 * 4 + 128)
+            .claim(layout.words as u64 * 4 + 128)
             .map_err(|cause| GpuError::new("gpu_display_mapping_admission", cause))?;
         let mut bytes = Vec::new();
         bytes
-            .try_reserve_exact(words * 4)
+            .try_reserve_exact(layout.words * 4)
             .map_err(|cause| GpuError::new("gpu_display_mapping_allocation", cause))?;
-        let matte = mapping.map_or([0, 0, 0, 255], |map| map.matte);
-        let background = u32::from_be_bytes([matte[3], matte[0], matte[1], matte[2]]);
-        for word in
-            [u32::from(mapping.is_some()), output.width(), output.height(), background, 0, 0, 0, 0]
+        encode_mappings(&mut bytes, mapping, underlay, output, layout.underlay_base);
+        Ok(Self { bytes, _memory: memory })
+    }
+}
+
+#[derive(Clone, Copy)]
+struct MappingLayout {
+    words: usize,
+    underlay_base: usize,
+}
+impl MappingLayout {
+    fn new(
+        mapping: Option<DisplayMapping<'_>>,
+        underlay: Option<DisplayMapping<'_>>,
+        output: Extent,
+    ) -> Result<Self, GpuError> {
+        if mapping.is_some_and(|map| map.output != output)
+            || underlay.is_some_and(|map| map.output != output)
+            || underlay.is_some() && mapping.is_none()
         {
-            bytes.extend_from_slice(&word.to_le_bytes());
+            return Err(GpuError::invalid("Native display mappings disagree on output extent"));
         }
-        if let Some(mapping) = mapping {
-            for sample in mapping.columns.iter().chain(mapping.rows) {
-                for word in [sample.first(), sample.second(), sample.weight()] {
-                    bytes.extend_from_slice(&word.to_le_bytes());
-                }
+        let primary_words = mapping.map_or(0, axis_words);
+        let underlay_base = underlay.map_or(0, |_| 8 + primary_words);
+        let words = 8 + primary_words + underlay.map_or(0, axis_words);
+        if words as u64 * 4 > MappingUpload::CAPACITY {
+            return Err(GpuError::invalid("Native display mappings exceed upload capacity"));
+        }
+        Ok(Self { words, underlay_base })
+    }
+}
+
+fn axis_words(mapping: DisplayMapping<'_>) -> usize {
+    (mapping.columns.len() + mapping.rows.len()) * 3
+}
+
+fn encode_mappings(
+    bytes: &mut Vec<u8>,
+    mapping: Option<DisplayMapping<'_>>,
+    underlay: Option<DisplayMapping<'_>>,
+    output: Extent,
+    underlay_base: usize,
+) {
+    let matte = mapping.map_or([0, 0, 0, 255], |map| map.matte);
+    let background = u32::from_be_bytes([matte[3], matte[0], matte[1], matte[2]]);
+    for word in [
+        u32::from(mapping.is_some()),
+        output.width(),
+        output.height(),
+        background,
+        underlay_base as u32,
+        0,
+        0,
+        0,
+    ] {
+        bytes.extend_from_slice(&word.to_le_bytes());
+    }
+    for mapping in [mapping, underlay].into_iter().flatten() {
+        for sample in mapping.columns.iter().chain(mapping.rows) {
+            for word in [sample.first(), sample.second(), sample.weight()] {
+                bytes.extend_from_slice(&word.to_le_bytes());
             }
         }
-        Ok(Self { bytes, _memory: memory })
     }
 }
 
@@ -117,6 +167,61 @@ mod tests {
         assert!(DisplayMapping::new(source, output, &columns[..1], &rows, matte).is_err());
         assert!(DisplayMapping::new(source, output, &columns, &rows, [0; 4]).is_err());
         assert!(DisplayMapping::new(source, Extent::new(16385, 1)?, &[], &[], matte).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn composited_mapping_encodes_underlay_at_bounded_header_offset()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let primary_source = Extent::new(3, 2)?;
+        let underlay_source = Extent::new(5, 4)?;
+        let output = Extent::new(2, 1)?;
+        let primary_columns = [DisplaySample::from_corner(0.25, 3, true), DisplaySample::UNCOVERED];
+        let primary_rows = [DisplaySample::from_corner(1.0, 2, true)];
+        let underlay_columns =
+            [DisplaySample::from_corner(2.5, 5, true), DisplaySample::from_corner(3.25, 5, true)];
+        let underlay_rows = [DisplaySample::from_corner(1.5, 4, true)];
+        let primary = DisplayMapping::new(
+            primary_source,
+            output,
+            &primary_columns,
+            &primary_rows,
+            [17, 29, 41, 255],
+        )?;
+        let underlay = DisplayMapping::new(
+            underlay_source,
+            output,
+            &underlay_columns,
+            &underlay_rows,
+            [17, 29, 41, 255],
+        )?;
+        let layout = MappingLayout::new(Some(primary), Some(underlay), output)?;
+        assert_eq!(layout.underlay_base, 17);
+        assert_eq!(layout.words, 26);
+        let mut bytes = Vec::new();
+        encode_mappings(&mut bytes, Some(primary), Some(underlay), output, layout.underlay_base);
+        let words = bytes
+            .chunks_exact(4)
+            .map(|word| u32::from_le_bytes([word[0], word[1], word[2], word[3]]))
+            .collect::<Vec<_>>();
+        assert_eq!(&words[..8], &[1, 2, 1, 0xff111d29, 17, 0, 0, 0]);
+        assert_eq!(
+            &words[17..],
+            &[
+                underlay_columns[0].first(),
+                underlay_columns[0].second(),
+                underlay_columns[0].weight(),
+                underlay_columns[1].first(),
+                underlay_columns[1].second(),
+                underlay_columns[1].weight(),
+                underlay_rows[0].first(),
+                underlay_rows[0].second(),
+                underlay_rows[0].weight(),
+            ]
+        );
+        let different_output = Extent::new(1, 1)?;
+        assert!(MappingLayout::new(Some(primary), Some(underlay), different_output).is_err());
+        assert!(MappingLayout::new(None, Some(underlay), output).is_err());
         Ok(())
     }
 }

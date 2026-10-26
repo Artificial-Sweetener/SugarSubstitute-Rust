@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Coordinate one camera/document lifetime with typed shared-execution jobs and worker retirement.
 mod activity;
+mod backing;
 mod completion;
 mod display;
 mod gpu;

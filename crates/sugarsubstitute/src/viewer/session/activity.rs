@@ -5,9 +5,9 @@ use super::*;
 use sugarsubstitute_execution::OwnedInputError;
 
 impl Session {
-    /// Preview scale changes while continuing finished reconstruction during a pan.
+    /// Use a direct-source preview only until the bounded fallback first completes.
     pub(super) fn reconstruction(&self) -> Result<Reconstruction, Box<dyn Error>> {
-        if self.initial_preview || self.tools.navigation().resampling() {
+        if self.initial_preview {
             Ok(Reconstruction::Preview)
         } else {
             Ok(Reconstruction::finished_for_display_zoom(
@@ -129,9 +129,6 @@ impl Session {
             (BackingTier::Fallback, shown.coverage, shown.reconstruction)
         } else {
             let reconstruction = self.reconstruction()?;
-            if reconstruction.is_preview() && self.tools.navigation().interacting() {
-                return Ok(());
-            }
             let detail_view =
                 self.detail_view(target_view, identity, scene.source_revision, reconstruction)?;
             let desired = coverage::detail(detail_view)?;

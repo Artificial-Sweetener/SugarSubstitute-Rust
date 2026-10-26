@@ -23,6 +23,9 @@ mod transfer;
 mod window;
 mod window_shader;
 
+#[cfg(feature = "boundary-fixtures")]
+pub mod boundary_fixtures;
+
 pub use adapter::{AdapterCatalog, AdapterClass, AdapterDescriptor, AdapterId, Backend, GpuDevice};
 pub use batch::GpuWork;
 pub use buffer::{GpuTile, Readback};

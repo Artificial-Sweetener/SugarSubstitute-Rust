@@ -922,3 +922,10 @@ owner = "sugarsubstitute-canvas-render"
 source_sha256 = "sha256:d12211caedd13feb0bbe6b7ae3108f6b92860c689e541d94539e1692a137c067"
 capabilities = ["arguments"]
 rationale = "Native frame qualification accepts explicit backend/vendor/device selectors and uses the actual selected adapter through admitted execution."
+
+[[records]]
+path = "crates/sugarsubstitute-image-gpu/examples/composite_qualification.rs"
+owner = "sugarsubstitute-image-gpu"
+source_sha256 = "sha256:a43be635d1ca11e51442603ac1a83ee6c50f6101c8be76d0a672199e7ecc66b7"
+capabilities = ["arguments"]
+rationale = "The developer composite check accepts one explicit Vulkan vendor/device selector and resolves it through the production adapter catalog."

@@ -77,42 +77,9 @@ impl Session {
             self.front.as_ref().and_then(|surface| surface.current())
         }
     }
-    /// Backing generation currently able to cover the complete document-visible target.
-    pub(super) fn display_frame(&self) -> Option<FrameStamp> {
-        let scene = self.scene.as_ref()?;
-        let snapshot = scene.document.snapshot();
-        let target = self.tools.navigation().viewport();
-        let current = |shown: &Presented| {
-            (shown.document == (snapshot.identity(), snapshot.revision())
-                && shown.source_revision == scene.source_revision
-                && shown.coverage.crop(target, snapshot.extent()).ok().flatten().is_some())
-            .then(|| {
-                if self.options.gpu.is_some() {
-                    match shown.tier {
-                        BackingTier::Fallback => {
-                            self.fallback_gpu_front.as_ref().and_then(GpuSurface::current)
-                        }
-                        BackingTier::Detail => {
-                            self.gpu_front.as_ref().and_then(GpuSurface::current)
-                        }
-                    }
-                } else {
-                    match shown.tier {
-                        BackingTier::Fallback => {
-                            self.fallback_front.as_ref().and_then(|surface| surface.current())
-                        }
-                        BackingTier::Detail => {
-                            self.front.as_ref().and_then(|surface| surface.current())
-                        }
-                    }
-                }
-            })
-            .flatten()
-        };
-        self.presented
-            .as_ref()
-            .and_then(current)
-            .or_else(|| self.fallback_presented.as_ref().and_then(current))
+    /// Primary generation selected for a complete direct or composited display.
+    pub(super) fn display_frame(&self) -> Result<Option<FrameStamp>, Box<dyn Error>> {
+        Ok(self.select_backing()?.map(|selection| selection.primary.source))
     }
 
     /// Validate the exact mapping and authored identity committed by native acknowledgement.
@@ -129,9 +96,6 @@ impl Session {
             && self.display_source == Some(evidence.source)
             && self.display_view == Some(evidence.view)
             && (self.native_target.is_none() || self.native_presented == Some(evidence.target))
-            && evidence.projection.source() == evidence.coverage.viewport()
-            && evidence.projection.target() == evidence.view
-            && evidence.coverage.crop(evidence.view, snapshot.extent())?
-                == Some(evidence.projection))
+            && evidence.proves_complete(snapshot.extent())?)
     }
 }

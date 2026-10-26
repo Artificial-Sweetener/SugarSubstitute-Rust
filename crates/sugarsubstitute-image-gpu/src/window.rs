@@ -119,7 +119,7 @@ impl WindowSurface {
         image: &DisplayImage,
         context: &JobContext,
     ) -> Result<Option<WindowFrame>, GpuError> {
-        self.draw(image, None, context)
+        self.draw(image, None, None, context)
     }
     /// Project one immutable retained image into a current physical viewport on the same device.
     /// Supplied indices are prevalidated; no source pixels are read back or replaced. Outstanding
@@ -135,19 +135,52 @@ impl WindowSurface {
         if mapping.source() != image.extent() {
             return Err(GpuError::invalid("Display projection source differs from retained image"));
         }
-        self.draw(image, Some(mapping), context)
+        self.draw(image, Some(mapping), None, context)
     }
-    /// Configure, acquire and retire one draw while retaining upload and swapchain custody.
-    fn draw(
+    /// Project a retained detail image over a retained fallback image into one physical viewport.
+    /// Covered detail pixels take precedence, uncovered detail pixels sample the underlay, and
+    /// pixels uncovered by both mappings use the primary mapping's opaque matte. Both immutable
+    /// images and maps are validated before native swapchain acquisition.
+    /// # Errors
+    /// Rejects foreign source extents/devices or disagreeing output extents; preserves original
+    /// control, admission and GPU causes.
+    pub fn prepare_composited(
         &mut self,
         image: &DisplayImage,
-        mapping: Option<DisplayMapping<'_>>,
+        mapping: DisplayMapping<'_>,
+        underlay: &DisplayImage,
+        underlay_mapping: DisplayMapping<'_>,
+        context: &JobContext,
+    ) -> Result<Option<WindowFrame>, GpuError> {
+        if mapping.source() != image.extent() || underlay_mapping.source() != underlay.extent() {
+            return Err(GpuError::invalid(
+                "Display composition source differs from retained image",
+            ));
+        }
+        if mapping.output() != underlay_mapping.output() {
+            return Err(GpuError::invalid(
+                "Display composition mappings disagree on output extent",
+            ));
+        }
+        self.draw(image, Some(mapping), Some((underlay, underlay_mapping)), context)
+    }
+    /// Configure, acquire and retire one draw while retaining upload and swapchain custody.
+    fn draw<'primary, 'underlay>(
+        &mut self,
+        image: &DisplayImage,
+        mapping: Option<DisplayMapping<'primary>>,
+        underlay: Option<(&DisplayImage, DisplayMapping<'underlay>)>,
         context: &JobContext,
     ) -> Result<Option<WindowFrame>, GpuError> {
         crate::adapter::check(context)?;
         if !Arc::ptr_eq(image.device(), &self.owner.device) {
             return Err(GpuError::invalid(
                 "Native window and image belong to different GPU devices",
+            ));
+        }
+        if underlay.is_some_and(|(image, _)| !Arc::ptr_eq(image.device(), &self.owner.device)) {
+            return Err(GpuError::invalid(
+                "Native window and underlay belong to different GPU devices",
             ));
         }
         if Arc::strong_count(&self.owner) != 1 {
@@ -205,7 +238,8 @@ impl WindowSurface {
         if self.blitter.is_none() {
             self.blitter = Some(Blitter::new(device, self.owner.format, context)?);
         }
-        let upload = MappingUpload::new(mapping, extent, context)?;
+        let upload =
+            MappingUpload::new(mapping, underlay.map(|(_, mapping)| mapping), extent, context)?;
         let staging = context
             .memory()
             .claim(upload.bytes.len() as u64 + 128)
@@ -234,12 +268,13 @@ impl WindowSurface {
             label: Some("SugarSubstitute native window frame"),
         });
         let input = image.view();
+        let underlay_input = underlay.map_or_else(|| image.view(), |(image, _)| image.view());
         let output = texture.texture.create_view(&wgpu::TextureViewDescriptor::default());
         let blitter = self
             .blitter
             .as_ref()
             .ok_or_else(|| GpuError::invalid("Native window shader is unavailable"))?;
-        blitter.encode(device, &input, &output, &mut commands);
+        blitter.encode(device, &input, &underlay_input, &output, &mut commands);
         device.faults.check()?;
         Transfer::upload(blitter.mapping(), staging, &upload.bytes, Some(commands)).retire()?;
         crate::adapter::check(context)?;

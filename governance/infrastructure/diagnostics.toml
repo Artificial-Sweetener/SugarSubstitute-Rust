@@ -1015,3 +1015,10 @@ owner = "sugarsubstitute-canvas-render"
 source_sha256 = "sha256:1fc71c4c21edad8146b807c6614cd471ef06a70092c9513edcd2c30a7c539ea1"
 disposition = "fixture"
 rationale = "Isolated finite CPU qualification reports physical 4K projection costs with fresh and recycled admitted storage through the production execution boundary. Measurements are diagnostics, not timing-based correctness assertions."
+
+[[records]]
+path = "crates/sugarsubstitute-image-gpu/examples/composite_qualification.rs"
+owner = "sugarsubstitute-image-gpu"
+source_sha256 = "sha256:a43be635d1ca11e51442603ac1a83ee6c50f6101c8be76d0a672199e7ecc66b7"
+disposition = "fixture"
+rationale = "The explicit single-device offscreen composite check reports native adapter identity, exact CPU/GPU pixel agreement and execution retirement; it creates no window or runtime diagnostic sink."

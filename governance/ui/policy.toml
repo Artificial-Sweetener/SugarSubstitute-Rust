@@ -138,7 +138,8 @@ sources = [
     "crates/sugarsubstitute-image-gpu/src/kernel.rs",
     "crates/sugarsubstitute-image-gpu/src/kernel/tests.rs",
     "crates/sugarsubstitute-image-gpu/src/transfer.rs",
+    "crates/sugarsubstitute-image-gpu/src/boundary_fixtures.rs",
     "crates/sugarsubstitute-image-gpu/src/window.rs",
     "crates/sugarsubstitute-image-gpu/src/window_shader.rs",
 ]
-source_sha256 = "sha256:8a56135b5d1d56d886174ae97ee65da4c0ca498285a6e491305bdd81dc781930"
+source_sha256 = "sha256:5206e3b82ebf269695836c376dccd1914e4e57fed6abf40753b6a483fd89da19"

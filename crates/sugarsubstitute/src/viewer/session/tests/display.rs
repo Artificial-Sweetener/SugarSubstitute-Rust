@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Application publication labels actual completed display poses and rejects obsolete content.
+mod composite;
 use super::refinement::Wake;
 use super::*;
 use sugarsubstitute_canvas::{BackingCoverage, Document, ViewProjection};
@@ -128,6 +129,7 @@ fn pending_draw() -> Result<Fixture, Box<dyn Error>> {
     )?;
     let job = client.submit_cpu(&scope, spec, move |_| {
         DrawBoundary(Some(work::Draw {
+            underlay: None,
             tier: BackingTier::Detail,
             source,
             target,
@@ -237,6 +239,7 @@ fn acknowledged_cpu_projection_publishes_actual_pose_once() -> Result<(), Box<dy
     session.cpu_pending = Some(target);
     let coverage = BackingCoverage::new(source_view, [0; 2])?;
     session.pending_cpu_evidence = Some(DisplayEvidence {
+        underlay: None,
         tier: BackingTier::Fallback,
         target,
         source,

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Disposable bilinear or nearest display pixels sampled from a canonical retained viewport.
+mod composite;
 use crate::{CpuSurface, RenderError, cpu::check};
 use sugarsubstitute_canvas::{FrameStamp, ViewProjection};
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim, MemoryLease};
@@ -60,6 +61,11 @@ impl ProjectionSamples {
     pub fn rows(&self) -> &[DisplaySample] {
         &self.rows
     }
+    /// Whether one output pixel is covered by both canonical source axes.
+    pub fn covers_pixel(&self, x: u32, y: u32) -> bool {
+        self.columns.get(x as usize).is_some_and(|sample| sample.is_covered())
+            && self.rows.get(y as usize).is_some_and(|sample| sample.is_covered())
+    }
     /// Sample one projected opaque encoded pixel from the retained canonical source.
     /// Projection construction already validated extents; callers provide in-range target pixels.
     pub fn sample_pixel(&self, source: &CpuSurface, x: u32, y: u32, matte: u32) -> u32 {
@@ -102,11 +108,13 @@ impl ProjectionSamples {
     }
 }
 
-/// Immutable approximate display pixels with a separate target and canonical source identity.
+/// Immutable approximate display pixels with separate target, primary and optional underlay
+/// canonical identities.
 /// This type cannot be applied to a `CpuSurface` or used as a prepared exact repair.
 pub struct CpuProjection {
     target: FrameStamp,
     source: FrameStamp,
+    underlay: Option<FrameStamp>,
     view: ViewProjection,
     buffer: ProjectionBuffer,
 }
@@ -163,31 +171,14 @@ impl ProjectionBuffer {
     /// Rejects mismatched extents/identities, stale targets and nonopaque matte; preserves
     /// original allocation/admission/cancellation/deadline failures without changing the source.
     pub fn project(
-        mut self,
+        self,
         target: FrameStamp,
         source: &CpuSurface,
         view: ViewProjection,
         matte: Pixel,
         context: &JobContext,
     ) -> Result<CpuProjection, RenderError> {
-        check(context)?;
-        let base = source.current().ok_or(RenderError::StaleBase)?;
-        if view.source().surface() != source.extent()
-            || target.surface != base.surface
-            || view.target().surface() != self.extent
-        {
-            return Err(RenderError::Invalid("Projection source extent or surface differs"));
-        }
-        if target.generation <= base.generation {
-            return Err(RenderError::StaleTarget);
-        }
-        let [red, green, blue, alpha] = SrgbEncoder::encode_constant(matte)?;
-        let background = u32::from_be_bytes([alpha, red, green, blue]);
-        let samples = ProjectionSamples::new(view, context)?;
-        self.pixels.clear();
-        project(source, &samples, background, &mut self.pixels, context)?;
-        check(context)?;
-        Ok(CpuProjection { target, source: base, view, buffer: self })
+        self.project_over(target, source, view, None, matte, context)
     }
 }
 impl CpuProjection {
@@ -199,9 +190,13 @@ impl CpuProjection {
     pub const fn target(&self) -> FrameStamp {
         self.target
     }
-    /// Actual canonical generation sampled by this immutable result.
+    /// Actual primary canonical generation sampled by this immutable result.
     pub const fn source(&self) -> FrameStamp {
         self.source
+    }
+    /// Canonical fallback generation sampled only outside primary retained coverage.
+    pub const fn underlay(&self) -> Option<FrameStamp> {
+        self.underlay
     }
     /// Actual source and approximate output cameras represented by these pixels.
     pub const fn view(&self) -> ViewProjection {
@@ -211,51 +206,6 @@ impl CpuProjection {
     pub fn pixels(&self) -> &[u32] {
         &self.buffer.pixels
     }
-}
-
-/// Sample visible columns once per distinct source row; never read a previous projection.
-fn project(
-    source: &CpuSurface,
-    samples: &ProjectionSamples,
-    matte: u32,
-    output: &mut Vec<u32>,
-    context: &JobContext,
-) -> Result<(), RenderError> {
-    let columns = samples.columns();
-    let width = columns.len();
-    let first = columns.iter().position(|column| column.is_covered()).unwrap_or(width);
-    let end =
-        columns.iter().rposition(|column| column.is_covered()).map_or(first, |index| index + 1);
-    let visible = &columns[first..end];
-    let contiguous = !visible.is_empty()
-        && visible.iter().all(|sample| sample.weight() == 0)
-        && visible.windows(2).all(|pair| pair[1].first() == pair[0].first() + 1);
-    let stride = source.extent().width() as usize;
-    let mut previous = None;
-    for (y, &row) in samples.rows().iter().enumerate() {
-        check(context)?;
-        let start = output.len();
-        if previous == Some(row) {
-            output.extend_from_within(start - width..start);
-        } else if !row.is_covered() || visible.is_empty() {
-            output.resize(start + width, matte);
-        } else if row.weight() == 0 && contiguous {
-            let source_row = &source.pixels()
-                [row.first() as usize * stride..(row.first() as usize + 1) * stride];
-            output.resize(start + first, matte);
-            let begin = visible[0].first() as usize;
-            output.extend_from_slice(&source_row[begin..begin + visible.len()]);
-            output.resize(start + width, matte);
-        } else {
-            output.resize(start + first, matte);
-            output.extend(
-                (first..end).map(|x| samples.sample_pixel(source, x as u32, y as u32, matte)),
-            );
-            output.resize(start + width, matte);
-        }
-        previous = Some(row);
-    }
-    Ok(())
 }
 
 #[cfg(test)]

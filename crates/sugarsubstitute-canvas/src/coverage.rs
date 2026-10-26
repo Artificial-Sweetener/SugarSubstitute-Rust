@@ -41,6 +41,26 @@ impl BackingCoverage {
     pub const fn margin(self) -> [u32; 2] {
         self.margin
     }
+    /// Whether retained pixels intersect any document area visible in the target camera.
+    /// Partial coverage is useful for compositing and ongoing preparation, but does not prove
+    /// a complete display; use `crop` for that stronger contract. Units are physical pixels.
+    /// # Errors
+    /// Preserves unrepresentable camera projection and document-footprint failures.
+    pub fn overlaps(self, target: Viewport, document: Extent) -> Result<bool, CanvasError> {
+        let projection = ViewProjection::new(self.viewport, target)?;
+        let start = target.device_at([0.0; 2])?;
+        let end = target.device_at([f64::from(document.width()), f64::from(document.height())])?;
+        let size = target.surface();
+        let source = self.viewport.surface();
+        let target_edges = [size.width(), size.height()];
+        let source_edges = [source.width(), source.height()];
+        Ok((0..2).all(|axis| {
+            let retained_start = projection.offset()[axis];
+            let retained_end = retained_start + f64::from(source_edges[axis]) * projection.scale();
+            start[axis].max(0.0).max(retained_start)
+                < end[axis].min(f64::from(target_edges[axis])).min(retained_end)
+        }))
+    }
     /// Build a disposable crop when retained coverage contains all target-visible document area.
     /// Target pixels outside the document may remain uncovered and receive presentation matte.
     /// The returned transform grants no exact-frame identity and may represent a different scale.
@@ -189,6 +209,33 @@ mod tests {
         assert!(coverage.crop(moved, Extent::new(1000, 1000)?)?.is_none());
         moved.pan_by([-10_000.0, -10_000.0])?;
         assert!(coverage.crop(moved, Extent::new(70, 70)?)?.is_some());
+        Ok(())
+    }
+
+    #[test]
+    fn partial_detail_remains_useful_beyond_the_full_crop_guard() -> TestResult {
+        let document = Extent::new(10_000, 10_000)?;
+        let mut target = Viewport::new(Extent::new(400, 300)?)?;
+        target.reframe([1000.0, 1000.0], 1.0)?;
+        let coverage = BackingCoverage::new(target, [128; 2])?;
+        target.pan_by([129.0, -170.0])?;
+        assert!(coverage.crop(target, document)?.is_none());
+        assert!(coverage.overlaps(target, document)?);
+        target.pan_by([1000.0, 0.0])?;
+        assert!(!coverage.overlaps(target, document)?);
+        Ok(())
+    }
+
+    #[test]
+    fn zoomed_out_detail_overlaps_but_off_document_pixels_do_not_count() -> TestResult {
+        let document = Extent::new(10_000, 10_000)?;
+        let mut target = Viewport::new(Extent::new(400, 300)?)?;
+        target.reframe([1000.0, 1000.0], 1.0)?;
+        let coverage = BackingCoverage::new(target, [128; 2])?;
+        target.zoom_at(0.25, [200.0, 150.0])?;
+        assert!(coverage.crop(target, document)?.is_none());
+        assert!(coverage.overlaps(target, document)?);
+        assert!(!coverage.overlaps(target, Extent::new(1, 1)?)?);
         Ok(())
     }
 

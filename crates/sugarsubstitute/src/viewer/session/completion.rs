@@ -138,19 +138,22 @@ impl Session {
                     self.retire(Retired { _packet: Some(packet), ..Default::default() })?;
                     return Err("Canvas received foreign backing coverage".into());
                 }
-                let current = !self.closing
-                    && self.pending_open.is_none()
-                    && self.loading.is_none()
-                    && self.scene.as_ref().is_some_and(|scene| {
+                let current =
+                    if self.closing || self.pending_open.is_some() || self.loading.is_some() {
+                        false
+                    } else if let Some(scene) = &self.scene {
                         let snapshot = scene.document.snapshot();
                         packet.document == (snapshot.identity(), snapshot.revision())
                             && packet.source_revision == scene.source_revision
-                            && (packet.tier == BackingTier::Fallback
-                                || rendering
-                                    .coverage
-                                    .crop(self.tools.navigation().viewport(), snapshot.extent())
-                                    .is_ok_and(|crop| crop.is_some()))
-                    });
+                            && completed_coverage_is_current(
+                                packet.tier,
+                                rendering.coverage,
+                                self.tools.navigation().viewport(),
+                                snapshot.extent(),
+                            )?
+                    } else {
+                        false
+                    };
                 retain_first_fallback_io(
                     &mut self.first_fallback_preparation_io,
                     current,
@@ -289,6 +292,15 @@ impl Session {
         }
         Ok(())
     }
+}
+/// Completed detail remains publishable while any of its current document pixels stay visible.
+pub(super) fn completed_coverage_is_current(
+    tier: BackingTier,
+    coverage: BackingCoverage,
+    target: Viewport,
+    document: sugarsubstitute_image_ops::Extent,
+) -> Result<bool, Box<dyn Error>> {
+    Ok(tier == BackingTier::Fallback || coverage.overlaps(target, document)?)
 }
 /// Retain only the first completed, current-source fallback preview preparation measurement.
 pub(super) fn retain_first_fallback_io(

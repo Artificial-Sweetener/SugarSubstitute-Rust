@@ -5,7 +5,9 @@ use super::{coverage::BackingTier, work_error::WorkError};
 mod cpu;
 mod display;
 mod gpu;
-pub(super) use display::{Draw, DrawInput, DrawPixels, DrawSource};
+pub(super) use display::{
+    CpuUnderlay, Draw, DrawInput, DrawPixels, DrawSource, GpuUnderlay, UnderlayEvidence,
+};
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex},

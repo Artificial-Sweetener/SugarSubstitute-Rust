@@ -67,6 +67,7 @@ impl Blitter {
         &self,
         device: &GpuDevice,
         input: &wgpu::TextureView,
+        underlay: &wgpu::TextureView,
         output: &wgpu::TextureView,
         commands: &mut wgpu::CommandEncoder,
     ) {
@@ -79,6 +80,10 @@ impl Blitter {
                     resource: wgpu::BindingResource::TextureView(input),
                 },
                 wgpu::BindGroupEntry { binding: 1, resource: self.mapping.raw.as_entire_binding() },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(underlay),
+                },
             ],
         });
         let mut pass = commands.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -103,6 +108,13 @@ const SOURCE: &str = r#"// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 @group(0) @binding(0) var image: texture_2d<f32>;
 @group(0) @binding(1) var<storage, read> mapping: array<u32>;
+@group(0) @binding(2) var underlay: texture_2d<f32>;
+struct MappedSource {
+    first: vec2<u32>,
+    second: vec2<u32>,
+    weight: vec2<u32>,
+    covered: u32,
+}
 @vertex
 fn vertex(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
     let positions = array<vec2<f32>, 3>(vec2<f32>(-1.0, -1.0), vec2<f32>(3.0, -1.0), vec2<f32>(-1.0, 3.0));
@@ -114,33 +126,77 @@ fn fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     if mapping[0] == 0u {
         return textureLoad(image, vec2<i32>(output), 0);
     }
-    let x_entry = 8u + output.x * 3u;
-    let y_entry = 8u + (mapping[1] + output.y) * 3u;
+    let primary = mapped_source(output, 8u);
+    if primary.covered != 0u {
+        return sample_image(primary);
+    }
+    let underlay_base = mapping[4];
+    if underlay_base != 0u {
+        let fallback = mapped_source(output, underlay_base);
+        if fallback.covered != 0u {
+            return sample_underlay(fallback);
+        }
+    }
+    let matte = mapping[3];
+    return vec4<f32>(f32((matte >> 16u) & 255u), f32((matte >> 8u) & 255u),
+        f32(matte & 255u), 255.0) / 255.0;
+}
+fn mapped_source(output: vec2<u32>, base: u32) -> MappedSource {
+    let x_entry = base + output.x * 3u;
+    let y_entry = base + (mapping[1] + output.y) * 3u;
     let source_x = mapping[x_entry];
     let source_y = mapping[y_entry];
     if source_x == 0xffffffffu || source_y == 0xffffffffu {
-        let matte = mapping[3];
-        return vec4<f32>(f32((matte >> 16u) & 255u), f32((matte >> 8u) & 255u),
-            f32(matte & 255u), 255.0) / 255.0;
+        return MappedSource(vec2<u32>(0u), vec2<u32>(0u), vec2<u32>(0u), 0u);
     }
-    let x_weight = mapping[x_entry + 2u];
-    let y_weight = mapping[y_entry + 2u];
-    if x_weight == 0u && y_weight == 0u {
-        return textureLoad(image, vec2<i32>(i32(source_x), i32(source_y)), 0);
+    return MappedSource(
+        vec2<u32>(source_x, source_y),
+        vec2<u32>(mapping[x_entry + 1u], mapping[y_entry + 1u]),
+        vec2<u32>(mapping[x_entry + 2u], mapping[y_entry + 2u]),
+        1u,
+    );
+}
+fn sample_image(source: MappedSource) -> vec4<f32> {
+    if source.weight.x == 0u && source.weight.y == 0u {
+        return textureLoad(image, vec2<i32>(i32(source.first.x), i32(source.first.y)), 0);
     }
-    let next_x = mapping[x_entry + 1u];
-    let next_y = mapping[y_entry + 1u];
-    let top_left = encoded_pixel(source_x, source_y);
-    let top_right = encoded_pixel(next_x, source_y);
-    let bottom_left = encoded_pixel(source_x, next_y);
-    let bottom_right = encoded_pixel(next_x, next_y);
-    let top = top_left * (256u - x_weight) + top_right * x_weight;
-    let bottom = bottom_left * (256u - x_weight) + bottom_right * x_weight;
-    let value = (top * (256u - y_weight) + bottom * y_weight + vec4<u32>(32768u)) >> vec4<u32>(16u);
+    return interpolate(
+        encoded_image_pixel(source.first.x, source.first.y),
+        encoded_image_pixel(source.second.x, source.first.y),
+        encoded_image_pixel(source.first.x, source.second.y),
+        encoded_image_pixel(source.second.x, source.second.y),
+        source.weight,
+    );
+}
+fn sample_underlay(source: MappedSource) -> vec4<f32> {
+    if source.weight.x == 0u && source.weight.y == 0u {
+        return textureLoad(underlay, vec2<i32>(i32(source.first.x), i32(source.first.y)), 0);
+    }
+    return interpolate(
+        encoded_underlay_pixel(source.first.x, source.first.y),
+        encoded_underlay_pixel(source.second.x, source.first.y),
+        encoded_underlay_pixel(source.first.x, source.second.y),
+        encoded_underlay_pixel(source.second.x, source.second.y),
+        source.weight,
+    );
+}
+fn interpolate(
+    top_left: vec4<u32>,
+    top_right: vec4<u32>,
+    bottom_left: vec4<u32>,
+    bottom_right: vec4<u32>,
+    weight: vec2<u32>,
+) -> vec4<f32> {
+    let top = top_left * (256u - weight.x) + top_right * weight.x;
+    let bottom = bottom_left * (256u - weight.x) + bottom_right * weight.x;
+    let value = (top * (256u - weight.y) + bottom * weight.y + vec4<u32>(32768u)) >> vec4<u32>(16u);
     return vec4<f32>(value) / 255.0;
 }
-fn encoded_pixel(x: u32, y: u32) -> vec4<u32> {
+fn encoded_image_pixel(x: u32, y: u32) -> vec4<u32> {
     return vec4<u32>(round(textureLoad(image, vec2<i32>(i32(x), i32(y)), 0) * 255.0));
+}
+fn encoded_underlay_pixel(x: u32, y: u32) -> vec4<u32> {
+    return vec4<u32>(round(textureLoad(underlay, vec2<i32>(i32(x), i32(y)), 0) * 255.0));
 }
 "#;
 
