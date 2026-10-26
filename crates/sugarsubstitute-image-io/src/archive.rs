@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Reconstruct canonical image regions from bounded independently checked source chunks.
+mod batch;
 mod samples;
 use crate::{ImportError, Packing, RasterDescriptor, buffer::Buffer};
 use sha2::{Digest, Sha256};
@@ -17,6 +18,21 @@ pub struct ArchiveStats {
     pub read_bytes: u64,
     /// Independently hashed chunks used to supply canonical source regions.
     pub chunks: u64,
+    /// Successful bounded encoded-data range reads, excluding archive-open metadata I/O.
+    pub range_reads: u64,
+    /// Encoded-data cursor repositioning operations, excluding archive-open metadata seeks.
+    pub range_seeks: u64,
+}
+impl ArchiveStats {
+    /// Return saturating work completed after an earlier cumulative observation.
+    pub const fn since(self, earlier: Self) -> Self {
+        Self {
+            read_bytes: self.read_bytes.saturating_sub(earlier.read_bytes),
+            chunks: self.chunks.saturating_sub(earlier.chunks),
+            range_reads: self.range_reads.saturating_sub(earlier.range_reads),
+            range_seeks: self.range_seeks.saturating_sub(earlier.range_seeks),
+        }
+    }
 }
 /// One immutable stream with bounded charged conversion tables and chunk workspace.
 /// Cache adapters retain their entry pin inside `R`; the DAG owns decoded tile reuse.
@@ -135,6 +151,7 @@ impl<R: Read + Seek> RasterArchive<R> {
                 return Err(ImportError::Invalid("Image source seek reached another offset"));
             }
             self.position = Some(position);
+            self.stats.range_seeks = self.stats.range_seeks.saturating_add(1);
         }
         let end = offset
             .checked_add(length as u64)
@@ -142,6 +159,7 @@ impl<R: Read + Seek> RasterArchive<R> {
         self.position = None;
         cache_read(self.reader.read_exact(&mut self.encoded.data[..length]))?;
         self.position = Some(end);
+        self.stats.range_reads = self.stats.range_reads.saturating_add(1);
         Ok(())
     }
     fn payload(&self) -> &[u8] {

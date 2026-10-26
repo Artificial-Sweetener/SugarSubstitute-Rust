@@ -50,6 +50,7 @@ fn first_image_latency_requires_matching_ack_and_is_recorded_only_once()
     session.cpu_pending = Some(first);
     let coverage = BackingCoverage::new(source_view, [0; 2])?;
     session.pending_cpu_evidence = Some(DisplayEvidence {
+        tier: BackingTier::Detail,
         target: first,
         source,
         view: output_view,
@@ -71,6 +72,7 @@ fn first_image_latency_requires_matching_ack_and_is_recorded_only_once()
     let first_projection = session.cpu_projection.replace(products.second_projection);
     session.cpu_pending = Some(second);
     session.pending_cpu_evidence = Some(DisplayEvidence {
+        tier: BackingTier::Detail,
         target: second,
         source,
         view: output_view,

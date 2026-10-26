@@ -4,6 +4,19 @@
 use std::{error::Error, fmt};
 use sugarsubstitute_contracts::execution::MemoryClaimError;
 
+/// Preserve original execution controls when projecting cancellation into image-domain errors.
+pub(crate) fn check(
+    context: &sugarsubstitute_contracts::execution::JobContext,
+) -> Result<(), ImageError> {
+    if context.cancellation_requested() {
+        return Err(ImageError::Cancelled);
+    }
+    if context.deadline().is_some_and(|deadline| context.now() >= deadline) {
+        return Err(ImageError::Deadline);
+    }
+    Ok(())
+}
+
 /// Reject invalid graphs, unavailable resources or unfinished image requests.
 #[derive(Debug)]
 pub enum ImageError {

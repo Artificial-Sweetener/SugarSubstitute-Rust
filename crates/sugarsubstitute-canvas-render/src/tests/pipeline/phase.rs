@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compare repaired pixels with full graph reconstruction after exact integer moves at fractional zoom.
 use super::*;
+use sugarsubstitute_canvas::ViewProjection;
 use sugarsubstitute_image_ops::{Filter, Reconstruction};
 
 #[test]
@@ -185,6 +186,72 @@ fn nearest_pan_preserves_the_source_pixel_where_offset_rounding_would_choose_its
             expected_source_one
         );
         assert_eq!(surface.pixels(), full.pixels());
+        Ok(())
+    })
+}
+
+#[test]
+fn fractional_pan_projection_cannot_replace_a_fresh_canonical_sampling_grid() -> harness::TestResult
+{
+    execute(|context| {
+        let extent = Extent::new(8, 4)?;
+        let snapshot = image_document(extent, context)?.snapshot();
+        let surface_extent = Extent::new(32, 16)?;
+        let mut source_view = Viewport::new(surface_extent)?;
+        source_view.zoom_at(3.5, [0.0; 2])?;
+        let reconstruction = Reconstruction::Finished(Filter::Nearest);
+        let mut renderer = CpuRenderer::new(AlternatingSource, 64, context.memory())?;
+        let source = CpuSurface::from_prepared(renderer.prepare(
+            RenderRequest {
+                document: &snapshot,
+                view: source_view,
+                reconstruction,
+                matte: black()?,
+                target: stamp(1)?,
+                base: None,
+                damage: DamagePlan::full(surface_extent),
+            },
+            context,
+        )?)?;
+
+        let mut target_view = source_view;
+        target_view.pan_by([0.5, 0.0])?;
+        assert!(!source_view.shares_sampling_grid(target_view));
+        let projected = ProjectionBuffer::new(surface_extent, context.memory(), context)?.project(
+            stamp(2)?,
+            &source,
+            ViewProjection::new(source_view, target_view)?,
+            black()?,
+            context,
+        )?;
+        let row = 1_usize;
+        let column = 3_usize;
+        let index = row * surface_extent.width() as usize + column;
+        assert_eq!(projected.pixels()[index], 0xff0000ff);
+
+        let target = CpuSurface::from_prepared(renderer.prepare(
+            RenderRequest {
+                document: &snapshot,
+                view: target_view,
+                reconstruction,
+                matte: black()?,
+                target: stamp(3)?,
+                base: None,
+                damage: DamagePlan::full(surface_extent),
+            },
+            context,
+        )?)?;
+        assert_eq!(target.pixels()[index], 0xffff0000);
+        assert_ne!(projected.pixels()[index], target.pixels()[index]);
+
+        let identity = ProjectionBuffer::new(surface_extent, context.memory(), context)?.project(
+            stamp(4)?,
+            &target,
+            ViewProjection::new(target_view, target_view)?,
+            black()?,
+            context,
+        )?;
+        assert_eq!(identity.pixels(), target.pixels());
         Ok(())
     })
 }

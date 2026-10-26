@@ -27,6 +27,7 @@ pub struct CpuPreparation {
     output: NodeId,
     context: JobContext,
     pending: Option<Preparation>,
+    batch_remaining: usize,
 }
 impl<S: RasterSource> CpuRenderer<S> {
     /// Prepare canonical display conversion and retain the application's source/memory boundary.
@@ -43,6 +44,11 @@ impl<S: RasterSource> CpuRenderer<S> {
     /// Cumulative actual graph work, excluding inexpensive device-pixel blits.
     pub fn stats(&self) -> EvaluationStats {
         self.evaluator.stats()
+    }
+    /// Release every reconstructible graph tile after preparation is terminal or abandoned.
+    /// Published updates and surfaces retain their own admitted allocations and remain valid.
+    pub fn clear_graph_tiles(&mut self) {
+        self.evaluator.clear_tiles();
     }
     /// Release one unpinned reconstructible DAG tile for another retained presentation allocation.
     /// Call on the preparation worker; source, document and published frame custody stay intact.
@@ -61,6 +67,7 @@ impl<S: RasterSource> CpuRenderer<S> {
         output: Extent,
         context: &JobContext,
     ) -> Result<ProjectionBuffers, RenderError> {
+        self.evaluator.release_sparse_batch();
         let first = self.projection_buffer(output, context)?;
         let second = self.projection_buffer(output, context)?;
         Ok(ProjectionBuffers::new(first, second))
@@ -92,6 +99,7 @@ impl<S: RasterSource> CpuRenderer<S> {
         request: RenderRequest<'_>,
         context: &JobContext,
     ) -> Result<CpuPreparation, RenderError> {
+        self.evaluator.release_sparse_batch();
         check(context)?;
         let RenderRequest { document, view, reconstruction, matte, target, base, damage } = request;
         if damage.dirty().surface() != view.surface() {
@@ -102,9 +110,11 @@ impl<S: RasterSource> CpuRenderer<S> {
         let (graph, output) = compiled.into_parts();
         let pending = Some(Preparation::new(update, context.memory())?);
         self.evaluator.replace_graph(graph);
-        Ok(CpuPreparation { output, pending, context: context.clone() })
+        Ok(CpuPreparation { output, pending, context: context.clone(), batch_remaining: 0 })
     }
     /// Evaluate at most one aligned viewport tile and return only a complete immutable update.
+    /// A bounded same-row group may stage its mandatory sparse source leaf before that tile;
+    /// composition and publication remain tile-local and demand-driven.
     /// `None` asks the caller to yield within the same original admitted job. Its original
     /// cancellation, deadline and memory custody remain authoritative. Tile dependencies use the shared DAG's bounded region
     /// rules and row-level cancellation checks; a cold pyramid dependency may require many tiles.
@@ -124,14 +134,55 @@ impl<S: RasterSource> CpuRenderer<S> {
         {
             return Err(RenderError::Invalid("Canvas preparation belongs to another job"));
         }
+        if preparation.pending.is_none() {
+            return Err(RenderError::Invalid("Canvas preparation already completed"));
+        }
         self.evaluator.graph().extent(preparation.output)?;
+        if preparation.batch_remaining == 0 {
+            let maximum =
+                match self.evaluator.sparse_region_batch_limit(preparation.output, context) {
+                    Ok(maximum) => maximum,
+                    Err(cause) => {
+                        preparation
+                            .pending
+                            .as_mut()
+                            .ok_or(RenderError::Invalid("Canvas preparation already completed"))?
+                            .fail();
+                        self.evaluator.release_sparse_batch();
+                        return Err(cause.into());
+                    }
+                };
+            let siblings = preparation
+                .pending
+                .as_mut()
+                .ok_or(RenderError::Invalid("Canvas preparation already completed"))?
+                .sibling_regions(maximum);
+            if let Some(siblings) = siblings {
+                let length = siblings.len();
+                let outcome = self.evaluator.prepare_sparse_regions(
+                    preparation.output,
+                    siblings.as_slice(),
+                    context,
+                );
+                if let Err(cause) = outcome {
+                    preparation
+                        .pending
+                        .as_mut()
+                        .ok_or(RenderError::Invalid("Canvas preparation already completed"))?
+                        .fail();
+                    self.evaluator.release_sparse_batch();
+                    return Err(cause.into());
+                }
+                preparation.batch_remaining = length;
+            }
+        }
         let pending = preparation
             .pending
             .as_mut()
             .ok_or(RenderError::Invalid("Canvas preparation already completed"))?;
         let evaluator = &mut self.evaluator;
         let encoder = &self.encoder;
-        let complete = pending.step(|region, patch, pixels| {
+        let outcome = pending.step(|region, patch, pixels| {
             let tile = evaluator.region(preparation.output, region, context)?;
             for y in region.y()..region.bottom() {
                 for x in region.x()..region.right() {
@@ -145,7 +196,19 @@ impl<S: RasterSource> CpuRenderer<S> {
                 }
             }
             Ok(())
-        })?;
+        });
+        let complete = match outcome {
+            Ok(complete) => complete,
+            Err(cause) => {
+                preparation.batch_remaining = 0;
+                self.evaluator.release_sparse_batch();
+                return Err(cause);
+            }
+        };
+        preparation.batch_remaining = preparation.batch_remaining.saturating_sub(1);
+        if preparation.batch_remaining == 0 {
+            self.evaluator.release_sparse_batch();
+        }
         if complete {
             let pending = preparation
                 .pending

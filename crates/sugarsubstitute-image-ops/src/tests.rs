@@ -5,13 +5,16 @@ use super::*;
 use harness::{TestResult, run};
 use std::sync::Arc;
 use sugarsubstitute_contracts::execution::JobContext;
+mod display_sampling;
 mod harness;
 mod phase;
 mod preview;
+mod raster_source;
 mod reference;
 mod retention;
 mod reuse;
 mod sampling;
+mod sparse_plan;
 
 const MEMORY: u64 = 64 * 1024 * 1024;
 const ASSET: AssetId = AssetId([7; 32]);

@@ -151,6 +151,13 @@ impl Session {
                                     .crop(self.tools.navigation().viewport(), snapshot.extent())
                                     .is_ok_and(|crop| crop.is_some()))
                     });
+                retain_first_fallback_io(
+                    &mut self.first_fallback_preparation_io,
+                    current,
+                    packet.tier,
+                    packet.reconstruction,
+                    packet.source_io,
+                );
                 if !current {
                     self.retire(Retired { _packet: Some(packet), ..Default::default() })?;
                     return Ok(());
@@ -281,6 +288,19 @@ impl Session {
             }
         }
         Ok(())
+    }
+}
+/// Retain only the first completed, current-source fallback preview preparation measurement.
+pub(super) fn retain_first_fallback_io(
+    retained: &mut Option<ArchiveStats>,
+    current: bool,
+    tier: BackingTier,
+    reconstruction: Reconstruction,
+    source_io: Option<ArchiveStats>,
+) {
+    if current && retained.is_none() && tier == BackingTier::Fallback && reconstruction.is_preview()
+    {
+        *retained = source_io;
     }
 }
 /// Match the typed cache-integrity cause without interpreting error text as a recovery command.

@@ -16,6 +16,7 @@ use sugarsubstitute_canvas::{
 };
 use sugarsubstitute_canvas_render::{CpuRenderer, CpuSurface, GpuFrame};
 use sugarsubstitute_contracts::execution::JobContext;
+use sugarsubstitute_image_io::ArchiveStats;
 use sugarsubstitute_image_ops::{EvaluationStats, Pixel, Reconstruction, Region};
 use sugarsubstitute_supervision::{ArtifactPublication, write_artifact};
 
@@ -72,8 +73,16 @@ pub(super) struct Input {
     pub(super) canonical_gpu_snapshot_readback: bool,
     pub(super) native_gpu_display_verification_readback: bool,
     pub(super) coverage_acceptances: u64,
+    /// Native-accepted displays backed by the bounded whole-document fallback.
+    pub(super) fallback_projection_acceptances: u64,
+    /// Whether the phase-six zoom-out accepted fallback output before settling.
+    pub(super) zoom_out_fallback_exercised: bool,
+    /// Archive work used by the first completed current-source fallback preview preparation.
+    pub(super) first_fallback_preparation_io: Option<ArchiveStats>,
     /// First source intent through native queue acceptance; includes import/load, not scanout.
     pub(super) first_image_queue_latency: Option<std::time::Duration>,
+    /// Whether startup selected the proof source through the ordinary lifetime port.
+    pub(super) source_selection_port_exercised: bool,
 }
 #[derive(Serialize)]
 struct Metrics<'a> {
@@ -92,14 +101,35 @@ struct Metrics<'a> {
     motion_and_fit_recovery_presentations: Option<PresentationEvidence>,
     initial_settle_presentations: Option<PresentationEvidence>,
     coverage_validated_presentations: u64,
+    fallback_projection_acceptances: u64,
+    zoom_out_fallback_exercised: bool,
+    initial_fallback_preparation_io: Option<SourceIoEvidence>,
     /// First source intent through native queue acceptance; excludes display scanout.
     initial_image_input_to_native_queue_nanoseconds: Option<u64>,
+    source_selection_port_exercised: bool,
 }
 #[derive(Serialize)]
 struct AdapterEvidence<'a> {
     name: &'a str,
     vendor: u32,
     device: u32,
+}
+#[derive(Serialize)]
+struct SourceIoEvidence {
+    read_bytes: u64,
+    chunks: u64,
+    range_reads: u64,
+    range_seeks: u64,
+}
+impl From<ArchiveStats> for SourceIoEvidence {
+    fn from(stats: ArchiveStats) -> Self {
+        Self {
+            read_bytes: stats.read_bytes,
+            chunks: stats.chunks,
+            range_reads: stats.range_reads,
+            range_seeks: stats.range_seeks,
+        }
+    }
 }
 /// Reconstruct through the same DAG with no retained-frame repair, compare every display pixel,
 /// and stream PNG/JSON on the original admitted storage worker. Originals are never modified.
@@ -122,8 +152,17 @@ pub(super) fn publish(input: Input, context: &JobContext) -> Result<(), WorkErro
         canonical_gpu_snapshot_readback,
         native_gpu_display_verification_readback,
         coverage_acceptances,
+        fallback_projection_acceptances,
+        zoom_out_fallback_exercised,
+        first_fallback_preparation_io,
         first_image_queue_latency,
+        source_selection_port_exercised,
     } = input;
+    if !zoom_out_fallback_exercised || fallback_projection_acceptances == 0 {
+        return Err(WorkError::invalid(
+            "Proof did not accept bounded fallback output during zoom-out",
+        ));
+    }
     resources.release_graph_tiles()?;
     let target =
         backing.target().ok_or_else(|| WorkError::invalid("Proof has no presented frame"))?;
@@ -200,7 +239,7 @@ pub(super) fn publish(input: Input, context: &JobContext) -> Result<(), WorkErro
     .map_err(WorkError::new)?;
     let count = samples.iter().take_while(|sample| sample.is_some()).count();
     let metrics = Metrics {
-        schema_version: 3,
+        schema_version: 5,
         backend: adapter.as_ref().map_or("cpu", |adapter| match adapter.backend {
             sugarsubstitute_image_gpu::Backend::Vulkan => "vulkan",
             sugarsubstitute_image_gpu::Backend::Metal => "metal",
@@ -226,10 +265,14 @@ pub(super) fn publish(input: Input, context: &JobContext) -> Result<(), WorkErro
         motion_and_fit_recovery_presentations: motion.map(PresentationEvidence::new),
         initial_settle_presentations: warmup.map(PresentationEvidence::new),
         coverage_validated_presentations: coverage_acceptances,
+        fallback_projection_acceptances,
+        zoom_out_fallback_exercised,
+        initial_fallback_preparation_io: first_fallback_preparation_io.map(Into::into),
         initial_image_input_to_native_queue_nanoseconds: first_image_queue_latency
             .map(|latency| u64::try_from(latency.as_nanos()))
             .transpose()
             .map_err(WorkError::new)?,
+        source_selection_port_exercised,
     };
     write_artifact(
         &paths.metrics,

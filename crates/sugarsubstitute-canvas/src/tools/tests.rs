@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Tool routing, temporary ownership and atomic gesture publication.
 use super::*;
-use crate::{Layer, LayerContent, LayerId, tests::harness};
+use crate::{Layer, LayerContent, LayerId, ZoomMode, tests::harness};
 use sugarsubstitute_image_ops::Extent;
 
 #[test]
@@ -199,6 +199,51 @@ fn rejected_activation_preserves_capture_and_all_pan_buttons_release_cleanly() -
             now,
         )?;
         assert!(!tools.navigation().captured());
+        Ok(())
+    })
+}
+
+#[test]
+fn tao_double_click_order_preserves_fit_roundtrip_after_release_and_pointer_motion()
+-> harness::TestResult {
+    execute(|_| {
+        let mut tools = manager()?;
+        let anchor = [27.0, 61.0];
+        let moved = [43.0, 38.0];
+        let initial_fit = tools.navigation().viewport();
+        let anchored_document = initial_fit.document_at(anchor)?;
+        let press = ToolInput::Button { button: ToolButton::Primary, pressed: true };
+        let release = ToolInput::Button { button: ToolButton::Primary, pressed: false };
+        let ordered_double_click = |tools: &mut ToolManager, first: Duration, second: Duration| {
+            tools.input(press, None, first)?;
+            tools.input(release, None, first)?;
+            tools.input(press, None, second)?;
+            tools.input(ToolInput::DoubleClick(anchor), None, second)?;
+            tools.input(release, None, second)?;
+            tools.input(ToolInput::Pointer(moved), None, second)
+        };
+
+        ordered_double_click(&mut tools, Duration::ZERO, Duration::from_millis(10))?;
+        let actual_size = tools.navigation().target_viewport();
+        assert_eq!(tools.navigation().zoom_mode(), ZoomMode::OneToOne);
+        assert_eq!(actual_size.zoom(), 1.0);
+        assert_eq!(actual_size.document_at(anchor)?, anchored_document);
+        assert!(!tools.navigation().captured());
+        assert!(tools.navigation().interacting());
+        tools.advance(Duration::from_millis(91))?;
+        assert_eq!(tools.navigation().viewport(), actual_size);
+        assert_eq!(tools.navigation().zoom_mode(), ZoomMode::OneToOne);
+        assert!(!tools.navigation().interacting());
+
+        ordered_double_click(&mut tools, Duration::from_millis(100), Duration::from_millis(110))?;
+        assert_eq!(tools.navigation().zoom_mode(), ZoomMode::Fit);
+        assert_eq!(tools.navigation().target_viewport(), initial_fit);
+        assert!(!tools.navigation().captured());
+        assert!(tools.navigation().interacting());
+        tools.advance(Duration::from_millis(191))?;
+        assert_eq!(tools.navigation().viewport(), initial_fit);
+        assert_eq!(tools.navigation().zoom_mode(), ZoomMode::Fit);
+        assert!(!tools.navigation().interacting());
         Ok(())
     })
 }

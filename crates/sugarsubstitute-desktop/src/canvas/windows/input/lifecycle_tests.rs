@@ -9,8 +9,8 @@ use ::windows::{
             Input::KeyboardAndMouse::{GetCapture, ReleaseCapture, SetCapture},
             WindowsAndMessaging::{
                 CreateWindowExW, DestroyWindow, GetCursor, GetIconInfo, HICON, ICONINFO,
-                SendMessageW, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CAPTURECHANGED, WM_ENTERSIZEMOVE,
-                WM_EXITSIZEMOVE,
+                SendMessageW, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CANCELMODE, WM_CAPTURECHANGED,
+                WM_ENTERSIZEMOVE, WM_EXITSIZEMOVE, WM_KILLFOCUS, WM_LBUTTONDOWN,
             },
         },
     },
@@ -143,6 +143,90 @@ fn canvas_capture_never_releases_or_adopts_native_move_capture() -> Result<(), B
     assert!(input.state.capture(handle, false)?);
     assert!(captured().is_invalid());
     assert!(!input.state.capture_owned.get());
+    window.destroy()?;
+    input.retire()?;
+    Ok(())
+}
+
+#[test]
+fn owned_button_release_preserves_the_first_click_for_native_double_click_pairing()
+-> Result<(), Box<dyn Error>> {
+    let mut window = Window::new()?;
+    let handle = window.handle()?;
+    let double_clicks = Rc::new(Cell::new(0));
+    let observed = double_clicks.clone();
+    let input = NativeInput::new(handle, move |event| {
+        if matches!(event, NativeEvent::DoubleClick(_)) {
+            observed.set(observed.get() + 1);
+        }
+        Ok(())
+    })?;
+    let point = LPARAM((11_u32 << 16 | 7) as isize);
+    // SAFETY: Messages and capture target only this same-thread hidden fixture.
+    unsafe {
+        SendMessageW(handle, WM_LBUTTONDOWN, None, Some(point));
+    }
+    assert!(input.state.click.get().is_some());
+    assert!(input.state.capture(handle, true)?);
+    assert!(input.state.capture(handle, false)?);
+    assert!(input.state.click.get().is_some());
+    // SAFETY: The second down is synchronous and cannot activate the hidden styleless peer.
+    unsafe {
+        SendMessageW(handle, WM_LBUTTONDOWN, None, Some(point));
+    }
+    assert_eq!(double_clicks.get(), 1);
+    assert!(input.state.click.get().is_none());
+    window.destroy()?;
+    input.retire()?;
+    Ok(())
+}
+
+#[test]
+fn external_capture_focus_cancel_and_native_move_clear_click_pairing() -> Result<(), Box<dyn Error>>
+{
+    let mut window = Window::new()?;
+    let handle = window.handle()?;
+    let losses = Rc::new(Cell::new(0));
+    let observed = losses.clone();
+    let input = NativeInput::new(handle, move |event| {
+        if matches!(event, NativeEvent::CaptureLost) {
+            observed.set(observed.get() + 1);
+        }
+        Ok(())
+    })?;
+    let click = Click { time: 1, point: [7, 11] };
+    input.state.click.set(Some(click));
+    input.state.capture_owned.set(true);
+    // SAFETY: Deliver only cancellation notifications to this retained hidden fixture.
+    unsafe {
+        SendMessageW(handle, WM_CAPTURECHANGED, None, Some(LPARAM(0)));
+    }
+    assert!(input.state.click.get().is_none());
+    assert_eq!(losses.get(), 1);
+
+    input.state.click.set(Some(click));
+    input.state.capture_owned.set(true);
+    input.state.releasing.set(true);
+    // SAFETY: A distinct nonzero gaining owner models capture theft during button-up reentry.
+    unsafe {
+        SendMessageW(handle, WM_CAPTURECHANGED, None, Some(LPARAM(1)));
+    }
+    input.state.releasing.set(false);
+    assert!(input.state.click.get().is_none());
+    assert_eq!(losses.get(), 2);
+
+    for message in [WM_CANCELMODE, WM_KILLFOCUS, WM_ENTERSIZEMOVE] {
+        input.state.click.set(Some(click));
+        // SAFETY: Each synchronous message targets only the private hidden peer.
+        unsafe {
+            SendMessageW(handle, message, None, None);
+        }
+        assert!(input.state.click.get().is_none());
+    }
+    // SAFETY: Balance the synthetic native move lifecycle before destroying the peer.
+    unsafe {
+        SendMessageW(handle, WM_EXITSIZEMOVE, None, None);
+    }
     window.destroy()?;
     input.retire()?;
     Ok(())

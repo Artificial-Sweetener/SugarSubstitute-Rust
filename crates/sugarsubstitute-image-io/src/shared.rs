@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Share immutable source identity while keeping mutable stream cursors on admitted workers.
-use crate::{ImportError, RasterArchive, RasterDescriptor};
+use crate::{ArchiveStats, ImportError, RasterArchive, RasterDescriptor};
 use std::{
     io::{Read, Seek},
     sync::{Arc, Mutex},
 };
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim, MemoryLease};
-use sugarsubstitute_image_ops::{AssetId, ImageError, Pixel, RasterSource, Region};
+use sugarsubstitute_image_ops::{
+    AssetId, ImageError, Pixel, RasterSampleRequest, RasterSource, Region,
+};
 
 struct Reader<R> {
     archive: Mutex<RasterArchive<R>>,
@@ -36,6 +38,19 @@ impl<R: Read + Seek> SharedRaster<R> {
     pub const fn descriptor(&self) -> RasterDescriptor {
         self.descriptor
     }
+    /// Cumulative authenticated source work completed by the shared archive reader.
+    /// Call only from an admitted worker: observation waits for any active read and must not block
+    /// a native UI thread.
+    /// # Errors
+    /// Reports failure to recover the shared reader lock without replacing its original state.
+    pub fn stats(&self) -> Result<ArchiveStats, ImageError> {
+        let source = self
+            .reader
+            .archive
+            .lock()
+            .map_err(|_| ImageError::Invalid("Shared raster reader failed"))?;
+        Ok(source.stats())
+    }
 }
 impl<R> Clone for SharedRaster<R> {
     fn clone(&self) -> Self {
@@ -43,6 +58,23 @@ impl<R> Clone for SharedRaster<R> {
     }
 }
 impl<R: Read + Seek> RasterSource for SharedRaster<R> {
+    fn read_sample_batch(
+        &mut self,
+        asset: AssetId,
+        requests: &mut [RasterSampleRequest<'_>],
+        context: &JobContext,
+    ) -> Result<(), ImageError> {
+        if context.cancellation_requested() {
+            return Err(ImageError::Cancelled);
+        }
+        let mut source = self
+            .reader
+            .archive
+            .lock()
+            .map_err(|_| ImageError::Invalid("Shared raster reader failed"))?;
+        source.read_sample_batch(asset, requests, context)
+    }
+
     fn read_samples(
         &mut self,
         asset: AssetId,

@@ -202,15 +202,24 @@ impl Viewport {
         self.translation = translation;
         Ok(())
     }
+    /// Whether both cameras use the same exact physical sampling grid.
+    ///
+    /// The bit-identical untranslated stored origin and zoom define sampling coefficients.
+    /// Surface dimensions and integer pixel translations do not change that grid. A camera that
+    /// folds an integer translation into a floating-point origin is not considered equivalent:
+    /// despite an identical geometric projection, recomputing samples from that origin can change
+    /// rounding at an analytic pixel boundary.
+    pub fn shares_sampling_grid(self, other: Self) -> bool {
+        self.zoom.to_bits() == other.zoom.to_bits()
+            && self.origin[0].to_bits() == other.origin[0].to_bits()
+            && self.origin[1].to_bits() == other.origin[1].to_bits()
+    }
     /// Plan reuse against the actually presented camera when document content is unchanged.
     /// Exact integer translation is required; fractional translation never blits stale sample phases.
     /// # Errors
     /// Preserves checked region-construction failures before presenting a repair plan.
     pub fn repair_from(self, previous: Self) -> Result<DamagePlan, CanvasError> {
-        if self.surface != previous.surface
-            || self.zoom != previous.zoom
-            || self.origin != previous.origin
-        {
+        if self.surface != previous.surface || !self.shares_sampling_grid(previous) {
             return Ok(DamagePlan::full(self.surface));
         }
         let x = i64::from(self.translation[0]) - i64::from(previous.translation[0]);

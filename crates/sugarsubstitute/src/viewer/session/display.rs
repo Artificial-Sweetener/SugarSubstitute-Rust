@@ -7,6 +7,7 @@ use sugarsubstitute_canvas::ViewProjection;
 /// Exact retained mapping and authored identity committed only by native acknowledgement.
 #[derive(Clone, Copy)]
 pub(super) struct DisplayEvidence {
+    pub(super) tier: BackingTier,
     pub(super) target: FrameStamp,
     pub(super) source: FrameStamp,
     pub(super) view: Viewport,
@@ -149,6 +150,7 @@ impl Session {
             work::DrawSource::Cpu { surface, storage }
         };
         let mut input = Some(work::DrawInput {
+            tier: shown.tier,
             resources,
             source,
             target,
@@ -224,6 +226,7 @@ impl Session {
                 }
                 self.native_verified = drawing.verified;
                 let evidence = DisplayEvidence {
+                    tier: drawing.tier,
                     target,
                     source: drawing.source,
                     view: drawing.view,

@@ -43,7 +43,12 @@ pub(super) fn prepare(
             context.memory(),
             |region, pixels| {
                 for tile in region.tiles() {
-                    let source = frame.image().read_region(tile, context)?;
+                    let source = loop {
+                        match frame.image().read_region(tile, context) {
+                            Err(cause) if cause.is_memory_pressure() && renderer.evict_one() => {}
+                            outcome => break outcome?,
+                        }
+                    };
                     for row in 0..tile.height() as usize {
                         let from = row * tile.width() as usize;
                         let to = (tile.y() as usize - region.y() as usize + row)
@@ -71,5 +76,6 @@ pub(super) fn prepare(
         elapsed: started.elapsed(),
         stats: renderer.stats(),
         source_revision: input.source_revision,
+        source_io: input.source_io()?,
     })
 }

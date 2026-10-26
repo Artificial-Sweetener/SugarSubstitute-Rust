@@ -977,7 +977,7 @@ rationale = "Isolated native qualification reports observed GPU display, repair 
 [[records]]
 path = "crates/sugarsubstitute-image-gpu/examples/adapter_qualification/display.rs"
 owner = "sugarsubstitute-image-gpu"
-source_sha256 = "sha256:2b978b2bd4776181c15e35a5e1e99451864ac700c627d881f27b35b9c773ca91"
+source_sha256 = "sha256:7f4c47de69c0f6fa1b784f34bcd69a87328e444ecf1fa9bbc42b102f67274040"
 disposition = "fixture"
 rationale = "Isolated native qualification reports observed GPU display, repair and cancellation outcomes through the production execution boundary; runtime diagnostics use structured logging."
 

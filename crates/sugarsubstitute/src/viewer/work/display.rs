@@ -2,9 +2,56 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Prepare disposable display from immutable canonical pixels independently of DAG evaluation.
 use super::*;
+use std::error::Error;
 use std::sync::TryLockError;
 use sugarsubstitute_canvas::ViewProjection;
 use sugarsubstitute_canvas_render::{CpuProjection, GpuFrame, ProjectionBuffer, ProjectionSamples};
+use sugarsubstitute_image_gpu::{DisplayReadbackWorkspace, GpuError};
+
+enum ReadbackOutcome<T> {
+    Complete(T),
+    Deferred,
+}
+
+enum CacheReclaim {
+    Progress,
+    Busy,
+    Exhausted,
+}
+
+struct VerificationWorkspace {
+    native: DisplayReadbackWorkspace,
+    source: Option<DisplayReadbackWorkspace>,
+}
+
+fn retry_after_cache_reclaim<T, E>(
+    mut operation: impl FnMut() -> Result<T, E>,
+    mut reclaim: impl FnMut() -> Result<CacheReclaim, WorkError>,
+    retryable: impl Fn(&E) -> bool,
+) -> Result<ReadbackOutcome<T>, WorkError>
+where
+    E: Error + Send + Sync + 'static,
+    WorkError: From<E>,
+{
+    loop {
+        match operation() {
+            Ok(value) => return Ok(ReadbackOutcome::Complete(value)),
+            Err(cause) if retryable(&cause) => match reclaim()? {
+                CacheReclaim::Progress => {}
+                CacheReclaim::Busy => return Ok(ReadbackOutcome::Deferred),
+                CacheReclaim::Exhausted => return Err(cause.into()),
+            },
+            Err(cause) => return Err(cause.into()),
+        }
+    }
+}
+
+fn retry_gpu_readback<T>(
+    operation: impl FnMut() -> Result<T, GpuError>,
+    reclaim: impl FnMut() -> Result<CacheReclaim, WorkError>,
+) -> Result<ReadbackOutcome<T>, WorkError> {
+    retry_after_cache_reclaim(operation, reclaim, GpuError::is_memory_pressure)
+}
 
 /// Immutable source pixels and exclusive software storage or a selected-device image.
 pub(in crate::viewer) enum DrawSource {
@@ -13,6 +60,7 @@ pub(in crate::viewer) enum DrawSource {
 }
 /// One immutable display request, independent of mutable image-operation evaluation.
 pub(in crate::viewer) struct DrawInput {
+    pub(in crate::viewer) tier: BackingTier,
     pub(in crate::viewer) resources: Resources,
     pub(in crate::viewer) source: DrawSource,
     pub(in crate::viewer) target: FrameStamp,
@@ -28,6 +76,7 @@ pub(in crate::viewer) enum DrawPixels {
 }
 /// Actual source generation, output camera and authored identity represented by one display.
 pub(in crate::viewer) struct Draw {
+    pub(in crate::viewer) tier: BackingTier,
     pub(in crate::viewer) target: FrameStamp,
     pub(in crate::viewer) source: FrameStamp,
     pub(in crate::viewer) view: Viewport,
@@ -68,6 +117,7 @@ impl CpuTask<Draw, WorkError> for DrawInput {
             }
         };
         Ok(CpuStep::Complete(Draw {
+            tier: self.tier,
             target: self.target,
             source,
             view: self.view.target(),
@@ -95,6 +145,29 @@ fn prepare_gpu(
         None
     };
     let matte = Pixel::linear(0.018, 0.018, 0.018, 1.0)?;
+    let mut verification = if resources.verify_native {
+        let native = match retry_gpu_readback(
+            || frame.image().readback_workspace(context),
+            || reclaim_gpu_cache(resources),
+        )? {
+            ReadbackOutcome::Complete(workspace) => workspace,
+            ReadbackOutcome::Deferred => return Ok(None),
+        };
+        let source = if samples.is_none() {
+            match retry_gpu_readback(
+                || frame.image().readback_workspace(context),
+                || reclaim_gpu_cache(resources),
+            )? {
+                ReadbackOutcome::Complete(workspace) => Some(workspace),
+                ReadbackOutcome::Deferred => return Ok(None),
+            }
+        } else {
+            None
+        };
+        Some(VerificationWorkspace { native, source })
+    } else {
+        None
+    };
     let mut window = resources
         .window
         .lock()
@@ -108,33 +181,37 @@ fn prepare_gpu(
                 None => window.prepare(frame.image(), context),
             };
             match prepared {
-                Err(cause) if cause.is_memory_pressure() => {
-                    let mut engine = match resources.engine.try_lock() {
-                        Ok(engine) => engine,
-                        Err(TryLockError::WouldBlock) => break None,
-                        Err(TryLockError::Poisoned(_)) => {
-                            return Err(WorkError::invalid("Canvas preparation state failed"));
-                        }
-                    };
-                    let evicted = match engine.renderer.as_mut() {
-                        Some(Renderer::Gpu(renderer)) => renderer.evict_one(),
-                        _ => false,
-                    };
-                    if !evicted {
-                        return Err(cause.into());
-                    }
-                }
+                Err(cause) if cause.is_memory_pressure() => match reclaim_gpu_cache(resources)? {
+                    CacheReclaim::Progress => {}
+                    CacheReclaim::Busy => break None,
+                    CacheReclaim::Exhausted => return Err(cause.into()),
+                },
                 result => break result?,
             }
         },
         None => None,
     };
-    if resources.verify_native
+    if let Some(verification) = &mut verification
         && let Some(native) = &native
     {
-        verify_gpu(frame, native, reference, samples.as_ref(), matte, view, context)?;
+        verify_gpu(frame, native, reference, samples.as_ref(), matte, verification, context)?;
     }
     Ok(native)
+}
+
+fn reclaim_gpu_cache(resources: &Resources) -> Result<CacheReclaim, WorkError> {
+    let mut engine = match resources.engine.try_lock() {
+        Ok(engine) => engine,
+        Err(TryLockError::WouldBlock) => return Ok(CacheReclaim::Busy),
+        Err(TryLockError::Poisoned(_)) => {
+            return Err(WorkError::invalid("Canvas preparation state failed"));
+        }
+    };
+    let evicted = match engine.renderer.as_mut() {
+        Some(Renderer::Gpu(renderer)) => renderer.evict_one(),
+        _ => false,
+    };
+    Ok(if evicted { CacheReclaim::Progress } else { CacheReclaim::Exhausted })
 }
 
 /// Proof-only readback is independent of normal presentation timing and source evaluation.
@@ -144,7 +221,7 @@ fn verify_gpu(
     reference: Option<&CpuSurface>,
     samples: Option<&ProjectionSamples>,
     matte: Pixel,
-    view: ViewProjection,
+    workspace: &mut VerificationWorkspace,
     context: &JobContext,
 ) -> Result<(), WorkError> {
     if let Some(samples) = samples {
@@ -158,24 +235,15 @@ fn verify_gpu(
         }
         let rgba = sugarsubstitute_image_ops::SrgbEncoder::encode_constant(matte)?;
         let background = u32::from_be_bytes([255, rgba[0], rgba[1], rgba[2]]);
-        let stride = reference.extent().width() as usize;
-        for region in view.target().surface().region().tiles() {
-            let actual = native.read_region(region, context)?;
+        for region in samples.view().target().surface().region().tiles() {
+            let actual = native.read_region_into(region, &mut workspace.native, context)?;
             for y in region.y()..region.bottom() {
                 for x in region.x()..region.right() {
-                    let row = samples.rows()[y as usize];
-                    let column = samples.columns()[x as usize];
-                    let expected = if row == ProjectionSamples::UNCOVERED
-                        || column == ProjectionSamples::UNCOVERED
-                    {
-                        background
-                    } else {
-                        reference.pixels()[row as usize * stride + column as usize]
-                    };
+                    let expected = samples.sample_pixel(reference, x, y, background);
                     let index = ((y - region.y()) * region.width() + x - region.x()) as usize;
-                    if actual.pixels()[index] != expected {
+                    if actual[index] != expected {
                         return Err(WorkError::invalid(
-                            "Native GPU projection differs from canonical nearest sampling",
+                            "Native GPU projection differs from canonical display sampling",
                         ));
                     }
                 }
@@ -183,8 +251,12 @@ fn verify_gpu(
         }
     } else {
         for region in frame.image().extent().region().tiles() {
-            let source = frame.image().read_region(region, context)?;
-            if native.read_region(region, context)?.pixels() != source.pixels() {
+            let source_workspace = workspace.source.as_mut().ok_or_else(|| {
+                WorkError::invalid("Canonical GPU verification lacks preallocated readback storage")
+            })?;
+            let source = frame.image().read_region_into(region, source_workspace, context)?;
+            let actual = native.read_region_into(region, &mut workspace.native, context)?;
+            if actual != source {
                 return Err(WorkError::invalid(
                     "Native GPU presentation differs from its completed display image",
                 ));
@@ -193,3 +265,6 @@ fn verify_gpu(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;

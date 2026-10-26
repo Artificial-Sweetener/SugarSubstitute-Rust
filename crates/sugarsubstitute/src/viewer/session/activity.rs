@@ -5,6 +5,24 @@ use super::*;
 use sugarsubstitute_execution::OwnedInputError;
 
 impl Session {
+    /// Preview startup/resampling and phase-changing drags while preserving integer-pan repair.
+    pub(super) fn reconstruction(&self) -> Result<Reconstruction, Box<dyn Error>> {
+        if self.initial_preview
+            || self.tools.navigation().resampling()
+            || (self.tools.navigation().captured()
+                && self.presented.as_ref().is_some_and(|shown| {
+                    shown.reconstruction.is_preview()
+                        || (shown.tier == BackingTier::Detail
+                            && !shown.view.shares_sampling_grid(self.tools.navigation().viewport()))
+                }))
+        {
+            Ok(Reconstruction::Preview)
+        } else {
+            Ok(Reconstruction::finished_for_display_zoom(
+                self.tools.navigation().viewport().zoom(),
+            )?)
+        }
+    }
     /// Drain metadata and typed completions before submitting the latest application intent.
     pub(super) fn advance(&mut self) -> Result<(), Box<dyn Error>> {
         self.tools.advance(self.navigation_time())?;
@@ -210,6 +228,7 @@ impl Session {
             cpu: None,
             display_buffers: None,
             started: None,
+            source_stats_before: None,
         }) {
             Ok(job) => {
                 self.rendering = Some(Rendering {

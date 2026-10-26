@@ -57,5 +57,6 @@ pub(super) fn step(
         elapsed: started.elapsed(),
         stats: renderer.stats(),
         source_revision: input.source_revision,
+        source_io: input.source_io()?,
     }))
 }

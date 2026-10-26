@@ -37,20 +37,38 @@ impl ViewProjection {
     pub const fn offset(self) -> [f64; 2] {
         self.offset
     }
+    /// Continuous source pixel-corner position beneath an output column center.
+    pub fn column_position(self, output: u32) -> Option<f64> {
+        self.sample_position(
+            output,
+            self.target.surface().width(),
+            self.source.surface().width(),
+            0,
+        )
+    }
+    /// Continuous source pixel-corner position beneath an output row center.
+    pub fn row_position(self, output: u32) -> Option<f64> {
+        self.sample_position(
+            output,
+            self.target.surface().height(),
+            self.source.surface().height(),
+            1,
+        )
+    }
     /// Source column beneath an output pixel center, or uncovered/out-of-output coverage.
     pub fn column(self, output: u32) -> Option<u32> {
-        self.sample(output, self.target.surface().width(), self.source.surface().width(), 0)
+        self.column_position(output).map(|position| position.floor() as u32)
     }
     /// Source row beneath an output pixel center, or uncovered/out-of-output coverage.
     pub fn row(self, output: u32) -> Option<u32> {
-        self.sample(output, self.target.surface().height(), self.source.surface().height(), 1)
+        self.row_position(output).map(|position| position.floor() as u32)
     }
-    fn sample(self, output: u32, bound: u32, source: u32, axis: usize) -> Option<u32> {
+    fn sample_position(self, output: u32, bound: u32, source: u32, axis: usize) -> Option<f64> {
         if output >= bound {
             return None;
         }
         let position = (f64::from(output) + 0.5 - self.offset[axis]) / self.scale;
-        (position >= 0.0 && position < f64::from(source)).then(|| position.floor() as u32)
+        (position >= 0.0 && position < f64::from(source)).then_some(position)
     }
 }
 
@@ -71,9 +89,14 @@ mod tests {
         assert_eq!(projection.offset(), [13.0, -7.0]);
         for x in 0..31 {
             assert_eq!(projection.column(x), x.checked_sub(13));
+            assert_eq!(
+                projection.column_position(x),
+                x.checked_sub(13).map(|column| f64::from(column) + 0.5)
+            );
         }
         for y in 0..19 {
             assert_eq!(projection.row(y), (y + 7 < 19).then_some(y + 7));
+            assert_eq!(projection.row_position(y), (y + 7 < 19).then_some(f64::from(y) + 7.5));
         }
         Ok(())
     }

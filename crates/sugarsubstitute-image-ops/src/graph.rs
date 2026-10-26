@@ -7,6 +7,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease};
 
 mod samples;
+mod sparse;
+pub use sparse::SparseSourcePlan;
 
 static NEXT_GRAPH: AtomicU64 = AtomicU64::new(1);
 const MAX_NODES: usize = 4096;

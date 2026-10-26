@@ -5,6 +5,7 @@ use super::*;
 mod display;
 mod latency;
 mod refinement;
+mod source_io;
 use std::sync::atomic::{AtomicU64, Ordering};
 use sugarsubstitute_canvas::{ScrollPhase, ToolButton, ToolInput};
 use sugarsubstitute_desktop::canvas::{Input, Lifetime};
@@ -97,6 +98,37 @@ fn panning_keeps_finished_quality_and_focus_loss_ends_tool_capture() -> Result<(
         Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3)
     );
     assert!(!session.take_picker_request());
+    Ok(())
+}
+
+#[test]
+fn fractional_pan_previews_until_release_then_requests_phase_correct_finished_detail()
+-> Result<(), Box<dyn Error>> {
+    let (mut session, clock, _directory) = session()?;
+    session.input(Input::Tool(ToolInput::OneToOne))?;
+    clock.0.store(80_000_000, Ordering::SeqCst);
+    session.poll(Duration::ZERO)?;
+    let target = session.tools.navigation().viewport();
+    let retained = coverage::detail(target)?;
+    let finished = Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3);
+    session.presented = Some(Presented {
+        tier: BackingTier::Detail,
+        coverage: retained,
+        view: retained.viewport(),
+        reconstruction: finished,
+        document: (1, 1),
+        source_revision: 0,
+    });
+
+    session.input(Input::Tool(ToolInput::Pointer([20.0, 30.0])))?;
+    session.input(Input::Tool(ToolInput::Button { button: ToolButton::Primary, pressed: true }))?;
+    session.input(Input::Tool(ToolInput::Pointer([27.0, 19.0])))?;
+    assert_eq!(session.reconstruction()?, finished);
+    session.input(Input::Tool(ToolInput::Pointer([27.5, 19.25])))?;
+    assert_eq!(session.reconstruction()?, Reconstruction::Preview);
+    session
+        .input(Input::Tool(ToolInput::Button { button: ToolButton::Primary, pressed: false }))?;
+    assert_eq!(session.reconstruction()?, finished);
     Ok(())
 }
 

@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Evaluate the authoritative image DAG into bounded immutable GPU tiles.
 mod source;
+mod sparse;
 use crate::{
     GpuDevice, GpuError, GpuTile,
     batch::{Batch, Coverage, GpuWork},
@@ -62,6 +63,7 @@ impl<S: RasterSource> GpuEvaluator<S> {
     /// Replace document semantics while preserving references with identical structural content keys.
     /// Source IDs must remain bound to the same immutable original content across snapshots.
     pub fn replace_graph(&mut self, graph: Graph) {
+        self.cache.release_batch();
         self.graph = graph;
     }
     /// Cumulative work and current semantic tile retention, excluding outside owners.
@@ -74,6 +76,7 @@ impl<S: RasterSource> GpuEvaluator<S> {
     }
     /// Release evaluator references; outside GPU results retain their native allocation charges.
     pub fn clear_tiles(&mut self) {
+        self.cache.release_batch();
         self.cache.clear();
     }
     /// Remove one cache-only tile reference using the shared tile-retention policy.

@@ -22,9 +22,9 @@ use sugarsubstitute_contracts::execution::{
     CpuStep, CpuTask, JobContext, MemoryClaim, MemoryLease,
 };
 use sugarsubstitute_image_gpu::{GpuDevice, WindowFrame, WindowSurface};
-use sugarsubstitute_image_io::{CacheReuse, SharedRaster, import_png};
+use sugarsubstitute_image_io::{ArchiveStats, CacheReuse, SharedRaster, import_png};
 use sugarsubstitute_image_ops::{
-    AssetId, Extent, ImageError, Pixel, RasterSource, Reconstruction, Region,
+    AssetId, Extent, ImageError, Pixel, RasterSampleRequest, RasterSource, Reconstruction, Region,
 };
 use sugarsubstitute_supervision::cache::{CachePolicy, CacheReader, RuntimeCache};
 
@@ -68,6 +68,18 @@ impl Clone for Resources {
 /// Share only immutable source identity; region reads execute on the admitted preparation worker.
 pub(super) struct SourcePort(pub(super) Option<Source>);
 impl RasterSource for SourcePort {
+    fn read_sample_batch(
+        &mut self,
+        asset: AssetId,
+        requests: &mut [RasterSampleRequest<'_>],
+        context: &JobContext,
+    ) -> Result<(), ImageError> {
+        self.0
+            .as_mut()
+            .ok_or(ImageError::Invalid("Canvas source is unavailable"))?
+            .read_sample_batch(asset, requests, context)
+    }
+
     fn read_samples(
         &mut self,
         asset: AssetId,
@@ -113,7 +125,7 @@ impl Resources {
             .lock()
             .map_err(|_| WorkError::invalid("Canvas preparation state failed"))?;
         match engine.renderer.as_mut() {
-            Some(Renderer::Cpu(renderer)) => while renderer.evict_one() {},
+            Some(Renderer::Cpu(renderer)) => renderer.clear_graph_tiles(),
             Some(Renderer::Gpu(renderer)) => while renderer.evict_one() {},
             None => {}
         }
@@ -192,6 +204,7 @@ pub(super) struct Packet {
     pub(super) elapsed: std::time::Duration,
     pub(super) stats: sugarsubstitute_image_ops::EvaluationStats,
     pub(super) source_revision: u64,
+    pub(super) source_io: Option<ArchiveStats>,
 }
 pub(super) enum Pixels {
     Cpu(CpuPacket),
@@ -227,11 +240,15 @@ pub(super) struct Prepare {
     pub(super) cpu: Option<CpuPreparation>,
     pub(super) display_buffers: Option<ProjectionBuffers>,
     pub(super) started: Option<std::time::Instant>,
+    pub(super) source_stats_before: Option<ArchiveStats>,
 }
 impl CpuTask<Packet, WorkError> for Prepare {
     fn step(&mut self, context: &JobContext) -> Result<CpuStep<Packet>, WorkError> {
         if self.finished {
             return Err(WorkError::invalid("Canvas request was already prepared"));
+        }
+        if self.source_stats_before.is_none() {
+            self.source_stats_before = self.source.as_ref().map(Source::stats).transpose()?;
         }
         let started = *self.started.get_or_insert_with(std::time::Instant::now);
         let handle = self.resources.engine.clone();
@@ -267,5 +284,15 @@ impl CpuTask<Packet, WorkError> for Prepare {
             return Err(WorkError::invalid("Canvas renderer and startup backend differ"));
         };
         cpu::step(self, renderer, started, context)
+    }
+}
+impl Prepare {
+    /// Worker-observed archive work attributable to this preparation.
+    fn source_io(&self) -> Result<Option<ArchiveStats>, WorkError> {
+        match (&self.source, self.source_stats_before) {
+            (Some(source), Some(before)) => Ok(Some(source.stats()?.since(before))),
+            (None, None) => Ok(None),
+            _ => Err(WorkError::invalid("Canvas source statistics state is incomplete")),
+        }
     }
 }

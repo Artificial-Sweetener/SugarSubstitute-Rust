@@ -9,7 +9,9 @@ use crate::{
 use sugarsubstitute_canvas::{
     DamagePlan, Document, DocumentEdit, Layer, LayerContent, LayerId, RenderRequest, Viewport,
 };
-use sugarsubstitute_image_ops::{AssetId, Extent, RasterSource, Reconstruction, Region};
+use sugarsubstitute_image_ops::{
+    AssetId, DisplaySample, Extent, RasterSource, Reconstruction, Region, bilinear_display_pixel,
+};
 
 struct TestSource {
     extent: Extent,
@@ -79,7 +81,7 @@ fn projected_pixels_match_independent_camera_sampling_with_safe_matte_coverage()
         let matte = Pixel::linear(0.018, 0.018, 0.018, 1.0)?;
         let encoded = SrgbEncoder::encode_constant(matte)?;
         let background = u32::from_be_bytes([255, encoded[0], encoded[1], encoded[2]]);
-        for factor in [0.5, 0.8, 1.0, 1.25, 4.0, 1e9] {
+        for factor in [0.5, 0.8, 1.0, 1.25, 2.0, 2.000_001, 4.0, 1e9] {
             for dx in [-120.25, -7.0, -0.5, 0.0, 0.5, 7.0, 120.25] {
                 for dy in [-51.0, -3.25, 0.0, 3.0, 80.0] {
                     let mut target = source;
@@ -93,17 +95,25 @@ fn projected_pixels_match_independent_camera_sampling_with_safe_matte_coverage()
                         context,
                     )?
                     .project(stamp(2)?, &base, mapping, matte, context)?;
+                    let smooth = target.zoom() <= 2.0;
                     for y in 0..29 {
                         for x in 0..37 {
                             let point = source.device_at(
                                 target.document_at([f64::from(x) + 0.5, f64::from(y) + 0.5])?,
                             )?;
-                            let expected = if point[0] >= 0.0
-                                && point[0] < 31.0
-                                && point[1] >= 0.0
-                                && point[1] < 23.0
-                            {
-                                color(point[0].floor() as u32, point[1].floor() as u32)
+                            let horizontal = DisplaySample::from_corner(point[0], 31, smooth);
+                            let vertical = DisplaySample::from_corner(point[1], 23, smooth);
+                            let expected = if horizontal.is_covered() && vertical.is_covered() {
+                                bilinear_display_pixel(
+                                    [
+                                        color(horizontal.first(), vertical.first()),
+                                        color(horizontal.second(), vertical.first()),
+                                        color(horizontal.first(), vertical.second()),
+                                        color(horizontal.second(), vertical.second()),
+                                    ],
+                                    horizontal,
+                                    vertical,
+                                )
                             } else {
                                 background
                             };
@@ -126,6 +136,42 @@ fn projected_pixels_match_independent_camera_sampling_with_safe_matte_coverage()
                 assert_eq!(base.pixels()[(y * 31 + x) as usize], color(x, y));
             }
         }
+        Ok(())
+    })
+}
+
+#[test]
+fn projection_sampling_is_bilinear_through_200_percent_then_nearest_and_keeps_integer_pan_exact()
+-> harness::TestResult {
+    run_test(|context| {
+        let base = surface(context)?;
+        let source = Viewport::new(base.extent())?;
+
+        let mut smooth_view = source;
+        smooth_view.zoom_at(2.0, [0.0; 2])?;
+        let smooth = ProjectionSamples::new(ViewProjection::new(source, smooth_view)?, context)?;
+        assert_eq!((smooth.columns()[1].first(), smooth.columns()[1].second()), (0, 1));
+        assert_eq!(smooth.columns()[1].weight(), 64);
+
+        let mut nearest_view = source;
+        nearest_view.zoom_at(2.000_001, [0.0; 2])?;
+        let nearest = ProjectionSamples::new(ViewProjection::new(source, nearest_view)?, context)?;
+        assert_eq!(nearest.columns()[1].first(), nearest.columns()[1].second());
+        assert_eq!(nearest.columns()[1].weight(), 0);
+
+        let mut panned = source;
+        panned.pan_by([3.0, -2.0])?;
+        let integer = ProjectionSamples::new(ViewProjection::new(source, panned)?, context)?;
+        assert_eq!(integer.columns()[3].first(), 0);
+        assert_eq!(integer.columns()[3].weight(), 0);
+        assert_eq!(integer.rows()[0].first(), 2);
+        assert_eq!(integer.rows()[0].weight(), 0);
+        assert_eq!(integer.sample_pixel(&base, 3, 0, 0xff12_3456), color(0, 2));
+
+        let mut distant = source;
+        distant.pan_by([1000.0, 1000.0])?;
+        let uncovered = ProjectionSamples::new(ViewProjection::new(source, distant)?, context)?;
+        assert_eq!(uncovered.sample_pixel(&base, 0, 0, 0xff12_3456), 0xff12_3456);
         Ok(())
     })
 }

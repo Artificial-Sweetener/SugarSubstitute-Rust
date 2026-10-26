@@ -303,6 +303,12 @@ impl Session {
             .coverage_acceptances
             .checked_add(1)
             .ok_or("Canvas coverage acceptance count exhausted")?;
+        if evidence.tier == BackingTier::Fallback {
+            self.fallback_projection_acceptances = self
+                .fallback_projection_acceptances
+                .checked_add(1)
+                .ok_or("Canvas fallback acceptance count exhausted")?;
+        }
         Ok(())
     }
 

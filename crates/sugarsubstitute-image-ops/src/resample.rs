@@ -24,7 +24,7 @@ pub(crate) fn nearest(
         )
     };
     for y in output.region.y()..output.region.bottom() {
-        crate::evaluate::check(context)?;
+        crate::check(context)?;
         let sy = coordinate(y, 1, source.height());
         for x in output.region.x()..output.region.right() {
             let sx = coordinate(x, 0, source.width());
@@ -58,7 +58,7 @@ pub(crate) fn render(
         )?;
     }
     for y in input.region.y()..input.region.bottom() {
-        crate::evaluate::check(context)?;
+        crate::check(context)?;
         let row = (y - input.region.y()) as usize * input.region.width() as usize;
         for (x, kernel) in horizontal[..region.width() as usize].iter().enumerate() {
             let mut value = [0.0; 4];
@@ -73,7 +73,7 @@ pub(crate) fn render(
         }
     }
     for y in 0..region.height() {
-        crate::evaluate::check(context)?;
+        crate::check(context)?;
         let kernel =
             sampling.axis_kernel(SamplingAxis::Vertical, region.y() + y, source.height())?;
         for x in 0..region.width() {

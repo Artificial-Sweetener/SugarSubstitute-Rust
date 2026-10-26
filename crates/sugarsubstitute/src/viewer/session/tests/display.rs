@@ -128,6 +128,7 @@ fn pending_draw() -> Result<Fixture, Box<dyn Error>> {
     )?;
     let job = client.submit_cpu(&scope, spec, move |_| {
         DrawBoundary(Some(work::Draw {
+            tier: BackingTier::Detail,
             source,
             target,
             view,
@@ -236,6 +237,7 @@ fn acknowledged_cpu_projection_publishes_actual_pose_once() -> Result<(), Box<dy
     session.cpu_pending = Some(target);
     let coverage = BackingCoverage::new(source_view, [0; 2])?;
     session.pending_cpu_evidence = Some(DisplayEvidence {
+        tier: BackingTier::Fallback,
         target,
         source,
         view: projected_view,
@@ -267,6 +269,7 @@ fn acknowledged_cpu_projection_publishes_actual_pose_once() -> Result<(), Box<dy
     assert_eq!(pending.target, target);
     assert!(session.did_present_cpu(foreign).is_err());
     assert_eq!(session.cpu_pending, Some(target));
+    assert_eq!(session.fallback_projection_acceptances, 0);
     assert!(matches!(
         session.pacing.readiness(Duration::ZERO)?,
         PresentationReadiness::Busy { target: retained, .. } if retained == target
@@ -280,10 +283,12 @@ fn acknowledged_cpu_projection_publishes_actual_pose_once() -> Result<(), Box<dy
     assert_eq!(session.native_presented, Some(target));
     let evidence = session.display_evidence.ok_or("Accepted display evidence was lost")?;
     assert_eq!(evidence.target, target);
+    assert_eq!(evidence.tier, BackingTier::Fallback);
     assert_eq!(evidence.source, source);
     assert_eq!(evidence.view, projected_view);
     assert_eq!(evidence.projection.source(), source_view);
     assert_eq!(evidence.projection.target(), projected_view);
+    assert_eq!(session.fallback_projection_acceptances, 1);
     assert!(!session.frame().ok_or("Acknowledged projection was lost")?.pending);
     assert_eq!(session.pacing.stats().projected_accepted, 1);
     assert!(session.did_present_cpu(target).is_err());

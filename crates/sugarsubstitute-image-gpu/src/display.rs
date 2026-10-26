@@ -2,13 +2,13 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Keep final sRGB8 display regions on the GPU while canonical graph tiles remain disposable.
 use crate::{
-    GpuError, GpuEvaluator,
+    DisplayReadback, GpuError, GpuEvaluator,
     buffer::Buffer,
-    transfer::{Mapping, Transfer},
+    display_readback::{DisplayReadbackWorkspace, read_buffer_region_into},
 };
 use std::sync::Arc;
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
-use sugarsubstitute_image_ops::{NodeId, RasterSource, Region};
+use sugarsubstitute_image_ops::{Extent, MAX_RASTER_SAMPLE_BATCH, NodeId, RasterSource, Region};
 
 /// Immutable opaque sRGB8 device pixels, packed as little-endian `0xffRRGGBB` words.
 /// Rows have 256-byte alignment for native texture copies; padding is excluded from readback.
@@ -29,58 +29,6 @@ impl DisplayRegions {
         &self.tiles
     }
 }
-/// Native display-pixel readback for export or headless qualification; presentation stays on GPU.
-pub struct DisplayReadback {
-    region: Region,
-    words: Vec<u32>,
-    _memory: MemoryClaim,
-}
-impl DisplayReadback {
-    pub(crate) fn swap_red_blue(&mut self) {
-        for word in &mut self.words {
-            *word = (*word & 0xff00ff00) | ((*word & 255) << 16) | ((*word >> 16) & 255);
-        }
-    }
-    /// Exact device-pixel coordinates represented by these row-major words.
-    pub const fn region(&self) -> Region {
-        self.region
-    }
-    /// Opaque sRGB words in `0xffRRGGBB` channel order, independent of host byte order.
-    pub fn pixels(&self) -> &[u32] {
-        &self.words
-    }
-    pub(crate) fn receive(
-        receiving: Arc<Buffer>,
-        region: Region,
-        context: &JobContext,
-    ) -> Result<Self, GpuError> {
-        let memory = context
-            .memory()
-            .claim(region.pixels() * 4 + 128)
-            .map_err(|cause| GpuError::new("gpu_display_readback", cause))?;
-        let mut words = Vec::new();
-        words
-            .try_reserve_exact(region.pixels() as usize)
-            .map_err(|cause| GpuError::new("gpu_display_readback_allocation", cause))?;
-        let mut mapping = Mapping::new(receiving);
-        mapping.wait()?;
-        {
-            let view = mapping.view()?;
-            for row in view.chunks_exact(row_bytes(region.width()) as usize) {
-                for bytes in row[..region.width() as usize * 4].chunks_exact(4) {
-                    let value = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
-                    if value >> 24 != 255 {
-                        return Err(GpuError::invalid("GPU display result is not opaque"));
-                    }
-                    words.push(value);
-                }
-            }
-        }
-        mapping.finish()?;
-        crate::adapter::check(context)?;
-        Ok(Self { region, words, _memory: memory })
-    }
-}
 pub(crate) const fn row_bytes(width: u32) -> u32 {
     (width * 4).next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT)
 }
@@ -94,19 +42,18 @@ impl DisplayTile {
     /// Preserves original native/control/admission causes and rejects nonopaque representations.
     pub fn read(&self, context: &JobContext) -> Result<DisplayReadback, GpuError> {
         let device = &self.buffer.device;
-        let receiving = device.allocate(
-            self.buffer.bytes,
-            wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            context,
-        )?;
-        Transfer::copy(self.buffer.clone(), receiving.clone()).retire()?;
-        crate::adapter::check(context)?;
-        DisplayReadback::receive(receiving, self.region, context)
+        let extent = Extent::new(self.region.right(), self.region.bottom())
+            .map_err(crate::evaluate::image_error)?;
+        let mut workspace =
+            DisplayReadbackWorkspace::for_region(device, extent, self.region, context)?;
+        read_buffer_region_into(self.buffer.clone(), self.region, &mut workspace, context)?;
+        Ok(workspace.into_readback(self.region))
     }
 }
 impl<S: RasterSource> GpuEvaluator<S> {
     /// Evaluate up to 4096 regions and encode completed opaque sRGB8 pixels on the selected GPU.
     /// Canonical intermediates remain evictable; display rows use four-byte words with native alignment.
+    /// Horizontal sparse-source siblings share one bounded source read before ordinary evaluation.
     /// Transfer bytes and nearest-16-bit sampling match the image-ops CPU sRGB encoder.
     /// # Errors
     /// Rejects excessive inventories and nonopaque output; preserves graph/control/native causes.
@@ -116,6 +63,7 @@ impl<S: RasterSource> GpuEvaluator<S> {
         regions: &[Region],
         context: &JobContext,
     ) -> Result<DisplayRegions, GpuError> {
+        self.cache.release_batch();
         if regions.len() > 4096 {
             return Err(GpuError::invalid("GPU display inventory exceeds its bound"));
         }
@@ -127,22 +75,56 @@ impl<S: RasterSource> GpuEvaluator<S> {
         tiles
             .try_reserve_exact(regions.len())
             .map_err(|cause| GpuError::new("gpu_display_inventory_allocation", cause))?;
+        if regions.is_empty() {
+            self.settle(Ok(()), context)?;
+            return Ok(DisplayRegions { tiles, _memory: memory });
+        }
+        self.cache.prefer_level(
+            self.graph.requested_pyramid_level(node).map_err(crate::evaluate::image_error)?,
+        );
+        let sparse =
+            self.graph.sparse_source_plan(node, context).map_err(crate::evaluate::image_error)?;
+        let group_limit =
+            sparse.maximum_regions(self.cache.capacity()).min(MAX_RASTER_SAMPLE_BATCH);
         let result = (|| {
-            for region in regions {
-                let input = self.computed(node, *region, context)?.tile.clone();
-                let tile = self.retry(|this| {
-                    this.ready(context)?;
-                    let batch = this
-                        .batch
-                        .as_mut()
-                        .ok_or_else(|| GpuError::invalid("GPU display batch is unavailable"))?;
-                    this.kernels.display(batch, &input, context)
-                })?;
-                tiles.push(tile);
+            let mut start = 0;
+            while start < regions.len() {
+                let end = horizontal_group_end(regions, start, group_limit);
+                self.cache.release_batch();
+                self.prepare_sparse_regions(sparse, &regions[start..end], context)?;
+                for region in &regions[start..end] {
+                    let input = self.computed(node, *region, context)?.tile.clone();
+                    let tile = self.retry(|this| {
+                        this.ready(context)?;
+                        let batch = this
+                            .batch
+                            .as_mut()
+                            .ok_or_else(|| GpuError::invalid("GPU display batch is unavailable"))?;
+                        this.kernels.display(batch, &input, context)
+                    })?;
+                    tiles.push(tile);
+                }
+                self.cache.release_batch();
+                start = end;
             }
             Ok(())
         })();
+        self.cache.release_batch();
         self.settle(result, context)?;
         Ok(DisplayRegions { tiles, _memory: memory })
     }
+}
+
+fn horizontal_group_end(regions: &[Region], start: usize, maximum: usize) -> usize {
+    let first = regions[start];
+    let mut end = start + 1;
+    while end < regions.len() && end - start < maximum {
+        let previous = regions[end - 1];
+        let next = regions[end];
+        if next.y() != first.y() || next.height() != first.height() || previous.right() > next.x() {
+            break;
+        }
+        end += 1;
+    }
+    end
 }

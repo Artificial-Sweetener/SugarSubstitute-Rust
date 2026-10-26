@@ -114,14 +114,33 @@ fn fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     if mapping[0] == 0u {
         return textureLoad(image, vec2<i32>(output), 0);
     }
-    let source_x = mapping[8u + output.x];
-    let source_y = mapping[8u + mapping[1] + output.y];
+    let x_entry = 8u + output.x * 3u;
+    let y_entry = 8u + (mapping[1] + output.y) * 3u;
+    let source_x = mapping[x_entry];
+    let source_y = mapping[y_entry];
     if source_x == 0xffffffffu || source_y == 0xffffffffu {
         let matte = mapping[3];
         return vec4<f32>(f32((matte >> 16u) & 255u), f32((matte >> 8u) & 255u),
             f32(matte & 255u), 255.0) / 255.0;
     }
-    return textureLoad(image, vec2<i32>(i32(source_x), i32(source_y)), 0);
+    let x_weight = mapping[x_entry + 2u];
+    let y_weight = mapping[y_entry + 2u];
+    if x_weight == 0u && y_weight == 0u {
+        return textureLoad(image, vec2<i32>(i32(source_x), i32(source_y)), 0);
+    }
+    let next_x = mapping[x_entry + 1u];
+    let next_y = mapping[y_entry + 1u];
+    let top_left = encoded_pixel(source_x, source_y);
+    let top_right = encoded_pixel(next_x, source_y);
+    let bottom_left = encoded_pixel(source_x, next_y);
+    let bottom_right = encoded_pixel(next_x, next_y);
+    let top = top_left * (256u - x_weight) + top_right * x_weight;
+    let bottom = bottom_left * (256u - x_weight) + bottom_right * x_weight;
+    let value = (top * (256u - y_weight) + bottom * y_weight + vec4<u32>(32768u)) >> vec4<u32>(16u);
+    return vec4<f32>(value) / 255.0;
+}
+fn encoded_pixel(x: u32, y: u32) -> vec4<u32> {
+    return vec4<u32>(round(textureLoad(image, vec2<i32>(i32(x), i32(y)), 0) * 255.0));
 }
 "#;
 

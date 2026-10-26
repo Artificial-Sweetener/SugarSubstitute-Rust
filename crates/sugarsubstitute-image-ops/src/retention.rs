@@ -10,6 +10,7 @@ struct Entry<T> {
     region: Region,
     used: u64,
     retention: u8,
+    batch_pinned: bool,
     tile: Arc<T>,
 }
 /// Process-local references to immutable backend tiles, keyed by graph content and exact region.
@@ -43,6 +44,10 @@ impl<T> TileRetention<T> {
     pub fn len(&self) -> usize {
         self.entries.len()
     }
+    /// Maximum number of semantic tile references retained by this owner.
+    pub const fn capacity(&self) -> usize {
+        self.maximum
+    }
     /// Whether the evaluator retains no tiles.
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
@@ -50,6 +55,12 @@ impl<T> TileRetention<T> {
     /// Release all evaluator references; outside owners remain charged.
     pub fn clear(&mut self) {
         self.entries.clear();
+    }
+    /// Release transient source-leaf custody after its complete sibling group is consumed.
+    pub fn release_batch(&mut self) {
+        for entry in &mut self.entries {
+            entry.batch_pinned = false;
+        }
     }
     /// Reuse exactly matching content/region and update its recency and pyramid provenance.
     pub fn find(&mut self, key: [u8; 32], region: Region, level: Option<u8>) -> Option<Arc<T>> {
@@ -61,10 +72,10 @@ impl<T> TileRetention<T> {
         Some(entry.tile.clone())
     }
     /// Retain a completed immutable tile, evicting according to the same finite pyramid quotas.
+    /// If every resident entry belongs to the active batch, the ordinary result remains uncached.
     pub fn insert(&mut self, key: [u8; 32], region: Region, level: Option<u8>, tile: Arc<T>) {
-        if self.entries.len() == self.maximum
-            && let Some(index) = self.victim(|_| true)
-        {
+        if self.entries.len() == self.maximum {
+            let Some(index) = self.victim(|_| true) else { return };
             self.entries.swap_remove(index);
         }
         self.entries.push(Entry {
@@ -72,8 +83,44 @@ impl<T> TileRetention<T> {
             region,
             used: self.tick,
             retention: level.map_or(0, |level| level.saturating_add(1)),
+            batch_pinned: false,
             tile,
         });
+    }
+    /// Pin one completed sparse source leaf until its sibling output group is consumed.
+    ///
+    /// Existing semantic entries acquire batch custody without duplicating their allocation.
+    /// # Errors
+    /// Rejects insertion when active batch custody already occupies the complete capacity.
+    pub fn insert_for_batch(
+        &mut self,
+        key: [u8; 32],
+        region: Region,
+        level: Option<u8>,
+        tile: Arc<T>,
+    ) -> Result<(), ImageError> {
+        if let Some(entry) =
+            self.entries.iter_mut().find(|entry| entry.key == key && entry.region == region)
+        {
+            entry.retention = entry.retention.max(level.map_or(0, |level| level.saturating_add(1)));
+            entry.batch_pinned = true;
+            return Ok(());
+        }
+        if self.entries.len() == self.maximum {
+            let index = self
+                .victim(|_| true)
+                .ok_or(ImageError::Invalid("Sparse batch exhausted tile retention"))?;
+            self.entries.swap_remove(index);
+        }
+        self.entries.push(Entry {
+            key,
+            region,
+            used: self.tick,
+            retention: level.map_or(0, |level| level.saturating_add(1)),
+            batch_pinned: true,
+            tile,
+        });
+        Ok(())
     }
     /// Evict one cache-only reference under allocation pressure, including aliases of one tile.
     /// Returns false when every candidate has outside or backend allocation references.
@@ -116,7 +163,7 @@ impl<T> TileRetention<T> {
         self.entries
             .iter()
             .enumerate()
-            .filter(|(_, entry)| eligible(&entry.tile))
+            .filter(|(_, entry)| !entry.batch_pinned && eligible(&entry.tile))
             .min_by_key(|(_, entry)| {
                 let level = usize::from(entry.retention);
                 let quota = if level == preferred { target } else { finer };

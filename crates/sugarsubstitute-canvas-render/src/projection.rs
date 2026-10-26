@@ -1,36 +1,50 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Disposable nearest display pixels sampled once from a canonical retained viewport.
+//! Disposable bilinear or nearest display pixels sampled from a canonical retained viewport.
 use crate::{CpuSurface, RenderError, cpu::check};
 use sugarsubstitute_canvas::{FrameStamp, ViewProjection};
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim, MemoryLease};
-use sugarsubstitute_image_ops::{ImageError, Pixel, SrgbEncoder};
+use sugarsubstitute_image_ops::{
+    DisplaySample, ImageError, Pixel, SrgbEncoder, bilinear_display_pixel,
+};
 
-/// Admitted physical source indices shared by software and native GPU display projection.
-/// Entries equal to `UNCOVERED` receive the display matte; other entries address canonical pixels.
+/// Admitted physical source samples shared by software and native GPU display projection.
+/// Uncovered entries receive the display matte; covered entries address canonical pixels.
 pub struct ProjectionSamples {
     view: ViewProjection,
-    columns: Vec<u32>,
-    rows: Vec<u32>,
+    columns: Vec<DisplaySample>,
+    rows: Vec<DisplaySample>,
     _memory: MemoryClaim,
 }
 impl ProjectionSamples {
-    /// Sentinel shared by display adapters for pixels outside canonical source coverage.
-    pub const UNCOVERED: u32 = u32::MAX;
-    /// Build bounded nearest source indices on an admitted worker, without image evaluation.
+    /// Build bounded retained-source samples on an admitted worker, without image evaluation.
+    /// Cameras through 200% use bilinear encoded-pixel display interpolation; larger
+    /// magnification preserves exact nearest-neighbor source pixels.
     /// # Errors
     /// Preserves original allocation/admission failures and observes cancellation/deadline.
     pub fn new(view: ViewProjection, context: &JobContext) -> Result<Self, RenderError> {
         check(context)?;
-        let extent = view.target().surface();
-        let bytes = (u64::from(extent.width()) + u64::from(extent.height())) * 4 + 256;
+        let source = view.source().surface();
+        let target = view.target().surface();
+        let bytes = (u64::from(target.width()) + u64::from(target.height()))
+            * size_of::<DisplaySample>() as u64
+            + 256;
         let memory = context.memory().claim(bytes).map_err(ImageError::from)?;
         let mut columns = Vec::new();
         let mut rows = Vec::new();
-        columns.try_reserve_exact(extent.width() as usize).map_err(ImageError::from)?;
-        rows.try_reserve_exact(extent.height() as usize).map_err(ImageError::from)?;
-        columns.extend((0..extent.width()).map(|x| view.column(x).unwrap_or(Self::UNCOVERED)));
-        rows.extend((0..extent.height()).map(|y| view.row(y).unwrap_or(Self::UNCOVERED)));
+        columns.try_reserve_exact(target.width() as usize).map_err(ImageError::from)?;
+        rows.try_reserve_exact(target.height() as usize).map_err(ImageError::from)?;
+        let smooth = view.target().zoom() <= 2.0;
+        columns.extend((0..target.width()).map(|x| {
+            view.column_position(x).map_or(DisplaySample::UNCOVERED, |position| {
+                DisplaySample::from_corner(position, source.width(), smooth)
+            })
+        }));
+        rows.extend((0..target.height()).map(|y| {
+            view.row_position(y).map_or(DisplaySample::UNCOVERED, |position| {
+                DisplaySample::from_corner(position, source.height(), smooth)
+            })
+        }));
         check(context)?;
         Ok(Self { view, columns, rows, _memory: memory })
     }
@@ -38,13 +52,38 @@ impl ProjectionSamples {
     pub const fn view(&self) -> ViewProjection {
         self.view
     }
-    /// One canonical source column per output column, or `UNCOVERED`.
-    pub fn columns(&self) -> &[u32] {
+    /// One canonical source sample per output column.
+    pub fn columns(&self) -> &[DisplaySample] {
         &self.columns
     }
-    /// One canonical source row per output row, or `UNCOVERED`.
-    pub fn rows(&self) -> &[u32] {
+    /// One canonical source sample per output row.
+    pub fn rows(&self) -> &[DisplaySample] {
         &self.rows
+    }
+    /// Sample one projected opaque encoded pixel from the retained canonical source.
+    /// Projection construction already validated extents; callers provide in-range target pixels.
+    pub fn sample_pixel(&self, source: &CpuSurface, x: u32, y: u32, matte: u32) -> u32 {
+        let horizontal = self.columns[x as usize];
+        let vertical = self.rows[y as usize];
+        if !horizontal.is_covered() || !vertical.is_covered() {
+            return matte;
+        }
+        let stride = source.extent().width() as usize;
+        let pixels = source.pixels();
+        let index = |column: u32, row: u32| row as usize * stride + column as usize;
+        if horizontal.weight() == 0 && vertical.weight() == 0 {
+            return pixels[index(horizontal.first(), vertical.first())];
+        }
+        bilinear_display_pixel(
+            [
+                pixels[index(horizontal.first(), vertical.first())],
+                pixels[index(horizontal.second(), vertical.first())],
+                pixels[index(horizontal.first(), vertical.second())],
+                pixels[index(horizontal.second(), vertical.second())],
+            ],
+            horizontal,
+            vertical,
+        )
     }
     /// Borrow the same exact index arrays for native GPU presentation; no display pixel readback.
     /// # Errors
@@ -184,32 +223,34 @@ fn project(
 ) -> Result<(), RenderError> {
     let columns = samples.columns();
     let width = columns.len();
-    let first =
-        columns.iter().position(|column| *column != ProjectionSamples::UNCOVERED).unwrap_or(width);
-    let end = columns
-        .iter()
-        .rposition(|column| *column != ProjectionSamples::UNCOVERED)
-        .map_or(first, |index| index + 1);
+    let first = columns.iter().position(|column| column.is_covered()).unwrap_or(width);
+    let end =
+        columns.iter().rposition(|column| column.is_covered()).map_or(first, |index| index + 1);
     let visible = &columns[first..end];
-    let contiguous = !visible.is_empty() && visible.windows(2).all(|pair| pair[1] == pair[0] + 1);
+    let contiguous = !visible.is_empty()
+        && visible.iter().all(|sample| sample.weight() == 0)
+        && visible.windows(2).all(|pair| pair[1].first() == pair[0].first() + 1);
     let stride = source.extent().width() as usize;
     let mut previous = None;
-    for &row in samples.rows() {
+    for (y, &row) in samples.rows().iter().enumerate() {
         check(context)?;
         let start = output.len();
         if previous == Some(row) {
             output.extend_from_within(start - width..start);
-        } else if row == ProjectionSamples::UNCOVERED || visible.is_empty() {
+        } else if !row.is_covered() || visible.is_empty() {
+            output.resize(start + width, matte);
+        } else if row.weight() == 0 && contiguous {
+            let source_row = &source.pixels()
+                [row.first() as usize * stride..(row.first() as usize + 1) * stride];
+            output.resize(start + first, matte);
+            let begin = visible[0].first() as usize;
+            output.extend_from_slice(&source_row[begin..begin + visible.len()]);
             output.resize(start + width, matte);
         } else {
-            let row = &source.pixels()[row as usize * stride..(row as usize + 1) * stride];
             output.resize(start + first, matte);
-            if contiguous {
-                let begin = visible[0] as usize;
-                output.extend_from_slice(&row[begin..begin + visible.len()]);
-            } else {
-                output.extend(visible.iter().map(|column| row[*column as usize]));
-            }
+            output.extend(
+                (first..end).map(|x| samples.sample_pixel(source, x as u32, y as u32, matte)),
+            );
             output.resize(start + width, matte);
         }
         previous = Some(row);

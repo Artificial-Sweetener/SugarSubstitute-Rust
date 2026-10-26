@@ -2,12 +2,12 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compose immutable retained display images with native copies and original execution custody.
 use crate::{
-    DisplayReadback, DisplayTile, GpuDevice, GpuError, buffer::Buffer, display::row_bytes,
-    transfer::Transfer,
+    DisplayReadback, DisplayReadbackWorkspace, DisplayTile, GpuDevice, GpuError,
+    display::row_bytes, display_readback::read_texture_region_into, transfer::Transfer,
 };
 use std::sync::Arc;
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
-use sugarsubstitute_image_ops::{Extent, Region, TILE_EDGE};
+use sugarsubstitute_image_ops::{Extent, Region};
 
 /// Exact native pixel copy between two immutable display generations.
 #[derive(Clone, Copy, Debug)]
@@ -145,41 +145,46 @@ impl DisplayImage {
         region: Region,
         context: &JobContext,
     ) -> Result<DisplayReadback, GpuError> {
-        read_texture_region(&self.0.texture, &self.0.device, self.extent(), region, context)
+        let mut workspace =
+            DisplayReadbackWorkspace::for_region(&self.0.device, self.extent(), region, context)?;
+        self.read_region_into(region, &mut workspace, context)?;
+        Ok(workspace.into_readback(region))
     }
-}
-pub(crate) fn read_texture_region(
-    texture: &wgpu::Texture,
-    device: &Arc<GpuDevice>,
-    extent: Extent,
-    region: Region,
-    context: &JobContext,
-) -> Result<DisplayReadback, GpuError> {
-    if region.width() > TILE_EDGE
-        || region.height() > TILE_EDGE
-        || region.intersection(extent.region()) != Some(region)
-    {
-        return Err(GpuError::invalid("Invalid retained GPU readback region"));
+
+    /// Preallocate reusable selected-device and CPU storage for bounded display readbacks.
+    ///
+    /// Construct this before acquiring a native swapchain image so memory pressure can be handled
+    /// without abandoning that image. The workspace retains its original execution admissions.
+    /// # Errors
+    /// Preserves execution admission, control and selected-device failures.
+    pub fn readback_workspace(
+        &self,
+        context: &JobContext,
+    ) -> Result<DisplayReadbackWorkspace, GpuError> {
+        DisplayReadbackWorkspace::new(&self.0.device, context)
     }
-    let receiving: Arc<Buffer> = device.allocate(
-        u64::from(row_bytes(region.width())) * u64::from(region.height()),
-        wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-        context,
-    )?;
-    let mut commands = device.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        label: Some("SugarSubstitute retained display readback"),
-    });
-    commands.copy_texture_to_buffer(
-        location(texture, [region.x(), region.y()]),
-        wgpu::TexelCopyBufferInfo {
-            buffer: &receiving.raw,
-            layout: layout(region.width(), region.height()),
-        },
-        size(region.width(), region.height()),
-    );
-    Transfer::submit(device.clone(), commands).retire()?;
-    crate::adapter::check(context)?;
-    DisplayReadback::receive(receiving, region, context)
+
+    /// Read one bounded physical region into previously admitted reusable storage.
+    ///
+    /// This performs no memory claim or vector growth. The workspace must belong to this image's
+    /// selected device and remains reusable after successful completion.
+    /// # Errors
+    /// Rejects foreign workspaces and regions beyond one 128-pixel tile or this image.
+    pub fn read_region_into<'a>(
+        &self,
+        region: Region,
+        workspace: &'a mut DisplayReadbackWorkspace,
+        context: &JobContext,
+    ) -> Result<&'a [u32], GpuError> {
+        read_texture_region_into(
+            &self.0.texture,
+            &self.0.device,
+            self.extent(),
+            region,
+            workspace,
+            context,
+        )
+    }
 }
 fn size(width: u32, height: u32) -> wgpu::Extent3d {
     wgpu::Extent3d { width, height, depth_or_array_layers: 1 }

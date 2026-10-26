@@ -18,6 +18,10 @@ use sugarsubstitute_desktop::{
 
 struct Proof {
     session: Session,
+    pending_selection: Option<PathBuf>,
+    source_selection_port_exercised: bool,
+    fallback_before_phase_six: Option<u64>,
+    zoom_out_fallback_exercised: bool,
     paths: Option<ProofPaths>,
     phase: u8,
     samples: [Option<Sample>; 32],
@@ -38,13 +42,19 @@ impl Session {
     /// Exercise original loading, settled zoom, retained pan and checked shutdown through either
     /// a windowless event pump or the ordinary hidden native window adapter.
     pub(in crate::viewer) fn run_proof(
-        self,
+        mut self,
         paths: ProofPaths,
         window: Option<sugarsubstitute_desktop::canvas::WindowOptions>,
     ) -> Result<(), Box<dyn Error>> {
         let motion_duration = paths.motion_duration;
+        let pending_selection =
+            self.options.image.take().ok_or("Viewer proof source selection is unavailable")?;
         let mut proof = Proof {
             session: self,
+            pending_selection: Some(pending_selection),
+            source_selection_port_exercised: false,
+            fallback_before_phase_six: None,
+            zoom_out_fallback_exercised: false,
             paths: Some(paths),
             phase: 0,
             samples: [None; 32],
@@ -95,7 +105,7 @@ impl Proof {
         let Some(_) = shown.coverage.crop(target_view, snapshot.extent())? else {
             return Ok(());
         };
-        if shown.view.zoom() != target_view.zoom() {
+        if !shown.view.shares_sampling_grid(target_view) {
             return Ok(());
         }
         let stamp = session.current_frame().ok_or("Proof lost its displayed frame")?;
@@ -168,17 +178,32 @@ impl Proof {
             self.motion_stats = Some(stats);
             self.motion_collecting = false;
         }
+        if self.phase == 7 && !self.zoom_out_fallback_exercised {
+            let before = self
+                .fallback_before_phase_six
+                .ok_or("Proof lost its phase-six fallback acceptance baseline")?;
+            if session.fallback_projection_acceptances <= before {
+                return Err("One-to-one zoom-out did not publish a fallback projection".into());
+            }
+            self.zoom_out_fallback_exercised = true;
+        }
         let center = [
             f64::from(session.tools.navigation().viewport().surface().width()) * 0.5,
             f64::from(session.tools.navigation().viewport().surface().height()) * 0.5,
         ];
         match self.phase {
-            0 | 6 => {
+            0 => {
                 session.input(Input::Tool(ToolInput::Pointer(center)))?;
                 session.input(Input::Tool(ToolInput::OneToOne))?;
             }
-            1 | 7 => pan(session, center, [17.0, -11.0])?,
-            2 | 8 => pan(session, center, [-7.0, 3.0])?,
+            6 => {
+                self.fallback_before_phase_six = Some(session.fallback_projection_acceptances);
+                session.input(Input::Tool(ToolInput::Pointer(center)))?;
+                session.input(Input::Tool(ToolInput::OneToOne))?;
+            }
+            // Cross the inner repair band while remaining within the outer backing guard.
+            1 | 7 => pan(session, center, [97.0, -83.0])?,
+            2 | 8 => pan(session, center, [-79.0, 61.0])?,
             3 => {
                 session.input(Input::Tool(ToolInput::Pointer(center)))?;
                 session.input(Input::Tool(ToolInput::Wheel {
@@ -198,8 +223,14 @@ impl Proof {
     fn prepare_output(&mut self) -> Result<(), Box<dyn Error>> {
         let session = &mut self.session;
         if self.pending.is_none() {
+            if !self.source_selection_port_exercised {
+                return Err("Proof did not exercise the source selection lifetime port".into());
+            }
             if session.coverage_acceptances == 0 {
                 return Err("Proof observed no coverage-validated native presentations".into());
+            }
+            if !self.zoom_out_fallback_exercised {
+                return Err("Proof observed no fallback presentation during zoom-out".into());
             }
             let scene = session.scene.as_ref().ok_or("Proof document is unavailable")?;
             let document = scene.document.snapshot();
@@ -247,7 +278,11 @@ impl Proof {
                     && session.options.verify_native
                     && session.native_target.is_some(),
                 coverage_acceptances: session.coverage_acceptances,
+                fallback_projection_acceptances: session.fallback_projection_acceptances,
+                zoom_out_fallback_exercised: self.zoom_out_fallback_exercised,
+                first_fallback_preparation_io: session.first_fallback_preparation_io,
                 first_image_queue_latency: session.first_image_queue_latency,
+                source_selection_port_exercised: self.source_selection_port_exercised,
             });
         }
         let runtime = session.runtime.as_ref().ok_or("Proof execution is unavailable")?;
@@ -328,6 +363,16 @@ impl HeadlessLifetime for Proof {
     }
     fn activity(&mut self, _: NonZeroUsize) -> Result<HeadlessStep, Box<dyn Error>> {
         self.session.poll(Duration::ZERO)?;
+        if self.session.take_picker_request() {
+            if self.source_selection_port_exercised {
+                return Err("Proof received a duplicate source selection request".into());
+            }
+            let path =
+                self.pending_selection.take().ok_or("Proof source selection custody was lost")?;
+            self.session.selected(Ok(Some(path)))?;
+            self.source_selection_port_exercised = true;
+            self.session.poll(Duration::ZERO)?;
+        }
         if let Some(outcome) = Session::take(&mut self.publishing) {
             Session::terminal(outcome)?;
             self.complete = true;

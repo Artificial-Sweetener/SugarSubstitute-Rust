@@ -28,6 +28,7 @@ impl<S: RasterSource> GpuEvaluator<S> {
         regions: &[Region],
         context: &JobContext,
     ) -> Result<GpuRegions, GpuError> {
+        self.cache.release_batch();
         if regions.len() > 4096 {
             return Err(GpuError::invalid("GPU region inventory exceeds its bound"));
         }
@@ -79,6 +80,7 @@ impl<S: RasterSource> GpuEvaluator<S> {
         result: Result<T, GpuError>,
         context: &JobContext,
     ) -> Result<T, GpuError> {
+        self.cache.release_batch();
         let retired = self.finish_batch();
         let result = match (result, retired) {
             (Ok(value), Ok(())) => Ok(value),
@@ -97,6 +99,7 @@ impl<S: RasterSource> GpuEvaluator<S> {
 }
 impl<S> Drop for GpuEvaluator<S> {
     fn drop(&mut self) {
+        self.cache.release_batch();
         if let Some(batch) = self.batch.take()
             && let Err(cause) = batch.finish()
         {

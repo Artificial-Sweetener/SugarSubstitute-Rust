@@ -10,6 +10,7 @@
 
 mod buffer;
 mod display;
+mod display_sampling;
 mod error;
 mod evaluate;
 mod geometry;
@@ -17,6 +18,7 @@ mod graph;
 mod kernel;
 mod pixel;
 mod raster_samples;
+mod raster_source;
 mod reconstruction;
 mod resample;
 mod retention;
@@ -25,13 +27,18 @@ mod spatial;
 
 pub use buffer::{TILE_EDGE, Tile};
 pub use display::SrgbEncoder;
+pub use display_sampling::{DisplaySample, bilinear_display_pixel};
 pub use error::ImageError;
-pub use evaluate::{EvaluationStats, Evaluator, RasterSource};
+pub(crate) use error::check;
+pub use evaluate::{EvaluationStats, Evaluator};
 pub use geometry::{Extent, Region, RegionTiles};
-pub use graph::{AssetId, Graph, NodeId, Operation, Pyramid, VectorRectangle};
+pub use graph::{AssetId, Graph, NodeId, Operation, Pyramid, SparseSourcePlan, VectorRectangle};
 pub use kernel::{AxisKernel, MAX_SAMPLING_TAPS, SampleTap, SamplingAxis};
 pub use pixel::Pixel;
 pub use raster_samples::RasterSamples;
+pub use raster_source::{
+    MAX_RASTER_SAMPLE_BATCH, RasterSampleRequest, RasterSource, validate_raster_sample_batch,
+};
 pub use reconstruction::Reconstruction;
 pub use retention::TileRetention;
 pub use sampling::{Filter, Sampling};

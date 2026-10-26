@@ -43,3 +43,32 @@ fn shared_tile_retention_preserves_content_region_and_extreme_level_bounds() -> 
         Ok(())
     })
 }
+
+#[test]
+fn batch_pins_displace_warmed_levels_and_bound_ordinary_insertion_until_release() -> TestResult {
+    run(MEMORY, |context| {
+        let mut cache = TileRetention::new(2, context.memory())?;
+        let region = Region::new(0, 0, 1, 1)?;
+        cache.prefer_level(5);
+        cache.insert([1; 32], region, Some(4), Arc::new(11));
+        cache.insert([2; 32], region, Some(5), Arc::new(13));
+
+        cache.insert_for_batch([3; 32], region, None, Arc::new(17))?;
+        cache.insert_for_batch([4; 32], region, None, Arc::new(19))?;
+        assert_eq!(cache.len(), cache.capacity());
+        assert_eq!(cache.find([3; 32], region, None).as_deref(), Some(&17));
+        assert_eq!(cache.find([4; 32], region, None).as_deref(), Some(&19));
+        assert!(!cache.evict_unpinned(|_| true));
+        assert!(cache.insert_for_batch([6; 32], region, None, Arc::new(29)).is_err());
+
+        cache.insert([5; 32], region, Some(5), Arc::new(23));
+        assert_eq!(cache.len(), cache.capacity());
+        assert!(cache.find([5; 32], region, Some(5)).is_none());
+
+        cache.release_batch();
+        cache.insert([5; 32], region, Some(5), Arc::new(23));
+        assert_eq!(cache.len(), cache.capacity());
+        assert_eq!(cache.find([5; 32], region, Some(5)).as_deref(), Some(&23));
+        Ok(())
+    })
+}

@@ -55,15 +55,40 @@ fn fractional_pan_zoom_and_resize_invalidate_sample_phase() -> TestResult {
     let before = Viewport::new(Extent::new(640, 480)?)?;
     let mut next = before;
     next.pan_by([8.0, -3.0])?;
+    assert!(next.shares_sampling_grid(before));
     assert!(next.repair_from(before)?.blit().is_some());
     next.pan_by([0.25, 0.0])?;
+    assert!(!next.shares_sampling_grid(before));
     assert_eq!(next.repair_from(before)?.dirty().pixels(), 640 * 480);
     next = before;
     next.zoom_at(2.0, [320.0, 240.0])?;
+    assert!(!next.shares_sampling_grid(before));
     assert_eq!(next.repair_from(before)?.dirty().pixels(), 640 * 480);
     next = before;
-    next.resize(Extent::new(800, 600)?)?;
-    assert_eq!(next.repair_from(before)?.dirty().pixels(), 800 * 600);
+    next.resize(Extent::new(641, 481)?)?;
+    assert!(!next.shares_sampling_grid(before));
+    assert_eq!(next.repair_from(before)?.dirty().pixels(), 641 * 481);
+    Ok(())
+}
+
+#[test]
+fn sampling_grid_identity_ignores_expansion_but_rejects_rebased_integer_phase() -> TestResult {
+    let extent = Extent::new(640, 480)?;
+    let mut translated = Viewport::new(extent)?;
+    translated.reframe([0.0; 2], 3.5)?;
+    translated.pan_by([1.0, 0.0])?;
+
+    let mut expanded = translated;
+    expanded.expand_surface(Extent::new(660, 500)?, [10, 10])?;
+    assert!(translated.shares_sampling_grid(expanded));
+
+    let mut rebased = Viewport::new(extent)?;
+    rebased.reframe(translated.origin(), translated.zoom())?;
+    let projection = ViewProjection::new(translated, rebased)?;
+    assert_eq!(projection.scale(), 1.0);
+    assert_eq!(projection.offset(), [0.0; 2]);
+    assert!(!translated.shares_sampling_grid(rebased));
+    assert_eq!(rebased.repair_from(translated)?.dirty().pixels(), extent.pixels());
     Ok(())
 }
 

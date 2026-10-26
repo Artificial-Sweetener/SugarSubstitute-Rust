@@ -2,8 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Native swapchain custody: attach on the window thread, prepare on workers, present completed work.
 use crate::{
-    DisplayImage, DisplayMapping, DisplayReadback, GpuDevice, GpuError,
-    display_mapping::MappingUpload, transfer::Transfer, window_shader::Blitter,
+    DisplayImage, DisplayMapping, DisplayReadback, DisplayReadbackWorkspace, GpuDevice, GpuError,
+    display_mapping::MappingUpload, display_readback::read_texture_region_into, transfer::Transfer,
+    window_shader::Blitter,
 };
 use std::sync::{
     Arc, Mutex,
@@ -204,6 +205,11 @@ impl WindowSurface {
         if self.blitter.is_none() {
             self.blitter = Some(Blitter::new(device, self.owner.format, context)?);
         }
+        let upload = MappingUpload::new(mapping, extent, context)?;
+        let staging = context
+            .memory()
+            .claim(upload.bytes.len() as u64 + 128)
+            .map_err(|cause| GpuError::new("gpu_display_mapping_staging", cause))?;
         let texture = match self.owner.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(texture) => texture,
             wgpu::CurrentSurfaceTexture::Suboptimal(texture) => {
@@ -233,11 +239,6 @@ impl WindowSurface {
             .blitter
             .as_ref()
             .ok_or_else(|| GpuError::invalid("Native window shader is unavailable"))?;
-        let upload = MappingUpload::new(mapping, extent, context)?;
-        let staging = context
-            .memory()
-            .claim(upload.bytes.len() as u64 + 128)
-            .map_err(|cause| GpuError::new("gpu_display_mapping_staging", cause))?;
         blitter.encode(device, &input, &output, &mut commands);
         device.faults.check()?;
         Transfer::upload(blitter.mapping(), staging, &upload.bytes, Some(commands)).retire()?;
@@ -266,17 +267,47 @@ impl WindowFrame {
             .ok_or_else(|| GpuError::invalid("Native window frame was already consumed"))?;
         let extent = Extent::new(texture.texture.width(), texture.texture.height())
             .map_err(crate::evaluate::image_error)?;
-        let mut readback = crate::display_image::read_texture_region(
+        let mut workspace =
+            DisplayReadbackWorkspace::for_region(&self.owner.device, extent, region, context)?;
+        self.read_region_into(region, &mut workspace, context)?;
+        Ok(workspace.into_readback(region))
+    }
+    /// Read a bounded region into previously admitted reusable selected-device storage.
+    ///
+    /// This performs no memory claim or vector growth. Allocate the workspace from the source
+    /// display image before acquiring this frame so admission pressure cannot abandon the image.
+    /// # Errors
+    /// Rejects unsupported capture, foreign workspaces, consumed frames and invalid regions.
+    pub fn read_region_into<'a>(
+        &self,
+        region: Region,
+        workspace: &'a mut DisplayReadbackWorkspace,
+        context: &JobContext,
+    ) -> Result<&'a [u32], GpuError> {
+        if !self.owner.capture {
+            return Err(GpuError::invalid(
+                "Native swapchain does not support qualification readback",
+            ));
+        }
+        let texture = self
+            .texture
+            .as_ref()
+            .ok_or_else(|| GpuError::invalid("Native window frame was already consumed"))?;
+        let extent = Extent::new(texture.texture.width(), texture.texture.height())
+            .map_err(crate::evaluate::image_error)?;
+        read_texture_region_into(
             &texture.texture,
             &self.owner.device,
             extent,
             region,
+            workspace,
             context,
         )?;
+        let pixels = region.pixels() as usize;
         if self.owner.format == wgpu::TextureFormat::Rgba8Unorm {
-            readback.swap_red_blue();
+            workspace.swap_red_blue(pixels);
         }
-        Ok(readback)
+        Ok(workspace.pixels(pixels))
     }
     /// Present already-completed native GPU work on the original desktop window thread.
     /// The returned receipt requests one follow-up acquisition after each configuration because

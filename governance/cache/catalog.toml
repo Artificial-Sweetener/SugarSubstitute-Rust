@@ -198,8 +198,8 @@ recovery = "Native containment object absence proves stopped writers after host 
 [[caches]]
 id = "image-sources"
 owner = "sugarsubstitute-image-io"
-sources = ["crates/sugarsubstitute-image-io/src/archive.rs", "crates/sugarsubstitute-image-io/src/archive/samples.rs", "crates/sugarsubstitute-image-io/src/cached.rs", "crates/sugarsubstitute-image-io/src/descriptor.rs", "crates/sugarsubstitute-image-io/src/layout.rs", "crates/sugarsubstitute-image-io/src/png_input.rs", "crates/sugarsubstitute-image-io/src/shared.rs", "crates/sugarsubstitute-image-io/src/write.rs"]
-source_sha256 = "sha256:89d31f568c84d08b05d0e981f6cee31128221f8d67c47827324e0b22ab2b6723"
+sources = ["crates/sugarsubstitute-image-io/src/archive.rs", "crates/sugarsubstitute-image-io/src/archive/batch.rs", "crates/sugarsubstitute-image-io/src/archive/samples.rs", "crates/sugarsubstitute-image-io/src/cached.rs", "crates/sugarsubstitute-image-io/src/descriptor.rs", "crates/sugarsubstitute-image-io/src/layout.rs", "crates/sugarsubstitute-image-io/src/png_input.rs", "crates/sugarsubstitute-image-io/src/shared.rs", "crates/sugarsubstitute-image-io/src/write.rs"]
+source_sha256 = "sha256:fe6bb037e1290aaca6e7ef7c8334af960f3726989a960d447507782fb9a0e576"
 namespace = "image-sources-v1"
 storage_schema = 1
 compatibility_epoch = 1

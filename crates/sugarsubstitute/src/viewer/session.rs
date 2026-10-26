@@ -33,7 +33,7 @@ use sugarsubstitute_contracts::{
 use sugarsubstitute_desktop::canvas::{GpuPresentation, WindowTarget};
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner, MonotonicClock};
 use sugarsubstitute_image_gpu::{AdapterDescriptor, GpuDevice, WindowFrame};
-use sugarsubstitute_image_io::CacheReuse;
+use sugarsubstitute_image_io::{ArchiveStats, CacheReuse};
 use sugarsubstitute_image_ops::{AssetId, Reconstruction};
 
 /// Actual executor/parent scope remain retained until all typed jobs and worker notifications stop.
@@ -133,6 +133,8 @@ pub(super) struct Session {
     display_view: Option<Viewport>,
     display_evidence: Option<DisplayEvidence>,
     coverage_acceptances: u64,
+    fallback_projection_acceptances: u64,
+    first_fallback_preparation_io: Option<ArchiveStats>,
     pending_cpu_evidence: Option<DisplayEvidence>,
     pending_gpu_evidence: Option<DisplayEvidence>,
     pacing: PresentationPacer,
@@ -158,20 +160,6 @@ pub(super) struct Session {
     pub(super) last_surface_work: sugarsubstitute_canvas_render::SurfaceWork,
 }
 impl Session {
-    /// Preview startup/resampling while preserving finished retained-detail repair during panning.
-    fn reconstruction(&self) -> Result<Reconstruction, Box<dyn Error>> {
-        if self.initial_preview
-            || self.tools.navigation().resampling()
-            || (self.tools.navigation().captured()
-                && self.presented.as_ref().is_some_and(|shown| shown.reconstruction.is_preview()))
-        {
-            Ok(Reconstruction::Preview)
-        } else {
-            Ok(Reconstruction::finished_for_display_zoom(
-                self.tools.navigation().viewport().zoom(),
-            )?)
-        }
-    }
     /// One elapsed clock epoch supplies navigation and execution deadlines.
     fn navigation_time(&self) -> Duration {
         Duration::from_nanos(self.clock.now().as_nanos())
@@ -221,6 +209,8 @@ impl Session {
             display_view: None,
             display_evidence: None,
             coverage_acceptances: 0,
+            fallback_projection_acceptances: 0,
+            first_fallback_preparation_io: None,
             pending_cpu_evidence: None,
             pending_gpu_evidence: None,
             pacing: PresentationPacer::new(Duration::from_nanos(16_666_667))?,

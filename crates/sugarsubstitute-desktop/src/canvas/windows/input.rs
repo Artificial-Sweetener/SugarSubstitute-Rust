@@ -281,8 +281,10 @@ unsafe extern "system" fn procedure(
             }
         }
         WM_CAPTURECHANGED if lparam.0 != window.0 as isize => {
-            state.click.set(None);
-            if !state.releasing.get() {
+            // Tao releases its own button capture synchronously inside the forwarded button-up.
+            // That ordinary release ends the gesture but leaves the first click eligible to pair.
+            if !state.releasing.get() || lparam.0 != 0 {
+                state.click.set(None);
                 state.lose_capture();
             }
         }

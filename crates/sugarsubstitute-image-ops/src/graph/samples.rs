@@ -17,6 +17,17 @@ impl Graph {
         if region.intersection(self.extent(node)?.region()) != Some(region) {
             return Err(ImageError::Invalid("Sparse raster output lies outside its node"));
         }
+        let Some((asset, extent, sampling)) = self.sampled_source_definition(node)? else {
+            return Ok(None);
+        };
+        Ok(Some((asset, RasterSamples::new(extent, region, sampling)?)))
+    }
+
+    /// Keep sparse-leaf eligibility identical for individual reads and batch planning.
+    pub(super) fn sampled_source_definition(
+        &self,
+        node: NodeId,
+    ) -> Result<Option<(AssetId, Extent, Sampling)>, ImageError> {
         let Operation::Resample { input, sampling, .. } = self.operation(node)? else {
             return Ok(None);
         };
@@ -26,6 +37,6 @@ impl Graph {
         if sampling.filter() != Filter::Nearest || !sampling.large_reduction(extent) {
             return Ok(None);
         }
-        Ok(Some((asset, RasterSamples::new(extent, region, sampling)?)))
+        Ok(Some((asset, extent, sampling)))
     }
 }

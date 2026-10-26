@@ -7,6 +7,7 @@ use std::{
     io::{Read, Seek, SeekFrom},
 };
 use sugarsubstitute_image_ops::{Filter, RasterSamples, Sampling};
+mod batch;
 mod batching;
 
 /// Count actual read-boundary calls independently of the archive's work counters.

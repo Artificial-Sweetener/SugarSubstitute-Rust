@@ -3,56 +3,14 @@
 //! Bounded demand-driven CPU evaluation with feature-owned process-local tile reuse.
 mod reuse;
 use crate::{
-    AssetId, Graph, ImageError, NodeId, Operation, Pixel, RasterSamples, Region, Sampling,
-    TILE_EDGE, Tile, TileRetention, buffer::Buffer,
+    Graph, ImageError, NodeId, Operation, Pixel, RasterSamples, Region, Sampling, TILE_EDGE, Tile,
+    TileRetention,
+    buffer::Buffer,
+    check,
+    raster_source::{MAX_RASTER_SAMPLE_BATCH, RasterSampleRequest, RasterSource},
 };
 use std::sync::Arc;
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim, MemoryLease};
-
-/// Read-only asset boundary. Implementations provide exact canonical region pixels in row-major order.
-/// Reads execute on the caller's admitted worker, observe cancellation/deadlines, and bound their
-/// own I/O/decoder workspace. They must never decode an unadmitted full image or spawn workers.
-pub trait RasterSource {
-    /// Fill exactly `region.pixels()` already-admitted output pixels for immutable asset content.
-    /// # Errors
-    /// Reports unavailable/corrupt sources and preserves original I/O/decoder causes.
-    fn read(
-        &mut self,
-        asset: AssetId,
-        region: Region,
-        output: &mut [Pixel],
-        context: &JobContext,
-    ) -> Result<(), ImageError>;
-    /// Decode only the original pixels addressed by the DAG's bounded sparse sampling plan.
-    /// Source adapters may group reads by encoded chunk without changing sample coordinates.
-    /// The default reads individual canonical pixels, suitable for simple in-memory sources.
-    /// # Errors
-    /// Rejects an incorrect destination length and preserves source and control failures.
-    fn read_samples(
-        &mut self,
-        asset: AssetId,
-        samples: &RasterSamples,
-        output: &mut [Pixel],
-        context: &JobContext,
-    ) -> Result<(), ImageError> {
-        if output.len() as u64 != samples.region().pixels() {
-            return Err(ImageError::Invalid("Invalid sparse raster destination"));
-        }
-        for (y, &row) in samples.rows().iter().enumerate() {
-            for (x, &column) in samples.columns().iter().enumerate() {
-                check(context)?;
-                let index = y * samples.columns().len() + x;
-                self.read(
-                    asset,
-                    Region::new(column, row, 1, 1)?,
-                    std::slice::from_mut(&mut output[index]),
-                    context,
-                )?;
-            }
-        }
-        Ok(())
-    }
-}
 
 /// Cumulative observable work, useful for tests and headless performance qualification.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -80,6 +38,12 @@ pub struct Evaluator<S> {
     memory: MemoryLease,
     evaluation_depth: usize,
 }
+
+struct StagedSparseTile {
+    samples: RasterSamples,
+    buffer: Buffer,
+}
+
 impl<S: RasterSource> Evaluator<S> {
     /// Retain a graph/source and bounded tile inventory under the original execution reservation.
     /// # Errors
@@ -108,11 +72,125 @@ impl<S: RasterSource> Evaluator<S> {
     /// Source adapters must keep every asset ID bound to the same immutable original content.
     /// Call on the preparation worker so retiring the preceding graph does not burden native input.
     pub fn replace_graph(&mut self, graph: Graph) {
+        self.cache.release_batch();
         self.graph = graph;
     }
     /// Current cumulative work and process-local retention.
     pub fn stats(&self) -> EvaluationStats {
         EvaluationStats { resident_tiles: self.cache.len(), ..self.stats }
+    }
+    /// Maximum same-row output regions that can safely retain one planned sparse source spine.
+    /// # Errors
+    /// Rejects a foreign output and preserves planner cancellation or graph failures.
+    pub fn sparse_region_batch_limit(
+        &self,
+        output: NodeId,
+        context: &JobContext,
+    ) -> Result<usize, ImageError> {
+        Ok(self
+            .graph
+            .sparse_source_plan(output, context)?
+            .maximum_regions(self.cache.capacity())
+            .min(MAX_RASTER_SAMPLE_BATCH))
+    }
+    /// Stage a bounded same-row sparse source batch in existing semantic tile retention.
+    ///
+    /// All source reads must succeed before any staged tile enters retention. Ordinary DAG
+    /// evaluation still owns vector coverage, masks, adjustments, composition and publication.
+    /// Single-region groups remain on the scalar evaluator path.
+    /// # Errors
+    /// Rejects invalid groups and preserves graph, source, memory and worker-control failures.
+    pub fn prepare_sparse_regions(
+        &mut self,
+        output: NodeId,
+        regions: &[Region],
+        context: &JobContext,
+    ) -> Result<(), ImageError> {
+        self.cache.release_batch();
+        if regions.len() <= 1 {
+            return Ok(());
+        }
+        check(context)?;
+        let first = regions[0];
+        if regions.len() > MAX_RASTER_SAMPLE_BATCH
+            || regions.iter().any(|region| {
+                region.y() != first.y()
+                    || region.height() != first.height()
+                    || region.width() > TILE_EDGE
+                    || region.height() > TILE_EDGE
+            })
+            || regions.windows(2).any(|pair| pair[0].right() > pair[1].x())
+        {
+            return Err(ImageError::Invalid("Invalid sparse output region batch"));
+        }
+        let plan = self.graph.sparse_source_plan(output, context)?;
+        if regions.len() > plan.maximum_regions(self.cache.capacity()) {
+            return Err(ImageError::Invalid("Sparse output region batch exceeds retention"));
+        }
+        let Some(source) = plan.source() else {
+            return Ok(());
+        };
+        self.cache.prefer_level(self.graph.requested_pyramid_level(output)?);
+        let key = self.graph.fingerprint(source)?;
+        let level = self.graph.pyramid_level(source)?;
+        let _metadata = self.claim(
+            (regions.len() * (size_of::<StagedSparseTile>() + size_of::<RasterSampleRequest<'_>>()))
+                as u64
+                + 128,
+        )?;
+        let mut staged = Vec::new();
+        staged.try_reserve_exact(regions.len())?;
+        let mut asset = None;
+        for &region in regions {
+            if let Some(tile) = self.cache.find(key, region, level) {
+                self.cache.insert_for_batch(key, region, level, tile)?;
+                continue;
+            }
+            let Some((current, samples)) = plan.samples(&self.graph, region)? else {
+                continue;
+            };
+            if asset.is_some_and(|asset| asset != current) {
+                return Err(ImageError::Invalid("Sparse source batch mixed raster assets"));
+            }
+            asset = Some(current);
+            staged.push(StagedSparseTile { samples, buffer: self.allocate(region)? });
+        }
+        if staged.len() <= 1 {
+            return Ok(());
+        }
+        let asset = asset.ok_or(ImageError::Invalid("Sparse source batch lost its asset"))?;
+        let mut requests = Vec::new();
+        requests.try_reserve_exact(staged.len())?;
+        requests.extend(staged.iter_mut().map(|staged| RasterSampleRequest {
+            samples: &staged.samples,
+            output: &mut staged.buffer.pixels,
+        }));
+        self.source.read_sample_batch(asset, &mut requests, context)?;
+        check(context)?;
+        drop(requests);
+        let source_pixels = staged
+            .iter()
+            .fold(0_u64, |pixels, staged| pixels.saturating_add(staged.buffer.region.pixels()));
+        self.stats.source_pixels = self.stats.source_pixels.saturating_add(source_pixels);
+        self.stats.computed_tiles = self.stats.computed_tiles.saturating_add(staged.len() as u64);
+        self.stats.computed_pixels = self.stats.computed_pixels.saturating_add(source_pixels);
+        for staged in staged {
+            let region = staged.buffer.region;
+            if let Err(cause) = self.cache.insert_for_batch(
+                key,
+                region,
+                level,
+                Arc::new(Tile { buffer: staged.buffer }),
+            ) {
+                self.cache.release_batch();
+                return Err(cause);
+            }
+        }
+        Ok(())
+    }
+    /// Release transient sparse-leaf custody after its complete sibling group is consumed.
+    pub fn release_sparse_batch(&mut self) {
+        self.cache.release_batch();
     }
     /// Release the evaluator's tile references. Outside retained results keep their charges.
     pub fn clear_tiles(&mut self) {
@@ -380,14 +458,4 @@ impl<S: RasterSource> Evaluator<S> {
             }
         }
     }
-}
-
-pub(crate) fn check(context: &JobContext) -> Result<(), ImageError> {
-    if context.cancellation_requested() {
-        return Err(ImageError::Cancelled);
-    }
-    if context.deadline().is_some_and(|deadline| context.now() >= deadline) {
-        return Err(ImageError::Deadline);
-    }
-    Ok(())
 }
