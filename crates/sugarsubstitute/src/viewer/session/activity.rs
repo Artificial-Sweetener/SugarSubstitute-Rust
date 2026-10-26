@@ -7,6 +7,8 @@ use sugarsubstitute_execution::BlockingInputError;
 impl Session {
     /// Drain metadata and typed completions before submitting the latest application intent.
     pub(super) fn advance(&mut self) -> Result<(), Box<dyn Error>> {
+        self.tools.advance(self.navigation_time())?;
+        self.cancel_obsolete_refinement();
         if let Some(runtime) = &self.runtime {
             let batch =
                 runtime.client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
@@ -122,7 +124,7 @@ impl Session {
         let filter = self.filter();
         if !self.expose_pending
             && self.presented.as_ref().is_some_and(|shown| {
-                shown.view == self.view
+                shown.view == self.tools.navigation().viewport()
                     && shown.filter == filter
                     && shown.document == identity
                     && shown.source_revision == scene.source_revision
@@ -130,14 +132,14 @@ impl Session {
         {
             return Ok(());
         }
-        let extent = self.view.surface();
+        let extent = self.tools.navigation().viewport().surface();
         let compatible = self.presented.as_ref().filter(|shown| {
             shown.document == identity
                 && shown.source_revision == scene.source_revision
                 && shown.filter == filter
         });
         let damage = match compatible {
-            Some(shown) => self.view.repair_from(shown.view)?,
+            Some(shown) => self.tools.navigation().viewport().repair_from(shown.view)?,
             None => DamagePlan::full(extent),
         };
         let replace_surface = if self.options.gpu.is_some() {
@@ -170,7 +172,7 @@ impl Session {
             self.resources.as_ref().ok_or("Canvas preparation resources are unavailable")?.clone();
         let source = scene.source.clone();
         let source_revision = scene.source_revision;
-        let view = self.view;
+        let view = self.tools.navigation().viewport();
         let gpu_surface = self.gpu_front.clone();
         let runtime = self.runtime.as_ref().ok_or("Canvas execution is unavailable")?;
         match runtime.client.submit_cpu(&runtime.scope, spec, move |_| work::Prepare {

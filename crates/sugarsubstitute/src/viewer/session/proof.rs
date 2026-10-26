@@ -8,9 +8,10 @@ use crate::viewer::{
     proof::{self, Input as ProofInput, Sample},
 };
 use std::{num::NonZeroUsize, time::Instant};
+use sugarsubstitute_canvas::{ScrollPhase, ToolButton, ToolInput};
 use sugarsubstitute_desktop::{
     HeadlessLifetime, HeadlessStep, StartupPreparationStep,
-    canvas::{Input, Lifetime, WheelDelta},
+    canvas::{Input, Lifetime},
 };
 
 struct Proof {
@@ -67,7 +68,7 @@ impl Proof {
         let Some(shown) = &session.presented else {
             return Ok(());
         };
-        if shown.view != session.view {
+        if shown.view != session.tools.navigation().viewport() {
             return Ok(());
         }
         let stamp = session
@@ -101,10 +102,13 @@ impl Proof {
             self.previous_stats = session.last_stats;
             self.observed = Some(stamp);
         }
-        if shown.filter != Filter::Lanczos3 || session.rendering.is_some() {
+        if shown.filter != Filter::Lanczos3
+            || session.rendering.is_some()
+            || session.tools.navigation().interacting()
+        {
             return Ok(());
         }
-        let surface = session.view.surface();
+        let surface = session.tools.navigation().viewport().surface();
         let reusable = match self.phase {
             5 => surface.width() > 13 && surface.height() > 7,
             6 => surface.width() > 5 && surface.height() > 3,
@@ -116,19 +120,22 @@ impl Proof {
             );
         }
         let center = [
-            f64::from(session.view.surface().width()) * 0.5,
-            f64::from(session.view.surface().height()) * 0.5,
+            f64::from(session.tools.navigation().viewport().surface().width()) * 0.5,
+            f64::from(session.tools.navigation().viewport().surface().height()) * 0.5,
         ];
         match self.phase {
             0 | 6 => {
-                session.input(Input::Pointer(center))?;
-                session.input(Input::ActualSize)?;
+                session.input(Input::Tool(ToolInput::Pointer(center)))?;
+                session.input(Input::Tool(ToolInput::OneToOne))?;
             }
             1 | 7 => pan(session, center, [17.0, -11.0])?,
             2 | 8 => pan(session, center, [-7.0, 3.0])?,
             3 => {
-                session.input(Input::Pointer(center))?;
-                session.input(Input::Wheel(WheelDelta::Lines([0.0, 2.0])))?;
+                session.input(Input::Tool(ToolInput::Pointer(center)))?;
+                session.input(Input::Tool(ToolInput::Wheel {
+                    steps: 2.0,
+                    phase: ScrollPhase::Unphased,
+                }))?;
             }
             4 => pan(session, center, [13.0, -7.0])?,
             5 => pan(session, center, [-5.0, 3.0])?,
@@ -151,7 +158,7 @@ impl Proof {
                     .clone(),
                 document: scene.document.snapshot(),
                 source: scene.source.clone(),
-                view: session.view,
+                view: session.tools.navigation().viewport(),
                 front: session.front.take().ok_or("Proof surface is unavailable")?,
                 samples: self.samples,
                 paths: self.paths.take().ok_or("Proof output custody was lost")?,
@@ -182,10 +189,10 @@ impl Proof {
 }
 /// Native observations exercise exactly the same camera input path used by a visible window.
 fn pan(session: &mut Session, start: [f64; 2], delta: [f64; 2]) -> Result<(), Box<dyn Error>> {
-    session.input(Input::Pointer(start))?;
-    session.input(Input::Pan(true))?;
-    session.input(Input::Pointer([start[0] + delta[0], start[1] + delta[1]]))?;
-    session.input(Input::Pan(false))
+    session.input(Input::Tool(ToolInput::Pointer(start)))?;
+    session.input(Input::Tool(ToolInput::Button { button: ToolButton::Primary, pressed: true }))?;
+    session.input(Input::Tool(ToolInput::Pointer([start[0] + delta[0], start[1] + delta[1]])))?;
+    session.input(Input::Tool(ToolInput::Button { button: ToolButton::Primary, pressed: false }))
 }
 impl HeadlessLifetime for Proof {
     fn start(&mut self, wake: Arc<dyn CompletionWake>) -> Result<(), Box<dyn Error>> {

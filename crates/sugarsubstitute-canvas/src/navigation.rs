@@ -68,6 +68,15 @@ impl Navigation {
     pub const fn interacting(&self) -> bool {
         self.dragging || self.wheel_active || self.transition.is_some()
     }
+    /// Whether wheel navigation or camera interpolation changes the sampling scale.
+    /// A direct pan can preserve settled pixels through exact integer blits and edge repair.
+    pub const fn resampling(&self) -> bool {
+        self.wheel_active || self.transition.is_some()
+    }
+    /// Current monitor's fractional frame period, including the portable 60 Hz fallback.
+    pub const fn frame_period(&self) -> Duration {
+        self.frame_period
+    }
     /// Resolve feedback from the same availability rules that admit pan gestures.
     pub fn cursor(&self) -> CursorIntent {
         if self.dragging {
@@ -104,11 +113,11 @@ impl Navigation {
         let mut next = *self;
         next.advance_inner(now)?;
         if next.view.surface() != extent {
+            let fitting = next.mode == ZoomMode::Fit;
             next.cancel();
             next.view.resize(extent)?;
-            if next.mode == ZoomMode::Fit
-                && let Some(content) = next.content
-            {
+            if fitting && let Some(content) = next.content {
+                next.mode = ZoomMode::Fit;
                 next.view.fit(content)?;
             }
         }
@@ -136,26 +145,18 @@ impl Navigation {
             .map_err(|_| CanvasError::Invalid("Invalid display frame period"))?;
         Ok(())
     }
-    /// Earliest desired animation/idle wake. Missed ticks are sampled at current time, never queued.
-    /// # Errors
-    /// Rejects deadline overflow; does not create a scheduled task.
-    pub fn next_deadline(&self, now: Duration) -> Result<Option<Duration>, CanvasError> {
-        let animation = self
-            .transition
-            .map(|transition| {
-                let elapsed = now.saturating_sub(transition.begin).as_nanos();
-                let period = self.frame_period.as_nanos();
-                let remaining = u64::try_from(period - elapsed % period)
-                    .map_err(|_| CanvasError::Invalid("Navigation period overflow"))?;
-                now.checked_add(Duration::from_nanos(remaining))
-                    .map(|tick| tick.min(transition.end))
-                    .ok_or(CanvasError::Invalid("Navigation deadline overflow"))
-            })
-            .transpose()?;
-        Ok(match (animation, self.wheel_end) {
+    /// Earliest desired animation/idle wake. Missed ticks sample current time without a backlog.
+    /// The next display tick is anchored to the transition start and bounded by its exact end.
+    pub fn next_deadline(&self, now: Duration) -> Option<Duration> {
+        let animation = self.transition.map(|transition| {
+            let elapsed = now.saturating_sub(transition.begin).as_nanos();
+            let remainder = Duration::from_nanos((elapsed % self.frame_period.as_nanos()) as u64);
+            now.saturating_add(self.frame_period - remainder).min(transition.end)
+        });
+        match (animation, self.wheel_end) {
             (Some(a), Some(b)) => Some(a.min(b)),
             (a, b) => a.or(b),
-        })
+        }
     }
     /// Apply one normalized observation at monotonic time, atomically on invalid input.
     /// # Errors
@@ -184,6 +185,9 @@ impl Navigation {
         Ok(())
     }
     fn cancel(&mut self) {
+        if self.transition.is_some_and(|transition| transition.target != self.view) {
+            self.mode = ZoomMode::Custom;
+        }
         self.dragging = false;
         self.wheel_active = false;
         self.wheel_end = None;

@@ -2,8 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Adapt native observations to document/camera intent without locking image workers.
 use super::*;
+use sugarsubstitute_canvas::ToolCancelReason;
 use sugarsubstitute_desktop::canvas::{
-    CpuFrame, GpuPresentation, Input, Lifetime, WheelDelta, WindowTarget,
+    CpuFrame, Feedback, GpuPresentation, Input, Lifetime, WindowTarget,
 };
 use sugarsubstitute_image_ops::Extent;
 
@@ -57,61 +58,45 @@ impl Lifetime for Session {
         self.advance()
     }
     fn resize(&mut self, extent: Extent) -> Result<(), Box<dyn Error>> {
-        self.view.resize(extent)?;
+        self.tools.resize(
+            extent,
+            self.scene.as_ref().map(|scene| &scene.document),
+            self.navigation_time(),
+        )?;
         Ok(())
     }
     fn input(&mut self, input: Input) -> Result<(), Box<dyn Error>> {
         if self.closing {
             return Ok(());
         }
-        let preceding = self.view;
+        let now = self.navigation_time();
         match input {
-            Input::Pointer(position) => {
-                if position.iter().any(|value| !value.is_finite()) {
-                    return Err("Invalid native canvas pointer coordinate".into());
-                }
-                if self.dragging {
-                    self.view
-                        .pan_by([position[0] - self.pointer[0], position[1] - self.pointer[1]])?;
-                }
-                self.pointer = position;
-            }
-            Input::Pan(active) => self.dragging = active,
-            Input::Wheel(delta) => {
-                let amount = match delta {
-                    WheelDelta::Lines(delta) => delta[1],
-                    WheelDelta::Pixels(delta) => delta[1] / 120.0,
-                };
-                if !amount.is_finite() {
-                    return Err("Invalid native canvas wheel delta".into());
-                }
-                self.view.zoom_at((amount * 0.25).clamp(-32.0, 32.0).exp2(), self.pointer)?;
-            }
-            Input::Fit => {
-                if let Some(scene) = &self.scene {
-                    self.view.fit(scene.document.snapshot().extent())?;
-                }
-            }
-            Input::ActualSize => self.view.actual_size(self.pointer)?,
+            Input::Tool(input) => self.tools.input(
+                input,
+                self.scene.as_mut().map(|scene| &mut scene.document),
+                now,
+            )?,
+            Input::TemporaryNavigation(held) => self.tools.temporary_navigation(
+                held,
+                self.scene.as_ref().map(|scene| &scene.document),
+                now,
+            )?,
+            Input::DisplayRefresh(rate) => self.tools.set_refresh_rate(rate)?,
             Input::Open => self.picker = true,
-            Input::Unfocused => self.dragging = false,
+            Input::Unfocused => self.tools.cancel(
+                ToolCancelReason::FocusLost,
+                self.scene.as_ref().map(|scene| &scene.document),
+                now,
+            )?,
         }
-        let changed = self.view != preceding;
-        if self.view.zoom() != preceding.zoom()
-            || (changed
-                && self.presented.as_ref().is_some_and(|shown| shown.filter == Filter::Nearest))
-        {
-            self.navigation_until = Some(self.clock.now().checked_add(Duration::from_millis(120))?);
-        }
-        if changed
-            && self.filter() == Filter::Nearest
-            && let Some(rendering) = &mut self.rendering
-            && rendering.filter == Filter::Lanczos3
-        {
-            rendering.superseded = true;
-            rendering.job.cancel();
-        }
+        self.cancel_obsolete_refinement();
         Ok(())
+    }
+    fn feedback(&self) -> Feedback {
+        Feedback {
+            cursor: self.tools.cursor(self.scene.as_ref().map(|scene| &scene.document)),
+            capture: self.tools.captured(),
+        }
     }
     fn take_picker_request(&mut self) -> bool {
         if self.closing
@@ -157,16 +142,24 @@ impl Lifetime for Session {
         &self.title
     }
     fn next_deadline(&self) -> Option<std::time::Instant> {
-        if self.options.gpu.is_some() && self.expose_pending && !self.closing {
-            return std::time::Instant::now().checked_add(Duration::from_millis(16));
-        }
-        let cutoff = self.navigation_until?;
-        if self.clock.now() >= cutoff {
+        if self.closing {
             return None;
         }
-        std::time::Instant::now().checked_add(Duration::from_nanos(
-            cutoff.as_nanos().saturating_sub(self.clock.now().as_nanos()),
-        ))
+        let now = self.navigation_time();
+        let native_now = std::time::Instant::now();
+        let navigation = self.tools.navigation();
+        let motion = navigation
+            .next_deadline(now)
+            .and_then(|cutoff| native_now.checked_add(cutoff.saturating_sub(now)));
+        let presentation = if self.options.gpu.is_some() && self.expose_pending {
+            native_now.checked_add(navigation.frame_period())
+        } else {
+            None
+        };
+        match (motion, presentation) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
     }
     fn close(&mut self) -> Result<(), Box<dyn Error>> {
         self.closing = true;
@@ -175,7 +168,11 @@ impl Lifetime for Session {
         self.native_target = None;
         self.picker = false;
         self.pending_open = None;
-        self.dragging = false;
+        self.tools.cancel(
+            ToolCancelReason::Shutdown,
+            self.scene.as_ref().map(|scene| &scene.document),
+            self.navigation_time(),
+        )?;
         if let Some(job) = &self.initializing {
             job.cancel();
         }
@@ -212,5 +209,18 @@ impl Lifetime for Session {
         }
         self.runtime = None;
         self.failed.take().map_or(Ok(()), Err)
+    }
+}
+
+impl Session {
+    /// Retain one observed terminal outcome while newer tool intent replaces expensive refinement.
+    pub(super) fn cancel_obsolete_refinement(&mut self) {
+        if self.filter() == Filter::Nearest
+            && let Some(rendering) = &mut self.rendering
+            && rendering.filter == Filter::Lanczos3
+        {
+            rendering.superseded = true;
+            rendering.job.cancel();
+        }
     }
 }

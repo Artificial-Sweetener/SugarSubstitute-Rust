@@ -73,6 +73,9 @@ fn auxiliary_roots_and_loose_files_cannot_hide_native_construction() -> Result<(
 fn source_capabilities_cannot_hide_in_aliases_macros_or_platform_branches() -> Result<()> {
     for source in [
         "use windows::Win32::UI::WindowsAndMessaging::CreateWindowExW as create;",
+        "use windows::Win32::UI::WindowsAndMessaging::CreateCursor as make; fn run(){ make(); }",
+        "macro_rules! cursor { () => { CreateCursor() }; }",
+        "unsafe extern \"system\" { #[link_name=\"CreateCursor\"] fn make(); }",
         "use windows::Win32::UI::WindowsAndMessaging::*; fn run(){ CreateWindowExW(); }",
         "macro_rules! ui { () => { WindowBuilder::new() }; }",
         "macro_rules! ui { ($f:ident) => { $f() }; } fn run(){ ui!(r#CreateWindowExW); }",
@@ -129,10 +132,12 @@ fn renamed_toolkit_dependency_and_its_source_are_rejected() -> Result<()> {
 /// New source cannot inherit arbitrary UI authority from an existing dependency or crate.
 #[test]
 fn unregistered_native_construction_is_rejected() -> Result<()> {
-    let (fixture, policy) = fixture()?;
-    check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace)?;
-    write(fixture.root(), "crates/consumer/src/adhoc.rs", "fn run(){ CreateWindowExW(); }")?;
-    assert!(check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace).is_err());
+    for source in ["fn run(){ CreateWindowExW(); }", "fn run(){ CreateCursor(); }"] {
+        let (fixture, policy) = fixture()?;
+        check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace)?;
+        write(fixture.root(), "crates/consumer/src/adhoc.rs", source)?;
+        assert!(check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace).is_err());
+    }
     Ok(())
 }
 

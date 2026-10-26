@@ -27,6 +27,7 @@ pub struct ToolManager {
     selected: ToolId,
     effective: ToolId,
     space: bool,
+    capture: bool,
     pan_zoom: pan_zoom::PanZoom,
     registered: [Option<Registered>; 16],
     edit: Option<EditSession>,
@@ -40,6 +41,7 @@ impl ToolManager {
             selected: ToolId::PAN_ZOOM,
             effective: ToolId::PAN_ZOOM,
             space: false,
+            capture: false,
             pan_zoom: Default::default(),
             registered: std::array::from_fn(|_| None),
             edit: None,
@@ -78,6 +80,10 @@ impl ToolManager {
     /// Tool currently receiving physical input.
     pub const fn effective(&self) -> ToolId {
         self.effective
+    }
+    /// Whether the effective tool owns pointer capture, including navigation and edit gestures.
+    pub const fn captured(&self) -> bool {
+        self.capture || self.navigation.captured()
     }
     /// Authoritative shared navigation state.
     pub const fn navigation(&self) -> &Navigation {
@@ -202,6 +208,7 @@ impl ToolManager {
             document,
             edit: &mut self.edit,
             next_edit: &mut self.next_edit,
+            capture: &mut self.capture,
             now,
         };
         if self.effective == ToolId::PAN_ZOOM {
@@ -235,6 +242,7 @@ impl ToolManager {
         now: Duration,
     ) -> Result<(), CanvasError> {
         self.cancel_active(reason);
+        self.capture = false;
         drop(self.edit.take());
         self.navigation.input(NavigationInput::Cancel, now)?;
         if self.space {
@@ -273,8 +281,9 @@ impl ToolManager {
             return Ok(());
         }
         self.navigation.advance(now)?;
-        let view =
-            ToolView { navigation: &self.navigation, document: document.map(Document::snapshot) };
+        let mut navigation = self.navigation;
+        navigation.input(NavigationInput::Cancel, now)?;
+        let view = ToolView { navigation: &navigation, document: document.map(Document::snapshot) };
         if id == ToolId::PAN_ZOOM {
             self.pan_zoom.activate(&view)?;
         } else {
@@ -287,7 +296,8 @@ impl ToolManager {
                 .activate(&view)?;
         }
         self.cancel_active(reason);
-        self.navigation.input(NavigationInput::Cancel, now)?;
+        self.capture = false;
+        self.navigation = navigation;
         drop(self.edit.take());
         self.effective = id;
         Ok(())

@@ -31,7 +31,14 @@ impl CanvasTool for PanZoom {
             ToolInput::Fit => NavigationInput::Fit,
             ToolInput::OneToOne => NavigationInput::OneToOne,
         };
-        context.navigate(input)
+        context.navigate(input)?;
+        if matches!(
+            input,
+            NavigationInput::DoubleClick(_) | NavigationInput::Fit | NavigationInput::OneToOne
+        ) {
+            self.buttons = 0;
+        }
+        Ok(())
     }
     fn cancel(&mut self, _: ToolCancelReason) {
         self.buttons = 0;

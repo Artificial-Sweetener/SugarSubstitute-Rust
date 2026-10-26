@@ -71,6 +71,7 @@ impl CanvasTool for EditingTool {
         match input {
             ToolInput::Button { button: ToolButton::Primary, pressed: true } => {
                 context.begin_edit()?;
+                context.capture_pointer(true);
                 context.stage(DocumentEdit::Insert {
                     index: 0,
                     layer: Layer::new(LayerId::new(1)?, LayerContent::Exposure { stops: 1.0 })?,
@@ -141,9 +142,11 @@ fn lifecycle_loss_discards_preview_while_completed_gesture_uses_one_history_entr
         let release = ToolInput::Button { button: ToolButton::Primary, pressed: false };
         tools.input(press, Some(&mut document), Duration::ZERO)?;
         assert_eq!(tools.preview().map(|p| p.layers().len()), Some(1));
+        assert!(tools.captured());
         assert!(document.snapshot().layers().is_empty());
         tools.temporary_navigation(true, Some(&document), Duration::ZERO)?;
         assert!(tools.preview().is_none());
+        assert!(!tools.captured());
         tools.cancel(ToolCancelReason::FocusLost, Some(&document), Duration::ZERO)?;
         assert_eq!(tools.effective(), edit);
         assert!(!document.undo()?);

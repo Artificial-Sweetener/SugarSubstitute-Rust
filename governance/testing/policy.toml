@@ -11,7 +11,7 @@ minimum_tests = 11
 package = "sugarsubstitute-canvas"
 root = "crates/sugarsubstitute-canvas"
 concern = "Physical camera and exact damage invariants; semantic navigation stops, anchors, cadence, refresh deadlines and cancellation; tool selection, temporary navigation and document-bound transactional gestures sharing reversible history"
-minimum_tests = 33
+minimum_tests = 34
 
 [[owners]]
 package = "sugarsubstitute-canvas-render"
@@ -77,7 +77,7 @@ minimum_tests = 64
 package = "sugarsubstitute-desktop"
 root = "crates/sugarsubstitute-desktop"
 concern = "Nonblocking frame delivery, pre-Tao preparation, lossless wake handoff, bounded native dispatch, headless settlement, retained native storage, input and timing boundaries; current-view native reporter controls, explicit consent and inert save selection, clipboard transfer, bounded modal input and checked font/callback retirement; post-show native layout reconciliation and retained closed preview source mismatch; actual incomplete-probe conditions, coalesced creating-thread custody counters and bounded closed stderr observations"
-minimum_tests = 447
+minimum_tests = 483
 
 [[owners]]
 package = "sugarsubstitute-crash"
@@ -107,7 +107,7 @@ minimum_tests = 24
 package = "sugarsubstitute-ui"
 root = "crates/sugarsubstitute-ui"
 concern = "Admitted layered surface clipping, fractional coverage, cancellation and validated pixel publication; shared form peer identities and text limits, shaped measurement/paint agreement; shared native availability and activation fencing, bounded raster, progress and scrollbar widgets; native and portable label shaping, geometry, memory custody, clipping and styled console text"
-minimum_tests = 78
+minimum_tests = 81
 
 [[owners]]
 package = "sugarsubstitute-image-io"

@@ -856,7 +856,7 @@ rationale = "Publication-recovery qualification reads the authoritative cache ca
 [[records]]
 path = "tools/xtask/src/ui/tests.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:7fbda1f501d70322f8825442a52474e4132c539f7edbdc81b2ea692ef287f052"
+source_sha256 = "sha256:bfe390a1aab1d8108f7d8df76f002535c54f67bb55cd42e71db6c3b0713e82d2"
 capabilities = ["codec"]
 rationale = "Construct isolated malformed UI policy documents to verify unknown-schema, duplicate, stale-review and dependency-identity rejection through the real governance checker."
 

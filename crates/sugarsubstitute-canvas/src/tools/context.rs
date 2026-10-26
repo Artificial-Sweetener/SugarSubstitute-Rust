@@ -9,9 +9,14 @@ pub struct ToolContext<'a> {
     pub(super) document: Option<&'a mut Document>,
     pub(super) edit: &'a mut Option<EditSession>,
     pub(super) next_edit: &'a mut u64,
+    pub(super) capture: &'a mut bool,
     pub(super) now: Duration,
 }
 impl ToolContext<'_> {
+    /// Request/release pointer capture for this tool's gesture; only the desktop owns native effects.
+    pub fn capture_pointer(&mut self, active: bool) {
+        *self.capture = active;
+    }
     /// Observe the current shared camera and navigation policy.
     pub const fn navigation(&self) -> &Navigation {
         self.navigation
@@ -50,11 +55,14 @@ impl ToolContext<'_> {
         let doc =
             self.document.as_deref_mut().ok_or(CanvasError::Invalid("No editable document"))?;
         let edit = self.edit.take().ok_or(CanvasError::Invalid("Tool has no edit session"))?;
-        doc.commit_edit(edit)
+        let result = doc.commit_edit(edit);
+        *self.capture = false;
+        result
     }
     /// Cancel the active edit without changing document content, revision or history.
     pub fn cancel_edit(&mut self) {
         drop(self.edit.take());
+        *self.capture = false;
     }
     /// Observe transient geometry with its gesture and base-revision identities.
     pub fn preview(&self) -> Option<EditPreview<'_>> {

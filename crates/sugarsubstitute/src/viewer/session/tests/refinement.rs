@@ -30,9 +30,13 @@ struct Fixture {
     session: Session,
     wake: Arc<Wake>,
     release: Arc<AtomicBool>,
+    _directory: tempfile::TempDir,
 }
 fn preparing(filter: Filter) -> Result<Fixture, Box<dyn Error>> {
-    let (mut session, _) = session()?;
+    let (mut session, clock, directory) = session()?;
+    session.input(Input::Tool(ToolInput::OneToOne))?;
+    clock.0.store(80_000_000, Ordering::SeqCst);
+    session.tools.advance(Duration::from_millis(80))?;
     let wake = Arc::new(Wake::default());
     let owner = ExecutionOwner::new(session.clock.clone(), wake.clone())?;
     let client = owner.client();
@@ -50,14 +54,14 @@ fn preparing(filter: Filter) -> Result<Fixture, Box<dyn Error>> {
     session.runtime = Some(Runtime { owner, client, scope });
     session.rendering = Some(Rendering { job, filter, superseded: false });
     session.presented = Some(Presented {
-        view: session.view,
+        view: session.tools.navigation().viewport(),
         filter: Filter::Nearest,
         document: (1, 1),
         source_revision: 0,
-        damage: DamagePlan::full(session.view.surface()),
+        damage: DamagePlan::full(session.tools.navigation().viewport().surface()),
         base: None,
     });
-    Ok(Fixture { session, wake, release })
+    Ok(Fixture { session, wake, release, _directory: directory })
 }
 fn observe_terminal(session: &mut Session, wake: &Wake) -> Result<(), Box<dyn Error>> {
     while session.rendering.is_some() {
@@ -84,9 +88,9 @@ fn observe_terminal(session: &mut Session, wake: &Wake) -> Result<(), Box<dyn Er
 #[test]
 fn panning_a_preview_cancels_pending_finished_refinement_without_failing_the_viewer()
 -> Result<(), Box<dyn Error>> {
-    let Fixture { mut session, wake, .. } = preparing(Filter::Lanczos3)?;
-    session.input(Input::Pan(true))?;
-    session.input(Input::Pointer([7.0, 3.0]))?;
+    let Fixture { mut session, wake, _directory, .. } = preparing(Filter::Lanczos3)?;
+    session.input(Input::Tool(ToolInput::Button { button: ToolButton::Primary, pressed: true }))?;
+    session.input(Input::Tool(ToolInput::Pointer([7.0, 3.0])))?;
     assert_eq!(session.filter(), Filter::Nearest);
     observe_terminal(&mut session, &wake)?;
     assert!(session.failed.is_none());
@@ -97,9 +101,9 @@ fn panning_a_preview_cancels_pending_finished_refinement_without_failing_the_vie
 #[test]
 fn panning_keeps_nearest_work_alive_and_preserves_its_actual_failure() -> Result<(), Box<dyn Error>>
 {
-    let Fixture { mut session, wake, release } = preparing(Filter::Nearest)?;
-    session.input(Input::Pan(true))?;
-    session.input(Input::Pointer([7.0, 3.0]))?;
+    let Fixture { mut session, wake, release, _directory } = preparing(Filter::Nearest)?;
+    session.input(Input::Tool(ToolInput::Button { button: ToolButton::Primary, pressed: true }))?;
+    session.input(Input::Tool(ToolInput::Pointer([7.0, 3.0])))?;
     release.store(true, Ordering::SeqCst);
     observe_terminal(&mut session, &wake)?;
     assert!(session.failed.is_some());

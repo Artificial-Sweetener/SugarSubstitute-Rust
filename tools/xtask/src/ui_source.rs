@@ -151,6 +151,7 @@ impl Scanner {
             | "CreateFontW"
             | "CreateFontIndirectW" => Some(Capability::Text),
             "WindowBuilder"
+            | "CreateCursor"
             | "CreateWindowExW"
             | "CreateWindowExA"
             | "CreateWindowW"

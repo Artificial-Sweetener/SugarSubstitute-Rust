@@ -3,7 +3,7 @@
 //! Own native canvas windows and input while application services own image/document work.
 use crate::DesktopError;
 use std::{error::Error, path::PathBuf, sync::Arc, time::Duration};
-use sugarsubstitute_canvas::{DamagePlan, FrameStamp};
+use sugarsubstitute_canvas::{CursorIntent, DamagePlan, FrameStamp, ToolInput};
 use sugarsubstitute_contracts::execution::CompletionWake;
 use sugarsubstitute_image_gpu::{GpuDevice, GpuError, WindowFrame, WindowSurface};
 use sugarsubstitute_image_ops::Extent;
@@ -79,31 +79,29 @@ pub struct WindowOptions {
     /// Show the window; native qualification may keep it off the input desktop.
     pub visible: bool,
 }
-/// Physical native observations, independent of image editing and backend selection policy.
+/// Physical observations assigned to this canvas by desktop/interface hit testing and focus.
+/// Interface controls consume their observations before this boundary; transparent presentation
+/// alone does not establish an input target. Image editing and backend policy remain independent.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Input {
-    /// Pointer location in physical client pixels.
-    Pointer([f64; 2]),
-    /// Begin/end direct mouse panning; application owns its navigation state.
-    Pan(bool),
-    /// Native scrolling with its original device unit retained.
-    Wheel(WheelDelta),
-    /// Fit authored bounds into the current viewport.
-    Fit,
-    /// Display one document pixel per physical client pixel.
-    ActualSize,
+    /// Tool observation normalized once into physical pixels and hardware wheel steps.
+    Tool(ToolInput),
+    /// Non-repeating Space state, independent of persistent tool selection.
+    TemporaryNavigation(bool),
+    /// Current active display rate in hertz; unavailable timing selects the portable fallback.
+    DisplayRefresh(Option<f64>),
     /// Request a native image picker.
     Open,
     /// Cancel active drag state when native focus is lost.
     Unfocused,
 }
-/// Native wheel observations before application-owned zoom sensitivity is applied.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum WheelDelta {
-    /// Horizontal and vertical line steps.
-    Lines([f64; 2]),
-    /// Horizontal and vertical physical device-pixel deltas.
-    Pixels([f64; 2]),
+/// Application interaction intent; the desktop supplies actual native resources and capture.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Feedback {
+    /// Cursor shape resolved by the effective canvas tool.
+    pub cursor: CursorIntent,
+    /// Whether the current gesture requires native pointer capture.
+    pub capture: bool,
 }
 /// Application lifetime composed into a native canvas event loop.
 /// Every callback runs on the UI thread and must remain nonblocking; preparation uses execution.
@@ -120,10 +118,14 @@ pub trait Lifetime {
     /// # Errors
     /// Reports invalid geometry or admission failures.
     fn resize(&mut self, extent: Extent) -> Result<(), Box<dyn Error>>;
-    /// Apply navigation/open intent and coalesce requested view changes.
+    /// Apply input after desktop/interface hit testing assigns it to this canvas surface.
+    /// Overlaid controls keep their own pointer and keyboard focus. Captured canvas gestures
+    /// continue until release or explicit cancellation; UI toolkit events do not cross this port.
     /// # Errors
     /// Preserves original camera or application lifecycle failures.
     fn input(&mut self, input: Input) -> Result<(), Box<dyn Error>>;
+    /// Current effective-tool feedback without native handles or image preparation.
+    fn feedback(&self) -> Feedback;
     /// Request one modal native picker; returning true consumes the pending request.
     fn take_picker_request(&mut self) -> bool;
     /// Receive the actual selected path or ordinary cancellation.

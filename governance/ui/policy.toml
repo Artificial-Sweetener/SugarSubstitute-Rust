@@ -74,6 +74,8 @@ capabilities = ["raster", "text", "webview", "window"]
 sources = [
     "crates/sugarsubstitute-desktop/src/canvas/paint.rs",
     "crates/sugarsubstitute-desktop/src/canvas/windows.rs",
+    "crates/sugarsubstitute-desktop/src/canvas/windows/cursor.rs",
+    "crates/sugarsubstitute-desktop/src/canvas/windows/input/lifecycle_tests.rs",
     "crates/sugarsubstitute-desktop/src/installer/native/windows.rs",
     "crates/sugarsubstitute-desktop/src/linux.rs",
     "crates/sugarsubstitute-desktop/src/macos.rs",
@@ -117,7 +119,7 @@ sources = [
     "crates/sugarsubstitute-desktop/src/windows_text/field_tests.rs",
     "crates/sugarsubstitute-desktop/src/windows_text/renderer.rs",
 ]
-source_sha256 = "sha256:20576e3d3d9c34f95aad2ac7e1309daa77e68197df85c9d9ef36ee94c226c5f5"
+source_sha256 = "sha256:d0b5e70c591b54174eb1121e66b885d6edeb5b525c991fea3e4a5d092a33f000"
 
 [[boundaries]]
 owner = "sugarsubstitute-image-gpu"

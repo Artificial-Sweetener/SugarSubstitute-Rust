@@ -4,6 +4,26 @@
 use super::*;
 
 #[test]
+fn cancelling_an_incomplete_stop_keeps_the_visible_camera_in_custom_mode() -> TestResult {
+    let mut nav = navigation()?;
+    actual(&mut nav)?;
+    nav.input(NavigationInput::Fit, time(100))?;
+    nav.advance(time(140))?;
+    let visible = nav.viewport();
+    nav.input(NavigationInput::Cancel, time(140))?;
+    assert_eq!(nav.zoom_mode(), ZoomMode::Custom);
+    assert_eq!(nav.viewport(), visible);
+    assert_eq!(nav.next_deadline(time(140)), None);
+    nav.resize(Extent::new(1100, 600)?, time(150))?;
+    assert_eq!(nav.viewport().zoom(), visible.zoom());
+    nav.input(NavigationInput::DoubleClick([550.0, 300.0]), time(160))?;
+    nav.resize(Extent::new(1200, 600)?, time(180))?;
+    assert_eq!(nav.zoom_mode(), ZoomMode::Fit);
+    assert_eq!(nav.viewport().zoom(), 0.6);
+    Ok(())
+}
+
+#[test]
 fn cadence_retargets_without_a_queue_and_uses_exact_elapsed_endpoints() -> TestResult {
     for (cadence, duration) in [(25, 0), (26, 20), (40, 20), (100, 50), (160, 80)] {
         let mut nav = navigation()?;
@@ -42,11 +62,11 @@ fn fit_motion_interpolates_physical_pan_and_late_ticks_skip_to_endpoint() -> Tes
     for (current, original) in pan(middle).into_iter().zip(pan(start)) {
         assert!((current - original * 0.25).abs() < 1e-10);
     }
-    assert!(nav.next_deadline(time(140))?.is_some_and(|deadline| deadline > time(140)));
+    assert!(nav.next_deadline(time(140)).is_some_and(|deadline| deadline > time(140)));
     nav.advance(time(1000))?;
     assert_eq!(nav.viewport().zoom(), 0.5);
     assert_eq!(nav.viewport().origin(), [0.0; 2]);
-    assert_eq!(nav.next_deadline(time(1000))?, None);
+    assert_eq!(nav.next_deadline(time(1000)), None);
     Ok(())
 }
 
@@ -57,7 +77,7 @@ fn final_phased_wheel_delta_is_not_lost_when_gesture_ends() -> TestResult {
     nav.input(NavigationInput::Wheel { steps: 0.5, phase: ScrollPhase::End }, time(10))?;
     assert_eq!(nav.viewport().zoom(), 0.625 * 1.25_f64.sqrt());
     assert!(!nav.interacting());
-    assert_eq!(nav.next_deadline(time(10))?, None);
+    assert_eq!(nav.next_deadline(time(10)), None);
     Ok(())
 }
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -198,7 +218,7 @@ fn explicit_wheel_lifetime_outlasts_idle_and_end_does_not_discard_motion() -> Te
     nav.input(NavigationInput::Wheel { steps: 1.0, phase: ScrollPhase::Begin }, time(0))?;
     nav.advance(time(300))?;
     assert!(nav.interacting());
-    assert_eq!(nav.next_deadline(time(300))?, None);
+    assert_eq!(nav.next_deadline(time(300)), None);
     nav.input(NavigationInput::Wheel { steps: 1.0, phase: ScrollPhase::Update }, time(400))?;
     nav.input(NavigationInput::Wheel { steps: 0.0, phase: ScrollPhase::End }, time(410))?;
     assert!(nav.interacting());
@@ -217,14 +237,14 @@ fn fractional_refresh_periods_retime_without_restarting_animation() -> TestResul
     let mut nav = navigation()?;
     nav.set_refresh_rate(Some(144.0))?;
     nav.input(NavigationInput::OneToOne, time(0))?;
-    assert_eq!(nav.next_deadline(time(0))?, Some(Duration::from_nanos(6_944_444)));
+    assert_eq!(nav.next_deadline(time(0)), Some(Duration::from_nanos(6_944_444)));
     nav.advance(time(40))?;
     assert_eq!(nav.viewport().zoom(), 0.875);
     nav.set_refresh_rate(Some(120.0))?;
-    assert_eq!(nav.next_deadline(time(40))?, Some(Duration::from_nanos(41_666_665)));
+    assert_eq!(nav.next_deadline(time(40)), Some(Duration::from_nanos(41_666_665)));
     nav.advance(time(80))?;
     assert_eq!(nav.viewport().zoom(), 1.0);
-    assert_eq!(nav.next_deadline(time(80))?, None);
+    assert_eq!(nav.next_deadline(time(80)), None);
     Ok(())
 }
 

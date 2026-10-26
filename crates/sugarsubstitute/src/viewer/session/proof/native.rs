@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Qualify the ordinary native window and retirement path with the same bounded proof driver.
 use super::*;
-use sugarsubstitute_desktop::canvas::{CpuFrame, GpuPresentation, WindowTarget};
+use sugarsubstitute_desktop::canvas::{CpuFrame, Feedback, GpuPresentation, WindowTarget};
 use sugarsubstitute_image_ops::Extent;
 
 impl Lifetime for Proof {
@@ -26,6 +26,9 @@ impl Lifetime for Proof {
     }
     fn input(&mut self, input: Input) -> Result<(), Box<dyn Error>> {
         self.session.input(input)
+    }
+    fn feedback(&self) -> Feedback {
+        self.session.feedback()
     }
     fn take_picker_request(&mut self) -> bool {
         false

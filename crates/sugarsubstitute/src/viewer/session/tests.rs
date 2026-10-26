@@ -4,7 +4,9 @@
 use super::*;
 mod refinement;
 use std::sync::atomic::{AtomicU64, Ordering};
-use sugarsubstitute_desktop::canvas::{Input, Lifetime, WheelDelta};
+use sugarsubstitute_canvas::{ScrollPhase, ToolButton, ToolInput};
+use sugarsubstitute_desktop::canvas::{Input, Lifetime};
+use sugarsubstitute_image_ops::Extent;
 
 struct TestClock(AtomicU64);
 impl Clock for TestClock {
@@ -15,10 +17,11 @@ impl Clock for TestClock {
         Box::pin(std::future::pending())
     }
 }
-fn session() -> Result<(Session, Arc<TestClock>), Box<dyn Error>> {
+fn session() -> Result<(Session, Arc<TestClock>, tempfile::TempDir), Box<dyn Error>> {
+    let directory = tempfile::tempdir()?;
     let options = Options::parse([
         "--cache".into(),
-        "E:\\viewer-navigation-fixture".into(),
+        directory.path().as_os_str().to_owned(),
         "--width".into(),
         "320".into(),
         "--height".into(),
@@ -27,57 +30,76 @@ fn session() -> Result<(Session, Arc<TestClock>), Box<dyn Error>> {
     let clock = Arc::new(TestClock(AtomicU64::new(0)));
     let mut session = Session::new(options, DiagnosticHealth::fixture())?;
     session.clock = clock.clone();
-    Ok((session, clock))
+    session.tools.set_content(Some(Extent::new(640, 480)?), None, Duration::ZERO)?;
+    Ok((session, clock, directory))
 }
 #[test]
-fn cursor_zoom_previews_then_refines_at_the_original_quiet_cutoff() -> Result<(), Box<dyn Error>> {
-    let (mut session, clock) = session()?;
+fn normalized_tool_zoom_uses_the_execution_clock_and_refines_after_wheel_idle()
+-> Result<(), Box<dyn Error>> {
+    let (mut session, clock, _directory) = session()?;
     let pointer = [71.25, 53.5];
-    session.input(Input::Pointer(pointer))?;
-    let anchor = session.view.document_at(pointer)?;
-    session.input(Input::Wheel(WheelDelta::Lines([0.0, 4.0])))?;
-    assert_eq!(session.view.zoom(), 2.0);
-    assert_eq!(session.view.document_at(pointer)?, anchor);
+    session.input(Input::Tool(ToolInput::Pointer(pointer)))?;
+    let anchor = session.tools.navigation().viewport().document_at(pointer)?;
+    session.input(Input::Tool(ToolInput::Wheel { steps: 1.0, phase: ScrollPhase::Unphased }))?;
+    assert_eq!(session.tools.navigation().target_viewport().zoom(), 0.625);
     assert_eq!(session.filter(), Filter::Nearest);
     assert!(session.next_deadline().is_some());
+    clock.0.store(40_000_000, Ordering::SeqCst);
+    session.poll(Duration::ZERO)?;
+    let view = session.tools.navigation().viewport();
+    assert_eq!(view.zoom(), 0.59375);
+    assert_eq!(view.document_at(pointer)?, anchor);
     clock.0.store(119_999_999, Ordering::SeqCst);
+    session.poll(Duration::ZERO)?;
+    assert_eq!(session.tools.navigation().viewport().zoom(), 0.625);
     assert_eq!(session.filter(), Filter::Nearest);
     clock.0.store(120_000_000, Ordering::SeqCst);
+    session.poll(Duration::ZERO)?;
     assert_eq!(session.filter(), Filter::Lanczos3);
     assert!(session.next_deadline().is_none());
-    session.input(Input::Wheel(WheelDelta::Pixels([0.0, 480.0])))?;
-    assert_eq!(session.view.zoom(), 4.0);
-    assert_eq!(session.view.document_at(pointer)?, anchor);
-    assert_eq!(session.navigation_until, Some(Moment::from_nanos(240_000_000)));
+    session.input(Input::Tool(ToolInput::Wheel { steps: 0.5, phase: ScrollPhase::End }))?;
+    clock.0.store(180_000_000, Ordering::SeqCst);
+    session.poll(Duration::ZERO)?;
+    assert_eq!(session.tools.navigation().viewport().zoom(), 0.625 * 1.25_f64.sqrt());
+    assert_eq!(session.filter(), Filter::Lanczos3);
     Ok(())
 }
 #[test]
-fn panning_keeps_finished_quality_and_focus_loss_ends_the_drag() -> Result<(), Box<dyn Error>> {
-    let (mut session, _) = session()?;
-    session.input(Input::Pointer([20.0, 30.0]))?;
-    session.input(Input::Pan(true))?;
-    session.input(Input::Pointer([27.0, 19.0]))?;
-    assert_eq!(session.view.origin(), [-7.0, 11.0]);
+fn panning_keeps_finished_quality_and_focus_loss_ends_tool_capture() -> Result<(), Box<dyn Error>> {
+    let (mut session, clock, _directory) = session()?;
+    session.input(Input::Tool(ToolInput::OneToOne))?;
+    clock.0.store(80_000_000, Ordering::SeqCst);
+    session.poll(Duration::ZERO)?;
+    session.input(Input::Tool(ToolInput::Pointer([20.0, 30.0])))?;
+    session.input(Input::Tool(ToolInput::Button { button: ToolButton::Primary, pressed: true }))?;
+    session.input(Input::Tool(ToolInput::Pointer([27.0, 19.0])))?;
+    assert_eq!(session.tools.navigation().viewport().origin(), [-7.0, 11.0]);
+    assert!(session.feedback().capture);
     assert_eq!(session.filter(), Filter::Lanczos3);
-    assert_eq!(session.navigation_until, None);
+    assert!(session.next_deadline().is_none());
     session.input(Input::Unfocused)?;
-    session.input(Input::Pointer([100.0, 100.0]))?;
-    assert_eq!(session.view.origin(), [-7.0, 11.0]);
+    session.input(Input::Tool(ToolInput::Pointer([100.0, 100.0])))?;
+    assert_eq!(session.tools.navigation().viewport().origin(), [-7.0, 11.0]);
+    assert!(!session.feedback().capture);
     assert!(!session.take_picker_request());
     Ok(())
 }
 #[test]
 fn invalid_native_input_preserves_camera_and_closed_lifetimes_ignore_new_intent()
 -> Result<(), Box<dyn Error>> {
-    let (mut session, _) = session()?;
-    let previous = session.view;
-    assert!(session.input(Input::Wheel(WheelDelta::Lines([0.0, f64::NAN]))).is_err());
-    assert!(session.input(Input::Pointer([f64::INFINITY, 2.0])).is_err());
-    assert_eq!(session.view, previous);
+    let (mut session, _, _directory) = session()?;
+    let previous = session.tools.navigation().viewport();
+    assert!(
+        session
+            .input(Input::Tool(ToolInput::Wheel { steps: f64::NAN, phase: ScrollPhase::Unphased }))
+            .is_err()
+    );
+    assert!(session.input(Input::Tool(ToolInput::Pointer([f64::INFINITY, 2.0]))).is_err());
+    assert_eq!(session.tools.navigation().viewport(), previous);
     assert!(!session.is_closing());
     session.close()?;
     assert!(session.is_closing());
-    session.input(Input::Wheel(WheelDelta::Lines([0.0, 4.0])))?;
-    assert_eq!(session.view, previous);
+    session.input(Input::Tool(ToolInput::Wheel { steps: 4.0, phase: ScrollPhase::Unphased }))?;
+    assert_eq!(session.tools.navigation().viewport(), previous);
     Ok(())
 }

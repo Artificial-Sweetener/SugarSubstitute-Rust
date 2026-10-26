@@ -62,7 +62,11 @@ impl Session {
                     current.source_revision = scene.source_revision;
                     self.retire(Retired { _scene: Some(scene), ..Default::default() })?;
                 } else {
-                    self.view.fit(scene.document.snapshot().extent())?;
+                    self.tools.set_content(
+                        Some(scene.document.snapshot().extent()),
+                        Some(&scene.document),
+                        self.navigation_time(),
+                    )?;
                     if let Some(previous) = self.scene.replace(scene) {
                         self.retire(Retired { _scene: Some(previous), ..Default::default() })?;
                     }
@@ -108,7 +112,7 @@ impl Session {
                 let current = !self.closing
                     && self.pending_open.is_none()
                     && self.loading.is_none()
-                    && packet.view.surface() == self.view.surface()
+                    && packet.view.surface() == self.tools.navigation().viewport().surface()
                     && self.scene.as_ref().is_some_and(|scene| {
                         let snapshot = scene.document.snapshot();
                         packet.document == (snapshot.identity(), snapshot.revision())

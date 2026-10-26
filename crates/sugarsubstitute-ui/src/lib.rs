@@ -7,6 +7,7 @@ pub mod availability;
 /// Data-only pixel storage for shared painting and retained frame publication.
 pub mod bitmap;
 pub mod caption;
+pub mod cursor;
 pub mod form;
 pub mod icons;
 pub mod panel;

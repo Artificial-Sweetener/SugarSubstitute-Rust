@@ -15,7 +15,7 @@ use super::{
 };
 use crate::{diagnostics::DiagnosticHealth, job_sequence::JobSequence};
 use std::{error::Error, path::PathBuf, sync::Arc, time::Duration};
-use sugarsubstitute_canvas::{DamagePlan, FrameStamp, Viewport};
+use sugarsubstitute_canvas::{DamagePlan, FrameStamp, Navigation, ToolManager, Viewport};
 use sugarsubstitute_canvas_render::{CpuSurface, GpuSurface};
 use sugarsubstitute_contracts::{
     execution::*,
@@ -96,8 +96,7 @@ pub(super) struct Session {
     pending_retirement: Option<Retired>,
     retirement: Option<OwnedJob<(), WorkError>>,
     retirement_deadline: Option<Moment>,
-    view: Viewport,
-    navigation_until: Option<Moment>,
+    tools: ToolManager,
     initial_preview: bool,
     front: Option<CpuSurface>,
     gpu_front: Option<GpuSurface>,
@@ -108,8 +107,6 @@ pub(super) struct Session {
     expose_pending: bool,
     presented: Option<Presented>,
     frame_revision: u64,
-    pointer: [f64; 2],
-    dragging: bool,
     picker: bool,
     failed: Option<Box<dyn Error>>,
     closing: bool,
@@ -124,12 +121,18 @@ impl Session {
     /// Preview only during the current navigation interval; settled output always refines.
     fn filter(&self) -> Filter {
         if self.initial_preview
-            || self.navigation_until.is_some_and(|deadline| self.clock.now() < deadline)
+            || self.tools.navigation().resampling()
+            || (self.tools.navigation().captured()
+                && self.presented.as_ref().is_some_and(|shown| shown.filter == Filter::Nearest))
         {
             Filter::Nearest
         } else {
             Filter::Lanczos3
         }
+    }
+    /// One elapsed clock epoch supplies navigation and execution deadlines.
+    fn navigation_time(&self) -> Duration {
+        Duration::from_nanos(self.clock.now().as_nanos())
     }
     /// Create inert native application state; execution begins only when the desktop supplies wake.
     pub(super) fn new(options: Options, health: DiagnosticHealth) -> Result<Self, Box<dyn Error>> {
@@ -159,8 +162,7 @@ impl Session {
             pending_retirement: None,
             retirement: None,
             retirement_deadline: None,
-            view,
-            navigation_until: None,
+            tools: ToolManager::new(Navigation::new(view)),
             initial_preview: false,
             front: None,
             gpu_front: None,
@@ -171,8 +173,6 @@ impl Session {
             expose_pending: false,
             presented: None,
             frame_revision: 0,
-            pointer: [0.0; 2],
-            dragging: false,
             picker: false,
             failed: None,
             closing: false,
