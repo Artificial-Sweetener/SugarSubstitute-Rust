@@ -4232,7 +4232,7 @@ rationale = "Owned temporary directories keep viewer document and refinement fix
 [[records]]
 path = "crates/sugarsubstitute/src/viewer/session/tests/display.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:08487468a93cb54f06cda5bce794e7eff2be525dda0079cdc865a098448e381e"
+source_sha256 = "sha256:f6d43300340aad7ce886ea1a042610c7d8496ff7561bc41c421b16b21648713a"
 capabilities = ["tempfile::TempDir"]
 disposition = "fixture"
 rationale = "The admitted document and display publication fixture retains its isolated temporary directory through the actual session and execution lifetime. Temporary directory construction remains in the shared viewer test helper."

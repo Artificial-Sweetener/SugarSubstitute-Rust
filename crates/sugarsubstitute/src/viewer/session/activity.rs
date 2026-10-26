@@ -48,6 +48,7 @@ impl Session {
                 return Err("Canvas received a foreign execution scope notice".into());
             }
         }
+        self.consume_gpu_presentation()?;
         self.consume_initialization()?;
         if self.pending_retirement.is_none() {
             self.consume_device()?;
@@ -60,6 +61,9 @@ impl Session {
         }
         if self.pending_retirement.is_none() {
             self.consume_display()?;
+        }
+        if self.pending_retirement.is_none() {
+            self.submit_gpu_presentation()?;
         }
         if let Some(outcome) = Self::take(&mut self.retirement) {
             if let Err(cause) = Self::terminal(outcome) {
@@ -92,7 +96,10 @@ impl Session {
             return Ok(());
         }
         if self.pending_open.is_some() {
-            if self.loading.is_none() && self.rendering.is_none() {
+            if self.loading.is_none()
+                && self.rendering.is_none()
+                && !self.gpu_presentation_pending()
+            {
                 self.submit_load()?;
             }
             return Ok(());
@@ -101,7 +108,7 @@ impl Session {
             self.submit_display()?;
         }
         if self.loading.is_none() && self.rendering.is_none() && self.failed.is_none() {
-            if self.gpu_presentation.is_some() || self.awaiting_gpu.is_some() {
+            if self.gpu_presentation_pending() {
                 return Ok(());
             }
             self.submit_frame()?;
@@ -296,6 +303,7 @@ impl Session {
             || self.loading.is_some()
             || self.rendering.is_some()
             || self.displaying.is_some()
+            || self.presenting.is_some()
             || self.pending_retirement.is_some()
             || self.retirement.is_some()
         {
@@ -308,6 +316,7 @@ impl Session {
             || self.gpu_front.is_some()
             || self.fallback_gpu_front.is_some()
             || self.gpu_presentation.is_some()
+            || self.pending_gpu_presentation.is_some()
             || self.cpu_projection.is_some()
             || self.display_buffers.iter().any(Option::is_some)
         {
@@ -318,7 +327,10 @@ impl Session {
                 _fallback_front: self.fallback_front.take(),
                 _gpu_front: self.gpu_front.take(),
                 _fallback_gpu_front: self.fallback_gpu_front.take(),
-                _presentation: self.gpu_presentation.take().map(|presentation| presentation.frame),
+                _presentation: self
+                    .pending_gpu_presentation
+                    .take()
+                    .map(|presentation| presentation.frame),
                 _projection: self.cpu_projection.take(),
                 _buffers: std::mem::take(&mut self.display_buffers),
                 ..Default::default()
@@ -328,6 +340,7 @@ impl Session {
             self.display_evidence = None;
             self.display_buffer_extent = None;
             self.projection_base = None;
+            self.gpu_presentation = None;
             self.retire(retired)?;
         } else if !self.shutdown_started {
             if let Some(runtime) = &mut self.runtime {

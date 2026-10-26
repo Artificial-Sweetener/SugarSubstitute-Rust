@@ -38,8 +38,7 @@ impl Session {
     pub(super) fn submit_display(&mut self) -> Result<(), Box<dyn Error>> {
         if self.closing
             || self.displaying.is_some()
-            || self.gpu_presentation.is_some()
-            || self.awaiting_gpu.is_some()
+            || self.gpu_presentation_pending()
             || self.cpu_pending.is_some()
         {
             return Ok(());
@@ -294,7 +293,12 @@ impl Session {
                     work::DrawPixels::Gpu(Some(frame)) => {
                         self.pacing.prepared(target, now)?;
                         self.pending_gpu_evidence = Some(evidence);
-                        self.gpu_presentation = Some(GpuPresentation { target, frame });
+                        self.pending_gpu_presentation = Some(presentation::PendingPresentation {
+                            target,
+                            frame,
+                            deadline: self.clock.now().checked_add(Duration::from_secs(30))?,
+                            frame_period: self.pacing.period(),
+                        });
                     }
                     work::DrawPixels::Gpu(None) => {
                         self.pacing.abandoned(target, now)?;

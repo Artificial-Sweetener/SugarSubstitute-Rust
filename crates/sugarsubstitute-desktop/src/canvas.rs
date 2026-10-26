@@ -5,7 +5,7 @@ use crate::DesktopError;
 use std::{error::Error, path::PathBuf, sync::Arc, time::Duration};
 use sugarsubstitute_canvas::{CursorIntent, DamagePlan, FrameStamp, ToolInput};
 use sugarsubstitute_contracts::execution::CompletionWake;
-use sugarsubstitute_image_gpu::{GpuDevice, GpuError, WindowFrame, WindowSurface};
+use sugarsubstitute_image_gpu::{GpuDevice, GpuError, WindowPresentation, WindowSurface};
 use sugarsubstitute_image_ops::Extent;
 
 /// Desktop-owned peer custody, attached to GPU presentation only on the original window thread.
@@ -19,12 +19,13 @@ impl WindowTarget {
         WindowSurface::attach(device, self.0.clone())
     }
 }
-/// Completed native GPU presentation with the exact application frame identity it represents.
+/// Native queue acceptance returned by a presentation worker, with its exact application identity.
+/// Contains no GPU resource or operation that can block the window thread.
 pub struct GpuPresentation {
-    /// Actual completed application frame.
+    /// Actual application frame accepted by the native queue.
     pub target: FrameStamp,
-    /// Already-drawn native swapchain image; presentation performs no worker wait.
-    pub frame: WindowFrame,
+    /// Immutable queue receipt; acceptance does not prove compositor delivery or scanout.
+    pub receipt: WindowPresentation,
 }
 
 #[cfg(any(windows, test))]
@@ -170,7 +171,7 @@ pub trait Lifetime {
     /// # Errors
     /// Rejects foreign, duplicate or out-of-order desktop acknowledgements.
     fn did_present_cpu(&mut self, target: FrameStamp) -> Result<(), Box<dyn Error>>;
-    /// Take at most one completed native GPU presentation; ownership is consumed by presentation.
+    /// Take at most one worker-completed native queue receipt without performing GPU operations.
     fn take_gpu_presentation(&mut self) -> Option<GpuPresentation>;
     /// Acknowledge the exact completed frame after the native queue accepted presentation.
     /// # Errors

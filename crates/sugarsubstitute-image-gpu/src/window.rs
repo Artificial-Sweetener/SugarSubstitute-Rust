@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Native swapchain custody: attach on the window thread, prepare on workers, present completed work.
+//! Native swapchain custody: attach on the window thread, prepare and present on admitted workers.
 use crate::{
     DisplayImage, DisplayMapping, GpuDevice, GpuError,
     coordination::{ConfigurationIntent, SubmissionPermit},
@@ -35,7 +35,7 @@ pub(super) struct SurfaceOwner {
     _memory: MemoryClaim,
 }
 /// Worker-owned native GPU presentation state for one explicitly selected device and window.
-/// Attach on the OS window thread; acquire/configure/draw on an admitted worker. Preparation is
+/// Attach on the OS window thread; acquire/configure/draw/present on admitted workers. Preparation is
 /// serialized, and at most one unconsumed completed window frame may remain outstanding.
 pub struct WindowSurface {
     blitter: Option<Blitter>,
@@ -48,7 +48,7 @@ pub(super) struct PendingConfiguration {
     pub(super) reason: ReconfigureReason,
     pub(super) intent: ConfigurationIntent,
 }
-/// A completed native swapchain image. The desktop presents it on the original window thread.
+/// A completed native swapchain image transferred into an admitted native-presentation job.
 /// Dropping an unpublished value marks the surface for exclusive reconfiguration before another
 /// acquisition; original swapchain/window and submission custody remain alive through this token.
 pub struct WindowFrame {

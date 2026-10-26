@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Consume a prepared swapchain image without making the native UI thread wait for GPU custody.
+//! Consume a prepared swapchain image on an admitted worker while native input keeps pumping.
 
 use crate::{
     DisplayReadback, DisplayReadbackWorkspace, GpuError,
@@ -97,12 +97,18 @@ impl WindowFrame {
         Ok(workspace.pixels(pixels))
     }
 
-    /// Present already-completed native GPU work on the original desktop window thread.
+    /// Present already-completed native GPU work on an admitted worker.
+    ///
+    /// wgpu acquires device locks and may call a blocking driver entry point here, even after
+    /// rendering retired. Never call this from the native window/input thread. The original
+    /// desktop peer remains retained by the frame's surface owner through completion.
     /// The returned receipt requests one follow-up acquisition after each configuration because
     /// wgpu does not expose recoverable present status through its public queue API.
     /// # Errors
-    /// Preserves original device failures; this operation never waits for an execution job.
-    pub fn present(mut self) -> Result<WindowPresentation, GpuError> {
+    /// Preserves original control/device failures. Once native presentation starts, cancellation
+    /// cannot establish retirement; the owning execution job must observe the call returning.
+    pub fn present(mut self, context: &JobContext) -> Result<WindowPresentation, GpuError> {
+        crate::adapter::check(context)?;
         self.owner.device.faults.check()?;
         let texture = self
             .texture

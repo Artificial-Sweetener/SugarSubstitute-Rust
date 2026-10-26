@@ -247,6 +247,9 @@ impl Lifetime for Session {
         if let Some(displaying) = &self.displaying {
             displaying.cancel();
         }
+        if let Some(presenting) = &self.presenting {
+            presenting.job.cancel();
+        }
         Ok(())
     }
     fn is_closing(&self) -> bool {

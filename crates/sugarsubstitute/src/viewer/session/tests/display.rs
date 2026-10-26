@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Application publication labels actual completed display poses and rejects obsolete content.
 mod composite;
+mod presentation;
 use super::refinement::Wake;
 use super::*;
 use sugarsubstitute_canvas::{BackingCoverage, Document, ViewProjection};

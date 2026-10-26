@@ -7,6 +7,7 @@ mod completion;
 mod display;
 mod gpu;
 mod native;
+mod presentation;
 mod proof;
 mod startup;
 #[cfg(test)]
@@ -127,6 +128,8 @@ pub(super) struct Session {
     gpu_front: Option<GpuSurface>,
     fallback_gpu_front: Option<GpuSurface>,
     gpu_presentation: Option<GpuPresentation>,
+    pending_gpu_presentation: Option<presentation::PendingPresentation>,
+    presenting: Option<presentation::Presenting>,
     awaiting_gpu: Option<FrameStamp>,
     native_presented: Option<FrameStamp>,
     native_verified: bool,
@@ -203,6 +206,8 @@ impl Session {
             gpu_front: None,
             fallback_gpu_front: None,
             gpu_presentation: None,
+            pending_gpu_presentation: None,
+            presenting: None,
             awaiting_gpu: None,
             native_presented: None,
             native_verified: false,
@@ -295,6 +300,9 @@ impl Session {
         }
         if let Some(rendering) = &self.rendering {
             rendering.job.cancel();
+        }
+        if let Some(presenting) = &self.presenting {
+            presenting.job.cancel();
         }
         self.failed = None;
         self.title = self.labels.opening.to_owned();

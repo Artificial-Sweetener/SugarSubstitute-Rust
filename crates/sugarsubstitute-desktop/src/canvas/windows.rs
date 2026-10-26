@@ -224,7 +224,7 @@ fn run_with_picker(
                         }
                         if let Some(frame) = lifetime.take_gpu_presentation() {
                             let target = frame.target;
-                            let presentation = frame.frame.present()?;
+                            let presentation = frame.receipt;
                             displayed = Some(target);
                             lifetime.did_present_gpu(target)?;
                             if presentation.needs_follow_up {

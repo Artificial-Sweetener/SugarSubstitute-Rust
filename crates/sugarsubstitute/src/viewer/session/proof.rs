@@ -118,8 +118,7 @@ impl Proof {
         }
         if session.options.gpu.is_some()
             && session.native_target.is_some()
-            && (session.gpu_presentation.is_some()
-                || session.awaiting_gpu.is_some()
+            && (session.gpu_presentation_pending()
                 || session.native_presented.is_none()
                 || !session.native_verified)
         {
@@ -213,7 +212,24 @@ impl Proof {
             }
             4 => pan(session, center, [13.0, -7.0])?,
             5 => pan(session, center, [-5.0, 3.0])?,
-            9 => return self.prepare_output(),
+            9 => session.input(Input::Tool(ToolInput::Fit))?,
+            10 => {
+                session.input(Input::Tool(ToolInput::Pointer(center)))?;
+                session.input(Input::Tool(ToolInput::Wheel {
+                    steps: -4.0,
+                    phase: ScrollPhase::Unphased,
+                }))?;
+            }
+            11 => {
+                let extent = snapshot.extent();
+                let fit = (f64::from(target_view.surface().width()) / f64::from(extent.width()))
+                    .min(f64::from(target_view.surface().height()) / f64::from(extent.height()));
+                if target_view.zoom() >= fit {
+                    return Err("Viewer proof did not reach below-Fit zoom".into());
+                }
+                session.input(Input::Tool(ToolInput::Fit))?;
+            }
+            12 => return self.prepare_output(),
             _ => return Err("Invalid viewer proof navigation phase".into()),
         }
         self.phase += 1;
