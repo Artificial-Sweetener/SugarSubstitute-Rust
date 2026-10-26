@@ -79,7 +79,7 @@ impl Navigation {
     }
     /// Resolve feedback from the same availability rules that admit pan gestures.
     pub fn cursor(&self) -> CursorIntent {
-        if self.dragging {
+        if self.dragging && !self.drag_out && self.can_pan() {
             CursorIntent::ClosedHand
         } else if !self.drag_out && self.can_pan() {
             CursorIntent::OpenHand
@@ -114,12 +114,27 @@ impl Navigation {
         next.advance_inner(now)?;
         if next.view.surface() != extent {
             let fitting = next.mode == ZoomMode::Fit;
-            next.cancel();
+            let transition = next.transition;
             next.view.resize(extent)?;
-            if fitting && let Some(content) = next.content {
-                next.mode = ZoomMode::Fit;
-                next.view.fit(content)?;
+            if transition.is_none() {
+                if fitting && let Some(content) = next.content {
+                    next.view.fit(content)?;
+                } else {
+                    next.view = next.clamp(next.view)?;
+                }
+            } else if let Some(mut transition) = transition {
+                next.view = next.clamp(next.view)?;
+                transition.start = next.view;
+                transition.target.resize(extent)?;
+                if fitting && let Some(content) = next.content {
+                    transition.target.fit(content)?;
+                } else {
+                    transition.target = next.clamp(transition.target)?;
+                }
+                transition.begin = now;
+                next.transition = (transition.target != transition.start).then_some(transition);
             }
+            next.release_pan_if_unavailable();
         }
         *self = next;
         Ok(())
@@ -128,9 +143,7 @@ impl Navigation {
     pub fn set_policy(&mut self, locked: bool, drag_out: bool) {
         self.locked = locked;
         self.drag_out = drag_out;
-        if locked || drag_out {
-            self.cancel();
-        }
+        self.release_pan_if_unavailable();
     }
     /// Set the active display rate, retaining fractional frame periods and current motion progress.
     /// `None` uses 60 Hz. The desktop resolves actual display timing and monitor changes.
@@ -164,7 +177,9 @@ impl Navigation {
     pub fn input(&mut self, input: NavigationInput, now: Duration) -> Result<(), CanvasError> {
         let mut next = *self;
         next.advance_inner(now)?;
+        next.release_pan_if_unavailable();
         next.apply(input, now)?;
+        next.release_pan_if_unavailable();
         *self = next;
         Ok(())
     }
@@ -174,6 +189,7 @@ impl Navigation {
     pub fn advance(&mut self, now: Duration) -> Result<(), CanvasError> {
         let mut next = *self;
         next.advance_inner(now)?;
+        next.release_pan_if_unavailable();
         *self = next;
         Ok(())
     }

@@ -696,6 +696,6 @@ rationale = "Native canvas window consumes catalog-owned titles/status from the 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/canvas/windows/input/lifecycle_tests.rs"
-source_sha256 = "sha256:7ad7c92e87352af5af9f826d4aa24d4087aff7e069742896e379c28e3aff05c2"
+source_sha256 = "sha256:9d24ec60e8dbae9f1757c661d6d456da5b76f40ed2da47ac3c3b32a92e7690fe"
 kind = "fixture"
 rationale = "Hidden native input qualification creates an untitled OS STATIC peer; the class identifier is native plumbing, and the fixture presents no product copy."

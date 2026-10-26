@@ -6,11 +6,13 @@ use ::windows::{
     Win32::{
         Graphics::Gdi::{ClientToScreen, DeleteObject, HGDIOBJ},
         UI::{
+            HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
             Input::KeyboardAndMouse::{GetCapture, ReleaseCapture, SetCapture},
             WindowsAndMessaging::{
                 CreateWindowExW, DestroyWindow, GetCursor, GetIconInfo, HICON, ICONINFO,
-                SendMessageW, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CANCELMODE, WM_CAPTURECHANGED,
-                WM_ENTERSIZEMOVE, WM_EXITSIZEMOVE, WM_KILLFOCUS, WM_LBUTTONDOWN,
+                SM_CXCURSOR, SM_CYCURSOR, SendMessageW, WINDOW_EX_STYLE, WINDOW_STYLE,
+                WM_CANCELMODE, WM_CAPTURECHANGED, WM_ENTERSIZEMOVE, WM_EXITSIZEMOVE, WM_KILLFOCUS,
+                WM_LBUTTONDOWN,
             },
         },
     },
@@ -69,13 +71,19 @@ fn captured() -> HWND {
     unsafe { GetCapture() }
 }
 #[test]
-fn native_callback_keeps_shared_cursor_selection_after_owner_drop_until_final_destruction()
+fn native_callback_keeps_owned_cursor_valid_after_owner_drop_until_final_destruction()
 -> Result<(), Box<dyn Error>> {
     let mut window = Window::new()?;
     let input = NativeInput::new(window.handle()?, |_| Ok(()))?;
     input.cursor(CursorIntent::OpenHand)?;
     let state = Rc::downgrade(&input.state);
-    let cursor = input.state.cursor.get().ok_or("Cursor was not published")?;
+    let cursor = input
+        .state
+        .cursor
+        .borrow()
+        .as_ref()
+        .map(CursorResource::handle)
+        .ok_or("Cursor was not published")?;
     drop(input);
     assert!(state.strong_count() > 0);
     let mut info = ICONINFO::default();
@@ -94,6 +102,50 @@ fn native_callback_keeps_shared_cursor_selection_after_owner_drop_until_final_de
     assert!(mask && color);
     window.destroy()?;
     assert_eq!(state.strong_count(), 0);
+    Ok(())
+}
+
+#[test]
+fn qt_open_and_closed_hands_are_distinct_native_cursors_at_the_current_window_dpi()
+-> Result<(), Box<dyn Error>> {
+    let mut window = Window::new()?;
+    let handle = window.handle()?;
+    let input = NativeInput::new(handle, |_| Ok(()))?;
+    let open = input.state.cursors.get(handle, CursorIntent::OpenHand)?.handle();
+    let closed = input.state.cursors.get(handle, CursorIntent::ClosedHand)?.handle();
+    assert_ne!(open, closed);
+    // SAFETY: Read current metrics for this retained hidden peer without changing desktop state.
+    let dpi = unsafe { GetDpiForWindow(handle) };
+    // SAFETY: Read physical metrics without retaining or changing any desktop resource.
+    let size = unsafe {
+        [GetSystemMetricsForDpi(SM_CXCURSOR, dpi), GetSystemMetricsForDpi(SM_CYCURSOR, dpi)]
+    };
+    assert!(dpi > 0 && size.iter().all(|edge| *edge > 0));
+    for cursor in [open, closed] {
+        let mut info = ICONINFO::default();
+        // SAFETY: Query a live private cursor retained by this input state.
+        unsafe {
+            GetIconInfo(HICON(cursor.0), &mut info)?;
+        }
+        assert!(!info.fIcon.as_bool());
+        assert!(info.xHotspot > 0 && info.xHotspot < size[0] as u32);
+        assert!(info.yHotspot > 0 && info.yHotspot < size[1] as u32);
+        // SAFETY: GetIconInfo returned private bitmap copies owned by this test.
+        assert!(unsafe { DeleteObject(HGDIOBJ(info.hbmMask.0)) }.as_bool());
+        if !info.hbmColor.is_invalid() {
+            // SAFETY: This non-null color bitmap is the second private copy from GetIconInfo.
+            assert!(unsafe { DeleteObject(HGDIOBJ(info.hbmColor.0)) }.as_bool());
+        }
+    }
+    assert_eq!(input.state.cursors.get(handle, CursorIntent::OpenHand)?.handle(), open);
+    input.state.cursors.refresh(handle, true)?;
+    let refreshed_open = input.state.cursors.get(handle, CursorIntent::OpenHand)?.handle();
+    let refreshed_closed = input.state.cursors.get(handle, CursorIntent::ClosedHand)?.handle();
+    assert_ne!(refreshed_open, open);
+    assert_ne!(refreshed_closed, closed);
+    assert_ne!(refreshed_open, refreshed_closed);
+    window.destroy()?;
+    input.retire()?;
     Ok(())
 }
 #[test]

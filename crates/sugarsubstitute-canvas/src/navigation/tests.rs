@@ -19,6 +19,8 @@ fn cancelling_an_incomplete_stop_keeps_the_visible_camera_in_custom_mode() -> Te
     nav.input(NavigationInput::DoubleClick([550.0, 300.0]), time(160))?;
     nav.resize(Extent::new(1200, 600)?, time(180))?;
     assert_eq!(nav.zoom_mode(), ZoomMode::Fit);
+    assert!(nav.next_deadline(time(180)).is_some());
+    nav.advance(time(240))?;
     assert_eq!(nav.viewport().zoom(), 0.6);
     Ok(())
 }
@@ -301,7 +303,7 @@ fn invalid_observations_and_backward_time_do_not_mutate_camera_or_capture() -> T
 }
 
 #[test]
-fn integer_drag_preserves_exact_blit_phase_and_bounds_allow_small_native_images() -> TestResult {
+fn integer_drag_preserves_exact_blit_phase_and_small_native_images_stay_centered() -> TestResult {
     let mut nav = navigation()?;
     actual(&mut nav)?;
     let previous = nav.viewport();
@@ -311,10 +313,54 @@ fn integer_drag_preserves_exact_blit_phase_and_bounds_allow_small_native_images(
     nav.set_content(Some(Extent::new(100, 100)?), time(100))?;
     nav.input(NavigationInput::OneToOne, time(100))?;
     nav.advance(time(180))?;
-    assert!(nav.can_pan());
+    assert!(!nav.can_pan());
+    assert_eq!(nav.cursor(), CursorIntent::Arrow);
+    assert_eq!(nav.viewport().origin(), [-450.0, -200.0]);
+    let centered = nav.viewport();
     nav.input(NavigationInput::Pan(true), time(190))?;
+    assert!(!nav.captured());
     nav.input(NavigationInput::Pointer([100_000.0; 2]), time(191))?;
-    assert_eq!(nav.viewport().origin(), [-900.0, -400.0]);
+    assert_eq!(nav.viewport(), centered);
+    Ok(())
+}
+
+#[test]
+fn one_axis_overflow_admits_hand_capture_and_resize_to_fit_releases_it() -> TestResult {
+    let mut nav = Navigation::new(Viewport::new(Extent::new(1000, 500)?)?);
+    nav.set_content(Some(Extent::new(1200, 100)?), time(0))?;
+    nav.input(NavigationInput::OneToOne, time(0))?;
+    nav.advance(time(80))?;
+    assert!(nav.can_pan());
+    assert_eq!(nav.cursor(), CursorIntent::OpenHand);
+
+    nav.input(NavigationInput::Pan(true), time(90))?;
+    assert!(nav.captured());
+    assert_eq!(nav.cursor(), CursorIntent::ClosedHand);
+    nav.resize(Extent::new(1200, 500)?, time(91))?;
+    assert!(!nav.captured());
+    assert!(!nav.can_pan());
+    assert_eq!(nav.cursor(), CursorIntent::Arrow);
+    assert_eq!(nav.viewport().origin(), [0.0, -200.0]);
+    Ok(())
+}
+
+#[test]
+fn geometry_and_policy_changes_do_not_discard_zoom_transitions() -> TestResult {
+    let mut nav = navigation()?;
+    actual(&mut nav)?;
+    nav.input(NavigationInput::Pan(true), time(90))?;
+    nav.input(NavigationInput::Wheel { steps: -4.0, phase: ScrollPhase::Begin }, time(100))?;
+    assert!(!nav.captured());
+    assert_eq!(nav.zoom_mode(), ZoomMode::Fit);
+    assert!(nav.next_deadline(time(100)).is_some());
+    nav.resize(Extent::new(1200, 600)?, time(120))?;
+    assert!(nav.next_deadline(time(120)).is_some());
+    nav.set_policy(true, false);
+    assert!(nav.next_deadline(time(120)).is_some());
+    assert_eq!(nav.cursor(), CursorIntent::Arrow);
+    nav.advance(time(180))?;
+    assert_eq!(nav.zoom_mode(), ZoomMode::Fit);
+    assert_eq!(nav.viewport().zoom(), 0.6);
     Ok(())
 }
 

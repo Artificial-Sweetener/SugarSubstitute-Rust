@@ -1,5 +1,18 @@
 # Bundled material
 
+The native canvas open and closed hand cursors preserve the Qt Base 6.11.0
+artwork, Copyright (C) The Qt Company Ltd., from commit
+`8ba7ea4b77a4b8f1948760221e264917ddc9e1c8`. The PNG license annotation in
+`src/plugins/REUSE.toml` offers commercial, LGPL-3.0-only, GPL-2.0-only and
+GPL-3.0-only terms; this distribution uses GPL-3.0-only. The full license is
+preserved in `licenses/qt-hand-cursors.GPL-3.0-only.txt`.
+The six original PNGs are unchanged. `tools/package_hand_cursors.py` packages
+their original pixels into Windows CUR files using Qt's 32, 48 and 64 pixel
+hotspots from `qwindowscursor.cpp`: (10, 12), (15, 16) and (20, 24).
+Packaging is copyright Artificial Sweetener and contributors (2026).
+The manifest inventories the originals and derivatives. Windows displays these
+as native cursors; the executable includes no Qt runtime.
+
 The installer uses provisioning source from
 [Comfy Desktop](https://github.com/Comfy-Org/Comfy-Desktop), pinned by the
 `third_party/comfy-desktop` Git submodule. The build applies the reviewed patches

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Preserve hardware wheel units and native interaction lifetimes before Tao's scroll scaling.
-use super::cursor::Cursors;
+use super::cursor::{CursorResource, Cursors, OwnedCursor};
 use super::*;
 use crate::windows_subclass::{self, Registration};
 use ::windows::Win32::{
@@ -12,11 +12,12 @@ use ::windows::Win32::{
         Input::KeyboardAndMouse::{GetCapture, GetDoubleClickTime, ReleaseCapture, SetCapture},
         Shell::DefSubclassProc,
         WindowsAndMessaging::{
-            GetClientRect, GetCursorPos, GetMessageTime, HCURSOR, HTCLIENT, IsWindowVisible,
+            GetClientRect, GetCursor, GetCursorPos, GetMessageTime, HTCLIENT, IsWindowVisible,
             SM_CXDOUBLECLK, SM_CYDOUBLECLK, SetCursor, WM_CANCELMODE, WM_CAPTURECHANGED,
             WM_DISPLAYCHANGE, WM_DPICHANGED, WM_ENTERSIZEMOVE, WM_EXITSIZEMOVE, WM_KILLFOCUS,
             WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONUP, WM_MOUSEWHEEL, WM_NCDESTROY, WM_RBUTTONUP,
-            WM_SETCURSOR, WM_XBUTTONUP, WindowFromPoint,
+            WM_SETCURSOR, WM_SETTINGCHANGE, WM_SIZE, WM_SYSCOLORCHANGE, WM_THEMECHANGED,
+            WM_XBUTTONUP, WindowFromPoint,
         },
     },
 };
@@ -50,7 +51,9 @@ struct State {
     capture_owned: Cell<bool>,
     capture_lost: Cell<bool>,
     moving: Cell<bool>,
-    cursor: Cell<Option<HCURSOR>>,
+    cursor_intent: Cell<Option<sugarsubstitute_canvas::CursorIntent>>,
+    cursor: RefCell<Option<CursorResource>>,
+    selected_cursor: RefCell<Option<Rc<OwnedCursor>>>,
 }
 impl State {
     fn send(&self, event: NativeEvent) {
@@ -109,6 +112,86 @@ impl State {
             self.send(NativeEvent::CaptureLost);
         }
     }
+    fn pointer_owned(&self, window: HWND) -> Result<bool, DesktopError> {
+        // SAFETY: Read the original peer's visibility without creating or focusing another peer.
+        if !unsafe { IsWindowVisible(window) }.as_bool() {
+            return Ok(false);
+        }
+        if self.capture_owned.get() {
+            return Ok(true);
+        }
+        let mut point = POINT::default();
+        // SAFETY: Stack storage remains live through this synchronous input-desktop query.
+        unsafe { GetCursorPos(&mut point) }
+            .map_err(|cause| DesktopError::new("canvas_cursor_position", cause))?;
+        // SAFETY: These queries retain no peer and never change another control's input.
+        if unsafe { WindowFromPoint(point) } != window {
+            return Ok(false);
+        }
+        let mut client = point;
+        let mut bounds = RECT::default();
+        // SAFETY: Both writes target local storage for the same retained original HWND.
+        let converted = unsafe { ScreenToClient(window, &mut client) }.as_bool();
+        // SAFETY: The original HWND remains live; the complete client rect is copied out.
+        unsafe { GetClientRect(window, &mut bounds) }
+            .map_err(|cause| DesktopError::new("canvas_cursor_bounds", cause))?;
+        Ok(converted
+            && client.x >= bounds.left
+            && client.x < bounds.right
+            && client.y >= bounds.top
+            && client.y < bounds.bottom)
+    }
+    fn select_cursor(&self, cursor: &CursorResource) {
+        // SAFETY: The resource remains retained through SetCursor and selected_cursor replacement.
+        unsafe {
+            SetCursor(Some(cursor.handle()));
+        }
+        *self.selected_cursor.borrow_mut() = cursor.owned();
+    }
+    fn publish_cursor(
+        &self,
+        window: HWND,
+        intent: sugarsubstitute_canvas::CursorIntent,
+    ) -> Result<(), Box<dyn Error>> {
+        let cursor = self.cursors.get(window, intent)?;
+        self.cursor_intent.set(Some(intent));
+        if self.cursor.borrow().as_ref().is_some_and(|current| current.handle() == cursor.handle())
+        {
+            return Ok(());
+        }
+        *self.cursor.borrow_mut() = Some(cursor.clone());
+        if self.pointer_owned(window)? {
+            self.select_cursor(&cursor);
+        }
+        Ok(())
+    }
+    fn refresh_cursor(&self, window: HWND, force: bool) -> Result<(), Box<dyn Error>> {
+        self.cursors.refresh(window, force)?;
+        let Some(intent) = self.cursor_intent.get() else {
+            return Ok(());
+        };
+        let cursor = self.cursors.get(window, intent)?;
+        *self.cursor.borrow_mut() = Some(cursor.clone());
+        if self.pointer_owned(window)? {
+            self.select_cursor(&cursor);
+        }
+        Ok(())
+    }
+    fn retire_cursors(&self) {
+        let selected = self.selected_cursor.borrow().as_ref().map(|cursor| cursor.handle());
+        // SAFETY: Restore only when this state still owns the exact current custom cursor. A shared
+        // arrow remains Windows-owned and prevents destroying an in-use private handle.
+        if selected.is_some_and(|cursor| unsafe { GetCursor() } == cursor) {
+            // SAFETY: The shared arrow remains OS-owned beyond this private cursor's lifetime.
+            unsafe {
+                SetCursor(Some(self.cursors.arrow()));
+            }
+        }
+        self.selected_cursor.borrow_mut().take();
+        self.cursor.borrow_mut().take();
+        self.cursor_intent.set(None);
+        self.cursors.retire_custom();
+    }
 }
 /// Retain callback data until the original HWND's final destruction is observed.
 pub(super) struct NativeInput {
@@ -121,7 +204,7 @@ impl NativeInput {
         window: HWND,
         send: impl Fn(NativeEvent) -> Result<(), DesktopError> + 'static,
     ) -> Result<Self, Box<dyn Error>> {
-        let cursors = Cursors::new()?;
+        let cursors = Cursors::new(window)?;
         let state = Rc::new(State {
             send: Box::new(send),
             cursors,
@@ -131,7 +214,9 @@ impl NativeInput {
             capture_owned: Cell::new(false),
             capture_lost: Cell::new(false),
             moving: Cell::new(false),
-            cursor: Cell::new(None),
+            cursor_intent: Cell::new(None),
+            cursor: RefCell::new(None),
+            selected_cursor: RefCell::new(None),
         });
         let callback = Rc::new(state.clone());
         let registration = Registration::new(&callback);
@@ -157,54 +242,19 @@ impl NativeInput {
         }
         self.state.capture(self.window, active)
     }
-    /// Publish a shared system cursor only while the canvas client or its gesture owns the pointer.
+    /// Publish the requested cursor only while the canvas client or its gesture owns the pointer.
     pub(super) fn cursor(
         &self,
         intent: sugarsubstitute_canvas::CursorIntent,
     ) -> Result<(), Box<dyn Error>> {
-        let cursor = self.state.cursors.get(intent);
-        if self.state.cursor.get() == Some(cursor) {
-            return Ok(());
-        }
-        // SAFETY: Read the original peer's visibility without creating or focusing another peer.
-        let visible = unsafe { IsWindowVisible(self.window) }.as_bool();
-        let mut owned = self.state.capture_owned.get();
-        if visible {
-            let mut point = POINT::default();
-            // SAFETY: Stack storage remains live through this synchronous input-desktop query.
-            unsafe { GetCursorPos(&mut point) }
-                .map_err(|cause| DesktopError::new("canvas_cursor_position", cause))?;
-            // SAFETY: These queries retain no peer and never change another control's input.
-            if !owned && unsafe { WindowFromPoint(point) == self.window } {
-                let mut client = point;
-                let mut bounds = RECT::default();
-                // SAFETY: Both writes target local storage for the same retained original HWND.
-                let converted = unsafe { ScreenToClient(self.window, &mut client) }.as_bool();
-                // SAFETY: The original HWND remains live; the complete client rect is copied out.
-                unsafe { GetClientRect(self.window, &mut bounds) }
-                    .map_err(|cause| DesktopError::new("canvas_cursor_bounds", cause))?;
-                owned = converted
-                    && client.x >= bounds.left
-                    && client.x < bounds.right
-                    && client.y >= bounds.top
-                    && client.y < bounds.bottom;
-            }
-        }
-        self.state.cursor.set(Some(cursor));
-        if owned {
-            // SAFETY: Windows owns this shared cursor resource; SetCursor only selects it.
-            unsafe {
-                SetCursor(Some(cursor));
-            }
-        }
-        Ok(())
+        self.state.publish_cursor(self.window, intent)
     }
-    /// Observe callback retirement and discard only the selected shared-handle identity.
+    /// Observe callback retirement, restore a selected private cursor and release its resources.
     pub(super) fn retire(&self) -> Result<(), Box<dyn Error>> {
         if !self.retired() {
             return Err("Native input callback has not retired".into());
         }
-        self.state.cursor.set(None);
+        self.state.retire_cursors();
         self.check().map_err(Box::<dyn Error>::from)
     }
 }
@@ -237,6 +287,12 @@ unsafe extern "system" fn procedure(
         // SAFETY: Installation supplies this exact registered concrete type. Clone stable
         // custody before forwarding; no borrow of registration memory crosses native reentry.
         unsafe { windows_subclass::callback::<Rc<State>>(data) }.clone()
+    };
+    let refresh_cursor = match message {
+        WM_SIZE => Some(false),
+        WM_DISPLAYCHANGE | WM_DPICHANGED | WM_SETTINGCHANGE | WM_SYSCOLORCHANGE
+        | WM_THEMECHANGED => Some(true),
+        _ => None,
     };
     match message {
         WM_MOUSEWHEEL => {
@@ -299,15 +355,13 @@ unsafe extern "system" fn procedure(
         }
         WM_DISPLAYCHANGE | WM_DPICHANGED => state.send(NativeEvent::DisplayChanged),
         WM_SETCURSOR if wparam.0 == window.0 as usize && lparam.0 as u16 as u32 == HTCLIENT => {
-            if let Some(cursor) = state.cursor.get() {
-                // SAFETY: Windows retains this shared system cursor beyond the callback lifetime.
-                unsafe {
-                    SetCursor(Some(cursor));
-                }
+            if let Some(cursor) = state.cursor.borrow().clone() {
+                state.select_cursor(&cursor);
                 return LRESULT(1);
             }
         }
         WM_NCDESTROY => {
+            state.retire_cursors();
             // SAFETY: This is the exact matching final callback; the shared owner remains live
             // across chaining and the registration reclaims its one native Rc reference once.
             return unsafe {
@@ -331,6 +385,11 @@ unsafe extern "system" fn procedure(
     let result = unsafe { DefSubclassProc(window, message, wparam, lparam) };
     if releasing {
         state.releasing.set(previous);
+    }
+    if let Some(force) = refresh_cursor
+        && let Err(cause) = state.refresh_cursor(window, force)
+    {
+        state.fail(DesktopError::boxed("canvas_cursor_refresh", cause));
     }
     result
 }

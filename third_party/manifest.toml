@@ -1,6 +1,22 @@
 schema_version = 1
 
 [[components]]
+id = "qt-native-hand-cursors"
+source_url = "https://github.com/qt/qtbase/tree/8ba7ea4b77a4b8f1948760221e264917ddc9e1c8/src/plugins/platforms/windows/images"
+license = "GPL-3.0-only"
+license_file = "third_party/licenses/qt-hand-cursors.GPL-3.0-only.txt"
+files = [
+  "crates/sugarsubstitute-desktop/assets/cursors/openhandcursor_32.png",
+  "crates/sugarsubstitute-desktop/assets/cursors/openhandcursor_48.png",
+  "crates/sugarsubstitute-desktop/assets/cursors/openhandcursor_64.png",
+  "crates/sugarsubstitute-desktop/assets/cursors/closedhandcursor_32.png",
+  "crates/sugarsubstitute-desktop/assets/cursors/closedhandcursor_48.png",
+  "crates/sugarsubstitute-desktop/assets/cursors/closedhandcursor_64.png",
+  "crates/sugarsubstitute-desktop/assets/cursors/qt-open-hand.cur",
+  "crates/sugarsubstitute-desktop/assets/cursors/qt-closed-hand.cur",
+]
+
+[[components]]
 id = "qt-raster-numerical-adaptations"
 source_url = "https://github.com/qt/qtbase/tree/v6.11.0/src/gui/painting"
 license = "GPL-3.0-only AND FTL"
