@@ -25,6 +25,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import os from 'node:os';
+import { runInNewContext } from 'node:vm';
 import path from 'node:path';
 import { buildPhotoshop } from '../../../scripts/photoshop/build.js';
 import {
@@ -124,6 +125,41 @@ test.each(['../outside', 'C:/outside', '/outside', 'static\\outside'])(
     expect(() => packagePath(path.resolve('.'), reference)).toThrow('Unsafe package path');
   },
 );
+
+test('bundles reviewed image decoding without browser globals and includes its license notices', async () => {
+  const root = fixture(),
+    source = path.join(root, 'integrations/photoshop');
+  try {
+    writeFileSync(
+      path.join(source, 'src/index.ts'),
+      'import UPNG from "upng-js"; export const decode=UPNG.decode;',
+    );
+    writeFileSync(
+      path.join(source, 'static/index.html'),
+      '<html><body><script src="./main.js"></script></body></html>',
+    );
+    writeFileSync(path.join(source, 'manifest.json'), JSON.stringify(manifest()));
+    expect(await buildPhotoshop(root, false)).toBe(true);
+    const output = path.join(root, 'build/photoshop');
+    expect(readFileSync(path.join(output, 'third_party/NOTICE.md'), 'utf8')).toContain(
+      'UPNG.js 2.1.0',
+    );
+    for (const license of ['upng-js.MIT.txt', 'pako.LICENSE.txt'])
+      expect(readFileSync(path.join(output, 'third_party/licenses', license), 'utf8')).toMatch(
+        /copyright/i,
+      );
+    const module: { exports: Record<string, unknown> } = { exports: {} };
+    runInNewContext(readFileSync(path.join(output, 'main.js'), 'utf8'), {
+      module,
+      require: (name: string): never => {
+        throw new Error(`Unexpected unbundled dependency: ${name}`);
+      },
+    });
+    expect(typeof module.exports.decode).toBe('function');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test('rejects wildcard origins, missing resources and release inspector settings', () => {
   const invalid = manifest();

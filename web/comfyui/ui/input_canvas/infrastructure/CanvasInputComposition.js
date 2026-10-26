@@ -10,6 +10,10 @@ import { MasonryInputHost } from './MasonryInputHost.js';
 import { ComfyInputBindings } from './ComfyInputBindings.js';
 import { BrowserInputPreviews } from './BrowserInputPreviews.js';
 import { BrowserInputRasters } from './BrowserInputRasters.js';
+import { BrowserMaskEditing } from './BrowserMaskEditing.js';
+import { MaskInputPreparation } from '../application/MaskInputPreparation.js';
+import { ComfyMaskInputPreparation } from './ComfyMaskInputPreparation.js';
+import { PreparedInputPromptClient } from './PreparedInputPromptClient.js';
 import { ComfyInputReturnPreparation } from './ComfyInputReturnPreparation.js';
 import { ComfyInputAssociations } from './ComfyInputAssociations.js';
 /** Keep definition registration, execution preparation and view lifetime under explicit owners. */
@@ -19,12 +23,15 @@ export function createCanvasInputs(options) {
     const assets = new BrowserCanvasSourceAssets((input, init) => fetch(input, init));
     const capture = new CanvasSourceCapture(host);
     const rasters = new BrowserInputRasters(document, (input, init) => fetch(input, init));
+    const maskEditing = new BrowserMaskEditing();
     const previews = new CanvasSourcePreviews(capture, host, report);
     const legacy = new LegacyMaskMigration(legacyHost, assets);
     const defaults = new ComfyInputSourceDefaults(host, legacy);
     const bindings = new ComfyInputBindings(loaders, {
         host,
+        editable: options.editable,
         files: new BrowserInputPreviews((source) => assets.stage(source), rasters),
+        maskEditing,
         legacy,
         verifyFile: (file) => assets.verify(file),
         verifiedFile: (file) => assets.verified(file),
@@ -35,6 +42,7 @@ export function createCanvasInputs(options) {
     document.defaultView?.addEventListener('pagehide', () => {
         associations.dispose();
         bindings.clear();
+        maskEditing.dispose();
     }, { once: true });
     return {
         loaders,
@@ -44,7 +52,7 @@ export function createCanvasInputs(options) {
                 return null;
             const context = await capture.context(source.canvasId);
             return context.document ? { canvasId: source.canvasId, document: context.document } : null;
-        })),
+        }), new ComfyMaskInputPreparation(rasters, assets, new MaskInputPreparation(maskEditing), () => associations.preparationPairs()), new PreparedInputPromptClient((input, init) => fetch(input, init))),
         masonry,
         bindings,
         associations,

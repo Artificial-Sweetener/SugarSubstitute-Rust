@@ -38,6 +38,10 @@ export function createWorkflowCanvasComposition(options) {
     const canvasInputs = createCanvasInputs({
         document: options.document,
         host: (id) => workflowExecution.canvases.sourceHost(id),
+        editable: (id) => {
+            const capabilities = workflowExecution.canvases.layerHost(id)?.readCanvas()?.capabilities;
+            return Boolean(capabilities?.insertImageLayer && capabilities.positionImageLayer);
+        },
         legacyHost: (id) => workflowExecution.canvases.maskHost(id),
         graph: () => options.app?.graph,
         report: options.reportPresentationError,

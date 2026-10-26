@@ -17,16 +17,24 @@
 import type { CanvasPixelRaster } from '../../core/embedded/CanvasRuntime.js';
 import { isRecord } from '../../types/common.js';
 import { encodeSourcePng } from '../../core/embedded/CanvasPngEncoding.js';
+import { InputRasterTransformCache } from '../application/InputRasterTransformCache.js';
 
 /** Own one upload policy shared by source controls, migration and queue-time canvas capture. */
 export class BrowserCanvasSourceAssets {
   readonly #verified = new Set<string>();
+  readonly #staged = new InputRasterTransformCache<string>();
   /** Inject same-origin transport without giving application code browser networking APIs. */
   constructor(private readonly fetch: (input: string, init: RequestInit) => Promise<Response>) {}
 
-  /** Preserve raw source channels and assign an immutable name for each execution snapshot. */
-  async stage(pixels: CanvasPixelRaster): Promise<string> {
-    return await this.#upload(await encodeSourcePng(pixels), `source-${crypto.randomUUID()}.png`);
+  /** Reuse an immutable upload when source pixels survive capture or generation boundaries unchanged. */
+  stage(pixels: CanvasPixelRaster): Promise<string> {
+    return this.#staged.read(
+      [pixels],
+      '',
+      async () =>
+        await this.#upload(await encodeSourcePng(pixels), `source-${crypto.randomUUID()}.png`),
+      (file) => file.length * 2,
+    );
   }
 
   /** Upload the user's selected file without decoding or changing its original channel data. */

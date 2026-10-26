@@ -121,7 +121,9 @@ function mount(deferred = false) {
     next.splice(to, 0, next.splice(from, 1)[0]!);
     accept(next);
   });
-  const drag = new WorkflowTabPointerDrag(viewport, list, reorder, report, restored);
+  const drag = new WorkflowTabPointerDrag(viewport, list, reorder, report, restored, () =>
+    tabs.map(() => 180),
+  );
   drag.afterUpdate(tabs, null);
   restored();
   disposals.push(() => drag.dispose());

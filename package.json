@@ -56,7 +56,9 @@
     "@semantic-release/release-notes-generator": "^14.1.1",
     "@types/jest": "^29.5.14",
     "@types/node": "^22.20.1",
+    "@types/pako": "2.0.4",
     "@types/photoshop": "27.11.0",
+    "@types/upng-js": "2.1.5",
     "@typescript-eslint/eslint-plugin": "^8.64.0",
     "@typescript-eslint/parser": "^8.64.0",
     "conventional-changelog-conventionalcommits": "^10.4.0",
@@ -88,6 +90,8 @@
     "@spectrum-web-components/tabs": "1.12.5",
     "@spectrum-web-components/textfield": "1.12.5",
     "@spectrum-web-components/theme": "1.12.5",
+    "pako": "1.0.11",
+    "upng-js": "2.1.0",
     "vue": "3.5.43"
   },
   "overrides": {

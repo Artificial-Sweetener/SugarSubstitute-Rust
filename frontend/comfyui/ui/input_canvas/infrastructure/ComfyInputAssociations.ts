@@ -26,6 +26,7 @@ import type { ComfyInputBindings } from './ComfyInputBindings.js';
 import type { ComfyInputLoaders } from './ComfyInputLoaders.js';
 import { ComfyInputAssociationGraph } from './ComfyInputAssociationGraph.js';
 import { ComfyInputAssociationObserver } from './ComfyInputAssociationObserver.js';
+import { readInputBinding } from './InputBindingMetadata.js';
 
 /** Own lifecycle and host translation while application policy owns every relationship decision. */
 export class ComfyInputAssociations implements InputAssetBindingLookup {
@@ -43,7 +44,7 @@ export class ComfyInputAssociations implements InputAssetBindingLookup {
 
   /** Inject the root workflow and authoritative source-binding registry instead of reading rendered cards. */
   constructor(
-    loaders: ComfyInputLoaders,
+    private readonly loaders: ComfyInputLoaders,
     private readonly bindings: ComfyInputBindings,
     private readonly root: () => ComfyGraph | null | undefined,
     private readonly report: (error: unknown) => void,
@@ -73,11 +74,54 @@ export class ComfyInputAssociations implements InputAssetBindingLookup {
         const source = this.binding(association.image);
         return source?.loader.kind === 'image' ? source : null;
       },
+      editable: () => {
+        const image = this.relationships.exclusiveImage(key);
+        if (!image) return false;
+        return this.#editablePair(key, image);
+      },
       subscribe: (listener) =>
         this.relationships.subscribe((changed) => {
           if (changed.has(key)) listener();
         }),
     };
+  }
+
+  /** Capture settled queue-time topology without discovering candidates from value or presentation changes. */
+  preparationPairs(): ReadonlyMap<string, string> {
+    if (!this.#active) return new Map();
+    if (this.#scheduled || this.#membership || this.#dirty.size) this.#flush();
+    const result = new Map<string, string>();
+    for (const [mask, image] of this.relationships.exclusivePairs()) {
+      const maskKey = this.#graph.workflowKey(mask),
+        imageKey = this.#graph.workflowKey(image);
+      if (maskKey && imageKey && this.#editablePair(mask, image)) result.set(maskKey, imageKey);
+    }
+    return result;
+  }
+
+  /** Require one scalar decoded mask and a positioned canvas before exposing or preparing edits. */
+  #editablePair(mask: string, image: string): boolean {
+    const field = this.#graph.field(mask),
+      source = this.binding(image);
+    const state = field
+      ? readInputBinding(field.node.properties, 'mask', field.loader.field)
+      : null;
+    return Boolean(
+      field &&
+        state &&
+        source &&
+        !field.loader.ordered &&
+        !source.loader.ordered &&
+        state.entries.length === 1 &&
+        source.state.entries.length === 1 &&
+        source.context?.supported &&
+        source.context.document &&
+        source.canEditMask &&
+        this.loaders
+          .assetPorts()
+          .get(field.loader.classType)
+          ?.outputs.filter((kind) => kind === 'mask').length === 1,
+    );
   }
 
   /** Activate the current native workflow after setup or an explicitly completed configuration. */

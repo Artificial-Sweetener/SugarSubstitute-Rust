@@ -266,6 +266,7 @@ describe('ComfyVueNodeCardRenderer', () => {
               name: 'text',
               widgetId: 'cube:prompt',
               callback: expect.any(Function),
+              sugarcubesNativeWidgetOwner: expect.any(Function),
               ...(subgraph
                 ? {
                     sugarcubesNativeWidgetOrigins: [
@@ -340,7 +341,13 @@ describe('ComfyVueNodeCardRenderer', () => {
       expect.anything(),
       expect.objectContaining({
         nodeData: expect.objectContaining({
-          widgets: [{ ...safeWidget, callback: expect.any(Function) }],
+          widgets: [
+            {
+              ...safeWidget,
+              callback: expect.any(Function),
+              sugarcubesNativeWidgetOwner: expect.any(Function),
+            },
+          ],
         }),
       }),
     );
@@ -420,7 +427,13 @@ describe('ComfyVueNodeCardRenderer', () => {
       expect.anything(),
       expect.objectContaining({
         nodeData: expect.objectContaining({
-          widgets: [{ ...editable, callback: expect.any(Function) }],
+          widgets: [
+            {
+              ...editable,
+              callback: expect.any(Function),
+              sugarcubesNativeWidgetOwner: expect.any(Function),
+            },
+          ],
         }),
       }),
     );

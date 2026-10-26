@@ -79,6 +79,119 @@ test('shares one relationship authority with source lookup and reverse queries b
   f.dispose();
 });
 
+test('composite context belongs to its destination and queue preparation retains exact authored field paths', async () => {
+  const f = fixture();
+  f.consumer.type = 'ImageCompositeMasked';
+  f.consumer.inputs![0]!.name = 'destination';
+  f.consumer.inputs!.push({ name: 'source', type: 'IMAGE', link: null });
+  const generated: ComfyNode = {
+    id: 12,
+    type: 'EmptyImage',
+    inputs: [],
+    outputs: [{ name: 'IMAGE', type: 'IMAGE', links: [] }],
+  };
+  f.add(generated);
+  f.connect(3, generated, 0, f.consumer, 2);
+  f.owner.binding(f.owner.key(f.mask, 'image'));
+  f.owner.image(f.mask, 'image').read();
+  await settled();
+  expect(f.owner.image(f.mask, 'image').editable()).toBe(true);
+  const pairs = f.owner.preparationPairs();
+  expect([...pairs]).toEqual([
+    [JSON.stringify(['1000002', 'image']), JSON.stringify(['1000001', 'image'])],
+  ]);
+  f.disconnect(2);
+  await settled();
+  expect(f.owner.preparationPairs().size).toBe(0);
+  expect(pairs.size).toBe(1);
+  f.dispose();
+});
+
+test('an image loader with a connected native mask output prevents an additional editing pair', async () => {
+  const f = fixture();
+  const target: ComfyNode = {
+    id: 13,
+    type: 'Other',
+    inputs: [{ name: 'mask', type: 'MASK', link: null }],
+    outputs: [],
+  };
+  f.add(target);
+  f.connect(3, f.image, 1, target, 0);
+  f.owner.binding(f.owner.key(f.mask, 'image'));
+  f.owner.image(f.mask, 'image').read();
+  await settled();
+  expect(f.owner.image(f.mask, 'image').read()).not.toBeNull();
+  expect(f.owner.image(f.mask, 'image').editable()).toBe(false);
+  expect(f.owner.preparationPairs().size).toBe(0);
+  f.dispose();
+});
+
+test('multiple decoded mask sockets remain preview-only instead of exposing editing with guessed output attribution', async () => {
+  const f = fixture();
+  f.mask.type = 'CustomMask';
+  f.loaders.define({
+    CustomMask: {
+      output: ['MASK', 'MASK'],
+      input: { required: { image: [[], { image_upload: true }] } },
+    },
+  });
+  f.owner.definitionsChanged();
+  await settled();
+  f.owner.binding(f.owner.key(f.mask, 'image'));
+  f.owner.image(f.mask, 'image').read();
+  await settled();
+  expect(f.owner.image(f.mask, 'image').read()).not.toBeNull();
+  expect(f.owner.image(f.mask, 'image').editable()).toBe(false);
+  expect(f.owner.preparationPairs().size).toBe(0);
+  f.dispose();
+});
+
+test('editing follows exclusive scalar pair ownership and restores when a competing mask is disconnected', async () => {
+  const f = fixture(),
+    query = f.owner.image(f.mask, 'image');
+  query.read();
+  f.owner.binding(f.owner.key(f.mask, 'image'));
+  await settled();
+  expect(query.editable()).toBe(true);
+  const other: ComfyNode = { ...associationNodes().mask, id: 1000004 };
+  f.add(other);
+  f.consumer.inputs!.push({ name: 'second_mask', type: 'MASK', link: null });
+  f.connect(3, other, 0, f.consumer, 2);
+  await settled();
+  expect(query.read()).not.toBeNull();
+  expect(query.editable()).toBe(false);
+  const changed = jest.fn();
+  const stop = query.subscribe(changed);
+  f.disconnect(3);
+  await settled();
+  expect(query.editable()).toBe(true);
+  expect(changed).toHaveBeenCalledTimes(1);
+  stop();
+  f.dispose();
+});
+
+test('mask edits persist through the existing source owner and native workflow history', async () => {
+  const f = fixture();
+  const binding = f.bindings.get(f.mask, f.loaders.read('LoadImageMask')!);
+  await binding.initialize();
+  const before = jest.mocked(f.graph.beforeChange!).mock.calls.length;
+  binding.changeMaskEdits({ mask_dilation: 2, crop_factor: 0, post_dilation: 0, feather: 5 });
+  expect(binding.state.edits).toEqual({
+    mask_dilation: 2,
+    crop_factor: 0,
+    post_dilation: 0,
+    feather: 5,
+  });
+  expect(jest.mocked(f.graph.beforeChange!).mock.calls.length).toBe(before + 1);
+  const current = binding.state;
+  expect(() =>
+    binding.changeMaskEdits({ mask_dilation: 2, crop_factor: -1, post_dilation: 0, feather: 5 }),
+  ).toThrow('Invalid');
+  expect(binding.state).toEqual(current);
+  expect(f.mask.widgets?.map((widget) => widget.name)).toEqual(['image', 'channel']);
+  f.dispose();
+});
+
 test('updates programmatic connections and ambiguity without rebuilding native membership', async () => {
   const f = fixture(),
     changed = jest.fn();

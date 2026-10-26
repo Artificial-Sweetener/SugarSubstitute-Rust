@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Validate durable workflow source bindings before using native document references. */
 import { isRecord } from '../../types/common.js';
+import { readMaskEditSettings } from '../domain/MaskEditSettings.js';
 import { isCanvasInputSource } from '../../core/embedded/CanvasRuntime.js';
 import type { InputKind } from '../domain/InputLoader.js';
 import {
@@ -89,6 +90,7 @@ function parseBinding(value: unknown): InputBinding | null {
     selected: value.selected,
     entries,
     files: value.files.filter((file): file is string => typeof file === 'string'),
+    ...(value.edits === undefined ? {} : { edits: readMaskEditSettings(value.edits) }),
   };
 }
 

@@ -116,6 +116,7 @@ test.each([true, false])(
     viewport.append(view.element);
     document.body.append(viewport);
     view.update(tabs, () => false);
+    view.resize(tabs.map(() => 180));
     await Updates.next();
     const ids = tabs.map((tab) => `sc-workflow-${tab.id}`);
     const a = document.getElementById(ids[0]!)!;
@@ -157,7 +158,9 @@ test('stationary captured presses retain the native control as the browser click
   list.append(...tabs);
   viewport.append(list);
   document.body.append(viewport);
-  const drag = new WorkflowTabPointerDrag(viewport, list, reorder, jest.fn(), jest.fn());
+  const drag = new WorkflowTabPointerDrag(viewport, list, reorder, jest.fn(), jest.fn(), () =>
+    tabs.map(() => 180),
+  );
   drag.afterUpdate(tabs, null);
   const pressed = tabs[1]!;
   const capture = captureBoundary([viewport, ...tabs]);

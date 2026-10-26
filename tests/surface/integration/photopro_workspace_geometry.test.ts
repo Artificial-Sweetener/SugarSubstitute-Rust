@@ -315,3 +315,59 @@ test('shares square header tools and a centered, selected-only advanced disclosu
     await page.close();
   }
 });
+
+test('name-sized PhotoPro tabs preserve the complete title and reserve the close-button slot', async () => {
+  const page = await browser.newPage();
+  try {
+    await page.setContent(
+      '<html data-sc-visual-style="photopro"><body><header class="sc-substitute-frame"><div data-sc-workflow-tabs><div data-sc-workflow-tab><span class="sc-workflow-title">Anima (2)</span><button class="sc-workflow-close">×</button></div></div></header></body></html>',
+    );
+    await page.addStyleTag({ content: substituteFrameCss + photoProAppearanceCss() });
+    const result = await page.locator('[data-sc-workflow-tab]').evaluate((tab) => {
+      const title = tab.querySelector<HTMLElement>('.sc-workflow-title')!,
+        close = tab.querySelector('.sc-workflow-close')!;
+      const range = document.createRange();
+      range.selectNodeContents(title);
+      const text = range.getBoundingClientRect(),
+        label = title.getBoundingClientRect(),
+        button = close.getBoundingClientRect(),
+        bounds = tab.getBoundingClientRect();
+      return {
+        mask: getComputedStyle(title).maskImage,
+        text: text.width,
+        label: label.width,
+        gap: button.left - label.right,
+        close: button.width,
+        remaining: bounds.right - button.right,
+      };
+    });
+    expect(result.mask).toBe('none');
+    expect(result.label).toBeGreaterThanOrEqual(result.text - 0.1);
+    expect(result.gap).toBeGreaterThanOrEqual(6);
+    expect(result.close).toBe(14);
+    expect(result.remaining).toBeGreaterThanOrEqual(8);
+  } finally {
+    await page.close();
+  }
+});
+
+test('PhotoPro retains the tab content extent inside a narrow scrolling viewport', async () => {
+  const page = await browser.newPage();
+  try {
+    await page.setContent(
+      '<html data-sc-visual-style="photopro"><body><header class="sc-substitute-frame"><div class="sc-workflow-strip" style="width:100px"><div data-sc-workflow-tabs style="--sc-workflow-tabs-width:400px"><div data-sc-workflow-tab><span class="sc-workflow-title">A longer workflow title</span><button class="sc-workflow-close">×</button></div><div data-sc-workflow-tab><span class="sc-workflow-title">Another workflow title</span><button class="sc-workflow-close">×</button></div></div></div></header></body></html>',
+    );
+    await page.addStyleTag({ content: substituteFrameCss + photoProAppearanceCss() });
+    const extent = await page.locator('.sc-workflow-strip').evaluate((viewport) => {
+      viewport.scrollLeft = 100;
+      return {
+        width: viewport.clientWidth,
+        content: viewport.scrollWidth,
+        position: viewport.scrollLeft,
+      };
+    });
+    expect(extent).toEqual({ width: 100, content: 400, position: 100 });
+  } finally {
+    await page.close();
+  }
+});

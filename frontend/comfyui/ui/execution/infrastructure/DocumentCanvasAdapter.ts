@@ -31,6 +31,13 @@ export function documentCanvasAdapter<Bytes>(
   return {
     id,
     capabilities: {
+      layers: host,
+      get geometry() {
+        const capabilities = host.readCanvas()?.capabilities;
+        return capabilities && 'geometry' in capabilities && capabilities.geometry
+          ? (host.geometry ?? undefined)
+          : undefined;
+      },
       get sources() {
         return host.sources ?? undefined;
       },
@@ -83,7 +90,9 @@ export function documentCanvasAdapter<Bytes>(
                           document: returned?.kind === 'region' ? returned.document : document,
                           image: prepared.image,
                           position: prepared.position,
-                          layerName: media.file.filename.slice(0, 128) || 'Generated image',
+                          layerName:
+                            media.file.filename.replace(/\.png$/i, '').slice(0, 128) ||
+                            'Generated image',
                         },
                         stop,
                       );

@@ -425,6 +425,7 @@ test('overflow activation reveals the selected tab and activity preserves delibe
     selected: index === 2,
   }));
   view.update(tabs, () => false);
+  view.resize(tabs.map(() => 180));
   await settle();
   expect(viewport.scrollLeft).toBe(260);
   viewport.scrollLeft = 0;
@@ -539,7 +540,7 @@ test('condensed selection and both wheel axes use allocated geometry without reb
   document.body.append(viewport);
   Object.defineProperty(viewport, 'clientWidth', { value: 200 });
   Object.defineProperty(viewport, 'scrollWidth', { value: 480 });
-  view.resize(120);
+  view.resize([120, 120, 120, 120]);
   const tabs = ['a', 'b', 'c', 'd'].map((key, index) => ({
     id: workflowSessionId(key),
     title: key,

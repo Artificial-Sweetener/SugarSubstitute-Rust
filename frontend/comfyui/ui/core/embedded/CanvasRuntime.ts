@@ -15,9 +15,17 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Bundle portable canvas mechanics for browser consumers without native editor dependencies. */
 export { CanvasClient } from '../../../../../integrations/shared/CanvasClient.js';
-export { MAX_CANVAS_IMAGE_BYTES } from '../../../../../integrations/shared/CanvasImagePolicy.js';
+export {
+  MAX_CANVAS_IMAGE_BYTES,
+  MAX_CANVAS_IMAGE_PIXELS,
+  canvasPngDimensions,
+} from '../../../../../integrations/shared/CanvasImagePolicy.js';
 export { encodeCanvasImage } from '../../../../../integrations/shared/CanvasImageEncoding.js';
 export { prepareCanvasImagePatch } from '../../../../../integrations/shared/CanvasImageRegions.js';
+export {
+  cropCanvasImageRegion,
+  resolveCanvasImageRegion,
+} from '../../../../../integrations/shared/CanvasImageRegionCrop.js';
 export { CanvasCancellation } from '../../../../../integrations/shared/CanvasCancellation.js';
 export { WEB_CANVAS } from '../../../../../integrations/contracts/CanvasHost.js';
 export { CanvasMaskClient } from '../../../../../integrations/shared/CanvasMaskClient.js';
@@ -43,6 +51,7 @@ export type {
 export {
   isCanvasInputTarget,
   isCanvasInputSource,
+  isCanvasPixelRaster,
 } from '../../../../../integrations/shared/CanvasValidation.generated.js';
 export {
   encodeCanvasRaster,
@@ -83,3 +92,8 @@ export type {
   CanvasAdapter,
   CanvasOutputBinding,
 } from '../../../../../integrations/contracts/CanvasAdapter.js';
+export type { CanvasGeometryHost } from '../../../../../integrations/contracts/CanvasGeometry.js';
+export {
+  canvasSizingProposal,
+  constrainCanvasDimension,
+} from '../../../../../integrations/shared/CanvasDimensions.js';

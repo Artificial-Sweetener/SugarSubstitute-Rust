@@ -446,6 +446,7 @@ def test_resolve_active_comfy_node_class_mappings_ignores_local_shadowing(
         "SugarCubes.CubeOutput",
         "SugarCubes.ManagedImageOutput",
         "SugarCubes.OutputSavingPolicyError",
+        "SugarCubes.SpatialProbeMeasurement",
     }
     assert any(
         "active Comfy nodes registry unavailable" in record.message

@@ -115,6 +115,8 @@ test('adapts owned custom JSON widgets and spec-free advanced controls through t
   mount.remove();
 });
 test('adapts only known native fields of the requested node and writes through its Vue emitter', () => {
+  const sourceNode = { id: 1, widgets: [{ name: 'width', value: 1024 }] };
+  const graph = { _nodes: [{ id: 11, subgraph: { _nodes: [sourceNode] } }] };
   const mount = document.createElement('div');
   mount.className = 'sugarcubes-native-node-card sugarcubes-cube-face__native-card-mount';
   const root = document.createElement('div');
@@ -158,7 +160,14 @@ test('adapts only known native fields of the requested node and writes through i
           nodeData: {
             type: 'EmptyLatentImage',
             title: 'Latent',
-            widgets: [{ name: 'width', type: 'number', value: 1024 }],
+            widgets: [
+              {
+                name: 'width',
+                type: 'number',
+                value: 1024,
+                sugarcubesNativeWidgetOwner: () => ({ node: sourceNode, name: 'width' }),
+              },
+            ],
           },
         },
         subTree: {
@@ -173,8 +182,9 @@ test('adapts only known native fields of the requested node and writes through i
       },
     },
   });
-  const card = readNativeEditorCard(root);
+  const card = readNativeEditorCard(root, () => graph);
   expect(card?.nodeType).toBe('EmptyLatentImage');
+  expect(card?.fields[0]?.targets?.()).toEqual([{ nodeId: '11:1', inputName: 'width' }]);
   expect(card?.fields).toHaveLength(1);
   expect(card?.fields[0]?.element).toBe(row);
   expect(card?.fields[0]?.element.contains(label)).toBe(true);

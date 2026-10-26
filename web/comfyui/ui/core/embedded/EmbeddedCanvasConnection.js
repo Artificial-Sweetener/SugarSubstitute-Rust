@@ -17,6 +17,10 @@
 import { CanvasClient, CanvasMaskClient, } from './CanvasRuntime.js';
 /** Keep the optional native canvas unavailable until the panel has authenticated and negotiated it. */
 export class EmbeddedCanvasConnection {
+    /** Borrow the existing authenticated request sequence for optional geometry operations. */
+    get geometry() {
+        return this.#client?.geometry ?? null;
+    }
     #client = null;
     #masks = null;
     /** Expose source reads on the authenticated canvas connection without a second request sequence. */

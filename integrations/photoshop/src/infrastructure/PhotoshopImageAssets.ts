@@ -13,65 +13,51 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Materialize validated portable PNG payloads in plugin-owned temporary storage. */
-import { storage } from 'uxp';
-/** Describe trusted file entries returned by UXP's plugin-owned temporary storage. */
-interface TemporaryImageFile {
-  write(data: ArrayBuffer, options: { format: symbol }): Promise<void>;
-  delete(): Promise<void>;
-}
-/** Supply the documented storage factory absent from the pinned namespace declarations. */
-interface TemporaryImageStorage {
-  localFileSystem: {
-    getTemporaryFolder(): Promise<{ createFile(name: string): Promise<TemporaryImageFile> }>;
-    createSessionToken(file: TemporaryImageFile): string;
-  };
-  formats: { binary: symbol };
-}
-// Native proof verifies this factory; the pinned UXP namespace omits localFileSystem and File.delete.
-const temporaryStorage = storage as unknown as TemporaryImageStorage;
+/** Prepare native sRGB pixel memory outside document mutation and dispose it after delivery. */
+import { imaging } from 'photoshop';
 import type { CanvasEncodedImage } from '../../../contracts/CanvasProtocol.generated.js';
-import { decodeCanvasImage } from '../../../shared/CanvasImageEncoding.js';
 import type { CanvasCancellationSource } from '../../../contracts/CanvasHost.js';
 import type { PreparedCanvasImage } from '../application/InsertCanvasImage.js';
-import { canvasPngDimensions } from '../../../shared/CanvasImagePolicy.js';
-/** Own temporary file identity without granting native adapters network or arbitrary filesystem access. */
+import { decodeCanvasImage } from '../../../shared/CanvasImageEncoding.js';
+import { photoshopPngPixels } from './PhotoshopPngPixels.js';
+
+type NativeImageData = Awaited<ReturnType<typeof imaging.createImageDataFromBuffer>>;
+
+/** Own bounded pixel buffers without temporary documents or filesystem materialization. */
 export class PhotoshopImageAssets {
-  readonly #files = new Map<string, TemporaryImageFile>();
-  /** Grant Photoshop access to exactly one plugin-owned image without exposing filesystem paths. */
-  token(key: string): string {
-    const file = this.#files.get(key);
-    if (!file) throw new Error('The prepared canvas image is unavailable.');
-    return temporaryStorage.localFileSystem.createSessionToken(file);
+  readonly #images = new Map<string, NativeImageData>();
+
+  /** Borrow prepared pixels only during their application's insertion lifetime. */
+  imageData(key: string): NativeImageData {
+    const image = this.#images.get(key);
+    if (!image) throw new Error('The prepared canvas pixels are unavailable.');
+    return image;
   }
-  /** Decode and admit the portable payload before creating temporary native material. */
+
+  /** Validate compressed and decoded geometry before acquiring native pixel memory. */
   async prepare(
     image: CanvasEncodedImage,
     cancellation: CanvasCancellationSource,
   ): Promise<PreparedCanvasImage> {
     if (cancellation.cancelled()) throw new Error('Canvas image preparation cancelled.');
-    const bytes = decodeCanvasImage(image);
-    const dimensions = canvasPngDimensions(bytes);
+    const { width, height, pixels } = photoshopPngPixels(decodeCanvasImage(image));
+    const data = await imaging.createImageDataFromBuffer(pixels, {
+      width,
+      height,
+      components: 4,
+      chunky: true,
+      colorSpace: 'RGB',
+      colorProfile: 'sRGB IEC61966-2.1',
+    });
     const key = crypto.randomUUID();
-    const folder = await temporaryStorage.localFileSystem.getTemporaryFolder();
-    const file = await folder.createFile(`sugarcubes-${key}.png`);
-    try {
-      await file.write(new Uint8Array(bytes).buffer, { format: temporaryStorage.formats.binary });
-    } catch (error: unknown) {
-      try {
-        await file.delete();
-      } catch (cleanup: unknown) {
-        throw new AggregateError([error, cleanup], 'Canvas image preparation and cleanup failed.');
-      }
-      throw error;
-    }
-    this.#files.set(key, file);
+    this.#images.set(key, data);
     return {
       key,
-      ...dimensions,
+      width,
+      height,
       dispose: async () => {
-        this.#files.delete(key);
-        await file.delete();
+        this.#images.delete(key);
+        await data.dispose();
       },
     };
   }

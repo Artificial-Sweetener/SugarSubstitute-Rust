@@ -29,6 +29,7 @@ import { MasonryInputEditor } from '../../../frontend/comfyui/ui/input_canvas/pr
 import { publishPluginMode } from '../../../frontend/comfyui/ui/core/PluginMode.js';
 import type { ComfyNode } from '../../../frontend/comfyui/ui/types/graph.js';
 import type { CanvasPixelRaster } from '../../../integrations/contracts/CanvasProtocol.generated.js';
+import { nativePresentationWidgets } from '../../../frontend/comfyui/ui/surface/NativePresentationWidgets.js';
 
 beforeAll(() =>
   Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: randomUUID }),
@@ -186,6 +187,63 @@ test('shows one wash over the associated composition source and reinterprets cha
   expect(view.element.querySelector('.sc-input-editor__frame')).toBe(frame);
   expect(view.element.querySelector('canvas')).toBe(canvas);
   expect(f.stage).not.toHaveBeenCalled();
+  expect(f.report).not.toHaveBeenCalled();
+  f.dispose();
+});
+
+test('native mask fields default to no crop and switch between persistent context and actual-input previews', async () => {
+  const f = await fixture(),
+    read = f.execute.getMockImplementation();
+  if (!read) throw new Error('Missing canvas reader');
+  const selected = encodeCanvasRaster(3, 2, 'coverage8', Uint8Array.from([0, 255, 0, 0, 0, 0]));
+  f.execute.mockImplementation(async (query) => {
+    const result = await read(query);
+    return result.kind === 'captured'
+      ? {
+          ...result,
+          snapshots: result.snapshots.map((snapshot) =>
+            snapshot.target.kind === 'selection' ? { ...snapshot, pixels: selected } : snapshot,
+          ),
+        }
+      : result;
+  });
+  const view = await f.mount(),
+    canvas = view.element.querySelector('canvas'),
+    frame = view.element.querySelector<HTMLElement>('.sc-input-editor__frame');
+  const crop = nativePresentationWidgets(f.node).find((widget) => widget.label === 'Crop Factor');
+  expect(crop).toMatchObject({ type: 'number', value: 0, serialize: false });
+  for (const label of ['Mask Dilation', 'Crop Factor', 'Post Dilation', 'Feather'])
+    expect(
+      nativePresentationWidgets(f.node).find((widget) => widget.label === label),
+    ).toMatchObject({ type: 'number', value: 0, options: { presentation: 'spinner-slider' } });
+  crop?.callback?.(1);
+  expect(frame?.style.aspectRatio).toBe('3 / 2');
+  await settled();
+  const outline = view.element.querySelector<HTMLElement>('.sc-input-editor__crop');
+  expect(outline?.hidden).toBe(false);
+  expect(outline?.style.left).toBe('33.333333333333336%');
+  expect(canvas?.width).toBe(3);
+  const captures = f.execute.mock.calls.filter(([query]) => query.type === 'capture').length;
+  const paints = f.painted.length;
+  const mode = nativePresentationWidgets(f.node).find((widget) => widget.label === 'Preview');
+  mode?.callback?.('input');
+  expect(frame?.style.aspectRatio).toBe('1 / 1');
+  await settled();
+  expect(outline?.hidden).toBe(true);
+  expect(canvas?.width).toBe(3);
+  expect(canvas?.height).toBe(2);
+  expect(canvas?.style.width).toBe('300%');
+  expect(canvas?.style.left).toBe('-100%');
+  expect(f.execute.mock.calls.filter(([query]) => query.type === 'capture')).toHaveLength(captures);
+  expect(f.painted).toHaveLength(paints);
+  expect(frame?.style.aspectRatio).toBe('1 / 1');
+  expect(view.element.querySelector('canvas')).toBe(canvas);
+  expect(view.element.querySelector('.sc-input-editor__frame')).toBe(frame);
+  expect(f.binding.state.edits?.crop_factor).toBe(1);
+  mode?.callback?.('context');
+  expect(canvas?.style.width).toBe('100%');
+  expect(canvas?.style.left).toBe('0%');
+  expect(f.painted).toHaveLength(paints);
   expect(f.report).not.toHaveBeenCalled();
   f.dispose();
 });

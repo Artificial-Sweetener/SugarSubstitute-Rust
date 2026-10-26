@@ -24,11 +24,6 @@ export function ensureInputEditorStyles(document: Document): void {
   :is(.sc-input-editor,[data-sc-input-controls]) [hidden] {display:none!important;}
   .sc-input-editor__controls {border:0;margin:0;padding:6px 8px;min-width:0;display:flex;flex-direction:column;gap:6px;font:inherit;color:inherit;}
   .sc-canvas-source {display:flex;flex-direction:column;gap:6px;min-width:0;}
-  .sc-canvas-source__file {display:flex;align-items:center;gap:6px;min-width:0;width:100%;}
-  .sc-canvas-source__file > [data-sc-button] {flex:none;font:inherit;}
-  .sc-canvas-source__file > button[data-sc-button] {min-height:var(--sc-control-height,28px);padding:0 10px;}
-  .sc-canvas-source__filename {flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:inherit;}
-  .sc-canvas-source__filename[data-empty=true] {color:var(--sc-text-secondary,var(--descrip-text));}
   [data-input-empty][hidden] {display:none!important;}
   .sc-input-editor__rows {display:flex;flex-direction:column;gap:4px;}
   .sc-input-editor__row {display:grid;grid-template-columns:auto 1fr;align-items:center;gap:8px;padding:6px 8px 6px 10px;border:0;border-left:4px solid var(--sc-mask-color,var(--p-primary-color,currentColor));background:transparent;color:inherit;cursor:pointer;min-height:44px;text-align:left;}
@@ -37,6 +32,7 @@ export function ensureInputEditorStyles(document: Document): void {
   .sc-input-editor__row[data-selected=true] .sc-input-editor__label {grid-row:1;}
   .sc-input-editor__frame {position:relative;width:44px;max-width:100%;justify-self:center;overflow:hidden;background:#000;border-radius:6px;}
   .sc-input-editor__preview {position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:contain;}
+  .sc-input-editor__crop {position:absolute;outline:1px solid red;pointer-events:none;}
   .sc-input-editor__row[data-selected=true] .sc-input-editor__frame {width:288px;}
   .sc-input-editor__row[data-passive=true] {border:0;padding:0;cursor:default;background:transparent;}
   .sc-input-editor__row[data-passive=true] .sc-input-editor__frame {border-radius:0;}
@@ -46,7 +42,7 @@ export function ensureInputEditorStyles(document: Document): void {
   .sc-input-editor__row:disabled {opacity:.45;cursor:default;}
   .sc-input-editor__row:focus-visible {outline:1px solid currentColor;outline-offset:1px;}
   .sc-input-editor__status {font-size:11px;opacity:.8;min-height:1em;}
-  .sc-input-editor__status:empty,.sc-input-editor__message:empty,.sc-canvas-source__filename:empty {display:none;}
+  .sc-input-editor__status:empty,.sc-input-editor__message:empty {display:none;}
   `;
   document.head.append(style);
 }

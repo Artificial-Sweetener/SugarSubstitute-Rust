@@ -27,6 +27,10 @@ import { MasonryInputHost } from './MasonryInputHost.js';
 import { ComfyInputBindings } from './ComfyInputBindings.js';
 import { BrowserInputPreviews } from './BrowserInputPreviews.js';
 import { BrowserInputRasters } from './BrowserInputRasters.js';
+import { BrowserMaskEditing } from './BrowserMaskEditing.js';
+import { MaskInputPreparation } from '../application/MaskInputPreparation.js';
+import { ComfyMaskInputPreparation } from './ComfyMaskInputPreparation.js';
+import { PreparedInputPromptClient } from './PreparedInputPromptClient.js';
 import { ComfyInputReturnPreparation } from './ComfyInputReturnPreparation.js';
 import { ComfyInputAssociations } from './ComfyInputAssociations.js';
 import type { ComfyGraph } from '../../types/graph.js';
@@ -35,6 +39,7 @@ import type { ComfyGraph } from '../../types/graph.js';
 export interface CanvasInputHostOptions {
   readonly document: Document;
   host(id?: string): CanvasSourceHost | null;
+  editable(canvasId: string): boolean;
   legacyHost(id?: string): CanvasMaskHost | null;
   graph(): ComfyGraph | null | undefined;
   report(error: unknown): void;
@@ -58,12 +63,15 @@ export function createCanvasInputs(options: CanvasInputHostOptions): {
   const assets = new BrowserCanvasSourceAssets((input, init) => fetch(input, init));
   const capture = new CanvasSourceCapture(host);
   const rasters = new BrowserInputRasters(document, (input, init) => fetch(input, init));
+  const maskEditing = new BrowserMaskEditing();
   const previews = new CanvasSourcePreviews(capture, host, report);
   const legacy = new LegacyMaskMigration(legacyHost, assets);
   const defaults = new ComfyInputSourceDefaults(host, legacy);
   const bindings = new ComfyInputBindings(loaders, {
     host,
+    editable: options.editable,
     files: new BrowserInputPreviews((source) => assets.stage(source), rasters),
+    maskEditing,
     legacy,
     verifyFile: (file) => assets.verify(file),
     verifiedFile: (file) => assets.verified(file),
@@ -90,6 +98,7 @@ export function createCanvasInputs(options: CanvasInputHostOptions): {
     () => {
       associations.dispose();
       bindings.clear();
+      maskEditing.dispose();
     },
     { once: true },
   );
@@ -105,6 +114,10 @@ export function createCanvasInputs(options: CanvasInputHostOptions): {
         const context = await capture.context(source.canvasId);
         return context.document ? { canvasId: source.canvasId, document: context.document } : null;
       }),
+      new ComfyMaskInputPreparation(rasters, assets, new MaskInputPreparation(maskEditing), () =>
+        associations.preparationPairs(),
+      ),
+      new PreparedInputPromptClient((input, init) => fetch(input, init)),
     ),
     masonry,
     bindings,

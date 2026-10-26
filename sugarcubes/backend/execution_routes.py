@@ -32,6 +32,7 @@ from ..execution import (
     QueueMetadata,
 )
 from ..execution.limits import MAX_PROXIMITY_CONNECTIONS
+from ..execution.prepared_input_values import parse_prepared_input_assets
 from .composition import BackendServices
 from .responses import BackendError, json_error_from_exception, json_success
 from .route_types import RouteHandler
@@ -72,6 +73,7 @@ def build_execution_route_handlers(services: BackendServices) -> ExecutionRouteH
                 "atomic_queueing": True,
                 "cube_scoped_optimization": True,
                 "validated_queue_observers": True,
+                "prepared_input_assets": True,
             }
         )
 
@@ -121,6 +123,7 @@ def _parse_request(body: Mapping[str, Any]) -> CubeExecutionRequest:
         queue=_parse_queue(body.get("queue")),
         optimization=_parse_optimization(body.get("optimization")),
         extra_data=_mapping(body.get("extra_data")),
+        prepared_inputs=parse_prepared_input_assets(body.get("prepared_inputs")),
     )
 
 

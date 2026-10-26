@@ -30,6 +30,12 @@ import type {
 } from '../contracts/CanvasProtocol.generated.js';
 import { isCanvasMessage } from './CanvasValidation.generated.js';
 import { CanvasSourceConnection } from './CanvasSourceConnection.js';
+import type { CanvasGeometryHost } from '../contracts/CanvasGeometry.js';
+import type {
+  CanvasGeometryCommand,
+  CanvasGeometryRequest,
+  CanvasGeometryResult,
+} from '../contracts/CanvasProtocol.generated.js';
 /** Supply transport and deadlines from their owning runtime. */
 export interface CanvasClientPort {
   send(message: CanvasMessage): void;
@@ -37,7 +43,7 @@ export interface CanvasClientPort {
   report(error: unknown): void;
 }
 interface Pending {
-  readonly type: 'context.reply' | 'image.reply' | 'source.reply';
+  readonly type: 'context.reply' | 'image.reply' | 'source.reply' | 'geometry.reply';
   accept(message: CanvasMessage): void;
   reject(error: Error): void;
   stop(): void;
@@ -45,9 +51,11 @@ interface Pending {
 type Request =
   | Pick<CanvasReadRequest, 'type'>
   | Pick<CanvasInsertRequest, 'type' | 'image'>
-  | Pick<CanvasSourceRequest, 'type' | 'command'>;
+  | Pick<CanvasSourceRequest, 'type' | 'command'>
+  | Pick<CanvasGeometryRequest, 'type' | 'command'>;
 /** Retain one correlated client for a validated host session; never replay mutations after reconnect. */
 export class CanvasClient implements CanvasLayerHost {
+  readonly geometry: CanvasGeometryHost;
   readonly sources: CanvasSourceConnection;
   readonly #pending = new Map<number, Pending>();
   readonly #sourceListeners = new Set<(change: CanvasSourceChange) => void>();
@@ -59,6 +67,13 @@ export class CanvasClient implements CanvasLayerHost {
     private readonly session: string,
     private readonly port: CanvasClientPort,
   ) {
+    this.geometry = {
+      get canvasId() {
+        return readIdentity();
+      },
+      execute: (command, cancellation) => this.#geometryRequest(command, cancellation),
+    };
+    const readIdentity = (): string => this.#context?.canvas.id ?? '';
     this.sources = new CanvasSourceConnection({
       identity: () => this.#context?.canvas.id ?? '',
       execute: (command) => this.#sourceRequest(command),
@@ -117,7 +132,7 @@ export class CanvasClient implements CanvasLayerHost {
     this.#disposed = true;
     for (const [id, pending] of this.#pending) {
       pending.stop();
-      if (pending.type === 'image.reply') this.#cancel(id);
+      if (pending.type === 'image.reply' || pending.type === 'geometry.reply') this.#cancel(id);
       pending.reject(new Error('Canvas connection closed.'));
     }
     this.#pending.clear();
@@ -139,6 +154,21 @@ export class CanvasClient implements CanvasLayerHost {
       };
     }
   }
+  /** Delegate geometry and native sizing through the existing correlated host transport. */
+  async #geometryRequest(
+    command: CanvasGeometryCommand,
+    cancellation?: CanvasCancellationSource,
+  ): Promise<CanvasGeometryResult> {
+    if (cancellation?.cancelled())
+      return { kind: 'failure', status: 'cancelled', message: 'Canvas sizing cancelled.' };
+    const reply = await this.#request(
+      { type: 'geometry.request', command },
+      'geometry.reply',
+      cancellation,
+    );
+    if (reply.type !== 'geometry.reply') throw new Error('Invalid canvas geometry reply.');
+    return reply.result;
+  }
   /** Register reply ownership before synchronous transports can answer, and bound every request. */
   #request(
     request: Request,
@@ -158,7 +188,8 @@ export class CanvasClient implements CanvasLayerHost {
       stopDeadline = this.port.later(30000, () => {
         this.#pending.delete(requestId);
         stop();
-        if (request.type === 'image.insert') this.#cancel(requestId);
+        if (request.type === 'image.insert' || request.type === 'geometry.request')
+          this.#cancel(requestId);
         reject(new Error('Canvas request timed out; it was not retried.'));
       });
       stopCancellation =
@@ -168,6 +199,17 @@ export class CanvasClient implements CanvasLayerHost {
           this.#pending.delete(requestId);
           stop();
           this.#cancel(requestId);
+          if (request.type === 'geometry.request') {
+            resolve({
+              protocol: 'sugarcubes.canvas',
+              version: 2,
+              session: this.session,
+              requestId,
+              type: 'geometry.reply',
+              result: { kind: 'failure', status: 'cancelled', message: 'Canvas sizing cancelled.' },
+            });
+            return;
+          }
           resolve({
             protocol: 'sugarcubes.canvas',
             version: 2,

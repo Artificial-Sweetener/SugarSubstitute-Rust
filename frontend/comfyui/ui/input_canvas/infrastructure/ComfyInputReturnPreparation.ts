@@ -23,10 +23,15 @@ import type {
   WorkflowCanvasReturn,
 } from '../../execution/domain/WorkflowPreparation.js';
 import type { InputAssetPorts } from '../domain/InputLoader.js';
-import { usesNativeMaskChannels, nativeMaskOutputChannel } from '../domain/InputLoader.js';
-import { interpretMaskSource } from '../domain/MaskSourcePixels.js';
+import { nativeMaskSource } from '../domain/MaskSourcePixels.js';
 import type { InputRasterPort } from '../application/InputRasterPort.js';
-import type { PreparedInputSources } from '../application/InputSourcePreparation.js';
+import {
+  preparedSourceFile,
+  type PreparedInputSources,
+} from '../application/InputSourcePreparation.js';
+import type { PreparedInputPixels } from '../application/PreparedInputPixels.js';
+import type { CanvasImageMapping } from '../../../../../integrations/contracts/CanvasImageRegion.js';
+import { hasCompiledVaeCenterCrop } from './ComfyVaeReturnFrame.js';
 import type { InputWorkflowTarget } from './InputWorkflowProjection.js';
 import {
   compiledInputReturnAssociations,
@@ -45,6 +50,8 @@ interface PreparedReturnInput extends PreparedInputIdentity {
   readonly origin: Origin | null;
   readonly masks: readonly CanvasPixelRaster[];
   readonly unresolvedSettings: readonly string[];
+  readonly mapping: CanvasImageMapping | null;
+  readonly sourceSize: { readonly width: number; readonly height: number } | null;
 }
 
 /** Retain an immutable preparation until the authoritative compiler has supplied its final graph. */
@@ -96,30 +103,56 @@ class PreparedCanvasReturns implements WorkflowCanvasPreparation {
               message: 'The inpaint image and mask belong to different canvas documents.',
             };
           const { width, height } = origin.document;
-          if (mask.masks.some((pixels) => pixels.width !== width || pixels.height !== height))
+          if (
+            mask.sourceSize &&
+            (mask.sourceSize.width !== width || mask.sourceSize.height !== height)
+          )
+            return {
+              kind: 'unavailable',
+              executionPath: association.output,
+              message: 'The edited inputs no longer match the captured canvas frame.',
+            };
+          const mapping =
+            mask.mapping ??
+            Object.freeze({
+              imageSize: Object.freeze({ width, height }),
+              imageBounds: Object.freeze({ left: 0, top: 0, width, height }),
+              documentBounds: Object.freeze({ left: 0, top: 0, width, height }),
+            });
+          if (
+            mask.masks.some(
+              (pixels) =>
+                pixels.width !== mapping.imageSize.width ||
+                pixels.height !== mapping.imageSize.height,
+            )
+          )
             return {
               kind: 'unavailable',
               executionPath: association.output,
               message: 'The inpaint mask has no declared mapping to the captured canvas frame.',
             };
-          const mapping = Object.freeze({
-            imageSize: Object.freeze({ width, height }),
-            imageBounds: Object.freeze({ left: 0, top: 0, width, height }),
-            documentBounds: Object.freeze({ left: 0, top: 0, width, height }),
-          });
+          if (image.mapping && JSON.stringify(image.mapping) !== JSON.stringify(mapping))
+            return {
+              kind: 'unavailable',
+              executionPath: association.output,
+              message: 'The edited image and mask have different input mappings.',
+            };
+          const centerCrop = hasCompiledVaeCenterCrop(prompt, association.output, image);
           return Object.freeze({
             kind: 'region',
             executionPath: association.output,
             canvasId: origin.canvasId,
             document: origin.document,
             regions: Object.freeze(
-              mask.masks.map((pixels) =>
-                Object.freeze({
+              mask.masks.map((pixels) => {
+                const region = Object.freeze({
+                  ...(centerCrop ? { outputFrame: 'vae-center-crop' as const } : {}),
                   mapping,
                   mask: pixels,
                   coverage: association.composited ? ('support' as const) : ('mask' as const),
-                }),
-              ),
+                });
+                return region;
+              }),
             ),
           });
         },
@@ -160,6 +193,7 @@ export class ComfyInputReturnPreparation {
     prepared: PreparedInputSources,
     ports: ReadonlyMap<string, InputAssetPorts>,
     fallback: Origin | null,
+    editedInputs: ReadonlyMap<string, PreparedInputPixels>,
   ): Promise<WorkflowCanvasPreparation | undefined> {
     if (!targets.some((target) => target.loader.kind === 'mask' || target.maskOutput))
       return undefined;
@@ -167,14 +201,14 @@ export class ComfyInputReturnPreparation {
     const inputs: PreparedReturnInput[] = [];
     let retained = 0;
     for (const target of targets) {
+      const edited = editedInputs.get(target.key);
       const files: string[] = [],
         masks: CanvasPixelRaster[] = [];
       let origin: Origin | null = null;
       for (const entry of target.binding.entries) {
         const key = JSON.stringify([target.key, entry.id]);
         const snapshot = prepared.snapshots.get(key);
-        const file = entry.source.kind === 'canvas' ? prepared.files.get(key) : entry.source.file;
-        if (!file) throw new Error('The captured inpaint source is unavailable.');
+        const file = edited?.file ?? preparedSourceFile(target.key, entry, prepared);
         files.push(file);
         if (snapshot && entry.source.kind === 'canvas') {
           const current = { canvasId: entry.source.canvasId, document: snapshot.document };
@@ -190,15 +224,12 @@ export class ComfyInputReturnPreparation {
           (target.loader.kind === 'mask' || target.maskOutput) &&
           !target.unresolvedSettings.length
         ) {
-          const channel = target.maskOutput
-            ? nativeMaskOutputChannel(target.loader)
-            : target.settings.inputs.channel;
           const pixels =
-            snapshot &&
-            (target.maskOutput || usesNativeMaskChannels(target.loader)) &&
-            typeof channel === 'string'
-              ? interpretMaskSource(snapshot.pixels, channel)
-              : await this.rasters.load(file, { ...target.settings, kind: 'mask' }, 0);
+            edited?.pixels ??
+            (snapshot
+              ? nativeMaskSource(snapshot.pixels, target.loader, target.settings, target.maskOutput)
+              : null) ??
+            (await this.rasters.load(file, { ...target.settings, kind: 'mask' }, 0));
           if (pixels.format !== 'coverage8')
             throw new Error('The inpaint loader did not return mask coverage.');
           retained += pixels.width * pixels.height;
@@ -210,13 +241,15 @@ export class ComfyInputReturnPreparation {
       const field = Object.freeze({
         key: target.key,
         nodePath: target.nodePath,
-        classType: target.loader.classType,
-        field: target.loader.field,
+        classType: edited?.classType ?? target.loader.classType,
+        field: edited?.field ?? target.loader.field,
         kind: target.loader.kind,
         files: Object.freeze(files),
         masks: Object.freeze(target.loader.kind === 'mask' ? masks : []),
         unresolvedSettings: target.unresolvedSettings,
         origin,
+        mapping: edited?.mapping ?? null,
+        sourceSize: edited?.sourceSize ?? null,
       });
       inputs.push(field);
       if (target.maskOutput)

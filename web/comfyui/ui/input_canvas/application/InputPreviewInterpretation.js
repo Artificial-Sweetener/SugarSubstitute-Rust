@@ -1,5 +1,5 @@
 import { usesNativeMaskChannels } from '../domain/InputLoader.js';
-import { interpretMaskSource } from '../domain/MaskSourcePixels.js';
+import { nativeMaskSource } from '../domain/MaskSourcePixels.js';
 /** Apply mask semantics while image consumers retain actual source content and transparency. */
 export class InputPreviewInterpretation {
     loader;
@@ -45,12 +45,9 @@ export class InputPreviewInterpretation {
                 throw new Error('The image source did not contain image pixels.');
             return source;
         }
-        if (usesNativeMaskChannels(this.loader)) {
-            const channel = settings.inputs.channel;
-            if (typeof channel !== 'string')
-                throw new Error('The mask channel must be an authored setting to show a live preview.');
-            return interpretMaskSource(source, channel);
-        }
+        const native = nativeMaskSource(source, this.loader, settings, false);
+        if (native)
+            return native;
         return await this.files.interpret(source, settings, maximumSize);
     }
 }

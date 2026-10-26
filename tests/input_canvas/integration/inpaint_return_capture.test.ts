@@ -20,7 +20,11 @@ import {
   sourceDocument,
 } from '../support/source_mask_fixture.js';
 import { compiledInputReturnAssociations } from '../../../frontend/comfyui/ui/input_canvas/infrastructure/ComfyInputReturnGraph.js';
-import { decodeCanvasRaster } from '../../../integrations/shared/CanvasRasterEncoding.js';
+import {
+  decodeCanvasRaster,
+  encodeCanvasRaster,
+} from '../../../integrations/shared/CanvasRasterEncoding.js';
+import { prepareCanvasImagePatch } from '../../../integrations/shared/CanvasImageRegions.js';
 import { isRecord } from '../../../frontend/comfyui/ui/types/common.js';
 import { withInputBinding } from '../../../frontend/comfyui/ui/input_canvas/infrastructure/InputBindingMetadata.js';
 
@@ -62,6 +66,78 @@ function fixture() {
   };
   return { ...f, payload };
 }
+
+test('carries a non-aligned real VAE input frame through preparation, attribution and positioned masked delivery', async () => {
+  const f = fixture();
+  const doc = { ...sourceDocument, width: 816, height: 684 };
+  const mask = new Uint8Array(doc.width * doc.height);
+  mask[2 * doc.width + 5] = 127;
+  mask[3 * doc.width + 6] = 255;
+  mask[0] = 255;
+  const coverage = encodeCanvasRaster(doc.width, doc.height, 'coverage8', mask);
+  const pixels = new Uint8Array(doc.width * doc.height * 4).fill(255);
+  const rgba = encodeCanvasRaster(doc.width, doc.height, 'rgba8', pixels);
+  f.execute.mockImplementation(async (query) =>
+    query.type === 'context'
+      ? {
+          kind: 'context',
+          supported: true,
+          document: doc,
+          revision: '1',
+          targets: ['composition', 'selection'],
+          layers: [],
+          currentLayerId: null,
+        }
+      : {
+          kind: 'captured',
+          snapshots: query.targets.map((target) => ({
+            target,
+            document: doc,
+            revision: '1',
+            pixels: target.kind === 'selection' ? coverage : rgba,
+          })),
+        },
+  );
+  f.loaders.define({
+    InpaintModelConditioning: {
+      input: { required: { pixels: ['IMAGE'], mask: ['MASK'], vae: ['VAE'] } },
+      output: ['CONDITIONING', 'CONDITIONING', 'LATENT'],
+    },
+    'SimpleSyrup.KSamplerExtras': {
+      input: { required: { latent_image: ['LATENT'] } },
+      output: ['LATENT'],
+    },
+  });
+  const output = {
+    '1': f.payload.output['1'],
+    '2': f.payload.output['2'],
+    '3': {
+      class_type: 'InpaintModelConditioning',
+      inputs: { pixels: ['1', 0], mask: ['2', 0], vae: ['vae', 0] },
+    },
+    sample: { class_type: 'SimpleSyrup.KSamplerExtras', inputs: { latent_image: ['3', 2] } },
+    decode: { class_type: 'VAEDecode', inputs: { samples: ['sample', 0], vae: ['vae', 0] } },
+    save: { class_type: 'SaveImage', inputs: { images: ['decode', 0] } },
+  };
+  const prepared = await f.preparation.prepare({ workflow: f.payload.workflow, output });
+  if (!isRecord(prepared.payload)) throw new Error('Missing prepared prompt.');
+  const returned = prepared
+    .canvas!.resolve(prepared.payload.output)
+    .find((value) => value.executionPath === 'save');
+  if (returned?.kind !== 'region') throw new Error('Missing VAE return region.');
+  const region = returned.regions[0]!;
+  expect(region.outputFrame).toBe('vae-center-crop');
+  expect(region.mapping.documentBounds).toEqual({ left: 0, top: 0, width: 816, height: 684 });
+  expect(region.mask).toMatchObject({ width: 816, height: 684 });
+  const generated = encodeCanvasRaster(816, 680, 'rgba8', new Uint8Array(816 * 680 * 4).fill(255));
+  const patch = prepareCanvasImagePatch(generated, region);
+  expect(patch?.position).toEqual({ left: 5, top: 2 });
+  expect(patch?.pixels).toMatchObject({ width: 2, height: 2 });
+  expect([...decodeCanvasRaster(patch!.pixels)]).toEqual([
+    255, 255, 255, 127, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255,
+  ]);
+  f.previews.dispose();
+});
 
 test('freezes actual interpreted selection and original document before the queued run, resolving through latent nodes', async () => {
   const f = fixture();

@@ -44,6 +44,10 @@ from .sugarcubes.runtime import queue_observer_registry
 from .sugarcubes.model_library.integration import install_model_library
 from .sugarcubes.output_saving.integration import install_output_saving
 from .sugarcubes.input_canvas.infrastructure.http_routes import install_input_previews
+from .sugarcubes.execution.spatial_probe_http import install_spatial_probe_routes
+from .sugarcubes.input_canvas.infrastructure.prepared_input_http import (
+    install_prepared_input_route,
+)
 
 WEB_DIRECTORY = "web"
 __version__ = "0.15.3"
@@ -64,6 +68,7 @@ if PromptServer is not None:
             raise RuntimeError("Comfy execution module is unavailable")
         _output_saving_runtime = install_output_saving(PromptServer)
         install_input_previews(PromptServer)
+        install_spatial_probe_routes(PromptServer)
         _backend_services = build_backend_services(
             _EXTENSION_ROOT,
             execution_port=DirectComfyExecutionPort(
@@ -72,6 +77,10 @@ if PromptServer is not None:
                 observers=queue_observer_registry(),
                 prompt_policy=_output_saving_runtime.policy,
             ),
+        )
+        install_prepared_input_route(
+            PromptServer,
+            _backend_services.execution.project_prepared_inputs,
         )
         set_active_backend_services(_backend_services)
         register_routes(PromptServer, _backend_services)

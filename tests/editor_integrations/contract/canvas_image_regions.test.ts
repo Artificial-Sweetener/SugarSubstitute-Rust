@@ -92,20 +92,63 @@ test('does not feather finished composite pixels a second time', () => {
   expect([...decodeCanvasRaster(result.pixels)]).toEqual([80, 120, 160, 255]);
 });
 
-test('produces no layer for an empty mask and refuses unknown output geometry', () => {
+test('produces no layer for an empty mask at either resolution and refuses invalid mappings', () => {
   const region = {
     mapping: mapping(2, 1),
     mask: encodeCanvasRaster(2, 1, 'coverage8', new Uint8Array(2)),
     coverage: 'mask' as const,
   };
   expect(prepareCanvasImagePatch(image(2, 1), region)).toBeNull();
-  expect(() => prepareCanvasImagePatch(image(3, 1), region)).toThrow(/geometry/i);
+  expect(prepareCanvasImagePatch(image(3, 1), region)).toBeNull();
+  expect(() =>
+    prepareCanvasImagePatch(image(3, 1), {
+      ...region,
+      mask: encodeCanvasRaster(3, 1, 'coverage8', new Uint8Array(3)),
+    }),
+  ).toThrow(/geometry/i);
   expect(() =>
     prepareCanvasImagePatch(image(2, 1), {
       ...region,
       mapping: { ...region.mapping, documentBounds: { left: 0, top: 0, width: 0, height: 1 } },
     }),
   ).toThrow(/mapping/i);
+});
+
+test.each([
+  [4, 4],
+  [1, 1],
+])(
+  'maps a %s by %s output into the captured region while retaining mask holes and feathering',
+  (width, height) => {
+    const result = prepareCanvasImagePatch(image(width, height), {
+      mapping: {
+        imageSize: { width: 2, height: 2 },
+        imageBounds: { left: 0, top: 0, width: 2, height: 2 },
+        documentBounds: { left: 30, top: 40, width: 2, height: 2 },
+      },
+      mask: encodeCanvasRaster(2, 2, 'coverage8', new Uint8Array([255, 0, 128, 255])),
+      coverage: 'mask',
+    });
+    expect(result?.position).toEqual({ left: 30, top: 40 });
+    expect(result?.pixels).toMatchObject({ width: 2, height: 2 });
+    expect([...decodeCanvasRaster(result!.pixels)]).toEqual([
+      80, 120, 160, 255, 0, 0, 0, 0, 80, 120, 160, 128, 80, 120, 160, 255,
+    ]);
+  },
+);
+
+test('samples a differently sized output with premultiplied alpha without bleeding hidden colors', () => {
+  const result = prepareCanvasImagePatch(
+    encodeCanvasRaster(2, 1, 'rgba8', new Uint8Array([255, 0, 0, 0, 0, 0, 255, 255])),
+    {
+      mapping: mapping(3, 1),
+      mask: encodeCanvasRaster(3, 1, 'coverage8', new Uint8Array([255, 255, 255])),
+      coverage: 'mask',
+    },
+  );
+  expect([...decodeCanvasRaster(result!.pixels)]).toEqual([
+    0, 0, 0, 0, 0, 0, 255, 128, 0, 0, 255, 255,
+  ]);
 });
 
 test('resamples transparent generated pixels without bleeding their hidden color into the patch', () => {

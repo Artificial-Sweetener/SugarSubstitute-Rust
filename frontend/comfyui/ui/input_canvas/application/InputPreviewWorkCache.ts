@@ -16,6 +16,10 @@
 /** Bound and reuse expensive file decoding independently of browser transport and raster interpretation. */
 import { INPUT_PREVIEW_MAXIMUM } from '../domain/InputPreviewResolution.js';
 import type { CanvasPixelRaster } from '../../../../../integrations/contracts/CanvasProtocol.generated.js';
+import {
+  canvasRasterByteLength,
+  MAX_CANVAS_RASTER_BYTES,
+} from '../../core/embedded/CanvasRuntime.js';
 interface Job {
   readonly key: string;
   readonly load: () => Promise<CanvasPixelRaster>;
@@ -29,6 +33,12 @@ export class InputPreviewWorkCache {
   readonly #jobs = new Map<string, Job>();
   readonly #queue: Job[] = [];
   #active = 0;
+  #bytes = 0;
+  /** Use zero for full-resolution editing while preserving an explicit retained-byte and decoder budget. */
+  constructor(
+    private readonly maximumSize = INPUT_PREVIEW_MAXIMUM,
+    private readonly concurrency = 2,
+  ) {}
   /** Reuse completed pixels or admit one bounded pending decode for this exact file, settings and size. */
   read(key: string, load: () => Promise<CanvasPixelRaster>): Promise<CanvasPixelRaster> {
     const ready = this.#ready.get(key);
@@ -55,7 +65,7 @@ export class InputPreviewWorkCache {
   }
   /** Release a decoder slot on both success and failure before admitting the next queued source. */
   #drain(): void {
-    while (this.#active < 2 && this.#queue.length) {
+    while (this.#active < this.concurrency && this.#queue.length) {
       const job = this.#queue.shift();
       if (!job) return;
       this.#active++;
@@ -67,12 +77,22 @@ export class InputPreviewWorkCache {
             !Number.isSafeInteger(pixels.height) ||
             pixels.width < 1 ||
             pixels.height < 1 ||
-            pixels.width > INPUT_PREVIEW_MAXIMUM ||
-            pixels.height > INPUT_PREVIEW_MAXIMUM
+            (this.maximumSize > 0 &&
+              (pixels.width > this.maximumSize || pixels.height > this.maximumSize))
           )
             throw new Error('The source preview exceeds its size limit.');
           this.#ready.set(job.key, pixels);
-          while (this.#ready.size > 16) this.#ready.delete(this.#ready.keys().next().value ?? '');
+          this.#bytes += canvasRasterByteLength(pixels.width, pixels.height, pixels.format);
+          while (this.#ready.size > 16 || this.#bytes > MAX_CANVAS_RASTER_BYTES) {
+            const oldest = this.#ready.entries().next().value;
+            if (!oldest) break;
+            this.#ready.delete(oldest[0]);
+            this.#bytes -= canvasRasterByteLength(
+              oldest[1].width,
+              oldest[1].height,
+              oldest[1].format,
+            );
+          }
           return pixels;
         })
         .then(job.resolve, job.reject)

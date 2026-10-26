@@ -1,16 +1,13 @@
 import { CanvasSourceUnavailable } from '../domain/CanvasSourceAvailability.js';
 import { CANVAS_INPUT_CHOICES, chooseCanvasInput } from '../domain/CanvasInputSource.js';
-import { CommandButtonMount } from '../../surface/appearance/CommandButtonMount.js';
 /** Supply source values to native fields without owning their label, combo or popup rendering. */
 export class CanvasSourcePicker {
     port;
     element;
     #kind;
     #layer;
-    #fileRow;
     #file;
-    #chooseFile;
-    #filename;
+    #fileField;
     #busy = false;
     #alive = true;
     /** Share Comfy's field renderer and the existing command-button owner. */
@@ -25,18 +22,11 @@ export class CanvasSourcePicker {
         this.#file.accept = 'image/*';
         this.#file.hidden = true;
         this.#file.setAttribute('aria-label', 'Source file');
-        this.#chooseFile = new CommandButtonMount(document, 'Browse…', () => {
+        this.#fileField = fields.mountActionField(fieldRoot, fieldLabel ? fieldLabel + ' File' : 'File', 'Browse…', () => {
             if (!this.#busy && !this.port.disabled)
                 this.#file.click();
-        });
-        this.#filename = document.createElement('span');
-        this.#filename.className = 'sc-canvas-source__filename';
-        this.#fileRow = document.createElement('div');
-        this.#fileRow.className = 'sc-canvas-source__file';
-        this.#fileRow.setAttribute('role', 'group');
-        this.#fileRow.setAttribute('aria-label', 'File');
-        this.#fileRow.append(this.#file, this.#filename, this.#chooseFile.element);
-        this.element.append(this.#fileRow);
+        }, 'File');
+        this.element.append(this.#file);
         this.#file.addEventListener('change', this.#upload);
         this.refresh();
     }
@@ -53,13 +43,9 @@ export class CanvasSourcePicker {
         })), this.#busy || this.port.disabled);
         const explicit = source.kind === 'canvas' &&
             (source.target.kind === 'layer' || source.target.kind === 'composition-from-layer');
-        this.#fileRow.hidden = source.kind !== 'file';
         this.#file.disabled = this.#busy || this.port.disabled;
-        this.#chooseFile.setDisabled(this.#busy || this.port.disabled);
         const file = source.kind === 'file' ? source.file : null;
-        this.#filename.textContent = file?.split('/').at(-1) ?? 'No file selected';
-        this.#filename.title = file ?? '';
-        this.#filename.dataset.empty = String(!file);
+        this.#fileField.update(file?.split('/').at(-1) ?? 'No file selected', this.#busy || this.port.disabled, source.kind === 'file', file ?? '');
         if (!explicit ||
             (source.target.kind !== 'layer' && source.target.kind !== 'composition-from-layer')) {
             this.#layer.update('', [], this.#busy || this.port.disabled, false);
@@ -80,7 +66,7 @@ export class CanvasSourcePicker {
     /** Retire native mounts before removing the owning source surface. */
     dispose() {
         this.#alive = false;
-        this.#chooseFile.dispose();
+        this.#fileField.dispose();
         this.#kind.dispose();
         this.#layer.dispose();
         this.element.remove();

@@ -12,6 +12,7 @@ export class InputPreviewRows {
     #empty;
     #entries = new Map();
     #alive = true;
+    #mode = 'context';
     /** Bind pixels and state through the existing source and interpretation owners. */
     constructor(document, binding, previews, report, association) {
         this.binding = binding;
@@ -88,6 +89,13 @@ export class InputPreviewRows {
                 row.content?.refresh();
         }
     }
+    /** Switch framing on the existing preview surfaces without changing mask settings or source identity. */
+    setMaskMode(mode) {
+        if (this.#mode === mode)
+            return;
+        this.#mode = mode;
+        this.refresh();
+    }
     /** Explain a rejected source intent within its existing selected preview. */
     unavailable(message) {
         const row = this.#entries.get(this.binding.state.selected ?? '');
@@ -146,13 +154,13 @@ export class InputPreviewRows {
                 row.surface.unavailable(value.message);
             else {
                 try {
-                    row.surface.paint(value.pixels, value.frame, value.background);
+                    row.surface.paint(value.pixels, value.frame, value.background, value.placement ?? null, value.outline ?? false, value.viewport ?? null);
                 }
                 catch (error) {
                     row.surface.unavailable('Preview unavailable');
                     this.report(error);
                 }
             }
-        }, this.report, this.association);
+        }, this.report, this.association, () => this.#mode);
     }
 }

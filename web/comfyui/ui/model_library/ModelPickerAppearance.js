@@ -1,6 +1,6 @@
 import { isRecord } from '../types/common.js';
 import { VISUAL_STYLE_SETTING, readVisualStylePreference, } from '../surface/appearance/VisualStylePreference.js';
-import { readComfyDarkTheme } from '../surface/appearance/ComfyColorScheme.js';
+import { readOwnedDarkTheme } from '../surface/appearance/OwnedColorScheme.js';
 import { applyOwnedTheme, visualStyleTokens } from '../surface/appearance/ThemeService.js';
 import { modelPickerCss } from './ModelPickerStyles.js';
 /** Own scoped theme annotations, styles and subscriptions for mounted picker surfaces. */
@@ -70,7 +70,7 @@ export class ModelPickerAppearance {
     #refresh = () => {
         if (!this.#active)
             return;
-        this.#dark = readComfyDarkTheme(this.#document);
+        this.#dark = readOwnedDarkTheme(this.#document);
         const style = this.#visualStyle();
         this.#style.textContent = `${modelPickerCss}\n[data-sc-model-appearance="${style}"]{${style === 'comfy' ? '' : visualStyleTokens(style, this.#dark)}}\n[data-sc-model-native]{display:none!important}.sc-model-mount{width:100%;min-width:0}`;
         for (const surface of this.#surfaces)

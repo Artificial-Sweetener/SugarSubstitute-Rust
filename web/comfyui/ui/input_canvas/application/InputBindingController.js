@@ -1,6 +1,7 @@
 import { InputPreviewInterpretation } from './InputPreviewInterpretation.js';
 import { inputLabel } from '../domain/InputLoader.js';
 import { moveInputEntry } from '../domain/InputBinding.js';
+import { readMaskEditSettings } from '../domain/MaskEditSettings.js';
 import { chooseCanvasInput, defaultCanvasInput } from '../domain/CanvasInputSource.js';
 /** Keep workflow metadata authoritative while source targets stay portable and interpretation-neutral. */
 export class InputBindingController {
@@ -10,6 +11,8 @@ export class InputBindingController {
     host;
     nextId;
     report;
+    maskEditing;
+    editableCanvas;
     preview;
     #listeners = new Set();
     #stopWidgets;
@@ -21,13 +24,15 @@ export class InputBindingController {
     #disposed = false;
     #generation = 0;
     /** Bind persistence and external capabilities without browser or Comfy globals. */
-    constructor(loader, port, initial, host, files, nextId, report) {
+    constructor(loader, port, initial, host, files, nextId, report, maskEditing, editableCanvas) {
         this.loader = loader;
         this.port = port;
         this.initial = initial;
         this.host = host;
         this.nextId = nextId;
         this.report = report;
+        this.maskEditing = maskEditing;
+        this.editableCanvas = editableCanvas;
         this.preview = new InputPreviewInterpretation(loader, files, () => port.settings());
         this.#stopWidgets = port.subscribe((intent) => {
             this.adoptFiles(intent);
@@ -49,6 +54,11 @@ export class InputBindingController {
     /** Resolve the attached canvas identity for reusable controls. */
     get canvasId() {
         return this.#canvas?.canvasId ?? '';
+    }
+    /** Require actual positioned layer support rather than inferring editing from selection reads. */
+    get canEditMask() {
+        const id = this.#canvas?.canvasId ?? this.host()?.canvasId;
+        return Boolean(id && this.editableCanvas(id));
     }
     /** Supply layer choices without teaching presentation about native APIs. */
     get context() {
@@ -163,6 +173,15 @@ export class InputBindingController {
         const state = this.state;
         if (state.selected)
             this.#save(moveInputEntry(state, state.selected, delta));
+    }
+    /** Persist preparation intent through the same workflow history as the source it transforms. */
+    changeMaskEdits(settings) {
+        if (this.loader.kind !== 'mask' || this.loader.ordered || this.state.entries.length !== 1)
+            throw new Error('Mask editing requires one scalar mask source.');
+        const edits = readMaskEditSettings(settings);
+        if (JSON.stringify(this.state.edits) === JSON.stringify(edits))
+            return;
+        this.#save({ ...this.state, edits });
     }
     /** Adopt explicit graph file edits while preserving SimpleSyrup append intent. */
     adoptFiles(intent = null) {

@@ -70,7 +70,11 @@ test('activation and inactive close invoke the existing native handlers without 
   tab.addEventListener('mouseup', (event) => {
     if (event.button === 1) closed++;
   });
-  const adapter = new ComfyFrameWorkflowAdapter({ extensionManager: { workflow: store } }, native);
+  const adapter = new ComfyFrameWorkflowAdapter(
+    { extensionManager: { workflow: store } },
+    native,
+    async () => null,
+  );
   expect(adapter.read(sessions)[0]?.title).toBe('<literal>');
   adapter.activate(id, sessions);
   adapter.close(id, sessions);
@@ -81,71 +85,102 @@ test('activation and inactive close invoke the existing native handlers without 
   expect(() => adapter.close(id, sessions)).toThrow('action surface changed');
 });
 
-test('the tab menu reads native actions for an inactive workflow without activating it', async () => {
-  const id = workflowSessionId('inactive');
-  const workflow = { path: 'inactive', isModified: false };
-  const store = { openWorkflows: [workflow], activeWorkflow: null };
-  const native = document.createElement('div');
-  const tab = document.createElement('div');
-  tab.className = 'workflow-tab';
-  const label = document.createElement('span');
-  label.className = 'workflow-label';
-  label.textContent = 'Inactive';
-  tab.append(label);
-  native.append(tab);
-  const appRoot = document.createElement('div');
-  appRoot.id = 'vue-app';
-  appRoot.append(native);
-  document.body.append(appRoot);
-  const menuSurface = document.createElement('div');
-  menuSurface.setAttribute('role', 'menu');
-  const command = jest.fn();
-  const tree: Record<string, unknown> = { children: [] };
-  const setOpen = jest.fn((open: boolean) => {
-    tree.children = open
-      ? [
-          {
-            type: { __name: 'ContextMenuContent' },
-            el: menuSurface,
-            children: [
-              {
-                type: { __name: 'WorkflowActionsList' },
-                props: { items: [{ label: 'Duplicate', command }] },
-              },
-            ],
-          },
-        ]
-      : [];
-  });
-  Object.defineProperty(appRoot, '_vnode', {
-    value: {
-      type: { __name: 'WorkflowTab' },
-      component: {
-        props: { workflowOption: { workflow } },
-        subTree: {
-          type: { __name: 'ContextMenuRoot' },
-          component: {
-            provides: { [Symbol('ContextMenuRootContext')]: { onOpenChange: setOpen } },
-            subTree: tree,
+test.each([false, true])(
+  'the tab menu preserves native actions and enables rename only for drafts (%s)',
+  async (draft) => {
+    const id = workflowSessionId('inactive');
+    const workflow = {
+      path: 'inactive',
+      filename: 'inactive',
+      fullFilename: 'inactive.json',
+      isModified: false,
+      isTemporary: draft,
+      isPersisted: !draft,
+    };
+    const renameWorkflow = jest.fn(async () => undefined);
+    const store = {
+      openWorkflows: [workflow],
+      activeWorkflow: null,
+      workflows: [workflow],
+      renameWorkflow,
+      getWorkflowByPath: () => undefined,
+    };
+    const native = document.createElement('div');
+    const tab = document.createElement('div');
+    tab.className = 'workflow-tab';
+    const label = document.createElement('span');
+    label.className = 'workflow-label';
+    label.textContent = 'Inactive';
+    tab.append(label);
+    native.append(tab);
+    const appRoot = document.createElement('div');
+    appRoot.id = 'vue-app';
+    appRoot.append(native);
+    document.body.append(appRoot);
+    const menuSurface = document.createElement('div');
+    menuSurface.setAttribute('role', 'menu');
+    const command = jest.fn();
+    const tree: Record<string, unknown> = { children: [] };
+    const setOpen = jest.fn((open: boolean) => {
+      tree.children = open
+        ? [
+            {
+              type: { __name: 'ContextMenuContent' },
+              el: menuSurface,
+              children: [
+                {
+                  type: { __name: 'WorkflowActionsList' },
+                  props: {
+                    items: [
+                      { id: 'rename', label: 'Rename', disabled: true, command },
+                      { label: 'Duplicate', command },
+                    ],
+                  },
+                },
+              ],
+            },
+          ]
+        : [];
+    });
+    Object.defineProperty(appRoot, '_vnode', {
+      value: {
+        type: { __name: 'WorkflowTab' },
+        component: {
+          props: { workflowOption: { workflow } },
+          subTree: {
+            type: { __name: 'ContextMenuRoot' },
+            component: {
+              provides: { [Symbol('ContextMenuRootContext')]: { onOpenChange: setOpen } },
+              subTree: tree,
+            },
           },
         },
       },
-    },
-  });
-  const adapter = new ComfyFrameWorkflowAdapter({ extensionManager: { workflow: store } }, native);
-  const entries = await adapter.menu(
-    id,
-    [{ sessionId: id, path: 'inactive', title: 'Inactive', generation: 0 }],
-    jest.fn(),
-  );
-  expect(entries.map((entry) => entry.label)).toEqual(['Duplicate']);
-  expect(store.activeWorkflow).toBeNull();
-  expect(setOpen.mock.calls).toEqual([[true], [false]]);
-  expect(document.documentElement.hasAttribute('data-sc-tab-menu-capture')).toBe(false);
-  entries[0]?.select?.();
-  expect(command).toHaveBeenCalledTimes(1);
-  appRoot.remove();
-});
+    });
+    const adapter = new ComfyFrameWorkflowAdapter(
+      { extensionManager: { workflow: store } },
+      native,
+      async () => 'Renamed',
+    );
+    const entries = await adapter.menu(
+      id,
+      [{ sessionId: id, path: 'inactive', title: 'Inactive', generation: 0 }],
+      jest.fn(),
+    );
+    expect(entries.map((entry) => entry.label)).toEqual(['Rename', 'Duplicate']);
+    expect(entries[0]?.disabled).toBe(!draft);
+    entries[0]?.select?.();
+    await Promise.resolve();
+    if (draft) expect(renameWorkflow).toHaveBeenCalledWith(workflow, 'Renamed.json');
+    else expect(renameWorkflow).not.toHaveBeenCalled();
+    expect(store.activeWorkflow).toBeNull();
+    expect(setOpen.mock.calls).toEqual([[true], [false]]);
+    expect(document.documentElement.hasAttribute('data-sc-tab-menu-capture')).toBe(false);
+    entries[1]?.select?.();
+    expect(command).toHaveBeenCalledTimes(1);
+    appRoot.remove();
+  },
+);
 
 test('command delegation preserves asynchronous failures for the frame error boundary', async () => {
   const execute = jest.fn(async (id: string) => {
@@ -154,6 +189,7 @@ test('command delegation preserves asynchronous failures for the frame error bou
   const adapter = new ComfyFrameWorkflowAdapter(
     { extensionManager: { workflow: { openWorkflows: [] }, command: { execute } } },
     document.createElement('div'),
+    async () => null,
   );
   await adapter.command('Comfy.ShowSettingsDialog');
   expect(execute).toHaveBeenCalledWith('Comfy.ShowSettingsDialog');

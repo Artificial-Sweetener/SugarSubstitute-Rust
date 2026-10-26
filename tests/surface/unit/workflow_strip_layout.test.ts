@@ -15,6 +15,10 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove responsive workflow-strip allocation, stable thresholds and observer retirement. */
 import { afterEach, beforeEach, expect, jest, test } from '@jest/globals';
+import {
+  publishVisualStyle,
+  releaseVisualStyle,
+} from '../../../frontend/comfyui/ui/surface/appearance/VisualStyleBoundary.js';
 import { WorkflowTabStripLayout } from '../../../frontend/comfyui/ui/surface/frame/WorkflowTabStripLayout.js';
 
 const descriptor = Object.getOwnPropertyDescriptor(window, 'ResizeObserver');
@@ -109,6 +113,14 @@ function harness(initialWidth = 803) {
     resized,
     close,
     layout,
+    update: (count: number) =>
+      layout.update(
+        Array.from({ length: count }, (_, index) => ({
+          id: String(index),
+          title: `Workflow ${String(index)}`,
+          modified: false,
+        })),
+      ),
     resize: (next: number) => {
       width = next;
       observers[0]?.deliver();
@@ -120,15 +132,15 @@ function harness(initialWidth = 803) {
 test('tabs condense from 180 to 120 pixels before scrolling or exposing overflow controls', () => {
   const h = harness();
   expect(observers[0]?.targets).toEqual(new Set([h.frame]));
-  h.layout.update(4);
+  h.update(4);
   expect(h.viewport.style.width).toBe('720px');
-  expect(h.resized).toHaveBeenLastCalledWith(180);
+  expect(h.resized).toHaveBeenLastCalledWith([180, 180, 180, 180]);
   expect(h.controls.overflow.hidden).toBe(true);
   h.resize(683);
   expect(h.viewport.style.width).toBe('600px');
-  expect(h.resized).toHaveBeenLastCalledWith(150);
+  expect(h.resized).toHaveBeenLastCalledWith([150, 150, 150, 150]);
   h.resize(563);
-  expect(h.resized).toHaveBeenLastCalledWith(120);
+  expect(h.resized).toHaveBeenLastCalledWith([120, 120, 120, 120]);
   expect(h.controls.overflow.hidden).toBe(true);
   h.resize(562);
   expect(h.controls.overflow.hidden).toBe(false);
@@ -137,10 +149,10 @@ test('tabs condense from 180 to 120 pixels before scrolling or exposing overflow
   expect(h.viewport.style.width).toBe('415px');
   h.resize(562);
   expect(h.controls.overflow.hidden).toBe(false);
-  h.layout.update(3);
+  h.update(3);
   expect(h.controls.overflow.hidden).toBe(true);
   expect(h.close).toHaveBeenCalledTimes(1);
-  h.layout.update(0);
+  h.update(0);
   expect(h.viewport.style.width).toBe('0px');
   expect(h.tabs.style.getPropertyValue('--sc-workflow-tabs-width')).toBe('0px');
   h.resize(0);
@@ -150,7 +162,7 @@ test('tabs condense from 180 to 120 pixels before scrolling or exposing overflow
 
 test('arrow visibility follows endpoints and returns its space to the scrolling viewport', () => {
   const h = harness(562);
-  h.layout.update(4);
+  h.update(4);
   expect(h.controls.previous.hidden).toBe(true);
   expect(h.controls.next.hidden).toBe(false);
   h.controls.next.click();
@@ -180,7 +192,7 @@ test('arrow visibility follows endpoints and returns its space to the scrolling 
 
 test('teardown cancels queued geometry and rejects late observer deliveries or collection updates', () => {
   const h = harness(900);
-  h.layout.update(2);
+  h.update(2);
   observers[0]?.deliver();
   observers[0]?.deliver();
   expect(frames.size).toBe(1);
@@ -188,7 +200,7 @@ test('teardown cancels queued geometry and rejects late observer deliveries or c
   expect(observers[0]?.disconnect).toHaveBeenCalledTimes(1);
   expect(frames.size).toBe(0);
   observers[0]?.deliver();
-  h.layout.update(9);
+  h.update(9);
   flush();
   expect(frames.size).toBe(0);
   expect(h.resized).toHaveBeenCalledTimes(1);
@@ -198,11 +210,11 @@ test('teardown cancels queued geometry and rejects late observer deliveries or c
 test('generation strip and native caption reservation participate in condensation and overflow', () => {
   const h = harness(1127);
   h.frame.style.paddingRight = '324px';
-  h.layout.update(4);
-  expect(h.resized).toHaveBeenLastCalledWith(180);
+  h.update(4);
+  expect(h.resized).toHaveBeenLastCalledWith([180, 180, 180, 180]);
   h.frame.style.paddingRight = '504px';
   h.resize(1127);
-  expect(h.resized).toHaveBeenLastCalledWith(135);
+  expect(h.resized).toHaveBeenLastCalledWith([135, 135, 135, 135]);
   expect(h.controls.overflow.hidden).toBe(true);
   h.frame.style.paddingRight = '565px';
   h.resize(1127);
@@ -226,4 +238,54 @@ test('layout rejects a detached document without a browser geometry lifetime', (
       ),
   ).toThrow('browser window');
   h.layout.dispose();
+});
+
+test('PhotoPro fits names independently and reallocates renamed tabs without replacing their controls', () => {
+  publishVisualStyle(document, 'photopro');
+  const h = harness(803);
+  const preferred = [80, 220];
+  const elements = preferred.map((_width, index) => {
+    const element = document.createElement('div');
+    const title = document.createElement('span');
+    title.className = 'sc-workflow-title';
+    element.append(title);
+    jest.spyOn(element, 'getBoundingClientRect').mockImplementation(
+      () =>
+        ({
+          width: Math.min(
+            preferred[index]!,
+            Number.parseFloat(h.tabs.style.getPropertyValue('--sc-workflow-tab-max-width')) ||
+              Infinity,
+          ),
+        }) as DOMRect,
+    );
+    h.tabs.append(element);
+    return element;
+  });
+  try {
+    h.update(2);
+    expect(h.resized).toHaveBeenLastCalledWith([80, 220]);
+    expect(h.viewport.style.width).toBe('300px');
+    preferred[0] = 140;
+    h.layout.update([
+      { id: '0', title: 'A longer new name', modified: false },
+      { id: '1', title: 'Workflow 1', modified: false },
+    ]);
+    expect(h.resized).toHaveBeenLastCalledWith([140, 220]);
+    preferred[0] = 60;
+    h.layout.update([
+      { id: '0', title: 'A', modified: false },
+      { id: '1', title: 'Workflow 1', modified: false },
+    ]);
+    expect(h.resized).toHaveBeenLastCalledWith([60, 220]);
+    expect(Array.from(h.tabs.children)).toEqual(elements);
+    h.resize(323);
+    expect(h.controls.overflow.hidden).toBe(false);
+    expect(h.resized).toHaveBeenLastCalledWith([60, 144]);
+    h.controls.next.click();
+    expect(h.viewport.scrollLeft).toBe(28);
+  } finally {
+    h.layout.dispose();
+    releaseVisualStyle(document, 'photopro');
+  }
 });

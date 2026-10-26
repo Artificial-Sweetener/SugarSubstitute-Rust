@@ -14,9 +14,10 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Declare executable canvas capabilities independently of execution engines and editor APIs. */
-import type { CanvasCancellationSource } from './CanvasHost.js';
+import type { CanvasCancellationSource, CanvasLayerHost } from './CanvasHost.js';
 import type { CanvasMaskHost } from './CanvasMasks.js';
 import type { CanvasSourceHost } from './CanvasSources.js';
+import type { CanvasGeometryHost } from './CanvasGeometry.js';
 
 /** Receive supported output in a destination captured before execution begins. */
 export interface CanvasOutputBinding<Output> {
@@ -46,6 +47,8 @@ export type CanvasOutputCapability<Submission, Output> =
 export interface CanvasAdapter<Submission, Output, ViewState, Preview> {
   readonly id: string;
   readonly capabilities: {
+    readonly geometry?: CanvasGeometryHost | undefined;
+    readonly layers?: CanvasLayerHost | undefined;
     readonly masks?: CanvasMaskHost | undefined;
     readonly sources?: CanvasSourceHost | undefined;
     readonly output: CanvasOutputCapability<Submission, Output>;

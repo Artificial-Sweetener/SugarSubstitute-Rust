@@ -35,5 +35,11 @@ export function createCubeHostExecution(options) {
         executeDirect: (position, payload, queueOptions, submit, prepared) => transport.queue(payload, () => direct.queue(position, payload, queueOptions, prepared), submit),
         shouldExecuteDirect: (payload) => direct.owns(payload),
     });
-    return queue;
+    return {
+        queue,
+        prepareAnalysisPrompt: async (payload) => {
+            options.preflight();
+            return await pipeline.transform(options.prepareRelations(payload));
+        },
+    };
 }

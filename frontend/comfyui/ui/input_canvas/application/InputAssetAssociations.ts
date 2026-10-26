@@ -16,6 +16,7 @@
 /** Publish reusable graph-derived loader relationships independently of any preview or canvas implementation. */
 import {
   resolveInputAssetAssociations,
+  exclusiveInputImage,
   type InputAssetAssociation,
   type InputAssetAssociationGraph,
 } from '../domain/InputAssetAssociation.js';
@@ -23,6 +24,7 @@ import {
 /** Own relationship queries and scoped changes for every application consumer. */
 export class InputAssetAssociations {
   #associations: ReadonlyMap<string, InputAssetAssociation> = new Map();
+  #maskSources: ReadonlySet<string> = new Set();
   readonly #listeners = new Set<(changed: ReadonlySet<string>) => void>();
 
   /** Return an explicit missing relationship for stale or undiscovered field identities. */
@@ -39,6 +41,21 @@ export class InputAssetAssociations {
       .sort();
   }
 
+  /** Resolve exclusive input ownership through the same policy used by execution preparation. */
+  exclusiveImage(mask: string): string | null {
+    return exclusiveInputImage(this.#associations, mask, this.#maskSources);
+  }
+
+  /** Freeze exclusive logical pairs for execution without re-reading any native graph or field values. */
+  exclusivePairs(): ReadonlyMap<string, string> {
+    return new Map(
+      [...this.#associations.keys()].flatMap((mask) => {
+        const image = this.exclusiveImage(mask);
+        return image ? [[mask, image] as const] : [];
+      }),
+    );
+  }
+
   /** Replace normalized graph facts atomically and preserve unchanged association identities. */
   replace(graphs: readonly InputAssetAssociationGraph[]): void {
     const next = new Map(resolveInputAssetAssociations(graphs)),
@@ -49,7 +66,29 @@ export class InputAssetAssociations {
       if (JSON.stringify(previous) !== JSON.stringify(current)) changed.add(mask);
       else if (previous) next.set(mask, previous);
     }
+    const maskSources = new Set(
+      graphs.flatMap((graph) =>
+        graph.endpoints.flatMap((endpoint) => (endpoint.maskOutput ? [endpoint.key] : [])),
+      ),
+    );
+    const images = new Set(
+      [...maskSources, ...this.#maskSources].filter(
+        (image) => maskSources.has(image) !== this.#maskSources.has(image),
+      ),
+    );
+    for (const mask of changed)
+      for (const item of [this.#associations.get(mask), next.get(mask)])
+        if (item?.kind === 'associated') images.add(item.image);
+        else for (const image of item?.candidates ?? []) images.add(image);
+    for (const item of [...this.#associations.values(), ...next.values()])
+      if (
+        item.kind === 'associated'
+          ? images.has(item.image)
+          : item.candidates.some((image) => images.has(image))
+      )
+        changed.add(item.mask);
     this.#associations = next;
+    this.#maskSources = maskSources;
     if (changed.size) for (const listener of this.#listeners) listener(changed);
   }
 

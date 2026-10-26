@@ -13,10 +13,13 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Read the host's active palette without introducing a competing theme preference. */
+/** Resolve owned-surface brightness from the accepted visual-style palette. */
 import { parseCssColor } from '../CssColor.js';
-/** Prefer the palette's actual surface when a custom palette retains stale host theme metadata. */
-export function readComfyDarkTheme(document) {
+import { readDocumentVisualStyle } from './VisualStyleBoundary.js';
+/** Let PhotoPro follow its accepted Photoshop palette; other styles follow the Comfy surface. */
+export function readOwnedDarkTheme(document) {
+    if (readDocumentVisualStyle(document) === 'photopro')
+        return document.documentElement.getAttribute('data-sc-photopro-palette') !== 'light-gray';
     const style = document.defaultView?.getComputedStyle(document.documentElement);
     const background = parseCssColor(style?.getPropertyValue('--comfy-menu-bg') ?? '');
     if (background?.alpha === 1) {

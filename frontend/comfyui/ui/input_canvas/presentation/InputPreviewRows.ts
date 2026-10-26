@@ -21,6 +21,7 @@ import type { InputEntry } from '../domain/InputBinding.js';
 import { InputPreviewSurface } from './InputPreviewSurface.js';
 import { InputPreviewResolutionObserver } from './InputPreviewResolutionObserver.js';
 import { readPluginMode } from '../../core/PluginMode.js';
+import type { MaskPreviewMode } from '../domain/MaskPreviewGeometry.js';
 interface Row {
   readonly resolution: InputPreviewResolutionObserver;
   readonly surface: InputPreviewSurface;
@@ -34,6 +35,7 @@ export class InputPreviewRows {
   readonly #empty: InputPreviewSurface;
   readonly #entries = new Map<string, Row>();
   #alive = true;
+  #mode: MaskPreviewMode = 'context';
   /** Bind pixels and state through the existing source and interpretation owners. */
   constructor(
     document: Document,
@@ -108,6 +110,13 @@ export class InputPreviewRows {
       } else row.content?.refresh();
     }
   }
+
+  /** Switch framing on the existing preview surfaces without changing mask settings or source identity. */
+  setMaskMode(mode: MaskPreviewMode): void {
+    if (this.#mode === mode) return;
+    this.#mode = mode;
+    this.refresh();
+  }
   /** Explain a rejected source intent within its existing selected preview. */
   unavailable(message: string): void {
     const row = this.#entries.get(this.binding.state.selected ?? '');
@@ -165,7 +174,14 @@ export class InputPreviewRows {
         else if (value.kind === 'error') row.surface.unavailable(value.message);
         else {
           try {
-            row.surface.paint(value.pixels, value.frame, value.background);
+            row.surface.paint(
+              value.pixels,
+              value.frame,
+              value.background,
+              value.placement ?? null,
+              value.outline ?? false,
+              value.viewport ?? null,
+            );
           } catch (error: unknown) {
             row.surface.unavailable('Preview unavailable');
             this.report(error);
@@ -174,6 +190,7 @@ export class InputPreviewRows {
       },
       this.report,
       this.association,
+      () => this.#mode,
     );
   }
 }

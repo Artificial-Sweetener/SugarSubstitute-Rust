@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Coordinate peer canvas capabilities through one execution delivery and lifecycle authority. */
 import { CanvasCancellation } from '../../core/embedded/CanvasRuntime.js';
+import type { CanvasGeometryHost } from '../../../../../integrations/contracts/CanvasGeometry.js';
 import type { CanvasOutputBinding } from '../../../../../integrations/contracts/CanvasAdapter.js';
 import type {
   WorkflowCanvasAdapter,
@@ -30,6 +31,7 @@ import type { WorkflowResultStore } from './WorkflowResultStore.js';
 import { WorkflowCanvasImages } from './WorkflowCanvasImages.js';
 import type { CanvasMaskHost } from '../../../../../integrations/contracts/CanvasMasks.js';
 import type { CanvasSourceHost } from '../../../../../integrations/contracts/CanvasSources.js';
+import type { CanvasLayerHost } from '../../../../../integrations/contracts/CanvasHost.js';
 
 interface CanvasEntry<Bytes> {
   readonly adapter: WorkflowCanvasAdapter<Bytes>;
@@ -104,6 +106,16 @@ export class WorkflowCanvasCoordinator<Bytes> {
     };
   }
 
+  /** Resolve dimension editing independently of output delivery or source-raster capture. */
+  geometryHost(canvasId?: string): CanvasGeometryHost | null {
+    const hosts = [...this.#entries.values()]
+      .flatMap(({ adapter }) =>
+        adapter.capabilities.geometry ? [adapter.capabilities.geometry] : [],
+      )
+      .filter((host) => host.canvasId && (!canvasId || host.canvasId === canvasId));
+    return hosts.length === 1 ? (hosts[0] ?? null) : null;
+  }
+
   /** Resolve source reads independently of output routing or mask interpretation. */
   sourceHost(canvasId?: string): CanvasSourceHost | null {
     const hosts = [...this.#entries.values()]
@@ -111,6 +123,17 @@ export class WorkflowCanvasCoordinator<Bytes> {
         adapter.capabilities.sources ? [adapter.capabilities.sources] : [],
       )
       .filter((host) => host.canvasId && (!canvasId || host.canvasId === canvasId));
+    return hosts.length === 1 ? (hosts[0] ?? null) : null;
+  }
+
+  /** Resolve the existing layer primitive by peer identity without exposing a particular editor. */
+  layerHost(canvasId?: string): CanvasLayerHost | null {
+    const hosts = [...this.#entries.values()]
+      .flatMap(({ adapter }) => (adapter.capabilities.layers ? [adapter.capabilities.layers] : []))
+      .filter((host) => {
+        const descriptor = host.readCanvas();
+        return descriptor && (!canvasId || descriptor.id === canvasId);
+      });
     return hosts.length === 1 ? (hosts[0] ?? null) : null;
   }
 

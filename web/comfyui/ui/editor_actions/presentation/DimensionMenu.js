@@ -1,21 +1,40 @@
 import { LANDSCAPE_RATIOS, PORTRAIT_RATIOS, ratioDimension, canonicalDimensions, } from '../domain/DimensionPolicy.js';
 import { GLOBAL_ASSOCIATION } from '../domain/UserPreset.js';
 /** Build side-aware dimensions, ratio orientations and matching persisted scopes without IO. */
-export function dimensionMenuEntries(binding, side, library, families, run) {
+export function dimensionMenuEntries(binding, side, library, families, run, canvasEntries = []) {
     if (binding.width.disabled() || binding.height.disabled())
         return [];
-    const entries = [
-        {
-            label: 'Swap width & height',
-            select: () => {
-                const width = binding.width.read(), height = binding.height.read();
-                if (typeof width === 'number' && typeof height === 'number') {
-                    binding.width.write(height);
-                    binding.height.write(width);
-                }
-            },
+    const entries = [];
+    for (const anchor of side ? [side] : ['width', 'height'])
+        entries.push({
+            label: `Set ratio by ${anchor === 'width' ? 'Width' : 'Height'}`,
+            children: [
+                { label: 'Landscape', ratios: LANDSCAPE_RATIOS },
+                { label: 'Portrait', ratios: PORTRAIT_RATIOS },
+            ].map(({ label, ratios }) => ({
+                label,
+                children: ratios.map(([width, height]) => ({
+                    label: `${width}:${height}`,
+                    select: () => {
+                        const value = binding[anchor].read();
+                        const target = typeof value === 'number' ? ratioDimension(value, anchor, width, height) : null;
+                        if (target !== null)
+                            binding[anchor === 'width' ? 'height' : 'width'].write(target);
+                    },
+                })),
+            })),
+        });
+    entries.push({
+        label: 'Swap width & height',
+        select: () => {
+            const width = binding.width.read(), height = binding.height.read();
+            if (typeof width === 'number' && typeof height === 'number') {
+                binding.width.write(height);
+                binding.height.write(width);
+            }
         },
-    ];
+    });
+    entries.push(...canvasEntries);
     const scopes = [...families, GLOBAL_ASSOCIATION];
     if (scopes.some((scope) => library.dimensions(scope).length))
         entries.push({
@@ -50,25 +69,6 @@ export function dimensionMenuEntries(binding, side, library, families, run) {
                         };
                     }),
                 ]),
-            })),
-        });
-    for (const anchor of side ? [side] : ['width', 'height'])
-        entries.push({
-            label: `Set ratio by ${anchor === 'width' ? 'Width' : 'Height'}`,
-            children: [
-                { label: 'Landscape', ratios: LANDSCAPE_RATIOS },
-                { label: 'Portrait', ratios: PORTRAIT_RATIOS },
-            ].map(({ label, ratios }) => ({
-                label,
-                children: ratios.map(([width, height]) => ({
-                    label: `${width}:${height}`,
-                    select: () => {
-                        const value = binding[anchor].read();
-                        const target = typeof value === 'number' ? ratioDimension(value, anchor, width, height) : null;
-                        if (target !== null)
-                            binding[anchor === 'width' ? 'height' : 'width'].write(target);
-                    },
-                })),
             })),
         });
     const width = binding.width.read(), height = binding.height.read();

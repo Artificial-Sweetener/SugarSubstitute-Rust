@@ -89,6 +89,7 @@ export class NativeNumericControls {
                 field.container.removeAttribute('data-sc-number-pair');
                 slider?.root.removeEventListener('input', publishSliderValue);
                 slider?.root.removeEventListener('change', publishSliderValue);
+                slider?.root.removeEventListener('keydown', retainSliderNavigation);
                 slider?.root.remove();
             },
         };
@@ -98,6 +99,7 @@ export class NativeNumericControls {
             field.container.setAttribute('data-sc-number-pair', '');
             slider.root.addEventListener('input', publishSliderValue);
             slider.root.addEventListener('change', publishSliderValue);
+            slider.root.addEventListener('keydown', retainSliderNavigation);
             field.container.append(slider.root);
         }
         try {
@@ -136,5 +138,19 @@ function synchronizeNumericAnnotations(field, annotations) {
 /** Keep primary gesture starts away from Comfy's node drag owner; themed retains window move/up. */
 function retainNumericGesture(event) {
     if (event instanceof MouseEvent && event.button === 0)
+        event.stopPropagation();
+}
+/** Preserve native range navigation before Comfy's graph shortcuts can cancel its default value change. */
+function retainSliderNavigation(event) {
+    if ([
+        'ArrowLeft',
+        'ArrowRight',
+        'ArrowUp',
+        'ArrowDown',
+        'Home',
+        'End',
+        'PageUp',
+        'PageDown',
+    ].includes(event.key))
         event.stopPropagation();
 }

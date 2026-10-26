@@ -18,6 +18,7 @@ import { isRecord } from '../../types/common.js';
 import { findVueComponents } from '../../surface/ComfyVueTree.js';
 import { copySavablePresetValue } from '../domain/PresetCodec.js';
 import { readNativeEditorModelInputs } from './NativeEditorModelInputs.js';
+import { nativeDimensionLimits, nativeDimensionTargets } from './NativeDimensionFieldMetadata.js';
 const components = new Map([
     ['WidgetInputNumber', 'number'],
     ['WidgetInputNumberInput', 'number'],
@@ -29,7 +30,7 @@ const components = new Map([
     ['WidgetTextarea', 'string'],
 ]);
 /** Resolve a positively identified node component and only its own standard widget descendants. */
-export function readNativeEditorCard(root) {
+export function readNativeEditorCard(root, graph = () => null) {
     const mount = projectedEditorCardMount(root);
     if (!mount)
         return null;
@@ -40,13 +41,14 @@ export function readNativeEditorCard(root) {
     const data = isRecord(props.nodeData) ? props.nodeData : {};
     if (typeof data.type !== 'string')
         return null;
+    const metadata = [data.widgets, data.sugarcubesEditorWidgets].flatMap((value) => Array.isArray(value) ? value.filter(isRecord) : []);
     const fields = [];
     const widgetContainers = findVueComponents(vnode, 'NodeWidgets')
         .map(elementOf)
         .filter((element) => element?.closest('.lg-node') === root);
     for (const [component, kind] of components) {
         for (const child of findVueComponents(vnode, component)) {
-            const field = readField(child, root, kind, widgetContainers);
+            const field = readField(child, root, kind, widgetContainers, graph, metadata);
             if (field && !fields.some((existing) => existing.name === field.name))
                 fields.push(field);
         }
@@ -57,7 +59,7 @@ export function readNativeEditorCard(root) {
         for (const widget of declared) {
             if (!isRecord(widget) || fields.some((field) => field.name === widget.name))
                 continue;
-            const field = readUnrenderedField(widget, root, hasOwnedWidgets);
+            const field = readUnrenderedField(widget, root, hasOwnedWidgets, graph);
             if (field)
                 fields.push(field);
         }
@@ -106,7 +108,7 @@ function readAdvancedControl(value, button) {
     };
 }
 /** Retain the native emitter and re-read dynamic constraints at every command execution. */
-function readField(vnode, root, kind, containers) {
+function readField(vnode, root, kind, containers, graph, metadata) {
     const instance = isRecord(vnode.component) ? vnode.component : {};
     const props = isRecord(instance.props) ? instance.props : {};
     const widget = isRecord(props.widget) ? props.widget : {};
@@ -118,6 +120,8 @@ function readField(vnode, root, kind, containers) {
         typeof emit !== 'function')
         return null;
     const options = () => (isRecord(widget.options) ? widget.options : {});
+    // Comfy normalizes component widget props and removes extension metadata from that copy.
+    const owner = metadata.find((candidate) => candidate.name === widget.name) ?? widget;
     const disabled = () => {
         const constraints = options();
         const input = element.querySelector('input,textarea');
@@ -132,6 +136,8 @@ function readField(vnode, root, kind, containers) {
     return {
         name: widget.name,
         kind,
+        limits: () => nativeDimensionLimits(owner),
+        targets: () => nativeDimensionTargets(owner, graph()),
         element: fieldRow(element, containers) ?? element,
         read,
         disabled,
@@ -149,7 +155,7 @@ function readField(vnode, root, kind, containers) {
     };
 }
 /** Apply declared advanced controls through the same data callback used by Comfy's NodeWidgets. */
-function readUnrenderedField(widget, root, owned) {
+function readUnrenderedField(widget, root, owned, graph) {
     if (typeof widget.name !== 'string' ||
         widget.name === 'control_after_generate' ||
         (!owned && !Array.isArray(widget.spec) && !isRecord(widget.spec)))
@@ -177,6 +183,8 @@ function readUnrenderedField(widget, root, owned) {
     return {
         name: widget.name,
         kind,
+        limits: () => nativeDimensionLimits(widget),
+        targets: () => nativeDimensionTargets(widget, graph()),
         element: root,
         read: () => widget.value,
         disabled,

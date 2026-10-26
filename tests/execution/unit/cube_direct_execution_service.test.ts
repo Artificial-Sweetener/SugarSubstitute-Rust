@@ -120,6 +120,34 @@ test('claims only persisted Cube workflows and leaves Substitute requests untouc
   ).toBe(false);
 });
 
+test('forwards frozen prepared mask assets through the normal direct execution request', async () => {
+  const queue = jest.fn(async () => ({ accepted: true }));
+  const asset = {
+    nodePath: 'cube:mask',
+    classType: 'LoadImageMask',
+    field: 'image',
+    file: 'original.png',
+    slot: 0,
+    kind: 'mask' as const,
+    preparedFile: 'sugarcubes/sources/source-00000000-0000-0000-0000-000000000001.png',
+  };
+  const graph = { _nodes: [], serialize: () => ({ nodes: [] }) } as unknown as ComfyGraph;
+  const service = new CubeDirectExecutionService({
+    client: { queue } as unknown as CubeExecutionApiClient,
+    getGraph: () => graph,
+    getProximityMatches: () => [],
+    prepareInputs: async (payload) => ({ payload, preparedInputs: [asset] }),
+  });
+  await service.queue(0, {});
+  expect(queue).toHaveBeenCalledTimes(1);
+  expect(queue).toHaveBeenCalledWith(
+    expect.objectContaining({
+      prepared_inputs: [asset],
+      workflow: expect.objectContaining({ nodes: [] }),
+    }),
+  );
+});
+
 /** Return a minimal native Cube surface with durable instance identity. */
 function cube(instanceId: string, outputs: string[], inputs: string[]): object {
   return {

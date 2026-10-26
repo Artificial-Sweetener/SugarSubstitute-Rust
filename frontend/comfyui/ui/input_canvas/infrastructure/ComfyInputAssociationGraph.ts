@@ -18,6 +18,7 @@ import { collectGraphLinks, getGraphNodes } from '../../graph/GraphQuery.js';
 import { NativeSubgraphBoundaryResolver } from '../../cube/graph/NativeSubgraphBoundaryResolver.js';
 import { isRecord } from '../../types/common.js';
 import type { ComfyGraph, ComfyNode } from '../../types/graph.js';
+import { isContextImageInput } from '../domain/InputContextSemantics.js';
 import type { InputLoader, InputKind } from '../domain/InputLoader.js';
 import type {
   InputAssetAssociationGraph,
@@ -64,6 +65,14 @@ export class ComfyInputAssociationGraph {
   /** Return only a field owned by the current workflow inventory. */
   field(key: string): ComfyInputAssetField | null {
     return this.#fields.get(key) ?? null;
+  }
+
+  /** Translate a cached native field identity to the same authored path used by queue projection. */
+  workflowKey(key: string): string | null {
+    const field = this.#fields.get(key);
+    if (!field) return null;
+    const paths = [...this.#paths].filter(([, node]) => node === field.node).map(([path]) => path);
+    return paths.length === 1 ? JSON.stringify([paths[0], field.loader.field]) : null;
   }
 
   /** Inventory membership at explicit workflow, node-membership or definition lifecycles. */
@@ -143,6 +152,14 @@ export class ComfyInputAssociationGraph {
         const type = node.inputs?.[target.inputSlot]?.type;
         const kind = assetKind(type) ?? (type == null || type === '*' ? outputKind : null);
         if (!kind) continue;
+        if (
+          kind === 'image' &&
+          !isContextImageInput(
+            node.type ?? node.class_type ?? '',
+            node.inputs?.[target.inputSlot]?.name ?? '',
+          )
+        )
+          continue;
         const endpoints =
           source && outputKind === kind
             ? this.loaders
@@ -163,7 +180,21 @@ export class ComfyInputAssociationGraph {
       endpoints: nodes.flatMap((node) =>
         this.loaders.all(node.type ?? node.class_type ?? '').flatMap((loader) => {
           const key = this.key(node, loader.field);
-          return this.#fields.has(key) ? [{ key, kind: loader.kind }] : [];
+          return this.#fields.has(key)
+            ? [
+                {
+                  key,
+                  kind: loader.kind,
+                  maskOutput:
+                    loader.kind === 'image' &&
+                    Boolean(
+                      node.outputs?.some(
+                        (output) => assetKind(output.type) === 'mask' && output.links?.length,
+                      ),
+                    ),
+                },
+              ]
+            : [];
         }),
       ),
       inputs,

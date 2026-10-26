@@ -26,8 +26,13 @@ import {
   type CanvasSourceHost,
 } from './CanvasRuntime.js';
 import type { BrowserPanelTransport } from './UxpPanelTransport.js';
+import type { CanvasGeometryHost } from '../../../../../integrations/contracts/CanvasGeometry.js';
 /** Keep the optional native canvas unavailable until the panel has authenticated and negotiated it. */
 export class EmbeddedCanvasConnection implements CanvasLayerHost {
+  /** Borrow the existing authenticated request sequence for optional geometry operations. */
+  get geometry(): CanvasGeometryHost | null {
+    return this.#client?.geometry ?? null;
+  }
   #client: CanvasClient | null = null;
   #masks: CanvasMaskClient | null = null;
   /** Expose source reads on the authenticated canvas connection without a second request sequence. */

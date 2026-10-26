@@ -15,6 +15,8 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own responsive tab-strip allocation and the lifetime of its overflow affordance. */
 import { WORKFLOW_TAB_WIDTH, WORKFLOW_TAB_MIN_WIDTH } from './WorkflowTabStyles.js';
+import { readOwnedVisualStyle } from '../appearance/VisualStyleBoundary.js';
+import { workflowTabOffsets } from './WorkflowTabGeometry.js';
 /** Preserve the reference orb's tab-strip origin. */
 export const FRAME_TAB_START = 48;
 /** Match Substitute's tab tool button width. */
@@ -33,7 +35,8 @@ export class WorkflowTabStripLayout {
     #window;
     #observer;
     #count = -1;
-    #tabWidth = WORKFLOW_TAB_WIDTH;
+    #widths = [];
+    #key = '';
     #available = 0;
     #animationFrame = null;
     #disposed = false;
@@ -62,11 +65,13 @@ export class WorkflowTabStripLayout {
         if (!this.#observer)
             window.addEventListener('resize', this.#request);
     }
-    /** Allocate natural tab and add-button width only when the collection length changes. */
-    update(count) {
-        if (this.#disposed || this.#count === count)
+    /** Reallocate only when ordered titles, dirty markers or collection identities change. */
+    update(items) {
+        const key = JSON.stringify(items.map(({ id, title, modified }) => [id, title, modified]));
+        if (this.#disposed || this.#key === key)
             return;
-        this.#count = count;
+        this.#key = key;
+        this.#count = items.length;
         this.#refresh();
     }
     /** Allocate the leading edge from the actual application-menu presentation. */
@@ -107,16 +112,38 @@ export class WorkflowTabStripLayout {
             trailing -
             WORKFLOW_NEW_BUTTON_GAP -
             WORKFLOW_TAB_TOOL_WIDTH));
-        const hidden = this.#count === 0 || this.#count * WORKFLOW_TAB_MIN_WIDTH <= available + 0.5;
+        const natural = readOwnedVisualStyle(this.tabs.ownerDocument) === 'photopro';
+        this.viewport.toggleAttribute('data-sc-natural-tabs', natural);
+        const elements = Array.from(this.tabs.children).filter((element) => element instanceof HTMLElement);
+        const preferred = natural
+            ? elements.map((element) => {
+                const title = element.querySelector('.sc-workflow-title');
+                return (element.getBoundingClientRect().width +
+                    Math.max(0, (title?.scrollWidth ?? 0) - (title?.clientWidth ?? 0)));
+            })
+            : [];
+        const required = natural
+            ? preferred.reduce((total, width) => total + Math.min(width, available), 0)
+            : this.#count * WORKFLOW_TAB_MIN_WIDTH;
+        const hidden = this.#count === 0 || required <= available + 0.5;
         this.viewport.toggleAttribute('data-sc-overflow', !hidden);
         const arrows = Math.max(1, Number(!this.controls.previous.hidden) + Number(!this.controls.next.hidden));
         const capacity = Math.max(0, available - (hidden ? 0 : (1 + arrows) * WORKFLOW_TAB_TOOL_WIDTH));
-        this.#tabWidth =
-            this.#count === 0
+        if (natural) {
+            // A long name stays bounded even when both endpoint arrows occupy their settled slots.
+            const maximum = Math.max(1, hidden ? capacity : available - 3 * WORKFLOW_TAB_TOOL_WIDTH);
+            this.tabs.style.setProperty('--sc-workflow-tab-max-width', `${String(maximum)}px`);
+            this.#widths = elements.map((element) => element.getBoundingClientRect().width);
+        }
+        else {
+            this.tabs.style.removeProperty('--sc-workflow-tab-max-width');
+            const width = this.#count === 0
                 ? WORKFLOW_TAB_WIDTH
                 : Math.max(WORKFLOW_TAB_MIN_WIDTH, Math.min(WORKFLOW_TAB_WIDTH, capacity / this.#count));
-        const content = this.#count * this.#tabWidth;
-        this.tabs.style.setProperty('--sc-workflow-tab-width', `${String(this.#tabWidth)}px`);
+            this.tabs.style.setProperty('--sc-workflow-tab-width', `${String(width)}px`);
+            this.#widths = Array.from({ length: this.#count }, () => width);
+        }
+        const content = workflowTabOffsets(this.#widths).at(-1) ?? 0;
         this.tabs.style.setProperty('--sc-workflow-tabs-width', `${String(content)}px`);
         this.viewport.style.width = `${String(Math.min(content, capacity))}px`;
         if (this.controls.overflow.hidden !== hidden) {
@@ -124,7 +151,7 @@ export class WorkflowTabStripLayout {
             if (hidden)
                 this.closeOverflow();
         }
-        this.resized(this.#tabWidth);
+        this.resized(this.#widths);
         this.#updateArrows();
     }
     /** Reflect actual scroll endpoints after wheel input, selection reveal or dragging. */
@@ -143,12 +170,12 @@ export class WorkflowTabStripLayout {
         this.controls.previous.hidden = !previous;
         this.controls.next.hidden = !next;
         const capacity = Math.max(0, this.#available - (1 + Number(previous) + Number(next)) * WORKFLOW_TAB_TOOL_WIDTH);
-        const width = Math.min(this.#count * this.#tabWidth, capacity);
+        const width = Math.min(workflowTabOffsets(this.#widths).at(-1) ?? 0, capacity);
         const cssWidth = `${String(width)}px`;
         const resized = this.viewport.style.width !== cssWidth;
         if (resized)
             this.viewport.style.width = cssWidth;
-        const position = Math.max(0, Math.min(this.viewport.scrollLeft, this.#count * this.#tabWidth - width));
+        const position = Math.max(0, Math.min(this.viewport.scrollLeft, (workflowTabOffsets(this.#widths).at(-1) ?? 0) - width));
         if (this.viewport.scrollLeft !== position)
             this.viewport.scrollLeft = position;
         if (changed || resized)
@@ -157,7 +184,12 @@ export class WorkflowTabStripLayout {
     /** Move one readable tab at a time without overshooting either end. */
     #scroll(direction) {
         const maximum = Math.max(0, this.viewport.scrollWidth - this.viewport.clientWidth);
-        this.viewport.scrollLeft = Math.max(0, Math.min(maximum, this.viewport.scrollLeft + direction * this.#tabWidth));
+        const starts = workflowTabOffsets(this.#widths);
+        const current = this.viewport.scrollLeft;
+        const destination = direction > 0
+            ? (starts.find((left) => left > current + 0.5) ?? maximum)
+            : (starts.findLast((left) => left < current - 0.5) ?? 0);
+        this.viewport.scrollLeft = Math.max(0, Math.min(maximum, destination));
         this.#updateArrows();
     }
     /** Reach earlier workflows using the fixed leading arrow. */

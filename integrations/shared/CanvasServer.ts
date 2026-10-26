@@ -23,11 +23,17 @@ import type {
   CanvasSourceResult,
 } from '../contracts/CanvasProtocol.generated.js';
 import type { CanvasSourceHost } from '../contracts/CanvasSources.js';
+import type { CanvasGeometryHost } from '../contracts/CanvasGeometry.js';
+import type {
+  CanvasGeometryRequest,
+  CanvasGeometryResult,
+} from '../contracts/CanvasProtocol.generated.js';
 import { CanvasCancellation } from './CanvasCancellation.js';
 import { isCanvasMessage } from './CanvasValidation.generated.js';
 import { MAX_CANVAS_ENCODED_CHARACTERS } from './CanvasImageEncoding.js';
 /** Supply editor capabilities through typed ports rather than importing native APIs. */
 export interface CanvasServerPort {
+  readonly geometry?: CanvasGeometryHost;
   readonly sources?: CanvasSourceHost;
   context(): CanvasContext;
   insert(image: CanvasInsertImage, cancellation: CanvasCancellation): Promise<CanvasInsertResult>;
@@ -62,13 +68,14 @@ export class CanvasServer {
     if (
       value.type !== 'context.request' &&
       value.type !== 'image.insert' &&
+      value.type !== 'geometry.request' &&
       value.type !== 'source.request'
     )
       return false;
     const fingerprint =
       value.type === 'context.request'
         ? value.type
-        : value.type === 'source.request'
+        : value.type === 'source.request' || value.type === 'geometry.request'
           ? JSON.stringify([value.type, value.command])
           : JSON.stringify([
               value.type,
@@ -125,7 +132,8 @@ export class CanvasServer {
           failure: { status: 'error', message: 'The canvas context is unavailable.' },
         });
       }
-    } else if (value.type === 'source.request') void this.#source(value, entry);
+    } else if (value.type === 'geometry.request') void this.#geometry(value, entry);
+    else if (value.type === 'source.request') void this.#source(value, entry);
     else void this.#insert(value, entry);
     return true;
   }
@@ -137,6 +145,27 @@ export class CanvasServer {
     for (const entry of this.#entries.values()) entry.cancellation.cancel();
     this.#entries.clear();
     this.#retainedCharacters = 0;
+  }
+  /** Dispatch negotiated document geometry with the same replay and cancellation ownership as insertion. */
+  async #geometry(request: CanvasGeometryRequest, entry: Entry): Promise<void> {
+    let result: CanvasGeometryResult;
+    try {
+      result = this.port.geometry
+        ? await this.port.geometry.execute(request.command, entry.cancellation)
+        : {
+            kind: 'failure',
+            status: 'unsupported',
+            message: 'This canvas does not support geometry operations.',
+          };
+    } catch (error: unknown) {
+      this.port.report(error);
+      result = {
+        kind: 'failure',
+        status: 'error',
+        message: 'The canvas geometry operation failed.',
+      };
+    }
+    this.#reply(entry, { ...this.#envelope(request.requestId), type: 'geometry.reply', result });
   }
   /** Dispatch optional read capabilities and scope native observation to this authenticated session. */
   async #source(request: CanvasSourceRequest, entry: Entry): Promise<void> {

@@ -1,6 +1,6 @@
 import { applyOwnedTheme } from '../../surface/appearance/ThemeService.js';
 import { createFinderInput, createButton } from '../../surface/appearance/ControlFactory.js';
-import { readComfyDarkTheme } from '../../surface/appearance/ComfyColorScheme.js';
+import { readOwnedDarkTheme } from '../../surface/appearance/OwnedColorScheme.js';
 import { ensureFinderStyles } from './FinderStyles.js';
 import { ContextMenu } from '../../menus/ContextMenu.js';
 /** Retain selected provider controls while finder state and results change. */
@@ -27,7 +27,7 @@ export class FinderView {
         this.element.setAttribute('aria-label', 'Find in masonry');
         this.element.setAttribute('data-capture-wheel', 'true');
         this.element.hidden = true;
-        applyOwnedTheme(this.element, readComfyDarkTheme(documentRef));
+        applyOwnedTheme(this.element, readOwnedDarkTheme(documentRef));
         this.#input = createFinderInput(documentRef);
         this.#input.className = 'sc-masonry-finder__input';
         this.#input.setAttribute('aria-label', 'Search masonry');
@@ -96,7 +96,7 @@ export class FinderView {
         if (this.element.parentElement !== container)
             container.append(this.element);
         this.element.hidden = false;
-        applyOwnedTheme(this.element, readComfyDarkTheme(this.element.ownerDocument));
+        applyOwnedTheme(this.element, readOwnedDarkTheme(this.element.ownerDocument));
         if (focus) {
             this.#input.focusInput(true);
         }

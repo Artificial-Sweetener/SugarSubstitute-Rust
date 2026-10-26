@@ -23,6 +23,7 @@ import { CanvasServer } from '../../../shared/CanvasServer.js';
 import { InsertCanvasImage } from '../application/InsertCanvasImage.js';
 import { PhotoshopImageAssets } from './PhotoshopImageAssets.js';
 import { PhotoshopCanvasDocuments } from './PhotoshopCanvasDocuments.js';
+import { PhotoshopCanvasGeometry } from './PhotoshopCanvasGeometry.js';
 import type { PhotoshopMaskSessionPort } from './PhotoshopMaskSession.js';
 /** Scope each canvas connection to the same authenticated navigation as its panel. */
 export class PhotoshopCanvasBridge {
@@ -39,7 +40,7 @@ export class PhotoshopCanvasBridge {
     private readonly maskSession: PhotoshopMaskSessionPort,
   ) {
     const assets = new PhotoshopImageAssets();
-    this.#documents = new PhotoshopCanvasDocuments(assets, report);
+    this.#documents = new PhotoshopCanvasDocuments(assets);
     this.#insertion = new InsertCanvasImage({
       prepare: (image, cancel) => assets.prepare(image, cancel),
       insert: (request, image, cancel) => this.#documents.insert(request, image, cancel),
@@ -51,6 +52,7 @@ export class PhotoshopCanvasBridge {
     this.dispose();
     this.#sources = new PhotoshopCanvasSources(this.report);
     this.#server = new CanvasServer(session, {
+      geometry: new PhotoshopCanvasGeometry(),
       sources: this.#sources,
       context: () => this.#documents.context(),
       insert: (image, cancel) => this.#insertion.execute(image, cancel),

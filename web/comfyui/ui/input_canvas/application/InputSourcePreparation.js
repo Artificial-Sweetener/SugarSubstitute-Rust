@@ -1,5 +1,14 @@
 import { canvasInputSourceKey } from '../../core/embedded/CanvasRuntime.js';
 import { maskSourceImage } from '../domain/MaskSourcePixels.js';
+/** Resolve one frozen entry through the same source-to-upload identity used by every queue consumer. */
+export function preparedSourceFile(field, entry, sources) {
+    const file = entry.source.kind === 'canvas'
+        ? sources.files.get(JSON.stringify([field, entry.id]))
+        : entry.source.file;
+    if (!file)
+        throw new Error('Choose a file or canvas source for every entry.');
+    return file;
+}
 /** Adapt source capture to a file-loading field without changing source channels or the loader's settings. */
 export class InputSourcePreparation {
     capture;

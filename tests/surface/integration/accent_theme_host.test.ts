@@ -37,6 +37,8 @@ const hosts: AccentThemeHost[] = [];
 afterEach(() => {
   hosts.splice(0).forEach((host) => host.dispose());
   document.documentElement.removeAttribute('style');
+  document.documentElement.removeAttribute('data-sc-visual-style');
+  document.documentElement.removeAttribute('data-sc-photopro-palette');
   document.head.replaceChildren();
   document.body.replaceChildren();
 });
@@ -210,4 +212,24 @@ test('uses the negotiated Photoshop accent without persisting it and restores th
     resizeCornerSize: 0,
   });
   expect(f.host.theme.color).toBe('#123456');
+});
+
+test('PhotoPro brightness follows accepted palette changes independently of Comfy theme and accent', async () => {
+  document.documentElement.style.setProperty('--comfy-menu-bg', '#ffffff');
+  document.documentElement.dataset.scVisualStyle = 'photopro';
+  document.documentElement.dataset.scPhotoproPalette = 'medium-gray';
+  const { host, setSettingValue } = createHost('#d6d6d6');
+  const changed = jest.fn();
+  host.subscribe(changed);
+  expect(host.theme).toEqual({ color: '#d6d6d6', dark: true });
+  document.documentElement.dataset.scPhotoproPalette = 'light-gray';
+  await settle();
+  expect(host.theme).toEqual({ color: '#d6d6d6', dark: false });
+  document.documentElement.dataset.scPhotoproPalette = 'dark-gray';
+  await settle();
+  expect(host.theme).toEqual({ color: '#d6d6d6', dark: true });
+  document.documentElement.style.setProperty('--comfy-menu-bg', '#202020');
+  await settle();
+  expect(changed).toHaveBeenCalledTimes(2);
+  expect(setSettingValue).not.toHaveBeenCalled();
 });

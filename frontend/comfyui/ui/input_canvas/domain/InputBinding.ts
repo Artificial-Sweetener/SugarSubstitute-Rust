@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Preserve ordered source identity independently of file transport, native editing and preview presentation. */
 import type { CanvasInputSource } from '../../../../../integrations/contracts/CanvasProtocol.generated.js';
+import type { MaskEditSettings } from './MaskEditSettings.js';
 /** Keep ordered source identity separate from its reusable input source. */
 export interface InputEntry {
   readonly id: string;
@@ -29,6 +30,8 @@ export interface InputBinding {
   readonly entries: readonly InputEntry[];
   /** Keep file-picker intent distinct from a collection's canvas-owned entries. */
   readonly files: readonly string[];
+  /** Preserve optional preparation intent alongside its owning mask loader's sources. */
+  readonly edits?: MaskEditSettings;
 }
 /** Identify durable source associations on their owning workflow node. */
 export const MASK_BINDING_KEY = 'sugarcubes_canvas_masks';

@@ -15,28 +15,45 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Translate bounded browser image decoding into the shared editor-independent region preparation. */
 import { encodeCanvasRaster, MAX_CANVAS_RASTER_BYTES } from '../../core/embedded/CanvasRuntime.js';
-import { prepareCanvasImagePatch, encodeCanvasImage } from '../../core/embedded/CanvasRuntime.js';
+import {
+  prepareCanvasImagePatch,
+  encodeCanvasImage,
+  MAX_CANVAS_IMAGE_PIXELS,
+  canvasPngDimensions,
+} from '../../core/embedded/CanvasRuntime.js';
 import type { CanvasImageRegion } from '../../../../../integrations/contracts/CanvasImageRegion.js';
 import type { CanvasCancellationSource } from '../../../../../integrations/contracts/CanvasHost.js';
 import { encodeSourcePng } from '../../core/embedded/CanvasPngEncoding.js';
 import type { PreparedGenerationImage } from '../domain/CanvasGenerationImages.js';
 
 /** Decode once, keep replacement pixels bounded, and release all native raster allocations. */
-export async function browserCanvasImageRegion(
+export async function browserCanvasImage(
   blob: Blob,
-  region: CanvasImageRegion,
+  region: CanvasImageRegion | null,
   cancellation: CanvasCancellationSource,
 ): Promise<PreparedGenerationImage | null> {
+  canvasPngDimensions(new Uint8Array(await blob.arrayBuffer()));
   const bitmap = await createImageBitmap(blob);
   try {
     if (cancellation.cancelled()) return null;
-    if (bitmap.width * bitmap.height * 4 > MAX_CANVAS_RASTER_BYTES)
+    if (
+      bitmap.width * bitmap.height >
+      (region ? MAX_CANVAS_RASTER_BYTES / 4 : MAX_CANVAS_IMAGE_PIXELS)
+    )
       throw new Error('The generated image exceeds its decoded pixel budget.');
     const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
     try {
       const context = canvas.getContext('2d');
       if (!context) throw new Error('Generated image pixel decoding is unavailable.');
       context.drawImage(bitmap, 0, 0);
+      if (!region) {
+        const png = await canvas.convertToBlob({ type: 'image/png' });
+        if (cancellation.cancelled()) return null;
+        return {
+          image: encodeCanvasImage(new Uint8Array(await png.arrayBuffer())),
+          position: null,
+        };
+      }
       const pixels = encodeCanvasRaster(
         bitmap.width,
         bitmap.height,

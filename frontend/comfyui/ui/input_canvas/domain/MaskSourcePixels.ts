@@ -16,6 +16,12 @@
 /** Interpret reusable source pixels with the loader's actual channel convention. */
 import type { CanvasPixelRaster } from '../../../../../integrations/contracts/CanvasProtocol.generated.js';
 import {
+  usesNativeMaskChannels,
+  nativeMaskOutputChannel,
+  type InputLoader,
+  type InputPreviewSettings,
+} from './InputLoader.js';
+import {
   decodeCanvasRaster,
   encodeCanvasRaster,
   canvasRasterByteLength,
@@ -49,4 +55,18 @@ export function interpretMaskSource(source: CanvasPixelRaster, channel: string):
     coverage[index] = channel === 'alpha' ? 255 - value : value;
   }
   return encodeCanvasRaster(image.width, image.height, 'coverage8', coverage);
+}
+
+/** Interpret known native coverage once and leave custom loader semantics to their native codec. */
+export function nativeMaskSource(
+  source: CanvasPixelRaster,
+  loader: InputLoader,
+  settings: InputPreviewSettings,
+  imageMaskOutput: boolean,
+): CanvasPixelRaster | null {
+  const channel = imageMaskOutput ? nativeMaskOutputChannel(loader) : settings.inputs.channel;
+  if (!imageMaskOutput && !usesNativeMaskChannels(loader)) return null;
+  if (imageMaskOutput && channel === null) return null;
+  if (typeof channel !== 'string') throw new Error('The mask channel must be an authored setting.');
+  return interpretMaskSource(source, channel);
 }

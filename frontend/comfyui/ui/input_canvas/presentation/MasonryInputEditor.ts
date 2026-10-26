@@ -19,12 +19,13 @@ import type { CanvasSourcePreviews } from '../application/CanvasSourcePreviews.j
 import { inputLabel } from '../domain/InputLoader.js';
 import { InputPreviewRows } from './InputPreviewRows.js';
 import { CanvasSourcePicker } from './CanvasSourcePicker.js';
-import type { NativeNodeChoiceFields } from '../../surface/NativeNodeChoiceFields.js';
+import type { NativeNodeFields } from '../../surface/NativeNodeFields.js';
 import { CommandButtonMount } from '../../surface/appearance/CommandButtonMount.js';
 import { readPluginMode, subscribePluginMode } from '../../core/PluginMode.js';
 import { CanvasSourceUnavailable } from '../domain/CanvasSourceAvailability.js';
-import type { NativeNodeChoiceMount } from '../../surface/NativeNodeChoiceFields.js';
+import type { NativeNodeChoiceMount } from '../../surface/NativeNodeFields.js';
 import { ensureInputEditorStyles } from './InputEditorStyles.js';
+import { MaskEditFields } from './MaskEditFields.js';
 
 /** Keep one source picker and stable preview surfaces while selection, channel and order change. */
 export class MasonryInputEditor {
@@ -36,6 +37,7 @@ export class MasonryInputEditor {
   readonly #commands: CommandButtonMount[] = [];
   readonly #stop: () => void;
   readonly #entryField: NativeNodeChoiceMount | null;
+  readonly #maskFields: MaskEditFields;
 
   /** Bind presentation to portable state and share raw source acquisition with queue preparation. */
   constructor(
@@ -44,7 +46,7 @@ export class MasonryInputEditor {
     previews: CanvasSourcePreviews,
     upload: (file: File) => Promise<string>,
     report: (error: unknown) => void,
-    fields: NativeNodeChoiceFields,
+    fields: NativeNodeFields,
     fieldRoot: HTMLElement,
     association: InputImageAssociation | null,
     showField = false,
@@ -128,6 +130,15 @@ export class MasonryInputEditor {
       this.#controls.append(actions);
     }
     this.#rows = new InputPreviewRows(document, binding, previews, report, association);
+    this.#maskFields = new MaskEditFields(
+      binding,
+      association,
+      fields,
+      fieldRoot,
+      showField,
+      (mode) => this.#rows.setMaskMode(mode),
+      report,
+    );
     this.#status = document.createElement('div');
     this.#status.className = 'sc-input-editor__status';
     this.#status.setAttribute('role', 'status');
@@ -156,6 +167,7 @@ export class MasonryInputEditor {
     this.#controls.disabled = this.binding.busy;
     for (const command of this.#commands) command.setDisabled(this.binding.busy);
     this.#picker.refresh();
+    this.#maskFields.refresh();
     this.#entryField?.update(
       state.selected ?? '',
       state.entries.map((entry) => ({ value: entry.id, label: entry.label, blockers: [] })),
@@ -172,6 +184,7 @@ export class MasonryInputEditor {
   dispose(): void {
     this.#stop();
     this.#picker.dispose();
+    this.#maskFields.dispose();
     this.#entryField?.dispose();
     for (const command of this.#commands) command.dispose();
     this.#controls.remove();

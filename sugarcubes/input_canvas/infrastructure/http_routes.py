@@ -41,7 +41,7 @@ def install_input_previews(
         [str, InputPreviewSettings, int], bytes
     ] = native_image_preview,
 ) -> None:
-    """Install one read-only file interpretation route without changing canvas capabilities."""
+    """Install native source interpretation independently of document editing or execution projection."""
     instance: object = getattr(prompt_server, "instance", prompt_server)
     application: object = getattr(instance, "app", None)
     routes: object = getattr(instance, "routes", None)

@@ -1,4 +1,6 @@
 import { InputSourcePreview } from './InputSourcePreview.js';
+import { DEFAULT_MASK_EDITS, hasMaskEdits } from '../domain/MaskEditSettings.js';
+import { InputMaskPreview } from './InputMaskPreview.js';
 import { sameCanvasSourceDocument, } from '../../core/embedded/CanvasRuntime.js';
 /** Consume reusable associations while source acquisition stays with the shared loader preview owner. */
 export class InputPreviewContent {
@@ -9,6 +11,7 @@ export class InputPreviewContent {
     publish;
     report;
     association;
+    mode;
     #stopAssociation;
     #stopImageBinding = () => { };
     #imageBinding = null;
@@ -18,12 +21,14 @@ export class InputPreviewContent {
     #image = null;
     #imageReference = '';
     #alive = true;
+    #sourceSize = -1;
+    #edited;
     /** Keep the primary source lifetime independent of relationship and associated image value changes. */
     static reference(binding, entry, maximumSize) {
         return InputSourcePreview.reference(binding, entry, maximumSize);
     }
     /** Observe graph relationships and exact image binding changes without graph discovery from presentation. */
-    constructor(binding, previews, entry, maximumSize, publish, report, association) {
+    constructor(binding, previews, entry, maximumSize, publish, report, association, mode) {
         this.binding = binding;
         this.previews = previews;
         this.entry = entry;
@@ -31,6 +36,8 @@ export class InputPreviewContent {
         this.publish = publish;
         this.report = report;
         this.association = association;
+        this.mode = mode;
+        this.#edited = new InputMaskPreview(binding.maskEditing, publish, report);
         this.#stopAssociation =
             binding.loader.kind === 'mask'
                 ? (association?.subscribe(() => this.#refreshImage()) ?? (() => { }))
@@ -51,6 +58,7 @@ export class InputPreviewContent {
     }
     /** Preserve black for missing image context while valid image previews retain concise source feedback. */
     unavailable(message) {
+        this.#edited.invalidate();
         this.publish(this.binding.loader.kind === 'mask' && this.#image?.kind !== 'pixels'
             ? { kind: 'black' }
             : { kind: 'error', message });
@@ -62,6 +70,7 @@ export class InputPreviewContent {
         this.#stopImageBinding();
         this.#sourceReader?.dispose();
         this.#imageReader?.dispose();
+        this.#edited.dispose();
     }
     /** Follow the associated loader's selected entry and actual source availability. */
     #refreshImage() {
@@ -85,18 +94,20 @@ export class InputPreviewContent {
                 this.#black();
                 return;
             }
+            const imageSize = this.maximumSize;
             const reference = JSON.stringify([
                 entry.id,
-                InputSourcePreview.reference(image, entry, this.maximumSize),
+                InputSourcePreview.reference(image, entry, imageSize),
             ]);
             if (this.#imageReference !== reference) {
+                this.#edited.invalidate();
                 this.#imageReference = reference;
                 this.#image = null;
                 const previous = this.#imageReader;
                 this.publish({ kind: 'loading' });
-                if (!this.#sourceReader)
+                if (!this.#sourceReader || this.#sourceSize !== this.#captureSize())
                     this.#startSource();
-                this.#imageReader = new InputSourcePreview(image, this.previews, entry, this.maximumSize, (value) => {
+                this.#imageReader = new InputSourcePreview(image, this.previews, entry, imageSize, (value) => {
                     this.#image = value;
                     this.#publishPixels();
                 }, this.report);
@@ -104,7 +115,10 @@ export class InputPreviewContent {
             }
             else
                 this.#imageReader?.refresh();
+            if (this.#sourceSize !== this.#captureSize())
+                this.#startSource();
             this.#sourceReader?.refresh();
+            this.#publishPixels();
         }
         catch (error) {
             this.#black();
@@ -113,18 +127,24 @@ export class InputPreviewContent {
     }
     /** Reuse the primary loader's source path for both ordinary image previews and effective mask pixels. */
     #startSource() {
-        this.#sourceReader = new InputSourcePreview(this.binding, this.previews, this.entry, this.maximumSize, (value) => {
+        this.#edited.invalidate();
+        this.#sourceReader?.dispose();
+        this.#source = null;
+        this.#sourceSize = this.#captureSize();
+        this.#sourceReader = new InputSourcePreview(this.binding, this.previews, this.entry, this.#sourceSize, (value) => {
             this.#source = value;
             this.#publishPixels();
         }, this.report);
     }
     /** Release unnecessary capture work when no real image is selected and keep the preview solid black. */
     #black() {
+        this.#edited.invalidate();
         this.#sourceReader?.dispose();
         this.#imageReader?.dispose();
         this.#sourceReader = this.#imageReader = null;
         this.#source = this.#image = null;
         this.#imageReference = '';
+        this.#sourceSize = -1;
         this.publish({ kind: 'black' });
     }
     /** Overlay only the associated image, waiting for matching revisions when both sources share a canvas. */
@@ -146,18 +166,22 @@ export class InputPreviewContent {
         }
         const image = this.#image;
         if (image?.kind === 'error') {
+            this.#edited.invalidate();
             this.publish({ kind: 'black' });
             return;
         }
         if (image?.kind !== 'pixels') {
+            this.#edited.invalidate();
             this.publish({ kind: 'loading' });
             return;
         }
         if (source?.kind === 'error') {
+            this.#edited.invalidate();
             this.publish(source);
             return;
         }
         if (source?.kind !== 'pixels') {
+            this.#edited.invalidate();
             this.publish({ kind: 'loading' });
             return;
         }
@@ -166,14 +190,29 @@ export class InputPreviewContent {
             source.canvas.id === image.canvas.id &&
             (source.canvas.revision !== image.canvas.revision ||
                 !sameCanvasSourceDocument(source.canvas.document, image.canvas.document))) {
+            this.#edited.invalidate();
             this.publish({ kind: 'loading' });
             return;
         }
+        const settings = this.binding.state.edits ?? DEFAULT_MASK_EDITS;
+        if (this.association?.editable() && hasMaskEdits(settings)) {
+            this.#edited.paint(source.pixels, image.pixels, settings, this.mode(), this.maximumSize, image.canvas?.document ?? null);
+            return;
+        }
+        this.#edited.invalidate();
         this.publish({
             kind: 'pixels',
             pixels: source.pixels,
             background: image.pixels,
             frame: image.canvas?.document ?? null,
         });
+    }
+    /** Preserve full-resolution coverage for pixel-radius edits while ordinary previews remain display sized. */
+    #captureSize() {
+        return this.binding.loader.kind === 'mask' &&
+            this.association?.editable() &&
+            hasMaskEdits(this.binding.state.edits ?? DEFAULT_MASK_EDITS)
+            ? 0
+            : this.maximumSize;
     }
 }

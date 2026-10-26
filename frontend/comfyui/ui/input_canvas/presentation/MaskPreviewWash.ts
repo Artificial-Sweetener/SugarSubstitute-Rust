@@ -16,11 +16,13 @@
 /** Composite effective mask coverage once over the associated loader's full-color image. */
 import { decodeCanvasRaster, type CanvasPixelRaster } from '../../core/embedded/CanvasRuntime.js';
 import { INPUT_PREVIEW_MAXIMUM } from '../domain/InputPreviewResolution.js';
+import type { MaskPreviewPlacement } from '../domain/MaskPreviewGeometry.js';
 
 /** Apply one half-opacity neutral wash, retaining soft coverage and straight-alpha image pixels. */
 export function maskPreviewPixels(
   mask: CanvasPixelRaster,
   image: CanvasPixelRaster,
+  placement: MaskPreviewPlacement | null = null,
 ): Uint8ClampedArray {
   if (mask.format !== 'coverage8' || image.format !== 'rgba8')
     throw new Error('A mask preview requires an effective monochrome mask and a color image.');
@@ -31,13 +33,32 @@ export function maskPreviewPixels(
     result = new Uint8ClampedArray(source.length);
   for (let y = 0; y < image.height; y++)
     for (let x = 0; x < image.width; x++) {
-      const value = sampleCoverage(
-        coverage,
-        mask.width,
-        mask.height,
-        ((x + 0.5) * mask.width) / image.width - 0.5,
-        ((y + 0.5) * mask.height) / image.height - 0.5,
-      );
+      const position = placement
+        ? {
+            x: ((x + 0.5) * placement.frame.width) / image.width - placement.bounds.left,
+            y: ((y + 0.5) * placement.frame.height) / image.height - placement.bounds.top,
+          }
+        : null;
+      const outside =
+        position &&
+        placement &&
+        (position.x < 0 ||
+          position.y < 0 ||
+          position.x >= placement.bounds.width ||
+          position.y >= placement.bounds.height);
+      const value = outside
+        ? 0
+        : sampleCoverage(
+            coverage,
+            mask.width,
+            mask.height,
+            position && placement
+              ? (position.x * mask.width) / placement.bounds.width - 0.5
+              : ((x + 0.5) * mask.width) / image.width - 0.5,
+            position && placement
+              ? (position.y * mask.height) / placement.bounds.height - 0.5
+              : ((y + 0.5) * mask.height) / image.height - 0.5,
+          );
       const offset = (y * image.width + x) * 4,
         retainedAlpha = ((source[offset + 3] ?? 0) / 255) * 0.5,
         alpha = 0.5 + retainedAlpha;

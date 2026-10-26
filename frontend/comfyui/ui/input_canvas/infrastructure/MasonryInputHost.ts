@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Follow positively registered masonry cards without discovering graphs from DOM mutations. */
 import { reconcileNativeNodeBodyAccessories } from '../../surface/NativeNodeBodyAccessories.js';
-import { NativeNodeChoiceFields } from '../../surface/NativeNodeChoiceFields.js';
+import { NativeNodeFields } from '../../surface/NativeNodeFields.js';
 import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
 import { readNativeNodeCard } from '../../surface/NativeNodeCardBoundary.js';
 import type { ComfyInputLoaders } from './ComfyInputLoaders.js';
@@ -40,7 +40,7 @@ export class MasonryInputHost {
   >();
   readonly #retired = new WeakMap<HTMLElement, ComfyNode>();
   #observer: HostSurfaceObserver | null = null;
-  readonly #fields = new WeakMap<ComfyNode, Map<string, NativeNodeChoiceFields>>();
+  readonly #fields = new WeakMap<ComfyNode, Map<string, NativeNodeFields>>();
   /** Share the registration catalog and peer capability resolver with execution preparation. */
   constructor(
     private readonly document: Document,
@@ -164,7 +164,7 @@ export class MasonryInputHost {
     );
   }
   /** Share the native node-field lifecycle across projections of the same exact bound field. */
-  #fieldScope(node: ComfyNode, field: string, beforeField: string | null): NativeNodeChoiceFields {
+  #fieldScope(node: ComfyNode, field: string, beforeField: string | null): NativeNodeFields {
     let scopes = this.#fields.get(node);
     if (!scopes) {
       scopes = new Map();
@@ -172,7 +172,7 @@ export class MasonryInputHost {
     }
     let scope = scopes.get(field);
     if (!scope) {
-      scope = new NativeNodeChoiceFields(node, 'canvas-input:' + field, this.document, beforeField);
+      scope = new NativeNodeFields(node, 'canvas-input:' + field, this.document, beforeField);
       scopes.set(field, scope);
     }
     return scope;

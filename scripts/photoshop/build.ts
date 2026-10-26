@@ -19,6 +19,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { packageFiles, packagePath, record, text, validatePackage } from './manifest.js';
+import { nativeImageDependency, packageNativeImageLicenses } from './NativeImageDependencies.js';
 
 /** Compile, stage and verify one package; an entirely absent runtime is a valid preparation state. */
 export async function buildPhotoshop(
@@ -57,7 +58,7 @@ export async function buildPhotoshop(
       copyFileSync(source, target);
     }
     copyFileSync(sourceManifest, path.join(staging, 'manifest.json'));
-    await build({
+    const bundle = await build({
       entryPoints: [sourceEntry],
       outfile: path.join(staging, 'main.js'),
       bundle: true,
@@ -78,12 +79,15 @@ export async function buildPhotoshop(
               if (args.kind === 'entry-point') return undefined;
               if (args.path === 'uxp' || args.path === 'photoshop')
                 return { path: args.path, external: true };
+              const dependency = nativeImageDependency(args.path);
+              if (dependency) return { path: dependency };
               throw new Error(`Native UXP dependencies require explicit review: ${args.path}`);
             });
           },
         },
       ],
     });
+    packageNativeImageLicenses(staging, bundle.metafile);
     const license = path.join(root, 'LICENSE');
     if (existsSync(license)) copyFileSync(license, path.join(staging, 'LICENSE'));
     validatePackage(staging, !development);

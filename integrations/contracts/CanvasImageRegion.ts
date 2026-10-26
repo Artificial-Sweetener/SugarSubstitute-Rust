@@ -33,6 +33,8 @@ export interface CanvasImageMapping {
 
 /** Freeze the exact return coverage in processing-image coordinates, including holes and soft edges. */
 export interface CanvasImageRegion {
+  /** Observe a verified VAE round trip's center crop from actual returned dimensions. */
+  readonly outputFrame?: 'vae-center-crop';
   readonly mapping: CanvasImageMapping;
   readonly mask: CanvasPixelRaster;
   /** Finished composites already contain their feathering; raw proposals receive coverage once. */

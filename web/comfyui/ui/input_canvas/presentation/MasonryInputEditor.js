@@ -5,6 +5,7 @@ import { CommandButtonMount } from '../../surface/appearance/CommandButtonMount.
 import { readPluginMode, subscribePluginMode } from '../../core/PluginMode.js';
 import { CanvasSourceUnavailable } from '../domain/CanvasSourceAvailability.js';
 import { ensureInputEditorStyles } from './InputEditorStyles.js';
+import { MaskEditFields } from './MaskEditFields.js';
 /** Keep one source picker and stable preview surfaces while selection, channel and order change. */
 export class MasonryInputEditor {
     binding;
@@ -16,6 +17,7 @@ export class MasonryInputEditor {
     #commands = [];
     #stop;
     #entryField;
+    #maskFields;
     /** Bind presentation to portable state and share raw source acquisition with queue preparation. */
     constructor(document, binding, previews, upload, report, fields, fieldRoot, association, showField = false) {
         this.binding = binding;
@@ -86,6 +88,7 @@ export class MasonryInputEditor {
             this.#controls.append(actions);
         }
         this.#rows = new InputPreviewRows(document, binding, previews, report, association);
+        this.#maskFields = new MaskEditFields(binding, association, fields, fieldRoot, showField, (mode) => this.#rows.setMaskMode(mode), report);
         this.#status = document.createElement('div');
         this.#status.className = 'sc-input-editor__status';
         this.#status.setAttribute('role', 'status');
@@ -112,6 +115,7 @@ export class MasonryInputEditor {
         for (const command of this.#commands)
             command.setDisabled(this.binding.busy);
         this.#picker.refresh();
+        this.#maskFields.refresh();
         this.#entryField?.update(state.selected ?? '', state.entries.map((entry) => ({ value: entry.id, label: entry.label, blockers: [] })), this.binding.busy, passive);
         this.#rows.refresh();
         this.#status.textContent = this.binding.busy
@@ -122,6 +126,7 @@ export class MasonryInputEditor {
     dispose() {
         this.#stop();
         this.#picker.dispose();
+        this.#maskFields.dispose();
         this.#entryField?.dispose();
         for (const command of this.#commands)
             command.dispose();

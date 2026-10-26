@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Expose loader-source state and interpretation without coupling views to native canvas implementation. */
 import type { InputBinding } from '../domain/InputBinding.js';
+import type { MaskEditSettings } from '../domain/MaskEditSettings.js';
 import type { InputLoader, InputPreviewSettings } from '../domain/InputLoader.js';
 import type {
   CanvasInputSource,
@@ -22,6 +23,7 @@ import type {
   CanvasPixelRaster,
 } from '../../../../../integrations/contracts/CanvasProtocol.generated.js';
 import type { InputPreviewInterpretation } from './InputPreviewInterpretation.js';
+import type { MaskEditingPort } from './MaskEditingPort.js';
 
 /** Read image source files and effective masks through their native codecs. */
 export interface InputPreviewPort {
@@ -44,7 +46,9 @@ export interface InputEditorBinding {
   readonly busy: boolean;
   readonly error: string | null;
   readonly preview: InputPreviewInterpretation;
+  readonly maskEditing: MaskEditingPort;
   readonly canvasId: string;
+  readonly canEditMask: boolean;
   readonly context: CanvasSourceContext | null;
   subscribe(listener: () => void): () => void;
   initialize(): Promise<void>;
@@ -53,11 +57,14 @@ export interface InputEditorBinding {
   add(): void;
   remove(): void;
   move(delta: number): void;
+  changeMaskEdits(settings: MaskEditSettings): void;
 }
 
 /** Query one graph-derived image relationship without exposing host nodes or reimplementing pairing policy. */
 export interface InputImageAssociation {
   read(): InputEditorBinding | null;
+  /** Admit image preparation only when this mask exclusively owns one scalar image source. */
+  editable(): boolean;
   subscribe(listener: () => void): () => void;
 }
 

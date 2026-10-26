@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own detached, bounded popup geometry and lifecycle without participating in application layout. */
 import { applyOwnedTheme } from '../surface/appearance/ThemeService.js';
-import { readComfyDarkTheme } from '../surface/appearance/ComfyColorScheme.js';
+import { readOwnedDarkTheme } from '../surface/appearance/OwnedColorScheme.js';
 /** Keep browser transport and native ancestry restoration under the shared floating owner. */
 export function createFloatingPlane(element) {
     const surface = new FloatingSurface(element);
@@ -45,7 +45,7 @@ export function createFloatingPlane(element) {
     };
 }
 /** Keep all popup kinds within the viewport while preferring their natural opening direction. */
-export function floatingPosition(anchor, width, height, viewportWidth, viewportHeight) {
+export function floatingPosition(anchor, width, height, viewportWidth, viewportHeight, reserveRight = 0) {
     const gap = 4;
     let left = anchor.kind === 'pointer' ? anchor.x : anchor.bounds.left;
     let top = anchor.kind === 'pointer' ? anchor.y : anchor.bounds.bottom + gap;
@@ -57,6 +57,8 @@ export function floatingPosition(anchor, width, height, viewportWidth, viewportH
     }
     else if (anchor.kind === 'below' && top + height > viewportHeight - gap)
         top = anchor.bounds.top - height - gap;
+    if (anchor.kind === 'pointer' && reserveRight > 0)
+        left = Math.min(left, Math.max(gap, viewportWidth - width - reserveRight - gap));
     return {
         left: Math.max(gap, Math.min(left, viewportWidth - width - gap)),
         top: Math.max(gap, Math.min(top, viewportHeight - height - gap)),
@@ -91,7 +93,7 @@ export class FloatingSurface {
         this.close();
         this.#options = options;
         this.#document.body.append(this.element);
-        applyOwnedTheme(this.element, readComfyDarkTheme(this.#document));
+        applyOwnedTheme(this.element, readOwnedDarkTheme(this.#document));
         if (typeof this.element.showPopover === 'function')
             this.element.showPopover();
         this.reposition();
@@ -128,7 +130,7 @@ export class FloatingSurface {
             ? 'calc(100vh - 8px)'
             : `${Math.max(0, Math.min(this.#options.maxHeight, (windowRef?.innerHeight ?? this.#document.documentElement.clientHeight) - 8))}px`, 'important');
         const rect = this.element.getBoundingClientRect();
-        const position = floatingPosition(this.#options.anchor, rect.width, rect.height, windowRef?.innerWidth ?? this.#document.documentElement.clientWidth, windowRef?.innerHeight ?? this.#document.documentElement.clientHeight);
+        const position = floatingPosition(this.#options.anchor, rect.width, rect.height, windowRef?.innerWidth ?? this.#document.documentElement.clientWidth, windowRef?.innerHeight ?? this.#document.documentElement.clientHeight, this.#options.reserveRight ? rect.width : 0);
         this.element.style.setProperty('left', `${String(position.left)}px`, 'important');
         this.element.style.setProperty('top', `${String(position.top)}px`, 'important');
     }

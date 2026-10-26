@@ -57,3 +57,18 @@ export function resolveInputAssetAssociations(graphs) {
         return [mask, Object.freeze(association)];
     }));
 }
+/** Admit editing only when no other mask can target the same image input. */
+export function exclusiveInputImage(associations, mask, maskSources) {
+    const pair = associations.get(mask);
+    if (pair?.kind !== 'associated' || maskSources.has(pair.image))
+        return null;
+    for (const other of associations.values()) {
+        if (other.mask === mask)
+            continue;
+        if (other.kind === 'associated'
+            ? other.image === pair.image
+            : other.candidates.includes(pair.image))
+            return null;
+    }
+    return pair.image;
+}

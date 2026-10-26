@@ -64,10 +64,12 @@ export class NativeFieldAppearance {
     const card =
       this.kind === 'widget' ? this.#adapter.annotateWidget(root) : this.#adapter.annotate(root);
     if (!themed) {
-      this.#numeric.reconcile(
-        root,
-        card.seedFields.map((field) => field.numeric),
-      );
+      this.#numeric.reconcile(root, [
+        ...new Set([
+          ...card.seedFields.map((field) => field.numeric),
+          ...card.numericFields.filter((field) => field.presentation === 'spinner-slider'),
+        ]),
+      ]);
       this.#seeds.reconcile(root, card.seedFields);
       return;
     }

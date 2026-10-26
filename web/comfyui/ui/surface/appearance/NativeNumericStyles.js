@@ -38,15 +38,10 @@ export function nativeNumericCss() {
     [data-sc-number-increment] span, [data-sc-number-decrement] span { font-size:10px; width:10px; height:10px; }
     [data-sc-number-increment]:hover, [data-sc-number-decrement]:hover { background:var(--sc-surface-hover); }
     [data-sc-number-increment]:active, [data-sc-number-decrement]:active { background:var(--sc-surface-pressed); }
-    [data-sc-number-pair] { display:flex; align-items:center; justify-content:flex-end; min-width:0; gap:6px; }
-    [data-sc-number-pair] > :first-child { width:${SPINNER_WIDTH}; min-width:${SPINNER_WIDTH}; flex:0 0 ${SPINNER_WIDTH}; }
-    [data-sc-number-slider] { width:120px; min-width:40px; max-width:120px; flex:1 1 120px; cursor:default !important; }
+    [data-sc-number-slider] { cursor:default !important; }
     [data-sc-number-slider]::part(track-container), [data-sc-number-slider] [data-sc-slider-thumb], [data-sc-number-slider] [data-sc-slider-thumb] * { cursor:default !important; }
     [data-sc-number-slider]::after { content:none; }
     [data-sc-number-slider]::part(track-container) { border-radius:var(--border-radius); }
     [data-sc-number-slider]::part(track-container)::after { background-image:none; }
-    .sugarcubes-cube-face__node-card [data-sc-style-row][data-sc-style-widget^="WidgetInputNumber"] [data-sc-style-layout] > [data-sc-number-pair] {
-      flex:0 0 calc(${SPINNER_WIDTH} + 126px); max-width:calc(${SPINNER_WIDTH} + 126px);
-    }
   `;
 }

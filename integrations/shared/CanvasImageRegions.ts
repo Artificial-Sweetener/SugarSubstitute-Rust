@@ -27,16 +27,15 @@ import {
   encodeCanvasRaster,
 } from './CanvasRasterEncoding.js';
 import { sampleCanvasComponent } from './CanvasImageSampling.js';
+import { resolveCanvasImageRegion } from './CanvasImageRegionCrop.js';
 
-/** Reject unknown geometry rather than guessing how arbitrary workflow transforms map into a document. */
+/** Require coherent captured coverage while admitting outputs sampled at a different resolution. */
 function validateMapping(image: CanvasPixelRaster, region: CanvasImageRegion): void {
   const { mapping, mask } = region;
   const { imageSize, imageBounds, documentBounds } = mapping;
   if (
     image.format !== 'rgba8' ||
     mask.format !== 'coverage8' ||
-    image.width !== imageSize.width ||
-    image.height !== imageSize.height ||
     mask.width !== imageSize.width ||
     mask.height !== imageSize.height
   )
@@ -59,8 +58,8 @@ function validateMapping(image: CanvasPixelRaster, region: CanvasImageRegion): v
     !Object.values(imageBounds).every(Number.isSafeInteger) ||
     imageBounds.left < 0 ||
     imageBounds.top < 0 ||
-    imageBounds.left + imageBounds.width > image.width ||
-    imageBounds.top + imageBounds.height > image.height
+    imageBounds.left + imageBounds.width > imageSize.width ||
+    imageBounds.top + imageBounds.height > imageSize.height
   )
     throw new Error('Invalid canvas return image mapping.');
 }
@@ -111,15 +110,17 @@ function documentRectangle(
   };
 }
 
-/** Prepare transparent replacement pixels once for any capable canvas adapter. */
+/** Sample returned pixels into the frozen input footprint without changing its mask or destination. */
 export function prepareCanvasImagePatch(
   image: CanvasPixelRaster,
   region: CanvasImageRegion,
 ): CanvasImagePatch | null {
+  region = resolveCanvasImageRegion(image, region);
   validateMapping(image, region);
   const pixels = decodeCanvasRaster(image),
     mask = decodeCanvasRaster(region.mask);
-  const support = coverageBounds(mask, image.width, region.mapping.imageBounds);
+  const frame = region.mapping.imageSize;
+  const support = coverageBounds(mask, frame.width, region.mapping.imageBounds);
   if (!support) return null;
   const rectangle = documentRectangle(support, region.mapping);
   const result = new Uint8Array(canvasRasterByteLength(rectangle.width, rectangle.height, 'rgba8'));
@@ -129,6 +130,17 @@ export function prepareCanvasImagePatch(
     scaleY = source.height / target.height;
   const direct =
     scaleX === 1 && scaleY === 1 && Number.isInteger(target.left) && Number.isInteger(target.top);
+  const imageScaleX = image.width / frame.width,
+    imageScaleY = image.height / frame.height;
+  const directImage = direct && imageScaleX === 1 && imageScaleY === 1;
+  const imageBounds = {
+    left: Math.floor(source.left * imageScaleX),
+    top: Math.floor(source.top * imageScaleY),
+    width:
+      Math.ceil((source.left + source.width) * imageScaleX) - Math.floor(source.left * imageScaleX),
+    height:
+      Math.ceil((source.top + source.height) * imageScaleY) - Math.floor(source.top * imageScaleY),
+  };
   let visible = false;
   for (let y = 0; y < rectangle.height; y++)
     for (let x = 0; x < rectangle.width; x++) {
@@ -141,13 +153,15 @@ export function prepareCanvasImagePatch(
         rectangle.top + y + 0.5 >= target.top + target.height
       )
         continue;
-      const sourceOffset = (sy * image.width + sx) * 4;
+      const ix = (sx + 0.5) * imageScaleX - 0.5,
+        iy = (sy + 0.5) * imageScaleY - 0.5;
+      const sourceOffset = (iy * image.width + ix) * 4;
       const coverage = direct
-        ? (mask[sy * image.width + sx] ?? 0)
-        : sampleCanvasComponent(mask, image.width, 1, 0, sx, sy, source);
-      const alpha = direct
+        ? (mask[sy * frame.width + sx] ?? 0)
+        : sampleCanvasComponent(mask, frame.width, 1, 0, sx, sy, source);
+      const alpha = directImage
         ? (pixels[sourceOffset + 3] ?? 0)
-        : sampleCanvasComponent(pixels, image.width, 4, 3, sx, sy, source);
+        : sampleCanvasComponent(pixels, image.width, 4, 3, ix, iy, imageBounds);
       const opacity = Math.round(
         alpha * (region.coverage === 'support' ? (coverage > 0 ? 1 : 0) : coverage / 255),
       );
@@ -155,10 +169,10 @@ export function prepareCanvasImagePatch(
       visible = true;
       const offset = (y * rectangle.width + x) * 4;
       for (let component = 0; component < 3; component++)
-        result[offset + component] = direct
+        result[offset + component] = directImage
           ? (pixels[sourceOffset + component] ?? 0)
           : Math.round(
-              (sampleCanvasComponent(pixels, image.width, 4, component, sx, sy, source, true) *
+              (sampleCanvasComponent(pixels, image.width, 4, component, ix, iy, imageBounds, true) *
                 255) /
                 alpha,
             );

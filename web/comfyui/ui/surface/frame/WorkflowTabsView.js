@@ -16,7 +16,7 @@
 /** Present stable Microsoft Fluent workflow tabs while Comfy retains workflow actions. */
 import { createWorkflowTab, createWorkflowTablist, createButton, workflowTabAccessorySlot, } from '../appearance/ControlFactory.js';
 import { ContextMenu } from '../../menus/ContextMenu.js';
-import { WORKFLOW_TAB_WIDTH } from './WorkflowTabStyles.js';
+import { workflowTabAtOffset, workflowTabOffsets } from './WorkflowTabGeometry.js';
 import { scrollWheelDistance } from '../ScrollWheelDistance.js';
 import { WorkflowTabPointerDrag } from './WorkflowTabPointerDrag.js';
 /** Retain keyed controls, literal titles, native keyboard navigation and one-shot activity animation. */
@@ -31,7 +31,7 @@ export class WorkflowTabsView {
     #drag;
     #projecting = false;
     #selection = '';
-    #tabWidth = WORKFLOW_TAB_WIDTH;
+    #widths = [];
     #menuRequest = 0;
     #menuTarget = null;
     #paintKey = '';
@@ -43,7 +43,7 @@ export class WorkflowTabsView {
         this.viewport = viewport;
         this.element = createWorkflowTablist(document);
         this.#menu = new ContextMenu(document);
-        this.#drag = new WorkflowTabPointerDrag(viewport, this.element, (from, to) => actions.reorder(from, to), (error) => actions.report(error), () => this.#updateOrbAdjacency(), () => this.#tabWidth);
+        this.#drag = new WorkflowTabPointerDrag(viewport, this.element, (from, to) => actions.reorder(from, to), (error) => actions.report(error), () => this.#updateOrbAdjacency(), () => this.#widths);
         this.element.setAttribute('aria-label', 'Workflows');
         this.viewport.addEventListener('scroll', this.#scrolled);
         this.element.addEventListener('change', () => {
@@ -115,17 +115,18 @@ export class WorkflowTabsView {
         const width = this.viewport.clientWidth;
         if (index < 0 || width <= 0)
             return;
-        const left = index * this.#tabWidth;
-        const right = left + this.#tabWidth;
+        const starts = workflowTabOffsets(this.#widths);
+        const left = starts[index] ?? 0;
+        const right = starts[index + 1] ?? left;
         if (left < this.viewport.scrollLeft)
             this.viewport.scrollLeft = left;
         else if (right > this.viewport.scrollLeft + width)
             this.viewport.scrollLeft = Math.max(0, right - width);
     }
     /** Keep selection and the orb cutout aligned after the enclosing strip changes width. */
-    resize(width) {
+    resize(widths) {
         this.#drag.cancelForResize();
-        this.#tabWidth = width;
+        this.#widths = widths;
         if (!this.#drag.active)
             this.#revealSelected(this.#order.findIndex((tab) => tab.selected));
         this.#updateOrbAdjacency();
@@ -153,18 +154,21 @@ export class WorkflowTabsView {
         event.preventDefault();
         this.viewport.scrollLeft += scrollWheelDistance(event, 'horizontal', this.viewport.clientWidth);
     };
-    /** Keep the cutout aligned to the orb when the uniform-width tab strip scrolls or reorders. */
+    /** Keep the cutout aligned to the orb when the tab strip scrolls or reorders. */
     #updateOrbAdjacency() {
         if (this.#drag.active)
             return;
-        const index = Math.floor(Math.max(0, this.viewport.scrollLeft) / this.#tabWidth);
-        const adjacent = !this.#orbVisible || this.viewport.hasAttribute('data-sc-overflow')
+        const index = workflowTabAtOffset(this.#widths, Math.max(0, this.viewport.scrollLeft));
+        const left = workflowTabOffsets(this.#widths)[index] ?? 0;
+        const adjacent = !this.#orbVisible ||
+            this.viewport.hasAttribute('data-sc-overflow') ||
+            this.viewport.hasAttribute('data-sc-natural-tabs')
             ? undefined
             : this.#order[index]?.id;
         for (const [id, tab] of this.#tabs) {
             tab.element.toggleAttribute('data-orb-adjacent', id === adjacent);
             if (id === adjacent)
-                tab.element.style.setProperty('--sc-tab-cutout-x', `${String(-17 + this.viewport.scrollLeft - index * this.#tabWidth)}px`);
+                tab.element.style.setProperty('--sc-tab-cutout-x', `${String(-17 + this.viewport.scrollLeft - left)}px`);
         }
     }
     /** Release floating interaction and official Fluent focus bindings through normal disconnection. */

@@ -33,8 +33,20 @@ export interface WorkflowCanvasPreparation {
   resolve(prompt: unknown): readonly WorkflowCanvasReturn[];
 }
 
+/** Replace one captured loader output with an immutable processed asset during canonical preparation. */
+export interface WorkflowPreparedInput {
+  readonly nodePath: string;
+  readonly classType: string;
+  readonly field: string;
+  readonly file: string;
+  readonly slot: number;
+  readonly kind: 'image' | 'mask';
+  readonly preparedFile: string;
+}
+
 /** Keep transient return metadata outside the serialized workflow and PNG metadata. */
 export interface WorkflowPromptPreparation {
   readonly payload: unknown;
   readonly canvas?: WorkflowCanvasPreparation;
+  readonly preparedInputs?: readonly WorkflowPreparedInput[];
 }

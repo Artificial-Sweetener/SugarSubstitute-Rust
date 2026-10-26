@@ -15,11 +15,13 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Verify owned surfaces follow palette colors even when host theme metadata is stale. */
 import { afterEach, expect, test } from '@jest/globals';
-import { readComfyDarkTheme } from '../../../frontend/comfyui/ui/surface/appearance/ComfyColorScheme.js';
+import { readOwnedDarkTheme } from '../../../frontend/comfyui/ui/surface/appearance/OwnedColorScheme.js';
 
 afterEach(() => {
   document.documentElement.removeAttribute('style');
   document.documentElement.className = '';
+  document.documentElement.removeAttribute('data-sc-visual-style');
+  document.documentElement.removeAttribute('data-sc-photopro-palette');
 });
 
 test.each(['#F5F5F5', '#fff', 'rgb(245 245 245)'])(
@@ -28,7 +30,7 @@ test.each(['#F5F5F5', '#fff', 'rgb(245 245 245)'])(
     document.documentElement.className = 'dark-theme';
     document.documentElement.style.colorScheme = 'dark';
     document.documentElement.style.setProperty('--comfy-menu-bg', background);
-    expect(readComfyDarkTheme(document)).toBe(false);
+    expect(readOwnedDarkTheme(document)).toBe(false);
   },
 );
 
@@ -37,7 +39,7 @@ test.each(['#202020', '#002b36', 'rgb(46, 52, 64)'])(
   (background) => {
     document.documentElement.style.colorScheme = 'light';
     document.documentElement.style.setProperty('--comfy-menu-bg', background);
-    expect(readComfyDarkTheme(document)).toBe(true);
+    expect(readOwnedDarkTheme(document)).toBe(true);
   },
 );
 
@@ -45,8 +47,22 @@ test('falls back to the host color scheme when no usable opaque palette surface 
   for (const background of ['', 'transparent', 'rgba(0, 0, 0, 0)', 'var(--unknown)']) {
     document.documentElement.style.setProperty('--comfy-menu-bg', background);
     document.documentElement.style.colorScheme = 'light';
-    expect(readComfyDarkTheme(document)).toBe(false);
+    expect(readOwnedDarkTheme(document)).toBe(false);
     document.documentElement.style.colorScheme = 'dark';
-    expect(readComfyDarkTheme(document)).toBe(true);
+    expect(readOwnedDarkTheme(document)).toBe(true);
   }
 });
+
+test.each(['black', 'dark-gray', 'medium-gray', 'light-gray'])(
+  'PhotoPro %s ignores an opposite Comfy color scheme',
+  (palette) => {
+    const dark = palette !== 'light-gray';
+    document.documentElement.dataset.scVisualStyle = 'photopro';
+    document.documentElement.dataset.scPhotoproPalette = palette;
+    document.documentElement.style.colorScheme = dark ? 'light' : 'dark';
+    document.documentElement.style.setProperty('--comfy-menu-bg', dark ? '#ffffff' : '#202020');
+    expect(readOwnedDarkTheme(document)).toBe(dark);
+    document.documentElement.dataset.scVisualStyle = 'fluent';
+    expect(readOwnedDarkTheme(document)).toBe(!dark);
+  },
+);
