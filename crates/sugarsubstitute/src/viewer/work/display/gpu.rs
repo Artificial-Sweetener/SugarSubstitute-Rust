@@ -172,7 +172,12 @@ fn verify_gpu(
             let source_workspace = workspace.source.as_mut().ok_or_else(|| {
                 WorkError::invalid("Canonical GPU verification lacks preallocated readback storage")
             })?;
-            let source = frame.image().read_region_into(region, source_workspace, context)?;
+            let source = native.read_reference_region_into(
+                frame.image(),
+                region,
+                source_workspace,
+                context,
+            )?;
             let actual = native.read_region_into(region, &mut workspace.native, context)?;
             if actual != source {
                 return Err(WorkError::invalid(

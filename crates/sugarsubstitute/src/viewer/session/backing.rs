@@ -92,6 +92,17 @@ pub(super) fn choose_backing(
 }
 
 impl Session {
+    /// Compare every sampled backing identity before reusing an acknowledged display.
+    pub(super) fn display_selection_pending(&self, selection: BackingSelection) -> bool {
+        self.expose_pending
+            || self.display_source != Some(selection.primary.source)
+            || self.display_view != Some(selection.primary.projection.target())
+            || !self.display_evidence.is_some_and(|evidence| {
+                evidence.underlay.map(|underlay| underlay.source)
+                    == selection.underlay.map(|underlay| underlay.source)
+            })
+    }
+
     /// Select the best current backing without confusing partial detail with complete coverage.
     pub(super) fn select_backing(&self) -> Result<Option<BackingSelection>, Box<dyn Error>> {
         let Some(scene) = &self.scene else {

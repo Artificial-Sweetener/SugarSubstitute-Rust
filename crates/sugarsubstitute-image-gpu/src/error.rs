@@ -14,6 +14,27 @@ impl GpuError {
     pub fn retirement_cause(&self) -> Option<&Self> {
         self.cause.downcast_ref::<Failures>().map(|causes| &causes.retirement)
     }
+    /// Whether native surface configuration reached wgpu-core's exact GPU-idle timeout.
+    ///
+    /// SugarSubstitute supports wgpu's native Vulkan and Metal backends, where `wgpu::wgc` is the
+    /// public re-export of the pinned core error types. Classification also requires this adapter's
+    /// surface-configuration operation, so an identical nested cause from other GPU work is not
+    /// treated as presentation backpressure.
+    pub fn is_surface_configuration_busy(&self) -> bool {
+        if self.operation != "gpu_surface_configuration" {
+            return false;
+        }
+        let mut cause: Option<&(dyn Error + 'static)> = Some(self.cause.as_ref());
+        while let Some(current) = cause {
+            if current.downcast_ref::<wgpu::wgc::present::ConfigureSurfaceError>().is_some_and(
+                |cause| matches!(cause, wgpu::wgc::present::ConfigureSurfaceError::GpuWaitTimeout),
+            ) {
+                return true;
+            }
+            cause = current.source();
+        }
+        false
+    }
     pub(crate) fn new(
         operation: &'static str,
         cause: impl Into<Box<dyn Error + Send + Sync>>,
@@ -118,5 +139,40 @@ mod tests {
             .ok_or("Missing original native retirement failure")?;
         assert_eq!(retirement.raw_os_error(), Some(23));
         Ok(())
+    }
+
+    fn configuration_error(cause: wgpu::wgc::present::ConfigureSurfaceError) -> GpuError {
+        let contextual = wgpu::wgc::error::ContextError {
+            fn_ident: "Surface::configure",
+            source: Box::new(cause),
+            label: String::new(),
+        };
+        GpuError::new(
+            "gpu_surface_configuration",
+            wgpu::Error::Validation {
+                source: Box::new(contextual),
+                description: "surface configuration rejected".into(),
+            },
+        )
+    }
+
+    #[test]
+    fn only_typed_surface_gpu_wait_timeout_is_recoverable_backpressure() {
+        let busy = configuration_error(wgpu::wgc::present::ConfigureSurfaceError::GpuWaitTimeout);
+        assert!(busy.is_surface_configuration_busy());
+
+        let wrong_operation =
+            GpuError::new("gpu_native", wgpu::wgc::present::ConfigureSurfaceError::GpuWaitTimeout);
+        assert!(!wrong_operation.is_surface_configuration_busy());
+        assert!(
+            !configuration_error(wgpu::wgc::present::ConfigureSurfaceError::ZeroArea)
+                .is_surface_configuration_busy()
+        );
+        assert!(
+            !configuration_error(wgpu::wgc::present::ConfigureSurfaceError::Device(
+                wgpu::wgc::device::DeviceError::Lost,
+            ))
+            .is_surface_configuration_busy()
+        );
     }
 }

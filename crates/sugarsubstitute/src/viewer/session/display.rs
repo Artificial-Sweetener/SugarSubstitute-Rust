@@ -54,14 +54,7 @@ impl Session {
         };
         let shown = selection.primary.shown;
         let source_stamp = selection.primary.source;
-        let underlay_source = selection.underlay.map(|layer| layer.source);
-        if !self.expose_pending
-            && self.display_source == Some(source_stamp)
-            && self.display_view == Some(view)
-            && self.display_evidence.is_some_and(|evidence| {
-                evidence.underlay.map(|underlay| underlay.source) == underlay_source
-            })
-        {
+        if !self.display_selection_pending(selection) {
             return Ok(());
         }
         if self.options.gpu.is_none()
@@ -342,13 +335,10 @@ impl Session {
         &self,
         now: Duration,
     ) -> Result<Option<Duration>, Box<dyn Error>> {
-        let Some(source) = self.display_frame()? else {
+        let Some(selection) = self.select_backing()? else {
             return Ok(None);
         };
-        let pending = self.expose_pending
-            || self.display_source != Some(source)
-            || self.display_view != Some(self.tools.navigation().viewport())
-            || self.rendering.is_some();
+        let pending = self.display_selection_pending(selection) || self.rendering.is_some();
         if !pending {
             return Ok(None);
         }

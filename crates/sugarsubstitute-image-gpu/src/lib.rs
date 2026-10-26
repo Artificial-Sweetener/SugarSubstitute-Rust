@@ -7,6 +7,7 @@
 mod adapter;
 mod batch;
 mod buffer;
+mod coordination;
 mod dependency;
 mod display;
 mod display_image;
@@ -19,8 +20,11 @@ mod kernel;
 mod request;
 mod resample;
 mod selection;
+mod surface_state;
 mod transfer;
 mod window;
+mod window_configuration;
+mod window_frame;
 mod window_shader;
 
 #[cfg(feature = "boundary-fixtures")]

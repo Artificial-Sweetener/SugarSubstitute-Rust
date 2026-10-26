@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retire native submissions and mappings before releasing their original managed allocations.
-use crate::{GpuDevice, GpuError, buffer::Buffer};
+use crate::{GpuDevice, GpuError, buffer::Buffer, coordination::SubmissionPermit};
 use std::{
     sync::{Arc, Mutex},
     time::Duration,
@@ -15,6 +15,7 @@ pub(crate) struct Transfer {
     done: bool,
     _buffers: [Option<Arc<Buffer>>; 8],
     _staging: Option<MemoryClaim>,
+    submission: Option<SubmissionPermit>,
 }
 impl Transfer {
     pub(crate) fn upload(
@@ -22,6 +23,7 @@ impl Transfer {
         staging: MemoryClaim,
         bytes: &[u8],
         commands: Option<wgpu::CommandEncoder>,
+        submission: SubmissionPermit,
     ) -> Self {
         let device = buffer.device.clone();
         let mut transfer = Self {
@@ -30,13 +32,18 @@ impl Transfer {
             done: false,
             _buffers: std::array::from_fn(|index| (index == 0).then(|| buffer.clone())),
             _staging: Some(staging),
+            submission: Some(submission),
         };
         transfer.device.queue.write_buffer(&buffer.raw, 0, bytes);
         transfer.index =
             Some(transfer.device.queue.submit(commands.into_iter().map(|value| value.finish())));
         transfer
     }
-    pub(crate) fn copy(source: Arc<Buffer>, receiving: Arc<Buffer>) -> Self {
+    pub(crate) fn copy(
+        source: Arc<Buffer>,
+        receiving: Arc<Buffer>,
+        submission: SubmissionPermit,
+    ) -> Self {
         let device = source.device.clone();
         let mut transfer = Self {
             device,
@@ -48,6 +55,7 @@ impl Transfer {
                 _ => None,
             }),
             _staging: None,
+            submission: Some(submission),
         };
         let mut commands =
             transfer.device.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -59,13 +67,18 @@ impl Transfer {
     }
     /// Submit a command batch whose calling owner keeps every allocation and staging claim alive.
     /// The guard's blocking destructor retires work before that calling custody can be released.
-    pub(crate) fn submit(device: Arc<GpuDevice>, commands: wgpu::CommandEncoder) -> Self {
+    pub(crate) fn submit(
+        device: Arc<GpuDevice>,
+        commands: wgpu::CommandEncoder,
+        submission: SubmissionPermit,
+    ) -> Self {
         let mut transfer = Self {
             device,
             index: None,
             done: false,
             _buffers: std::array::from_fn(|_| None),
             _staging: None,
+            submission: Some(submission),
         };
         transfer.index = Some(transfer.device.queue.submit([commands.finish()]));
         transfer
@@ -95,6 +108,7 @@ impl Transfer {
             }
         }
         self.done = true;
+        self.submission.take();
         match failure {
             Some(cause) => Err(cause),
             None => self.device.faults.check(),
@@ -117,15 +131,16 @@ pub(crate) struct Mapping {
     completion: Arc<Mutex<Option<MapResult>>>,
     done: bool,
     mapped: bool,
+    submission: Option<SubmissionPermit>,
 }
 impl Mapping {
-    pub(crate) fn new(buffer: Arc<Buffer>) -> Self {
+    pub(crate) fn new(buffer: Arc<Buffer>, submission: SubmissionPermit) -> Self {
         let completion = Arc::new(Mutex::new(None));
         let delivered = completion.clone();
         buffer.raw.map_async(wgpu::MapMode::Read, .., move |outcome| {
             *delivered.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(outcome);
         });
-        Self { buffer, completion, done: false, mapped: false }
+        Self { buffer, completion, done: false, mapped: false, submission: Some(submission) }
     }
     pub(crate) fn wait(&mut self) -> Result<(), GpuError> {
         let mut failure = None;
@@ -167,6 +182,7 @@ impl Mapping {
             self.buffer.raw.unmap();
             self.mapped = false;
         }
+        self.submission.take();
         observed.and_then(|()| self.buffer.device.faults.check())
     }
 }

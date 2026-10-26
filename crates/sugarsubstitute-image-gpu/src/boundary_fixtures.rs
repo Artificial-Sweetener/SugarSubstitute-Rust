@@ -152,7 +152,9 @@ pub fn qualify_composite(
     });
     blitter.encode(&device, &primary_view, &fallback_view, &output_view, &mut commands);
     device.faults.check()?;
-    let mut transfer = Transfer::upload(mapping, staging, &upload.bytes, Some(commands));
+    let submission = device.submission(context)?;
+    let mut transfer =
+        Transfer::upload(mapping, staging, &upload.bytes, Some(commands), submission);
     transfer.retire()?;
     crate::adapter::check(context)?;
     read_texture_region_into(&texture, &device, output, output.region(), &mut readback, context)?;

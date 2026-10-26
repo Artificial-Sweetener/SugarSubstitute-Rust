@@ -119,7 +119,9 @@ impl GpuDevice {
             .memory()
             .claim(bytes)
             .map_err(|cause| GpuError::new("gpu_upload_staging", cause))?;
-        let mut transfer = Transfer::upload(buffer.clone(), staging, &encoded.bytes, None);
+        let submission = self.submission(context)?;
+        let mut transfer =
+            Transfer::upload(buffer.clone(), staging, &encoded.bytes, None, submission);
         transfer.retire()?;
         crate::adapter::check(context)?;
         Ok(GpuTile { buffer, region })
@@ -150,10 +152,12 @@ impl GpuTile {
             wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
             context,
         )?;
-        let mut transfer = Transfer::copy(self.buffer.clone(), receiving.clone());
+        let submission = device.submission(context)?;
+        let mut transfer =
+            Transfer::copy(self.buffer.clone(), receiving.clone(), submission.clone());
         transfer.retire()?;
         crate::adapter::check(context)?;
-        let mut mapping = Mapping::new(receiving);
+        let mut mapping = Mapping::new(receiving, submission);
         mapping.wait()?;
         crate::adapter::check(context)?;
         {

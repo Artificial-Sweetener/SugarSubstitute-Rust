@@ -182,6 +182,7 @@ impl AdapterCatalog {
             queue,
             memory: memory.clone(),
             faults,
+            submission: Arc::new(crate::coordination::SubmissionGate::default()),
             _memory: claim,
         }))
     }
@@ -196,12 +197,19 @@ pub struct GpuDevice {
     pub(crate) queue: wgpu::Queue,
     pub(crate) memory: MemoryLease,
     pub(crate) faults: Arc<crate::fault::Faults>,
+    pub(crate) submission: Arc<crate::coordination::SubmissionGate>,
     _memory: MemoryClaim,
 }
 impl GpuDevice {
     /// Actual selected hardware metadata, captured from the adapter used for initialization.
     pub fn descriptor(&self) -> &AdapterDescriptor {
         &self.descriptor
+    }
+    pub(crate) fn submission(
+        &self,
+        context: &JobContext,
+    ) -> Result<crate::coordination::SubmissionPermit, GpuError> {
+        self.submission.submission(context)
     }
 }
 fn class(value: wgpu::DeviceType) -> AdapterClass {

@@ -4,6 +4,7 @@
 use crate::{
     GpuDevice, GpuError,
     buffer::Buffer,
+    coordination::SubmissionPermit,
     transfer::{Mapping, Transfer},
 };
 use std::sync::{
@@ -82,10 +83,12 @@ pub(crate) struct Batch {
     steps: usize,
     work: GpuWork,
     _memory: MemoryClaim,
+    submission: SubmissionPermit,
 }
 impl Batch {
     pub(crate) fn new(device: Arc<GpuDevice>, context: &JobContext) -> Result<Self, GpuError> {
         crate::adapter::check(context)?;
+        let submission = device.submission(context)?;
         let memory = context
             .memory()
             .claim(METADATA_BYTES)
@@ -126,6 +129,7 @@ impl Batch {
             steps: 0,
             work: GpuWork::default(),
             _memory: memory,
+            submission,
         })
     }
     pub(crate) fn full(&self) -> bool {
@@ -202,10 +206,11 @@ impl Batch {
             MAX_STEPS as u64 * 4,
         );
         // Batch custody stays intact while the submission guard observes actual native completion.
-        let mut submitted = Transfer::submit(self.device.clone(), commands);
+        let mut submitted =
+            Transfer::submit(self.device.clone(), commands, self.submission.clone());
         submitted.retire()?;
         self.work.batches = 1;
-        let mut mapping = Mapping::new(self.receiving.clone());
+        let mut mapping = Mapping::new(self.receiving.clone(), self.submission.clone());
         mapping.wait()?;
         let mut invalid = false;
         let mut nonopaque = false;

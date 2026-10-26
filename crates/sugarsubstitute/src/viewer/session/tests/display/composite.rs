@@ -4,6 +4,58 @@
 use super::*;
 
 #[test]
+fn replacing_only_the_underlay_keeps_a_paced_display_pending() -> Result<(), Box<dyn Error>> {
+    let stamp = |value: u64| -> Result<FrameStamp, Box<dyn Error>> {
+        Ok(FrameStamp { surface: SurfaceId::new(1)?, generation: Generation::new(value)? })
+    };
+    let (mut session, _, _directory) = session()?;
+    let view = session.tools.navigation().viewport();
+    let coverage = BackingCoverage::new(view, [0; 2])?;
+    let projection = ViewProjection::new(view, view)?;
+    let primary = stamp(2)?;
+    let old_underlay = stamp(1)?;
+    let target = stamp(3)?;
+    let shown = Presented {
+        tier: BackingTier::Detail,
+        coverage,
+        view,
+        reconstruction: Reconstruction::Finished(sugarsubstitute_image_ops::Filter::Lanczos3),
+        document: (1, 1),
+        source_revision: 1,
+    };
+    let layer = |source| backing::SelectedLayer { shown, source, projection };
+    let selection =
+        backing::BackingSelection { primary: layer(primary), underlay: Some(layer(old_underlay)) };
+    session.display_source = Some(primary);
+    session.display_view = Some(view);
+    session.expose_pending = false;
+    session.display_evidence = Some(DisplayEvidence {
+        underlay: Some(work::UnderlayEvidence { source: old_underlay, coverage, projection }),
+        tier: BackingTier::Detail,
+        target,
+        source: primary,
+        view,
+        coverage,
+        projection,
+        document: (1, 1),
+        source_revision: 1,
+    });
+    session.pacing.submitted(
+        target,
+        PresentationMode::Projected,
+        Duration::ZERO,
+        Duration::ZERO,
+    )?;
+    session.pacing.prepared(target, Duration::ZERO)?;
+    session.pacing.native_accepted(target, Duration::ZERO)?;
+    assert!(!session.display_selection_pending(selection));
+    let changed = backing::BackingSelection { underlay: Some(layer(stamp(4)?)), ..selection };
+    assert!(session.display_selection_pending(changed));
+    assert!(session.pacing.next_deadline(Duration::ZERO)?.is_some());
+    Ok(())
+}
+
+#[test]
 fn partial_detail_selects_shared_composite_contract_before_cpu_or_gpu_projection()
 -> Result<(), Box<dyn Error>> {
     let document = Extent::new(4096, 4096)?;

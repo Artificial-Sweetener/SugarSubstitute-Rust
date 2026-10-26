@@ -3,7 +3,10 @@
 //! Compose immutable retained display images with native copies and original execution custody.
 use crate::{
     DisplayReadback, DisplayReadbackWorkspace, DisplayTile, GpuDevice, GpuError,
-    display::row_bytes, display_readback::read_texture_region_into, transfer::Transfer,
+    coordination::SubmissionPermit,
+    display::row_bytes,
+    display_readback::{read_texture_region_into, read_texture_region_into_with_submission},
+    transfer::Transfer,
 };
 use std::sync::Arc;
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
@@ -132,7 +135,8 @@ impl DisplayImage {
             );
         }
         device.faults.check()?;
-        Transfer::submit(device.clone(), commands).retire()?;
+        let submission = device.submission(context)?;
+        Transfer::submit(device.clone(), commands, submission).retire()?;
         crate::adapter::check(context)?;
         Ok(Self(Arc::new(Image { texture, extent, device, _memory: memory })))
     }
@@ -183,6 +187,24 @@ impl DisplayImage {
             region,
             workspace,
             context,
+        )
+    }
+
+    pub(crate) fn read_region_into_with_submission<'a>(
+        &self,
+        region: Region,
+        workspace: &'a mut DisplayReadbackWorkspace,
+        context: &JobContext,
+        submission: SubmissionPermit,
+    ) -> Result<&'a [u32], GpuError> {
+        read_texture_region_into_with_submission(
+            &self.0.texture,
+            &self.0.device,
+            self.extent(),
+            region,
+            workspace,
+            context,
+            submission,
         )
     }
 }

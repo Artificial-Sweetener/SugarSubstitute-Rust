@@ -5,6 +5,7 @@
 use crate::{
     GpuDevice, GpuError,
     buffer::Buffer,
+    coordination::SubmissionPermit,
     display::row_bytes,
     transfer::{Mapping, Transfer},
 };
@@ -112,6 +113,21 @@ pub(crate) fn read_texture_region_into<'a>(
     workspace: &'a mut DisplayReadbackWorkspace,
     context: &JobContext,
 ) -> Result<&'a [u32], GpuError> {
+    let submission = device.submission(context)?;
+    read_texture_region_into_with_submission(
+        texture, device, extent, region, workspace, context, submission,
+    )
+}
+
+pub(crate) fn read_texture_region_into_with_submission<'a>(
+    texture: &wgpu::Texture,
+    device: &Arc<GpuDevice>,
+    extent: Extent,
+    region: Region,
+    workspace: &'a mut DisplayReadbackWorkspace,
+    context: &JobContext,
+    submission: SubmissionPermit,
+) -> Result<&'a [u32], GpuError> {
     validate_workspace(device, extent, region, workspace)?;
     crate::adapter::check(context)?;
     let mut commands = device.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -134,8 +150,8 @@ pub(crate) fn read_texture_region_into<'a>(
         },
         wgpu::Extent3d { width: region.width(), height: region.height(), depth_or_array_layers: 1 },
     );
-    Transfer::submit(device.clone(), commands).retire()?;
-    decode_workspace(region, workspace, context)
+    Transfer::submit(device.clone(), commands, submission.clone()).retire()?;
+    decode_workspace(region, workspace, context, submission)
 }
 
 pub(crate) fn read_buffer_region_into<'a>(
@@ -151,8 +167,9 @@ pub(crate) fn read_buffer_region_into<'a>(
         return Err(GpuError::invalid("GPU display tile differs from its readback region"));
     }
     crate::adapter::check(context)?;
-    Transfer::copy(source, workspace.receiving.clone()).retire()?;
-    decode_workspace(region, workspace, context)
+    let submission = source.device.submission(context)?;
+    Transfer::copy(source, workspace.receiving.clone(), submission.clone()).retire()?;
+    decode_workspace(region, workspace, context, submission)
 }
 
 fn validate_workspace(
@@ -187,8 +204,9 @@ fn decode_workspace<'a>(
     region: Region,
     workspace: &'a mut DisplayReadbackWorkspace,
     context: &JobContext,
+    submission: SubmissionPermit,
 ) -> Result<&'a [u32], GpuError> {
-    let mut mapping = Mapping::new(workspace.receiving.clone());
+    let mut mapping = Mapping::new(workspace.receiving.clone(), submission);
     mapping.wait()?;
     {
         let view = mapping.view()?;

@@ -77,11 +77,6 @@ impl Session {
             self.front.as_ref().and_then(|surface| surface.current())
         }
     }
-    /// Primary generation selected for a complete direct or composited display.
-    pub(super) fn display_frame(&self) -> Result<Option<FrameStamp>, Box<dyn Error>> {
-        Ok(self.select_backing()?.map(|selection| selection.primary.source))
-    }
-
     /// Validate the exact mapping and authored identity committed by native acknowledgement.
     pub(super) fn displayed_coverage_is_valid(&self) -> Result<bool, Box<dyn Error>> {
         let Some(evidence) = self.display_evidence else {
